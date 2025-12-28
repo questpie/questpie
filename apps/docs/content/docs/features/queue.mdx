@@ -106,7 +106,7 @@ In your application code (hooks, API routes, etc.), publish jobs to the queue:
 
 ```typescript
 // In a collection hook
-export const users = collection('users')
+export const users = defineCollection('users')
   .fields({
     email: fields.text('email'),
     name: fields.text('name'),

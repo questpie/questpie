@@ -16,9 +16,9 @@ This document outlines the architectural principle of separating the backend dat
 
 **Example (from `packages/core/src/modules/barbershop/schema.ts`):
 ```typescript
-import { collection } from '../../server/collection/builder/collection-builder';
+import { defineCollection } from '../../server/collection/builder/collection-builder';
 
-export const services = collection('services')
+export const services = defineCollection('services')
   .fields((f) => ({
     name: f.text().required(),
     price: f.integer().required(),

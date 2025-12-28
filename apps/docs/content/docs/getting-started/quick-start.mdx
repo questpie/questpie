@@ -13,10 +13,10 @@ This guide demonstrates how to define a content schema, initialize the CMS, and 
 Collections are defined using the builder API. Create a new file `collections/posts.ts`:
 
 ```typescript title="collections/posts.ts"
-import { collection } from '@qcms/core'
+import { defineCollection } from '@qcms/core'
 import { text, timestamp } from 'drizzle-orm/pg-core'
 
-export const posts = collection('posts')
+export const posts = defineCollection('posts')
   .fields({
     title: text('title').notNull(),
     slug: text('slug').notNull().unique(),

@@ -1,6 +1,9 @@
 // builder/index.ts - Main exports for the collection builder
 
-export { collection, CollectionBuilder } from "./collection-builder";
+export {
+	defineCollection as collection,
+	CollectionBuilder,
+} from "./collection-builder";
 export { Collection } from "./collection";
 export type {
 	CollectionBuilderState,

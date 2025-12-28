@@ -15,10 +15,10 @@ QUESTPIE uses a **fluent builder API** to define collections. This approach allo
 The `collection()` function initiates a new collection builder. You can then chain various configuration methods to define the collection's properties.
 
 ```typescript
-import { collection } from '@qcms/core'
+import { defineCollection } from '@qcms/core'
 import { text, boolean } from 'drizzle-orm/pg-core'
 
-export const pages = collection('pages')
+export const pages = defineCollection('pages')
   .fields({
     slug: text('slug').notNull().unique(),
     isPublished: boolean('is_published').default(false),
@@ -33,7 +33,7 @@ export const pages = collection('pages')
 The builder is **immutable**. Every method call returns a *new* instance of the builder with the updated configuration and type signature. This design pattern enables safe composition and reusability.
 
 ```typescript
-const baseContent = collection('base_content')
+const baseContent = defineCollection('base_content')
   .fields({
     createdAt: timestamp('created_at').defaultNow(),
   })

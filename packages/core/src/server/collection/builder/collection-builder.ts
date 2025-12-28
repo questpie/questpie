@@ -1,9 +1,4 @@
-import {
-	Collection,
-	type CollectionSelect,
-	type CollectionInsert,
-	type CollectionUpdate,
-} from "#questpie/core/server/collection/builder/collection";
+import { Collection } from "#questpie/core/server/collection/builder/collection";
 import type {
 	CollectionAccess,
 	CollectionBuilderState,
@@ -19,8 +14,7 @@ import type {
 } from "#questpie/core/server/collection/builder/types";
 import type { CRUD } from "#questpie/core/server/collection/crud/types";
 import type { BuildExtraConfigColumns, SQL } from "drizzle-orm";
-import type { PgTableExtraConfigValue } from "drizzle-orm/pg-core";
-import type { SearchableConfig } from "#questpie/core/server/integrated/search";
+import type { PgTableExtraConfigValue } from "drizzle-orsearch";
 
 /**
  * Main collection builder class
@@ -626,7 +620,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 /**
  * Factory function to create a new collection builder
  */
-export function collection<TName extends string>(
+export function defineCollection<TName extends string>(
 	name: TName,
 ): CollectionBuilder<EmptyCollectionState<TName>> {
 	return new CollectionBuilder({

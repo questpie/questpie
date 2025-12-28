@@ -13,17 +13,17 @@ icon: GitMerge
 The `.merge()` method combines the state of two collection builders. It is useful for splitting large schemas, creating reusable plugins, or extending core collections from feature modules.
 
 ```typescript
-import { collection } from '@questpie/core'
+import { defineCollection } from '@questpie/core'
 import { text } from 'drizzle-orm/pg-core'
 
 // 1. Define a base collection
-const baseUsers = collection('users')
+const baseUsers = defineCollection('users')
   .fields({
     email: text('email').notNull(),
   })
 
 // 2. Define an extension
-const profileExtension = collection('users')
+const profileExtension = defineCollection('users')
   .fields({
     avatar: text('avatar'),
     bio: text('bio'),
@@ -81,7 +81,7 @@ The merge operation preserves full type safety. The resulting builder infers a t
 
 ```typescript
 const users = baseUsers
-  .merge(collection('users').fields({
+  .merge(defineCollection('users').fields({
     age: integer('age'),
   }))
 

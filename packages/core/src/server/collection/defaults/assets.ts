@@ -1,8 +1,8 @@
-import { collection } from "../builder/collection-builder";
+import { defineCollection } from "../builder/collection-builder";
 import { sql } from "drizzle-orm";
 import { varchar, text, integer } from "drizzle-orm/pg-core";
 
-export const assetsCollection = collection("questpie_assets")
+export const assetsCollection = defineCollection("questpie_assets")
 	.options({
 		timestamps: true,
 	})

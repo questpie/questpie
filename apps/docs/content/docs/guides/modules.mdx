@@ -18,7 +18,7 @@ A Module is a typed definition that bundles:
 Use the `defineModule` utility to create a type-safe module definition.
 
 ```typescript title="modules/stripe/index.ts"
-import { defineModule, collection } from '@questpie/core'
+import { defineModule, defineCollection } from '@questpie/core'
 import { text, integer } from 'drizzle-orm/pg-core'
 
 // 1. Define Config Type
@@ -33,7 +33,7 @@ export const stripeModule = defineModule({
 
   // New collections owned by this module
   collections: {
-    payments: collection('payments').fields({
+    payments: defineCollection('payments').fields({
       amount: integer('amount').notNull(),
       currency: text('currency').default('usd'),
     }),
@@ -41,7 +41,7 @@ export const stripeModule = defineModule({
 
   // Extensions to existing collections
   extensions: {
-    users: collection('users').fields({
+    users: defineCollection('users').fields({
       stripeCustomerId: text('stripe_customer_id'),
     }),
   },
@@ -94,10 +94,10 @@ export const cms = createCMS({
     users, // Our extended core collection
     ...collectModuleCollections([stripe]), // Add 'payments' from Stripe
   ],
-  
+
   // Register modules for lifecycle hooks
   modules: [stripe],
-  
+
   db: drizzle(process.env.DATABASE_URL!),
 })
 ```

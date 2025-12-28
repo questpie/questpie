@@ -38,11 +38,11 @@ QUESTPIE CMS is a headless Content Management System engineered for modern TypeS
 QUESTPIE CMS defines content structures ("Collections") through code. This approach ensures that your database schema and application types are always in sync.
 
 ```typescript
-import { collection, createCMS } from '@qcms/core'
+import { defineCollection, createCMS } from '@qcms/core'
 import { text, integer } from 'drizzle-orm/pg-core'
 
 // 1. Define your content model
-const products = collection('products')
+const products = defineCollection('products')
   .fields({
     name: text('name').notNull(),
     price: integer('price').notNull(),
