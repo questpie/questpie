@@ -13,8 +13,9 @@ import type {
 	CollectionBuilderRelationFn,
 } from "#questpie/cms/server/collection/builder/types";
 import type { CRUD } from "#questpie/cms/server/collection/crud/types";
+import type { SearchableConfig } from "#questpie/cms/server/integrated/search";
 import type { BuildExtraConfigColumns, SQL } from "drizzle-orm";
-import type { PgTableExtraConfigValue } from "drizzle-orsearch";
+import type { PgTableExtraConfigValue } from "drizzle-orm/pg-core";
 
 /**
  * Main collection builder class
@@ -473,8 +474,8 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	get versionsTable() {
 		return this.build().versionsTable;
 	}
-	get name() {
-		return this.state.name;
+	get name(): TState["name"] {
+		return this.state.name as TState["name"];
 	}
 
 	get $infer() {

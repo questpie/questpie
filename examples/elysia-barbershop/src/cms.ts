@@ -1,59 +1,30 @@
-import { defineCollection } from "#questpie/cms/server/collection/builder/collection-builder.js";
-import { defineJob, pgBossAdapter, QCMS } from "#questpie/cms/server/index.js";
-import { sql } from "drizzle-orm";
+/**
+ * Barbershop CMS Configuration
+ *
+ * A complete example showing:
+ * - Collections with relations
+ * - Better Auth integration
+ * - Queue jobs for notifications
+ * - Custom business logic
+ */
+
 import {
-	integer,
-	boolean,
+	QCMS,
+	defaultQCMSAuth,
+	defineCollection,
+	defineJob,
+	pgBossAdapter,
+} from "@questpie/cms/server";
+import {
 	varchar,
-	jsonb,
-	text,
+	integer,
 	timestamp,
+	text,
+	boolean,
+	jsonb,
 } from "drizzle-orm/pg-core";
-import z from "zod";
-
-const categories = defineCollection("categories")
-	.fields({
-		name: varchar().notNull(),
-		description: varchar(),
-		availableProducts: integer().notNull().default(0),
-	})
-	.relations(({ many }) => ({
-		products: many("products", { relationName: "category" }),
-	}))
-	.access({
-		read: () => true,
-		create: (ctx) => ctx.user.role === "admin",
-		update: (ctx) => ctx.user.role === "admin",
-	})
-	.build();
-
-const products = defineCollection("products")
-	.fields({
-		name: varchar().notNull(),
-		description: varchar(),
-		price: varchar().notNull(),
-		isAvailable: boolean().notNull().default(true),
-		categoryId: varchar()
-			.references(() => categories.table.id)
-			.notNull(),
-	})
-	.relations(({ one }) => ({
-		category: one(categories.name, {
-			fields: [categories.table.id],
-			references: ["categoryId"],
-		}),
-	}))
-	.access({
-		read: () => true,
-		create: (ctx) => ctx.user.role === "admin",
-		update: (ctx) => ctx.user.role === "admin",
-	})
-	.hooks({
-		afterChange: async () => {
-			// Enqueue job to update available products count
-		},
-	})
-	.build();
+import { z } from "zod";
+import { sql } from "drizzle-orm";
 
 // ============================================================================
 // Collections
@@ -84,8 +55,7 @@ export const barbers = defineCollection("barbers")
 		// Working hours stored as JSON
 		workingHours: jsonb("working_hours").$type<WorkingHours>(),
 	})
-	.build();
-// .title((t) => sql`${t.name}`);
+	.title((t) => sql`${t.name}`);
 
 /**
  * Services Collection
@@ -99,8 +69,7 @@ export const services = defineCollection("services")
 		price: integer("price").notNull(), // in cents
 		isActive: boolean("is_active").default(true).notNull(),
 	})
-	.build();
-// .title((t) => sql`${t.name}`);
+	.title((t) => sql`${t.name}`);
 
 /**
  * Appointments Collection
@@ -118,7 +87,7 @@ export const appointments = defineCollection("appointments")
 		cancelledAt: timestamp("cancelled_at", { mode: "date" }),
 		cancellationReason: text("cancellation_reason"),
 	})
-	// .title((t) => sql`Appointment at  ${t.scheduledAt}`)
+	.title((t) => sql`Appointment at  ${t.scheduledAt}`)
 	.relations(({ one, table }) => ({
 		// Note: customerId references Better Auth's users table
 		customer: one("questpie_users", {
@@ -151,8 +120,7 @@ export const appointments = defineCollection("appointments")
 				});
 			}
 		},
-	})
-	.build();
+	});
 
 /**
  * Reviews Collection
@@ -182,89 +150,104 @@ export const reviews = defineCollection("reviews")
 			fields: [table.barberId],
 			references: ["id"],
 		}),
-	}))
-	.build();
-s;
+	}));
 
-const updateJob = defineJob({
-	name: "update-number-of-available-products",
-	schema: z.object({
-		categoryId: z.string(),
+// ============================================================================
+// Queue Jobs
+// ============================================================================
+
+const jobs = [
+	defineJob({
+		name: "send-appointment-confirmation",
+		schema: z.object({
+			appointmentId: z.string(),
+			customerId: z.string(),
+		}),
+		handler: async (payload) => {
+			console.log(
+				`📧 Sending confirmation email for appointment ${payload.appointmentId} to customer ${payload.customerId}`,
+			);
+			// TODO: Implement email sending via context.cms.email
+		},
 	}),
-	handler: async (input) => {
-		const availableProductsCount = await cms.api.collections.products.count({
-			where: {
-				categoryId: input.categoryId,
-				isAvailable: true,
-			},
-		});
 
-		await cms.api.collections.categories.update({
-			where: {
-				id: { eq: input.categoryId },
-			},
-			data: {
-				availableProducts: availableProductsCount,
-			},
-		});
-	},
-});
+	defineJob({
+		name: "send-appointment-cancellation",
+		schema: z.object({
+			appointmentId: z.string(),
+			customerId: z.string(),
+		}),
+		handler: async (payload) => {
+			console.log(
+				`📧 Sending cancellation email for appointment ${payload.appointmentId} to customer ${payload.customerId}`,
+			);
+			// TODO: Implement email sending
+		},
+	}),
+
+	defineJob({
+		name: "send-appointment-reminder",
+		schema: z.object({
+			appointmentId: z.string(),
+		}),
+		handler: async (payload) => {
+			console.log(
+				`📧 Sending reminder email for appointment ${payload.appointmentId}`,
+			);
+			// TODO: Implement reminder logic
+		},
+	}),
+];
+
+// ============================================================================
+// CMS Instance
+// ============================================================================
+
+const DATABASE_URL =
+	process.env.DATABASE_URL || "postgres://localhost/barbershop_elysia";
 
 export const cms = new QCMS({
 	app: {
-		url: "http://localhost:3000",
+		url: process.env.APP_URL || "http://localhost:3001",
 	},
+
 	db: {
 		connection: {
-			url: "postgresql://user:password@localhost:5432/questpie_test",
+			url: DATABASE_URL,
 		},
 	},
-	collections: [products, categories, barbers, appointments, reviews] as const,
+
+	collections: [barbers, services, appointments, reviews],
+
+	auth: (db: any) =>
+		defaultQCMSAuth(db, {
+			emailPassword: true,
+			emailVerification: false, // Simplified for demo
+			baseURL: process.env.APP_URL || "http://localhost:3001",
+			secret:
+				process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
+		}),
+
+	storage: {
+		// Default: local filesystem storage
+		// driver: fsDriver({ location: './uploads' })
+	},
+
+	email: {
+		transport: {
+			host: process.env.SMTP_HOST || "localhost",
+			port: Number.parseInt(process.env.SMTP_PORT || "1025", 10),
+			secure: false,
+		},
+		templates: {},
+	},
+
 	queue: {
-		jobs: [updateJob],
+		jobs,
 		adapter: pgBossAdapter({
-			connectionString:
-				"postgresql://user:password@localhost:5432/questpie_test",
+			connectionString: DATABASE_URL,
 		}),
 	},
-	locale: {
-		locales() {
-			return [{ code: "en" }];
-		},
-		defaultLocale: "en",
-	},
 });
 
-const productsResult = await cms.api.collections.products.find({
-	where: {
-		isAvailable: true,
-	},
-	with: {
-		category: { columns: { name: true } },
-	},
-});
-
-console.log("Products with Category:", productsResult.docs);
-if (productsResult.docs.length > 0) {
-	console.log("Product Name:", productsResult.docs[0].name);
-	console.log("Category Name:", productsResult.docs[0].category.name);
-}
-
-const categoriesResult = await cms.api.collections.categories.find({
-	with: {
-		products: {
-			columns: { id: true },
-			_aggregate: {
-				_avg: {
-					price: true,
-				},
-			},
-		},
-	},
-});
-
-console.log("Categories with Product Count:", categoriesResult.docs);
-if (categoriesResult.docs.length > 0) {
-	console.log("Category Name:", categoriesResult.docs[0].name);
-	console.log("Product Count:", categoriesResult.docs[0].products._avg.price);
-}
+export type AppCMS = typeof cms;

@@ -147,13 +147,19 @@ export class QCMS<
 		// In the future, we could provide safe "dev" defaults (e.g. local storage, console mail)
 
 		if (config.auth) {
+			// Resolve auth config - could be a factory function
+			const authConfig =
+				typeof config.auth === "function"
+					? config.auth(this.db.client)
+					: config.auth;
+
 			// Check if it's a betterAuth instance (has handler method) or BetterAuthOptions
-			if ("handler" in config.auth && typeof config.auth.handler === "function") {
+			if ("handler" in authConfig && typeof authConfig.handler === "function") {
 				// Already a betterAuth instance
-				this.auth = config.auth;
+				this.auth = authConfig;
 			} else {
 				// BetterAuthOptions - create instance
-				this.auth = betterAuth(config.auth);
+				this.auth = betterAuth(authConfig);
 			}
 		}
 

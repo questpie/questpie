@@ -17,10 +17,10 @@ export type CRUDContext = RequestContext;
 export interface WhereOperators<T> {
 	eq?: T;
 	ne?: T;
-	gt?: T extends number ? number : never;
-	gte?: T extends number ? number : never;
-	lt?: T extends number ? number : never;
-	lte?: T extends number ? number : never;
+	gt?: T extends Date ? Date | string : T extends number | string ? T : never;
+	gte?: T extends Date ? Date | string : T extends number | string ? T : never;
+	lt?: T extends Date ? Date | string : T extends number | string ? T : never;
+	lte?: T extends Date ? Date | string : T extends number | string ? T : never;
 	in?: T[];
 	notIn?: T[];
 	like?: T extends string ? string : never;

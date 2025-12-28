@@ -1,28 +1,29 @@
 /**
- * Barbershop Client Example
+ * Barbershop Client Example (Elysia Edition)
  *
  * Demonstrates:
- * - Unified client combining CMS CRUD + Hono RPC
- * - Type-safe operations across both
+ * - Unified client combining CMS CRUD + Eden Treaty
+ * - Full end-to-end type safety with Elysia
  * - Cleaner API with single client instance
+ * - Superior type inference compared to Hono
  */
 
-import { createClientFromHono } from "@questpie/hono/client";
-import { cms } from "./cms";
-import type { AppType } from "./server";
+import { createClientFromEden } from "@questpie/elysia/client";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import type { cms } from "./cms"; // MUST be runtime import for typeof to work!
+import type { App } from "./server";
 
 // ============================================================================
 // Client Setup
 // ============================================================================
 
-const BASE_URL = "http://localhost:3000";
+const SERVER = "localhost:3001";
 
-// Unified client - combines CMS CRUD with Hono RPC
-// ✨ Single client for everything!
+// Unified client - combines CMS CRUD with Eden Treaty
+// ✨ Single client with full type safety!
 // IMPORTANT: Use `typeof cms` directly for proper type inference
-const client = createClientFromHono<AppType, typeof cms>({
-	baseURL: BASE_URL,
-	basePath: "/api",
+const client = createClientFromEden<App, typeof cms>({
+	server: SERVER,
 });
 
 // ============================================================================
@@ -30,21 +31,21 @@ const client = createClientFromHono<AppType, typeof cms>({
 // ============================================================================
 
 async function exampleUsage() {
-	console.log("🪒 Barbershop Client Examples\n");
+	console.log("🪒 Barbershop Client Examples (Elysia + Eden Treaty)\n");
 
 	// ========================================================================
 	// 1. Browse Barbers (CMS CRUD)
 	// ========================================================================
 
 	console.log("📋 Fetching active barbers...");
-	const barbers = await client.collections.barbers.find({
+	const { docs: barbers } = await client.collections.barbers.find({
 		where: { isActive: true },
 		orderBy: { name: "asc" },
 	});
 
 	console.log(`Found ${barbers.length} barbers:`);
 	for (const barber of barbers) {
-		console.log(`  - ${barber.name} (${barber.email})`);
+		console.log(` - ${barber.name} (${barber.email})`);
 	}
 	console.log();
 
@@ -53,8 +54,7 @@ async function exampleUsage() {
 	// ========================================================================
 
 	console.log("💇 Fetching available services...");
-	const services = await client.collections.services.find({
-		where: { isActive: true },
+	const { docs: services } = await client.collections.services.find({
 		orderBy: { price: "asc" },
 	});
 
@@ -67,7 +67,7 @@ async function exampleUsage() {
 	console.log();
 
 	// ========================================================================
-	// 3. Check Availability (Custom API)
+	// 3. Check Availability (Custom API with Eden Treaty)
 	// ========================================================================
 
 	if (barbers.length > 0 && services.length > 0) {
@@ -78,17 +78,22 @@ async function exampleUsage() {
 		const date = tomorrow.toISOString().split("T")[0]; // YYYY-MM-DD
 
 		console.log(`🗓️  Checking availability for ${barber.name} on ${date}...`);
-		const availability = await client.api.barbers[":barberId"].availability.$get({
-			param: { barberId: barber.id },
-			query: {
-				date,
-				serviceId: service.id,
-			},
-		});
 
-		if (availability.ok) {
-			const data = await availability.json();
-			console.log(`Available slots: ${data.availableSlots.join(", ")}`);
+		// ✨ Eden Treaty - fully type-safe, no $get suffix!
+		const availability = await client.api
+			.barbers({ barberId: barber.id })
+			.availability.get({
+				query: {
+					date,
+					serviceId: service.id,
+				},
+			});
+
+		// ✨ Response is already typed, no need for .json()!
+		if (availability.data) {
+			console.log(
+				`Available slots: ${availability.data.availableSlots.join(", ")}`,
+			);
 		}
 		console.log();
 
@@ -114,13 +119,10 @@ async function exampleUsage() {
 
 		// Example of actual booking (when authenticated):
 		/*
-		const booking = await client.api.appointments.book.$post({
-			json: bookingData
-		});
+		const booking = await client.api.appointments.book.post(bookingData);
 
-		if (booking.ok) {
-			const result = await booking.json();
-			console.log('✅ Appointment booked:', result.appointment);
+		if (booking.data) {
+			console.log('✅ Appointment booked:', booking.data.appointment);
 		}
 		*/
 	}
@@ -135,12 +137,11 @@ async function exampleUsage() {
 
 	// Example when authenticated:
 	/*
-	const myAppointments = await client.api.my.appointments.$get();
+	const myAppointments = await client.api.my.appointments.get();
 
-	if (myAppointments.ok) {
-		const data = await myAppointments.json();
-		console.log(`You have ${data.appointments.length} appointments:`);
-		for (const apt of data.appointments) {
+	if (myAppointments.data) {
+		console.log(`You have ${myAppointments.data.appointments.length} appointments:`);
+		for (const apt of myAppointments.data.appointments) {
 			console.log(`  - ${apt.scheduledAt}: ${apt.service.name} with ${apt.barber.name}`);
 		}
 	}
@@ -157,16 +158,15 @@ async function exampleUsage() {
 	// Example when authenticated:
 	/*
 	const appointmentId = 'some-uuid';
-	const cancellation = await client.api.appointments[':id'].cancel.$post({
-		param: { id: appointmentId },
-		json: {
+	const cancellation = await client.api.appointments[':id'].cancel.post({
+		params: { id: appointmentId },
+		body: {
 			reason: 'Schedule conflict'
 		}
 	});
 
-	if (cancellation.ok) {
-		const result = await cancellation.json();
-		console.log('✅ Appointment cancelled:', result.appointment);
+	if (cancellation.data) {
+		console.log('✅ Appointment cancelled:', cancellation.data.appointment);
 	}
 	*/
 
@@ -196,7 +196,7 @@ async function exampleUsage() {
 	// ========================================================================
 
 	console.log("👨‍💼 Admin: Viewing all appointments with relations...");
-	const allAppointments = await client.collections.appointments.find({
+	const { docs: allAppointments } = await client.collections.appointments.find({
 		limit: 10,
 		with: {
 			customer: true,
@@ -214,10 +214,15 @@ async function exampleUsage() {
 	// ========================================================================
 
 	console.log("✨ Summary:");
-	console.log("  • Unified Client: Single client for both CMS CRUD and custom routes");
+	console.log(
+		"  • Unified Client: Single client for both CMS CRUD and custom routes",
+	);
 	console.log("  • client.collections.*: CMS CRUD operations");
-	console.log("  • client.api.*: Hono RPC for custom business logic");
-	console.log("  • Fully type-safe end-to-end");
+	console.log(
+		"  • client.api.*: Eden Treaty for custom routes (NO $get/$post!)",
+	);
+	console.log("  • Full end-to-end type safety with Elysia");
+	console.log("  • Automatic response parsing - no .json() needed");
 	console.log("  • Relations are automatically typed and loaded");
 }
 
@@ -231,15 +236,18 @@ async function _authExample() {
 	// Register new user
 	console.log("Registering new customer...");
 
-	const registerResponse = await fetch(`${BASE_URL}/api/auth/sign-up/email`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			email: "customer@example.com",
-			password: "secure_password_123",
-			name: "John Doe",
-		}),
-	});
+	const registerResponse = await fetch(
+		`http://${SERVER}/api/auth/sign-up/email`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				email: "customer@example.com",
+				password: "secure_password_123",
+				name: "John Doe",
+			}),
+		},
+	);
 
 	if (registerResponse.ok) {
 		const session = await registerResponse.json();
@@ -248,24 +256,40 @@ async function _authExample() {
 		// Now you can use the session token for authenticated requests
 		const sessionToken = session.token; // or get from cookies
 
-		// Example: Book appointment with authentication
-		const bookingResponse = await client.api.appointments.book.$post(
-			{
-				json: {
-					barberId: "barber-uuid",
-					serviceId: "service-uuid",
-					scheduledAt: new Date().toISOString(),
-				},
-			},
-			{
-				headers: {
-					Cookie: `session_token=${sessionToken}`,
-				},
-			},
-		);
-
-		console.log("Booking result:", bookingResponse.ok);
+		// ✨ Eden Treaty with authentication headers
+		// Note: You'd need to configure the client with headers
+		console.log("Session token:", sessionToken);
+		console.log("(Configure client headers for authenticated requests)");
 	}
+}
+
+// ============================================================================
+// Eden Treaty vs Hono RPC Comparison
+// ============================================================================
+
+async function _comparisonExample() {
+	console.log("\n🔍 Eden Treaty vs Hono RPC Comparison\n");
+
+	console.log("Hono RPC:");
+	console.log("  const result = await client.api.route.$get()");
+	console.log("  if (result.ok) {");
+	console.log("    const data = await result.json()  // Manual parsing");
+	console.log("  }");
+	console.log();
+
+	console.log("Eden Treaty:");
+	console.log("  const result = await client.api.route.get()");
+	console.log("  if (result.data) {");
+	console.log("    // Data is already parsed and typed!");
+	console.log("  }");
+	console.log();
+
+	console.log("Benefits of Eden Treaty:");
+	console.log("  ✅ No $ prefix needed");
+	console.log("  ✅ Automatic response parsing");
+	console.log("  ✅ Better type inference");
+	console.log("  ✅ Runtime type validation");
+	console.log("  ✅ Cleaner API surface");
 }
 
 // ============================================================================
@@ -276,6 +300,7 @@ if (import.meta.main) {
 	try {
 		await exampleUsage();
 		// await authExample(); // Uncomment to test auth
+		// await comparisonExample(); // Uncomment to see comparison
 	} catch (error) {
 		console.error("Error:", error);
 	}

@@ -1,12 +1,8 @@
 // builder/types.ts
-import type {
-	PgColumn,
-	PgTableWithColumns,
-	PgColumnBuilder,
-} from "drizzle-orm/pg-core";
-import type { BuildColumns, GetColumnData, SQL } from "drizzle-orm";
 import type { Collection } from "#questpie/cms/server/collection/builder/collection";
 import type { SearchableConfig } from "#questpie/cms/server/integrated/search";
+import type { BuildColumns, GetColumnData, SQL } from "drizzle-orm";
+import type { PgColumn, PgTableWithColumns } from "drizzle-orm/pg-core";
 
 /**
  * Versioning configuration
@@ -394,28 +390,13 @@ export type I18nFieldAccessor<
  */
 export type InferSQLType<T extends SQL> = T extends SQL<infer R> ? R : unknown;
 
-export type BuildColumnType<T> =
-	T extends PgColumnBuilder<infer C>
-		? PgColumn<
-				C & {
-					tableName: string;
-					name: string;
-					isPrimaryKey: boolean;
-					isAutoincrement: boolean;
-					hasDefault: boolean;
-					hasRuntimeDefault: boolean;
-					enumValues: any;
-					notNull: boolean;
-				}
-			>
-		: T;
-
 export type InferColumnsFromFields<
+	// TName extends string,
 	TFields extends Record<string, any>,
 	TOptions extends CollectionOptions,
 	_TTitle extends SQL | undefined,
 > = ReturnType<typeof Collection.pkCols> & {
-	[K in keyof TFields]: BuildColumnType<TFields[K]>;
+	[K in keyof TFields]: TFields[K];
 } & (TOptions["timestamps"] extends false
 		? {}
 		: ReturnType<typeof Collection.timestampsCols>) &

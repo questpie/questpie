@@ -1,12 +1,14 @@
+import { hc } from "hono/client";
+import type { ClientRequestOptions } from "hono/client";
+import { createQCMSClient, type QCMSClient } from "@questpie/cms/client";
 import type { QCMS } from "@questpie/cms/server";
-import qs from "qs";
 
 /**
- * Client configuration
+ * Hono client configuration
  */
-export type QCMSClientConfig = {
+export type HonoClientConfig = {
 	/**
-	 * Base URL of the CMS API
+	 * Base URL of the API
 	 * @example 'http://localhost:3000'
 	 */
 	baseURL: string;
@@ -18,7 +20,7 @@ export type QCMSClientConfig = {
 	fetch?: typeof fetch;
 
 	/**
-	 * Base path for API routes
+	 * Base path for CMS routes
 	 * @default '/api'
 	 */
 	basePath?: string;
@@ -27,160 +29,56 @@ export type QCMSClientConfig = {
 	 * Default headers to include in all requests
 	 */
 	headers?: Record<string, string>;
+
+	/**
+	 * Hono client options
+	 */
+	honoOptions?: ClientRequestOptions;
 };
 
 /**
- * Collection API response
- */
-type CollectionFindOptions = {
-	limit?: number;
-	offset?: number;
-	where?: any;
-	orderBy?: any;
-	with?: any;
-};
-
-/**
- * Extract collection names from QCMS type
- */
-type CollectionNames<T> = T extends QCMS<infer TCollections, any, any>
-	? TCollections[number] extends { name: infer Name }
-		? Name extends string
-			? Name
-			: never
-		: never
-	: never;
-
-/**
- * Collections API proxy
- */
-type CollectionsAPI<T> = {
-	[K in CollectionNames<T>]: {
-		find: (options?: CollectionFindOptions) => Promise<any[]>;
-		findOne: (options: { where: any; with?: any }) => Promise<any | null>;
-		create: (data: any) => Promise<any>;
-		update: (id: string, data: any) => Promise<any>;
-		delete: (id: string) => Promise<{ success: boolean }>;
-	};
-};
-
-/**
- * QCMS Client
- */
-export type QCMSClient<T = any> = {
-	collections: CollectionsAPI<T>;
-};
-
-/**
- * Create type-safe QUESTPIE CMS client
+ * Create a unified client that combines QUESTPIE CMS CRUD operations
+ * with Hono's native RPC client for custom routes
  *
  * @example
  * ```ts
- * import { createQCMSClient } from '@questpie/client'
- * import type { cms } from './server'
+ * import { createClientFromHono } from '@questpie/hono/client'
+ * import type { AppType } from './server'
+ * import type { AppCMS } from './cms'
  *
- * const client = createQCMSClient<typeof cms>({
+ * const client = createClientFromHono<AppType, AppCMS>({
  *   baseURL: 'http://localhost:3000'
  * })
  *
- * // Type-safe collections
+ * // Use CMS CRUD operations
  * const posts = await client.collections.posts.find({ limit: 10 })
  *
- * // Type-safe functions
- * const result = await client.functions.addToCart({ productId: '123' })
+ * // Use Hono RPC for custom routes
+ * const result = await client.api.custom.route.$get()
  * ```
  */
-export function createQCMSClient<T = any>(config: QCMSClientConfig): QCMSClient<T> {
-	const fetcher = config.fetch || globalThis.fetch;
-	const basePath = config.basePath || "/api";
-	const defaultHeaders = config.headers || {};
-
-	/**
-	 * Make a request to the CMS API
-	 */
-	async function request(path: string, options: RequestInit = {}): Promise<any> {
-		const url = `${config.baseURL}${path}`;
-		const headers = {
-			"Content-Type": "application/json",
-			...defaultHeaders,
-			...options.headers,
-		};
-
-		const response = await fetcher(url, {
-			...options,
-			headers,
-		});
-
-		if (!response.ok) {
-			const error = await response.json().catch(() => ({ error: response.statusText }));
-			throw new Error(error.error || `Request failed: ${response.statusText}`);
-		}
-
-		return response.json();
-	}
-
-	/**
-	 * Collections API
-	 */
-	const collections = new Proxy({} as CollectionsAPI<T>, {
-		get(_, collectionName: string) {
-			return {
-				find: async (options: CollectionFindOptions = {}) => {
-					// Use qs for cleaner query strings with nested objects
-					const queryString = qs.stringify(options, {
-						skipNulls: true,
-						arrayFormat: "brackets",
-					});
-
-					const path = `${basePath}/cms/${collectionName}${queryString ? `?${queryString}` : ""}`;
-
-					return request(path);
-				},
-
-				findOne: async (options: { where: any; with?: any }) => {
-					const where = options.where;
-					if (!where.id) {
-						throw new Error("findOne requires where.id");
-					}
-
-					// Use qs for query string
-					const queryString = qs.stringify(
-						{ with: options.with },
-						{
-							skipNulls: true,
-							arrayFormat: "brackets",
-						},
-					);
-
-					const path = `${basePath}/cms/${collectionName}/${where.id}${queryString ? `?${queryString}` : ""}`;
-
-					return request(path);
-				},
-
-				create: async (data: any) => {
-					return request(`${basePath}/cms/${collectionName}`, {
-						method: "POST",
-						body: JSON.stringify(data),
-					});
-				},
-
-				update: async (id: string, data: any) => {
-					return request(`${basePath}/cms/${collectionName}/${id}`, {
-						method: "PATCH",
-						body: JSON.stringify(data),
-					});
-				},
-
-				delete: async (id: string) => {
-					return request(`${basePath}/cms/${collectionName}/${id}`, {
-						method: "DELETE",
-					});
-				},
-			};
-		},
+export function createClientFromHono<
+	TApp extends Record<string, any>,
+	TCMS extends QCMS<any, any, any>,
+>(config: HonoClientConfig): QCMSClient<TCMS> & TApp {
+	// Create CMS client for CRUD operations
+	const cmsClient = createQCMSClient<TCMS>({
+		baseURL: config.baseURL,
+		fetch: config.fetch,
+		basePath: config.basePath,
+		headers: config.headers,
 	});
 
+	// Create Hono RPC client for custom routes
+	const honoClient = hc<TApp>(config.baseURL, {
+		fetch: config.fetch,
+		headers: config.headers,
+		...config.honoOptions,
+	});
+
+	// Merge both clients
 	return {
-		collections,
-	};
+		...honoClient,
+		collections: cmsClient.collections,
+	} as QCMSClient<TCMS> & TApp;
 }

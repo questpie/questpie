@@ -8,7 +8,6 @@
  * - Custom business logic
  */
 
-import { SQL } from "bun";
 import {
 	QCMS,
 	defaultQCMSAuth,
@@ -70,7 +69,7 @@ export const services = defineCollection("services")
 		price: integer("price").notNull(), // in cents
 		isActive: boolean("is_active").default(true).notNull(),
 	})
-	.title((t) => t.name);
+	.title((t) => sql`${t.name}`);
 
 /**
  * Appointments Collection
@@ -220,13 +219,14 @@ export const cms = new QCMS({
 
 	collections: [barbers, services, appointments, reviews],
 
-	auth: defaultQCMSAuth(new SQL({ url: DATABASE_URL }), {
-		emailPassword: true,
-		emailVerification: false, // Simplified for demo
-		baseURL: process.env.APP_URL || "http://localhost:3000",
-		secret:
-			process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
-	}),
+	auth: (db: any) =>
+		defaultQCMSAuth(db, {
+			emailPassword: true,
+			emailVerification: false, // Simplified for demo
+			baseURL: process.env.APP_URL || "http://localhost:3000",
+			secret:
+				process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
+		}),
 
 	storage: {
 		// Default: local filesystem storage

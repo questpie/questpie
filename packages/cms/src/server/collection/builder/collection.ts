@@ -73,6 +73,9 @@ type InferCollectionUpdate<
 	[K in TLocalized[number]]?: GetColumnData<TFields[K]>;
 };
 
+// Re-export for convenience
+export type { CollectionBuilder } from "./collection-builder.js";
+
 export type CollectionSelect<TState extends CollectionBuilderState> =
 	InferCollectionSelect<
 		InferTableWithColumns<
@@ -140,12 +143,16 @@ export class Collection<TState extends CollectionBuilderState> {
 	});
 
 	static timestampsCols = () => ({
-		createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-		updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+		createdAt: timestamp("created_at", { mode: "string" })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { mode: "string" })
+			.defaultNow()
+			.notNull(),
 	});
 
 	static softDeleteCols = () => ({
-		deletedAt: timestamp("deleted_at", { mode: "date" }),
+		deletedAt: timestamp("deleted_at", { mode: "string" }),
 	});
 
 	/**
@@ -267,7 +274,6 @@ export class Collection<TState extends CollectionBuilderState> {
 		const i18nAccessor = this.createRawI18nAccessor();
 		return this.titleFn(this.table, i18nAccessor, context);
 	}
-
 
 	/**
 	 * Generate the main Drizzle table

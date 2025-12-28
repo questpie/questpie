@@ -1,9 +1,10 @@
 /**
  * Better Auth Integration Example
  *
- * This example shows how to use Better Auth with QCMS in two ways:
- * 1. Quick start with defaultQCMSAuth() helper
- * 2. Full control with custom betterAuth() instance
+ * This example shows how to use Better Auth with QCMS in three ways:
+ * 1. Callback with defaultQCMSAuth() - RECOMMENDED (uses CMS database connection)
+ * 2. Direct with defaultQCMSAuth() - Legacy (creates separate connection)
+ * 3. Full control with custom betterAuth() instance
  */
 
 import { SQL } from "bun";
@@ -14,11 +15,6 @@ import { varchar } from "drizzle-orm/pg-core";
 import { defineJob, pgBossAdapter } from "@questpie/cms/server";
 import z from "zod";
 import { sql } from "drizzle-orm";
-
-// Example database connection
-const db = new SQL({
-	url: process.env.DATABASE_URL || "postgres://localhost/qcms_test",
-});
 
 // Define some jobs (required by QCMS)
 const jobs = [
@@ -42,9 +38,9 @@ const posts = defineCollection("posts")
 	.title((t) => sql`${t.title}`);
 
 // ============================================================================
-// PATTERN 1: Quick Start with defaultQCMSAuth()
+// PATTERN 1: Callback with defaultQCMSAuth() - RECOMMENDED
 // ============================================================================
-// Best for most use cases - provides sensible defaults with customization
+// Best for most use cases - reuses CMS database connection (no redundant connections!)
 
 const cmsQuickStart = new QCMS({
 	app: {
@@ -59,31 +55,32 @@ const cmsQuickStart = new QCMS({
 
 	collections: [posts],
 
-	// Quick start auth config
-	auth: defaultQCMSAuth(db, {
-		// Enable email/password authentication
-		emailPassword: true,
+	// RECOMMENDED: Use callback to receive database client from CMS
+	auth: (db: SQL) =>
+		defaultQCMSAuth(db, {
+			// Enable email/password authentication
+			emailPassword: true,
 
-		// Base URL for OAuth redirects
-		baseURL: "http://localhost:3000",
+			// Base URL for OAuth redirects
+			baseURL: "http://localhost:3000",
 
-		// Social providers (optional)
-		socialProviders: {
-			google: {
-				clientId: process.env.GOOGLE_CLIENT_ID!,
-				clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+			// Social providers (optional)
+			socialProviders: {
+				google: {
+					clientId: process.env.GOOGLE_CLIENT_ID!,
+					clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+				},
 			},
-		},
 
-		// Require email verification
-		emailVerification: true,
+			// Require email verification
+			emailVerification: true,
 
-		// Secret for signing tokens
-		secret: process.env.BETTER_AUTH_SECRET,
+			// Secret for signing tokens
+			secret: process.env.BETTER_AUTH_SECRET,
 
-		// Add custom plugins (optional)
-		// plugins: [],
-	}),
+			// Add custom plugins (optional)
+			// plugins: [],
+		}),
 
 	storage: {
 		// driver: fsDriver({ location: './uploads' })
@@ -114,7 +111,50 @@ const _authHandler = cmsQuickStart.auth.handler;
 // app.all('/api/auth/*', (req) => authHandler(req))
 
 // ============================================================================
-// PATTERN 2: Full Control with betterAuth() Instance
+// PATTERN 2: Direct with defaultQCMSAuth() - Legacy
+// ============================================================================
+// Still supported but creates a separate database connection (not recommended)
+
+const cmsLegacy = new QCMS({
+	app: {
+		url: "http://localhost:3000",
+	},
+
+	db: {
+		connection: {
+			url: process.env.DATABASE_URL || "postgres://localhost/qcms_test",
+		},
+	},
+
+	collections: [posts],
+
+	// Legacy pattern: requires separate SQL connection
+	auth: defaultQCMSAuth(
+		new SQL({
+			url: process.env.DATABASE_URL || "postgres://localhost/qcms_test",
+		}),
+		{
+			emailPassword: true,
+			baseURL: "http://localhost:3000",
+			secret: process.env.BETTER_AUTH_SECRET,
+		},
+	),
+
+	storage: {
+		// driver: fsDriver({ location: './uploads' })
+	},
+
+	queue: {
+		jobs,
+		adapter: pgBossAdapter({
+			connectionString:
+				process.env.DATABASE_URL || "postgres://localhost/qcms_test",
+		}),
+	},
+});
+
+// ============================================================================
+// PATTERN 3: Full Control with betterAuth() Instance
 // ============================================================================
 // For advanced use cases where you need complete control
 
@@ -131,36 +171,31 @@ const cmsFullControl = new QCMS({
 
 	collections: [posts],
 
-	// Pass custom betterAuth instance
-	auth: betterAuth({
-		database: {
-			client: db as any,
-			type: "postgres",
-		},
-
-		baseURL: "http://localhost:3000",
-		secret: process.env.BETTER_AUTH_SECRET,
-
-		// Full control over plugins
-		plugins: [
-			admin(),
-			twoFactor({
-				issuer: "QCMS",
-			}),
-			// Add any other Better Auth plugins
-		],
-
-		// Email/password config
-		emailAndPassword: {
-			enabled: true,
-			requireEmailVerification: true,
-
-			// Custom password validation
-			async sendVerificationEmail(user, url) {
-				// Custom email sending logic
-				console.log("Send verification email to", user.email, url);
+	// Pass custom betterAuth instance using callback
+	auth: (db: SQL) =>
+		betterAuth({
+			database: {
+				client: db as any,
+				type: "postgres",
 			},
-		},
+
+			baseURL: "http://localhost:3000",
+			secret: process.env.BETTER_AUTH_SECRET,
+
+			// Full control over plugins
+			plugins: [
+				admin(),
+				twoFactor({
+					issuer: "QCMS",
+				}),
+				// Add any other Better Auth plugins
+			],
+
+			// Email/password config
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
 
 		// Social providers
 		socialProviders: {
@@ -186,8 +221,18 @@ const cmsFullControl = new QCMS({
 		},
 	}),
 
-	storage: {},
-	email: {},
+	storage: {
+		// driver: fsDriver({ location: './uploads' })
+	},
+
+	email: {
+		transport: {
+			host: "localhost",
+			port: 1025,
+			secure: false,
+		},
+		templates: {},
+	},
 
 	queue: {
 		jobs,
@@ -239,6 +284,7 @@ const useAuthInOperations = async () => {
 
 export {
 	cmsQuickStart,
+	cmsLegacy,
 	cmsFullControl,
 	createUser,
 	loginUser,

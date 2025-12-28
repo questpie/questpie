@@ -266,17 +266,25 @@ export interface CMSConfig<
 	/**
 	 * Authentication configuration (Better Auth)
 	 *
-	 * Two patterns supported:
+	 * Three patterns supported:
 	 *
-	 * 1. Quick start with defaultQCMSAuth() helper:
+	 * 1. Callback with defaultQCMSAuth() helper (RECOMMENDED):
 	 * ```ts
-	 * auth: defaultQCMSAuth(db.client, {
+	 * auth: (db) => defaultQCMSAuth(db, {
 	 *   emailPassword: true,
 	 *   baseURL: 'http://localhost:3000'
 	 * })
 	 * ```
 	 *
-	 * 2. Full control with custom betterAuth() instance:
+	 * 2. Direct BetterAuthOptions (creates separate connection):
+	 * ```ts
+	 * auth: defaultQCMSAuth(new SQL({ url: DATABASE_URL }), {
+	 *   emailPassword: true,
+	 *   baseURL: 'http://localhost:3000'
+	 * })
+	 * ```
+	 *
+	 * 3. Full control with custom betterAuth() instance:
 	 * ```ts
 	 * auth: betterAuth({
 	 *   database: { client: db.client, type: 'postgres' },
@@ -285,7 +293,7 @@ export interface CMSConfig<
 	 * })
 	 * ```
 	 */
-	auth?: BetterAuthOptions | any; // betterAuth instance (generic based on options)
+	auth?: BetterAuthOptions | any | ((db: SQL) => BetterAuthOptions | any); // betterAuth instance or factory
 
 	/**
 	 * Storage configuration

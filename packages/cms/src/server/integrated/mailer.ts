@@ -1,4 +1,5 @@
-import { createTransport, type Transporter, type TransportOptions } from "nodemailer";
+import { createTransport, type Transporter } from "nodemailer";
+import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { render } from "@react-email/render";
 import type { ComponentType } from "react";
 import * as React from "react";
@@ -6,8 +7,10 @@ import * as React from "react";
 export interface MailerConfig<TTemplates extends Record<string, ComponentType<any>> = Record<string, ComponentType<any>>> {
 	/**
 	 * Nodemailer transport options (SMTP, JSON, etc.)
+	 * For SMTP: { host, port, secure, auth, etc. }
+	 * Or connection URL: "smtp://user:pass@smtp.example.com"
 	 */
-	transport: TransportOptions;
+	transport: string | SMTPTransport.Options;
 	/**
 	 * Default 'from' address
 	 */

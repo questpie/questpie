@@ -1,5 +1,5 @@
 {
-	"name": "barbershop-example",
+	"name": "elysia-barbershop-example",
 	"version": "1.0.0",
 	"private": true,
 	"type": "module",
@@ -11,10 +11,13 @@
 		"worker": "bun run worker.ts"
 	},
 	"dependencies": {
+		"@elysiajs/eden": "^1.2.6",
 		"@questpie/cms": "workspace:*",
-		"@questpie/hono": "workspace:*",
-		"hono": "^4.6.14",
-		"zod": "^4.2.1"
+		"@questpie/elysia": "workspace:*",
+		"elysia": "^1.2.14",
+		"zod": "^4.2.1",
+		"drizzle-kit": "^1.0.0-beta.6-4414a19",
+		"drizzle-orm": "^1.0.0-beta.6-4414a19"
 	},
 	"devDependencies": {
 		"@types/bun": "latest",
