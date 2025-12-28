@@ -1,1 +1,4 @@
-{"title": "Reference"}
+{
+	"title": "Reference",
+	"pages": ["cms-config", "cli", "hono-adapter", "drizzle-orm"]
+}

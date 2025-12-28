@@ -1,0 +1,448 @@
+---
+title: Overview
+description: Introduction to QUESTPIE CMS - A batteries-included, type-safe headless CMS built for modern TypeScript applications.
+---
+
+# QUESTPIE CMS Overview
+
+QUESTPIE CMS is a **batteries-included**, **type-safe** headless CMS designed for developers who want to build content-heavy applications without wrestling with boilerplate, infrastructure, or fragmented ecosystems.
+
+## What is QUESTPIE CMS?
+
+QUESTPIE CMS is a content management system that:
+
+- **Runs in your codebase** - Not a hosted service, not a monolithic platform
+- **Integrates seamlessly** - Built for Hono, Elysia, and other modern TypeScript frameworks
+- **Provides everything you need** - Auth, storage, queues, email, search - all integrated out of the box
+- **Enforces type safety** - From database schema to API responses, fully typed with TypeScript
+- **Scales with you** - From prototypes to production, from solo projects to team applications
+
+Think of it as **Payload CMS philosophy** meets **Drizzle ORM simplicity** with **integrated services** for the modern TypeScript ecosystem.
+
+## Philosophy
+
+### Batteries Included, Not Batteries Required
+
+Unlike generic CMS frameworks that leave you to wire together auth, storage, queues, and email yourself, QUESTPIE comes with **opinionated, best-in-class integrations**:
+
+- **Better Auth** for authentication
+- **Flydrive** for file storage (S3, R2, local)
+- **pg-boss** for background job processing
+- **Nodemailer + React Email** for transactional emails
+- **Pino** for structured logging
+- **ParadeDB (pgvector)** for full-text and vector search
+
+You can still swap these out, but the defaults are production-ready and work together seamlessly.
+
+### Type Safety from Database to API
+
+QUESTPIE leverages **Drizzle ORM** for schema definition, which means:
+
+- Database schema and TypeScript types are **the same thing**
+- No code generation required - **live type inference**
+- Migrations are **deterministic and reversible**
+- Query builder is **fully typed** at every step
+
+Combined with the builder pattern for collections and globals, you get **end-to-end type safety** that catches errors at compile time, not runtime.
+
+### Designed for Modern Frameworks
+
+QUESTPIE integrates natively with:
+
+- **Hono** - Ultra-fast, edge-compatible framework (via `@questpie/hono` adapter)
+- **Elysia** - High-performance Bun-native framework (built-in support)
+- **Any TypeScript runtime** - Works with Node.js, Bun, Deno, Cloudflare Workers
+
+The CMS core is **framework-agnostic** - adapters handle the HTTP layer while the core focuses on content management.
+
+### Developer Experience First
+
+- **Fluent builder API** - Define collections like `defineCollection("posts").fields({...}).hooks({...}).access({...})`
+- **Autocomplete everywhere** - Your IDE knows your schema, fields, relations, and access rules
+- **Clear error messages** - TypeScript catches issues before they reach production
+- **Convention over configuration** - Sensible defaults, override when needed
+- **Hot module reloading** - Changes to collections reflect instantly in dev mode
+
+## Key Features
+
+### Collections & Globals
+
+**Collections** are multi-record content types (posts, products, users).
+**Globals** are single-instance settings (homepage, site config, SEO defaults).
+
+Both support:
+- Drizzle-based schema definition
+- Localization (i18n) for multi-language sites
+- Virtual fields (computed SQL expressions)
+- Relations (one-to-many, many-to-many, polymorphic)
+- Versioning (track changes, revert to previous versions)
+- Soft deletes (keep deleted records for recovery)
+
+```typescript
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }).notNull(),
+    content: text("content"),
+    authorId: uuid("author_id").notNull(),
+  })
+  .relations(({ table, one }) => ({
+    author: one("users", {
+      fields: [table.authorId],
+      references: ["id"],
+    }),
+  }))
+  .access({
+    read: true,
+    create: ({ user }) => !!user,
+    update: ({ user, row }) => row.authorId === user.id,
+  });
+```
+
+### Lifecycle Hooks
+
+Intercept operations at every stage:
+
+```typescript
+.hooks({
+  beforeCreate: async ({ data, cms }) => {
+    // Generate slug from title
+    data.slug = slugify(data.title);
+  },
+
+  afterCreate: async ({ data, cms }) => {
+    // Queue email notification
+    await cms.queue.publish("post-created", { postId: data.id });
+
+    // Log the event
+    cms.logger.info("Post created", { postId: data.id });
+  },
+})
+```
+
+Hooks have access to:
+- All integrated services (queue, email, storage, logger)
+- Other collections via `cms.api.collections`
+- Full type safety on data and context
+
+### Access Control
+
+Database-level access control with type-safe WHERE conditions:
+
+```typescript
+.access({
+  read: ({ user }) => {
+    if (!user) return { isPublished: true }; // Anonymous: published only
+
+    return {
+      OR: [
+        { isPublished: true },   // Published posts
+        { authorId: user.id },   // Own posts
+      ],
+    };
+  },
+
+  update: ({ user }) => ({
+    authorId: user.id,       // Can only update own posts
+    status: { ne: "archived" }, // Cannot update archived
+  }),
+})
+```
+
+Access rules are **enforced at the database level** - no manual filtering needed.
+
+### Integrated Services
+
+#### Authentication (Better Auth)
+
+- Email/password, OAuth (Google, GitHub, etc.)
+- Session management
+- Role-based access control
+- Auto-generated user/session/account tables
+
+#### Storage (Flydrive)
+
+- S3, Cloudflare R2, Local disk
+- Automatic `questpie_assets` collection
+- Direct upload endpoints
+- CDN-ready URLs
+
+#### Background Jobs (pg-boss)
+
+- Database-backed job queue
+- Cron jobs and workflows
+- Retry logic and error handling
+- No Redis required
+
+#### Email (Nodemailer + React Email)
+
+- Transactional emails
+- React components for templates
+- SMTP or API providers (SendGrid, Resend, etc.)
+
+#### Search (ParadeDB/pgvector)
+
+- Full-text search with BM25 ranking
+- Vector embeddings for semantic search
+- Built into Postgres - no separate service
+
+### Migrations
+
+Deterministic, reversible migrations powered by Drizzle Kit:
+
+```bash
+bun qcms migrate:generate    # Generate migration from schema changes
+bun qcms migrate:up          # Run pending migrations
+bun qcms migrate:down        # Rollback last batch
+bun qcms migrate:status      # Show migration status
+bun qcms migrate:fresh       # Reset and re-run all migrations
+```
+
+Migrations are **auto-generated** from your collection definitions - no manual SQL writing.
+
+### RESTful API (Auto-Generated)
+
+When using an adapter (Hono, Elysia), RESTful endpoints are generated automatically:
+
+```
+GET    /api/collections/posts           # List posts
+POST   /api/collections/posts           # Create post
+GET    /api/collections/posts/:id       # Get post by ID
+PATCH  /api/collections/posts/:id       # Update post
+DELETE /api/collections/posts/:id       # Delete post
+
+GET    /api/globals/site-config         # Get global
+PATCH  /api/globals/site-config         # Update global
+
+POST   /api/storage/upload              # Upload file
+GET    /api/storage/:path               # Serve file
+
+POST   /api/auth/sign-in                # Authentication endpoints
+POST   /api/auth/sign-up
+POST   /api/auth/sign-out
+```
+
+All endpoints respect access control and execute hooks automatically.
+
+## Architecture
+
+### Monorepo Structure
+
+QUESTPIE CMS is organized as a Turborepo monorepo:
+
+```
+questpie-cms/
+├── packages/
+│   └── cms/                 # Core CMS package
+│       ├── src/
+│       │   ├── server/      # Server-side CMS engine
+│       │   ├── client/      # Client-side SDK (optional)
+│       │   ├── shared/      # Shared utilities
+│       │   └── cli/         # Migration CLI
+│       └── package.json
+│
+├── apps/
+│   ├── docs/                # Documentation (Fumadocs)
+│   └── tanstackstart-admin/ # Admin UI (TanStack Start)
+│
+└── examples/
+    └── hono-barbershop/     # Example: Barbershop booking app
+```
+
+### Core Package (`@questpie/cms`)
+
+The CMS is published as a single package with **subpath exports**:
+
+```typescript
+import { QCMS, defineCollection } from "@questpie/cms/server"; // Server-only
+import { createClient } from "@questpie/cms/client";           // Client-only
+import { utils } from "@questpie/cms/shared";                  // Shared
+```
+
+This ensures:
+- No accidental server code in client bundles
+- Clear separation of concerns
+- Tree-shakeable imports
+
+### Server Architecture
+
+```
+CMS Instance (QCMS)
+├── Collections (posts, users, products)
+├── Globals (siteConfig, homepage)
+├── Integrated Services
+│   ├── Database (Drizzle ORM)
+│   ├── Auth (Better Auth)
+│   ├── Storage (Flydrive)
+│   ├── Queue (pg-boss)
+│   ├── Email (Nodemailer)
+│   ├── Logger (Pino)
+│   └── Search (ParadeDB)
+├── CRUD Engine
+│   ├── Query builder
+│   ├── Access control enforcer
+│   ├── Hook executor
+│   └── Transaction manager
+└── Adapters
+    ├── Hono (@questpie/hono)
+    └── Elysia (built-in)
+```
+
+### Request Flow
+
+1. **HTTP Request** → Adapter (Hono/Elysia)
+2. **Authentication** → Better Auth middleware
+3. **Context Creation** → `cms.createContext({ user, locale, accessMode })`
+4. **Access Control** → Evaluate access rules, build WHERE clause
+5. **Hook Execution** → Run `before*` hooks
+6. **Database Query** → Execute via Drizzle ORM
+7. **Hook Execution** → Run `after*` hooks
+8. **Response** → JSON with type-safe data
+
+### Database Schema
+
+QUESTPIE generates tables based on your collections:
+
+```sql
+-- Main collection table
+CREATE TABLE posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title VARCHAR(255) NOT NULL,
+  content TEXT,
+  author_id UUID NOT NULL,
+  is_published BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Localized fields (if .localized() used)
+CREATE TABLE posts_i18n (
+  id UUID PRIMARY KEY,
+  post_id UUID REFERENCES posts(id) ON DELETE CASCADE,
+  locale VARCHAR(10) NOT NULL,
+  title VARCHAR(255),  -- Localized field
+  content TEXT         -- Localized field
+);
+
+-- Versions (if versioning enabled)
+CREATE TABLE posts_versions (
+  id UUID PRIMARY KEY,
+  post_id UUID REFERENCES posts(id) ON DELETE CASCADE,
+  version INT NOT NULL,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+## When to Use QUESTPIE CMS
+
+### Perfect For:
+
+- **Content-heavy applications** - Blogs, documentation sites, marketing pages
+- **Multi-tenant SaaS** - Built-in organization/workspace support via access control
+- **E-commerce backends** - Products, categories, orders with complex relations
+- **Admin dashboards** - Type-safe CRUD operations with auto-generated APIs
+- **Rapid prototyping** - Get a production-ready backend in minutes
+
+### Not Ideal For:
+
+- **Simple static sites** - Use a static site generator instead
+- **Non-TypeScript projects** - The value is in TypeScript's type safety
+- **Edge-only deployments** - Requires Postgres (though Neon/PlanetScale work on edge)
+- **GraphQL-first APIs** - QUESTPIE is REST-first (GraphQL support coming)
+
+## Comparison to Other CMS
+
+| Feature | QUESTPIE | Payload CMS | Strapi | Contentful |
+|---------|----------|-------------|--------|------------|
+| **Type Safety** | ✅ Full (Drizzle) | ⚠️ Partial | ❌ Limited | ❌ API only |
+| **Batteries Included** | ✅ Auth, Storage, Queue, Email | ⚠️ Partial | ⚠️ Plugins | ❌ No |
+| **Self-Hosted** | ✅ Yes | ✅ Yes | ✅ Yes | ❌ SaaS only |
+| **Database** | Postgres | MongoDB | SQL/NoSQL | Proprietary |
+| **Framework** | Hono/Elysia | Express | Koa | N/A |
+| **Runtime** | Bun/Node/Deno | Node | Node | N/A |
+| **Schema Definition** | Code (Drizzle) | Code (Config) | GUI/Code | GUI |
+| **Migrations** | Auto-generated | Custom | Auto | N/A |
+| **Access Control** | Database-level | Code-level | RBAC | API-level |
+| **Admin UI** | Coming soon | ✅ Built-in | ✅ Built-in | ✅ SaaS |
+
+## Getting Started
+
+### Installation
+
+```bash
+bun add @questpie/cms drizzle-orm
+bun add -d drizzle-kit
+```
+
+### Quick Start
+
+```typescript
+// cms.ts
+import { QCMS, defineCollection } from "@questpie/cms/server";
+import { varchar, text } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+
+const queryClient = postgres(process.env.DATABASE_URL);
+const db = drizzle(queryClient);
+
+// Define a collection
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }).notNull(),
+    content: text("content"),
+  })
+  .access({
+    read: true,
+    create: ({ user }) => !!user,
+  });
+
+// Initialize CMS
+export const cms = new QCMS({
+  db: { drizzle: db },
+  collections: [posts],
+});
+
+// Run migrations
+await cms.migrations.push();
+```
+
+### With Hono
+
+```typescript
+import { Hono } from "hono";
+import { questpieHono } from "@questpie/hono";
+import { cms } from "./cms";
+
+const app = new Hono();
+
+app.route("/api", questpieHono(cms));
+
+export default {
+  port: 3000,
+  fetch: app.fetch,
+};
+```
+
+Now you have a fully functional CMS with:
+- RESTful API at `/api/collections/posts`
+- Type-safe CRUD operations
+- Access control enforced
+- Auto-generated migrations
+
+## Next Steps
+
+- **[Getting Started](/docs/introduction/getting-started)** - Step-by-step setup guide
+- **[Core Concepts](/docs/core-concepts)** - Learn about Collections, Hooks, Access Control
+- **[Guides](/docs/guides)** - Practical tutorials and real-world examples
+- **[API Reference](/docs/reference)** - Complete API documentation
+
+## Community & Support
+
+- **GitHub**: [questpie/questpie-cms](https://github.com/questpie/questpie-cms)
+- **Issues**: Report bugs or request features on GitHub
+- **Discussions**: Ask questions in GitHub Discussions
+
+## License
+
+QUESTPIE CMS is open-source software licensed under the **MIT License**.

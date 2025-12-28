@@ -1,88 +1,25 @@
 ---
-title: Introduction
-description: A modern, type-safe Content Management System built for the TypeScript ecosystem.
-icon: Rocket
+title: Documentation Home
+description: Welcome to the official documentation for QUESTPIE CMS.
+
 ---
 
-# QUESTPIE CMS
+# Welcome to QUESTPIE CMS Documentation
 
-QUESTPIE CMS is a headless Content Management System engineered for modern TypeScript applications. It combines the flexibility of a code-first schema definition with the performance of a compiled runtime, providing developers with end-to-end type safety without the need for code generation.
+This documentation is your comprehensive guide to understanding, developing with, and extending QUESTPIE CMS. Whether you're a new user setting up your first project or an experienced developer looking for detailed API references, you'll find the information you need here.
 
-## Core Features
+## Get Started
 
-<Cards>
-  <Card
-    title="Type-Safe Schema Definition"
-    description="Define content models using a fluent, builder-based API. QUESTPIE leverages advanced TypeScript inference to provide immediate feedback and autocomplete."
-    href="/docs/core-concepts/builder-pattern"
-  />
-  <Card
-    title="Modular Architecture"
-    description="Extend core functionality through a robust plugin system. Compose complex applications by merging collection definitions and modules."
-    href="/docs/core-concepts/merge-pattern"
-  />
-  <Card
-    title="Drizzle ORM Integration"
-    description="Built on top of Drizzle ORM, offering direct access to the underlying database with zero abstraction overhead when you need it."
-    href="/docs/reference/cms/collections"
-  />
-  <Card
-    title="Native Internationalization"
-    description="Built-in multi-language support. Define localized fields at the schema level and let the CMS handle data separation and fallback logic."
-    href="/docs/reference/cms/collections"
-  />
-</Cards>
+Begin your journey by exploring the [Introduction](/docs/introduction/overview) section, where you'll find an overview of the system's architecture and a step-by-step guide to setting up your development environment.
 
-## At a Glance
+## Explore the Core
 
-QUESTPIE CMS defines content structures ("Collections") through code. This approach ensures that your database schema and application types are always in sync.
+Dive into the [Core Concepts](/docs/core-concepts/overview) to understand how collections, globals, fields, relations, and hooks form the backbone of your content models.
 
-```typescript
-import { defineCollection, createCMS } from '@questpie/cms'
-import { text, integer } from 'drizzle-orm/pg-core'
+## Practical Guides
 
-// 1. Define your content model
-const products = defineCollection('products')
-  .fields({
-    name: text('name').notNull(),
-    price: integer('price').notNull(),
-    description: text('description'),
-  })
-  .access({
-    read: () => true,
-    create: 'admin',
-  })
+The [Guides](/docs/guides/overview) section offers practical, task-oriented instructions to help you implement common features, set up authentication, manage file storage, and work with queue jobs.
 
-// 2. Initialize the CMS
-const cms = createCMS({
-  collections: [products],
-  db: drizzle(process.env.DATABASE_URL!),
-})
+## API Reference
 
-// 3. Query with full type safety
-const product = await cms.crud('products', ctx).findFirst({
-  where: { name: 'QUESTPIE Pro' }
-})
-```
-
-## Documentation Structure
-
-- **Getting Started**: Installation and setup guides.
-- **Core Concepts**: Deep dives into the Builder Pattern, Module System, and Type Inference.
-- **Guides**: Practical examples for creating collections, managing relations, and handling assets.
-- **API Reference**: Detailed documentation of the core library exports.
-
-## Next Steps
-
-<Cards>
-  <Card
-    title="Installation"
-    description="Add QUESTPIE CMS to your existing project."
-    href="/docs/getting-started/installation"
-  />
-  <Card
-    title="Quick Start"
-    description="Build your first CMS application in minutes."
-    href="/docs/getting-started/quick-start"
-  />
-</Cards>
+For detailed information on configuration options, CLI commands, and API adapters, refer to the [Reference](/docs/reference/overview) section.

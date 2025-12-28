@@ -1,0 +1,681 @@
+---
+title: Access Control
+description: Comprehensive guide to securing your collections with granular access rules.
+---
+
+# Access Control
+
+Access Control in QUESTPIE CMS provides granular, type-safe rules for controlling who can read, create, update, and delete records. It's built directly into the collection system and enforced automatically at the database query level.
+
+## What is Access Control?
+
+Access Control allows you to:
+- **Restrict operations** based on user authentication and roles
+- **Filter query results** automatically based on user permissions
+- **Control field-level access** for sensitive data
+- **Return type-safe WHERE conditions** that filter data at the database level
+- **Operate in different modes** - system (full access) vs user (restricted)
+
+Unlike traditional middleware-based access control, QUESTPIE's access rules are:
+- **Database-enforced** - filters are applied at the SQL level
+- **Type-safe** - WHERE conditions are fully typed
+- **Composable** - rules can return complex boolean logic
+- **Automatic** - no need to manually check permissions in every query
+
+## Access Modes
+
+QUESTPIE CMS operates in two access modes:
+
+**System Mode** (`accessMode: "system"`)
+- Full unrestricted access to all data
+- Used for: background jobs, migrations, admin tasks, internal operations
+- Bypasses all access control rules
+- **Default mode** for CMS API operations
+
+**User Mode** (`accessMode: "user"`)
+- Restricted access based on access rules
+- Used for: user-facing API endpoints, client requests
+- Enforces all access control rules
+- Must be explicitly set when handling user requests
+
+```typescript
+// System mode (default) - full access
+const systemContext = await cms.createContext({
+  accessMode: "system",
+});
+
+// User mode - restricted access
+const userContext = await cms.createContext({
+  user: req.user,
+  accessMode: "user",
+});
+```
+
+## Defining Access Rules
+
+Access control is defined using the `.access()` method on collections:
+
+```typescript
+import { defineCollection } from "@questpie/cms/server";
+import { varchar, uuid, boolean } from "drizzle-orm/pg-core";
+
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    content: text("content"),
+    isPublished: boolean("is_published").default(false),
+    authorId: uuid("author_id").notNull(),
+  })
+  .access({
+    // Operation-level access
+    read: ({ user, row }) => {
+      // Not logged in? Only published posts
+      if (!user) return { isPublished: true };
+
+      // Logged in? Published OR own posts
+      return {
+        OR: [
+          { isPublished: true },
+          { authorId: user.id },
+        ],
+      };
+    },
+
+    create: ({ user }) => !!user, // Must be logged in
+
+    update: ({ user, row }) => row.authorId === user.id, // Own posts only
+
+    delete: ({ user }) => user?.role === "admin", // Admins only
+
+    // Field-level access
+    fields: {
+      authorId: {
+        write: ({ user }) => user?.role === "admin", // Only admins can change author
+      },
+    },
+  });
+```
+
+## Access Rule Return Types
+
+Access rules can return two types of values:
+
+### 1. Boolean
+
+Allow or deny all access:
+
+```typescript
+.access({
+  read: true, // Everyone can read
+  create: false, // Nobody can create
+  update: ({ user }) => !!user, // Logged-in users can update
+  delete: ({ user }) => user?.role === "admin", // Only admins
+})
+```
+
+### 2. WHERE Conditions (Type-Safe!)
+
+Return database filters that are applied automatically:
+
+```typescript
+.access({
+  read: ({ user }) => {
+    if (!user) return { isPublished: true };
+
+    return {
+      OR: [
+        { isPublished: true },
+        { authorId: user.id },
+      ],
+    };
+  },
+
+  update: ({ user }) => ({
+    authorId: user.id, // Can only update own records
+    status: { ne: "archived" }, // Cannot update archived records
+  }),
+})
+```
+
+**The WHERE conditions are:**
+- **Type-safe** - TypeScript knows your field names and types
+- **Database-enforced** - Applied directly in the SQL WHERE clause
+- **Automatic** - No need to manually add to every query
+
+## Operation-Level Access
+
+Define rules for each CRUD operation:
+
+### Read Access
+
+Controls which records users can view:
+
+```typescript
+.access({
+  read: ({ user }) => {
+    // Anonymous users: only public posts
+    if (!user) return { visibility: "public" };
+
+    // Regular users: public + internal
+    if (user.role === "user") {
+      return {
+        visibility: { in: ["public", "internal"] },
+      };
+    }
+
+    // Admins: everything
+    if (user.role === "admin") return true;
+
+    // Default: deny
+    return false;
+  },
+})
+```
+
+### Create Access
+
+Controls who can create new records:
+
+```typescript
+.access({
+  create: ({ user }) => {
+    // Must be logged in
+    if (!user) return false;
+
+    // Only verified users
+    if (!user.emailVerified) return false;
+
+    // Banned users cannot create
+    if (user.isBanned) return false;
+
+    return true;
+  },
+})
+```
+
+### Update Access
+
+Controls who can modify existing records:
+
+```typescript
+.access({
+  update: ({ user, row }) => {
+    // Must be logged in
+    if (!user) return false;
+
+    // Admins can update anything
+    if (user.role === "admin") return true;
+
+    // Users can only update their own non-published posts
+    return {
+      authorId: user.id,
+      isPublished: false,
+    };
+  },
+})
+```
+
+### Delete Access
+
+Controls who can delete records:
+
+```typescript
+.access({
+  delete: ({ user, row }) => {
+    // Only admins can delete
+    if (user?.role !== "admin") return false;
+
+    // Cannot delete system-protected records
+    return {
+      isSystemProtected: false,
+    };
+  },
+})
+```
+
+## Access Context
+
+Each access rule receives a context object:
+
+```typescript
+interface AccessContext<TRow> {
+  // Current authenticated user (from Better Auth)
+  user?: User;
+
+  // The record being accessed (for update/delete operations)
+  row?: TRow;
+
+  // Input data (for create/update operations)
+  input?: any;
+
+  // Database client
+  db: any;
+
+  // Full request context
+  context?: RequestContext;
+}
+```
+
+**Key properties:**
+- `user` - Current user from Better Auth (if authenticated)
+- `row` - The existing record (available in update/delete checks)
+- `input` - Data being created/updated
+- `context` - Full request context with locale, session, etc.
+
+## Field-Level Access
+
+Control access to individual fields:
+
+```typescript
+.access({
+  // Operation-level rules
+  read: true,
+  update: ({ user, row }) => row.authorId === user.id,
+
+  // Field-level rules
+  fields: {
+    // Only admins can read sensitive data
+    ssn: {
+      read: ({ user }) => user?.role === "admin",
+    },
+
+    // Only author or admin can modify status
+    status: {
+      write: ({ user, row }) => {
+        if (user?.role === "admin") return true;
+        return row.authorId === user.id;
+      },
+    },
+
+    // Price can only be set by admins
+    price: {
+      write: "admin",
+    },
+
+    // View count is read-only (nobody can write)
+    viewCount: {
+      write: false,
+    },
+  },
+})
+```
+
+**Field access options:**
+- `read` - Who can see this field in query results
+- `write` - Who can modify this field in create/update operations
+
+## Complex Access Patterns
+
+### Multi-Tenant Access
+
+Restrict data by organization:
+
+```typescript
+export const projects = defineCollection("projects")
+  .fields({
+    name: varchar("name", { length: 255 }),
+    organizationId: uuid("organization_id").notNull(),
+  })
+  .access({
+    // Users can only see projects in their organization
+    read: ({ user }) => ({
+      organizationId: user.organizationId,
+    }),
+
+    // Can only create in own organization
+    create: ({ user, input }) => {
+      return input.organizationId === user.organizationId;
+    },
+
+    // Can only update own organization's projects
+    update: ({ user }) => ({
+      organizationId: user.organizationId,
+    }),
+  });
+```
+
+### Role-Based Access with Hierarchy
+
+```typescript
+.access({
+  read: ({ user }) => {
+    if (!user) return { visibility: "public" };
+
+    // Admin sees everything
+    if (user.role === "admin") return true;
+
+    // Editor sees published + draft
+    if (user.role === "editor") {
+      return {
+        status: { in: ["published", "draft"] },
+      };
+    }
+
+    // Author sees only own posts
+    if (user.role === "author") {
+      return { authorId: user.id };
+    }
+
+    // Default: public only
+    return { visibility: "public" };
+  },
+})
+```
+
+### Time-Based Access
+
+```typescript
+.access({
+  read: () => {
+    const now = new Date();
+    return {
+      OR: [
+        // Published posts
+        { isPublished: true },
+        // Or scheduled posts that should be visible
+        {
+          isPublished: false,
+          publishAt: { lte: now },
+        },
+      ],
+    };
+  },
+})
+```
+
+### Ownership + Sharing
+
+```typescript
+export const documents = defineCollection("documents")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    ownerId: uuid("owner_id").notNull(),
+    sharedWith: jsonb("shared_with").$type<string[]>(),
+    isPublic: boolean("is_public").default(false),
+  })
+  .access({
+    read: ({ user }) => {
+      if (!user) return { isPublic: true };
+
+      return {
+        OR: [
+          { isPublic: true }, // Public documents
+          { ownerId: user.id }, // Own documents
+          { sharedWith: { contains: user.id } }, // Shared with me
+        ],
+      };
+    },
+
+    update: ({ user }) => ({
+      ownerId: user.id, // Can only update own documents
+    }),
+
+    delete: ({ user }) => ({
+      ownerId: user.id, // Can only delete own documents
+    }),
+  });
+```
+
+## WHERE Condition Syntax
+
+Access rules support the same WHERE syntax as queries:
+
+```typescript
+{
+  // Equality
+  field: value,
+
+  // Operators
+  field: { eq: value },
+  field: { ne: value },
+  field: { gt: value },
+  field: { gte: value },
+  field: { lt: value },
+  field: { lte: value },
+
+  // Array operators
+  field: { in: [value1, value2] },
+  field: { notIn: [value1, value2] },
+
+  // Null checks
+  field: { isNull: true },
+  field: { isNotNull: true },
+
+  // String operators
+  field: { contains: "text" },
+  field: { startsWith: "text" },
+  field: { endsWith: "text" },
+
+  // Logical operators
+  AND: [condition1, condition2],
+  OR: [condition1, condition2],
+  NOT: condition,
+}
+```
+
+## Utility Functions for Access Rules
+
+Create reusable utility functions for common access patterns:
+
+```typescript
+// utils/access.ts
+import type { AccessContext } from "@questpie/cms/server";
+
+// Role-based utilities
+export const isAdmin = ({ user }: AccessContext) => user?.role === "admin";
+export const isEditor = ({ user }: AccessContext) => user?.role === "editor";
+export const isAuthenticated = ({ user }: AccessContext) => !!user;
+
+// Ownership utilities
+export const isOwner = <T extends { authorId?: string }>(
+  { user, row }: AccessContext<T>
+) => row?.authorId === user?.id;
+
+export const isOwnerOrAdmin = <T extends { authorId?: string }>(
+  ctx: AccessContext<T>
+) => isAdmin(ctx) || isOwner(ctx);
+
+// Organization-based
+export const sameOrganization = <T extends { organizationId?: string }>(
+  { user, row }: AccessContext<T>
+) => row?.organizationId === user?.organizationId;
+```
+
+Use these utilities in your access rules:
+
+```typescript
+import { isAdmin, isAuthenticated, isOwnerOrAdmin } from "./utils/access";
+
+export const posts = defineCollection("posts")
+  .fields({ /* ... */ })
+  .access({
+    read: true,
+    create: isAuthenticated,
+    update: isOwnerOrAdmin,
+    delete: isAdmin,
+  });
+```
+
+This makes your access rules:
+- More readable and maintainable
+- Reusable across collections
+- Easier to test
+- Consistent throughout your application
+
+## Best Practices
+
+### 1. Always Define Access Rules
+
+Default behavior is to allow all access in system mode. Always define explicit rules:
+
+```typescript
+// ❌ Bad - No access control defined
+defineCollection("posts")
+  .fields({ /* ... */ })
+
+// ✅ Good - Explicit access rules
+defineCollection("posts")
+  .fields({ /* ... */ })
+  .access({
+    read: true, // Public
+    create: ({ user }) => !!user,
+    update: ({ user, row }) => row.authorId === user.id,
+    delete: ({ user }) => user?.role === "admin",
+  })
+```
+
+### 2. Use WHERE Conditions for Read Access
+
+Don't use boolean checks for read operations - use WHERE conditions:
+
+```typescript
+// ❌ Bad - Boolean doesn't filter data
+read: ({ user }) => !!user,
+
+// ✅ Good - WHERE condition filters query results
+read: ({ user }) => {
+  if (!user) return { isPublished: true };
+  return {
+    OR: [
+      { isPublished: true },
+      { authorId: user.id },
+    ],
+  };
+},
+```
+
+### 3. Set Access Mode Explicitly for User Requests
+
+Don't forget to set `accessMode: "user"` when handling user requests:
+
+```typescript
+// ❌ Bad - Using default system mode
+app.get("/api/posts", async (c) => {
+  const user = c.get("user");
+  const context = await cms.createContext({ user });
+  // Access rules won't be enforced!
+  return cms.api.collections.posts.find({}, context);
+});
+
+// ✅ Good - Explicit user mode
+app.get("/api/posts", async (c) => {
+  const user = c.get("user");
+  const context = await cms.createContext({
+    user,
+    accessMode: "user", // Enforces access rules
+  });
+  return cms.api.collections.posts.find({}, context);
+});
+```
+
+### 4. Combine Operation and Field Access
+
+Use field-level access for sensitive fields:
+
+```typescript
+.access({
+  read: true, // Everyone can read posts
+
+  fields: {
+    // But only admins can see email addresses
+    authorEmail: {
+      read: ({ user }) => user?.role === "admin",
+    },
+  },
+})
+```
+
+### 5. Test Access Rules
+
+Always test your access control logic:
+
+```typescript
+// Test as anonymous user
+const anonContext = await cms.createContext({ accessMode: "user" });
+const anonPosts = await cms.api.collections.posts.find({}, anonContext);
+// Should only return published posts
+
+// Test as regular user
+const userContext = await cms.createContext({
+  user: { id: "user-123" },
+  accessMode: "user",
+});
+const userPosts = await cms.api.collections.posts.find({}, userContext);
+// Should return published + user's own posts
+
+// Test as admin
+const adminContext = await cms.createContext({
+  user: { id: "admin-123", role: "admin" },
+  accessMode: "user",
+});
+const adminPosts = await cms.api.collections.posts.find({}, adminContext);
+// Should return all posts
+```
+
+## How It Works Internally
+
+1. **Context Creation**: `cms.createContext()` sets the access mode
+2. **Query Building**: CRUD operations check `context.accessMode`
+3. **Access Evaluation**: If `user` mode, access rules are evaluated
+4. **WHERE Merging**: Returned WHERE conditions are merged with the query
+5. **Database Execution**: Final SQL query includes access filters
+
+**Example:**
+
+```typescript
+// User query
+await cms.api.collections.posts.find({
+  where: { categoryId: "tech" },
+}, userContext);
+
+// Access rule returns
+{ authorId: user.id }
+
+// Final SQL WHERE clause becomes:
+// WHERE category_id = 'tech' AND author_id = 'user-123'
+```
+
+## Integration with Better Auth
+
+QUESTPIE CMS integrates with Better Auth for authentication:
+
+```typescript
+// In your Hono server
+app.use("*", async (c, next) => {
+  // Better Auth middleware provides user
+  const session = await auth.api.getSession({ headers: c.req.headers });
+
+  if (session) {
+    c.set("user", session.user);
+    c.set("session", session.session);
+  }
+
+  await next();
+});
+
+// In your route handlers
+app.get("/api/posts", async (c) => {
+  const user = c.get("user");
+
+  const context = await cms.createContext({
+    user, // From Better Auth
+    accessMode: "user",
+  });
+
+  const posts = await cms.api.collections.posts.find({}, context);
+  return c.json(posts);
+});
+```
+
+## Next Steps
+
+- Learn about [Hooks](/docs/core-concepts/hooks) for adding business logic
+- Explore [Authentication](/docs/guides/authentication) for setting up Better Auth
+- See [Real-world Examples](/docs/guides) for practical access control implementations
+
+## Reference
+
+- **Source Code**: `packages/cms/src/server/collection/builder/types.ts:259-271`
+- **Access Context**: `packages/cms/src/server/collection/builder/types.ts:181-188`
+- **CRUD Enforcement**: `packages/cms/src/server/collection/crud/crud-generator.ts:136-153`
+- **Examples**: `examples/hono-barbershop/src/server.ts`

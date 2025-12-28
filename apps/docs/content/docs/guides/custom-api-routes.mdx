@@ -1,0 +1,48 @@
+---
+title: Custom API Routes
+description: Extending the API with custom Hono routes.
+
+---
+
+# Custom API Routes
+
+While QUESTPIE CMS generates CRUD endpoints automatically, real-world applications often need custom logic (e.g., "Checkout", "Complex Search").
+
+## Using the Hono Adapter
+
+The CMS integrates directly into a Hono application.
+
+```typescript
+// src/server.ts
+import { Hono } from "hono";
+import { questpieHono } from "@questpie/hono";
+import { cms } from "./cms";
+
+const app = new Hono();
+
+// 1. Mount Standard CMS Routes
+app.route("/", questpieHono(cms, { basePath: "/api" }));
+
+// 2. Add Custom Routes
+app.post("/api/checkout", async (c) => {
+  const body = await c.req.json();
+  const context = c.get("cmsContext"); // Access CMS context
+
+  // Use CMS API programmatically within your custom route
+  const product = await cms.api.collections.products.findOne({
+    where: { id: body.productId }
+  }, context);
+
+  if (!product) return c.json({ error: "Product not found" }, 404);
+
+  // Perform checkout logic...
+
+  return c.json({ success: true, orderId: "123" });
+});
+
+export default app;
+```
+
+## Accessing CMS Context
+
+The `questpieHono` middleware populates `c.get("cmsContext")` and `c.get("user")`, allowing your custom routes to share the same database transaction scope and authentication state as the core CMS.

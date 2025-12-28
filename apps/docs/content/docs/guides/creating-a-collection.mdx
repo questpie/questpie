@@ -1,0 +1,59 @@
+---
+title: Creating a Collection
+description: Step-by-step guide to building a new data model.
+
+---
+
+# Creating a Collection
+
+This guide walks you through creating a "Products" collection for an e-commerce site.
+
+## 1. Define the Collection
+
+Create a new file or add to your existing `cms.ts` configuration.
+
+```typescript
+import { defineCollection } from "@questpie/cms/server";
+import { varchar, integer, text, boolean } from "drizzle-orm/pg-core";
+
+export const products = defineCollection("products")
+  .fields({
+    name: varchar("name", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 255 }).unique().notNull(),
+    description: text("description"),
+    price: integer("price").notNull(), // stored in cents
+    isActive: boolean("is_active").default(true),
+  })
+  .title(t => t.name);
+```
+
+## 2. Register in CMS Config
+
+Add the collection to your `QCMS` instance configuration.
+
+```typescript
+// src/cms.ts
+import { QCMS } from "@questpie/cms/server";
+import { products } from "./collections/products"; // assuming separate file
+
+export const cms = new QCMS({
+  // ...
+  collections: [
+    products,
+    // other collections...
+  ],
+});
+```
+
+## 3. Generate Migrations
+
+Run your migration tool (e.g., via the CLI or Drizzle Kit) to create the table in your database.
+
+```bash
+bun run db:generate
+bun run db:migrate
+```
+
+## 4. Verify
+
+Start your server and visit the Admin UI. You should see the new "Products" collection in the sidebar.

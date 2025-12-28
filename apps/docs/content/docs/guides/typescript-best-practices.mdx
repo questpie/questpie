@@ -1,0 +1,82 @@
+---
+title: TypeScript Best Practices
+description: Leveraging TypeScript for a type-safe QUESTPIE CMS experience.
+
+---
+
+# TypeScript Best Practices
+
+QUESTPIE CMS is built with TypeScript from the ground up to provide an unparalleled developer experience with full type safety.
+
+## End-to-End Type Safety
+
+One of the core strengths of QUESTPIE CMS is its ability to provide end-to-end type safety, from your database schema definitions to your client-side applications.
+
+### Collection Definitions
+
+When you define collections, the types are automatically inferred and available throughout your backend and for generating client-side types.
+
+```typescript
+// packages/cms/src/collections/posts.ts
+import { defineCollection } from "@questpie/cms/server";
+import { varchar, text } from "drizzle-orm/pg-core";
+
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }).notNull(),
+    content: text("content"),
+  });
+
+// You can then import the inferred type
+export type Post = typeof posts.infer;
+```
+
+### Client-side Type Generation
+
+For your frontend applications (e.g., `@questpie/admin`), you can generate client-side types based on your CMS collections. This ensures that your frontend code interacts with a fully typed API.
+
+*(Note: Specific instructions for client-side type generation will be provided in a dedicated guide once the feature is fully implemented in the CLI/SDK.)*
+
+## Zod for Runtime Validation
+
+While Drizzle ORM provides schema-level validation, you can use [Zod](https://zod.dev/) for robust runtime validation of API inputs, especially in custom routes or hooks.
+
+```typescript
+import { z } from "zod";
+import { Hono } from "hono";
+import { cms } from "../cms";
+
+const createPostSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  content: z.string().optional(),
+});
+
+app.post("/api/posts", async (c) => {
+  const body = await c.req.json();
+  const validatedData = createPostSchema.parse(body); // Zod validation
+
+  const newPost = await cms.api.collections.posts.create(
+    validatedData,
+    c.get("cmsContext")
+  );
+
+  return c.json(newPost, 201);
+});
+```
+
+## Utilizing Inferred Types
+
+Always prefer importing and using the inferred types from your collections to ensure maximum type safety and to catch errors at compile-time.
+
+```typescript
+import { type Post } from "../collections/posts"; // Import inferred type
+
+async function displayPost(post: Post) {
+  console.log(post.title);
+  // post.nonExistentField; // This would be a TypeScript error
+}
+```
+
+### Reference
+- *Fumadocs TypeScript*: [https://www.fumadocs.dev/docs/ui/typescript](https://www.fumadocs.dev/docs/ui/typescript)
+- *Zod Documentation*: [https://zod.dev/](https://zod.dev/)

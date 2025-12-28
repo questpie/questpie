@@ -1,0 +1,23 @@
+---
+title: Drizzle ORM
+description: Integration details for Drizzle ORM.
+
+---
+
+# Drizzle ORM Integration
+
+QUESTPIE CMS relies heavily on Drizzle ORM.
+
+## Schema Generation
+
+The CMS automatically compiles your `defineCollection` definitions into a Drizzle schema. You do not need to manually define Drizzle tables unless you are doing advanced custom integration.
+
+## Query Builder
+
+The CMS API (`cms.api.collections...`) exposes methods that wrap Drizzle queries, but you can also access the raw DB instance if needed:
+
+```typescript
+cms.db.select().from(...)
+```
+
+However, it is recommended to use the CMS API methods (`find`, `create`, etc.) to ensure hooks and relation logic are executed.

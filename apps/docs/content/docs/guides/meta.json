@@ -1,12 +1,11 @@
 {
-  "title": "Guides",
-  "pages": [
-    "collections",
-    "fields",
-    "relations",
-    "hooks",
-    "access-control",
-    "localization",
-    "modules"
-  ]
+	"title": "Guides",
+	"pages": [
+		"creating-a-collection",
+		"authentication",
+		"storage-upload",
+		"queue-jobs",
+		"custom-api-routes",
+		"typescript-best-practices"
+	]
 }

@@ -1,0 +1,44 @@
+---
+title: Fields
+description: Supported field types and validation.
+
+---
+
+# Fields
+
+QUESTPIE CMS leverages [Drizzle ORM](https://orm.drizzle.team/) column types directly for defining schema fields. This ensures maximum compatibility and type safety.
+
+## Supported Types
+
+You can use standard Drizzle generic column builders:
+
+- `varchar`, `text` (Strings)
+- `integer`, `bigint`, `serial` (Numbers)
+- `boolean`
+- `json`, `jsonb` (Complex structures)
+- `timestamp`, `date`
+
+## Example
+
+```typescript
+import { varchar, integer, jsonb } from "drizzle-orm/pg-core";
+
+// ... inside defineCollection
+.fields({
+  // Simple string
+  slug: varchar("slug", { length: 50 }).unique(),
+
+  // Number
+  views: integer("views").default(0),
+
+  // JSON Data (Typed)
+  metadata: jsonb("metadata").$type<{ author: string; tags: string[] }>(),
+})
+```
+
+## Validation
+
+While the database schema enforces type and constraints (like `notNull`), you can add additional runtime validation using Zod in your hooks or by wrapping field definitions (future feature). Currently, the primary validation is schema-driven.
+
+### Reference
+- *Drizzle Docs*: [PostgreSQL Column Types](https://orm.drizzle.team/docs/column-types/pg)

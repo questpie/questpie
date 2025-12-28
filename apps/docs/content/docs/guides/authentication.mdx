@@ -1,0 +1,41 @@
+---
+title: Authentication
+description: Setting up and configuring authentication.
+
+---
+
+# Authentication
+
+QUESTPIE CMS uses **Better Auth** for handling user authentication.
+
+## Configuration
+
+Configure auth in your `QCMS` initialization.
+
+```typescript
+import { QCMS, defaultQCMSAuth } from "@questpie/cms/server";
+import { SQL } from "bun"; // or your driver
+
+export const cms = new QCMS({
+  // ...
+  auth: defaultQCMSAuth(new SQL({ url: process.env.DATABASE_URL }), {
+    emailPassword: true,
+    emailVerification: true,
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET
+        }
+    },
+    baseURL: process.env.APP_URL,
+    secret: process.env.BETTER_AUTH_SECRET,
+  }),
+});
+```
+
+## Users Collection
+
+By default, Better Auth manages its own tables (usually `user`, `session`, `account`, etc.). You can create a virtual or real link to these tables in your own collections using relations (e.g., linking a `Profile` collection to the `User` table).
+
+## Reference
+- *Better Auth Docs*: [better-auth.com](https://better-auth.com/)

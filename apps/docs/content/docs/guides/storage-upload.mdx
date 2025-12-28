@@ -1,0 +1,33 @@
+---
+title: Storage & Uploads
+description: Managing file uploads and storage drivers.
+
+---
+
+# Storage & Uploads
+
+QUESTPIE CMS uses **Flydrive** to manage file uploads, supporting multiple drivers (Local, S3, etc.).
+
+## Configuration
+
+Configure the `storage` object in your `QCMS` config.
+
+```typescript
+import { QCMS } from "@questpie/cms/server";
+// Import drivers from flydrive (conceptual)
+// import { fsDriver } from "flydrive/drivers/fs";
+
+export const cms = new QCMS({
+  // ...
+  storage: {
+    // default: fsDriver({ location: './uploads' })
+    // See Flydrive documentation for S3 and other providers
+  },
+});
+```
+
+## Handling Uploads
+
+When creating or updating a record with a file field (often represented as a `varchar` storing the path/URL), the Admin UI or your custom API handles the file upload separately (typically to an upload endpoint) and then stores the reference in the collection.
+
+*(Note: Full integrated media library documentation is forthcoming).*

@@ -1,0 +1,34 @@
+---
+title: Hono Adapter
+description: Reference for @questpie/hono.
+
+---
+
+# Hono Adapter
+
+The `@questpie/hono` package connects the CMS engine to a web server.
+
+## `questpieHono(cms, options)`
+
+### Parameters
+- `cms`: The `QCMS` instance.
+- `options`: See configuration below.
+
+### Configuration
+
+---type-table---
+path: ../../../packages/hono/src/server.ts
+name: HonoAdapterConfig
+---
+
+### Middleware
+
+The adapter automatically registers middleware to:
+1.  Initialize request context (`c.set("cmsContext", ...)`).
+2.  Handle authentication (populating `c.get("user")`).
+
+## Example
+
+```typescript
+app.route("/", questpieHono(cms, { basePath: "/api" }));
+```

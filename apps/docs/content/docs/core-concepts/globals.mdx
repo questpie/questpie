@@ -1,0 +1,551 @@
+---
+title: Globals
+description: Managing singleton content types for site-wide settings and configurations.
+---
+
+# Globals
+
+Globals are singleton content types that represent data with only one instance. Unlike Collections (which can have many records), Globals always have exactly one record, making them perfect for site-wide settings, configurations, and unique content sections.
+
+## What are Globals?
+
+Globals in QUESTPIE CMS:
+- Store **single-instance** data (only one record exists)
+- Use the same **builder pattern** as Collections
+- Support **localization** for multi-language sites
+- Have **hooks and access control** like Collections
+- Are **type-safe** with full TypeScript inference
+- Are **automatically created** if they don't exist
+
+Think of Globals as your site's configuration and singleton content - things like site settings, homepage hero content, SEO defaults, or feature flags that only need one instance.
+
+## Common Use Cases
+
+- **Site Settings**: Site name, contact email, social media links
+- **Homepage Content**: Hero section, featured posts, banners
+- **SEO Defaults**: Default meta description, OpenGraph images
+- **Feature Flags**: Toggle features on/off site-wide
+- **Legal Content**: Privacy policy, terms of service
+- **Navigation**: Header/footer menus
+- **Theme Settings**: Colors, typography, layout preferences
+
+## Defining a Global
+
+Use `defineGlobal` with a fluent builder API:
+
+```typescript
+import { defineGlobal } from "@questpie/cms/server";
+import { varchar, text, boolean, jsonb } from "drizzle-orm/pg-core";
+
+export const siteConfig = defineGlobal("site_config")
+  .fields({
+    siteName: varchar("site_name", { length: 100 }).notNull(),
+    tagline: varchar("tagline", { length: 255 }),
+    contactEmail: varchar("contact_email", { length: 255 }).notNull(),
+    socialLinks: jsonb("social_links").$type<{
+      twitter?: string;
+      github?: string;
+      linkedin?: string;
+    }>(),
+    maintenanceMode: boolean("maintenance_mode").default(false),
+  });
+```
+
+## Builder Methods
+
+Globals support most of the same methods as Collections:
+
+### `.fields()`
+
+Define the schema using Drizzle ORM column types:
+
+```typescript
+export const homepage = defineGlobal("homepage")
+  .fields({
+    heroTitle: varchar("hero_title", { length: 255 }),
+    heroSubtitle: text("hero_subtitle"),
+    heroImage: uuid("hero_image").references(() => assets.table.id),
+    featuredPosts: jsonb("featured_posts").$type<string[]>(), // Array of post IDs
+    showNewsletter: boolean("show_newsletter").default(true),
+  });
+```
+
+### `.localized()`
+
+Support multiple languages for global content:
+
+```typescript
+export const siteConfig = defineGlobal("site_config")
+  .fields({
+    siteName: varchar("site_name", { length: 100 }),
+    tagline: varchar("tagline", { length: 255 }),
+    contactEmail: varchar("contact_email", { length: 255 }), // Not localized
+  })
+  .localized(["siteName", "tagline"]); // Translate per locale
+```
+
+### `.virtuals()`
+
+Add computed fields:
+
+```typescript
+import { sql } from "drizzle-orm";
+
+export const siteConfig = defineGlobal("site_config")
+  .fields({
+    firstName: varchar("first_name", { length: 100 }),
+    lastName: varchar("last_name", { length: 100 }),
+  })
+  .virtuals((t) => ({
+    fullName: sql<string>`${t.firstName} || ' ' || ${t.lastName}`,
+  }));
+```
+
+### `.relations()`
+
+Link to collections or other globals:
+
+```typescript
+export const homepage = defineGlobal("homepage")
+  .fields({
+    featuredPostId: uuid("featured_post_id"),
+    featuredProductId: uuid("featured_product_id"),
+  })
+  .relations(({ table, one }) => ({
+    featuredPost: one("posts", {
+      fields: [table.featuredPostId],
+      references: ["id"],
+    }),
+    featuredProduct: one("products", {
+      fields: [table.featuredProductId],
+      references: ["id"],
+    }),
+  }));
+```
+
+### `.options()`
+
+Configure global behavior:
+
+```typescript
+export const siteConfig = defineGlobal("site_config")
+  .fields({ /* ... */ })
+  .options({
+    timestamps: true,    // Add createdAt, updatedAt (default: true)
+    versioning: true,    // Track history of changes (default: false)
+    tableName: "config", // Custom table name (default: global name)
+  });
+```
+
+### `.hooks()`
+
+Add lifecycle hooks:
+
+```typescript
+export const siteConfig = defineGlobal("site_config")
+  .fields({
+    maintenanceMode: boolean("maintenance_mode"),
+  })
+  .hooks({
+    afterUpdate: async ({ data, original, cms }) => {
+      // Notify admins when maintenance mode changes
+      if (data.maintenanceMode !== original.maintenanceMode) {
+        await cms.queue.publish("maintenance-mode-changed", {
+          enabled: data.maintenanceMode,
+        });
+
+        cms.logger.warn("Maintenance mode toggled", {
+          enabled: data.maintenanceMode,
+        });
+      }
+    },
+  });
+```
+
+### `.access()`
+
+Control who can view/modify:
+
+```typescript
+export const siteConfig = defineGlobal("site_config")
+  .fields({ /* ... */ })
+  .access({
+    read: true, // Everyone can read
+    update: ({ user }) => user?.role === "admin", // Only admins can update
+  });
+```
+
+## Using Globals
+
+Register globals in your CMS config:
+
+```typescript
+import { QCMS } from "@questpie/cms/server";
+import { siteConfig, homepage, seoDefaults } from "./globals";
+
+export const cms = new QCMS({
+  db: { /* ... */ },
+  collections: [/* ... */],
+  globals: [siteConfig, homepage, seoDefaults],
+  // ...
+});
+```
+
+## CRUD Operations
+
+Globals have a simpler API than Collections (no list/create/delete):
+
+### Get (Read)
+
+Retrieve the global record:
+
+```typescript
+const context = await cms.createContext({ user, locale: "en" });
+
+// Get the global
+const config = await cms.api.globals.siteConfig.get(context);
+
+console.log(config.siteName); // "My Awesome Site"
+console.log(config.contactEmail); // "hello@example.com"
+```
+
+**If the global doesn't exist yet**, it will be **automatically created** with default values.
+
+### Update
+
+Update the global record:
+
+```typescript
+const updated = await cms.api.globals.siteConfig.update({
+  data: {
+    siteName: "New Site Name",
+    maintenanceMode: true,
+  },
+}, context);
+```
+
+**Note:** Unlike collections, you don't specify an ID - there's only one record.
+
+### With Relations
+
+Load related data:
+
+```typescript
+const homepage = await cms.api.globals.homepage.get({
+  with: {
+    featuredPost: true,
+    featuredProduct: true,
+  },
+}, context);
+
+console.log(homepage.featuredPost.title);
+console.log(homepage.featuredProduct.name);
+```
+
+### Versioning
+
+If versioning is enabled, track changes:
+
+```typescript
+export const siteConfig = defineGlobal("site_config")
+  .options({ versioning: true });
+
+// Get version history
+const versions = await cms.api.globals.siteConfig.findVersions({
+  limit: 10,
+}, context);
+
+// Revert to a previous version
+await cms.api.globals.siteConfig.revertToVersion({
+  versionId: versions[0].versionId,
+}, context);
+```
+
+## Differences from Collections
+
+| Feature | Collections | Globals |
+|---------|------------|---------|
+| Records | Many | One (singleton) |
+| Create | `create()` | Auto-created |
+| Read | `find()`, `findOne()` | `get()` |
+| Update | `updateById()` | `update()` |
+| Delete | `deleteById()`, `delete()` | Not available |
+| List | Yes | No |
+| ID | Required | Not needed |
+
+## Practical Examples
+
+### Site Settings
+
+```typescript
+export const siteSettings = defineGlobal("site_settings")
+  .fields({
+    siteName: varchar("site_name", { length: 100 }).notNull(),
+    description: text("description"),
+    logo: uuid("logo").references(() => assets.table.id),
+    favicon: uuid("favicon").references(() => assets.table.id),
+    googleAnalyticsId: varchar("google_analytics_id", { length: 50 }),
+    enableComments: boolean("enable_comments").default(true),
+    enableNewsletter: boolean("enable_newsletter").default(true),
+  })
+  .relations(({ table, one }) => ({
+    logoAsset: one("questpie_assets", {
+      fields: [table.logo],
+      references: ["id"],
+    }),
+    faviconAsset: one("questpie_assets", {
+      fields: [table.favicon],
+      references: ["id"],
+    }),
+  }))
+  .access({
+    read: true,
+    update: ({ user }) => user?.role === "admin",
+  });
+```
+
+### Homepage Content
+
+```typescript
+export const homepage = defineGlobal("homepage")
+  .fields({
+    heroTitle: varchar("hero_title", { length: 255 }),
+    heroSubtitle: text("hero_subtitle"),
+    heroCtaText: varchar("hero_cta_text", { length: 100 }),
+    heroCtaLink: varchar("hero_cta_link", { length: 500 }),
+    heroBackgroundImage: uuid("hero_background_image"),
+
+    featuredSectionTitle: varchar("featured_section_title", { length: 255 }),
+    featuredPosts: jsonb("featured_posts").$type<string[]>(),
+
+    testimonialsEnabled: boolean("testimonials_enabled").default(true),
+  })
+  .localized(["heroTitle", "heroSubtitle", "heroCtaText", "featuredSectionTitle"])
+  .relations(({ table, one }) => ({
+    heroBackground: one("questpie_assets", {
+      fields: [table.heroBackgroundImage],
+      references: ["id"],
+    }),
+  }))
+  .hooks({
+    afterUpdate: async ({ data, cms }) => {
+      // Invalidate cache when homepage changes
+      await cms.queue.publish("invalidate-cache", {
+        keys: ["homepage"],
+      });
+    },
+  });
+```
+
+### SEO Defaults
+
+```typescript
+export const seoDefaults = defineGlobal("seo_defaults")
+  .fields({
+    defaultTitle: varchar("default_title", { length: 60 }),
+    defaultDescription: text("default_description"),
+    defaultOgImage: uuid("default_og_image"),
+    twitterHandle: varchar("twitter_handle", { length: 50 }),
+    fbAppId: varchar("fb_app_id", { length: 50 }),
+
+    structuredData: jsonb("structured_data").$type<{
+      "@context": string;
+      "@type": string;
+      [key: string]: any;
+    }>(),
+  })
+  .localized(["defaultTitle", "defaultDescription"])
+  .relations(({ table, one }) => ({
+    ogImage: one("questpie_assets", {
+      fields: [table.defaultOgImage],
+      references: ["id"],
+    }),
+  }));
+```
+
+### Feature Flags
+
+```typescript
+export const featureFlags = defineGlobal("feature_flags")
+  .fields({
+    enableBetaFeatures: boolean("enable_beta_features").default(false),
+    enableNewEditor: boolean("enable_new_editor").default(false),
+    enableAiAssistant: boolean("enable_ai_assistant").default(false),
+    enableDarkMode: boolean("enable_dark_mode").default(true),
+    maintenanceMode: boolean("maintenance_mode").default(false),
+
+    maintenanceMessage: text("maintenance_message"),
+  })
+  .hooks({
+    afterUpdate: async ({ data, original, cms }) => {
+      // Log feature flag changes
+      const changes = Object.keys(data).filter(
+        key => data[key] !== original[key]
+      );
+
+      for (const change of changes) {
+        cms.logger.info("Feature flag changed", {
+          flag: change,
+          oldValue: original[change],
+          newValue: data[change],
+        });
+      }
+    },
+  })
+  .access({
+    read: true,
+    update: ({ user }) => user?.role === "admin",
+  });
+```
+
+### Navigation Menus
+
+```typescript
+type MenuItem = {
+  label: string;
+  url: string;
+  external?: boolean;
+  children?: MenuItem[];
+};
+
+export const navigation = defineGlobal("navigation")
+  .fields({
+    headerMenu: jsonb("header_menu").$type<MenuItem[]>().default([]),
+    footerMenu: jsonb("footer_menu").$type<MenuItem[]>().default([]),
+    socialLinks: jsonb("social_links").$type<{
+      platform: string;
+      url: string;
+    }[]>().default([]),
+  })
+  .localized(["headerMenu", "footerMenu"])
+  .hooks({
+    beforeUpdate: async ({ data }) => {
+      // Validate menu structure
+      const validateMenu = (items: MenuItem[]) => {
+        for (const item of items) {
+          if (!item.label || !item.url) {
+            throw new Error("All menu items must have label and url");
+          }
+          if (item.children) {
+            validateMenu(item.children);
+          }
+        }
+      };
+
+      if (data.headerMenu) validateMenu(data.headerMenu);
+      if (data.footerMenu) validateMenu(data.footerMenu);
+    },
+  });
+```
+
+## Best Practices
+
+### 1. Use Globals for Singletons Only
+
+```typescript
+// ❌ Bad - Should be a Collection
+export const blogPosts = defineGlobal("blog_posts")
+  .fields({ /* multiple posts */ });
+
+// ✅ Good - Single instance
+export const homepage = defineGlobal("homepage")
+  .fields({ /* one homepage */ });
+```
+
+### 2. Provide Sensible Defaults
+
+```typescript
+export const siteConfig = defineGlobal("site_config")
+  .fields({
+    siteName: varchar("site_name", { length: 100 })
+      .notNull()
+      .default("My Site"), // Default value
+
+    enableComments: boolean("enable_comments")
+      .default(true), // Sensible default
+  });
+```
+
+### 3. Use JSON for Structured Data
+
+```typescript
+export const homepage = defineGlobal("homepage")
+  .fields({
+    // ✅ Good - Structured as JSON
+    featuredPosts: jsonb("featured_posts").$type<string[]>(),
+
+    // ❌ Bad - Multiple fields for array items
+    featuredPost1: uuid("featured_post_1"),
+    featuredPost2: uuid("featured_post_2"),
+    featuredPost3: uuid("featured_post_3"),
+  });
+```
+
+### 4. Add Hooks for Side Effects
+
+```typescript
+export const siteConfig = defineGlobal("site_config")
+  .hooks({
+    afterUpdate: async ({ data, cms }) => {
+      // Invalidate caches
+      await cms.queue.publish("invalidate-cache", {
+        keys: ["site-config"],
+      });
+    },
+  });
+```
+
+### 5. Control Access Appropriately
+
+```typescript
+export const siteConfig = defineGlobal("site_config")
+  .access({
+    read: true, // Public reading
+    update: ({ user }) => user?.role === "admin", // Admin-only updates
+  });
+```
+
+## Type Safety
+
+Globals are fully typed:
+
+```typescript
+export const siteConfig = defineGlobal("site_config")
+  .fields({
+    siteName: varchar("site_name", { length: 100 }),
+    enableNewsletter: boolean("enable_newsletter"),
+  });
+
+// TypeScript knows the shape
+type SiteConfig = typeof siteConfig.$infer.select;
+
+const config = await cms.api.globals.siteConfig.get();
+config.siteName; // ✅ string
+config.enableNewsletter; // ✅ boolean
+// config.invalid; // ❌ TypeScript error
+```
+
+## API Endpoints
+
+When using the Hono adapter, globals get RESTful endpoints:
+
+```
+GET    /api/globals/site-config       # Get global
+PATCH  /api/globals/site-config       # Update global
+GET    /api/globals/site-config/versions  # Get version history
+POST   /api/globals/site-config/revert    # Revert to version
+```
+
+**Note:** No POST (create) or DELETE endpoints - globals are singletons.
+
+## Next Steps
+
+- Learn about [Collections](/docs/core-concepts/collections) for multi-record data
+- Explore [Hooks](/docs/core-concepts/hooks) for adding business logic
+- See [Access Control](/docs/core-concepts/access-control) for security
+
+## Reference
+
+- **Source Code**: `packages/cms/src/server/global/builder/global-builder.ts`
+- **Type Definitions**: `packages/cms/src/server/global/builder/types.ts`
+- **CRUD Operations**: `packages/cms/src/server/global/crud/global-crud-generator.ts`

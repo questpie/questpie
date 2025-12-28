@@ -1,12 +1,11 @@
 {
-  "title": "Core Concepts",
-  "pages": [
-    "index",
-    "collections",
-    "builder-pattern",
-    "type-inference",
-    "extensibility",
-    "merge-pattern",
-    "lazy-build"
-  ]
+	"title": "Core Concepts",
+	"pages": [
+		"collections",
+		"fields",
+		"globals",
+		"relations",
+		"hooks",
+		"access-control"
+	]
 }

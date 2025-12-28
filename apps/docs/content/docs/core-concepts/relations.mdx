@@ -1,0 +1,712 @@
+---
+title: Relations
+description: Complete guide to defining and querying relationships between collections.
+---
+
+# Relations
+
+Relations allow you to connect collections together, creating powerful data models that reflect real-world relationships. QUESTPIE CMS provides type-safe relations with eager loading support.
+
+## What are Relations?
+
+Relations in QUESTPIE CMS:
+- **Connect collections** via foreign keys
+- Are **type-safe** with full TypeScript inference
+- Support **eager loading** (load related data in a single query)
+- Enable **nested queries** (relations of relations)
+- Work with **access control** (permissions cascade to related data)
+- Follow **Drizzle ORM patterns** for familiarity
+
+Think of relations as the connections between your data - a Post belongs to an Author, an Author has many Posts, a Product has many Categories through a junction table.
+
+## Relation Types
+
+QUESTPIE CMS supports four types of relations:
+
+1. **One (Many-to-One)** - A record belongs to one related record
+2. **Many (One-to-Many)** - A record has many related records
+3. **Many-to-Many** - Records are connected through a junction table
+4. **Polymorphic** - A record can belong to multiple different collection types
+
+## One (Many-to-One) Relations
+
+A "belongs to" relationship where each record references a single related record.
+
+### Basic Example
+
+```typescript
+import { defineCollection } from "@questpie/cms/server";
+import { varchar, uuid } from "drizzle-orm/pg-core";
+
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    authorId: uuid("author_id").notNull(), // Foreign key
+  })
+  .relations(({ table, one }) => ({
+    author: one("questpie_users", {
+      fields: [table.authorId], // Column reference from table
+      references: ["id"],        // Column name in referenced collection
+    }),
+  }));
+```
+
+**Key points:**
+- Add a foreign key field (`authorId`)
+- Use `table.fieldName` for fields (type-safe column references)
+- Use string array for references (column names in target collection)
+- The relation name (`author`) is used when querying
+
+### With Custom Reference
+
+```typescript
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    categorySlug: varchar("category_slug", { length: 255 }), // Reference by slug
+  })
+  .relations(({ table, one }) => ({
+    category: one("categories", {
+      fields: [table.categorySlug],
+      references: ["slug"], // Reference non-primary key
+    }),
+  }));
+```
+
+### Multiple One Relations
+
+```typescript
+export const appointments = defineCollection("appointments")
+  .fields({
+    customerId: uuid("customer_id").notNull(),
+    barberId: uuid("barber_id").notNull(),
+    serviceId: uuid("service_id").notNull(),
+    scheduledAt: timestamp("scheduled_at", { mode: "date" }),
+  })
+  .relations(({ table, one }) => ({
+    customer: one("questpie_users", {
+      fields: [table.customerId],
+      references: ["id"],
+    }),
+    barber: one("barbers", {
+      fields: [table.barberId],
+      references: ["id"],
+    }),
+    service: one("services", {
+      fields: [table.serviceId],
+      references: ["id"],
+    }),
+  }));
+```
+
+## Many (One-to-Many) Relations
+
+The inverse of a Many-to-One relation. A record has many related records.
+
+### Basic Example
+
+```typescript
+export const users = defineCollection("users")
+  .fields({
+    name: varchar("name", { length: 255 }),
+    email: varchar("email", { length: 255 }),
+  })
+  .relations(({ many }) => ({
+    posts: many("posts", {
+      relationName: "author-posts", // Optional: helps link relations
+    }),
+  }));
+
+// The corresponding "one" side
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    authorId: uuid("author_id").notNull(),
+  })
+  .relations(({ table, one }) => ({
+    author: one("questpie_users", {
+      fields: [table.authorId],
+      references: ["id"],
+      relationName: "author-posts", // Match the name
+    }),
+  }));
+```
+
+**Key points:**
+- Define `many()` on the "parent" collection
+- Define `one()` on the "child" collection (with the foreign key)
+- Use `relationName` to explicitly link bidirectional relations
+- The CMS automatically finds related records based on foreign keys
+
+### With Cascade Delete
+
+```typescript
+export const users = defineCollection("users")
+  .fields({ /* ... */ })
+  .relations(({ many }) => ({
+    posts: many("posts", {
+      onDelete: "cascade", // Delete posts when user is deleted
+      onUpdate: "cascade", // Update posts when user ID changes
+    }),
+  }));
+```
+
+**Available cascade options:**
+- `"cascade"` - Cascade the operation to related records
+- `"set null"` - Set foreign key to null
+- `"restrict"` - Prevent operation if related records exist
+- `"no action"` - Database default behavior
+
+## Many-to-Many Relations
+
+Records are connected through a junction (join) table.
+
+### Basic Example
+
+Blog posts with multiple tags:
+
+```typescript
+// 1. Define the junction collection
+export const postTags = defineCollection("post_tags")
+  .fields({
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.table.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.table.id, { onDelete: "cascade" }),
+  })
+  .indexes((t) => [
+    // Composite primary key
+    uniqueIndex("post_tags_pk").on(t.postId, t.tagId),
+  ]);
+
+// 2. Define the relation on both sides
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+  })
+  .relations(({ manyToMany }) => ({
+    tags: manyToMany("tags", {
+      through: "post_tags",     // Junction collection name
+      sourceField: "postId",    // FK in junction pointing to posts
+      targetField: "tagId",     // FK in junction pointing to tags
+    }),
+  }));
+
+export const tags = defineCollection("tags")
+  .fields({
+    name: varchar("name", { length: 100 }),
+  })
+  .relations(({ manyToMany }) => ({
+    posts: manyToMany("posts", {
+      through: "post_tags",
+      sourceField: "tagId",     // FK in junction pointing to tags
+      targetField: "postId",    // FK in junction pointing to posts
+    }),
+  }));
+```
+
+### With Additional Junction Data
+
+Add metadata to the junction table:
+
+```typescript
+// Junction table with extra fields
+export const orderItems = defineCollection("order_items")
+  .fields({
+    orderId: uuid("order_id").notNull(),
+    productId: uuid("product_id").notNull(),
+    quantity: integer("quantity").notNull(),
+    priceAtTime: integer("price_at_time").notNull(), // Store price snapshot
+  });
+
+export const orders = defineCollection("orders")
+  .fields({
+    orderNumber: varchar("order_number", { length: 50 }),
+    customerId: uuid("customer_id"),
+  })
+  .relations(({ manyToMany }) => ({
+    products: manyToMany("products", {
+      through: "order_items",
+      sourceField: "orderId",
+      targetField: "productId",
+    }),
+    // Also define direct access to junction
+    items: many("order_items"),
+  }));
+```
+
+### Image Gallery Pattern
+
+Many-to-many with ordering:
+
+```typescript
+export const postImages = defineCollection("post_images")
+  .fields({
+    postId: uuid("post_id").notNull(),
+    assetId: uuid("asset_id").notNull(),
+    order: integer("order").default(0), // For sorting
+    caption: text("caption"),
+  });
+
+export const posts = defineCollection("posts")
+  .fields({ /* ... */ })
+  .relations(({ manyToMany }) => ({
+    images: manyToMany("questpie_assets", {
+      through: "post_images",
+      sourceField: "postId",
+      targetField: "assetId",
+    }),
+  }));
+```
+
+## Polymorphic Relations
+
+A record can belong to multiple different collection types.
+
+### Basic Example
+
+Comments that can be on Posts OR Products:
+
+```typescript
+export const comments = defineCollection("comments")
+  .fields({
+    content: text("content"),
+    commentableType: varchar("commentable_type", { length: 50 }), // "posts" or "products"
+    commentableId: uuid("commentable_id"), // ID of post or product
+  })
+  .relations(({ polymorphic }) => ({
+    commentable: polymorphic({
+      typeField: table.commentableType, // Which collection type
+      idField: table.commentableId,     // Which record ID
+      collections: {
+        posts: "posts",       // Map type value to collection name
+        products: "products",
+      },
+    }),
+  }));
+
+export const posts = defineCollection("posts")
+  .fields({ /* ... */ })
+  .relations(({ many }) => ({
+    comments: many("comments"), // Inverse relation
+  }));
+
+export const products = defineCollection("products")
+  .fields({ /* ... */ })
+  .relations(({ many }) => ({
+    comments: many("comments"), // Inverse relation
+  }));
+```
+
+### Polymorphic with Metadata
+
+Attachments that can belong to multiple types:
+
+```typescript
+export const attachments = defineCollection("attachments")
+  .fields({
+    filename: varchar("filename", { length: 255 }),
+    attachableType: varchar("attachable_type", { length: 50 }),
+    attachableId: uuid("attachable_id"),
+    uploadedAt: timestamp("uploaded_at", { mode: "date" }),
+  })
+  .relations(({ polymorphic }) => ({
+    attachable: polymorphic({
+      typeField: table.attachableType,
+      idField: table.attachableId,
+      collections: {
+        posts: "posts",
+        comments: "comments",
+        users: "questpie_users",
+      },
+    }),
+  }));
+```
+
+## Querying Relations
+
+Once defined, you can eager load relations in your queries:
+
+### Basic Eager Loading
+
+```typescript
+// Load a single relation
+const posts = await cms.api.collections.posts.find({
+  with: {
+    author: true,
+  },
+});
+
+// Result includes author data:
+// [{ id: "1", title: "Post", author: { id: "user-1", name: "John" } }]
+```
+
+### Multiple Relations
+
+```typescript
+const appointments = await cms.api.collections.appointments.find({
+  with: {
+    customer: true,
+    barber: true,
+    service: true,
+  },
+});
+```
+
+### Nested Relations
+
+Load relations of relations:
+
+```typescript
+const posts = await cms.api.collections.posts.find({
+  with: {
+    author: {
+      with: {
+        profile: true, // Author's profile
+        organization: true, // Author's organization
+      },
+    },
+    comments: {
+      with: {
+        user: true, // Each comment's user
+      },
+    },
+  },
+});
+```
+
+### Filtered Relations
+
+Load only specific related records:
+
+```typescript
+const users = await cms.api.collections.users.find({
+  with: {
+    posts: {
+      where: { isPublished: true }, // Only published posts
+      orderBy: { createdAt: "desc" },
+      limit: 5, // Latest 5 published posts
+    },
+  },
+});
+```
+
+### Many-to-Many Queries
+
+```typescript
+const posts = await cms.api.collections.posts.find({
+  with: {
+    tags: true, // Load all tags through junction table
+  },
+});
+
+// Access junction data directly
+const posts = await cms.api.collections.posts.find({
+  with: {
+    images: true, // Many-to-many
+    postImages: { // Direct access to junction
+      with: {
+        asset: true,
+      },
+      orderBy: { order: "asc" },
+    },
+  },
+});
+```
+
+### Polymorphic Queries
+
+```typescript
+const comments = await cms.api.collections.comments.find({
+  with: {
+    commentable: true, // Loads the related post OR product
+  },
+});
+
+// Result:
+// [
+//   { id: "1", content: "Great!", commentable: { id: "post-1", title: "..." } },
+//   { id: "2", content: "Nice!", commentable: { id: "product-5", name: "..." } },
+// ]
+```
+
+## Relation Helpers
+
+Access table references in your fields:
+
+```typescript
+export const posts = defineCollection("posts")
+  .fields({
+    // Use table reference for foreign key
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.table.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+  })
+  .relations(({ table, one }) => ({
+    author: one("users", {
+      fields: [table.authorId], // Use table reference
+      references: ["id"],
+    }),
+  }));
+```
+
+## Common Patterns
+
+### Blog with Categories and Tags
+
+```typescript
+// Many-to-one: Post → Category
+// Many-to-many: Post ↔ Tags
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    categoryId: uuid("category_id"),
+  })
+  .relations(({ table, one, manyToMany }) => ({
+    category: one("categories", {
+      fields: [table.categoryId],
+      references: ["id"],
+    }),
+    tags: manyToMany("tags", {
+      through: "post_tags",
+      sourceField: "postId",
+      targetField: "tagId",
+    }),
+  }));
+```
+
+### E-commerce Orders
+
+```typescript
+// Order → Customer (many-to-one)
+// Order ↔ Products (many-to-many with quantities)
+export const orders = defineCollection("orders")
+  .fields({
+    customerId: uuid("customer_id").notNull(),
+    orderNumber: varchar("order_number", { length: 50 }),
+  })
+  .relations(({ table, one, many, manyToMany }) => ({
+    customer: one("users", {
+      fields: [table.customerId],
+      references: ["id"],
+    }),
+    items: many("order_items"), // Direct access to items
+    products: manyToMany("products", {
+      through: "order_items",
+      sourceField: "orderId",
+      targetField: "productId",
+    }),
+  }));
+```
+
+### Hierarchical Data (Self-Referencing)
+
+```typescript
+export const categories = defineCollection("categories")
+  .fields({
+    name: varchar("name", { length: 255 }),
+    parentId: uuid("parent_id"), // Self-reference
+  })
+  .relations(({ table, one, many }) => ({
+    parent: one("categories", {
+      fields: [table.parentId],
+      references: ["id"],
+      relationName: "category-hierarchy",
+    }),
+    children: many("categories", {
+      relationName: "category-hierarchy",
+    }),
+  }));
+
+// Query with nested children
+const categories = await cms.api.collections.categories.find({
+  where: { parentId: { isNull: true } }, // Root categories
+  with: {
+    children: {
+      with: {
+        children: true, // Grandchildren
+      },
+    },
+  },
+});
+```
+
+### User Profiles
+
+```typescript
+// One-to-one: User ↔ Profile
+export const users = defineCollection("users")
+  .fields({
+    email: varchar("email", { length: 255 }),
+  })
+  .relations(({ table, one }) => ({
+    profile: one("profiles", {
+      fields: [table.id],
+      references: ["userId"],
+    }),
+  }));
+
+export const profiles = defineCollection("profiles")
+  .fields({
+    userId: uuid("user_id").notNull().unique(), // Unique enforces one-to-one
+    bio: text("bio"),
+    avatar: varchar("avatar", { length: 500 }),
+  })
+  .relations(({ table, one }) => ({
+    user: one("questpie_users", {
+      fields: [table.userId],
+      references: ["id"],
+    }),
+  }));
+```
+
+## Best Practices
+
+### 1. Always Use Foreign Keys
+
+Define foreign keys in your fields, not just in relations:
+
+```typescript
+// ❌ Bad - No database constraint
+.fields({
+  authorId: uuid("author_id"),
+})
+
+// ✅ Good - With foreign key constraint
+.fields({
+  authorId: uuid("author_id")
+    .notNull()
+    .references(() => users.table.id, { onDelete: "cascade" }),
+})
+```
+
+### 2. Use Cascade Options
+
+Prevent orphaned records:
+
+```typescript
+.fields({
+  postId: uuid("post_id")
+    .notNull()
+    .references(() => posts.table.id, {
+      onDelete: "cascade", // Delete comments when post is deleted
+    }),
+})
+```
+
+### 3. Name Relations Clearly
+
+Use descriptive relation names:
+
+```typescript
+// ❌ Bad - Ambiguous
+.relations(({ one }) => ({
+  user: one("users", { /* ... */ }),
+}))
+
+// ✅ Good - Clear purpose
+.relations(({ one }) => ({
+  author: one("users", { /* ... */ }),
+  editor: one("users", { /* ... */ }),
+  reviewer: one("users", { /* ... */ }),
+}))
+```
+
+### 4. Use Indexes for Foreign Keys
+
+Add indexes to foreign key columns for query performance:
+
+```typescript
+.fields({
+  authorId: uuid("author_id").notNull(),
+})
+.indexes((t) => [
+  index("posts_author_idx").on(t.authorId),
+])
+```
+
+### 5. Avoid Circular Eager Loading
+
+Don't create infinite loops:
+
+```typescript
+// ❌ Bad - Circular reference
+const users = await cms.api.collections.users.find({
+  with: {
+    posts: {
+      with: {
+        author: { // Loads user again!
+          with: {
+            posts: true, // Infinite loop!
+          },
+        },
+      },
+    },
+  },
+});
+
+// ✅ Good - Load only what you need
+const users = await cms.api.collections.users.find({
+  with: {
+    posts: true, // Stop here
+  },
+});
+```
+
+### 6. Use Relation Names for Bidirectional Links
+
+Help the CMS understand bidirectional relations:
+
+```typescript
+// Parent collection
+.relations(({ many }) => ({
+  comments: many("comments", {
+    relationName: "post-comments",
+  }),
+}))
+
+// Child collection
+.relations(({ one }) => ({
+  post: one("posts", {
+    fields: ["postId"],
+    references: ["id"],
+    relationName: "post-comments", // Same name
+  }),
+}))
+```
+
+## Type Safety
+
+Relations are fully typed - TypeScript knows the shape of related data:
+
+```typescript
+const posts = await cms.api.collections.posts.find({
+  with: {
+    author: true,
+    tags: true,
+  },
+});
+
+// TypeScript knows:
+posts[0].title; // ✅ string
+posts[0].author.name; // ✅ string (from user)
+posts[0].tags[0].name; // ✅ string (from tags)
+// posts[0].invalid; // ❌ TypeScript error
+```
+
+## Next Steps
+
+- Learn about [Collections](/docs/core-concepts/collections) for defining your data models
+- Explore [Hooks](/docs/core-concepts/hooks) for handling relation side effects
+- See [Creating a Collection](/docs/guides/creating-a-collection) for step-by-step examples
+
+## Reference
+
+- **Source Code**: `packages/cms/src/server/collection/builder/types.ts:46-117`
+- **Relation Resolution**: `packages/cms/src/server/collection/crud/crud-generator.ts`
+- **Examples**: `examples/hono-barbershop/src/cms.ts:79-155`

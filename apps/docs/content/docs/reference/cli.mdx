@@ -1,0 +1,24 @@
+---
+title: CLI
+description: Command Line Interface reference.
+
+---
+
+# CLI
+
+QUESTPIE CMS leverages the scripts defined in `package.json`.
+
+## Common Commands
+
+- `bun run dev`: Start development server.
+- `bun run build`: Build for production.
+- `bun run check-types`: Run TypeScript type checking.
+- `bun run lint`: Lint code.
+
+## Database Commands (Drizzle Kit)
+
+Usually run via `bun run db:...` scripts in your project.
+
+- `db:generate`: Generate SQL migrations from schema.
+- `db:migrate`: Apply migrations to the database.
+- `db:studio`: Open Drizzle Studio to inspect data.

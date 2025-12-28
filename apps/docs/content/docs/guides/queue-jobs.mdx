@@ -1,0 +1,62 @@
+---
+title: Queue Jobs
+description: Background processing with pg-boss.
+
+---
+
+# Queue Jobs
+
+Perform background tasks like sending emails, image processing, or data synchronization using the built-in Queue system (powered by **pg-boss**).
+
+## Defining a Job
+
+Use `defineJob` to specify the job name, payload schema, and handler.
+
+```typescript
+import { defineJob } from "@questpie/cms/server";
+import { z } from "zod";
+
+const emailJob = defineJob({
+  name: "send-email",
+  schema: z.object({
+    to: z.string().email(),
+    subject: z.string(),
+    body: z.string(),
+  }),
+  handler: async (payload, { cms }) => {
+    console.log(`Sending email to ${payload.to}`);
+    // Implement email sending logic
+  },
+});
+```
+
+## Registering Jobs
+
+Add jobs to your CMS config.
+
+```typescript
+import { pgBossAdapter } from "@questpie/cms/server";
+
+export const cms = new QCMS({
+  // ...
+  queue: {
+    jobs: [emailJob],
+    adapter: pgBossAdapter({
+      connectionString: process.env.DATABASE_URL,
+    }),
+  },
+});
+```
+
+## Triggering Jobs
+
+You can trigger jobs from anywhere you have access to the CMS instance (e.g., inside Hooks or Custom API routes).
+
+```typescript
+// Inside a hook or route
+await cms.queue.publish("send-email", {
+  to: "user@example.com",
+  subject: "Welcome!",
+  body: "Hello world",
+});
+```

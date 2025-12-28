@@ -1,0 +1,563 @@
+---
+title: Hooks
+description: Lifecycle hooks for adding custom business logic to your collections.
+---
+
+# Hooks
+
+Hooks are functions that run at specific points in your collection's lifecycle. They allow you to add custom business logic, validation, side effects, and integrations without modifying the core CRUD operations.
+
+## What are Hooks?
+
+Hooks in QUESTPIE CMS are:
+- **Lifecycle callbacks** that execute before or after CRUD operations
+- **Type-safe** with full access to record data
+- **Async-capable** for external API calls, database queries, or queue jobs
+- **CMS-aware** with direct access to all services (queue, email, storage, etc.)
+- **Chainable** - multiple hooks can be defined for the same event
+
+Think of hooks as middleware for your data operations - they intercept the flow and allow you to:
+- Validate or transform data before saving
+- Trigger side effects after changes (emails, notifications, webhooks)
+- Sync data to external systems
+- Generate derived data
+- Enforce business rules
+
+## Available Hooks
+
+### Create Lifecycle
+
+**`beforeCreate`**
+- Runs before a new record is inserted
+- Can modify the `data` object before saving
+- Useful for: validation, generating slugs, setting defaults
+
+**`afterCreate`**
+- Runs after a record is successfully created
+- Has access to the created record (with `id` and timestamps)
+- Useful for: sending notifications, triggering workflows, syncing to external services
+
+### Update Lifecycle
+
+**`beforeUpdate`**
+- Runs before an existing record is updated
+- Can modify the `data` object before saving
+- Has access to the original record via `original`
+- Useful for: validation, conditional updates, audit logging
+
+**`afterUpdate`**
+- Runs after a record is successfully updated
+- Has access to both the updated record and the original
+- Useful for: detecting changes, triggering notifications, invalidating caches
+
+### Delete Lifecycle
+
+**`beforeDelete`**
+- Runs before a record is deleted (or soft-deleted)
+- Can access the record being deleted
+- Useful for: preventing deletion, cascading deletes, backups
+
+**`afterDelete`**
+- Runs after a record is successfully deleted
+- Useful for: cleanup, logging, notifying users
+
+### Read Lifecycle
+
+**`beforeRead`**
+- Runs before records are queried
+- Can modify query options
+- Useful for: adding default filters, logging access
+
+**`afterRead`**
+- Runs after records are retrieved
+- Can transform the result data
+- Useful for: post-processing, adding computed fields
+
+### Change Shortcuts
+
+**`beforeChange`**
+- Runs on both create AND update operations
+- Convenient for shared validation logic
+
+**`afterChange`**
+- Runs after both create AND update operations
+- Convenient for shared side effects
+
+## Hook Context
+
+Every hook receives a context object with:
+
+```typescript
+interface HookContext<TData, TCMS> {
+  // The record data (created/updated)
+  data: TData;
+
+  // Original record (for update/delete operations only)
+  original?: TData;
+
+  // Current authenticated user
+  user?: User;
+
+  // Current locale
+  locale?: string;
+
+  // Access mode (system or user)
+  accessMode?: "user" | "system";
+
+  // Operation type
+  operation: "create" | "update" | "delete" | "read";
+
+  // Full CMS instance - type-safe access to all services
+  cms: TCMS;
+
+  // Database client (for transactions)
+  db?: any;
+}
+```
+
+**Key properties:**
+- `data` - The record being created/updated (mutable in before hooks)
+- `original` - The previous state (in update/delete hooks)
+- `cms` - Full access to queue, email, storage, logger, and other collections
+- `user` - Current authenticated user (if any)
+- `operation` - What type of operation is happening
+
+## Basic Examples
+
+### Generate Slug from Title
+
+```typescript
+import { defineCollection } from "@questpie/cms/server";
+import { varchar, text } from "drizzle-orm/pg-core";
+import slugify from "slugify";
+
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 255 }).notNull().unique(),
+    content: text("content"),
+  })
+  .hooks({
+    beforeCreate: async ({ data }) => {
+      // Auto-generate slug if not provided
+      if (!data.slug && data.title) {
+        data.slug = slugify(data.title, { lower: true, strict: true });
+      }
+    },
+
+    beforeUpdate: async ({ data, original }) => {
+      // Regenerate slug if title changed and slug wasn't manually set
+      if (data.title && data.title !== original.title && !data.slug) {
+        data.slug = slugify(data.title, { lower: true, strict: true });
+      }
+    },
+  });
+```
+
+### Send Notification on Create
+
+```typescript
+export const posts = defineCollection("posts")
+  .fields({ /* ... */ })
+  .hooks({
+    afterCreate: async ({ data, cms }) => {
+      // Queue a job to send email notifications
+      await cms.queue.publish("post-created-notification", {
+        postId: data.id,
+        title: data.title,
+        authorId: data.authorId,
+      });
+
+      // Log the event
+      cms.logger.info("New post created", {
+        postId: data.id,
+        title: data.title,
+      });
+    },
+  });
+```
+
+### Validate Data Before Save
+
+```typescript
+export const products = defineCollection("products")
+  .fields({
+    name: varchar("name", { length: 255 }),
+    price: integer("price"),
+    discountPrice: integer("discount_price"),
+  })
+  .hooks({
+    beforeChange: async ({ data }) => {
+      // Runs on both create and update
+
+      // Ensure discount price is less than regular price
+      if (data.discountPrice && data.price) {
+        if (data.discountPrice >= data.price) {
+          throw new Error("Discount price must be less than regular price");
+        }
+      }
+
+      // Ensure price is positive
+      if (data.price !== undefined && data.price < 0) {
+        throw new Error("Price cannot be negative");
+      }
+    },
+  });
+```
+
+### Track Changes with Audit Log
+
+```typescript
+export const posts = defineCollection("posts")
+  .fields({ /* ... */ })
+  .hooks({
+    afterUpdate: async ({ data, original, user, cms }) => {
+      // Detect what changed
+      const changes: Record<string, { from: any; to: any }> = {};
+
+      for (const key in data) {
+        if (data[key] !== original[key]) {
+          changes[key] = {
+            from: original[key],
+            to: data[key],
+          };
+        }
+      }
+
+      // Log to audit collection
+      await cms.api.collections.auditLog.create({
+        collectionName: "posts",
+        recordId: data.id,
+        operation: "update",
+        changes: JSON.stringify(changes),
+        userId: user?.id,
+        timestamp: new Date(),
+      });
+    },
+  });
+```
+
+## Advanced Patterns
+
+### Cascading Operations
+
+When a record is deleted, clean up related data:
+
+```typescript
+export const users = defineCollection("users")
+  .fields({ /* ... */ })
+  .hooks({
+    beforeDelete: async ({ data, cms }) => {
+      // Delete all posts by this user
+      await cms.api.collections.posts.delete({
+        where: { authorId: data.id },
+      });
+
+      // Delete user's profile picture from storage
+      if (data.avatarPath) {
+        await cms.storage.delete(data.avatarPath);
+      }
+
+      // Notify admin
+      await cms.queue.publish("user-deleted", {
+        userId: data.id,
+        email: data.email,
+      });
+    },
+  });
+```
+
+### Conditional Side Effects
+
+Trigger actions only when specific fields change:
+
+```typescript
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    isPublished: boolean("is_published"),
+    publishedAt: timestamp("published_at", { mode: "date" }),
+  })
+  .hooks({
+    afterUpdate: async ({ data, original, cms }) => {
+      // Detect if post was just published
+      const wasJustPublished = data.isPublished && !original.isPublished;
+
+      if (wasJustPublished) {
+        // Set publish timestamp
+        if (!data.publishedAt) {
+          await cms.api.collections.posts.updateById({
+            id: data.id,
+            data: { publishedAt: new Date() },
+          });
+        }
+
+        // Notify subscribers
+        await cms.queue.publish("post-published", {
+          postId: data.id,
+          title: data.title,
+        });
+
+        // Send to social media
+        await cms.queue.publish("share-to-social-media", {
+          postId: data.id,
+        });
+      }
+
+      // Detect if post was unpublished
+      const wasUnpublished = !data.isPublished && original.isPublished;
+
+      if (wasUnpublished) {
+        // Clear publish date
+        await cms.api.collections.posts.updateById({
+          id: data.id,
+          data: { publishedAt: null },
+        });
+      }
+    },
+  });
+```
+
+### External API Integration
+
+Sync data to external services:
+
+```typescript
+export const products = defineCollection("products")
+  .fields({ /* ... */ })
+  .hooks({
+    afterCreate: async ({ data, cms }) => {
+      // Sync to external inventory system
+      try {
+        await fetch("https://api.inventory-system.com/products", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${process.env.INVENTORY_API_KEY}`,
+          },
+          body: JSON.stringify({
+            externalId: data.id,
+            name: data.name,
+            sku: data.sku,
+            quantity: data.stock,
+          }),
+        });
+
+        cms.logger.info("Product synced to inventory system", {
+          productId: data.id,
+        });
+      } catch (error) {
+        // Don't fail the operation, queue retry instead
+        cms.logger.error("Failed to sync product to inventory", {
+          productId: data.id,
+          error,
+        });
+
+        await cms.queue.publish("retry-inventory-sync", {
+          productId: data.id,
+        });
+      }
+    },
+
+    afterUpdate: async ({ data, cms }) => {
+      // Sync updates to external system
+      await cms.queue.publish("sync-product-to-inventory", {
+        productId: data.id,
+      });
+    },
+  });
+```
+
+## Multiple Hooks
+
+You can define multiple hook functions for the same event - they run in order:
+
+```typescript
+export const posts = defineCollection("posts")
+  .fields({ /* ... */ })
+  .hooks({
+    // Array of hook functions
+    afterCreate: [
+      // Hook 1: Send notification
+      async ({ data, cms }) => {
+        await cms.queue.publish("post-created", { postId: data.id });
+      },
+
+      // Hook 2: Update statistics
+      async ({ data, cms }) => {
+        await cms.api.collections.stats.updateById({
+          id: "global-stats",
+          data: {
+            totalPosts: { increment: 1 },
+          },
+        });
+      },
+
+      // Hook 3: Log event
+      async ({ data, cms }) => {
+        cms.logger.info("Post created", { postId: data.id });
+      },
+    ],
+  });
+```
+
+## Hook Execution Order
+
+For a create operation:
+1. `beforeChange` hooks (if defined)
+2. `beforeCreate` hooks (if defined)
+3. **Database INSERT**
+4. `afterCreate` hooks (if defined)
+5. `afterChange` hooks (if defined)
+
+For an update operation:
+1. `beforeChange` hooks (if defined)
+2. `beforeUpdate` hooks (if defined)
+3. **Database UPDATE**
+4. `afterUpdate` hooks (if defined)
+5. `afterChange` hooks (if defined)
+
+For a delete operation:
+1. `beforeDelete` hooks (if defined)
+2. **Database DELETE** (or soft delete)
+3. `afterDelete` hooks (if defined)
+
+**Important:** If any `before*` hook throws an error, the operation is aborted and the database is not modified.
+
+## Best Practices
+
+### 1. Keep Hooks Fast
+
+Hooks run synchronously in the request flow. For slow operations, use queue jobs:
+
+```typescript
+// ❌ Bad - Slow operation blocks the request
+afterCreate: async ({ data, cms }) => {
+  await processLargeImage(data.imageUrl); // Might take 10 seconds
+}
+
+// ✅ Good - Queue the work
+afterCreate: async ({ data, cms }) => {
+  await cms.queue.publish("process-image", { imageId: data.imageId });
+}
+```
+
+### 2. Avoid Infinite Loops
+
+Be careful when updating the same collection inside hooks:
+
+```typescript
+// ❌ Bad - Infinite loop!
+afterUpdate: async ({ data, cms }) => {
+  await cms.api.collections.posts.updateById({
+    id: data.id,
+    data: { updatedCount: data.updatedCount + 1 },
+  }); // This triggers afterUpdate again!
+}
+
+// ✅ Good - Use a flag or condition
+afterUpdate: async ({ data, original, cms }) => {
+  if (data.isPublished && !original.isPublished) {
+    // Only update when status changes
+    await cms.api.collections.posts.updateById({
+      id: data.id,
+      data: { publishedAt: new Date() },
+    });
+  }
+}
+```
+
+### 3. Use beforeChange for Shared Logic
+
+Instead of duplicating code between `beforeCreate` and `beforeUpdate`:
+
+```typescript
+// ❌ Bad - Duplicated logic
+beforeCreate: async ({ data }) => {
+  data.slug = slugify(data.title);
+},
+beforeUpdate: async ({ data }) => {
+  data.slug = slugify(data.title);
+},
+
+// ✅ Good - Use beforeChange
+beforeChange: async ({ data }) => {
+  if (data.title) {
+    data.slug = slugify(data.title);
+  }
+},
+```
+
+### 4. Don't Throw Errors in After Hooks
+
+After hooks run after the database operation - throwing an error won't roll back:
+
+```typescript
+// ❌ Bad - Record already created, error is confusing
+afterCreate: async ({ data }) => {
+  if (!data.email) {
+    throw new Error("Email required"); // Too late!
+  }
+}
+
+// ✅ Good - Validate in before hooks
+beforeCreate: async ({ data }) => {
+  if (!data.email) {
+    throw new Error("Email required"); // Prevents creation
+  }
+}
+```
+
+### 5. Use CMS Services, Not Global State
+
+Always access services through the `cms` parameter:
+
+```typescript
+// ❌ Bad - Using global/imported instance
+import { cms } from "./cms";
+
+afterCreate: async ({ data }) => {
+  await cms.queue.publish(...); // Don't do this
+}
+
+// ✅ Good - Use the cms from context
+afterCreate: async ({ data, cms }) => {
+  await cms.queue.publish(...); // Type-safe and context-aware
+}
+```
+
+## Type Safety
+
+Hooks are fully typed - you get autocomplete and type checking:
+
+```typescript
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    viewCount: integer("view_count").default(0),
+  })
+  .hooks({
+    beforeCreate: async ({ data, cms }) => {
+      // ✅ TypeScript knows the shape of data
+      data.title.toUpperCase(); // ✅ OK
+      data.viewCount = 0; // ✅ OK
+
+      // data.invalidField = "x"; // ❌ TypeScript error
+
+      // ✅ TypeScript knows cms.queue exists
+      await cms.queue.publish("job-name", { /* typed payload */ });
+    },
+  });
+```
+
+## Next Steps
+
+- Learn about [Access Control](/docs/core-concepts/access-control) for securing operations
+- Explore [Queue Jobs](/docs/guides/queue-jobs) for background processing
+- See [Real-world Examples](/docs/guides) for practical hook implementations
+
+## Reference
+
+- **Source Code**: `packages/cms/src/server/collection/builder/types.ts:200-217`
+- **Hook Context**: `packages/cms/src/server/collection/builder/types.ts:124-177`
+- **Examples**: `examples/hono-barbershop/src/cms.ts:107-124`

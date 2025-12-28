@@ -1,0 +1,27 @@
+---
+title: CMS Configuration
+description: Reference for the QCMS configuration object.
+
+---
+
+# CMS Configuration
+
+The `QCMS` class is the central entry point.
+
+## Options
+
+---type-table---
+path: ../../../packages/cms/src/server/config/types.ts
+name: CMSConfig
+---
+
+## Example
+
+```typescript
+export const cms = new QCMS({
+  app: { url: "http://localhost:3000" },
+  db: { connection: { url: process.env.DB_URL } },
+  collections: [posts, users],
+  // ...
+});
+```

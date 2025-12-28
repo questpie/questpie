@@ -1,0 +1,54 @@
+---
+title: Getting Started
+description: How to install and run QUESTPIE CMS.
+
+---
+
+# Getting Started
+
+Follow these steps to set up a new QUESTPIE CMS project.
+
+## Prerequisites
+
+- **Bun**: v1.3.0 or later.
+- **Node.js**: >= 23 (required for some ecosystem tools).
+- **PostgreSQL**: A running Postgres instance with v18 or later (we are utilizing new `uuidv7()` for ids)
+
+## Installation
+
+1.  **Clone the repository** (if contributing) or use the starter template.
+2.  **Install dependencies**:
+    ```bash
+    bun install
+    ```
+
+## Running the Development Server
+
+Start the entire monorepo (CMS API, Admin UI, Docs) in development mode:
+
+```bash
+bun run dev
+```
+
+To run a specific app, use the filter flag:
+
+```bash
+# Run only the Admin UI
+bun run dev --filter=@questpie/admin
+```
+
+## Configuration
+
+The core configuration lives in your CMS entry point (e.g., `src/cms.ts`). This is where you define:
+
+- Database connection (`db`)
+- Collections & Globals (`collections`)
+- Authentication (`auth`)
+- Queue settings (`queue`)
+
+See the [CMS Configuration](/docs/reference/cms-config) reference for details.
+
+### Next Steps
+
+- [Create your first Collection](/docs/guides/creating-a-collection)
+- [Explore Core Concepts](/docs/core-concepts)

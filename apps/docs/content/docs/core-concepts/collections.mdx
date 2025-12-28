@@ -1,0 +1,592 @@
+---
+title: Collections
+description: Complete guide to defining and working with Collections in QUESTPIE CMS.
+---
+
+# Collections
+
+Collections are the fundamental data structures in QUESTPIE CMS. They represent content types like Blog Posts, Products, Users, or any other structured data you need to manage.
+
+## What is a Collection?
+
+A Collection is:
+- A **database table** with a typed schema
+- A set of **CRUD operations** (create, read, update, delete) automatically generated
+- **Type-safe** throughout your entire application
+- **Extensible** through hooks, access control, and relations
+
+Think of a Collection as a content model that combines:
+1. Database schema (via Drizzle ORM)
+2. Business logic (via hooks)
+3. Access control (via access rules)
+4. API endpoints (auto-generated)
+
+## Defining a Collection
+
+Use the `defineCollection` function with a fluent builder pattern:
+
+```typescript
+import { defineCollection } from "@questpie/cms/server";
+import { varchar, text, boolean, integer } from "drizzle-orm/pg-core";
+
+export const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 255 }).notNull().unique(),
+    content: text("content"),
+    excerpt: text("excerpt"),
+    isPublished: boolean("is_published").default(false).notNull(),
+    viewCount: integer("view_count").default(0),
+  })
+  .title((t) => t.title);
+```
+
+**Important:** Field definitions use Drizzle ORM column builders directly. This ensures complete type safety from the database to your application code.
+
+## Builder Methods
+
+The `CollectionBuilder` provides a fluent API for configuring your collection:
+
+### `.fields()`
+
+Define the schema using Drizzle ORM column types:
+
+```typescript
+import { varchar, text, integer, boolean, timestamp, jsonb, uuid } from "drizzle-orm/pg-core";
+
+defineCollection("products")
+  .fields({
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    price: integer("price").notNull(), // in cents
+    stock: integer("stock").default(0),
+    isAvailable: boolean("is_available").default(true),
+    metadata: jsonb("metadata").$type<{ sku: string; weight: number }>(),
+    publishedAt: timestamp("published_at", { mode: "date" }),
+  })
+```
+
+**Available Field Types:**
+- `varchar(name, { length })` - Variable-length string
+- `text(name)` - Unlimited text
+- `integer(name)` - 32-bit integer
+- `bigint(name, { mode: "number" })` - Large integers
+- `boolean(name)` - True/false
+- `timestamp(name, { mode: "date" })` - Date/time
+- `uuid(name)` - UUID
+- `jsonb(name)` - Binary JSON (better query performance)
+- `real(name)`, `doublePrecision(name)` - Floating point
+- And more from [Drizzle PostgreSQL types](https://orm.drizzle.team/docs/column-types/pg)
+
+### `.title()`
+
+Generate a computed `_title` field for each record. This is used for:
+- Search indexing and full-text search
+- Display in lists and references
+- Logging and audit trails
+- Any place where a human-readable record identifier is needed
+
+The `_title` is automatically computed and stored in query results.
+
+```typescript
+import { sql } from "drizzle-orm";
+
+defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    status: varchar("status", { length: 50 })
+  })
+  .title((t) => t.title) // Simple field reference
+
+// Or use SQL expressions for complex titles:
+  .title((t) => sql`${t.title} || ' [' || ${t.status} || ']'`)
+
+// Title is available in query results as _title:
+const post = await cms.api.collections.posts.findOne({ where: { id } });
+console.log(post._title); // "My Post [published]"
+```
+
+The title expression can reference:
+- Non-localized fields directly: `t.fieldName`
+- Localized fields via i18n accessor: `i18n.fieldName`
+
+**Why use `.title()`:**
+- Enables search to find records by their human-readable name
+- Provides consistent display across the system
+- Automatically included in search indexes if `.searchable()` is configured
+
+### `.localized()`
+
+Mark fields that should support multiple languages:
+
+```typescript
+defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }).notNull(),
+    content: text("content"),
+    slug: varchar("slug", { length: 255 }).notNull(), // Not localized
+  })
+  .localized(["title", "content"]) // These fields go to i18n table
+  .title((t, i18n) => i18n.title) // Access localized fields via i18n
+```
+
+**How Localization Works:**
+1. Non-localized fields stay in the main table
+2. Localized fields are moved to a separate `{collection}_i18n` table
+3. CMS automatically joins the i18n table based on the request locale
+4. Each localized field is duplicated per locale
+
+### `.virtuals()`
+
+Define computed fields using SQL expressions:
+
+```typescript
+import { sql } from "drizzle-orm";
+
+defineCollection("users")
+  .fields({
+    firstName: varchar("first_name", { length: 255 }),
+    lastName: varchar("last_name", { length: 255 }),
+    email: varchar("email", { length: 255 }),
+  })
+  .virtuals((t) => ({
+    fullName: sql<string>`${t.firstName} || ' ' || ${t.lastName}`,
+    emailDomain: sql<string>`substring(${t.email} from '@(.*)$')`,
+  }))
+```
+
+Virtual fields are:
+- Computed at query time (not stored)
+- Type-safe (use `sql<Type>` for typing)
+- Available in queries and API responses
+- Can reference both main table and i18n fields
+
+### `.relations()`
+
+Define relationships to other collections:
+
+```typescript
+defineCollection("posts")
+  .fields({
+    authorId: uuid("author_id").notNull(),
+    categoryId: uuid("category_id"),
+  })
+  .relations(({ table, one, many }) => ({
+    // One-to-one or many-to-one
+    author: one("users", {
+      fields: [table.authorId], // Reference table columns
+      references: ["id"],
+    }),
+
+    category: one("categories", {
+      fields: [table.categoryId],
+      references: ["id"],
+    }),
+
+    // One-to-many (inverse relation)
+    comments: many("comments", {
+      relationName: "post-comments",
+    }),
+  }))
+```
+
+**Key points:**
+- `fields` parameter uses **table column references** (`table.fieldName`), not strings
+- `references` parameter uses **column name strings** in the target collection
+- The `table` object is provided in the relation callback context
+
+**Relation Types:**
+- `one()` - Many-to-one or one-to-one
+- `many()` - One-to-many (inverse)
+- `manyToMany()` - Many-to-many through junction table
+- `polymorphic()` - Polymorphic relations
+
+See [Relations](/docs/core-concepts/relations) for detailed documentation.
+
+### `.indexes()`
+
+Define database indexes and constraints:
+
+```typescript
+import { index, uniqueIndex } from "drizzle-orm/pg-core";
+
+defineCollection("posts")
+  .fields({
+    slug: varchar("slug", { length: 255 }),
+    authorId: uuid("author_id"),
+    publishedAt: timestamp("published_at", { mode: "date" }),
+  })
+  .indexes((t) => [
+    uniqueIndex("posts_slug_idx").on(t.slug),
+    index("posts_author_idx").on(t.authorId),
+    index("posts_published_idx").on(t.publishedAt),
+  ])
+```
+
+### `.options()`
+
+Configure collection behavior:
+
+```typescript
+defineCollection("posts")
+  .fields({ /* ... */ })
+  .options({
+    timestamps: true,      // Add createdAt, updatedAt (default: true)
+    softDelete: true,      // Add deletedAt for soft deletes (default: false)
+    tableName: "blog_posts", // Custom table name (default: collection name)
+    versioning: true,      // Enable version history (default: false)
+    // Or with detailed versioning config:
+    versioning: {
+      enabled: true,
+      maxVersions: 100,    // Keep last 100 versions (default: 50)
+    },
+  })
+```
+
+**Automatic Fields:**
+- `id` (UUID v7) - Always added as primary key
+- `createdAt` (timestamp) - Added if `timestamps: true`
+- `updatedAt` (timestamp) - Added if `timestamps: true`
+- `deletedAt` (timestamp) - Added if `softDelete: true`
+
+### `.hooks()`
+
+Add lifecycle hooks for business logic:
+
+```typescript
+defineCollection("posts")
+  .fields({ /* ... */ })
+  .hooks({
+    beforeCreate: async ({ data, cms }) => {
+      // Validate data, generate slug, etc.
+      if (!data.slug) {
+        data.slug = slugify(data.title);
+      }
+    },
+
+    afterCreate: async ({ data, cms }) => {
+      // Send notifications, trigger jobs, etc.
+      await cms.queue.publish("post-created", {
+        postId: data.id,
+        title: data.title,
+      });
+    },
+
+    afterUpdate: async ({ data, original, cms }) => {
+      // Check what changed
+      if (data.isPublished && !original.isPublished) {
+        await cms.queue.publish("post-published", {
+          postId: data.id,
+        });
+      }
+    },
+  })
+```
+
+See [Hooks](/docs/core-concepts/hooks) for complete documentation.
+
+### `.access()`
+
+Control who can perform operations:
+
+```typescript
+defineCollection("posts")
+  .fields({ /* ... */ })
+  .access({
+    // Anyone can read published posts
+    read: ({ user, row }) => {
+      if (!user) {
+        // Not logged in - only published posts
+        return { isPublished: true };
+      }
+      // Logged in - published OR own posts
+      return {
+        OR: [
+          { isPublished: true },
+          { authorId: user.id },
+        ],
+      };
+    },
+
+    // Only logged-in users can create
+    create: ({ user }) => !!user,
+
+    // Only authors can update their own posts
+    update: ({ user, row }) => row.authorId === user.id,
+
+    // Only admins can delete
+    delete: ({ user }) => user?.role === "admin",
+
+    // Field-level access
+    fields: {
+      authorId: {
+        write: ({ user }) => user?.role === "admin", // Only admins can change author
+      },
+    },
+  })
+```
+
+See [Access Control](/docs/core-concepts/access-control) for complete documentation.
+
+### `.searchable()`
+
+Enable full-text search with BM25 ranking:
+
+```typescript
+defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }),
+    content: jsonb("content"), // Rich text JSON
+    tags: jsonb("tags").$type<string[]>(),
+  })
+  .searchable({
+    // Extract searchable text from fields
+    content: (record) => {
+      // Extract plain text from rich text JSON
+      return extractTextFromRichText(record.content);
+    },
+
+    // Optionally add metadata for filtering
+    metadata: (record) => ({
+      tags: record.tags,
+      author: record.authorId,
+    }),
+
+    // Optional: Generate embeddings for vector search
+    embeddings: async (record, { cms }) => {
+      const text = `${record.title} ${extractTextFromRichText(record.content)}`;
+      return await cms.search.embeddings.generate(text);
+    },
+  })
+```
+
+## Using Collections in Your CMS
+
+Register collections in your CMS configuration:
+
+```typescript
+import { QCMS } from "@questpie/cms/server";
+import { posts, categories, comments } from "./collections";
+
+export const cms = new QCMS({
+  db: { /* ... */ },
+  collections: [posts, categories, comments],
+  // ...
+});
+```
+
+## CRUD Operations
+
+Once registered, collections provide type-safe CRUD operations:
+
+```typescript
+// Create a context (usually from request)
+const context = await cms.createContext({ user, locale: "en" });
+
+// Create
+const post = await cms.api.collections.posts.create({
+  title: "Hello World",
+  content: "This is my first post",
+  isPublished: false,
+}, context);
+
+// Read (with relations)
+const posts = await cms.api.collections.posts.find({
+  where: { isPublished: true },
+  with: {
+    author: true,
+    comments: {
+      with: { user: true },
+      limit: 5,
+    },
+  },
+  orderBy: { createdAt: "desc" },
+  limit: 10,
+}, context);
+
+// Update
+const updated = await cms.api.collections.posts.updateById({
+  id: post.id,
+  data: { isPublished: true },
+}, context);
+
+// Delete (soft delete if enabled)
+await cms.api.collections.posts.deleteById({ id: post.id }, context);
+```
+
+All operations:
+- Enforce access control automatically
+- Execute hooks in the correct order
+- Support transactions via `context.db`
+- Are fully type-safe
+
+## Type Inference
+
+Get fully typed data from your collections:
+
+```typescript
+// Infer the collection type
+type Post = typeof posts.$infer.select;
+
+// Infer insert type
+type NewPost = typeof posts.$infer.insert;
+
+// Infer update type
+type UpdatePost = typeof posts.$infer.update;
+
+// Use in your application
+function displayPost(post: Post) {
+  console.log(post.title); // ✅ Type-safe
+  console.log(post.slug);  // ✅ Type-safe
+  // console.log(post.invalid); // ❌ TypeScript error
+}
+```
+
+## Internal Architecture
+
+Understanding what happens under the hood:
+
+1. **Schema Generation**: `defineCollection()` creates Drizzle table schemas
+2. **CRUD Generation**: `CRUDGenerator` creates type-safe operations
+3. **API Exposure**: Hono adapter generates REST endpoints automatically
+4. **Query Building**: Complex queries with joins, filters, pagination
+5. **Hook Execution**: Lifecycle hooks run at the right time
+6. **Access Enforcement**: Access rules filter data automatically
+
+**Key Files:**
+- `packages/cms/src/server/collection/builder/collection-builder.ts` - Builder implementation
+- `packages/cms/src/server/collection/crud/crud-generator.ts` - CRUD operations
+- `packages/cms/src/server/collection/builder/types.ts` - Type definitions
+
+## Best Practices
+
+### 1. Use Drizzle Column Builders
+
+Always import from `drizzle-orm/pg-core`:
+
+```typescript
+import { varchar, text, integer, uuid } from "drizzle-orm/pg-core";
+```
+
+### 2. Define Title Expressions
+
+Make your records easily identifiable:
+
+```typescript
+.title((t) => t.name) // For simple cases
+.title((t) => sql`${t.firstName} || ' ' || ${t.lastName}`) // For composed titles
+```
+
+### 3. Use Foreign Keys for Relations
+
+Don't store IDs in JSON fields - use proper foreign keys:
+
+```typescript
+// ❌ Bad
+.fields({
+  relatedIds: jsonb("related_ids").$type<string[]>(),
+})
+
+// ✅ Good - Use many-to-many relation
+.fields({
+  postId: uuid("post_id").references(() => posts.table.id),
+})
+```
+
+### 4. Leverage Hooks for Business Logic
+
+Keep business logic in hooks, not in application code:
+
+```typescript
+.hooks({
+  beforeCreate: async ({ data }) => {
+    // Generate slug automatically
+    data.slug = slugify(data.title);
+    // Set publish date if publishing
+    if (data.isPublished && !data.publishedAt) {
+      data.publishedAt = new Date();
+    }
+  },
+})
+```
+
+### 5. Implement Proper Access Control
+
+Always define access rules - default is allow all (system mode):
+
+```typescript
+.access({
+  read: true, // Public reading
+  create: ({ user }) => !!user, // Must be logged in
+  update: ({ user, row }) => row.authorId === user.id, // Own content only
+  delete: ({ user }) => user?.role === "admin", // Admin only
+})
+```
+
+## Advanced Features
+
+### Versioning
+
+Track historical changes to your records:
+
+```typescript
+defineCollection("posts")
+  .options({ versioning: true })
+
+// Query versions
+const versions = await cms.api.collections.posts.findVersions({
+  id: postId,
+  limit: 10,
+}, context);
+
+// Revert to a version
+await cms.api.collections.posts.revertToVersion({
+  id: postId,
+  versionId: versions[0].versionId,
+}, context);
+```
+
+### Soft Delete
+
+Keep deleted records for recovery or auditing:
+
+```typescript
+defineCollection("posts")
+  .options({ softDelete: true })
+
+// Delete sets deletedAt instead of removing
+await cms.api.collections.posts.deleteById({ id: postId }, context);
+
+// Queries automatically exclude deleted records
+const posts = await cms.api.collections.posts.find({}, context);
+// Won't include deleted posts
+
+// Force include deleted records
+const allPosts = await cms.api.collections.posts.find({
+  includeDeleted: true,
+}, context);
+```
+
+### Custom Table Names
+
+Override the default table name:
+
+```typescript
+defineCollection("blogPosts")
+  .options({
+    tableName: "blog_posts", // Database table will be named "blog_posts"
+  })
+```
+
+## Next Steps
+
+- Learn about [Relations](/docs/core-concepts/relations) for connecting collections
+- Understand [Hooks](/docs/core-concepts/hooks) for lifecycle events
+- Implement [Access Control](/docs/core-concepts/access-control) for security
+- Explore [Fields](/docs/core-concepts/fields) for field types and validation
+
+## Reference
+
+- **Source Code**: `packages/cms/src/server/collection/`
+- **Examples**: `examples/hono-barbershop/src/cms.ts`
+- **API Reference**: [CMS API](/docs/reference/cms-config)

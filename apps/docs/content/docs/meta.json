@@ -1,17 +1,4 @@
 {
 	"title": "Documentation",
-	"pages": [
-		"index",
-		"getting-started",
-		"---Core Concepts---",
-		"core-concepts",
-		"---Guides---",
-		"guides",
-		"---Features---",
-		"features",
-		"---API Reference---",
-		"api",
-		"---Examples---",
-		"examples"
-	]
+	"pages": ["introduction", "core-concepts", "guides", "reference"]
 }

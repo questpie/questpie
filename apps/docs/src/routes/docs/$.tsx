@@ -12,7 +12,6 @@ import {
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import { baseOptions } from '@/lib/layout.shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
-import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 export const Route = createFileRoute('/docs/$')({
   component: Page,
@@ -48,8 +47,6 @@ const clientLoader = browserCollections.docs.createClientLoader({
           <MDX
             components={{
               ...defaultMdxComponents,
-              Tab,
-              Tabs,
             }}
           />
         </DocsBody>
