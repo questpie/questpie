@@ -35,7 +35,7 @@ const posts = defineCollection("posts")
 	.fields({
 		title: varchar("title", { length: 255 }).notNull(),
 	})
-	.title((t) => sql`${t.title}`);
+	.title(({ table }) => sql`${table.title}`);
 
 // ============================================================================
 // PATTERN 1: Callback with defaultQCMSAuth() - RECOMMENDED

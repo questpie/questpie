@@ -1,21 +1,19 @@
 import { Collection } from "#questpie/cms/server/collection/builder/collection";
 import type {
 	CollectionAccess,
+	CollectionBuilderIndexesFn,
 	CollectionBuilderState,
+	CollectionBuilderTitleFn,
+	CollectionBuilderVirtualsFn,
 	CollectionHooks,
 	CollectionOptions,
-	I18nFieldAccessor,
-	InferColumnsFromFields,
-	InferTableWithColumns,
-	NonLocalizedFields,
 	RelationConfig,
 	EmptyCollectionState,
 	CollectionBuilderRelationFn,
 } from "#questpie/cms/server/collection/builder/types";
-import type { CRUD } from "#questpie/cms/server/collection/crud/types";
 import type { SearchableConfig } from "#questpie/cms/server/integrated/search";
-import type { BuildExtraConfigColumns, SQL } from "drizzle-orm";
 import type { PgTableExtraConfigValue } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 
 /**
  * Main collection builder class
@@ -26,14 +24,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	private _builtCollection?: Collection<TState>;
 
 	// Store callback functions for lazy evaluation
-	private _virtualsFn?: (
-		table: any,
-		i18n: any,
-		context: any,
-	) => TState["virtuals"];
+	private _virtualsFn?: CollectionBuilderVirtualsFn<TState, TState["virtuals"]>;
 	private _relationsFn?: CollectionBuilderRelationFn<TState, any>;
-	private _indexesFn?: (table: any) => TState["indexes"];
-	private _titleFn?: (table: any, i18n: any, context: any) => TState["title"];
+	private _indexesFn?: CollectionBuilderIndexesFn<TState, TState["indexes"]>;
+	private _titleFn?: CollectionBuilderTitleFn<TState, TState["title"]>;
 
 	constructor(state: TState) {
 		this.state = state;
@@ -117,19 +111,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 	/**
 	 * Define virtual (computed) fields
-	 * Callback receives fully typed table + i18n accessor for localized fields
+	 * Callback receives context object with table, i18n accessor, and context
 	 */
 	virtuals<TNewVirtuals extends Record<string, SQL>>(
-		fn: (
-			table: InferTableWithColumns<
-				TState["name"],
-				NonLocalizedFields<TState["fields"], TState["localized"]>,
-				undefined,
-				TState["options"]
-			>,
-			i18n: I18nFieldAccessor<TState["fields"], TState["localized"]>,
-			context: any,
-		) => TNewVirtuals,
+		fn: CollectionBuilderVirtualsFn<TState, TNewVirtuals>,
 	): CollectionBuilder<
 		CollectionBuilderState<
 			TState["name"],
@@ -199,20 +184,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 	/**
 	 * Define indexes and constraints
-	 * Callback receives fully typed table
+	 * Callback receives context object with table
 	 */
 	indexes<TNewIndexes extends PgTableExtraConfigValue[]>(
-		fn: (
-			table: BuildExtraConfigColumns<
-				TState["name"],
-				InferColumnsFromFields<
-					TState["fields"],
-					TState["options"],
-					TState["title"]
-				>,
-				"pg"
-			>,
-		) => TNewIndexes,
+		fn: CollectionBuilderIndexesFn<TState, TNewIndexes>,
 	): CollectionBuilder<
 		CollectionBuilderState<
 			TState["name"],
@@ -246,19 +221,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 	/**
 	 * Define title expression (creates searchable _title column)
-	 * Can reference both non-localized fields and localized fields via i18n accessor
+	 * Callback receives context object with table, i18n accessor, and context
 	 */
 	title<TNewTitle extends SQL>(
-		fn: (
-			table: InferTableWithColumns<
-				TState["name"],
-				NonLocalizedFields<TState["fields"], TState["localized"]>,
-				undefined,
-				TState["options"]
-			>,
-			i18n: I18nFieldAccessor<TState["fields"], TState["localized"]>,
-			context: any,
-		) => TNewTitle,
+		fn: CollectionBuilderTitleFn<TState, TNewTitle>,
 	): CollectionBuilder<
 		CollectionBuilderState<
 			TState["name"],

@@ -32,7 +32,7 @@ describe("integration: full CMS workflow", () => {
 				email: varchar("email", { length: 255 }).notNull(),
 				bio: text("bio"),
 			})
-			.title((t) => sql`${t.name}`)
+			.title(({ table }) => sql`${table.name}`)
 			.hooks({
 				afterCreate: async ({ data, cms }) => {
 					// Send welcome email when author is created
@@ -59,7 +59,7 @@ describe("integration: full CMS workflow", () => {
 				viewCount: integer("view_count"),
 				publishedAt: timestamp("published_at", { mode: "date" }),
 			})
-			.title((t) => sql`${t.title}`)
+			.title(({ table }) => sql`${table.title}`)
 			.relations(({ one, manyToMany }) => ({
 				author: one("authors", {
 					fields: ["authorId"] as any,
@@ -119,7 +119,7 @@ describe("integration: full CMS workflow", () => {
 			.fields({
 				name: text("name").notNull(),
 			})
-			.title((t) => sql`${t.name}`)
+			.title(({ table }) => sql`${table.name}`)
 			.relations(({ manyToMany }) => ({
 				articles: manyToMany("articles", {
 					through: "article_tags",

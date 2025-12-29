@@ -1,7 +1,12 @@
 // builder/types.ts
 import type { Collection } from "#questpie/cms/server/collection/builder/collection";
 import type { SearchableConfig } from "#questpie/cms/server/integrated/search";
-import type { BuildColumns, GetColumnData, SQL } from "drizzle-orm";
+import type {
+	BuildColumns,
+	BuildExtraConfigColumns,
+	GetColumnData,
+	SQL,
+} from "drizzle-orm";
 import type { PgColumn, PgTableWithColumns } from "drizzle-orm/pg-core";
 
 /**
@@ -76,6 +81,54 @@ export type CollectionBuilderRelationFn<
 		i18n: I18nFieldAccessor<TState["fields"], TState["localized"]>;
 	} & RelationVariant,
 ) => TNewRelations;
+
+/**
+ * Context for virtuals callback
+ */
+export type CollectionBuilderVirtualsFn<
+	TState extends CollectionBuilderState,
+	TNewVirtuals extends Record<string, SQL>,
+> = (ctx: {
+	table: InferTableWithColumns<
+		TState["name"],
+		NonLocalizedFields<TState["fields"], TState["localized"]>,
+		undefined,
+		TState["options"]
+	>;
+	i18n: I18nFieldAccessor<TState["fields"], TState["localized"]>;
+	context: any;
+}) => TNewVirtuals;
+
+/**
+ * Context for title callback
+ */
+export type CollectionBuilderTitleFn<
+	TState extends CollectionBuilderState,
+	TNewTitle extends SQL | undefined,
+> = (ctx: {
+	table: InferTableWithColumns<
+		TState["name"],
+		NonLocalizedFields<TState["fields"], TState["localized"]>,
+		undefined,
+		TState["options"]
+	>;
+	i18n: I18nFieldAccessor<TState["fields"], TState["localized"]>;
+	context: any;
+}) => TNewTitle;
+
+/**
+ * Context for indexes callback
+ */
+export type CollectionBuilderIndexesFn<
+	TState extends CollectionBuilderState,
+	TNewIndexes extends Record<string, any>,
+> = (ctx: {
+	table: BuildExtraConfigColumns<
+		TState["name"],
+		InferColumnsFromFields<TState["fields"], TState["options"], TState["title"]>,
+		"pg"
+	>;
+}) => TNewIndexes;
 
 /**
  * Helper types for relation definition callback

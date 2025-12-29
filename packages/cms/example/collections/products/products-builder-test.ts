@@ -49,7 +49,7 @@ export const products = defineCollection("products")
 		}),
 	}))
 	// ✅ Virtual fields with typed table + i18n parameters
-	.virtuals((table, i18n) => ({
+	.virtuals(({ table, i18n }) => ({
 		// table has non-localized fields (sku, price, stock, status, categoryId, tags)
 		// i18n has localized fields (name, description) as SQL expressions
 		priceWithVat: sql<number>`${table.price} * 1.2`,
@@ -58,13 +58,13 @@ export const products = defineCollection("products")
 		displayName: sql<string>`${i18n.name}`,
 	}))
 	// ✅ Indexes with typed table
-	.indexes((table) => [
+	.indexes(({ table }) => [
 		unique().on(table.sku),
 		index().on(table.status),
 		index().on(table.categoryId, table.status),
 	])
 	// ✅ Title with access to both table and i18n
-	.title((table, i18n) => sql`${i18n.name} || ' - ' || ${table.sku}`)
+	.title(({ table, i18n }) => sql`${i18n.name} || ' - ' || ${table.sku}`)
 	// ✅ Options
 	.options({
 		timestamps: true,

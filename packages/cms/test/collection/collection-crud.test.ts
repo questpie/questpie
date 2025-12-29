@@ -17,7 +17,7 @@ const products = defineCollection("products")
 		description: text("description"),
 	})
 	.localized(["name", "description"] as const)
-	.title((table, i18n) => sql`${i18n.name} || ' - ' || ${table.sku}`)
+	.title(({ table, i18n }) => sql`${i18n.name} || ' - ' || ${table.sku}`)
 	.options({
 		timestamps: true,
 		softDelete: true,
@@ -31,7 +31,7 @@ const lockedProducts = defineCollection("locked_products")
 		name: text("name").notNull(),
 	})
 	.localized(["name"] as const)
-	.title((table, i18n) => sql`${i18n.name} || ' - ' || ${table.sku}`)
+	.title(({ table, i18n }) => sql`${i18n.name} || ' - ' || ${table.sku}`)
 	.options({
 		timestamps: true,
 		softDelete: true,

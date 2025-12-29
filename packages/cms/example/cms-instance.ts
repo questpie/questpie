@@ -16,7 +16,7 @@ const barbers = defineCollection("barbers")
 		bio: text("bio"),
 		isActive: boolean("is_active").default(true).notNull(),
 	})
-	.title((t) => sql`${t.name}`);
+	.title(({ table }) => sql`${table.name}`);
 
 // Define appointments collection
 const appointments = defineCollection("appointments")

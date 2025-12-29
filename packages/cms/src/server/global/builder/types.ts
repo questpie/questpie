@@ -1,10 +1,9 @@
 // src/server/global/builder/types.ts
 import type { PgTableWithColumns } from "drizzle-orm/pg-core";
-import type { SQL } from "drizzle-orm";
+import type { BuildColumn, SQL } from "drizzle-orm";
 import type {
 	CollectionVersioningOptions,
 	RelationConfig,
-	BuildColumnType,
 	NonLocalizedFields,
 	I18nFieldAccessor,
 	InferTableWithColumns,
@@ -172,10 +171,11 @@ export type AnyGlobalState = GlobalBuilderState<
 
 // Helper types for inference (similar to Collection)
 export type InferGlobalColumnsFromFields<
+	TName extends string,
 	TFields extends Record<string, any>,
 	TOptions extends GlobalOptions,
 > = {
-	[K in keyof TFields]: BuildColumnType<TFields[K]>;
+	[K in keyof TFields]: BuildColumn<TName, TFields[K], "pg">;
 } & (TOptions["timestamps"] extends false
 	? {}
 	: ReturnType<
@@ -189,6 +189,6 @@ export type InferGlobalTableWithColumns<
 > = PgTableWithColumns<{
 	name: TName;
 	schema: undefined;
-	columns: InferGlobalColumnsFromFields<TFields, TOptions>;
+	columns: InferGlobalColumnsFromFields<TName, TFields, TOptions>;
 	dialect: "pg";
 }>;

@@ -27,6 +27,9 @@ import type {
 	LocalizedTableName,
 	RelationVariant,
 	CollectionBuilderRelationFn,
+	CollectionBuilderVirtualsFn,
+	CollectionBuilderTitleFn,
+	CollectionBuilderIndexesFn,
 } from "#questpie/cms/server/collection/builder/types";
 import { CRUDGenerator } from "#questpie/cms/server/collection/crud";
 import type { CRUD } from "#questpie/cms/server/collection/crud/types";
@@ -167,18 +170,13 @@ export class Collection<TState extends CollectionBuilderState> {
 
 	constructor(
 		state: TState,
-		private readonly virtualsFn?: (
-			table: any,
-			i18n: any,
-			context: any,
-		) => TState["virtuals"],
+		private readonly virtualsFn?: CollectionBuilderVirtualsFn<
+			TState,
+			TState["virtuals"]
+		>,
 		private readonly relationsFn?: CollectionBuilderRelationFn<TState, any>,
-		readonly indexesFn?: (table: any) => TState["indexes"],
-		private readonly titleFn?: (
-			table: any,
-			i18n: any,
-			context: any,
-		) => TState["title"],
+		readonly indexesFn?: CollectionBuilderIndexesFn<TState, TState["indexes"]>,
+		private readonly titleFn?: CollectionBuilderTitleFn<TState, TState["title"]>,
 	) {
 		this.state = state;
 		this.name = state.name;
@@ -198,11 +196,11 @@ export class Collection<TState extends CollectionBuilderState> {
 				defaultLocale: (this.state.options as any).defaultLocale || "en",
 			};
 			const i18nAccessor = this.createI18nAccessor(context);
-			state.virtuals = virtualsFn(
-				this.table,
-				i18nAccessor,
+			state.virtuals = virtualsFn({
+				table: this.table,
+				i18n: i18nAccessor,
 				context,
-			) as TState["virtuals"];
+			}) as TState["virtuals"];
 		}
 
 		// Execute relations function
@@ -236,11 +234,11 @@ export class Collection<TState extends CollectionBuilderState> {
 				defaultLocale: (this.state.options as any).defaultLocale || "en",
 			};
 			const i18nAccessor = this.createI18nAccessor(context);
-			state.title = titleFn(
-				this.table,
-				i18nAccessor,
+			state.title = titleFn({
+				table: this.table,
+				i18n: i18nAccessor,
 				context,
-			) as TState["title"];
+			}) as TState["title"];
 		}
 
 		// Type inference helper (empty runtime object, types only)
@@ -254,7 +252,11 @@ export class Collection<TState extends CollectionBuilderState> {
 	public getVirtuals(context: any): TState["virtuals"] {
 		if (!this.virtualsFn) return this.state.virtuals;
 		const i18nAccessor = this.createI18nAccessor(context);
-		return this.virtualsFn(this.table, i18nAccessor, context);
+		return this.virtualsFn({
+			table: this.table,
+			i18n: i18nAccessor,
+			context,
+		});
 	}
 
 	/**
@@ -263,7 +265,11 @@ export class Collection<TState extends CollectionBuilderState> {
 	public getTitle(context: any): TState["title"] {
 		if (!this.titleFn) return this.state.title;
 		const i18nAccessor = this.createI18nAccessor(context);
-		return this.titleFn(this.table, i18nAccessor, context);
+		return this.titleFn({
+			table: this.table,
+			i18n: i18nAccessor,
+			context,
+		});
 	}
 
 	/**
@@ -272,15 +278,19 @@ export class Collection<TState extends CollectionBuilderState> {
 	public getRawTitle(context: any): TState["title"] {
 		if (!this.titleFn) return this.state.title;
 		const i18nAccessor = this.createRawI18nAccessor();
-		return this.titleFn(this.table, i18nAccessor, context);
+		return this.titleFn({
+			table: this.table,
+			i18n: i18nAccessor,
+			context,
+		});
 	}
 
 	/**
 	 * Generate the main Drizzle table
 	 */
 	private generateMainTable(
-		indexesFn?: (table: any) => TState["indexes"],
-		_titleFn?: (table: any, i18n: any, context: any) => TState["title"],
+		indexesFn?: CollectionBuilderIndexesFn<TState, TState["indexes"]>,
+		_titleFn?: CollectionBuilderTitleFn<TState, TState["title"]>,
 	): PgTable {
 		const tableName = this.state.options.tableName || this.state.name;
 		const columns: Record<string, any> = {
@@ -311,7 +321,7 @@ export class Collection<TState extends CollectionBuilderState> {
 
 			// User-defined indexes
 			if (indexesFn) {
-				Object.assign(constraints, indexesFn(t));
+				Object.assign(constraints, indexesFn({ table: t }));
 			}
 
 			// Auto-index on deletedAt for soft delete

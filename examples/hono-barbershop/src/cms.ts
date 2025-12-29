@@ -55,7 +55,7 @@ export const barbers = defineCollection("barbers")
 		// Working hours stored as JSON
 		workingHours: jsonb("working_hours").$type<WorkingHours>(),
 	})
-	.title((t) => sql`${t.name}`);
+	.title(({ table }) => sql`${table.name}`);
 
 /**
  * Services Collection
@@ -69,7 +69,7 @@ export const services = defineCollection("services")
 		price: integer("price").notNull(), // in cents
 		isActive: boolean("is_active").default(true).notNull(),
 	})
-	.title((t) => sql`${t.name}`);
+	.title(({ table }) => sql`${table.name}`);
 
 /**
  * Appointments Collection
@@ -87,7 +87,7 @@ export const appointments = defineCollection("appointments")
 		cancelledAt: timestamp("cancelled_at", { mode: "date" }),
 		cancellationReason: text("cancellation_reason"),
 	})
-	.title((t) => sql`Appointment at  ${t.scheduledAt}`)
+	.title(({ table }) => sql`Appointment at  ${table.scheduledAt}`)
 	.relations(({ one, table }) => ({
 		// Note: customerId references Better Auth's users table
 		customer: one("questpie_users", {
@@ -136,7 +136,7 @@ export const reviews = defineCollection("reviews")
 		rating: integer("rating").notNull(), // 1-5
 		comment: text("comment"),
 	})
-	.title((t) => sql`'Review #' || ${t.id}`)
+	.title(({ table }) => sql`'Review #' || ${table.id}`)
 	.relations(({ one, table }) => ({
 		appointment: one("appointments", {
 			fields: [table.appointmentId],

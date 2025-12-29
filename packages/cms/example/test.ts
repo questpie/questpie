@@ -168,7 +168,7 @@ export const reviews = defineCollection("reviews")
 		rating: integer("rating").notNull(), // 1-5
 		comment: text("comment"),
 	})
-	.title((t) => sql`'Review #' || ${t.id}`)
+	.title(({ table }) => sql`'Review #' || ${table.id}`)
 	.relations(({ one, table }) => ({
 		appointment: one("appointments", {
 			fields: [table.appointmentId],

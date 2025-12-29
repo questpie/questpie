@@ -13,7 +13,7 @@ export const usersCollection = defineCollection("user")
 		role: varchar("role", { length: 50 }), // Optional: Better Auth role handling
 		banned: boolean("banned"), // Optional: Better Auth ban handling
 	})
-	.title((t) => sql`${t.name}`);
+	.title(({ table }) => sql`${table.name}`);
 
 // Session Collection
 export const sessionsCollection = defineCollection("session")
@@ -24,7 +24,7 @@ export const sessionsCollection = defineCollection("session")
 		ipAddress: varchar("ipAddress", { length: 45 }),
 		userAgent: varchar("userAgent", { length: 500 }),
 	})
-	.title((t) => sql`${t.token}`);
+	.title(({ table }) => sql`${table.token}`);
 
 // Account Collection (Social Logins)
 export const accountsCollection = defineCollection("account")
@@ -40,7 +40,7 @@ export const accountsCollection = defineCollection("account")
 		idToken: varchar("idToken", { length: 500 }),
 		password: varchar("password", { length: 255 }), // Optional: if using credential account here
 	})
-	.title((t) => sql`${t.providerId}`);
+	.title(({ table }) => sql`${table.providerId}`);
 
 // Verification Collection
 export const verificationsCollection = defineCollection("verification")
@@ -49,4 +49,4 @@ export const verificationsCollection = defineCollection("verification")
 		value: varchar("value", { length: 255 }).notNull(),
 		expiresAt: timestamp("expiresAt", { mode: "date" }).notNull(),
 	})
-	.title((t) => sql`${t.identifier}`);
+	.title(({ table }) => sql`${table.identifier}`);

@@ -30,4 +30,4 @@ export const assetsCollection = defineCollection("questpie_assets")
 		alt: varchar("alt", { length: 500 }),
 		caption: text("caption"),
 	})
-	.title((t) => sql`${t.filename}`);
+	.title(({ table }) => sql`${table.filename}`);
