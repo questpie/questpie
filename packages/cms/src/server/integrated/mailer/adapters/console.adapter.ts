@@ -1,4 +1,5 @@
-import { MailAdapter, type SerializableMailOptions } from "../mailer";
+import { MailAdapter } from "../adapter";
+import type { SerializableMailOptions } from "../types";
 
 /**
  * Console adapter options

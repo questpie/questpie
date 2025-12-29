@@ -1,71 +1,9 @@
 import { render } from "@react-email/render";
 import { convert } from "html-to-text";
-import type { ComponentType, ReactElement } from "react";
+import type { ComponentType } from "react";
 import type * as React from "react";
-
-/**
- * Base mail options interface
- */ export type MailOptions = {
-	from?: string;
-	to: string | string[];
-	cc?: string | string[];
-	bcc?: string | string[];
-	subject: string;
-	attachments?: Array<{
-		filename: string;
-		content: Buffer | string;
-		contentType?: string;
-	}>;
-	headers?: Record<string, string>;
-	replyTo?: string;
-} & (
-	| { react: ReactElement; text?: never; html?: never }
-	| { text?: string; html?: string; react?: never }
-);
-
-/**
- * Serializable mail options (after React rendering)
- */
-export type SerializableMailOptions = Omit<
-	MailOptions,
-	"react" | "text" | "html"
-> & {
-	text: string;
-	html: string;
-	from: string;
-};
-
-/**
- * Abstract base class for mail adapters
- */
-export abstract class MailAdapter {
-	abstract send(options: SerializableMailOptions): Promise<void>;
-}
-
-/**
- * Mailer configuration
- */
-export interface MailerConfig<
-	TTemplates extends Record<string, ComponentType<any>> = Record<
-		string,
-		ComponentType<any>
-	>,
-> {
-	/**
-	 * Mail adapter (SMTP, Console, Resend, etc.)
-	 */
-	adapter: MailAdapter | Promise<MailAdapter>;
-	/**
-	 * Default 'from' address
-	 */
-	defaults?: {
-		from?: string;
-	};
-	/**
-	 * Registry of React Email templates
-	 */
-	templates: TTemplates;
-}
+import type { MailAdapter } from "./adapter";
+import type { MailOptions, MailerConfig, SerializableMailOptions } from "./types";
 
 /**
  * Main mailer service

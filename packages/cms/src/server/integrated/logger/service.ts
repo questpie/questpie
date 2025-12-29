@@ -1,28 +1,12 @@
 import pino from "pino";
-
-export interface LoggerConfig {
-	/**
-	 * Log level (debug, info, warn, error)
-	 * Defaults to 'info'
-	 */
-	level?: string;
-	/**
-	 * Enable pretty printing (useful for dev)
-	 * Defaults to false (true if NODE_ENV is development)
-	 */
-	pretty?: boolean;
-	/**
-	 * Redact keys (e.g. ["req.headers.authorization"])
-	 */
-	redact?: string[];
-}
+import type { LoggerConfig } from "./types";
 
 export class LoggerService {
 	private logger: pino.Logger;
 
 	constructor(config: LoggerConfig = {}) {
 		const isDev = process.env.NODE_ENV === "development";
-		
+
 		this.logger = pino({
 			level: config.level || "info",
 			redact: config.redact,
@@ -52,7 +36,7 @@ export class LoggerService {
 	error(msg: string, ...args: any[]) {
 		this.logger.error(msg, ...args);
 	}
-	
+
 	child(bindings: Record<string, any>) {
 		const childLogger = new LoggerService();
 		childLogger.logger = this.logger.child(bindings);

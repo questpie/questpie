@@ -1,7 +1,7 @@
 import type { QueueClient } from "#questpie/cms/server/integrated/queue/index.js";
 import type { Disk } from "flydrive";
-import type { MailerService } from "#questpie/cms/server/integrated/mailer.js";
-import type { LoggerService } from "#questpie/cms/server/integrated/logger.js";
+import type { MailerService } from "#questpie/cms/server/integrated/mailer";
+import type { LoggerService } from "#questpie/cms/server/integrated/logger";
 
 /**
  * Mock Queue Service for testing

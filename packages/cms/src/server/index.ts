@@ -8,5 +8,5 @@ export * from "./module";
 export * from "./integrated/queue";
 export * from "./integrated/auth";
 export * from "./integrated/mailer";
-export * from "./integrated/mail-adapters";
+export * from "./integrated/mailer/adapters";
 export * from "./migration";

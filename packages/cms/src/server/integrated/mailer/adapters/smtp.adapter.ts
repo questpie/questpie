@@ -1,6 +1,7 @@
 import { createTransport, type Transporter } from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
-import { MailAdapter, type SerializableMailOptions } from "../mailer";
+import { MailAdapter } from "../adapter";
+import type { SerializableMailOptions } from "../types";
 
 /**
  * SMTP adapter options
