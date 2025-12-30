@@ -12,6 +12,7 @@
 		"qs": "^6.13.1"
 	},
 	"devDependencies": {
+		"@questpie/typescript-config": "workspace:*",
 		"@types/qs": "^6.9.17",
 		"bun-types": "latest",
 		"tsdown": "^0.18.3"

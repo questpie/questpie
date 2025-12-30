@@ -35,6 +35,7 @@
 		"@types/qs": "^6.9.17",
 		"@types/react": "^19.2.7",
 		"@types/html-to-text": "^9.0.4",
+		"@questpie/typescript-config": "workspace:*",
 		"bun-types": "latest",
 		"tsdown": "^0.18.3"
 	},

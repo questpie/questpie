@@ -1,0 +1,10 @@
+{
+  "name": "@questpie/typescript-config",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "base.json",
+    "bun.json"
+  ]
+}
