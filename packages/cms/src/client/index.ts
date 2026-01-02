@@ -20,7 +20,7 @@ import type {
 	GlobalSelect,
 	GlobalUpdate,
 	GetCollection,
-	ResolveRelations,
+	ResolveRelationsDeep,
 	CollectionFunctions,
 	GlobalFunctions,
 } from "#questpie/cms/shared/type-utils.js";
@@ -174,7 +174,7 @@ type CollectionAPI<
 	find: <
 		TQuery extends FindManyOptions<
 			CollectionSelect<TCollection>,
-			ResolveRelations<TCollection["state"]["relations"], TCollections>
+			ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>
 		>,
 	>(
 		options?: TQuery,
@@ -182,7 +182,7 @@ type CollectionAPI<
 		PaginatedResult<
 			ApplyQuery<
 				CollectionSelect<TCollection>,
-				ResolveRelations<TCollection["state"]["relations"], TCollections>,
+				ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>,
 				TQuery
 			>
 		>
@@ -195,13 +195,13 @@ type CollectionAPI<
 	findOne: <
 		TQuery extends FindFirstOptions<
 			CollectionSelect<TCollection>,
-			ResolveRelations<TCollection["state"]["relations"], TCollections>
+			ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>
 		> & { where: { id: string } },
 	>(
 		options: TQuery,
 	) => Promise<ApplyQuery<
 		CollectionSelect<TCollection>,
-		ResolveRelations<TCollection["state"]["relations"], TCollections>,
+		ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>,
 		TQuery
 	> | null>;
 
@@ -211,12 +211,12 @@ type CollectionAPI<
 	create: <
 		TInput extends CreateInputBase<
 			CollectionInsert<TCollection>,
-			ResolveRelations<TCollection["state"]["relations"], TCollections>
+			ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>
 		>,
 	>(
 		data: CreateInputWithRelations<
 			CollectionInsert<TCollection>,
-			ResolveRelations<TCollection["state"]["relations"], TCollections>,
+			ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>,
 			TInput
 		>,
 	) => Promise<CollectionSelect<TCollection>>;
@@ -268,7 +268,7 @@ type GlobalAPI<
 	get: <
 		TQuery extends {
 			with?: With<
-				ResolveRelations<TGlobal["state"]["relations"], TCollections>
+				ResolveRelationsDeep<TGlobal["state"]["relations"], TCollections>
 			>;
 			columns?: any;
 		},
@@ -277,7 +277,7 @@ type GlobalAPI<
 	) => Promise<
 		ApplyQuery<
 			GlobalSelect<TGlobal>,
-			ResolveRelations<TGlobal["state"]["relations"], TCollections>,
+			ResolveRelationsDeep<TGlobal["state"]["relations"], TCollections>,
 			TQuery
 		>
 	>;
@@ -289,7 +289,7 @@ type GlobalAPI<
 	update: <
 		TQuery extends {
 			with?: With<
-				ResolveRelations<TGlobal["state"]["relations"], TCollections>
+				ResolveRelationsDeep<TGlobal["state"]["relations"], TCollections>
 			>;
 		},
 	>(
@@ -298,7 +298,7 @@ type GlobalAPI<
 	) => Promise<
 		ApplyQuery<
 			GlobalSelect<TGlobal>,
-			ResolveRelations<TGlobal["state"]["relations"], TCollections>,
+			ResolveRelationsDeep<TGlobal["state"]["relations"], TCollections>,
 			TQuery
 		>
 	>;

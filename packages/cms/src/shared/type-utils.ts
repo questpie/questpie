@@ -235,6 +235,37 @@ type ResolveCollectionSelect<
 	? CollectionSelect<GetCollection<TCollections, C>>
 	: any;
 
+type DecrementDepth<Depth extends unknown[]> =
+	Depth extends [unknown, ...infer Rest] ? Rest : [];
+
+export type RelationShape<TSelect, TRelations> = {
+	__select: TSelect;
+	__relations: TRelations;
+};
+
+export type ExtractRelationSelect<T> =
+	T extends RelationShape<infer Select, any> ? Select : T;
+
+export type ExtractRelationRelations<T> =
+	T extends RelationShape<any, infer Relations> ? Relations : never;
+
+type ResolveCollectionRelation<
+	TCollections extends Record<string, AnyCollectionOrBuilder>,
+	C,
+	Depth extends unknown[],
+> = C extends CollectionNames<TCollections>
+	? RelationShape<
+			CollectionSelect<GetCollection<TCollections, C>>,
+			Depth extends []
+				? never
+				: ResolveRelationsDeep<
+						CollectionRelations<GetCollection<TCollections, C>>,
+						TCollections,
+						DecrementDepth<Depth>
+					>
+		>
+	: RelationShape<any, never>;
+
 /**
  * Resolve all relations from a RelationConfig to actual types
  * Handles one-to-many, many-to-many, and one-to-one relations
@@ -260,5 +291,23 @@ export type ResolveRelations<
 					collection: infer C;
 				}
 			? ResolveCollectionSelect<TCollections, C>
+			: never;
+};
+
+export type ResolveRelationsDeep<
+	TRelations extends Record<string, RelationConfig>,
+	TCollections extends Record<string, AnyCollectionOrBuilder>,
+	Depth extends unknown[] = [1, 1, 1, 1, 1],
+> = {
+	[K in keyof TRelations]: TRelations[K] extends {
+		type: "many" | "manyToMany";
+		collection: infer C;
+	}
+		? ResolveCollectionRelation<TCollections, C, Depth>[]
+		: TRelations[K] extends {
+					type: "one";
+					collection: infer C;
+				}
+			? ResolveCollectionRelation<TCollections, C, Depth>
 			: never;
 };

@@ -2,6 +2,10 @@
 
 import type { SQL } from "drizzle-orm";
 import type { RequestContext } from "#questpie/cms/server/config/context";
+import type {
+	ExtractRelationRelations,
+	ExtractRelationSelect,
+} from "#questpie/cms/shared/type-utils.js";
 
 /**
  * Context passed to CRUD operations
@@ -139,6 +143,12 @@ export interface RelationAggregation<TFields = any> {
 	};
 }
 
+type RelationValue<T> = T extends (infer U)[] ? U : T;
+
+type RelationSelect<T> = ExtractRelationSelect<RelationValue<T>>;
+
+type RelationRelations<T> = ExtractRelationRelations<RelationValue<T>>;
+
 /**
  * WITH clause for including relations
  * Supports nested relations and sub-queries
@@ -152,7 +162,7 @@ export type With<TRelations = any> = {
 				orderBy?: OrderBy;
 				limit?: number;
 				offset?: number;
-				with?: With;
+				with?: With<RelationRelations<TRelations[K]>>;
 				// Aggregation: if specified, returns aggregate data instead of full records
 				_aggregate?: RelationAggregation;
 				// Shorthand for just count
@@ -471,8 +481,16 @@ export type RelationResult<TRelations, TQuery> = [TQuery] extends [never]
 												? AggregationResult<Agg>
 												: {}
 											: {})
-								: ApplyQuery<S, any, TQuery["with"][K]>[]
-							: ApplyQuery<TRelations[K], any, TQuery["with"][K]>
+								: ApplyQuery<
+										RelationSelect<S>,
+										RelationRelations<S>,
+										TQuery["with"][K]
+									>[]
+							: ApplyQuery<
+									RelationSelect<TRelations[K]>,
+									RelationRelations<TRelations[K]>,
+									TQuery["with"][K]
+								>
 						: never;
 				}
 			: {}

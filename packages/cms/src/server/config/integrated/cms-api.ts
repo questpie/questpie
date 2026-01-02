@@ -29,7 +29,7 @@ import type {
 	GlobalRelations,
 	GlobalSelect,
 	GlobalUpdate,
-	ResolveRelations,
+	ResolveRelationsDeep,
 } from "#questpie/cms/shared/type-utils.js";
 
 type JsonFunctionCaller<TDefinition extends JsonFunctionDefinition<any, any>> =
@@ -76,7 +76,7 @@ type CollectionAPI<
 	CollectionSelect<TCollection>,
 	CollectionInsert<TCollection>,
 	CollectionUpdate<TCollection>,
-	ResolveRelations<CollectionRelations<TCollection>, TCollections>
+	ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
 > &
 	CollectionFunctionsAPI<TCollection, TCollections>;
 
@@ -87,7 +87,7 @@ type GlobalAPI<
 	GlobalSelect<TGlobal>,
 	GlobalInsert<TGlobal>,
 	GlobalUpdate<TGlobal>,
-	ResolveRelations<GlobalRelations<TGlobal>, TCollections>
+	ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>
 > &
 	GlobalFunctionsAPI<TGlobal>;
 
