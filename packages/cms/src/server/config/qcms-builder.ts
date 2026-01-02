@@ -15,7 +15,7 @@ import type {
 	LocaleConfig,
 } from "#questpie/cms/server/config/types";
 import type { Migration } from "#questpie/cms/server/migration/types";
-import { coreModule } from "#questpie/cms/server/modules/core/core.module.js";
+import { createCoreModule } from "#questpie/cms/server/modules/core/core.module.js";
 
 type QCMSFromState<TState extends QCMSBuilderState> = QCMS<
 	CMSConfig & {
@@ -501,5 +501,5 @@ export class QCMSBuilder<TState extends QCMSBuilderState = QCMSBuilderState> {
  * ```
  */
 export function defineQCMS<TName extends string>(config: { name: TName }) {
-	return QCMSBuilder.empty(config.name).use(coreModule);
+	return QCMSBuilder.empty(config.name).use(createCoreModule());
 }

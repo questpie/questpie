@@ -155,8 +155,6 @@ export class Global<TState extends GlobalBuilderState> {
 					({ type: "many", collection, ...config }) as any,
 				manyToMany: (collection, config) =>
 					({ type: "manyToMany", collection, ...config }) as any,
-				polymorphic: (config) =>
-					({ type: "polymorphic", collection: "", ...config }) as any,
 			};
 			state.relations = relationsFn({
 				table: this.table as any,

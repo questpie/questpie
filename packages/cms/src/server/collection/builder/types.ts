@@ -42,7 +42,7 @@ export interface CollectionOptions {
 /**
  * Relation configuration
  */
-export type RelationType = "one" | "many" | "manyToMany" | "polymorphic";
+export type RelationType = "one" | "many" | "manyToMany";
 
 export interface RelationConfig {
 	type: RelationType;
@@ -58,10 +58,6 @@ export interface RelationConfig {
 	sourceField?: string; // Foreign key column in junction table pointing to source
 	targetKey?: string; // Primary key on target table (default: "id")
 	targetField?: string; // Foreign key column in junction table pointing to target
-	// Polymorphic specific fields
-	typeField?: PgColumn; // Column storing the type/collection name
-	idField?: PgColumn; // Column storing the ID
-	collections?: Record<string, string>; // Map of type values to collection names
 }
 
 export type CollectionBuilderRelationFn<
@@ -159,11 +155,6 @@ export interface RelationVariant {
 			onUpdate?: "cascade" | "set null" | "restrict" | "no action";
 		},
 	) => RelationConfig & { type: "manyToMany"; collection: C };
-	polymorphic: (config: {
-		typeField: PgColumn; // Column storing the collection name
-		idField: PgColumn; // Column storing the ID
-		collections: Record<string, string>; // Map of type values to collection names (e.g., { posts: "posts", products: "products" })
-	}) => RelationConfig & { type: "polymorphic" };
 }
 
 /**

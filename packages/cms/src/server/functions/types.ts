@@ -42,5 +42,7 @@ export type InferFunctionOutput<T> = T extends {
 		: never;
 
 export type ExtractJsonFunctions<T extends FunctionsMap> = {
-	[K in keyof T as T[K] extends JsonFunctionDefinition<any, any> ? K : never]: T[K];
+	[K in keyof T as T[K] extends JsonFunctionDefinition<any, any>
+		? K
+		: never]: T[K];
 };

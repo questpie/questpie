@@ -236,20 +236,8 @@ type ResolveCollectionSelect<
 	: any;
 
 /**
- * Resolve polymorphic relation types
- */
-type ResolvePolymorphic<
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
-	TRelation extends RelationConfig,
-> = TRelation extends {
-	types: Record<string, { collection: infer C }>;
-}
-	? ResolveCollectionSelect<TCollections, C>
-	: any;
-
-/**
  * Resolve all relations from a RelationConfig to actual types
- * Handles one-to-many, many-to-many, one-to-one, and polymorphic relations
+ * Handles one-to-many, many-to-many, and one-to-one relations
  *
  * @example
  * type PostRelations = ResolveRelations<
@@ -272,7 +260,5 @@ export type ResolveRelations<
 					collection: infer C;
 				}
 			? ResolveCollectionSelect<TCollections, C>
-			: TRelations[K] extends { type: "polymorphic" }
-				? ResolvePolymorphic<TCollections, TRelations[K]>
-				: never;
+			: never;
 };

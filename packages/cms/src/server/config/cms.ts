@@ -490,13 +490,7 @@ export class QCMS<TConfig extends CMSConfig = CMSConfig> {
 			const relation = global.state.relations?.[relationName];
 			if (!relation) continue;
 
-			if (relation.type === "polymorphic" && relation.collections) {
-				for (const target of Object.values(relation.collections)) {
-					dependencies.collections.add(target);
-				}
-			} else {
-				dependencies.collections.add(relation.collection);
-			}
+			dependencies.collections.add(relation.collection);
 
 			if (relation.type === "manyToMany" && relation.through) {
 				dependencies.collections.add(relation.through);
@@ -508,23 +502,12 @@ export class QCMS<TConfig extends CMSConfig = CMSConfig> {
 					: undefined;
 
 			if (nestedWith) {
-				if (relation.type === "polymorphic" && relation.collections) {
-					for (const target of Object.values(relation.collections)) {
-						this.visitCollectionRelations(
-							collectionMap,
-							dependencies.collections,
-							target,
-							nestedWith as Record<string, any>,
-						);
-					}
-				} else {
-					this.visitCollectionRelations(
-						collectionMap,
-						dependencies.collections,
-						relation.collection,
-						nestedWith as Record<string, any>,
-					);
-				}
+				this.visitCollectionRelations(
+					collectionMap,
+					dependencies.collections,
+					relation.collection,
+					nestedWith as Record<string, any>,
+				);
 			}
 		}
 
@@ -556,13 +539,7 @@ export class QCMS<TConfig extends CMSConfig = CMSConfig> {
 			const relation = collection.state.relations?.[relationName];
 			if (!relation) continue;
 
-			if (relation.type === "polymorphic" && relation.collections) {
-				for (const target of Object.values(relation.collections)) {
-					dependencies.add(target as string);
-				}
-			} else {
-				dependencies.add(relation.collection);
-			}
+			dependencies.add(relation.collection);
 
 			if (relation.type === "manyToMany" && relation.through) {
 				dependencies.add(relation.through);
@@ -588,23 +565,12 @@ export class QCMS<TConfig extends CMSConfig = CMSConfig> {
 			}
 
 			if (nestedWith) {
-				if (relation.type === "polymorphic" && relation.collections) {
-					for (const target of Object.values(relation.collections)) {
-						this.visitCollectionRelations(
-							collectionMap,
-							dependencies,
-							target as string,
-							nestedWith as Record<string, any>,
-						);
-					}
-				} else {
-					this.visitCollectionRelations(
-						collectionMap,
-						dependencies,
-						relation.collection,
-						nestedWith as Record<string, any>,
-					);
-				}
+				this.visitCollectionRelations(
+					collectionMap,
+					dependencies,
+					relation.collection,
+					nestedWith as Record<string, any>,
+				);
 			}
 		}
 	}

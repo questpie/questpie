@@ -133,24 +133,6 @@ const restrictedProducts = defineCollection("restricted_products")
 		}),
 	}));
 
-// Polymorphic relations setup
-const polymorphicComments = defineCollection("polymorphicComments")
-	.fields({
-		content: text("content").notNull(),
-		commentableType: text("commentable_type").notNull(),
-		commentableId: uuid("commentable_id").notNull(),
-	})
-	.relations(({ table, polymorphic }) => ({
-		commentable: polymorphic({
-			typeField: table.commentableType,
-			idField: table.commentableId,
-			collections: {
-				posts: "posts",
-				profiles: "profiles",
-			},
-		}),
-	}));
-
 // Many-to-many with extra fields in junction table
 const articles = defineCollection("articles")
 	.fields({
@@ -264,7 +246,6 @@ const testModule = defineQCMS({ name: "test" }).collections({
 	comments,
 	restrictedCategories,
 	restrictedProducts,
-	polymorphicComments,
 	articles,
 	articleTags,
 	articleTagJunction,
@@ -1169,140 +1150,6 @@ describe("collection relations", () => {
 		});
 	});
 
-	// ==========================================================================
-	// 12. POLYMORPHIC RELATIONS
-	// ==========================================================================
-
-	describe("polymorphic relations", () => {
-		it("creates and resolves polymorphic relations to different types", async () => {
-			const ctx = createTestContext();
-			const postsCrud = cms.api.collections.posts;
-			const profilesCrud = cms.api.collections.profiles;
-			const usersCrud = cms.api.collections.users;
-			const commentsCrud = cms.api.collections.polymorphicComments;
-			const authorsCrud = cms.api.collections.authors;
-
-			// Create a post
-			const author = await authorsCrud.create(
-				{ id: crypto.randomUUID(), name: "Post Author" },
-				ctx,
-			);
-
-			const post = await postsCrud.create(
-				{
-					id: crypto.randomUUID(),
-					title: "Commentable Post",
-					views: 100,
-					authorId: author.id,
-				},
-				ctx,
-			);
-
-			// Create a profile
-			const user = await usersCrud.create(
-				{
-					id: crypto.randomUUID(),
-					email: "profile@example.com",
-					name: "Profile User",
-				},
-				ctx,
-			);
-
-			const profile = await profilesCrud.create(
-				{
-					id: crypto.randomUUID(),
-					userId: user.id,
-					bio: "My bio",
-					avatar: "avatar.jpg",
-				},
-				ctx,
-			);
-
-			// Create polymorphic comments
-			const commentOnPost = await commentsCrud.create(
-				{
-					id: crypto.randomUUID(),
-					content: "Comment on post",
-					commentableType: "posts",
-					commentableId: post.id,
-				},
-				ctx,
-			);
-
-			const commentOnProfile = await commentsCrud.create(
-				{
-					id: crypto.randomUUID(),
-					content: "Comment on profile",
-					commentableType: "profiles",
-					commentableId: profile.id,
-				},
-				ctx,
-			);
-
-			// Load comments with polymorphic relations
-			const commentsWithRelations = await commentsCrud.find(
-				{
-					with: { commentable: true },
-				},
-				ctx,
-			);
-
-			expect(commentsWithRelations.docs).toHaveLength(2);
-
-			const postComment = commentsWithRelations.docs.find(
-				(c) => c.id === commentOnPost.id,
-			);
-			const profileComment = commentsWithRelations.docs.find(
-				(c) => c.id === commentOnProfile.id,
-			);
-
-			expect(postComment?.commentable?.title).toBe("Commentable Post");
-			expect(profileComment?.commentable?.bio).toBe("My bio");
-		});
-
-		it("filters by polymorphic relation type", async () => {
-			const ctx = createTestContext();
-			const postsCrud = cms.api.collections.posts;
-			const commentsCrud = cms.api.collections.polymorphicComments;
-			const authorsCrud = cms.api.collections.authors;
-
-			const author = await authorsCrud.create(
-				{ id: crypto.randomUUID(), name: "Another Author" },
-				ctx,
-			);
-
-			const post = await postsCrud.create(
-				{
-					id: crypto.randomUUID(),
-					title: "Another Post",
-					views: 50,
-					authorId: author.id,
-				},
-				ctx,
-			);
-
-			await commentsCrud.create(
-				{
-					id: crypto.randomUUID(),
-					content: "Another comment on post",
-					commentableType: "posts",
-					commentableId: post.id,
-				},
-				ctx,
-			);
-
-			// Find comments where commentableType is "posts"
-			const postComments = await commentsCrud.find(
-				{
-					where: { commentableType: "posts" },
-				},
-				ctx,
-			);
-
-			expect(postComments.docs.length).toBeGreaterThan(0);
-			expect(postComments.docs[0].commentableType).toBe("posts");
-		});
-	});
 
 	// ==========================================================================
 	// 13. EDGE CASES
