@@ -18,7 +18,7 @@ const notFoundResponse = () =>
  * Create TanStack Start server handlers for QUESTPIE CMS routes.
  */
 export const questpieStartHandlers = (
-	cms: QCMS<any, any, any>,
+	cms: QCMS<any>,
 	config: TanStackStartAdapterConfig = {},
 ): Record<string, (ctx: TanStackStartHandlerContext) => Promise<Response>> => {
 	const handler = createCMSFetchHandler(cms, config);

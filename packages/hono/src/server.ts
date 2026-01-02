@@ -5,16 +5,17 @@ import {
 	createCMSFetchHandler,
 	type CMSAdapterContext,
 	type QCMS,
+	type RequestContext,
 } from "@questpie/cms/server";
 
 /**
  * Variables stored in Hono context
  */
 export type QCMSVariables<
-	TQCMS extends QCMS<any, any, any> = QCMS<any, any, any>,
+	TQCMS extends QCMS<any> = QCMS<any>,
 > = {
 	cms: TQCMS;
-	cmsContext: Awaited<ReturnType<TQCMS["createContext"]>>;
+	cmsContext: RequestContext;
 	user: any;
 };
 
@@ -30,7 +31,7 @@ export type HonoAdapterConfig = {
 	basePath?: string;
 };
 
-export function questpieMiddleware<TQCMS extends QCMS<any, any, any>>(
+export function questpieMiddleware<TQCMS extends QCMS<any>>(
 	cms: TQCMS,
 ) {
 	return createMiddleware<{
@@ -75,8 +76,8 @@ export function questpieMiddleware<TQCMS extends QCMS<any, any, any>>(
  * }))
  * ```
  */
-export function questpieHono(
-	cms: QCMS<any, any, any>,
+export function questpieHono<TQCMS extends QCMS<any>>(
+	cms: TQCMS,
 	config: HonoAdapterConfig = {},
 ) {
 	const basePath = config.basePath || "/cms";
@@ -85,7 +86,10 @@ export function questpieHono(
 		accessMode: "user",
 	});
 
-	const resolveContext = (context?: QCMSVariables["cmsContext"], user?: any) => {
+	const resolveContext = (
+		context?: QCMSVariables<TQCMS>["cmsContext"],
+		user?: any,
+	) => {
 		if (!context) {
 			return undefined;
 		}
@@ -98,13 +102,16 @@ export function questpieHono(
 		} satisfies CMSAdapterContext;
 	};
 
-	const app = new Hono().all(`${basePath}/*`, async (c) => {
-		const response = await handler(
-			c.req.raw,
-			resolveContext(c.get("cmsContext"), c.get("user")),
-		);
-		return response ?? c.notFound();
-	});
+	const app = new Hono<{ Variables: QCMSVariables<TQCMS> }>().all(
+		`${basePath}/*`,
+		async (c) => {
+			const response = await handler(
+				c.req.raw,
+				resolveContext(c.get("cmsContext"), c.get("user")),
+			);
+			return response ?? c.notFound();
+		},
+	);
 
 	return app;
 }

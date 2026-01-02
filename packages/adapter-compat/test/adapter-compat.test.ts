@@ -19,7 +19,7 @@ type AdapterHarness = {
 	close?: () => Promise<void> | void;
 };
 
-type AdapterFactory = (cms: QCMS<any, any, any>) => Promise<AdapterHarness> | AdapterHarness;
+type AdapterFactory = (cms: QCMS<any>) => Promise<AdapterHarness> | AdapterHarness;
 
 const jsonRequest = (method: string, body: unknown): RequestInit => ({
 	method,
@@ -84,7 +84,7 @@ const setupCms = async () => {
 const runAdapterSuite = (name: string, createHarness: AdapterFactory) => {
 	describe(name, () => {
 		let harness: AdapterHarness;
-		let cms: QCMS<any, any, any>;
+		let cms: QCMS<any>;
 		let client: Awaited<ReturnType<typeof createTestDb>>["client"];
 
 		beforeEach(async () => {

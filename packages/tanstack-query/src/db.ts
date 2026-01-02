@@ -1,5 +1,12 @@
 import type { QCMSClient } from "@questpie/cms/client";
-import type { QCMS } from "@questpie/cms/server";
+import type {
+	Collection as CMSCollection,
+	CollectionSelect,
+	FindManyOptions,
+	GetCollection,
+	QCMS,
+	ResolveRelationsDeep,
+} from "@questpie/cms/server";
 import type { Collection, CollectionConfig } from "@tanstack/db";
 import { createCollection } from "@tanstack/db";
 import type {
@@ -19,30 +26,59 @@ import qs from "qs";
 
 import type { QCMSQueryOptionsConfig, QueryKey } from "./index";
 
-type CollectionKeys<T extends QCMS<any, any, any>> = Extract<
+type ResolvedCollections<T extends QCMS<any>> = T["config"]["collections"];
+type AnyCollection = CMSCollection<any>;
+
+type CollectionKeys<T extends QCMS<any>> = Extract<
 	keyof QCMSClient<T>["collections"],
 	string
 >;
 
-type CollectionFind<T extends QCMS<any, any, any>, K extends CollectionKeys<T>> =
-	QCMSClient<T>["collections"][K]["find"];
+type CollectionDefinition<T extends QCMS<any>, K extends CollectionKeys<T>> =
+	K extends keyof ResolvedCollections<T>
+		? GetCollection<ResolvedCollections<T>, K>
+		: AnyCollection;
 
-type CollectionFindResult<
-	T extends QCMS<any, any, any>,
-	K extends CollectionKeys<T>,
-> = Awaited<ReturnType<CollectionFind<T, K>>>;
+type CollectionSelectType<T extends QCMS<any>, K extends CollectionKeys<T>> =
+	CollectionSelect<CollectionDefinition<T, K>>;
+
+type CollectionRelationsType<T extends QCMS<any>, K extends CollectionKeys<T>> =
+	ResolveRelationsDeep<
+		CollectionDefinition<T, K>["state"]["relations"],
+		ResolvedCollections<T>
+	>;
+
+type PaginatedResult<T> = {
+	docs: T[];
+	totalDocs: number;
+	limit: number;
+	totalPages: number;
+	page: number;
+	pagingCounter: number;
+	hasPrevPage: boolean;
+	hasNextPage: boolean;
+	prevPage: number | null;
+	nextPage: number | null;
+};
 
 type CollectionItem<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
-> = CollectionFindResult<T, K> extends { docs: Array<infer TItem> }
-	? TItem
-	: never;
+> = Partial<CollectionSelectType<T, K>>;
 
 type FindOptions<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
-> = Parameters<CollectionFind<T, K>>[0];
+> = FindManyOptions<CollectionSelectType<T, K>, CollectionRelationsType<T, K>>;
+
+type CollectionFind<T extends QCMS<any>, K extends CollectionKeys<T>> = (
+	options?: FindOptions<T, K>,
+) => Promise<PaginatedResult<CollectionItem<T, K>>>;
+
+type CollectionFindResult<
+	T extends QCMS<any>,
+	K extends CollectionKeys<T>,
+> = PaginatedResult<CollectionItem<T, K>>;
 
 type BaseQueryCollectionConfig<TItem extends object> = Omit<
 	QueryCollectionConfig<TItem>,
@@ -153,7 +189,7 @@ export function mapLoadSubsetOptionsToFindOptions<
 >(
 	options: LoadSubsetOptions | undefined,
 	config: QCMSLoadSubsetOptionsConfig = {},
-): Pick<TFindOptions, "where" | "orderBy" | "limit"> {
+): Partial<TFindOptions> {
 	const parsed = parseLoadSubsetOptions(options);
 	return {
 		where: buildWhereFromFilters<TFindOptions["where"]>(
@@ -162,7 +198,7 @@ export function mapLoadSubsetOptionsToFindOptions<
 		),
 		orderBy: buildOrderByFromSorts<TFindOptions["orderBy"]>(parsed.sorts),
 		limit: parsed.limit,
-	} as Pick<TFindOptions, "where" | "orderBy" | "limit">;
+	} as Partial<TFindOptions>;
 }
 
 const applyFilter = (
@@ -228,7 +264,7 @@ const mergeFindOptions = <TFindOptions extends { [key: string]: any }>(
 };
 
 export type QCMSDBCollectionConfig<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
 > = BaseQueryCollectionConfig<CollectionItem<T, K>> & {
 	queryClient: QueryClient;
@@ -310,7 +346,7 @@ type QCMSDBCollectionOptionsResult<TItem extends object, TConfig> =
 				>;
 			};
 
-export type QCMSDBHelpers<T extends QCMS<any, any, any>> = {
+export type QCMSDBHelpers<T extends QCMS<any>> = {
 	collections: {
 		[K in CollectionKeys<T>]: {
 			queryCollectionOptions: <TConfig extends QCMSDBCollectionConfig<T, K>>(
@@ -323,7 +359,7 @@ export type QCMSDBHelpers<T extends QCMS<any, any, any>> = {
 	};
 };
 
-export function createQCMSDBHelpers<T extends QCMS<any, any, any>>(
+export function createQCMSDBHelpers<T extends QCMS<any>>(
 	client: QCMSClient<T>,
 	config: Pick<QCMSQueryOptionsConfig, "keyPrefix"> = {},
 ): QCMSDBHelpers<T> {
@@ -335,7 +371,7 @@ export function createQCMSDBHelpers<T extends QCMS<any, any, any>>(
 			const collectionKey = collectionName as CollectionKeys<T>;
 			const collection =
 				client.collections[collectionKey] as QCMSClient<T>["collections"][typeof collectionKey];
-			const typedCollection = collection as {
+			const typedCollection = collection as unknown as {
 				find: CollectionFind<T, typeof collectionKey>;
 			};
 
@@ -368,7 +404,7 @@ export function createQCMSDBHelpers<T extends QCMS<any, any, any>>(
 }
 
 const createQCMSQueryCollectionOptions = <
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
 	TConfig extends QCMSDBCollectionConfig<T, K>,
 >(
@@ -428,7 +464,7 @@ const createQCMSQueryCollectionOptions = <
 };
 
 const createQCMSCollectionWithRealtime = <
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
 	TConfig extends QCMSDBCollectionConfig<T, K>,
 >(
@@ -486,13 +522,15 @@ const startCollectionRealtime = <TItem>(
 	collection: { replaceAll: (items: TItem[]) => void },
 	config: QCMSRealtimeConfig<any, TItem>,
 ): QCMSRealtimeHandle | undefined => {
-	const EventSourceCtor =
+	const createEventSource =
 		config.eventSource ??
-		(typeof EventSource === "undefined" ? undefined : EventSource);
-	if (!EventSourceCtor) return undefined;
+		(typeof EventSource === "undefined"
+			? undefined
+			: (url: string) => new EventSource(url));
+	if (!createEventSource) return undefined;
 
 	const url = buildRealtimeUrl(collectionName, config);
-	const source = EventSourceCtor(url);
+	const source = createEventSource(url);
 
 	const handleSnapshot = (event: MessageEvent) => {
 		const payload = JSON.parse(event.data) as QCMSRealtimeSnapshot;

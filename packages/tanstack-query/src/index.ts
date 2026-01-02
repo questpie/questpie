@@ -31,45 +31,53 @@ type QueryBuilder<TFn extends AnyAsyncFn> = HasArgs<TFn> extends false
 		? (options?: FirstArg<TFn>) => QCMSQueryOptions<QueryData<TFn>>
 		: (options: FirstArg<TFn>) => QCMSQueryOptions<QueryData<TFn>>;
 
-type CollectionKeys<T extends QCMS<any, any, any>> = Extract<
+type CollectionKeys<T extends QCMS<any>> = Extract<
 	keyof QCMSClient<T>["collections"],
 	string
 >;
-type GlobalKeys<T extends QCMS<any, any, any>> = Extract<
+type GlobalKeys<T extends QCMS<any>> = Extract<
 	keyof QCMSClient<T>["globals"],
 	string
 >;
 
-type CollectionFind<T extends QCMS<any, any, any>, K extends CollectionKeys<T>> =
+type CollectionFind<T extends QCMS<any>, K extends CollectionKeys<T>> =
 	QCMSClient<T>["collections"][K]["find"];
 type CollectionFindOne<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
 > = QCMSClient<T>["collections"][K]["findOne"];
 type CollectionCreate<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
 > = QCMSClient<T>["collections"][K]["create"];
 type CollectionUpdate<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
 > = QCMSClient<T>["collections"][K]["update"];
 type CollectionDelete<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
 > = QCMSClient<T>["collections"][K]["delete"];
 type CollectionRestore<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
 > = QCMSClient<T>["collections"][K]["restore"];
 
-type GlobalGet<T extends QCMS<any, any, any>, K extends GlobalKeys<T>> =
-	QCMSClient<T>["globals"][K]["get"];
-type GlobalUpdate<T extends QCMS<any, any, any>, K extends GlobalKeys<T>> =
-	QCMSClient<T>["globals"][K]["update"];
+type GlobalGet<T extends QCMS<any>, K extends GlobalKeys<T>> =
+	QCMSClient<T>["globals"][K] extends { get: infer TGet }
+		? TGet extends AnyAsyncFn
+			? TGet
+			: never
+		: never;
+type GlobalUpdate<T extends QCMS<any>, K extends GlobalKeys<T>> =
+	QCMSClient<T>["globals"][K] extends { update: infer TUpdate }
+		? TUpdate extends AnyAsyncFn
+			? TUpdate
+			: never
+		: never;
 
 type CollectionQueryOptionsAPI<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends CollectionKeys<T>,
 > = {
 	find: QueryBuilder<CollectionFind<T, K>>;
@@ -100,7 +108,7 @@ type CollectionQueryOptionsAPI<
 };
 
 type GlobalQueryOptionsAPI<
-	T extends QCMS<any, any, any>,
+	T extends QCMS<any>,
 	K extends GlobalKeys<T>,
 > = {
 	get: QueryBuilder<GlobalGet<T, K>>;
@@ -113,7 +121,7 @@ type GlobalQueryOptionsAPI<
 	>;
 };
 
-export type QCMSQueryOptionsProxy<T extends QCMS<any, any, any>> = {
+export type QCMSQueryOptionsProxy<T extends QCMS<any>> = {
 	collections: {
 		[K in CollectionKeys<T>]: CollectionQueryOptionsAPI<T, K>;
 	};
@@ -214,7 +222,7 @@ export function createMutationOptions<TVariables, TData>(config: {
 	};
 }
 
-export function createQCMSQueryOptions<T extends QCMS<any, any, any>>(
+export function createQCMSQueryOptions<T extends QCMS<any>>(
 	client: QCMSClient<T>,
 	config: QCMSQueryOptionsConfig = {},
 ): QCMSQueryOptionsProxy<T> {

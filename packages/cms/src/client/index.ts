@@ -8,12 +8,9 @@ import type {
 	UpdateParams,
 	With,
 } from "../server/collection/crud/types.js";
-import type { Global, GlobalBuilder } from "../server/global/builder/index.js";
 import type {
 	AnyCollection,
 	AnyCollectionOrBuilder,
-	CollectionNames as SharedCollectionNames,
-	GlobalNames as SharedGlobalNames,
 	CollectionSelect,
 	CollectionInsert,
 	CollectionUpdate,
@@ -29,9 +26,14 @@ import type {
 	InferFunctionInput,
 	InferFunctionOutput,
 	JsonFunctionDefinition,
-} from "../server/functions/types.js";
+} from "#questpie/cms/server/functions/types.js";
 import qs from "qs";
-import type { AnyGlobal, QCMS } from "../exports/server.js";
+import type {
+	AnyGlobal,
+	GetFunctions,
+	GetGlobal,
+	QCMS,
+} from "#questpie/cms/exports/server.js";
 
 export class QCMSClientError extends Error {
 	status: number;
@@ -84,58 +86,23 @@ export type QCMSClientConfig = {
 	headers?: Record<string, string>;
 };
 
-/**
- * Resolve collections from QCMS instance (including core collections)
- * Uses $inferCms helper property for reliable type extraction
- */
-type ResolvedCollections<T extends QCMS<any>> = T["config"]["collections"];
-
-/**
- * Resolve globals from QCMS instance
- * Uses $inferCms helper property for reliable type extraction
- */
-type ResolvedGlobals<T extends QCMS<any>> = T["config"]["globals"];
-
-/**
- * Resolve root functions from QCMS instance
- */
-type ResolvedFunctions<T extends QCMS<any>> = T["config"]["functions"];
-
-/**
- * Extract collection names from QCMS instance
- */
-type CollectionNames<T extends QCMS<any>> = SharedCollectionNames<
-	ResolvedCollections<T>
->;
-
-/**
- * Extract global names from QCMS instance
- */
-type GlobalNames<T extends QCMS<any>> = SharedGlobalNames<ResolvedGlobals<T>>;
-
-/**
- * Extract global state by name from QCMS instance
- */
-type GetGlobalState<
-	T extends QCMS<any>,
-	Name extends string,
-> = ResolvedGlobals<T>[Name] extends Global<infer TState>
-	? TState
-	: ResolvedGlobals<T>[Name] extends GlobalBuilder<infer TState>
-		? TState
-		: never;
-
 type JsonFunctionCaller<TDefinition extends JsonFunctionDefinition<any, any>> =
 	(
 		input: InferFunctionInput<TDefinition>,
 	) => Promise<InferFunctionOutput<TDefinition>>;
 
-type RootFunctionsAPI<T extends QCMS<any>> =
-	ResolvedFunctions<T> extends Record<string, any>
+type RootFunctionsAPI<T extends QCMS> =
+	GetFunctions<T["config"]> extends Record<string, any>
 		? {
 				[K in keyof ExtractJsonFunctions<
-					ResolvedFunctions<T>
-				>]: JsonFunctionCaller<ExtractJsonFunctions<ResolvedFunctions<T>>[K]>;
+					GetFunctions<T["config"]>
+				>]: ExtractJsonFunctions<
+					GetFunctions<T["config"]>
+				>[K] extends JsonFunctionDefinition<any, any>
+					? JsonFunctionCaller<
+							ExtractJsonFunctions<GetFunctions<T["config"]>>[K]
+						>
+					: never;
 			}
 		: {};
 
@@ -242,16 +209,11 @@ type CollectionAPI<
 /**
  * Collections API proxy with type-safe collection methods
  */
-type CollectionsAPI<T extends QCMS<any>> = {
-	[K in CollectionNames<T>]: GetCollection<
-		ResolvedCollections<T>,
-		K
-	> extends AnyCollection
-		? CollectionAPI<
-				GetCollection<ResolvedCollections<T>, K>,
-				ResolvedCollections<T>
-			>
-		: never;
+type CollectionsAPI<T extends QCMS> = {
+	[K in keyof T["config"]["collections"]]: CollectionAPI<
+		GetCollection<T["config"]["collections"], K>,
+		T["config"]["collections"]
+	>;
 };
 
 /**
@@ -307,21 +269,17 @@ type GlobalAPI<
 /**
  * Globals API proxy with type-safe global methods
  */
-type GlobalsAPI<T extends QCMS<any>> =
-	ResolvedGlobals<T> extends never
-		? {}
-		: {
-				[K in GlobalNames<T>]: K extends string
-					? ResolvedGlobals<T>[K] extends AnyGlobal
-						? GlobalAPI<ResolvedGlobals<T>[K], ResolvedCollections<T>>
-						: never
-					: never;
-			};
+type GlobalsAPI<T extends QCMS> = {
+	[K in keyof NonNullable<T["config"]["globals"]>]: GlobalAPI<
+		GetGlobal<NonNullable<T["config"]["globals"]>, K>,
+		T["config"]["collections"]
+	>;
+};
 
 /**
  * QCMS Client
  */
-export type QCMSClient<T extends QCMS<any>> = {
+export type QCMSClient<T extends QCMS> = {
 	collections: CollectionsAPI<T>;
 	globals: GlobalsAPI<T>;
 	functions: RootFunctionsAPI<T>;
@@ -348,7 +306,7 @@ export type QCMSClient<T extends QCMS<any>> = {
  * const result = await client.functions.addToCart({ productId: '123' })
  * ```
  */
-export function createQCMSClient<T extends QCMS<any> = any>(
+export function createQCMSClient<T extends QCMS>(
 	config: QCMSClientConfig,
 ): QCMSClient<T> {
 	const fetcher = config.fetch || globalThis.fetch;

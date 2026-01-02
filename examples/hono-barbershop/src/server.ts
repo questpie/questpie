@@ -121,7 +121,7 @@ const app = new Hono()
 						slotTime.setHours(hour, minute, 0, 0);
 
 						// Check if slot conflicts with existing appointments
-						const hasConflict = existingAppointments.docs.some((apt) => {
+					const hasConflict = existingAppointments.docs.some((apt: any) => {
 							const aptStart = new Date(apt.scheduledAt);
 							const aptEnd = new Date(
 								aptStart.getTime() + service.duration * 60000,
@@ -222,7 +222,7 @@ const app = new Hono()
 				return c.json(
 					{
 						error: "Time slot not available",
-						conflicts: conflicts.docs.map((a) => ({
+							conflicts: conflicts.docs.map((a: any) => ({
 							id: a.id,
 							scheduledAt: a.scheduledAt,
 						})),
@@ -377,7 +377,7 @@ const app = new Hono()
 			);
 
 			return c.json({
-				appointments: appointments.docs.map((apt) => ({
+					appointments: appointments.docs.map((apt: any) => ({
 					id: apt.id,
 					scheduledAt: apt.scheduledAt,
 					status: apt.status,

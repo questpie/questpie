@@ -89,7 +89,6 @@ export const appointments = defineCollection("appointments")
 		cancelledAt: timestamp("cancelled_at", { mode: "date" }),
 		cancellationReason: text("cancellation_reason"),
 	})
-	// TODO: Support relation definitions that accept table/column refs (not just strings).
 	.relations(({ one, table }) => ({
 		// Note: customerId references Better Auth's users table
 		customer: one("questpie_users", {
@@ -168,14 +167,19 @@ const appointmentConfirmationTemplate = defineEmailTemplate({
 		scheduledAt: z.string(),
 		appointmentId: z.string(),
 	}),
-	render: ({ customerName, barberName, serviceName, scheduledAt }) => (
-		React.createElement("div", null,
+	render: ({ customerName, barberName, serviceName, scheduledAt }) =>
+		React.createElement(
+			"div",
+			null,
 			React.createElement("h1", null, `Hello ${customerName}!`),
-			React.createElement("p", null, `Your appointment with ${barberName} for ${serviceName} is confirmed.`),
+			React.createElement(
+				"p",
+				null,
+				`Your appointment with ${barberName} for ${serviceName} is confirmed.`,
+			),
 			React.createElement("p", null, `Scheduled at: ${scheduledAt}`),
-			React.createElement("p", null, "See you soon!")
-		)
-	),
+			React.createElement("p", null, "See you soon!"),
+		),
 	subject: (ctx) => `Appointment Confirmed - ${ctx.serviceName}`,
 });
 
@@ -187,14 +191,19 @@ const appointmentCancellationTemplate = defineEmailTemplate({
 		scheduledAt: z.string(),
 		reason: z.string().optional(),
 	}),
-	render: ({ customerName, serviceName, scheduledAt, reason }) => (
-		React.createElement("div", null,
+	render: ({ customerName, serviceName, scheduledAt, reason }) =>
+		React.createElement(
+			"div",
+			null,
 			React.createElement("h1", null, `Hello ${customerName}`),
-			React.createElement("p", null, `Your appointment for ${serviceName} scheduled at ${scheduledAt} has been cancelled.`),
+			React.createElement(
+				"p",
+				null,
+				`Your appointment for ${serviceName} scheduled at ${scheduledAt} has been cancelled.`,
+			),
 			reason && React.createElement("p", null, `Reason: ${reason}`),
-			React.createElement("p", null, "We hope to see you again soon!")
-		)
-	),
+			React.createElement("p", null, "We hope to see you again soon!"),
+		),
 	subject: () => "Appointment Cancelled",
 });
 
@@ -211,9 +220,9 @@ const sendAppointmentConfirmation = defineJob({
 	handler: async (payload) => {
 		const cms = getCMSFromContext<AppCMS>();
 		// Fetch appointment details
-		const appointment = await cms.api.findOne("appointments", {
+		const appointment = await cms.api.collections.appointments.findOne({
 			where: { id: payload.appointmentId },
-			with: { customer: true, barber: true, service: true },
+			with: { customer: true },
 		});
 
 		if (!appointment) {
@@ -248,7 +257,7 @@ const sendAppointmentCancellation = defineJob({
 	}),
 	handler: async (payload) => {
 		const cms = getCMSFromContext<AppCMS>();
-		const appointment = await cms.api.findOne("appointments", {
+		const appointment = await cms.api.collections.appointments.findOne({
 			where: { id: payload.appointmentId },
 			with: { customer: true, service: true },
 		});

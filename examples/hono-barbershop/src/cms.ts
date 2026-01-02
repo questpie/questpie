@@ -234,30 +234,6 @@ export const cms = defineQCMS({ name: "barbershop" })
 				process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
 		}),
 	)
-	// Configure storage (local filesystem by default)
-	.storage({
-		// driver: fsDriver({ location: './uploads' })
-	})
-	// Configure email
-	.email({
-		adapter:
-			process.env.MAIL_ADAPTER === "console"
-				? new ConsoleAdapter({ logHtml: false })
-				: new SmtpAdapter({
-						transport: {
-							host: process.env.SMTP_HOST || "localhost",
-							port: Number.parseInt(process.env.SMTP_PORT || "1025", 10),
-							secure: false,
-						},
-					}),
-		templates: {},
-	})
-	// Configure queue adapter
-	.queueAdapter(
-		pgBossAdapter({
-			connectionString: DATABASE_URL,
-		}),
-	)
 	// Build the final instance with runtime configuration
 	.build({
 		app: {
@@ -267,6 +243,29 @@ export const cms = defineQCMS({ name: "barbershop" })
 			url: DATABASE_URL,
 		},
 		secret: process.env.SECRET,
+		// Configure storage (local filesystem by default)
+		storage: {
+			// driver: fsDriver({ location: "./uploads" })
+		},
+		// Configure email
+		email: {
+			adapter:
+				process.env.MAIL_ADAPTER === "console"
+					? new ConsoleAdapter({ logHtml: false })
+					: new SmtpAdapter({
+							transport: {
+								host: process.env.SMTP_HOST || "localhost",
+								port: Number.parseInt(process.env.SMTP_PORT || "1025", 10),
+								secure: false,
+							},
+						}),
+		},
+		// Configure queue adapter
+		queue: {
+			adapter: pgBossAdapter({
+				connectionString: DATABASE_URL,
+			}),
+		},
 	});
 
 export type AppCMS = typeof cms;

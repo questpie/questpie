@@ -9,7 +9,6 @@ import type {
 	FunctionDefinition,
 } from "#questpie/cms/server";
 import type { RelationConfig } from "#questpie/cms/server/collection/builder/types";
-import type { SearchableConfig } from "#questpie/cms/server/integrated/search";
 
 // ============================================================================
 // Base Type Helpers
@@ -94,13 +93,14 @@ export type CollectionRelations<T> =
 			: Record<string, RelationConfig>
 		: Record<string, RelationConfig>;
 
-/**
- * Extract search metadata type from a Collection or CollectionBuilder
- */
-export type CollectionSearchMetadata<T> =
-	CollectionState<T> extends { searchable: SearchableConfig }
-		? Record<string, any>
-		: Record<string, any>;
+// /**
+// TODO: use this type
+//  * Extract search metadata type from a Collection or CollectionBuilder
+//  */
+// export type CollectionSearchMetadata<T> =
+// 	CollectionState<T> extends { searchable: SearchableConfig }
+// 		? Record<string, any>
+// 		: Record<string, any>;
 
 // ============================================================================
 // Global Type Inference (from $infer property)
@@ -164,49 +164,35 @@ export type GlobalRelations<T> =
 // ============================================================================
 
 /**
- * Extract all collection names from a collections object
- * @example type Names = CollectionNames<{ posts: typeof posts, pages: typeof pages }> // "posts" | "pages"
- */
-export type CollectionNames<
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
-> = keyof TCollections;
-
-/**
  * Get a Collection by name from collections object
  * @example type Posts = GetCollection<{ posts: typeof posts, pages: typeof pages }, "posts">
  */
 export type GetCollection<
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
-	Name extends CollectionNames<TCollections>,
+	Name extends keyof TCollections,
 > = TCollections[Name] extends Collection<infer TState>
 	? Collection<TState>
 	: TCollections[Name] extends CollectionBuilder<infer TState>
 		? Collection<TState>
 		: never;
 
-/**
- * Extract searchable collection names from a collections map
- */
-export type SearchableCollectionNames<
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
-> = {
-	[K in CollectionNames<TCollections>]: CollectionState<
-		GetCollection<TCollections, K>
-	> extends { searchable: SearchableConfig }
-		? K
-		: never;
-}[CollectionNames<TCollections>];
+// /**
+// TODO: use this type
+//  * Extract searchable collection names from a collections map
+//  */
+// export type SearchableCollectionNames<
+// 	TCollections extends Record<string, AnyCollectionOrBuilder>,
+// > = {
+// 	[K in keyof TCollections]: CollectionState<
+// 		GetCollection<TCollections, K>
+// 	> extends { searchable: SearchableConfig }
+// 		? K
+// 		: never;
+// }[keyof TCollections];
 
 // ============================================================================
 // Global Name Extraction & Lookup
 // ============================================================================
-
-/**
- * Extract all global names from a globals object
- * @example type Names = GlobalNames<{ siteSettings: typeof siteSettings, themeConfig: typeof themeConfig }> // "siteSettings" | "themeConfig"
- */
-export type GlobalNames<TGlobals extends Record<string, AnyGlobalOrBuilder>> =
-	keyof TGlobals;
 
 /**
  * Get a Global by name from globals object
@@ -214,7 +200,7 @@ export type GlobalNames<TGlobals extends Record<string, AnyGlobalOrBuilder>> =
  */
 export type GetGlobal<
 	TGlobals extends Record<string, AnyGlobalOrBuilder>,
-	Name extends GlobalNames<TGlobals>,
+	Name extends keyof TGlobals,
 > = TGlobals[Name] extends Global<infer TState>
 	? Global<TState>
 	: TGlobals[Name] extends GlobalBuilder<infer TState>
@@ -231,12 +217,16 @@ export type GetGlobal<
 type ResolveCollectionSelect<
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
 	C,
-> = C extends CollectionNames<TCollections>
+> = C extends keyof TCollections
 	? CollectionSelect<GetCollection<TCollections, C>>
 	: any;
 
-type DecrementDepth<Depth extends unknown[]> =
-	Depth extends [unknown, ...infer Rest] ? Rest : [];
+type DecrementDepth<Depth extends unknown[]> = Depth extends [
+	unknown,
+	...infer Rest,
+]
+	? Rest
+	: [];
 
 export type RelationShape<TSelect, TRelations> = {
 	__select: TSelect;
@@ -253,7 +243,7 @@ type ResolveCollectionRelation<
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
 	C,
 	Depth extends unknown[],
-> = C extends CollectionNames<TCollections>
+> = C extends keyof TCollections
 	? RelationShape<
 			CollectionSelect<GetCollection<TCollections, C>>,
 			Depth extends []

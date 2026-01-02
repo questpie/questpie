@@ -60,7 +60,7 @@ export type HonoClientConfig = {
  */
 export function createClientFromHono<
 	TApp extends Hono<any, any, any>,
-	TCMS extends QCMS<any, any, any>,
+	TCMS extends QCMS<any>,
 >(
 	config: HonoClientConfig,
 ): ReturnType<typeof hc<TApp>> & ReturnType<typeof createQCMSClient<TCMS>> {

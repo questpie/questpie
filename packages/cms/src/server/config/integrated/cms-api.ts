@@ -1,12 +1,10 @@
 import type {
 	AnyCollectionOrBuilder,
 	CMSConfig,
-	CollectionNames,
 	CRUD,
 	GetCollection,
 	GetGlobal,
 	GlobalCRUD,
-	GlobalNames,
 	QCMS,
 } from "#questpie/cms/exports/server.js";
 import type { RequestContext } from "#questpie/cms/server/config/context";

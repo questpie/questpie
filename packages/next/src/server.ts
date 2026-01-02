@@ -16,7 +16,7 @@ const notFoundResponse = () =>
  * Create a Next.js-compatible handler for QUESTPIE CMS routes.
  */
 export const questpieNext = (
-	cms: QCMS<any, any, any>,
+	cms: QCMS<any>,
 	config: NextAdapterConfig = {},
 ): NextHandler => {
 	const handler = createCMSFetchHandler(cms, config);
@@ -31,7 +31,7 @@ export const questpieNext = (
  * Convenience helpers for Next.js route handlers.
  */
 export const questpieNextRouteHandlers = (
-	cms: QCMS<any, any, any>,
+	cms: QCMS<any>,
 	config: NextAdapterConfig = {},
 ): Record<string, NextHandler> => {
 	const handler = questpieNext(cms, config);

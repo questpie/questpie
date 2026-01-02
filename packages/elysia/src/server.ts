@@ -5,8 +5,8 @@ import { createCMSFetchHandler, type QCMS } from "@questpie/cms/server";
  * Context stored in Elysia decorator
  */
 export type QCMSContext = {
-	cms: QCMS<any, any, any>;
-	cmsContext: Awaited<ReturnType<QCMS<any, any, any>["createContext"]>>;
+	cms: QCMS<any>;
+	cmsContext: Awaited<ReturnType<QCMS<any>["createContext"]>>;
 	user: any;
 };
 
@@ -66,7 +66,7 @@ export type ElysiaAdapterConfig = {
  * ```
  */
 export function questpieElysia(
-	cms: QCMS<any, any, any>,
+	cms: QCMS<any>,
 	config: ElysiaAdapterConfig = {},
 ) {
 	const basePath = config.basePath || "/cms";

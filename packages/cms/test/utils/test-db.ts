@@ -33,7 +33,7 @@ export const createTestDb = async () => {
 };
 
 export const runTestDbMigrations = async (
-	qcms: QCMS<any, any, any> | MockCMS<any>,
+	qcms: QCMS<any> | MockCMS<any>,
 ) => {
 	// Generate migrations in-memory using drizzle-kit API
 	const { generateDrizzleJson, generateMigration } = await import(

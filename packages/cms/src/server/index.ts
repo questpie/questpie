@@ -32,8 +32,6 @@ export type {
 	RelationShape,
 	ExtractRelationSelect,
 	ExtractRelationRelations,
-	CollectionNames,
 	GetCollection,
-	GlobalNames,
 	GetGlobal,
 } from "#questpie/cms/shared/type-utils.js";

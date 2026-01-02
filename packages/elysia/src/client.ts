@@ -56,7 +56,7 @@ export type ElysiaClientConfig = {
  */
 export function createClientFromEden<
 	TApp extends Elysia<any, any, any, any, any, any, any> = any,
-	TCMS extends QCMS<any, any, any> = any,
+	TCMS extends QCMS<any> = any,
 >(config: ElysiaClientConfig): QCMSClient<TCMS> & Treaty.Create<TApp> {
 	// Determine baseURL with protocol for CMS client
 	const baseURL = config.server.startsWith("http")
