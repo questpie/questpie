@@ -28,6 +28,7 @@ import type {
 	JsonFunctionDefinition,
 } from "#questpie/cms/server/functions/types.js";
 import qs from "qs";
+import superjson from "superjson";
 import type {
 	AnyGlobal,
 	GetFunctions,
@@ -144,6 +145,13 @@ export type QCMSClientConfig = {
 	 * Default headers to include in all requests
 	 */
 	headers?: Record<string, string>;
+
+	/**
+	 * Enable SuperJSON serialization for enhanced type support (Date, Map, Set, BigInt)
+	 * When enabled, adds X-SuperJSON header and uses SuperJSON for request/response serialization
+	 * @default true
+	 */
+	useSuperJSON?: boolean;
 };
 
 type JsonFunctionCaller<TDefinition extends JsonFunctionDefinition<any, any>> =
@@ -391,19 +399,53 @@ export function createQCMSClient<T extends QCMS>(
 		options: RequestInit = {},
 	): Promise<any> {
 		const url = `${config.baseURL}${path}`;
-		const headers = {
-			"Content-Type": "application/json",
+		const useSuperJSON = config.useSuperJSON !== false; // default true
+
+		const contentType = useSuperJSON
+			? "application/superjson+json"
+			: "application/json";
+
+		const headers: Record<string, string> = {
+			"Content-Type": contentType,
 			...defaultHeaders,
-			...options.headers,
+			...(options.headers as Record<string, string>),
 		};
+
+		if (useSuperJSON) {
+			headers["X-SuperJSON"] = "1";
+		}
+
+		// Serialize body with SuperJSON if enabled
+		let body = options.body;
+		if (body && typeof body === "string" && useSuperJSON) {
+			try {
+				const parsed = JSON.parse(body);
+				body = superjson.stringify(parsed);
+			} catch {
+				// If parsing fails, keep original body
+			}
+		}
 
 		const response = await fetcher(url, {
 			...options,
 			headers,
+			body,
 		});
 
 		if (!response.ok) {
-			const errorData = await response.json().catch(() => undefined);
+			// Try to parse error response (could be SuperJSON or regular JSON)
+			let errorData: any;
+			try {
+				const responseContentType = response.headers.get("Content-Type");
+				const text = await response.text();
+				if (text) {
+					errorData = responseContentType?.includes("superjson")
+						? superjson.parse(text)
+						: JSON.parse(text);
+				}
+			} catch {
+				errorData = undefined;
+			}
 
 			// Extract error from { error: CMSErrorShape } format
 			const cmsError =
@@ -432,7 +474,14 @@ export function createQCMSClient<T extends QCMS>(
 			});
 		}
 
-		return response.json();
+		// Parse successful response (could be SuperJSON or regular JSON)
+		const responseContentType = response.headers.get("Content-Type");
+		const text = await response.text();
+		if (!text) return undefined;
+
+		return responseContentType?.includes("superjson")
+			? superjson.parse(text)
+			: JSON.parse(text);
 	}
 
 	/**
