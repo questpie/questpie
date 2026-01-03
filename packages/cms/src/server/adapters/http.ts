@@ -5,6 +5,7 @@ import type { RequestContext } from "../config/context";
 import type { AccessMode, CMSConfig } from "../config/types";
 import type { FunctionDefinition, FunctionsMap } from "../functions/types";
 import { executeJsonFunction } from "../functions/execute";
+import { CMSError } from "../errors";
 
 export type CMSAdapterConfig<TConfig extends CMSConfig = CMSConfig> = {
 	basePath?: string;
@@ -152,6 +153,52 @@ const jsonResponse = (data: unknown, status = 200) =>
 		headers: jsonHeaders,
 	});
 
+/**
+ * Detect if we're in development mode
+ */
+const isDevelopment = () => {
+	try {
+		return process?.env?.NODE_ENV === "development";
+	} catch {
+		return false;
+	}
+};
+
+/**
+ * Handle errors and convert to HTTP Response
+ * Supports CMSError, ZodError, and generic Error
+ */
+const handleError = (error: unknown, isDev = isDevelopment()): Response => {
+	// If it's our CMSError, use it directly
+	if (error instanceof CMSError) {
+		return new Response(JSON.stringify({ error: error.toJSON(isDev) }), {
+			status: error.getHTTPStatus(),
+			headers: jsonHeaders,
+		});
+	}
+
+	// If it's ZodError, convert to CMSError
+	if (error instanceof ZodError) {
+		const cmsError = CMSError.fromZodError(error);
+		return new Response(JSON.stringify({ error: cmsError.toJSON(isDev) }), {
+			status: cmsError.getHTTPStatus(),
+			headers: jsonHeaders,
+		});
+	}
+
+	// Unknown error - wrap it as INTERNAL_SERVER_ERROR
+	const message = error instanceof Error ? error.message : "Unknown error";
+	const wrappedError = CMSError.internal(message, error);
+
+	return new Response(JSON.stringify({ error: wrappedError.toJSON(isDev) }), {
+		status: wrappedError.getHTTPStatus(),
+		headers: jsonHeaders,
+	});
+};
+
+/**
+ * @deprecated Use handleError instead
+ */
 const jsonError = (message: string, status = 500) =>
 	jsonResponse({ error: message }, status);
 
@@ -355,7 +402,9 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 	) => {
 		if (definition.mode === "raw") {
 			if (request.method !== "POST") {
-				return jsonError("Method not allowed", 405);
+				return handleError(
+					CMSError.badRequest("Method not allowed for raw function"),
+				);
 			}
 
 			const resolved = await resolveContext(cms, request, config, context);
@@ -365,21 +414,19 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 					context: resolved.cmsContext,
 				});
 			} catch (error) {
-				const message =
-					error instanceof Error ? error.message : "Unknown error";
-				return jsonError(message, 500);
+				return handleError(error);
 			}
 		}
 
 		if (request.method !== "POST") {
-			return jsonError("Method not allowed", 405);
+			return handleError(CMSError.badRequest("Method not allowed"));
 		}
 
 		const resolved = await resolveContext(cms, request, config, context);
 		const body = await parseRpcBody(request);
 
 		if (body === null) {
-			return jsonError("Invalid JSON body", 400);
+			return handleError(CMSError.badRequest("Invalid JSON body"));
 		}
 
 		try {
@@ -391,29 +438,29 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 			);
 			return jsonResponse(result);
 		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
-			const status = error instanceof ZodError ? 400 : 500;
-			return jsonError(message, status);
+			return handleError(error);
 		}
 	};
 
 	return {
 		auth: async (request) => {
 			if (!cms.auth) {
-				return jsonError("Auth not configured", 500);
+				return handleError(CMSError.notImplemented("Authentication"));
 			}
 			return cms.auth.handler(request);
 		},
 		storageUpload: async (request, context, file) => {
 			if (request.method !== "POST") {
-				return jsonError("Method not allowed", 405);
+				return handleError(CMSError.badRequest("Method not allowed"));
 			}
 
 			const resolved = await resolveContext(cms, request, config, context);
 			const uploadFile = await resolveUploadFile(request, file);
 
 			if (!uploadFile) {
-				return jsonError("No file uploaded. Send 'file' in form-data.", 400);
+				return handleError(
+					CMSError.badRequest("No file uploaded. Send 'file' in form-data."),
+				);
 			}
 
 			try {
@@ -437,9 +484,7 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 
 				return jsonResponse(asset);
 			} catch (error) {
-				const message =
-					error instanceof Error ? error.message : "Unknown error";
-				return jsonError(message, 500);
+				return handleError(error);
 			}
 		},
 		rpc: {
@@ -447,7 +492,7 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 				const functions = cms.getFunctions() as FunctionsMap;
 				const definition = functions[params.name];
 				if (!definition) {
-					return jsonError(`Function "${params.name}" not found`, 404);
+					return handleError(CMSError.notFound("Function", params.name));
 				}
 
 				return executeFunction(definition, request, context);
@@ -459,16 +504,20 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 						params.collection as any,
 					);
 				} catch {
-					return jsonError(`Collection "${params.collection}" not found`, 404);
+					return handleError(
+						CMSError.notFound("Collection", params.collection),
+					);
 				}
 
 				const functions = (collectionInstance.state?.functions ||
 					{}) as FunctionsMap;
 				const definition = functions[params.name];
 				if (!definition) {
-					return jsonError(
-						`Function "${params.name}" not found on collection "${params.collection}"`,
-						404,
+					return handleError(
+						CMSError.notFound(
+							`Function on collection "${params.collection}"`,
+							params.name,
+						),
 					);
 				}
 
@@ -479,16 +528,18 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 				try {
 					globalInstance = cms.getGlobalConfig(params.global as any);
 				} catch {
-					return jsonError(`Global "${params.global}" not found`, 404);
+					return handleError(CMSError.notFound("Global", params.global));
 				}
 
 				const functions = (globalInstance.state?.functions ||
 					{}) as FunctionsMap;
 				const definition = functions[params.name];
 				if (!definition) {
-					return jsonError(
-						`Function "${params.name}" not found on global "${params.global}"`,
-						404,
+					return handleError(
+						CMSError.notFound(
+							`Function on global "${params.global}"`,
+							params.name,
+						),
 					);
 				}
 
@@ -498,11 +549,11 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 		realtime: {
 			subscribe: async (request, params, context) => {
 				if (request.method !== "GET") {
-					return jsonError("Method not allowed", 405);
+					return handleError(CMSError.badRequest("Method not allowed"));
 				}
 
 				if (!cms.realtime) {
-					return jsonError("Realtime not configured", 500);
+					return handleError(CMSError.notImplemented("Realtime"));
 				}
 
 				const resolved = await resolveContext(cms, request, config, context);
@@ -734,7 +785,9 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 				const crud = cms.api.collections[params.collection as any];
 
 				if (!crud) {
-					return jsonError(`Collection "${params.collection}" not found`, 404);
+					return handleError(
+						CMSError.notFound("Collection", params.collection),
+					);
 				}
 
 				try {
@@ -742,9 +795,7 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 					const result = await crud.find(options, resolved.cmsContext);
 					return jsonResponse(result);
 				} catch (error) {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					return jsonError(message, 500);
+					return handleError(error);
 				}
 			},
 			create: async (request, params, context, input) => {
@@ -752,21 +803,21 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 				const crud = cms.api.collections[params.collection as any];
 
 				if (!crud) {
-					return jsonError(`Collection "${params.collection}" not found`, 404);
+					return handleError(
+						CMSError.notFound("Collection", params.collection),
+					);
 				}
 
 				const body = input !== undefined ? input : await parseJsonBody(request);
 				if (body === null) {
-					return jsonError("Invalid JSON body", 400);
+					return handleError(CMSError.badRequest("Invalid JSON body"));
 				}
 
 				try {
 					const result = await crud.create(body, resolved.cmsContext);
 					return jsonResponse(result);
 				} catch (error) {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					return jsonError(message, 400);
+					return handleError(error);
 				}
 			},
 			findOne: async (request, params, context) => {
@@ -774,20 +825,20 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 				const crud = cms.api.collections[params.collection as any];
 
 				if (!crud) {
-					return jsonError(`Collection "${params.collection}" not found`, 404);
+					return handleError(
+						CMSError.notFound("Collection", params.collection),
+					);
 				}
 
 				try {
 					const options = parseFindOneOptions(new URL(request.url), params.id);
 					const result = await crud.findOne(options, resolved.cmsContext);
 					if (!result) {
-						return jsonError("Not found", 404);
+						return handleError(CMSError.notFound("Record", params.id));
 					}
 					return jsonResponse(result);
 				} catch (error) {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					return jsonError(message, 500);
+					return handleError(error);
 				}
 			},
 			update: async (request, params, context, input) => {
@@ -795,12 +846,14 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 				const crud = cms.api.collections[params.collection as any];
 
 				if (!crud) {
-					return jsonError(`Collection "${params.collection}" not found`, 404);
+					return handleError(
+						CMSError.notFound("Collection", params.collection),
+					);
 				}
 
 				const body = input !== undefined ? input : await parseJsonBody(request);
 				if (body === null) {
-					return jsonError("Invalid JSON body", 400);
+					return handleError(CMSError.badRequest("Invalid JSON body"));
 				}
 
 				try {
@@ -810,9 +863,7 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 					);
 					return jsonResponse(result);
 				} catch (error) {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					return jsonError(message, 400);
+					return handleError(error);
 				}
 			},
 			remove: async (request, params, context) => {
@@ -820,16 +871,16 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 				const crud = cms.api.collections[params.collection as any];
 
 				if (!crud) {
-					return jsonError(`Collection "${params.collection}" not found`, 404);
+					return handleError(
+						CMSError.notFound("Collection", params.collection),
+					);
 				}
 
 				try {
 					await crud.deleteById({ id: params.id }, resolved.cmsContext);
 					return jsonResponse({ success: true });
 				} catch (error) {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					return jsonError(message, 400);
+					return handleError(error);
 				}
 			},
 			restore: async (request, params, context) => {
@@ -837,7 +888,9 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 				const crud = cms.api.collections[params.collection as any];
 
 				if (!crud) {
-					return jsonError(`Collection "${params.collection}" not found`, 404);
+					return handleError(
+						CMSError.notFound("Collection", params.collection),
+					);
 				}
 
 				try {
@@ -847,9 +900,7 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 					);
 					return jsonResponse(result);
 				} catch (error) {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					return jsonError(message, 400);
+					return handleError(error);
 				}
 			},
 		},
@@ -864,16 +915,14 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 					const result = await crud.get(options, resolved.cmsContext);
 					return jsonResponse(result);
 				} catch (error) {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					return jsonError(message, 404);
+					return handleError(error);
 				}
 			},
 			update: async (request, params, context, input) => {
 				const resolved = await resolveContext(cms, request, config, context);
 				const body = input !== undefined ? input : await parseJsonBody(request);
 				if (body === null) {
-					return jsonError("Invalid JSON body", 400);
+					return handleError(CMSError.badRequest("Invalid JSON body"));
 				}
 
 				try {
@@ -883,9 +932,7 @@ export const createCMSAdapterRoutes = <TConfig extends CMSConfig = CMSConfig>(
 					const result = await crud.update(body, resolved.cmsContext, options);
 					return jsonResponse(result);
 				} catch (error) {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					return jsonError(message, 400);
+					return handleError(error);
 				}
 			},
 		},
@@ -916,7 +963,7 @@ export const createCMSFetchHandler = (
 		let segments = relativePath.split("/").filter(Boolean);
 
 		if (segments.length === 0) {
-			return jsonError("Not found", 404);
+			return handleError(CMSError.notFound("Route"));
 		}
 
 		if (segments[0] === "cms") {
@@ -924,7 +971,7 @@ export const createCMSFetchHandler = (
 		}
 
 		if (segments.length === 0) {
-			return jsonError("Not found", 404);
+			return handleError(CMSError.notFound("Route"));
 		}
 
 		if (segments[0] === "auth") {
@@ -938,7 +985,7 @@ export const createCMSFetchHandler = (
 		if (segments[0] === "rpc") {
 			const functionName = segments[1];
 			if (!functionName) {
-				return jsonError("Function not specified", 404);
+				return handleError(CMSError.badRequest("Function not specified"));
 			}
 
 			return routes.rpc.root(request, { name: functionName }, context);
@@ -948,10 +995,10 @@ export const createCMSFetchHandler = (
 			const collectionName = segments[1];
 			const functionName = segments[3];
 			if (!collectionName) {
-				return jsonError("Collection not specified", 404);
+				return handleError(CMSError.badRequest("Collection not specified"));
 			}
 			if (!functionName) {
-				return jsonError("Function not specified", 404);
+				return handleError(CMSError.badRequest("Function not specified"));
 			}
 
 			return routes.rpc.collection(
@@ -965,10 +1012,10 @@ export const createCMSFetchHandler = (
 			const globalName = segments[1];
 			const functionName = segments[3];
 			if (!globalName) {
-				return jsonError("Global not specified", 404);
+				return handleError(CMSError.badRequest("Global not specified"));
 			}
 			if (!functionName) {
-				return jsonError("Function not specified", 404);
+				return handleError(CMSError.badRequest("Function not specified"));
 			}
 
 			return routes.rpc.global(
@@ -981,13 +1028,13 @@ export const createCMSFetchHandler = (
 		if (segments[0] === "realtime") {
 			const maybeGlobals = segments[1];
 			if (!maybeGlobals) {
-				return jsonError("Collection not specified", 404);
+				return handleError(CMSError.badRequest("Collection not specified"));
 			}
 
 			if (maybeGlobals === "globals") {
 				const globalName = segments[2];
 				if (!globalName) {
-					return jsonError("Global not specified", 404);
+					return handleError(CMSError.badRequest("Global not specified"));
 				}
 
 				if (request.method === "GET") {
@@ -998,7 +1045,7 @@ export const createCMSFetchHandler = (
 					);
 				}
 
-				return jsonError("Method not allowed", 405);
+				return handleError(CMSError.badRequest("Method not allowed"));
 			}
 
 			if (request.method === "GET") {
@@ -1009,13 +1056,13 @@ export const createCMSFetchHandler = (
 				);
 			}
 
-			return jsonError("Method not allowed", 405);
+			return handleError(CMSError.badRequest("Method not allowed"));
 		}
 
 		if (segments[0] === "globals") {
 			const globalName = segments[1];
 			if (!globalName) {
-				return jsonError("Global not specified", 404);
+				return handleError(CMSError.badRequest("Global not specified"));
 			}
 
 			if (request.method === "GET") {
@@ -1026,7 +1073,7 @@ export const createCMSFetchHandler = (
 				return routes.globals.update(request, { global: globalName }, context);
 			}
 
-			return jsonError("Method not allowed", 405);
+			return handleError(CMSError.badRequest("Method not allowed"));
 		}
 
 		const collection = segments[0];
@@ -1042,7 +1089,7 @@ export const createCMSFetchHandler = (
 				return routes.collections.create(request, { collection }, context);
 			}
 
-			return jsonError("Method not allowed", 405);
+			return handleError(CMSError.badRequest("Method not allowed"));
 		}
 
 		if (action === "restore") {
@@ -1050,7 +1097,7 @@ export const createCMSFetchHandler = (
 				return routes.collections.restore(request, { collection, id }, context);
 			}
 
-			return jsonError("Method not allowed", 405);
+			return handleError(CMSError.badRequest("Method not allowed"));
 		}
 
 		if (request.method === "GET") {
@@ -1065,6 +1112,6 @@ export const createCMSFetchHandler = (
 			return routes.collections.remove(request, { collection, id }, context);
 		}
 
-		return jsonError("Method not allowed", 405);
+		return handleError(CMSError.badRequest("Method not allowed"));
 	};
 };

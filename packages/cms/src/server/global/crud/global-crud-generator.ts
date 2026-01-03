@@ -14,6 +14,7 @@ import {
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { RelationConfig } from "#questpie/cms/server/collection/builder/types";
 import { runWithCMSContext } from "#questpie/cms/server/config/context";
+import { CMSError } from "#questpie/cms/server/errors";
 import type {
 	Columns,
 	CRUDContext,
@@ -252,7 +253,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				options,
 			);
 			if (!canRead) {
-				throw new Error("Access denied: read global");
+				throw CMSError.forbidden({
+					operation: "read",
+					resource: this.state.name,
+					reason: "User does not have permission to read global settings",
+				});
 			}
 
 			// Hooks
@@ -274,7 +279,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				row = await db.transaction(async (tx: any) => {
 					const [inserted] = await tx.insert(this.table).values({}).returning();
 					if (!inserted) {
-						throw new Error("Failed to auto-create global");
+						throw CMSError.internal("Failed to auto-create global record");
 					}
 
 					await this.createVersion(tx, inserted, "create", normalized);
@@ -330,7 +335,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				existing,
 				data,
 			);
-			if (!canUpdate) throw new Error("Access denied: update global");
+			if (!canUpdate)
+				throw CMSError.forbidden({
+					operation: "update",
+					resource: this.state.name,
+					reason: "User does not have permission to update global settings",
+				});
 
 			await this.executeHooks(this.state.hooks?.beforeUpdate, {
 				db,
@@ -417,7 +427,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				const updatedRecord = refreshedRows[0] || baseRecord;
 
 				if (!baseRecord) {
-					throw new Error("Global record not found after update");
+					throw CMSError.internal("Global record not found after update");
 				}
 
 				await this.createVersion(
@@ -481,7 +491,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				null,
 				options,
 			);
-			if (!canRead) throw new Error("Access denied: read versions");
+			if (!canRead)
+				throw CMSError.forbidden({
+					operation: "read",
+					resource: `${this.state.name} versions`,
+					reason: "User does not have permission to read version history",
+				});
 
 			const parentId = options.id ?? (await this.getCurrentRow(db))?.id;
 			if (!parentId) return [];
@@ -523,18 +538,18 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		) => {
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext(context);
-			if (!this.versionsTable) throw new Error("Versioning not enabled");
+			if (!this.versionsTable) throw CMSError.notImplemented("Versioning");
 
 			const hasVersionId = typeof options.versionId === "string";
 			const hasVersion = typeof options.version === "number";
 
 			if (!hasVersionId && !hasVersion) {
-				throw new Error("Version or versionId required");
+				throw CMSError.badRequest("Version or versionId required");
 			}
 
 			const parentId = options.id ?? (await this.getCurrentRow(db))?.id;
 			if (!parentId) {
-				throw new Error("Global record not found");
+				throw CMSError.notFound("Global record", "");
 			}
 
 			const versionRows = await db
@@ -554,10 +569,14 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				.limit(1);
 			const version = versionRows[0];
 
-			if (!version) throw new Error("Version not found");
+			if (!version)
+				throw CMSError.notFound(
+					"Version",
+					options.versionId || String(options.version),
+				);
 
 			const existing = await this.getCurrentRow(db);
-			if (!existing) throw new Error("Global record not found");
+			if (!existing) throw CMSError.notFound("Global record", "");
 
 			const nonLocalized: Record<string, any> = {};
 			for (const [name] of Object.entries(this.state.fields)) {
@@ -598,7 +617,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				existing,
 				restoreData,
 			);
-			if (!canUpdate) throw new Error("Access denied: update global");
+			if (!canUpdate)
+				throw CMSError.forbidden({
+					operation: "update",
+					resource: this.state.name,
+					reason: "User does not have permission to revert to this version",
+				});
 
 			await this.executeHooks(this.state.hooks?.beforeUpdate, {
 				db,
@@ -682,7 +706,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				const updatedRecord = refreshedRows[0] || baseRecord;
 
 				if (!baseRecord) {
-					throw new Error("Global record not found after revert");
+					throw CMSError.internal("Global record not found after revert");
 				}
 
 				await this.createVersion(tx, baseRecord, "update", normalized);
@@ -1196,7 +1220,12 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 			const canWrite = await this.canWriteField(fieldName, context, existing);
 			if (!canWrite) {
-				throw new Error(`Cannot write field '${fieldName}': access denied`);
+				throw CMSError.forbidden({
+					operation: "update",
+					resource: this.state.name,
+					reason: `Cannot write field '${fieldName}': access denied`,
+					fieldPath: fieldName,
+				});
 			}
 		}
 	}

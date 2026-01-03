@@ -25,6 +25,7 @@ import type {
 	RevertVersionOptions,
 } from "#questpie/cms/server/collection/crud/types";
 import { runWithCMSContext } from "#questpie/cms/server/config/context";
+import { CMSError } from "#questpie/cms/server/errors";
 import {
 	and,
 	avg,
@@ -1015,7 +1016,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 
 			if (actionKeys.length > 1) {
-				throw new Error(
+				throw CMSError.badRequest(
 					`Nested relation "${relationName}" supports only one operation at a time.`,
 				);
 			}
@@ -1028,7 +1029,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				.filter(Boolean) as string[];
 
 			if (fieldKeys.length !== 1) {
-				throw new Error(
+				throw CMSError.badRequest(
 					`Nested relation "${relationName}" requires exactly one foreign key field.`,
 				);
 			}
@@ -1040,7 +1041,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			if (operations.connect) {
 				if (Array.isArray(operations.connect)) {
 					if (operations.connect.length !== 1) {
-						throw new Error(
+						throw CMSError.badRequest(
 							`Nested relation "${relationName}" supports a single connect target.`,
 						);
 					}
@@ -1050,7 +1051,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 			} else if (operations.create) {
 				if (Array.isArray(operations.create)) {
-					throw new Error(
+					throw CMSError.badRequest(
 						`Nested relation "${relationName}" supports a single create payload.`,
 					);
 				}
@@ -1061,7 +1062,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				updatedFields[foreignKeyField] = created?.[referenceKey] ?? created?.id;
 			} else if (operations.connectOrCreate) {
 				if (Array.isArray(operations.connectOrCreate)) {
-					throw new Error(
+					throw CMSError.badRequest(
 						`Nested relation "${relationName}" supports a single connectOrCreate payload.`,
 					);
 				}
@@ -1307,7 +1308,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				input,
 			);
 			if (canCreate === false) {
-				throw new Error("Access denied: create");
+				throw CMSError.forbidden({
+					operation: "create",
+					resource: this.state.name,
+					reason: "User does not have permission to create records",
+				});
 			}
 
 			// Execute beforeValidate hook (transform input before validation)
@@ -1330,7 +1335,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					// Validate and potentially transform the input
 					input = this.state.validation.insertSchema.parse(input);
 				} catch (error: any) {
-					throw new Error(`Validation error: ${error.message}`);
+					throw CMSError.fromZodError(error);
 				}
 			}
 
@@ -1459,7 +1464,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const existing = existingRows[0];
 
 			if (!existing) {
-				throw new Error(`Record not found: ${id}`);
+				throw CMSError.notFound("Record", id);
 			}
 
 			// Enforce access control
@@ -1470,7 +1475,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				data,
 			);
 			if (canUpdate === false) {
-				throw new Error("Access denied: update");
+				throw CMSError.forbidden({
+					operation: "update",
+					resource: this.state.name,
+					reason: "User does not have permission to update this record",
+				});
 			}
 			if (typeof canUpdate === "object") {
 				// Check if existing record matches access conditions
@@ -1479,7 +1488,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					existing,
 				);
 				if (!matchesConditions) {
-					throw new Error("Access denied: update (conditions not met)");
+					throw CMSError.forbidden({
+						operation: "update",
+						resource: this.state.name,
+						reason: "Record does not match access control conditions",
+					});
 				}
 			}
 
@@ -1505,7 +1518,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					// Validate and potentially transform the input
 					validatedData = this.state.validation.updateSchema.parse(data);
 				} catch (error: any) {
-					throw new Error(`Validation error: ${error.message}`);
+					if (error?.name === "ZodError") {
+						throw CMSError.fromZodError(error);
+					}
+					throw CMSError.badRequest(`Validation error: ${error.message}`);
 				}
 			}
 
@@ -1650,7 +1666,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const existing = existingRows[0];
 
 			if (!existing) {
-				throw new Error(`Record not found: ${id}`);
+				throw CMSError.notFound("Record", id);
 			}
 
 			// Enforce access control
@@ -1661,7 +1677,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				params,
 			);
 			if (canDelete === false) {
-				throw new Error("Access denied: delete");
+				throw CMSError.forbidden({
+					operation: "delete",
+					resource: this.state.name,
+					reason: "User does not have permission to delete this record",
+				});
 			}
 			if (typeof canDelete === "object") {
 				// Check if existing record matches access conditions
@@ -1670,7 +1690,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					existing,
 				);
 				if (!matchesConditions) {
-					throw new Error("Access denied: delete (conditions not met)");
+					throw CMSError.forbidden({
+						operation: "delete",
+						resource: this.state.name,
+						reason: "Record does not match access control conditions",
+					});
 				}
 			}
 
@@ -1756,7 +1780,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	private createRestore() {
 		return async (params: RestoreParams, context: CRUDContext = {}) => {
 			if (!this.state.options.softDelete) {
-				throw new Error("Soft delete is not enabled for this collection");
+				throw CMSError.notImplemented("Soft delete");
 			}
 
 			const db = this.getDb(context);
@@ -1770,7 +1794,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const existing = existingRows[0];
 
 			if (!existing) {
-				throw new Error(`Record not found: ${id}`);
+				throw CMSError.notFound("Record", id);
 			}
 
 			const canUpdate = await this.enforceAccessControl(
@@ -1780,7 +1804,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				{ deletedAt: null },
 			);
 			if (canUpdate === false) {
-				throw new Error("Access denied: update");
+				throw CMSError.forbidden({
+					operation: "update",
+					resource: this.state.name,
+					reason: "User does not have permission to restore this record",
+				});
 			}
 			if (typeof canUpdate === "object") {
 				const matchesConditions = await this.checkAccessConditions(
@@ -1788,7 +1816,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					existing,
 				);
 				if (!matchesConditions) {
-					throw new Error("Access denied: update (conditions not met)");
+					throw CMSError.forbidden({
+						operation: "update",
+						resource: this.state.name,
+						reason: "Record does not match access control conditions",
+					});
 				}
 			}
 
@@ -1839,7 +1871,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					params.data,
 				);
 				if (canUpdate === false) {
-					throw new Error(`Access denied: update record ${record.id}`);
+					throw CMSError.forbidden({
+						operation: "update",
+						resource: this.state.name,
+						reason: `User does not have permission to update record ${record.id}`,
+					});
 				}
 				if (typeof canUpdate === "object") {
 					const matchesConditions = await this.checkAccessConditions(
@@ -1847,9 +1883,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						record,
 					);
 					if (!matchesConditions) {
-						throw new Error(
-							`Access denied: update record ${record.id} (conditions not met)`,
-						);
+						throw CMSError.forbidden({
+							operation: "update",
+							resource: this.state.name,
+							reason: `Record ${record.id} does not match access control conditions`,
+						});
 					}
 				}
 
@@ -1992,7 +2030,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					params,
 				);
 				if (canDelete === false) {
-					throw new Error(`Access denied: delete record ${record.id}`);
+					throw CMSError.forbidden({
+						operation: "delete",
+						resource: this.state.name,
+						reason: `User does not have permission to delete record ${record.id}`,
+					});
 				}
 				if (typeof canDelete === "object") {
 					const matchesConditions = await this.checkAccessConditions(
@@ -2000,9 +2042,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						record,
 					);
 					if (!matchesConditions) {
-						throw new Error(
-							`Access denied: delete record ${record.id} (conditions not met)`,
-						);
+						throw CMSError.forbidden({
+							operation: "delete",
+							resource: this.state.name,
+							reason: `Record ${record.id} does not match access control conditions`,
+						});
 					}
 				}
 
@@ -2094,7 +2138,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				null,
 				options,
 			);
-			if (!canRead) throw new Error("Access denied: read versions");
+			if (!canRead)
+				throw CMSError.forbidden({
+					operation: "read",
+					resource: `${this.state.name} versions`,
+					reason: "User does not have permission to read version history",
+				});
 
 			let query: any;
 
@@ -2148,12 +2197,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		return async (options: RevertVersionOptions, context: CRUDContext = {}) => {
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext(context);
-			if (!this.versionsTable) throw new Error("Versioning not enabled");
+			if (!this.versionsTable) throw CMSError.notImplemented("Versioning");
 			const hasVersionId = typeof options.versionId === "string";
 			const hasVersion = typeof options.version === "number";
 
 			if (!hasVersionId && !hasVersion) {
-				throw new Error("Version or versionId required");
+				throw CMSError.badRequest("Version or versionId required");
 			}
 
 			const versionRows = await db
@@ -2173,7 +2222,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				.limit(1);
 			const version = versionRows[0];
 
-			if (!version) throw new Error("Version not found");
+			if (!version)
+				throw CMSError.notFound(
+					"Version",
+					options.versionId || String(options.version),
+				);
 
 			const existingRows = await db
 				.select()
@@ -2183,7 +2236,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const existing = existingRows[0];
 
 			if (!existing) {
-				throw new Error(`Record not found: ${options.id}`);
+				throw CMSError.notFound("Record", options.id);
 			}
 
 			const nonLocalized: Record<string, any> = {};
@@ -2229,7 +2282,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				restoreData,
 			);
 			if (canUpdate === false) {
-				throw new Error("Access denied: update");
+				throw CMSError.forbidden({
+					operation: "update",
+					resource: this.state.name,
+					reason: "User does not have permission to revert to this version",
+				});
 			}
 			if (typeof canUpdate === "object") {
 				const matchesConditions = await this.checkAccessConditions(
@@ -2237,7 +2294,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					existing,
 				);
 				if (!matchesConditions) {
-					throw new Error("Access denied: update (conditions not met)");
+					throw CMSError.forbidden({
+						operation: "update",
+						resource: this.state.name,
+						reason: "Record does not match access control conditions",
+					});
 				}
 			}
 
@@ -2811,7 +2872,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			const canWrite = await this.canWriteField(fieldName, context, existing);
 			if (!canWrite) {
-				throw new Error(`Cannot write field '${fieldName}': access denied`);
+				throw CMSError.forbidden({
+					operation: "update",
+					resource: this.state.name,
+					reason: `Cannot write field '${fieldName}': access denied`,
+					fieldPath: fieldName,
+				});
 			}
 		}
 	}

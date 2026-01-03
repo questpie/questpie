@@ -34,12 +34,21 @@ import type {
 	GetGlobal,
 	QCMS,
 } from "#questpie/cms/exports/server.js";
+import type { CMSErrorShape } from "#questpie/cms/shared/error-types";
 
+/**
+ * Type-safe client error with support for CMSErrorShape
+ */
 export class QCMSClientError extends Error {
-	status: number;
-	statusText: string;
-	data?: unknown;
-	url: string;
+	public readonly status: number;
+	public readonly statusText: string;
+	public readonly url: string;
+
+	// Type-safe error data from server
+	public readonly code?: CMSErrorShape["code"];
+	public readonly fieldErrors?: CMSErrorShape["fieldErrors"];
+	public readonly context?: CMSErrorShape["context"];
+	public readonly serverData?: unknown; // Raw server response
 
 	constructor(options: {
 		message: string;
@@ -52,8 +61,59 @@ export class QCMSClientError extends Error {
 		this.name = "QCMSClientError";
 		this.status = options.status;
 		this.statusText = options.statusText;
-		this.data = options.data;
 		this.url = options.url;
+		this.serverData = options.data;
+
+		// Extract typed error data if present
+		if (this.isCMSError(options.data)) {
+			this.code = options.data.code;
+			this.fieldErrors = options.data.fieldErrors;
+			this.context = options.data.context;
+		}
+	}
+
+	private isCMSError(data: unknown): data is CMSErrorShape {
+		return (
+			typeof data === "object" &&
+			data !== null &&
+			"code" in data &&
+			"message" in data
+		);
+	}
+
+	/**
+	 * Check if this is a specific error code
+	 * @example
+	 * if (error.isCode('FORBIDDEN')) { ... }
+	 */
+	isCode(code: CMSErrorShape["code"]): boolean {
+		return this.code === code;
+	}
+
+	/**
+	 * Get field error for specific path
+	 * @example
+	 * const emailError = error.getFieldError('email');
+	 */
+	getFieldError(path: string) {
+		return this.fieldErrors?.find((err) => err.path === path);
+	}
+
+	/**
+	 * Get all field errors as object
+	 * @example
+	 * const errors = error.getFieldErrorsMap();
+	 * // { email: ['Invalid format'], password: ['Too short'] }
+	 */
+	getFieldErrorsMap(): Record<string, string[]> {
+		if (!this.fieldErrors) return {};
+
+		const map: Record<string, string[]> = {};
+		for (const err of this.fieldErrors) {
+			if (!map[err.path]) map[err.path] = [];
+			map[err.path].push(err.message);
+		}
+		return map;
 	}
 }
 
@@ -344,19 +404,30 @@ export function createQCMSClient<T extends QCMS>(
 
 		if (!response.ok) {
 			const errorData = await response.json().catch(() => undefined);
-			const message =
+
+			// Extract error from { error: CMSErrorShape } format
+			const cmsError =
 				errorData &&
 				typeof errorData === "object" &&
 				"error" in errorData &&
+				typeof errorData.error === "object"
+					? (errorData.error as CMSErrorShape)
+					: undefined;
+
+			const message =
+				cmsError?.message ||
+				(typeof errorData === "object" &&
+				errorData &&
+				"error" in errorData &&
 				typeof (errorData as { error?: unknown }).error === "string"
 					? (errorData as { error: string }).error
-					: `Request failed: ${response.statusText}`;
+					: `Request failed: ${response.statusText}`);
 
 			throw new QCMSClientError({
 				message,
 				status: response.status,
 				statusText: response.statusText,
-				data: errorData,
+				data: cmsError, // Pass the CMSErrorShape (not the wrapper)
 				url,
 			});
 		}
