@@ -294,6 +294,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				await this.resolveRelations([row], options.with, normalized);
 			}
 
+			// Filter fields based on field-level read access
+			if (row) {
+				await this.filterFieldsForRead(row, normalized);
+			}
+
 			// Hooks
 			if (row && this.state.hooks?.afterRead) {
 				await this.executeHooks(this.state.hooks.afterRead, {
@@ -344,6 +349,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				user: normalized.user,
 				context: normalized,
 			});
+
+			// Validate field-level write access
+			await this.validateFieldWriteAccess(data, normalized, existing);
 
 			let changeEvent: any = null;
 			const updatedRecord = await db.transaction(async (tx: any) => {
@@ -940,6 +948,257 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			} as GlobalAccessContext);
 		}
 		return true;
+	}
+
+	/**
+	 * Get fields the user can read based on field-level access control
+	 */
+	private getReadableFields(context: CRUDContext): Set<string> {
+		const normalized = this.normalizeContext(context);
+		const readableFields = new Set<string>();
+
+		// System mode can read all fields
+		if (normalized.accessMode === "system") {
+			return new Set([
+				...Object.keys(this.state.fields),
+				...Object.keys(this.state.virtuals),
+				"id",
+				"createdAt",
+				"updatedAt",
+			]);
+		}
+
+		const fieldAccess = this.state.access?.fields;
+		if (!fieldAccess) {
+			// No field-level access rules - all fields readable
+			return new Set([
+				...Object.keys(this.state.fields),
+				...Object.keys(this.state.virtuals),
+				"id",
+				"createdAt",
+				"updatedAt",
+			]);
+		}
+
+		// Check each field's read access
+		const allFields = [
+			...Object.keys(this.state.fields),
+			...Object.keys(this.state.virtuals),
+		];
+
+		for (const fieldName of allFields) {
+			const access = fieldAccess[fieldName];
+			if (!access || access.read === undefined) {
+				// No access rule for this field - allow read
+				readableFields.add(fieldName);
+				continue;
+			}
+
+			const readRule = access.read;
+
+			// Boolean rule
+			if (typeof readRule === "boolean") {
+				if (readRule) {
+					readableFields.add(fieldName);
+				}
+				continue;
+			}
+
+			// String role rule
+			if (typeof readRule === "string") {
+				const userRole =
+					(normalized as any).role || (normalized.user as any)?.role;
+				if (userRole === readRule) {
+					readableFields.add(fieldName);
+				}
+				continue;
+			}
+
+			// Function rule - we can't evaluate async here, so we allow it
+			// The actual filtering will happen in filterFieldsForRead
+			if (typeof readRule === "function") {
+				readableFields.add(fieldName);
+			}
+		}
+
+		// Always include meta fields
+		readableFields.add("id");
+		if (this.state.options.timestamps !== false) {
+			readableFields.add("createdAt");
+			readableFields.add("updatedAt");
+		}
+
+		return readableFields;
+	}
+
+	/**
+	 * Filter fields from result based on field-level read access
+	 */
+	private async filterFieldsForRead(
+		result: any,
+		context: CRUDContext,
+	): Promise<void> {
+		if (!result) return;
+
+		const normalized = this.normalizeContext(context);
+
+		// System mode bypasses field access control
+		if (normalized.accessMode === "system") return;
+
+		const fieldAccess = this.state.access?.fields;
+		if (!fieldAccess) return; // No field-level access rules
+
+		const db = this.getDb(context);
+
+		// Check each field in the result
+		const fieldsToRemove: string[] = [];
+
+		for (const fieldName of Object.keys(result)) {
+			// Skip meta fields
+			if (
+				fieldName === "id" ||
+				fieldName === "createdAt" ||
+				fieldName === "updatedAt"
+			) {
+				continue;
+			}
+
+			const access = fieldAccess[fieldName];
+			if (!access || access.read === undefined) {
+				// No access rule for this field - allow read
+				continue;
+			}
+
+			const readRule = access.read;
+
+			// Boolean rule
+			if (typeof readRule === "boolean") {
+				if (!readRule) {
+					fieldsToRemove.push(fieldName);
+				}
+				continue;
+			}
+
+			// String role rule
+			if (typeof readRule === "string") {
+				const userRole =
+					(normalized as any).role || (normalized.user as any)?.role;
+				if (userRole !== readRule) {
+					fieldsToRemove.push(fieldName);
+				}
+				continue;
+			}
+
+			// Function rule
+			if (typeof readRule === "function") {
+				const canRead = await readRule({
+					user: normalized.user,
+					row: result,
+					input: undefined,
+					db,
+					context: normalized,
+				} as GlobalAccessContext);
+
+				// Field-level access should return boolean (not AccessWhere)
+				if (canRead !== true) {
+					fieldsToRemove.push(fieldName);
+				}
+			}
+		}
+
+		// Remove restricted fields
+		for (const fieldName of fieldsToRemove) {
+			delete result[fieldName];
+		}
+	}
+
+	/**
+	 * Check if user can write to a specific field
+	 */
+	private async canWriteField(
+		fieldName: string,
+		context: CRUDContext,
+		row?: any,
+	): Promise<boolean> {
+		const normalized = this.normalizeContext(context);
+
+		// System mode can write all fields
+		if (normalized.accessMode === "system") return true;
+
+		const fieldAccess = this.state.access?.fields;
+		if (!fieldAccess) return true; // No field-level access rules
+
+		const access = fieldAccess[fieldName];
+		if (!access || access.write === undefined) {
+			// No access rule for this field - allow write
+			return true;
+		}
+
+		const writeRule = access.write;
+		const db = this.getDb(context);
+
+		// Boolean rule
+		if (typeof writeRule === "boolean") {
+			return writeRule;
+		}
+
+		// String role rule
+		if (typeof writeRule === "string") {
+			const userRole =
+				(normalized as any).role || (normalized.user as any)?.role;
+			return userRole === writeRule;
+		}
+
+		// Function rule
+		if (typeof writeRule === "function") {
+			const result = await writeRule({
+				user: normalized.user,
+				row,
+				input: undefined,
+				db,
+				context: normalized,
+			} as GlobalAccessContext);
+
+			// Field-level access: only boolean true allows write
+			// AccessWhere is treated as deny (it's for record-level filtering)
+			return result === true;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Validate write access for all fields in input data
+	 */
+	private async validateFieldWriteAccess(
+		data: any,
+		context: CRUDContext,
+		existing?: any,
+	): Promise<void> {
+		const normalized = this.normalizeContext(context);
+
+		// System mode bypasses field access control
+		if (normalized.accessMode === "system") return;
+
+		const fieldAccess = this.state.access?.fields;
+		if (!fieldAccess) return; // No field-level access rules
+
+		// Check each field in the input
+		for (const fieldName of Object.keys(data)) {
+			// Skip meta fields
+			if (
+				fieldName === "id" ||
+				fieldName === "createdAt" ||
+				fieldName === "updatedAt"
+			) {
+				continue;
+			}
+
+			const canWrite = await this.canWriteField(fieldName, context, existing);
+			if (!canWrite) {
+				throw new Error(`Cannot write field '${fieldName}': access denied`);
+			}
+		}
 	}
 
 	/**

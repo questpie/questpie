@@ -32,14 +32,43 @@ export type CollectionInfer<T> = T extends { $infer: infer Infer }
 	: never;
 
 /**
+ * Extract field access configuration from a Collection state
+ */
+type CollectionFieldAccess<T> =
+	CollectionState<T> extends {
+		access: { fields?: infer Fields };
+	}
+		? Fields extends Record<string, any>
+			? Fields
+			: {}
+		: {};
+
+/**
+ * Make fields optional if they have access rules defined
+ */
+type MakeFieldsWithAccessOptional<TSelect, TFieldAccess> =
+	TFieldAccess extends Record<string, any>
+		? {
+				[K in keyof TSelect as K extends keyof TFieldAccess
+					? never
+					: K]: TSelect[K];
+			} & {
+				[K in keyof TSelect as K extends keyof TFieldAccess
+					? K
+					: never]?: TSelect[K];
+			}
+		: TSelect;
+
+/**
  * Extract the select type from a Collection or CollectionBuilder
+ * Fields with access rules are made optional (marked with ?)
  * @example type Post = CollectionSelect<typeof posts>
  */
 export type CollectionSelect<T> =
 	CollectionInfer<T> extends {
 		select: infer Select;
 	}
-		? Select
+		? MakeFieldsWithAccessOptional<Select, CollectionFieldAccess<T>>
 		: never;
 
 /**
@@ -112,11 +141,25 @@ export type CollectionRelations<T> =
 export type GlobalInfer<T> = T extends { $infer: infer Infer } ? Infer : never;
 
 /**
+ * Extract field access configuration from a Global state
+ */
+type GlobalFieldAccess<T> = T extends {
+	state: { access: { fields?: infer Fields } };
+}
+	? Fields extends Record<string, any>
+		? Fields
+		: {}
+	: {};
+
+/**
  * Extract the select type from a Global or GlobalBuilder
+ * Fields with access rules are made optional (marked with ?)
  * @example type Settings = GlobalSelect<typeof siteSettings>
  */
 export type GlobalSelect<T> =
-	GlobalInfer<T> extends { select: infer Select } ? Select : never;
+	GlobalInfer<T> extends { select: infer Select }
+		? MakeFieldsWithAccessOptional<Select, GlobalFieldAccess<T>>
+		: never;
 
 /**
  * Extract the insert type from a Global or GlobalBuilder
