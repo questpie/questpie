@@ -14,6 +14,7 @@ export * from "./integrated/mailer/adapters";
 export * from "./integrated/realtime";
 export * from "./migration";
 export * from "./functions";
+export * from "./utils/drizzle-to-zod";
 
 // Re-export shared type utilities for convenience
 export type {
