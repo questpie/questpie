@@ -12,7 +12,8 @@ COPY . .
 # Install dependencies
 RUN bun install --frozen-lockfile
 
-# Build the application
+# Build the application (disable prerendering in Docker)
+ENV DISABLE_PRERENDER=true
 RUN bun run build
 
 # Production stage
