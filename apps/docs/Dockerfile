@@ -8,7 +8,8 @@ COPY package.json bun.lock* ./
 COPY apps/docs/package.json ./apps/docs/
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+# RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy source files
 COPY apps/docs ./apps/docs
