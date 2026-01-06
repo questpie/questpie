@@ -36,5 +36,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD bun -e "fetch('http://localhost:3000').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
-# Start the application
+# Start the application (Nitro with bun preset)
 CMD ["bun", "run", ".output/server/index.mjs"]

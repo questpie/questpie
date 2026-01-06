@@ -21,9 +21,7 @@ export default defineConfig({
 				enabled: process.env.DISABLE_PRERENDER !== "true",
 			},
 		}),
+		nitro({ preset: "bun" }),
 		react(),
-		// see https://tanstack.com/start/latest/docs/framework/react/guide/hosting for hosting config
-		// we configured nitro by default
-		nitro({ preset: "bun", entry: "./server.ts" }),
 	],
 });
