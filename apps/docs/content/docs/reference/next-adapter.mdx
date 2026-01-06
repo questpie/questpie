@@ -1,0 +1,206 @@
+---
+title: Next.js Adapter
+description: Reference for @questpie/next adapter.
+---
+
+# Next.js Adapter
+
+The `@questpie/next` package connects the CMS engine to Next.js App Router route handlers.
+
+## Installation
+
+```bash
+bun add @questpie/next
+# or
+npm install @questpie/next
+```
+
+## `questpieNext(cms, options)`
+
+Creates a Next.js-compatible request handler for CMS routes.
+
+### Parameters
+
+- `cms` - The `QCMS` instance from `.build()`
+- `options` - Configuration options (see below)
+
+### Configuration
+
+```typescript
+interface NextAdapterConfig {
+  /**
+   * Base path for CMS routes.
+   * Should match your catch-all route location.
+   * @default '/cms'
+   */
+  basePath?: string;
+
+  /**
+   * Access mode for the API.
+   * - 'user': Standard user access (default)
+   * - 'admin': Admin-only access
+   * @default 'user'
+   */
+  accessMode?: "user" | "admin";
+}
+```
+
+## `questpieNextRouteHandlers(cms, options)`
+
+Convenience helper that returns all HTTP method handlers for a route file.
+
+### Returns
+
+```typescript
+{
+  GET: NextHandler;
+  POST: NextHandler;
+  PATCH: NextHandler;
+  DELETE: NextHandler;
+  PUT: NextHandler;
+  OPTIONS: NextHandler;
+  HEAD: NextHandler;
+}
+```
+
+## Basic Example
+
+Create a catch-all route at `app/cms/[[...path]]/route.ts`:
+
+```typescript
+// app/cms/[[...path]]/route.ts
+import { questpieNextRouteHandlers } from "@questpie/next";
+import { cms } from "@/cms";
+
+export const { GET, POST, PATCH, DELETE, PUT, OPTIONS, HEAD } =
+  questpieNextRouteHandlers(cms, {
+    basePath: "/cms",
+  });
+```
+
+## With Custom Base Path
+
+For fullstack apps, you might want to use `/api/cms`:
+
+```typescript
+// app/api/cms/[[...path]]/route.ts
+import { questpieNextRouteHandlers } from "@questpie/next";
+import { cms } from "@/cms";
+
+export const { GET, POST, PATCH, DELETE, PUT, OPTIONS, HEAD } =
+  questpieNextRouteHandlers(cms, {
+    basePath: "/api/cms",
+  });
+```
+
+## Using `questpieNext` Directly
+
+For more control, use the lower-level `questpieNext` function:
+
+```typescript
+// app/cms/[[...path]]/route.ts
+import { questpieNext } from "@questpie/next";
+import { cms } from "@/cms";
+
+const handler = questpieNext(cms, {
+  basePath: "/cms",
+});
+
+export const GET = handler;
+export const POST = handler;
+export const PATCH = handler;
+export const DELETE = handler;
+```
+
+## Client Usage
+
+Use the QUESTPIE client from any Next.js component:
+
+```typescript
+// Server component
+import { cms } from "@/cms";
+
+export default async function PostsPage() {
+  const { docs } = await cms.api.collections.posts.find({
+    limit: 10,
+  });
+
+  return (
+    <ul>
+      {docs.map((post) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+```typescript
+// Client component
+"use client";
+
+import { createQCMSClient } from "@questpie/cms/client";
+import type { cms } from "@/cms";
+
+const client = createQCMSClient<typeof cms>({
+  baseURL: "/cms",
+});
+
+export function PostsList() {
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    client.collections.posts.find({ limit: 10 }).then(({ docs }) => {
+      setPosts(docs);
+    });
+  }, []);
+
+  return <ul>{posts.map((post) => <li key={post.id}>{post.title}</li>)}</ul>;
+}
+```
+
+## Generated Routes
+
+The adapter handles these routes under your `basePath`:
+
+| Method | Path                        | Description              |
+| ------ | --------------------------- | ------------------------ |
+| GET    | `/{collection}`             | List records (paginated) |
+| POST   | `/{collection}`             | Create record            |
+| GET    | `/{collection}/:id`         | Get record by ID         |
+| PATCH  | `/{collection}/:id`         | Update record            |
+| DELETE | `/{collection}/:id`         | Delete record            |
+| POST   | `/{collection}/:id/restore` | Restore soft-deleted     |
+| GET    | `/globals/{name}`           | Get global               |
+| PATCH  | `/globals/{name}`           | Update global            |
+| POST   | `/rpc/{function}`           | Call custom function     |
+| POST   | `/storage/upload`           | Upload file              |
+| `*`    | `/auth/*`                   | Better Auth endpoints    |
+
+## Middleware Integration
+
+You can combine with Next.js middleware for additional processing:
+
+```typescript
+// middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+export function middleware(request: NextRequest) {
+  // Add custom headers, handle CORS, etc.
+  const response = NextResponse.next();
+  response.headers.set("x-custom-header", "value");
+  return response;
+}
+
+export const config = {
+  matcher: "/cms/:path*",
+};
+```
+
+## See Also
+
+- [Getting Started](/docs/introduction/getting-started) - Initial setup
+- [Hono Adapter](/docs/reference/hono-adapter) - Alternative adapter
+- [Authentication](/docs/guides/authentication) - Auth configuration
+- [Next.js App Router](https://nextjs.org/docs/app/building-your-application/routing/route-handlers) - Route handlers docs

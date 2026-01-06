@@ -1,44 +1,687 @@
 ---
 title: Fields
-description: Supported field types and validation.
-
+description: Complete reference for all field types and modifiers in QUESTPIE CMS.
 ---
 
 # Fields
 
-QUESTPIE CMS leverages [Drizzle ORM](https://orm.drizzle.team/) column types directly for defining schema fields. This ensures maximum compatibility and type safety.
+QUESTPIE CMS uses [Drizzle ORM](https://orm.drizzle.team/) column types directly for defining schema fields. This ensures maximum type safety and full PostgreSQL power.
 
-## Supported Types
+## Why Native Drizzle?
 
-You can use standard Drizzle generic column builders:
+Instead of creating a proprietary field DSL, QUESTPIE uses Drizzle column builders directly:
 
-- `varchar`, `text` (Strings)
-- `integer`, `bigint`, `serial` (Numbers)
-- `boolean`
-- `json`, `jsonb` (Complex structures)
-- `timestamp`, `date`
-
-## Example
+- **No abstraction layer** - You get full PostgreSQL power
+- **Same syntax everywhere** - If you know Drizzle, you know QUESTPIE fields
+- **Type inference** - TypeScript types are automatically inferred
+- **Full modifier support** - All Drizzle modifiers work (`.notNull()`, `.default()`, etc.)
 
 ```typescript
-import { varchar, integer, jsonb } from "drizzle-orm/pg-core";
+import {
+  varchar,
+  text,
+  integer,
+  boolean,
+  timestamp,
+  jsonb,
+} from "drizzle-orm/pg-core";
 
-// ... inside defineCollection
+defineCollection("posts").fields({
+  // These are standard Drizzle column definitions
+  title: varchar("title", { length: 255 }).notNull(),
+  content: text("content"),
+  viewCount: integer("view_count").default(0),
+  isPublished: boolean("is_published").default(false).notNull(),
+  publishedAt: timestamp("published_at", { mode: "date" }),
+  metadata: jsonb("metadata").$type<{ tags: string[] }>(),
+});
+```
+
+## String Fields
+
+### varchar
+
+Variable-length string with a maximum length.
+
+```typescript
+import { varchar } from "drizzle-orm/pg-core";
+
 .fields({
-  // Simple string
-  slug: varchar("slug", { length: 50 }).unique(),
-
-  // Number
-  views: integer("views").default(0),
-
-  // JSON Data (Typed)
-  metadata: jsonb("metadata").$type<{ author: string; tags: string[] }>(),
+  name: varchar("name", { length: 255 }),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  shortCode: varchar("short_code", { length: 10 }),
 })
 ```
 
-## Validation
+**Options:**
 
-While the database schema enforces type and constraints (like `notNull`), you can add additional runtime validation using Zod in your hooks or by wrapping field definitions (future feature). Currently, the primary validation is schema-driven.
+- `length` (required) - Maximum character length
 
-### Reference
-- *Drizzle Docs*: [PostgreSQL Column Types](https://orm.drizzle.team/docs/column-types/pg)
+### text
+
+Unlimited length text. Use for long content like descriptions, articles, etc.
+
+```typescript
+import { text } from "drizzle-orm/pg-core";
+
+.fields({
+  description: text("description"),
+  content: text("content").notNull(),
+  bio: text("bio").default(""),
+})
+```
+
+### char
+
+Fixed-length string. Pads with spaces if shorter.
+
+```typescript
+import { char } from "drizzle-orm/pg-core";
+
+.fields({
+  countryCode: char("country_code", { length: 2 }), // "US", "SK"
+  currencyCode: char("currency_code", { length: 3 }), // "USD", "EUR"
+})
+```
+
+## Number Fields
+
+### integer
+
+32-bit signed integer (-2,147,483,648 to 2,147,483,647).
+
+```typescript
+import { integer } from "drizzle-orm/pg-core";
+
+.fields({
+  quantity: integer("quantity").default(0),
+  price: integer("price").notNull(), // Store cents, not dollars
+  order: integer("order").default(0).notNull(),
+})
+```
+
+### bigint
+
+64-bit signed integer. Use for large numbers like timestamps or IDs.
+
+```typescript
+import { bigint } from "drizzle-orm/pg-core";
+
+.fields({
+  // mode: "number" returns JavaScript number (loses precision >53 bits)
+  viewCount: bigint("view_count", { mode: "number" }).default(0),
+
+  // mode: "bigint" returns JavaScript BigInt
+  fileSize: bigint("file_size", { mode: "bigint" }),
+})
+```
+
+### smallint
+
+16-bit signed integer (-32,768 to 32,767). Use for small ranges.
+
+```typescript
+import { smallint } from "drizzle-orm/pg-core";
+
+.fields({
+  rating: smallint("rating"), // 1-5 stars
+  year: smallint("year"),
+})
+```
+
+### serial
+
+Auto-incrementing 32-bit integer. Commonly used for legacy IDs.
+
+```typescript
+import { serial } from "drizzle-orm/pg-core";
+
+.fields({
+  legacyId: serial("legacy_id"),
+})
+```
+
+**Note:** QUESTPIE collections automatically get a UUID `id` field. Use `serial` only for legacy compatibility.
+
+### real
+
+32-bit floating point (6 decimal digits precision).
+
+```typescript
+import { real } from "drizzle-orm/pg-core";
+
+.fields({
+  rating: real("rating"), // 4.5
+  latitude: real("latitude"),
+})
+```
+
+### doublePrecision
+
+64-bit floating point (15 decimal digits precision).
+
+```typescript
+import { doublePrecision } from "drizzle-orm/pg-core";
+
+.fields({
+  amount: doublePrecision("amount"),
+  longitude: doublePrecision("longitude"),
+})
+```
+
+### numeric / decimal
+
+Exact decimal numbers. Use for money or when precision matters.
+
+```typescript
+import { numeric } from "drizzle-orm/pg-core";
+
+.fields({
+  // precision: total digits, scale: decimal places
+  price: numeric("price", { precision: 10, scale: 2 }), // 99999999.99
+  taxRate: numeric("tax_rate", { precision: 5, scale: 4 }), // 0.0825
+})
+```
+
+## Boolean
+
+```typescript
+import { boolean } from "drizzle-orm/pg-core";
+
+.fields({
+  isActive: boolean("is_active").default(true).notNull(),
+  isPublished: boolean("is_published").default(false).notNull(),
+  isVerified: boolean("is_verified"),
+})
+```
+
+## Date and Time
+
+### timestamp
+
+Date and time with optional timezone.
+
+```typescript
+import { timestamp } from "drizzle-orm/pg-core";
+
+.fields({
+  // mode: "date" returns JavaScript Date object
+  publishedAt: timestamp("published_at", { mode: "date" }),
+
+  // mode: "string" returns ISO string
+  eventTime: timestamp("event_time", { mode: "string" }),
+
+  // With timezone (recommended)
+  createdAt: timestamp("created_at", { mode: "date", withTimezone: true }),
+})
+```
+
+**Options:**
+
+- `mode`: `"date"` (default) | `"string"`
+- `withTimezone`: `true` | `false` (default)
+- `precision`: 0-6 (microsecond precision)
+
+### date
+
+Date only (no time component).
+
+```typescript
+import { date } from "drizzle-orm/pg-core";
+
+.fields({
+  birthDate: date("birth_date", { mode: "date" }),
+  expiresOn: date("expires_on", { mode: "string" }),
+})
+```
+
+### time
+
+Time only (no date component).
+
+```typescript
+import { time } from "drizzle-orm/pg-core";
+
+.fields({
+  openingTime: time("opening_time"),
+  closingTime: time("closing_time", { withTimezone: true }),
+})
+```
+
+### interval
+
+Time duration/interval.
+
+```typescript
+import { interval } from "drizzle-orm/pg-core";
+
+.fields({
+  duration: interval("duration"),
+})
+```
+
+## UUID
+
+UUID v7 (time-sortable) is recommended for primary keys.
+
+```typescript
+import { uuid } from "drizzle-orm/pg-core";
+
+.fields({
+  // Foreign key to another collection
+  authorId: uuid("author_id").notNull(),
+
+  // Optional foreign key
+  categoryId: uuid("category_id"),
+
+  // Auto-generate UUID
+  externalId: uuid("external_id").defaultRandom(),
+})
+```
+
+**Note:** The `id` field is automatically added to all collections as UUID v7.
+
+## JSON
+
+### json
+
+Standard JSON storage (text-based).
+
+```typescript
+import { json } from "drizzle-orm/pg-core";
+
+.fields({
+  data: json("data"),
+})
+```
+
+### jsonb
+
+Binary JSON storage. **Recommended** - faster queries, supports indexing.
+
+```typescript
+import { jsonb } from "drizzle-orm/pg-core";
+
+// Type your JSON with .$type<T>()
+type Metadata = {
+  tags: string[];
+  seo?: { title: string; description: string };
+};
+
+type SocialLinks = {
+  twitter?: string;
+  linkedin?: string;
+  github?: string;
+};
+
+.fields({
+  // Typed JSONB
+  metadata: jsonb("metadata").$type<Metadata>(),
+  socialLinks: jsonb("social_links").$type<SocialLinks>(),
+
+  // Array as JSON
+  featuredIds: jsonb("featured_ids").$type<string[]>(),
+
+  // Complex nested structure
+  config: jsonb("config").$type<{
+    theme: "light" | "dark";
+    notifications: { email: boolean; push: boolean };
+  }>(),
+})
+```
+
+**Best practices:**
+
+- Always use `.$type<T>()` for type safety
+- Use `jsonb` over `json` for better performance
+- Consider separate columns for frequently queried fields
+
+## Arrays
+
+Any column type can be made into an array with `.array()`.
+
+```typescript
+import { varchar, integer, text, jsonb } from "drizzle-orm/pg-core";
+
+.fields({
+  // String array
+  tags: varchar("tags", { length: 100 }).array(),
+
+  // Integer array
+  scores: integer("scores").array(),
+
+  // Text array with default
+  categories: text("categories").array().default([]),
+
+  // JSONB array
+  items: jsonb("items").$type<{ name: string; qty: number }>().array(),
+})
+```
+
+**Querying arrays:**
+
+```typescript
+// Find posts with specific tag
+const posts = await cms.api.collections.posts.find({
+  where: {
+    tags: { arrayContains: ["typescript"] },
+  },
+});
+
+// Find posts with any of these tags
+const posts = await cms.api.collections.posts.find({
+  where: {
+    tags: { arrayOverlaps: ["typescript", "javascript"] },
+  },
+});
+```
+
+## Enums
+
+PostgreSQL native enums for type-safe string values.
+
+```typescript
+import { pgEnum } from "drizzle-orm/pg-core";
+
+// Define enum outside collection
+export const statusEnum = pgEnum("status", ["draft", "published", "archived"]);
+
+// Use in collection
+.fields({
+  status: statusEnum("status").default("draft").notNull(),
+})
+```
+
+**Alternative:** Use `varchar` with TypeScript union for simpler setup:
+
+```typescript
+.fields({
+  status: varchar("status", { length: 20 })
+    .default("draft")
+    .notNull()
+    .$type<"draft" | "published" | "archived">(),
+})
+```
+
+## Field Modifiers
+
+All Drizzle column modifiers are supported:
+
+### .notNull()
+
+Field cannot be null.
+
+```typescript
+title: varchar("title", { length: 255 }).notNull();
+```
+
+### .default(value)
+
+Default value when not provided.
+
+```typescript
+isActive: boolean("is_active").default(true);
+viewCount: integer("view_count").default(0);
+status: varchar("status", { length: 20 }).default("draft");
+```
+
+### .defaultRandom()
+
+Generate random UUID on insert.
+
+```typescript
+apiKey: uuid("api_key").defaultRandom();
+```
+
+### .$default(() => value)
+
+Dynamic default using a function.
+
+```typescript
+import { sql } from "drizzle-orm";
+
+createdAt: timestamp("created_at").default(sql`now()`);
+sortKey: varchar("sort_key", { length: 100 }).$default(() => generateSortKey());
+```
+
+### .primaryKey()
+
+Mark as primary key. **Note:** QUESTPIE auto-adds `id` as primary key.
+
+```typescript
+// Only for custom primary keys
+customId: varchar("custom_id", { length: 50 }).primaryKey();
+```
+
+### .unique()
+
+Add unique constraint.
+
+```typescript
+email: varchar("email", { length: 255 }).notNull().unique();
+slug: varchar("slug", { length: 100 }).notNull().unique();
+```
+
+### .references()
+
+Foreign key reference. **Note:** Use `.relations()` instead for QUESTPIE relations.
+
+```typescript
+// Direct Drizzle reference (not recommended - use .relations())
+authorId: uuid("author_id").references(() => users.id);
+```
+
+### .$type\<T\>()
+
+Override TypeScript type inference.
+
+```typescript
+// Type JSONB fields
+metadata: jsonb("metadata").$type<{ tags: string[] }>();
+
+// Narrow varchar to union
+status: varchar("status", { length: 20 }).$type<"draft" | "published">();
+```
+
+## Automatic Fields
+
+QUESTPIE automatically adds these fields to collections:
+
+| Field       | Type      | Description                                   |
+| ----------- | --------- | --------------------------------------------- |
+| `id`        | UUID v7   | Primary key, auto-generated                   |
+| `createdAt` | timestamp | Created timestamp (if `timestamps: true`)     |
+| `updatedAt` | timestamp | Last update timestamp (if `timestamps: true`) |
+| `deletedAt` | timestamp | Soft delete timestamp (if `softDelete: true`) |
+
+```typescript
+defineCollection("posts")
+  .fields({
+    /* your fields */
+  })
+  .options({
+    timestamps: true, // Add createdAt, updatedAt (default: true)
+    softDelete: true, // Add deletedAt
+  });
+```
+
+## Virtual Fields
+
+Computed fields that exist only at query time.
+
+```typescript
+import { sql } from "drizzle-orm";
+
+defineCollection("users")
+  .fields({
+    firstName: varchar("first_name", { length: 100 }),
+    lastName: varchar("last_name", { length: 100 }),
+    email: varchar("email", { length: 255 }),
+  })
+  .virtuals((t) => ({
+    // Concatenate fields
+    fullName: sql<string>`${t.firstName} || ' ' || ${t.lastName}`,
+
+    // Extract from email
+    emailDomain: sql<string>`substring(${t.email} from '@(.*)$')`,
+
+    // Conditional
+    displayName: sql<string>`coalesce(${t.firstName}, ${t.email})`,
+  }));
+```
+
+Virtual fields are:
+
+- **Computed at query time** - Not stored in database
+- **Type-safe** - Use `sql<Type>` for TypeScript typing
+- **Available in queries** - Returned in API responses
+- **Not writable** - Cannot be set on create/update
+
+## Complete Example
+
+```typescript
+import { defineCollection } from "@questpie/cms/server";
+import {
+  varchar,
+  text,
+  integer,
+  boolean,
+  timestamp,
+  jsonb,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
+type ProjectMetadata = {
+  client?: string;
+  budget?: number;
+  technologies: string[];
+};
+
+export const projects = defineCollection("projects")
+  .fields({
+    // Strings
+    title: varchar("title", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 100 }).notNull().unique(),
+    description: text("description"),
+
+    // Numbers
+    order: integer("order").default(0).notNull(),
+    budget: integer("budget"), // in cents
+
+    // Booleans
+    featured: boolean("featured").default(false).notNull(),
+    isPublished: boolean("is_published").default(false).notNull(),
+
+    // Dates
+    publishedAt: timestamp("published_at", { mode: "date" }),
+    deadline: timestamp("deadline", { mode: "date", withTimezone: true }),
+
+    // Relations (UUIDs)
+    categoryId: uuid("category_id"),
+    authorId: uuid("author_id").notNull(),
+
+    // JSON
+    metadata: jsonb("metadata").$type<ProjectMetadata>(),
+    tags: varchar("tags", { length: 50 }).array().default([]),
+
+    // Status
+    status: varchar("status", { length: 20 })
+      .default("draft")
+      .notNull()
+      .$type<"draft" | "in_progress" | "completed" | "archived">(),
+  })
+  // Virtual/computed fields
+  .virtuals((t) => ({
+    isActive: sql<boolean>`${t.status} NOT IN ('completed', 'archived')`,
+  }))
+  // Collection options
+  .options({
+    timestamps: true,
+    softDelete: true,
+  });
+```
+
+## Best Practices
+
+### 1. Use Appropriate Types
+
+```typescript
+// ❌ Storing money as float
+price: doublePrecision("price");
+
+// ✅ Store as integer cents
+price: integer("price"); // $19.99 = 1999
+```
+
+### 2. Type Your JSON
+
+```typescript
+// ❌ Untyped JSON
+config: jsonb("config");
+
+// ✅ Typed JSON
+config: jsonb("config").$type<{ theme: string; locale: string }>();
+```
+
+### 3. Use varchar Length Appropriately
+
+```typescript
+// ❌ Everything is 255
+name: varchar("name", { length: 255 });
+status: varchar("status", { length: 255 });
+slug: varchar("slug", { length: 255 });
+
+// ✅ Size appropriately
+name: varchar("name", { length: 255 });
+status: varchar("status", { length: 20 });
+slug: varchar("slug", { length: 100 });
+```
+
+### 4. Default Values for Required Fields
+
+```typescript
+// ❌ Nullable field that should always have value
+isActive: boolean("is_active");
+
+// ✅ Not null with default
+isActive: boolean("is_active").default(true).notNull();
+```
+
+### 5. Use Relations for Foreign Keys
+
+```typescript
+// ❌ Just foreign key field
+authorId: uuid("author_id").notNull();
+
+// ✅ Field + relation definition
+authorId: uuid("author_id").notNull();
+// ... later in .relations()
+author: one("users", { fields: [table.authorId], references: ["id"] });
+```
+
+## Learn More from Drizzle
+
+QUESTPIE uses native Drizzle ORM column types. Everything you learn from Drizzle documentation applies directly here.
+
+### Drizzle Documentation
+
+- [PostgreSQL Column Types](https://orm.drizzle.team/docs/column-types/pg) - Complete reference for all column types
+- [Column Modifiers](https://orm.drizzle.team/docs/column-types/pg#column-constraints) - `.notNull()`, `.default()`, `.unique()`, etc.
+- [Indexes](https://orm.drizzle.team/docs/indexes-constraints) - Creating indexes and constraints
+- [Custom Types](https://orm.drizzle.team/docs/custom-types) - Define your own column types
+
+### Why Native Drizzle?
+
+We intentionally don't abstract away Drizzle's column types because:
+
+1. **No learning curve** - If you know Drizzle, you know QUESTPIE fields
+2. **Full PostgreSQL power** - Access every PostgreSQL feature
+3. **Community resources** - All Drizzle tutorials and Stack Overflow answers apply
+4. **Future-proof** - As Drizzle adds features, you get them automatically
+
+## Related
+
+- [Collections](/docs/core-concepts/collections) - Define collections with fields
+- [Relations](/docs/core-concepts/relations) - Connect collections together
+- [CLI Reference](/docs/reference/cli) - Generate migrations from schema changes

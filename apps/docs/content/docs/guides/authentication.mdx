@@ -98,7 +98,7 @@ export const cms = defineQCMS({ name:'app' })
   .auth((oldAuth) => ({
     user: {
       additionalFields: {
-        role: { type: "string", required: true },
+        profileCompleted: { type: "boolean", required: true },
         department: { type: "string", required: false },
       },
     },
@@ -109,7 +109,7 @@ export const cms = defineQCMS({ name:'app' })
 
 // TypeScript knows the new fields exist:
 type Session = typeof cms.auth.$Infer.Session;
-// Session.user.role is string
+// Session.user.profileCompleted is boolean
 // Session.user.department is string | null
 ```
 
@@ -211,7 +211,7 @@ export const cms = defineQCMS({ name:'app' })
 
 ```typescript
 
-export const cms = createCoreModule()
+export const cms = defineQCMS({ name:'app' })
   .auth({
     baseURL: process.env.BETTER_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET,
@@ -268,7 +268,8 @@ cms.auth.api.signIn.email; // ✅ Exists (email/password enabled)
 
 ### 1. Use the Core Module
 
-Start with `createCoreModule()` for batteries-included auth setup.
+1. `defineQCMS` automatically includes tiny core module with essential auth setup. (emailPassword, admin plugin, basic collections)
+2. Avoid re-defining core auth features unless necessary. Or override them progressively.
 
 ### 2. Compose with Modules
 

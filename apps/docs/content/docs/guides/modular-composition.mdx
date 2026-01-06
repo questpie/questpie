@@ -1,0 +1,382 @@
+---
+title: Modular Composition
+description: Create reusable CMS modules and distribute them via npm.
+---
+
+# Modular Composition
+
+QUESTPIE CMS supports composing multiple modules into a single application using the `.use()` method. This allows you to:
+
+- Create reusable feature modules (blog, e-commerce, auth, etc.)
+- Share modules across projects via npm
+- Extend and customize modules without forking
+
+## Creating a Module
+
+A module is simply a `defineQCMS()` call without `.build()`. It contains collections, globals, jobs, and other definitions that can be composed into a main application.
+
+```typescript
+// @my-org/blog-module/src/index.ts
+import { defineQCMS, defineCollection, defineJob } from "@questpie/cms/server";
+import { varchar, text, boolean, timestamp, uuid } from "drizzle-orm/pg-core";
+import { z } from "zod";
+
+// Define collections
+const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 100 }).notNull().unique(),
+    content: text("content"),
+    excerpt: text("excerpt"),
+    isPublished: boolean("is_published").default(false).notNull(),
+    publishedAt: timestamp("published_at", { mode: "date" }),
+    authorId: uuid("author_id"),
+  })
+  .title((row) => row.title);
+
+const categories = defineCollection("categories")
+  .fields({
+    name: varchar("name", { length: 100 }).notNull(),
+    slug: varchar("slug", { length: 100 }).notNull().unique(),
+    description: text("description"),
+  })
+  .title((row) => row.name);
+
+const comments = defineCollection("comments")
+  .fields({
+    postId: uuid("post_id").notNull(),
+    authorName: varchar("author_name", { length: 100 }).notNull(),
+    authorEmail: varchar("author_email", { length: 255 }).notNull(),
+    content: text("content").notNull(),
+    isApproved: boolean("is_approved").default(false).notNull(),
+  })
+  .relations(({ table, one }) => ({
+    post: one("posts", {
+      fields: [table.postId],
+      references: ["id"],
+    }),
+  }));
+
+// Define jobs
+const notifyNewComment = defineJob({
+  name: "blog-notify-new-comment",
+  schema: z.object({
+    postId: z.string().uuid(),
+    commentId: z.string().uuid(),
+  }),
+  handler: async ({ data }) => {
+    // Send notification to post author
+    console.log(`New comment on post ${data.postId}`);
+  },
+});
+
+// Export the module (NO .build() call!)
+export const blogModule = defineQCMS({ name: "blog" })
+  .collections({
+    posts,
+    categories,
+    comments,
+  })
+  .jobs({
+    notifyNewComment,
+  });
+
+// Export individual pieces for extension
+export { posts, categories, comments, notifyNewComment };
+```
+
+**Important:** Do NOT call `.build()` on modules. The consuming application calls `.build()` with runtime configuration.
+
+## Using a Module
+
+Import and compose modules using `.use()`:
+
+```typescript
+// src/cms.ts
+import { defineQCMS } from "@questpie/cms/server";
+import { blogModule } from "@my-org/blog-module";
+import { products } from "./collections/products";
+
+export const cms = defineQCMS({ name: "myapp" })
+  // Compose the blog module
+  .use(blogModule)
+  // Add your own collections
+  .collections({
+    products,
+  })
+  // Runtime configuration
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+  });
+```
+
+All collections, globals, jobs, and email templates from `blogModule` are now part of your CMS:
+
+```typescript
+// Access blog collections
+await cms.api.collections.posts.find({});
+await cms.api.collections.categories.find({});
+
+// Access your collections
+await cms.api.collections.products.find({});
+
+// Access blog jobs
+await cms.queue["blog-notify-new-comment"].publish({ postId, commentId });
+```
+
+## Composing Multiple Modules
+
+Chain multiple `.use()` calls:
+
+```typescript
+import { defineQCMS } from "@questpie/cms/server";
+import { blogModule } from "@my-org/blog-module";
+import { ecommerceModule } from "@my-org/ecommerce-module";
+import { analyticsModule } from "@my-org/analytics-module";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .use(blogModule)
+  .use(ecommerceModule)
+  .use(analyticsModule)
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+  });
+```
+
+## Extending Module Collections
+
+Use `.merge()` to add fields to module collections:
+
+```typescript
+import { defineQCMS, defineCollection } from "@questpie/cms/server";
+import { blogModule, posts as basePosts } from "@my-org/blog-module";
+import { boolean, integer, uuid } from "drizzle-orm/pg-core";
+
+// Extend the posts collection with custom fields
+const extendedPosts = basePosts.merge(
+  defineCollection("posts").fields({
+    // Add new fields
+    featured: boolean("featured").default(false).notNull(),
+    viewCount: integer("view_count").default(0).notNull(),
+    // Add relation to your own collection
+    productId: uuid("product_id"),
+  }),
+);
+
+export const cms = defineQCMS({ name: "myapp" })
+  .use(blogModule)
+  .collections({
+    // Override with extended version
+    posts: extendedPosts,
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+  });
+```
+
+## Adding Hooks to Module Collections
+
+Extend module collections with custom hooks:
+
+```typescript
+import {
+  defineQCMS,
+  defineCollection,
+  getCMSFromContext,
+} from "@questpie/cms/server";
+import { blogModule, posts as basePosts } from "@my-org/blog-module";
+
+// Add hooks to the posts collection
+const postsWithHooks = basePosts.hooks({
+  afterCreate: async ({ data }) => {
+    const cms = getCMSFromContext();
+
+    // Custom logic when a post is created
+    await cms.queue["send-notification"].publish({
+      type: "new-post",
+      postId: data.id,
+    });
+  },
+  afterUpdate: async ({ data, previousData }) => {
+    // Track when posts are published
+    if (!previousData.isPublished && data.isPublished) {
+      console.log(`Post ${data.id} was published`);
+    }
+  },
+});
+
+export const cms = defineQCMS({ name: "myapp" })
+  .use(blogModule)
+  .collections({
+    posts: postsWithHooks,
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+  });
+```
+
+## Module with Auth Configuration
+
+Modules can include auth configuration:
+
+```typescript
+// @my-org/auth-module/src/index.ts
+import { defineQCMS } from "@questpie/cms/server";
+
+export const authModule = defineQCMS({ name: "auth" }).auth({
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+  },
+  session: {
+    expiresIn: 60 * 60 * 24 * 7, // 7 days
+  },
+});
+
+// Consumer
+export const cms = defineQCMS({ name: "myapp" })
+  .use(authModule)
+  .collections({
+    /* ... */
+  })
+  .auth({
+    // Can extend/override auth config
+    socialProviders: {
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      },
+    },
+  })
+  .build({
+    /* ... */
+  });
+```
+
+## Publishing to npm
+
+Structure your module package:
+
+```
+my-blog-module/
+├── src/
+│   ├── index.ts          # Main export
+│   ├── collections/
+│   │   ├── posts.ts
+│   │   ├── categories.ts
+│   │   └── comments.ts
+│   ├── jobs/
+│   │   └── notify.ts
+│   └── email-templates/
+│       └── new-comment.tsx
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+**package.json:**
+
+```json
+{
+  "name": "@my-org/blog-module",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@questpie/cms": "workspace:*",
+    "drizzle-orm": "^0.42.0-beta",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "bun run build"
+  }
+}
+```
+
+**Key points:**
+
+- Use `peerDependencies` for `@questpie/cms`, `drizzle-orm`, and `zod`
+- Export TypeScript types for full type safety
+- Do NOT bundle the CMS - consumers provide it
+
+## Module Best Practices
+
+### 1. Use Prefixed Names
+
+Avoid naming collisions by prefixing collection and job names:
+
+```typescript
+// Good: prefixed names
+const blogPosts = defineCollection("blog_posts");
+const blogNotify = defineJob({ name: "blog-notify" });
+
+// Bad: generic names
+const posts = defineCollection("posts"); // May conflict
+```
+
+### 2. Export Individual Pieces
+
+Allow consumers to extend specific parts:
+
+```typescript
+// Export everything
+export const blogModule = defineQCMS({ name: "blog" }).collections({
+  posts,
+  categories,
+});
+
+// Also export individual collections for extension
+export { posts, categories };
+```
+
+### 3. Document Required Configuration
+
+If your module needs environment variables or runtime config, document it:
+
+```typescript
+/**
+ * Blog Module
+ *
+ * Required environment variables:
+ * - BLOG_NOTIFY_WEBHOOK_URL (optional): Webhook URL for post notifications
+ *
+ * Required collections in consumer:
+ * - users: For author relationships
+ */
+export const blogModule = defineQCMS({ name: "blog" }).collections({
+  posts,
+  categories,
+});
+```
+
+### 4. Provide Type Exports
+
+Export types for consumers:
+
+```typescript
+// src/index.ts
+export const blogModule = defineQCMS({ name: "blog" }).collections({ posts });
+
+// Export types
+export type BlogModule = typeof blogModule;
+export type Post = typeof posts.$inferSelect;
+export type NewPost = typeof posts.$inferInsert;
+```
+
+## Related
+
+- [Collections](/docs/core-concepts/collections) - Define collections
+- [Hooks](/docs/core-concepts/hooks) - Add lifecycle hooks
+- [Background Jobs](/docs/guides/queue-jobs) - Define jobs
+- [Email Templates](/docs/guides/email-templates) - Define email templates

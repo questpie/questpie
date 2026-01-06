@@ -18,7 +18,9 @@
       "name": "@questpie/docs",
       "dependencies": {
         "@base-ui/react": "^1.0.0",
-        "@fontsource-variable/inter": "^5.2.8",
+        "@fontsource-variable/dm-sans": "^5.2.8",
+        "@fontsource-variable/jetbrains-mono": "^5.2.8",
+        "@openpanel/web": "^1.0.6",
         "@phosphor-icons/react": "^2.1.10",
         "@tanstack/react-router": "1.136.18",
         "@tanstack/react-router-devtools": "1.136.18",
@@ -26,6 +28,7 @@
         "clsx": "^2.1.1",
         "fumadocs-core": "16.4.1",
         "fumadocs-mdx": "14.2.3",
+        "fumadocs-typescript": "^5.0.1",
         "fumadocs-ui": "16.4.1",
         "lucide-react": "^0.561.0",
         "react": "^19.2.3",
@@ -73,6 +76,23 @@
       "version": "1.0.0",
       "dependencies": {
         "@hono/zod-validator": "^0.7.6",
+        "@questpie/cms": "workspace:*",
+        "@questpie/hono": "workspace:*",
+        "drizzle-kit": "^1.0.0-beta.6-4414a19",
+        "drizzle-orm": "^1.0.0-beta.6-4414a19",
+        "hono": "^4.6.14",
+        "zod": "^4.2.1",
+      },
+      "devDependencies": {
+        "@questpie/typescript-config": "workspace:*",
+        "@types/bun": "latest",
+        "bun-types": "latest",
+      },
+    },
+    "examples/portfolio-hono": {
+      "name": "portfolio-hono-example",
+      "version": "1.0.0",
+      "dependencies": {
         "@questpie/cms": "workspace:*",
         "@questpie/hono": "workspace:*",
         "drizzle-kit": "^1.0.0-beta.6-4414a19",
@@ -676,7 +696,7 @@
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ=="],
 
-    "@fontsource-variable/inter": ["@fontsource-variable/inter@5.2.8", "", {}, "sha512-kOfP2D+ykbcX/P3IFnokOhVRNoTozo5/JxhAIVYLpea/UBmCQ/YWPBfWIDuBImXX/15KH+eKh4xpEUyS2sQQGQ=="],
+    "@fontsource-variable/dm-sans": ["@fontsource-variable/dm-sans@5.2.8", "", {}, "sha512-AxkvMTvNWgfrmlyjiV05vlHYJa+nRQCf1EfvIrQAPBpFJW0O9VTz7oAFr9S3lvbWdmnFoBk7yFqQL86u64nl2g=="],
 
     "@fontsource-variable/jetbrains-mono": ["@fontsource-variable/jetbrains-mono@5.2.8", "", {}, "sha512-WBA9elru6Jdp5df2mES55wuOO0WIrn3kpXnI4+W2ek5u3ZgLS9XS4gmIlcQhiZOWEKl95meYdvK7xI+ETLCq/Q=="],
 
@@ -763,6 +783,10 @@
     "@open-draft/logger": ["@open-draft/logger@0.3.0", "", { "dependencies": { "is-node-process": "^1.2.0", "outvariant": "^1.4.0" } }, "sha512-X2g45fzhxH238HKO4xbSr7+wBS8Fvw6ixhTDuvLd5mqh6bJJCFAPwU9mPDxbcrRtfxv4u5IHCEH77BmxvXmmxQ=="],
 
     "@open-draft/until": ["@open-draft/until@2.1.0", "", {}, "sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg=="],
+
+    "@openpanel/sdk": ["@openpanel/sdk@1.0.3", "", {}, "sha512-VzxHN4wfMd6iP7Amq572plQKvj6bnsp+KgVK/7sbqEvzJ2N505a3Sn/wCwectBYiJ0QPRi2djeqU5tdacm6hhg=="],
+
+    "@openpanel/web": ["@openpanel/web@1.0.6", "", { "dependencies": { "@openpanel/sdk": "1.0.3" } }, "sha512-82D/pP6SIpHrQn2Q9JshlU4cg8LLx+we/DdrXNBdy1qLXuty1jhA2TqIH7UAG4pJrHvG4se+hhlNUYclRDD7MQ=="],
 
     "@orama/orama": ["@orama/orama@3.1.18", "", {}, "sha512-a61ljmRVVyG5MC/698C8/FfFDw5a8LOIvyOLW5fztgUXqUpc1jOfQzOitSCbge657OgXXThmY3Tk8fpiDb4UcA=="],
 
@@ -2629,6 +2653,8 @@
     "pkg-types": ["pkg-types@1.3.1", "", { "dependencies": { "confbox": "^0.1.8", "mlly": "^1.7.4", "pathe": "^2.0.1" } }, "sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ=="],
 
     "pluralize": ["pluralize@8.0.0", "", {}, "sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA=="],
+
+    "portfolio-hono-example": ["portfolio-hono-example@workspace:examples/portfolio-hono"],
 
     "postcss": ["postcss@8.5.6", "", { "dependencies": { "nanoid": "^3.3.11", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg=="],
 

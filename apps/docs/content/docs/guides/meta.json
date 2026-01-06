@@ -1,10 +1,13 @@
 {
 	"title": "Guides",
+	"defaultOpen": true,
 	"pages": [
-		"creating-a-collection",
 		"authentication",
 		"storage-upload",
 		"queue-jobs",
+		"email-templates",
+		"modular-composition",
+		"custom-adapters",
 		"realtime-subscriptions",
 		"custom-api-routes",
 		"typescript-best-practices"

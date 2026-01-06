@@ -1,4 +1,5 @@
 {
 	"title": "Reference",
-	"pages": ["cms-config", "cli", "hono-adapter", "drizzle-orm"]
+	"defaultOpen": true,
+	"pages": ["cms-config", "cli", "hono-adapter"]
 }

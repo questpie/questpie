@@ -1,33 +1,425 @@
 ---
-title: Storage & Uploads
-description: Managing file uploads and storage drivers.
-
+title: File Storage & Uploads
+description: Configure file storage and handle uploads with Flydrive.
 ---
 
-# Storage & Uploads
+# File Storage & Uploads
 
-QUESTPIE CMS uses **Flydrive** to manage file uploads, supporting multiple drivers (Local, S3, etc.).
+QUESTPIE CMS uses [Flydrive](https://flydrive.dev/) for file storage, supporting multiple backends including local filesystem, Amazon S3, Cloudflare R2, Google Cloud Storage, and more.
+
+## How It Works
+
+1. Files are uploaded via the `/cms/storage/upload` endpoint
+2. The file is stored using the configured Flydrive driver
+3. An `assets` record is created with metadata (URL, filename, size, MIME type)
+4. When an asset is deleted, the file is automatically removed from storage
 
 ## Configuration
 
-Configure the `storage` object in your `QCMS` config.
+### Local Filesystem (Default)
+
+By default, QUESTPIE uses local filesystem storage:
 
 ```typescript
-import { QCMS } from "@questpie/cms/server";
-// Import drivers from flydrive (conceptual)
-// import { fsDriver } from "flydrive/drivers/fs";
+// src/cms.ts
+import { defineQCMS } from "@questpie/cms/server";
 
-export const cms = new QCMS({
-  // ...
-  storage: {
-    // default: fsDriver({ location: './uploads' })
-    // See Flydrive documentation for S3 and other providers
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .build({
+    app: { url: "http://localhost:3000" },
+    db: { url: process.env.DATABASE_URL! },
+    // Storage defaults to local filesystem at ./uploads
+  });
+```
+
+### Amazon S3
+
+```typescript
+import { defineQCMS } from "@questpie/cms/server";
+import { S3Driver } from "flydrive/drivers/s3";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .build({
+    app: { url: "https://myapp.com" },
+    db: { url: process.env.DATABASE_URL! },
+    storage: {
+      driver: new S3Driver({
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        },
+        region: process.env.AWS_REGION!,
+        bucket: process.env.AWS_S3_BUCKET!,
+        visibility: "public",
+      }),
+    },
+  });
+```
+
+### Cloudflare R2
+
+```typescript
+import { defineQCMS } from "@questpie/cms/server";
+import { S3Driver } from "flydrive/drivers/s3";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .build({
+    app: { url: "https://myapp.com" },
+    db: { url: process.env.DATABASE_URL! },
+    storage: {
+      driver: new S3Driver({
+        credentials: {
+          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+        },
+        endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        region: "auto",
+        bucket: process.env.R2_BUCKET!,
+        visibility: "public",
+      }),
+    },
+  });
+```
+
+### Google Cloud Storage
+
+```typescript
+import { defineQCMS } from "@questpie/cms/server";
+import { GCSDriver } from "flydrive/drivers/gcs";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .build({
+    app: { url: "https://myapp.com" },
+    db: { url: process.env.DATABASE_URL! },
+    storage: {
+      driver: new GCSDriver({
+        credentials: JSON.parse(process.env.GCS_CREDENTIALS!),
+        bucket: process.env.GCS_BUCKET!,
+        visibility: "public",
+      }),
+    },
+  });
+```
+
+## Uploading Files
+
+### Via API Endpoint
+
+Upload files using multipart/form-data:
+
+```bash
+curl -X POST http://localhost:3000/cms/storage/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@/path/to/image.jpg"
+```
+
+**Response:**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "key": "a1b2c3d4-image.jpg",
+  "url": "http://localhost:3000/uploads/a1b2c3d4-image.jpg",
+  "filename": "image.jpg",
+  "mimeType": "image/jpeg",
+  "size": 102400,
+  "createdAt": "2025-01-06T12:00:00.000Z",
+  "updatedAt": "2025-01-06T12:00:00.000Z"
+}
+```
+
+### Via JavaScript/TypeScript
+
+```typescript
+async function uploadFile(file: File, token: string) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch("/cms/storage/upload", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  return response.json();
+}
+
+// Usage
+const fileInput = document.querySelector('input[type="file"]');
+const file = fileInput.files[0];
+const asset = await uploadFile(file, authToken);
+console.log("Uploaded:", asset.url);
+```
+
+### Via CMS Client
+
+```typescript
+import { createQCMSClient } from "@questpie/cms/client";
+import type { CMS } from "./cms";
+
+const client = createQCMSClient<CMS>({
+  baseURL: "http://localhost:3000/cms",
+});
+
+// Upload file
+const asset = await client.storage.upload(file);
+console.log("Uploaded:", asset.url);
+```
+
+## Using Storage in Code
+
+### Direct Storage Access
+
+Access the Flydrive driver directly:
+
+```typescript
+import { getCMSFromContext } from "@questpie/cms/server";
+
+// In a hook or function
+const cms = getCMSFromContext();
+
+// Upload file
+await cms.storage.use().put("my-file.txt", "Hello World");
+
+// Get URL
+const url = await cms.storage.use().getUrl("my-file.txt");
+
+// Check if exists
+const exists = await cms.storage.use().exists("my-file.txt");
+
+// Delete file
+await cms.storage.use().delete("my-file.txt");
+
+// Get file contents
+const contents = await cms.storage.use().get("my-file.txt");
+```
+
+### In Collection Hooks
+
+Handle file uploads in hooks:
+
+```typescript
+import { defineCollection, getCMSFromContext } from "@questpie/cms/server";
+import { varchar, uuid } from "drizzle-orm/pg-core";
+
+export const products = defineCollection("products")
+  .fields({
+    name: varchar("name", { length: 255 }).notNull(),
+    imageId: uuid("image_id"), // Reference to assets collection
+  })
+  .relations(({ table, one }) => ({
+    image: one("assets", {
+      fields: [table.imageId],
+      references: ["id"],
+    }),
+  }))
+  .hooks({
+    beforeDelete: async ({ data }) => {
+      // Optionally clean up associated image
+      if (data.imageId) {
+        const cms = getCMSFromContext();
+        await cms.api.collections.assets.deleteById({ id: data.imageId });
+        // The assets hook will delete the file from storage
+      }
+    },
+  });
+```
+
+## The Assets Collection
+
+QUESTPIE automatically includes an `assets` collection for tracking uploaded files:
+
+```typescript
+// Built-in assets collection schema
+{
+  id: uuid,           // Primary key
+  key: varchar,       // Storage key (e.g. "uuid-filename.jpg")
+  url: text,          // Public URL
+  filename: varchar,  // Original filename
+  mimeType: varchar,  // MIME type (e.g. "image/jpeg")
+  size: integer,      // File size in bytes
+  width: integer,     // Image width (optional)
+  height: integer,    // Image height (optional)
+  alt: varchar,       // Alt text (optional)
+  caption: text,      // Caption (optional)
+  createdAt: timestamp,
+  updatedAt: timestamp,
+}
+```
+
+### Querying Assets
+
+```typescript
+// Get all images
+const images = await cms.api.collections.assets.find({
+  where: {
+    mimeType: { startsWith: "image/" },
   },
+});
+
+// Get specific asset
+const asset = await cms.api.collections.assets.findOne({
+  where: { id: assetId },
 });
 ```
 
-## Handling Uploads
+### Linking Assets to Collections
 
-When creating or updating a record with a file field (often represented as a `varchar` storing the path/URL), the Admin UI or your custom API handles the file upload separately (typically to an upload endpoint) and then stores the reference in the collection.
+Reference assets in your collections:
 
-*(Note: Full integrated media library documentation is forthcoming).*
+```typescript
+const posts = defineCollection("posts")
+  .fields({
+    title: varchar("title", { length: 255 }).notNull(),
+    featuredImageId: uuid("featured_image_id"),
+    galleryIds: jsonb("gallery_ids").$type<string[]>().default([]),
+  })
+  .relations(({ table, one }) => ({
+    featuredImage: one("assets", {
+      fields: [table.featuredImageId],
+      references: ["id"],
+    }),
+  }));
+
+// Query with image
+const post = await cms.api.collections.posts.findOne({
+  where: { id: postId },
+  with: { featuredImage: true },
+});
+
+console.log(post.featuredImage?.url);
+```
+
+## Image Processing
+
+For image processing (resize, crop, optimize), consider using a CDN or image processing service:
+
+### Cloudflare Images
+
+```typescript
+// When using R2 + Cloudflare Images
+const imageUrl = `https://imagedelivery.net/${accountId}/${asset.key}/public`;
+const thumbnail = `https://imagedelivery.net/${accountId}/${asset.key}/thumbnail`;
+```
+
+### imgproxy
+
+```typescript
+// Self-hosted image processing
+const processedUrl = `https://imgproxy.example.com/resize:fit:300:200/${asset.url}`;
+```
+
+### Sharp (Server-side)
+
+```typescript
+import sharp from "sharp";
+
+async function createThumbnail(assetKey: string) {
+  const cms = getCMSFromContext();
+
+  // Get original file
+  const original = await cms.storage.use().getBytes(assetKey);
+
+  // Process with Sharp
+  const thumbnail = await sharp(original)
+    .resize(300, 200, { fit: "cover" })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+
+  // Save thumbnail
+  const thumbKey = `thumb-${assetKey}`;
+  await cms.storage.use().put(thumbKey, thumbnail);
+
+  return cms.storage.use().getUrl(thumbKey);
+}
+```
+
+## Environment-based Configuration
+
+Switch storage based on environment:
+
+```typescript
+import { defineQCMS } from "@questpie/cms/server";
+import { FSDriver } from "flydrive/drivers/fs";
+import { S3Driver } from "flydrive/drivers/s3";
+
+const getStorageDriver = () => {
+  if (process.env.NODE_ENV === "production") {
+    return new S3Driver({
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      },
+      region: process.env.AWS_REGION!,
+      bucket: process.env.AWS_S3_BUCKET!,
+      visibility: "public",
+    });
+  }
+
+  // Local filesystem for development
+  return new FSDriver({
+    location: "./uploads",
+    visibility: "public",
+    urlBuilder: {
+      async generateURL(key) {
+        return `http://localhost:3000/uploads/${key}`;
+      },
+    },
+  });
+};
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .build({
+    app: { url: process.env.APP_URL! },
+    db: { url: process.env.DATABASE_URL! },
+    storage: {
+      driver: getStorageDriver(),
+    },
+  });
+```
+
+## Serving Local Files
+
+When using local filesystem storage, serve the uploads directory:
+
+### Hono
+
+```typescript
+import { Hono } from "hono";
+import { serveStatic } from "hono/bun";
+
+const app = new Hono()
+  .route("/cms", questpieHono(cms))
+  .use("/uploads/*", serveStatic({ root: "./" }));
+```
+
+### Express
+
+```typescript
+import express from "express";
+
+app.use("/uploads", express.static("./uploads"));
+```
+
+## Related
+
+- [Collections](/docs/core-concepts/collections) - Reference assets in collections
+- [Hooks](/docs/core-concepts/hooks) - Handle uploads in lifecycle hooks
+- [Flydrive Documentation](https://flydrive.dev/) - Full driver reference

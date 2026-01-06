@@ -1,0 +1,489 @@
+---
+title: Email Templates
+description: Create type-safe email templates with React and send transactional emails.
+---
+
+# Email Templates
+
+QUESTPIE CMS uses [React Email](https://react.email/) for building email templates and [Nodemailer](https://nodemailer.com/) for sending them. This gives you the power of React components for email design with full type safety.
+
+## Setup
+
+### 1. Install Dependencies
+
+```bash
+bun add @react-email/components
+```
+
+### 2. Configure Email Adapter
+
+```typescript
+// src/cms.ts
+import { defineQCMS } from "@questpie/cms/server";
+import { SmtpAdapter } from "@questpie/cms/server/integrated/mailer/adapters/smtp.adapter";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+    email: {
+      adapter: new SmtpAdapter({
+        transport: {
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT),
+          secure: true,
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        },
+      }),
+      defaults: {
+        from: "noreply@example.com",
+      },
+    },
+  });
+```
+
+### Development: Ethereal Email
+
+For development, use [Ethereal](https://ethereal.email/) - a fake SMTP service that captures emails for preview:
+
+```typescript
+import { createEtherealSmtpAdapter } from "@questpie/cms/server/integrated/mailer/adapters/smtp.adapter";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+    email: {
+      // Creates test account and logs preview URLs to console
+      adapter: await createEtherealSmtpAdapter(),
+    },
+  });
+```
+
+## Creating Templates
+
+### Basic Template
+
+```typescript
+// src/emails/welcome.tsx
+import { defineEmailTemplate } from "@questpie/cms/server";
+import { z } from "zod";
+import { Html, Head, Body, Container, Heading, Text, Link } from "@react-email/components";
+
+export const welcomeEmail = defineEmailTemplate({
+  name: "welcome",
+  schema: z.object({
+    userName: z.string(),
+    verifyUrl: z.string().url(),
+  }),
+  subject: (ctx) => `Welcome to Our Platform, ${ctx.userName}!`,
+  render: ({ userName, verifyUrl }) => (
+    <Html>
+      <Head />
+      <Body style={{ fontFamily: "sans-serif", padding: "20px" }}>
+        <Container>
+          <Heading>Welcome, {userName}!</Heading>
+          <Text>Thanks for signing up. Please verify your email address:</Text>
+          <Link href={verifyUrl} style={{ color: "#0066cc" }}>
+            Verify Email
+          </Link>
+        </Container>
+      </Body>
+    </Html>
+  ),
+});
+```
+
+### Template with More Context
+
+```typescript
+// src/emails/booking-confirmation.tsx
+import { defineEmailTemplate } from "@questpie/cms/server";
+import { z } from "zod";
+import { Html, Head, Body, Container, Heading, Text, Hr, Section } from "@react-email/components";
+
+export const bookingConfirmation = defineEmailTemplate({
+  name: "booking-confirmation",
+  schema: z.object({
+    customerName: z.string(),
+    bookingDate: z.string(),
+    bookingTime: z.string(),
+    serviceName: z.string(),
+    providerName: z.string(),
+    totalPrice: z.number(),
+  }),
+  subject: (ctx) => `Booking Confirmed: ${ctx.serviceName} on ${ctx.bookingDate}`,
+  render: ({ customerName, bookingDate, bookingTime, serviceName, providerName, totalPrice }) => (
+    <Html>
+      <Head />
+      <Body style={{ fontFamily: "sans-serif", backgroundColor: "#f4f4f4", padding: "20px" }}>
+        <Container style={{ backgroundColor: "white", padding: "32px", borderRadius: "8px" }}>
+          <Heading style={{ color: "#333" }}>Booking Confirmed!</Heading>
+          <Text>Hi {customerName},</Text>
+          <Text>Your booking has been confirmed with the following details:</Text>
+
+          <Hr />
+
+          <Section>
+            <Text><strong>Service:</strong> {serviceName}</Text>
+            <Text><strong>Provider:</strong> {providerName}</Text>
+            <Text><strong>Date:</strong> {bookingDate}</Text>
+            <Text><strong>Time:</strong> {bookingTime}</Text>
+            <Text><strong>Total:</strong> ${(totalPrice / 100).toFixed(2)}</Text>
+          </Section>
+
+          <Hr />
+
+          <Text style={{ color: "#666", fontSize: "14px" }}>
+            If you need to cancel or reschedule, please contact us at least 24 hours in advance.
+          </Text>
+        </Container>
+      </Body>
+    </Html>
+  ),
+});
+```
+
+## Registering Templates
+
+Register templates in your CMS configuration:
+
+```typescript
+// src/cms.ts
+import { defineQCMS } from "@questpie/cms/server";
+import { welcomeEmail } from "./emails/welcome";
+import { bookingConfirmation } from "./emails/booking-confirmation";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({ /* ... */ })
+  .emailTemplates({
+    welcomeEmail,
+    bookingConfirmation,
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+    email: {
+      adapter: /* your adapter */,
+    },
+  });
+```
+
+## Sending Emails
+
+### Using Templates (Recommended)
+
+```typescript
+// Type-safe: context is validated against the template's Zod schema
+await cms.email.sendTemplate({
+  template: "welcome",
+  to: "user@example.com",
+  context: {
+    userName: "John Doe",
+    verifyUrl: "https://example.com/verify?token=abc123",
+  },
+});
+
+// Multiple recipients
+await cms.email.sendTemplate({
+  template: "booking-confirmation",
+  to: ["customer@example.com", "provider@example.com"],
+  context: {
+    customerName: "Jane Smith",
+    bookingDate: "January 15, 2025",
+    bookingTime: "2:00 PM",
+    serviceName: "Haircut",
+    providerName: "John's Barbershop",
+    totalPrice: 2500, // $25.00
+  },
+  // Override subject if needed
+  subject: "Your Haircut Appointment is Confirmed",
+});
+```
+
+### Direct Send (Without Template)
+
+For one-off emails or when you don't need a template:
+
+```typescript
+await cms.email.send({
+  to: "user@example.com",
+  subject: "Your Order Has Shipped",
+  html: "<h1>Order Shipped</h1><p>Your order #12345 is on its way!</p>",
+});
+
+// With React component
+await cms.email.send({
+  to: "user@example.com",
+  subject: "Quick Update",
+  react: <MyQuickEmail message="Hello!" />,
+});
+```
+
+## Using in Hooks
+
+Send emails automatically when data changes:
+
+```typescript
+// src/collections/orders.ts
+import { defineCollection, getCMSFromContext } from "@questpie/cms/server";
+import { varchar, integer, timestamp } from "drizzle-orm/pg-core";
+
+export const orders = defineCollection("orders")
+  .fields({
+    customerEmail: varchar("customer_email", { length: 255 }).notNull(),
+    customerName: varchar("customer_name", { length: 255 }).notNull(),
+    status: varchar("status", { length: 50 }).default("pending").notNull(),
+    total: integer("total").notNull(),
+  })
+  .hooks({
+    afterCreate: async ({ data }) => {
+      const cms = getCMSFromContext();
+
+      await cms.email.sendTemplate({
+        template: "order-confirmation",
+        to: data.customerEmail,
+        context: {
+          customerName: data.customerName,
+          orderId: data.id,
+          total: data.total,
+        },
+      });
+    },
+    afterUpdate: async ({ data, previousData }) => {
+      // Send shipping notification when status changes
+      if (previousData.status !== "shipped" && data.status === "shipped") {
+        const cms = getCMSFromContext();
+
+        await cms.email.sendTemplate({
+          template: "order-shipped",
+          to: data.customerEmail,
+          context: {
+            customerName: data.customerName,
+            orderId: data.id,
+          },
+        });
+      }
+    },
+  });
+```
+
+## Using with Background Jobs
+
+For better reliability, send emails via background jobs:
+
+```typescript
+// src/jobs/send-email.ts
+import { defineJob, getCMSFromContext } from "@questpie/cms/server";
+import { z } from "zod";
+
+export const sendWelcomeEmailJob = defineJob({
+  name: "send-welcome-email",
+  schema: z.object({
+    userId: z.string().uuid(),
+    email: z.string().email(),
+    userName: z.string(),
+  }),
+  handler: async ({ data }) => {
+    const cms = getCMSFromContext();
+
+    // Generate verification token
+    const verifyUrl = `https://example.com/verify?user=${data.userId}`;
+
+    await cms.email.sendTemplate({
+      template: "welcome",
+      to: data.email,
+      context: {
+        userName: data.userName,
+        verifyUrl,
+      },
+    });
+
+    console.log(`Welcome email sent to ${data.email}`);
+  },
+  options: {
+    retryLimit: 3,
+    retryDelay: 5000, // 5 seconds
+  },
+});
+```
+
+Then publish from your hook:
+
+```typescript
+.hooks({
+  afterCreate: async ({ data }) => {
+    const cms = getCMSFromContext();
+
+    // Queue email instead of sending synchronously
+    await cms.queue["send-welcome-email"].publish({
+      userId: data.id,
+      email: data.email,
+      userName: data.name,
+    });
+  },
+})
+```
+
+## Email Adapters
+
+### SMTP Adapter (Production)
+
+```typescript
+import { SmtpAdapter } from "@questpie/cms/server/integrated/mailer/adapters/smtp.adapter";
+
+new SmtpAdapter({
+  transport: {
+    host: "smtp.sendgrid.net",
+    port: 587,
+    secure: false,
+    auth: {
+      user: "apikey",
+      pass: process.env.SENDGRID_API_KEY,
+    },
+  },
+  // Optional: callback after send (useful for logging)
+  afterSendCallback: (info) => {
+    console.log("Email sent:", info.messageId);
+  },
+});
+```
+
+### Console Adapter (Development)
+
+Logs emails to console instead of sending:
+
+```typescript
+import { ConsoleAdapter } from "@questpie/cms/server/integrated/mailer/adapters/console.adapter";
+
+new ConsoleAdapter();
+```
+
+### Custom Adapter
+
+Create your own adapter for services like Resend, Postmark, etc:
+
+```typescript
+import {
+  MailAdapter,
+  type SerializableMailOptions,
+} from "@questpie/cms/server/integrated/mailer";
+
+class ResendAdapter extends MailAdapter {
+  private apiKey: string;
+
+  constructor(apiKey: string) {
+    super();
+    this.apiKey = apiKey;
+  }
+
+  async send(options: SerializableMailOptions): Promise<void> {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: options.from,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+      }),
+    });
+  }
+}
+
+// Usage
+new ResendAdapter(process.env.RESEND_API_KEY!);
+```
+
+## React Email Components
+
+React Email provides pre-built components for common email patterns:
+
+```typescript
+import {
+  Html,
+  Head,
+  Body,
+  Container,
+  Section,
+  Row,
+  Column,
+  Heading,
+  Text,
+  Link,
+  Button,
+  Img,
+  Hr,
+  Preview,
+} from "@react-email/components";
+```
+
+See the [React Email documentation](https://react.email/docs/introduction) for the full component reference.
+
+## Best Practices
+
+### 1. Always Define Subject in Template
+
+```typescript
+// Define subject in template for consistency
+defineEmailTemplate({
+  name: "welcome",
+  subject: (ctx) => `Welcome, ${ctx.userName}!`, // Dynamic subject
+  // ...
+});
+```
+
+### 2. Use Background Jobs for Reliability
+
+```typescript
+// Don't send in hooks - queue instead
+.hooks({
+  afterCreate: async ({ data }) => {
+    const cms = getCMSFromContext();
+    await cms.queue["send-email"].publish({ /* ... */ });
+  },
+})
+```
+
+### 3. Validate Context with Zod
+
+The schema is automatically validated before sending:
+
+```typescript
+defineEmailTemplate({
+  schema: z.object({
+    email: z.string().email(),
+    amount: z.number().positive(),
+    currency: z.enum(["USD", "EUR", "GBP"]),
+  }),
+  // ...
+});
+```
+
+### 4. Use Ethereal in Development
+
+```typescript
+const adapter =
+  process.env.NODE_ENV === "production"
+    ? new SmtpAdapter({
+        /* production config */
+      })
+    : await createEtherealSmtpAdapter();
+```
+
+## Related
+
+- [Background Jobs](/docs/guides/queue-jobs) - Send emails asynchronously
+- [Hooks](/docs/core-concepts/hooks) - Trigger emails on data changes
+- [React Email Documentation](https://react.email/docs/introduction) - Full component reference
+- [Nodemailer Documentation](https://nodemailer.com/) - Transport options

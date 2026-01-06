@@ -1,0 +1,626 @@
+---
+title: Custom Adapters
+description: Build custom adapters for queue, email, storage, and realtime.
+---
+
+# Custom Adapters
+
+QUESTPIE CMS uses the adapter pattern for all integrated services. This allows you to swap implementations without changing your application code. You can use built-in adapters or create custom ones for your infrastructure.
+
+## Adapter Types
+
+| Service      | Interface                   | Built-in Adapters |
+| ------------ | --------------------------- | ----------------- |
+| **Queue**    | `QueueAdapter`              | pg-boss           |
+| **Email**    | `MailAdapter`               | SMTP, Console     |
+| **Storage**  | `DriverContract` (Flydrive) | FS, S3, R2, GCS   |
+| **Realtime** | `RealtimeAdapter`           | PostgreSQL NOTIFY |
+
+## Queue Adapter
+
+### Interface
+
+```typescript
+interface QueueAdapter {
+  // Lifecycle
+  start(): Promise<void>;
+  stop(): Promise<void>;
+
+  // Publishing
+  publish(
+    jobName: string,
+    payload: any,
+    options?: PublishOptions,
+  ): Promise<string | null>;
+  schedule(
+    jobName: string,
+    cron: string,
+    payload: any,
+    options?: PublishOptions,
+  ): Promise<void>;
+  unschedule(jobName: string): Promise<void>;
+
+  // Processing
+  work(
+    jobName: string,
+    handler: (job: { id: string; data: any }) => Promise<void>,
+    options?: { teamSize?: number; batchSize?: number },
+  ): Promise<void>;
+
+  // Events
+  on(event: "error", handler: (error: Error) => void): void;
+}
+
+interface PublishOptions {
+  priority?: number;
+  startAfter?: number | string | Date;
+  singletonKey?: string;
+  retryLimit?: number;
+  retryDelay?: number;
+  retryBackoff?: boolean;
+  expireInSeconds?: number;
+}
+```
+
+### Example: BullMQ Adapter
+
+```typescript
+// adapters/bullmq.adapter.ts
+import { Queue, Worker, type ConnectionOptions } from "bullmq";
+import type { QueueAdapter, PublishOptions } from "@questpie/cms/server";
+
+export interface BullMQAdapterOptions {
+  connection: ConnectionOptions;
+}
+
+export class BullMQAdapter implements QueueAdapter {
+  private queues = new Map<string, Queue>();
+  private workers = new Map<string, Worker>();
+  private connection: ConnectionOptions;
+
+  constructor(options: BullMQAdapterOptions) {
+    this.connection = options.connection;
+  }
+
+  async start(): Promise<void> {
+    // BullMQ connects on-demand
+  }
+
+  async stop(): Promise<void> {
+    // Close all queues and workers
+    for (const queue of this.queues.values()) {
+      await queue.close();
+    }
+    for (const worker of this.workers.values()) {
+      await worker.close();
+    }
+  }
+
+  private getQueue(jobName: string): Queue {
+    if (!this.queues.has(jobName)) {
+      this.queues.set(
+        jobName,
+        new Queue(jobName, { connection: this.connection }),
+      );
+    }
+    return this.queues.get(jobName)!;
+  }
+
+  async publish(
+    jobName: string,
+    payload: any,
+    options?: PublishOptions,
+  ): Promise<string | null> {
+    const queue = this.getQueue(jobName);
+
+    const job = await queue.add(jobName, payload, {
+      priority: options?.priority,
+      delay:
+        typeof options?.startAfter === "number"
+          ? options.startAfter * 1000
+          : undefined,
+      attempts: options?.retryLimit ?? 3,
+      backoff: options?.retryBackoff
+        ? { type: "exponential", delay: (options?.retryDelay ?? 5) * 1000 }
+        : { type: "fixed", delay: (options?.retryDelay ?? 5) * 1000 },
+    });
+
+    return job.id ?? null;
+  }
+
+  async schedule(
+    jobName: string,
+    cron: string,
+    payload: any,
+    options?: Omit<PublishOptions, "startAfter">,
+  ): Promise<void> {
+    const queue = this.getQueue(jobName);
+
+    await queue.upsertJobScheduler(
+      `${jobName}-scheduler`,
+      { pattern: cron },
+      {
+        name: jobName,
+        data: payload,
+        opts: {
+          priority: options?.priority,
+          attempts: options?.retryLimit ?? 3,
+        },
+      },
+    );
+  }
+
+  async unschedule(jobName: string): Promise<void> {
+    const queue = this.getQueue(jobName);
+    await queue.removeJobScheduler(`${jobName}-scheduler`);
+  }
+
+  async work(
+    jobName: string,
+    handler: (job: { id: string; data: any }) => Promise<void>,
+    options?: { teamSize?: number },
+  ): Promise<void> {
+    const worker = new Worker(
+      jobName,
+      async (job) => {
+        await handler({ id: job.id!, data: job.data });
+      },
+      {
+        connection: this.connection,
+        concurrency: options?.teamSize ?? 1,
+      },
+    );
+
+    this.workers.set(jobName, worker);
+  }
+
+  on(event: "error", handler: (error: Error) => void): void {
+    // BullMQ error handling per worker
+    for (const worker of this.workers.values()) {
+      worker.on("failed", (job, error) => handler(error));
+    }
+  }
+}
+
+// Factory function
+export function bullmqAdapter(options: BullMQAdapterOptions): BullMQAdapter {
+  return new BullMQAdapter(options);
+}
+```
+
+### Usage
+
+```typescript
+import { defineQCMS } from "@questpie/cms/server";
+import { bullmqAdapter } from "./adapters/bullmq.adapter";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .jobs({
+    /* ... */
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+    queue: {
+      adapter: bullmqAdapter({
+        connection: {
+          host: process.env.REDIS_HOST,
+          port: Number(process.env.REDIS_PORT),
+        },
+      }),
+    },
+  });
+```
+
+## Email Adapter
+
+### Interface
+
+```typescript
+import type { SerializableMailOptions } from "@questpie/cms/server";
+
+abstract class MailAdapter {
+  abstract send(options: SerializableMailOptions): Promise<void>;
+}
+
+interface SerializableMailOptions {
+  to: string | string[];
+  from: string;
+  subject: string;
+  html: string;
+  text: string;
+  cc?: string | string[];
+  bcc?: string | string[];
+  replyTo?: string;
+}
+```
+
+### Example: Resend Adapter
+
+```typescript
+// adapters/resend.adapter.ts
+import { Resend } from "resend";
+import {
+  MailAdapter,
+  type SerializableMailOptions,
+} from "@questpie/cms/server";
+
+export interface ResendAdapterOptions {
+  apiKey: string;
+}
+
+export class ResendAdapter extends MailAdapter {
+  private client: Resend;
+
+  constructor(options: ResendAdapterOptions) {
+    super();
+    this.client = new Resend(options.apiKey);
+  }
+
+  async send(options: SerializableMailOptions): Promise<void> {
+    const { error } = await this.client.emails.send({
+      from: options.from,
+      to: Array.isArray(options.to) ? options.to : [options.to],
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+      cc: options.cc
+        ? Array.isArray(options.cc)
+          ? options.cc
+          : [options.cc]
+        : undefined,
+      bcc: options.bcc
+        ? Array.isArray(options.bcc)
+          ? options.bcc
+          : [options.bcc]
+        : undefined,
+      reply_to: options.replyTo,
+    });
+
+    if (error) {
+      throw new Error(`Resend error: ${error.message}`);
+    }
+  }
+}
+
+// Factory function
+export function resendAdapter(options: ResendAdapterOptions): ResendAdapter {
+  return new ResendAdapter(options);
+}
+```
+
+### Example: Postmark Adapter
+
+```typescript
+// adapters/postmark.adapter.ts
+import { ServerClient } from "postmark";
+import {
+  MailAdapter,
+  type SerializableMailOptions,
+} from "@questpie/cms/server";
+
+export class PostmarkAdapter extends MailAdapter {
+  private client: ServerClient;
+
+  constructor(serverToken: string) {
+    super();
+    this.client = new ServerClient(serverToken);
+  }
+
+  async send(options: SerializableMailOptions): Promise<void> {
+    await this.client.sendEmail({
+      From: options.from,
+      To: Array.isArray(options.to) ? options.to.join(",") : options.to,
+      Subject: options.subject,
+      HtmlBody: options.html,
+      TextBody: options.text,
+      Cc: options.cc
+        ? Array.isArray(options.cc)
+          ? options.cc.join(",")
+          : options.cc
+        : undefined,
+      Bcc: options.bcc
+        ? Array.isArray(options.bcc)
+          ? options.bcc.join(",")
+          : options.bcc
+        : undefined,
+      ReplyTo: options.replyTo,
+    });
+  }
+}
+
+export function postmarkAdapter(serverToken: string): PostmarkAdapter {
+  return new PostmarkAdapter(serverToken);
+}
+```
+
+### Usage
+
+```typescript
+import { defineQCMS } from "@questpie/cms/server";
+import { resendAdapter } from "./adapters/resend.adapter";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .emailTemplates({
+    /* ... */
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+    email: {
+      adapter: resendAdapter({
+        apiKey: process.env.RESEND_API_KEY!,
+      }),
+      defaults: {
+        from: "noreply@example.com",
+      },
+    },
+  });
+```
+
+## Storage Adapter
+
+QUESTPIE uses [Flydrive](https://flydrive.dev/) for storage. Flydrive already supports many drivers, but you can create custom ones.
+
+### Interface
+
+```typescript
+// From flydrive/types
+interface DriverContract {
+  put(
+    key: string,
+    contents: Uint8Array | string,
+    options?: WriteOptions,
+  ): Promise<void>;
+  get(key: string): Promise<string>;
+  getBytes(key: string): Promise<Uint8Array>;
+  getStream(key: string): Promise<ReadableStream>;
+  exists(key: string): Promise<boolean>;
+  delete(key: string): Promise<void>;
+  copy(
+    source: string,
+    destination: string,
+    options?: WriteOptions,
+  ): Promise<void>;
+  move(
+    source: string,
+    destination: string,
+    options?: WriteOptions,
+  ): Promise<void>;
+  getUrl(key: string): Promise<string>;
+  getSignedUrl(key: string, options?: SignedUrlOptions): Promise<string>;
+}
+```
+
+### Example: Custom Driver
+
+```typescript
+// adapters/custom-storage.driver.ts
+import type {
+  DriverContract,
+  WriteOptions,
+  SignedUrlOptions,
+} from "flydrive/types";
+
+export class CustomStorageDriver implements DriverContract {
+  private baseUrl: string;
+  private apiKey: string;
+
+  constructor(options: { baseUrl: string; apiKey: string }) {
+    this.baseUrl = options.baseUrl;
+    this.apiKey = options.apiKey;
+  }
+
+  async put(key: string, contents: Uint8Array | string): Promise<void> {
+    await fetch(`${this.baseUrl}/upload/${key}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/octet-stream",
+      },
+      body: contents,
+    });
+  }
+
+  async get(key: string): Promise<string> {
+    const response = await fetch(`${this.baseUrl}/files/${key}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    return response.text();
+  }
+
+  async getBytes(key: string): Promise<Uint8Array> {
+    const response = await fetch(`${this.baseUrl}/files/${key}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  async getStream(key: string): Promise<ReadableStream> {
+    const response = await fetch(`${this.baseUrl}/files/${key}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    return response.body!;
+  }
+
+  async exists(key: string): Promise<boolean> {
+    const response = await fetch(`${this.baseUrl}/files/${key}`, {
+      method: "HEAD",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    return response.ok;
+  }
+
+  async delete(key: string): Promise<void> {
+    await fetch(`${this.baseUrl}/files/${key}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+  }
+
+  async copy(source: string, destination: string): Promise<void> {
+    const contents = await this.getBytes(source);
+    await this.put(destination, contents);
+  }
+
+  async move(source: string, destination: string): Promise<void> {
+    await this.copy(source, destination);
+    await this.delete(source);
+  }
+
+  async getUrl(key: string): Promise<string> {
+    return `${this.baseUrl}/public/${key}`;
+  }
+
+  async getSignedUrl(key: string, options?: SignedUrlOptions): Promise<string> {
+    // Implement signed URL generation
+    const expiresAt = options?.expiresIn
+      ? Date.now() + options.expiresIn * 1000
+      : Date.now() + 3600000;
+    return `${this.baseUrl}/signed/${key}?expires=${expiresAt}&sig=${this.sign(key, expiresAt)}`;
+  }
+
+  private sign(key: string, expiresAt: number): string {
+    // Implement your signing logic
+    return "signature";
+  }
+}
+```
+
+### Usage
+
+```typescript
+import { defineQCMS } from "@questpie/cms/server";
+import { CustomStorageDriver } from "./adapters/custom-storage.driver";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+    storage: {
+      driver: new CustomStorageDriver({
+        baseUrl: process.env.STORAGE_URL!,
+        apiKey: process.env.STORAGE_API_KEY!,
+      }),
+    },
+  });
+```
+
+## Environment-based Adapter Selection
+
+Switch adapters based on environment:
+
+```typescript
+import { defineQCMS, pgBossAdapter, SmtpAdapter } from "@questpie/cms/server";
+import { ConsoleAdapter } from "@questpie/cms/server/integrated/mailer/adapters/console.adapter";
+import { FSDriver } from "flydrive/drivers/fs";
+import { S3Driver } from "flydrive/drivers/s3";
+import { bullmqAdapter } from "./adapters/bullmq.adapter";
+import { resendAdapter } from "./adapters/resend.adapter";
+
+const isProd = process.env.NODE_ENV === "production";
+
+export const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .jobs({
+    /* ... */
+  })
+  .emailTemplates({
+    /* ... */
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+
+    // Queue: pg-boss in dev, BullMQ in prod
+    queue: {
+      adapter: isProd
+        ? bullmqAdapter({ connection: { host: process.env.REDIS_HOST! } })
+        : pgBossAdapter({ connectionString: process.env.DATABASE_URL! }),
+    },
+
+    // Email: Console in dev, Resend in prod
+    email: {
+      adapter: isProd
+        ? resendAdapter({ apiKey: process.env.RESEND_API_KEY! })
+        : new ConsoleAdapter(),
+      defaults: { from: "noreply@example.com" },
+    },
+
+    // Storage: Local in dev, S3 in prod
+    storage: {
+      driver: isProd
+        ? new S3Driver({
+            credentials: {
+              accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+            },
+            region: process.env.AWS_REGION!,
+            bucket: process.env.AWS_S3_BUCKET!,
+          })
+        : new FSDriver({
+            location: "./uploads",
+            visibility: "public",
+          }),
+    },
+  });
+```
+
+## Testing Adapters
+
+Create mock adapters for testing:
+
+```typescript
+// adapters/mock-queue.adapter.ts
+import type { QueueAdapter, PublishOptions } from "@questpie/cms/server";
+
+export class MockQueueAdapter implements QueueAdapter {
+  public jobs: Array<{ name: string; payload: any; options?: PublishOptions }> =
+    [];
+  public scheduled: Array<{ name: string; cron: string; payload: any }> = [];
+
+  async start() {}
+  async stop() {}
+
+  async publish(jobName: string, payload: any, options?: PublishOptions) {
+    this.jobs.push({ name: jobName, payload, options });
+    return `mock-${Date.now()}`;
+  }
+
+  async schedule(jobName: string, cron: string, payload: any) {
+    this.scheduled.push({ name: jobName, cron, payload });
+  }
+
+  async unschedule(jobName: string) {
+    this.scheduled = this.scheduled.filter((s) => s.name !== jobName);
+  }
+
+  async work() {}
+  on() {}
+
+  // Test helpers
+  clear() {
+    this.jobs = [];
+    this.scheduled = [];
+  }
+
+  getJobsByName(name: string) {
+    return this.jobs.filter((j) => j.name === name);
+  }
+}
+```
+
+## Related
+
+- [Background Jobs](/docs/guides/queue-jobs) - Job definitions and patterns
+- [Email Templates](/docs/guides/email-templates) - Email template system
+- [File Storage](/docs/guides/storage-upload) - Storage configuration
+- [Flydrive Documentation](https://flydrive.dev/) - Storage driver reference
+- [pg-boss Documentation](https://github.com/timgit/pg-boss) - Default queue adapter

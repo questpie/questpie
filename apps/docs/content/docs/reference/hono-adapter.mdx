@@ -1,29 +1,55 @@
 ---
 title: Hono Adapter
-description: Reference for @questpie/hono.
-
+description: Reference for @questpie/hono adapter.
 ---
 
 # Hono Adapter
 
-The `@questpie/hono` package connects the CMS engine to a web server.
+The `@questpie/hono` package connects the CMS engine to a Hono web server.
+
+## Installation
+
+```bash
+bun add @questpie/hono
+```
 
 ## `questpieHono(cms, options)`
 
+Creates a Hono app with all CMS routes mounted.
+
 ### Parameters
-- `cms`: The `QCMS` instance.
-- `options`: See configuration below.
+
+- `cms` - The `QCMS` instance from `.build()`
+- `options` - Configuration options (see below)
 
 ### Configuration
 
----type-table---
-path: ../../../packages/hono/src/server.ts
-name: HonoAdapterConfig
----
+```typescript
+interface HonoAdapterConfig {
+  /**
+   * Base path for CMS routes
+   * Use '/cms' for server-only apps or '/api/cms' for fullstack apps.
+   * @default '/cms'
+   */
+  basePath?: string;
+}
+```
 
-### Context Middleware
+## `questpieMiddleware(cms)`
 
-Use `questpieMiddleware(cms)` to populate `c.get("cmsContext")` and `c.get("user")` for your custom routes. The CMS handler itself is a catch-all under `basePath`.
+Middleware that populates Hono context with CMS data. Use this to access `cmsContext` and `user` in your custom routes.
+
+### Context Variables
+
+After applying the middleware, these are available via `c.get()`:
+
+```typescript
+interface QCMSVariables {
+  cms: QCMS; // The CMS instance
+  cmsContext: RequestContext; // Request context with user, session, locale
+  user: User | undefined; // Current authenticated user
+}
+```
 
 ## Example
 
@@ -32,8 +58,48 @@ import { Hono } from "hono";
 import { questpieHono, questpieMiddleware } from "@questpie/hono";
 import { cms } from "./cms";
 
-const app = new Hono();
+const app = new Hono()
+  // Add CMS context to all routes
+  .use("*", questpieMiddleware(cms))
+  // Mount CMS routes
+  .route("/", questpieHono(cms, { basePath: "/cms" }));
 
-app.use(questpieMiddleware(cms));
-app.route("/", questpieHono(cms, { basePath: "/cms" }));
+// Custom route with access to CMS context
+app.get("/api/me", (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Not authenticated" }, 401);
+  return c.json({ user });
+});
+
+export default {
+  port: 3000,
+  fetch: app.fetch,
+};
 ```
+
+## Generated Routes
+
+The adapter generates these routes under your `basePath`:
+
+| Method | Path                        | Description              |
+| ------ | --------------------------- | ------------------------ |
+| GET    | `/{collection}`             | List records (paginated) |
+| POST   | `/{collection}`             | Create record            |
+| GET    | `/{collection}/:id`         | Get record by ID         |
+| PATCH  | `/{collection}/:id`         | Update record            |
+| DELETE | `/{collection}/:id`         | Delete record            |
+| POST   | `/{collection}/:id/restore` | Restore soft-deleted     |
+| GET    | `/globals/{name}`           | Get global               |
+| PATCH  | `/globals/{name}`           | Update global            |
+| POST   | `/rpc/{function}`           | Call custom function     |
+| POST   | `/storage/upload`           | Upload file              |
+| `*`    | `/auth/*`                   | Better Auth endpoints    |
+
+## See Also
+
+- [Getting Started](/docs/introduction/getting-started) - Initial setup
+- [Elysia Adapter](/docs/reference/elysia-adapter) - Elysia adapter
+- [Next.js Adapter](/docs/reference/next-adapter) - Next.js adapter
+- [TanStack Start Adapter](/docs/reference/tanstack-start-adapter) - TanStack Start adapter
+- [Authentication](/docs/guides/authentication) - Auth configuration
+- [Hono Documentation](https://hono.dev/) - Full Hono reference

@@ -1,54 +1,94 @@
 import { cn } from "@/lib/utils";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-// Import a minimal style, or no style, and apply custom styling via Tailwind/CSS
 import {
 	coldarkCold,
 	coldarkDark,
-} from "react-syntax-highlighter/dist/esm/styles/prism"; // Keep this import for now, but its style will be overridden
+} from "react-syntax-highlighter/dist/esm/styles/prism";
 
-export function CodeWindow({
-	children,
-	className,
-	title = "terminal",
-}: {
+interface CodeWindowProps {
+	title?: string;
 	children: string;
 	className?: string;
-	title?: string;
-}) {
+	language?: string;
+}
+
+export function CodeWindow({
+	title,
+	children,
+	className,
+	language = "typescript",
+}: CodeWindowProps) {
 	return (
 		<div
 			className={cn(
-				"overflow-hidden border border-border bg-card/80 backdrop-blur-md",
+				"flex flex-col border border-border overflow-hidden",
 				className,
 			)}
 		>
-			<div className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2">
-				<div className="flex gap-1.5">
-					<div className="h-2.5 w-2.5 bg-muted-foreground/30" />
-					<div className="h-2.5 w-2.5 bg-muted-foreground/30" />
-					<div className="h-2.5 w-2.5 bg-muted-foreground/30" />
+			{/* VSCode-like tab */}
+			{title && (
+				<div className="flex items-center bg-card/30 border-b border-border">
+					<div className="flex items-center gap-2 px-4 py-2.5 text-sm font-mono border-r border-border bg-background text-foreground relative min-w-fit">
+						{/* File icon based on extension */}
+						<span
+							className={cn(
+								"w-2 h-2 rounded-full",
+								title.endsWith(".ts")
+									? "bg-blue-500"
+									: title.endsWith(".tsx")
+										? "bg-cyan-500"
+										: title.endsWith(".js")
+											? "bg-yellow-500"
+											: title.endsWith(".jsx")
+												? "bg-yellow-400"
+												: "bg-gray-500",
+							)}
+						/>
+						{/* Filename */}
+						<span className="select-none">{title}</span>
+						{/* Active indicator */}
+						<div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+					</div>
 				</div>
-				<div className="ml-2 font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
-					{title}
+			)}
+
+			{/* Code content */}
+			<div className="flex-1 bg-background p-6 overflow-auto">
+				{/* Light mode */}
+				<div className="dark:hidden">
+					<SyntaxHighlighter
+						language={language}
+						style={coldarkCold}
+						customStyle={{
+							background: "transparent",
+							padding: 0,
+							margin: 0,
+							fontSize: "0.875rem",
+						}}
+						showLineNumbers={true}
+						wrapLines={true}
+					>
+						{children}
+					</SyntaxHighlighter>
 				</div>
-			</div>
-			<div className="p-4 font-mono text-xs overflow-x-auto text-foreground/90 leading-relaxed dark:hidden">
-				<SyntaxHighlighter
-					language="typescript"
-					style={coldarkCold}
-					customStyle={{ background: "transparent", padding: 0 }}
-				>
-					{children}
-				</SyntaxHighlighter>
-			</div>
-			<div className="p-4 font-mono text-xs overflow-x-auto text-foreground/90 leading-relaxed hidden dark:block">
-				<SyntaxHighlighter
-					language="typescript"
-					style={coldarkDark}
-					customStyle={{ background: "transparent", padding: 0 }}
-				>
-					{children}
-				</SyntaxHighlighter>
+
+				{/* Dark mode */}
+				<div className="hidden dark:block">
+					<SyntaxHighlighter
+						language={language}
+						style={coldarkDark}
+						customStyle={{
+							background: "transparent",
+							padding: 0,
+							margin: 0,
+							fontSize: "0.875rem",
+						}}
+						showLineNumbers={true}
+						wrapLines={true}
+					>
+						{children}
+					</SyntaxHighlighter>
+				</div>
 			</div>
 		</div>
 	);

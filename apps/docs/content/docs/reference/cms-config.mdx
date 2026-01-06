@@ -1,19 +1,46 @@
 ---
 title: CMS Configuration
-description: Reference for the QCMS configuration object.
-
+description: Reference for QCMS configuration and runtime options.
 ---
 
 # CMS Configuration
 
-The `QCMS` class is the central entry point.
+The `defineQCMS` function creates a CMS builder that you configure with collections, globals, auth, and runtime options.
 
-## Options
+## Configuration Reference
 
----type-table---
-path: ../../../packages/cms/src/server/config/types.ts
-name: CMSConfig
----
+When you call `.build()`, you pass the runtime configuration object:
+
+```typescript
+interface CMSConfig {
+  app: {
+    url: string; // Your app's public URL
+  };
+
+  db:
+    | {
+        url: string; // PostgreSQL connection string
+      }
+    | {
+        pglite: PGlite; // Or PGlite instance for testing
+      };
+
+  // Optional settings
+  secret?: string; // Secret key for signing tokens
+  locale?: LocaleConfig; // i18n configuration
+  auth?: BetterAuthOptions; // Better Auth config
+  storage?: StorageConfig; // Flydrive storage config
+  email?: MailerConfig; // Email/SMTP config
+  queue?: QueueConfig; // pg-boss queue config
+  search?: SearchConfig; // Full-text search config
+  realtime?: RealtimeConfig; // SSE/WebSocket config
+  logger?: LoggerConfig; // Pino logger config
+  migrations?: {
+    directory?: string; // Default: "./migrations"
+    migrations?: Migration[]; // Custom migrations
+  };
+}
+```
 
 ## Example
 
@@ -22,9 +49,57 @@ import { defineQCMS } from "@questpie/cms/server";
 
 export const cms = defineQCMS({ name: "my-app" })
   .collections({ posts, users })
+  .auth({
+    emailAndPassword: { enabled: true },
+  })
   .build({
-    app: { url: process.env.APP_URL },
-    db: { url: process.env.DATABASE_URL },
-    // ...
+    app: {
+      url: process.env.APP_URL!,
+    },
+    db: {
+      url: process.env.DATABASE_URL!,
+    },
+    secret: process.env.SECRET,
+    storage: {
+      // Local storage by default, or configure S3/R2
+    },
+    email: {
+      // SMTP or custom adapter
+    },
+    queue: {
+      // pg-boss by default
+    },
   });
 ```
+
+## Storage Configuration
+
+```typescript
+interface StorageConfig {
+  driver?: DriverContract; // Flydrive driver (local, s3, r2, gcs)
+  basePath?: string; // Base path for uploads
+}
+```
+
+## Email Configuration
+
+```typescript
+interface MailerConfig {
+  adapter?: EmailAdapter; // SMTP, Resend, Sendgrid, etc.
+  from?: string; // Default sender address
+}
+```
+
+## Queue Configuration
+
+```typescript
+interface QueueConfig {
+  adapter?: QueueAdapter; // pg-boss adapter by default
+}
+```
+
+## See Also
+
+- [Getting Started](/docs/introduction/getting-started) - Initial setup guide
+- [Collections](/docs/core-concepts/collections) - Defining collections
+- [Authentication](/docs/guides/authentication) - Auth configuration

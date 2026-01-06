@@ -1,0 +1,17 @@
+{
+	"extends": "@questpie/typescript-config/base.json",
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"types": ["bun-types"],
+		"strict": true,
+		"skipLibCheck": true,
+		"noEmit": true,
+		"paths": {
+			"@/*": ["./src/*"]
+		}
+	},
+	"include": ["src/**/*", "*.ts"],
+	"exclude": ["node_modules"]
+}

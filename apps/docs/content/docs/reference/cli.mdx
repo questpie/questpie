@@ -1,24 +1,442 @@
 ---
-title: CLI
-description: Command Line Interface reference.
+title: CLI Reference
+description: Complete reference for the QUESTPIE CMS command-line interface.
+---
+
+# CLI Reference
+
+QUESTPIE CMS provides a CLI tool (`qcms`) for database migrations and schema management. The CLI uses your CMS configuration to generate and run migrations.
+
+## Installation
+
+The CLI is included with `@questpie/cms`. To use it, add a script to your `package.json`:
+
+```json
+{
+  "scripts": {
+    "qcms": "bun --bun ./node_modules/@questpie/cms/dist/cli/index.js"
+  }
+}
+```
+
+Or run directly:
+
+```bash
+bun ./node_modules/@questpie/cms/dist/cli/index.js migrate:generate
+```
+
+## Configuration
+
+The CLI looks for `cms.config.ts` in the current directory by default. Your config must export a QCMS instance:
+
+```typescript
+// cms.config.ts
+import { cms } from "./src/cms";
+
+export default { qcms: cms };
+```
+
+Or export a function that returns the instance:
+
+```typescript
+// cms.config.ts
+export default async function () {
+  const { cms } = await import("./src/cms");
+  return cms;
+}
+```
+
+## Migration Commands
+
+### migrate:generate
+
+Generate a new migration from schema changes.
+
+```bash
+bun qcms migrate:generate
+bun qcms migrate:generate --name add-posts-table
+bun qcms migrate:generate --dry-run
+```
+
+**What it does:**
+
+1. Loads your CMS config and schema via `qcms.getSchema()`
+2. Compares with previous schema snapshots
+3. Generates a migration file with `up()` and `down()` functions
+4. Updates `migrations/index.ts` with the new migration
+
+**Options:**
+
+| Option                | Description                                                     |
+| --------------------- | --------------------------------------------------------------- |
+| `-c, --config <path>` | Path to CMS config file (default: `cms.config.ts`)              |
+| `-n, --name <name>`   | Custom migration name (default: random like `happy_blue_panda`) |
+| `--dry-run`           | Preview without creating files                                  |
+| `--verbose`           | Show detailed output                                            |
+
+**Example output:**
+
+```
+📝 Generating migration...
+
+📊 Loaded schema with 12 definitions
+📝 Migration name: 20240115T143022_add_posts_table
+🔤 Variable name: addPostsTable20240115T143022
+
+📝 Updated migrations index: ./migrations/index.ts
+
+✅ Migration generated successfully!
+
+Next steps:
+  1. Review the migration file: ./migrations/20240115T143022_add_posts_table.ts
+  2. Run migrations: bun qcms migrate:up
+```
+
+**Generated migration structure:**
+
+```typescript
+// migrations/20240115T143022_add_posts_table.ts
+import type { Migration } from "@questpie/cms/server/migration/types";
+
+export const addPostsTable20240115T143022: Migration = {
+  id: "20240115T143022_add_posts_table",
+  up: async (db) => {
+    await db.execute(`
+      CREATE TABLE "posts" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "title" varchar(255) NOT NULL,
+        "content" text,
+        "created_at" timestamp DEFAULT now(),
+        "updated_at" timestamp DEFAULT now()
+      )
+    `);
+  },
+  down: async (db) => {
+    await db.execute(`DROP TABLE IF EXISTS "posts"`);
+  },
+};
+```
 
 ---
 
-# CLI
+### migrate:up
 
-QUESTPIE CMS leverages the scripts defined in `package.json`.
+Run pending migrations.
 
-## Common Commands
+```bash
+bun qcms migrate:up
+bun qcms migrate:up --target 20240115T143022_add_posts_table
+bun qcms migrate:up --dry-run
+```
 
-- `bun run dev`: Start development server.
-- `bun run build`: Build for production.
-- `bun run check-types`: Run TypeScript type checking.
-- `bun run lint`: Lint code.
+**Options:**
 
-## Database Commands (Drizzle Kit)
+| Option                     | Description                                        |
+| -------------------------- | -------------------------------------------------- |
+| `-c, --config <path>`      | Path to CMS config file (default: `cms.config.ts`) |
+| `-t, --target <migration>` | Run up to (and including) specific migration ID    |
+| `--dry-run`                | Show what would be run without executing           |
 
-Usually run via `bun run db:...` scripts in your project.
+**Example:**
 
-- `db:generate`: Generate SQL migrations from schema.
-- `db:migrate`: Apply migrations to the database.
-- `db:studio`: Open Drizzle Studio to inspect data.
+```bash
+# Run all pending migrations
+bun qcms migrate:up
+
+# Run up to specific migration
+bun qcms migrate:up --target 20240115T143022_add_posts_table
+```
+
+---
+
+### migrate:down
+
+Rollback migrations.
+
+```bash
+bun qcms migrate:down
+bun qcms migrate:down --batch 2
+bun qcms migrate:down --target 20240115T143022_add_posts_table
+```
+
+**Behavior:**
+
+- Without options: Rolls back the last batch of migrations
+- With `--batch`: Rolls back migrations from a specific batch number
+- With `--target`: Rolls back to (but not including) a specific migration
+
+**Options:**
+
+| Option                     | Description                                        |
+| -------------------------- | -------------------------------------------------- |
+| `-c, --config <path>`      | Path to CMS config file (default: `cms.config.ts`) |
+| `-b, --batch <number>`     | Rollback specific batch number                     |
+| `-t, --target <migration>` | Rollback to specific migration                     |
+| `--dry-run`                | Show what would be run without executing           |
+
+**Example:**
+
+```bash
+# Rollback last batch
+bun qcms migrate:down
+
+# Rollback batch #2
+bun qcms migrate:down --batch 2
+
+# Rollback to specific migration (excludes target)
+bun qcms migrate:down --target 20240110T120000_initial
+```
+
+---
+
+### migrate:status
+
+Show migration status.
+
+```bash
+bun qcms migrate:status
+```
+
+**Options:**
+
+| Option                | Description                                        |
+| --------------------- | -------------------------------------------------- |
+| `-c, --config <path>` | Path to CMS config file (default: `cms.config.ts`) |
+
+**Example output:**
+
+```
+📦 Found 5 migrations
+
+Migration Status:
+┌─────────────────────────────────────────────┬───────────┬───────┬─────────────────────┐
+│ ID                                          │ Status    │ Batch │ Ran At              │
+├─────────────────────────────────────────────┼───────────┼───────┼─────────────────────┤
+│ 20240110T120000_initial                     │ ✅ Applied │ 1     │ 2024-01-10 12:00:00 │
+│ 20240112T090000_add_users                   │ ✅ Applied │ 1     │ 2024-01-12 09:00:00 │
+│ 20240115T143022_add_posts_table             │ ✅ Applied │ 2     │ 2024-01-15 14:30:22 │
+│ 20240118T100000_add_comments                │ ⏳ Pending │ -     │ -                   │
+│ 20240120T080000_add_tags                    │ ⏳ Pending │ -     │ -                   │
+└─────────────────────────────────────────────┴───────────┴───────┴─────────────────────┘
+```
+
+---
+
+### migrate:reset
+
+Rollback all migrations.
+
+```bash
+bun qcms migrate:reset
+bun qcms migrate:reset --dry-run
+```
+
+**Options:**
+
+| Option                | Description                                        |
+| --------------------- | -------------------------------------------------- |
+| `-c, --config <path>` | Path to CMS config file (default: `cms.config.ts`) |
+| `--dry-run`           | Show what would be run without executing           |
+
+**Warning:** This will remove all tables created by migrations. Data will be lost.
+
+---
+
+### migrate:fresh
+
+Drop all tables and re-run all migrations from scratch.
+
+```bash
+bun qcms migrate:fresh
+bun qcms migrate:fresh --dry-run
+```
+
+**Options:**
+
+| Option                | Description                                        |
+| --------------------- | -------------------------------------------------- |
+| `-c, --config <path>` | Path to CMS config file (default: `cms.config.ts`) |
+| `--dry-run`           | Show what would be run without executing           |
+
+**Warning:** This will destroy all data. Use only in development.
+
+---
+
+## Migrations Directory
+
+Migrations are stored in `migrations/` by default. You can customize this in your CMS config:
+
+```typescript
+const cms = defineQCMS({ name: "myapp" })
+  .collections({
+    /* ... */
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL },
+    migrations: {
+      directory: "./db/migrations", // Custom directory
+    },
+  });
+```
+
+### migrations/index.ts
+
+The CLI automatically maintains an index file that exports all migrations:
+
+```typescript
+// migrations/index.ts
+import type { Migration } from "@questpie/cms/server/migration/types";
+
+import { initial20240110T120000 } from "./20240110T120000_initial";
+import { addUsers20240112T090000 } from "./20240112T090000_add_users";
+import { addPostsTable20240115T143022 } from "./20240115T143022_add_posts_table";
+
+export const migrations: Migration[] = [
+  initial20240110T120000,
+  addUsers20240112T090000,
+  addPostsTable20240115T143022,
+];
+```
+
+## Typical Workflow
+
+```bash
+# 1. Make schema changes in your collection definitions
+# Edit src/collections/posts.ts
+
+# 2. Generate migration
+bun qcms migrate:generate --name add_featured_to_posts
+
+# 3. Review the generated migration
+# Check migrations/20240120T100000_add_featured_to_posts.ts
+
+# 4. Run the migration
+bun qcms migrate:up
+
+# 5. If something goes wrong, rollback
+bun qcms migrate:down
+```
+
+## Manual Migrations
+
+For complex changes, you can create migrations manually:
+
+```typescript
+// migrations/20240120T100000_custom_migration.ts
+import type { Migration } from "@questpie/cms/server/migration/types";
+import { sql } from "drizzle-orm";
+
+export const customMigration20240120T100000: Migration = {
+  id: "20240120T100000_custom_migration",
+  up: async (db) => {
+    // Add column
+    await db.execute(
+      sql`ALTER TABLE "posts" ADD COLUMN "featured" boolean DEFAULT false`,
+    );
+
+    // Create index
+    await db.execute(
+      sql`CREATE INDEX "posts_featured_idx" ON "posts" ("featured")`,
+    );
+
+    // Data migration
+    await db.execute(
+      sql`UPDATE "posts" SET "featured" = true WHERE "view_count" > 1000`,
+    );
+  },
+  down: async (db) => {
+    await db.execute(sql`DROP INDEX IF EXISTS "posts_featured_idx"`);
+    await db.execute(sql`ALTER TABLE "posts" DROP COLUMN IF EXISTS "featured"`);
+  },
+};
+```
+
+Then add it to `migrations/index.ts`:
+
+```typescript
+import { customMigration20240120T100000 } from "./20240120T100000_custom_migration";
+
+export const migrations: Migration[] = [
+  // ... existing migrations
+  customMigration20240120T100000,
+];
+```
+
+## Development Tips
+
+### Use --dry-run for Safety
+
+Always preview changes before running:
+
+```bash
+bun qcms migrate:generate --dry-run
+bun qcms migrate:up --dry-run
+```
+
+### Fresh Start in Development
+
+When prototyping, use `migrate:fresh` to start clean:
+
+```bash
+bun qcms migrate:fresh
+bun run seed  # Re-seed your data
+```
+
+### CI/CD Pipeline
+
+In production deployments, always run migrations:
+
+```bash
+# In your deployment script
+bun qcms migrate:up
+```
+
+## Troubleshooting
+
+### "Config file not found"
+
+Ensure `cms.config.ts` exists and exports your CMS instance:
+
+```typescript
+// cms.config.ts
+import { cms } from "./src/cms";
+export default { qcms: cms };
+```
+
+### "Migrations directory not found"
+
+Run `migrate:generate` first to create the directory:
+
+```bash
+bun qcms migrate:generate
+```
+
+### "No schema changes detected"
+
+If you expect changes but none are detected:
+
+1. Check that your collection definitions have actually changed
+2. Ensure the CMS is built with the latest schema
+3. Use `--verbose` to see detailed comparison
+
+```bash
+bun qcms migrate:generate --verbose
+```
+
+## Drizzle Kit vs QCMS CLI
+
+QUESTPIE uses its own migration system instead of Drizzle Kit directly because:
+
+1. **Unified schema** - Collections, globals, auth tables are merged into one schema
+2. **Batch tracking** - Migrations are grouped in batches for easier rollback
+3. **CMS-aware** - Understands QUESTPIE-specific tables and relations
+
+However, under the hood we use Drizzle's schema diffing. For more details on how Drizzle migrations work, see the [Drizzle Kit documentation](https://orm.drizzle.team/docs/kit-overview).
+
+## Related
+
+- [Collections](/docs/core-concepts/collections) - Define your schema
+- [Fields](/docs/core-concepts/fields) - Field types reference
+- [CMS Configuration](/docs/reference/cms-config) - Full config options
+- [Drizzle ORM Documentation](https://orm.drizzle.team/) - Full Drizzle reference
+- [Drizzle Kit Migrations](https://orm.drizzle.team/docs/migrations) - How schema diffing works

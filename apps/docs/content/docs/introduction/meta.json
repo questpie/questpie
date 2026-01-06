@@ -1,4 +1,5 @@
 {
 	"title": "Introduction",
+	"defaultOpen": true,
 	"pages": ["overview", "getting-started"]
 }

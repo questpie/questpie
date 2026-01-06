@@ -16,3 +16,10 @@ node_modules
 .tanstack
 
 .source
+
+# fumadocs-typescript cache
+.fumadocs
+
+# Environment variables
+.env
+.env.local

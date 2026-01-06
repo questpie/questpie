@@ -9,7 +9,7 @@ import {
   DocsPage,
   DocsTitle,
 } from 'fumadocs-ui/layouts/docs/page';
-import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { components } from '@/components/mdx';
 import { baseOptions } from '@/lib/layout.shared';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
 
@@ -43,10 +43,10 @@ const clientLoader = browserCollections.docs.createClientLoader({
       <DocsPage toc={toc}>
         <DocsTitle>{frontmatter.title}</DocsTitle>
         <DocsDescription>{frontmatter.description}</DocsDescription>
-        <DocsBody>
+        <DocsBody className="animate-in fade-in slide-in-from-bottom-8 duration-700">
           <MDX
             components={{
-              ...defaultMdxComponents,
+              ...components,
             }}
           />
         </DocsBody>

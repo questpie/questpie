@@ -1,0 +1,224 @@
+---
+title: TanStack Start Adapter
+description: Reference for @questpie/tanstack-start adapter.
+---
+
+# TanStack Start Adapter
+
+The `@questpie/tanstack-start` package connects the CMS engine to TanStack Start API routes.
+
+## Installation
+
+```bash
+bun add @questpie/tanstack-start
+```
+
+## `questpieStartHandlers(cms, options)`
+
+Creates TanStack Start-compatible request handlers for CMS routes.
+
+### Parameters
+
+- `cms` - The `QCMS` instance from `.build()`
+- `options` - Configuration options (see below)
+
+### Configuration
+
+```typescript
+interface TanStackStartAdapterConfig {
+  /**
+   * Base path for CMS routes.
+   * Should match your API route location.
+   * @default '/cms'
+   */
+  basePath?: string;
+
+  /**
+   * Access mode for the API.
+   * - 'user': Standard user access (default)
+   * - 'admin': Admin-only access
+   * @default 'user'
+   */
+  accessMode?: "user" | "admin";
+}
+```
+
+### Returns
+
+```typescript
+{
+  GET: (ctx: { request: Request }) => Promise<Response>;
+  POST: (ctx: { request: Request }) => Promise<Response>;
+  PATCH: (ctx: { request: Request }) => Promise<Response>;
+  DELETE: (ctx: { request: Request }) => Promise<Response>;
+  PUT: (ctx: { request: Request }) => Promise<Response>;
+  OPTIONS: (ctx: { request: Request }) => Promise<Response>;
+  HEAD: (ctx: { request: Request }) => Promise<Response>;
+}
+```
+
+## Basic Example
+
+Create an API route at `app/routes/api/cms.$.ts`:
+
+```typescript
+// app/routes/api/cms.$.ts
+import { createAPIFileRoute } from "@tanstack/start/api";
+import { questpieStartHandlers } from "@questpie/tanstack-start";
+import { cms } from "../../cms";
+
+const handlers = questpieStartHandlers(cms, {
+  basePath: "/api/cms",
+});
+
+export const APIRoute = createAPIFileRoute("/api/cms/$")({
+  GET: handlers.GET,
+  POST: handlers.POST,
+  PATCH: handlers.PATCH,
+  DELETE: handlers.DELETE,
+  PUT: handlers.PUT,
+  OPTIONS: handlers.OPTIONS,
+});
+```
+
+## Server-Side Usage
+
+Access CMS data directly in server functions:
+
+```typescript
+// app/routes/posts.tsx
+import { createFileRoute } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/start";
+import { cms } from "../cms";
+
+const getPosts = createServerFn({ method: "GET" }).handler(async () => {
+  const { docs } = await cms.api.collections.posts.find({
+    limit: 10,
+  });
+  return docs;
+});
+
+export const Route = createFileRoute("/posts")({
+  loader: () => getPosts(),
+  component: PostsPage,
+});
+
+function PostsPage() {
+  const posts = Route.useLoaderData();
+  return (
+    <ul>
+      {posts.map((post) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Client-Side Usage
+
+Use the QUESTPIE client for client-side data fetching:
+
+```typescript
+// app/lib/cms-client.ts
+import { createQCMSClient } from "@questpie/cms/client";
+import type { cms } from "../cms";
+
+export const cmsClient = createQCMSClient<typeof cms>({
+  baseURL: "/api/cms",
+});
+```
+
+```typescript
+// In a component
+import { cmsClient } from "../lib/cms-client";
+
+function PostsList() {
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    cmsClient.collections.posts.find({ limit: 10 }).then(({ docs }) => {
+      setPosts(docs);
+    });
+  }, []);
+
+  return <ul>{posts.map((post) => <li key={post.id}>{post.title}</li>)}</ul>;
+}
+```
+
+## With TanStack Query
+
+For better client-side caching, use TanStack Query:
+
+```typescript
+// app/lib/queries.ts
+import { queryOptions } from "@tanstack/react-query";
+import { cmsClient } from "./cms-client";
+
+export const postsQuery = queryOptions({
+  queryKey: ["posts"],
+  queryFn: () => cmsClient.collections.posts.find({ limit: 10 }),
+});
+```
+
+```typescript
+// In a component
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { postsQuery } from "../lib/queries";
+
+function PostsList() {
+  const { data } = useSuspenseQuery(postsQuery);
+
+  return (
+    <ul>
+      {data.docs.map((post) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Generated Routes
+
+The adapter handles these routes under your `basePath`:
+
+| Method | Path                        | Description              |
+| ------ | --------------------------- | ------------------------ |
+| GET    | `/{collection}`             | List records (paginated) |
+| POST   | `/{collection}`             | Create record            |
+| GET    | `/{collection}/:id`         | Get record by ID         |
+| PATCH  | `/{collection}/:id`         | Update record            |
+| DELETE | `/{collection}/:id`         | Delete record            |
+| POST   | `/{collection}/:id/restore` | Restore soft-deleted     |
+| GET    | `/globals/{name}`           | Get global               |
+| PATCH  | `/globals/{name}`           | Update global            |
+| POST   | `/rpc/{function}`           | Call custom function     |
+| POST   | `/storage/upload`           | Upload file              |
+| `*`    | `/auth/*`                   | Better Auth endpoints    |
+
+## File Structure
+
+Typical TanStack Start project with QUESTPIE CMS:
+
+```
+app/
+├── routes/
+│   ├── api/
+│   │   └── cms.$.ts          # CMS API routes
+│   ├── posts.tsx             # Posts page
+│   └── index.tsx             # Home page
+├── lib/
+│   ├── cms-client.ts         # Client instance
+│   └── queries.ts            # TanStack Query options
+├── cms.ts                    # CMS configuration
+└── cms.config.ts             # CLI config
+```
+
+## See Also
+
+- [Getting Started](/docs/introduction/getting-started) - Initial setup
+- [Hono Adapter](/docs/reference/hono-adapter) - Alternative adapter
+- [Authentication](/docs/guides/authentication) - Auth configuration
+- [TanStack Start Documentation](https://tanstack.com/start) - Full TanStack Start reference
+- [TanStack Query](https://tanstack.com/query) - Data fetching library

@@ -10,6 +10,7 @@ Access Control in QUESTPIE CMS provides granular, type-safe rules for controllin
 ## What is Access Control?
 
 Access Control allows you to:
+
 - **Restrict operations** based on user authentication and roles
 - **Filter query results** automatically based on user permissions
 - **Control field-level access** for sensitive data
@@ -17,6 +18,7 @@ Access Control allows you to:
 - **Operate in different modes** - system (full access) vs user (restricted)
 
 Unlike traditional middleware-based access control, QUESTPIE's access rules are:
+
 - **Database-enforced** - filters are applied at the SQL level
 - **Type-safe** - WHERE conditions are fully typed
 - **Composable** - rules can return complex boolean logic
@@ -27,12 +29,14 @@ Unlike traditional middleware-based access control, QUESTPIE's access rules are:
 QUESTPIE CMS operates in two access modes:
 
 **System Mode** (`accessMode: "system"`)
+
 - Full unrestricted access to all data
 - Used for: background jobs, migrations, admin tasks, internal operations
 - Bypasses all access control rules
 - **Default mode** for CMS API operations
 
 **User Mode** (`accessMode: "user"`)
+
 - Restricted access based on access rules
 - Used for: user-facing API endpoints, client requests
 - Enforces all access control rules
@@ -74,10 +78,7 @@ export const posts = defineCollection("posts")
 
       // Logged in? Published OR own posts
       return {
-        OR: [
-          { isPublished: true },
-          { authorId: user.id },
-        ],
+        OR: [{ isPublished: true }, { authorId: user.id }],
       };
     },
 
@@ -138,6 +139,7 @@ Return database filters that are applied automatically:
 ```
 
 **The WHERE conditions are:**
+
 - **Type-safe** - TypeScript knows your field names and types
 - **Database-enforced** - Applied directly in the SQL WHERE clause
 - **Automatic** - No need to manually add to every query
@@ -257,6 +259,7 @@ interface AccessContext<TRow> {
 ```
 
 **Key properties:**
+
 - `user` - Current user from Better Auth (if authenticated)
 - `row` - The existing record (available in update/delete checks)
 - `input` - Data being created/updated
@@ -301,6 +304,7 @@ Control access to individual fields:
 ```
 
 **Field access options:**
+
 - `read` - Who can see this field in query results
 - `write` - Who can modify this field in create/update operations
 
@@ -467,18 +471,20 @@ export const isEditor = ({ user }: AccessContext) => user?.role === "editor";
 export const isAuthenticated = ({ user }: AccessContext) => !!user;
 
 // Ownership utilities
-export const isOwner = <T extends { authorId?: string }>(
-  { user, row }: AccessContext<T>
-) => row?.authorId === user?.id;
+export const isOwner = <T extends { authorId?: string }>({
+  user,
+  row,
+}: AccessContext<T>) => row?.authorId === user?.id;
 
 export const isOwnerOrAdmin = <T extends { authorId?: string }>(
-  ctx: AccessContext<T>
+  ctx: AccessContext<T>,
 ) => isAdmin(ctx) || isOwner(ctx);
 
 // Organization-based
-export const sameOrganization = <T extends { organizationId?: string }>(
-  { user, row }: AccessContext<T>
-) => row?.organizationId === user?.organizationId;
+export const sameOrganization = <T extends { organizationId?: string }>({
+  user,
+  row,
+}: AccessContext<T>) => row?.organizationId === user?.organizationId;
 ```
 
 Use these utilities in your access rules:
@@ -487,7 +493,9 @@ Use these utilities in your access rules:
 import { isAdmin, isAuthenticated, isOwnerOrAdmin } from "./utils/access";
 
 export const posts = defineCollection("posts")
-  .fields({ /* ... */ })
+  .fields({
+    /* ... */
+  })
   .access({
     read: true,
     create: isAuthenticated,
@@ -497,6 +505,7 @@ export const posts = defineCollection("posts")
 ```
 
 This makes your access rules:
+
 - More readable and maintainable
 - Reusable across collections
 - Easier to test
@@ -510,18 +519,21 @@ Default behavior is to allow all access in system mode. Always define explicit r
 
 ```typescript
 // ❌ Bad - No access control defined
-defineCollection("posts")
-  .fields({ /* ... */ })
+defineCollection("posts").fields({
+  /* ... */
+});
 
 // ✅ Good - Explicit access rules
 defineCollection("posts")
-  .fields({ /* ... */ })
+  .fields({
+    /* ... */
+  })
   .access({
     read: true, // Public
     create: ({ user }) => !!user,
     update: ({ user, row }) => row.authorId === user.id,
     delete: ({ user }) => user?.role === "admin",
-  })
+  });
 ```
 
 ### 2. Use WHERE Conditions for Read Access
@@ -624,12 +636,17 @@ const adminPosts = await cms.api.collections.posts.find({}, adminContext);
 
 ```typescript
 // User query
-await cms.api.collections.posts.find({
-  where: { categoryId: "tech" },
-}, userContext);
+await cms.api.collections.posts.find(
+  {
+    where: { categoryId: "tech" },
+  },
+  userContext,
+);
 
 // Access rule returns
-{ authorId: user.id }
+{
+  authorId: user.id;
+}
 
 // Final SQL WHERE clause becomes:
 // WHERE category_id = 'tech' AND author_id = 'user-123'
@@ -671,7 +688,7 @@ app.get("/api/posts", async (c) => {
 
 - Learn about [Hooks](/docs/core-concepts/hooks) for adding business logic
 - Explore [Authentication](/docs/guides/authentication) for setting up Better Auth
-- See [Real-world Examples](/docs/guides) for practical access control implementations
+- See [Custom Adapters](/docs/guides/custom-adapters) for building your own integrations
 
 ## Reference
 

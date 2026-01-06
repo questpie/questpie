@@ -10,6 +10,7 @@ Relations allow you to connect collections together, creating powerful data mode
 ## What are Relations?
 
 Relations in QUESTPIE CMS:
+
 - **Connect collections** via foreign keys
 - Are **type-safe** with full TypeScript inference
 - Support **eager loading** (load related data in a single query)
@@ -46,12 +47,13 @@ export const posts = defineCollection("posts")
   .relations(({ table, one }) => ({
     author: one("questpie_users", {
       fields: [table.authorId], // Column reference from table
-      references: ["id"],        // Column name in referenced collection
+      references: ["id"], // Column name in referenced collection
     }),
   }));
 ```
 
 **Key points:**
+
 - Add a foreign key field (`authorId`)
 - Use `table.fieldName` for fields (type-safe column references)
 - Use string array for references (column names in target collection)
@@ -133,6 +135,7 @@ export const posts = defineCollection("posts")
 ```
 
 **Key points:**
+
 - Define `many()` on the "parent" collection
 - Define `one()` on the "child" collection (with the foreign key)
 - Use `relationName` to explicitly link bidirectional relations
@@ -142,7 +145,9 @@ export const posts = defineCollection("posts")
 
 ```typescript
 export const users = defineCollection("users")
-  .fields({ /* ... */ })
+  .fields({
+    /* ... */
+  })
   .relations(({ many }) => ({
     posts: many("posts", {
       onDelete: "cascade", // Delete posts when user is deleted
@@ -152,6 +157,7 @@ export const users = defineCollection("users")
 ```
 
 **Available cascade options:**
+
 - `"cascade"` - Cascade the operation to related records
 - `"set null"` - Set foreign key to null
 - `"restrict"` - Prevent operation if related records exist
@@ -188,9 +194,9 @@ export const posts = defineCollection("posts")
   })
   .relations(({ manyToMany }) => ({
     tags: manyToMany("tags", {
-      through: "post_tags",     // Junction collection name
-      sourceField: "postId",    // FK in junction pointing to posts
-      targetField: "tagId",     // FK in junction pointing to tags
+      through: "post_tags", // Junction collection name
+      sourceField: "postId", // FK in junction pointing to posts
+      targetField: "tagId", // FK in junction pointing to tags
     }),
   }));
 
@@ -201,8 +207,8 @@ export const tags = defineCollection("tags")
   .relations(({ manyToMany }) => ({
     posts: manyToMany("posts", {
       through: "post_tags",
-      sourceField: "tagId",     // FK in junction pointing to tags
-      targetField: "postId",    // FK in junction pointing to posts
+      sourceField: "tagId", // FK in junction pointing to tags
+      targetField: "postId", // FK in junction pointing to posts
     }),
   }));
 ```
@@ -213,13 +219,12 @@ Add metadata to the junction table:
 
 ```typescript
 // Junction table with extra fields
-export const orderItems = defineCollection("order_items")
-  .fields({
-    orderId: uuid("order_id").notNull(),
-    productId: uuid("product_id").notNull(),
-    quantity: integer("quantity").notNull(),
-    priceAtTime: integer("price_at_time").notNull(), // Store price snapshot
-  });
+export const orderItems = defineCollection("order_items").fields({
+  orderId: uuid("order_id").notNull(),
+  productId: uuid("product_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  priceAtTime: integer("price_at_time").notNull(), // Store price snapshot
+});
 
 export const orders = defineCollection("orders")
   .fields({
@@ -242,16 +247,17 @@ export const orders = defineCollection("orders")
 Many-to-many with ordering:
 
 ```typescript
-export const postImages = defineCollection("post_images")
-  .fields({
-    postId: uuid("post_id").notNull(),
-    assetId: uuid("asset_id").notNull(),
-    order: integer("order").default(0), // For sorting
-    caption: text("caption"),
-  });
+export const postImages = defineCollection("post_images").fields({
+  postId: uuid("post_id").notNull(),
+  assetId: uuid("asset_id").notNull(),
+  order: integer("order").default(0), // For sorting
+  caption: text("caption"),
+});
 
 export const posts = defineCollection("posts")
-  .fields({ /* ... */ })
+  .fields({
+    /* ... */
+  })
   .relations(({ manyToMany }) => ({
     images: manyToMany("assets", {
       through: "post_images",
@@ -342,7 +348,8 @@ const posts = await cms.api.collections.posts.find({
 const posts = await cms.api.collections.posts.find({
   with: {
     images: true, // Many-to-many
-    postImages: { // Direct access to junction
+    postImages: {
+      // Direct access to junction
       with: {
         asset: true,
       },
@@ -576,7 +583,8 @@ const users = await cms.api.collections.users.find({
   with: {
     posts: {
       with: {
-        author: { // Loads user again!
+        author: {
+          // Loads user again!
           with: {
             posts: true, // Infinite loop!
           },
@@ -639,7 +647,7 @@ posts[0].tags[0].name; // ✅ string (from tags)
 
 - Learn about [Collections](/docs/core-concepts/collections) for defining your data models
 - Explore [Hooks](/docs/core-concepts/hooks) for handling relation side effects
-- See [Creating a Collection](/docs/guides/creating-a-collection) for step-by-step examples
+- See [Getting Started](/docs/introduction/getting-started) for step-by-step examples
 
 ## Reference
 

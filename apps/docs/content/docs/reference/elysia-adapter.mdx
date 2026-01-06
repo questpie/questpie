@@ -1,0 +1,142 @@
+---
+title: Elysia Adapter
+description: Reference for @questpie/elysia adapter.
+---
+
+# Elysia Adapter
+
+The `@questpie/elysia` package connects the CMS engine to an Elysia web server with full Eden Treaty type inference.
+
+## Installation
+
+```bash
+bun add @questpie/elysia
+```
+
+## `questpieElysia(cms, options)`
+
+Creates an Elysia plugin with all CMS routes mounted.
+
+### Parameters
+
+- `cms` - The `QCMS` instance from `.build()`
+- `options` - Configuration options (see below)
+
+### Configuration
+
+```typescript
+interface ElysiaAdapterConfig {
+  /**
+   * Base path for CMS routes
+   * Use '/cms' for server-only apps or '/api/cms' for fullstack apps.
+   * @default '/cms'
+   */
+  basePath?: string;
+}
+```
+
+## Context Types
+
+After using the plugin, these types are available:
+
+```typescript
+interface QCMSContext {
+  cms: QCMS; // The CMS instance
+  cmsContext: RequestContext; // Request context with user, session, locale
+  user: User | undefined; // Current authenticated user
+}
+```
+
+## Basic Example
+
+```typescript
+import { Elysia } from "elysia";
+import { questpieElysia } from "@questpie/elysia";
+import { cms } from "./cms";
+
+const app = new Elysia().use(questpieElysia(cms)).listen(3000);
+
+export default app;
+export type App = typeof app;
+```
+
+## With Custom Base Path
+
+```typescript
+import { Elysia } from "elysia";
+import { questpieElysia } from "@questpie/elysia";
+import { cms } from "./cms";
+
+const app = new Elysia()
+  .use(
+    questpieElysia(cms, {
+      basePath: "/api/cms",
+    }),
+  )
+  .listen(3000);
+```
+
+## Eden Treaty Client
+
+Elysia's Eden Treaty provides end-to-end type safety:
+
+```typescript
+import { treaty } from "@elysiajs/eden";
+import type { App } from "./server";
+
+const client = treaty<App>("localhost:3000");
+
+// Fully type-safe API calls
+const posts = await client.cms.posts.get();
+const post = await client.cms.posts({ id: "123" }).get();
+const newPost = await client.cms.posts.post({ title: "Hello" });
+```
+
+## Generated Routes
+
+The adapter generates these routes under your `basePath`:
+
+| Method | Path                        | Description              |
+| ------ | --------------------------- | ------------------------ |
+| GET    | `/{collection}`             | List records (paginated) |
+| POST   | `/{collection}`             | Create record            |
+| GET    | `/{collection}/:id`         | Get record by ID         |
+| PATCH  | `/{collection}/:id`         | Update record            |
+| DELETE | `/{collection}/:id`         | Delete record            |
+| POST   | `/{collection}/:id/restore` | Restore soft-deleted     |
+| GET    | `/globals/{name}`           | Get global               |
+| PATCH  | `/globals/{name}`           | Update global            |
+| POST   | `/rpc/{function}`           | Call custom function     |
+| POST   | `/storage/upload`           | Upload file              |
+| `*`    | `/auth/*`                   | Better Auth endpoints    |
+
+## Adding Custom Routes
+
+You can add custom routes alongside the CMS routes:
+
+```typescript
+import { Elysia } from "elysia";
+import { questpieElysia } from "@questpie/elysia";
+import { cms } from "./cms";
+
+const app = new Elysia()
+  .use(questpieElysia(cms))
+  // Custom routes
+  .get("/health", () => ({ status: "ok" }))
+  .get("/api/me", async ({ headers }) => {
+    // Access CMS for custom logic
+    const ctx = await cms.createContext({
+      headers: new Headers(headers as Record<string, string>),
+    });
+    return { user: ctx.user };
+  })
+  .listen(3000);
+```
+
+## See Also
+
+- [Getting Started](/docs/introduction/getting-started) - Initial setup
+- [Hono Adapter](/docs/reference/hono-adapter) - Alternative adapter
+- [Authentication](/docs/guides/authentication) - Auth configuration
+- [Elysia Documentation](https://elysiajs.com/) - Full Elysia reference
+- [Eden Treaty](https://elysiajs.com/eden/treaty.html) - Type-safe client

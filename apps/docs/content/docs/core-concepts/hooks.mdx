@@ -10,6 +10,7 @@ Hooks are functions that run at specific points in your collection's lifecycle. 
 ## What are Hooks?
 
 Hooks in QUESTPIE CMS are:
+
 - **Lifecycle callbacks** that execute before or after CRUD operations
 - **Type-safe** with full access to record data
 - **Async-capable** for external API calls, database queries, or queue jobs
@@ -17,6 +18,7 @@ Hooks in QUESTPIE CMS are:
 - **Chainable** - multiple hooks can be defined for the same event
 
 Think of hooks as middleware for your data operations - they intercept the flow and allow you to:
+
 - Validate or transform data before saving
 - Trigger side effects after changes (emails, notifications, webhooks)
 - Sync data to external systems
@@ -30,48 +32,56 @@ All hooks are fully type-safe with specific data types and field availability ba
 ### Lifecycle Hooks
 
 **`beforeOperation`**
+
 - **When**: Before any operation (create, update, delete, read)
 - **Data type**: Depends on operation (TInsert, TUpdate, or TSelect)
 - **`original` available**: No
 - **Use for**: Logging, rate limiting, early validation
 
 **`beforeValidate`**
+
 - **When**: Before validation on create/update operations
 - **Data type**: TInsert (create) or TUpdate (update) - mutable input data
 - **`original` available**: No
 - **Use for**: Transforming input, setting defaults, normalizing data
 
 **`beforeChange`**
+
 - **When**: Before create/update operations (after validation)
 - **Data type**: TInsert (create) or TUpdate (update) - validated input data
 - **`original` available**: No
 - **Use for**: Business logic, slug generation, complex validation
 
 **`afterChange`**
+
 - **When**: After create/update operations
 - **Data type**: TSelect - complete record with all fields
 - **`original` available**: Yes (only on update operations)
 - **Use for**: Notifications, webhooks, syncing to external services
 
 **`beforeRead`**
+
 - **When**: Before read operations
 - **Data type**: Query context/options
 - **`original` available**: No
 - **Use for**: Modifying query options, adding filters
 
 **`afterRead`**
+
 - **When**: After any operation that returns data
 - **Data type**: TSelect - complete record
 - **`original` available**: Yes (only on update operations)
 - **Use for**: Transforming output, adding computed fields, formatting
 
 **`beforeDelete`**
+
 - **When**: Before delete operations
 - **Data type**: TSelect - record to be deleted
 - **`original` available**: No
 - **Use for**: Preventing deletion, cascading deletes, backups
 
 **`afterDelete`**
+
 - **When**: After delete operations
 - **Data type**: TSelect - deleted record
 - **`original` available**: No
@@ -124,6 +134,7 @@ interface HookContext<TData, TOriginal, TOperation, TCMS> {
 ```
 
 **Key properties:**
+
 - `data` - The record being processed. Type changes based on the hook:
   - `beforeValidate`/`beforeChange`: Insert or update data (TInsert | TUpdate)
   - `afterChange`/`afterRead`/`beforeDelete`/`afterDelete`: Complete record (TSelect)
@@ -177,7 +188,9 @@ export const posts = defineCollection("posts")
 
 ```typescript
 export const posts = defineCollection("posts")
-  .fields({ /* ... */ })
+  .fields({
+    /* ... */
+  })
   .hooks({
     afterChange: async ({ data, operation }) => {
       if (operation !== "create") return;
@@ -231,7 +244,9 @@ export const products = defineCollection("products")
 
 ```typescript
 export const posts = defineCollection("posts")
-  .fields({ /* ... */ })
+  .fields({
+    /* ... */
+  })
   .hooks({
     afterChange: async ({ data, original, operation, user }) => {
       if (operation !== "update" || !original) return;
@@ -270,7 +285,9 @@ When a record is deleted, clean up related data:
 
 ```typescript
 export const users = defineCollection("users")
-  .fields({ /* ... */ })
+  .fields({
+    /* ... */
+  })
   .hooks({
     beforeDelete: async ({ data }) => {
       const cms = getCMSFromContext();
@@ -355,7 +372,9 @@ Sync data to external services:
 
 ```typescript
 export const products = defineCollection("products")
-  .fields({ /* ... */ })
+  .fields({
+    /* ... */
+  })
   .hooks({
     afterChange: async ({ data, operation }) => {
       const cms = getCMSFromContext();
@@ -367,7 +386,7 @@ export const products = defineCollection("products")
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${process.env.INVENTORY_API_KEY}`,
+              Authorization: `Bearer ${process.env.INVENTORY_API_KEY}`,
             },
             body: JSON.stringify({
               externalId: data.id,
@@ -407,7 +426,9 @@ You can define multiple hook functions for the same event - they run in order:
 
 ```typescript
 export const posts = defineCollection("posts")
-  .fields({ /* ... */ })
+  .fields({
+    /* ... */
+  })
   .hooks({
     // Array of hook functions
     afterChange: [
@@ -441,6 +462,7 @@ export const posts = defineCollection("posts")
 ## Hook Execution Order
 
 For a **create** operation:
+
 1. `beforeOperation` (if defined)
 2. `beforeValidate` (if defined)
 3. `beforeChange` (if defined)
@@ -449,6 +471,7 @@ For a **create** operation:
 6. `afterRead` (if defined)
 
 For an **update** operation:
+
 1. `beforeOperation` (if defined)
 2. `beforeValidate` (if defined)
 3. `beforeChange` (if defined)
@@ -457,6 +480,7 @@ For an **update** operation:
 6. `afterRead` (if defined, with `original` available)
 
 For a **delete** operation:
+
 1. `beforeOperation` (if defined)
 2. `beforeDelete` (if defined)
 3. **Database DELETE** (or soft delete)
@@ -464,6 +488,7 @@ For a **delete** operation:
 5. `afterRead` (if defined)
 
 For a **read** operation:
+
 1. `beforeOperation` (if defined)
 2. `beforeRead` (if defined)
 3. **Database SELECT**
@@ -482,14 +507,14 @@ Hooks run synchronously in the request flow. For slow operations, use queue jobs
 afterChange: async ({ data, operation }) => {
   if (operation !== "create") return;
   await processLargeImage(data.imageUrl); // Might take 10 seconds
-}
+};
 
 // ✅ Good - Queue the work
 afterChange: async ({ data, operation }) => {
   if (operation !== "create") return;
   const cms = getCMSFromContext();
   await cms.queue["process-image"].publish({ imageId: data.imageId });
-}
+};
 ```
 
 ### 2. Avoid Infinite Loops
@@ -505,7 +530,7 @@ afterChange: async ({ data, operation }) => {
     id: data.id,
     data: { updatedCount: data.updatedCount + 1 },
   }); // This triggers afterChange again!
-}
+};
 
 // ✅ Good - Use a flag or condition
 afterChange: async ({ data, original, operation }) => {
@@ -518,7 +543,7 @@ afterChange: async ({ data, original, operation }) => {
       data: { publishedAt: new Date() },
     });
   }
-}
+};
 ```
 
 ### 3. Use beforeChange for Shared Logic
@@ -549,14 +574,14 @@ afterChange: async ({ data, operation }) => {
   if (operation === "create" && !data.email) {
     throw new Error("Email required"); // Too late!
   }
-}
+};
 
 // ✅ Good - Validate in before hooks
 beforeChange: async ({ data, operation }) => {
   if (operation === "create" && !data.email) {
     throw new Error("Email required"); // Prevents creation
   }
-}
+};
 ```
 
 ### 5. Use CMS Services, Not Global State
@@ -608,7 +633,9 @@ export const posts = defineCollection("posts")
       // const x = original; // ❌ TypeScript error
 
       // ✅ TypeScript knows cms.queue exists
-      await cms.queue["job-name"].publish({ /* typed payload */ });
+      await cms.queue["job-name"].publish({
+        /* typed payload */
+      });
     },
 
     afterChange: async ({ data, original, operation }) => {
@@ -637,7 +664,7 @@ export const posts = defineCollection("posts")
 
 - Learn about [Access Control](/docs/core-concepts/access-control) for securing operations
 - Explore [Queue Jobs](/docs/guides/queue-jobs) for background processing
-- See [Real-world Examples](/docs/guides) for practical hook implementations
+- See [Email Templates](/docs/guides/email-templates) for practical hook implementations
 
 ## Reference
 

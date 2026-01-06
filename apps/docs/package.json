@@ -12,7 +12,9 @@
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",
-		"@fontsource-variable/inter": "^5.2.8",
+		"@fontsource-variable/dm-sans": "^5.2.8",
+		"@fontsource-variable/jetbrains-mono": "^5.2.8",
+		"@openpanel/web": "^1.0.6",
 		"@phosphor-icons/react": "^2.1.10",
 		"@tanstack/react-router": "1.136.18",
 		"@tanstack/react-router-devtools": "1.136.18",
@@ -20,6 +22,7 @@
 		"clsx": "^2.1.1",
 		"fumadocs-core": "16.4.1",
 		"fumadocs-mdx": "14.2.3",
+		"fumadocs-typescript": "^5.0.1",
 		"fumadocs-ui": "16.4.1",
 		"lucide-react": "^0.561.0",
 		"react": "^19.2.3",

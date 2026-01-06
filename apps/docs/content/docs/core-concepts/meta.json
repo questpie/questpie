@@ -1,5 +1,6 @@
 {
 	"title": "Core Concepts",
+	"defaultOpen": true,
 	"pages": [
 		"collections",
 		"fields",

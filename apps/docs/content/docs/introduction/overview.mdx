@@ -30,7 +30,6 @@ Unlike generic CMS frameworks that leave you to wire together auth, storage, que
 - **pg-boss** for background job processing
 - **Nodemailer + React Email** for transactional emails
 - **Pino** for structured logging
-- **ParadeDB (pgvector)** for full-text and vector search
 
 You can still swap these out, but the defaults are production-ready and work together seamlessly.
 
@@ -67,8 +66,10 @@ cmsWithoutOrg.auth.api.createOrganization(); // ❌ Type error!
 
 QUESTPIE integrates natively with:
 
-- **Hono** - Ultra-fast, edge-compatible framework (via `@questpie/hono` adapter)
-- **Elysia** - High-performance Bun-native framework (built-in support)
+- **Hono** - Ultra-fast, edge-compatible framework, via `@questpie/hono` adapter
+- **Elysia** - High-performance Bun-native framework, via `@questpie/elysia` adapter
+- **TanStack Start** - Full-stack React framework, adapter via `@questpie/tanstack-start` (admin UI coming soon)
+- **Next.js** - Via custom API routes or middleware, via `@questpie/next` (admin UI coming soon)
 - **Any TypeScript runtime** - Works with Node.js, Bun, Deno, Cloudflare Workers
 
 The CMS core is **framework-agnostic** - adapters handle the HTTP layer while the core focuses on content management.
@@ -77,8 +78,8 @@ The CMS core is **framework-agnostic** - adapters handle the HTTP layer while th
 
 - **Fluent builder API** - Chain methods like `.collections({...}).auth({...}).build({...})`
 - **Autocomplete everywhere** - Your IDE knows your schema, fields, relations, access rules, and auth methods
-- **Modular composition** - Create reusable modules with `.use()` for features like auth, storage, or custom collections
-- **Progressive enhancement** - Use callbacks to build on previous configurations: `.auth((prev) => ({ ...prev, plugins: [...] }))`
+- **Modular composition** - Create reusable modules with `.use()` for to encapsulate and distribute functionality (eg. `.use(blogModule).use(ecommerceModule)`)
+- **Progressive enhancement** - Use callbacks or extensions to build on/override previous configurations in type-safe manner: `.auth((prev) => ({ ...prev, plugins: [...] }))`
 - **Clear error messages** - TypeScript catches issues before they reach production
 - **Convention over configuration** - Sensible defaults, override when needed
 - **Hot module reloading** - Changes to collections reflect instantly in dev mode
@@ -89,33 +90,138 @@ The CMS core is **framework-agnostic** - adapters handle the HTTP layer while th
 
 QUESTPIE CMS uses a **composable module system** that allows you to:
 
-- **Start simple** - Use `defineQCMS({ name: 'app' })` for full control, or `createCoreModule()` for batteries-included setup
+- **Start simple** - Use `defineQCMS({ name: 'app' })` for full control, that uses minimal defaults regarding auth, storage, etc.
+- **Add features as needed** - Chain methods to add collections, globals, auth, storage
 - **Compose modules** - Merge modules with `.use()` to add features from other packages or your own code
-- **Progressive enhancement** - Build on previous configurations using callbacks
 
 ```typescript
-// Create reusable modules
-const orgModule = defineQCMS({ name: "org" }).auth({
-  plugins: [organization()],
-});
+// Create reusable modules with collections, globals, and functions
+const blogModule = defineQCMS({ name: "blog" })
+  .collections({
+    posts: defineCollection("posts")
+      .fields({
+        title: varchar("title", { length: 255 }).notNull(),
+        content: text("content"),
+        slug: varchar("slug", { length: 255 }).unique(),
+      })
+      .access({
+        read: true,
+        create: ({ user }) => !!user,
+      }),
+    categories: defineCollection("categories")
+      .fields({
+        name: varchar("name", { length: 100 }).notNull(),
+        description: text("description"),
+      }),
+  })
+  .functions({
+    publishPost: defineFunction({
+      input: z.object({
+        postId: z.string().uuid(),
+      }),
+      handler: async ({ postId }) => {
+        const cms = getCMSFromContext<typeof cms>(); // for easy type-safe access
+        await cms.collections.posts.update({
+          where: { id: postId },
+          data: { isPublished: true },
+        });
+        return { success: true }; // Output is also typed
+      },
+    }),
+  })
+  });
 
-const twoFactorModule = defineQCMS({ name: "2fa" }).auth({
-  plugins: [twoFactor()],
-});
+const siteModule = defineQCMS({ name: "site" })
+  .globals({
+    siteConfig: defineGlobal("siteConfig")
+      .fields({
+        siteName: varchar("site_name", { length: 100 }),
+        tagline: varchar("tagline", { length: 255 }),
+        maintenanceMode: boolean("maintenance_mode").default(false),
+      }),
+    homepage: defineGlobal("homepage")
+      .fields({
+        heroTitle: varchar("hero_title", { length: 255 }),
+        heroSubtitle: text("hero_subtitle"),
+      })
+      .localized(), // Support multiple languages
+  })
+  .functions({
+    toggleMaintenance: defineFunction({
+      handler: async () => {
+        const cms = getCMSFromContext<typeof cms>();
+        const config = await cms.globals.siteConfig.get();
+        const newMode = !config.maintenanceMode;
+        await cms.globals.siteConfig.update({
+          data: { maintenanceMode: newMode },
+        });
+        return { maintenanceMode: newMode };
+      },
+    }),
+  });
 
-// Compose them together
+const authModule = defineQCMS({ name: "auth" })
+  .auth({
+    plugins: [organization(), twoFactor()],
+  });
+
+// Compose all modules together
 const cms = defineQCMS({ name: "app" })
-  .use(orgModule) // ✅ Merge organization auth
-  .use(twoFactorModule) // ✅ Merge two-factor auth
-  .collections({ posts, products })
+  .use(blogModule) // ✅ Adds posts & categories collections + publishPost function
+  .use(siteModule) // ✅ Adds siteConfig & homepage globals + toggleMaintenance function
+  .use(authModule) // ✅ Adds organization & two-factor auth
+  .collections({
+    // Add more collections directly
+    products: defineCollection("products")
+      .fields({
+        name: varchar("name", { length: 255 }).notNull(),
+        price: integer("price").notNull(),
+      }),
+      // or modify existing ones
+      posts: blogModule.collections.posts.merge(
+        defineCollection().fields({
+          summary: varchar("summary", { length: 500 }),
+      }))
+  })
+  .functions({
+    // Add custom functions
+    sendNewsletter: defineFunction({
+      input: z.object({
+        subject: z.string(),
+        content: z.string(),
+      }),
+      handler: async ({ subject, content }) => {
+        const cms = getCMSFromContext<typeof cms>();
+        // Send email to all subscribers (pseudo-code)
+        const subscribers = await cms.collections.users.findMany({
+          where: { isSubscribed: true },
+        });
+        for (const user of subscribers) {
+          await cms.email.send({
+            to: user.email,
+            subject,
+            html: content,
+          });
+        }
+        return { sentTo: subscribers.length };
+      },
+    }),
+  })
   .build({
     /* ... */
   });
 
-// All auth methods are available and typed:
-cms.auth.api.createUser(); // From default auth
-cms.auth.api.createOrganization(); // From orgModule
-cms.auth.api.sendTwoFactorCode(); // From twoFactorModule
+// All collections, globals, functions, and auth methods are typed:
+await cms.api.collections.posts.findMany(); // From blogModule
+await cms.api.collections.categories.findMany(); // From blogModule
+await cms.api.collections.products.findMany(); // Defined directly
+await cms.api.globals.siteConfig.get(); // From siteModule
+await cms.api.globals.homepage.get(); // From siteModule
+await cms.api.functions.publishPost({ postId: "123" }); // From blogModule
+await cms.api.functions.toggleMaintenance(); // From siteModule
+await cms.api.functions.sendNewsletter({ subject: "News", content: "..." }); // Defined directly
+cms.auth.api.createOrganization({ name: "Acme" }); // From authModule
+cms.auth.api.sendTwoFactorCode({ userId: "123" }); // From authModule
 ```
 
 **Why this matters:**
@@ -428,21 +534,6 @@ CREATE TABLE posts_versions (
 - **Edge-only deployments** - Requires Postgres (though Neon/PlanetScale work on edge)
 - **GraphQL-first APIs** - QUESTPIE is REST-first (GraphQL support coming)
 
-## Comparison to Other CMS
-
-| Feature                | QUESTPIE                       | Payload CMS   | Strapi      | Contentful   |
-| ---------------------- | ------------------------------ | ------------- | ----------- | ------------ |
-| **Type Safety**        | ✅ Full (Drizzle)              | ⚠️ Partial    | ❌ Limited  | ❌ API only  |
-| **Batteries Included** | ✅ Auth, Storage, Queue, Email | ⚠️ Partial    | ⚠️ Plugins  | ❌ No        |
-| **Self-Hosted**        | ✅ Yes                         | ✅ Yes        | ✅ Yes      | ❌ SaaS only |
-| **Database**           | Postgres                       | MongoDB       | SQL/NoSQL   | Proprietary  |
-| **Framework**          | Hono/Elysia/Next/TanstackStart | Express       | Koa         | N/A          |
-| **Runtime**            | Bun/Node/Deno                  | Node          | Node        | N/A          |
-| **Schema Definition**  | Code (Drizzle)                 | Code (Config) | GUI/Code    | GUI          |
-| **Migrations**         | Auto-generated                 | Custom        | Auto        | N/A          |
-| **Access Control**     | Database-level                 | Code-level    | RBAC        | API-level    |
-| **Admin UI**           | Coming soon                    | ✅ Built-in   | ✅ Built-in | ✅ SaaS      |
-
 ## Getting Started
 
 ### Installation
@@ -515,9 +606,9 @@ Now you have a fully functional CMS with:
 ## Next Steps
 
 - **[Getting Started](/docs/introduction/getting-started)** - Step-by-step setup guide
-- **[Core Concepts](/docs/core-concepts)** - Learn about Collections, Hooks, Access Control
-- **[Guides](/docs/guides)** - Practical tutorials and real-world examples
-- **[API Reference](/docs/reference)** - Complete API documentation
+- **[Core Concepts](/docs/core-concepts/collections)** - Learn about Collections, Hooks, Access Control
+- **[Guides](/docs/guides/authentication)** - Practical tutorials and real-world examples
+- **[API Reference](/docs/reference/cms-config)** - Complete API documentation
 
 ## Community & Support
 

@@ -1,3 +1,4 @@
+import { Navbar } from "@/components/landing/Navbar";
 import { createFileRoute } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { baseOptions } from "@/lib/layout.shared";
@@ -5,6 +6,7 @@ import { Hero } from "@/components/landing/Hero";
 import { Features } from "@/components/landing/Features";
 import { Comparison } from "@/components/landing/Comparison";
 import { Examples } from "@/components/landing/Examples";
+import { Frameworks } from "@/components/landing/Frameworks";
 import { Footer } from "@/components/landing/Footer";
 
 export const Route = createFileRoute("/")({
@@ -13,20 +15,44 @@ export const Route = createFileRoute("/")({
 
 function Home() {
 	return (
-		<HomeLayout {...baseOptions()}>
-			<div className="flex flex-col min-h-screen bg-background text-foreground font-sans selection:bg-primary/20 selection:text-primary">
-                {/* Background Grid */}
-                <div className="fixed inset-0 bg-grid-quest opacity-[0.03] pointer-events-none z-0" />
-                
-                {/* Main Content */}
-                <main className="flex-1 relative z-10">
-                    <Hero />
-                    <Features />
-                    <Comparison />
-                    <Examples />
-                </main>
-                
-                <Footer />
+		<HomeLayout {...baseOptions()} nav={{ component: <Navbar /> }}>
+			<div className="flex flex-col min-h-screen text-foreground bg-grid-quest font-sans selection:bg-primary/20 selection:text-primary">
+				{/* Background Grid */}
+				<div className="fixed inset-0 bg-grid-quest opacity-[0.03] pointer-events-none z-0" />
+
+				{/* Layout Guide Lines */}
+				<div className="fixed inset-0 pointer-events-none z-[1] flex justify-center px-4">
+					<div className="w-full max-w-7xl h-full border-x border-border/30 relative">
+						<div className="absolute top-0 bottom-0 left-1/4 w-px bg-border/10 hidden md:block" />
+						<div className="absolute top-0 bottom-0 left-2/4 w-px bg-border/10 hidden md:block" />
+						<div className="absolute top-0 bottom-0 left-3/4 w-px bg-border/10 hidden md:block" />
+
+						{/* Crosshairs */}
+						<div className="absolute top-24 -left-1.5 w-3 h-3 text-border/40 font-mono text-[10px] flex items-center justify-center">
+							+
+						</div>
+						<div className="absolute top-24 -right-1.5 w-3 h-3 text-border/40 font-mono text-[10px] flex items-center justify-center">
+							+
+						</div>
+						<div className="absolute bottom-24 -left-1.5 w-3 h-3 text-border/40 font-mono text-[10px] flex items-center justify-center">
+							+
+						</div>
+						<div className="absolute bottom-24 -right-1.5 w-3 h-3 text-border/40 font-mono text-[10px] flex items-center justify-center">
+							+
+						</div>
+					</div>
+				</div>
+
+				{/* Main Content */}
+				<main className="flex-1 relative z-10">
+					<Hero />
+					<Comparison />
+					<Features />
+					<Frameworks />
+					<Examples />
+				</main>
+
+				<Footer />
 			</div>
 		</HomeLayout>
 	);
