@@ -3,19 +3,16 @@ FROM oven/bun:1.3.0-alpine AS builder
 
 WORKDIR /app
 
-# Copy root package files
+# Copy package files
 COPY package.json bun.lock* ./
-COPY apps/docs/package.json ./apps/docs/
+
+# Copy source files (needed for postinstall script)
+COPY . .
 
 # Install dependencies
-# RUN bun install --frozen-lockfile
-RUN bun install
-
-# Copy source files
-COPY apps/docs ./apps/docs
+RUN bun install --frozen-lockfile
 
 # Build the application
-WORKDIR /app/apps/docs
 RUN bun run build
 
 # Production stage
@@ -23,9 +20,9 @@ FROM oven/bun:1.3.0-alpine AS runner
 
 WORKDIR /app
 
-# Install production dependencies only
-COPY --from=builder /app/apps/docs/.output ./.output
-COPY --from=builder /app/apps/docs/package.json ./package.json
+# Copy built application
+COPY --from=builder /app/.output ./.output
+COPY --from=builder /app/package.json ./package.json
 
 # Set environment variables
 ENV NODE_ENV=production
