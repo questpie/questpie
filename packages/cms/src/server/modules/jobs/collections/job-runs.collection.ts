@@ -1,6 +1,5 @@
 import { defineCollection } from "#questpie/cms/exports/server.js";
-import { sql } from "drizzle-orm";
-import { jsonb, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, jsonb, text, timestamp, varchar } from "drizzle-orm/pg-core";
 
 export const jobRunsCollection = defineCollection("job_run")
 	.options({ timestamps: true })
@@ -16,5 +15,5 @@ export const jobRunsCollection = defineCollection("job_run")
 		workerId: varchar("worker_id", { length: 100 }),
 	})
 	.indexes(({ table }) => [
-		sql`create index on ${table} (job_name, created_at desc)`,
+		index("job_name_created_at_idx").on(table.jobName, table.createdAt.desc()),
 	]);
