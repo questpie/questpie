@@ -12,6 +12,10 @@ import {
 import { components } from "@/components/mdx";
 import { baseOptions } from "@/lib/layout.shared";
 import { useFumadocsLoader } from "fumadocs-core/source/client";
+import { LLMCopyButton } from "@/components/llm-actions";
+import { createContext, useContext } from "react";
+
+const PageUrlContext = createContext<string>("");
 
 export const Route = createFileRoute("/docs/$")({
 	component: Page,
@@ -41,9 +45,19 @@ const serverLoader = createServerFn({
 
 		return {
 			path: page.path,
+			url: page.url,
 			pageTree: await source.serializePageTree(source.getPageTree()),
 		};
 	});
+
+function LLMActions() {
+	const url = useContext(PageUrlContext);
+	return (
+		<div className="flex items-center gap-2 border-b border-fd-border pb-4 mb-6">
+			<LLMCopyButton markdownUrl={`${url}.mdx`} />
+		</div>
+	);
+}
 
 const clientLoader = browserCollections.docs.createClientLoader({
 	component({ toc, frontmatter, default: MDX }) {
@@ -51,12 +65,9 @@ const clientLoader = browserCollections.docs.createClientLoader({
 			<DocsPage toc={toc}>
 				<DocsTitle>{frontmatter.title}</DocsTitle>
 				<DocsDescription>{frontmatter.description}</DocsDescription>
+				<LLMActions />
 				<DocsBody className="animate-in fade-in slide-in-from-bottom-8 duration-700">
-					<MDX
-						components={{
-							...components,
-						}}
-					/>
+					<MDX components={components} />
 				</DocsBody>
 			</DocsPage>
 		);
@@ -69,8 +80,10 @@ function Page() {
 	const Content = clientLoader.getComponent(data.path);
 
 	return (
-		<DocsLayout {...baseOptions()} tree={pageTree}>
-			<Content />
-		</DocsLayout>
+		<PageUrlContext.Provider value={data.url}>
+			<DocsLayout {...baseOptions()} tree={pageTree}>
+				<Content />
+			</DocsLayout>
+		</PageUrlContext.Provider>
 	);
 }
