@@ -19,6 +19,10 @@ export default defineConfig({
 		tanstackStart({
 			prerender: {
 				enabled: process.env.DISABLE_PRERENDER !== "true",
+				// Prerender landing page and docs routes for ISR
+				routes: ["/", "/docs/*"],
+				// Crawl links to discover all documentation pages
+				crawlLinks: true,
 			},
 		}),
 		nitro({ preset: "bun" }),

@@ -7,10 +7,24 @@ const server = createFromSource(source, {
   language: 'english',
 });
 
-export const Route = createFileRoute('/api/search')({
-  server: {
-    handlers: {
-      GET: async ({ request }) => server.GET(request),
-    },
-  },
+export const Route = createFileRoute("/api/search")({
+	server: {
+		handlers: {
+			GET: async ({ request }) => {
+				const response = await server.GET(request);
+				// Clone response to add ISR headers
+				const headers = new Headers(response.headers);
+				// Cache search results for 5 minutes, stale for 1 hour
+				headers.set(
+					"Cache-Control",
+					"public, max-age=300, s-maxage=300, stale-while-revalidate=3600"
+				);
+				return new Response(response.body, {
+					status: response.status,
+					statusText: response.statusText,
+					headers,
+				});
+			},
+		},
+	},
 });

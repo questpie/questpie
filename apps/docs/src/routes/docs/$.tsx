@@ -21,6 +21,14 @@ export const Route = createFileRoute("/docs/$")({
 		await clientLoader.preload(data.path);
 		return data;
 	},
+	// ISR: Cache docs pages for 1 hour, allow stale content for 7 days
+	headers: () => ({
+		"Cache-Control":
+			"public, max-age=3600, s-maxage=3600, stale-while-revalidate=604800",
+	}),
+	// Client-side: Consider data fresh for 5 minutes
+	staleTime: 5 * 60_000,
+	gcTime: 10 * 60_000,
 });
 
 const serverLoader = createServerFn({

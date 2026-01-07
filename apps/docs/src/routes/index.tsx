@@ -31,6 +31,14 @@ export const Route = createFileRoute("/")({
 			headlineIndex: getRandomHeadlineIndex(),
 		};
 	},
+	// ISR: Cache landing page for 24 hours, allow stale for 7 days
+	headers: () => ({
+		"Cache-Control":
+			"public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+	}),
+	// Client-side: Consider data fresh for 1 hour
+	staleTime: 60 * 60_000,
+	gcTime: 2 * 60 * 60_000,
 });
 
 function Home() {
