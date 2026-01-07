@@ -1,5 +1,5 @@
 {
 	"title": "Introduction",
 	"defaultOpen": true,
-	"pages": ["overview", "getting-started"]
+	"pages": ["overview", "getting-started", "llms"]
 }

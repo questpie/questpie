@@ -1,0 +1,43 @@
+---
+title: AI & LLMs
+description: AI-friendly documentation endpoints for large language models.
+---
+
+QUESTPIE CMS documentation is available in AI-friendly formats.
+
+## Endpoints
+
+### `/llms-full.txt`
+
+All documentation pages in a single text file:
+
+```
+https://questpie.com/llms-full.txt
+```
+
+### `/docs/*.mdx`
+
+Any page as Markdown by appending `.mdx`:
+
+```
+https://questpie.com/docs/core-concepts/collections.mdx
+```
+
+## Usage Examples
+
+### Claude / ChatGPT
+
+```
+Please read the QUESTPIE CMS documentation at:
+https://questpie.com/docs/core-concepts/collections.mdx
+
+And help me create a new collection for blog posts.
+```
+
+### Custom GPTs
+
+Use `/llms-full.txt` as a knowledge source for your custom GPT.
+
+### RAG Systems
+
+Fetch `/llms-full.txt`, split into chunks, create embeddings, and store in a vector database.
