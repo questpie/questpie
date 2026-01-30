@@ -25,17 +25,18 @@ const cms = q({ name: "my-cms" })
 ### Amazon S3
 
 ```typescript
-import { S3Driver } from "questpie/storage";
+import { S3Driver } from "flydrive/drivers/s3";
 
 const cms = q({ name: "my-cms" })
   .build({
     storage: {
       driver: new S3Driver({
-        key: process.env.AWS_ACCESS_KEY_ID,
-        secret: process.env.AWS_SECRET_ACCESS_KEY,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        },
         region: "eu-central-1",
         bucket: "my-bucket",
-        endpoint: undefined,  // Use default AWS endpoint
       }),
       defaultVisibility: "private",
     },
@@ -45,16 +46,19 @@ const cms = q({ name: "my-cms" })
 ### Cloudflare R2
 
 ```typescript
-import { R2Driver } from "questpie/storage";
+import { S3Driver } from "flydrive/drivers/s3";
 
 const cms = q({ name: "my-cms" })
   .build({
     storage: {
-      driver: new R2Driver({
-        accountId: process.env.R2_ACCOUNT_ID,
-        accessKeyId: process.env.R2_ACCESS_KEY_ID,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      driver: new S3Driver({
+        credentials: {
+          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+        },
+        endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
         bucket: "my-bucket",
+        region: "auto",
       }),
     },
   });
@@ -63,20 +67,14 @@ const cms = q({ name: "my-cms" })
 ### Google Cloud Storage
 
 ```typescript
-import { GCSDriver } from "questpie/storage";
+import { GCSDriver } from "flydrive/drivers/gcs";
 
 const cms = q({ name: "my-cms" })
   .build({
     storage: {
       driver: new GCSDriver({
-        projectId: process.env.GCP_PROJECT_ID,
+        credentials: JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY!),
         bucket: "my-bucket",
-        keyFilename: "./service-account.json",
-        // Or use credentials object
-        credentials: {
-          client_email: process.env.GCP_CLIENT_EMAIL,
-          private_key: process.env.GCP_PRIVATE_KEY,
-        },
       }),
     },
   });

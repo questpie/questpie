@@ -14,6 +14,7 @@ QUESTPIE CMS is framework-agnostic. Use adapters to connect it to your preferred
 | Hono | `@questpie/hono` | Stable |
 | Elysia | `@questpie/elysia` | Stable |
 | Next.js | `@questpie/next` | Stable |
+| TanStack Start | `createFetchHandler` | Stable |
 
 ## Quick Start
 
@@ -101,19 +102,45 @@ All adapters expose these routes:
 | `/assets/*` | * | File storage routes |
 | `/realtime` | GET | SSE subscription |
 
-## Custom Adapters
+## TanStack Start
 
-Create an adapter for any framework:
+Use the built-in `createFetchHandler` directly with TanStack Start:
 
 ```typescript
-import { createRequestHandler } from "questpie";
+// src/routes/api/cms/$.ts
+import { createFileRoute } from "@tanstack/react-router";
+import { createFetchHandler } from "questpie";
+import { cms } from "~/questpie/server/cms";
+
+const handler = createFetchHandler(cms, { basePath: "/api/cms" });
+
+export const Route = createFileRoute("/api/cms/$")({
+  server: {
+    handlers: {
+      GET: async ({ request }) => handler(request),
+      POST: async ({ request }) => handler(request),
+      PUT: async ({ request }) => handler(request),
+      DELETE: async ({ request }) => handler(request),
+      PATCH: async ({ request }) => handler(request),
+    },
+  },
+});
+```
+
+## Custom Adapters
+
+Create an adapter for any framework that supports standard `Request`/`Response`:
+
+```typescript
+import { createFetchHandler } from "questpie";
 import { cms } from "./cms";
 
-const handler = createRequestHandler(cms);
+const handler = createFetchHandler(cms, { basePath: "/api/cms" });
 
 // Your framework's route handler
 export async function handleRequest(request: Request): Promise<Response> {
-  return handler(request);
+  const response = await handler(request);
+  return response ?? new Response("Not Found", { status: 404 });
 }
 ```
 

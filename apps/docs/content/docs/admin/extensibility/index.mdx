@@ -22,7 +22,7 @@ QUESTPIE Admin is designed to be extended at every level. Create custom fields, 
 ### Custom Field
 
 ```typescript
-import { field } from "@questpie/admin/builder";
+import { field } from "@questpie/admin/client";
 
 const colorField = field("color", {
   component: ColorPickerField,
@@ -45,7 +45,7 @@ const admin = qa()
 ### Custom Widget
 
 ```typescript
-import { widget } from "@questpie/admin/builder";
+import { widget } from "@questpie/admin/client";
 
 const weatherWidget = widget("weather", {
   component: WeatherWidgetComponent,

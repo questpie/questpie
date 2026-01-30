@@ -14,21 +14,23 @@ The KV (key-value) adapter provides caching and temporary storage.
 For development and single-server deployments:
 
 ```typescript
+import { MemoryKVAdapter } from "questpie/kv";
+
 const cms = q({ name: "my-cms" })
   .build({
     kv: {
-      adapter: memoryKVAdapter(),
+      adapter: new MemoryKVAdapter(),
       defaultTtl: 3600, // 1 hour
     },
   });
 ```
 
-### Redis
+### Redis (ioredis)
 
 For production and multi-server deployments:
 
 ```typescript
-import { RedisKVAdapter } from "questpie/kv";
+import { IORedisKVAdapter } from "questpie/kv";
 import Redis from "ioredis";
 
 const redis = new Redis(process.env.REDIS_URL);
@@ -36,30 +38,9 @@ const redis = new Redis(process.env.REDIS_URL);
 const cms = q({ name: "my-cms" })
   .build({
     kv: {
-      adapter: new RedisKVAdapter(redis),
+      adapter: new IORedisKVAdapter(redis),
       defaultTtl: 3600,
       prefix: "myapp:", // Key prefix
-    },
-  });
-```
-
-### Upstash Redis
-
-For serverless environments:
-
-```typescript
-import { UpstashKVAdapter } from "questpie/kv";
-import { Redis } from "@upstash/redis";
-
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
-
-const cms = q({ name: "my-cms" })
-  .build({
-    kv: {
-      adapter: new UpstashKVAdapter(redis),
     },
   });
 ```

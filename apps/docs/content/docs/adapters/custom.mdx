@@ -12,11 +12,11 @@ Create an adapter for any framework that supports the Web standard `Request`/`Re
 QUESTPIE provides a core request handler that works with standard Web APIs:
 
 ```typescript
-import { createRequestHandler } from "questpie";
+import { createFetchHandler } from "questpie";
 import { cms } from "./cms";
 
 // Create the handler
-const handler = createRequestHandler(cms, {
+const handler = createFetchHandler(cms, {
   basePath: "/api/cms",
 });
 
@@ -38,7 +38,7 @@ A typical adapter:
 ```typescript
 // Generic adapter pattern
 export function createMyFrameworkAdapter(cms, options = {}) {
-  const handler = createRequestHandler(cms, options);
+  const handler = createFetchHandler(cms, options);
 
   // Return framework-specific handler
   return async (frameworkRequest) => {
@@ -58,7 +58,7 @@ export function createMyFrameworkAdapter(cms, options = {}) {
 
 ```typescript
 // express-adapter.ts
-import { createRequestHandler, type QCMS } from "questpie";
+import { createFetchHandler, type QCMS } from "questpie";
 import type { Request as ExpressRequest, Response as ExpressResponse, Router } from "express";
 
 export function createExpressAdapter(
@@ -66,7 +66,7 @@ export function createExpressAdapter(
   options: { basePath?: string } = {}
 ) {
   const basePath = options.basePath || "/api/cms";
-  const handler = createRequestHandler(cms, { basePath });
+  const handler = createFetchHandler(cms, { basePath });
 
   return async (req: ExpressRequest, res: ExpressResponse) => {
     // Convert Express request to standard Request
@@ -112,7 +112,7 @@ app.use("/api/cms/*", createExpressAdapter(cms, { basePath: "/api/cms" }));
 
 ```typescript
 // fastify-adapter.ts
-import { createRequestHandler, type QCMS } from "questpie";
+import { createFetchHandler, type QCMS } from "questpie";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 
 export function createFastifyAdapter(
@@ -120,7 +120,7 @@ export function createFastifyAdapter(
   options: { basePath?: string } = {}
 ) {
   const basePath = options.basePath || "/api/cms";
-  const handler = createRequestHandler(cms, { basePath });
+  const handler = createFetchHandler(cms, { basePath });
 
   return async (fastify: FastifyInstance) => {
     fastify.all(`${basePath}/*`, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -232,7 +232,7 @@ async function handleSSE(response: Response, frameworkResponse) {
 
 ## Configuration Options
 
-The `createRequestHandler` accepts these options:
+The `createFetchHandler` accepts these options:
 
 ```typescript
 interface RequestHandlerOptions {

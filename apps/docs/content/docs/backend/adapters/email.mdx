@@ -53,24 +53,6 @@ const cms = q({ name: "my-cms" })
   });
 ```
 
-### Resend Adapter
-
-```typescript
-import { ResendAdapter } from "questpie/email";
-
-const cms = q({ name: "my-cms" })
-  .build({
-    email: {
-      adapter: new ResendAdapter({
-        apiKey: process.env.RESEND_API_KEY,
-      }),
-      defaults: {
-        from: "My App <noreply@myapp.com>",
-      },
-    },
-  });
-```
-
 ## Sending Emails
 
 ### Basic Email

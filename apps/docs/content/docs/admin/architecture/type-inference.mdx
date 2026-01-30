@@ -94,7 +94,7 @@ The `({ r })`, `({ v, f })` pattern enables type inference:
 Create typed helper functions:
 
 ```typescript
-import { createAdminHelpers } from "@questpie/admin/builder";
+import { createAdminHelpers } from "@questpie/admin";
 
 const h = createAdminHelpers(admin);
 
@@ -112,7 +112,7 @@ const { data } = h.hooks.useCollectionList("posts");
 Extract collection name union:
 
 ```typescript
-import type { CollectionNames } from "@questpie/admin/builder";
+import type { CollectionNames } from "@questpie/admin";
 
 type Names = CollectionNames<typeof admin>;
 // "posts" | "users"
@@ -127,7 +127,7 @@ function goToCollection(name: Names) {
 Extract global name union:
 
 ```typescript
-import type { GlobalNames } from "@questpie/admin/builder";
+import type { GlobalNames } from "@questpie/admin";
 
 type Names = GlobalNames<typeof admin>;
 // "settings" | "navigation"
@@ -139,7 +139,7 @@ For advanced use cases, augment module types:
 
 ```typescript
 // types/admin.d.ts
-declare module "@questpie/admin/builder" {
+declare module "@questpie/admin" {
   interface AdminCollectionRegistry {
     posts: typeof postsAdmin;
     users: typeof usersAdmin;
@@ -242,7 +242,7 @@ import type {
   GlobalNames,
   FieldNames,
   InferCollectionData,
-} from "@questpie/admin/builder";
+} from "@questpie/admin";
 
 // Instead of manually typing
 type PostData = InferCollectionData<typeof postsAdmin>;

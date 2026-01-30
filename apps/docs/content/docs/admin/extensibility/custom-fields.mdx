@@ -12,7 +12,7 @@ Create custom field types to handle specialized input needs beyond the built-in 
 A field definition consists of:
 
 ```typescript
-import { field } from "@questpie/admin/builder";
+import { field } from "@questpie/admin/client";
 
 const myField = field("myField", {
   // Required: React component for form editing
@@ -134,7 +134,7 @@ function ColorFieldCell({ value, config }: ColorCellProps) {
 ### 4. Create Field Definition
 
 ```typescript
-import { field } from "@questpie/admin/builder";
+import { field } from "@questpie/admin/client";
 import { z } from "zod";
 
 export const colorField = field("color", {

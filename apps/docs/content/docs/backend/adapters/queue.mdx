@@ -30,19 +30,6 @@ const cms = q({ name: "my-cms" })
   });
 ```
 
-### In-Memory (Development)
-
-For development and testing:
-
-```typescript
-const cms = q({ name: "my-cms" })
-  .build({
-    queue: {
-      adapter: memoryQueueAdapter(),
-    },
-  });
-```
-
 ## Defining Jobs
 
 Define jobs in your CMS configuration:

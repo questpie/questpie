@@ -27,7 +27,7 @@ const myModule = qa()
 
 ```typescript
 // modules/seo-module.ts
-import { qa, field } from "@questpie/admin/builder";
+import { qa, field } from "@questpie/admin/client";
 
 // Custom field
 const seoTitleField = field("seoTitle", {
@@ -61,7 +61,7 @@ const admin = qa()
 
 ```typescript
 // modules/blog-module.ts
-import { qa } from "@questpie/admin/builder";
+import { qa } from "@questpie/admin/client";
 import { Newspaper, Tag, Users } from "lucide-react";
 
 // Define collection configs
@@ -107,7 +107,7 @@ export const blogModule = qa()
 
 ```typescript
 // modules/analytics-module.ts
-import { qa, widget } from "@questpie/admin/builder";
+import { qa, widget } from "@questpie/admin/client";
 
 const pageViewsWidget = widget("pageViews", {
   component: PageViewsChart,
