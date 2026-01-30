@@ -1,5 +1,11 @@
 # questpie
 
+## 1.0.5
+
+### Patch Changes
+
+- [`a043841`](https://github.com/questpie/questpie-cms/commit/a0438419b01421ef16ca4b7621cb3ec7562cbec9) Thanks [@drepkovsky](https://github.com/drepkovsky)! - refactor: use cms.api.collections for CRUD operations
+
 ## 1.0.4
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @questpie/hono
 
+## 1.0.5
+
+### Patch Changes
+
+- Updated dependencies [[`a043841`](https://github.com/questpie/questpie-cms/commit/a0438419b01421ef16ca4b7621cb3ec7562cbec9)]:
+  - questpie@1.0.5
+
 ## 1.0.4
 
 ### Patch Changes
