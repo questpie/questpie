@@ -4,7 +4,6 @@
 "@questpie/elysia": minor
 "@questpie/hono": minor
 "@questpie/next": minor
-"@questpie/tanstack-start": minor
 "@questpie/tanstack-query": minor
 ---
 

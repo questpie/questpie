@@ -12,7 +12,6 @@
 			"@questpie/elysia",
 			"@questpie/hono",
 			"@questpie/next",
-			"@questpie/tanstack-start",
 			"@questpie/tanstack-query"
 		]
 	],
