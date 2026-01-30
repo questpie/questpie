@@ -1,15 +1,14 @@
 /**
- * Publish script that converts workspace:* to actual versions before running changeset publish.
+ * Publish script that:
+ * 1. Applies publishConfig overrides (exports, main, etc.)
+ * 2. Converts workspace:* to actual versions
+ * 3. Runs changeset publish (npm with provenance/trusted publishing)
+ * 4. Restores original package.json files
  *
  * This is needed because:
  * - changeset publish uses npm which doesn't understand workspace:* protocol
- * - bun publish understands workspace:* but doesn't support --provenance (trusted publishing)
- *
- * What it does:
- * 1. Reads all package.json files and saves originals
- * 2. Replaces workspace:* with actual versions from the monorepo
- * 3. Runs changeset publish (which uses npm with provenance)
- * 4. Restores original package.json files
+ * - npm doesn't apply publishConfig overrides like bun publish does
+ * - bun publish understands both but doesn't support --provenance (trusted publishing)
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -27,6 +26,7 @@ interface PackageJson {
   dependencies?: Record<string, string>
   devDependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
+  publishConfig?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -71,9 +71,9 @@ function replaceWorkspaceVersions(
         } else {
           result[name] = `^${actualVersion}`
         }
-        console.log(`  ${name}: ${version} -> ${result[name]}`)
+        console.log(`    ${name}: ${version} -> ${result[name]}`)
       } else {
-        console.warn(`  ⚠️  ${name}: workspace version not found, keeping as-is`)
+        console.warn(`    ⚠️  ${name}: workspace version not found, keeping as-is`)
         result[name] = version
       }
     } else {
@@ -102,13 +102,13 @@ function getPackageJsonPaths(): string[] {
 }
 
 async function main() {
-  console.log('🔄 Converting workspace:* to actual versions...\n')
+  console.log('🔄 Preparing packages for publish...\n')
 
   const versions = getWorkspaceVersions()
   const packageJsonPaths = getPackageJsonPaths()
   const originals = new Map<string, string>()
 
-  // Save originals and convert workspace:* references
+  // Save originals and apply transformations
   for (const packageJsonPath of packageJsonPaths) {
     const original = fs.readFileSync(packageJsonPath, 'utf-8')
     originals.set(packageJsonPath, original)
@@ -118,18 +118,34 @@ async function main() {
 
     let modified = false
 
-    if (packageJson.dependencies) {
-      const newDeps = replaceWorkspaceVersions(packageJson.dependencies, versions)
-      if (JSON.stringify(newDeps) !== JSON.stringify(packageJson.dependencies)) {
-        packageJson.dependencies = newDeps
+    // 1. Apply publishConfig overrides (like bun publish does)
+    if (packageJson.publishConfig) {
+      console.log('  Applying publishConfig overrides:')
+      for (const [key, value] of Object.entries(packageJson.publishConfig)) {
+        // Skip npm-specific fields that aren't overrides
+        if (key === 'access' || key === 'registry' || key === 'tag') continue
+        console.log(`    ${key}`)
+        packageJson[key] = value
         modified = true
       }
     }
 
+    // 2. Convert workspace:* in dependencies
+    if (packageJson.dependencies) {
+      const hasWorkspace = Object.values(packageJson.dependencies).some(v => v.startsWith('workspace:'))
+      if (hasWorkspace) {
+        console.log('  Converting workspace dependencies:')
+        packageJson.dependencies = replaceWorkspaceVersions(packageJson.dependencies, versions)
+        modified = true
+      }
+    }
+
+    // 3. Convert workspace:* in peerDependencies
     if (packageJson.peerDependencies) {
-      const newPeerDeps = replaceWorkspaceVersions(packageJson.peerDependencies, versions)
-      if (JSON.stringify(newPeerDeps) !== JSON.stringify(packageJson.peerDependencies)) {
-        packageJson.peerDependencies = newPeerDeps
+      const hasWorkspace = Object.values(packageJson.peerDependencies).some(v => v.startsWith('workspace:'))
+      if (hasWorkspace) {
+        console.log('  Converting workspace peerDependencies:')
+        packageJson.peerDependencies = replaceWorkspaceVersions(packageJson.peerDependencies, versions)
         modified = true
       }
     }
@@ -138,12 +154,15 @@ async function main() {
 
     if (modified) {
       fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, '\t') + '\n')
+      console.log('  ✅ Modified\n')
     } else {
-      console.log('  (no workspace:* references)')
+      console.log('  (no changes needed)\n')
     }
   }
 
-  console.log('\n🚀 Running changeset publish...\n')
+  console.log('🚀 Running changeset publish...\n')
+
+  let publishSuccess = false
 
   try {
     const { stdout, stderr } = await execAsync('bunx changeset publish', {
@@ -155,6 +174,7 @@ async function main() {
     if (stderr) console.error(stderr)
 
     console.log('\n✅ Publish completed successfully')
+    publishSuccess = true
   } catch (error: any) {
     console.error('\n❌ Publish failed:', error.message)
     if (error.stdout) console.log('stdout:', error.stdout)
@@ -166,6 +186,10 @@ async function main() {
       fs.writeFileSync(packageJsonPath, original)
     }
     console.log('✅ Restored')
+  }
+
+  if (!publishSuccess) {
+    process.exit(1)
   }
 }
 
