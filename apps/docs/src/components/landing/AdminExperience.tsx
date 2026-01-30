@@ -30,7 +30,7 @@ const features = [
 
 export function AdminExperience() {
 	return (
-		<section className="py-24 relative overflow-hidden">
+		<section className="py-24 border-t border-border/50 relative overflow-hidden">
 			{/* Subtle background glow */}
 			<div className="absolute top-1/2 left-1/2 w-[600px] h-[600px] bg-primary/3 rounded-full blur-[180px] -translate-x-1/2 -translate-y-1/2" />
 
@@ -160,9 +160,7 @@ export function AdminExperience() {
 												<div className="w-8 h-6 bg-muted" />
 												<div className="truncate">{row.title}</div>
 												<div className="flex items-center gap-1">
-													<div
-														className={`w-1.5 h-1.5 ${row.statusColor}`}
-													/>
+													<div className={`w-1.5 h-1.5 ${row.statusColor}`} />
 													<span className="text-muted-foreground">
 														{row.status}
 													</span>
