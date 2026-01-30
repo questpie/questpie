@@ -109,9 +109,7 @@ function isAsyncIndexingAvailable(cms: Questpie<any>): boolean {
 	if (!cms.queue) return false;
 
 	// Check if index-records job exists on the queue client
-	return (
-		typeof (cms.queue as any)["index-records"]?.publish === "function"
-	);
+	return typeof (cms.queue as any)["index-records"]?.publish === "function";
 }
 
 /**
@@ -239,27 +237,19 @@ async function indexAllLocalesSync(
 
 		try {
 			// Fetch localized version of the record
-			const collection = cms.getCollections()[state.name];
-			if (!collection) continue;
+			const crud = cms.api.collections[state.name];
+			if (!crud) continue;
 
-			const localizedRecord = await (collection as any).crud.findById(
-				record.id,
-				{
-					locale,
-					localeFallback: false,
-					populate: false,
-				},
-			);
+			const localizedRecord = await crud.findOne({
+				where: { id: record.id },
+				locale,
+				localeFallback: false,
+				populate: false,
+			});
 
 			if (!localizedRecord) continue;
 
-			await indexRecordSync(
-				localizedRecord,
-				locale,
-				state,
-				cms,
-				defaultLocale,
-			);
+			await indexRecordSync(localizedRecord, locale, state, cms, defaultLocale);
 		} catch (error) {
 			console.warn(
 				`[Search] Failed to index ${state.name}:${record.id} for locale ${locale}:`,
@@ -319,12 +309,7 @@ export async function indexToSearch(
 		scheduleAsyncIndex(cms, state.name, record.id);
 	} else {
 		// Fallback: synchronous indexing for all locales
-		await indexAllLocalesSync(
-			record,
-			state,
-			cms,
-			normalized.defaultLocale,
-		);
+		await indexAllLocalesSync(record, state, cms, normalized.defaultLocale);
 	}
 }
 
@@ -351,7 +336,7 @@ export interface RemoveFromSearchOptions {
  */
 export async function removeFromSearch(
 	recordId: string,
-	context: CRUDContext,
+	_context: CRUDContext,
 	options: RemoveFromSearchOptions,
 ): Promise<void> {
 	const { cms, state } = options;

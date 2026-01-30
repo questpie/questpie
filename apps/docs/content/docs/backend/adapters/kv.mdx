@@ -166,7 +166,10 @@ async function getUserWithCache(userId: string): Promise<User> {
   }
 
   // Fetch from database
-  const user = await db.users.findById(userId);
+  const user = await cms.api.collections.users.findOne({ where: { id: userId } });
+  if (!user) {
+    throw new Error("User not found");
+  }
 
   // Store in cache
   await cms.kv.set(cacheKey, user, 3600);

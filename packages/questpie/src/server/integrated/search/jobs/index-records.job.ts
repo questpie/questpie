@@ -91,7 +91,7 @@ export const indexRecordsJob = job({
 		// Get configured locales (or default to 'en')
 		const locales = await cms.getLocales();
 		const localeCodes = locales.map((l) => l.code);
-		const defaultLocale = cms.config.locale?.defaultLocale || "en";
+		const _defaultLocale = cms.config.locale?.defaultLocale || "en";
 
 		// Batch all index operations
 		const indexOperations: Array<{
@@ -124,14 +124,12 @@ export const indexRecordsJob = job({
 			for (const locale of localeCodes) {
 				try {
 					// Fetch localized version of the record
-					const record = await (collectionConfig as any).crud.findById(
-						recordId,
-						{
-							locale,
-							localeFallback: false,
-							populate: false,
-						},
-					);
+					const record = await cms.api.collections[collection].findOne({
+						where: { id: recordId },
+						locale,
+						localeFallback: false,
+						populate: false,
+					});
 
 					if (!record) continue;
 
