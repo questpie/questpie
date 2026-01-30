@@ -1,5 +1,13 @@
 # questpie
 
+## 1.0.1
+
+### Patch Changes
+
+- [`87c7afb`](https://github.com/questpie/questpie-cms/commit/87c7afbfad14e3f20ab078a803f11abf173aae99) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Remove internal @questpie/typescript-config package and inline tsconfig settings
+
+  This removes the workspace:\* dependency that was causing issues when installing published packages from npm.
+
 ## 1.0.0
 
 ### Minor Changes
