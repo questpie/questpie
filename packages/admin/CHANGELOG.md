@@ -1,5 +1,17 @@
 # @questpie/admin
 
+## 1.0.3
+
+### Patch Changes
+
+- [`9005d72`](https://github.com/questpie/questpie-cms/commit/9005d725497bb0c70884c6dced980c9496163705) Thanks [@drepkovsky](https://github.com/drepkovsky)! - refactor: use optimized type utilities in admin builder types
+
+  Replace `Omit<T, "key"> & { key: NewType }` pattern with `SetProperty`, `TypeMerge`, and `UnsetProperty` utilities for faster TypeScript completion.
+
+- Updated dependencies []:
+  - questpie@1.0.3
+  - @questpie/tanstack-query@1.0.3
+
 ## 1.0.2
 
 ### Patch Changes
