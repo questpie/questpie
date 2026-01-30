@@ -2,6 +2,11 @@
 	"name": "@questpie/hono",
 	"version": "0.0.2",
 	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/questpie/questpie-cms.git",
+		"directory": "packages/hono"
+	},
 	"files": [
 		"dist"
 	],

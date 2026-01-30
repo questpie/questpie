@@ -2,6 +2,11 @@
 	"name": "questpie",
 	"version": "0.0.2",
 	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/questpie/questpie-cms.git",
+		"directory": "packages/questpie"
+	},
 	"bin": {
 		"questpie": "./dist/cli.mjs"
 	},
