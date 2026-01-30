@@ -7,6 +7,7 @@
 
 import {
 	DEFAULT_LOCALE_CONFIG,
+	type Prettify,
 	type SetProperty,
 	type TypeMerge,
 	type UnsetProperty,
@@ -103,7 +104,11 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 	fields<TNewFields extends Record<string, any>>(
 		fields: TNewFields,
 	): AdminBuilder<
-		SetProperty<TState, "fields", TypeMerge<TState["fields"], TNewFields>>
+		SetProperty<
+			TState,
+			"fields",
+			Prettify<TypeMerge<TState["fields"], TNewFields>>
+		>
 	> {
 		return new AdminBuilder({
 			...this.state,
@@ -120,12 +125,18 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 	views<TNewViews extends Record<string, any>>(
 		views: TNewViews,
 	): AdminBuilder<
-		TypeMerge<
-			UnsetProperty<TState, "listViews" | "editViews">,
-			{
-				listViews: TypeMerge<TState["listViews"], FilterListViews<TNewViews>>;
-				editViews: TypeMerge<TState["editViews"], FilterEditViews<TNewViews>>;
-			}
+		Prettify<
+			TypeMerge<
+				UnsetProperty<TState, "listViews" | "editViews">,
+				{
+					listViews: Prettify<
+						TypeMerge<TState["listViews"], FilterListViews<TNewViews>>
+					>;
+					editViews: Prettify<
+						TypeMerge<TState["editViews"], FilterEditViews<TNewViews>>
+					>;
+				}
+			>
 		>
 	> {
 		const listViews: Record<string, any> = {};
@@ -154,7 +165,11 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 	widgets<TNewWidgets extends Record<string, any>>(
 		widgets: TNewWidgets,
 	): AdminBuilder<
-		SetProperty<TState, "widgets", TypeMerge<TState["widgets"], TNewWidgets>>
+		SetProperty<
+			TState,
+			"widgets",
+			Prettify<TypeMerge<TState["widgets"], TNewWidgets>>
+		>
 	> {
 		return new AdminBuilder({
 			...this.state,
@@ -171,7 +186,7 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 	pages<TNewPages extends Record<string, any>>(
 		pages: TNewPages,
 	): AdminBuilder<
-		SetProperty<TState, "pages", TypeMerge<TState["pages"], TNewPages>>
+		SetProperty<TState, "pages", Prettify<TypeMerge<TState["pages"], TNewPages>>>
 	> {
 		return new AdminBuilder({
 			...this.state,
@@ -209,7 +224,11 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 	blocks<TNewBlocks extends Record<string, any>>(
 		blocks: TNewBlocks,
 	): AdminBuilder<
-		SetProperty<TState, "blocks", TypeMerge<TState["blocks"], TNewBlocks>>
+		SetProperty<
+			TState,
+			"blocks",
+			Prettify<TypeMerge<TState["blocks"], TNewBlocks>>
+		>
 	> {
 		return new AdminBuilder({
 			...this.state,
@@ -240,7 +259,7 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 		SetProperty<
 			TState,
 			"translations",
-			TypeMerge<TState["translations"], TNewTranslations>
+			Prettify<TypeMerge<TState["translations"], TNewTranslations>>
 		>
 	> {
 		return new AdminBuilder({
@@ -288,7 +307,7 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 		SetProperty<
 			TState,
 			"translations",
-			TypeMerge<TState["translations"], TNewMessages>
+			Prettify<TypeMerge<TState["translations"], TNewMessages>>
 		>
 	> {
 		return this.translations(messages);
@@ -300,53 +319,65 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 	use<TOther extends AdminBuilder<any>>(
 		other: TOther,
 	): AdminBuilder<
-		TypeMerge<
-			UnsetProperty<
-				TState,
-				| "fields"
-				| "listViews"
-				| "editViews"
-				| "widgets"
-				| "pages"
-				| "blocks"
-				| "collections"
-				| "globals"
-				| "sidebar"
-				| "translations"
-			>,
-			{
-				fields: TypeMerge<TState["fields"], TOther["state"]["fields"]>;
-				listViews: TypeMerge<TState["listViews"], TOther["state"]["listViews"]>;
-				editViews: TypeMerge<TState["editViews"], TOther["state"]["editViews"]>;
-				widgets: TypeMerge<TState["widgets"], TOther["state"]["widgets"]>;
-				pages: TypeMerge<TState["pages"], TOther["state"]["pages"]>;
-				blocks: TypeMerge<TState["blocks"], TOther["state"]["blocks"]>;
-				collections: TypeMerge<
-					TState["collections"],
-					TOther["state"]["collections"]
-				>;
-				globals: TypeMerge<TState["globals"], TOther["state"]["globals"]>;
-				sidebar: TOther["state"]["sidebar"] extends { sections: any[] }
-					? {
-							sections: [
-								...(TState["sidebar"] extends { sections: infer S }
-									? S extends any[]
-										? S
-										: []
-									: []),
-								...(TOther["state"]["sidebar"] extends { sections: infer S }
-									? S extends any[]
-										? S
-										: []
-									: []),
-							];
-						}
-					: TState["sidebar"];
-				translations: TypeMerge<
-					TState["translations"],
-					TOther["state"]["translations"]
-				>;
-			}
+		Prettify<
+			TypeMerge<
+				UnsetProperty<
+					TState,
+					| "fields"
+					| "listViews"
+					| "editViews"
+					| "widgets"
+					| "pages"
+					| "blocks"
+					| "collections"
+					| "globals"
+					| "sidebar"
+					| "translations"
+				>,
+				{
+					fields: Prettify<
+						TypeMerge<TState["fields"], TOther["state"]["fields"]>
+					>;
+					listViews: Prettify<
+						TypeMerge<TState["listViews"], TOther["state"]["listViews"]>
+					>;
+					editViews: Prettify<
+						TypeMerge<TState["editViews"], TOther["state"]["editViews"]>
+					>;
+					widgets: Prettify<
+						TypeMerge<TState["widgets"], TOther["state"]["widgets"]>
+					>;
+					pages: Prettify<TypeMerge<TState["pages"], TOther["state"]["pages"]>>;
+					blocks: Prettify<
+						TypeMerge<TState["blocks"], TOther["state"]["blocks"]>
+					>;
+					collections: Prettify<
+						TypeMerge<TState["collections"], TOther["state"]["collections"]>
+					>;
+					globals: Prettify<
+						TypeMerge<TState["globals"], TOther["state"]["globals"]>
+					>;
+					sidebar: TOther["state"]["sidebar"] extends { sections: any[] }
+						? {
+								sections: [
+									...(TState["sidebar"] extends { sections: infer S }
+										? S extends any[]
+											? S
+											: []
+										: []),
+									...(TOther["state"]["sidebar"] extends { sections: infer S }
+										? S extends any[]
+											? S
+											: []
+										: []),
+								];
+							}
+						: TState["sidebar"];
+					translations: Prettify<
+						TypeMerge<TState["translations"], TOther["state"]["translations"]>
+					>;
+				}
+			>
 		>
 	> {
 		const otherState = (other as any).state;
@@ -387,7 +418,7 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 		SetProperty<
 			TState,
 			"collections",
-			TypeMerge<TState["collections"], TNewCollections>
+			Prettify<TypeMerge<TState["collections"], TNewCollections>>
 		>
 	> {
 		return new AdminBuilder({
@@ -405,7 +436,11 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 	globals<TNewGlobals extends Record<string, any>>(
 		globals: TNewGlobals,
 	): AdminBuilder<
-		SetProperty<TState, "globals", TypeMerge<TState["globals"], TNewGlobals>>
+		SetProperty<
+			TState,
+			"globals",
+			Prettify<TypeMerge<TState["globals"], TNewGlobals>>
+		>
 	> {
 		return new AdminBuilder({
 			...this.state,
@@ -568,7 +603,7 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 		SetProperty<
 			TState,
 			"defaultViews",
-			TypeMerge<TState["defaultViews"], TDefaultViews>
+			Prettify<TypeMerge<TState["defaultViews"], TDefaultViews>>
 		>
 	> {
 		return new AdminBuilder({

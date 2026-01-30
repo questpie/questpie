@@ -26,10 +26,14 @@
 		"@react-email/render": "^2.0.0",
 		"better-auth": "^1.4.9",
 		"commander": "^14.0.2",
+		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"flydrive": "^1.3.0",
 		"html-to-text": "^9.0.5",
+		"pino": "^10.1.0",
+		"pino-pretty": "^13.1.3",
 		"qs": "^6.13.1",
-		"superjson": "^2.2.6"
+		"superjson": "^2.2.6",
+		"zod": "^4.2.1"
 	},
 	"devDependencies": {
 		"@electric-sql/pglite": "^0.3.14",
@@ -40,28 +44,23 @@
 		"@types/react": "^19.2.7",
 		"bun-types": "latest",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
-		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"ioredis": "^5.4.2",
 		"nodemailer": "^7.0.12",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4",
-		"pino": "^10.1.0",
-		"pino-pretty": "^13.1.3",
-		"tsdown": "^0.18.3",
-		"zod": "^4.2.1"
+		"tsdown": "^0.18.3"
 	},
 	"peerDependencies": {
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
-		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"ioredis": "^5.4.2",
 		"nodemailer": "^7.0.12",
 		"pg": "^8.13.1",
-		"pg-boss": "^12.5.4",
-		"pino": "^10.1.0",
-		"pino-pretty": "^13.1.3",
-		"zod": "^4.2.1"
+		"pg-boss": "^12.5.4"
 	},
 	"peerDependenciesMeta": {
+		"drizzle-kit": {
+			"optional": true
+		},
 		"ioredis": {
 			"optional": true
 		},
@@ -72,12 +71,6 @@
 			"optional": true
 		},
 		"pg-boss": {
-			"optional": true
-		},
-		"pino": {
-			"optional": true
-		},
-		"pino-pretty": {
 			"optional": true
 		}
 	},

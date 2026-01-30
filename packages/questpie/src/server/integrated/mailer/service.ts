@@ -1,5 +1,7 @@
 import { render } from "@react-email/render";
 import { convert } from "html-to-text";
+import { ConsoleAdapter } from "./adapters/console.adapter.js";
+import type { MailAdapter } from "./adapter.js";
 import type {
   EmailTemplateDefinition,
   EmailTemplateNames,
@@ -12,6 +14,8 @@ import type {
   SerializableMailOptions,
 } from "./types.js";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 /**
  * Main mailer service
  */
@@ -20,6 +24,7 @@ export class MailerService<
 > {
   private templates: Map<string, EmailTemplateDefinition<any, any>>;
   private defaultFrom?: string;
+  private defaultAdapter: MailAdapter | null = null;
 
   constructor(private config: MailerConfig<TTemplates>) {
     this.templates = new Map();
@@ -29,6 +34,28 @@ export class MailerService<
       }
     }
     this.defaultFrom = config.defaults?.from;
+  }
+
+  /**
+   * Get the mail adapter, falling back to ConsoleAdapter in development
+   */
+  private async getAdapter(): Promise<MailAdapter> {
+    const adapter = await this.config.adapter;
+    if (adapter) {
+      return adapter;
+    }
+
+    // In development, use ConsoleAdapter as default
+    if (isDev) {
+      if (!this.defaultAdapter) {
+        this.defaultAdapter = new ConsoleAdapter();
+      }
+      return this.defaultAdapter;
+    }
+
+    throw new Error(
+      "QUESTPIE: Email adapter is not configured. Provide adapter in .build({ email: { adapter: ... } })",
+    );
   }
 
   /**
@@ -65,12 +92,7 @@ export class MailerService<
    */
   async send(options: MailOptions): Promise<void> {
     const serializedMail = await this.serializeMailOptions(options);
-    const adapter = await this.config.adapter;
-    if (!adapter) {
-      throw new Error(
-        "QUESTPIE: Email adapter is not configured. Provide adapter in .build({ email: { adapter: ... } })",
-      );
-    }
+    const adapter = await this.getAdapter();
     return adapter.send(serializedMail);
   }
 
