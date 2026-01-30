@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/admin",
-	"version": "0.0.2",
+	"version": "1.0.0",
 	"type": "module",
 	"imports": {
 		"#questpie/admin/*": "./src/*"
