@@ -41,7 +41,7 @@ export type {
 	FieldAccess,
 	FieldHooks,
 	FieldHookContext,
-	AccessContext,
+	FieldAccessContext,
 	ContextualOperators,
 	OperatorMap,
 	OperatorFn,

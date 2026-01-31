@@ -197,9 +197,9 @@ export interface BaseFieldConfig {
 // ============================================================================
 
 /**
- * Context provided to access control functions.
+ * Context provided to field-level access control functions.
  */
-export interface AccessContext {
+export interface FieldAccessContext {
 	/** Current request */
 	req: Request;
 
@@ -230,21 +230,21 @@ export interface FieldAccess {
 	 * If function returns false, field is omitted from response.
 	 * @default true
 	 */
-	read?: boolean | ((ctx: AccessContext) => boolean | Promise<boolean>);
+	read?: boolean | ((ctx: FieldAccessContext) => boolean | Promise<boolean>);
 
 	/**
 	 * Can set this field on create?
 	 * If false, field is removed from input before save.
 	 * @default true
 	 */
-	create?: boolean | ((ctx: AccessContext) => boolean | Promise<boolean>);
+	create?: boolean | ((ctx: FieldAccessContext) => boolean | Promise<boolean>);
 
 	/**
 	 * Can update this field?
 	 * If false, field changes are ignored on update.
 	 * @default true
 	 */
-	update?: boolean | ((ctx: AccessContext) => boolean | Promise<boolean>);
+	update?: boolean | ((ctx: FieldAccessContext) => boolean | Promise<boolean>);
 }
 
 // ============================================================================
