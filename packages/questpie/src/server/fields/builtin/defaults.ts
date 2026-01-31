@@ -17,6 +17,9 @@ import { selectField } from "./select.js";
 import { uploadField } from "./upload.js";
 import { relationField } from "./relation.js";
 import { polymorphicRelationField } from "./polymorphic-relation.js";
+import { objectField } from "./object.js";
+import { arrayField } from "./array.js";
+import { jsonField } from "./json.js";
 
 /**
  * Default field factories map.
@@ -67,6 +70,11 @@ export const defaultFields = {
 	// Relations
 	relation: relationField,
 	polymorphicRelation: polymorphicRelationField,
+
+	// Complex types
+	object: objectField,
+	array: arrayField,
+	json: jsonField,
 } as const;
 
 /**

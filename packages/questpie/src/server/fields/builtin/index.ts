@@ -41,6 +41,11 @@ export {
 	type PolymorphicReference,
 } from "./polymorphic-relation.js";
 
+// Complex fields
+export { objectField, type ObjectFieldConfig } from "./object.js";
+export { arrayField, type ArrayFieldConfig } from "./array.js";
+export { jsonField, type JsonFieldConfig, type JsonValue } from "./json.js";
+
 /**
  * Default field factories map.
  * Use this with QuestpieBuilder.fields() to register all built-in fields.
