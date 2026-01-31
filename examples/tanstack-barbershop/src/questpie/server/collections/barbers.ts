@@ -76,7 +76,7 @@ export const barbers = q
 	}))
 	.title(({ f }) => f.name)
 	.hooks({
-		beforeChange: async ({ data, operation }) => {
+		beforeValidate: async ({ data, operation }) => {
 			// Auto-generate slug from name on create
 			if (operation === "create") {
 				const d = data as { name?: string; slug?: string };
