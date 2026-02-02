@@ -23,6 +23,10 @@ export type {
 // Introspection API
 export {
 	type AccessResult,
+	type AdminCollectionSchema,
+	type AdminFormViewSchema,
+	type AdminListViewSchema,
+	type AdminPreviewSchema,
 	type CollectionAccessInfo,
 	type CollectionSchema,
 	type FieldAccessInfo,

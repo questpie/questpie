@@ -1,4 +1,9 @@
 // Re-export shared type utilities for convenience
+
+// Re-export commonly used drizzle-orm utilities for use by dependent packages
+// This ensures all packages use the same drizzle-orm instance (type compatibility)
+export { isNotNull, isNull, type SQL, sql } from "drizzle-orm";
+export { json, jsonb } from "drizzle-orm/pg-core";
 export type {
 	CollectionInfer,
 	CollectionInsert,

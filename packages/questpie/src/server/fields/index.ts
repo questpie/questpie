@@ -64,6 +64,7 @@ export type {
 	FieldAccessContext,
 	FieldDefinition,
 	FieldDefinitionAccess,
+	FieldDefinitionState,
 	FieldHookContext,
 	FieldHooks,
 	FieldMetadata,

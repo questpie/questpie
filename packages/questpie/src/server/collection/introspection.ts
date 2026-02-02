@@ -81,6 +81,105 @@ export interface CollectionSchema {
 		/** JSON Schema for update operations */
 		update?: unknown;
 	};
+
+	/**
+	 * Admin configuration from .admin(), .list(), .form(), .preview()
+	 * Only present when adminModule is used.
+	 */
+	admin?: {
+		/** Collection metadata (label, icon, hidden, group, order) */
+		config?: AdminCollectionSchema;
+		/** List view configuration */
+		list?: AdminListViewSchema;
+		/** Form view configuration */
+		form?: AdminFormViewSchema;
+		/** Preview configuration */
+		preview?: AdminPreviewSchema;
+	};
+}
+
+/**
+ * Admin collection metadata schema (from .admin())
+ */
+export interface AdminCollectionSchema {
+	/** Display label */
+	label?: I18nText;
+	/** Description */
+	description?: I18nText;
+	/** Icon reference */
+	icon?: { type: string; props: Record<string, unknown> };
+	/** Hide from admin sidebar */
+	hidden?: boolean;
+	/** Group in sidebar */
+	group?: string;
+	/** Order within group */
+	order?: number;
+}
+
+/**
+ * Admin list view schema (from .list())
+ */
+export interface AdminListViewSchema {
+	/** View type (table, cards, etc.) */
+	view?: string;
+	/** Columns to display (field names) */
+	columns?: string[];
+	/** Default sort configuration */
+	defaultSort?: { field: string; direction: "asc" | "desc" };
+	/** Searchable fields */
+	searchable?: string[];
+	/** Filterable fields */
+	filterable?: string[];
+	/** Actions configuration */
+	actions?: {
+		header?: { primary?: unknown[]; secondary?: unknown[] };
+		row?: unknown[];
+		bulk?: unknown[];
+	};
+}
+
+/**
+ * Admin form view schema (from .form())
+ */
+export interface AdminFormViewSchema {
+	/** View type (form, wizard, etc.) */
+	view?: string;
+	/** Fields to include */
+	fields?: string[];
+	/** Form sections */
+	sections?: Array<{
+		label?: I18nText;
+		description?: I18nText;
+		fields: string[];
+		collapsible?: boolean;
+		defaultCollapsed?: boolean;
+	}>;
+	/** Form tabs */
+	tabs?: Array<{
+		label: I18nText;
+		icon?: { type: string; props: Record<string, unknown> };
+		sections: Array<{
+			label?: I18nText;
+			description?: I18nText;
+			fields: string[];
+			collapsible?: boolean;
+			defaultCollapsed?: boolean;
+		}>;
+	}>;
+}
+
+/**
+ * Admin preview schema (from .preview())
+ */
+export interface AdminPreviewSchema {
+	/** Enable preview panel */
+	enabled?: boolean;
+	/** Preview panel position */
+	position?: "left" | "right" | "bottom";
+	/** Default panel width (percentage) */
+	defaultWidth?: number;
+	/** URL template or pattern (actual URL generation happens server-side) */
+	hasUrlBuilder?: boolean;
 }
 
 /**
@@ -249,11 +348,15 @@ export async function introspectCollection(
 		}
 	}
 
+	// Extract admin configuration if present (from adminModule)
+	const adminConfig = extractAdminConfig(state);
+
 	return {
 		name: state.name,
-		label: undefined, // TODO: Add label to collection builder state
-		description: undefined, // TODO: Add description to collection builder state
-		icon: undefined, // TODO: Add icon to collection builder state
+		// Use admin config label/description/icon if available
+		label: adminConfig?.config?.label,
+		description: adminConfig?.config?.description,
+		icon: adminConfig?.config?.icon?.props?.name as string | undefined,
 		fields,
 		access,
 		options: {
@@ -269,7 +372,77 @@ export async function introspectCollection(
 			: undefined,
 		relations,
 		validation,
+		admin: adminConfig,
 	};
+}
+
+/**
+ * Extract admin configuration from collection state.
+ * These properties are added by adminModule via monkey patching.
+ */
+function extractAdminConfig(
+	state: CollectionBuilderState,
+): CollectionSchema["admin"] | undefined {
+	// Check if any admin config exists
+	const stateAny = state as any;
+	const hasAdminConfig =
+		stateAny.admin ||
+		stateAny.adminList ||
+		stateAny.adminForm ||
+		stateAny.adminPreview;
+
+	if (!hasAdminConfig) {
+		return undefined;
+	}
+
+	const result: CollectionSchema["admin"] = {};
+
+	// Extract admin metadata (.admin())
+	if (stateAny.admin) {
+		result.config = {
+			label: stateAny.admin.label,
+			description: stateAny.admin.description,
+			icon: stateAny.admin.icon,
+			hidden: stateAny.admin.hidden,
+			group: stateAny.admin.group,
+			order: stateAny.admin.order,
+		};
+	}
+
+	// Extract list view config (.list())
+	if (stateAny.adminList) {
+		result.list = {
+			view: stateAny.adminList.view,
+			columns: stateAny.adminList.columns,
+			defaultSort: stateAny.adminList.defaultSort,
+			searchable: stateAny.adminList.searchable,
+			filterable: stateAny.adminList.filterable,
+			actions: stateAny.adminList.actions,
+		};
+	}
+
+	// Extract form view config (.form())
+	if (stateAny.adminForm) {
+		result.form = {
+			view: stateAny.adminForm.view,
+			fields: stateAny.adminForm.fields,
+			sections: stateAny.adminForm.sections,
+			tabs: stateAny.adminForm.tabs,
+		};
+	}
+
+	// Extract preview config (.preview())
+	if (stateAny.adminPreview) {
+		result.preview = {
+			enabled: stateAny.adminPreview.enabled,
+			position: stateAny.adminPreview.position,
+			defaultWidth: stateAny.adminPreview.defaultWidth,
+			// Don't include the url function - just indicate it exists
+			hasUrlBuilder: typeof stateAny.adminPreview.url === "function",
+		};
+	}
+
+	return result;
 }
 
 /**
