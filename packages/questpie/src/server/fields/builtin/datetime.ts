@@ -34,7 +34,7 @@ import type {
 /**
  * Datetime field metadata - augmentable by external packages.
  */
-export interface DatetimeFieldMeta {}
+export type DatetimeFieldMeta = {};
 
 // ============================================================================
 // Datetime Field Configuration
@@ -194,10 +194,8 @@ export const datetimeField = defineField<"datetime", DatetimeFieldConfig, Date>(
 						: config.default;
 				column = column.default(defaultValue as Date);
 			}
-
-			if (config.unique) {
-				column = column.unique();
-			}
+			// NOTE: unique constraint removed from field level
+			// Use .indexes() on collection builder instead
 
 			return column;
 		},
@@ -237,8 +235,6 @@ export const datetimeField = defineField<"datetime", DatetimeFieldConfig, Date>(
 				description: config.description,
 				required: config.required ?? false,
 				localized: config.localized ?? false,
-				unique: config.unique ?? false,
-				searchable: config.searchable ?? false,
 				readOnly: config.input === false,
 				writeOnly: config.output === false,
 				meta: config.meta,

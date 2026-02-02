@@ -340,62 +340,10 @@ export class FieldBuilder<
 		});
 	}
 
-	/**
-	 * Mark field as unique
-	 */
-	unique(): FieldBuilder<
-		TType,
-		SetProperty<TConfig, "unique", true>,
-		TValue,
-		TColumn
-	> {
-		return this.clone({
-			...this.state,
-			config: { ...this.state.config, unique: true } as SetProperty<
-				TConfig,
-				"unique",
-				true
-			>,
-		});
-	}
-
-	/**
-	 * Create index on this field
-	 */
-	index(): FieldBuilder<
-		TType,
-		SetProperty<TConfig, "index", true>,
-		TValue,
-		TColumn
-	> {
-		return this.clone({
-			...this.state,
-			config: { ...this.state.config, index: true } as SetProperty<
-				TConfig,
-				"index",
-				true
-			>,
-		});
-	}
-
-	/**
-	 * Mark field as searchable
-	 */
-	searchable(): FieldBuilder<
-		TType,
-		SetProperty<TConfig, "searchable", true>,
-		TValue,
-		TColumn
-	> {
-		return this.clone({
-			...this.state,
-			config: { ...this.state.config, searchable: true } as SetProperty<
-				TConfig,
-				"searchable",
-				true
-			>,
-		});
-	}
+	// NOTE: unique(), index(), searchable() chainable methods REMOVED
+	// These are collection-level concerns, not field-level:
+	// - Use .indexes() on CollectionBuilder for unique/index constraints
+	// - Use .searchable() on CollectionBuilder for search indexing
 
 	/**
 	 * Hide field from output (write-only)

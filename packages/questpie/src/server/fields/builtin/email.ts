@@ -33,7 +33,7 @@ import type {
 /**
  * Email field metadata - augmentable by external packages.
  */
-export interface EmailFieldMeta {}
+export type EmailFieldMeta = {};
 
 // ============================================================================
 // Email Field Configuration
@@ -169,9 +169,8 @@ export const emailField = defineField<"email", EmailFieldConfig, string>(
 						: config.default;
 				column = column.default(defaultValue as string);
 			}
-			if (config.unique) {
-				column = column.unique();
-			}
+			// NOTE: unique constraint removed from field level
+			// Use .indexes() on collection builder instead
 
 			return column;
 		},
@@ -237,8 +236,6 @@ export const emailField = defineField<"email", EmailFieldConfig, string>(
 				description: config.description,
 				required: config.required ?? false,
 				localized: config.localized ?? false,
-				unique: config.unique ?? false,
-				searchable: config.searchable ?? false,
 				readOnly: config.input === false,
 				writeOnly: config.output === false,
 				validation: {

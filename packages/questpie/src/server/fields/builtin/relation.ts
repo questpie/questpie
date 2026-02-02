@@ -56,7 +56,7 @@ import type {
  * }
  * ```
  */
-export interface RelationFieldMeta {}
+export type RelationFieldMeta = {};
 
 // ============================================================================
 // Relation Field Configuration
@@ -584,11 +584,8 @@ export const relationField = defineField<
 					: config.default;
 			column = column.default(defaultValue as string);
 		}
-
-		// Apply UNIQUE
-		if (config.unique) {
-			column = column.unique();
-		}
+		// NOTE: unique constraint removed from field level
+		// Use .indexes() on collection builder instead
 
 		// Apply FK constraint only if we have a callback with table access
 		if (typeof config.to === "function") {
@@ -692,8 +689,6 @@ export const relationField = defineField<
 			description: config.description,
 			required: config.required ?? false,
 			localized: config.localized ?? false,
-			unique: config.unique ?? false,
-			searchable: config.searchable ?? false,
 			readOnly: config.input === false,
 			writeOnly: config.output === false,
 			relationType,

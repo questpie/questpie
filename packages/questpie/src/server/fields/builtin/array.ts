@@ -37,7 +37,7 @@ import type {
  * }
  * ```
  */
-export interface ArrayFieldMeta {}
+export type ArrayFieldMeta = {};
 
 // ============================================================================
 // Array Field Configuration
@@ -272,8 +272,6 @@ export const arrayField = defineField<"array", ArrayFieldConfig, unknown[]>(
 				description: config.description,
 				required: config.required ?? false,
 				localized: config.localized ?? false,
-				unique: config.unique ?? false,
-				searchable: config.searchable ?? false,
 				readOnly: config.input === false,
 				writeOnly: config.output === false,
 				nestedFields: {

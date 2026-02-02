@@ -34,7 +34,7 @@ import type {
  * }
  * ```
  */
-export interface BooleanFieldMeta {}
+export type BooleanFieldMeta = {};
 
 // ============================================================================
 // Boolean Field Configuration
@@ -162,10 +162,8 @@ export const booleanField = defineField<"boolean", BooleanFieldConfig, boolean>(
 			if (defaultValue !== undefined) {
 				column = column.default(defaultValue);
 			}
-
-			if (config.unique) {
-				column = column.unique();
-			}
+			// NOTE: unique constraint removed from field level
+			// Use .indexes() on collection builder instead
 
 			return column;
 		},
@@ -192,8 +190,6 @@ export const booleanField = defineField<"boolean", BooleanFieldConfig, boolean>(
 				description: config.description,
 				required: config.required ?? false,
 				localized: config.localized ?? false,
-				unique: config.unique ?? false,
-				searchable: config.searchable ?? false,
 				readOnly: config.input === false,
 				writeOnly: config.output === false,
 				meta: config.meta,

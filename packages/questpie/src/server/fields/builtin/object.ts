@@ -38,7 +38,7 @@ import type {
  * }
  * ```
  */
-export interface ObjectFieldMeta {}
+export type ObjectFieldMeta = {};
 
 // ============================================================================
 // Object Field Configuration
@@ -250,8 +250,6 @@ export const objectField = defineField<
 			description: config.description,
 			required: config.required ?? false,
 			localized: config.localized ?? false,
-			unique: config.unique ?? false,
-			searchable: config.searchable ?? false,
 			readOnly: config.input === false,
 			writeOnly: config.output === false,
 			nestedFields: nestedMetadata,

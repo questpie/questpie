@@ -151,14 +151,11 @@ export interface BaseFieldConfig {
 	/** Field is localized (stored in i18n table) */
 	localized?: boolean;
 
-	/** Create unique constraint */
-	unique?: boolean;
-
-	/** Create index */
-	index?: boolean;
-
-	/** Include in search index */
-	searchable?: boolean;
+	// NOTE: unique, index, searchable REMOVED from field config!
+	// These are collection-level concerns, not field-level:
+	// - Use .indexes() on CollectionBuilder for unique/index constraints
+	// - Use .searchable() on CollectionBuilder for search indexing
+	// See: specifications/DECOUPLED_ARCHITECTURE.md
 
 	/**
 	 * Field-level access control.
@@ -400,6 +397,11 @@ export type FieldMetadataMeta = {};
  * Base metadata exposed for introspection.
  * Contains only data-relevant information - NO UI/admin config.
  * Admin package uses this to auto-generate UI, then applies its own overrides.
+ *
+ * NOTE: unique and searchable REMOVED!
+ * These are collection-level concerns handled by:
+ * - .indexes() for unique constraints
+ * - .searchable() for search indexing
  */
 export interface FieldMetadataBase {
 	/** Field type identifier */
@@ -416,12 +418,6 @@ export interface FieldMetadataBase {
 
 	/** Is field localized */
 	localized: boolean;
-
-	/** Is field unique */
-	unique: boolean;
-
-	/** Is field searchable */
-	searchable: boolean;
 
 	/** Is field read-only (input: false) */
 	readOnly?: boolean;

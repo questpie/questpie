@@ -34,7 +34,7 @@ import type {
 /**
  * Date field metadata - augmentable by external packages.
  */
-export interface DateFieldMeta {}
+export type DateFieldMeta = {};
 
 // ============================================================================
 // Date Field Configuration
@@ -166,10 +166,8 @@ export const dateField = defineField<"date", DateFieldConfig, string>("date", {
 					: config.default;
 			column = column.default(defaultValue as string);
 		}
-
-		if (config.unique) {
-			column = column.unique();
-		}
+		// NOTE: unique constraint removed from field level
+		// Use .indexes() on collection builder instead
 
 		return column;
 	},
@@ -217,8 +215,6 @@ export const dateField = defineField<"date", DateFieldConfig, string>("date", {
 			description: config.description,
 			required: config.required ?? false,
 			localized: config.localized ?? false,
-			unique: config.unique ?? false,
-			searchable: config.searchable ?? false,
 			readOnly: config.input === false,
 			writeOnly: config.output === false,
 			meta: config.meta,

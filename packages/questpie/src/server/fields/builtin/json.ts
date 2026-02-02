@@ -24,7 +24,7 @@ import type {
 /**
  * JSON field metadata - augmentable by external packages.
  */
-export interface JsonFieldMeta {}
+export type JsonFieldMeta = {};
 
 // ============================================================================
 // JSON Field Configuration
@@ -222,8 +222,6 @@ export const jsonField = defineField<"json", JsonFieldConfig, JsonValue>(
 				description: config.description,
 				required: config.required ?? false,
 				localized: config.localized ?? false,
-				unique: config.unique ?? false,
-				searchable: config.searchable ?? false,
 				readOnly: config.input === false,
 				writeOnly: config.output === false,
 				meta: config.meta,

@@ -45,7 +45,7 @@ import type {
  * }
  * ```
  */
-export interface SelectFieldMeta {}
+export type SelectFieldMeta = {};
 
 // ============================================================================
 // Select Field Configuration
@@ -302,9 +302,8 @@ export const selectField = defineField<
 				multiple ? JSON.stringify(defaultValue) : defaultValue,
 			);
 		}
-		if (config.unique && !multiple) {
-			column = column.unique();
-		}
+		// NOTE: unique constraint removed from field level
+		// Use .indexes() on collection builder instead
 
 		return column;
 	},
@@ -349,8 +348,6 @@ export const selectField = defineField<
 			description: config.description,
 			required: config.required ?? false,
 			localized: config.localized ?? false,
-			unique: config.unique ?? false,
-			searchable: config.searchable ?? false,
 			readOnly: config.input === false,
 			writeOnly: config.output === false,
 			options: config.options.map((o) => ({

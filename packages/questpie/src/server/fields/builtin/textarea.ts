@@ -36,7 +36,7 @@ import type {
  * }
  * ```
  */
-export interface TextareaFieldMeta {}
+export type TextareaFieldMeta = {};
 
 // ============================================================================
 // Textarea Field Configuration
@@ -180,9 +180,8 @@ export const textareaField = defineField<
 					: config.default;
 			column = column.default(defaultValue as string);
 		}
-		if (config.unique) {
-			column = column.unique();
-		}
+		// NOTE: unique constraint removed from field level
+		// Use .indexes() on collection builder instead
 
 		return column;
 	},
@@ -224,8 +223,6 @@ export const textareaField = defineField<
 			description: config.description,
 			required: config.required ?? false,
 			localized: config.localized ?? false,
-			unique: config.unique ?? false,
-			searchable: config.searchable ?? false,
 			readOnly: config.input === false,
 			writeOnly: config.output === false,
 			validation: {
