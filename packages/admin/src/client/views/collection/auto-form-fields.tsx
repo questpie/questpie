@@ -39,6 +39,7 @@ import {
 	TabsTrigger,
 } from "../../components/ui/tabs";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
+import { useGlobalFields } from "../../hooks/use-global-fields";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../utils";
 import { getFullFieldName, resolveValue } from "./field-context";
@@ -74,9 +75,17 @@ export interface AutoFormFieldsProps<
 	cms?: T;
 
 	/**
-	 * Collection name
+	 * Collection or global name
 	 */
 	collection: K;
+
+	/**
+	 * Schema source mode.
+	 * - "collection": Fetch collection schema (default)
+	 * - "global": Fetch global schema
+	 * @default "collection"
+	 */
+	mode?: "collection" | "global";
 
 	/**
 	 * Collection config (CollectionBuilderState)
@@ -813,15 +822,31 @@ function extractFieldNamesFromFieldItems(
 export function AutoFormFields<T extends Questpie<any>, K extends string>({
 	cms: _cms,
 	collection,
+	mode = "collection",
 	config,
 	registry,
 	renderField,
 	fieldPrefix,
 	allCollectionsConfig,
 }: AutoFormFieldsProps<T, K>): React.ReactElement {
-	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
-		fallbackFields: config?.fields,
+	// Use the appropriate hook based on mode
+	const collectionResult = useCollectionFields(
+		mode === "collection" ? collection : "",
+		{
+			fallbackFields: mode === "collection" ? config?.fields : undefined,
+			schemaQueryOptions: { enabled: mode === "collection" },
+		},
+	);
+	const globalResult = useGlobalFields(mode === "global" ? collection : "", {
+		schemaQueryOptions: { enabled: mode === "global" },
 	});
+
+	const resolvedFields =
+		mode === "global"
+			? { ...globalResult.fields, ...config?.fields }
+			: collectionResult.fields;
+	const schema =
+		mode === "global" ? (globalResult.schema as any) : collectionResult.schema;
 	const form = useFormContext() as any;
 	// Use useWatch hook (React pattern) instead of form.watch() method
 	// Watch all form values - the fieldPrefix scoping is handled below

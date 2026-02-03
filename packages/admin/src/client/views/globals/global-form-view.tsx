@@ -15,6 +15,7 @@ import type { ComponentRegistry } from "../../builder/types/field-types";
 import { LocaleSwitcher } from "../../components/locale-switcher";
 import { Button } from "../../components/ui/button";
 import { useGlobal, useGlobalUpdate } from "../../hooks/use-global";
+import { useGlobalFields } from "../../hooks/use-global-fields";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import {
 	selectAdmin,
@@ -135,6 +136,9 @@ export default function GlobalFormView({
 	const contentLocales = useSafeContentLocales();
 	const localeOptions = contentLocales?.locales ?? [];
 
+	// Fetch global schema-driven fields (with fallback to config.fields)
+	const { fields: schemaFields } = useGlobalFields(globalName);
+
 	// Fetch global data
 	const {
 		data: globalData,
@@ -164,12 +168,20 @@ export default function GlobalFormView({
 		}
 	}, [form, globalData]);
 
+	// Merge schema-driven fields with local config fields (local overrides win)
+	const mergedFields = React.useMemo(
+		() => ({ ...schemaFields, ...config?.fields }),
+		[schemaFields, config?.fields],
+	);
+
 	const onSubmit = React.useCallback(
 		async (data: any) => {
 			// Transform nested localized values with $i18n wrappers
-			const transformedData = config?.fields
+			const fieldsForTransform =
+				Object.keys(mergedFields).length > 0 ? mergedFields : config?.fields;
+			const transformedData = fieldsForTransform
 				? wrapLocalizedNestedValues(data, {
-						fields: config.fields,
+						fields: fieldsForTransform,
 						blocks: admin.state.blocks,
 					})
 				: data;
@@ -211,7 +223,7 @@ export default function GlobalFormView({
 				);
 			}
 		},
-		[updateMutation, form, t, config?.fields, admin.state.blocks],
+		[updateMutation, form, t, config?.fields, admin.state.blocks, mergedFields],
 	);
 
 	// Keyboard shortcut: Cmd+S to save
@@ -338,6 +350,7 @@ export default function GlobalFormView({
 					{/* Main Content - Form Fields */}
 					<AutoFormFields
 						collection={globalName as any}
+						mode="global"
 						config={config as any}
 						registry={registry}
 						allCollectionsConfig={allGlobalsConfig as any}
