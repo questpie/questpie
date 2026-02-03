@@ -33,7 +33,7 @@ import type {
 /**
  * Email field metadata - augmentable by external packages.
  */
-export type EmailFieldMeta = {};
+export interface EmailFieldMeta {}
 
 // ============================================================================
 // Email Field Configuration

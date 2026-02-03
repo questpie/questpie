@@ -93,7 +93,7 @@ export function ImagePopover({
 							? file
 							: new File([file], sanitizedName, { type: file.type });
 					const uploadedAsset = (await upload(uploadFile, {
-						collection,
+						to: collection,
 					})) as Asset;
 					url = uploadedAsset?.url;
 					if (!url) {

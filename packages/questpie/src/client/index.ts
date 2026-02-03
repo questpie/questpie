@@ -6,6 +6,7 @@ import type {
 	InferFunctionOutput,
 	JsonFunctionDefinition,
 } from "#questpie/server/functions/types.js";
+import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
 	AnyCollection,
 	AnyCollectionOrBuilder,
@@ -438,6 +439,11 @@ type GlobalAPI<
 			TQuery
 		>
 	>;
+
+	/**
+	 * Get global schema with full introspection (fields, access, validation)
+	 */
+	schema: () => Promise<GlobalSchema>;
 } & GlobalFunctionsAPI<TGlobal>;
 
 /**
@@ -1016,6 +1022,10 @@ export function createClient<T extends Questpie<any>>(
 						},
 					);
 				},
+
+				schema: async () => {
+					return request(`${cmsBasePath}/globals/${globalName}/schema`);
+				},
 			};
 
 			return new Proxy(base as any, {
@@ -1093,6 +1103,7 @@ export type {
 	FieldSchema,
 	RelationSchema,
 } from "#questpie/server/collection/introspection.js";
+export type { GlobalSchema } from "#questpie/server/global/introspection.js";
 // Re-export collection meta types
 export type {
 	CollectionFieldMeta,

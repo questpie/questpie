@@ -8,7 +8,7 @@
  * - Auto-generates fields when no form config is defined
  */
 
-import type { Questpie } from "questpie";
+import type { CollectionSchema, Questpie } from "questpie";
 import * as React from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import type {
@@ -38,6 +38,7 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "../../components/ui/tabs";
+import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../utils";
 import { getFullFieldName, resolveValue } from "./field-context";
@@ -56,6 +57,12 @@ interface CollectionConfig {
 	fields?: Record<string, FieldDefinition>;
 	form?: FormViewConfig;
 }
+
+type AdminFormSchema = CollectionSchema["admin"] extends infer TAdmin
+	? TAdmin extends { form?: infer TForm }
+		? TForm
+		: undefined
+	: undefined;
 
 export interface AutoFormFieldsProps<
 	T extends Questpie<any> = Questpie<any>,
@@ -133,6 +140,75 @@ function getGridColumnsClass(columns?: number) {
 function getGapStyle(gap?: number) {
 	if (gap === undefined) return undefined;
 	return `${gap * 0.25}rem`;
+}
+
+// ============================================================================
+// Schema Mapping Helpers
+// ============================================================================
+
+function formatTabId(label: unknown, index: number): string {
+	if (typeof label === "string") {
+		const normalized = label
+			.toLowerCase()
+			.replace(/\s+/g, "-")
+			.replace(/[^a-z0-9-_]/g, "");
+		return normalized || `tab-${index}`;
+	}
+	if (label && typeof label === "object" && "key" in label) {
+		const key = (label as { key?: string }).key;
+		if (key) return key;
+	}
+	return `tab-${index}`;
+}
+
+function mapSectionsToLayout(
+	sections: Array<{
+		label?: any;
+		description?: any;
+		fields: string[];
+		collapsible?: boolean;
+		defaultCollapsed?: boolean;
+	}>,
+): FieldLayoutItem[] {
+	return sections.map((section) => ({
+		type: "section",
+		label: section.label,
+		description: section.description,
+		fields: section.fields,
+		wrapper: section.collapsible ? "collapsible" : "flat",
+		defaultCollapsed: section.defaultCollapsed,
+	}));
+}
+
+function mapFormSchemaToConfig(
+	form?: AdminFormSchema,
+): FormViewConfig | undefined {
+	if (!form) return undefined;
+
+	if (form.tabs?.length) {
+		return {
+			fields: [
+				{
+					type: "tabs",
+					tabs: form.tabs.map((tab, index) => ({
+						id: formatTabId(tab.label, index),
+						label: tab.label,
+						fields: mapSectionsToLayout(tab.sections ?? []),
+					})),
+				},
+			],
+		};
+	}
+
+	if (form.sections?.length) {
+		return { fields: mapSectionsToLayout(form.sections) };
+	}
+
+	if (form.fields?.length) {
+		return { fields: form.fields };
+	}
+
+	return undefined;
 }
 
 // ============================================================================
@@ -743,6 +819,9 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 	fieldPrefix,
 	allCollectionsConfig,
 }: AutoFormFieldsProps<T, K>): React.ReactElement {
+	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
+		fallbackFields: config?.fields,
+	});
 	const form = useFormContext() as any;
 	// Use useWatch hook (React pattern) instead of form.watch() method
 	// Watch all form values - the fieldPrefix scoping is handled below
@@ -765,10 +844,12 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 	const resolveText = useResolveText();
 
 	// Get fields config
-	const fields = (config?.fields || {}) as Record<string, FieldDefinition>;
+	const fields = (resolvedFields || {}) as Record<string, FieldDefinition>;
 
 	// Extract form config from view builder (~config property)
-	const formConfig = (config?.form as any)?.["~config"] ?? config?.form;
+	const schemaFormConfig = mapFormSchemaToConfig(schema?.admin?.form);
+	const formConfig =
+		(config?.form as any)?.["~config"] ?? config?.form ?? schemaFormConfig;
 
 	// Get all field names for auto-generation
 	const allFieldNames = Object.keys(fields);

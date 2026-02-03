@@ -38,7 +38,7 @@ import type {
  * }
  * ```
  */
-export type ObjectFieldMeta = {};
+export interface ObjectFieldMeta {}
 
 // ============================================================================
 // Object Field Configuration

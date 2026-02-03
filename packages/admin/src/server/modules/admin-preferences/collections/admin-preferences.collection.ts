@@ -1,4 +1,4 @@
-import { jsonb, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { uniqueIndex } from "drizzle-orm/pg-core";
 import { q } from "questpie";
 
 /**
@@ -27,16 +27,16 @@ import { q } from "questpie";
  */
 export const adminPreferencesCollection = q
 	.collection("admin_preferences")
-	.fields({
+	.fields((f) => ({
 		// User who owns this preference
-		userId: varchar("user_id", { length: 255 }).notNull(),
+		userId: f.text({ required: true, maxLength: 255, label: "User ID" }),
 
 		// Preference key (e.g., "viewState:posts")
-		key: varchar("key", { length: 255 }).notNull(),
+		key: f.text({ required: true, maxLength: 255, label: "Key" }),
 
 		// Preference value (JSON)
-		value: jsonb("value").notNull(),
-	})
+		value: f.json({ required: true, label: "Value" }),
+	}))
 	.options({
 		timestamps: true,
 	})

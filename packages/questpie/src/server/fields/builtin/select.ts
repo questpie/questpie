@@ -45,7 +45,7 @@ import type {
  * }
  * ```
  */
-export type SelectFieldMeta = {};
+export interface SelectFieldMeta {}
 
 // ============================================================================
 // Select Field Configuration

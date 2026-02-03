@@ -5,8 +5,8 @@
  * Single generic TState pattern with ~adminApp for type safety.
  */
 
-import type { SetProperty } from "questpie/shared";
 import type { Questpie } from "questpie";
+import type { SetProperty } from "questpie/shared";
 import type { I18nText } from "../../i18n/types.js";
 import type { AdminBuilder } from "../admin-builder";
 import type {
@@ -185,6 +185,8 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * r = field registry proxy with access to TState["~adminApp"] fields and blocks
 	 *
 	 * Field keys MUST match backend collection schema!
+	 *
+	 * @deprecated Admin UI is schema-driven. Prefer server-side schema fields.
 	 */
 	fields<TNewFields extends Record<string, FieldDefinition<any, any>>>(
 		callback: (ctx: {
@@ -219,6 +221,8 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *
 	 * @param callback - Receives `{ v, f, a, r }` with type-safe proxies
 	 * @returns View config with columns, sorting, search options, and actions
+	 *
+	 * @deprecated Admin UI is schema-driven. Prefer server-side schema config.
 	 *
 	 * @example
 	 * ```ts
@@ -289,6 +293,8 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *
 	 * @param callback - Receives `{ v, f, a, r }` with type-safe proxies
 	 * @returns View config with sidebar, tabs, sections, and actions
+	 *
+	 * @deprecated Admin UI is schema-driven. Prefer server-side schema config.
 	 *
 	 * @example
 	 * ```ts

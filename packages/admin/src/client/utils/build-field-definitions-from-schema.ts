@@ -9,12 +9,12 @@
 import type {
 	CollectionSchema,
 	FieldMetadata,
-	FieldSchema,
+	GlobalSchema,
+	NestedFieldMetadata,
 	RelationFieldMetadata,
 	RelationSchema,
 	SelectFieldMetadata,
 } from "questpie";
-import { isI18nLocaleMap } from "questpie/shared";
 import type { AnyAdminMeta } from "../../augmentation";
 import type { FieldBuilder, FieldDefinition } from "../builder/field/field";
 
@@ -81,11 +81,13 @@ export type FieldDefinitionsResult = Record<string, FieldDefinition>;
  * ```
  */
 export function buildFieldDefinitionsFromSchema(
-	schema: CollectionSchema | null | undefined,
+	schema: CollectionSchema | GlobalSchema | null | undefined,
 	registry: FieldRegistry,
 	options: BuildFieldDefinitionsOptions = {},
 ): FieldDefinitionsResult {
 	if (!schema) return {};
+
+	const relations = "relations" in schema ? schema.relations : {};
 
 	const result: FieldDefinitionsResult = {};
 
@@ -102,7 +104,7 @@ export function buildFieldDefinitionsFromSchema(
 		const fieldDef = buildFieldDefinition(
 			fieldName,
 			fieldSchema,
-			schema.relations,
+			relations,
 			registry,
 			options.overrides?.[fieldName],
 		);
@@ -124,13 +126,13 @@ export function buildFieldDefinitionsFromSchema(
  */
 function buildFieldDefinition(
 	fieldName: string,
-	fieldSchema: FieldSchema,
+	fieldSchema: { metadata: FieldMetadata },
 	relations: Record<string, RelationSchema>,
 	registry: FieldRegistry,
 	overrides?: Partial<Record<string, unknown>>,
 ): FieldDefinition | null {
 	const { metadata } = fieldSchema;
-	const fieldType = metadata.type;
+	const fieldType = resolveFieldType(metadata);
 
 	// Get field builder from registry
 	const fieldBuilder = registry[fieldType];
@@ -141,7 +143,13 @@ function buildFieldDefinition(
 	}
 
 	// Build field config from metadata
-	const config = buildFieldConfig(fieldName, metadata, relations);
+	const config = buildFieldConfig(
+		fieldName,
+		metadata,
+		relations,
+		registry,
+		fieldType,
+	);
 
 	// Apply admin overrides from server meta
 	// The meta.admin property is added via module augmentation on field-specific meta interfaces
@@ -167,12 +175,15 @@ function buildFieldConfig(
 	fieldName: string,
 	metadata: FieldMetadata,
 	relations: Record<string, RelationSchema>,
+	registry: FieldRegistry,
+	fieldType: string,
 ): Record<string, unknown> {
 	const config: Record<string, unknown> = {
 		label: metadata.label ?? formatFieldLabel(fieldName),
 		description: metadata.description,
 		required: metadata.required,
 		localized: metadata.localized,
+		readOnly: metadata.readOnly,
 	};
 
 	// Apply validation constraints from base metadata
@@ -184,8 +195,18 @@ function buildFieldConfig(
 	if (isSelectMetadata(metadata)) {
 		applySelectConfig(config, metadata);
 	} else if (isRelationMetadata(metadata)) {
-		applyRelationConfig(config, metadata, relations[fieldName]);
+		if (fieldType === "upload") {
+			applyUploadConfig(config, metadata, relations[fieldName]);
+		} else {
+			applyRelationConfig(config, metadata, relations[fieldName]);
+		}
+	} else if (isNestedMetadata(metadata)) {
+		applyNestedConfig(config, metadata, relations, registry);
+	} else if (metadata.type === "richText") {
+		applyRichTextConfig(config, metadata as unknown as Record<string, unknown>);
 	}
+
+	applyExtraMetadata(config, metadata);
 
 	return config;
 }
@@ -202,6 +223,10 @@ function isRelationMetadata(m: FieldMetadata): m is RelationFieldMetadata {
 	return m.type === "relation";
 }
 
+function isNestedMetadata(m: FieldMetadata): m is NestedFieldMetadata {
+	return m.type === "object" || m.type === "array" || m.type === "blocks";
+}
+
 // ============================================================================
 // Config Appliers (mutate config object)
 // ============================================================================
@@ -215,34 +240,11 @@ function applySelectConfig(
 ): void {
 	config.options = metadata.options.map((opt) => ({
 		value: opt.value,
-		label: resolveLabel(opt.label, opt.value),
+		label: opt.label ?? String(opt.value),
 	}));
 	if (metadata.multiple !== undefined) {
 		config.multiple = metadata.multiple;
 	}
-}
-
-/**
- * Resolve I18nText label to string
- */
-function resolveLabel(label: unknown, fallback: string | number): string {
-	if (typeof label === "string") {
-		return label;
-	}
-	if (label && typeof label === "object") {
-		// Check for locale map (has 'en' key but not 'key' key)
-		if (isI18nLocaleMap(label as Parameters<typeof isI18nLocaleMap>[0])) {
-			return (label as Record<string, string>).en ?? String(fallback);
-		}
-		// Translation key - use fallback or key itself
-		if ("key" in label) {
-			return (
-				(label as { key: string; fallback?: string }).fallback ??
-				String(fallback)
-			);
-		}
-	}
-	return String(fallback);
 }
 
 /**
@@ -256,7 +258,7 @@ function applyRelationConfig(
 	// Map relation type to single/multiple
 	const isSingle = ["belongsTo", "morphTo"].includes(metadata.relationType);
 
-	config.to = metadata.targetCollection;
+	config.targetCollection = metadata.targetCollection;
 	config.type = isSingle ? "single" : "multiple";
 	// Pass through relation metadata for advanced use
 	config.relationType = metadata.relationType;
@@ -267,6 +269,174 @@ function applyRelationConfig(
 	if (metadata.foreignKey ?? relationSchema?.foreignKey) {
 		config.foreignKey = metadata.foreignKey ?? relationSchema?.foreignKey;
 	}
+}
+
+function applyUploadConfig(
+	config: Record<string, unknown>,
+	metadata: RelationFieldMetadata,
+	relationSchema?: RelationSchema,
+): void {
+	const isMultiple = [
+		"hasMany",
+		"manyToMany",
+		"multiple",
+		"morphMany",
+	].includes(metadata.relationType);
+
+	config.to = metadata.targetCollection;
+	config.multiple = isMultiple;
+
+	if (metadata.through ?? relationSchema?.through) {
+		config.through = metadata.through ?? relationSchema?.through;
+	}
+	if (metadata.foreignKey ?? relationSchema?.foreignKey) {
+		config.foreignKey = metadata.foreignKey ?? relationSchema?.foreignKey;
+	}
+}
+
+function applyNestedConfig(
+	config: Record<string, unknown>,
+	metadata: NestedFieldMetadata,
+	relations: Record<string, RelationSchema>,
+	registry: FieldRegistry,
+): void {
+	if (!metadata.nestedFields) return;
+
+	if (metadata.type === "object") {
+		const nestedDefs = buildNestedFieldDefinitions(
+			metadata.nestedFields,
+			relations,
+			registry,
+		);
+		config.fields = () => nestedDefs;
+		return;
+	}
+
+	if (metadata.type === "array") {
+		const itemMetadata = metadata.nestedFields.item as
+			| FieldMetadata
+			| undefined;
+		if (!itemMetadata) return;
+
+		if (
+			itemMetadata.type === "object" &&
+			(itemMetadata as NestedFieldMetadata).nestedFields
+		) {
+			const itemFields = buildNestedFieldDefinitions(
+				(itemMetadata as NestedFieldMetadata).nestedFields ?? {},
+				relations,
+				registry,
+			);
+			config.item = () => itemFields;
+			return;
+		}
+
+		const itemType = mapArrayItemType(itemMetadata.type);
+		if (itemType) {
+			config.itemType = itemType;
+			if (itemMetadata.type === "select") {
+				applySelectConfig(config, itemMetadata as SelectFieldMetadata);
+			}
+		}
+	}
+}
+
+function applyExtraMetadata(
+	config: Record<string, unknown>,
+	metadata: FieldMetadata,
+) {
+	const reservedKeys = new Set([
+		"type",
+		"label",
+		"description",
+		"required",
+		"localized",
+		"readOnly",
+		"writeOnly",
+		"validation",
+		"meta",
+		"nestedFields",
+		"features",
+	]);
+
+	for (const [key, value] of Object.entries(
+		metadata as unknown as Record<string, unknown>,
+	)) {
+		if (reservedKeys.has(key)) continue;
+		if (key.startsWith("_")) continue;
+		if (value === undefined) continue;
+		config[key] = value;
+	}
+}
+
+function applyRichTextConfig(
+	config: Record<string, unknown>,
+	metadata: Record<string, unknown>,
+) {
+	if (metadata.outputFormat !== undefined) {
+		config.outputFormat = metadata.outputFormat;
+	}
+	if (metadata.maxCharacters !== undefined) {
+		config.maxCharacters = metadata.maxCharacters;
+		config.showCharacterCount = true;
+	}
+	if (metadata.placeholder !== undefined) {
+		config.placeholder = metadata.placeholder;
+	}
+	if (metadata.allowImages !== undefined) {
+		config.enableImages = metadata.allowImages;
+	}
+	if (metadata.imageCollection !== undefined) {
+		config.imageCollection = metadata.imageCollection;
+	}
+}
+
+function buildNestedFieldDefinitions(
+	nestedFields: Record<string, FieldMetadata>,
+	relations: Record<string, RelationSchema>,
+	registry: FieldRegistry,
+): FieldDefinitionsResult {
+	const result: FieldDefinitionsResult = {};
+
+	for (const [nestedName, nestedMetadata] of Object.entries(nestedFields)) {
+		const fieldType = resolveFieldType(nestedMetadata);
+		const fieldBuilder = registry[fieldType];
+		if (!fieldBuilder) continue;
+
+		const config = buildFieldConfig(
+			nestedName,
+			nestedMetadata,
+			relations,
+			registry,
+			fieldType,
+		);
+
+		const adminConfig = (
+			nestedMetadata.meta as { admin?: AnyAdminMeta } | undefined
+		)?.admin;
+		if (adminConfig) {
+			applyAdminConfig(config, adminConfig);
+		}
+
+		result[nestedName] = fieldBuilder.$options(config);
+	}
+
+	return result;
+}
+
+function resolveFieldType(metadata: FieldMetadata): string {
+	if (metadata.type === "relation") {
+		const relationMeta = metadata as RelationFieldMetadata;
+		if (relationMeta.targetCollection === "assets") {
+			return "upload";
+		}
+	}
+	return metadata.type;
+}
+
+function mapArrayItemType(type: string): string | null {
+	const allowed = new Set(["text", "number", "email", "textarea", "select"]);
+	return allowed.has(type) ? type : null;
 }
 
 /**

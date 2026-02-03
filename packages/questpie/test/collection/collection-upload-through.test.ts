@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { collection, questpie } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
@@ -164,7 +165,7 @@ describe("upload + through (many-to-many)", () => {
 			const post = await postsCrud.create(
 				{
 					title: "Test Post",
-					gallery: { set: [{ id: asset1.id }] },
+					gallery: { set: [{ id: asset1.id }, { id: asset2.id }] } as any,
 				},
 				ctx,
 			);

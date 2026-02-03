@@ -24,7 +24,7 @@ import type {
 /**
  * JSON field metadata - augmentable by external packages.
  */
-export type JsonFieldMeta = {};
+export interface JsonFieldMeta {}
 
 // ============================================================================
 // JSON Field Configuration

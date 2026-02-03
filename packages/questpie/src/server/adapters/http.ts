@@ -261,9 +261,24 @@ export const createFetchHandler = (
 		// Global routes
 		if (segments[0] === "globals") {
 			const globalName = segments[1];
+			const globalAction = segments[2];
 			if (!globalName) {
 				return errorResponse(
 					ApiError.badRequest("Global not specified"),
+					request,
+				);
+			}
+
+			if (globalAction === "schema") {
+				if (request.method === "GET") {
+					return routes.globals.schema(
+						request,
+						{ global: globalName },
+						context,
+					);
+				}
+				return errorResponse(
+					ApiError.badRequest("Method not allowed"),
 					request,
 				);
 			}

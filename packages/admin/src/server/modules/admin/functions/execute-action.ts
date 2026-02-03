@@ -21,6 +21,7 @@ import { z } from "zod";
 import type {
 	ServerActionContext,
 	ServerActionDefinition,
+	ServerActionFormField,
 	ServerActionResult,
 	ServerActionsConfig,
 } from "../../../augmentation.js";
@@ -384,15 +385,34 @@ async function executeBuiltinAction(
 }
 
 /**
+ * Check if a field is a ServerActionFormFieldDefinition (has getMetadata)
+ */
+function isFieldDefinition(
+	field: ServerActionFormField,
+): field is { state: any; getMetadata(): any; toZodSchema(): unknown } {
+	return typeof (field as any).getMetadata === "function";
+}
+
+/**
+ * Extract required status from a form field (handles both config and definition)
+ */
+function isFieldRequired(field: ServerActionFormField): boolean {
+	if (isFieldDefinition(field)) {
+		return !!field.state?.required;
+	}
+	return !!field.required;
+}
+
+/**
  * Validate form data against action form fields.
  * Returns error message if validation fails, null if valid.
  */
 function validateActionFormData(
-	fields: Record<string, { type: string; required?: boolean }>,
+	fields: Record<string, ServerActionFormField>,
 	data: Record<string, unknown>,
 ): string | null {
 	for (const [fieldName, fieldConfig] of Object.entries(fields)) {
-		if (fieldConfig.required && !data[fieldName]) {
+		if (isFieldRequired(fieldConfig) && !data[fieldName]) {
 			return `Field "${fieldName}" is required`;
 		}
 	}

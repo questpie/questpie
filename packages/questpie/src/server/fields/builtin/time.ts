@@ -34,7 +34,7 @@ import type {
 /**
  * Time field metadata - augmentable by external packages.
  */
-export type TimeFieldMeta = {};
+export interface TimeFieldMeta {}
 
 // ============================================================================
 // Time Field Configuration

@@ -47,7 +47,7 @@ import type {
  * }
  * ```
  */
-export type TextFieldMeta = {};
+export interface TextFieldMeta {}
 
 // ============================================================================
 // Text Field Configuration

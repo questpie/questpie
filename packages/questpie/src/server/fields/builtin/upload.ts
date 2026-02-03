@@ -43,7 +43,7 @@ import type {
  * }
  * ```
  */
-export type UploadFieldMeta = {};
+export interface UploadFieldMeta {}
 
 // ============================================================================
 // Upload Field Configuration

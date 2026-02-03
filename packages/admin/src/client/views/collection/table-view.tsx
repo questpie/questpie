@@ -53,6 +53,7 @@ import {
 	useCollectionDelete,
 	useCollectionList,
 } from "../../hooks/use-collection";
+import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useCollectionMeta } from "../../hooks/use-collection-meta";
 import {
 	useDeleteSavedView,
@@ -85,6 +86,27 @@ import {
  * Re-exports ListViewConfig for type consistency between builder and component.
  */
 export type TableViewConfig = ListViewConfig;
+
+function mapListSchemaToConfig(list?: {
+	view?: string;
+	columns?: string[];
+	defaultSort?: { field: string; direction: "asc" | "desc" };
+	searchable?: string[];
+	filterable?: string[];
+	actions?: unknown;
+}): ListViewConfig | undefined {
+	if (!list) return undefined;
+
+	const config: ListViewConfig = {};
+	if (list.columns?.length) config.columns = list.columns;
+	if (list.defaultSort) config.defaultSort = list.defaultSort as any;
+	if (list.searchable?.length) {
+		config.searchFields = list.searchable as any;
+		config.searchable = true;
+	}
+
+	return config;
+}
 
 /**
  * Props for TableView component
@@ -191,12 +213,17 @@ export default function TableView({
 	emptyState,
 	actionsConfig,
 }: TableViewProps): React.ReactElement {
+	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
+		fallbackFields: (config as any)?.fields,
+	});
+	const schemaListConfig = mapListSchemaToConfig(schema?.admin?.list as any);
+	const resolvedListConfig =
+		(config?.list as any)?.["~config"] ?? config?.list ?? schemaListConfig;
+
 	// Use actionsConfig from prop or from config.list view config
 	// Actions are now stored in the list view config, not at collection level
 	const resolvedActionsConfig =
-		actionsConfig ??
-		(config?.list as any)?.["~config"]?.actions ??
-		(config?.list as any)?.actions;
+		actionsConfig ?? (resolvedListConfig as any)?.actions;
 
 	// Fetch collection metadata from backend (for title field detection, timestamps, etc.)
 	const { data: collectionMeta } = useCollectionMeta(collection);
@@ -229,25 +256,25 @@ export default function TableView({
 		() =>
 			buildColumns({
 				config: {
-					fields: config?.fields,
-					list: config?.list,
+					fields: resolvedFields,
+					list: resolvedListConfig,
 				},
 				fallbackColumns: ["id"],
 				buildAllColumns: true, // Build all columns so user can toggle any field
 				meta: collectionMeta, // Use meta to determine title field
 			}),
-		[config?.fields, config?.list, collectionMeta],
+		[resolvedFields, resolvedListConfig, collectionMeta],
 	);
 
 	// Auto-detect fields to expand (uploads, relations)
 	const expandedFields = useMemo(
 		() =>
 			autoExpandFields({
-				fields: config?.fields,
-				list: config?.list,
+				fields: resolvedFields,
+				list: resolvedListConfig as any,
 				relations: collectionMeta?.relations,
 			}),
-		[config?.fields, config?.list, collectionMeta?.relations],
+		[resolvedFields, resolvedListConfig, collectionMeta?.relations],
 	);
 
 	// Filter builder sheet state
@@ -258,11 +285,11 @@ export default function TableView({
 	// When .list({ columns: [...] }) is defined, those become the defaults
 	const defaultColumns = useMemo(
 		() =>
-			computeDefaultColumns(config?.fields, {
+			computeDefaultColumns(resolvedFields, {
 				meta: collectionMeta,
-				configuredColumns: config?.list?.columns,
+				configuredColumns: resolvedListConfig?.columns as any,
 			}),
-		[config?.fields, config?.list?.columns, collectionMeta],
+		[resolvedFields, resolvedListConfig?.columns, collectionMeta],
 	);
 
 	// View state (filters, sort, visible columns) - with database persistence
@@ -373,7 +400,7 @@ export default function TableView({
 				const { field, operator, value } = filter;
 				if (!field || field === "_title") continue;
 
-				const fieldDef = config?.fields?.[field] as any;
+				const fieldDef = resolvedFields?.[field] as any;
 				const fieldType = fieldDef?.name ?? "text";
 				const fieldOptions = fieldDef?.["~options"] ?? {};
 				const relationName =
@@ -475,7 +502,7 @@ export default function TableView({
 		expandedFields,
 		viewState.config.filters,
 		viewState.config.sortConfig,
-		config?.fields,
+		resolvedFields,
 		collectionMeta?.relations,
 	]);
 
@@ -522,8 +549,8 @@ export default function TableView({
 	// Build available fields from config for column picker
 	// All fields are available in Options, but defaults come from .list() config
 	const availableFields: AvailableField[] = useMemo(() => {
-		return getAllAvailableFields(config?.fields, { meta: collectionMeta });
-	}, [config?.fields, collectionMeta]);
+		return getAllAvailableFields(resolvedFields, { meta: collectionMeta });
+	}, [resolvedFields, collectionMeta]);
 
 	// Filter columns based on visibleColumns from view state
 	// Includes checkbox selection column as first column
@@ -736,7 +763,10 @@ export default function TableView({
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-3">
 							<h1 className="text-2xl md:text-3xl font-extrabold tracking-tight truncate">
-								{resolveText(config?.label, collection)}
+								{resolveText(
+									(config as any)?.label ?? schema?.admin?.config?.label,
+									collection,
+								)}
 							</h1>
 							{localeOptions.length > 0 && (
 								<LocaleSwitcher
@@ -746,11 +776,15 @@ export default function TableView({
 								/>
 							)}
 						</div>
-						{config?.description && (
+						{((config as any)?.description ??
+						schema?.admin?.config?.description) ? (
 							<p className="text-muted-foreground text-sm mt-1 line-clamp-2">
-								{resolveText(config.description)}
+								{resolveText(
+									(config as any)?.description ??
+										schema?.admin?.config?.description,
+								)}
 							</p>
-						)}
+						) : null}
 					</div>
 					<div className="flex items-center gap-2 shrink-0">
 						{headerActions}
@@ -954,13 +988,12 @@ export default function TableView({
 
 				{/* Footer - Item count */}
 				<div className="text-sm text-muted-foreground flex items-center gap-2">
-					{isSearchActive && (
-						<SpinnerGap className="size-3 animate-spin" />
-					)}
+					{isSearchActive && <SpinnerGap className="size-3 animate-spin" />}
 					{filteredItems.length} item{filteredItems.length !== 1 ? "s" : ""}
 					{isSearching && searchData?.total !== undefined && (
 						<span>
-							({searchData.total} match{searchData.total !== 1 ? "es" : ""} found)
+							({searchData.total} match{searchData.total !== 1 ? "es" : ""}{" "}
+							found)
 						</span>
 					)}
 				</div>

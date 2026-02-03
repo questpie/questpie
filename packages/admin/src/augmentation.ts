@@ -1,9 +1,8 @@
 /**
- * Module Augmentation for questpie package
+ * Admin Field Meta Types
  *
- * Each field type has its own Meta interface that admin augments
- * with field-specific UI options. This provides type-safe configuration
- * where only valid options for each field type are allowed.
+ * These types define UI options for admin field rendering.
+ * They are used by the admin package to configure field appearance and behavior.
  *
  * @example Usage in field definition (server-side):
  * ```ts
@@ -11,123 +10,28 @@
  *   label: "Title",
  *   meta: {
  *     admin: {
- *       placeholder: "Enter title...",  // Only text options here
+ *       placeholder: "Enter title...",
  *       showCounter: true,
  *     }
  *   }
  * })
+ * ```
  *
- * f.boolean({
- *   label: "Published",
- *   meta: {
- *     admin: {
- *       displayAs: "switch",  // Only boolean options here
- *     }
+ * For type-safe `meta.admin` property, users should add module augmentation
+ * in their project's types file:
+ *
+ * ```ts
+ * // types/questpie.d.ts
+ * import type { TextFieldAdminMeta } from "@questpie/admin";
+ *
+ * declare module "questpie" {
+ *   interface TextFieldMeta {
+ *     admin?: TextFieldAdminMeta;
  *   }
- * })
+ *   // ... other field types
+ * }
  * ```
  */
-
-// Import from questpie to make this a module and enable augmentation
-import "questpie";
-
-// ============================================================================
-// Module Augmentation - Each field gets its own admin options
-// ============================================================================
-
-declare module "questpie" {
-	// ─────────────────────────────────────────────────────────────────────────
-	// Text-based Fields
-	// ─────────────────────────────────────────────────────────────────────────
-
-	interface TextFieldMeta {
-		admin?: TextFieldAdminMeta;
-	}
-
-	interface TextareaFieldMeta {
-		admin?: TextareaFieldAdminMeta;
-	}
-
-	interface EmailFieldMeta {
-		admin?: TextFieldAdminMeta; // Same as text
-	}
-
-	interface UrlFieldMeta {
-		admin?: TextFieldAdminMeta; // Same as text
-	}
-
-	// ─────────────────────────────────────────────────────────────────────────
-	// Numeric Fields
-	// ─────────────────────────────────────────────────────────────────────────
-
-	interface NumberFieldMeta {
-		admin?: NumberFieldAdminMeta;
-	}
-
-	// ─────────────────────────────────────────────────────────────────────────
-	// Boolean Field
-	// ─────────────────────────────────────────────────────────────────────────
-
-	interface BooleanFieldMeta {
-		admin?: BooleanFieldAdminMeta;
-	}
-
-	// ─────────────────────────────────────────────────────────────────────────
-	// Date/Time Fields
-	// ─────────────────────────────────────────────────────────────────────────
-
-	interface DateFieldMeta {
-		admin?: DateFieldAdminMeta;
-	}
-
-	interface DatetimeFieldMeta {
-		admin?: DateFieldAdminMeta; // Same as date
-	}
-
-	interface TimeFieldMeta {
-		admin?: TimeFieldAdminMeta;
-	}
-
-	// ─────────────────────────────────────────────────────────────────────────
-	// Select Field
-	// ─────────────────────────────────────────────────────────────────────────
-
-	interface SelectFieldMeta {
-		admin?: SelectFieldAdminMeta;
-	}
-
-	// ─────────────────────────────────────────────────────────────────────────
-	// Relation Field
-	// ─────────────────────────────────────────────────────────────────────────
-
-	interface RelationFieldMeta {
-		admin?: RelationFieldAdminMeta;
-	}
-
-	// ─────────────────────────────────────────────────────────────────────────
-	// Complex Fields (Object, Array, JSON)
-	// ─────────────────────────────────────────────────────────────────────────
-
-	interface ObjectFieldMeta {
-		admin?: ObjectFieldAdminMeta;
-	}
-
-	interface ArrayFieldMeta {
-		admin?: ArrayFieldAdminMeta;
-	}
-
-	interface JsonFieldMeta {
-		admin?: JsonFieldAdminMeta;
-	}
-
-	// ─────────────────────────────────────────────────────────────────────────
-	// Upload Field
-	// ─────────────────────────────────────────────────────────────────────────
-
-	interface UploadFieldMeta {
-		admin?: UploadFieldAdminMeta;
-	}
-}
 
 // ============================================================================
 // Shared Admin Options (common across field types)

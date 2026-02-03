@@ -5,22 +5,23 @@
  * Provides automatic validation with i18n support for react-hook-form.
  */
 
-import { useCallback, useMemo } from "react";
-import { z } from "zod";
 import type { ZodErrorMapFn } from "questpie/shared";
+import { useCallback, useMemo } from "react";
 import type { FieldErrors, FieldValues, Resolver } from "react-hook-form";
+import type { z } from "zod";
 import { createFormSchema } from "../builder/validation";
 import { selectAdmin, useAdminStore } from "../runtime";
+import { useCollectionFields } from "./use-collection-fields";
 import { useValidationErrorMap } from "./use-validation-error-map";
 
 /**
  * Result of useCollectionValidation hook
  */
 export interface CollectionValidationResult {
-  /** Zod schema for the collection's fields */
-  schema: z.ZodTypeAny | undefined;
-  /** Error map for i18n support */
-  errorMap: ZodErrorMapFn;
+	/** Zod schema for the collection's fields */
+	schema: z.ZodTypeAny | undefined;
+	/** Error map for i18n support */
+	errorMap: ZodErrorMapFn;
 }
 
 /**
@@ -46,74 +47,74 @@ export interface CollectionValidationResult {
  * ```
  */
 export function useCollectionValidation<
-  TFieldValues extends FieldValues = FieldValues,
+	TFieldValues extends FieldValues = FieldValues,
 >(collection: string): Resolver<TFieldValues> | undefined {
-  const admin = useAdminStore(selectAdmin);
-  const schema = useMemo(() => {
-    if (!admin) return undefined;
+	const admin = useAdminStore(selectAdmin);
+	const collections = admin?.getCollections();
+	const config = collections?.[collection];
+	const { fields } = useCollectionFields(collection, {
+		fallbackFields: config?.fields,
+	});
+	const schema = useMemo(() => {
+		if (!admin) return undefined;
+		if (!fields || Object.keys(fields).length === 0) return undefined;
+		return createFormSchema(fields);
+	}, [admin, fields]);
+	const errorMap = useValidationErrorMap();
 
-    const collections = admin.getCollections();
-    const config = collections[collection];
+	const resolver: Resolver<TFieldValues> = useCallback(
+		async (values, _context, _options) => {
+			if (!schema) {
+				return {
+					values: values as TFieldValues,
+					errors: {} as Record<string, never>,
+				};
+			}
 
-    if (!config?.fields) return undefined;
+			const result = schema.safeParse(values);
 
-    return createFormSchema(config.fields);
-  }, [admin, collection]);
-  const errorMap = useValidationErrorMap();
+			if (result.success) {
+				return {
+					values: result.data as TFieldValues,
+					errors: {} as Record<string, never>,
+				};
+			}
 
-  const resolver: Resolver<TFieldValues> = useCallback(
-    async (values, _context, _options) => {
-      if (!schema) {
-        return {
-          values: values as TFieldValues,
-          errors: {} as Record<string, never>,
-        };
-      }
+			return {
+				values: {} as Record<string, never>,
+				errors: zodErrorToFieldErrors(
+					result.error,
+					errorMap,
+				) as FieldErrors<TFieldValues>,
+			};
+		},
+		[schema, errorMap],
+	);
 
-      const result = schema.safeParse(values);
-
-      if (result.success) {
-        return {
-          values: result.data as TFieldValues,
-          errors: {} as Record<string, never>,
-        };
-      }
-
-      return {
-        values: {} as Record<string, never>,
-        errors: zodErrorToFieldErrors(
-          result.error,
-          errorMap,
-        ) as FieldErrors<TFieldValues>,
-      };
-    },
-    [schema, errorMap],
-  );
-
-  return schema ? resolver : undefined;
+	return schema ? resolver : undefined;
 }
 
 /**
  * Convert Zod error to react-hook-form FieldErrors format with i18n support
  */
 function zodErrorToFieldErrors(
-  error: z.ZodError,
-  errorMap: ZodErrorMapFn,
+	error: z.ZodError,
+	errorMap: ZodErrorMapFn,
 ): FieldErrors<FieldValues> {
-  const errors: FieldErrors<FieldValues> = {};
+	const errors: FieldErrors<FieldValues> = {};
 
-  for (const issue of error.issues) {
-    const path = issue.path.join(".");
-    // Apply i18n error map to get translated message
-    const { message } = errorMap(issue as Parameters<ZodErrorMapFn>[0]);
+	for (const issue of error.issues) {
+		const path = issue.path.join(".");
+		// Apply i18n error map to get translated message
+		const { message } = errorMap(issue as Parameters<ZodErrorMapFn>[0]);
 
-    if (path && !errors[path]) {
-      errors[path] = {
-        type: issue.code,
-        message,
-      };
-    }
-  }
+		if (path && !errors[path]) {
+			errors[path] = {
+				type: issue.code,
+				message,
+			};
+		}
+	}
 
-  return errors;
+	return errors;
 }

@@ -4,7 +4,7 @@
  * Factory functions for creating and configuring Tiptap extensions.
  */
 
-import type { Extension as TiptapExtension } from "@tiptap/core";
+import type { AnyExtension } from "@tiptap/core";
 import CharacterCount from "@tiptap/extension-character-count";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Image from "@tiptap/extension-image";
@@ -36,8 +36,8 @@ export function buildExtensions({
 	features: Required<RichTextFeatures>;
 	placeholder?: string;
 	maxCharacters?: number;
-	customExtensions?: TiptapExtension[];
-}): TiptapExtension[] {
+	customExtensions?: AnyExtension[];
+}): AnyExtension[] {
 	const starterKitConfig: Record<string, any> = {
 		codeBlock: false,
 	};
@@ -56,7 +56,7 @@ export function buildExtensions({
 	if (!features.horizontalRule) starterKitConfig.horizontalRule = false;
 	if (!features.history) starterKitConfig.history = false;
 
-	const extensions: TiptapExtension[] = [
+	const extensions: AnyExtension[] = [
 		StarterKit.configure(starterKitConfig),
 		Placeholder.configure({
 			placeholder: placeholder || "Start writing...",
@@ -141,7 +141,8 @@ export function buildExtensions({
 					title: "Paragraph",
 					description: "Start with plain text",
 					keywords: ["text"],
-					command: (cmdEditor) => cmdEditor.chain().focus().setParagraph().run(),
+					command: (cmdEditor) =>
+						cmdEditor.chain().focus().setParagraph().run(),
 				});
 
 				if (features.bulletList) {

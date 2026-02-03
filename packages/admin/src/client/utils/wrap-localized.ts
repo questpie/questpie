@@ -54,20 +54,30 @@ function getNestedFields(
 	if (!options) return undefined;
 
 	// Object field - has `fields` callback
-	if (options.fields && typeof options.fields === "function") {
-		try {
-			return options.fields({ r: createRegistryProxy(builtInFields) });
-		} catch {
-			return undefined;
+	if (options.fields) {
+		if (typeof options.fields === "function") {
+			try {
+				return options.fields({ r: createRegistryProxy(builtInFields) });
+			} catch {
+				return undefined;
+			}
+		}
+		if (typeof options.fields === "object") {
+			return options.fields as Record<string, FieldDefinition>;
 		}
 	}
 
 	// Array field with object items - has `item` callback
-	if (options.item && typeof options.item === "function") {
-		try {
-			return options.item({ r: createRegistryProxy(builtInFields) });
-		} catch {
-			return undefined;
+	if (options.item) {
+		if (typeof options.item === "function") {
+			try {
+				return options.item({ r: createRegistryProxy(builtInFields) });
+			} catch {
+				return undefined;
+			}
+		}
+		if (typeof options.item === "object") {
+			return options.item as Record<string, FieldDefinition>;
 		}
 	}
 

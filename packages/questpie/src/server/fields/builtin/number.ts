@@ -55,7 +55,7 @@ import type {
  * }
  * ```
  */
-export type NumberFieldMeta = {};
+export interface NumberFieldMeta {}
 
 // ============================================================================
 // Number Field Configuration

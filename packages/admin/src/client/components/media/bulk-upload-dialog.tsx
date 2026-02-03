@@ -21,21 +21,21 @@
  * ```
  */
 
+import { CheckCircle, Trash, WarningCircle, X } from "@phosphor-icons/react";
 import * as React from "react";
-import { Trash, CheckCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { type Asset, useUpload } from "../../hooks/use-upload";
 import { cn } from "../../lib/utils";
-import { useUpload, type Asset } from "../../hooks/use-upload";
+import { Dropzone } from "../primitives/dropzone";
 import { Button } from "../ui/button";
 import {
 	ResponsiveDialog,
 	ResponsiveDialogContent,
-	ResponsiveDialogHeader,
-	ResponsiveDialogTitle,
 	ResponsiveDialogDescription,
 	ResponsiveDialogFooter,
+	ResponsiveDialogHeader,
+	ResponsiveDialogTitle,
 } from "../ui/responsive-dialog";
-import { Dropzone } from "../primitives/dropzone";
 
 // ============================================================================
 // Types
@@ -213,8 +213,7 @@ export function BulkUploadDialog({
 	const uploadedFiles = files.filter((f) => f.status === "success");
 	const failedFiles = files.filter((f) => f.status === "error");
 	const canUpload = pendingFiles.length > 0 && !isUploading;
-	const allComplete =
-		hasFiles && pendingFiles.length === 0 && !isUploading;
+	const allComplete = hasFiles && pendingFiles.length === 0 && !isUploading;
 
 	// Handle file drop
 	const handleDrop = (droppedFiles: File[]) => {
@@ -267,7 +266,7 @@ export function BulkUploadDialog({
 				try {
 					// Upload file
 					const asset = await uploadMany([file], {
-						collection,
+						to: collection,
 						onProgress: (progress) => {
 							setFiles((prev) =>
 								prev.map((f, idx) =>
@@ -368,14 +367,11 @@ export function BulkUploadDialog({
 					{hasFiles && (
 						<div className="space-y-2">
 							<div className="flex items-center justify-between">
-								<p className="text-sm font-medium">
-									Files ({files.length})
-								</p>
+								<p className="text-sm font-medium">Files ({files.length})</p>
 								{uploadedFiles.length > 0 && (
 									<p className="text-muted-foreground text-xs">
 										{uploadedFiles.length} uploaded
-										{failedFiles.length > 0 &&
-											`, ${failedFiles.length} failed`}
+										{failedFiles.length > 0 && `, ${failedFiles.length} failed`}
 									</p>
 								)}
 							</div>

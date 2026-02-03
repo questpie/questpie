@@ -73,9 +73,9 @@ export const isSetupRequired = fn({
 		const app = getApp(ctx);
 		const userCollection = app.getCollectionConfig("user");
 		const result = await app.db
-			.select({ count: sql<number>`count(*)::int` })
+			.select({ count: sql`count(*)::int` as any })
 			.from(userCollection.table);
-		return { required: result[0].count === 0 };
+		return { required: (result[0] as { count: number }).count === 0 };
 	},
 });
 
@@ -112,10 +112,10 @@ export const createFirstAdmin = fn({
 
 		// Check if setup already completed (any users exist)
 		const checkResult = await app.db
-			.select({ count: sql<number>`count(*)::int` })
+			.select({ count: sql`count(*)::int` as any })
 			.from(userCollection.table);
 
-		if (checkResult[0].count > 0) {
+		if ((checkResult[0] as { count: number }).count > 0) {
 			return {
 				success: false,
 				error: "Setup already completed - users exist in the system",
@@ -141,13 +141,14 @@ export const createFirstAdmin = fn({
 
 			// Update role to admin and verify email (first user is always admin)
 			// TODO: we can also use our builder pattern for admin functions for proper typesafety here !
-			await app.db
+			// Note: Type assertion needed due to drizzle-orm duplicate dependency resolution
+			await (app.db as any)
 				.update(userCollection.table)
 				.set({
 					role: "admin",
 					emailVerified: true,
-				} as any)
-				.where(eq(userCollection.table.id, signUpResult.user.id));
+				})
+				.where(eq(userCollection.table.id as any, signUpResult.user.id));
 
 			return {
 				success: true,

@@ -34,7 +34,7 @@ import type {
  * }
  * ```
  */
-export type BooleanFieldMeta = {};
+export interface BooleanFieldMeta {}
 
 // ============================================================================
 // Boolean Field Configuration

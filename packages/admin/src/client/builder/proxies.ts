@@ -25,8 +25,20 @@ export type FieldProxy<TFields extends Record<string, any>> = {
  * Creates a field proxy at runtime
  */
 export function createFieldProxy<TFields extends Record<string, any>>(
-	fields: TFields,
+	fields?: TFields,
 ): FieldProxy<TFields> {
+	if (!fields || Object.keys(fields).length === 0) {
+		return new Proxy(
+			{},
+			{
+				get: (_target, prop) => {
+					if (typeof prop !== "string") return undefined;
+					return prop;
+				},
+			},
+		) as FieldProxy<TFields>;
+	}
+
 	const proxy = {} as any;
 	for (const key in fields) {
 		proxy[key] = key;

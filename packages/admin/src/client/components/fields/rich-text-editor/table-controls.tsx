@@ -5,7 +5,7 @@
  */
 
 import type { Editor } from "@tiptap/core";
-import * as React from "react";
+import type * as React from "react";
 
 import { useTranslation } from "../../../i18n/hooks";
 import { Button } from "../../ui/button";
@@ -21,7 +21,7 @@ export type TableControlsProps = {
 	editor: Editor;
 	disabled?: boolean;
 	inTable: boolean;
-	triggerButton?: React.ReactNode;
+	triggerButton?: React.ReactElement;
 };
 
 /**

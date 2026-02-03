@@ -36,7 +36,7 @@ import type {
  * }
  * ```
  */
-export type TextareaFieldMeta = {};
+export interface TextareaFieldMeta {}
 
 // ============================================================================
 // Textarea Field Configuration

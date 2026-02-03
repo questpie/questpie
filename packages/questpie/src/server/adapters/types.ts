@@ -154,6 +154,15 @@ export type AdapterRoutes = {
 			params: { global: string },
 			context?: AdapterContext,
 		) => Promise<Response>;
+		/**
+		 * Get introspected global schema with fields, access, validation.
+		 * Used by admin UI to auto-generate forms.
+		 */
+		schema: (
+			request: Request,
+			params: { global: string },
+			context?: AdapterContext,
+		) => Promise<Response>;
 		update: (
 			request: Request,
 			params: { global: string },

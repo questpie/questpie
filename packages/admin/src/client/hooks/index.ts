@@ -44,6 +44,8 @@ export {
 	useActionHelpers,
 	useActions,
 } from "./use-action";
+// Admin config hook
+export { useAdminConfig } from "./use-admin-config";
 // Admin preferences hooks
 export {
 	type AdminPreference,
@@ -81,6 +83,8 @@ export {
 	useCollectionList,
 	useCollectionUpdate,
 } from "./use-collection";
+// Collection fields hook (schema -> field definitions)
+export { useCollectionFields } from "./use-collection-fields";
 // Collection meta hook
 export {
 	getCollectionMetaQueryKey,
@@ -114,6 +118,8 @@ export {
 } from "./use-field-hooks";
 // Global hooks
 export { useGlobal, useGlobalUpdate } from "./use-global";
+export { useGlobalFields } from "./use-global-fields";
+export { getGlobalSchemaQueryKey, useGlobalSchema } from "./use-global-schema";
 // Prefill params hook
 export {
 	buildPrefillUrl,

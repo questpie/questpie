@@ -56,7 +56,7 @@ import type {
  * }
  * ```
  */
-export type RelationFieldMeta = {};
+export interface RelationFieldMeta {}
 
 // ============================================================================
 // Relation Field Configuration

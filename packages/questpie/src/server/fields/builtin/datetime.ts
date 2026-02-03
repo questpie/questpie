@@ -34,7 +34,7 @@ import type {
 /**
  * Datetime field metadata - augmentable by external packages.
  */
-export type DatetimeFieldMeta = {};
+export interface DatetimeFieldMeta {}
 
 // ============================================================================
 // Datetime Field Configuration

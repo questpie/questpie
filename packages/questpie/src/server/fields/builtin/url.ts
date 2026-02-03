@@ -33,7 +33,7 @@ import type {
 /**
  * URL field metadata - augmentable by external packages.
  */
-export type UrlFieldMeta = {};
+export interface UrlFieldMeta {}
 
 // ============================================================================
 // URL Field Configuration

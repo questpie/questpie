@@ -207,16 +207,22 @@ export interface CollectionConfig<TFieldNames extends string = string> {
 
 	/**
 	 * Field configurations (FieldDefinition objects)
+	 *
+	 * @deprecated Admin UI is schema-driven. Prefer server-side schema fields.
 	 */
 	fields?: Record<string, FieldDefinition>;
 
 	/**
 	 * List view configuration
+	 *
+	 * @deprecated Admin UI is schema-driven. Prefer server-side schema config.
 	 */
 	list?: ListViewConfig<TFieldNames>;
 
 	/**
 	 * Form view configuration
+	 *
+	 * @deprecated Admin UI is schema-driven. Prefer server-side schema config.
 	 */
 	form?: FormViewConfig;
 

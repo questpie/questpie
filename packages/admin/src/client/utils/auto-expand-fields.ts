@@ -72,15 +72,14 @@ export function autoExpandFields(
 
 	// Determine which columns are displayed
 	// TODO: this should adhere to visible columns based on adminPrefs
-	// const columnFields = config.list?.columns || [];
-	const columnFields = config.fields ? Object.keys(config.fields) : [];
+	const columnFields = config.list?.columns ?? [];
 	const fieldsToCheck: string[] = [];
 
 	if (columnFields.length > 0) {
 		// Use explicitly configured columns
 		for (const col of columnFields) {
-			// const fieldName = typeof col === "string" ? col : col.field;
-			const fieldName = col;
+			const fieldName = typeof col === "string" ? col : col.field;
+			if (fieldName === "_title") continue;
 			fieldsToCheck.push(fieldName);
 		}
 	} else if (config.fields) {

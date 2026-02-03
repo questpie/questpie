@@ -37,7 +37,7 @@ import type {
  * }
  * ```
  */
-export type ArrayFieldMeta = {};
+export interface ArrayFieldMeta {}
 
 // ============================================================================
 // Array Field Configuration

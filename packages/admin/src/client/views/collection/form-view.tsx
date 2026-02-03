@@ -67,6 +67,7 @@ import {
 	useCollectionItem,
 	useCollectionUpdate,
 } from "../../hooks/use-collection";
+import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import {
 	selectAdmin,
@@ -224,6 +225,9 @@ export default function FormView({
 	const resolveText = useResolveText();
 	const admin = useAdminStore(selectAdmin);
 	const isEditMode = !!id;
+	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
+		fallbackFields: (config as any)?.fields,
+	});
 
 	// Try to get preview context (will be null if not in LivePreviewMode)
 	const previewContext = useLivePreviewContext();
@@ -256,8 +260,8 @@ export default function FormView({
 
 	// Auto-detect M:N relations that need to be included when fetching
 	const withRelations = React.useMemo(
-		() => detectManyToManyRelations({ fields: config?.fields }),
-		[config?.fields],
+		() => detectManyToManyRelations({ fields: resolvedFields }),
+		[resolvedFields],
 	);
 
 	// Fetch item if in edit mode (include relations if specified)
@@ -404,9 +408,9 @@ export default function FormView({
 
 	const onSubmit = React.useEffectEvent(async (data: any) => {
 		// Transform nested localized values with $i18n wrappers
-		const transformedData = config?.fields
+		const transformedData = resolvedFields
 			? wrapLocalizedNestedValues(data, {
-					fields: config.fields,
+					fields: resolvedFields,
 					blocks: admin.state.blocks,
 				})
 			: data;
@@ -496,9 +500,9 @@ export default function FormView({
 				setIsSaving(true);
 				await form.handleSubmit(async (data) => {
 					// Transform nested localized values with $i18n wrappers
-					const transformedData = config?.fields
+					const transformedData = resolvedFields
 						? wrapLocalizedNestedValues(data, {
-								fields: config.fields,
+								fields: resolvedFields,
 								blocks: admin.state.blocks,
 							})
 						: data;
@@ -541,7 +545,7 @@ export default function FormView({
 		autoSaveConfig.debounce,
 		isEditMode,
 		updateMutation,
-		config,
+		resolvedFields,
 		admin.state.blocks,
 		id,
 		previewContext,
@@ -954,7 +958,10 @@ export default function FormView({
 		);
 	}
 
-	const collectionLabel = resolveText(config?.label, collection);
+	const collectionLabel = resolveText(
+		(config as any)?.label ?? schema?.admin?.config?.label,
+		collection,
+	);
 	// In edit mode, show item's _title; in new mode, show "New {collection}"
 	const title = isEditMode
 		? (item as any)?._title ||
