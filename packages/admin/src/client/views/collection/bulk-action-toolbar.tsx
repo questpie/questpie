@@ -221,6 +221,12 @@ export function BulkActionToolbar<TItem = any>({
 				);
 				break;
 			}
+
+			case "server": {
+				// Server actions with forms open dialog, otherwise execute
+				onOpenDialog?.(action, selectedItems);
+				break;
+			}
 		}
 	};
 

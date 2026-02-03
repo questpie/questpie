@@ -127,7 +127,6 @@ export {
 	parsePrefillParamsFromUrl,
 	usePrefillParams,
 } from "./use-prefill-params";
-// Prefill params hook
 // Saved views hooks
 export {
 	useDeleteSavedView,
@@ -150,6 +149,13 @@ export {
 	useReindex,
 	useSearch,
 } from "./use-search";
+// Server actions hook
+export {
+	mergeServerActions,
+	type UseServerActionsOptions,
+	type UseServerActionsReturn,
+	useServerActions,
+} from "./use-server-actions";
 // Setup status hook
 export { type SetupStatus, useSetupStatus } from "./use-setup-status";
 // Upload hook

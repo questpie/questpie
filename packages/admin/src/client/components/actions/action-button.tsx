@@ -171,6 +171,13 @@ export function ActionButton<TItem = any>({
 				onOpenDialog?.(action);
 				break;
 			}
+
+			case "server": {
+				// Server actions are handled as form/dialog if they have a form config,
+				// otherwise execute directly via the action execution hook
+				onOpenDialog?.(action);
+				break;
+			}
 		}
 	};
 

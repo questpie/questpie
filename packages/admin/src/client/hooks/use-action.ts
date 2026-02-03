@@ -431,6 +431,55 @@ export function useActionExecution<TItem = any>({
 						// These are handled by the ActionDialog component
 						break;
 					}
+
+					case "server": {
+						// Execute server-side action via API
+						const serverHandler = handler as {
+							type: "server";
+							actionId: string;
+							collection: string;
+						};
+						try {
+							const collectionClient = (client as any).collections?.[
+								serverHandler.collection
+							];
+							if (collectionClient?.executeAction) {
+								const result = await collectionClient.executeAction(
+									serverHandler.actionId,
+									{
+										itemId: (item as any)?.id,
+										itemIds: items?.map((i: any) => i?.id).filter(Boolean),
+									},
+								);
+								if (result?.toast) {
+									if (result.type === "error") {
+										helpers.toast.error(result.toast.message);
+									} else {
+										helpers.toast.success(result.toast.message);
+									}
+								}
+								if (result?.effects?.invalidate) {
+									if (result.effects.invalidate === true) {
+										await helpers.invalidateAll();
+									} else {
+										for (const col of result.effects.invalidate) {
+											await helpers.invalidateCollection(col);
+										}
+									}
+								}
+								if (result?.effects?.closeModal) {
+									helpers.closeDialog();
+								}
+							} else {
+								helpers.toast.info(`Server action: ${serverHandler.actionId}`);
+							}
+						} catch (err) {
+							helpers.toast.error(
+								err instanceof Error ? err.message : "Server action failed",
+							);
+						}
+						break;
+					}
 				}
 			} catch (error) {
 				helpers.toast.error(

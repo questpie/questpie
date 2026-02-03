@@ -192,6 +192,18 @@ export interface CustomHandler<TItem = any> {
 }
 
 /**
+ * Server handler - executes action on the server via API.
+ * Used for server-defined actions where the handler runs server-side.
+ */
+export interface ServerHandler {
+	type: "server";
+	/** Server action ID (matches ServerActionDefinition.id) */
+	actionId: string;
+	/** Collection name for the action endpoint */
+	collection: string;
+}
+
+/**
  * Union of all action handler types
  */
 export type ActionHandler<TItem = any> =
@@ -199,7 +211,8 @@ export type ActionHandler<TItem = any> =
 	| DialogHandler<TItem>
 	| FormHandler<TItem>
 	| ApiHandler
-	| CustomHandler<TItem>;
+	| CustomHandler<TItem>
+	| ServerHandler;
 
 // ============================================================================
 // Confirmation

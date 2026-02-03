@@ -22,6 +22,7 @@ import type {
 	PageDefinition,
 } from "../../builder";
 import { Card } from "../../components/index.js";
+import { useAdminConfig } from "../../hooks/use-admin-config";
 import { parsePrefillParams } from "../../hooks/use-prefill-params";
 import { useAdminStore } from "../../runtime/provider";
 import FormView from "../collection/form-view";
@@ -159,17 +160,45 @@ function useRouterProps(props: {
 	// Subscribe to admin from store reactively
 	const admin = useAdminStore((s) => s.admin);
 
+	// Fetch server-side admin config for dashboard
+	const { data: serverConfig } = useAdminConfig();
+
 	const storeCollections = admin.getCollections();
 	const storeGlobals = admin.getGlobals();
 	const storePages = admin.getPages();
 	const storeDashboard = admin.getDashboard();
 	const storeDefaultViews = admin.getDefaultViews();
 
+	// Merge server dashboard config with local config (server takes priority for title/description/items)
+	const mergedDashboard = React.useMemo<DashboardConfig | undefined>(() => {
+		const localConfig = props.dashboardConfig ?? storeDashboard;
+		const serverDashboard = serverConfig?.dashboard;
+
+		if (!serverDashboard) return localConfig;
+
+		// Server dashboard config maps directly to DashboardConfig
+		// (icons in server widgets are ComponentReference but DashboardWidget accepts them as-is
+		// since the widget renderers handle icon resolution)
+		return {
+			...localConfig,
+			title: serverDashboard.title ?? localConfig?.title,
+			description: serverDashboard.description ?? localConfig?.description,
+			columns: serverDashboard.columns ?? localConfig?.columns,
+			gap: serverDashboard.gap ?? localConfig?.gap,
+			refreshInterval:
+				serverDashboard.refreshInterval ?? localConfig?.refreshInterval,
+			// Server items take priority if provided
+			items: serverDashboard.items?.length
+				? (serverDashboard.items as DashboardConfig["items"])
+				: localConfig?.items,
+		};
+	}, [props.dashboardConfig, storeDashboard, serverConfig?.dashboard]);
+
 	return {
 		collections: props.collections ?? storeCollections,
 		globals: props.globals ?? storeGlobals,
 		pages: props.pages ?? storePages,
-		dashboardConfig: props.dashboardConfig ?? storeDashboard,
+		dashboardConfig: mergedDashboard,
 		DashboardComponent:
 			props.DashboardComponent ?? (storeDashboard as any)?.component,
 		defaultViews: props.defaultViews ?? storeDefaultViews,

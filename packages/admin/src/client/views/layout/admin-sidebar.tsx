@@ -5,6 +5,7 @@
  * Automatically reads from AdminProvider context when props are not provided.
  */
 
+import * as PhosphorIcons from "@phosphor-icons/react";
 import {
 	CaretDownIcon,
 	CaretUpDown,
@@ -15,6 +16,7 @@ import {
 	UserCircle,
 } from "@phosphor-icons/react";
 import * as React from "react";
+import type { ComponentReference } from "#questpie/admin/server";
 import type { IconComponent } from "../../builder/types/common";
 import {
 	DropdownMenu,
@@ -46,6 +48,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "../../components/ui/tooltip";
+import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useAuthClientSafe } from "../../hooks/use-auth";
 import { useSessionState } from "../../hooks/use-current-user";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
@@ -144,6 +147,177 @@ export interface AdminSidebarProps {
 }
 
 // ============================================================================
+// Icon Resolution
+// ============================================================================
+
+/**
+ * Resolve a ComponentReference<"icon"> to an IconComponent.
+ * Uses Phosphor icons by looking up the icon name from props.
+ */
+function resolveComponentRefIcon(
+	ref: ComponentReference<"icon"> | undefined,
+): IconComponent | undefined {
+	if (!ref?.props?.name) return undefined;
+
+	const name = String(ref.props.name);
+	// Handle "ph:IconName" format (strip prefix)
+	const iconName = name.includes(":") ? name.split(":").pop()! : name;
+
+	const icon = (PhosphorIcons as Record<string, unknown>)[iconName];
+	if (typeof icon === "function") {
+		return icon as IconComponent;
+	}
+	return undefined;
+}
+
+// ============================================================================
+// Internal Hook - Build navigation from server config
+// ============================================================================
+
+/**
+ * Build NavigationGroup[] from server sidebar config, using local navigation
+ * as fallback data for collection/global/page items.
+ */
+function useServerNavigation(): NavigationGroup[] | undefined {
+	const { data: serverConfig } = useAdminConfig();
+	const storeNavigation = useAdminStore((s) => s.navigation);
+	const basePath = useAdminStore(selectBasePath);
+
+	return React.useMemo(() => {
+		const sections = serverConfig?.sidebar?.sections;
+		if (!sections?.length) return undefined;
+
+		// Build a lookup map from local navigation items
+		const localItemMap = new Map<string, NavigationItem>();
+		for (const group of storeNavigation ?? []) {
+			for (const element of group.items) {
+				if (element.type !== "divider" && "id" in element) {
+					localItemMap.set(element.id, element as NavigationItem);
+				}
+			}
+		}
+
+		return sections.map((section) => ({
+			id: section.id,
+			label: section.title,
+			icon: resolveComponentRefIcon(
+				section.icon as ComponentReference<"icon"> | undefined,
+			),
+			collapsed: section.collapsed,
+			items: section.items
+				.map((item): NavigationElement | undefined => {
+					switch (item.type) {
+						case "collection": {
+							const found = localItemMap.get(
+								`collection:${(item as any).collection}`,
+							);
+							if (!found) {
+								// Build from server meta if not in local config
+								const collectionName = (item as any).collection as string;
+								return {
+									id: `collection:${collectionName}`,
+									label:
+										(item as any).label ??
+										collectionName
+											.replace(/([A-Z])/g, " $1")
+											.replace(/^./, (s: string) => s.toUpperCase())
+											.trim(),
+									href: `${basePath}/collections/${collectionName}`,
+									icon: resolveComponentRefIcon(
+										(item as any).icon as
+											| ComponentReference<"icon">
+											| undefined,
+									),
+									type: "collection" as const,
+									order: 0,
+								};
+							}
+							return {
+								...found,
+								label: (item as any).label ?? found.label,
+								icon:
+									resolveComponentRefIcon(
+										(item as any).icon as
+											| ComponentReference<"icon">
+											| undefined,
+									) ?? found.icon,
+							};
+						}
+
+						case "global": {
+							const found = localItemMap.get(`global:${(item as any).global}`);
+							if (!found) {
+								const globalName = (item as any).global as string;
+								return {
+									id: `global:${globalName}`,
+									label:
+										(item as any).label ??
+										globalName
+											.replace(/([A-Z])/g, " $1")
+											.replace(/^./, (s: string) => s.toUpperCase())
+											.trim(),
+									href: `${basePath}/globals/${globalName}`,
+									icon: resolveComponentRefIcon(
+										(item as any).icon as
+											| ComponentReference<"icon">
+											| undefined,
+									),
+									type: "global" as const,
+									order: 0,
+								};
+							}
+							return {
+								...found,
+								label: (item as any).label ?? found.label,
+								icon:
+									resolveComponentRefIcon(
+										(item as any).icon as
+											| ComponentReference<"icon">
+											| undefined,
+									) ?? found.icon,
+							};
+						}
+
+						case "page": {
+							const found = localItemMap.get(`page:${(item as any).pageId}`);
+							if (!found) return undefined;
+							return {
+								...found,
+								label: (item as any).label ?? found.label,
+								icon:
+									resolveComponentRefIcon(
+										(item as any).icon as
+											| ComponentReference<"icon">
+											| undefined,
+									) ?? found.icon,
+							};
+						}
+
+						case "link":
+							return {
+								id: `link:${(item as any).href}`,
+								label: (item as any).label ?? "",
+								href: (item as any).href,
+								icon: resolveComponentRefIcon(
+									(item as any).icon as ComponentReference<"icon"> | undefined,
+								),
+								type: "link" as const,
+								order: 0,
+							};
+
+						case "divider":
+							return { type: "divider" as const };
+
+						default:
+							return undefined;
+					}
+				})
+				.filter((i): i is NavigationElement => i !== undefined),
+		}));
+	}, [serverConfig?.sidebar, storeNavigation, basePath]);
+}
+
+// ============================================================================
 // Internal Hook - Resolve props from store
 // ============================================================================
 
@@ -155,6 +329,9 @@ function useSidebarProps(props: {
 	const storeNavigation = useAdminStore((s) => s.navigation);
 	const storeBrandName = useAdminStore((s) => s.brandName);
 
+	// Try server-driven navigation
+	const serverNavigation = useServerNavigation();
+
 	// If props provided, use them (props take priority)
 	if (props.navigation !== undefined && props.brandName !== undefined) {
 		return {
@@ -164,7 +341,7 @@ function useSidebarProps(props: {
 	}
 
 	return {
-		navigation: props.navigation ?? storeNavigation ?? [],
+		navigation: props.navigation ?? serverNavigation ?? storeNavigation ?? [],
 		brandName: props.brandName ?? storeBrandName ?? "Admin",
 	};
 }
