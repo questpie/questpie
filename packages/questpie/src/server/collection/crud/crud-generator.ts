@@ -2458,6 +2458,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const key = `${crypto.randomUUID()}-${file.name}`;
 
 			// Upload file to storage using streaming when available
+			// Normalize MIME type (remove charset etc)
+			const mimeType = file.type.split(";")[0]?.trim() || file.type;
+			const visibility: StorageVisibility =
+				uploadOptions.visibility || "public";
+
 			// Streaming is more memory-efficient for large files
 			if (file.stream) {
 				// Convert web ReadableStream to Node.js Readable for Flydrive
@@ -2467,6 +2472,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				await this.cms.storage.use().putStream(key, nodeStream, {
 					contentType: file.type,
 					contentLength: file.size,
+					visibility,
 				});
 			} else {
 				// Fallback to buffer-based upload for files without stream support
@@ -2474,13 +2480,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				await this.cms.storage.use().put(key, new Uint8Array(buffer), {
 					contentType: file.type,
 					contentLength: file.size,
+					visibility,
 				});
 			}
-
-			// Normalize MIME type (remove charset etc)
-			const mimeType = file.type.split(";")[0]?.trim() || file.type;
-			const visibility: StorageVisibility =
-				uploadOptions.visibility || "public";
 
 			// Create record using the existing create method
 			const createFn = this.createCreate();

@@ -761,6 +761,20 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			}
 		};
 
+		// Create afterChange hook to sync visibility with storage
+		const uploadAfterChangeHook = async ({
+			data,
+			original,
+			app,
+			operation,
+		}: any) => {
+			if (operation !== "update") return;
+			if (!app?.storage || !data?.key) return;
+			if (!original || original.visibility === data.visibility) return;
+
+			await app.storage.use().setVisibility(data.key, data.visibility);
+		};
+
 		// Merge existing afterRead hooks with upload hook
 		const existingAfterRead = this.state.hooks?.afterRead;
 		const mergedAfterRead = existingAfterRead
@@ -768,6 +782,14 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				? [...existingAfterRead, uploadAfterReadHook]
 				: [existingAfterRead, uploadAfterReadHook]
 			: uploadAfterReadHook;
+
+		// Merge existing afterChange hooks with upload hook
+		const existingAfterChange = this.state.hooks?.afterChange;
+		const mergedAfterChange = existingAfterChange
+			? Array.isArray(existingAfterChange)
+				? [...existingAfterChange, uploadAfterChangeHook]
+				: [existingAfterChange, uploadAfterChangeHook]
+			: uploadAfterChangeHook;
 
 		const newState = {
 			...this.state,
@@ -782,6 +804,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			hooks: {
 				...this.state.hooks,
 				afterRead: mergedAfterRead,
+				afterChange: mergedAfterChange,
 			},
 			upload: options,
 		} as any;
