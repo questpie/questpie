@@ -6,12 +6,11 @@
  */
 
 import { z } from "zod";
-import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 import type { QuestpieBuilder } from "#questpie/server/config/builder.js";
 import { questpie } from "#questpie/server/config/builder.js";
 import type { Questpie } from "#questpie/server/config/cms.js";
+import { builtinFields } from "#questpie/server/fields/builtin/defaults.js";
 import { fn } from "#questpie/server/functions/define-function.js";
-import { global } from "#questpie/server/global/builder/global-builder.js";
 import { job } from "#questpie/server/integrated/queue/job.js";
 import type {
 	Equal,
@@ -22,15 +21,17 @@ import type {
 } from "./type-test-utils.js";
 
 // ============================================================================
-// Test fixtures
+// Test fixtures — use q.collection() for proper field type inference
 // ============================================================================
 
-const usersCollection = collection("users").fields((f) => ({
+const q = questpie({ name: "test" }).fields(builtinFields);
+
+const usersCollection = q.collection("users").fields((f) => ({
 	name: f.textarea({ required: true }),
 	email: f.email({ required: true, maxLength: 255 }),
 }));
 
-const postsCollection = collection("posts").fields((f) => ({
+const postsCollection = q.collection("posts").fields((f) => ({
 	title: f.text({ required: true, maxLength: 255 }),
 	content: f.textarea(),
 	author: f.relation({
@@ -40,7 +41,7 @@ const postsCollection = collection("posts").fields((f) => ({
 	}),
 }));
 
-const settingsGlobal = global("settings").fields((f) => ({
+const settingsGlobal = q.global("settings").fields((f) => ({
 	siteName: f.text({ required: true, maxLength: 255 }),
 }));
 

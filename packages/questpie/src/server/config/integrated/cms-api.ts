@@ -1,5 +1,14 @@
 import type { UploadOptions } from "#questpie/server/collection/builder/index.js";
-import type { CRUD } from "#questpie/server/collection/crud/index.js";
+import type {
+	ApplyQuery,
+	CollectionRelationsFromApp,
+	CollectionSelectFromApp,
+	CRUD,
+	CRUDContext,
+	FindOneOptions,
+	FindOptions,
+	PaginatedResult,
+} from "#questpie/server/collection/crud/index.js";
 import type { Questpie } from "#questpie/server/config/cms.js";
 import type { RequestContext } from "#questpie/server/config/context.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
@@ -79,24 +88,65 @@ type CollectionHasUpload<TCollection> =
 			: false
 		: false;
 
+/**
+ * Build an app-like context from TCollections for field-definition resolution.
+ * This allows nested relation Where/With to resolve through WhereFromCollection.
+ */
+type AppFromCollections<
+	TCollections extends Record<string, AnyCollectionOrBuilder>,
+> = { collections: TCollections };
+
+/**
+ * Collection-aware CRUD that uses FindOptions/FindOneOptions typed against
+ * the collection + TApp context for field-definition-aware operator types.
+ *
+ * This ensures that:
+ * - Where clauses use FieldOperatorsFromFieldDef (not WhereOperatorsLegacy)
+ * - Nested relation Where flows through WhereFromCollection
+ * - With clauses get typed where/columns/orderBy from field definitions
+ */
+type CollectionCRUD<
+	TCollection,
+	TCollections extends Record<string, AnyCollectionOrBuilder>,
+	TApp = AppFromCollections<TCollections>,
+	TSelect = CollectionSelectFromApp<TCollection, TApp>,
+	TRelations = CollectionRelationsFromApp<TCollection, TApp>,
+> = Omit<
+	CRUD<
+		TSelect,
+		CollectionInsert<TCollection>,
+		CollectionUpdate<TCollection>,
+		TRelations
+	>,
+	"find" | "findOne" | "count"
+> & {
+	find<TQuery extends FindOptions<TCollection, TApp>>(
+		options?: TQuery,
+		context?: CRUDContext,
+	): Promise<PaginatedResult<ApplyQuery<TSelect, TRelations, TQuery>>>;
+
+	findOne<TQuery extends FindOneOptions<TCollection, TApp>>(
+		options?: TQuery,
+		context?: CRUDContext,
+	): Promise<ApplyQuery<TSelect, TRelations, TQuery> | null>;
+
+	count(
+		options?: Pick<FindOptions<TCollection, TApp>, "where" | "includeDeleted">,
+		context?: CRUDContext,
+	): Promise<number>;
+};
+
 type CollectionAPI<
 	TCollection,
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
-> = CRUD<
-	CollectionSelect<TCollection>,
-	CollectionInsert<TCollection>,
-	CollectionUpdate<TCollection>,
-	ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
-> extends infer TCrud
-	? Omit<TCrud, "upload" | "uploadMany"> &
-			(CollectionHasUpload<TCollection> extends true
-				? UploadMethods<
-						CollectionSelect<TCollection>,
-						CollectionInsert<TCollection>
-					>
-				: {}) &
-			CollectionFunctionsAPI<TCollection, TCollections>
-	: never;
+> = Omit<CollectionCRUD<TCollection, TCollections>, "upload" | "uploadMany"> &
+	(CollectionHasUpload<TCollection> extends true
+		? UploadMethods<
+				CollectionSelect<TCollection>,
+				CollectionInsert<TCollection>
+			>
+		: {}) &
+	CollectionFunctionsAPI<TCollection, TCollections>;
 
 type GlobalAPI<
 	TGlobal,

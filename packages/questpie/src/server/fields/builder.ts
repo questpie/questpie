@@ -3,30 +3,46 @@
  *
  * Creates a type-safe proxy object that provides field factory methods.
  * Usage: f.text({ required: true }), f.number({ min: 0 }), etc.
+ *
+ * Fields are plain objects (via defineField). The proxy wraps each field
+ * into a callable factory: f.text(config) → FieldDefinition<...>.
  */
 
-import type { DefaultFields } from "./builtin/defaults.js";
-import type { FieldRegistry } from "./registry.js";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
+
+export type { BuiltinFields } from "./builtin/defaults.js";
+
+import {
+	type BuildFieldState,
+	createFieldDefinition,
+	type ExtractConfigFromFieldDef,
+	type ExtractOpsFromFieldDef,
+	type ExtractTypeFromFieldDef,
+	type ExtractValueFromFieldDef,
+} from "./define-field.js";
 import type { FieldDefinition, FieldDefinitionState } from "./types.js";
 
 // ============================================================================
 // Field Builder Proxy Types
 // ============================================================================
 
+// Re-export BuiltinFields for backwards compat
+import type { BuiltinFields } from "./builtin/defaults.js";
+
 /**
  * Default field type map for built-in fields.
- * Provides full type inference for standard fields.
- *
- * This type contains all built-in field types from defaultFields.
- * When using standalone `collection()` (not `q.collection()`), this is the fallback.
+ * @deprecated Use `BuiltinFields` instead
  */
-export type DefaultFieldTypeMap = DefaultFields;
+export type DefaultFieldTypeMap = BuiltinFields;
 
 /**
  * Field builder proxy type.
- * Provides type-safe access to field factories.
+ * Maps plain field def objects to callable factories that produce FieldDefinition.
  *
- * @template TMap - The field type map to use (defaults to DefaultFieldTypeMap)
+ * Each property becomes a function: (config?) => FieldDefinition<BuildFieldState<...>>
+ * The concrete operator types from getOperators are preserved through ExtractOpsFromFieldDef.
+ *
+ * @template TMap - The field type map to use (defaults to BuiltinFields)
  *
  * @example
  * ```ts
@@ -38,8 +54,22 @@ export type DefaultFieldTypeMap = DefaultFields;
  * };
  * ```
  */
-export type FieldBuilderProxy<TMap = DefaultFieldTypeMap> = {
-	[K in keyof TMap]: TMap[K];
+export type FieldBuilderProxy<TMap = BuiltinFields> = {
+	[K in keyof TMap]: <
+		const TUserConfig extends ExtractConfigFromFieldDef<TMap[K]>,
+	>(
+		config?: TUserConfig,
+	) => FieldDefinition<
+		BuildFieldState<
+			ExtractTypeFromFieldDef<TMap[K]>,
+			TUserConfig extends undefined
+				? ExtractConfigFromFieldDef<TMap[K]>
+				: TUserConfig,
+			ExtractValueFromFieldDef<TMap[K]>,
+			AnyPgColumn,
+			ExtractOpsFromFieldDef<TMap[K]>
+		>
+	>;
 };
 
 // ============================================================================
@@ -47,16 +77,17 @@ export type FieldBuilderProxy<TMap = DefaultFieldTypeMap> = {
 // ============================================================================
 
 /**
- * Create a field builder proxy from a registry.
- * The proxy provides type-safe access to all registered field factories.
+ * Create a field builder proxy from a plain field defs map.
+ * Wraps each plain field def object into a callable factory using createFieldDefinition.
  *
- * @param registry - The field registry to use
+ * @param fieldDefs - Map of field type names to plain field def objects (defaults to builtinFields)
  * @returns A proxy object with field factory methods
  *
  * @example
  * ```ts
- * const registry = getDefaultRegistry();
- * const f = createFieldBuilder(registry);
+ * import { builtinFields } from "questpie";
+ *
+ * const f = createFieldBuilder(builtinFields);
  *
  * const fields = {
  *   title: f.text({ required: true }),
@@ -64,42 +95,45 @@ export type FieldBuilderProxy<TMap = DefaultFieldTypeMap> = {
  * };
  * ```
  */
-export function createFieldBuilder<TMap = DefaultFieldTypeMap>(
-	registry: FieldRegistry,
-): FieldBuilderProxy<TMap> {
-	// Create a proxy that delegates to the registry
-	return new Proxy({} as FieldBuilderProxy<TMap>, {
+export function createFieldBuilder<TFields extends Record<string, any>>(
+	fieldDefs: TFields,
+): FieldBuilderProxy<TFields> {
+	return new Proxy({} as FieldBuilderProxy<TFields>, {
 		get(_target, prop: string) {
-			const factory = registry.get(prop);
-			if (!factory) {
+			const fieldDef = fieldDefs[prop];
+			if (!fieldDef) {
 				throw new Error(
 					`Unknown field type: "${prop}". ` +
-						`Available types: ${registry.types().join(", ")}`,
+						`Available types: ${Object.keys(fieldDefs).join(", ")}`,
 				);
 			}
-			return factory;
+			// Return a factory function that wraps the plain field def
+			return (config?: any) => createFieldDefinition(fieldDef, config);
 		},
-
 		has(_target, prop: string) {
-			return registry.has(prop);
+			return prop in fieldDefs;
 		},
-
 		ownKeys() {
-			return registry.types();
+			return Object.keys(fieldDefs);
 		},
-
 		getOwnPropertyDescriptor(_target, prop: string) {
-			if (registry.has(prop)) {
+			if (prop in fieldDefs) {
 				return {
 					configurable: true,
 					enumerable: true,
-					value: registry.get(prop),
+					value: (config?: any) =>
+						createFieldDefinition(fieldDefs[prop], config),
 				};
 			}
 			return undefined;
 		},
 	});
 }
+
+/**
+ * @deprecated Use `createFieldBuilder` instead
+ */
+export const createFieldBuilderFromDefs = createFieldBuilder;
 
 // ============================================================================
 // Field Definition Extraction

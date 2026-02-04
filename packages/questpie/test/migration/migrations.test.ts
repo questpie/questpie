@@ -10,7 +10,8 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
-import { collection, questpie } from "../../src/server/index.js";
+import { builtinFields } from "../../src/server/fields/builtin/defaults.js";
+import { questpie } from "../../src/server/index.js";
 import type { Migration } from "../../src/server/migration/types.js";
 import { MockKVAdapter } from "../utils/mocks/kv.adapter";
 import { MockLogger } from "../utils/mocks/logger.adapter";
@@ -26,15 +27,18 @@ describe("Migration System - Programmatic", () => {
 		// Create in-memory PGlite instance
 		pgClient = await createTestDb();
 
-		// Define test collections
-		const posts = collection("posts").fields((f) => ({
+		// Create questpie instance with fields
+		const q = questpie({ name: "test-cms" }).fields(builtinFields);
+
+		// Define test collections using q.collection()
+		const posts = q.collection("posts").fields((f) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 			content: f.textarea(),
 			published: f.boolean({ default: false }),
 		}));
 
 		// Create CMS instance
-		const builder = questpie({ name: "test-cms" }).collections({ posts });
+		const builder = q.collections({ posts });
 
 		app = builder.build({
 			app: { url: "http://localhost:3000" },
@@ -267,12 +271,13 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			"../../src/server/migration/generator.js"
 		);
 
-		const posts = collection("posts").fields((f) => ({
+		const q = questpie({ name: "test-cms" }).fields(builtinFields);
+		const posts = q.collection("posts").fields((f) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 			content: f.textarea(),
 		}));
 
-		const builder = questpie({ name: "test-cms" }).collections({ posts });
+		const builder = q.collections({ posts });
 		const app = builder.build({
 			app: { url: "http://localhost:3000" },
 			db: { pglite: pgClient },
@@ -307,11 +312,12 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			"../../src/server/migration/generator.js"
 		);
 
-		const posts = collection("posts").fields((f) => ({
+		const q = questpie({ name: "test-cms" }).fields(builtinFields);
+		const posts = q.collection("posts").fields((f) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 		}));
 
-		const builder = questpie({ name: "test-cms" }).collections({ posts });
+		const builder = q.collections({ posts });
 		const app = builder.build({
 			app: { url: "http://localhost:3000" },
 			db: { pglite: pgClient },

@@ -5,26 +5,14 @@
  * Supports validation, transforms, and search operators.
  */
 
-import {
-	eq,
-	ilike,
-	inArray,
-	isNotNull,
-	isNull,
-	like,
-	ne,
-	notInArray,
-	sql,
-} from "drizzle-orm";
 import { text, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import {
+	stringColumnOperators,
+	stringJsonbOperators,
+} from "../common-operators.js";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	FieldMetadataBase,
-} from "../types.js";
+import type { FieldMetadataBase } from "../types.js";
 
 // ============================================================================
 // Text Field Meta (augmentable by admin)
@@ -47,7 +35,12 @@ import type {
  * }
  * ```
  */
-export interface TextFieldMeta {}
+
+// biome-ignore lint/suspicious/noEmptyInterface: we need interface for module augmentation
+export interface TextFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Text Field Configuration
@@ -106,67 +99,20 @@ export interface TextFieldConfig extends BaseFieldConfig {
 	uppercase?: boolean;
 }
 
+import type { BaseFieldConfig } from "../types.js";
+
 // ============================================================================
 // Text Field Operators
 // ============================================================================
 
 /**
- * Get operators for text field.
- * Supports both column and JSONB path access.
+ * Get operators for text fields.
+ * Provides rich text search and comparison.
  */
-function getTextOperators(): ContextualOperators {
+function getTextOperators(_config: TextFieldConfig) {
 	return {
-		column: {
-			eq: (col, value) => eq(col, value as string),
-			ne: (col, value) => ne(col, value as string),
-			like: (col, value) => like(col, value as string),
-			ilike: (col, value) => ilike(col, value as string),
-			startsWith: (col, value) => like(col, `${value}%`),
-			endsWith: (col, value) => like(col, `%${value}`),
-			contains: (col, value) => ilike(col, `%${value}%`),
-			in: (col, values) => inArray(col, values as string[]),
-			notIn: (col, values) => notInArray(col, values as string[]),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
-		},
-		jsonb: {
-			eq: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' = ${value}`;
-			},
-			ne: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' != ${value}`;
-			},
-			like: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' LIKE ${value}`;
-			},
-			ilike: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${value}`;
-			},
-			contains: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%" + value + "%"}`;
-			},
-			startsWith: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' LIKE ${value + "%"}`;
-			},
-			endsWith: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' LIKE ${"%" + value}`;
-			},
-			isNull: (col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
-		},
+		column: stringColumnOperators,
+		jsonb: stringJsonbOperators,
 	};
 }
 
@@ -175,22 +121,24 @@ function getTextOperators(): ContextualOperators {
 // ============================================================================
 
 /**
- * Text field factory.
- * Creates a text field with the given configuration.
+ * Text field definition.
+ * Plain object with generic methods — concrete operator types are preserved.
  *
  * @example
  * ```ts
- * const title = textField({ required: true, maxLength: 255 });
- * const slug = textField({ required: true, pattern: /^[a-z0-9-]+$/, lowercase: true });
- * const content = textField({ mode: "text" });
+ * const title = f.text({ required: true, maxLength: 255 });
+ * const slug = f.text({ required: true, pattern: /^[a-z0-9-]+$/, lowercase: true });
+ * const content = f.text({ mode: "text" });
  * ```
  */
-export const textField = defineField<"text", TextFieldConfig, string>("text", {
-	toColumn(_name, config) {
+export const textField = defineField<TextFieldConfig, string>()({
+	type: "text" as const,
+	_value: undefined as unknown as string,
+
+	toColumn(_name: string, config: TextFieldConfig) {
 		const { mode = "varchar", maxLength = 255 } = config;
 
 		// Don't specify column name - Drizzle uses the key name
-		// User's casing config handles naming (title → title or title → title)
 		let column: any = mode === "text" ? text() : varchar({ length: maxLength });
 
 		// Apply constraints
@@ -204,13 +152,11 @@ export const textField = defineField<"text", TextFieldConfig, string>("text", {
 					: config.default;
 			column = column.default(defaultValue as string);
 		}
-		// NOTE: unique constraint removed from field level
-		// Use .indexes() on collection builder instead
 
 		return column;
 	},
 
-	toZodSchema(config) {
+	toZodSchema(config: TextFieldConfig) {
 		let schema = z.string();
 
 		// Validation rules
@@ -247,11 +193,11 @@ export const textField = defineField<"text", TextFieldConfig, string>("text", {
 		return schema;
 	},
 
-	getOperators() {
-		return getTextOperators();
+	getOperators<TApp>(config: TextFieldConfig) {
+		return getTextOperators(config);
 	},
 
-	getMetadata(config): FieldMetadataBase {
+	getMetadata(config: TextFieldConfig): FieldMetadataBase {
 		return {
 			type: "text",
 			label: config.label,
@@ -271,4 +217,3 @@ export const textField = defineField<"text", TextFieldConfig, string>("text", {
 });
 
 // Register in default registry
-getDefaultRegistry().register("text", textField);

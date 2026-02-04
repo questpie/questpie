@@ -103,6 +103,39 @@ export interface RelationConfig {
 	targetField?: string; // Foreign key column in junction table pointing to target
 }
 
+type InferRelationTargetName<TTarget> = TTarget extends string
+	? TTarget
+	: TTarget extends () => { name: infer TName extends string }
+		? TName
+		: TTarget extends Record<string, any>
+			? Extract<keyof TTarget, string>
+			: string;
+
+type InferRelationTypeFromConfig<TConfig> = TConfig extends {
+	morphName: string;
+}
+	? "many"
+	: TConfig extends { hasMany: true }
+		? TConfig extends { through: any }
+			? "manyToMany"
+			: "many"
+		: "one";
+
+export type InferRelationConfigsFromFields<
+	TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
+> = {
+	[K in keyof TFields as TFields[K] extends FieldDefinition<infer TState>
+		? TState["type"] extends "relation"
+			? K
+			: never
+		: never]: TFields[K] extends FieldDefinition<infer TState>
+		? RelationConfig & {
+				type: InferRelationTypeFromConfig<TState["config"]>;
+				collection: InferRelationTargetName<TState["config"]["to"]>;
+			}
+		: never;
+};
+
 /**
  * Extract fields for relations context.
  * For field definitions, uses ExtractFieldsByLocation.

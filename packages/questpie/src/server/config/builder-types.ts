@@ -49,7 +49,7 @@ export interface QuestpieBuilderState<
 	TFunctions extends BuilderFunctionsMap = BuilderFunctionsMap,
 	TAuth extends BetterAuthOptions | Record<never, never> = Record<never, never>,
 	TMessageKeys extends string = never,
-	TFields extends BuilderFieldsMap = BuilderFieldsMap,
+	TBuilderFields extends BuilderFieldsMap = BuilderFieldsMap,
 > {
 	name: TName;
 	collections: TCollections;
@@ -62,7 +62,7 @@ export interface QuestpieBuilderState<
 	 * Registered field types for the Field Builder system.
 	 * Used when defining collections with `.fields((f) => ({ ... }))`.
 	 */
-	fields: TFields;
+	fields: TBuilderFields;
 
 	// Type-inferrable configurations (affect types)
 	auth: TAuth;

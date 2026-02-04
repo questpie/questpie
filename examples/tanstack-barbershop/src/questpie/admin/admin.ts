@@ -1,18 +1,6 @@
 // Import official admin translations for SK (optional - other languages available)
 import { adminMessagesSK } from "@questpie/admin/client";
-import blocks from "./blocks";
 import { builder } from "./builder";
-import { appointmentsAdmin } from "./collections/appointments";
-// Import collection configs
-import { barbersAdmin } from "./collections/barbers";
-import { pagesAdmin } from "./collections/pages";
-import { reviewsAdmin } from "./collections/reviews";
-import { servicesAdmin } from "./collections/services";
-import { dashboard } from "./dashboard";
-// Import global configs
-import { siteSettingsAdmin } from "./globals";
-// Import UI configs
-import { sidebarConfig } from "./sidebar";
 
 // ============================================================================
 // I18n Messages (Admin UI)
@@ -78,23 +66,6 @@ export const admin = builder
 	.branding({
 		name: "Barbershop Admin",
 		logo: undefined, // TODO: Add logo component
-	})
-	// Collections (each collection has its own config)
-	.collections({
-		barbers: barbersAdmin,
-		services: servicesAdmin,
-		appointments: appointmentsAdmin,
-		reviews: reviewsAdmin,
-		pages: pagesAdmin,
-	})
-	// Globals (singleton settings)
-	.globals({
-		siteSettings: siteSettingsAdmin,
-	})
-	// Blocks (page builder content)
-	.blocks(blocks)
-	// Sidebar navigation
-	.sidebar(sidebarConfig)
-	.dashboard(dashboard);
+	});
 
 export type AdminConfig = typeof admin;

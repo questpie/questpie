@@ -165,7 +165,7 @@ describe("upload + through (many-to-many)", () => {
 			const post = await postsCrud.create(
 				{
 					title: "Test Post",
-					gallery: { set: [{ id: asset1.id }, { id: asset2.id }] } as any,
+					gallery: { set: [{ id: asset1.id }] },
 				},
 				ctx,
 			);

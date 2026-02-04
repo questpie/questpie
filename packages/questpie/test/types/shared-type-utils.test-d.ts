@@ -5,8 +5,8 @@
  * These are compile-time only tests - run with: tsc --noEmit
  */
 
-import { collection } from "#questpie/server/collection/builder/collection-builder.js";
-import { global } from "#questpie/server/global/builder/global-builder.js";
+import { questpie } from "#questpie/server/config/builder.js";
+import { builtinFields } from "#questpie/server/fields/builtin/defaults.js";
 import type {
 	CollectionFunctions,
 	CollectionInsert,
@@ -38,12 +38,14 @@ import type {
 // Test fixtures
 // ============================================================================
 
-const usersCollection = collection("users").fields((f) => ({
+const q = questpie({ name: "test" }).fields(builtinFields);
+
+const usersCollection = q.collection("users").fields((f) => ({
 	name: f.textarea({ required: true }),
 	email: f.email({ required: true, maxLength: 255 }),
 }));
 
-const postsCollection = collection("posts").fields((f) => ({
+const postsCollection = q.collection("posts").fields((f) => ({
 	title: f.text({ required: true, maxLength: 255 }),
 	content: f.textarea(),
 	author: f.relation({
@@ -59,7 +61,7 @@ const postsCollection = collection("posts").fields((f) => ({
 	}),
 }));
 
-const commentsCollection = collection("comments").fields((f) => ({
+const commentsCollection = q.collection("comments").fields((f) => ({
 	text: f.textarea({ required: true }),
 	post: f.relation({
 		to: "posts",
@@ -68,7 +70,7 @@ const commentsCollection = collection("comments").fields((f) => ({
 	}),
 }));
 
-const settingsGlobal = global("settings").fields((f) => ({
+const settingsGlobal = q.global("settings").fields((f) => ({
 	siteName: f.text({ required: true, maxLength: 255 }),
 	maintenanceMode: f.textarea(),
 }));

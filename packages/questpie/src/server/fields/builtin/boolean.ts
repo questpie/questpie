@@ -5,16 +5,12 @@
  * Supports default values and boolean operators.
  */
 
-import { eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { eq, ne, sql } from "drizzle-orm";
 import { boolean } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	FieldMetadataBase,
-} from "../types.js";
+import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
+import { operator } from "../types.js";
 
 // ============================================================================
 // Boolean Field Meta (augmentable by admin)
@@ -34,7 +30,10 @@ import type {
  * }
  * ```
  */
-export interface BooleanFieldMeta {}
+export interface BooleanFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Boolean Field Configuration
@@ -70,51 +69,59 @@ export interface BooleanFieldConfig extends BaseFieldConfig {
  * Get operators for boolean field.
  * Supports both column and JSONB path access.
  */
-function getBooleanOperators(): ContextualOperators {
+function getBooleanOperators() {
 	return {
 		column: {
-			eq: (col, value) => eq(col, value as boolean),
-			ne: (col, value) => ne(col, value as boolean),
-			is: (col, value) => eq(col, value as boolean),
-			isNot: (col, value) => ne(col, value as boolean),
-			isTrue: (col) => eq(col, true),
-			isFalse: (col) => eq(col, false),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			eq: operator<boolean, unknown>((col, value) => eq(col, value)),
+			ne: operator<boolean, unknown>((col, value) => ne(col, value)),
+			is: operator<boolean, unknown>((col, value) => eq(col, value)),
+			isNot: operator<boolean, unknown>((col, value) => ne(col, value)),
+			isTrue: operator<boolean, unknown>((col) => eq(col, true)),
+			isFalse: operator<boolean, unknown>((col) => eq(col, false)),
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			eq: (col, value, ctx) => {
+			eq: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = ${value}`;
-			},
-			ne: (col, value, ctx) => {
+			}),
+			ne: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean != ${value}`;
-			},
-			is: (col, value, ctx) => {
+			}),
+			is: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = ${value}`;
-			},
-			isNot: (col, value, ctx) => {
+			}),
+			isNot: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean != ${value}`;
-			},
-			isTrue: (col, _value, ctx) => {
+			}),
+			isTrue: operator<boolean, unknown>((col, _value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = true`;
-			},
-			isFalse: (col, _value, ctx) => {
+			}),
+			isFalse: operator<boolean, unknown>((col, _value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = false`;
-			},
-			isNull: (col, _value, ctx) => {
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -134,69 +141,67 @@ function getBooleanOperators(): ContextualOperators {
  * const isAdmin = booleanField({ required: true });
  * ```
  */
-export const booleanField = defineField<"boolean", BooleanFieldConfig, boolean>(
-	"boolean",
-	{
-		toColumn(_name, config) {
-			// Don't specify column name - Drizzle uses the key name
-			let column: any = boolean();
+export const booleanField = defineField<BooleanFieldConfig, boolean>()({
+	type: "boolean" as const,
+	_value: undefined as unknown as boolean,
+	toColumn(_name: string, config: BooleanFieldConfig) {
+		// Don't specify column name - Drizzle uses the key name
+		let column: any = boolean();
 
-			// Apply constraints
-			if (config.required && config.nullable !== true) {
-				column = column.notNull();
-			}
+		// Apply constraints
+		if (config.required && config.nullable !== true) {
+			column = column.notNull();
+		}
 
-			// Determine default value
-			let defaultValue: boolean | undefined;
-			if (config.default !== undefined) {
-				defaultValue =
-					typeof config.default === "function"
-						? (config.default() as boolean)
-						: (config.default as boolean);
-			} else if (config.defaultTrue) {
-				defaultValue = true;
-			} else if (config.defaultFalse) {
-				defaultValue = false;
-			}
+		// Determine default value
+		let defaultValue: boolean | undefined;
+		if (config.default !== undefined) {
+			defaultValue =
+				typeof config.default === "function"
+					? (config.default() as boolean)
+					: (config.default as boolean);
+		} else if (config.defaultTrue) {
+			defaultValue = true;
+		} else if (config.defaultFalse) {
+			defaultValue = false;
+		}
 
-			if (defaultValue !== undefined) {
-				column = column.default(defaultValue);
-			}
-			// NOTE: unique constraint removed from field level
-			// Use .indexes() on collection builder instead
+		if (defaultValue !== undefined) {
+			column = column.default(defaultValue);
+		}
+		// NOTE: unique constraint removed from field level
+		// Use .indexes() on collection builder instead
 
-			return column;
-		},
-
-		toZodSchema(config) {
-			const schema = z.boolean();
-
-			// Nullability
-			if (!config.required && config.nullable !== false) {
-				return schema.nullish();
-			}
-
-			return schema;
-		},
-
-		getOperators() {
-			return getBooleanOperators();
-		},
-
-		getMetadata(config): FieldMetadataBase {
-			return {
-				type: "boolean",
-				label: config.label,
-				description: config.description,
-				required: config.required ?? false,
-				localized: config.localized ?? false,
-				readOnly: config.input === false,
-				writeOnly: config.output === false,
-				meta: config.meta,
-			};
-		},
+		return column;
 	},
-);
+
+	toZodSchema(config: BooleanFieldConfig) {
+		const schema = z.boolean();
+
+		// Nullability
+		if (!config.required && config.nullable !== false) {
+			return schema.nullish();
+		}
+
+		return schema;
+	},
+
+	getOperators<TApp>(config: BooleanFieldConfig) {
+		return getBooleanOperators();
+	},
+
+	getMetadata(config: BooleanFieldConfig): FieldMetadataBase {
+		return {
+			type: "boolean",
+			label: config.label,
+			description: config.description,
+			required: config.required ?? false,
+			localized: config.localized ?? false,
+			readOnly: config.input === false,
+			writeOnly: config.output === false,
+			meta: config.meta,
+		};
+	},
+});
 
 // Register in default registry
-getDefaultRegistry().register("boolean", booleanField);

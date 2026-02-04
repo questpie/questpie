@@ -5,10 +5,12 @@
  * Design: Prominent button with optional pre-selected service/barber.
  */
 
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type {
+	BlockDefinition,
+	BlockRendererProps,
+} from "@questpie/admin/client";
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
-import { builder } from "../builder";
 
 type BookingCtaValues = {
 	title: string;
@@ -62,59 +64,7 @@ function BookingCtaRenderer({ values }: BlockRendererProps<BookingCtaValues>) {
 	);
 }
 
-export const bookingCtaBlock = builder
-	.block("booking-cta")
-	.label({ en: "Booking CTA", sk: "Rezervácia CTA" })
-	.description({
-		en: "Call-to-action for booking with pre-selection",
-		sk: "Výzva na rezerváciu s predvýberom",
-	})
-	.icon("CalendarPlus")
-	.category("call-to-action")
-	.fields(({ r }) => ({
-		title: r.text({
-			label: { en: "Title", sk: "Nadpis" },
-			required: true,
-			localized: true,
-			defaultValue: { en: "Book Your Appointment", sk: "Rezervujte si termín" },
-		}),
-		description: r.text({
-			label: { en: "Description", sk: "Popis" },
-			localized: true,
-		}),
-		buttonText: r.text({
-			label: { en: "Button Text", sk: "Text tlačidla" },
-			required: true,
-			localized: true,
-			defaultValue: { en: "Book Now", sk: "Rezervovať" },
-		}),
-		serviceId: r.relation({
-			label: { en: "Pre-select Service", sk: "Predvybrať službu" },
-			targetCollection: "services",
-			type: "single",
-		}),
-		barberId: r.relation({
-			label: { en: "Pre-select Barber", sk: "Predvybrať holiča" },
-			targetCollection: "barbers",
-			type: "single",
-		}),
-		variant: r.select({
-			label: { en: "Button Style", sk: "Štýl tlačidla" },
-			options: [
-				{ value: "default", label: { en: "Default", sk: "Predvolený" } },
-				{ value: "highlight", label: { en: "Highlight", sk: "Zvýraznený" } },
-				{ value: "outline", label: { en: "Outline", sk: "Obrys" } },
-			],
-			defaultValue: "default",
-		}),
-		size: r.select({
-			label: { en: "Button Size", sk: "Veľkosť tlačidla" },
-			options: [
-				{ value: "default", label: { en: "Default", sk: "Predvolená" } },
-				{ value: "lg", label: { en: "Large", sk: "Veľká" } },
-			],
-			defaultValue: "default",
-		}),
-	}))
-	.renderer(BookingCtaRenderer)
-	.build();
+export const bookingCtaBlock = {
+	name: "booking-cta",
+	renderer: BookingCtaRenderer,
+} satisfies BlockDefinition;

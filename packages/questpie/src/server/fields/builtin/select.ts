@@ -5,25 +5,13 @@
  * Supports single and multiple selection, enum types, and option labels.
  */
 
-import {
-	eq,
-	inArray,
-	isNotNull,
-	isNull,
-	ne,
-	notInArray,
-	sql,
-} from "drizzle-orm";
+import { eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { jsonb, pgEnum, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	SelectFieldMetadata,
-} from "../types.js";
+import type { BaseFieldConfig, SelectFieldMetadata } from "../types.js";
+import { operator } from "../types.js";
 
 // ============================================================================
 // Select Field Meta (augmentable by admin)
@@ -45,7 +33,10 @@ import type {
  * }
  * ```
  */
-export interface SelectFieldMeta {}
+export interface SelectFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Select Field Configuration
@@ -108,41 +99,51 @@ export interface SelectFieldConfig extends BaseFieldConfig {
 /**
  * Get operators for single select field.
  */
-function getSingleSelectOperators(): ContextualOperators {
+function getSingleSelectOperators() {
 	return {
 		column: {
-			eq: (col, value) => eq(col, value as string),
-			ne: (col, value) => ne(col, value as string),
-			in: (col, values) => inArray(col, values as string[]),
-			notIn: (col, values) => notInArray(col, values as string[]),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			eq: operator<string, unknown>((col, value) => eq(col, value)),
+			ne: operator<string, unknown>((col, value) => ne(col, value)),
+			in: operator<string[], unknown>((col, values) => inArray(col, values)),
+			notIn: operator<string[], unknown>((col, values) =>
+				notInArray(col, values),
+			),
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			eq: (col, value, ctx) => {
+			eq: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>>'{${sql.raw(path)}}' = ${value}`;
-			},
-			ne: (col, value, ctx) => {
+			}),
+			ne: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>>'{${sql.raw(path)}}' != ${value}`;
-			},
-			in: (col, values, ctx) => {
+			}),
+			in: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[])`;
-			},
-			notIn: (col, values, ctx) => {
+			}),
+			notIn: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`NOT (${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[]))`;
-			},
-			isNull: (col, _value, ctx) => {
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -150,59 +151,78 @@ function getSingleSelectOperators(): ContextualOperators {
 /**
  * Get operators for multi-select field.
  */
-function getMultiSelectOperators(): ContextualOperators {
+function getMultiSelectOperators() {
 	return {
 		column: {
 			// Contains all specified values
-			containsAll: (col, values) =>
-				sql`${col} @> ${JSON.stringify(values)}::jsonb`,
+			containsAll: operator<string[], unknown>(
+				(col, values) => sql`${col} @> ${JSON.stringify(values)}::jsonb`,
+			),
 			// Contains any of specified values
-			containsAny: (col, values) =>
-				sql`${col} ?| ${sql.raw(`ARRAY[${(values as string[]).map((v) => `'${v}'`).join(",")}]`)}`,
+			containsAny: operator<string[], unknown>(
+				(col, values) =>
+					sql`${col} ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
+			),
 			// Exactly equals (same values, same order)
-			eq: (col, values) => sql`${col} = ${JSON.stringify(values)}::jsonb`,
+			eq: operator<string[], unknown>(
+				(col, values) => sql`${col} = ${JSON.stringify(values)}::jsonb`,
+			),
 			// Is empty array
-			isEmpty: (col) => sql`${col} = '[]'::jsonb OR ${col} IS NULL`,
+			isEmpty: operator<boolean, unknown>(
+				(col) => sql`${col} = '[]'::jsonb OR ${col} IS NULL`,
+			),
 			// Is not empty
-			isNotEmpty: (col) => sql`${col} != '[]'::jsonb AND ${col} IS NOT NULL`,
+			isNotEmpty: operator<boolean, unknown>(
+				(col) => sql`${col} != '[]'::jsonb AND ${col} IS NOT NULL`,
+			),
 			// Length equals
-			length: (col, value) => sql`jsonb_array_length(${col}) = ${value}`,
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			length: operator<number, unknown>(
+				(col, value) => sql`jsonb_array_length(${col}) = ${value}`,
+			),
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			containsAll: (col, values, ctx) => {
+			containsAll: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(values)}::jsonb`;
-			},
-			containsAny: (col, values, ctx) => {
+			}),
+			containsAny: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' ?| ${sql.raw(`ARRAY[${(values as string[]).map((v) => `'${v}'`).join(",")}]`)}`;
-			},
-			eq: (col, values, ctx) => {
+				return sql`${col}#>'{${sql.raw(path)}}' ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`;
+			}),
+			eq: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>'{${sql.raw(path)}}' = ${JSON.stringify(values)}::jsonb`;
-			},
-			isEmpty: (col, _value, ctx) => {
+			}),
+			isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>'{${sql.raw(path)}}' = '[]'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
-			},
-			isNotEmpty: (col, _value, ctx) => {
+			}),
+			isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>'{${sql.raw(path)}}' != '[]'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
-			},
-			length: (col, value, ctx) => {
+			}),
+			length: operator<number, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`jsonb_array_length(${col}#>'{${sql.raw(path)}}') = ${value}`;
-			},
-			isNull: (col, _value, ctx) => {
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -249,12 +269,10 @@ const enumCache = new Map<string, any>();
  * });
  * ```
  */
-export const selectField = defineField<
-	"select",
-	SelectFieldConfig,
-	string | string[]
->("select", {
-	toColumn(name, config) {
+export const selectField = defineField<SelectFieldConfig, string | string[]>()({
+	type: "select" as const,
+	_value: undefined as unknown as string | string[],
+	toColumn(name: string, config: SelectFieldConfig) {
 		const { multiple = false, enumType = false, enumName } = config;
 
 		// Don't specify column name - Drizzle uses the key name
@@ -308,7 +326,7 @@ export const selectField = defineField<
 		return column;
 	},
 
-	toZodSchema(config) {
+	toZodSchema(config: SelectFieldConfig) {
 		const { multiple = false } = config;
 		const validValues = config.options.map((o) => String(o.value));
 
@@ -335,13 +353,13 @@ export const selectField = defineField<
 		}
 	},
 
-	getOperators(config) {
+	getOperators<TApp>(config: SelectFieldConfig) {
 		return config.multiple
 			? getMultiSelectOperators()
 			: getSingleSelectOperators();
 	},
 
-	getMetadata(config): SelectFieldMetadata {
+	getMetadata(config: SelectFieldConfig): SelectFieldMetadata {
 		return {
 			type: "select",
 			label: config.label,
@@ -361,5 +379,4 @@ export const selectField = defineField<
 });
 
 // Register in default registry
-// Note: Cast needed because SelectFieldConfig has required options property
-getDefaultRegistry().register("select", selectField as any);
+// SelectFieldConfig is now compatible with AnyFieldDefinition (no cast needed)

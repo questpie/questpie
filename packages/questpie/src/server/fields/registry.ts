@@ -2,60 +2,21 @@
  * Field Registry
  *
  * Registry for field types. Allows registration of built-in and custom fields.
- * The registry maps field type names to their factory functions.
+ * The registry maps field type names to plain field definition objects (FieldDef).
  */
 
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import type {
-	AnyFieldDefinition,
-	BaseFieldConfig,
-	FieldDefinition,
-	FieldDefinitionState,
-	InferColumnType,
-	InferInputType,
-	InferOutputType,
-} from "./types.js";
+import type { FieldDef } from "./define-field.js";
+import type { BaseFieldConfig } from "./types.js";
 
 // ============================================================================
-// Field Factory Type
+// Any Field Def Type (for registry storage)
 // ============================================================================
 
 /**
- * Factory function that creates a field definition from config.
- *
- * Type parameters match FieldDefinition for consistency:
- * - TType: Field type identifier
- * - TConfig: Configuration object type (extends BaseFieldConfig)
- * - TValue: Base runtime value type
- * - TInput: Input type (inferred from config via InferInputType)
- * - TOutput: Output type (inferred from config via InferOutputType)
- * - TColumn: Drizzle column type (inferred from toColumn return)
- * - TLocation: Field location ("main", "i18n", "virtual") inferred from config
- *
- * See "Type System & Inference" section for detailed type derivation.
+ * Generic field def type for registry storage.
+ * Uses FieldDef<any, any> as the widened storage type.
  */
-export type FieldFactory<
-	TType extends string = string,
-	TConfig extends BaseFieldConfig = BaseFieldConfig,
-	TValue = unknown,
-	TColumn extends AnyPgColumn = AnyPgColumn,
-	TLocation extends "main" | "i18n" | "virtual" = "main" | "i18n" | "virtual",
-> = <TUserConfig extends TConfig>(
-	config?: TUserConfig,
-) => FieldDefinition<{
-	type: TType;
-	config: TUserConfig;
-	value: TValue;
-	input: InferInputType<TUserConfig, TValue>;
-	output: InferOutputType<TUserConfig, TValue>;
-	column: InferColumnType<TUserConfig, TColumn>;
-	location: TLocation;
-}>;
-
-/**
- * Generic field factory type for registry storage.
- */
-export type AnyFieldFactory = (config?: BaseFieldConfig) => AnyFieldDefinition;
+export type AnyFieldDef = FieldDef<any, any>;
 
 // ============================================================================
 // Field Registry
@@ -64,47 +25,49 @@ export type AnyFieldFactory = (config?: BaseFieldConfig) => AnyFieldDefinition;
 /**
  * Registry for field types.
  * Allows registration of built-in and custom fields.
+ * Stores plain field definition objects (from defineField).
+//  * TODO: get rid of this we will just export builtinFields like we do in admin
  */
 export class FieldRegistry {
-	/** Registered field factories */
-	private fields: Map<string, AnyFieldFactory> = new Map();
+	/** Registered field definitions */
+	private fields: Map<string, AnyFieldDef> = new Map();
 
 	/**
 	 * Register a field type.
 	 *
 	 * @param type - The field type identifier (e.g., "text", "number")
-	 * @param factory - Factory function that creates field definitions
+	 * @param fieldDef - Plain field definition object (from defineField)
 	 * @returns this (for chaining)
 	 *
 	 * @example
 	 * ```ts
-	 * registry.register("text", textFieldFactory);
-	 * registry.register("number", numberFieldFactory);
+	 * registry.register("text", textField);
+	 * registry.register("number", numberField);
 	 * ```
 	 */
-	register<TType extends string, TConfig extends BaseFieldConfig, TValue>(
+	register<TType extends string>(
 		type: TType,
-		factory: FieldFactory<TType, TConfig, TValue, AnyPgColumn>,
+		fieldDef: FieldDef<BaseFieldConfig, any>,
 	): this {
-		this.fields.set(type, factory as AnyFieldFactory);
+		this.fields.set(type, fieldDef as AnyFieldDef);
 		return this;
 	}
 
 	/**
-	 * Get field factory by type.
+	 * Get field definition by type.
 	 *
 	 * @param type - The field type identifier
-	 * @returns The field factory or undefined if not registered
+	 * @returns The field definition or undefined if not registered
 	 *
 	 * @example
 	 * ```ts
-	 * const textFactory = registry.get("text");
-	 * if (textFactory) {
-	 *   const field = textFactory({ required: true });
+	 * const textDef = registry.get("text");
+	 * if (textDef) {
+	 *   const field = createFieldDefinition(textDef, { required: true });
 	 * }
 	 * ```
 	 */
-	get<TType extends string>(type: TType): AnyFieldFactory | undefined {
+	get<TType extends string>(type: TType): AnyFieldDef | undefined {
 		return this.fields.get(type);
 	}
 
@@ -142,8 +105,8 @@ export class FieldRegistry {
 	 */
 	clone(): FieldRegistry {
 		const newRegistry = new FieldRegistry();
-		for (const [type, factory] of this.fields) {
-			newRegistry.fields.set(type, factory);
+		for (const [type, fieldDef] of this.fields) {
+			newRegistry.fields.set(type, fieldDef);
 		}
 		return newRegistry;
 	}

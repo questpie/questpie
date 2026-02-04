@@ -25,7 +25,7 @@ import type {
 	CreateInputBase,
 	CreateInputWithRelations,
 	FindManyOptions,
-	FindOneOptions,
+	FindOneOptionsBase,
 	PaginatedResult,
 	UpdateInput,
 	With,
@@ -293,7 +293,7 @@ type CollectionAPI<
 	 * Accepts any where clause - optimizes to /:id endpoint when only id is provided
 	 */
 	findOne: <
-		TQuery extends FindOneOptions<
+		TQuery extends FindOneOptionsBase<
 			CollectionSelect<TCollection>,
 			ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>
 		>,

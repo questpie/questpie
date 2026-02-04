@@ -414,19 +414,7 @@ export class QuestpieBuilder<
 	auth<const TNewAuth extends BetterAuthOptions>(
 		auth: TNewAuth | ((oldAuth: TState["auth"]) => TNewAuth),
 	): QuestpieBuilder<
-		Prettify<
-			QuestpieBuilderState<
-				TState["name"],
-				TState["collections"],
-				TState["globals"],
-				TState["jobs"],
-				TState["emailTemplates"],
-				TState["functions"],
-				MergeAuthOptions<TState["auth"], TNewAuth>,
-				TState["~messageKeys"],
-				TState["fields"]
-			>
-		>
+		SetProperty<TState, "auth", MergeAuthOptions<TState["auth"], TNewAuth>>
 	> {
 		return new QuestpieBuilder({
 			...this.state,
@@ -574,71 +562,66 @@ export class QuestpieBuilder<
 	 * ```
 	 */
 	use<
-		TOtherName extends string,
-		TOtherCollections extends BuilderCollectionsMap,
-		TOtherGlobals extends BuilderGlobalsMap,
-		TOtherJobs extends BuilderJobsMap,
-		TOtherEmailTemplates extends BuilderEmailTemplatesMap,
-		TOtherFunctions extends BuilderFunctionsMap,
-		TOtherAuth extends BetterAuthOptions | Record<never, never>,
-		TOtherMessageKeys extends string,
-		TOtherFields extends BuilderFieldsMap,
-	>(
-		other: QuestpieBuilder<
-			QuestpieBuilderState<
-				TOtherName,
-				TOtherCollections,
-				TOtherGlobals,
-				TOtherJobs,
-				TOtherEmailTemplates,
-				TOtherFunctions,
-				TOtherAuth,
-				TOtherMessageKeys,
-				TOtherFields
-			>
-		>,
-	): QuestpieBuilder<
+		TOtherState extends {
+			name: string;
+			collections: BuilderCollectionsMap;
+			globals: BuilderGlobalsMap;
+			jobs: BuilderJobsMap;
+			emailTemplates: BuilderEmailTemplatesMap;
+			functions: BuilderFunctionsMap;
+			fields: BuilderFieldsMap;
+			auth: BetterAuthOptions | Record<never, never>;
+			locale?: any;
+			migrations?: any;
+			translations?: any;
+			"~messageKeys"?: any;
+		},
+	>(other: {
+		readonly state: TOtherState;
+	}): QuestpieBuilder<
 		Prettify<
-			QuestpieBuilderState<
-				TState["name"],
-				TypeMerge<
-					UnsetProperty<TState["collections"], keyof TOtherCollections>,
-					TOtherCollections
-				>,
-				TypeMerge<
-					UnsetProperty<TState["globals"], keyof TOtherGlobals>,
-					TOtherGlobals
-				>,
-				TypeMerge<UnsetProperty<TState["jobs"], keyof TOtherJobs>, TOtherJobs>,
-				TypeMerge<
-					UnsetProperty<TState["emailTemplates"], keyof TOtherEmailTemplates>,
-					TOtherEmailTemplates
-				>,
-				TypeMerge<
-					UnsetProperty<TState["functions"], keyof TOtherFunctions>,
-					TOtherFunctions
-				>,
-				MergeAuthOptions<TState["auth"], TOtherAuth>,
-				| Extract<TState["~messageKeys"], string>
-				| Extract<TOtherMessageKeys, string>,
-				TypeMerge<
-					UnsetProperty<TState["fields"], keyof TOtherFields>,
-					TOtherFields
-				>
+			TypeMerge<
+				TState,
+				{
+					collections: TypeMerge<
+						UnsetProperty<
+							TState["collections"],
+							keyof TOtherState["collections"]
+						>,
+						TOtherState["collections"]
+					>;
+					globals: TypeMerge<
+						UnsetProperty<TState["globals"], keyof TOtherState["globals"]>,
+						TOtherState["globals"]
+					>;
+					jobs: TypeMerge<
+						UnsetProperty<TState["jobs"], keyof TOtherState["jobs"]>,
+						TOtherState["jobs"]
+					>;
+					emailTemplates: TypeMerge<
+						UnsetProperty<
+							TState["emailTemplates"],
+							keyof TOtherState["emailTemplates"]
+						>,
+						TOtherState["emailTemplates"]
+					>;
+					functions: TypeMerge<
+						UnsetProperty<TState["functions"], keyof TOtherState["functions"]>,
+						TOtherState["functions"]
+					>;
+					fields: TypeMerge<
+						UnsetProperty<TState["fields"], keyof TOtherState["fields"]>,
+						TOtherState["fields"]
+					>;
+					auth: MergeAuthOptions<TState["auth"], TOtherState["auth"]>;
+					"~messageKeys":
+						| Extract<TState["~messageKeys"], string>
+						| Extract<TOtherState["~messageKeys"], string>;
+				}
 			>
 		>
 	> {
-		const otherState = (other as any).state as QuestpieBuilderState<
-			TOtherName,
-			TOtherCollections,
-			TOtherGlobals,
-			TOtherJobs,
-			TOtherEmailTemplates,
-			TOtherFunctions,
-			TOtherAuth,
-			TOtherMessageKeys,
-			TOtherFields
-		>;
+		const otherState = other.state;
 
 		return new QuestpieBuilder({
 			name: this.state.name, // Keep current name

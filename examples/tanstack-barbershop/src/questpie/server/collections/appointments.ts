@@ -1,63 +1,51 @@
-import { getApp, q } from "questpie";
-import { varchar, timestamp, text } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+import { getApp } from "questpie";
+import { qb } from "@/questpie/server/builder";
 import type { AppCMS } from "@/questpie/server/cms";
 
-export const appointments = q
-  .collection("appointments")
-  .fields({
-    customerId: varchar("customer_id", { length: 255 }).notNull(),
-    barberId: varchar("barber_id", { length: 255 }).notNull(),
-    serviceId: varchar("service_id", { length: 255 }).notNull(),
-    scheduledAt: timestamp("scheduled_at", { mode: "date" }).notNull(),
-    status: varchar("status", { length: 50 }).default("pending").notNull(),
-    // Status: pending, confirmed, completed, cancelled, no-show
-    notes: text("notes"),
-    cancelledAt: timestamp("cancelled_at", { mode: "date" }),
-    cancellationReason: text("cancellation_reason"),
-  })
-  // Display title as a virtual field that combines customer name and scheduled time
-  .virtuals(({ table }) => ({
-    displayTitle: sql<string>`(
-      SELECT COALESCE(u.name, u.email, u.id::text)
-      FROM "user" u
-      WHERE u.id = ${table.customerId}
-    ) || ' - ' || to_char(${table.scheduledAt}, 'DD.MM.YYYY HH24:MI')`,
-  }))
-  .title(({ f }) => f.displayTitle)
-  .relations(({ one, table }) => ({
-    customer: one("user", {
-      fields: [table.customerId],
-      references: ["id"],
-    }),
-    barber: one("barbers", {
-      fields: [table.barberId],
-      references: ["id"],
-    }),
-    service: one("services", {
-      fields: [table.serviceId],
-      references: ["id"],
-    }),
-  }))
-  .hooks({
-    // Use getApp<AppCMS>() for type-safe access
-    afterChange: async ({ data, operation, original, app }) => {
-      const cms = getApp<AppCMS>(app);
+export const appointments = qb
+	.collection("appointments")
+	.fields((f) => ({
+		customer: f.relation({ to: "user", required: true }),
+		barber: f.relation({ to: "barbers", required: true }),
+		service: f.relation({ to: "services", required: true }),
+		scheduledAt: f.datetime({ required: true }),
+		status: f.text({ required: true, maxLength: 50, default: "pending" }),
+		// Status: pending, confirmed, completed, cancelled, no-show
+		notes: f.textarea(),
+		cancelledAt: f.datetime(),
+		cancellationReason: f.textarea(),
+		// Display title computed at read time
+		displayTitle: f.text({ virtual: true }),
+	}))
+	.title(({ f }) => f.displayTitle)
+	.hooks({
+		afterRead: ({ data }) => {
+			if (!data) return;
+			const scheduledAt = (data as any).scheduledAt as Date | undefined;
+			const dateLabel = scheduledAt
+				? scheduledAt.toISOString().replace("T", " ").slice(0, 16)
+				: "";
+			(data as any).displayTitle =
+				`${(data as any).customer ?? "Customer"} - ${dateLabel}`.trim();
+		},
+		// Use getApp<AppCMS>() for type-safe access
+		afterChange: async ({ data, operation, original, app }) => {
+			const cms = getApp<AppCMS>(app);
 
-      if (operation === "create") {
-        // Send confirmation email after booking
-        await cms.queue.sendAppointmentConfirmation.publish({
-          appointmentId: data.id,
-          customerId: data.customerId,
-        });
-      } else if (operation === "update" && original) {
-        // Notify customer if appointment is cancelled
-        if (data.status === "cancelled" && data.cancelledAt) {
-          await cms.queue.sendAppointmentCancellation.publish({
-            appointmentId: data.id,
-            customerId: data.customerId,
-          });
-        }
-      }
-    },
-  });
+			if (operation === "create") {
+				// Send confirmation email after booking
+				await cms.queue.sendAppointmentConfirmation.publish({
+					appointmentId: (data as any).id,
+					customerId: (data as any).customer,
+				});
+			} else if (operation === "update" && original) {
+				// Notify customer if appointment is cancelled
+				if ((data as any).status === "cancelled" && (data as any).cancelledAt) {
+					await cms.queue.sendAppointmentCancellation.publish({
+						appointmentId: (data as any).id,
+						customerId: (data as any).customer,
+					});
+				}
+			}
+		},
+	});

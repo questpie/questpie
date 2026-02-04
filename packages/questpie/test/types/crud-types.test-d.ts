@@ -7,7 +7,6 @@
  * Run with: tsc --noEmit
  */
 
-import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 import type {
 	Columns,
 	FindManyOptions,
@@ -17,14 +16,18 @@ import type {
 	Where,
 	WhereOperators,
 } from "#questpie/server/collection/crud/types.js";
+import { questpie } from "#questpie/server/config/builder.js";
+import { builtinFields } from "#questpie/server/fields/builtin/defaults.js";
 import type { Equal, Expect, Extends, HasKey } from "./type-test-utils.js";
 
 // ============================================================================
 // Test fixtures
 // ============================================================================
 
+const q = questpie({ name: "test" }).fields(builtinFields);
+
 // Simple collection for basic tests
-const postsCollection = collection("posts").fields((f) => ({
+const postsCollection = q.collection("posts").fields((f) => ({
 	title: f.text({ required: true, maxLength: 255 }),
 	content: f.textarea(),
 	views: f.number({ default: 0 }),
@@ -94,29 +97,29 @@ type _isNotNull = Expect<Equal<StringOps["isNotNull"], boolean | undefined>>;
 type PostWhere = Where<PostSelect, {}>;
 
 // Can use direct values
-const where1: PostWhere = { title: "Hello" };
-const where2: PostWhere = { views: 100 };
+const _where1: PostWhere = { title: "Hello" };
+const _where2: PostWhere = { views: 100 };
 
 // Can use operators
-const where3: PostWhere = { title: { like: "%hello%" } };
-const where4: PostWhere = { views: { gt: 100 } };
-const where5: PostWhere = { publishedAt: { gte: new Date() } };
+const _where3: PostWhere = { title: { like: "%hello%" } };
+const _where4: PostWhere = { views: { gt: 100 } };
+const _where5: PostWhere = { publishedAt: { gte: new Date() } };
 
 // Logical operators
-const whereAnd: PostWhere = {
+const _whereAnd: PostWhere = {
 	AND: [{ title: "Hello" }, { views: { gt: 10 } }],
 };
 
-const whereOr: PostWhere = {
+const _whereOr: PostWhere = {
 	OR: [{ title: "Hello" }, { title: "World" }],
 };
 
-const whereNot: PostWhere = {
+const _whereNot: PostWhere = {
 	NOT: { title: "Excluded" },
 };
 
 // Combined conditions
-const whereCombined: PostWhere = {
+const _whereCombined: PostWhere = {
 	title: { like: "%hello%" },
 	views: { gt: 100, lt: 1000 },
 	AND: [{ author: { eq: "user-1" } }],
@@ -129,13 +132,13 @@ const whereCombined: PostWhere = {
 type PostColumns = Columns<PostSelect>;
 
 // Selecting specific columns
-const columns: PostColumns = {
+const _columns: PostColumns = {
 	title: true,
 	content: true,
 };
 
 // Excluding columns
-const columnsExclude: PostColumns = {
+const _columnsExclude: PostColumns = {
 	content: false, // Exclude content
 };
 
@@ -154,7 +157,7 @@ type _titleType = Expect<Extends<PostColumns["title"], boolean | undefined>>;
 type PostOrderBy = OrderBy<PostSelect>;
 
 // Object syntax for ordering
-const orderBy: PostOrderBy = {
+const _orderBy: PostOrderBy = {
 	createdAt: "desc",
 	title: "asc",
 };
@@ -172,7 +175,7 @@ type _validDirection = Expect<Extends<Direction, "asc" | "desc">>;
 type PostFindOptions = FindManyOptions<PostSelect, {}>;
 
 // Combine all query options
-const options: PostFindOptions = {
+const _options: PostFindOptions = {
 	where: { title: { like: "%hello%" } },
 	columns: { title: true, content: true },
 	orderBy: { createdAt: "desc" },
@@ -181,13 +184,13 @@ const options: PostFindOptions = {
 };
 
 // Locale options
-const optionsLocale: PostFindOptions = {
+const _optionsLocale: PostFindOptions = {
 	locale: "en",
 	localeFallback: true,
 };
 
 // Include deleted (soft delete)
-const optionsDeleted: PostFindOptions = {
+const _optionsDeleted: PostFindOptions = {
 	includeDeleted: true,
 };
 
@@ -213,12 +216,12 @@ type _hasOrderBy = Expect<Equal<HasKey<PostFindOneOptions, "orderBy">, true>>;
 type AuthorMutation = NestedRelationMutation<{ name: string }>;
 
 // Single connect
-const mutation1: AuthorMutation = {
+const _mutation1: AuthorMutation = {
 	connect: { id: "user-123" },
 };
 
 // Array connect
-const mutation2: AuthorMutation = {
+const _mutation2: AuthorMutation = {
 	connect: [{ id: "user-1" }, { id: "user-2" }],
 };
 
@@ -228,11 +231,11 @@ type AuthorMutationCreate = NestedRelationMutation<{
 	email: string;
 }>;
 
-const mutationCreate1: AuthorMutationCreate = {
+const _mutationCreate1: AuthorMutationCreate = {
 	create: { name: "John", email: "john@example.com" },
 };
 
-const mutationCreate2: AuthorMutationCreate = {
+const _mutationCreate2: AuthorMutationCreate = {
 	create: [
 		{ name: "John", email: "john@example.com" },
 		{ name: "Jane", email: "jane@example.com" },
@@ -240,7 +243,7 @@ const mutationCreate2: AuthorMutationCreate = {
 };
 
 // ConnectOrCreate operation
-const mutationConnectOrCreate: AuthorMutationCreate = {
+const _mutationConnectOrCreate: AuthorMutationCreate = {
 	connectOrCreate: {
 		where: { id: "user-123" },
 		create: { name: "John", email: "john@example.com" },
@@ -263,7 +266,7 @@ type _connectOrCreateCanBeUndefined = Expect<
 // ============================================================================
 
 // Deeply nested where conditions
-const complexWhere: PostWhere = {
+const _complexWhere: PostWhere = {
 	AND: [
 		{
 			OR: [{ title: { like: "%hello%" } }, { title: { like: "%world%" } }],
@@ -279,7 +282,7 @@ const complexWhere: PostWhere = {
 };
 
 // Full query with all options
-const fullQuery: PostFindOptions = {
+const _fullQuery: PostFindOptions = {
 	where: {
 		AND: [
 			{ title: { ilike: "%search%" } },
@@ -311,19 +314,19 @@ const fullQuery: PostFindOptions = {
 // ============================================================================
 
 // Nullable fields should allow null checks
-const whereNullable: PostWhere = {
+const _whereNullable: PostWhere = {
 	content: { isNull: true },
 };
 
-const whereDateNullable: PostWhere = {
+const _whereDateNullable: PostWhere = {
 	publishedAt: { isNull: false },
 };
 
 // Empty where clause
-const emptyWhere: PostWhere = {};
+const _emptyWhere: PostWhere = {};
 
 // Mixing direct values and operators
-const mixedWhere: PostWhere = {
+const _mixedWhere: PostWhere = {
 	title: "Exact Match", // Direct value
 	views: { gt: 100 }, // Operator
 	author: { eq: "user-123" }, // Relation field uses operators

@@ -1,5 +1,4 @@
-import { boolean, integer, text, varchar } from "drizzle-orm/pg-core";
-import { q } from "questpie";
+import { qb } from "@/questpie/server/builder";
 
 /**
  * Reviews Collection
@@ -11,39 +10,24 @@ import { q } from "questpie";
  * - Moderation (isApproved)
  * - Featured reviews for homepage
  */
-export const reviews = q
+export const reviews = qb
 	.collection("reviews")
-	.fields({
+	.fields((f) => ({
 		// Customer info (can be from user or anonymous)
-		customerId: varchar("customer_id", { length: 255 }),
-		customerName: varchar("customer_name", { length: 255 }).notNull(),
-		customerEmail: varchar("customer_email", { length: 255 }),
+		customer: f.relation({ to: "user" }),
+		customerName: f.text({ required: true, maxLength: 255 }),
+		customerEmail: f.email({ maxLength: 255 }),
 
 		// Review target
-		barberId: varchar("barber_id", { length: 255 }).notNull(),
-		appointmentId: varchar("appointment_id", { length: 255 }),
+		barber: f.relation({ to: "barbers", required: true }),
+		appointment: f.relation({ to: "appointments" }),
 
 		// Review content
-		rating: integer("rating").notNull(), // 1-5
-		comment: text("comment"),
+		rating: f.number({ required: true, min: 1, max: 5 }),
+		comment: f.textarea({ localized: true }),
 
 		// Moderation
-		isApproved: boolean("is_approved").default(false).notNull(),
-		isFeatured: boolean("is_featured").default(false).notNull(),
-	})
-	.localized(["comment"] as const)
-	.relations(({ one, table }) => ({
-		customer: one("user", {
-			fields: [table.customerId],
-			references: ["id"],
-		}),
-		barber: one("barbers", {
-			fields: [table.barberId],
-			references: ["id"],
-		}),
-		appointment: one("appointments", {
-			fields: [table.appointmentId],
-			references: ["id"],
-		}),
+		isApproved: f.boolean({ default: false, required: true }),
+		isFeatured: f.boolean({ default: false, required: true }),
 	}))
 	.title(({ f }) => f.customerName);

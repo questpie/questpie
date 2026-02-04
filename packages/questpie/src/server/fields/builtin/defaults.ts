@@ -1,7 +1,7 @@
 /**
- * Default Field Factories
+ * Builtin Field Definitions
  *
- * Provides a map of all built-in field factories for use with QuestpieBuilder.fields().
+ * Provides a map of all built-in field definitions for use with QuestpieBuilder.fields().
  */
 
 import { arrayField } from "./array.js";
@@ -21,28 +21,26 @@ import { uploadField } from "./upload.js";
 import { urlField } from "./url.js";
 
 /**
- * Default field factories map.
+ * Built-in field definitions map.
  * Use this with QuestpieBuilder.fields() to register all built-in fields.
  *
  * @example
  * ```ts
- * import { questpie, defaultFields } from "@questpie/server";
+ * import { questpie, builtinFields } from "questpie";
  *
  * const q = questpie({ name: "app" })
- *   .fields(defaultFields);
+ *   .fields(builtinFields);
  *
  * // Now use q to define collections:
- * const posts = collection("posts")
+ * const posts = q.collection("posts")
  *   .fields((f) => ({
  *     title: f.text({ required: true }),
  *     content: f.textarea({ required: true }),
  *     publishedAt: f.datetime(),
  *   }));
- *
- * q.collections({ posts }).build({ ... });
  * ```
  */
-export const defaultFields = {
+export const builtinFields = {
 	// Text-based
 	text: textField,
 	textarea: textareaField,
@@ -76,6 +74,16 @@ export const defaultFields = {
 } as const;
 
 /**
- * Type for the default fields map.
+ * Type for the builtin fields map.
  */
-export type DefaultFields = typeof defaultFields;
+export type BuiltinFields = typeof builtinFields;
+
+/**
+ * @deprecated Use `builtinFields` instead
+ */
+export const defaultFields = builtinFields;
+
+/**
+ * @deprecated Use `BuiltinFields` instead
+ */
+export type DefaultFields = BuiltinFields;

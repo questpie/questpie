@@ -12,25 +12,13 @@
  * Replaces legacy .relations() method - all relations are now defined in .fields()
  */
 
-import {
-	eq,
-	inArray,
-	isNotNull,
-	isNull,
-	ne,
-	notInArray,
-	sql,
-} from "drizzle-orm";
+import { eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { jsonb, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	FieldMetadataBase,
-} from "../types.js";
+import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
+import { operator } from "../types.js";
 
 // ============================================================================
 // Relation Field Meta (augmentable by admin)
@@ -56,7 +44,10 @@ import type {
  * }
  * ```
  */
-export interface RelationFieldMeta {}
+export interface RelationFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Relation Field Configuration
@@ -311,41 +302,51 @@ export function inferRelationType(
 /**
  * Operators for belongsTo relation (FK field).
  */
-function getBelongsToOperators(): ContextualOperators {
+function getBelongsToOperators() {
 	return {
 		column: {
-			eq: (col, value) => eq(col, value as string),
-			ne: (col, value) => ne(col, value as string),
-			in: (col, values) => inArray(col, values as string[]),
-			notIn: (col, values) => notInArray(col, values as string[]),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			eq: operator<string, unknown>((col, value) => eq(col, value)),
+			ne: operator<string, unknown>((col, value) => ne(col, value)),
+			in: operator<string[], unknown>((col, values) => inArray(col, values)),
+			notIn: operator<string[], unknown>((col, values) =>
+				notInArray(col, values),
+			),
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			eq: (col, value, ctx) => {
+			eq: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>>'{${sql.raw(path)}}' = ${value}`;
-			},
-			ne: (col, value, ctx) => {
+			}),
+			ne: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>>'{${sql.raw(path)}}' != ${value}`;
-			},
-			in: (col, values, ctx) => {
+			}),
+			in: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[])`;
-			},
-			notIn: (col, values, ctx) => {
+			}),
+			notIn: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`NOT (${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[]))`;
-			},
-			isNull: (col, _value, ctx) => {
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -353,55 +354,73 @@ function getBelongsToOperators(): ContextualOperators {
 /**
  * Operators for multiple (jsonb array of FKs).
  */
-function getMultipleOperators(): ContextualOperators {
+function getMultipleOperators() {
 	return {
 		column: {
-			contains: (col, value) =>
-				sql`${col} @> ${JSON.stringify([value])}::jsonb`,
-			containsAll: (col, values) =>
-				sql`${col} @> ${JSON.stringify(values)}::jsonb`,
-			containsAny: (col, values) =>
-				sql`${col} ?| ${sql.raw(`ARRAY[${(values as string[]).map((v) => `'${v}'`).join(",")}]`)}`,
-			isEmpty: (col) => sql`(${col} = '[]'::jsonb OR ${col} IS NULL)`,
-			isNotEmpty: (col) => sql`(${col} != '[]'::jsonb AND ${col} IS NOT NULL)`,
-			count: (col, value) =>
-				sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) = ${value}`,
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			contains: operator<string, unknown>(
+				(col, value) => sql`${col} @> ${JSON.stringify([value])}::jsonb`,
+			),
+			containsAll: operator<string[], unknown>(
+				(col, values) => sql`${col} @> ${JSON.stringify(values)}::jsonb`,
+			),
+			containsAny: operator<string[], unknown>(
+				(col, values) =>
+					sql`${col} ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
+			),
+			isEmpty: operator<boolean, unknown>(
+				(col) => sql`(${col} = '[]'::jsonb OR ${col} IS NULL)`,
+			),
+			isNotEmpty: operator<boolean, unknown>(
+				(col) => sql`(${col} != '[]'::jsonb AND ${col} IS NOT NULL)`,
+			),
+			count: operator<number, unknown>(
+				(col, value) =>
+					sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) = ${value}`,
+			),
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			contains: (col, value, ctx) => {
+			contains: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify([value])}::jsonb`;
-			},
-			containsAll: (col, values, ctx) => {
+			}),
+			containsAll: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(values)}::jsonb`;
-			},
-			containsAny: (col, values, ctx) => {
+			}),
+			containsAny: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' ?| ${sql.raw(`ARRAY[${(values as string[]).map((v) => `'${v}'`).join(",")}]`)}`;
-			},
-			isEmpty: (col, _value, ctx) => {
+				return sql`${col}#>'{${sql.raw(path)}}' ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`;
+			}),
+			isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>'{${sql.raw(path)}}' = '[]'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
-			},
-			isNotEmpty: (col, _value, ctx) => {
+			}),
+			isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>'{${sql.raw(path)}}' != '[]'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
-			},
-			count: (col, value, ctx) => {
+			}),
+			count: operator<number, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`jsonb_array_length(COALESCE(${col}#>'{${sql.raw(path)}}', '[]'::jsonb)) = ${value}`;
-			},
-			isNull: (col, _value, ctx) => {
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -410,20 +429,20 @@ function getMultipleOperators(): ContextualOperators {
  * Operators for hasMany/manyToMany/morphMany.
  * These require subqueries built at query time.
  */
-function getToManyOperators(): ContextualOperators {
+function getToManyOperators() {
 	return {
 		column: {
 			// Placeholder operators - actual implementation in query builder
-			some: () => sql`TRUE`,
-			none: () => sql`TRUE`,
-			every: () => sql`TRUE`,
-			count: () => sql`0`,
+			some: operator<unknown, unknown>(() => sql`TRUE`),
+			none: operator<unknown, unknown>(() => sql`TRUE`),
+			every: operator<unknown, unknown>(() => sql`TRUE`),
+			count: operator<number, unknown>(() => sql`0`),
 		},
 		jsonb: {
-			some: () => sql`TRUE`,
-			none: () => sql`TRUE`,
-			every: () => sql`TRUE`,
-			count: () => sql`0`,
+			some: operator<unknown, unknown>(() => sql`TRUE`),
+			none: operator<unknown, unknown>(() => sql`TRUE`),
+			every: operator<unknown, unknown>(() => sql`TRUE`),
+			count: operator<number, unknown>(() => sql`0`),
 		},
 	};
 }
@@ -505,11 +524,16 @@ export interface RelationFieldMetadata extends FieldMetadataBase {
  * ```
  */
 export const relationField = defineField<
-	"relation",
 	RelationFieldConfig,
 	string | string[] | { type: string; id: string } | null
->("relation", {
-	toColumn(name, config) {
+>()({
+	type: "relation" as const,
+	_value: undefined as unknown as
+		| string
+		| string[]
+		| { type: string; id: string }
+		| null,
+	toColumn(name: string, config: RelationFieldConfig) {
 		const relationType = inferRelationType(config);
 
 		// HasMany, ManyToMany, MorphMany - no column on this table
@@ -612,7 +636,7 @@ export const relationField = defineField<
 		return column;
 	},
 
-	toZodSchema(config) {
+	toZodSchema(config: RelationFieldConfig) {
 		const relationType = inferRelationType(config);
 
 		// MorphTo - object with type + id
@@ -658,7 +682,7 @@ export const relationField = defineField<
 		return schema;
 	},
 
-	getOperators(config) {
+	getOperators<TApp>(config: RelationFieldConfig) {
 		const relationType = inferRelationType(config);
 
 		if (relationType === "multiple") {
@@ -676,7 +700,7 @@ export const relationField = defineField<
 		return getBelongsToOperators();
 	},
 
-	getMetadata(config): RelationFieldMetadata {
+	getMetadata(config: RelationFieldConfig): RelationFieldMetadata {
 		const relationType = inferRelationType(config);
 
 		// Resolve target collection name(s)
@@ -711,4 +735,3 @@ export const relationField = defineField<
 });
 
 // Register in default registry
-getDefaultRegistry().register("relation", relationField as any);

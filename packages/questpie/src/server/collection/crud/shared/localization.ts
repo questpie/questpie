@@ -2,14 +2,19 @@
  * Shared Localization Utilities
  *
  * Provides field splitting utilities for localized content.
- * Supports two types of localization:
+ * Supports three types of localization:
  * 1. Flat localized fields - entire column is localized (e.g., title, description)
  * 2. JSONB whole-mode - entire JSONB object per locale
- * 3. JSONB nested-mode - { $i18n: value } wrappers within JSONB field
+ * 3. JSONB nested-mode - nested fields with `localized: true` in field definitions
+ *    (also supports legacy $i18n wrappers for backward compatibility)
  */
 
+import type { NestedLocalizationSchema } from "./field-extraction.js";
 import { deepMergeI18n } from "./nested-i18n-merge.js";
-import { autoSplitNestedI18n } from "./nested-i18n-split.js";
+import {
+	autoSplitNestedI18n,
+	splitByNestedSchema,
+} from "./nested-i18n-split.js";
 
 /**
  * Constant for the _localized column name in i18n table
@@ -130,6 +135,120 @@ export function splitLocalizedFields(
 			localized[key] = value;
 		} else {
 			// Non-localized field - goes to main table
+			nonLocalized[key] = value;
+		}
+	}
+
+	return {
+		localized,
+		nonLocalized,
+		nestedLocalized: hasNestedLocalized ? nestedLocalized : null,
+	};
+}
+
+/**
+ * Split input data into localized and non-localized fields using field definition schemas.
+ * This is the new approach that doesn't require $i18n wrappers from the client.
+ *
+ * Uses nested localization schemas from field definitions to know which paths are localized.
+ * Falls back to $i18n wrapper detection for backward compatibility.
+ *
+ * @param input - Input data object (plain values, no $i18n wrappers needed)
+ * @param localizedFields - Array of field names marked as localized at top level
+ * @param nestedSchemas - Map of field name → nested localization schema
+ * @returns Object with localized fields, nonLocalized fields, and nested localized values
+ *
+ * @example
+ * // Field definitions have:
+ * // - workingHours.monday.note: localized: true
+ * // - socialLinks[].description: localized: true
+ *
+ * // Client sends plain data:
+ * { workingHours: { monday: { isOpen: true, note: "Morning only" } } }
+ *
+ * // Function splits into:
+ * // nonLocalized: { workingHours: { monday: { isOpen: true, note: { $i18n: true } } } }
+ * // nestedLocalized: { workingHours: { monday: { note: "Morning only" } } }
+ */
+export function splitLocalizedFieldsWithSchema(
+	input: Record<string, any>,
+	localizedFields: readonly string[],
+	nestedSchemas: Record<string, NestedLocalizationSchema>,
+): {
+	localized: Record<string, any>;
+	nonLocalized: Record<string, any>;
+	nestedLocalized: Record<string, any> | null;
+} {
+	const localized: Record<string, any> = {};
+	const nonLocalized: Record<string, any> = {};
+	const nestedLocalized: Record<string, any> = {};
+	let hasNestedLocalized = false;
+
+	for (const [key, value] of Object.entries(input)) {
+		const mode = getLocalizedFieldMode(localizedFields, key);
+		const nestedSchema = nestedSchemas[key];
+
+		// Case 1: Field has nested localization schema
+		if (nestedSchema !== undefined && value != null) {
+			const { structure, i18nValues } = splitByNestedSchema(
+				value,
+				nestedSchema,
+			);
+			nonLocalized[key] = structure;
+			if (i18nValues != null) {
+				nestedLocalized[key] = i18nValues;
+				hasNestedLocalized = true;
+			}
+			continue;
+		}
+
+		// Case 2: Check for legacy $i18n wrappers (backward compatibility)
+		if (value != null && typeof value === "object" && !Array.isArray(value)) {
+			const { structure, i18nValues } = autoSplitNestedI18n(value);
+
+			if (i18nValues != null) {
+				// Found $i18n wrappers
+				if (mode === "nested" || mode === null) {
+					nonLocalized[key] = structure;
+					nestedLocalized[key] = i18nValues;
+					hasNestedLocalized = true;
+					continue;
+				}
+			}
+
+			// Object without $i18n wrappers and no nested schema
+			if (mode === "whole") {
+				localized[key] = value;
+				continue;
+			}
+
+			if (mode === "nested") {
+				nonLocalized[key] = value;
+				continue;
+			}
+
+			nonLocalized[key] = value;
+			continue;
+		}
+
+		// Case 3: Handle arrays - check for nested schema
+		if (Array.isArray(value) && nestedSchema === undefined) {
+			// No schema - try $i18n detection
+			const { structure, i18nValues } = autoSplitNestedI18n(value);
+			if (i18nValues != null) {
+				nonLocalized[key] = structure;
+				nestedLocalized[key] = i18nValues;
+				hasNestedLocalized = true;
+				continue;
+			}
+			nonLocalized[key] = value;
+			continue;
+		}
+
+		// Case 4: Primitive values
+		if (mode !== null) {
+			localized[key] = value;
+		} else {
 			nonLocalized[key] = value;
 		}
 	}

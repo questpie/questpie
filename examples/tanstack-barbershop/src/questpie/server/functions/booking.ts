@@ -1,6 +1,6 @@
-import type { BaseCMS } from "@/questpie/server/cms";
 import { getApp, q } from "questpie";
 import z from "zod";
+import type { BaseCMS } from "@/questpie/server/cms";
 
 /**
  * Get available time slots for a specific date and barber.
@@ -67,7 +67,7 @@ export const getAvailableTimeSlots = q.fn({
 
 		const appointments = await cms.api.collections.appointments.find({
 			where: {
-				barberId,
+				barber: barberId,
 				scheduledAt: {
 					gte: startOfDay,
 					lte: endOfDay,
@@ -82,7 +82,7 @@ export const getAvailableTimeSlots = q.fn({
 
 		// Fetch related services in one query
 		const serviceIds = [
-			...new Set(activeAppointments.map((apt) => apt.serviceId)),
+			...new Set(activeAppointments.map((apt) => apt.service)),
 		];
 		const servicesMap = new Map<string, { duration: number }>();
 
@@ -163,7 +163,7 @@ export const createBooking = q.fn({
 		const scheduledDate = new Date(input.scheduledAt);
 		const allAtTime = await cms.api.collections.appointments.find({
 			where: {
-				barberId: input.barberId,
+				barber: input.barberId,
 				scheduledAt: scheduledDate,
 			},
 		});
@@ -189,9 +189,9 @@ export const createBooking = q.fn({
 
 		// 4. Create appointment
 		const appointment = await cms.api.collections.appointments.create({
-			customerId: customer.id,
-			barberId: input.barberId,
-			serviceId: input.serviceId,
+			customer: customer.id,
+			barber: input.barberId,
+			service: input.serviceId,
 			scheduledAt: scheduledDate,
 			status: "pending",
 			notes: input.notes || null,

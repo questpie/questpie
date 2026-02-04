@@ -5,27 +5,12 @@
  * Supports precision and time operators.
  */
 
-import {
-	between,
-	eq,
-	gt,
-	gte,
-	isNotNull,
-	isNull,
-	lt,
-	lte,
-	ne,
-	sql,
-} from "drizzle-orm";
+import { between, eq, gt, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { time } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	FieldMetadataBase,
-} from "../types.js";
+import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
+import { operator } from "../types.js";
 
 // ============================================================================
 // Time Field Meta (augmentable by admin)
@@ -34,7 +19,10 @@ import type {
 /**
  * Time field metadata - augmentable by external packages.
  */
-export interface TimeFieldMeta {}
+export interface TimeFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Time Field Configuration
@@ -79,62 +67,68 @@ export interface TimeFieldConfig extends BaseFieldConfig {
  * Get operators for time field.
  * Supports both column and JSONB path access.
  */
-function getTimeOperators(): ContextualOperators {
+function getTimeOperators() {
 	return {
 		column: {
-			eq: (col, value) => eq(col, value as string),
-			ne: (col, value) => ne(col, value as string),
-			gt: (col, value) => gt(col, value as string),
-			gte: (col, value) => gte(col, value as string),
-			lt: (col, value) => lt(col, value as string),
-			lte: (col, value) => lte(col, value as string),
-			between: (col, value) => {
-				const [min, max] = value as [string, string];
-				return between(col, min, max);
-			},
-			before: (col, value) => lt(col, value as string),
-			after: (col, value) => gt(col, value as string),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			eq: operator<string, unknown>((col, value) => eq(col, value)),
+			ne: operator<string, unknown>((col, value) => ne(col, value)),
+			gt: operator<string, unknown>((col, value) => gt(col, value)),
+			gte: operator<string, unknown>((col, value) => gte(col, value)),
+			lt: operator<string, unknown>((col, value) => lt(col, value)),
+			lte: operator<string, unknown>((col, value) => lte(col, value)),
+			between: operator<[string, string], unknown>((col, value) =>
+				between(col, value[0], value[1]),
+			),
+			before: operator<string, unknown>((col, value) => lt(col, value)),
+			after: operator<string, unknown>((col, value) => gt(col, value)),
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			eq: (col, value, ctx) => {
+			eq: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::time = ${value}::time`;
-			},
-			ne: (col, value, ctx) => {
+			}),
+			ne: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::time != ${value}::time`;
-			},
-			gt: (col, value, ctx) => {
+			}),
+			gt: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::time > ${value}::time`;
-			},
-			gte: (col, value, ctx) => {
+			}),
+			gte: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::time >= ${value}::time`;
-			},
-			lt: (col, value, ctx) => {
+			}),
+			lt: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::time < ${value}::time`;
-			},
-			lte: (col, value, ctx) => {
+			}),
+			lte: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::time <= ${value}::time`;
-			},
-			between: (col, value, ctx) => {
-				const [min, max] = value as [string, string];
+			}),
+			between: operator<[string, string], unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::time BETWEEN ${min}::time AND ${max}::time`;
-			},
-			isNull: (col, _value, ctx) => {
+				return sql`(${col}#>>'{${sql.raw(path)}}')::time BETWEEN ${value[0]}::time AND ${value[1]}::time`;
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -154,8 +148,10 @@ function getTimeOperators(): ContextualOperators {
  * const startTime = timeField({ required: true });
  * ```
  */
-export const timeField = defineField<"time", TimeFieldConfig, string>("time", {
-	toColumn(name, config) {
+export const timeField = defineField<TimeFieldConfig, string>()({
+	type: "time" as const,
+	_value: undefined as unknown as string,
+	toColumn(name: string, config: TimeFieldConfig) {
 		const { precision = 0 } = config;
 
 		let column: any = time(name, { precision });
@@ -178,7 +174,7 @@ export const timeField = defineField<"time", TimeFieldConfig, string>("time", {
 		return column;
 	},
 
-	toZodSchema(config) {
+	toZodSchema(config: TimeFieldConfig) {
 		// Time format: HH:MM or HH:MM:SS
 		const withSeconds = config.withSeconds !== false;
 		const timePattern = withSeconds
@@ -211,11 +207,11 @@ export const timeField = defineField<"time", TimeFieldConfig, string>("time", {
 		return schema;
 	},
 
-	getOperators() {
+	getOperators<TApp>() {
 		return getTimeOperators();
 	},
 
-	getMetadata(config): FieldMetadataBase {
+	getMetadata(config: TimeFieldConfig): FieldMetadataBase {
 		return {
 			type: "time",
 			label: config.label,
@@ -230,4 +226,3 @@ export const timeField = defineField<"time", TimeFieldConfig, string>("time", {
 });
 
 // Register in default registry
-getDefaultRegistry().register("time", timeField);

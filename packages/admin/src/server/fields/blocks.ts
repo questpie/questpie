@@ -218,12 +218,11 @@ function getBlocksOperators(): ContextualOperators {
  * });
  * ```
  */
-export const blocksField = defineField<
-	"blocks",
-	BlocksFieldConfig,
-	BlocksDocument
->("blocks", {
-	toColumn(_name, config) {
+export const blocksField = defineField<BlocksFieldConfig, BlocksDocument>()({
+	type: "blocks" as const,
+	_value: undefined as unknown as BlocksDocument,
+
+	toColumn(_name: string, config: BlocksFieldConfig) {
 		// Blocks are always stored as JSONB
 		let column: any = jsonb();
 
@@ -242,7 +241,7 @@ export const blocksField = defineField<
 		return column;
 	},
 
-	toZodSchema(config) {
+	toZodSchema(config: BlocksFieldConfig) {
 		// Block node schema (recursive for nested blocks)
 		const blockNodeSchema: z.ZodType<BlockNode> = z.lazy(() =>
 			z.object({
@@ -292,11 +291,11 @@ export const blocksField = defineField<
 		return docSchema as z.ZodType<BlocksDocument>;
 	},
 
-	getOperators() {
+	getOperators<TApp>() {
 		return getBlocksOperators();
 	},
 
-	getMetadata(config): FieldMetadataBase & {
+	getMetadata(config: BlocksFieldConfig): FieldMetadataBase & {
 		allowedBlocks?: string[];
 		minBlocks?: number;
 		maxBlocks?: number;

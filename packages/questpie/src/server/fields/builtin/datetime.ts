@@ -5,27 +5,13 @@
  * Supports timezone, precision, auto-now on create/update.
  */
 
-import {
-	between,
-	eq,
-	gt,
-	gte,
-	isNotNull,
-	isNull,
-	lt,
-	lte,
-	ne,
-	sql,
-} from "drizzle-orm";
+import { between, eq, gt, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { timestamp } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import type { DateInput } from "#questpie/shared/type-utils.js";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	FieldMetadataBase,
-} from "../types.js";
+import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
+import { operator } from "../types.js";
 
 // ============================================================================
 // Datetime Field Meta (augmentable by admin)
@@ -34,7 +20,10 @@ import type {
 /**
  * Datetime field metadata - augmentable by external packages.
  */
-export interface DatetimeFieldMeta {}
+export interface DatetimeFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Datetime Field Configuration
@@ -90,62 +79,88 @@ export interface DatetimeFieldConfig extends BaseFieldConfig {
  * Get operators for datetime field.
  * Supports both column and JSONB path access.
  */
-function getDatetimeOperators(): ContextualOperators {
+function getDatetimeOperators() {
 	return {
 		column: {
-			eq: (col, value) => eq(col, new Date(value as string)),
-			ne: (col, value) => ne(col, new Date(value as string)),
-			gt: (col, value) => gt(col, new Date(value as string)),
-			gte: (col, value) => gte(col, new Date(value as string)),
-			lt: (col, value) => lt(col, new Date(value as string)),
-			lte: (col, value) => lte(col, new Date(value as string)),
-			between: (col, value) => {
-				const [min, max] = value as [string, string];
-				return between(col, new Date(min), new Date(max));
-			},
-			before: (col, value) => lt(col, new Date(value as string)),
-			after: (col, value) => gt(col, new Date(value as string)),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			eq: operator<DateInput, unknown>((col, value) =>
+				eq(col, new Date(value as string)),
+			),
+			ne: operator<DateInput, unknown>((col, value) =>
+				ne(col, new Date(value as string)),
+			),
+			gt: operator<DateInput, unknown>((col, value) =>
+				gt(col, new Date(value as string)),
+			),
+			gte: operator<DateInput, unknown>((col, value) =>
+				gte(col, new Date(value as string)),
+			),
+			lt: operator<DateInput, unknown>((col, value) =>
+				lt(col, new Date(value as string)),
+			),
+			lte: operator<DateInput, unknown>((col, value) =>
+				lte(col, new Date(value as string)),
+			),
+			between: operator<[DateInput, DateInput], unknown>((col, value) =>
+				between(
+					col,
+					new Date(value[0] as string),
+					new Date(value[1] as string),
+				),
+			),
+			before: operator<DateInput, unknown>((col, value) =>
+				lt(col, new Date(value as string)),
+			),
+			after: operator<DateInput, unknown>((col, value) =>
+				gt(col, new Date(value as string)),
+			),
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			eq: (col, value, ctx) => {
+			eq: operator<DateInput, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::timestamptz = ${value}::timestamptz`;
-			},
-			ne: (col, value, ctx) => {
+			}),
+			ne: operator<DateInput, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::timestamptz != ${value}::timestamptz`;
-			},
-			gt: (col, value, ctx) => {
+			}),
+			gt: operator<DateInput, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::timestamptz > ${value}::timestamptz`;
-			},
-			gte: (col, value, ctx) => {
+			}),
+			gte: operator<DateInput, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::timestamptz >= ${value}::timestamptz`;
-			},
-			lt: (col, value, ctx) => {
+			}),
+			lt: operator<DateInput, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::timestamptz < ${value}::timestamptz`;
-			},
-			lte: (col, value, ctx) => {
+			}),
+			lte: operator<DateInput, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::timestamptz <= ${value}::timestamptz`;
-			},
-			between: (col, value, ctx) => {
-				const [min, max] = value as [string, string];
+			}),
+			between: operator<[DateInput, DateInput], unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::timestamptz BETWEEN ${min}::timestamptz AND ${max}::timestamptz`;
-			},
-			isNull: (col, _value, ctx) => {
+				return sql`(${col}#>>'{${sql.raw(path)}}')::timestamptz BETWEEN ${value[0]}::timestamptz AND ${value[1]}::timestamptz`;
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -166,82 +181,80 @@ function getDatetimeOperators(): ContextualOperators {
  * const eventTime = datetimeField({ precision: 0 }); // No fractional seconds
  * ```
  */
-export const datetimeField = defineField<"datetime", DatetimeFieldConfig, Date>(
-	"datetime",
-	{
-		toColumn(_name, config) {
-			const { precision = 3, withTimezone = true } = config;
+export const datetimeField = defineField<DatetimeFieldConfig, Date>()({
+	type: "datetime" as const,
+	_value: undefined as unknown as Date,
+	toColumn(_name: string, config: DatetimeFieldConfig) {
+		const { precision = 3, withTimezone = true } = config;
 
-			// Don't specify column name - Drizzle uses the key name
-			let column: any = timestamp({
-				precision,
-				withTimezone,
-				mode: "date",
-			});
+		// Don't specify column name - Drizzle uses the key name
+		let column: any = timestamp({
+			precision,
+			withTimezone,
+			mode: "date",
+		});
 
-			// Apply constraints
-			if (config.required && config.nullable !== true) {
-				column = column.notNull();
-			}
+		// Apply constraints
+		if (config.required && config.nullable !== true) {
+			column = column.notNull();
+		}
 
-			// Default value
-			if (config.autoNow) {
-				column = column.defaultNow();
-			} else if (config.default !== undefined) {
-				const defaultValue =
-					typeof config.default === "function"
-						? config.default()
-						: config.default;
-				column = column.default(defaultValue as Date);
-			}
-			// NOTE: unique constraint removed from field level
-			// Use .indexes() on collection builder instead
+		// Default value
+		if (config.autoNow) {
+			column = column.defaultNow();
+		} else if (config.default !== undefined) {
+			const defaultValue =
+				typeof config.default === "function"
+					? config.default()
+					: config.default;
+			column = column.default(defaultValue as Date);
+		}
+		// NOTE: unique constraint removed from field level
+		// Use .indexes() on collection builder instead
 
-			return column;
-		},
-
-		toZodSchema(config) {
-			// Accept string or Date, coerce to Date
-			let schema = z.coerce.date();
-
-			// Min/max constraints
-			if (config.min) {
-				const minDate =
-					typeof config.min === "string" ? new Date(config.min) : config.min;
-				schema = schema.min(minDate);
-			}
-			if (config.max) {
-				const maxDate =
-					typeof config.max === "string" ? new Date(config.max) : config.max;
-				schema = schema.max(maxDate);
-			}
-
-			// Nullability
-			if (!config.required && config.nullable !== false) {
-				return schema.nullish();
-			}
-
-			return schema;
-		},
-
-		getOperators() {
-			return getDatetimeOperators();
-		},
-
-		getMetadata(config): FieldMetadataBase {
-			return {
-				type: "datetime",
-				label: config.label,
-				description: config.description,
-				required: config.required ?? false,
-				localized: config.localized ?? false,
-				readOnly: config.input === false,
-				writeOnly: config.output === false,
-				meta: config.meta,
-			};
-		},
+		return column;
 	},
-);
+
+	toZodSchema(config: DatetimeFieldConfig) {
+		// Accept string or Date, coerce to Date
+		let schema = z.coerce.date();
+
+		// Min/max constraints
+		if (config.min) {
+			const minDate =
+				typeof config.min === "string" ? new Date(config.min) : config.min;
+			schema = schema.min(minDate);
+		}
+		if (config.max) {
+			const maxDate =
+				typeof config.max === "string" ? new Date(config.max) : config.max;
+			schema = schema.max(maxDate);
+		}
+
+		// Nullability
+		if (!config.required && config.nullable !== false) {
+			return schema.nullish();
+		}
+
+		return schema;
+	},
+
+	getOperators<TApp>() {
+		return getDatetimeOperators();
+	},
+
+	getMetadata(config: DatetimeFieldConfig): FieldMetadataBase {
+		return {
+			type: "datetime",
+			label: config.label,
+			description: config.description,
+			required: config.required ?? false,
+			localized: config.localized ?? false,
+			readOnly: config.input === false,
+			writeOnly: config.output === false,
+			meta: config.meta,
+		};
+	},
+});
 
 // Register in default registry
-getDefaultRegistry().register("datetime", datetimeField);

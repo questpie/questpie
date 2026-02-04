@@ -50,7 +50,9 @@ import {
 } from "#questpie/server/collection/crud/shared/access-control.js";
 import {
 	extractLocalizedFieldNames,
+	extractNestedLocalizationSchemas,
 	hasLocalizedFields,
+	type NestedLocalizationSchema,
 } from "#questpie/server/collection/crud/shared/field-extraction.js";
 import {
 	appendRealtimeChange,
@@ -63,6 +65,7 @@ import {
 	onAfterCommit,
 	resolveFieldKey,
 	splitLocalizedFields,
+	splitLocalizedFieldsWithSchema,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/index.js";
 import type {
@@ -73,7 +76,7 @@ import type {
 	DeleteParams,
 	Extras,
 	FindManyOptions,
-	FindOneOptions,
+	FindOneOptionsBase,
 	FindVersionsOptions,
 	OrderBy,
 	PaginatedResult,
@@ -210,7 +213,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 * @param mode - 'many' for paginated results, 'one' for single result
 	 */
 	private async _executeFind<T>(
-		options: FindManyOptions | FindOneOptions,
+		options: FindManyOptions | FindOneOptionsBase,
 		context: CRUDContext,
 		mode: "many" | "one",
 	): Promise<PaginatedResult<T> | T | null> {
@@ -509,7 +512,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 */
 	private createFindOne() {
 		return async (
-			options: FindOneOptions = {},
+			options: FindOneOptionsBase = {},
 			context: CRUDContext = {},
 		): Promise<any | null> => {
 			return this._executeFind(options, context, "one") as Promise<any | null>;
@@ -544,7 +547,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const relation = this.state.relations?.[relationName];
 			if (!relation) continue;
 
-			const relatedCrud = this.cms.api.collections[relation.collection];
+			const relatedCrud = this.cms.api.collections[
+				relation.collection
+			] as unknown as CRUD;
 
 			// Parse nested options
 			let nestedOptions: Record<string, any> = {};
@@ -613,7 +618,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 			// ManyToMany relation (through junction table)
 			else if (relation.type === "manyToMany" && relation.through) {
-				const junctionCrud = this.cms.api.collections[relation.through];
+				const junctionCrud = this.cms.api.collections[
+					relation.through
+				] as unknown as CRUD;
 				await resolveManyToManyRelation({
 					rows: typedRows,
 					relationName,
@@ -2295,14 +2302,55 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	/**
-	 * Split localized and non-localized fields
-	 * Delegates to shared splitLocalizedFields utility
-	 * Auto-detects { $i18n: value } wrappers in JSONB fields
+	 * Cached nested localization schemas (extracted from field definitions).
+	 */
+	private _nestedLocalizationSchemas:
+		| Record<string, NestedLocalizationSchema>
+		| undefined;
+
+	/**
+	 * Get nested localization schemas for JSONB fields.
+	 * Extracts schemas from field definitions (cached after first call).
+	 */
+	private getNestedLocalizationSchemas(): Record<
+		string,
+		NestedLocalizationSchema
+	> {
+		if (this._nestedLocalizationSchemas === undefined) {
+			if (this.state.fieldDefinitions) {
+				this._nestedLocalizationSchemas = extractNestedLocalizationSchemas(
+					this.state.fieldDefinitions,
+				);
+			} else {
+				this._nestedLocalizationSchemas = {};
+			}
+		}
+		return this._nestedLocalizationSchemas;
+	}
+
+	/**
+	 * Split localized and non-localized fields.
+	 *
+	 * Uses field definition schemas to automatically detect which nested fields
+	 * are localized (no $i18n wrappers needed from client).
+	 * Falls back to $i18n wrapper detection for backward compatibility.
 	 *
 	 * @param input - Input data
 	 */
 	private splitLocalizedFields(input: any) {
 		const localizedFieldNames = this.getLocalizedFieldNames();
+		const nestedSchemas = this.getNestedLocalizationSchemas();
+
+		// Use schema-based approach if we have field definitions with nested schemas
+		if (Object.keys(nestedSchemas).length > 0) {
+			return splitLocalizedFieldsWithSchema(
+				input,
+				localizedFieldNames,
+				nestedSchemas,
+			);
+		}
+
+		// Fallback to legacy $i18n wrapper detection
 		return splitLocalizedFields(input, localizedFieldNames);
 	}
 

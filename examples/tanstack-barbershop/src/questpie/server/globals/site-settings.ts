@@ -15,8 +15,7 @@
  * Note: Hero and page content are managed via Pages collection with blocks!
  */
 
-import { boolean, jsonb, text, varchar } from "drizzle-orm/pg-core";
-import { global } from "questpie";
+import { qb } from "@/questpie/server/builder";
 import type { WorkingHours } from "../collections/barbers";
 
 /**
@@ -56,54 +55,76 @@ export type BookingSettings = {
 	cancellationDeadlineHours: number;
 };
 
-export const siteSettings = global("site_settings")
-	.fields({
+export const siteSettings = qb
+	.global("site_settings")
+	.fields((f) => ({
 		// === Branding ===
-		shopName: text().notNull().default("Sharp Cuts"),
-		tagline: text().default("Your Style, Our Passion"),
-		logo: varchar("logo", { length: 500 }), // Asset ID
+		shopName: f.text({ required: true, default: "Sharp Cuts" }),
+		tagline: f.text({ default: "Your Style, Our Passion", localized: true }),
+		logo: f.upload({ to: "assets" }),
 
 		// === Navigation (Header) ===
-		navigation: jsonb()
-			.$type<NavItem[]>()
-			.default([
+		navigation: f.array({
+			localized: true,
+			default: [
 				{ label: "Home", href: "/" },
 				{ label: "Services", href: "/services" },
 				{ label: "Our Team", href: "/barbers" },
 				{ label: "Contact", href: "/contact" },
-			]),
-		ctaButtonText: text().default("Book Now"),
-		ctaButtonLink: text().default("/booking"),
+			] satisfies NavItem[],
+			of: f.object({
+				fields: {
+					label: f.text({ required: true }),
+					href: f.text({ required: true }),
+					isExternal: f.boolean({ default: false }),
+				},
+			}),
+		}),
+		ctaButtonText: f.text({ default: "Book Now", localized: true }),
+		ctaButtonLink: f.text({ default: "/booking" }),
 
 		// === Footer ===
-		footerTagline: text().default("Your Style, Our Passion"),
-		footerLinks: jsonb()
-			.$type<FooterLink[]>()
-			.default([
+		footerTagline: f.text({
+			default: "Your Style, Our Passion",
+			localized: true,
+		}),
+		footerLinks: f.array({
+			localized: true,
+			default: [
 				{ label: "Services", href: "/services" },
 				{ label: "Our Team", href: "/barbers" },
 				{ label: "Contact", href: "/contact" },
 				{ label: "Privacy Policy", href: "/privacy" },
-			]),
-		copyrightText: text().default("Sharp Cuts. All rights reserved."),
+			] satisfies FooterLink[],
+			of: f.object({
+				fields: {
+					label: f.text({ required: true }),
+					href: f.text({ required: true }),
+					isExternal: f.boolean({ default: false }),
+				},
+			}),
+		}),
+		copyrightText: f.text({
+			default: "Sharp Cuts. All rights reserved.",
+			localized: true,
+		}),
 
 		// === Contact ===
-		contactEmail: text().notNull().default("hello@barbershop.com"),
-		contactPhone: text().default("+1 555 0100"),
-		address: text().default("123 Main Street"),
-		city: text().default("New York"),
-		zipCode: text().default("10001"),
-		country: text().default("USA"),
-		mapEmbedUrl: text("map_embed_url"), // Google Maps embed URL
+		contactEmail: f.email({ required: true, default: "hello@barbershop.com" }),
+		contactPhone: f.text({ default: "+1 555 0100" }),
+		address: f.text({ default: "123 Main Street" }),
+		city: f.text({ default: "New York" }),
+		zipCode: f.text({ default: "10001" }),
+		country: f.text({ default: "USA" }),
+		mapEmbedUrl: f.text(),
 
 		// === Business Settings ===
-		isOpen: boolean().notNull().default(true),
-		bookingEnabled: boolean().notNull().default(true),
+		isOpen: f.boolean({ default: true, required: true }),
+		bookingEnabled: f.boolean({ default: true, required: true }),
 
 		// === Working Hours (shop-wide defaults) ===
-		businessHours: jsonb("business_hours")
-			.$type<WorkingHours>()
-			.default({
+		businessHours: f.object({
+			default: {
 				monday: { isOpen: true, start: "09:00", end: "18:00" },
 				tuesday: { isOpen: true, start: "09:00", end: "18:00" },
 				wednesday: { isOpen: true, start: "09:00", end: "18:00" },
@@ -111,47 +132,112 @@ export const siteSettings = global("site_settings")
 				friday: { isOpen: true, start: "09:00", end: "20:00" },
 				saturday: { isOpen: true, start: "10:00", end: "16:00" },
 				sunday: { isOpen: false, start: "", end: "" },
-			}),
+			} satisfies WorkingHours,
+			fields: {
+				monday: f.object({
+					fields: {
+						isOpen: f.boolean({ default: true, required: true }),
+						start: f.time({}),
+						end: f.time({}),
+					},
+				}),
+				tuesday: f.object({
+					fields: {
+						isOpen: f.boolean({ default: true, required: true }),
+						start: f.time({}),
+						end: f.time({}),
+					},
+				}),
+				wednesday: f.object({
+					fields: {
+						isOpen: f.boolean({ default: true, required: true }),
+						start: f.time({}),
+						end: f.time({}),
+					},
+				}),
+				thursday: f.object({
+					fields: {
+						isOpen: f.boolean({ default: true, required: true }),
+						start: f.time({}),
+						end: f.time({}),
+					},
+				}),
+				friday: f.object({
+					fields: {
+						isOpen: f.boolean({ default: true, required: true }),
+						start: f.time({}),
+						end: f.time({}),
+					},
+				}),
+				saturday: f.object({
+					fields: {
+						isOpen: f.boolean({ default: true, required: true }),
+						start: f.time({}),
+						end: f.time({}),
+					},
+				}),
+				sunday: f.object({
+					fields: {
+						isOpen: f.boolean({ default: true, required: true }),
+						start: f.time({}),
+						end: f.time({}),
+					},
+				}),
+			},
+		}),
 
 		// === Booking Configuration ===
-		bookingSettings: jsonb().$type<BookingSettings>().default({
-			minAdvanceHours: 2,
-			maxAdvanceDays: 30,
-			slotDurationMinutes: 30,
-			allowCancellation: true,
-			cancellationDeadlineHours: 24,
+		bookingSettings: f.object({
+			default: {
+				minAdvanceHours: 2,
+				maxAdvanceDays: 30,
+				slotDurationMinutes: 30,
+				allowCancellation: true,
+				cancellationDeadlineHours: 24,
+			} satisfies BookingSettings,
+			fields: {
+				minAdvanceHours: f.number({ required: true }),
+				maxAdvanceDays: f.number({ required: true }),
+				slotDurationMinutes: f.number({ required: true }),
+				allowCancellation: f.boolean({ required: true }),
+				cancellationDeadlineHours: f.number({ required: true }),
+			},
 		}),
 
 		// === Social Media ===
-		socialLinks: jsonb()
-			.$type<SocialLink[]>()
-			.default([
+		socialLinks: f.array({
+			default: [
 				{ platform: "instagram", url: "https://instagram.com/sharpcuts" },
 				{ platform: "facebook", url: "https://facebook.com/sharpcuts" },
-			]),
+			] satisfies SocialLink[],
+			of: f.object({
+				fields: {
+					platform: f.select({
+						options: [
+							{ value: "instagram", label: "Instagram" },
+							{ value: "facebook", label: "Facebook" },
+							{ value: "twitter", label: "Twitter" },
+							{ value: "tiktok", label: "TikTok" },
+							{ value: "youtube", label: "YouTube" },
+						],
+						required: true,
+					}),
+					url: f.url({ required: true }),
+				},
+			}),
+		}),
 
 		// === SEO ===
-		metaTitle: text().default("Sharp Cuts - Premium Barbershop"),
-		metaDescription: text().default(
-			"Professional barbershop services - haircuts, beard grooming, and more.",
-		),
-	})
-	.relations(({ one, table }) => ({
-		logo: one("assets", {
-			fields: [table.logo],
-			references: ["id"],
+		metaTitle: f.text({
+			default: "Sharp Cuts - Premium Barbershop",
+			localized: true,
+		}),
+		metaDescription: f.textarea({
+			default:
+				"Professional barbershop services - haircuts, beard grooming, and more.",
+			localized: true,
 		}),
 	}))
-	.localized([
-		"tagline",
-		"navigation",
-		"ctaButtonText",
-		"footerTagline",
-		"footerLinks",
-		"copyrightText",
-		"metaTitle",
-		"metaDescription",
-	] as const)
 	.options({
 		timestamps: true,
 		versioning: true,

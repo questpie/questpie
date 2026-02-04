@@ -1,14 +1,46 @@
 // Centralized Type Utilities for QUESTPIE CMS
 // This file consolidates all type inference helpers used by both server and client
 
+import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
+
+// ============================================================================
+// Opaque Types for Better Autocomplete
+// ============================================================================
+
+/**
+ * Phantom brand symbol - exists only at type level for autocomplete filtering.
+ * This symbol is never actually used at runtime.
+ */
+declare const __dateInputBrand: unique symbol;
+
+/**
+ * Date input type for operators - accepts Date objects or ISO strings.
+ *
+ * This type uses a technique to hide Date's methods from autocomplete while
+ * still accepting Date | string values. The intersection with a branded phantom
+ * type makes TypeScript not expand the union in autocomplete, so you only see
+ * the operator keys (eq, gt, lte, etc.) instead of Date methods.
+ *
+ * @example
+ * // In where clause autocomplete shows:
+ * { createdAt: { eq, ne, gt, gte, lt, lte, between, isNull, isNotNull } }
+ * // Instead of showing Date methods like getTime, toISOString, etc.
+ *
+ * // Both of these work:
+ * { createdAt: { gte: "2024-01-01" } }  // ✓ string
+ * { createdAt: { gte: new Date() } }     // ✓ Date
+ */
+export type DateInput = (Date | string) & {
+	readonly [__dateInputBrand]?: never;
+};
+
 import type {
 	Collection,
 	CollectionBuilder,
-	GlobalBuilder,
-	Global,
 	FunctionDefinition,
+	Global,
+	GlobalBuilder,
 } from "#questpie/server/index.js";
-import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 
 // ============================================================================
 // Performance Type Utilities
@@ -325,20 +357,38 @@ type DecrementDepth<Depth extends unknown[]> = Depth extends [
 	? Rest
 	: [];
 
-export type RelationShape<TSelect, TRelations, TInsert = TSelect> = {
+export type RelationShape<
+	TSelect,
+	TRelations,
+	TInsert = TSelect,
+	TCollection = unknown,
+	TApp = unknown,
+> = {
 	__select: TSelect;
 	__relations: TRelations;
 	__insert: TInsert;
+	__collection: TCollection;
+	__app: TApp;
 };
 
 export type ExtractRelationSelect<T> =
-	T extends RelationShape<infer Select, any, any> ? Select : T;
+	T extends RelationShape<infer Select, any, any, any, any> ? Select : T;
 
 export type ExtractRelationRelations<T> =
-	T extends RelationShape<any, infer Relations, any> ? Relations : never;
+	T extends RelationShape<any, infer Relations, any, any, any>
+		? Relations
+		: never;
 
 export type ExtractRelationInsert<T> =
-	T extends RelationShape<any, any, infer Insert> ? Insert : T;
+	T extends RelationShape<any, any, infer Insert, any, any> ? Insert : T;
+
+export type ExtractRelationCollection<T> =
+	T extends RelationShape<any, any, any, infer Collection, any>
+		? Collection
+		: unknown;
+
+export type ExtractRelationApp<T> =
+	T extends RelationShape<any, any, any, any, infer App> ? App : unknown;
 
 type ResolveCollectionRelation<
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
@@ -354,9 +404,11 @@ type ResolveCollectionRelation<
 						TCollections,
 						DecrementDepth<Depth>
 					>,
-			CollectionInsert<GetCollection<TCollections, C>>
+			CollectionInsert<GetCollection<TCollections, C>>,
+			GetCollection<TCollections, C>,
+			unknown
 		>
-	: RelationShape<any, never, any>;
+	: RelationShape<any, never, any, unknown, unknown>;
 
 /**
  * Resolve all relations from a RelationConfig to actual types

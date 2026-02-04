@@ -9,7 +9,7 @@
  *
  * @example
  * ```ts
- * import { defineField, createFieldBuilder, getDefaultRegistry } from "questpie/server/fields";
+ * import { defineField, createFieldBuilder, builtinFields } from "questpie/server/fields";
  *
  * // Using built-in fields
  * const posts = collection("posts").fields((f) => ({
@@ -24,10 +24,12 @@
  * }));
  *
  * // Creating custom fields
- * const slugField = defineField<"slug", SlugFieldConfig, string>("slug", {
- *   toColumn: (name, config) => varchar(name, { length: 255 }),
+ * const slugField = defineField<SlugFieldConfig, string>()({
+ *   type: "slug" as const,
+ *   _value: undefined as unknown as string,
+ *   toColumn: (name, config) => varchar({ length: 255 }),
  *   toZodSchema: (config) => z.string().regex(/^[a-z0-9-]+$/),
- *   getOperators: (config) => ({ column: stringOperators, jsonb: stringJsonbOperators }),
+ *   getOperators: <TApp>(config) => ({ column: stringOperators, jsonb: stringJsonbOperators }),
  *   getMetadata: (config) => ({ type: "slug", ... }),
  * });
  * ```
@@ -35,7 +37,11 @@
 
 // Builder
 export {
+	type BuiltinFields,
 	createFieldBuilder,
+	/** @deprecated Use `createFieldBuilder` instead */
+	createFieldBuilderFromDefs,
+	/** @deprecated Use `BuiltinFields` instead */
 	type DefaultFieldTypeMap,
 	extractFieldDefinitions,
 	type FieldBuilderProxy,
@@ -47,15 +53,16 @@ export {
 // Built-in field types
 export * from "./builtin/index.js";
 // Define field helper
-export { defineField, type FieldImplementation } from "./define-field.js";
-// Registry
 export {
-	type AnyFieldFactory,
-	createFieldRegistry,
-	type FieldFactory,
-	FieldRegistry,
-	getDefaultRegistry,
-} from "./registry.js";
+	type BuildFieldState,
+	createFieldDefinition,
+	defineField,
+	type ExtractConfigFromFieldDef,
+	type ExtractOpsFromFieldDef,
+	type ExtractTypeFromFieldDef,
+	type ExtractValueFromFieldDef,
+	type FieldDef,
+} from "./define-field.js";
 // Core types
 export type {
 	AnyFieldDefinition,

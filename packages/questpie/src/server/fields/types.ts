@@ -39,6 +39,7 @@ export interface FieldDefinition<TState extends FieldDefinitionState> {
 		value: TState["value"];
 		input: TState["input"];
 		output: TState["output"];
+		select: TState["select"];
 		column: TState["column"];
 		location: TState["location"];
 	};
@@ -65,7 +66,7 @@ export interface FieldDefinition<TState extends FieldDefinitionState> {
 	 * Returns context-aware operators for both column and JSONB access.
 	 * System automatically selects appropriate variant based on field context.
 	 */
-	getOperators(): ContextualOperators;
+	getOperators(): TState["operators"];
 
 	/**
 	 * Get metadata for admin introspection.
@@ -348,29 +349,75 @@ export interface QueryContext {
 /**
  * Operator function type.
  * Generates SQL condition from column and value.
+ *
+ * @template TValue - The value type this operator accepts
+ * @template TResult - The SQL result type (defaults to boolean for WHERE conditions)
  */
-export type OperatorFn<TValue = unknown> = (
+export type OperatorFn<TValue = unknown, TResult = boolean> = (
 	column: AnyPgColumn,
 	value: TValue,
 	ctx: QueryContext,
-) => SQL;
+) => SQL<TResult>;
+
+/**
+ * Helper to create a typed operator function.
+ * Makes the value type explicit and ensures proper type inference.
+ *
+ * @example
+ * ```ts
+ * const textOps = {
+ *   eq: operator<string>((col, value) => eq(col, value)),
+ *   contains: operator<string>((col, value) =>
+ *     sql<boolean>`${col} LIKE '%' || ${value} || '%'`
+ *   ),
+ * };
+ * ```
+ */
+export function operator<TValue, TResult = boolean>(
+	fn: (col: AnyPgColumn, value: TValue, ctx: QueryContext) => SQL<TResult>,
+): OperatorFn<TValue, TResult> {
+	return fn;
+}
 
 /**
  * Map of operator name to function.
  */
-export type OperatorMap = Record<string, OperatorFn | undefined>;
+export type OperatorMap = Record<string, OperatorFn<any, any> | undefined>;
 
 /**
  * Context-aware operators for both column and JSONB access.
  * System automatically selects appropriate variant based on field context.
+ *
+ * @template TColumnOps - Column operator map type (for type inference)
+ * @template TJsonbOps - JSONB operator map type (for type inference)
  */
-export interface ContextualOperators {
+export interface ContextualOperators<
+	TColumnOps extends OperatorMap = OperatorMap,
+	TJsonbOps extends OperatorMap = OperatorMap,
+> {
 	/** Operators for direct column access */
-	column: OperatorMap;
+	column: TColumnOps;
 
 	/** Operators for JSONB path access */
-	jsonb: OperatorMap;
+	jsonb: TJsonbOps;
 }
+
+// ============================================================================
+// Common Operator Sets
+// ============================================================================
+
+/**
+ * Extract the parameter type from an operator function.
+ */
+export type ExtractOperatorParamType<TFn> =
+	TFn extends OperatorFn<infer TValue, any> ? TValue : never;
+
+/**
+ * Convert operator map to where input type (operator keys → parameter types).
+ */
+export type OperatorsToWhereInput<TOps extends OperatorMap> = {
+	[K in keyof TOps]?: ExtractOperatorParamType<TOps[K]>;
+};
 
 // ============================================================================
 // Field Metadata (for Introspection)
@@ -646,14 +693,17 @@ export interface FieldDefinitionState {
 	/** Output type for select (affected by output, access, etc.) */
 	output: unknown;
 
+	/** Select type for CRUD (defaults to output when not overridden) */
+	select: unknown;
+
 	/** Drizzle column type (null for virtual/relation fields) */
 	column: AnyPgColumn | null;
 
 	/** Field location - determines which table the field belongs to */
 	location: FieldLocation;
 
-	/** Optional: Field-specific operators */
-	operators?: ContextualOperators;
+	/** Field operators for WHERE clause (column + jsonb variants) */
+	operators: ContextualOperators<any, any>;
 
 	/** Optional: Field metadata for introspection */
 	metadata?: FieldMetadata;
@@ -668,6 +718,7 @@ export type EmptyFieldState = {
 	value: unknown;
 	input: unknown;
 	output: unknown;
+	select: unknown;
 	column: AnyPgColumn | null;
 	location: "main";
 };
@@ -738,13 +789,20 @@ export type ExtractColumnsFromFields<
 /**
  * Generic FieldDefinition type for use when the specific field type is unknown.
  * Uses a default FieldDefinitionState with all unknown types.
+ *
+ * NOTE: `config` uses `Record<string, any>` (matching FieldDefinitionState)
+ * to allow any field config to be assigned. This avoids requiring casts when
+ * using specialized configs like ObjectFieldConfig or ArrayFieldConfig which
+ * have required properties (`fields`, `of`) not present in BaseFieldConfig.
  */
 export type AnyFieldDefinition = FieldDefinition<{
 	type: string;
-	config: BaseFieldConfig;
+	config: Record<string, any>;
 	value: unknown;
 	input: unknown;
 	output: unknown;
+	select: unknown;
 	column: AnyPgColumn | null;
 	location: FieldLocation;
+	operators: ContextualOperators<any, any>;
 }>;

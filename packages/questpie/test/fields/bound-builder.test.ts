@@ -40,7 +40,8 @@ describe("q.collection() with field types", () => {
 		}).toThrow(/Unknown field type: "unknownField"/);
 	});
 
-	test("standalone collection() should use default registry", () => {
+	test("standalone collection() should use builtin fields by default", () => {
+		// Standalone collection() now includes builtinFields by default
 		const posts = collection("posts").fields((f) => ({
 			title: f.text({ required: true }),
 		}));
@@ -90,7 +91,8 @@ describe("q.global() with field types", () => {
 		}).toThrow(/Unknown field type: "unknownField"/);
 	});
 
-	test("standalone global() should use default registry", () => {
+	test("standalone global() should use builtin fields by default", () => {
+		// Standalone global() now includes builtinFields by default
 		const settings = global("settings").fields((f) => ({
 			siteName: f.text({ required: true }),
 		}));

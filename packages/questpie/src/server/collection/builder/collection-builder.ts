@@ -28,10 +28,12 @@ import {
 import type { StorageVisibility } from "#questpie/server/config/types.js";
 import {
 	createFieldBuilder,
-	type DefaultFieldTypeMap,
 	type FieldBuilderProxy,
 } from "#questpie/server/fields/builder.js";
-import { getDefaultRegistry } from "#questpie/server/fields/registry.js";
+import {
+	type BuiltinFields,
+	builtinFields,
+} from "#questpie/server/fields/builtin/defaults.js";
 import type {
 	FieldDefinition,
 	FieldDefinitionState,
@@ -67,8 +69,8 @@ type ExtractFieldTypes<TState extends CollectionBuilderState> =
 	TState["~fieldTypes"] extends infer TFields
 		? TFields extends Record<string, any>
 			? TFields
-			: DefaultFieldTypeMap
-		: DefaultFieldTypeMap;
+			: {} // No fields registered — f will be empty
+		: {};
 
 /**
  * Main collection builder class.
@@ -150,11 +152,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				f: FieldBuilderProxy<ExtractFieldTypes<TState>>,
 			) => Record<string, FieldDefinition<FieldDefinitionState>>;
 
-			// Use field factories from ~questpieApp if available, otherwise default registry
-			const questpieFields = this.state["~questpieApp"]?.state?.fields;
-			const builderProxy = questpieFields
-				? createFieldBuilderFromFactories(questpieFields)
-				: createFieldBuilder<DefaultFieldTypeMap>(getDefaultRegistry());
+			// Use field defs from ~questpieApp, or fall back to builtinFields for standalone collection()
+			const questpieFields =
+				this.state["~questpieApp"]?.state?.fields ?? builtinFields;
+			const builderProxy = createFieldBuilder(questpieFields);
 
 			const fieldDefs = factory(builderProxy);
 
@@ -1008,9 +1009,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
  */
 export function collection<TName extends string>(
 	name: TName,
-): CollectionBuilder<
-	EmptyCollectionState<TName, undefined, DefaultFieldTypeMap>
-> {
+): CollectionBuilder<EmptyCollectionState<TName, undefined, BuiltinFields>> {
 	return new CollectionBuilder({
 		name: name as string,
 		fields: {},
@@ -1030,41 +1029,4 @@ export function collection<TName extends string>(
 		fieldDefinitions: {},
 		"~questpieApp": undefined,
 	}) as any;
-}
-
-/**
- * Create a field builder proxy from registered field factories.
- * Used when ~questpieApp provides field types.
- */
-function createFieldBuilderFromFactories<TFields extends Record<string, any>>(
-	factories: TFields,
-): FieldBuilderProxy<TFields> {
-	return new Proxy({} as FieldBuilderProxy<TFields>, {
-		get(_target, prop: string) {
-			const factory = factories[prop];
-			if (!factory) {
-				throw new Error(
-					`Unknown field type: "${prop}". ` +
-						`Available types: ${Object.keys(factories).join(", ")}`,
-				);
-			}
-			return factory;
-		},
-		has(_target, prop: string) {
-			return prop in factories;
-		},
-		ownKeys() {
-			return Object.keys(factories);
-		},
-		getOwnPropertyDescriptor(_target, prop: string) {
-			if (prop in factories) {
-				return {
-					configurable: true,
-					enumerable: true,
-					value: factories[prop],
-				};
-			}
-			return undefined;
-		},
-	});
 }

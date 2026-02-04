@@ -6,11 +6,13 @@
  */
 
 import { ArrowRight } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type {
+	BlockDefinition,
+	BlockRendererProps,
+} from "@questpie/admin/client";
 import { buttonVariants } from "../../../components/ui/button";
 import { client } from "../../../lib/cms-client";
 import { cn } from "../../../lib/utils";
-import { builder } from "../builder";
 
 type HeroValues = {
 	title: string;
@@ -100,71 +102,17 @@ function HeroRenderer({
 	);
 }
 
-export const heroBlock = builder
-	.block("hero")
-	.label({ en: "Hero", sk: "Hero" })
-	.description({
-		en: "Full-width banner with background image",
-		sk: "Banner na celú šírku s obrázkom pozadia",
-	})
-	.icon("Image")
-	.category("sections")
-	.fields(({ r }) => ({
-		title: r.text({
-			label: { en: "Title", sk: "Titulok" },
-			localized: true,
-			required: true,
-		}),
-		subtitle: r.textarea({
-			label: { en: "Subtitle", sk: "Podtitulok" },
-			localized: true,
-		}),
-		backgroundImage: r.upload({
-			label: { en: "Background Image", sk: "Obrázok pozadia" },
-			accept: ["image/*"],
-		}),
-		overlayOpacity: r.number({
-			label: { en: "Overlay Opacity (%)", sk: "Prekrytie (%)" },
-			defaultValue: 60,
-			min: 0,
-			max: 100,
-		}),
-		height: r.select({
-			label: { en: "Height", sk: "Výška" },
-			options: [
-				{ value: "small", label: { en: "Small (50vh)", sk: "Malá" } },
-				{ value: "medium", label: { en: "Medium (70vh)", sk: "Stredná" } },
-				{ value: "large", label: { en: "Large (85vh)", sk: "Veľká" } },
-				{ value: "full", label: { en: "Full Screen", sk: "Celá obrazovka" } },
-			],
-			defaultValue: "medium",
-		}),
-		alignment: r.select({
-			label: { en: "Alignment", sk: "Zarovnanie" },
-			options: [
-				{ value: "left", label: { en: "Left", sk: "Vľavo" } },
-				{ value: "center", label: { en: "Center", sk: "Na stred" } },
-				{ value: "right", label: { en: "Right", sk: "Vpravo" } },
-			],
-			defaultValue: "center",
-		}),
-		ctaText: r.text({
-			label: { en: "Button Text", sk: "Text tlačidla" },
-			localized: true,
-		}),
-		ctaLink: r.text({
-			label: { en: "Button Link", sk: "Odkaz" },
-			defaultValue: "/booking",
-		}),
-	}))
-	.prefetch(async ({ values }) => {
-		if (!values.backgroundImage) return {};
+export const heroBlock = {
+	name: "hero",
+	renderer: HeroRenderer,
+	prefetch: async ({ values }) => {
+		const { backgroundImage } = values as HeroValues;
+		if (!backgroundImage) return {};
 		// TODO: tighten assets collection types for url field
 		type AssetRecord = { url?: string | null };
 		const asset = (await client.collections.assets.findOne({
-			where: { id: String(values.backgroundImage) },
+			where: { id: String(backgroundImage) },
 		})) as unknown as AssetRecord | null;
 		return { backgroundImageUrl: asset?.url || null };
-	})
-	.renderer(HeroRenderer)
-	.build();
+	},
+} satisfies BlockDefinition;

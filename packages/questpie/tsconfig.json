@@ -16,5 +16,6 @@
 			"#questpie/*": ["./src/*"]
 		}
 	},
-	"exclude": ["node_modules", "dist", "test"]
+	"include": ["src", "test/types"],
+	"exclude": ["node_modules", "dist"]
 }

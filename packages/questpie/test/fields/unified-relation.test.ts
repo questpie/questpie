@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { pgTable, varchar } from "drizzle-orm/pg-core";
+import { createFieldBuilderFromDefs } from "#questpie/server/fields/builder.js";
 import { defaultFields } from "#questpie/server/fields/builtin/index.js";
 import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 
@@ -34,7 +35,8 @@ const mockTags = { name: "tags", table: tagsTable };
 const mockPostTags = { name: "postTags", table: postTagsTable };
 
 describe("Unified Relation Field", () => {
-	const fields = defaultFields;
+	// Create a callable proxy from plain field defs
+	const fields = createFieldBuilderFromDefs(defaultFields);
 
 	test("belongsTo relation is created correctly", () => {
 		const relationField = fields.relation({

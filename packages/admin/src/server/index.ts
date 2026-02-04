@@ -79,6 +79,9 @@ export type {
 	ServerSidebarSection,
 	ServerStatsWidget,
 	SidebarConfigContext,
+	WithAdminMethods,
+	WithCollectionAdminMethods,
+	WithGlobalAdminMethods,
 } from "./augmentation.js";
 // Auth helpers for SSR
 export {

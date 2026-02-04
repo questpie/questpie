@@ -6,10 +6,12 @@
  */
 
 import { ArrowRight } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type {
+	BlockDefinition,
+	BlockRendererProps,
+} from "@questpie/admin/client";
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
-import { builder } from "../builder";
 
 type CTAValues = {
 	title: string;
@@ -76,54 +78,7 @@ function CTARenderer({ values }: BlockRendererProps<CTAValues>) {
 	);
 }
 
-export const ctaBlock = builder
-	.block("cta")
-	.label({ en: "Call to Action", sk: "Výzva k akcii" })
-	.description({
-		en: "Highlighted section with button",
-		sk: "Zvýraznená sekcia s tlačidlom",
-	})
-	.icon("Megaphone")
-	.category("sections")
-	.fields(({ r }) => ({
-		title: r.text({
-			label: { en: "Title", sk: "Titulok" },
-			localized: true,
-			required: true,
-		}),
-		description: r.textarea({
-			label: { en: "Description", sk: "Popis" },
-			localized: true,
-		}),
-		buttonText: r.text({
-			label: { en: "Button Text", sk: "Text tlačidla" },
-			localized: true,
-		}),
-		buttonLink: r.text({
-			label: { en: "Button Link", sk: "Odkaz" },
-			defaultValue: "/booking",
-		}),
-		variant: r.select({
-			label: { en: "Style", sk: "Štýl" },
-			options: [
-				{
-					value: "highlight",
-					label: { en: "Highlight (Orange)", sk: "Oranžový" },
-				},
-				{ value: "dark", label: { en: "Dark", sk: "Tmavý" } },
-				{ value: "light", label: { en: "Light", sk: "Svetlý" } },
-			],
-			defaultValue: "highlight",
-		}),
-		size: r.select({
-			label: { en: "Size", sk: "Veľkosť" },
-			options: [
-				{ value: "small", label: { en: "Small", sk: "Malá" } },
-				{ value: "medium", label: { en: "Medium", sk: "Stredná" } },
-				{ value: "large", label: { en: "Large", sk: "Veľká" } },
-			],
-			defaultValue: "medium",
-		}),
-	}))
-	.renderer(CTARenderer)
-	.build();
+export const ctaBlock = {
+	name: "cta",
+	renderer: CTARenderer,
+} satisfies BlockDefinition;

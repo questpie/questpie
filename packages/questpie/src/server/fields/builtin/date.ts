@@ -5,27 +5,12 @@
  * Supports min/max constraints and date operators.
  */
 
-import {
-	between,
-	eq,
-	gt,
-	gte,
-	isNotNull,
-	isNull,
-	lt,
-	lte,
-	ne,
-	sql,
-} from "drizzle-orm";
+import { between, eq, gt, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { date } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	FieldMetadataBase,
-} from "../types.js";
+import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
+import { operator } from "../types.js";
 
 // ============================================================================
 // Date Field Meta (augmentable by admin)
@@ -34,7 +19,10 @@ import type {
 /**
  * Date field metadata - augmentable by external packages.
  */
-export interface DateFieldMeta {}
+export interface DateFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Date Field Configuration
@@ -72,62 +60,68 @@ export interface DateFieldConfig extends BaseFieldConfig {
  * Get operators for date field.
  * Supports both column and JSONB path access.
  */
-function getDateOperators(): ContextualOperators {
+function getDateOperators() {
 	return {
 		column: {
-			eq: (col, value) => eq(col, value as string),
-			ne: (col, value) => ne(col, value as string),
-			gt: (col, value) => gt(col, value as string),
-			gte: (col, value) => gte(col, value as string),
-			lt: (col, value) => lt(col, value as string),
-			lte: (col, value) => lte(col, value as string),
-			between: (col, value) => {
-				const [min, max] = value as [string, string];
-				return between(col, min, max);
-			},
-			before: (col, value) => lt(col, value as string),
-			after: (col, value) => gt(col, value as string),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			eq: operator<string, unknown>((col, value) => eq(col, value)),
+			ne: operator<string, unknown>((col, value) => ne(col, value)),
+			gt: operator<string, unknown>((col, value) => gt(col, value)),
+			gte: operator<string, unknown>((col, value) => gte(col, value)),
+			lt: operator<string, unknown>((col, value) => lt(col, value)),
+			lte: operator<string, unknown>((col, value) => lte(col, value)),
+			between: operator<[string, string], unknown>((col, value) =>
+				between(col, value[0], value[1]),
+			),
+			before: operator<string, unknown>((col, value) => lt(col, value)),
+			after: operator<string, unknown>((col, value) => gt(col, value)),
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			eq: (col, value, ctx) => {
+			eq: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::date = ${value}::date`;
-			},
-			ne: (col, value, ctx) => {
+			}),
+			ne: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::date != ${value}::date`;
-			},
-			gt: (col, value, ctx) => {
+			}),
+			gt: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::date > ${value}::date`;
-			},
-			gte: (col, value, ctx) => {
+			}),
+			gte: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::date >= ${value}::date`;
-			},
-			lt: (col, value, ctx) => {
+			}),
+			lt: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::date < ${value}::date`;
-			},
-			lte: (col, value, ctx) => {
+			}),
+			lte: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::date <= ${value}::date`;
-			},
-			between: (col, value, ctx) => {
-				const [min, max] = value as [string, string];
+			}),
+			between: operator<[string, string], unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::date BETWEEN ${min}::date AND ${max}::date`;
-			},
-			isNull: (col, _value, ctx) => {
+				return sql`(${col}#>>'{${sql.raw(path)}}')::date BETWEEN ${value[0]}::date AND ${value[1]}::date`;
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -147,8 +141,10 @@ function getDateOperators(): ContextualOperators {
  * const createdAt = dateField({ autoNow: true, input: false });
  * ```
  */
-export const dateField = defineField<"date", DateFieldConfig, string>("date", {
-	toColumn(name, config) {
+export const dateField = defineField<DateFieldConfig, string>()({
+	type: "date" as const,
+	_value: undefined as unknown as string,
+	toColumn(name: string, config: DateFieldConfig) {
 		let column: any = date(name, { mode: "string" });
 
 		// Apply constraints
@@ -172,7 +168,7 @@ export const dateField = defineField<"date", DateFieldConfig, string>("date", {
 		return column;
 	},
 
-	toZodSchema(config) {
+	toZodSchema(config: DateFieldConfig) {
 		// Use string for date in ISO format (YYYY-MM-DD)
 		let schema = z.string().date();
 
@@ -204,11 +200,11 @@ export const dateField = defineField<"date", DateFieldConfig, string>("date", {
 		return schema;
 	},
 
-	getOperators() {
+	getOperators<TApp>() {
 		return getDateOperators();
 	},
 
-	getMetadata(config): FieldMetadataBase {
+	getMetadata(config: DateFieldConfig): FieldMetadataBase {
 		return {
 			type: "date",
 			label: config.label,
@@ -223,4 +219,3 @@ export const dateField = defineField<"date", DateFieldConfig, string>("date", {
 });
 
 // Register in default registry
-getDefaultRegistry().register("date", dateField);

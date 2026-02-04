@@ -5,17 +5,16 @@
  * Supports typed items via nested field definition.
  */
 
-import { isNotNull, isNull, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { jsonb } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
 import type {
 	AnyFieldDefinition,
 	BaseFieldConfig,
-	ContextualOperators,
 	NestedFieldMetadata,
 } from "../types.js";
+import { operator } from "../types.js";
 
 // ============================================================================
 // Array Field Meta (augmentable by admin)
@@ -37,7 +36,10 @@ import type {
  * }
  * ```
  */
-export interface ArrayFieldMeta {}
+export interface ArrayFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Array Field Configuration
@@ -84,84 +86,103 @@ export interface ArrayFieldConfig extends BaseFieldConfig {
  * Get operators for array field.
  * Provides JSONB array operators.
  */
-function getArrayOperators(): ContextualOperators {
+function getArrayOperators() {
 	return {
 		column: {
 			// Contains the given element
-			contains: (col, value) =>
-				sql`${col} @> ${JSON.stringify([value])}::jsonb`,
+			contains: operator<unknown, unknown>(
+				(col, value) => sql`${col} @> ${JSON.stringify([value])}::jsonb`,
+			),
 			// Contains all the given elements
-			containsAll: (col, values) =>
-				sql`${col} @> ${JSON.stringify(values)}::jsonb`,
+			containsAll: operator<unknown[], unknown>(
+				(col, values) => sql`${col} @> ${JSON.stringify(values)}::jsonb`,
+			),
 			// Contains any of the given elements
-			containsAny: (col, values) => {
-				const arr = values as unknown[];
-				if (arr.length === 0) return sql`FALSE`;
-				return sql`${col} ?| ${sql.raw(`ARRAY[${arr.map((v) => `'${JSON.stringify(v)}'`).join(",")}]`)}`;
-			},
+			containsAny: operator<unknown[], unknown>((col, values) => {
+				if (values.length === 0) return sql`FALSE`;
+				return sql`${col} ?| ${sql.raw(`ARRAY[${values.map((v) => `'${JSON.stringify(v)}'`).join(",")}]`)}`;
+			}),
 			// Is contained by the given array
-			containedBy: (col, values) =>
-				sql`${col} <@ ${JSON.stringify(values)}::jsonb`,
+			containedBy: operator<unknown[], unknown>(
+				(col, values) => sql`${col} <@ ${JSON.stringify(values)}::jsonb`,
+			),
 			// Array length equals
-			length: (col, value) =>
-				sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) = ${value}`,
+			length: operator<number, unknown>(
+				(col, value) =>
+					sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) = ${value}`,
+			),
 			// Array length greater than
-			lengthGt: (col, value) =>
-				sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) > ${value}`,
+			lengthGt: operator<number, unknown>(
+				(col, value) =>
+					sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) > ${value}`,
+			),
 			// Array length less than
-			lengthLt: (col, value) =>
-				sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) < ${value}`,
+			lengthLt: operator<number, unknown>(
+				(col, value) =>
+					sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) < ${value}`,
+			),
 			// Array length between
-			lengthBetween: (col, value) => {
-				const [min, max] = value as [number, number];
-				return sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) BETWEEN ${min} AND ${max}`;
-			},
+			lengthBetween: operator<[number, number], unknown>((col, value) => {
+				return sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) BETWEEN ${value[0]} AND ${value[1]}`;
+			}),
 			// Is empty array
-			isEmpty: (col) => sql`(${col} = '[]'::jsonb OR ${col} IS NULL)`,
+			isEmpty: operator<boolean, unknown>(
+				(col) => sql`(${col} = '[]'::jsonb OR ${col} IS NULL)`,
+			),
 			// Is not empty
-			isNotEmpty: (col) => sql`(${col} != '[]'::jsonb AND ${col} IS NOT NULL)`,
+			isNotEmpty: operator<boolean, unknown>(
+				(col) => sql`(${col} != '[]'::jsonb AND ${col} IS NOT NULL)`,
+			),
 			// Some element matches condition (requires subquery in practice)
-			some: () => sql`TRUE`, // Placeholder
+			some: operator<unknown, unknown>(() => sql`TRUE`), // Placeholder
 			// Every element matches condition
-			every: () => sql`TRUE`, // Placeholder
+			every: operator<unknown, unknown>(() => sql`TRUE`), // Placeholder
 			// No element matches condition
-			none: () => sql`TRUE`, // Placeholder
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			none: operator<unknown, unknown>(() => sql`TRUE`), // Placeholder
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			contains: (col, value, ctx) => {
+			contains: operator<unknown, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify([value])}::jsonb`;
-			},
-			containsAll: (col, values, ctx) => {
+			}),
+			containsAll: operator<unknown[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(values)}::jsonb`;
-			},
-			containedBy: (col, values, ctx) => {
+			}),
+			containedBy: operator<unknown[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>'{${sql.raw(path)}}' <@ ${JSON.stringify(values)}::jsonb`;
-			},
-			length: (col, value, ctx) => {
+			}),
+			length: operator<number, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`jsonb_array_length(COALESCE(${col}#>'{${sql.raw(path)}}', '[]'::jsonb)) = ${value}`;
-			},
-			isEmpty: (col, _value, ctx) => {
+			}),
+			isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>'{${sql.raw(path)}}' = '[]'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
-			},
-			isNotEmpty: (col, _value, ctx) => {
+			}),
+			isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>'{${sql.raw(path)}}' != '[]'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
-			},
-			isNull: (col, _value, ctx) => {
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -214,79 +235,77 @@ function resolveItemField(
  * });
  * ```
  */
-export const arrayField = defineField<"array", ArrayFieldConfig, unknown[]>(
-	"array",
-	{
-		toColumn(_name, config) {
-			// Always use JSONB for complex typed arrays
-			// Don't specify column name - Drizzle uses the key name
-			let column: any = jsonb();
+export const arrayField = defineField<ArrayFieldConfig, unknown[]>()({
+	type: "array" as const,
+	_value: undefined as unknown as unknown[],
+	toColumn(_name: string, config: ArrayFieldConfig) {
+		// Always use JSONB for complex typed arrays
+		// Don't specify column name - Drizzle uses the key name
+		let column: any = jsonb();
 
-			// Apply constraints
-			if (config.required && config.nullable !== true) {
-				column = column.notNull();
-			}
-			if (config.default !== undefined) {
-				const defaultValue =
-					typeof config.default === "function"
-						? config.default()
-						: config.default;
-				column = column.default(defaultValue);
-			}
+		// Apply constraints
+		if (config.required && config.nullable !== true) {
+			column = column.notNull();
+		}
+		if (config.default !== undefined) {
+			const defaultValue =
+				typeof config.default === "function"
+					? config.default()
+					: config.default;
+			column = column.default(defaultValue);
+		}
 
-			return column;
-		},
-
-		toZodSchema(config) {
-			const itemField = resolveItemField(config.of);
-
-			// Build array schema from item field
-			let schema = z.array(itemField.toZodSchema());
-
-			// Length constraints
-			if (config.minItems !== undefined) {
-				schema = schema.min(config.minItems);
-			}
-			if (config.maxItems !== undefined) {
-				schema = schema.max(config.maxItems);
-			}
-
-			// Nullability
-			if (!config.required && config.nullable !== false) {
-				return schema.nullish();
-			}
-
-			return schema;
-		},
-
-		getOperators() {
-			return getArrayOperators();
-		},
-
-		getMetadata(config): NestedFieldMetadata {
-			const itemField = resolveItemField(config.of);
-
-			return {
-				type: "array",
-				label: config.label,
-				description: config.description,
-				required: config.required ?? false,
-				localized: config.localized ?? false,
-				readOnly: config.input === false,
-				writeOnly: config.output === false,
-				nestedFields: {
-					item: itemField.getMetadata(),
-				},
-				validation: {
-					minItems: config.minItems,
-					maxItems: config.maxItems,
-				},
-				meta: config.meta,
-			};
-		},
+		return column;
 	},
-);
+
+	toZodSchema(config: ArrayFieldConfig) {
+		const itemField = resolveItemField(config.of);
+
+		// Build array schema from item field
+		let schema = z.array(itemField.toZodSchema());
+
+		// Length constraints
+		if (config.minItems !== undefined) {
+			schema = schema.min(config.minItems);
+		}
+		if (config.maxItems !== undefined) {
+			schema = schema.max(config.maxItems);
+		}
+
+		// Nullability
+		if (!config.required && config.nullable !== false) {
+			return schema.nullish();
+		}
+
+		return schema;
+	},
+
+	getOperators<TApp>(config: ArrayFieldConfig) {
+		return getArrayOperators();
+	},
+
+	getMetadata(config: ArrayFieldConfig): NestedFieldMetadata {
+		const itemField = resolveItemField(config.of);
+
+		return {
+			type: "array",
+			label: config.label,
+			description: config.description,
+			required: config.required ?? false,
+			localized: config.localized ?? false,
+			readOnly: config.input === false,
+			writeOnly: config.output === false,
+			nestedFields: {
+				item: itemField.getMetadata(),
+			},
+			validation: {
+				minItems: config.minItems,
+				maxItems: config.maxItems,
+			},
+			meta: config.meta,
+		};
+	},
+});
 
 // Register in default registry
-// Note: Cast needed because ArrayFieldConfig has required 'of' property
-getDefaultRegistry().register("array", arrayField as any);
+// ArrayFieldConfig is now compatible with AnyFieldDefinition (no cast needed)

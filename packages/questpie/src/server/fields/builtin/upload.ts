@@ -5,23 +5,18 @@
  * Supports single uploads and many-to-many relations with mime type and size validation.
  */
 
-import {
-	eq,
-	inArray,
-	isNotNull,
-	isNull,
-	ne,
-	notInArray,
-	sql,
-} from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import {
+	stringColumnOperators,
+	stringJsonbOperators,
+} from "../common-operators.js";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	RelationFieldMetadata,
+import {
+	type BaseFieldConfig,
+	operator,
+	type RelationFieldMetadata,
 } from "../types.js";
 
 // ============================================================================
@@ -43,7 +38,10 @@ import type {
  * }
  * ```
  */
-export interface UploadFieldMeta {}
+export interface UploadFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Upload Field Configuration
@@ -102,63 +100,27 @@ export interface UploadFieldConfig extends BaseFieldConfig {
 /**
  * Get operators for single upload field.
  */
-function getSingleUploadOperators(): ContextualOperators {
+function getSingleUploadOperators() {
 	return {
-		column: {
-			eq: (col, value) => eq(col, value as string),
-			ne: (col, value) => ne(col, value as string),
-			in: (col, values) => inArray(col, values as string[]),
-			notIn: (col, values) => notInArray(col, values as string[]),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
-		},
-		jsonb: {
-			eq: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' = ${value}`;
-			},
-			ne: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' != ${value}`;
-			},
-			in: (col, values, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[])`;
-			},
-			notIn: (col, values, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`NOT (${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[]))`;
-			},
-			isNull: (col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
-		},
+		column: stringColumnOperators,
+		jsonb: stringJsonbOperators,
 	};
 }
 
 /**
  * Get operators for many-to-many upload field.
  */
-function getToManyUploadOperators(): ContextualOperators {
+function getToManyUploadOperators() {
+	const toManyOps = {
+		// Placeholder operators - actual implementation in query builder
+		some: operator<boolean, unknown>(() => sql`TRUE`),
+		none: operator<boolean, unknown>(() => sql`TRUE`),
+		every: operator<boolean, unknown>(() => sql`TRUE`),
+		count: operator<number, unknown>(() => sql`0`),
+	} as const;
 	return {
-		column: {
-			// Placeholder operators - actual implementation in query builder
-			some: () => sql`TRUE`,
-			none: () => sql`TRUE`,
-			every: () => sql`TRUE`,
-			count: () => sql`0`,
-		},
-		jsonb: {
-			some: () => sql`TRUE`,
-			none: () => sql`TRUE`,
-			every: () => sql`TRUE`,
-			count: () => sql`0`,
-		},
+		column: toManyOps,
+		jsonb: toManyOps,
 	};
 }
 
@@ -182,12 +144,10 @@ function getToManyUploadOperators(): ContextualOperators {
  * });
  * ```
  */
-export const uploadField = defineField<
-	"upload",
-	UploadFieldConfig,
-	string | string[]
->("upload", {
-	toColumn(name, config) {
+export const uploadField = defineField<UploadFieldConfig, string | string[]>()({
+	type: "upload" as const,
+	_value: undefined as unknown as string | string[],
+	toColumn(name: string, config: UploadFieldConfig) {
 		if (config.through) {
 			return null as any;
 		}
@@ -212,7 +172,7 @@ export const uploadField = defineField<
 		return column;
 	},
 
-	toZodSchema(config) {
+	toZodSchema(config: UploadFieldConfig) {
 		if (config.through) {
 			const schema = z.array(z.string().uuid());
 
@@ -232,13 +192,13 @@ export const uploadField = defineField<
 		return schema;
 	},
 
-	getOperators(config) {
+	getOperators<TApp>(config: UploadFieldConfig) {
 		return config.through
 			? getToManyUploadOperators()
 			: getSingleUploadOperators();
 	},
 
-	getMetadata(config): RelationFieldMetadata {
+	getMetadata(config: UploadFieldConfig): RelationFieldMetadata {
 		return {
 			type: "relation",
 			label: config.label,
@@ -258,4 +218,3 @@ export const uploadField = defineField<
 });
 
 // Register in default registry
-getDefaultRegistry().register("upload", uploadField);

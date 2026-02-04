@@ -6,10 +6,12 @@
  */
 
 import { Envelope, MapPin, Phone } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
-import { cn } from "../../../lib/utils";
-import { builder } from "../builder";
+import type {
+	BlockDefinition,
+	BlockRendererProps,
+} from "@questpie/admin/client";
 import { client } from "../../../lib/cms-client";
+import { cn } from "../../../lib/utils";
 
 type ContactInfoValues = {
 	title?: string;
@@ -32,7 +34,12 @@ function ContactInfoRenderer({
 	data,
 }: BlockRendererProps<ContactInfoValues>) {
 	const contactData = (data as ContactInfoPrefetchedData) || {};
-	const fullAddress = [contactData?.address, contactData?.city, contactData?.zipCode, contactData?.country]
+	const fullAddress = [
+		contactData?.address,
+		contactData?.city,
+		contactData?.zipCode,
+		contactData?.country,
+	]
 		.filter(Boolean)
 		.join(", ");
 
@@ -126,27 +133,10 @@ function ContactInfoRenderer({
 	);
 }
 
-export const contactInfoBlock = builder
-	.block("contact-info")
-	.label({ en: "Contact Info", sk: "Kontaktné údaje" })
-	.description({
-		en: "Contact information with map",
-		sk: "Kontaktné informácie s mapou",
-	})
-	.icon("AddressBook")
-	.category("content")
-	.fields(({ r }) => ({
-		title: r.text({
-			label: { en: "Title (optional)", sk: "Nadpis (voliteľný)" },
-			localized: true,
-			defaultValue: { en: "Get in Touch", sk: "Kontaktujte nás" },
-		}),
-		showMap: r.checkbox({
-			label: { en: "Show Map", sk: "Zobraziť mapu" },
-			defaultValue: true,
-		}),
-	}))
-	.prefetch(async () => {
+export const contactInfoBlock = {
+	name: "contact-info",
+	renderer: ContactInfoRenderer,
+	prefetch: async () => {
 		const settings = await client.globals.siteSettings.get();
 		return {
 			shopName: settings?.shopName,
@@ -158,6 +148,5 @@ export const contactInfoBlock = builder
 			country: settings?.country,
 			mapEmbedUrl: settings?.mapEmbedUrl,
 		};
-	})
-	.renderer(ContactInfoRenderer)
-	.build();
+	},
+} satisfies BlockDefinition;

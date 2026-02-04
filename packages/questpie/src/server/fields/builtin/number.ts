@@ -11,8 +11,6 @@ import {
 	gt,
 	gte,
 	inArray,
-	isNotNull,
-	isNull,
 	lt,
 	lte,
 	ne,
@@ -29,12 +27,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	FieldMetadataBase,
-} from "../types.js";
+import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
+import { operator } from "../types.js";
 
 // ============================================================================
 // Number Field Meta (augmentable by admin)
@@ -55,7 +49,10 @@ import type {
  * }
  * ```
  */
-export interface NumberFieldMeta {}
+export interface NumberFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // Number Field Configuration
@@ -151,62 +148,70 @@ export interface NumberFieldConfig extends BaseFieldConfig {
  * Get operators for number field.
  * Supports both column and JSONB path access.
  */
-function getNumberOperators(): ContextualOperators {
+function getNumberOperators() {
 	return {
 		column: {
-			eq: (col, value) => eq(col, value as number),
-			ne: (col, value) => ne(col, value as number),
-			gt: (col, value) => gt(col, value as number),
-			gte: (col, value) => gte(col, value as number),
-			lt: (col, value) => lt(col, value as number),
-			lte: (col, value) => lte(col, value as number),
-			between: (col, value) => {
-				const [min, max] = value as [number, number];
-				return between(col, min, max);
-			},
-			in: (col, values) => inArray(col, values as number[]),
-			notIn: (col, values) => notInArray(col, values as number[]),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			eq: operator<number, unknown>((col, value) => eq(col, value)),
+			ne: operator<number, unknown>((col, value) => ne(col, value)),
+			gt: operator<number, unknown>((col, value) => gt(col, value)),
+			gte: operator<number, unknown>((col, value) => gte(col, value)),
+			lt: operator<number, unknown>((col, value) => lt(col, value)),
+			lte: operator<number, unknown>((col, value) => lte(col, value)),
+			between: operator<[number, number], unknown>((col, value) =>
+				between(col, value[0], value[1]),
+			),
+			in: operator<number[], unknown>((col, values) => inArray(col, values)),
+			notIn: operator<number[], unknown>((col, values) =>
+				notInArray(col, values),
+			),
+			isNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+			),
+			isNotNull: operator<boolean, unknown>((col, value) =>
+				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+			),
 		},
 		jsonb: {
-			eq: (col, value, ctx) => {
+			eq: operator<number, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::numeric = ${value}`;
-			},
-			ne: (col, value, ctx) => {
+			}),
+			ne: operator<number, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::numeric != ${value}`;
-			},
-			gt: (col, value, ctx) => {
+			}),
+			gt: operator<number, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::numeric > ${value}`;
-			},
-			gte: (col, value, ctx) => {
+			}),
+			gte: operator<number, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::numeric >= ${value}`;
-			},
-			lt: (col, value, ctx) => {
+			}),
+			lt: operator<number, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::numeric < ${value}`;
-			},
-			lte: (col, value, ctx) => {
+			}),
+			lte: operator<number, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`(${col}#>>'{${sql.raw(path)}}')::numeric <= ${value}`;
-			},
-			between: (col, value, ctx) => {
-				const [min, max] = value as [number, number];
+			}),
+			between: operator<[number, number], unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::numeric BETWEEN ${min} AND ${max}`;
-			},
-			isNull: (col, _value, ctx) => {
+				return sql`(${col}#>>'{${sql.raw(path)}}')::numeric BETWEEN ${value[0]} AND ${value[1]}`;
+			}),
+			isNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+			}),
+			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+				return value
+					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+			}),
 		},
 	};
 }
@@ -227,140 +232,134 @@ function getNumberOperators(): ContextualOperators {
  * const rating = numberField({ min: 1, max: 5, step: 0.5 });
  * ```
  */
-export const numberField = defineField<"number", NumberFieldConfig, number>(
-	"number",
-	{
-		toColumn(_name, config) {
-			const { mode = "integer", precision = 10, scale = 2 } = config;
+export const numberField = defineField<NumberFieldConfig, number>()({
+	type: "number" as const,
+	_value: undefined as unknown as number,
+	toColumn(_name: string, config: NumberFieldConfig) {
+		const { mode = "integer", precision = 10, scale = 2 } = config;
 
-			// Don't specify column name - Drizzle uses the key name
-			let column: any;
+		// Don't specify column name - Drizzle uses the key name
+		let column: any;
 
-			switch (mode) {
-				case "smallint":
-					column = smallint();
-					break;
-				case "bigint":
-					column = bigint({ mode: "number" });
-					break;
-				case "real":
-					column = real();
-					break;
-				case "double":
-					column = doublePrecision();
-					break;
-				case "decimal":
-					column = numeric({ precision, scale });
-					break;
-				case "integer":
-				default:
-					column = integer();
-					break;
-			}
+		switch (mode) {
+			case "smallint":
+				column = smallint();
+				break;
+			case "bigint":
+				column = bigint({ mode: "number" });
+				break;
+			case "real":
+				column = real();
+				break;
+			case "double":
+				column = doublePrecision();
+				break;
+			case "decimal":
+				column = numeric({ precision, scale });
+				break;
+			case "integer":
+			default:
+				column = integer();
+				break;
+		}
 
-			// Apply constraints
-			if (config.required && config.nullable !== true) {
-				column = column.notNull();
-			}
-			if (config.default !== undefined) {
-				const defaultValue =
-					typeof config.default === "function"
-						? config.default()
-						: config.default;
-				column = column.default(defaultValue as number);
-			}
-			// NOTE: unique constraint removed from field level
-			// Use .indexes() on collection builder instead
+		// Apply constraints
+		if (config.required && config.nullable !== true) {
+			column = column.notNull();
+		}
+		if (config.default !== undefined) {
+			const defaultValue =
+				typeof config.default === "function"
+					? config.default()
+					: config.default;
+			column = column.default(defaultValue as number);
+		}
+		// NOTE: unique constraint removed from field level
+		// Use .indexes() on collection builder instead
 
-			return column;
-		},
-
-		toZodSchema(config) {
-			let schema = z.number();
-
-			// Range constraints
-			if (config.min !== undefined) {
-				schema = schema.min(config.min);
-			}
-			if (config.max !== undefined) {
-				schema = schema.max(config.max);
-			}
-
-			// Sign constraints
-			if (config.positive) {
-				schema = schema.positive();
-			}
-			if (config.negative) {
-				schema = schema.negative();
-			}
-			if (config.nonNegative) {
-				schema = schema.nonnegative();
-			}
-			if (config.nonPositive) {
-				schema = schema.nonpositive();
-			}
-
-			// Type constraints
-			if (
-				config.int ||
-				config.mode === "integer" ||
-				config.mode === "smallint"
-			) {
-				schema = schema.int();
-			}
-			if (config.finite ?? config.mode === "decimal") {
-				schema = schema.finite();
-			}
-			if (config.safe) {
-				schema = schema.safe();
-			}
-
-			// Step validation
-			if (config.step !== undefined) {
-				const step = config.step;
-				schema = schema.refine(
-					(val) => {
-						// Check if value is a multiple of step (with floating point tolerance)
-						const remainder = Math.abs(val % step);
-						const tolerance = 1e-10;
-						return (
-							remainder < tolerance || Math.abs(remainder - step) < tolerance
-						);
-					},
-					{ message: `Value must be a multiple of ${step}` },
-				);
-			}
-
-			// Nullability
-			if (!config.required && config.nullable !== false) {
-				return schema.nullish();
-			}
-
-			return schema;
-		},
-
-		getOperators() {
-			return getNumberOperators();
-		},
-
-		getMetadata(config): FieldMetadataBase {
-			return {
-				type: "number",
-				label: config.label,
-				description: config.description,
-				required: config.required ?? false,
-				localized: config.localized ?? false,
-				readOnly: config.input === false,
-				writeOnly: config.output === false,
-				validation: {
-					min: config.min,
-					max: config.max,
-				},
-				meta: config.meta,
-			};
-		},
+		return column;
 	},
-);
+
+	toZodSchema(config: NumberFieldConfig) {
+		let schema = z.number();
+
+		// Range constraints
+		if (config.min !== undefined) {
+			schema = schema.min(config.min);
+		}
+		if (config.max !== undefined) {
+			schema = schema.max(config.max);
+		}
+
+		// Sign constraints
+		if (config.positive) {
+			schema = schema.positive();
+		}
+		if (config.negative) {
+			schema = schema.negative();
+		}
+		if (config.nonNegative) {
+			schema = schema.nonnegative();
+		}
+		if (config.nonPositive) {
+			schema = schema.nonpositive();
+		}
+
+		// Type constraints
+		if (config.int || config.mode === "integer" || config.mode === "smallint") {
+			schema = schema.int();
+		}
+		if (config.finite ?? config.mode === "decimal") {
+			schema = schema.finite();
+		}
+		if (config.safe) {
+			schema = schema.safe();
+		}
+
+		// Step validation
+		if (config.step !== undefined) {
+			const step = config.step;
+			schema = schema.refine(
+				(val) => {
+					// Check if value is a multiple of step (with floating point tolerance)
+					const remainder = Math.abs(val % step);
+					const tolerance = 1e-10;
+					return (
+						remainder < tolerance || Math.abs(remainder - step) < tolerance
+					);
+				},
+				{ message: `Value must be a multiple of ${step}` },
+			);
+		}
+
+		// Nullability
+		if (!config.required && config.nullable !== false) {
+			return schema.nullish();
+		}
+
+		return schema;
+	},
+
+	getOperators<TApp>(config: NumberFieldConfig) {
+		return getNumberOperators();
+	},
+
+	getMetadata(config: NumberFieldConfig): FieldMetadataBase {
+		return {
+			type: "number",
+			label: config.label,
+			description: config.description,
+			required: config.required ?? false,
+			localized: config.localized ?? false,
+			readOnly: config.input === false,
+			writeOnly: config.output === false,
+			validation: {
+				min: config.min,
+				max: config.max,
+			},
+			meta: config.meta,
+		};
+	},
+});
 
 // Register in default registry
-getDefaultRegistry().register("number", numberField);

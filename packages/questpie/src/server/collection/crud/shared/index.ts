@@ -20,10 +20,16 @@ export {
 	extractFieldNamesByLocation,
 	extractLocalizedFieldNames,
 	extractMainFieldNames,
+	extractNestedLocalizationSchema,
+	extractNestedLocalizationSchemas,
 	extractVirtualFieldNames,
 	hasLocalizedFields,
+	hasNestedLocalizedFields,
 	hasVirtualFields,
 	mergeFieldsByLocation,
+	type NestedArraySchema,
+	type NestedLocalizationSchema,
+	type NestedObjectSchema,
 	splitFieldsByLocation,
 } from "./field-extraction.js";
 export { resolveFieldKey } from "./field-resolver.js";
@@ -46,6 +52,7 @@ export {
 	LOCALIZED_COLUMN,
 	mergeNestedLocalizedFromColumn,
 	splitLocalizedFields,
+	splitLocalizedFieldsWithSchema,
 } from "./localization.js";
 
 // Nested i18n merge utilities (for JSONB fields with $i18n markers)
@@ -67,6 +74,8 @@ export {
 	autoSplitNestedI18n,
 	isI18nValueWrapper,
 	type SplitResult,
+	splitByNestedSchema,
+	splitFieldsByNestedSchemas,
 } from "./nested-i18n-split.js";
 
 // Path utilities for nested object manipulation

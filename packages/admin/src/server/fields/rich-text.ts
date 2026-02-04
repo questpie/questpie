@@ -281,96 +281,97 @@ const DEFAULT_HEADING_LEVELS: (1 | 2 | 3 | 4 | 5 | 6)[] = [1, 2, 3];
  * });
  * ```
  */
-export const richTextField = defineField<
-	"richText",
-	RichTextFieldConfig,
-	TipTapDocument
->("richText", {
-	toColumn(_name, config) {
-		// Rich text is always stored as JSONB
-		let column: any = jsonb();
+export const richTextField = defineField<RichTextFieldConfig, TipTapDocument>()(
+	{
+		type: "richText" as const,
+		_value: undefined as unknown as TipTapDocument,
 
-		// Apply constraints
-		if (config.required && config.nullable !== true) {
-			column = column.notNull();
-		}
-		if (config.default !== undefined) {
-			const defaultValue =
-				typeof config.default === "function"
-					? config.default()
-					: config.default;
-			column = column.default(defaultValue);
-		}
+		toColumn(_name: string, config: RichTextFieldConfig) {
+			// Rich text is always stored as JSONB
+			let column: any = jsonb();
 
-		return column;
-	},
+			// Apply constraints
+			if (config.required && config.nullable !== true) {
+				column = column.notNull();
+			}
+			if (config.default !== undefined) {
+				const defaultValue =
+					typeof config.default === "function"
+						? config.default()
+						: config.default;
+				column = column.default(defaultValue);
+			}
 
-	toZodSchema(config) {
-		// TipTap document structure validation
-		// We use a loose schema that validates the basic structure
-		// but allows any valid TipTap content
-		const nodeSchema: z.ZodType<TipTapNode> = z.lazy(() =>
-			z.object({
-				type: z.string(),
-				attrs: z.record(z.string(), z.unknown()).optional(),
+			return column;
+		},
+
+		toZodSchema(config: RichTextFieldConfig) {
+			// TipTap document structure validation
+			// We use a loose schema that validates the basic structure
+			// but allows any valid TipTap content
+			const nodeSchema: z.ZodType<TipTapNode> = z.lazy(() =>
+				z.object({
+					type: z.string(),
+					attrs: z.record(z.string(), z.unknown()).optional(),
+					content: z.array(nodeSchema).optional(),
+					marks: z
+						.array(
+							z.object({
+								type: z.string(),
+								attrs: z.record(z.string(), z.unknown()).optional(),
+							}),
+						)
+						.optional(),
+					text: z.string().optional(),
+				}),
+			);
+
+			const docSchema = z.object({
+				type: z.literal("doc"),
 				content: z.array(nodeSchema).optional(),
-				marks: z
-					.array(
-						z.object({
-							type: z.string(),
-							attrs: z.record(z.string(), z.unknown()).optional(),
-						}),
-					)
-					.optional(),
-				text: z.string().optional(),
-			}),
-		);
+			});
 
-		const docSchema = z.object({
-			type: z.literal("doc"),
-			content: z.array(nodeSchema).optional(),
-		});
+			// Nullability
+			if (!config.required && config.nullable !== false) {
+				return docSchema.nullish() as any;
+			}
 
-		// Nullability
-		if (!config.required && config.nullable !== false) {
-			return docSchema.nullish() as any;
-		}
+			return docSchema as any;
+		},
 
-		return docSchema as any;
+		getOperators<TApp>() {
+			return getRichTextOperators();
+		},
+
+		getMetadata(config: RichTextFieldConfig): FieldMetadataBase & {
+			outputFormat: RichTextOutputFormat;
+			maxCharacters?: number;
+			minCharacters?: number;
+			features: RichTextFeature[];
+			headingLevels: (1 | 2 | 3 | 4 | 5 | 6)[];
+			placeholder?: string;
+			allowImages?: boolean;
+			imageCollection?: string;
+		} {
+			return {
+				type: "richText",
+				label: config.label,
+				description: config.description,
+				required: config.required ?? false,
+				localized: config.localized ?? false,
+				readOnly: config.input === false,
+				writeOnly: config.output === false,
+				meta: config.meta,
+				// Rich text specific
+				outputFormat: config.outputFormat ?? "json",
+				maxCharacters: config.maxCharacters,
+				minCharacters: config.minCharacters,
+				features: config.features ?? DEFAULT_FEATURES,
+				headingLevels: config.headingLevels ?? DEFAULT_HEADING_LEVELS,
+				placeholder: config.placeholder,
+				allowImages: config.allowImages,
+				imageCollection: config.imageCollection,
+			};
+		},
 	},
-
-	getOperators() {
-		return getRichTextOperators();
-	},
-
-	getMetadata(config): FieldMetadataBase & {
-		outputFormat: RichTextOutputFormat;
-		maxCharacters?: number;
-		minCharacters?: number;
-		features: RichTextFeature[];
-		headingLevels: (1 | 2 | 3 | 4 | 5 | 6)[];
-		placeholder?: string;
-		allowImages?: boolean;
-		imageCollection?: string;
-	} {
-		return {
-			type: "richText",
-			label: config.label,
-			description: config.description,
-			required: config.required ?? false,
-			localized: config.localized ?? false,
-			readOnly: config.input === false,
-			writeOnly: config.output === false,
-			meta: config.meta,
-			// Rich text specific
-			outputFormat: config.outputFormat ?? "json",
-			maxCharacters: config.maxCharacters,
-			minCharacters: config.minCharacters,
-			features: config.features ?? DEFAULT_FEATURES,
-			headingLevels: config.headingLevels ?? DEFAULT_HEADING_LEVELS,
-			placeholder: config.placeholder,
-			allowImages: config.allowImages,
-			imageCollection: config.imageCollection,
-		};
-	},
-});
+);

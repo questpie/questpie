@@ -1,45 +1,31 @@
-import { boolean, jsonb, text, varchar } from "drizzle-orm/pg-core";
-import { q } from "questpie";
+import { uniqueIndex } from "drizzle-orm/pg-core";
+import { qb } from "@/questpie/server/builder";
 
 /**
  * Pages Collection
  *
  * Demonstrates the Block System from Feature Pack V2.
- * Content is stored as JSONB with $i18n markers for localized block fields.
- *
- * The `content` field stores:
- * - _tree: Block hierarchy (id, type, children)
- * - _values: Block field values indexed by block ID
+ * Content is stored as JSONB with localized block content.
  */
-export const pages = q
+export const pages = qb
 	.collection("pages")
-	.fields({
+	.fields((f) => ({
 		// Basic page info (localized)
-		title: varchar("title", { length: 255 }).notNull(),
-		slug: varchar("slug", { length: 255 }).notNull().unique(),
-		description: text("description"),
+		title: f.text({ required: true, maxLength: 255, localized: true }),
+		slug: f.text({ required: true, maxLength: 255 }),
+		description: f.textarea({ localized: true }),
 
-		// Block content - stored as JSONB with $i18n markers
-		// Structure: { _tree: BlockNode[], _values: Record<string, Record<string, unknown>> }
-		content: jsonb("content").$type<{
-			_tree: Array<{ id: string; type: string; children: unknown[] }>;
-			_values: Record<string, Record<string, unknown>>;
-		}>(),
+		// Block content - stored as JSONB with localized values
+		content: f.blocks({ localized: true }),
 
 		// SEO fields
-		metaTitle: varchar("meta_title", { length: 255 }),
-		metaDescription: text("meta_description"),
+		metaTitle: f.text({ maxLength: 255, localized: true }),
+		metaDescription: f.textarea({ localized: true }),
 
 		// Publishing
-		isPublished: boolean("is_published").default(false).notNull(),
-	})
-	// Localize title, description, and nested content
-	// content uses :nested suffix for $i18n markers in block values
-	.localized([
-		"title",
-		"description",
-		"content:nested",
-		"metaTitle",
-		"metaDescription",
+		isPublished: f.boolean({ default: false, required: true }),
+	}))
+	.indexes(({ table }) => [
+		uniqueIndex("pages_slug_unique").on(table.slug as any),
 	])
 	.title(({ f }) => f.title);

@@ -11,8 +11,9 @@
  */
 
 import type { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
-import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
+import { questpie } from "#questpie/server/config/builder.js";
+import { builtinFields } from "#questpie/server/fields/builtin/defaults.js";
 import type {
 	Equal,
 	Expect,
@@ -24,10 +25,12 @@ import type {
 } from "./type-test-utils.js";
 
 // ============================================================================
-// Test fixtures
+// Test fixtures — use q.collection() for proper field type inference
 // ============================================================================
 
-const postsCollection = collection("posts").fields((f) => ({
+const q = questpie({ name: "test" }).fields(builtinFields);
+
+const postsCollection = q.collection("posts").fields((f) => ({
 	title: f.text({ required: true, maxLength: 255 }),
 	content: f.textarea(),
 	views: f.number({ default: 0 }),
@@ -90,14 +93,16 @@ type _updateViewsOptional = Expect<Extends<"views", UpdateOptional>>;
 // .options() - conditional fields
 // ============================================================================
 
-const withSoftDelete = collection("posts")
+const withSoftDelete = q
+	.collection("posts")
 	.fields((f) => ({ title: f.textarea() }))
 	.options({ softDelete: true });
 
 type SoftDeleteSelect = typeof withSoftDelete.$infer.select;
 type _hasDeletedAt = Expect<Equal<HasKey<SoftDeleteSelect, "deletedAt">, true>>;
 
-const withoutTimestamps = collection("posts")
+const withoutTimestamps = q
+	.collection("posts")
 	.fields((f) => ({ title: f.textarea() }))
 	.options({ timestamps: false });
 
@@ -110,7 +115,7 @@ type _noCreatedAt = Expect<
 // f.relation() - relation config inference
 // ============================================================================
 
-const withRelations = collection("posts").fields((f) => ({
+const withRelations = q.collection("posts").fields((f) => ({
 	title: f.textarea(),
 	author: f.relation({
 		to: "users",
@@ -139,7 +144,8 @@ type _authorIsRelationConfig = Expect<
 // .title() - literal type inference
 // ============================================================================
 
-const withTitle = collection("posts")
+const withTitle = q
+	.collection("posts")
 	.fields((f) => ({ name: f.textarea(), slug: f.textarea() }))
 	.title(({ f }) => f.name);
 
@@ -154,7 +160,8 @@ type _titleIsLiteral = Expect<IsLiteral<TitleField>>;
 // .upload() - upload fields
 // ============================================================================
 
-const withUpload = collection("media")
+const withUpload = q
+	.collection("media")
 	.fields((f) => ({ alt: f.textarea() }))
 	.upload({ visibility: "public" });
 
@@ -169,7 +176,8 @@ type _hasSize = Expect<Equal<HasKey<UploadSelect, "size">, true>>;
 // .$outputType() - output extension
 // ============================================================================
 
-const withOutput = collection("assets")
+const withOutput = q
+	.collection("assets")
 	.fields((f) => ({ key: f.text({ required: true }) }))
 	.$outputType<{ url: string; thumbnailUrl?: string }>();
 
@@ -184,9 +192,9 @@ type _outputSelectExists = Expect<
 // .merge() - type combination
 // ============================================================================
 
-const base = collection("posts").fields((f) => ({ title: f.textarea() }));
+const base = q.collection("posts").fields((f) => ({ title: f.textarea() }));
 const extended = base.merge(
-	collection("posts").fields((f) => ({
+	q.collection("posts").fields((f) => ({
 		featured: f.boolean(),
 	})),
 );
@@ -212,7 +220,8 @@ type _inferHasUpdate = Expect<Equal<HasKey<Infer, "update">, true>>;
 // Complex chain
 // ============================================================================
 
-const fullCollection = collection("articles")
+const fullCollection = q
+	.collection("articles")
 	.fields((f) => ({
 		title: f.text({ required: true, maxLength: 255 }),
 		content: f.textarea(),

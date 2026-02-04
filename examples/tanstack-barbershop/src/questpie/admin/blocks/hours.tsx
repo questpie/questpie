@@ -5,10 +5,12 @@
  * Design: Simple, scannable layout with day/hours pairs.
  */
 
-import type { BlockRendererProps } from "@questpie/admin/client";
-import { cn } from "../../../lib/utils";
-import { builder } from "../builder";
+import type {
+	BlockDefinition,
+	BlockRendererProps,
+} from "@questpie/admin/client";
 import { client } from "../../../lib/cms-client";
+import { cn } from "../../../lib/utils";
 
 type HoursValues = {
 	title?: string;
@@ -27,10 +29,7 @@ type HoursPrefetchedData = {
 	};
 };
 
-function HoursRenderer({
-	values,
-	data,
-}: BlockRendererProps<HoursValues>) {
+function HoursRenderer({ values, data }: BlockRendererProps<HoursValues>) {
 	const hoursData = (data as HoursPrefetchedData) || {};
 	const businessHours = hoursData?.businessHours;
 
@@ -70,7 +69,9 @@ function HoursRenderer({
 									<dd
 										className={cn(
 											"text-sm",
-											isOpen ? "text-muted-foreground" : "text-muted-foreground/60",
+											isOpen
+												? "text-muted-foreground"
+												: "text-muted-foreground/60",
 										)}
 									>
 										{isOpen && hours
@@ -87,31 +88,13 @@ function HoursRenderer({
 	);
 }
 
-export const hoursBlock = builder
-	.block("hours")
-	.label({ en: "Business Hours", sk: "Otváracie hodiny" })
-	.description({
-		en: "Display shop opening hours",
-		sk: "Zobrazí otváracie hodiny",
-	})
-	.icon("Clock")
-	.category("content")
-	.fields(({ r }) => ({
-		title: r.text({
-			label: { en: "Title", sk: "Nadpis" },
-			localized: true,
-			defaultValue: { en: "Opening Hours", sk: "Otváracie hodiny" },
-		}),
-		showClosed: r.checkbox({
-			label: { en: "Show Closed Days", sk: "Zobraziť zatvorené dni" },
-			defaultValue: true,
-		}),
-	}))
-	.prefetch(async () => {
+export const hoursBlock = {
+	name: "hours",
+	renderer: HoursRenderer,
+	prefetch: async () => {
 		const settings = await client.globals.siteSettings.get();
 		return {
 			businessHours: settings?.businessHours,
 		};
-	})
-	.renderer(HoursRenderer)
-	.build();
+	},
+} satisfies BlockDefinition;

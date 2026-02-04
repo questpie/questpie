@@ -6,10 +6,12 @@
  */
 
 import { ArrowRight, Clock } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type {
+	BlockDefinition,
+	BlockRendererProps,
+} from "@questpie/admin/client";
 import { client } from "../../../lib/cms-client";
 import { cn } from "../../../lib/utils";
-import { builder } from "../builder";
 
 type Service = {
 	id: string;
@@ -135,54 +137,16 @@ function ServicesRenderer({
 	);
 }
 
-export const servicesBlock = builder
-	.block("services")
-	.label({ en: "Services", sk: "Služby" })
-	.description({
-		en: "Display services with prices",
-		sk: "Zobrazenie služieb s cenami",
-	})
-	.icon("Scissors")
-	.category("sections")
-	.fields(({ r }) => ({
-		title: r.text({
-			label: { en: "Title", sk: "Titulok" },
-			localized: true,
-		}),
-		subtitle: r.textarea({
-			label: { en: "Subtitle", sk: "Podtitulok" },
-			localized: true,
-		}),
-		showPrices: r.switch({
-			label: { en: "Show Prices", sk: "Zobraziť ceny" },
-			defaultValue: true,
-		}),
-		showDuration: r.switch({
-			label: { en: "Show Duration", sk: "Zobraziť trvanie" },
-			defaultValue: true,
-		}),
-		columns: r.select({
-			label: { en: "Columns", sk: "Stĺpce" },
-			options: [
-				{ value: "2", label: "2" },
-				{ value: "3", label: "3" },
-				{ value: "4", label: "4" },
-			],
-			defaultValue: "3",
-		}),
-		limit: r.number({
-			label: { en: "Max Services", sk: "Max služieb" },
-			defaultValue: 6,
-			min: 1,
-			max: 20,
-		}),
-	}))
-	.prefetch(async ({ values, locale }) => {
+export const servicesBlock = {
+	name: "services",
+	renderer: ServicesRenderer,
+	prefetch: async ({ values, locale }) => {
+		const v = values as ServicesValues;
 		const result = await client.collections.services.find({
 			locale,
 			with: { image: true },
 		});
-		const limit = (values.limit as number) || 6;
+		const limit = v.limit || 6;
 		const services = result.docs
 			.filter((service) => service.isActive)
 			.slice(0, limit)
@@ -191,6 +155,5 @@ export const servicesBlock = builder
 				imageUrl: (service.image as any)?.url || null,
 			}));
 		return { services };
-	})
-	.renderer(ServicesRenderer)
-	.build();
+	},
+} satisfies BlockDefinition;

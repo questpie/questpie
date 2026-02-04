@@ -5,26 +5,16 @@
  * Supports allowed protocols and host-based operators.
  */
 
-import {
-	eq,
-	ilike,
-	inArray,
-	isNotNull,
-	isNull,
-	like,
-	ne,
-	notInArray,
-	sql,
-} from "drizzle-orm";
+import { ilike, like, sql } from "drizzle-orm";
 import { text, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import {
+	stringColumnOperators,
+	stringJsonbOperators,
+} from "../common-operators.js";
 import { defineField } from "../define-field.js";
-import { getDefaultRegistry } from "../registry.js";
-import type {
-	BaseFieldConfig,
-	ContextualOperators,
-	FieldMetadataBase,
-} from "../types.js";
+import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
+import { operator } from "../types.js";
 
 // ============================================================================
 // URL Field Meta (augmentable by admin)
@@ -33,7 +23,10 @@ import type {
 /**
  * URL field metadata - augmentable by external packages.
  */
-export interface UrlFieldMeta {}
+export interface UrlFieldMeta {
+	/** Phantom property to prevent interface collapse - enables module augmentation */
+	_?: never;
+}
 
 // ============================================================================
 // URL Field Configuration
@@ -85,73 +78,36 @@ export interface UrlFieldConfig extends BaseFieldConfig {
  * Get operators for URL field.
  * Includes URL-specific operators like host matching.
  */
-function getUrlOperators(): ContextualOperators {
+function getUrlOperators() {
 	return {
 		column: {
-			eq: (col, value) => eq(col, value as string),
-			ne: (col, value) => ne(col, value as string),
-			like: (col, value) => like(col, value as string),
-			ilike: (col, value) => ilike(col, value as string),
-			startsWith: (col, value) => like(col, `${value}%`),
-			contains: (col, value) => ilike(col, `%${value}%`),
-			in: (col, values) => inArray(col, values as string[]),
-			notIn: (col, values) => notInArray(col, values as string[]),
+			...stringColumnOperators,
 			// URL-specific operators
-			host: (col, value) => ilike(col, `%://${value}%`),
-			hostIn: (col, values) => {
-				const hosts = values as string[];
-				if (hosts.length === 0) return sql`FALSE`;
-				if (hosts.length === 1) return ilike(col, `%://${hosts[0]}%`);
+			host: operator<string, unknown>((col, value) =>
+				ilike(col, `%://${value}%`),
+			),
+			hostIn: operator<string[], unknown>((col, values) => {
+				if (values.length === 0) return sql`FALSE`;
+				if (values.length === 1) return ilike(col, `%://${values[0]}%`);
 				return sql`(${sql.join(
-					hosts.map((h) => ilike(col, `%://${h}%`)),
+					values.map((h) => ilike(col, `%://${h}%`)),
 					sql` OR `,
 				)})`;
-			},
-			protocol: (col, value) => like(col, `${value}://%`),
-			isNull: (col) => isNull(col),
-			isNotNull: (col) => isNotNull(col),
+			}),
+			protocol: operator<string, unknown>((col, value) =>
+				like(col, `${value}://%`),
+			),
 		},
 		jsonb: {
-			eq: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' = ${value}`;
-			},
-			ne: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' != ${value}`;
-			},
-			like: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' LIKE ${value}`;
-			},
-			ilike: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${value}`;
-			},
-			startsWith: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' LIKE ${value + "%"}`;
-			},
-			contains: (col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%" + value + "%"}`;
-			},
-			host: (col, value, ctx) => {
+			...stringJsonbOperators,
+			host: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%://" + value + "%"}`;
-			},
-			protocol: (col, value, ctx) => {
+			}),
+			protocol: operator<string, unknown>((col, value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
 				return sql`${col}#>>'{${sql.raw(path)}}' LIKE ${value + "://%"}`;
-			},
-			isNull: (col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			},
-			isNotNull: (col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			},
+			}),
 		},
 	};
 }
@@ -171,8 +127,11 @@ function getUrlOperators(): ContextualOperators {
  * const internalLink = urlField({ allowedHosts: ["example.com", "app.example.com"] });
  * ```
  */
-export const urlField = defineField<"url", UrlFieldConfig, string>("url", {
-	toColumn(_name, config) {
+export const urlField = defineField<UrlFieldConfig, string>()({
+	type: "url" as const,
+	_value: undefined as unknown as string,
+
+	toColumn(_name: string, config: UrlFieldConfig) {
 		const { maxLength = 2048, textMode = false } = config;
 
 		// Don't specify column name - Drizzle uses the key name
@@ -195,7 +154,7 @@ export const urlField = defineField<"url", UrlFieldConfig, string>("url", {
 		return column;
 	},
 
-	toZodSchema(config) {
+	toZodSchema(config: UrlFieldConfig) {
 		const { protocols = ["http", "https"], maxLength = 2048 } = config;
 
 		let schema = z.string().url();
@@ -254,11 +213,11 @@ export const urlField = defineField<"url", UrlFieldConfig, string>("url", {
 		return schema;
 	},
 
-	getOperators() {
+	getOperators<TApp>(config: UrlFieldConfig) {
 		return getUrlOperators();
 	},
 
-	getMetadata(config): FieldMetadataBase {
+	getMetadata(config: UrlFieldConfig): FieldMetadataBase {
 		return {
 			type: "url",
 			label: config.label,
@@ -276,4 +235,3 @@ export const urlField = defineField<"url", UrlFieldConfig, string>("url", {
 });
 
 // Register in default registry
-getDefaultRegistry().register("url", urlField);

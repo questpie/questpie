@@ -94,8 +94,10 @@ export interface FieldState<
 	value: TValue;
 	input: TValue | null | undefined;
 	output: TValue;
+	select: TValue;
 	column: TColumn;
 	location: FieldLocation;
+	operators: ContextualOperators<any, any>;
 }
 
 // ============================================================================
@@ -384,6 +386,7 @@ export class FieldBuilder<
 				value: TValue;
 				input: TValue | null | undefined;
 				output: TValue;
+				select: TValue;
 				column: TColumn;
 				location: FieldLocation;
 			},
@@ -447,8 +450,10 @@ export function createFieldBuilderForType<
 		value: undefined as TValue,
 		input: undefined as TValue | null | undefined,
 		output: undefined as TValue,
+		select: undefined as TValue,
 		column: undefined as unknown as TColumn,
 		location: "main",
+		operators: implementation.getOperators(baseConfig),
 	};
 
 	return new FieldBuilder(initialState, implementation);

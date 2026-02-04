@@ -36,7 +36,20 @@
  * ```
  */
 
+import type { BetterAuthOptions } from "better-auth";
+import type {
+	BuilderCollectionsMap,
+	BuilderEmailTemplatesMap,
+	BuilderFieldsMap,
+	BuilderFunctionsMap,
+	BuilderGlobalsMap,
+	BuilderJobsMap,
+	CollectionBuilderState,
+	GlobalBuilderState,
+	QuestpieBuilderState,
+} from "questpie";
 import type { I18nText } from "questpie/shared";
+import type { AnyBlockBuilder, AnyBlockDefinition } from "./block/index.js";
 
 // ============================================================================
 // Admin Configuration Types
@@ -976,6 +989,11 @@ export interface QuestpieBuilderAdminMethods {
 		components: TComponents,
 	): this;
 
+	/** Register block definitions */
+	blocks<TBlocks extends Record<string, AnyBlockBuilder>>(
+		blocks: TBlocks,
+	): this;
+
 	/**
 	 * Configure the admin dashboard.
 	 *
@@ -1124,3 +1142,52 @@ export type WithGlobalAdminMethods<
 	T,
 	TFields extends Record<string, any> = Record<string, any>,
 > = T & GlobalBuilderAdminMethods<TFields>;
+
+declare module "questpie" {
+	// Augment the QuestpieBuilder class with admin methods (dashboard, sidebar, blocks, etc.)
+	interface QuestpieBuilder extends QuestpieBuilderAdminMethods {}
+
+	// Augment the CollectionBuilder class directly with admin methods (.admin(), .list(), .form(), etc.)
+	// This works because questpie's exports resolve to source types (via "types" condition),
+	// where CollectionBuilder is a class declaration (supports interface merging).
+	interface CollectionBuilder<TState extends CollectionBuilderState>
+		extends CollectionBuilderAdminMethods<TState["fields"]> {}
+
+	interface GlobalBuilder<TState extends GlobalBuilderState>
+		extends GlobalBuilderAdminMethods<TState["fields"]> {}
+
+	interface QuestpieBuilderState<
+		TName extends string = string,
+		TCollections extends BuilderCollectionsMap = BuilderCollectionsMap,
+		TGlobals extends BuilderGlobalsMap = BuilderGlobalsMap,
+		TJobs extends BuilderJobsMap = BuilderJobsMap,
+		TEmailTemplates extends BuilderEmailTemplatesMap = BuilderEmailTemplatesMap,
+		TFunctions extends BuilderFunctionsMap = BuilderFunctionsMap,
+		TAuth extends BetterAuthOptions | Record<never, never> = Record<
+			never,
+			never
+		>,
+		TMessageKeys extends string = never,
+		TBuilderFields extends BuilderFieldsMap = BuilderFieldsMap,
+	> {
+		listViews?: Record<string, ListViewDefinition>;
+		editViews?: Record<string, EditViewDefinition>;
+		components?: Record<string, ComponentDefinition>;
+		blocks?: Record<string, AnyBlockDefinition>;
+		dashboard?: ServerDashboardConfig;
+		sidebar?: ServerSidebarConfig;
+	}
+
+	interface CollectionBuilderState {
+		admin?: AdminCollectionConfig;
+		adminList?: ListViewConfig;
+		adminForm?: FormViewConfig;
+		adminPreview?: PreviewConfig;
+		adminActions?: ServerActionsConfig;
+	}
+
+	interface GlobalBuilderState {
+		admin?: AdminGlobalConfig;
+		adminForm?: FormViewConfig;
+	}
+}

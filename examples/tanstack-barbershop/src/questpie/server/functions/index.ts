@@ -59,10 +59,7 @@ export const getRevenueStats = q.fn({
 				),
 			})
 			.from(appointmentsTable)
-			.innerJoin(
-				servicesTable,
-				eq(appointmentsTable.serviceId, servicesTable.id),
-			)
+			.innerJoin(servicesTable, eq(appointmentsTable.service, servicesTable.id))
 			.where(and(...conditions));
 
 		return {

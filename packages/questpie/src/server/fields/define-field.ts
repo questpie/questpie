@@ -1,11 +1,23 @@
 /**
  * Define Field Helper
  *
- * Helper function for creating type-safe field definitions.
- * This is the primary way to implement custom field types.
+ * Uses the curried "as const satisfies" pattern for type-safe field definitions.
+ * Each field is defined as a plain object with generic methods — the concrete
+ * return types (especially getOperators) are fully preserved by TypeScript.
  *
- * Uses TState pattern for complete type inference from config.
- * No chaining, no builder class - just pure config-based field definitions.
+ * @example
+ * ```ts
+ * export const textField = defineField<TextFieldConfig, string>()({
+ *   type: "text" as const,
+ *   _value: undefined as unknown as string,
+ *   toColumn(name: string, config: TextFieldConfig) { ... },
+ *   getOperators<TApp>(config: TextFieldConfig) {
+ *     return { column: stringColumnOperators, jsonb: stringJsonbOperators };
+ *   },
+ *   toZodSchema(config: TextFieldConfig) { ... },
+ *   getMetadata(config: TextFieldConfig) { ... },
+ * });
+ * ```
  */
 
 import type { SQL } from "drizzle-orm";
@@ -62,7 +74,7 @@ type InferInputType<TConfig extends BaseFieldConfig, TValue> = TConfig extends {
 				? TValue
 				: // Has default value
 					TConfig extends { default: infer TDefault }
-					? TDefault extends () => infer TReturn
+					? TDefault extends () => infer _TReturn
 						? TValue | undefined // Factory function
 						: TValue | undefined // Static default
 					: TValue | null | undefined; // Nullable by default
@@ -96,6 +108,15 @@ type InferOutputType<
 				: TValue | null;
 
 /**
+ * Infer select type from config.
+ * Defaults to output type unless overridden by field definitions.
+ */
+type InferSelectType<TConfig extends BaseFieldConfig, TValue> = InferOutputType<
+	TConfig,
+	TValue
+>;
+
+/**
  * Infer column type from config.
  * Virtual fields have null columns.
  */
@@ -105,235 +126,261 @@ type InferColumnType<
 > = TConfig extends { virtual: true | SQL<unknown> } ? null : TColumn;
 
 /**
- * Build complete field state from config.
+ * Build complete field state from config + implementation.
  * This is the TState that FieldDefinition will use.
+ *
+ * @template TOps - Concrete operators type (e.g. typeof stringColumnOperators).
  */
-type BuildFieldState<
+export type BuildFieldState<
 	TType extends string,
 	TConfig extends BaseFieldConfig,
 	TValue,
 	TColumn extends AnyPgColumn | null,
+	TOps extends ContextualOperators,
 > = {
 	type: TType;
 	config: TConfig;
 	value: TValue;
 	input: InferInputType<TConfig, TValue>;
 	output: InferOutputType<TConfig, TValue>;
+	select: InferSelectType<TConfig, TValue>;
 	column: InferColumnType<TConfig, TColumn>;
 	location: InferFieldLocation<TConfig>;
+	operators: TOps;
 };
 
 // ============================================================================
-// Field Implementation Options
+// Field Definition Shape (FieldDef)
 // ============================================================================
 
 /**
- * Options for implementing a field type.
- * Provides all the methods needed by FieldDefinition.
+ * Type constraint for a field implementation object.
+ * Validates shape without widening — used with the curried defineField pattern.
+ *
+ * @template TConfig - The field configuration type
+ * @template TValue - The field value type
  */
-export interface FieldImplementation<
-	TType extends string,
-	TConfig extends BaseFieldConfig,
-	TValue,
-	TColumn extends AnyPgColumn | null = AnyPgColumn | null,
-> {
-	/**
-	 * Generate Drizzle column(s) for this field.
-	 * May return single column, multiple, or null for virtual fields.
-	 */
-	toColumn: (name: string, config: TConfig) => TColumn | TColumn[] | null;
+export interface FieldDef<TConfig extends BaseFieldConfig, TValue> {
+	/** Field type identifier (e.g. "text", "number", "relation") */
+	type: string;
 
-	/**
-	 * Generate Zod schema for input validation.
-	 */
+	/** Phantom property for value type inference. Not used at runtime. */
+	_value?: TValue;
+
+	/** Generate Drizzle column(s) for this field. */
+	toColumn: (
+		name: string,
+		config: TConfig,
+	) => AnyPgColumn | AnyPgColumn[] | null;
+
+	/** Generate Zod schema for input validation. */
 	toZodSchema: (config: TConfig) => ZodType;
 
 	/**
-	 * Get operators for query builder.
+	 * Get operators for where clauses.
+	 * Generic over TApp so relation fields can resolve target collection types.
+	 * For simple fields (text, number, etc.), TApp is unused.
 	 */
-	getOperators: (config: TConfig) => ContextualOperators;
+	getOperators: <TApp>(config: TConfig) => ContextualOperators;
 
-	/**
-	 * Get metadata for admin introspection.
-	 */
+	/** Get metadata for admin introspection. */
 	getMetadata: (config: TConfig) => FieldMetadata;
 
-	/**
-	 * Optional: Get nested fields (for object/array types).
-	 */
+	/** Optional: Get nested fields (for object/array types). */
 	getNestedFields?: (
 		config: TConfig,
 	) => Record<string, FieldDefinition<FieldDefinitionState>> | undefined;
 
-	/**
-	 * Optional: Modify select query (for relations, computed fields).
-	 */
+	/** Optional: Modify select query (for relations, computed fields). */
 	getSelectModifier?: (config: TConfig) => SelectModifier | undefined;
 
-	/**
-	 * Optional: Build joins for relation fields.
-	 */
+	/** Optional: Build joins for relation fields. */
 	getJoinBuilder?: (config: TConfig) => JoinBuilder | undefined;
 
-	/**
-	 * Optional: Transform value after reading from DB.
-	 */
+	/** Optional: Transform value after reading from DB. */
 	fromDb?: (dbValue: unknown, config: TConfig) => TValue;
 
-	/**
-	 * Optional: Transform value before writing to DB.
-	 */
+	/** Optional: Transform value before writing to DB. */
 	toDb?: (value: TValue, config: TConfig) => unknown;
 }
 
 // ============================================================================
-// Define Field Helper
+// Type Extraction Helpers
 // ============================================================================
 
 /**
- * Define a new field type using TState pattern.
+ * Extract config type from a field def by looking at getOperators parameter.
+ */
+export type ExtractConfigFromFieldDef<TFieldDef> = TFieldDef extends {
+	getOperators: (config: infer TConfig, ...args: any[]) => any;
+}
+	? TConfig extends BaseFieldConfig
+		? TConfig
+		: BaseFieldConfig
+	: BaseFieldConfig;
+
+/**
+ * Extract value type from a field def's phantom _value property.
+ */
+export type ExtractValueFromFieldDef<TFieldDef> = TFieldDef extends {
+	_value?: infer V;
+}
+	? unknown extends V
+		? unknown
+		: V
+	: unknown;
+
+/**
+ * Extract field type string literal from a field def.
+ */
+export type ExtractTypeFromFieldDef<TFieldDef> = TFieldDef extends {
+	type: infer T extends string;
+}
+	? T
+	: string;
+
+/**
+ * Extract concrete operators from a field def's getOperators return type.
+ */
+export type ExtractOpsFromFieldDef<TFieldDef> = TFieldDef extends {
+	getOperators: (...args: any[]) => infer TOps;
+}
+	? TOps extends ContextualOperators
+		? TOps
+		: ContextualOperators
+	: ContextualOperators;
+
+// ============================================================================
+// defineField — Curried "as const satisfies" Pattern
+// ============================================================================
+
+/**
+ * Define a field type with full type inference.
  *
- * Returns a factory function that creates FieldDefinition with complete
- * type information inferred from the config object.
+ * Uses the curried pattern to separate explicit type params from inferred ones:
+ * - First call: provide TConfig and TValue explicitly
+ * - Second call: provide implementation object — its concrete type (including
+ *   getOperators return type) is fully preserved by TypeScript
  *
- * Type inference (all from config):
- * - TState.location: "main" | "i18n" | "virtual" | "relation"
- * - TState.input: Required, optional, or never (based on required/default/virtual/input)
- * - TState.output: Value or never (based on output/access)
- * - TState.column: Column type or null (based on virtual)
- *
- * @param type - The field type identifier (e.g., "text", "number")
- * @param implementation - Object with methods to implement field behavior
- * @returns A factory function that creates field definitions
+ * This avoids the TypeScript "all-or-nothing" inference problem where
+ * specifying ANY explicit type params prevents inference of the rest.
  *
  * @example
  * ```ts
- * const textField = defineField<"text", TextFieldConfig, string>("text", {
- *   toColumn(name, config) {
- *     return config.mode === "text"
- *       ? text(name)
- *       : varchar(name, { length: config.maxLength ?? 255 });
+ * export const textField = defineField<TextFieldConfig, string>()({
+ *   type: "text" as const,
+ *   _value: undefined as unknown as string,
+ *   toColumn(name: string, config: TextFieldConfig) {
+ *     return varchar({ length: config.maxLength ?? 255 });
  *   },
- *   toZodSchema(config) {
- *     let schema = z.string();
- *     if (config.maxLength) schema = schema.max(config.maxLength);
- *     return config.required ? schema : schema.nullish();
- *   },
- *   getOperators(config) {
+ *   getOperators<TApp>(config: TextFieldConfig) {
  *     return { column: stringColumnOperators, jsonb: stringJsonbOperators };
  *   },
- *   getMetadata(config) {
- *     return { type: "text", required: !!config.required };
- *   },
+ *   toZodSchema(config: TextFieldConfig) { return z.string(); },
+ *   getMetadata(config: TextFieldConfig) { return { type: "text" }; },
  * });
- *
- * // Usage - all types inferred from config (no chaining, no .build()):
- * const posts = q.collection("posts").fields((f) => ({
- *   // Main table field
- *   title: f.text({ maxLength: 255, required: true }),
- *   // → TState.location = "main"
- *   // → TState.input = string
- *   // → TState.output = string
- *   // → TState.column = PgVarchar
- *
- *   // i18n table field
- *   content: f.text({ localized: true }),
- *   // → TState.location = "i18n"
- *   // → TState.input = string | null | undefined
- *   // → TState.output = string
- *
- *   // Virtual field (computed)
- *   excerpt: f.text({ virtual: true }),
- *   // → TState.location = "virtual"
- *   // → TState.column = null
- *   // → TState.input = never
- * }));
  * ```
  */
-export function defineField<
-	TType extends string,
-	TConfig extends BaseFieldConfig,
-	TValue,
-	TColumn extends AnyPgColumn = AnyPgColumn,
+export const defineField =
+	<TConfig extends BaseFieldConfig, TValue>() =>
+	<const TImpl extends FieldDef<TConfig, TValue>>(impl: TImpl): TImpl =>
+		impl;
+
+// ============================================================================
+// Runtime: Create FieldDefinition from a plain field def + config
+// ============================================================================
+
+/**
+ * Create a FieldDefinition object from a plain field definition + user config.
+ * Used at runtime by the FieldBuilderProxy to produce FieldDefinition instances.
+ *
+ * The typed overload preserves concrete types (operators, value, config) when
+ * the field def and config types are known at call site.
+ * The untyped overload is used for dynamic/registry-based creation.
+ */
+export function createFieldDefinition<
+	TFieldDef extends FieldDef<any, any>,
+	const TConfig extends ExtractConfigFromFieldDef<TFieldDef>,
 >(
-	type: TType,
-	implementation: FieldImplementation<TType, TConfig, TValue, TColumn>,
-): <const TUserConfig extends TConfig>(
-	config?: TUserConfig,
-) => FieldDefinition<BuildFieldState<TType, TUserConfig, TValue, TColumn>> {
-	return <const TUserConfig extends TConfig>(
-		config: TUserConfig = {} as TUserConfig,
-	) => {
-		const fieldConfig = config;
+	fieldDef: TFieldDef,
+	config: TConfig,
+): FieldDefinition<
+	BuildFieldState<
+		ExtractTypeFromFieldDef<TFieldDef>,
+		TConfig,
+		ExtractValueFromFieldDef<TFieldDef>,
+		AnyPgColumn,
+		ExtractOpsFromFieldDef<TFieldDef>
+	>
+>;
+export function createFieldDefinition(
+	fieldDef: FieldDef<any, any>,
+	config: any,
+): FieldDefinition<FieldDefinitionState>;
+export function createFieldDefinition(
+	fieldDef: FieldDef<any, any>,
+	config: any,
+): FieldDefinition<FieldDefinitionState> {
+	const fieldConfig = config ?? {};
 
-		// Infer location from config at runtime
-		const location: FieldLocation =
-			"virtual" in config &&
-			(config.virtual === true ||
-				(typeof config.virtual === "object" && config.virtual !== null))
-				? "virtual"
-				: config.localized === true
-					? "i18n"
-					: "main";
+	// Infer location from config at runtime
+	const location: FieldLocation =
+		"virtual" in fieldConfig &&
+		(fieldConfig.virtual === true ||
+			(typeof fieldConfig.virtual === "object" && fieldConfig.virtual !== null))
+			? "virtual"
+			: fieldConfig.localized === true
+				? "i18n"
+				: "main";
 
-		// Build the complete field state
-		// Type casting is necessary because runtime location is a union,
-		// but TypeScript needs to know it's the specific inferred type
-		const state = {
-			type,
-			config: fieldConfig,
-			value: undefined as TValue,
-			input: undefined as InferInputType<TUserConfig, TValue>,
-			output: undefined as InferOutputType<TUserConfig, TValue>,
-			column: undefined as unknown as InferColumnType<TUserConfig, TColumn>,
-			location: location as InferFieldLocation<TUserConfig>,
-		};
-
-		// Return FieldDefinition with full TState
-		return {
-			state,
-			$types: {} as {
-				value: TValue;
-				input: InferInputType<TUserConfig, TValue>;
-				output: InferOutputType<TUserConfig, TValue>;
-				column: InferColumnType<TUserConfig, TColumn>;
-				location: InferFieldLocation<TUserConfig>;
-			},
-			toColumn(name: string) {
-				// Virtual fields don't have columns
-				if (location === "virtual") {
-					return null;
-				}
-				return implementation.toColumn(name, fieldConfig);
-			},
-			toZodSchema() {
-				return implementation.toZodSchema(fieldConfig);
-			},
-			getOperators() {
-				return implementation.getOperators(fieldConfig);
-			},
-			getMetadata() {
-				return implementation.getMetadata(fieldConfig);
-			},
-			getNestedFields: implementation.getNestedFields
-				? () =>
-						implementation.getNestedFields!(fieldConfig) as Record<
-							string,
-							FieldDefinition<FieldDefinitionState>
-						>
-				: undefined,
-			getSelectModifier: implementation.getSelectModifier
-				? () => implementation.getSelectModifier!(fieldConfig)
-				: undefined,
-			getJoinBuilder: implementation.getJoinBuilder
-				? () => implementation.getJoinBuilder!(fieldConfig)
-				: undefined,
-			fromDb: implementation.fromDb
-				? (dbValue: unknown) => implementation.fromDb!(dbValue, fieldConfig)
-				: undefined,
-			toDb: implementation.toDb
-				? (value: unknown) => implementation.toDb!(value as TValue, fieldConfig)
-				: undefined,
-		} as FieldDefinition<BuildFieldState<TType, TUserConfig, TValue, TColumn>>;
+	const state = {
+		type: fieldDef.type,
+		config: fieldConfig,
+		value: undefined,
+		input: undefined,
+		output: undefined,
+		select: undefined,
+		column: undefined,
+		location,
+		operators: undefined,
 	};
+
+	return {
+		state,
+		$types: {} as any,
+		toColumn(name: string) {
+			if (location === "virtual") {
+				return null;
+			}
+			return fieldDef.toColumn(name, fieldConfig);
+		},
+		toZodSchema() {
+			return fieldDef.toZodSchema(fieldConfig);
+		},
+		getOperators() {
+			return fieldDef.getOperators(fieldConfig);
+		},
+		getMetadata() {
+			return fieldDef.getMetadata(fieldConfig);
+		},
+		getNestedFields: fieldDef.getNestedFields
+			? () =>
+					fieldDef.getNestedFields!(fieldConfig) as Record<
+						string,
+						FieldDefinition<FieldDefinitionState>
+					>
+			: undefined,
+		getSelectModifier: fieldDef.getSelectModifier
+			? () => fieldDef.getSelectModifier!(fieldConfig)
+			: undefined,
+		getJoinBuilder: fieldDef.getJoinBuilder
+			? () => fieldDef.getJoinBuilder!(fieldConfig)
+			: undefined,
+		fromDb: fieldDef.fromDb
+			? (dbValue: unknown) => fieldDef.fromDb!(dbValue, fieldConfig)
+			: undefined,
+		toDb: fieldDef.toDb
+			? (value: unknown) => fieldDef.toDb!(value, fieldConfig)
+			: undefined,
+	} as unknown as FieldDefinition<FieldDefinitionState>;
 }

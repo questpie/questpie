@@ -1,10 +1,12 @@
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import {
 	createFieldBuilder,
-	type DefaultFieldTypeMap,
 	type FieldBuilderProxy,
 } from "#questpie/server/fields/builder.js";
-import { getDefaultRegistry } from "#questpie/server/fields/registry.js";
+import {
+	type BuiltinFields,
+	builtinFields,
+} from "#questpie/server/fields/builtin/defaults.js";
 import type {
 	FieldDefinition,
 	FieldDefinitionState,
@@ -48,8 +50,8 @@ type ExtractFieldTypes<TState extends GlobalBuilderState> =
 	TState["~fieldTypes"] extends infer TFields
 		? TFields extends Record<string, any>
 			? TFields
-			: DefaultFieldTypeMap
-		: DefaultFieldTypeMap;
+			: {} // No fields registered — f will be empty
+		: {};
 
 /**
  * Main global builder class
@@ -131,11 +133,10 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 		const localizedFields: string[] = [];
 
 		if (typeof fieldsOrFactory === "function") {
-			// Field Builder pattern - use field factories from ~questpieApp if available
-			const questpieFields = (this.state as any)["~questpieApp"]?.state?.fields;
-			const builderProxy = questpieFields
-				? createFieldBuilderFromFactories(questpieFields)
-				: createFieldBuilder<DefaultFieldTypeMap>(getDefaultRegistry());
+			// Field Builder pattern - use field defs from ~questpieApp, or fall back to builtinFields
+			const questpieFields =
+				(this.state as any)["~questpieApp"]?.state?.fields ?? builtinFields;
+			const builderProxy = createFieldBuilder(questpieFields);
 
 			const fieldDefs = fieldsOrFactory(builderProxy);
 			fieldDefinitions = fieldDefs;
@@ -430,7 +431,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
  */
 export function global<TName extends string>(
 	name?: TName,
-): GlobalBuilder<EmptyGlobalState<TName>> {
+): GlobalBuilder<EmptyGlobalState<TName, undefined, BuiltinFields>> {
 	// Overload 1: global("settings") - simple name
 	return new GlobalBuilder({
 		name: name as string,
@@ -442,44 +443,7 @@ export function global<TName extends string>(
 		hooks: {},
 		access: {},
 		functions: {},
-		fieldDefinitions: undefined,
+		fieldDefinitions: {},
 		"~questpieApp": undefined,
 	}) as any;
-}
-
-/**
- * Create a field builder proxy from registered field factories.
- * Used when ~questpieApp provides field types.
- */
-function createFieldBuilderFromFactories<TFields extends Record<string, any>>(
-	factories: TFields,
-): FieldBuilderProxy<TFields> {
-	return new Proxy({} as FieldBuilderProxy<TFields>, {
-		get(_target, prop: string) {
-			const factory = factories[prop];
-			if (!factory) {
-				throw new Error(
-					`Unknown field type: "${prop}". ` +
-						`Available types: ${Object.keys(factories).join(", ")}`,
-				);
-			}
-			return factory;
-		},
-		has(_target, prop: string) {
-			return prop in factories;
-		},
-		ownKeys() {
-			return Object.keys(factories);
-		},
-		getOwnPropertyDescriptor(_target, prop: string) {
-			if (prop in factories) {
-				return {
-					configurable: true,
-					enumerable: true,
-					value: factories[prop],
-				};
-			}
-			return undefined;
-		},
-	});
 }
