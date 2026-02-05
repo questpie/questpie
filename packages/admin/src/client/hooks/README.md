@@ -26,6 +26,20 @@ function App() {
 }
 ```
 
+## Realtime Behavior
+
+- `useCollectionList`, `useCollectionCount`, and `useGlobal` automatically consume SSE snapshots when realtime is enabled in `AdminProvider`.
+- Realtime is enabled by default in `AdminProvider`.
+- Hooks apply snapshot payloads to query cache when possible and fall back to `invalidateQueries` when snapshot mapping is unavailable.
+- `AdminProvider` supports `realtime.debounceMs` to debounce cache updates/invalidation during rapid bursts (set `0` for immediate updates).
+- You can disable per-hook call:
+
+```tsx
+const { data } = useCollectionList("posts", { limit: 10 }, undefined, {
+  realtime: false,
+});
+```
+
 ## Collection Hooks
 
 ### useCollectionList
@@ -372,20 +386,21 @@ const { data: post } = useCollectionItem("posts", id);
 
 ### Collection Hooks
 
-| Hook                  | Parameters                                  | Returns                               |
-| --------------------- | ------------------------------------------- | ------------------------------------- |
-| `useCollectionList`   | `(collection, options?, queryOptions?)`     | `UseQueryResult<{ docs, totalDocs }>` |
-| `useCollectionItem`   | `(collection, id, options?, queryOptions?)` | `UseQueryResult<Item>`                |
-| `useCollectionCreate` | `(collection, mutationOptions?)`            | `UseMutationResult`                   |
-| `useCollectionUpdate` | `(collection, mutationOptions?)`            | `UseMutationResult`                   |
-| `useCollectionDelete` | `(collection, mutationOptions?)`            | `UseMutationResult`                   |
+| Hook                  | Parameters                                                | Returns                               |
+| --------------------- | --------------------------------------------------------- | ------------------------------------- |
+| `useCollectionList`   | `(collection, options?, queryOptions?, realtimeOptions?)` | `UseQueryResult<{ docs, totalDocs }>` |
+| `useCollectionCount`  | `(collection, options?, queryOptions?, realtimeOptions?)` | `UseQueryResult<number>`              |
+| `useCollectionItem`   | `(collection, id, options?, queryOptions?)`               | `UseQueryResult<Item>`                |
+| `useCollectionCreate` | `(collection, mutationOptions?)`                          | `UseMutationResult`                   |
+| `useCollectionUpdate` | `(collection, mutationOptions?)`                          | `UseMutationResult`                   |
+| `useCollectionDelete` | `(collection, mutationOptions?)`                          | `UseMutationResult`                   |
 
 ### Global Hooks
 
-| Hook              | Parameters                   | Returns                      |
-| ----------------- | ---------------------------- | ---------------------------- |
-| `useGlobal`       | `(global, queryOptions?)`    | `UseQueryResult<GlobalData>` |
-| `useGlobalUpdate` | `(global, mutationOptions?)` | `UseMutationResult`          |
+| Hook              | Parameters                                            | Returns                      |
+| ----------------- | ----------------------------------------------------- | ---------------------------- |
+| `useGlobal`       | `(global, options?, queryOptions?, realtimeOptions?)` | `UseQueryResult<GlobalData>` |
+| `useGlobalUpdate` | `(global, mutationOptions?)`                          | `UseMutationResult`          |
 
 ### Store Hooks
 

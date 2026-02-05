@@ -10,6 +10,11 @@ import type { Questpie } from "questpie";
 import type { QuestpieClient } from "questpie/client";
 import type { RegisteredCMS, RegisteredGlobalNames } from "../builder/registry";
 import { selectClient, selectContentLocale, useAdminStore } from "../runtime";
+import { useGlobalRealtimeInvalidation } from "./use-realtime-query";
+
+type GlobalRealtimeOptions = {
+	realtime?: boolean;
+};
 
 // ============================================================================
 // Type Helpers
@@ -46,6 +51,7 @@ export function useGlobal<K extends ResolvedGlobalNames>(
 	globalName: K,
 	options?: any,
 	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
+	realtimeOptions?: GlobalRealtimeOptions,
 ): any {
 	const client = useAdminStore(selectClient);
 	const contentLocale = useAdminStore(selectContentLocale);
@@ -58,11 +64,28 @@ export function useGlobal<K extends ResolvedGlobalNames>(
 		} as any,
 	);
 
+	const globalOptions = {
+		...options,
+		locale: contentLocale,
+	};
+	const baseQuery = (queryOpts as any).globals[globalName as string].get(
+		globalOptions as any,
+	);
+
+	useGlobalRealtimeInvalidation({
+		global: globalName as string,
+		queryKey: (baseQuery as any).queryKey,
+		realtime: realtimeOptions?.realtime,
+		options: {
+			with: globalOptions.with,
+			columns: globalOptions.columns,
+			locale: globalOptions.locale,
+			localeFallback: globalOptions.localeFallback,
+		},
+	});
+
 	return useQuery({
-		...(queryOpts as any).globals[globalName as string].get({
-			...options,
-			locale: contentLocale,
-		} as any),
+		...baseQuery,
 		...queryOptions,
 	});
 }

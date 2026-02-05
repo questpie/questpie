@@ -550,6 +550,54 @@ import { adminModule } from "@questpie/admin/server";
 import "@questpie/admin/client/styles/index.css";
 ```
 
+## Realtime Invalidation
+
+Admin data hooks now support SSE-driven live updates.
+
+- Realtime is enabled by default in `AdminProvider`.
+- You can disable it globally:
+
+```tsx
+<AdminProvider admin={admin} client={client} realtime={false}>
+  {children}
+</AdminProvider>
+```
+
+- Or configure it explicitly (useful if your API is mounted on a custom path):
+
+```tsx
+<AdminProvider
+  admin={admin}
+  client={client}
+  realtime={{ enabled: true, basePath: "/api/cms", debounceMs: 150 }}
+>
+  {children}
+</AdminProvider>
+```
+
+- Snapshot events are applied directly to query cache when possible. If snapshot mapping is not possible, hooks fall back to `invalidateQueries`.
+- `debounceMs` debounces cache apply/invalidation during bursts. Set `0` for strict immediate updates.
+
+- Per-table toggle via view config:
+
+```ts
+defaultViews: {
+	collectionList: {
+		realtime: false,
+	},
+}
+```
+
+- Per-widget toggle via dashboard widget config:
+
+```ts
+widgets: [
+  { type: "stats", id: "orders", collection: "orders", realtime: false },
+];
+```
+
+- Per-table UI toggle is available in the table "View Options" sheet (`Realtime Updates`). The preference is persisted per collection view.
+
 ## Styling
 
 Built with Tailwind CSS v4 + shadcn/ui:

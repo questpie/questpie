@@ -30,24 +30,56 @@ You can override the default behavior:
 ```ts
 import { q, redisStreamsAdapter } from "questpie";
 
-const app = q({ name: "app" })
-  .build({
-    app: { url: process.env.APP_URL! },
-    db: { url: process.env.DATABASE_URL! },
-    realtime: {
-      adapter: redisStreamsAdapter({ client: redisClient }), // Custom adapter
-      // Or disable adapter for polling mode:
-      // adapter: undefined,
-      // pollIntervalMs: 2000,
-      // batchSize: 500,
-    },
-  });
+const app = q({ name: "app" }).build({
+  app: { url: process.env.APP_URL! },
+  db: { url: process.env.DATABASE_URL! },
+  realtime: {
+    adapter: redisStreamsAdapter({ client: redisClient }), // Custom adapter
+    // Or disable adapter for polling mode:
+    // adapter: undefined,
+    // pollIntervalMs: 2000,
+    // batchSize: 500,
+    // retentionDays: 7,
+  },
+});
 ```
 
 Notes:
+
 - PostgreSQL setup automatically uses `pg-notify` (requires `pg` package: `bun add pg`)
 - PGlite setup uses polling mode (no LISTEN/NOTIFY support)
 - Custom adapters override the default behavior
+
+## Operational Notes
+
+- Update/delete events now always trigger snapshot refresh for direct subscriptions, even when a `where` filter is present. This prevents stale filtered views when a record leaves the filter set or is deleted.
+- Outbox cleanup uses a hybrid strategy:
+  - optional time retention via `realtime.retentionDays`
+  - min-consumed-seq watermark cleanup for active subscribers (deletes already-consumed rows)
+    Cleanup runs as best-effort maintenance in the realtime service.
+- If you use `starterModule` with queue workers enabled, an hourly `questpie.realtime.cleanup` cron job is included by default.
+- If you pass your own external adapter clients (for example Redis or `pg`), QUESTPIE no longer force-closes them during realtime stop; lifecycle ownership stays with your app.
+
+### Worker Bootstrap (for scheduled cleanup)
+
+```ts
+// worker.ts
+import { app } from "./app";
+
+// Starts queue workers and auto-schedules starter cron jobs
+await app.queue.listen();
+
+// Graceful shutdown on SIGINT/SIGTERM is enabled by default.
+```
+
+### Quirks and Trade-offs
+
+- Realtime streams **snapshots, not patches**. This favors correctness and simple clients, but large result sets can be expensive at very high write rates.
+- For `where` filters:
+  - `create` events use payload-based matching for simple equality filters.
+  - complex filters (`OR`, nested operators, relation-heavy conditions) refresh conservatively to avoid stale views.
+  - `update`/`delete`/bulk operations refresh direct subscribers when filtered, because previous row state is not present in the event payload.
+- If your UI receives many events quickly, use client-side invalidation debounce (for example in AdminProvider) to coalesce bursts. Events still arrive immediately; only refetch frequency is reduced.
 
 ## Subscribe to a Collection (SSE)
 
@@ -79,6 +111,7 @@ source.addEventListener("error", (event) => {
 ```
 
 Events:
+
 - `snapshot`: full query snapshot
 - `ping`: keep-alive
 - `error`: server-side error
@@ -137,8 +170,9 @@ source.addEventListener("snapshot", (event) => {
 
 ## Cleanup Strategy
 
-The outbox table grows over time. A simple cleanup strategy is:
-- Track the minimum consumed seq across subscribers.
-- Delete rows older than that (plus a safety window).
+The outbox table is cleaned inside realtime service as best-effort maintenance:
 
-You can use your queue system (pg-boss) to schedule cleanup jobs.
+- Watermark cleanup: rows with `seq < minConsumedSeq(activeListeners)` are deleted.
+- Time retention cleanup: if `realtime.retentionDays` is set, rows older than that window are deleted.
+
+For very high-volume deployments, you can still add external periodic maintenance via your queue system (pg-boss).

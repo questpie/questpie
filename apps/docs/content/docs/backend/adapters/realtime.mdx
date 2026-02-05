@@ -1,370 +1,124 @@
 ---
 title: Realtime Adapter
-description: Live updates and subscriptions
+description: Live updates and subscriptions over SSE
 ---
 
 # Realtime Adapter
 
-The realtime adapter enables live updates when data changes, using Server-Sent Events (SSE).
+QUESTPIE realtime is based on an outbox table (`questpie_realtime_log`) plus Server-Sent Events (SSE).
+
+- Collection endpoint: `GET /cms/realtime/:collection`
+- Global endpoint: `GET /cms/realtime/globals/:global`
+- Stream event types: `snapshot`, `ping`, `error`
+
+`snapshot` always contains fresh query results (not a diff event payload).
 
 ## Configuration
 
-### PostgreSQL NOTIFY (Single Server)
+### Automatic PostgreSQL setup
 
-For single-server deployments, use PostgreSQL's LISTEN/NOTIFY:
+If your app uses a PostgreSQL `db.url`, QUESTPIE automatically wires the `pg-notify` adapter.
 
 ```typescript
-import { PgNotifyAdapter } from "questpie/realtime";
+import { q } from "questpie";
 
-const cms = q({ name: "my-cms" })
-  .build({
-    realtime: {
-      adapter: new PgNotifyAdapter({
-        connectionString: process.env.DATABASE_URL,
-        channel: "questpie_realtime",
-      }),
-    },
-  });
+const cms = q({ name: "my-cms" }).build({
+  app: { url: process.env.APP_URL! },
+  db: { url: process.env.DATABASE_URL! },
+});
 ```
 
-### Redis Streams (Distributed)
-
-For multi-server deployments:
+### Custom adapter setup
 
 ```typescript
-import { RedisStreamsAdapter } from "questpie/realtime";
-import Redis from "ioredis";
+import { q, redisStreamsAdapter } from "questpie";
 
-const redis = new Redis(process.env.REDIS_URL);
-
-const cms = q({ name: "my-cms" })
-  .build({
-    realtime: {
-      adapter: new RedisStreamsAdapter({
-        client: redis,
-        stream: "questpie:realtime",
-        group: "questpie-realtime",
-      }),
-    },
-  });
+const cms = q({ name: "my-cms" }).build({
+  app: { url: process.env.APP_URL! },
+  db: { url: process.env.DATABASE_URL! },
+  realtime: {
+    adapter: redisStreamsAdapter({ client: redisClient }),
+    pollIntervalMs: 2000,
+    batchSize: 500,
+    retentionDays: 7,
+  },
+});
 ```
 
-## Subscribing to Changes
+Notes:
 
-### Collection Changes
+- External clients passed to adapters are not force-closed by QUESTPIE realtime shutdown.
+- `retentionDays` enables time-based cleanup of old outbox rows.
+- Realtime service also performs watermark cleanup using min consumed seq across active subscribers.
+
+## SSE usage
 
 ```typescript
-// Subscribe to all changes in a collection
-const unsubscribe = cms.realtime.subscribe("posts", (event) => {
-  console.log("Event:", event.type); // "create" | "update" | "delete"
-  console.log("Doc ID:", event.docId);
-  console.log("Data:", event.data);
+const source = new EventSource("/cms/realtime/posts?with[author]=true");
+
+source.addEventListener("snapshot", (event) => {
+  const payload = JSON.parse(event.data);
+  // payload = { seq, data }
+  // data matches collections.posts.find(...) result shape
+  renderPosts(payload.data.docs);
 });
 
-// Later: unsubscribe
-unsubscribe();
+source.addEventListener("error", (event) => {
+  console.error("Realtime error", event);
+});
 ```
 
-### Document Changes
+Global example:
 
 ```typescript
-// Subscribe to specific document
-const unsubscribe = cms.realtime.subscribeDoc(
-  "posts",
-  "post-123",
-  (event) => {
-    console.log("Post updated:", event.data);
-  }
-);
+const source = new EventSource("/cms/realtime/globals/settings");
+
+source.addEventListener("snapshot", (event) => {
+  const payload = JSON.parse(event.data);
+  // payload.data matches globals.settings.get(...) result shape
+  updateUI(payload.data);
+});
 ```
 
-### With Filters
+## Server-side service API
+
+For advanced usage you can subscribe inside server runtime:
 
 ```typescript
-// Subscribe with filter
-const unsubscribe = cms.realtime.subscribe(
-  "posts",
+const unsubscribe = cms.realtime?.subscribe(
   (event) => {
-    console.log("Published post changed:", event);
+    console.log(event.operation, event.resource, event.recordId);
   },
   {
-    filter: { status: "published" },
-  }
-);
-```
-
-## SSE Endpoint
-
-Expose a Server-Sent Events endpoint for clients:
-
-```typescript
-// Hono adapter
-import { Hono } from "hono";
-import { streamSSE } from "hono/streaming";
-
-const app = new Hono();
-
-app.get("/api/realtime/:collection", async (c) => {
-  const collection = c.req.param("collection");
-
-  return streamSSE(c, async (stream) => {
-    const unsubscribe = cms.realtime.subscribe(collection, (event) => {
-      stream.writeSSE({
-        event: event.type,
-        data: JSON.stringify(event),
-      });
-    });
-
-    // Cleanup on disconnect
-    stream.onAbort(() => {
-      unsubscribe();
-    });
-
-    // Keep connection alive
-    while (true) {
-      await stream.writeSSE({ event: "ping", data: "" });
-      await stream.sleep(30000);
-    }
-  });
-});
-```
-
-## Client-Side Usage
-
-### EventSource API
-
-```typescript
-const eventSource = new EventSource("/api/realtime/posts");
-
-eventSource.addEventListener("create", (event) => {
-  const data = JSON.parse(event.data);
-  console.log("New post:", data);
-});
-
-eventSource.addEventListener("update", (event) => {
-  const data = JSON.parse(event.data);
-  console.log("Post updated:", data);
-});
-
-eventSource.addEventListener("delete", (event) => {
-  const data = JSON.parse(event.data);
-  console.log("Post deleted:", data.docId);
-});
-
-// Cleanup
-eventSource.close();
-```
-
-### React Hook
-
-```typescript
-function useRealtimeCollection(collection: string) {
-  const [events, setEvents] = useState<RealtimeEvent[]>([]);
-
-  useEffect(() => {
-    const eventSource = new EventSource(`/api/realtime/${collection}`);
-
-    const handleEvent = (type: string) => (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      setEvents((prev) => [...prev, { type, ...data }]);
-    };
-
-    eventSource.addEventListener("create", handleEvent("create"));
-    eventSource.addEventListener("update", handleEvent("update"));
-    eventSource.addEventListener("delete", handleEvent("delete"));
-
-    return () => eventSource.close();
-  }, [collection]);
-
-  return events;
-}
-
-// Usage
-function PostsList() {
-  const events = useRealtimeCollection("posts");
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    for (const event of events) {
-      // Invalidate cache on changes
-      queryClient.invalidateQueries(["posts"]);
-    }
-  }, [events]);
-
-  return <div>...</div>;
-}
-```
-
-## Event Types
-
-```typescript
-interface RealtimeEvent {
-  // Event type
-  type: "create" | "update" | "delete";
-
-  // Collection name
-  collection: string;
-
-  // Document ID
-  docId: string;
-
-  // Document data (for create/update)
-  data?: Record<string, any>;
-
-  // Changed fields (for update)
-  changes?: string[];
-
-  // Event timestamp
-  timestamp: Date;
-
-  // User who made the change (if available)
-  userId?: string;
-}
-```
-
-## Manual Notifications
-
-Send custom notifications:
-
-```typescript
-// Notify about a custom event
-await cms.realtime.notify({
-  type: "update",
-  collection: "posts",
-  docId: "post-123",
-  data: { title: "Updated Title" },
-});
-
-// Broadcast to all subscribers
-await cms.realtime.broadcast("posts", {
-  type: "custom",
-  message: "Cache invalidated",
-});
-```
-
-## Realtime Adapter Interface
-
-```typescript
-interface RealtimeAdapter {
-  // Start listening for notifications
-  start(): Promise<void>;
-
-  // Stop and cleanup
-  stop(): Promise<void>;
-
-  // Publish a change event
-  notify(event: RealtimeEvent): Promise<void>;
-
-  // Subscribe to events
-  subscribe(
-    handler: (event: RealtimeEvent) => void
-  ): () => void;
-}
-```
-
-## Configuration Options
-
-### PostgreSQL NOTIFY
-
-```typescript
-new PgNotifyAdapter({
-  // Database connection
-  connectionString: string;
-
-  // Channel name for NOTIFY
-  channel?: string; // default: "questpie_realtime"
-
-  // Reconnect on connection loss
-  reconnect?: boolean; // default: true
-
-  // Reconnect delay (ms)
-  reconnectDelay?: number; // default: 1000
-})
-```
-
-### Redis Streams
-
-```typescript
-new RedisStreamsAdapter({
-  // Redis client
-  client: Redis;
-
-  // Stream name
-  stream?: string; // default: "questpie:realtime"
-
-  // Consumer group name
-  group?: string; // default: "questpie-realtime"
-
-  // Consumer name (unique per server)
-  consumer?: string; // default: auto-generated
-
-  // Message retention (ms)
-  maxLen?: number; // default: 10000
-})
-```
-
-## Best Practices
-
-### 1. Filter Events Server-Side
-
-```typescript
-// ❌ Don't send all events to client
-cms.realtime.subscribe("posts", (event) => {
-  stream.writeSSE({ data: JSON.stringify(event) });
-});
-
-// ✅ Filter based on user permissions
-cms.realtime.subscribe("posts", (event) => {
-  if (canUserSeePost(user, event.data)) {
-    stream.writeSSE({ data: JSON.stringify(event) });
-  }
-});
-```
-
-### 2. Handle Reconnection
-
-```typescript
-function createReliableEventSource(url: string) {
-  let eventSource: EventSource;
-  let reconnectAttempts = 0;
-
-  function connect() {
-    eventSource = new EventSource(url);
-
-    eventSource.onopen = () => {
-      reconnectAttempts = 0;
-    };
-
-    eventSource.onerror = () => {
-      eventSource.close();
-      const delay = Math.min(1000 * 2 ** reconnectAttempts, 30000);
-      setTimeout(connect, delay);
-      reconnectAttempts++;
-    };
-  }
-
-  connect();
-  return () => eventSource.close();
-}
-```
-
-### 3. Debounce Updates
-
-```typescript
-// Client-side debouncing for rapid updates
-const debouncedUpdate = useDebouncedCallback(
-  (data) => {
-    setDisplayData(data);
+    resourceType: "collection",
+    resource: "posts",
+    where: { status: "published" },
+    with: { author: true },
   },
-  100
 );
 
-eventSource.addEventListener("update", (event) => {
-  debouncedUpdate(JSON.parse(event.data));
-});
+unsubscribe?.();
 ```
+
+`event.operation` can be: `create`, `update`, `delete`, `bulk_update`, `bulk_delete`.
+
+## Filtering semantics
+
+- `create` events use payload-based filter matching.
+- `update`/`delete`/bulk events trigger direct subscribers even when a `where` filter exists.
+
+This avoids stale filtered snapshots when a record leaves a filter set or is deleted.
+
+### Complex `where` behavior
+
+For complex filters (`OR`, nested conditions, non-equality operators), realtime matching is conservative:
+
+- create events may refresh subscribers even when payload-only checks are inconclusive
+- update/delete/bulk events refresh filtered subscribers by design
+
+This prioritizes correctness over minimal refreshes.
 
 ## Related
 
-- [KV Store](/docs/backend/adapters/kv) - Key-value caching
-- [Realtime Guide](/docs/guides/realtime-subscriptions) - Complete realtime guide
+- [Realtime Guide](/docs/guides/realtime-subscriptions)
+- [KV Store](/docs/backend/adapters/kv)

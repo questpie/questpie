@@ -12,6 +12,7 @@
 
 import type * as React from "react";
 import type {
+	AnyWidgetConfig,
 	DashboardAction,
 	DashboardConfig,
 	DashboardLayoutItem,
@@ -248,6 +249,7 @@ interface LayoutItemRendererProps {
 	navigate?: (path: string) => void;
 	widgetRegistry?: Record<string, React.ComponentType<WidgetComponentProps>>;
 	resolveText: (text: any) => string;
+	dashboardRealtime?: boolean;
 }
 
 function LayoutItemRenderer({
@@ -258,14 +260,19 @@ function LayoutItemRenderer({
 	navigate,
 	widgetRegistry,
 	resolveText,
+	dashboardRealtime,
 }: LayoutItemRendererProps) {
 	// Widget
 	if (isWidgetConfig(item)) {
 		const spanClass = getSpanClass(item.span);
+		const widgetConfig =
+			dashboardRealtime !== undefined && item.realtime === undefined
+				? ({ ...item, realtime: dashboardRealtime } as AnyWidgetConfig)
+				: item;
 		return (
 			<div className={cn("min-h-0 h-full", spanClass)}>
 				<DashboardWidget
-					config={item}
+					config={widgetConfig}
 					basePath={basePath}
 					navigate={navigate}
 					widgetRegistry={widgetRegistry}
@@ -284,6 +291,7 @@ function LayoutItemRenderer({
 				navigate={navigate}
 				widgetRegistry={widgetRegistry}
 				resolveText={resolveText}
+				dashboardRealtime={dashboardRealtime}
 			/>
 		);
 	}
@@ -298,6 +306,7 @@ function LayoutItemRenderer({
 				navigate={navigate}
 				widgetRegistry={widgetRegistry}
 				resolveText={resolveText}
+				dashboardRealtime={dashboardRealtime}
 			/>
 		);
 	}
@@ -315,6 +324,7 @@ interface SectionRendererProps {
 	navigate?: (path: string) => void;
 	widgetRegistry?: Record<string, React.ComponentType<WidgetComponentProps>>;
 	resolveText: (text: any) => string;
+	dashboardRealtime?: boolean;
 }
 
 function SectionRenderer({
@@ -323,6 +333,7 @@ function SectionRenderer({
 	navigate,
 	widgetRegistry,
 	resolveText,
+	dashboardRealtime,
 }: SectionRendererProps) {
 	const {
 		label,
@@ -360,6 +371,7 @@ function SectionRenderer({
 					navigate={navigate}
 					widgetRegistry={widgetRegistry}
 					resolveText={resolveText}
+					dashboardRealtime={dashboardRealtime}
 				/>
 			))}
 		</div>
@@ -444,6 +456,7 @@ interface TabsRendererProps {
 	navigate?: (path: string) => void;
 	widgetRegistry?: Record<string, React.ComponentType<WidgetComponentProps>>;
 	resolveText: (text: any) => string;
+	dashboardRealtime?: boolean;
 }
 
 function TabsRenderer({
@@ -452,6 +465,7 @@ function TabsRenderer({
 	navigate,
 	widgetRegistry,
 	resolveText,
+	dashboardRealtime,
 }: TabsRendererProps) {
 	const { tabs: tabConfigs, defaultTab, variant = "default" } = tabs;
 
@@ -486,6 +500,7 @@ function TabsRenderer({
 						navigate={navigate}
 						widgetRegistry={widgetRegistry}
 						resolveText={resolveText}
+						dashboardRealtime={dashboardRealtime}
 					/>
 				</TabsContent>
 			))}
@@ -499,6 +514,7 @@ interface TabContentRendererProps {
 	navigate?: (path: string) => void;
 	widgetRegistry?: Record<string, React.ComponentType<WidgetComponentProps>>;
 	resolveText: (text: any) => string;
+	dashboardRealtime?: boolean;
 }
 
 function TabContentRenderer({
@@ -507,6 +523,7 @@ function TabContentRenderer({
 	navigate,
 	widgetRegistry,
 	resolveText,
+	dashboardRealtime,
 }: TabContentRendererProps) {
 	// Default to 4 columns for tab content
 	const columns = 4;
@@ -528,6 +545,7 @@ function TabContentRenderer({
 					navigate={navigate}
 					widgetRegistry={widgetRegistry}
 					resolveText={resolveText}
+					dashboardRealtime={dashboardRealtime}
 				/>
 			))}
 		</div>
@@ -579,7 +597,12 @@ export function DashboardGrid({
 	className,
 }: DashboardGridProps): React.ReactElement {
 	const resolveText = useResolveText();
-	const { title, description, columns = 4 } = config;
+	const {
+		title,
+		description,
+		columns = 4,
+		realtime: dashboardRealtime,
+	} = config;
 
 	// Support both new `items` and legacy `widgets` array
 	const layoutItems = config.items || config.widgets || [];
@@ -635,6 +658,7 @@ export function DashboardGrid({
 						navigate={navigate}
 						widgetRegistry={widgetRegistry}
 						resolveText={resolveText}
+						dashboardRealtime={dashboardRealtime}
 					/>
 				))}
 			</div>

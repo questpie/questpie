@@ -11,7 +11,7 @@ async function startWorker() {
 	console.log("Starting job worker...");
 
 	try {
-		await cms.listenToJobs({
+		await cms.queue.listen({
 			teamSize: 5, // Concurrent jobs
 			batchSize: 3, // Jobs to fetch at once
 		});
@@ -23,18 +23,5 @@ async function startWorker() {
 		process.exit(1);
 	}
 }
-
-// Handle graceful shutdown
-process.on("SIGINT", async () => {
-	console.log("\nShutting down worker...");
-	await cms.queue._stop();
-	process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-	console.log("\nShutting down worker...");
-	await cms.queue._stop();
-	process.exit(0);
-});
 
 startWorker();

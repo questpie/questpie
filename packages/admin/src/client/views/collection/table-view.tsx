@@ -157,6 +157,12 @@ export interface TableViewProps {
 	showToolbar?: boolean;
 
 	/**
+	 * Enable realtime invalidation for this table.
+	 * Falls back to AdminProvider realtime config when undefined.
+	 */
+	realtime?: boolean;
+
+	/**
 	 * Custom header actions (in addition to configured actions)
 	 * @deprecated Use actions config instead
 	 */
@@ -209,6 +215,7 @@ export default function TableView({
 	showSearch = true,
 	showFilters = true,
 	showToolbar = true,
+	realtime,
 	headerActions,
 	emptyState,
 	actionsConfig,
@@ -219,6 +226,8 @@ export default function TableView({
 	const schemaListConfig = mapListSchemaToConfig(schema?.admin?.list as any);
 	const resolvedListConfig =
 		(config?.list as any)?.["~config"] ?? config?.list ?? schemaListConfig;
+	const resolvedRealtime =
+		realtime ?? ((resolvedListConfig as any)?.realtime as boolean | undefined);
 
 	// Use actionsConfig from prop or from config.list view config
 	// Actions are now stored in the list view config, not at collection level
@@ -292,8 +301,13 @@ export default function TableView({
 		[resolvedFields, resolvedListConfig?.columns, collectionMeta],
 	);
 
-	// View state (filters, sort, visible columns) - with database persistence
-	const viewState = useViewState(defaultColumns, undefined, collection);
+	// View state (filters, sort, visible columns, realtime) - with database persistence
+	const viewState = useViewState(
+		defaultColumns,
+		{ realtime: resolvedRealtime },
+		collection,
+	);
+	const effectiveRealtime = viewState.config.realtime ?? resolvedRealtime;
 
 	// Build query options from view state (filters, sort)
 	const queryOptions = useMemo(() => {
@@ -531,6 +545,7 @@ export default function TableView({
 		collection as any,
 		queryOptions,
 		{ enabled: !isSearching },
+		{ realtime: effectiveRealtime },
 	);
 
 	// Merge data sources - search returns full records directly now
@@ -828,7 +843,11 @@ export default function TableView({
 											onClick={() => setIsSheetOpen(true)}
 											className="gap-2"
 										>
-											<Icon icon="ph:sliders-horizontal" width={16} height={16} />
+											<Icon
+												icon="ph:sliders-horizontal"
+												width={16}
+												height={16}
+											/>
 											{t("viewOptions.title")}
 										</Button>
 									</ToolbarSection>
@@ -988,7 +1007,9 @@ export default function TableView({
 
 				{/* Footer - Item count */}
 				<div className="text-sm text-muted-foreground flex items-center gap-2">
-					{isSearchActive && <Icon icon="ph:spinner-gap" className="size-3 animate-spin" />}
+					{isSearchActive && (
+						<Icon icon="ph:spinner-gap" className="size-3 animate-spin" />
+					)}
 					{filteredItems.length} item{filteredItems.length !== 1 ? "s" : ""}
 					{isSearching && searchData?.total !== undefined && (
 						<span>

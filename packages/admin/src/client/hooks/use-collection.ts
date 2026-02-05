@@ -13,6 +13,11 @@ import type {
 	RegisteredCollectionNames,
 } from "../builder/registry";
 import { selectClient, useAdminStore, useScopedLocale } from "../runtime";
+import { useCollectionRealtimeInvalidation } from "./use-realtime-query";
+
+type CollectionRealtimeOptions = {
+	realtime?: boolean;
+};
 
 // ============================================================================
 // Type Helpers
@@ -49,6 +54,7 @@ export function useCollectionList<K extends ResolvedCollectionNames>(
 	collection: K,
 	options?: any,
 	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
+	realtimeOptions?: CollectionRealtimeOptions,
 ): any {
 	const client = useAdminStore(selectClient);
 	// Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
@@ -62,11 +68,34 @@ export function useCollectionList<K extends ResolvedCollectionNames>(
 		} as any,
 	);
 
+	const findOptions = {
+		...options,
+		locale: contentLocale,
+	};
+	const baseQuery = (queryOpts as any).collections[collection as string].find(
+		findOptions as any,
+	);
+
+	useCollectionRealtimeInvalidation({
+		collection: collection as string,
+		queryKey: (baseQuery as any).queryKey,
+		realtime: realtimeOptions?.realtime,
+		options: {
+			where: findOptions.where,
+			with: findOptions.with,
+			orderBy: findOptions.orderBy,
+			limit: findOptions.limit,
+			offset: findOptions.offset,
+			page: findOptions.page,
+			includeDeleted: findOptions.includeDeleted,
+			search: findOptions.search,
+			locale: findOptions.locale,
+			localeFallback: findOptions.localeFallback,
+		},
+	});
+
 	return useQuery({
-		...(queryOpts as any).collections[collection as string].find({
-			...options,
-			locale: contentLocale,
-		} as any),
+		...baseQuery,
 		...queryOptions,
 	});
 }
@@ -92,6 +121,7 @@ export function useCollectionCount<K extends ResolvedCollectionNames>(
 	collection: K,
 	options?: { where?: any; includeDeleted?: boolean },
 	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
+	realtimeOptions?: CollectionRealtimeOptions,
 ): any {
 	const client = useAdminStore(selectClient);
 	// Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
@@ -105,11 +135,31 @@ export function useCollectionCount<K extends ResolvedCollectionNames>(
 		} as any,
 	);
 
+	const countOptions = {
+		...options,
+		locale: contentLocale,
+	};
+	const baseQuery = (queryOpts as any).collections[collection as string].count(
+		countOptions as any,
+	);
+
+	useCollectionRealtimeInvalidation({
+		collection: collection as string,
+		queryKey: (baseQuery as any).queryKey,
+		realtime: realtimeOptions?.realtime,
+		mapSnapshotToQueryData: (snapshotData) => {
+			const totalDocs = (snapshotData as { totalDocs?: unknown })?.totalDocs;
+			return typeof totalDocs === "number" ? totalDocs : undefined;
+		},
+		options: {
+			where: countOptions.where,
+			includeDeleted: countOptions.includeDeleted,
+			locale: countOptions.locale,
+		},
+	});
+
 	return useQuery({
-		...(queryOpts as any).collections[collection as string].count({
-			...options,
-			locale: contentLocale,
-		} as any),
+		...baseQuery,
 		...queryOptions,
 	});
 }

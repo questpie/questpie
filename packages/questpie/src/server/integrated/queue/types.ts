@@ -1,7 +1,14 @@
 import type { z } from "zod";
 // Note: any, any, and any are deprecated.
 // Users should use getApp<AppCMS>(), getDb<AppCMS>(), and getSession<AppCMS>() instead.
-import type { QueueAdapter } from "./adapter.js";
+import type {
+	QueueAdapter,
+	QueueAdapterCapabilities,
+	QueueListenOptions,
+	QueuePushConsumerHandler,
+	QueueRunOnceOptions,
+	QueueRunOnceResult,
+} from "./adapter.js";
 
 // Re-export QueueAdapter for external use
 export type { QueueAdapter } from "./adapter.js";
@@ -208,6 +215,34 @@ export interface QueueConfig<
 	adapter: QueueAdapter;
 }
 
+export interface QueueListenRuntimeOptions extends QueueListenOptions {
+	/**
+	 * Register automatic graceful shutdown handlers for worker process.
+	 * @default true
+	 */
+	gracefulShutdown?: boolean;
+
+	/**
+	 * Process signals that trigger graceful shutdown.
+	 * @default ["SIGINT", "SIGTERM"]
+	 */
+	shutdownSignals?: string[];
+
+	/**
+	 * Max time to wait for queue adapter stop before forcing exit (ms).
+	 * @default 10000
+	 */
+	shutdownTimeoutMs?: number;
+}
+
+export interface QueueRegisterSchedulesOptions {
+	jobs?: string[];
+}
+
+export interface QueueListenHandle {
+	stop: () => Promise<void>;
+}
+
 /**
  * Typesafe queue client for publishing jobs
  */
@@ -237,6 +272,38 @@ export type QueueClient<TJobs extends Record<string, JobDefinition<any, any>>> =
 			unschedule: () => Promise<void>;
 		};
 	} & {
+		/**
+		 * Adapter capabilities exposed to runtime.
+		 */
+		capabilities: QueueAdapterCapabilities;
+
+		/**
+		 * Start long-running queue consumers.
+		 */
+		listen: (options?: QueueListenRuntimeOptions) => Promise<QueueListenHandle>;
+
+		/**
+		 * Process one bounded batch of jobs.
+		 */
+		runOnce: (options?: QueueRunOnceOptions) => Promise<QueueRunOnceResult>;
+
+		/**
+		 * Register recurring cron schedules declared in job options.
+		 */
+		registerSchedules: (
+			options?: QueueRegisterSchedulesOptions,
+		) => Promise<void>;
+
+		/**
+		 * Stop all running queue consumers and adapter.
+		 */
+		stop: () => Promise<void>;
+
+		/**
+		 * Create push consumer handler (for runtimes like Cloudflare Queues).
+		 */
+		createPushConsumer: () => QueuePushConsumerHandler;
+
 		/**
 		 * Access to underlying Queue Adapter
 		 */

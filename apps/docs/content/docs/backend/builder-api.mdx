@@ -38,8 +38,8 @@ import { q } from "questpie";
 const cms = q({ name: "my-cms" });
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
+| Option | Type     | Description                            |
+| ------ | -------- | -------------------------------------- |
 | `name` | `string` | Unique identifier for the CMS instance |
 
 ## Content Definition Methods
@@ -49,22 +49,20 @@ const cms = q({ name: "my-cms" });
 Defines collections as a type-safe map. Collections are the core data models in your CMS.
 
 ```typescript
-const cms = q({ name: "my-cms" })
-  .collections({
-    posts: q.collection("posts")
-      .fields({
-        title: text("title").notNull(),
-        content: text("content"),
-      }),
+const cms = q({ name: "my-cms" }).collections({
+  posts: q.collection("posts").fields({
+    title: text("title").notNull(),
+    content: text("content"),
+  }),
 
-    categories: q.collection("categories")
-      .fields({
-        name: text("name").notNull(),
-      }),
-  });
+  categories: q.collection("categories").fields({
+    name: text("name").notNull(),
+  }),
+});
 ```
 
 Collections are accessed after `.build()`:
+
 - `cms.collections.posts.table` - Drizzle table
 - `cms.api.collections.posts` - CRUD operations
 
@@ -75,23 +73,21 @@ See [Collections](/docs/backend/collections) for detailed collection builder doc
 Defines global singleton records. Globals are single-instance documents like site settings.
 
 ```typescript
-const cms = q({ name: "my-cms" })
-  .globals({
-    settings: q.global("settings")
-      .fields({
-        siteName: text("siteName"),
-        description: text("description"),
-        logo: text("logo"),
-      }),
+const cms = q({ name: "my-cms" }).globals({
+  settings: q.global("settings").fields({
+    siteName: text("siteName"),
+    description: text("description"),
+    logo: text("logo"),
+  }),
 
-    navigation: q.global("navigation")
-      .fields({
-        items: jsonb("items"),
-      }),
-  });
+  navigation: q.global("navigation").fields({
+    items: jsonb("items"),
+  }),
+});
 ```
 
 Globals are accessed after `.build()`:
+
 - `cms.globals.settings.table` - Drizzle table
 - `cms.api.globals.settings` - Get/update operations
 
@@ -102,20 +98,19 @@ See [Globals](/docs/backend/globals) for detailed global builder documentation.
 Defines root-level RPC functions that can be called via the API.
 
 ```typescript
-const cms = q({ name: "my-cms" })
-  .functions({
-    sendNewsletter: async ({ input, ctx }) => {
-      const { subject, content } = input;
-      // Send newsletter logic
-      return { sent: true, count: 150 };
-    },
+const cms = q({ name: "my-cms" }).functions({
+  sendNewsletter: async ({ input, ctx }) => {
+    const { subject, content } = input;
+    // Send newsletter logic
+    return { sent: true, count: 150 };
+  },
 
-    generateReport: async ({ input, ctx }) => {
-      const { startDate, endDate } = input;
-      // Generate report
-      return { url: "/reports/2024-01.pdf" };
-    },
-  });
+  generateReport: async ({ input, ctx }) => {
+    const { startDate, endDate } = input;
+    // Generate report
+    return { url: "/reports/2024-01.pdf" };
+  },
+});
 ```
 
 Functions can accept typed input and return typed output:
@@ -123,22 +118,23 @@ Functions can accept typed input and return typed output:
 ```typescript
 import { z } from "zod";
 
-const cms = q({ name: "my-cms" })
-  .functions({
-    createInvoice: {
-      input: z.object({
-        customerId: z.string(),
-        items: z.array(z.object({
+const cms = q({ name: "my-cms" }).functions({
+  createInvoice: {
+    input: z.object({
+      customerId: z.string(),
+      items: z.array(
+        z.object({
           productId: z.string(),
           quantity: z.number(),
-        })),
-      }),
-      handler: async ({ input, ctx }) => {
-        // Type-safe access to input.customerId, input.items
-        return { invoiceId: "INV-001" };
-      },
+        }),
+      ),
+    }),
+    handler: async ({ input, ctx }) => {
+      // Type-safe access to input.customerId, input.items
+      return { invoiceId: "INV-001" };
     },
-  });
+  },
+});
 ```
 
 ### `.jobs(map)`
@@ -146,22 +142,21 @@ const cms = q({ name: "my-cms" })
 Defines background jobs that can be processed asynchronously via a queue.
 
 ```typescript
-const cms = q({ name: "my-cms" })
-  .jobs({
-    sendEmail: async ({ data, ctx }) => {
-      const { to, subject, body } = data;
-      await ctx.email.send({ to, subject, body });
-    },
+const cms = q({ name: "my-cms" }).jobs({
+  sendEmail: async ({ data, ctx }) => {
+    const { to, subject, body } = data;
+    await ctx.email.send({ to, subject, body });
+  },
 
-    processImage: async ({ data, ctx }) => {
-      const { assetId, operations } = data;
-      // Process image (resize, optimize, etc.)
-    },
+  processImage: async ({ data, ctx }) => {
+    const { assetId, operations } = data;
+    // Process image (resize, optimize, etc.)
+  },
 
-    syncInventory: async ({ data, ctx }) => {
-      // Sync with external inventory system
-    },
-  });
+  syncInventory: async ({ data, ctx }) => {
+    // Sync with external inventory system
+  },
+});
 ```
 
 Jobs are published via the queue:
@@ -198,52 +193,51 @@ Jobs support scheduling and retry options:
 Configures authentication using Better Auth.
 
 ```typescript
-const cms = q({ name: "my-cms" })
-  .auth({
-    secret: process.env.AUTH_SECRET,
-    emailAndPassword: { enabled: true },
+const cms = q({ name: "my-cms" }).auth({
+  secret: process.env.AUTH_SECRET,
+  emailAndPassword: { enabled: true },
 
-    // OAuth providers
-    socialProviders: {
-      google: {
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      },
-      github: {
-        clientId: process.env.GITHUB_CLIENT_ID,
-        clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      },
+  // OAuth providers
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     },
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    },
+  },
 
-    // Session configuration
-    session: {
-      expiresIn: 60 * 60 * 24 * 7, // 7 days
-      updateAge: 60 * 60 * 24,     // 1 day
-    },
+  // Session configuration
+  session: {
+    expiresIn: 60 * 60 * 24 * 7, // 7 days
+    updateAge: 60 * 60 * 24, // 1 day
+  },
 
-    // Email verification
-    emailVerification: {
-      sendOnSignUp: true,
-      sendVerificationEmail: async ({ user, url }) => {
-        await cms.email.send({
-          to: user.email,
-          subject: "Verify your email",
-          template: "email-verification",
-          data: { url },
-        });
-      },
+  // Email verification
+  emailVerification: {
+    sendOnSignUp: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      await cms.email.send({
+        to: user.email,
+        subject: "Verify your email",
+        template: "email-verification",
+        data: { url },
+      });
     },
-  });
+  },
+});
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `secret` | `string` | Secret key for signing tokens |
-| `emailAndPassword` | `object` | Enable email/password auth |
-| `socialProviders` | `object` | OAuth provider configurations |
-| `session` | `object` | Session expiration settings |
-| `emailVerification` | `object` | Email verification config |
-| `plugins` | `array` | Better Auth plugins |
+| Option              | Type     | Description                   |
+| ------------------- | -------- | ----------------------------- |
+| `secret`            | `string` | Secret key for signing tokens |
+| `emailAndPassword`  | `object` | Enable email/password auth    |
+| `socialProviders`   | `object` | OAuth provider configurations |
+| `session`           | `object` | Session expiration settings   |
+| `emailVerification` | `object` | Email verification config     |
+| `plugins`           | `array`  | Better Auth plugins           |
 
 See [Authentication Guide](/docs/guides/authentication) for complete setup.
 
@@ -252,36 +246,35 @@ See [Authentication Guide](/docs/guides/authentication) for complete setup.
 Configures localization for content.
 
 ```typescript
-const cms = q({ name: "my-cms" })
-  .locale({
-    locales: [
-      { code: "en", label: "English", flagCountryCode: "US" },
-      { code: "sk", label: "Slovenčina", flagCountryCode: "SK" },
-      { code: "de", label: "Deutsch", flagCountryCode: "DE" },
-    ],
-    defaultLocale: "en",
-    fallbacks: {
-      "en-GB": "en",
-      "en-US": "en",
-      "de-AT": "de",
-    },
-  });
+const cms = q({ name: "my-cms" }).locale({
+  locales: [
+    { code: "en", label: "English", flagCountryCode: "US" },
+    { code: "sk", label: "Slovenčina", flagCountryCode: "SK" },
+    { code: "de", label: "Deutsch", flagCountryCode: "DE" },
+  ],
+  defaultLocale: "en",
+  fallbacks: {
+    "en-GB": "en",
+    "en-US": "en",
+    "de-AT": "de",
+  },
+});
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `locales` | `Locale[]` or `() => Promise<Locale[]>` | Available locales (static or dynamic) |
-| `defaultLocale` | `string` | Fallback locale code |
-| `fallbacks` | `Record<string, string>` | Map specific locales to fallbacks |
+| Option          | Type                                    | Description                           |
+| --------------- | --------------------------------------- | ------------------------------------- |
+| `locales`       | `Locale[]` or `() => Promise<Locale[]>` | Available locales (static or dynamic) |
+| `defaultLocale` | `string`                                | Fallback locale code                  |
+| `fallbacks`     | `Record<string, string>`                | Map specific locales to fallbacks     |
 
 Each locale object:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `code` | `string` | Locale code (e.g., "en", "en-US") |
-| `label` | `string` | Display name |
-| `flagCountryCode` | `string` | ISO country code for flag display |
-| `fallback` | `boolean` | Whether this is a fallback locale |
+| Field             | Type      | Description                       |
+| ----------------- | --------- | --------------------------------- |
+| `code`            | `string`  | Locale code (e.g., "en", "en-US") |
+| `label`           | `string`  | Display name                      |
+| `flagCountryCode` | `string`  | ISO country code for flag display |
+| `fallback`        | `boolean` | Whether this is a fallback locale |
 
 See [Localization](/docs/backend/localization) for content localization.
 
@@ -293,12 +286,11 @@ Defines email templates using React Email components.
 import { WelcomeEmail } from "./emails/welcome";
 import { ResetPasswordEmail } from "./emails/reset-password";
 
-const cms = q({ name: "my-cms" })
-  .emailTemplates({
-    welcome: WelcomeEmail,
-    resetPassword: ResetPasswordEmail,
-    orderConfirmation: OrderConfirmationEmail,
-  });
+const cms = q({ name: "my-cms" }).emailTemplates({
+  welcome: WelcomeEmail,
+  resetPassword: ResetPasswordEmail,
+  orderConfirmation: OrderConfirmationEmail,
+});
 ```
 
 Templates are rendered when sending emails:
@@ -317,21 +309,20 @@ await cms.email.send({
 Adds backend i18n messages for error messages and system text.
 
 ```typescript
-const cms = q({ name: "my-cms" })
-  .messages({
-    en: {
-      "error.notFound": "Resource not found",
-      "error.unauthorized": "You are not authorized",
-      "error.validation": "Validation failed",
-      "email.welcome.subject": "Welcome to {{ siteName }}",
-    },
-    sk: {
-      "error.notFound": "Zdroj nebol nájdený",
-      "error.unauthorized": "Nemáte oprávnenie",
-      "error.validation": "Validácia zlyhala",
-      "email.welcome.subject": "Vitajte na {{ siteName }}",
-    },
-  });
+const cms = q({ name: "my-cms" }).messages({
+  en: {
+    "error.notFound": "Resource not found",
+    "error.unauthorized": "You are not authorized",
+    "error.validation": "Validation failed",
+    "email.welcome.subject": "Welcome to {{ siteName }}",
+  },
+  sk: {
+    "error.notFound": "Zdroj nebol nájdený",
+    "error.unauthorized": "Nemáte oprávnenie",
+    "error.validation": "Validácia zlyhala",
+    "email.welcome.subject": "Vitajte na {{ siteName }}",
+  },
+});
 ```
 
 Messages support interpolation with `{{ variable }}` syntax and plural forms.
@@ -351,21 +342,20 @@ Registers custom database migrations.
 ```typescript
 import { sql } from "drizzle-orm";
 
-const cms = q({ name: "my-cms" })
-  .migrations([
-    {
-      name: "add-full-text-search",
-      up: async (db) => {
-        await db.execute(sql`
+const cms = q({ name: "my-cms" }).migrations([
+  {
+    name: "add-full-text-search",
+    up: async (db) => {
+      await db.execute(sql`
           CREATE INDEX posts_search_idx ON posts
           USING GIN (to_tsvector('english', title || ' ' || content))
         `);
-      },
-      down: async (db) => {
-        await db.execute(sql`DROP INDEX posts_search_idx`);
-      },
     },
-  ]);
+    down: async (db) => {
+      await db.execute(sql`DROP INDEX posts_search_idx`);
+    },
+  },
+]);
 ```
 
 ## Module Composition
@@ -397,6 +387,7 @@ const cms = q({ name: "my-cms" })
 ```
 
 **Override Strategy:**
+
 - Collections with same name: Later definition wins
 - Jobs with same name: Later definition wins
 - Auth options: Merged (later options override)
@@ -511,16 +502,16 @@ const cms = q({ name: "my-cms" })
   });
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `db` | `{ url: string }` or `{ pglite: true }` | Database connection |
-| `storage` | `StorageConfig` | File storage configuration |
-| `email` | `EmailConfig` | Email service configuration |
-| `queue` | `QueueConfig` | Background job queue |
-| `search` | `SearchConfig` | Full-text search engine |
-| `logger` | `LoggerConfig` | Logging configuration |
-| `kv` | `KVConfig` | Key-value store |
-| `realtime` | `RealtimeConfig` | Real-time updates via PostgreSQL NOTIFY |
+| Option     | Type                                    | Description                             |
+| ---------- | --------------------------------------- | --------------------------------------- |
+| `db`       | `{ url: string }` or `{ pglite: true }` | Database connection                     |
+| `storage`  | `StorageConfig`                         | File storage configuration              |
+| `email`    | `EmailConfig`                           | Email service configuration             |
+| `queue`    | `QueueConfig`                           | Background job queue                    |
+| `search`   | `SearchConfig`                          | Full-text search engine                 |
+| `logger`   | `LoggerConfig`                          | Logging configuration                   |
+| `kv`       | `KVConfig`                              | Key-value store                         |
+| `realtime` | `RealtimeConfig`                        | Real-time updates via PostgreSQL NOTIFY |
 
 ## Runtime Instance
 
@@ -529,29 +520,29 @@ After calling `.build()`, you have access to the `Questpie` instance:
 ### Properties
 
 ```typescript
-cms.config       // The resolved configuration
-cms.db           // Drizzle ORM client
-cms.auth         // Better Auth instance
-cms.storage      // File storage (Flydrive)
-cms.queue        // Job queue (pg-boss)
-cms.email        // Email service
-cms.kv           // Key-value store
-cms.logger       // Logger
-cms.search       // Search service
-cms.realtime     // Realtime service
+cms.config; // The resolved configuration
+cms.db; // Drizzle ORM client
+cms.auth; // Better Auth instance
+cms.storage; // File storage (Flydrive)
+cms.queue; // Job queue (pg-boss)
+cms.email; // Email service
+cms.kv; // Key-value store
+cms.logger; // Logger
+cms.search; // Search service
+cms.realtime; // Realtime service
 ```
 
 ### Collections & Globals
 
 ```typescript
 // Access collection metadata
-cms.collections.posts.table      // Drizzle table
-cms.collections.posts.name       // "posts"
-cms.collections.posts.fields     // Field definitions
+cms.collections.posts.table; // Drizzle table
+cms.collections.posts.name; // "posts"
+cms.collections.posts.fields; // Field definitions
 
 // Access global metadata
-cms.globals.settings.table       // Drizzle table
-cms.globals.settings.name        // "settings"
+cms.globals.settings.table; // Drizzle table
+cms.globals.settings.name; // "settings"
 ```
 
 ### API Operations
@@ -589,7 +580,7 @@ cms.getTables()
 cms.getSchema()
 
 // Start job worker
-cms.listenToJobs({ concurrency: 5 });
+cms.queue.listen({ teamSize: 5 });
 ```
 
 ### Migrations API

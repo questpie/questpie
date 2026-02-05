@@ -44,6 +44,19 @@ class MockRealtimeAdapter implements RealtimeAdapter {
 	}
 }
 
+class LifecycleTrackingRealtimeAdapter extends MockRealtimeAdapter {
+	public startCalls = 0;
+	public stopCalls = 0;
+
+	async start(): Promise<void> {
+		this.startCalls += 1;
+	}
+
+	async stop(): Promise<void> {
+		this.stopCalls += 1;
+	}
+}
+
 type SSEEvent = {
 	event: string;
 	data: any;
@@ -403,6 +416,91 @@ describe("realtime", () => {
 			unsub?.();
 		});
 
+		it("refreshes create events for complex OR filters", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
+			const posts = q
+				.collection("posts")
+				.fields((f) => ({
+					title: f.textarea({ required: true }),
+					status: f.textarea({ required: true }),
+					authorId: f.textarea({ required: true }),
+				}))
+				.build();
+
+			const testModule = q.collections({ posts });
+
+			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			await runTestDbMigrations(setup.cms);
+
+			const ctx = createTestContext();
+			const events: any[] = [];
+
+			const unsub = setup.cms.realtime?.subscribe(
+				(event) => events.push(event),
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: {
+						OR: [{ status: "published" }, { authorId: "author-1" }],
+					},
+				},
+			);
+
+			await setup.cms.api.collections.posts.create(
+				{ title: "Matches OR", status: "draft", authorId: "author-1" },
+				ctx,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			expect(events.length).toBe(1);
+			expect(events[0].operation).toBe("create");
+
+			unsub?.();
+		});
+
+		it("conservatively refreshes create for complex filters", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
+			const posts = q
+				.collection("posts")
+				.fields((f) => ({
+					title: f.textarea({ required: true }),
+					status: f.textarea({ required: true }),
+				}))
+				.build();
+
+			const testModule = q.collections({ posts });
+
+			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			await runTestDbMigrations(setup.cms);
+
+			const ctx = createTestContext();
+			const events: any[] = [];
+
+			const unsub = setup.cms.realtime?.subscribe(
+				(event) => events.push(event),
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: {
+						OR: [{ status: "published" }, { status: "scheduled" }],
+					},
+				},
+			);
+
+			await setup.cms.api.collections.posts.create(
+				{ title: "Draft", status: "draft" },
+				ctx,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			expect(events.length).toBe(1);
+			expect(events[0].operation).toBe("create");
+
+			unsub?.();
+		});
+
 		it("filters by boolean fields", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
@@ -539,6 +637,101 @@ describe("realtime", () => {
 				"comments",
 				"posts",
 			]);
+
+			unsub?.();
+		});
+
+		it("re-sends snapshot when record leaves filter on update", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
+			const posts = q
+				.collection("posts")
+				.fields((f) => ({
+					title: f.textarea({ required: true }),
+					status: f.textarea({ required: true }),
+				}))
+				.build();
+
+			const testModule = q.collections({ posts });
+
+			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			await runTestDbMigrations(setup.cms);
+
+			const ctx = createTestContext();
+			const filteredEvents: any[] = [];
+
+			const unsub = setup.cms.realtime?.subscribe(
+				(event) => filteredEvents.push(event),
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: { status: "published" },
+				},
+			);
+
+			const post = await setup.cms.api.collections.posts.create(
+				{ title: "Published post", status: "published" },
+				ctx,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			expect(filteredEvents.length).toBe(1);
+
+			filteredEvents.length = 0;
+
+			await setup.cms.api.collections.posts.updateById(
+				{ id: post.id, data: { status: "draft" } },
+				ctx,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			expect(filteredEvents.length).toBe(1);
+			expect(filteredEvents[0].operation).toBe("update");
+
+			unsub?.();
+		});
+
+		it("re-sends snapshot for filtered subscriber on delete", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
+			const posts = q
+				.collection("posts")
+				.fields((f) => ({
+					title: f.textarea({ required: true }),
+					status: f.textarea({ required: true }),
+				}))
+				.build();
+
+			const testModule = q.collections({ posts });
+
+			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			await runTestDbMigrations(setup.cms);
+
+			const ctx = createTestContext();
+			const filteredEvents: any[] = [];
+
+			const unsub = setup.cms.realtime?.subscribe(
+				(event) => filteredEvents.push(event),
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: { status: "published" },
+				},
+			);
+
+			const post = await setup.cms.api.collections.posts.create(
+				{ title: "To delete", status: "published" },
+				ctx,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			expect(filteredEvents.length).toBe(1);
+
+			filteredEvents.length = 0;
+
+			await setup.cms.api.collections.posts.deleteById({ id: post.id }, ctx);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			expect(filteredEvents.length).toBe(1);
+			expect(filteredEvents[0].operation).toBe("delete");
 
 			unsub?.();
 		});
@@ -924,6 +1117,40 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("edge cases", () => {
+		it("restarts adapter after all subscribers disconnect", async () => {
+			const adapter = new LifecycleTrackingRealtimeAdapter();
+			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
+			const items = q
+				.collection("items")
+				.fields((f) => ({ name: f.textarea({ required: true }) }))
+				.build();
+
+			const testModule = q.collections({ items });
+
+			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			await runTestDbMigrations(setup.cms);
+
+			const firstUnsub = setup.cms.realtime?.subscribe(() => {}, {
+				resourceType: "collection",
+				resource: "items",
+			});
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			expect(adapter.startCalls).toBe(1);
+
+			firstUnsub?.();
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			expect(adapter.stopCalls).toBe(1);
+
+			const secondUnsub = setup.cms.realtime?.subscribe(() => {}, {
+				resourceType: "collection",
+				resource: "items",
+			});
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			expect(adapter.startCalls).toBe(2);
+
+			secondUnsub?.();
+		});
+
 		it("handles multiple subscribers with different filters", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
@@ -1063,6 +1290,161 @@ describe("realtime", () => {
 			await new Promise((resolve) => setTimeout(resolve, 100));
 
 			expect(events.length).toBe(2);
+
+			unsub?.();
+		});
+
+		it("scales filtered routing across many subscribers", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
+			const messages = q
+				.collection("messages")
+				.fields((f) => ({
+					roomId: f.textarea({ required: true }),
+					content: f.textarea({ required: true }),
+				}))
+				.build();
+
+			const testModule = q.collections({ messages });
+
+			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			await runTestDbMigrations(setup.cms);
+
+			const ctx = createTestContext();
+			const subscriberCount = 120;
+			const rooms = 12;
+			const targetRoom = "room-7";
+			const hits = Array.from({ length: subscriberCount }, () => 0);
+
+			const unsubscribers: Array<() => void> = [];
+			for (let i = 0; i < subscriberCount; i++) {
+				const roomId = `room-${i % rooms}`;
+				const unsub = setup.cms.realtime?.subscribe(
+					() => {
+						hits[i] += 1;
+					},
+					{
+						resourceType: "collection",
+						resource: "messages",
+						where: { roomId },
+					},
+				);
+
+				if (unsub) unsubscribers.push(unsub);
+			}
+
+			await setup.cms.api.collections.messages.create(
+				{ roomId: targetRoom, content: "hello" },
+				ctx,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 150));
+
+			const targetHits = hits
+				.filter((_, i) => `room-${i % rooms}` === targetRoom)
+				.reduce((sum, value) => sum + value, 0);
+			const nonTargetHits = hits
+				.filter((_, i) => `room-${i % rooms}` !== targetRoom)
+				.reduce((sum, value) => sum + value, 0);
+
+			expect(targetHits).toBe(subscriberCount / rooms);
+			expect(nonTargetHits).toBe(0);
+
+			for (const unsub of unsubscribers) {
+				unsub();
+			}
+		});
+
+		it("cleans up old realtime log rows with retentionDays", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
+			const items = q
+				.collection("items")
+				.fields((f) => ({ name: f.textarea({ required: true }) }))
+				.build();
+
+			const testModule = q.collections({ items });
+
+			setup = await buildMockApp(testModule, {
+				realtime: { adapter, retentionDays: 1 },
+			});
+			await runTestDbMigrations(setup.cms);
+
+			const oldCreatedAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+			await setup.cms.db.insert(questpieRealtimeLogTable).values({
+				resourceType: "collection",
+				resource: "items",
+				operation: "create",
+				recordId: "old-record",
+				locale: null,
+				payload: { name: "old" },
+				createdAt: oldCreatedAt,
+			});
+
+			const ctx = createTestContext();
+			await setup.cms.api.collections.items.create({ name: "new" }, ctx);
+			await new Promise((resolve) => setTimeout(resolve, 150));
+
+			const logs = await setup.cms.db
+				.select()
+				.from(questpieRealtimeLogTable)
+				.orderBy(questpieRealtimeLogTable.seq);
+
+			const hasOldRow = logs.some((row: any) => row.recordId === "old-record");
+			expect(hasOldRow).toBe(false);
+			expect(logs.some((row: any) => row.payload?.name === "new")).toBe(true);
+		});
+
+		it("cleans up consumed realtime rows using min consumed seq", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
+			const items = q
+				.collection("items")
+				.fields((f) => ({ name: f.textarea({ required: true }) }))
+				.build();
+
+			const testModule = q.collections({ items });
+
+			setup = await buildMockApp(testModule, { realtime: { adapter } });
+			await runTestDbMigrations(setup.cms);
+
+			await setup.cms.db.insert(questpieRealtimeLogTable).values({
+				resourceType: "collection",
+				resource: "items",
+				operation: "create",
+				recordId: "pre-existing",
+				locale: null,
+				payload: { name: "before-subscribe" },
+			});
+
+			const events: RealtimeChangeEvent[] = [];
+			const unsub = setup.cms.realtime?.subscribe(
+				(event) => events.push(event),
+				{
+					resourceType: "collection",
+					resource: "items",
+				},
+			);
+
+			const ctx = createTestContext();
+			await setup.cms.api.collections.items.create(
+				{ name: "after-subscribe" },
+				ctx,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 150));
+
+			expect(events.length).toBe(1);
+
+			const logs = await setup.cms.db
+				.select()
+				.from(questpieRealtimeLogTable)
+				.orderBy(questpieRealtimeLogTable.seq);
+
+			expect(logs.some((row: any) => row.recordId === "pre-existing")).toBe(
+				false,
+			);
+			expect(
+				logs.some((row: any) => row.payload?.name === "after-subscribe"),
+			).toBe(true);
 
 			unsub?.();
 		});

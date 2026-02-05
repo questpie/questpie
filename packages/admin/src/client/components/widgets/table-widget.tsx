@@ -121,6 +121,7 @@ export default function TableWidget({
 		filter,
 		linkToDetail,
 		emptyMessage,
+		realtime,
 	} = config;
 
 	// Normalize columns (convert strings to objects)
@@ -146,6 +147,8 @@ export default function TableWidget({
 	const { data, isLoading, error, refetch } = useCollectionList(
 		collection as any,
 		queryOptions,
+		undefined,
+		{ realtime },
 	);
 
 	const items = Array.isArray(data?.docs) ? data.docs : [];

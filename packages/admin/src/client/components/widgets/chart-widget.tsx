@@ -43,6 +43,7 @@ export type ChartWidgetConfig = {
 	chartType?: "line" | "bar" | "area" | "pie";
 	timeRange?: "7d" | "30d" | "90d" | "1y";
 	label?: string;
+	realtime?: boolean;
 	/** Color for the chart (CSS color value) */
 	color?: string;
 	/** Show grid lines */
@@ -111,6 +112,7 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 		label,
 		color = "var(--color-chart-1)",
 		showGrid = true,
+		realtime,
 	} = config;
 
 	// Fetch collection data (limited to 1000 items for performance)
@@ -119,6 +121,8 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 		{
 			limit: 1000,
 		},
+		undefined,
+		{ realtime },
 	);
 
 	// API returns PaginatedResult with { docs, totalDocs, ... }

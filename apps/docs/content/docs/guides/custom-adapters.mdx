@@ -7,13 +7,13 @@ QUESTPIE uses the adapter pattern for all integrated services. This allows you t
 
 ## Adapter Types
 
-| Service      | Interface                   | Built-in Adapters | Required Packages          |
-| ------------ | --------------------------- | ----------------- | -------------------------- |
-| **Queue**    | `QueueAdapter`              | pg-boss           | `pg-boss`, `pg` (optional) |
-| **Email**    | `MailAdapter`               | SMTP, Console     | `nodemailer` (optional)    |
-| **Storage**  | `DriverContract` (Flydrive) | FS, S3, R2, GCS   | None (built-in)            |
-| **Realtime** | `RealtimeAdapter`           | PostgreSQL NOTIFY | `pg` (optional)            |
-| **KV/Cache** | `KVAdapter`                 | Memory, Redis     | `ioredis` (optional)       |
+| Service      | Interface                   | Built-in Adapters | Required Packages                |
+| ------------ | --------------------------- | ----------------- | -------------------------------- |
+| **Queue**    | `QueueAdapter`              | pg-boss           | `pg-boss`, `pg` (optional)       |
+| **Email**    | `MailAdapter`               | SMTP, Console     | `nodemailer` (optional)          |
+| **Storage**  | `DriverContract` (Flydrive) | FS, S3, R2, GCS   | None (built-in)                  |
+| **Realtime** | `RealtimeAdapter`           | PostgreSQL NOTIFY | `pg` (optional)                  |
+| **KV/Cache** | `KVAdapter`                 | Memory, Redis     | `ioredis` (optional)             |
 | **Logger**   | `LoggerAdapter`             | Pino              | `pino`, `pino-pretty` (optional) |
 
 ## Queue Adapter
@@ -36,6 +36,14 @@ bun add bullmq ioredis
 
 ```typescript
 interface QueueAdapter {
+  capabilities?: {
+    longRunningConsumer?: boolean;
+    runOnceConsumer?: boolean;
+    pushConsumer?: boolean;
+    scheduling?: boolean;
+    singleton?: boolean;
+  };
+
   // Lifecycle
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -54,12 +62,22 @@ interface QueueAdapter {
   ): Promise<void>;
   unschedule(jobName: string): Promise<void>;
 
-  // Processing
-  work(
-    jobName: string,
-    handler: (job: { id: string; data: any }) => Promise<void>,
+  // Long-running worker mode
+  listen?(
+    handlers: Record<string, (job: { id: string; data: any }) => Promise<void>>,
     options?: { teamSize?: number; batchSize?: number },
   ): Promise<void>;
+
+  // Serverless tick mode
+  runOnce?(
+    handlers: Record<string, (job: { id: string; data: any }) => Promise<void>>,
+    options?: { batchSize?: number; jobs?: string[] },
+  ): Promise<{ processed: number }>;
+
+  // Push consumer mode (Cloudflare Queues style)
+  createPushConsumer?(args: {
+    handlers: Record<string, (job: { id: string; data: any }) => Promise<void>>;
+  }): (batch: unknown) => Promise<void>;
 
   // Events
   on(event: "error", handler: (error: Error) => void): void;
@@ -88,6 +106,14 @@ export interface BullMQAdapterOptions {
 }
 
 export class BullMQAdapter implements QueueAdapter {
+  capabilities = {
+    longRunningConsumer: true,
+    runOnceConsumer: false,
+    pushConsumer: false,
+    scheduling: true,
+    singleton: false,
+  };
+
   private queues = new Map<string, Queue>();
   private workers = new Map<string, Worker>();
   private connection: ConnectionOptions;
@@ -169,23 +195,24 @@ export class BullMQAdapter implements QueueAdapter {
     await queue.removeJobScheduler(`${jobName}-scheduler`);
   }
 
-  async work(
-    jobName: string,
-    handler: (job: { id: string; data: any }) => Promise<void>,
+  async listen(
+    handlers: Record<string, (job: { id: string; data: any }) => Promise<void>>,
     options?: { teamSize?: number },
   ): Promise<void> {
-    const worker = new Worker(
-      jobName,
-      async (job) => {
-        await handler({ id: job.id!, data: job.data });
-      },
-      {
-        connection: this.connection,
-        concurrency: options?.teamSize ?? 1,
-      },
-    );
+    for (const [jobName, handler] of Object.entries(handlers)) {
+      const worker = new Worker(
+        jobName,
+        async (job) => {
+          await handler({ id: job.id!, data: job.data });
+        },
+        {
+          connection: this.connection,
+          concurrency: options?.teamSize ?? 1,
+        },
+      );
 
-    this.workers.set(jobName, worker);
+      this.workers.set(jobName, worker);
+    }
   }
 
   on(event: "error", handler: (error: Error) => void): void {
@@ -277,10 +304,7 @@ interface SerializableMailOptions {
 ```typescript
 // adapters/resend.adapter.ts
 import { Resend } from "resend";
-import {
-  MailAdapter,
-  type SerializableMailOptions,
-} from "questpie";
+import { MailAdapter, type SerializableMailOptions } from "questpie";
 
 export interface ResendAdapterOptions {
   apiKey: string;
@@ -331,10 +355,7 @@ export function resendAdapter(options: ResendAdapterOptions): ResendAdapter {
 ```typescript
 // adapters/postmark.adapter.ts
 import { ServerClient } from "postmark";
-import {
-  MailAdapter,
-  type SerializableMailOptions,
-} from "questpie";
+import { MailAdapter, type SerializableMailOptions } from "questpie";
 
 export class PostmarkAdapter extends MailAdapter {
   private client: ServerClient;
@@ -637,7 +658,10 @@ export class MockQueueAdapter implements QueueAdapter {
     this.scheduled = this.scheduled.filter((s) => s.name !== jobName);
   }
 
-  async work() {}
+  async listen() {}
+  async runOnce() {
+    return { processed: 0 };
+  }
   on() {}
 
   // Test helpers

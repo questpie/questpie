@@ -8,6 +8,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "../ui/sheet.js";
+import { Switch } from "../ui/switch.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { ColumnsTab } from "./columns-tab.js";
 import { FiltersTab } from "./filters-tab.js";
@@ -75,6 +76,7 @@ export function FilterBuilderSheet({
 			filters: [],
 			sortConfig: null,
 			visibleColumns: availableFields.map((f) => f.name),
+			realtime: undefined,
 		};
 		setLocalConfig(resetConfig);
 	};
@@ -90,6 +92,23 @@ export function FilterBuilderSheet({
 				</SheetHeader>
 
 				<div className="flex-1 overflow-y-auto px-6">
+					<div className="mt-4 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+						<div className="flex items-center justify-between gap-3">
+							<div>
+								<p className="text-sm font-medium">Realtime Updates</p>
+								<p className="text-xs text-muted-foreground">
+									Auto-refresh this table when data changes.
+								</p>
+							</div>
+							<Switch
+								checked={localConfig.realtime ?? true}
+								onCheckedChange={(checked) =>
+									setLocalConfig({ ...localConfig, realtime: checked })
+								}
+							/>
+						</div>
+					</div>
+
 					<Tabs defaultValue="columns" className="mt-4">
 						<TabsList variant="line" className="w-full">
 							<TabsTrigger value="columns" className="flex-1">

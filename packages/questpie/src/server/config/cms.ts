@@ -35,8 +35,6 @@ import { MailerService } from "#questpie/server/integrated/mailer/index.js";
 import {
 	createQueueClient,
 	type QueueClient,
-	startJobWorkerForJobs,
-	type WorkerOptions,
 } from "#questpie/server/integrated/queue/index.js";
 import {
 	questpieRealtimeLogTable,
@@ -198,10 +196,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 					"QUESTPIE: Queue adapter is required when jobs are defined. Provide adapter in .build({ queue: { adapter: ... } })",
 				);
 			}
-			this.queue = createQueueClient(
-				config.queue.jobs,
-				config.queue.adapter,
-			) as any;
+			this.queue = createQueueClient(config.queue.jobs, config.queue.adapter, {
+				createContext: async () => this.createContext({ accessMode: "system" }),
+				getApp: () => this,
+				logger: this.logger,
+			}) as any;
 		} else {
 			this.queue = {} as any; // Empty queue client if no jobs defined
 		}
@@ -628,51 +627,5 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				);
 			}
 		}
-	}
-
-	/**
-	 * Start listening to jobs (worker mode)
-	 *
-	 * This method starts the queue workers and begins processing jobs.
-	 * Call this in your worker instances, not in your web server.
-	 *
-	 * @example
-	 * ```ts
-	 * // worker.ts
-	 * const cms = new Questpie({ ... });
-	 * await cms.listenToJobs();
-	 * ```
-	 *
-	 * @example
-	 * ```ts
-	 * // Listen to specific jobs only
-	 * await cms.listenToJobs(['send-email', 'process-image']);
-	 * ```
-	 *
-	 * @example
-	 * ```ts
-	 * // With custom options
-	 * await cms.listenToJobs({ teamSize: 20, batchSize: 10 });
-	 * ```
-	 */
-	public async listenToJobs(options?: WorkerOptions): Promise<void> {
-		if (!this.config.queue?.jobs) {
-			throw new Error(
-				"Cannot start job workers: No jobs configured. Add 'queue.jobs' to your Questpie config.",
-			);
-		}
-
-		// Create context factory for workers
-		const createContext = async (): Promise<RequestContext> => {
-			return this.createContext({ accessMode: "system" });
-		};
-
-		await startJobWorkerForJobs(
-			this.queue,
-			this.config.queue.jobs,
-			createContext,
-			options,
-			this,
-		);
 	}
 }

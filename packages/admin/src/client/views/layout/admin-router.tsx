@@ -509,6 +509,7 @@ export function AdminRouter({
 				showSearch={defaultViews?.collectionList?.showSearch}
 				showFilters={defaultViews?.collectionList?.showFilters}
 				showToolbar={defaultViews?.collectionList?.showToolbar}
+				realtime={defaultViews?.collectionList?.realtime}
 			/>
 		);
 	}

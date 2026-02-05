@@ -37,6 +37,7 @@ export {
 	selectContentLocale,
 	selectNavigate,
 	selectNavigation,
+	selectRealtime,
 	selectSetContentLocale,
 	// Store hooks
 	useAdminStore,

@@ -99,8 +99,22 @@ const app = q({ name: "my-app" })
   .use(starterModule)  // Includes:
   // - Auth collections (users, sessions, accounts, verifications, apikeys)
   // - Assets collection with file upload support
+  // - Scheduled realtime outbox cleanup job (hourly, when queue worker runs)
   // - Core auth options (Better Auth)
   .build({ ... });
+```
+
+If queue is configured and worker mode is running (`await app.queue.listen()`),
+starter module auto-schedules the `questpie.realtime.cleanup` cron job.
+
+Worker bootstrap example:
+
+```typescript
+// worker.ts
+import { app } from "./app";
+
+await app.queue.listen();
+console.log("[worker] queue workers started");
 ```
 
 If you don't need auth or file uploads, simply omit `.use(starterModule)` for a minimal setup.
@@ -196,6 +210,22 @@ const app = q({ name: "my-app" })
 
 // Publish job (use registration key, not internal name)
 await app.queue.sendEmail.publish({ userId: "123" });
+```
+
+Worker bootstrap with automatic graceful shutdown:
+
+```typescript
+// worker.ts
+import { app } from "./app";
+
+// Registers workers and auto-handles SIGINT/SIGTERM shutdown
+await app.queue.listen();
+
+// Optional tuning:
+// await app.queue.listen({
+//   shutdownSignals: ["SIGINT", "SIGTERM", "SIGQUIT"],
+//   shutdownTimeoutMs: 15000,
+// });
 ```
 
 ## Modular Composition

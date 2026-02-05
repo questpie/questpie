@@ -8,7 +8,9 @@
  *
  * - **Typesafe Jobs**: Define jobs with Zod schemas for compile-time type safety
  * - **Auto-validation**: Payloads are validated automatically using Zod schemas
- * - **Worker Support**: Easy worker setup with `cms.listenToJobs()`
+ * - **Worker Support**: Easy worker setup with `cms.queue.listen()`
+ * - **Serverless Support**: Tick mode with `cms.queue.runOnce()`
+ * - **Push Consumers**: Runtime-specific push consumer handlers
  * - **Workflows**: Chain multiple jobs together with the workflow builder
  * - **Scheduling**: Support for delayed jobs and cron scheduling
  * - **Retries**: Built-in retry logic with exponential backoff
@@ -124,10 +126,10 @@
  * });
  *
  * // Start listening to all jobs
- * await cms.listenToJobs();
+ * await cms.queue.listen();
  *
- * // Or listen to specific jobs only
- * await cms.listenToJobs(['send-email'], { teamSize: 20 });
+ * // Graceful shutdown is enabled by default
+ * // await cms.queue.listen({ shutdownTimeoutMs: 15000 });
  * ```
  *
  * ## Workflows
@@ -198,11 +200,12 @@
  * ```
  */
 
-// Core exports
-export * from "./types.js";
+export * from "./adapter.js";
+export * from "./adapters/cloudflare-queues.js";
+export * from "./adapters/pg-boss.js";
 export * from "./job.js";
 export * from "./service.js";
+// Core exports
+export * from "./types.js";
 export * from "./worker.js";
 export * from "./workflow.js";
-export * from "./adapter.js";
-export * from "./adapters/pg-boss.js";

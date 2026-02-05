@@ -24,6 +24,7 @@ import { StatsWidgetSkeleton } from "./widget-skeletons";
 export type StatsWidgetConfig = {
 	collection: string;
 	label?: string;
+	realtime?: boolean;
 	/** Static filter (evaluated at build time) */
 	filter?: Record<string, any>;
 	/** Dynamic filter function (evaluated at render time) */
@@ -169,6 +170,7 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 		dateFilter,
 		icon: Icon,
 		variant = "default",
+		realtime,
 	} = config;
 
 	// Build the final filter - evaluated at render time
@@ -206,6 +208,8 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 	} = useCollectionCount(
 		collection as any,
 		computedFilter ? { where: computedFilter } : undefined,
+		undefined,
+		{ realtime },
 	);
 
 	const displayLabel = label

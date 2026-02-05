@@ -9,7 +9,7 @@ import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
-import { parseFindOptions } from "../utils/parsers.js";
+import { parseFindOptions, parseGlobalGetOptions } from "../utils/parsers.js";
 import { handleError, sseHeaders } from "../utils/response.js";
 
 export const createRealtimeRoutes = <
@@ -183,7 +183,7 @@ export const createRealtimeRoutes = <
 			}
 
 			const crud = globalInstance.generateCRUD(resolved.cmsContext.db, cms);
-			const options = parseFindOptions(new URL(request.url));
+			const options = parseGlobalGetOptions(new URL(request.url));
 
 			const encoder = new TextEncoder();
 			let closeStream: (() => void) | null = null;

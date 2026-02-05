@@ -89,6 +89,11 @@ export interface AdminState {
 	authClient: any | null;
 	basePath: string;
 	navigate: (path: string) => void;
+	realtime: {
+		enabled: boolean;
+		basePath: string;
+		debounceMs: number;
+	};
 
 	// Content locale state (CMS content language)
 	// Note: UI locale is managed by I18n adapter, not the store
@@ -112,6 +117,11 @@ interface CreateAdminStoreProps {
 	authClient: any | null;
 	basePath: string;
 	navigate: (path: string) => void;
+	realtime: {
+		enabled: boolean;
+		basePath: string;
+		debounceMs: number;
+	};
 	initialContentLocale: string;
 }
 
@@ -121,6 +131,7 @@ function createAdminStore({
 	authClient,
 	basePath,
 	navigate,
+	realtime,
 	initialContentLocale,
 }: CreateAdminStoreProps) {
 	if (client && initialContentLocale && "setLocale" in client) {
@@ -134,6 +145,7 @@ function createAdminStore({
 		authClient,
 		basePath,
 		navigate,
+		realtime,
 
 		// Content Locale (CMS content language)
 		// Note: UI locale is managed by I18n adapter, not the store
@@ -180,6 +192,24 @@ export interface AdminProviderProps {
 	 * Base path for admin routes (default: "/admin")
 	 */
 	basePath?: string;
+
+	/**
+	 * Realtime settings for auto-refreshing collection/global queries via SSE.
+	 *
+	 * - `true`: enable with inferred API base path from client
+	 * - `false`: disabled
+	 * - `undefined`: enabled by default
+	 * - object: configure enabled flag and API base path
+	 */
+	realtime?:
+		| boolean
+		| {
+				enabled?: boolean;
+				/** API base path where CMS routes are mounted (e.g. `/api/cms`) */
+				basePath?: string;
+				/** Debounce window for snapshot invalidation (default: 150ms) */
+				debounceMs?: number;
+		  };
 
 	/**
 	 * Navigate function for routing
@@ -356,6 +386,7 @@ export function AdminProvider({
 	client,
 	authClient,
 	basePath = "/admin",
+	realtime,
 	navigate: navigateProp,
 	initialUiLocale,
 	initialContentLocale,
@@ -392,6 +423,24 @@ export function AdminProvider({
 
 	// Create store (once per provider instance)
 	const storeRef = useRef<AdminStore | null>(null);
+	const inferredCmsBasePath =
+		typeof (client as any)?.getBasePath === "function"
+			? ((client as any).getBasePath() as string)
+			: "/cms";
+
+	const realtimeConfig =
+		typeof realtime === "boolean"
+			? {
+					enabled: realtime,
+					basePath: inferredCmsBasePath,
+					debounceMs: 150,
+				}
+			: {
+					enabled: realtime?.enabled ?? true,
+					basePath: realtime?.basePath ?? inferredCmsBasePath,
+					debounceMs: realtime?.debounceMs ?? 150,
+				};
+
 	if (!storeRef.current) {
 		storeRef.current = createAdminStore({
 			admin,
@@ -399,6 +448,7 @@ export function AdminProvider({
 			authClient: authClient ?? null,
 			basePath,
 			navigate,
+			realtime: realtimeConfig,
 			initialContentLocale: resolvedContentLocale,
 		});
 	}
@@ -409,9 +459,10 @@ export function AdminProvider({
 				admin,
 				navigation: buildNavigation(admin, { basePath }),
 				brandName: resolveTextSync(admin.getBranding().name, "Admin"),
+				realtime: realtimeConfig,
 			});
 		}
-	}, [admin, basePath]);
+	}, [admin, basePath, realtimeConfig]);
 
 	// Get content locale from store for reactive updates
 	const contentLocale = useStore(storeRef.current, (s) => s.contentLocale);
@@ -524,6 +575,9 @@ export const selectBasePath = (s: AdminState) => s.basePath;
 
 /** Select navigate function */
 export const selectNavigate = (s: AdminState) => s.navigate;
+
+/** Select realtime config */
+export const selectRealtime = (s: AdminState) => s.realtime;
 
 /** Select current content locale (CMS content language) */
 export const selectContentLocale = (s: AdminState) => s.contentLocale;

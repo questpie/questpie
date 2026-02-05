@@ -160,6 +160,12 @@ export interface ListViewConfig<TFieldNames extends string = string> {
 	paginated?: boolean;
 
 	/**
+	 * Enable realtime invalidation for list queries.
+	 * Falls back to AdminProvider realtime config when undefined.
+	 */
+	realtime?: boolean;
+
+	/**
 	 * Default page size
 	 * @default 25
 	 */

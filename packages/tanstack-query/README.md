@@ -5,6 +5,7 @@ Type-safe TanStack React Query integration for QUESTPIE.
 ## Features
 
 - **Query Options Factory** - Pre-built query/mutation options using `queryOptions()` and `mutationOptions()` from TanStack Query
+- **RPC Query Primitives** - Typed `query()` / `mutation()` helpers for `client.rpc.*` procedures
 - **SSR Ready** - Prefetch data on server, hydrate on client
 - **Type-Safe** - Full TypeScript inference from your CMS schema
 
@@ -22,9 +23,9 @@ bun add @questpie/tanstack-query questpie @tanstack/react-query
 // src/lib/queries.ts
 import { createClient } from "questpie/client";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
-import type { AppCMS } from "@/cms";
+import type { AppCMS, AppRpc } from "@/cms";
 
-const cmsClient = createClient<AppCMS>({
+const cmsClient = createClient<AppCMS, AppRpc>({
   baseURL: "http://localhost:3000",
   basePath: "/api/cms",
 });
@@ -124,6 +125,22 @@ const searchQuery = q.custom.query({
 });
 
 useQuery(searchQuery);
+```
+
+### RPC
+
+```typescript
+// Query options from RPC procedure
+const statsQuery = q.rpc.dashboard.getStats.query({ period: "week" });
+
+// Mutation options from RPC procedure
+const publishPost = useMutation(q.rpc.posts.publish.mutation());
+publishPost.mutate({ id: "post_123" });
+
+// Stable key helper for invalidation/prefetch
+queryClient.invalidateQueries({
+  queryKey: q.rpc.dashboard.getStats.key({ period: "week" }),
+});
 ```
 
 ## SSR Prefetching

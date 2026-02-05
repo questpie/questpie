@@ -171,7 +171,7 @@ const sendEmail = q.job("send-email", {
 });
 
 await app.queue.sendEmail.publish({ to: "user@example.com" });
-await app.listenToJobs();
+await app.queue.listen();
 ```
 
 Control plane with admin UI visibility may be re-added in the future with a cleaner design.

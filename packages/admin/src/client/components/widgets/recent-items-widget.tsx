@@ -24,6 +24,7 @@ export type RecentItemsWidgetConfig = {
 	/** Fields to display as subtitle */
 	subtitleFields?: string[];
 	label?: string;
+	realtime?: boolean;
 	/** Base path for item links */
 	basePath?: string;
 	/** Click handler for items */
@@ -55,6 +56,7 @@ export default function RecentItemsWidget({ config }: RecentItemsWidgetProps) {
 		dateField = "createdAt",
 		subtitleFields,
 		onItemClick,
+		realtime,
 	} = config;
 
 	// Fetch recent items sorted by date
@@ -64,6 +66,8 @@ export default function RecentItemsWidget({ config }: RecentItemsWidgetProps) {
 			orderBy: { [dateField]: "desc" },
 			limit,
 		} as any,
+		undefined,
+		{ realtime },
 	);
 
 	// API returns PaginatedResult with { docs, totalDocs, ... }

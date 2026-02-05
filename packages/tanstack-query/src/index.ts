@@ -45,6 +45,20 @@ type QueryBuilder<TFn extends AnyAsyncFn> =
 			? (options?: FirstArg<TFn>) => UseQueryOptions<QueryData<TFn>>
 			: (options: FirstArg<TFn>) => UseQueryOptions<QueryData<TFn>>;
 
+type KeyBuilder<TFn extends AnyAsyncFn> =
+	HasArgs<TFn> extends false
+		? () => QueryKey
+		: undefined extends FirstArg<TFn>
+			? (options?: FirstArg<TFn>) => QueryKey
+			: (options: FirstArg<TFn>) => QueryKey;
+
+type MutationVariables<TFn extends AnyAsyncFn> =
+	HasArgs<TFn> extends false
+		? void
+		: undefined extends FirstArg<TFn>
+			? FirstArg<TFn> | void
+			: FirstArg<TFn>;
+
 type MutationBuilder<TVariables, TData> = () => UseMutationOptions<
 	TData,
 	DefaultError,
@@ -52,115 +66,147 @@ type MutationBuilder<TVariables, TData> = () => UseMutationOptions<
 >;
 
 /** Extract collection keys from QuestpieClient */
-type CollectionKeys<T extends Questpie<any>> = Extract<
-	keyof QuestpieClient<T>["collections"],
-	string
->;
+type CollectionKeys<
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+> = Extract<keyof QuestpieClient<TCMS, TRPC>["collections"], string>;
 
 /** Extract global keys from QuestpieClient */
-type GlobalKeys<T extends Questpie<any>> = Extract<
-	keyof QuestpieClient<T>["globals"],
-	string
->;
+type GlobalKeys<
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+> = Extract<keyof QuestpieClient<TCMS, TRPC>["globals"], string>;
 
 // Collection method type extractors
 type CollectionFind<
-	T extends Questpie<any>,
-	K extends CollectionKeys<T>,
-> = QuestpieClient<T>["collections"][K]["find"];
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends CollectionKeys<TCMS, TRPC>,
+> = QuestpieClient<TCMS, TRPC>["collections"][K]["find"];
 type CollectionCount<
-	T extends Questpie<any>,
-	K extends CollectionKeys<T>,
-> = QuestpieClient<T>["collections"][K]["count"];
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends CollectionKeys<TCMS, TRPC>,
+> = QuestpieClient<TCMS, TRPC>["collections"][K]["count"];
 type CollectionFindOne<
-	T extends Questpie<any>,
-	K extends CollectionKeys<T>,
-> = QuestpieClient<T>["collections"][K]["findOne"];
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends CollectionKeys<TCMS, TRPC>,
+> = QuestpieClient<TCMS, TRPC>["collections"][K]["findOne"];
 type CollectionCreate<
-	T extends Questpie<any>,
-	K extends CollectionKeys<T>,
-> = QuestpieClient<T>["collections"][K]["create"];
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends CollectionKeys<TCMS, TRPC>,
+> = QuestpieClient<TCMS, TRPC>["collections"][K]["create"];
 type CollectionUpdate<
-	T extends Questpie<any>,
-	K extends CollectionKeys<T>,
-> = QuestpieClient<T>["collections"][K]["update"];
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends CollectionKeys<TCMS, TRPC>,
+> = QuestpieClient<TCMS, TRPC>["collections"][K]["update"];
 type CollectionDelete<
-	T extends Questpie<any>,
-	K extends CollectionKeys<T>,
-> = QuestpieClient<T>["collections"][K]["delete"];
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends CollectionKeys<TCMS, TRPC>,
+> = QuestpieClient<TCMS, TRPC>["collections"][K]["delete"];
 type CollectionRestore<
-	T extends Questpie<any>,
-	K extends CollectionKeys<T>,
-> = QuestpieClient<T>["collections"][K]["restore"];
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends CollectionKeys<TCMS, TRPC>,
+> = QuestpieClient<TCMS, TRPC>["collections"][K]["restore"];
 
 // Global method type extractors
 type GlobalGet<
-	T extends Questpie<any>,
-	K extends GlobalKeys<T>,
-> = QuestpieClient<T>["globals"][K] extends { get: infer TGet }
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends GlobalKeys<TCMS, TRPC>,
+> = QuestpieClient<TCMS, TRPC>["globals"][K] extends { get: infer TGet }
 	? TGet extends AnyAsyncFn
 		? TGet
 		: never
 	: never;
 type GlobalUpdate<
-	T extends Questpie<any>,
-	K extends GlobalKeys<T>,
-> = QuestpieClient<T>["globals"][K] extends { update: infer TUpdate }
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends GlobalKeys<TCMS, TRPC>,
+> = QuestpieClient<TCMS, TRPC>["globals"][K] extends { update: infer TUpdate }
 	? TUpdate extends AnyAsyncFn
 		? TUpdate
 		: never
 	: never;
+
+type RpcProcedureQueryOptionsAPI<TFn extends AnyAsyncFn> = {
+	query: QueryBuilder<TFn>;
+	mutation: MutationBuilder<MutationVariables<TFn>, QueryData<TFn>>;
+	key: KeyBuilder<TFn>;
+};
+
+type RpcQueryOptionsAPI<TRpcNode> = TRpcNode extends AnyAsyncFn
+	? RpcProcedureQueryOptionsAPI<TRpcNode>
+	: TRpcNode extends Record<string, any>
+		? {
+				[K in keyof TRpcNode]: RpcQueryOptionsAPI<TRpcNode[K]>;
+			}
+		: never;
 
 // ============================================================================
 // API Types
 // ============================================================================
 
 type CollectionQueryOptionsAPI<
-	T extends Questpie<any>,
-	K extends CollectionKeys<T>,
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends CollectionKeys<TCMS, TRPC>,
 > = {
-	find: QueryBuilder<CollectionFind<T, K>>;
-	count: QueryBuilder<CollectionCount<T, K>>;
-	findOne: QueryBuilder<CollectionFindOne<T, K>>;
+	find: QueryBuilder<CollectionFind<TCMS, TRPC, K>>;
+	count: QueryBuilder<CollectionCount<TCMS, TRPC, K>>;
+	findOne: QueryBuilder<CollectionFindOne<TCMS, TRPC, K>>;
 	create: MutationBuilder<
-		FirstArg<CollectionCreate<T, K>>,
-		QueryData<CollectionCreate<T, K>>
+		FirstArg<CollectionCreate<TCMS, TRPC, K>>,
+		QueryData<CollectionCreate<TCMS, TRPC, K>>
 	>;
 	update: MutationBuilder<
 		{
-			id: Parameters<CollectionUpdate<T, K>>[0];
-			data: Parameters<CollectionUpdate<T, K>>[1];
+			id: Parameters<CollectionUpdate<TCMS, TRPC, K>>[0];
+			data: Parameters<CollectionUpdate<TCMS, TRPC, K>>[1];
 		},
-		QueryData<CollectionUpdate<T, K>>
+		QueryData<CollectionUpdate<TCMS, TRPC, K>>
 	>;
 	delete: MutationBuilder<
-		{ id: Parameters<CollectionDelete<T, K>>[0] },
-		QueryData<CollectionDelete<T, K>>
+		{ id: Parameters<CollectionDelete<TCMS, TRPC, K>>[0] },
+		QueryData<CollectionDelete<TCMS, TRPC, K>>
 	>;
 	restore: MutationBuilder<
-		{ id: Parameters<CollectionRestore<T, K>>[0] },
-		QueryData<CollectionRestore<T, K>>
+		{ id: Parameters<CollectionRestore<TCMS, TRPC, K>>[0] },
+		QueryData<CollectionRestore<TCMS, TRPC, K>>
 	>;
 };
 
-type GlobalQueryOptionsAPI<T extends Questpie<any>, K extends GlobalKeys<T>> = {
-	get: QueryBuilder<GlobalGet<T, K>>;
+type GlobalQueryOptionsAPI<
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends GlobalKeys<TCMS, TRPC>,
+> = {
+	get: QueryBuilder<GlobalGet<TCMS, TRPC, K>>;
 	update: MutationBuilder<
 		{
-			data: Parameters<GlobalUpdate<T, K>>[0];
-			options?: Parameters<GlobalUpdate<T, K>>[1];
+			data: Parameters<GlobalUpdate<TCMS, TRPC, K>>[0];
+			options?: Parameters<GlobalUpdate<TCMS, TRPC, K>>[1];
 		},
-		QueryData<GlobalUpdate<T, K>>
+		QueryData<GlobalUpdate<TCMS, TRPC, K>>
 	>;
 };
 
-export type QuestpieQueryOptionsProxy<T extends Questpie<any>> = {
+export type QuestpieQueryOptionsProxy<
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any> = Record<string, never>,
+> = {
 	collections: {
-		[K in CollectionKeys<T>]: CollectionQueryOptionsAPI<T, K>;
+		[K in CollectionKeys<TCMS, TRPC>]: CollectionQueryOptionsAPI<TCMS, TRPC, K>;
 	};
 	globals: {
-		[K in GlobalKeys<T>]: GlobalQueryOptionsAPI<T, K>;
+		[K in GlobalKeys<TCMS, TRPC>]: GlobalQueryOptionsAPI<TCMS, TRPC, K>;
 	};
+	rpc: RpcQueryOptionsAPI<QuestpieClient<TCMS, TRPC>["rpc"]>;
 	custom: {
 		query: <TData>(config: {
 			key: QueryKey;
@@ -257,21 +303,24 @@ const wrapMutationFn = <TVariables, TData>(
  * const mutation = useMutation(qpo.collections.posts.create())
  * ```
  */
-export function createQuestpieQueryOptions<T extends Questpie<any>>(
-	client: QuestpieClient<T>,
+export function createQuestpieQueryOptions<
+	TCMS extends Questpie<any>,
+	TRPC extends Record<string, any> = Record<string, never>,
+>(
+	client: QuestpieClient<TCMS, TRPC>,
 	config: QuestpieQueryOptionsConfig = {},
-): QuestpieQueryOptionsProxy<T> {
+): QuestpieQueryOptionsProxy<TCMS, TRPC> {
 	const keyPrefix = config.keyPrefix ?? ["questpie"];
 	const errorMap = config.errorMap ?? defaultErrorMap;
 	const locale = config.locale;
 
 	const collections = new Proxy(
-		{} as QuestpieQueryOptionsProxy<T>["collections"],
+		{} as QuestpieQueryOptionsProxy<TCMS, TRPC>["collections"],
 		{
 			get: (_target, collectionName) => {
 				if (typeof collectionName !== "string") return undefined;
 				const collection = client.collections[
-					collectionName as CollectionKeys<T>
+					collectionName as CollectionKeys<TCMS, TRPC>
 				] as any;
 				const baseKey: QueryKey = ["collections", collectionName];
 
@@ -357,42 +406,131 @@ export function createQuestpieQueryOptions<T extends Questpie<any>>(
 		},
 	);
 
-	const globals = new Proxy({} as QuestpieQueryOptionsProxy<T>["globals"], {
-		get: (_target, globalName) => {
-			if (typeof globalName !== "string") return undefined;
-			const global = client.globals[globalName as GlobalKeys<T>] as any;
-			const baseKey: QueryKey = ["globals", globalName];
+	const globals = new Proxy(
+		{} as QuestpieQueryOptionsProxy<TCMS, TRPC>["globals"],
+		{
+			get: (_target, globalName) => {
+				if (typeof globalName !== "string") return undefined;
+				const global = client.globals[
+					globalName as GlobalKeys<TCMS, TRPC>
+				] as any;
+				const baseKey: QueryKey = ["globals", globalName];
 
-			return {
-				get: (options?: any) =>
-					queryOptions({
-						queryKey: buildKey(keyPrefix, [
-							...baseKey,
-							"get",
-							locale,
-							normalizeQueryKeyOptions(options),
-						]),
-						queryFn: wrapQueryFn(() => global.get(options), errorMap),
-					}),
-				update: () =>
-					mutationOptions({
-						mutationKey: buildKey(keyPrefix, [...baseKey, "update", locale]),
-						mutationFn: wrapMutationFn(
-							(variables: { data: any; options?: any }) =>
-								global.update(variables.data, {
-									...variables.options,
-									...(locale ? { locale } : undefined),
-								}),
-							errorMap,
-						),
-					}),
-			};
+				return {
+					get: (options?: any) =>
+						queryOptions({
+							queryKey: buildKey(keyPrefix, [
+								...baseKey,
+								"get",
+								locale,
+								normalizeQueryKeyOptions(options),
+							]),
+							queryFn: wrapQueryFn(() => global.get(options), errorMap),
+						}),
+					update: () =>
+						mutationOptions({
+							mutationKey: buildKey(keyPrefix, [...baseKey, "update", locale]),
+							mutationFn: wrapMutationFn(
+								(variables: { data: any; options?: any }) =>
+									global.update(variables.data, {
+										...variables.options,
+										...(locale ? { locale } : undefined),
+									}),
+								errorMap,
+							),
+						}),
+				};
+			},
+		},
+	);
+
+	const callRpcProcedure = async (segments: string[], input: unknown) => {
+		let current: any = client.rpc as any;
+
+		for (const segment of segments) {
+			current = current?.[segment];
+		}
+
+		if (typeof current !== "function") {
+			throw new Error(
+				`RPC procedure not found at path: ${segments.join(".") || "<root>"}`,
+			);
+		}
+
+		if (input === undefined) {
+			return current();
+		}
+
+		return current(input);
+	};
+
+	const createRpcNodeProxy = (segments: string[]): any => {
+		return new Proxy(
+			{},
+			{
+				get: (_target, prop) => {
+					if (prop === "query") {
+						return (input?: any) =>
+							queryOptions({
+								queryKey: buildKey(keyPrefix, [
+									"rpc",
+									...segments,
+									"query",
+									locale,
+									normalizeQueryKeyOptions(input),
+								]),
+								queryFn: wrapQueryFn(
+									() => callRpcProcedure(segments, input),
+									errorMap,
+								),
+							});
+					}
+
+					if (prop === "mutation") {
+						return () =>
+							mutationOptions({
+								mutationKey: buildKey(keyPrefix, [
+									"rpc",
+									...segments,
+									"mutation",
+									locale,
+								]),
+								mutationFn: wrapMutationFn(
+									(variables: any) => callRpcProcedure(segments, variables),
+									errorMap,
+								),
+							});
+					}
+
+					if (prop === "key") {
+						return (input?: any) =>
+							buildKey(keyPrefix, [
+								"rpc",
+								...segments,
+								"query",
+								locale,
+								normalizeQueryKeyOptions(input),
+							]);
+					}
+
+					if (typeof prop !== "string") return undefined;
+					return createRpcNodeProxy([...segments, prop]);
+				},
+			},
+		);
+	};
+
+	const rpc = new Proxy({} as QuestpieQueryOptionsProxy<TCMS, TRPC>["rpc"], {
+		get: (_target, prop) => {
+			if (typeof prop !== "string") return undefined;
+			return createRpcNodeProxy([prop]);
 		},
 	});
 
 	return {
 		collections,
 		globals,
+		rpc,
 		custom: {
 			query: (customConfig) =>
 				queryOptions({

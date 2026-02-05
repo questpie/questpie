@@ -1,66 +1,117 @@
 ---
 title: Queue Jobs
-description: Background processing with pg-boss.
+description: Background processing with runtime-aware queue consumers.
 ---
 
-Perform background tasks like sending emails, image processing, or data synchronization using the built-in Queue system (powered by **pg-boss**).
+Use QUESTPIE jobs for background email, indexing, media processing, and async integrations.
 
-## Defining a Job
+## Define a Job
 
-Use `q.job` to specify the job name, payload schema, and handler.
-
-```typescript
-import { q, getAppFromContext } from "questpie";
+```ts
+import { q } from "questpie";
 import { z } from "zod";
 
-const emailJob = q.job({
+export const sendEmailJob = q.job({
   name: "send-email",
   schema: z.object({
     to: z.string().email(),
     subject: z.string(),
     body: z.string(),
   }),
-  handler: async (payload) => {
-    const app = getAppFromContext();
-    console.log(`Sending email to ${payload.to}`);
-    // Use app.email.send() or other CMS services
+  handler: async ({ payload, app }) => {
     await app.email.send({
       to: payload.to,
       subject: payload.subject,
       html: payload.body,
     });
   },
-});
-```
-
-## Registering Jobs
-
-Add jobs to your CMS config.
-
-```typescript
-import { pgBossAdapter } from "questpie";
-
-export const app = q({
-  // ...
-  queue: {
-    jobs: [emailJob],
-    adapter: pgBossAdapter({
-      connectionString: process.env.DATABASE_URL,
-    }),
+  options: {
+    retryLimit: 3,
+    retryDelay: 30,
+    retryBackoff: true,
   },
 });
 ```
 
-## Triggering Jobs
+## Register Jobs
 
-You can trigger jobs from anywhere you have access to the CMS instance (e.g., inside Hooks or Custom API routes).
+```ts
+import { pgBossAdapter, q } from "questpie";
+import { sendEmailJob } from "./jobs/send-email";
 
-```typescript
-// Inside a hook or route
-const app = getAppFromContext();
-await app.queue.sendEmail.publish({
+export const cms = q({ name: "my-cms" })
+  .jobs({ sendEmail: sendEmailJob })
+  .build({
+    app: { url: process.env.APP_URL! },
+    db: { url: process.env.DATABASE_URL! },
+    queue: {
+      adapter: pgBossAdapter({
+        connectionString: process.env.DATABASE_URL!,
+      }),
+    },
+  });
+```
+
+## Publish Jobs
+
+```ts
+await cms.queue.sendEmail.publish({
   to: "user@example.com",
-  subject: "Welcome!",
-  body: "Hello world",
+  subject: "Welcome",
+  body: "<p>Hello</p>",
+});
+
+await cms.queue.sendEmail.publish(
+  { to: "user@example.com", subject: "Later", body: "<p>Deferred</p>" },
+  { startAfter: 60 },
+);
+```
+
+## Worker Mode (long-running)
+
+```ts
+// worker.ts
+import { cms } from "./cms";
+
+await cms.queue.listen({
+  teamSize: 10,
+  batchSize: 5,
+  gracefulShutdown: true,
+  shutdownSignals: ["SIGINT", "SIGTERM"],
+  shutdownTimeoutMs: 10000,
 });
 ```
+
+## Serverless Tick Mode
+
+```ts
+const { processed } = await cms.queue.runOnce({
+  batchSize: 25,
+});
+
+console.log("processed", processed);
+```
+
+## Scheduling
+
+Per-job cron:
+
+```ts
+await cms.queue.sendEmail.schedule(
+  { to: "ops@example.com", subject: "Report", body: "<p>Daily</p>" },
+  "0 8 * * *",
+);
+```
+
+Auto-register cron from job definitions:
+
+```ts
+await cms.queue.registerSchedules();
+```
+
+## Idempotency Checklist
+
+- assume at-least-once delivery
+- use unique keys / processed markers in DB
+- use `singletonKey` when adapter supports it
+- keep handlers side-effect safe on retries

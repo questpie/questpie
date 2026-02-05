@@ -87,6 +87,12 @@ export interface BaseWidgetConfig {
 	refreshInterval?: number;
 
 	/**
+	 * Enable realtime invalidation for widget data queries.
+	 * Falls back to AdminProvider realtime config when undefined.
+	 */
+	realtime?: boolean;
+
+	/**
 	 * Header actions
 	 */
 	actions?: WidgetAction[];

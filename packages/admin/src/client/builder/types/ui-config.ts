@@ -163,6 +163,8 @@ export interface DashboardConfig {
 	showRefresh?: boolean;
 	/** Auto-refresh interval in milliseconds */
 	refreshInterval?: number;
+	/** Enable realtime invalidation for dashboard widgets by default */
+	realtime?: boolean;
 	/** Header actions (buttons in dashboard header) */
 	actions?: DashboardAction[];
 }

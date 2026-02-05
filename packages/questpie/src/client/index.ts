@@ -572,6 +572,7 @@ export type QuestpieClient<
 	search: SearchAPI;
 	setLocale?: (locale?: string) => void;
 	getLocale?: () => string | undefined;
+	getBasePath?: () => string;
 };
 
 /**
@@ -1110,6 +1111,7 @@ export function createClient<
 			}
 		},
 		getLocale: () => currentLocale,
+		getBasePath: () => cmsBasePath,
 	};
 }
 
