@@ -161,7 +161,10 @@ function getMultiSelectOperators() {
 			// Contains any of specified values
 			containsAny: operator<string[], unknown>(
 				(col, values) =>
-					sql`${col} ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
+					sql`${col} ?| ARRAY[${sql.join(
+						values.map((v) => sql`${v}`),
+						sql`, `,
+					)}]::text[]`,
 			),
 			// Exactly equals (same values, same order)
 			eq: operator<string[], unknown>(
@@ -193,7 +196,10 @@ function getMultiSelectOperators() {
 			}),
 			containsAny: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`;
+				return sql`${col}#>'{${sql.raw(path)}}' ?| ARRAY[${sql.join(
+					values.map((v) => sql`${v}`),
+					sql`, `,
+				)}]::text[]`;
 			}),
 			eq: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";

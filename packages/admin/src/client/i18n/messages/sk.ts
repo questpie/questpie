@@ -187,6 +187,7 @@ export const adminMessagesSK = {
 		"Vytvorte váš prvý administrátorský účet pre začatie.",
 	"auth.profile": "Profil",
 	"auth.myAccount": "Môj účet",
+	"auth.logoutFailed": "Odhlásenie zlyhalo. Skúste to prosím znova.",
 
 	// Errors
 	"error.notFound": "Nenájdené",
@@ -230,6 +231,36 @@ export const adminMessagesSK = {
 	"upload.preview": "Náhľad",
 	"upload.noFile": "Žiadny súbor nevybraný",
 	"upload.dragDrop": "Presuňte súbory sem",
+	"upload.bulkTitle": "Nahrať súbory",
+	"upload.bulkDescription": "Pridajte viacero súborov do vašej knižnice médií",
+	"upload.bulkHint": "Nahrajte viacero súborov naraz",
+	"upload.bulkSuccess": {
+		one: "{{count}} súbor úspešne nahraný",
+		few: "{{count}} súbory úspešne nahrané",
+		other: "{{count}} súborov úspešne nahraných",
+	},
+	"upload.bulkError": {
+		one: "{{count}} súbor sa nepodarilo nahrať",
+		few: "{{count}} súbory sa nepodarilo nahrať",
+		other: "{{count}} súborov sa nepodarilo nahrať",
+	},
+	"upload.waitForComplete": "Počkajte prosím na dokončenie nahrávania",
+	"upload.filesCount": {
+		one: "{{count}} súbor",
+		few: "{{count}} súbory",
+		other: "{{count}} súborov",
+	},
+	"upload.uploadedCount": {
+		one: "{{count}} nahraný",
+		few: "{{count}} nahrané",
+		other: "{{count}} nahraných",
+	},
+	"upload.failedCount": {
+		one: "{{count}} zlyhal",
+		few: "{{count}} zlyhali",
+		other: "{{count}} zlyhalo",
+	},
+	"upload.browseLibrary": "Prehľadať knižnicu",
 
 	// Editor
 	"editor.bold": "Tučné",

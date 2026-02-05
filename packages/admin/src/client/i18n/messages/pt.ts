@@ -182,6 +182,7 @@ export const adminMessagesPT = {
 		"Crie sua primeira conta de administrador para começar.",
 	"auth.profile": "Perfil",
 	"auth.myAccount": "Minha conta",
+	"auth.logoutFailed": "Falha ao sair. Por favor, tente novamente.",
 
 	// Errors
 	"error.notFound": "Não encontrado",

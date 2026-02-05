@@ -185,6 +185,7 @@ export const adminMessagesPL = {
 	"auth.setupDescription": "Utwórz pierwsze konto administratora.",
 	"auth.profile": "Profil",
 	"auth.myAccount": "Moje konto",
+	"auth.logoutFailed": "Wylogowanie nie powiodło się. Spróbuj ponownie.",
 
 	// Errors
 	"error.notFound": "Nie znaleziono",

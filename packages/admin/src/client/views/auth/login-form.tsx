@@ -49,6 +49,8 @@ export type LoginFormProps = {
 	className?: string;
 	/** Error message from auth */
 	error?: string | null;
+	/** Minimum password length (default: 8) */
+	minPasswordLength?: number;
 };
 
 /**
@@ -89,6 +91,7 @@ export function LoginForm({
 	defaultValues,
 	className,
 	error,
+	minPasswordLength = 8,
 }: LoginFormProps) {
 	const { t } = useTranslation();
 	const {
@@ -159,8 +162,10 @@ export function LoginForm({
 								{...register("password", {
 									required: t("auth.passwordRequired"),
 									minLength: {
-										value: 6,
-										message: t("auth.passwordMinLength", { min: 6 }),
+										value: minPasswordLength,
+										message: t("auth.passwordMinLength", {
+											min: minPasswordLength,
+										}),
 									},
 								})}
 							/>

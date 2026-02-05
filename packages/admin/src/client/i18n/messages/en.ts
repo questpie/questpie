@@ -180,6 +180,7 @@ export const adminMessagesEN = {
 	"auth.setupDescription": "Create your first admin account to get started.",
 	"auth.profile": "Profile",
 	"auth.myAccount": "My account",
+	"auth.logoutFailed": "Failed to log out. Please try again.",
 
 	// Errors
 	"error.notFound": "Not found",
@@ -223,6 +224,25 @@ export const adminMessagesEN = {
 	"upload.preview": "Preview",
 	"upload.noFile": "No file selected",
 	"upload.dragDrop": "Drag and drop files here",
+	"upload.bulkTitle": "Upload Files",
+	"upload.bulkDescription": "Add multiple files to your media library",
+	"upload.bulkHint": "Upload multiple files at once",
+	"upload.bulkSuccess": {
+		one: "{{count}} file uploaded successfully",
+		other: "{{count}} files uploaded successfully",
+	},
+	"upload.bulkError": {
+		one: "{{count}} file failed to upload",
+		other: "{{count}} files failed to upload",
+	},
+	"upload.waitForComplete": "Please wait for uploads to complete",
+	"upload.filesCount": { one: "{{count}} file", other: "{{count}} files" },
+	"upload.uploadedCount": {
+		one: "{{count}} uploaded",
+		other: "{{count}} uploaded",
+	},
+	"upload.failedCount": { one: "{{count}} failed", other: "{{count}} failed" },
+	"upload.browseLibrary": "Browse Library",
 
 	// Editor
 	"editor.bold": "Bold",
@@ -516,7 +536,8 @@ export const adminMessagesEN = {
 	"autosave.hoursAgo": { one: "{{count}}h ago", other: "{{count}}h ago" },
 
 	// Global Search
-	"globalSearch.placeholder": "Search collections, globals, actions, records...",
+	"globalSearch.placeholder":
+		"Search collections, globals, actions, records...",
 	"globalSearch.collections": "Collections",
 	"globalSearch.globals": "Globals",
 	"globalSearch.quickActions": "Quick Actions",

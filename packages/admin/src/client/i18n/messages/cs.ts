@@ -183,6 +183,7 @@ export const adminMessagesCS = {
 	"auth.setupDescription": "Vytvořte svůj první administrátorský účet.",
 	"auth.profile": "Profil",
 	"auth.myAccount": "Můj účet",
+	"auth.logoutFailed": "Odhlášení se nezdařilo. Zkuste to prosím znovu.",
 
 	// Errors
 	"error.notFound": "Nenalezeno",

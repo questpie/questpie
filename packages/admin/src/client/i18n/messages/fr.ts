@@ -186,6 +186,7 @@ export const adminMessagesFR = {
 		"Créez votre premier compte administrateur pour commencer.",
 	"auth.profile": "Profil",
 	"auth.myAccount": "Mon compte",
+	"auth.logoutFailed": "Échec de la déconnexion. Veuillez réessayer.",
 
 	// Errors
 	"error.notFound": "Non trouvé",

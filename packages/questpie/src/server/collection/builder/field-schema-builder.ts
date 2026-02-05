@@ -13,10 +13,10 @@
  */
 
 import { z } from "zod";
-import type { RelationFieldMetadata } from "#questpie/server/fields/builtin/relation.js";
 import type {
 	FieldDefinition,
 	FieldDefinitionState,
+	RelationFieldMetadata,
 } from "#questpie/server/fields/types.js";
 
 // ============================================================================

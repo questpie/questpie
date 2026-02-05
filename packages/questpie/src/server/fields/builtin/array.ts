@@ -100,7 +100,10 @@ function getArrayOperators() {
 			// Contains any of the given elements
 			containsAny: operator<unknown[], unknown>((col, values) => {
 				if (values.length === 0) return sql`FALSE`;
-				return sql`${col} ?| ${sql.raw(`ARRAY[${values.map((v) => `'${JSON.stringify(v)}'`).join(",")}]`)}`;
+				return sql`${col} ?| ARRAY[${sql.join(
+					values.map((v) => sql`${JSON.stringify(v)}`),
+					sql`, `,
+				)}]::text[]`;
 			}),
 			// Is contained by the given array
 			containedBy: operator<unknown[], unknown>(

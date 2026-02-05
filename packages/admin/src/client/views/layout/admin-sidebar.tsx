@@ -16,6 +16,7 @@ import {
 	UserCircle,
 } from "@phosphor-icons/react";
 import * as React from "react";
+import { toast } from "sonner";
 import type { ComponentReference } from "#questpie/admin/server";
 import type { IconComponent } from "../../builder/types/common";
 import {
@@ -685,9 +686,9 @@ function UserFooter() {
 			closeSidebarOnMobile();
 			navigate(`${basePath}/login`);
 		} catch (error) {
-			console.error("Logout failed:", error);
+			toast.error(t("auth.logoutFailed"));
 		}
-	}, [authClient, navigate, basePath, closeSidebarOnMobile]);
+	}, [authClient, navigate, basePath, closeSidebarOnMobile, t]);
 
 	// Handle navigate to user profile
 	const handleMyAccount = React.useCallback(() => {

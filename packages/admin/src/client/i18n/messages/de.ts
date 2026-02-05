@@ -185,6 +185,8 @@ export const adminMessagesDE = {
 	"auth.setupDescription": "Erstellen Sie Ihr erstes Administratorkonto.",
 	"auth.profile": "Profil",
 	"auth.myAccount": "Mein Konto",
+	"auth.logoutFailed":
+		"Abmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
 
 	// Errors
 	"error.notFound": "Nicht gefunden",

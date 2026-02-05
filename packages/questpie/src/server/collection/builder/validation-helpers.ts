@@ -6,10 +6,10 @@
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { pgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import type { RelationFieldMetadata } from "#questpie/server/fields/builtin/relation.js";
 import type {
 	FieldDefinition,
 	FieldDefinitionState,
+	RelationFieldMetadata,
 } from "#questpie/server/fields/types.js";
 import {
 	createInsertSchema,

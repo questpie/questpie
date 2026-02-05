@@ -188,6 +188,7 @@ export const adminMessagesES = {
 		"Cree su primera cuenta de administrador para comenzar.",
 	"auth.profile": "Perfil",
 	"auth.myAccount": "Mi cuenta",
+	"auth.logoutFailed": "Error al cerrar sesión. Por favor, intente nuevamente.",
 
 	// Errors
 	"error.notFound": "No encontrado",

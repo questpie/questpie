@@ -369,7 +369,10 @@ function getMultipleOperators() {
 			),
 			containsAny: operator<string[], unknown>(
 				(col, values) =>
-					sql`${col} ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
+					sql`${col} ?| ARRAY[${sql.join(
+						values.map((v) => sql`${v}`),
+						sql`, `,
+					)}]::text[]`,
 			),
 			isEmpty: operator<boolean, unknown>(
 				(col) => sql`(${col} = '[]'::jsonb OR ${col} IS NULL)`,
@@ -399,7 +402,10 @@ function getMultipleOperators() {
 			}),
 			containsAny: operator<string[], unknown>((col, values, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`;
+				return sql`${col}#>'{${sql.raw(path)}}' ?| ARRAY[${sql.join(
+					values.map((v) => sql`${v}`),
+					sql`, `,
+				)}]::text[]`;
 			}),
 			isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
 				const path = ctx.jsonbPath?.join(",") ?? "";

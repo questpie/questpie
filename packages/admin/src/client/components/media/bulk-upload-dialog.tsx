@@ -25,6 +25,7 @@ import { CheckCircle, Trash, WarningCircle, X } from "@phosphor-icons/react";
 import * as React from "react";
 import { toast } from "sonner";
 import { type Asset, useUpload } from "../../hooks/use-upload";
+import { useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Dropzone } from "../primitives/dropzone";
 import { Button } from "../ui/button";
@@ -202,6 +203,7 @@ export function BulkUploadDialog({
 	onSuccess,
 }: BulkUploadDialogProps) {
 	const { uploadMany } = useUpload();
+	const { t } = useTranslation();
 
 	// State
 	const [files, setFiles] = React.useState<FileUploadState[]>([]);
@@ -242,6 +244,10 @@ export function BulkUploadDialog({
 		if (!canUpload) return;
 
 		setIsUploading(true);
+
+		// Track counts during upload to avoid stale state issues
+		let successCount = 0;
+		let failureCount = 0;
 
 		try {
 			// Get pending files
@@ -289,6 +295,7 @@ export function BulkUploadDialog({
 								: f,
 						),
 					);
+					successCount++;
 				} catch (err) {
 					// Mark as error
 					const errorMessage =
@@ -301,24 +308,18 @@ export function BulkUploadDialog({
 								: f,
 						),
 					);
+					failureCount++;
 				}
 			}
 
-			// Show success toast
-			const successCount = files.filter((f) => f.status === "success").length;
-			const failureCount = files.filter((f) => f.status === "error").length;
-
+			// Show success toast using tracked counts (not stale state)
 			if (successCount > 0) {
-				toast.success(
-					`${successCount} file${successCount !== 1 ? "s" : ""} uploaded successfully`,
-				);
+				toast.success(t("upload.bulkSuccess", { count: successCount }));
 				onSuccess?.();
 			}
 
 			if (failureCount > 0) {
-				toast.error(
-					`${failureCount} file${failureCount !== 1 ? "s" : ""} failed to upload`,
-				);
+				toast.error(t("upload.bulkError", { count: failureCount }));
 			}
 		} finally {
 			setIsUploading(false);
@@ -328,7 +329,7 @@ export function BulkUploadDialog({
 	// Handle close
 	const handleClose = () => {
 		if (isUploading) {
-			toast.warning("Please wait for uploads to complete");
+			toast.warning(t("upload.waitForComplete"));
 			return;
 		}
 		onClose();
@@ -344,9 +345,9 @@ export function BulkUploadDialog({
 		<ResponsiveDialog open onOpenChange={handleClose}>
 			<ResponsiveDialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
 				<ResponsiveDialogHeader>
-					<ResponsiveDialogTitle>Upload Files</ResponsiveDialogTitle>
+					<ResponsiveDialogTitle>{t("upload.bulkTitle")}</ResponsiveDialogTitle>
 					<ResponsiveDialogDescription>
-						Add multiple files to your media library
+						{t("upload.bulkDescription")}
 					</ResponsiveDialogDescription>
 				</ResponsiveDialogHeader>
 
@@ -358,8 +359,8 @@ export function BulkUploadDialog({
 							onDrop={handleDrop}
 							multiple={true}
 							disabled={isUploading}
-							label="Drop files here or click to browse"
-							hint="Upload multiple files at once"
+							label={t("upload.dropzone")}
+							hint={t("upload.bulkHint")}
 						/>
 					)}
 
@@ -367,11 +368,14 @@ export function BulkUploadDialog({
 					{hasFiles && (
 						<div className="space-y-2">
 							<div className="flex items-center justify-between">
-								<p className="text-sm font-medium">Files ({files.length})</p>
+								<p className="text-sm font-medium">
+									{t("upload.filesCount", { count: files.length })}
+								</p>
 								{uploadedFiles.length > 0 && (
 									<p className="text-muted-foreground text-xs">
-										{uploadedFiles.length} uploaded
-										{failedFiles.length > 0 && `, ${failedFiles.length} failed`}
+										{t("upload.uploadedCount", { count: uploadedFiles.length })}
+										{failedFiles.length > 0 &&
+											`, ${t("upload.failedCount", { count: failedFiles.length })}`}
 									</p>
 								)}
 							</div>
@@ -398,7 +402,7 @@ export function BulkUploadDialog({
 					{allComplete ? (
 						<>
 							<Button variant="outline" onClick={handleDone}>
-								Done
+								{t("common.close")}
 							</Button>
 						</>
 					) : (
@@ -408,13 +412,13 @@ export function BulkUploadDialog({
 								onClick={handleClose}
 								disabled={isUploading}
 							>
-								Cancel
+								{t("common.cancel")}
 							</Button>
 							<Button
 								onClick={handleUploadAll}
 								disabled={!canUpload || isUploading}
 							>
-								{isUploading ? "Uploading..." : "Upload"}{" "}
+								{isUploading ? t("upload.uploading") : t("common.upload")}{" "}
 								{pendingFiles.length > 0 && `(${pendingFiles.length})`}
 							</Button>
 						</>
