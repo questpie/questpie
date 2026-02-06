@@ -341,7 +341,15 @@ export const createFetchHandler = (
 			return errorResponse(ApiError.badRequest("Method not allowed"), request);
 		}
 
-		// Collection list and create
+		// Batch delete: POST /:collection/delete-many
+		if (id === "delete-many") {
+			if (request.method === "POST") {
+				return routes.collections.deleteMany(request, { collection }, context);
+			}
+			return errorResponse(ApiError.badRequest("Method not allowed"), request);
+		}
+
+		// Collection list, create, and batch update
 		if (!id) {
 			if (request.method === "GET") {
 				return routes.collections.find(request, { collection }, context);
@@ -349,6 +357,10 @@ export const createFetchHandler = (
 
 			if (request.method === "POST") {
 				return routes.collections.create(request, { collection }, context);
+			}
+
+			if (request.method === "PATCH") {
+				return routes.collections.updateMany(request, { collection }, context);
 			}
 
 			return errorResponse(ApiError.badRequest("Method not allowed"), request);

@@ -405,7 +405,7 @@ export function useActionExecution<TItem = any>({
 
 						if (collectionClient) {
 							if (method === "delete" && collectionClient.delete) {
-								await collectionClient.delete((item as any)?.id);
+								await collectionClient.delete({ id: (item as any)?.id });
 								helpers.toast.success("Item deleted successfully");
 							} else {
 								// For other methods, show info (actual implementation would call the API)

@@ -421,7 +421,7 @@ export async function introspectCollection(
 			timestamps: state.options?.timestamps !== false,
 			softDelete: state.options?.softDelete ?? false,
 			versioning: !!state.options?.versioning,
-			singleton: undefined, // TODO: Add singleton support
+			singleton: undefined, // TODO(globals): Derive singleton flag from collection config
 		},
 		title: state.title
 			? {

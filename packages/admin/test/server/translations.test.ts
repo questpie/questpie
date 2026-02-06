@@ -7,7 +7,7 @@
  * 3. Admin locale config augmentation via .adminLocale()
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
 	adminMessagesEN,
 	adminMessagesSK,

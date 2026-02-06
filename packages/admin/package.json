@@ -28,9 +28,8 @@
 		"dev": "tsdown --watch",
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"test": "vitest run",
-		"test:watch": "vitest",
-		"test:coverage": "vitest run --coverage"
+		"test": "bun test test/",
+		"test:watch": "bun test --watch test/"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",
@@ -99,18 +98,11 @@
 	"devDependencies": {
 		"@tanstack/db": "^0.1.1",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
-		"@testing-library/jest-dom": "^6.9.1",
-		"@testing-library/react": "^16.3.1",
-		"@testing-library/user-event": "^14.6.1",
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
-		"@vitejs/plugin-react": "^5.1.2",
-		"happy-dom": "^20.1.0",
-		"jsdom": "^27.4.0",
 		"tinyglobby": "^0.2.15",
 		"tsdown": "^0.18.3",
-		"typescript": "^5.9.2",
-		"vitest": "^4.0.16"
+		"typescript": "^5.9.2"
 	},
 	"publishConfig": {
 		"access": "public",

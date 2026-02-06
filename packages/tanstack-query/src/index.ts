@@ -165,19 +165,24 @@ type CollectionQueryOptionsAPI<
 		QueryData<CollectionCreate<TCMS, TRPC, K>>
 	>;
 	update: MutationBuilder<
-		{
-			id: Parameters<CollectionUpdate<TCMS, TRPC, K>>[0];
-			data: Parameters<CollectionUpdate<TCMS, TRPC, K>>[1];
-		},
+		FirstArg<CollectionUpdate<TCMS, TRPC, K>>,
 		QueryData<CollectionUpdate<TCMS, TRPC, K>>
 	>;
 	delete: MutationBuilder<
-		{ id: Parameters<CollectionDelete<TCMS, TRPC, K>>[0] },
+		FirstArg<CollectionDelete<TCMS, TRPC, K>>,
 		QueryData<CollectionDelete<TCMS, TRPC, K>>
 	>;
 	restore: MutationBuilder<
-		{ id: Parameters<CollectionRestore<TCMS, TRPC, K>>[0] },
+		FirstArg<CollectionRestore<TCMS, TRPC, K>>,
 		QueryData<CollectionRestore<TCMS, TRPC, K>>
+	>;
+	updateMany: MutationBuilder<
+		{ where: any; data: any },
+		QueryData<CollectionUpdate<TCMS, TRPC, K>>
+	>;
+	deleteMany: MutationBuilder<
+		{ where: any },
+		{ success: boolean; count: number }
 	>;
 };
 
@@ -374,10 +379,9 @@ export function createQuestpieQueryOptions<
 							mutationFn: wrapMutationFn(
 								(variables: { id: string; data: any }) =>
 									collection.update(
-										variables.id,
-										variables.data,
-										locale ? { locale } : undefined,
-									),
+									variables,
+									locale ? { locale } : undefined,
+								),
 								errorMap,
 							),
 						}),
@@ -387,9 +391,9 @@ export function createQuestpieQueryOptions<
 							mutationFn: wrapMutationFn(
 								(variables: { id: string }) =>
 									collection.delete(
-										variables.id,
-										locale ? { locale } : undefined,
-									),
+									variables,
+									locale ? { locale } : undefined,
+								),
 								errorMap,
 							),
 						}),
@@ -399,7 +403,31 @@ export function createQuestpieQueryOptions<
 							mutationFn: wrapMutationFn(
 								(variables: { id: string }) =>
 									collection.restore(
-										variables.id,
+									variables,
+									locale ? { locale } : undefined,
+								),
+								errorMap,
+							),
+						}),
+					updateMany: () =>
+						mutationOptions({
+							mutationKey: buildKey(keyPrefix, [...baseKey, "updateMany", locale]),
+							mutationFn: wrapMutationFn(
+								(variables: { where: any; data: any }) =>
+									collection.updateMany(
+										variables,
+										locale ? { locale } : undefined,
+									),
+								errorMap,
+							),
+						}),
+					deleteMany: () =>
+						mutationOptions({
+							mutationKey: buildKey(keyPrefix, [...baseKey, "deleteMany", locale]),
+							mutationFn: wrapMutationFn(
+								(variables: { where: any }) =>
+									collection.deleteMany(
+										variables,
 										locale ? { locale } : undefined,
 									),
 								errorMap,

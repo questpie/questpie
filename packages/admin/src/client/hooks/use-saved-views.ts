@@ -94,7 +94,7 @@ export function useUpdateSavedView(collectionName: string) {
         );
       }
 
-      return collections.admin_saved_views.update(id, data);
+      return collections.admin_saved_views.update({ id, data });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -122,7 +122,7 @@ export function useDeleteSavedView(collectionName: string) {
         );
       }
 
-      return collections.admin_saved_views.delete(viewId);
+      return collections.admin_saved_views.delete({ id: viewId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

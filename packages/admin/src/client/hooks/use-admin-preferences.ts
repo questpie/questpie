@@ -90,7 +90,7 @@ export function useSetAdminPreference<T = unknown>(key: string) {
 
       if (existing) {
         // Update existing
-        return collections.admin_preferences.update(existing.id, { value });
+        return collections.admin_preferences.update({ id: existing.id, data: { value } });
       }
       // Create new
       return collections.admin_preferences.create({
@@ -148,7 +148,7 @@ export function useDeleteAdminPreference(key: string) {
       });
 
       if (existing) {
-        return collections.admin_preferences.delete(existing.id);
+        return collections.admin_preferences.delete({ id: existing.id });
       }
 
       return null;

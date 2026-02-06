@@ -4,7 +4,7 @@
  * Tests for Admin class - runtime wrapper around AdminBuilder state.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { Admin } from "#questpie/admin/client/builder/admin";
 import { AdminBuilder } from "#questpie/admin/client/builder/admin-builder";
 import { page } from "#questpie/admin/client/builder/page/page";

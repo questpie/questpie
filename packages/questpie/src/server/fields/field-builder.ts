@@ -19,6 +19,7 @@ import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { ZodType } from "zod";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
+import type { SetProperty } from "#questpie/shared/type-utils.js";
 import type {
 	BaseFieldConfig,
 	ContextualOperators,
@@ -29,15 +30,6 @@ import type {
 	JoinBuilder,
 	SelectModifier,
 } from "./types.js";
-
-// ============================================================================
-// Type Helpers
-// ============================================================================
-
-/**
- * Set a property in an object type
- */
-type SetProperty<T, K extends keyof T, V> = Omit<T, K> & Record<K, V>;
 
 /**
  * Infer field location from config

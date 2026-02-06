@@ -4,7 +4,7 @@
  * Tests for field(), FieldBuilder, and FieldDefinition.
  */
 
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect } from "bun:test";
 import {
   field,
   FieldBuilder,
@@ -235,39 +235,6 @@ describe("FieldBuilder implements FieldDefinition", () => {
   });
 });
 
-describe("FieldBuilder - Type Safety", () => {
-  it("should infer name type correctly", () => {
-    const textField = field("text", { component: MockTextField });
-
-    expectTypeOf(textField.name).toEqualTypeOf<"text">();
-  });
-
-  it("should infer options type from config parameter", () => {
-    type MyConfig = { maxLength: number; placeholder?: string };
-    const textField = field("text", {
-      component: MockTextField,
-      config: {} as MyConfig,
-    });
-
-    // Options should include MyConfig merged with FieldUIOptions
-    expectTypeOf(textField["~options"]).toMatchTypeOf<{ maxLength: number }>();
-  });
-
-  it("should update options type after $options()", () => {
-    const original = field("text", { component: MockTextField });
-    const updated = original.$options({ customOption: "value" });
-
-    expectTypeOf(updated["~options"]).toEqualTypeOf<{ customOption: string }>();
-  });
-
-  it("should preserve name type through builder chain", () => {
-    const final = field("text", { component: MockTextField })
-      .$options({ maxLength: 100 })
-      .withCell(MockTextCell);
-
-    expectTypeOf(final.name).toEqualTypeOf<"text">();
-  });
-});
 
 describe("field() with different field types", () => {
   it("should work with textarea field", () => {

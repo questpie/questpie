@@ -66,7 +66,6 @@ export { FieldBuilder, field } from "./field/field";
 export { global } from "./global/global";
 export { GlobalBuilder } from "./global/global-builder";
 export type { GlobalBuilderState, GlobalConfig } from "./types/global-types";
-export { type AdminHelpers, createAdminHelpers } from "./helpers";
 export type { PageBuilderState, PageDefinition } from "./page/page";
 export { PageBuilder, page } from "./page/page";
 export { qa } from "./qa";

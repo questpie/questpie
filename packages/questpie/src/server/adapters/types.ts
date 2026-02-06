@@ -149,6 +149,18 @@ export type AdapterRoutes = {
 			params: { collection: string; id: string },
 			context?: AdapterContext,
 		) => Promise<Response>;
+		updateMany: (
+			request: Request,
+			params: { collection: string },
+			context?: AdapterContext,
+			input?: unknown,
+		) => Promise<Response>;
+		deleteMany: (
+			request: Request,
+			params: { collection: string },
+			context?: AdapterContext,
+			input?: unknown,
+		) => Promise<Response>;
 	};
 	globals: {
 		get: (

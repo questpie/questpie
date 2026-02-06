@@ -28,6 +28,7 @@ import type {
 	FindOneOptionsBase,
 	PaginatedResult,
 	UpdateInput,
+	Where,
 	With,
 } from "../server/collection/crud/types.js";
 import type { GlobalUpdateInput } from "../server/global/crud/types.js";
@@ -323,11 +324,13 @@ type CollectionAPI<
 	 * Update a single record by ID
 	 */
 	update: (
-		id: string,
-		data: UpdateInput<
-			CollectionUpdate<TCollection>,
-			ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>
-		>,
+		params: {
+			id: string;
+			data: UpdateInput<
+				CollectionUpdate<TCollection>,
+				ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>
+			>;
+		},
 		options?: LocaleOptions,
 	) => Promise<CollectionSelect<TCollection>>;
 
@@ -335,7 +338,7 @@ type CollectionAPI<
 	 * Delete a single record by ID
 	 */
 	delete: (
-		id: string,
+		params: { id: string },
 		options?: LocaleOptions,
 	) => Promise<{ success: boolean }>;
 
@@ -343,9 +346,39 @@ type CollectionAPI<
 	 * Restore a soft-deleted record by ID
 	 */
 	restore: (
-		id: string,
+		params: { id: string },
 		options?: LocaleOptions,
 	) => Promise<CollectionSelect<TCollection>>;
+
+	/**
+	 * Update multiple records matching a where clause
+	 */
+	updateMany: (
+		params: {
+			where: Where<
+				CollectionSelect<TCollection>,
+				ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>
+			>;
+			data: UpdateInput<
+				CollectionUpdate<TCollection>,
+				ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>
+			>;
+		},
+		options?: LocaleOptions,
+	) => Promise<CollectionSelect<TCollection>[]>;
+
+	/**
+	 * Delete multiple records matching a where clause
+	 */
+	deleteMany: (
+		params: {
+			where: Where<
+				CollectionSelect<TCollection>,
+				ResolveRelationsDeep<TCollection["state"]["relations"], TCollections>
+			>;
+		},
+		options?: LocaleOptions,
+	) => Promise<{ success: boolean; count: number }>;
 
 	/**
 	 * Upload a file to this collection (requires .upload() enabled on collection)
@@ -784,7 +817,10 @@ export function createClient<
 					});
 				},
 
-				update: async (id: string, data: any, options: LocaleOptions = {}) => {
+				update: async (
+				{ id, data }: { id: string; data: any },
+				options: LocaleOptions = {},
+			) => {
 					const queryString = qs.stringify(options, {
 						skipNulls: true,
 						arrayFormat: "brackets",
@@ -796,7 +832,10 @@ export function createClient<
 					});
 				},
 
-				delete: async (id: string, options: LocaleOptions = {}) => {
+				delete: async (
+				{ id }: { id: string },
+				options: LocaleOptions = {},
+			) => {
 					const queryString = qs.stringify(options, {
 						skipNulls: true,
 						arrayFormat: "brackets",
@@ -807,7 +846,10 @@ export function createClient<
 					});
 				},
 
-				restore: async (id: string, options: LocaleOptions = {}) => {
+				restore: async (
+				{ id }: { id: string },
+				options: LocaleOptions = {},
+			) => {
 					const queryString = qs.stringify(options, {
 						skipNulls: true,
 						arrayFormat: "brackets",
@@ -815,6 +857,37 @@ export function createClient<
 					const path = `${cmsBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
 					return request(path, {
 						method: "POST",
+					});
+				},
+
+
+				updateMany: async (
+					{ where, data }: { where: any; data: any },
+					options: LocaleOptions = {},
+				) => {
+					const queryString = qs.stringify(options, {
+						skipNulls: true,
+						arrayFormat: "brackets",
+					});
+					const path = `${cmsBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
+					return request(path, {
+						method: "PATCH",
+						body: JSON.stringify({ where, data }),
+					});
+				},
+
+				deleteMany: async (
+					{ where }: { where: any },
+					options: LocaleOptions = {},
+				) => {
+					const queryString = qs.stringify(options, {
+						skipNulls: true,
+						arrayFormat: "brackets",
+					});
+					const path = `${cmsBasePath}/${collectionName}/delete-many${queryString ? `?${queryString}` : ""}`;
+					return request(path, {
+						method: "POST",
+						body: JSON.stringify({ where }),
 					});
 				},
 

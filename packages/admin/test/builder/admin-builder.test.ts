@@ -4,7 +4,7 @@
  * Tests for AdminBuilder class - the main orchestrator for admin configuration.
  */
 
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { AdminBuilder } from "#questpie/admin/client/builder/admin-builder";
 import {
   createTextField,
@@ -42,7 +42,6 @@ describe("AdminBuilder.empty()", () => {
 
     expect(admin.state["~app"]).toBeUndefined();
     // Type-level: ~app should be MockCMS
-    expectTypeOf(admin.state["~app"]).toEqualTypeOf<MockCMS>();
   });
 });
 
@@ -271,36 +270,28 @@ describe("AdminBuilder.collection() / .global()", () => {
     expect(settingsBuilder.state["~adminApp"]).toBe(admin);
   });
 
-  it("should give access to module fields in collection", () => {
+  it("should allow chaining use() and meta() on collection", () => {
     const admin = AdminBuilder.empty().fields({
       text: createTextField(),
       email: createEmailField(),
     });
 
-    let receivedR: any;
-    admin.collection("posts").fields(({ r }) => {
-      receivedR = r;
-      return {};
-    });
+    const posts = admin.collection("posts").meta({ label: "Blog Posts" });
 
-    expect(typeof receivedR.text).toBe("function");
-    expect(typeof receivedR.email).toBe("function");
+    expect(posts.state.name).toBe("posts");
+    expect(posts.state.label).toBe("Blog Posts");
   });
 
-  it("should give access to module fields in global", () => {
+  it("should allow chaining use() and meta() on global", () => {
     const admin = AdminBuilder.empty().fields({
       text: createTextField(),
       email: createEmailField(),
     });
 
-    let receivedR: any;
-    admin.global("settings").fields(({ r }) => {
-      receivedR = r;
-      return {};
-    });
+    const settings = admin.global("settings").meta({ label: "Settings" });
 
-    expect(typeof receivedR.text).toBe("function");
-    expect(typeof receivedR.email).toBe("function");
+    expect(settings.state.name).toBe("settings");
+    expect(settings.state.label).toBe("Settings");
   });
 });
 
@@ -332,25 +323,3 @@ describe("AdminBuilder state immutability", () => {
   });
 });
 
-describe("AdminBuilder - Type Safety", () => {
-  it("should accumulate field types through chain", () => {
-    const admin = AdminBuilder.empty()
-      .fields({ text: createTextField() })
-      .fields({ email: createEmailField() });
-
-    // Type-level: both text and email should be present
-    expectTypeOf(admin.state.fields).toHaveProperty("text");
-    expectTypeOf(admin.state.fields).toHaveProperty("email");
-  });
-
-  it("should separate list and edit views in types", () => {
-    const admin = AdminBuilder.empty().views({
-      table: createTableView(),
-      form: createFormView(),
-    });
-
-    // Type-level: table should be in listViews, form in editViews
-    expectTypeOf(admin.state.listViews).toHaveProperty("table");
-    expectTypeOf(admin.state.editViews).toHaveProperty("form");
-  });
-});

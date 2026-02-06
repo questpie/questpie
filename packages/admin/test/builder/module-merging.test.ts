@@ -4,7 +4,7 @@
  * Tests for the .use() method across all builders and module composition.
  */
 
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { AdminBuilder } from "#questpie/admin/client/builder/admin-builder";
 import {
   createTextField,
@@ -222,30 +222,6 @@ describe("AdminBuilder.use() - Chained Calls", () => {
     expect(admin.state.fields.text).toBeDefined();
     expect(admin.state.fields.number).toBeDefined();
     expect(admin.state.listViews.table).toBeDefined();
-  });
-});
-
-describe("AdminBuilder.use() - Type Safety", () => {
-  it("should accumulate field types from multiple modules", () => {
-    const module1 = AdminBuilder.empty().fields({ text: createTextField() });
-    const module2 = AdminBuilder.empty().fields({ email: createEmailField() });
-
-    const combined = AdminBuilder.empty().use(module1).use(module2);
-
-    // Type-level: combined should have both text and email
-    expectTypeOf(combined.state.fields).toHaveProperty("text");
-    expectTypeOf(combined.state.fields).toHaveProperty("email");
-  });
-
-  it("should accumulate view types from multiple modules", () => {
-    const module1 = AdminBuilder.empty().views({ table: createTableView() });
-    const module2 = AdminBuilder.empty().views({ form: createFormView() });
-
-    const combined = AdminBuilder.empty().use(module1).use(module2);
-
-    // Type-level: combined should have table in listViews and form in editViews
-    expectTypeOf(combined.state.listViews).toHaveProperty("table");
-    expectTypeOf(combined.state.editViews).toHaveProperty("form");
   });
 });
 

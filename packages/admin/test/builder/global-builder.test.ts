@@ -4,7 +4,7 @@
  * Tests for GlobalBuilder class and global() factory.
  */
 
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { global } from "#questpie/admin/client/builder/global/global";
 import { GlobalBuilder } from "#questpie/admin/client/builder/global/global-builder";
 import { AdminBuilder } from "#questpie/admin/client/builder/admin-builder";
@@ -136,187 +136,11 @@ describe("GlobalBuilder.meta()", () => {
   });
 });
 
-describe("GlobalBuilder.fields()", () => {
-  it("should receive r (FieldRegistryProxy) in callback", () => {
-    const adminModule = AdminBuilder.empty().fields({
-      text: createTextField(),
-      email: createEmailField(),
-    });
-
-    let receivedR: any;
-    global("settings")
-      .use(adminModule)
-      .fields(({ r }) => {
-        receivedR = r;
-        return {};
-      });
-
-    expect(receivedR).toBeDefined();
-    expect(typeof receivedR.text).toBe("function");
-    expect(typeof receivedR.email).toBe("function");
-  });
-
-  it("should allow defining fields using registry proxy", () => {
-    const adminModule = AdminBuilder.empty().fields({
-      text: createTextField(),
-    });
-
-    const settings = global("settings")
-      .use(adminModule)
-      .fields(({ r }) => ({
-        siteName: r.text(),
-        siteDescription: r.text(),
-      }));
-
-    expect(settings.state.fields).toBeDefined();
-    expect(settings.state.fields?.siteName).toBeDefined();
-    expect(settings.state.fields?.siteDescription).toBeDefined();
-  });
-
-  it("should pass options through r.fieldType(options)", () => {
-    const adminModule = AdminBuilder.empty().fields({
-      text: createTextField(),
-    });
-
-    const settings = global("settings")
-      .use(adminModule)
-      .fields(({ r }) => ({
-        siteName: r.text({ maxLength: 100 } as any),
-      }));
-
-    expect(settings.state.fields?.siteName["~options"]).toEqual({
-      maxLength: 100,
-    });
-  });
-
-  it("should preserve field type (name property)", () => {
-    const adminModule = AdminBuilder.empty().fields({
-      text: createTextField(),
-      email: createEmailField(),
-    });
-
-    const settings = global("settings")
-      .use(adminModule)
-      .fields(({ r }) => ({
-        siteName: r.text(),
-        contactEmail: r.email(),
-      }));
-
-    expect(settings.state.fields?.siteName.name).toBe("text");
-    expect(settings.state.fields?.contactEmail.name).toBe("email");
-  });
-
-  it("should return new builder instance", () => {
-    const adminModule = AdminBuilder.empty().fields({
-      text: createTextField(),
-    });
-
-    const original = global("settings").use(adminModule);
-    const withFields = original.fields(({ r }) => ({ siteName: r.text() }));
-
-    expect(original).not.toBe(withFields);
-  });
-
-  it("should not mutate original builder", () => {
-    const adminModule = AdminBuilder.empty().fields({
-      text: createTextField(),
-    });
-
-    const original = global("settings").use(adminModule);
-    original.fields(({ r }) => ({ siteName: r.text() }));
-
-    expect(original.state.fields).toBeUndefined();
-  });
-
-  it("should work without admin module (empty registry)", () => {
-    let receivedR: any;
-    global("settings").fields(({ r }) => {
-      receivedR = r;
-      return {};
-    });
-
-    // r should be empty object
-    expect(Object.keys(receivedR)).toHaveLength(0);
-  });
-});
-
-describe("GlobalBuilder.form()", () => {
-  it("should receive v (ViewRegistryProxy) and f (FieldProxy) in callback", () => {
-    const adminModule = AdminBuilder.empty()
-      .fields({ text: createTextField() })
-      .views({ form: createFormView() });
-
-    let receivedV: any;
-    let receivedF: any;
-
-    global("settings")
-      .use(adminModule)
-      .fields(({ r }) => ({
-        siteName: r.text(),
-        siteDescription: r.text(),
-      }))
-      .form(({ v, f }) => {
-        receivedV = v;
-        receivedF = f;
-        return {};
-      });
-
-    expect(receivedV).toBeDefined();
-    expect(typeof receivedV.form).toBe("function");
-    expect(receivedF).toBeDefined();
-    expect(receivedF.siteName).toBe("siteName");
-    expect(receivedF.siteDescription).toBe("siteDescription");
-  });
-
-  it("should allow selecting view using view proxy", () => {
-    const adminModule = AdminBuilder.empty()
-      .fields({ text: createTextField() })
-      .views({ form: createFormView() });
-
-    const settings = global("settings")
-      .use(adminModule)
-      .fields(({ r }) => ({
-        siteName: r.text(),
-      }))
-      .form(({ v, f }) => v.form({ sections: [] }));
-
-    expect(settings.state.form).toBeDefined();
-  });
-
-  it("should return new builder instance", () => {
-    const adminModule = AdminBuilder.empty()
-      .fields({ text: createTextField() })
-      .views({ form: createFormView() });
-
-    const original = global("settings")
-      .use(adminModule)
-      .fields(({ r }) => ({ siteName: r.text() }));
-
-    const withForm = original.form(({ v, f }) => ({}));
-
-    expect(original).not.toBe(withForm);
-  });
-
-  it("should not mutate original builder", () => {
-    const adminModule = AdminBuilder.empty()
-      .fields({ text: createTextField() })
-      .views({ form: createFormView() });
-
-    const original = global("settings")
-      .use(adminModule)
-      .fields(({ r }) => ({ siteName: r.text() }));
-
-    original.form(({ v, f }) => ({}));
-
-    expect(original.state.form).toBeUndefined();
-  });
-});
 
 describe("GlobalBuilder.state", () => {
   it("should expose readonly state", () => {
     const settings = global("settings")
-      .meta({ label: "Site Settings" })
-      .fields(({ r }) => ({}));
+      .meta({ label: "Site Settings" });
 
     expect(settings.state).toBeDefined();
     expect(settings.state.name).toBe("settings");
@@ -341,74 +165,17 @@ describe("GlobalBuilder - Full Configuration Chain", () => {
         label: "Site Settings",
         icon: MockIcon,
         description: "Configure your site",
-      })
-      .fields(({ r }) => ({
-        siteName: r.text({ maxLength: 100 } as any),
-        siteDescription: r.text(),
-        contactEmail: r.email(),
-      }))
-      .form(({ v, f }) =>
-        v.form({
-          sections: [
-            {
-              title: "General",
-              fields: [f.siteName, f.siteDescription],
-            },
-            {
-              title: "Contact",
-              fields: [f.contactEmail],
-            },
-          ],
-        }),
-      );
+      });
 
     // Verify all state is correctly set
     expect(settings.state.name).toBe("settings");
     expect(settings.state.label).toBe("Site Settings");
     expect(settings.state.icon).toBe(MockIcon);
     expect(settings.state.description).toBe("Configure your site");
-    expect(settings.state.fields?.siteName.name).toBe("text");
-    expect(settings.state.fields?.contactEmail.name).toBe("email");
-    expect(settings.state.form).toBeDefined();
+    expect(settings.state["~adminApp"]).toBe(adminModule);
   });
 });
 
-describe("GlobalBuilder - Type Safety", () => {
-  it("should type field proxy based on defined fields", () => {
-    const adminModule = AdminBuilder.empty().fields({
-      text: createTextField(),
-    });
-
-    global("settings")
-      .use(adminModule)
-      .fields(({ r }) => ({
-        siteName: r.text(),
-        siteDescription: r.text(),
-      }))
-      .form(({ v, f }) => {
-        // Type-level: f should have siteName and siteDescription
-        expectTypeOf(f.siteName).toEqualTypeOf<"siteName">();
-        expectTypeOf(f.siteDescription).toEqualTypeOf<"siteDescription">();
-        return {};
-      });
-  });
-
-  it("should type registry proxy based on admin module fields", () => {
-    const adminModule = AdminBuilder.empty().fields({
-      text: createTextField(),
-      email: createEmailField(),
-    });
-
-    global("settings")
-      .use(adminModule)
-      .fields(({ r }) => {
-        // Type-level: r should have text and email
-        expectTypeOf(r.text).toBeFunction();
-        expectTypeOf(r.email).toBeFunction();
-        return {};
-      });
-  });
-});
 
 describe("GlobalBuilder immutability", () => {
   it("should create new instance on every method call", () => {
@@ -419,13 +186,9 @@ describe("GlobalBuilder immutability", () => {
     const a = global("settings");
     const b = a.use(adminModule);
     const c = b.meta({ label: "Settings" });
-    const d = c.fields(({ r }) => ({ siteName: r.text() }));
-    const e = d.form(({ v, f }) => ({}));
 
     expect(a).not.toBe(b);
     expect(b).not.toBe(c);
-    expect(c).not.toBe(d);
-    expect(d).not.toBe(e);
   });
 });
 
@@ -434,32 +197,32 @@ describe("GlobalBuilder vs CollectionBuilder", () => {
     // GlobalBuilder and CollectionBuilder should have matching APIs for:
     // - use()
     // - meta()
-    // - fields()
-    // But GlobalBuilder doesn't have list() (only form())
 
     const adminModule = AdminBuilder.empty().fields({
       text: createTextField(),
     });
 
-    // Both support use/meta/fields
+    // Both support use/meta
     const { collection } =
       await import("#questpie/admin/client/builder/collection/collection");
     const collectionBuilder = collection("posts")
       .use(adminModule)
-      .meta({ label: "Posts" })
-      .fields(({ r }) => ({ title: r.text() }));
+      .meta({ label: "Posts" });
 
     const globalBuilder = global("settings")
       .use(adminModule)
-      .meta({ label: "Settings" })
-      .fields(({ r }) => ({ siteName: r.text() }));
+      .meta({ label: "Settings" });
 
-    // Global doesn't have list(), collection does
-    expect(typeof (collectionBuilder as any).list).toBe("function");
-    expect((globalBuilder as any).list).toBeUndefined();
+    // Both have use and meta
+    expect(typeof collectionBuilder.use).toBe("function");
+    expect(typeof collectionBuilder.meta).toBe("function");
+    expect(typeof globalBuilder.use).toBe("function");
+    expect(typeof globalBuilder.meta).toBe("function");
 
-    // Both have form()
-    expect(typeof collectionBuilder.form).toBe("function");
-    expect(typeof globalBuilder.form).toBe("function");
+    // Collection has preview and autoSave, global doesn't
+    expect(typeof (collectionBuilder as any).preview).toBe("function");
+    expect(typeof (collectionBuilder as any).autoSave).toBe("function");
+    expect((globalBuilder as any).preview).toBeUndefined();
+    expect((globalBuilder as any).autoSave).toBeUndefined();
   });
 });

@@ -4,7 +4,7 @@
  * Tests for createZod, buildValidationSchema, and nested field validation.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { z } from "zod";
 import { builtInFields } from "#questpie/admin/client/builder/defaults/fields";
 import {

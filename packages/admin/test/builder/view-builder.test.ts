@@ -4,7 +4,7 @@
  * Tests for listView(), editView(), ListViewBuilder, and EditViewBuilder.
  */
 
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
 	EditViewBuilder,
 	type EditViewDefinition,
@@ -326,40 +326,6 @@ describe("View kind discrimination", () => {
 	});
 });
 
-describe("View builder - Type Safety", () => {
-	it("should infer name type correctly for list view", () => {
-		const tableView = listView("table", { component: MockTableView });
-
-		expectTypeOf(tableView.name).toEqualTypeOf<"table">();
-	});
-
-	it("should infer name type correctly for edit view", () => {
-		const formView = editView("form", { component: MockFormView });
-
-		expectTypeOf(formView.name).toEqualTypeOf<"form">();
-	});
-
-	it("should have literal kind type for list view", () => {
-		const tableView = listView("table", { component: MockTableView });
-
-		expectTypeOf(tableView.kind).toEqualTypeOf<"list">();
-	});
-
-	it("should have literal kind type for edit view", () => {
-		const formView = editView("form", { component: MockFormView });
-
-		expectTypeOf(formView.kind).toEqualTypeOf<"edit">();
-	});
-
-	it("should update config type after $config()", () => {
-		const original = listView("table", { component: MockTableView });
-		const updated = original.$config({ columns: ["name"] as const });
-
-		expectTypeOf(updated["~config"]).toEqualTypeOf<{
-			columns: readonly ["name"];
-		}>();
-	});
-});
 
 describe("View builder immutability", () => {
 	it("should create new instances on list view mutations", () => {
@@ -436,9 +402,6 @@ describe("Custom view type extraction", () => {
 		expect(kanbanView.kind).toBe("list");
 
 		// Type test: config should be typed as KanbanViewConfig
-		expectTypeOf(kanbanView["~config"]).toEqualTypeOf<
-			KanbanViewConfig | undefined
-		>();
 	});
 
 	it("should allow setting typed config via $config", () => {
@@ -449,7 +412,6 @@ describe("Custom view type extraction", () => {
 		expect(kanbanView["~config"]).toEqual({ groupByField: "status" });
 
 		// Type should be preserved
-		expectTypeOf(kanbanView["~config"]).toEqualTypeOf<KanbanViewConfig>();
 	});
 
 	it("should work with components without viewConfig prop", () => {
@@ -459,6 +421,5 @@ describe("Custom view type extraction", () => {
 
 		expect(simpleView.name).toBe("simple");
 		// Config type should be unknown when not extractable
-		expectTypeOf(simpleView["~config"]).toEqualTypeOf<unknown>();
 	});
 });

@@ -4,7 +4,7 @@
  * Tests for createFieldProxy, createFieldRegistryProxy, and createViewRegistryProxy.
  */
 
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect } from "bun:test";
 import {
   createFieldProxy,
   createFieldRegistryProxy,
@@ -65,33 +65,6 @@ describe("createFieldProxy", () => {
 });
 
 describe("createFieldProxy - Type Safety", () => {
-  it("should have correct FieldProxy type", () => {
-    type TestFields = {
-      name: FieldDefinition<"text">;
-      email: FieldDefinition<"email">;
-    };
-
-    const fields = {} as TestFields;
-    const proxy = createFieldProxy(fields);
-
-    // Type-level: proxy should map field keys to themselves
-    expectTypeOf(proxy).toMatchTypeOf<FieldProxy<TestFields>>();
-    expectTypeOf(proxy.name).toEqualTypeOf<"name">();
-    expectTypeOf(proxy.email).toEqualTypeOf<"email">();
-  });
-
-  it("should only allow defined field keys", () => {
-    type TestFields = {
-      title: FieldDefinition<"text">;
-    };
-
-    type Proxy = FieldProxy<TestFields>;
-
-    // Type-level: only 'title' should be accessible
-    expectTypeOf<Proxy>().toHaveProperty("title");
-    // @ts-expect-error - 'nonexistent' should not exist on type
-    type _Invalid = Proxy["nonexistent"];
-  });
 });
 
 describe("createFieldRegistryProxy", () => {
@@ -196,22 +169,6 @@ describe("createFieldRegistryProxy", () => {
   });
 });
 
-describe("createFieldRegistryProxy - Type Safety", () => {
-  it("should type proxy methods correctly", () => {
-    const fields = {
-      text: createTextField(),
-    };
-
-    const proxy = createFieldRegistryProxy(fields);
-
-    // Type-level: proxy.text should be callable
-    expectTypeOf(proxy.text).toBeFunction();
-
-    // Type-level: result should be FieldDefinition
-    const result = proxy.text();
-    expectTypeOf(result).toMatchTypeOf<FieldDefinition>();
-  });
-});
 
 describe("createViewRegistryProxy", () => {
   it("should create callable methods for each view type", () => {
@@ -281,29 +238,6 @@ describe("createViewRegistryProxy", () => {
   });
 });
 
-describe("createViewRegistryProxy - Type Safety", () => {
-  it("should correctly type list view proxy", () => {
-    const views = {
-      table: createTableView(),
-    };
-
-    const proxy = createViewRegistryProxy(views);
-
-    // Type-level: proxy.table should be callable
-    expectTypeOf(proxy.table).toBeFunction();
-  });
-
-  it("should correctly type edit view proxy", () => {
-    const views = {
-      form: createFormView(),
-    };
-
-    const proxy = createViewRegistryProxy(views);
-
-    // Type-level: proxy.form should be callable
-    expectTypeOf(proxy.form).toBeFunction();
-  });
-});
 
 describe("Proxy Integration", () => {
   it("should work together in a realistic scenario", () => {

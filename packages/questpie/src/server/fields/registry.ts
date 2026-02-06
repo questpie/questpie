@@ -26,7 +26,7 @@ export type AnyFieldDef = FieldDef<any, any>;
  * Registry for field types.
  * Allows registration of built-in and custom fields.
  * Stores plain field definition objects (from defineField).
-//  * TODO: get rid of this we will just export builtinFields like we do in admin
+//  * TODO: Consider replacing FieldRegistry class with plain exported builtinFields (like admin package)
  */
 export class FieldRegistry {
 	/** Registered field definitions */

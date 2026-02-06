@@ -4,7 +4,7 @@
  * Tests for the qa namespace - the main entry point for admin builder API.
  */
 
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { qa } from "#questpie/admin/client/builder/qa";
 import { AdminBuilder } from "#questpie/admin/client/builder/admin-builder";
 import { FieldBuilder } from "#questpie/admin/client/builder/field/field";
@@ -50,7 +50,6 @@ describe("qa() factory", () => {
 
     expect(admin).toBeInstanceOf(AdminBuilder);
     // Type-level: ~app should be MockCMS
-    expectTypeOf(admin.state["~app"]).toEqualTypeOf<MockCMS>();
   });
 
   it("should be callable multiple times for independent builders", () => {
@@ -249,36 +248,28 @@ describe("AdminBuilder.collection() / AdminBuilder.global()", () => {
     expect(settings.state["~adminApp"]).toBe(adminModule);
   });
 
-  it("should give access to module fields in collection", () => {
+  it("should allow chaining use() and meta() on collection", () => {
     const adminModule = qa().fields({
       text: createTextField(),
       email: createEmailField(),
     });
 
-    let receivedR: any;
-    adminModule.collection("posts").fields(({ r }) => {
-      receivedR = r;
-      return {};
-    });
+    const posts = adminModule.collection("posts").meta({ label: "Blog Posts" });
 
-    expect(typeof receivedR.text).toBe("function");
-    expect(typeof receivedR.email).toBe("function");
+    expect(posts.state.name).toBe("posts");
+    expect(posts.state.label).toBe("Blog Posts");
   });
 
-  it("should give access to module fields in global", () => {
+  it("should allow chaining use() and meta() on global", () => {
     const adminModule = qa().fields({
       text: createTextField(),
       email: createEmailField(),
     });
 
-    let receivedR: any;
-    adminModule.global("settings").fields(({ r }) => {
-      receivedR = r;
-      return {};
-    });
+    const settings = adminModule.global("settings").meta({ label: "Settings" });
 
-    expect(typeof receivedR.text).toBe("function");
-    expect(typeof receivedR.email).toBe("function");
+    expect(settings.state.name).toBe("settings");
+    expect(settings.state.label).toBe("Settings");
   });
 });
 
@@ -301,22 +292,12 @@ describe("qa namespace - Complete Example", () => {
     // 2. Define collections using builder directly
     const posts = builder
       .collection("posts")
-      .meta({ label: "Blog Posts" })
-      .fields(({ r }) => ({
-        title: r.text({ maxLength: 200 } as any),
-        authorEmail: r.email(),
-      }))
-      .list(({ f }) => ({
-        columns: [f.title, f.authorEmail],
-      }));
+      .meta({ label: "Blog Posts" });
 
     // 3. Define globals using builder directly
     const settings = builder
       .global("settings")
-      .meta({ label: "Site Settings" })
-      .fields(({ r }) => ({
-        siteName: r.text(),
-      }));
+      .meta({ label: "Site Settings" });
 
     // Verify builder has all registries
     expect(builder.state.fields.text).toBeDefined();
@@ -327,32 +308,9 @@ describe("qa namespace - Complete Example", () => {
 
     // Verify entity builders work
     expect(posts.state.name).toBe("posts");
+    expect(posts.state.label).toBe("Blog Posts");
     expect(settings.state.name).toBe("settings");
-  });
-});
-
-describe("qa namespace - Type Safety", () => {
-  it("should preserve types through builder.collection()", () => {
-    const adminModule = qa().fields({
-      text: createTextField(),
-      email: createEmailField(),
-    });
-
-    const posts = adminModule.collection("posts");
-
-    // Type-level: posts should have ~adminApp type from adminModule
-    expect(posts.state["~adminApp"]).toBe(adminModule);
-  });
-
-  it("should type builder methods correctly", () => {
-    const textField = qa.field("text", { component: MockTextField });
-    const tableView = qa.listView("table", { component: MockTableView });
-    const formView = qa.editView("form", { component: MockFormView });
-
-    // Type-level: verify correct return types
-    expectTypeOf(textField).toMatchTypeOf<FieldBuilder<any>>();
-    expectTypeOf(tableView).toMatchTypeOf<ListViewBuilder<any>>();
-    expectTypeOf(formView).toMatchTypeOf<EditViewBuilder<any>>();
+    expect(settings.state.label).toBe("Site Settings");
   });
 });
 

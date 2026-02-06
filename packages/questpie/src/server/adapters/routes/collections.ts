@@ -236,6 +236,76 @@ export const createCollectionRoutes = <
 			}
 		},
 
+		updateMany: async (
+			request: Request,
+			params: { collection: string },
+			context?: AdapterContext,
+			input?: unknown,
+		): Promise<Response> => {
+			const resolved = await resolveContext(cms, request, config, context);
+			const crud = cms.api.collections[params.collection as any];
+
+			if (!crud) {
+				return errorResponse(
+					ApiError.notFound("Collection", params.collection),
+					request,
+					resolved.cmsContext.locale,
+				);
+			}
+
+			const body = input !== undefined ? input : await parseRpcBody(request);
+			if (body === null || typeof body !== "object") {
+				return errorResponse(
+					ApiError.badRequest("Invalid JSON body"),
+					request,
+					resolved.cmsContext.locale,
+				);
+			}
+
+			try {
+				const { where, data } = body as { where: any; data: any };
+				const result = await crud.update({ where, data }, resolved.cmsContext);
+				return smartResponse(result, request);
+			} catch (error) {
+				return errorResponse(error, request, resolved.cmsContext.locale);
+			}
+		},
+
+		deleteMany: async (
+			request: Request,
+			params: { collection: string },
+			context?: AdapterContext,
+			input?: unknown,
+		): Promise<Response> => {
+			const resolved = await resolveContext(cms, request, config, context);
+			const crud = cms.api.collections[params.collection as any];
+
+			if (!crud) {
+				return errorResponse(
+					ApiError.notFound("Collection", params.collection),
+					request,
+					resolved.cmsContext.locale,
+				);
+			}
+
+			const body = input !== undefined ? input : await parseRpcBody(request);
+			if (body === null || typeof body !== "object") {
+				return errorResponse(
+					ApiError.badRequest("Invalid JSON body"),
+					request,
+					resolved.cmsContext.locale,
+				);
+			}
+
+			try {
+				const { where } = body as { where: any };
+				const result = await crud.delete({ where }, resolved.cmsContext);
+				return smartResponse(result, request);
+			} catch (error) {
+				return errorResponse(error, request, resolved.cmsContext.locale);
+			}
+		},
+
 		meta: async (
 			request: Request,
 			params: { collection: string },
