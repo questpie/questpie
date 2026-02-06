@@ -92,6 +92,12 @@ import type { Questpie } from "#questpie/server/config/cms.js";
 import { runWithContext } from "#questpie/server/config/context.js";
 import type { StorageVisibility } from "#questpie/server/config/types.js";
 import { ApiError, parseDatabaseError } from "#questpie/server/errors/index.js";
+import {
+	applyFieldInputHooks,
+	applyFieldOutputHooks,
+	extractFieldDefinitionAccessRules,
+} from "#questpie/server/fields/runtime.js";
+import type { FieldDefinitionAccess } from "#questpie/server/fields/types.js";
 
 export class CRUDGenerator<TState extends CollectionBuilderState> {
 	// Public accessors for internal use by relation resolution
@@ -202,6 +208,48 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	): (...args: TArgs) => Promise<TResult> {
 		// Direct passthrough - context is passed explicitly through function arguments
 		return fn;
+	}
+
+	private getFieldAccessRules():
+		| Record<string, FieldDefinitionAccess>
+		| undefined {
+		return extractFieldDefinitionAccessRules(this.state.fieldDefinitions);
+	}
+
+	private async runFieldInputHooks(
+		data: Record<string, unknown>,
+		operation: "create" | "update",
+		context: CRUDContext,
+		db: any,
+		originalDocument?: Record<string, unknown>,
+	): Promise<Record<string, unknown>> {
+		return applyFieldInputHooks({
+			data,
+			fieldDefinitions: this.state.fieldDefinitions,
+			collectionName: this.state.name,
+			operation,
+			context,
+			db,
+			originalDocument,
+		});
+	}
+
+	private async runFieldOutputHooks(
+		data: Record<string, unknown>,
+		operation: "create" | "read" | "update",
+		context: CRUDContext,
+		db: any,
+		originalDocument?: Record<string, unknown>,
+	): Promise<void> {
+		await applyFieldOutputHooks({
+			data,
+			fieldDefinitions: this.state.fieldDefinitions,
+			collectionName: this.state.name,
+			operation,
+			context,
+			db,
+			originalDocument,
+		});
 	}
 
 	/**
@@ -445,6 +493,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		// Filter fields based on field-level read access
 		for (const row of rows) {
 			await this.filterFieldsForRead(row, normalized);
+			await this.runFieldOutputHooks(row, "read", normalized, db);
 		}
 
 		// Execute afterRead hooks
@@ -871,7 +920,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					));
 
 					// Validate field-level write access (on regular fields only)
-					await this.validateFieldWriteAccess(regularFields, normalized);
+					await this.validateFieldWriteAccess(
+						regularFields,
+						normalized,
+						"create",
+					);
 
 					// Runtime validation (if schemas are configured)
 					if (this.state.validation?.insertSchema) {
@@ -883,6 +936,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							throw ApiError.fromZodError(error);
 						}
 					}
+
+					regularFields = await this.runFieldInputHooks(
+						regularFields,
+						"create",
+						normalized,
+						db,
+					);
 
 					// Execute beforeChange hooks (after validation)
 					await this.executeHooks(
@@ -1048,6 +1108,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}
 
 					// Execute afterRead hook (transform output)
+					await this.runFieldOutputHooks(record, "create", normalized, db);
+
 					await this.executeHooks(
 						this.state.hooks?.afterRead,
 						this.createHookContext({
@@ -1174,7 +1236,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 		for (const existing of records) {
 			// Validate field-level write access
-			await this.validateFieldWriteAccess(regularFields, normalized, existing);
+			await this.validateFieldWriteAccess(
+				regularFields,
+				normalized,
+				"update",
+				existing,
+			);
+
+			regularFields = await this.runFieldInputHooks(
+				regularFields,
+				"update",
+				normalized,
+				db,
+				existing,
+			);
 
 			await this.executeHooks(
 				this.state.hooks?.beforeChange as any,
@@ -1320,6 +1395,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		// 6. afterRead hooks and notifications
 		for (const updated of updatedRecords) {
 			const original = records.find((r) => r.id === updated.id);
+
+			await this.runFieldOutputHooks(
+				updated,
+				"update",
+				normalized,
+				db,
+				original,
+			);
 
 			await this.executeHooks(
 				this.state.hooks?.afterRead,
@@ -2113,7 +2196,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	/**
 	 * Filter fields from result based on field-level read access
 	 * Delegates to extracted getRestrictedReadFields utility
-	 * Merges collection field access with CMS defaultAccess.fields
+	 * Uses field definition access rules
 	 */
 	private async filterFieldsForRead(
 		result: any,
@@ -2122,17 +2205,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		if (!result) return;
 
 		const db = this.getDb(context);
-
-		// Merge collection field access with defaultAccess.fields (collection takes precedence)
-		const mergedFieldAccess = {
-			...this.cms?.defaultAccess?.fields,
-			...this.state.access?.fields,
-		};
+		const fieldAccess = this.getFieldAccessRules();
 
 		const fieldsToRemove = await getRestrictedReadFields(result, context, {
 			cms: this.cms,
 			db,
-			fieldAccess: mergedFieldAccess,
+			fieldAccess,
 		});
 
 		// Remove restricted fields
@@ -2144,27 +2222,24 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	/**
 	 * Validate write access for all fields in input data
 	 * Delegates to extracted validateFieldsWriteAccess utility
-	 * Merges collection field access with CMS defaultAccess.fields
+	 * Uses field definition access rules
 	 */
 	private async validateFieldWriteAccess(
 		data: any,
 		context: CRUDContext,
+		operation: "create" | "update",
 		existing?: any,
 	): Promise<void> {
 		const db = this.getDb(context);
-
-		// Merge collection field access with defaultAccess.fields (collection takes precedence)
-		const mergedFieldAccess = {
-			...this.cms?.defaultAccess?.fields,
-			...this.state.access?.fields,
-		};
+		const fieldAccess = this.getFieldAccessRules();
 
 		await validateFieldsWriteAccess(
 			data,
-			mergedFieldAccess,
+			fieldAccess,
 			context,
 			{ cms: this.cms, db },
 			this.state.name,
+			operation,
 			existing,
 		);
 	}

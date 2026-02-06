@@ -66,7 +66,7 @@ examples/tanstack-barbershop/
 ```typescript
 // src/questpie/server/cms.ts
 import { adminModule } from "@questpie/admin/server";
-import { q, ConsoleAdapter, SmtpAdapter, pgBossAdapter } from "questpie";
+import { q, rpc, ConsoleAdapter, SmtpAdapter, pgBossAdapter } from "questpie";
 import { barbers, services, appointments, reviews, pages } from "./collections";
 import { siteSettings } from "./globals";
 import * as jobs from "./jobs";
@@ -85,7 +85,6 @@ export const cms = q({ name: "barbershop" })
     siteSettings,
   })
   .jobs(jobs)
-  .functions(functions)
   .locale({
     locales: [
       { code: "en", label: "English", fallback: true },
@@ -112,6 +111,11 @@ export const cms = q({ name: "barbershop" })
   });
 
 export type AppCMS = typeof cms;
+
+const r = rpc();
+
+export const appRpc = r.router(functions);
+export type AppRpc = typeof appRpc;
 ```
 
 ### Barbers Collection
@@ -120,7 +124,8 @@ export type AppCMS = typeof cms;
 // src/questpie/server/collections/barbers.ts
 import { q, text, boolean, json } from "questpie";
 
-export const barbers = q.collection("barbers")
+export const barbers = q
+  .collection("barbers")
   .fields({
     name: text("name").notNull(),
     email: text("email").notNull().unique(),
@@ -158,7 +163,8 @@ export const barbers = q.collection("barbers")
 // src/questpie/server/collections/appointments.ts
 import { q, text, datetime, integer } from "questpie";
 
-export const appointments = q.collection("appointments")
+export const appointments = q
+  .collection("appointments")
   .fields({
     customerName: text("customerName").notNull(),
     customerEmail: text("customerEmail").notNull(),
@@ -289,27 +295,29 @@ export const barbersAdmin = builder
     }),
   }))
   .list(({ v }) => v.table({}))
-  .form(({ v, f }) => v.form({
-    sidebar: {
-      position: "right",
-      fields: [f.isActive, f.avatar],
-    },
-    sections: [
-      {
-        title: { en: "Contact", sk: "Kontakt" },
-        layout: "grid",
-        grid: { columns: 2 },
-        fields: [f.name, f.email, f.phone],
+  .form(({ v, f }) =>
+    v.form({
+      sidebar: {
+        position: "right",
+        fields: [f.isActive, f.avatar],
       },
-      {
-        title: { en: "Profile", sk: "Profil" },
-        fields: [f.bio, f.services],
-      },
-      {
-        fields: [f.socialLinks, f.workingHours],
-      },
-    ],
-  }));
+      sections: [
+        {
+          title: { en: "Contact", sk: "Kontakt" },
+          layout: "grid",
+          grid: { columns: 2 },
+          fields: [f.name, f.email, f.phone],
+        },
+        {
+          title: { en: "Profile", sk: "Profil" },
+          fields: [f.bio, f.services],
+        },
+        {
+          fields: [f.socialLinks, f.workingHours],
+        },
+      ],
+    }),
+  );
 ```
 
 ### Dashboard
@@ -337,7 +345,7 @@ export const dashboard = qa.dashboard({
           span: 2,
           cardVariant: "featured",
           fetchFn: async () => {
-            const stats = await client.functions.getRevenueStats();
+            const stats = await client.rpc.getRevenueStats();
             return {
               value: stats.totalRevenue / 100,
               formatted: `${stats.totalRevenue.toLocaleString()} €`,
@@ -371,12 +379,16 @@ export const dashboard = qa.dashboard({
         {
           id: "overview",
           label: { en: "Overview", sk: "Prehľad" },
-          items: [/* stats, recent items */],
+          items: [
+            /* stats, recent items */
+          ],
         },
         {
           id: "analytics",
           label: { en: "Analytics", sk: "Analytika" },
-          items: [/* charts, progress */],
+          items: [
+            /* charts, progress */
+          ],
         },
       ],
     },
@@ -423,7 +435,7 @@ The example includes 18 blocks:
 
 **Layout:** columns, spacer, divider
 
-## Custom Functions
+## Custom RPC Procedures
 
 ```typescript
 // src/questpie/server/functions/booking.ts
@@ -432,7 +444,7 @@ import { z } from "zod";
 import type { BaseCMS } from "../cms";
 
 export const createBooking = q.fn({
-  input: z.object({
+  schema: z.object({
     barberId: z.string(),
     serviceId: z.string(),
     scheduledAt: z.string().datetime(),
@@ -500,6 +512,7 @@ bun run dev
 ```
 
 Visit:
+
 - `http://localhost:3000` - Frontend
 - `http://localhost:3000/admin` - Admin panel
 

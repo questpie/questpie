@@ -29,7 +29,8 @@ Use the `q.collection` function with a fluent builder pattern:
 import { q } from "questpie";
 import { varchar, text, boolean, integer } from "drizzle-orm/pg-core";
 
-export const posts = q.collection("posts")
+export const posts = q
+  .collection("posts")
   .fields({
     title: varchar("title", { length: 255 }).notNull(),
     slug: varchar("slug", { length: 255 }).notNull().unique(),
@@ -359,13 +360,26 @@ q.collection("posts")
 
     // Only admins can delete
     delete: ({ user }) => user?.role === "admin",
+  });
+```
 
-    // Field-level access
-    fields: {
-      authorId: {
-        write: ({ user }) => user?.role === "admin", // Only admins can change author
+Field-level access is configured directly in field definitions:
+
+```typescript
+q.collection("posts")
+  .fields((f) => ({
+    authorId: f.text({
+      access: {
+        create: ({ user }) => user?.role === "admin",
+        update: ({ user }) => user?.role === "admin",
       },
-    },
+    }),
+  }))
+  .access({
+    read: true,
+    create: ({ user }) => !!user,
+    update: ({ user, row }) => row.authorId === user.id,
+    delete: ({ user }) => user?.role === "admin",
   });
 ```
 
@@ -380,7 +394,8 @@ import { q } from "questpie";
 import { varchar, integer } from "drizzle-orm/pg-core";
 
 // Example: Assets collection with computed URL
-export const assets = q.collection("assets")
+export const assets = q
+  .collection("assets")
   .fields({
     key: varchar("key", { length: 255 }).notNull(),
     filename: varchar("filename", { length: 255 }).notNull(),

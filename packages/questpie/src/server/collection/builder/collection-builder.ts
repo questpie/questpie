@@ -950,10 +950,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		const mergedAccess = {
 			...this.state.access,
 			...other.state.access,
-			fields: {
-				...this.state.access?.fields,
-				...other.state.access?.fields,
-			},
 		};
 
 		const mergedState = {

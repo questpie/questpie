@@ -26,7 +26,8 @@ Each collection creates a database table and provides CRUD operations.
 ```typescript
 import { q, text, boolean, datetime, integer, varchar } from "questpie";
 
-const posts = q.collection("posts")
+const posts = q
+  .collection("posts")
   .fields({
     title: text("title").notNull(),
     slug: text("slug").notNull().unique(),
@@ -38,9 +39,9 @@ const posts = q.collection("posts")
     authorId: varchar("authorId", { length: 255 }),
   })
   .options({
-    timestamps: true,     // Add createdAt, updatedAt
-    softDelete: true,     // Add deletedAt, use soft delete
-    versioning: true,     // Track version history
+    timestamps: true, // Add createdAt, updatedAt
+    softDelete: true, // Add deletedAt, use soft delete
+    versioning: true, // Track version history
   })
   .relations(({ one, many }) => ({
     author: one("user", {
@@ -85,7 +86,8 @@ import type { AppCMS } from "./server/cms";
 
 const builder = qa<AppCMS>().use(adminModule);
 
-const postsAdmin = builder.collection("posts")
+const postsAdmin = builder
+  .collection("posts")
   .meta({
     label: "Posts",
     labelSingular: "Post",
@@ -108,29 +110,33 @@ const postsAdmin = builder.collection("posts")
       multiple: true,
     }),
   }))
-  .list(({ v, f }) => v.table({
-    columns: [f.title, f.author, f.published, f.publishedAt],
-    defaultSort: { field: "createdAt", direction: "desc" },
-  }))
-  .form(({ v, f }) => v.form({
-    fields: [
-      f.title,
-      f.slug,
-      f.content,
-      f.excerpt,
-      { type: "row", fields: [f.author, f.tags] },
-      { type: "row", fields: [f.published, f.publishedAt] },
-    ],
-  }));
+  .list(({ v, f }) =>
+    v.table({
+      columns: [f.title, f.author, f.published, f.publishedAt],
+      defaultSort: { field: "createdAt", direction: "desc" },
+    }),
+  )
+  .form(({ v, f }) =>
+    v.form({
+      fields: [
+        f.title,
+        f.slug,
+        f.content,
+        f.excerpt,
+        { type: "row", fields: [f.author, f.tags] },
+        { type: "row", fields: [f.published, f.publishedAt] },
+      ],
+    }),
+  );
 ```
 
 ## Collection Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `timestamps` | `boolean` | `true` | Add `createdAt`, `updatedAt` fields |
-| `softDelete` | `boolean` | `false` | Use soft delete with `deletedAt` |
-| `versioning` | `boolean` | `false` | Track version history |
+| Option       | Type      | Default | Description                         |
+| ------------ | --------- | ------- | ----------------------------------- |
+| `timestamps` | `boolean` | `true`  | Add `createdAt`, `updatedAt` fields |
+| `softDelete` | `boolean` | `false` | Use soft delete with `deletedAt`    |
+| `versioning` | `boolean` | `false` | Track version history               |
 
 ```typescript
 .options({
@@ -228,15 +234,21 @@ Define access control:
   create: ({ ctx }) => !!ctx.session,
   update: ({ ctx, data }) => data.authorId === ctx.session?.user?.id,
   delete: ({ ctx }) => ctx.session?.user?.role === "admin",
-
-  // Field-level access
-  fields: {
-    internalNotes: {
-      read: ({ ctx }) => ctx.session?.user?.role === "admin",
-      write: ({ ctx }) => ctx.session?.user?.role === "admin",
-    },
-  },
 })
+```
+
+Field-level access is configured on field definitions:
+
+```typescript
+.fields((f) => ({
+  internalNotes: f.textarea({
+    access: {
+      read: ({ user }) => user?.role === "admin",
+      create: ({ user }) => user?.role === "admin",
+      update: ({ user }) => user?.role === "admin",
+    },
+  }),
+}))
 ```
 
 ### `.localized(fields)`
@@ -324,23 +336,22 @@ const { docs } = await client.collections.posts.find({
 
 ## Globals vs Collections
 
-| Feature | Collection | Global |
-|---------|-----------|--------|
-| Records | Multiple | Single (singleton) |
-| Has ID | Yes | No (uses slug) |
-| CRUD | Full | Get/Update only |
-| Use case | Content items | Site settings |
+| Feature  | Collection    | Global             |
+| -------- | ------------- | ------------------ |
+| Records  | Multiple      | Single (singleton) |
+| Has ID   | Yes           | No (uses slug)     |
+| CRUD     | Full          | Get/Update only    |
+| Use case | Content items | Site settings      |
 
 ```typescript
 // Collection - many posts
 const posts = q.collection("posts");
 
 // Global - one settings record
-const settings = q.global("settings")
-  .fields({
-    siteName: text("siteName"),
-    logo: text("logo"),
-  });
+const settings = q.global("settings").fields({
+  siteName: text("siteName"),
+  logo: text("logo"),
+});
 ```
 
 ## Related

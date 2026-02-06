@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import type {
 	FieldDefinition,
+	FieldDefinitionAccess,
 	FieldDefinitionState,
 	FieldLocation,
 	FieldMetadata,
@@ -200,13 +201,7 @@ export async function introspectGlobal(
 	const fields: Record<string, GlobalFieldSchema> = {};
 	for (const [name, fieldDef] of Object.entries(fieldDefinitions)) {
 		const metadata = fieldDef.getMetadata();
-		const fieldAccess = await evaluateGlobalFieldAccess(
-			name,
-			fieldDef,
-			state,
-			context,
-			cms,
-		);
+		const fieldAccess = await evaluateGlobalFieldAccess(fieldDef, context, cms);
 
 		// Generate field-level JSON Schema if possible
 		let validation: unknown;
@@ -380,29 +375,60 @@ async function evaluateAccessRule(
  * Evaluate field-level access for current user.
  */
 async function evaluateGlobalFieldAccess(
-	fieldName: string,
 	fieldDef: FieldDefinition<FieldDefinitionState>,
-	state: GlobalBuilderState,
 	context: CRUDContext,
 	cms?: unknown,
 ): Promise<GlobalFieldAccessInfo | undefined> {
-	const fieldAccess = state.access?.fields?.[fieldName];
+	const fieldAccess = fieldDef.state.config?.access as
+		| FieldDefinitionAccess
+		| undefined;
 
 	// No field-level access config
 	if (!fieldAccess) {
 		return undefined;
 	}
 
-	const accessContext: GlobalAccessContext = {
-		app: cms,
-		session: context.session,
-		db: context.db,
-		locale: context.locale,
+	const req =
+		(context as any).req ??
+		(context as any).request ??
+		(typeof Request !== "undefined"
+			? new Request("http://questpie.local")
+			: ({} as Request));
+
+	const read = fieldAccess.read;
+	const update = fieldAccess.update;
+
+	const evaluateFieldRule = async (
+		rule: typeof read | typeof update,
+		operation: "read" | "update",
+	): Promise<GlobalAccessResult> => {
+		if (rule === undefined || rule === true) {
+			return { allowed: true };
+		}
+
+		if (rule === false) {
+			return { allowed: false };
+		}
+
+		try {
+			const allowed = await rule({
+				req,
+				user: (context.session as any)?.user,
+				doc: undefined,
+				operation,
+			});
+			return allowed ? { allowed: true } : { allowed: false };
+		} catch (error) {
+			return {
+				allowed: false,
+				reason: error instanceof Error ? error.message : "Access denied",
+			};
+		}
 	};
 
 	return {
-		read: await evaluateAccessRule(fieldAccess.read, accessContext),
-		write: await evaluateAccessRule(fieldAccess.write, accessContext),
+		read: await evaluateFieldRule(read, "read"),
+		write: await evaluateFieldRule(update, "update"),
 	};
 }
 

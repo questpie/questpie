@@ -38,7 +38,7 @@ const posts = q.collection("posts").hooks({
     // ✅ Fully typed access
     await cms.queue.sendEmail.publish({ to: "user@example.com" });
     await cms.api.collections.posts.find();
-  }
+  },
 });
 ```
 
@@ -57,7 +57,7 @@ const posts = q.collection("posts").hooks({
 
     // ✅ Fully typed Drizzle operations
     await typedDb.select().from(cms.config.collections.posts.table);
-  }
+  },
 });
 ```
 
@@ -80,7 +80,7 @@ const posts = q.collection("posts").hooks({
     // ✅ Typed session access
     const userId = typedSession.user.id;
     const role = typedSession.user.role;
-  }
+  },
 });
 ```
 
@@ -90,17 +90,25 @@ In your `cms.ts` file, export your CMS type for use throughout your application:
 
 ```ts
 // cms.ts
-export const cms = q({ name: "my-app" })
+import { rpc } from "questpie";
+
+export const appBuilder = q({ name: "my-app" })
   .collections({ posts, users })
   .jobs({ sendEmail })
-  .functions({ getStats })
-  .build({ ... });
+;
+
+export type AppShape = typeof appBuilder.$inferCms;
+
+export const app = appBuilder.build({ ... });
+
+export const appRpc = rpc().router({ getStats });
 
 /**
- * Full CMS type including all modules, collections, globals, jobs, and functions.
+ * Full CMS runtime type.
  * Use this type with getApp<AppCMS>() in hooks and jobs.
  */
-export type AppCMS = typeof cms;
+export type AppCMS = typeof app;
+export type AppRpc = typeof appRpc;
 ```
 
 ## Type Safety in Hooks
@@ -138,14 +146,15 @@ export const posts = q.collection("posts")
 import { getApp } from "questpie";
 import type { AppCMS } from "./cms";
 
-export const settings = q.global("settings")
+export const settings = q
+  .global("settings")
   .fields({ siteName: text("site_name") })
   .hooks({
     afterUpdate: async ({ data, app }) => {
       const cms = getApp<AppCMS>(app);
       // ✅ Typed access
       await cms.kv.set("settings-cache", data);
-    }
+    },
   });
 ```
 
@@ -161,7 +170,7 @@ export const sendEmail = q.job({
   name: "send-email",
   schema: z.object({
     to: z.string(),
-    subject: z.string()
+    subject: z.string(),
   }),
   handler: async ({ payload, app }) => {
     const cms = getApp<AppCMS>(app);
@@ -170,15 +179,15 @@ export const sendEmail = q.job({
     await cms.email.send({
       to: payload.to,
       subject: payload.subject,
-      html: "<p>Hello</p>"
+      html: "<p>Hello</p>",
     });
-  }
+  },
 });
 ```
 
-## Type Safety in Functions
+## Type Safety in RPC Procedures
 
-Functions require special handling to avoid circular dependencies. QUESTPIE provides two patterns:
+RPC procedures require special handling to avoid circular dependencies. QUESTPIE provides two patterns:
 
 ### Pattern 1: Explicit `outputSchema` (Recommended)
 
@@ -190,7 +199,7 @@ import { z } from "zod";
 
 const statsSchema = z.object({
   total: z.number(),
-  active: z.number()
+  active: z.number(),
 });
 
 export const getStats = q.fn({
@@ -200,58 +209,61 @@ export const getStats = q.fn({
     // app can be any - doesn't matter
     return {
       total: 100,
-      active: 50
+      active: 50,
     };
-  }
+  },
 });
 
 // Client-side usage - return type is automatically inferred!
-const stats = await client.functions.getStats({});
+const stats = await client.rpc.getStats({});
 // stats: { total: number, active: number }
 ```
 
-### Pattern 2: BaseCMS Type (For Complex Cases)
+### Pattern 2: App Shape Type (For Complex Cases)
 
-When you need to reference the CMS instance in functions, use the `BaseCMS` pattern to avoid circular dependencies:
+When you need typed CMS access inside RPC handlers, type against the builder shape and keep RPC separate from CMS runtime:
 
 ```ts
-// cms.ts - Create base instance without functions
-const baseInstance = q({ name: "base" })
+// cms.ts
+import { rpc } from "questpie";
+
+const appBuilder = q({ name: "app" })
   .collections({ posts, users })
-  .jobs({ sendEmail })
-  .build({ ... });
+  .jobs({ sendEmail });
 
-export const cms = q({ name: "app" })
-  .use(baseInstance)
-  .functions({ getStats }) // Functions added separately
-  .build({ ... });
+export type AppShape = typeof appBuilder.$inferCms;
 
-export type AppCMS = typeof cms;
-export type BaseCMS = typeof baseInstance; // ✅ Base CMS without functions
+export const app = appBuilder.build({ ... });
+
+export const appRpc = rpc().router({ getStats });
+
+export type AppCMS = typeof app;
+export type AppRpc = typeof appRpc;
 ```
 
 ```ts
 // functions/index.ts
 import { getApp } from "questpie";
-import type { BaseCMS } from "../cms";
+import type { AppShape } from "../cms";
 
 export const getStats = q.fn({
   schema: z.object({}),
   handler: async ({ app }) => {
-    const cms = getApp<BaseCMS>(app);
+    const cms = getApp<AppShape>(app);
 
     // ✅ Return type fully inferred from cms.api
     return await cms.api.collections.posts.find({
-      where: { isPublished: true }
+      where: { isPublished: true },
     });
-  }
+  },
 });
 ```
 
-**Why BaseCMS?**
-- Functions are part of the final CMS instance
-- Referencing `AppCMS` in function handlers creates circular dependencies
-- `BaseCMS` includes everything except functions, breaking the cycle
+**Why AppShape?**
+
+- Referencing final `AppCMS` from procedure files can create circular dependencies
+- `AppShape` comes from the builder type layer and remains stable for handler typing
+- CMS runtime and RPC contract stay separated (`app` + `appRpc`)
 - Return types are still fully inferred from the CMS API
 
 ## Type Safety in Access Control
@@ -262,20 +274,19 @@ Access control rules also support the type helpers:
 import { getSession } from "questpie";
 import type { AppCMS } from "./cms";
 
-export const posts = q.collection("posts")
-  .access({
-    read: ({ session, data }) => {
-      const typedSession = getSession<AppCMS>(session);
+export const posts = q.collection("posts").access({
+  read: ({ session, data }) => {
+    const typedSession = getSession<AppCMS>(session);
 
-      // Public posts or owned by user
-      return data.isPublic || data.authorId === typedSession?.user.id;
-    },
-    create: ({ session }) => {
-      const typedSession = getSession<AppCMS>(session);
-      // Only authenticated users can create
-      return !!typedSession;
-    }
-  });
+    // Public posts or owned by user
+    return data.isPublic || data.authorId === typedSession?.user.id;
+  },
+  create: ({ session }) => {
+    const typedSession = getSession<AppCMS>(session);
+    // Only authenticated users can create
+    return !!typedSession;
+  },
+});
 ```
 
 ## Advanced Type Utilities
@@ -422,15 +433,15 @@ await db.select().from(postsTable);
 
 ### "Type instantiation is excessively deep"
 
-This usually happens when you have circular type dependencies. Use the `BaseCMS` pattern for functions:
+This usually happens when you have circular type dependencies. Use the `AppShape` pattern for RPC handlers:
 
 ```ts
-// ✅ Use BaseCMS in functions
+// ✅ Use AppShape in RPC handlers
 export const getStats = q.fn({
   handler: async ({ app }) => {
-    const cms = getApp<BaseCMS>(app); // Not AppCMS!
+    const cms = getApp<AppShape>(app); // Not AppCMS!
     return cms.api.collections.posts.find();
-  }
+  },
 });
 ```
 
@@ -463,7 +474,7 @@ if (typedSession?.user.role === "admin") { ... }
 ## Summary
 
 - Use `getApp<AppCMS>()`, `getDb<AppCMS>()`, and `getSession<AppCMS>()` for type-safe access
-- Export `AppCMS` and `BaseCMS` types from your cms.ts
-- Use `outputSchema` for function return types when possible
-- Use `BaseCMS` pattern for functions that need CMS access
+- Export `AppCMS`, `AppRpc`, and `AppShape` from your cms.ts
+- Use `outputSchema` for RPC return types when possible
+- Use `AppShape` pattern for RPC handlers that need CMS access
 - Avoid module augmentation - use explicit type helpers instead

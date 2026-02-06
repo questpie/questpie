@@ -773,9 +773,6 @@ export interface CollectionAccess<TRow = any, TApp = any> {
 	create?: AccessRule<TRow, any, TApp>;
 	update?: AccessRule<TRow, any, TApp>;
 	delete?: AccessRule<TRow, any, TApp>;
-
-	// Optional: field-level access
-	fields?: Record<string, FieldAccess<TRow, TApp>>;
 }
 
 export type CollectionFunctionsMap = Record<string, FunctionDefinition>;

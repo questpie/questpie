@@ -143,22 +143,11 @@ export type GlobalAccessRule<TRow = any, TApp = any> =
 	| ((ctx: GlobalAccessContext<TRow, TApp>) => boolean | Promise<boolean>);
 
 /**
- * Field-level access control
- */
-export interface GlobalFieldAccess<TRow = any, TApp = any> {
-	read?: GlobalAccessRule<TRow, TApp>;
-	write?: GlobalAccessRule<TRow, TApp>;
-}
-
-/**
  * Global access control configuration
  */
 export interface GlobalAccess<TRow = any, TApp = any> {
 	read?: GlobalAccessRule<TRow, TApp>;
 	update?: GlobalAccessRule<TRow, TApp>;
-
-	// Optional: field-level access
-	fields?: Record<string, GlobalFieldAccess<TRow, TApp>>;
 }
 
 export type GlobalBuilderRelationFn<

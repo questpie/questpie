@@ -59,16 +59,20 @@ Access control is defined using the `.access()` method on collections:
 
 ```typescript
 import { q } from "questpie";
-import { varchar, uuid, boolean } from "drizzle-orm/pg-core";
 
 export const posts = q
   .collection("posts")
-  .fields({
-    title: varchar("title", { length: 255 }),
-    content: text("content"),
-    isPublished: boolean("is_published").default(false),
-    authorId: uuid("author_id").notNull(),
-  })
+  .fields((f) => ({
+    title: f.text({ required: true }),
+    content: f.textarea(),
+    isPublished: f.boolean({ default: false, required: true }),
+    authorId: f.text({
+      required: true,
+      access: {
+        update: ({ user }) => user?.role === "admin", // Only admins can change author
+      },
+    }),
+  }))
   .access({
     // Operation-level access
     read: ({ user, row }) => {
@@ -86,13 +90,6 @@ export const posts = q
     update: ({ user, row }) => row.authorId === user.id, // Own posts only
 
     delete: ({ user }) => user?.role === "admin", // Admins only
-
-    // Field-level access
-    fields: {
-      authorId: {
-        write: ({ user }) => user?.role === "admin", // Only admins can change author
-      },
-    },
   });
 ```
 
@@ -194,22 +191,21 @@ const internalNotes = q.collection("internal_notes")
   // Inherits defaultAccess (admin-only)
 ```
 
-### Field-Level Defaults
+### Field-Level Access Location
 
-You can also set default field-level access:
+Field-level access is defined on each field definition (inside `.fields((f) => ...)`), not in `defaultAccess`:
 
 ```typescript
-const cms = q({ name: "app" }).build({
-  defaultAccess: {
-    read: ({ session }) => !!session,
-    fields: {
-      // All collections get these field-level defaults
-      internalNotes: {
-        read: ({ session }) => session?.user?.role === "admin",
-      },
+const posts = q.collection("posts").fields((f) => ({
+  title: f.text({ required: true }),
+  internalNotes: f.textarea({
+    access: {
+      read: ({ user }) => user?.role === "admin",
+      create: ({ user }) => user?.role === "admin",
+      update: ({ user }) => user?.role === "admin",
     },
-  },
-});
+  }),
+}));
 ```
 
 ### System Mode Bypasses Defaults
@@ -348,43 +344,45 @@ interface AccessContext<TRow> {
 Control access to individual fields:
 
 ```typescript
-.access({
-  // Operation-level rules
-  read: true,
-  update: ({ user, row }) => row.authorId === user.id,
-
-  // Field-level rules
-  fields: {
-    // Only admins can read sensitive data
-    ssn: {
-      read: ({ user }) => user?.role === "admin",
-    },
-
-    // Only author or admin can modify status
-    status: {
-      write: ({ user, row }) => {
-        if (user?.role === "admin") return true;
-        return row.authorId === user.id;
+q.collection("posts")
+  .fields((f) => ({
+    ssn: f.text({
+      access: {
+        read: ({ user }) => user?.role === "admin",
       },
-    },
-
-    // Price can only be set by admins
-    price: {
-      write: "admin",
-    },
-
-    // View count is read-only (nobody can write)
-    viewCount: {
-      write: false,
-    },
-  },
-})
+    }),
+    status: f.text({
+      access: {
+        update: ({ user, doc }) => {
+          if (user?.role === "admin") return true;
+          return doc?.authorId === user?.id;
+        },
+      },
+    }),
+    price: f.number({
+      access: {
+        create: ({ user }) => user?.role === "admin",
+        update: ({ user }) => user?.role === "admin",
+      },
+    }),
+    viewCount: f.number({
+      access: {
+        create: false,
+        update: false,
+      },
+    }),
+  }))
+  .access({
+    read: true,
+    update: ({ user, row }) => row.authorId === user.id,
+  });
 ```
 
 **Field access options:**
 
 - `read` - Who can see this field in query results
-- `write` - Who can modify this field in create/update operations
+- `create` - Who can set this field during create
+- `update` - Who can modify this field during update
 
 ## Complex Access Patterns
 
@@ -666,16 +664,17 @@ app.get("/api/posts", async (c) => {
 Use field-level access for sensitive fields:
 
 ```typescript
-.access({
-  read: true, // Everyone can read posts
-
-  fields: {
-    // But only admins can see email addresses
-    authorEmail: {
-      read: ({ user }) => user?.role === "admin",
-    },
-  },
-})
+q.collection("posts")
+  .fields((f) => ({
+    authorEmail: f.email({
+      access: {
+        read: ({ user }) => user?.role === "admin", // Only admins can see email addresses
+      },
+    }),
+  }))
+  .access({
+    read: true, // Everyone can read posts
+  });
 ```
 
 ### 5. Test Access Rules

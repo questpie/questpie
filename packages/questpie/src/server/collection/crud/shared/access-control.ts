@@ -9,10 +9,13 @@ import type {
 	AccessContext,
 	AccessWhere,
 	CollectionAccess,
-	FieldAccess,
 } from "#questpie/server/collection/builder/types.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import type { Questpie } from "#questpie/server/config/cms.js";
+import type {
+	FieldAccessContext,
+	FieldDefinitionAccess,
+} from "#questpie/server/fields/types.js";
 import { getDb, normalizeContext } from "./context.js";
 
 /**
@@ -125,7 +128,42 @@ export async function matchesAccessConditions(
 export interface FilterFieldsForReadOptions {
 	cms?: Questpie<any>;
 	db: any;
-	fieldAccess?: Record<string, FieldAccess>;
+	fieldAccess?: Record<string, FieldDefinitionAccess>;
+}
+
+function createFieldAccessContext(params: {
+	context: CRUDContext;
+	operation: "create" | "read" | "update" | "delete";
+	doc?: Record<string, unknown>;
+}): FieldAccessContext {
+	const request =
+		(params.context as any).req ??
+		(params.context as any).request ??
+		(typeof Request !== "undefined"
+			? new Request("http://questpie.local")
+			: ({} as Request));
+
+	return {
+		req: request,
+		user: (params.context.session as any)?.user,
+		doc: params.doc,
+		operation: params.operation,
+	};
+}
+
+async function evaluateFieldAccess(
+	rule:
+		| FieldDefinitionAccess["read"]
+		| FieldDefinitionAccess["create"]
+		| FieldDefinitionAccess["update"],
+	context: FieldAccessContext,
+): Promise<boolean> {
+	if (rule === undefined || rule === true) return true;
+	if (rule === false) return false;
+	if (typeof rule === "function") {
+		return (await rule(context)) === true;
+	}
+	return true;
 }
 
 /**
@@ -171,16 +209,16 @@ export async function getRestrictedReadFields(
 			continue;
 		}
 
-		const canRead = await executeAccessRule(access.read, {
-			cms: options.cms,
-			db: options.db,
-			session: normalized.session,
-			locale: normalized.locale,
-			row: result,
-		});
+		const canRead = await evaluateFieldAccess(
+			access.read,
+			createFieldAccessContext({
+				context: normalized,
+				operation: "read",
+				doc: result,
+			}),
+		);
 
-		// Field-level access should return boolean (not AccessWhere)
-		if (canRead !== true) {
+		if (!canRead) {
 			fieldsToRemove.push(fieldName);
 		}
 	}
@@ -200,9 +238,10 @@ export async function getRestrictedReadFields(
  */
 export async function checkFieldWriteAccess(
 	fieldName: string,
-	fieldAccess: Record<string, FieldAccess> | undefined,
+	fieldAccess: Record<string, FieldDefinitionAccess> | undefined,
 	context: CRUDContext,
 	options: { cms?: Questpie<any>; db: any },
+	operation: "create" | "update",
 	existingRow?: any,
 ): Promise<boolean> {
 	const normalized = normalizeContext(context);
@@ -213,22 +252,20 @@ export async function checkFieldWriteAccess(
 	if (!fieldAccess) return true;
 
 	const access = fieldAccess[fieldName];
-	if (!access || access.write === undefined) {
+	if (!access) {
 		// No access rule for this field - allow write
 		return true;
 	}
 
-	const result = await executeAccessRule(access.write, {
-		cms: options.cms,
-		db: options.db,
-		session: normalized.session,
-		locale: normalized.locale,
-		row: existingRow,
-	});
-
-	// Field-level access: only boolean true allows write
-	// AccessWhere is treated as deny (it's for record-level filtering)
-	return result === true;
+	const rule = operation === "create" ? access.create : access.update;
+	return evaluateFieldAccess(
+		rule,
+		createFieldAccessContext({
+			context: normalized,
+			operation,
+			doc: existingRow,
+		}),
+	);
 }
 
 /**
@@ -244,10 +281,11 @@ export async function checkFieldWriteAccess(
  */
 export async function validateFieldsWriteAccess(
 	data: Record<string, any>,
-	fieldAccess: Record<string, FieldAccess> | undefined,
+	fieldAccess: Record<string, FieldDefinitionAccess> | undefined,
 	context: CRUDContext,
 	options: { cms?: Questpie<any>; db: any },
 	collectionName: string,
+	operation: "create" | "update",
 	existingRow?: any,
 ): Promise<void> {
 	// Lazy import to avoid circular dependency
@@ -276,6 +314,7 @@ export async function validateFieldsWriteAccess(
 			fieldAccess,
 			context,
 			options,
+			operation,
 			existingRow,
 		);
 

@@ -121,10 +121,20 @@ export type CollectionInfer<T> = T extends { $infer: infer Infer }
  */
 type CollectionFieldAccess<T> =
 	CollectionState<T> extends {
-		access: { fields: infer Fields };
+		fieldDefinitions: infer FieldDefinitions;
 	}
-		? Fields extends Record<string, any>
-			? Fields
+		? FieldDefinitions extends Record<string, any>
+			? {
+					[K in keyof FieldDefinitions as FieldDefinitions[K] extends {
+						state: { config?: { access?: any } };
+					}
+						? NonNullable<
+								FieldDefinitions[K]["state"]["config"]
+							>["access"] extends undefined
+							? never
+							: K
+						: never]?: true;
+				}
 			: Record<never, never>
 		: Record<never, never>;
 
@@ -221,10 +231,20 @@ export type GlobalInfer<T> = T extends { $infer: infer Infer } ? Infer : never;
  * Extract field access configuration from a Global state
  */
 type GlobalFieldAccess<T> = T extends {
-	state: { access: { fields?: infer Fields } };
+	state: { fieldDefinitions: infer FieldDefinitions };
 }
-	? Fields extends Record<string, any>
-		? Fields
+	? FieldDefinitions extends Record<string, any>
+		? {
+				[K in keyof FieldDefinitions as FieldDefinitions[K] extends {
+					state: { config?: { access?: any } };
+				}
+					? NonNullable<
+							FieldDefinitions[K]["state"]["config"]
+						>["access"] extends undefined
+						? never
+						: K
+					: never]?: true;
+			}
 		: {}
 	: {};
 

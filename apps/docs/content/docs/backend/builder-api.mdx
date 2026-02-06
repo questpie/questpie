@@ -16,7 +16,6 @@ const cms = q({ name: "my-cms" })
   .use(someModule)           // Compose modules
   .collections({...})        // Define collections
   .globals({...})            // Define globals
-  .functions({...})          // Define RPC functions
   .jobs({...})               // Define background jobs
   .auth({...})               // Configure authentication
   .locale({...})             // Configure localization
@@ -93,47 +92,46 @@ Globals are accessed after `.build()`:
 
 See [Globals](/docs/backend/globals) for detailed global builder documentation.
 
-### `.functions(map)`
+### Standalone RPC Contracts
 
-Defines root-level RPC functions that can be called via the API.
+Root RPC procedures are now defined outside the CMS builder with `rpc().router(...)`.
 
 ```typescript
-const cms = q({ name: "my-cms" }).functions({
-  sendNewsletter: async ({ input, ctx }) => {
-    const { subject, content } = input;
-    // Send newsletter logic
-    return { sent: true, count: 150 };
-  },
+import { q, rpc } from "questpie";
+import { z } from "zod";
 
-  generateReport: async ({ input, ctx }) => {
-    const { startDate, endDate } = input;
-    // Generate report
-    return { url: "/reports/2024-01.pdf" };
+const sendNewsletter = q.fn({
+  schema: z.object({
+    subject: z.string(),
+    content: z.string(),
+    recipients: z.array(z.string().email()),
+  }),
+  handler: async ({ input }) => {
+    return { sent: input.recipients.length };
   },
+});
+
+const generateReport = q.fn({
+  schema: z.object({ startDate: z.string(), endDate: z.string() }),
+  handler: async ({ input }) => {
+    return { url: `/reports/${input.startDate}-${input.endDate}.pdf` };
+  },
+});
+
+export const appRpc = rpc().router({
+  sendNewsletter,
+  generateReport,
 });
 ```
 
-Functions can accept typed input and return typed output:
+Pass `appRpc` to your adapter/fetch handler:
 
 ```typescript
-import { z } from "zod";
+import { createFetchHandler } from "questpie";
 
-const cms = q({ name: "my-cms" }).functions({
-  createInvoice: {
-    input: z.object({
-      customerId: z.string(),
-      items: z.array(
-        z.object({
-          productId: z.string(),
-          quantity: z.number(),
-        }),
-      ),
-    }),
-    handler: async ({ input, ctx }) => {
-      // Type-safe access to input.customerId, input.items
-      return { invoiceId: "INV-001" };
-    },
-  },
+const handler = createFetchHandler(cms, {
+  basePath: "/api/cms",
+  rpc: appRpc,
 });
 ```
 

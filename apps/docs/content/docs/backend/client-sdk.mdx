@@ -14,6 +14,7 @@ QUESTPIE provides two ways to access your CMS data:
 ### Server API (`cms.api`)
 
 Direct database access from server-side code. Use this in:
+
 - API routes
 - Server components
 - Background jobs
@@ -29,6 +30,7 @@ const { docs } = await cms.api.collections.posts.find({
 ```
 
 **Characteristics:**
+
 - Direct database queries (Drizzle ORM)
 - Full CRUD interface with `updateById`, `deleteById`, `restoreById`
 - Batch operations with `update(where)`, `delete(where)`
@@ -39,6 +41,7 @@ const { docs } = await cms.api.collections.posts.find({
 ### Client SDK (`createClient`)
 
 HTTP client for browser and external services. Use this in:
+
 - React components (browser)
 - Mobile apps
 - External services
@@ -59,6 +62,7 @@ const { docs } = await client.collections.posts.find({
 ```
 
 **Characteristics:**
+
 - HTTP requests to your CMS API endpoints
 - Simplified API: `update(id, data)` instead of `updateById({ id, data })`
 - Progress tracking for file uploads
@@ -67,15 +71,15 @@ const { docs } = await client.collections.posts.find({
 
 ### API Differences
 
-| Operation | Server API (`cms.api`) | Client SDK |
-|-----------|----------------------|------------|
-| Update single | `updateById({ id, data })` | `update(id, data)` |
-| Update many | `update({ where, data })` | Not available |
-| Delete single | `deleteById({ id })` | `delete(id)` |
-| Delete many | `delete({ where })` | Not available |
-| Restore | `restoreById({ id })` | `restore(id)` |
-| Versions | `findVersions({ id })` | Not available |
-| Revert | `revertToVersion({ id, version })` | Not available |
+| Operation     | Server API (`cms.api`)             | Client SDK         |
+| ------------- | ---------------------------------- | ------------------ |
+| Update single | `updateById({ id, data })`         | `update(id, data)` |
+| Update many   | `update({ where, data })`          | Not available      |
+| Delete single | `deleteById({ id })`               | `delete(id)`       |
+| Delete many   | `delete({ where })`                | Not available      |
+| Restore       | `restoreById({ id })`              | `restore(id)`      |
+| Versions      | `findVersions({ id })`             | Not available      |
+| Revert        | `revertToVersion({ id, version })` | Not available      |
 
 The client SDK exposes a simpler interface designed for common use cases, while the server API provides the full power of the CRUD system.
 
@@ -90,19 +94,19 @@ import type { AppCMS } from "@/questpie/server/cms";
 
 export const cmsClient = createClient<AppCMS>({
   baseURL: "http://localhost:3000",
-  basePath: "/api/cms",  // Default: "/cms"
+  basePath: "/api/cms", // Default: "/cms"
 });
 ```
 
 ### Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `baseURL` | `string` | Required | Base URL of your API |
-| `basePath` | `string` | `"/cms"` | Path prefix for CMS routes |
-| `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation |
-| `headers` | `Record<string, string>` | `{}` | Default headers for all requests |
-| `useSuperJSON` | `boolean` | `true` | Enable SuperJSON serialization |
+| Option         | Type                     | Default            | Description                      |
+| -------------- | ------------------------ | ------------------ | -------------------------------- |
+| `baseURL`      | `string`                 | Required           | Base URL of your API             |
+| `basePath`     | `string`                 | `"/cms"`           | Path prefix for CMS routes       |
+| `fetch`        | `typeof fetch`           | `globalThis.fetch` | Custom fetch implementation      |
+| `headers`      | `Record<string, string>` | `{}`               | Default headers for all requests |
+| `useSuperJSON` | `boolean`                | `true`             | Enable SuperJSON serialization   |
 
 ### Custom Fetch
 
@@ -128,12 +132,13 @@ For session-based auth in the browser:
 
 ```typescript
 const cmsClient = createClient<AppCMS>({
-  baseURL: "",  // Same origin
+  baseURL: "", // Same origin
   basePath: "/api/cms",
-  fetch: (url, init) => fetch(url, {
-    ...init,
-    credentials: "include",  // Send cookies
-  }),
+  fetch: (url, init) =>
+    fetch(url, {
+      ...init,
+      credentials: "include", // Send cookies
+    }),
 });
 ```
 
@@ -154,7 +159,7 @@ const { docs, totalDocs } = await cmsClient.collections.posts.find({
 });
 
 // docs is typed as Post[]
-docs.forEach(post => {
+docs.forEach((post) => {
   console.log(post.title, post.author?.name);
 });
 ```
@@ -201,10 +206,13 @@ console.log(post.id);
 With locale:
 
 ```typescript
-const post = await cmsClient.collections.posts.create({
-  title: "Môj nový príspevok",
-  content: "Ahoj svet!",
-}, { locale: "sk" });
+const post = await cmsClient.collections.posts.create(
+  {
+    title: "Môj nový príspevok",
+    content: "Ahoj svet!",
+  },
+  { locale: "sk" },
+);
 ```
 
 ### `update(id, data, options?)`
@@ -241,9 +249,9 @@ Get collection schema metadata.
 ```typescript
 const meta = await cmsClient.collections.posts.meta();
 
-console.log(meta.fields);      // Field definitions
-console.log(meta.relations);   // Relation definitions
-console.log(meta.options);     // Collection options
+console.log(meta.fields); // Field definitions
+console.log(meta.relations); // Relation definitions
+console.log(meta.options); // Collection options
 ```
 
 ## File Uploads
@@ -277,18 +285,18 @@ const assets = await cmsClient.collections.assets.uploadMany(files, {
 
 ### Progress Options
 
-| Option | Type | Description |
-|--------|------|-------------|
+| Option       | Type                 | Description       |
+| ------------ | -------------------- | ----------------- |
 | `onProgress` | `(progress) => void` | Progress callback |
 
 Progress object:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `loaded` | `number` | Bytes uploaded |
-| `total` | `number` | Total bytes |
-| `percent` | `number` | Percentage (0-100) |
-| `index` | `number` | File index (for uploadMany) |
+| Field     | Type     | Description                 |
+| --------- | -------- | --------------------------- |
+| `loaded`  | `number` | Bytes uploaded              |
+| `total`   | `number` | Total bytes                 |
+| `percent` | `number` | Percentage (0-100)          |
+| `index`   | `number` | File index (for uploadMany) |
 
 ### Upload Example
 
@@ -351,29 +359,46 @@ const updated = await cmsClient.globals.settings.update({
 });
 ```
 
-## Functions API
+## RPC API
 
-Call RPC functions defined on the backend.
+Call typed RPC procedures from `cmsClient.rpc.*`.
 
 ```typescript
-// Backend definition
-const cms = q({ name: "my-cms" })
-  .functions({
-    sendNewsletter: async ({ input }) => {
-      const { subject, content, recipients } = input;
-      // Send newsletter
-      return { sent: recipients.length };
-    },
-  });
+import { q, rpc } from "questpie";
+import { createClient } from "questpie/client";
+import { z } from "zod";
 
-// Client call
-const result = await cmsClient.functions.sendNewsletter({
+const sendNewsletter = q.fn({
+  schema: z.object({
+    subject: z.string(),
+    content: z.string(),
+    recipients: z.array(z.string().email()),
+  }),
+  handler: async ({ input }) => {
+    return { sent: input.recipients.length };
+  },
+});
+
+export const appRpc = rpc().router({
+  newsletter: rpc().router({
+    send: sendNewsletter,
+  }),
+});
+
+type AppRpc = typeof appRpc;
+
+const cmsClient = createClient<AppCMS, AppRpc>({
+  baseURL: "http://localhost:3000",
+  basePath: "/api/cms",
+});
+
+const result = await cmsClient.rpc.newsletter.send({
   subject: "Monthly Update",
   content: "Here's what's new...",
   recipients: ["user@example.com"],
 });
 
-console.log(result.sent);  // Number of emails sent
+console.log(result.sent);
 ```
 
 ## Search API
@@ -389,21 +414,21 @@ const results = await cmsClient.search.search({
   limit: 20,
 });
 
-results.docs.forEach(doc => {
+results.docs.forEach((doc) => {
   console.log(doc.collection, doc.title, doc.score);
 });
 ```
 
 Search options:
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `query` | `string` | Search query |
-| `collections` | `string[]` | Collections to search |
-| `locale` | `string` | Filter by locale |
-| `limit` | `number` | Max results |
-| `offset` | `number` | Pagination offset |
-| `mode` | `"lexical" \| "semantic" \| "hybrid"` | Search mode |
+| Option        | Type                                  | Description           |
+| ------------- | ------------------------------------- | --------------------- |
+| `query`       | `string`                              | Search query          |
+| `collections` | `string[]`                            | Collections to search |
+| `locale`      | `string`                              | Filter by locale      |
+| `limit`       | `number`                              | Max results           |
+| `offset`      | `number`                              | Pagination offset     |
+| `mode`        | `"lexical" \| "semantic" \| "hybrid"` | Search mode           |
 
 ### `reindex(collection)`
 
@@ -450,7 +475,7 @@ import { QuestpieClientError } from "questpie/client";
 
 try {
   await cmsClient.collections.posts.create({
-    title: "",  // Invalid: empty title
+    title: "", // Invalid: empty title
   });
 } catch (error) {
   if (error instanceof QuestpieClientError) {
@@ -469,12 +494,12 @@ try {
 
 ### Error Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `code` | `string` | Error code (e.g., "VALIDATION_ERROR") |
-| `message` | `string` | Human-readable message |
-| `fieldErrors` | `Record<string, string[]>` | Validation errors by field |
-| `context` | `object` | Additional error context |
+| Property      | Type                       | Description                           |
+| ------------- | -------------------------- | ------------------------------------- |
+| `code`        | `string`                   | Error code (e.g., "VALIDATION_ERROR") |
+| `message`     | `string`                   | Human-readable message                |
+| `fieldErrors` | `Record<string, string[]>` | Validation errors by field            |
+| `context`     | `object`                   | Additional error context              |
 
 ### Error Methods
 
@@ -493,14 +518,14 @@ const errors = error.getFieldErrorsMap();
 
 ### Common Error Codes
 
-| Code | Description |
-|------|-------------|
+| Code               | Description             |
+| ------------------ | ----------------------- |
 | `VALIDATION_ERROR` | Input validation failed |
-| `NOT_FOUND` | Resource not found |
-| `UNAUTHORIZED` | Authentication required |
-| `FORBIDDEN` | Permission denied |
-| `CONFLICT` | Duplicate or conflict |
-| `INTERNAL_ERROR` | Server error |
+| `NOT_FOUND`        | Resource not found      |
+| `UNAUTHORIZED`     | Authentication required |
+| `FORBIDDEN`        | Permission denied       |
+| `CONFLICT`         | Duplicate or conflict   |
+| `INTERNAL_ERROR`   | Server error            |
 
 ## Upload Errors
 
@@ -525,22 +550,26 @@ try {
 Use with `@questpie/tanstack-query` for React hooks.
 
 ```typescript
-// lib/cms-hooks.ts
-import { createCmsHooks } from "@questpie/tanstack-query";
+// lib/cms-queries.ts
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import { cmsClient } from "./cms-client";
 
-export const { useCmsQuery, useCmsMutation } = createCmsHooks(cmsClient);
+export const cmsQueries = createQuestpieQueryOptions(cmsClient, {
+  keyPrefix: ["cms"],
+});
 ```
 
 ```tsx
 // components/PostList.tsx
+import { useQuery } from "@tanstack/react-query";
+import { cmsQueries } from "@/lib/cms-queries";
+
 function PostList() {
-  const { data, isLoading, error } = useCmsQuery(
-    ["posts", "list"],
-    () => cmsClient.collections.posts.find({
+  const { data, isLoading, error } = useQuery(
+    cmsQueries.collections.posts.find({
       where: { published: true },
       limit: 10,
-    })
+    }),
   );
 
   if (isLoading) return <Loading />;
@@ -548,7 +577,7 @@ function PostList() {
 
   return (
     <ul>
-      {data.docs.map(post => (
+      {data.docs.map((post) => (
         <li key={post.id}>{post.title}</li>
       ))}
     </ul>
@@ -557,36 +586,20 @@ function PostList() {
 ```
 
 ```tsx
-// components/CreatePost.tsx
-function CreatePost() {
-  const mutation = useCmsMutation(
-    (data) => cmsClient.collections.posts.create(data),
-    {
-      onSuccess: (post) => {
-        toast.success("Post created!");
-        router.push(`/posts/${post.id}`);
-      },
-      onError: (error) => {
-        if (error instanceof QuestpieClientError) {
-          toast.error(error.message);
-        }
-      },
-    }
-  );
+// components/PublishPost.tsx
+import { useMutation } from "@tanstack/react-query";
+import { cmsQueries } from "@/lib/cms-queries";
+
+function PublishPost({ id }: { id: string }) {
+  const mutation = useMutation(cmsQueries.rpc.posts.publish.mutation());
 
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      mutation.mutate({
-        title: formData.title,
-        content: formData.content,
-      });
-    }}>
-      {/* form fields */}
-      <button disabled={mutation.isPending}>
-        {mutation.isPending ? "Creating..." : "Create Post"}
-      </button>
-    </form>
+    <button
+      disabled={mutation.isPending}
+      onClick={() => mutation.mutate({ id })}
+    >
+      {mutation.isPending ? "Publishing..." : "Publish"}
+    </button>
   );
 }
 ```
@@ -609,7 +622,7 @@ export default async function PostsPage() {
 
   return (
     <div>
-      {docs.map(post => (
+      {docs.map((post) => (
         <article key={post.id}>
           <h2>{post.title}</h2>
         </article>
@@ -647,19 +660,19 @@ const post = await cmsClient.collections.posts.findOne({
 // post is typed as Post | null
 
 // Autocomplete for collection names
-cmsClient.collections.posts   // ← Autocomplete!
-cmsClient.collections.pages   // ← Autocomplete!
+cmsClient.collections.posts; // ← Autocomplete!
+cmsClient.collections.pages; // ← Autocomplete!
 
 // Autocomplete for fields in where clauses
 cmsClient.collections.posts.find({
   where: {
-    title: { contains: "..." },  // ← Field autocomplete!
+    title: { contains: "..." }, // ← Field autocomplete!
   },
 });
 
 // Type errors for invalid data
 cmsClient.collections.posts.create({
-  titl: "typo",  // ← TypeScript error!
+  titl: "typo", // ← TypeScript error!
 });
 ```
 
