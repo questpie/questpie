@@ -235,7 +235,6 @@ describe("FieldBuilder implements FieldDefinition", () => {
   });
 });
 
-
 describe("field() with different field types", () => {
   it("should work with textarea field", () => {
     const textareaField = field("textarea", {

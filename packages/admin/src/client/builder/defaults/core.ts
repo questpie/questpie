@@ -36,11 +36,11 @@ import { builtInWidgets } from "./widgets";
  * ```
  */
 export const coreAdminModule = AdminBuilder.empty()
-	.fields(builtInFields)
-	.components(builtInComponents)
-	.views(builtInViews)
-	.pages(builtInPages)
-	.widgets(builtInWidgets);
+  .fields(builtInFields)
+  .components(builtInComponents)
+  .views(builtInViews)
+  .pages(builtInPages)
+  .widgets(builtInWidgets);
 
 /**
  * Type of core admin module state

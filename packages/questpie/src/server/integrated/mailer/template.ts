@@ -5,49 +5,49 @@ import type { z } from "zod";
  * Email template definition with typesafe context
  */
 export interface EmailTemplateDefinition<
-	TContext = any,
-	TName extends string = string,
+  TContext = any,
+  TName extends string = string,
 > {
-	/**
-	 * Unique name for this email template
-	 */
-	name: TName;
+  /**
+   * Unique name for this email template
+   */
+  name: TName;
 
-	/**
-	 * Zod schema for context validation
-	 */
-	schema: z.ZodSchema<TContext>;
+  /**
+   * Zod schema for context validation
+   */
+  schema: z.ZodSchema<TContext>;
 
-	/**
-	 * React component renderer
-	 */
-	render: ComponentType<TContext>;
+  /**
+   * React component renderer
+   */
+  render: ComponentType<TContext>;
 
-	/**
-	 * Optional default subject (can use context values)
-	 */
-	subject?: (context: TContext) => string;
+  /**
+   * Optional default subject (can use context values)
+   */
+  subject?: (context: TContext) => string;
 }
 
 /**
  * Infer context type from email template definition
  */
 export type InferEmailTemplateContext<T> =
-	T extends EmailTemplateDefinition<infer C, any> ? C : never;
+  T extends EmailTemplateDefinition<infer C, any> ? C : never;
 
 /**
  * Extract template names from email template definitions Record
  */
 export type EmailTemplateNames<
-	TTemplates extends Record<string, EmailTemplateDefinition<any, any>>,
+  TTemplates extends Record<string, EmailTemplateDefinition<any, any>>,
 > = keyof TTemplates;
 
 /**
  * Get specific email template by name from templates Record
  */
 export type GetEmailTemplate<
-	TTemplates extends Record<string, EmailTemplateDefinition<any, any>>,
-	Name extends EmailTemplateNames<TTemplates>,
+  TTemplates extends Record<string, EmailTemplateDefinition<any, any>>,
+  Name extends EmailTemplateNames<TTemplates>,
 > = TTemplates[Name];
 
 /**
@@ -76,7 +76,7 @@ export type GetEmailTemplate<
  * ```
  */
 export function email<TName extends string, TContext>(
-	definition: EmailTemplateDefinition<TContext, TName>,
+  definition: EmailTemplateDefinition<TContext, TName>,
 ): EmailTemplateDefinition<TContext, TName> {
-	return definition;
+  return definition;
 }

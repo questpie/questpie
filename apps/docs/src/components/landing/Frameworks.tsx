@@ -47,8 +47,8 @@ export function Frameworks() {
         </h2>
         <h3 className="text-3xl font-bold mb-6">Deploy Anywhere</h3>
         <p className="text-muted-foreground max-w-2xl mx-auto mb-12">
-          Write your CMS once. Mount it on any HTTP framework with a one-line adapter.
-          Hono, Elysia, Next.js — pick your runtime, keep your code.
+          Write your CMS once. Mount it on any HTTP framework with a one-line
+          adapter. Hono, Elysia, Next.js — pick your runtime, keep your code.
         </p>
 
         <div className="max-w-3xl mx-auto">

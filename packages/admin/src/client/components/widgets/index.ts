@@ -11,8 +11,8 @@ export { default as ProgressWidget } from "./progress-widget";
 export type { QuickActionsWidgetProps } from "./quick-actions-widget";
 export { default as QuickActionsWidget } from "./quick-actions-widget";
 export type {
-	RecentItemsWidgetConfig,
-	RecentItemsWidgetProps,
+  RecentItemsWidgetConfig,
+  RecentItemsWidgetProps,
 } from "./recent-items-widget";
 export { default as RecentItemsWidget } from "./recent-items-widget";
 export type { StatsWidgetConfig, StatsWidgetProps } from "./stats-widget";
@@ -26,13 +26,13 @@ export { default as ValueWidget } from "./value-widget";
 
 // Skeleton exports
 export {
-	ChartWidgetSkeleton,
-	GenericWidgetSkeleton,
-	ProgressWidgetSkeleton,
-	QuickActionsWidgetSkeleton,
-	RecentItemsWidgetSkeleton,
-	StatsWidgetSkeleton,
-	TableWidgetSkeleton,
-	TimelineWidgetSkeleton,
-	ValueWidgetSkeleton,
+  ChartWidgetSkeleton,
+  GenericWidgetSkeleton,
+  ProgressWidgetSkeleton,
+  QuickActionsWidgetSkeleton,
+  RecentItemsWidgetSkeleton,
+  StatsWidgetSkeleton,
+  TableWidgetSkeleton,
+  TimelineWidgetSkeleton,
+  ValueWidgetSkeleton,
 } from "./widget-skeletons";

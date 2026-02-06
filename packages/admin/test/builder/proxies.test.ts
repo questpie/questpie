@@ -64,8 +64,7 @@ describe("createFieldProxy", () => {
   });
 });
 
-describe("createFieldProxy - Type Safety", () => {
-});
+describe("createFieldProxy - Type Safety", () => {});
 
 describe("createFieldRegistryProxy", () => {
   it("should create callable methods for each field type", () => {
@@ -169,7 +168,6 @@ describe("createFieldRegistryProxy", () => {
   });
 });
 
-
 describe("createViewRegistryProxy", () => {
   it("should create callable methods for each view type", () => {
     const views = {
@@ -237,7 +235,6 @@ describe("createViewRegistryProxy", () => {
     expect(result.state.component).toBe(tableView.component);
   });
 });
-
 
 describe("Proxy Integration", () => {
   it("should work together in a realistic scenario", () => {

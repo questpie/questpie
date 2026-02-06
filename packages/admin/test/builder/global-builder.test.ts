@@ -136,11 +136,9 @@ describe("GlobalBuilder.meta()", () => {
   });
 });
 
-
 describe("GlobalBuilder.state", () => {
   it("should expose readonly state", () => {
-    const settings = global("settings")
-      .meta({ label: "Site Settings" });
+    const settings = global("settings").meta({ label: "Site Settings" });
 
     expect(settings.state).toBeDefined();
     expect(settings.state.name).toBe("settings");
@@ -159,13 +157,11 @@ describe("GlobalBuilder - Full Configuration Chain", () => {
         form: createFormView(),
       });
 
-    const settings = global("settings")
-      .use(adminModule)
-      .meta({
-        label: "Site Settings",
-        icon: MockIcon,
-        description: "Configure your site",
-      });
+    const settings = global("settings").use(adminModule).meta({
+      label: "Site Settings",
+      icon: MockIcon,
+      description: "Configure your site",
+    });
 
     // Verify all state is correctly set
     expect(settings.state.name).toBe("settings");
@@ -175,7 +171,6 @@ describe("GlobalBuilder - Full Configuration Chain", () => {
     expect(settings.state["~adminApp"]).toBe(adminModule);
   });
 });
-
 
 describe("GlobalBuilder immutability", () => {
   it("should create new instance on every method call", () => {

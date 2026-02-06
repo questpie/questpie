@@ -34,8 +34,8 @@ export const DRAFT_MODE_COOKIE = "__draft_mode";
  * ```
  */
 export function isDraftMode(cookieHeader: string | null | undefined): boolean {
-	if (!cookieHeader) return false;
-	return cookieHeader.includes(`${DRAFT_MODE_COOKIE}=true`);
+  if (!cookieHeader) return false;
+  return cookieHeader.includes(`${DRAFT_MODE_COOKIE}=true`);
 }
 
 /**
@@ -55,11 +55,11 @@ export function isDraftMode(cookieHeader: string | null | undefined): boolean {
  * ```
  */
 export function createDraftModeCookie(enabled: boolean, maxAge = 3600): string {
-	if (enabled) {
-		return `${DRAFT_MODE_COOKIE}=true; Path=/; Max-Age=${maxAge}; SameSite=Lax; HttpOnly`;
-	}
-	// Delete cookie by setting Max-Age=0
-	return `${DRAFT_MODE_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly`;
+  if (enabled) {
+    return `${DRAFT_MODE_COOKIE}=true; Path=/; Max-Age=${maxAge}; SameSite=Lax; HttpOnly`;
+  }
+  // Delete cookie by setting Max-Age=0
+  return `${DRAFT_MODE_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly`;
 }
 
 /**
@@ -69,17 +69,17 @@ export function createDraftModeCookie(enabled: boolean, maxAge = 3600): string {
  * @returns The preview secret
  */
 export function getPreviewSecret(): string {
-	const secret =
-		process.env.PREVIEW_SECRET || process.env.SECRET || "dev-preview-secret";
+  const secret =
+    process.env.PREVIEW_SECRET || process.env.SECRET || "dev-preview-secret";
 
-	if (
-		process.env.NODE_ENV === "production" &&
-		secret === "dev-preview-secret"
-	) {
-		console.warn(
-			"[preview] Using default secret in production. Set PREVIEW_SECRET or SECRET env var.",
-		);
-	}
+  if (
+    process.env.NODE_ENV === "production" &&
+    secret === "dev-preview-secret"
+  ) {
+    console.warn(
+      "[preview] Using default secret in production. Set PREVIEW_SECRET or SECRET env var.",
+    );
+  }
 
-	return secret;
+  return secret;
 }

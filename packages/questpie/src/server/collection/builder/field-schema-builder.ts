@@ -14,9 +14,9 @@
 
 import { z } from "zod";
 import type {
-	FieldDefinition,
-	FieldDefinitionState,
-	RelationFieldMetadata,
+  FieldDefinition,
+  FieldDefinitionState,
+  RelationFieldMetadata,
 } from "#questpie/server/fields/types.js";
 
 // ============================================================================
@@ -36,34 +36,34 @@ import type {
  * @returns Zod schema for input validation
  */
 export function buildFieldBasedSchema(
-	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
-	mode: "insert" | "update" = "insert",
+  fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+  mode: "insert" | "update" = "insert",
 ): z.ZodObject<Record<string, z.ZodTypeAny>> {
-	const shape: Record<string, z.ZodTypeAny> = {};
+  const shape: Record<string, z.ZodTypeAny> = {};
 
-	for (const [fieldName, fieldDef] of Object.entries(fieldDefinitions)) {
-		// Skip fields that don't accept input
-		if (fieldDef.state.input === false) {
-			continue;
-		}
+  for (const [fieldName, fieldDef] of Object.entries(fieldDefinitions)) {
+    // Skip fields that don't accept input
+    if (fieldDef.state.input === false) {
+      continue;
+    }
 
-		// Get the field's own schema
-		let fieldSchema = fieldDef.toZodSchema();
+    // Get the field's own schema
+    let fieldSchema = fieldDef.toZodSchema();
 
-		// For update mode, make all fields optional
-		if (mode === "update") {
-			fieldSchema = fieldSchema.optional();
-		}
+    // For update mode, make all fields optional
+    if (mode === "update") {
+      fieldSchema = fieldSchema.optional();
+    }
 
-		// For insert mode with optional input, make the field optional
-		if (mode === "insert" && fieldDef.state.input === "optional") {
-			fieldSchema = fieldSchema.optional();
-		}
+    // For insert mode with optional input, make the field optional
+    if (mode === "insert" && fieldDef.state.input === "optional") {
+      fieldSchema = fieldSchema.optional();
+    }
 
-		shape[fieldName] = fieldSchema;
-	}
+    shape[fieldName] = fieldSchema;
+  }
 
-	return z.object(shape);
+  return z.object(shape);
 }
 
 /**
@@ -80,52 +80,52 @@ export function buildFieldBasedSchema(
  * @returns Extended schema with nested mutation support
  */
 export function extendSchemaWithNestedMutations(
-	schema: z.ZodObject<Record<string, z.ZodTypeAny>>,
-	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+  schema: z.ZodObject<Record<string, z.ZodTypeAny>>,
+  fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
 ): z.ZodTypeAny {
-	// Create a nested mutation schema for each relation field
-	const nestedMutationShape: Record<string, z.ZodTypeAny> = {};
+  // Create a nested mutation schema for each relation field
+  const nestedMutationShape: Record<string, z.ZodTypeAny> = {};
 
-	for (const [fieldName, fieldDef] of Object.entries(fieldDefinitions)) {
-		const metadata = fieldDef.state.metadata as
-			| RelationFieldMetadata
-			| undefined;
-		if (!metadata?.relationType) continue;
+  for (const [fieldName, fieldDef] of Object.entries(fieldDefinitions)) {
+    const metadata = fieldDef.state.metadata as
+      | RelationFieldMetadata
+      | undefined;
+    if (!metadata?.relationType) continue;
 
-		// Create a flexible schema that accepts nested mutations
-		const nestedMutationSchema = z
-			.object({
-				connect: z
-					.union([
-						z.object({ id: z.string() }),
-						z.array(z.object({ id: z.string() })),
-					])
-					.optional(),
-				create: z
-					.union([
-						z.record(z.string(), z.any()),
-						z.array(z.record(z.string(), z.any())),
-					])
-					.optional(),
-				connectOrCreate: z
-					.object({
-						where: z.record(z.string(), z.any()),
-						create: z.record(z.string(), z.any()),
-					})
-					.optional(),
-				disconnect: z
-					.union([z.boolean(), z.object({ id: z.string() })])
-					.optional(),
-				set: z.array(z.object({ id: z.string() })).optional(),
-			})
-			.passthrough();
+    // Create a flexible schema that accepts nested mutations
+    const nestedMutationSchema = z
+      .object({
+        connect: z
+          .union([
+            z.object({ id: z.string() }),
+            z.array(z.object({ id: z.string() })),
+          ])
+          .optional(),
+        create: z
+          .union([
+            z.record(z.string(), z.any()),
+            z.array(z.record(z.string(), z.any())),
+          ])
+          .optional(),
+        connectOrCreate: z
+          .object({
+            where: z.record(z.string(), z.any()),
+            create: z.record(z.string(), z.any()),
+          })
+          .optional(),
+        disconnect: z
+          .union([z.boolean(), z.object({ id: z.string() })])
+          .optional(),
+        set: z.array(z.object({ id: z.string() })).optional(),
+      })
+      .passthrough();
 
-		nestedMutationShape[fieldName] = nestedMutationSchema.optional();
-	}
+    nestedMutationShape[fieldName] = nestedMutationSchema.optional();
+  }
 
-	// Use passthrough to allow extra keys (nested mutations)
-	// The CRUD layer will handle separating them
-	return schema.passthrough();
+  // Use passthrough to allow extra keys (nested mutations)
+  // The CRUD layer will handle separating them
+  return schema.passthrough();
 }
 
 // ============================================================================
@@ -142,11 +142,11 @@ export function extendSchemaWithNestedMutations(
  * @returns Empty map (no transformation needed with unified field API)
  */
 export function extractBelongsToMappings(
-	_fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+  _fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
 ): Record<string, string> {
-	// With unified field API, field name = column key
-	// No transformation needed
-	return {};
+  // With unified field API, field name = column key
+  // No transformation needed
+  return {};
 }
 
 /**
@@ -162,25 +162,25 @@ export function extractBelongsToMappings(
  * @returns Transformed data with FK column names
  */
 export function transformFieldNamesToFkColumns(
-	input: Record<string, unknown>,
-	mappings: Record<string, string>,
+  input: Record<string, unknown>,
+  mappings: Record<string, string>,
 ): Record<string, unknown> {
-	const result = { ...input };
+  const result = { ...input };
 
-	for (const [fieldName, fkColumnName] of Object.entries(mappings)) {
-		if (!(fieldName in result)) continue;
+  for (const [fieldName, fkColumnName] of Object.entries(mappings)) {
+    if (!(fieldName in result)) continue;
 
-		const value = result[fieldName];
+    const value = result[fieldName];
 
-		// Only transform simple values (string IDs or null)
-		// Objects are nested mutations, handled separately
-		if (typeof value === "string" || value === null) {
-			result[fkColumnName] = value;
-			delete result[fieldName];
-		}
-	}
+    // Only transform simple values (string IDs or null)
+    // Objects are nested mutations, handled separately
+    if (typeof value === "string" || value === null) {
+      result[fkColumnName] = value;
+      delete result[fieldName];
+    }
+  }
 
-	return result;
+  return result;
 }
 
 // ============================================================================
@@ -188,12 +188,12 @@ export function transformFieldNamesToFkColumns(
 // ============================================================================
 
 export interface CollectionSchemas {
-	/** Schema for insert (create) operations */
-	insertSchema: z.ZodTypeAny;
-	/** Schema for update operations */
-	updateSchema: z.ZodTypeAny;
-	/** Mapping of relation field names to FK column names */
-	belongsToMappings: Record<string, string>;
+  /** Schema for insert (create) operations */
+  insertSchema: z.ZodTypeAny;
+  /** Schema for update operations */
+  updateSchema: z.ZodTypeAny;
+  /** Mapping of relation field names to FK column names */
+  belongsToMappings: Record<string, string>;
 }
 
 /**
@@ -206,16 +206,16 @@ export interface CollectionSchemas {
  * @returns Insert and update schemas with relation mappings
  */
 export function buildCollectionSchemas(
-	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+  fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
 ): CollectionSchemas {
-	const insertSchema = buildFieldBasedSchema(fieldDefinitions, "insert");
-	const updateSchema = buildFieldBasedSchema(fieldDefinitions, "update");
-	const belongsToMappings = extractBelongsToMappings(fieldDefinitions);
+  const insertSchema = buildFieldBasedSchema(fieldDefinitions, "insert");
+  const updateSchema = buildFieldBasedSchema(fieldDefinitions, "update");
+  const belongsToMappings = extractBelongsToMappings(fieldDefinitions);
 
-	return {
-		// Use passthrough to allow extra keys (nested mutations, FK columns)
-		insertSchema: insertSchema.passthrough(),
-		updateSchema: updateSchema.passthrough(),
-		belongsToMappings,
-	};
+  return {
+    // Use passthrough to allow extra keys (nested mutations, FK columns)
+    insertSchema: insertSchema.passthrough(),
+    updateSchema: updateSchema.passthrough(),
+    belongsToMappings,
+  };
 }

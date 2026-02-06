@@ -45,7 +45,7 @@ import type { JobDefinition } from "./types.js";
  * ```
  */
 export function job<TName extends string, TPayload, TResult = void>(
-	definition: JobDefinition<TPayload, TResult, TName>,
+  definition: JobDefinition<TPayload, TResult, TName>,
 ): JobDefinition<TPayload, TResult, TName>;
 
 /**
@@ -58,31 +58,31 @@ export function job<TName extends string, TPayload, TResult = void>(
  * ```
  */
 export function job<TApp = any>(): <
-	TName extends string,
-	TPayload,
-	TResult = void,
+  TName extends string,
+  TPayload,
+  TResult = void,
 >(
-	definition: JobDefinition<TPayload, TResult, TName, TApp>,
+  definition: JobDefinition<TPayload, TResult, TName, TApp>,
 ) => JobDefinition<TPayload, TResult, TName, TApp>;
 
 export function job<
-	TNameOrApp extends string | unknown,
-	TPayload = any,
-	TResult = void,
+  TNameOrApp extends string | unknown,
+  TPayload = any,
+  TResult = void,
 >(
-	definition?: JobDefinition<
-		TPayload,
-		TResult,
-		TNameOrApp extends string ? TNameOrApp : string
-	>,
+  definition?: JobDefinition<
+    TPayload,
+    TResult,
+    TNameOrApp extends string ? TNameOrApp : string
+  >,
 ): unknown {
-	// Overload 2: job<AppCMS>() returns a curried function
-	if (definition === undefined) {
-		return <TName extends string, TPayload, TResult = void>(
-			def: JobDefinition<TPayload, TResult, TName, TNameOrApp>,
-		) => def;
-	}
+  // Overload 2: job<AppCMS>() returns a curried function
+  if (definition === undefined) {
+    return <TName extends string, TPayload, TResult = void>(
+      def: JobDefinition<TPayload, TResult, TName, TNameOrApp>,
+    ) => def;
+  }
 
-	// Overload 1: job({ name: 'x', ... }) - direct definition
-	return definition;
+  // Overload 1: job({ name: 'x', ... }) - direct definition
+  return definition;
 }

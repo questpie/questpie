@@ -18,32 +18,32 @@ import type { EditViewDefinition, ListViewDefinition } from "./view/view";
  * Usage: ({ f }) => ({ columns: [f.name, f.email] })
  */
 export type FieldProxy<TFields extends Record<string, any>> = {
-	[K in keyof TFields]: K;
+  [K in keyof TFields]: K;
 };
 
 /**
  * Creates a field proxy at runtime
  */
 export function createFieldProxy<TFields extends Record<string, any>>(
-	fields?: TFields,
+  fields?: TFields,
 ): FieldProxy<TFields> {
-	if (!fields || Object.keys(fields).length === 0) {
-		return new Proxy(
-			{},
-			{
-				get: (_target, prop) => {
-					if (typeof prop !== "string") return undefined;
-					return prop;
-				},
-			},
-		) as FieldProxy<TFields>;
-	}
+  if (!fields || Object.keys(fields).length === 0) {
+    return new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          if (typeof prop !== "string") return undefined;
+          return prop;
+        },
+      },
+    ) as FieldProxy<TFields>;
+  }
 
-	const proxy = {} as any;
-	for (const key in fields) {
-		proxy[key] = key;
-	}
-	return proxy;
+  const proxy = {} as any;
+  for (const key in fields) {
+    proxy[key] = key;
+  }
+  return proxy;
 }
 
 /**
@@ -53,13 +53,13 @@ export function createFieldProxy<TFields extends Record<string, any>>(
  * the actual block names from the registry for type-safe autocomplete.
  */
 type InjectBlocksConfig<
-	TConfig,
-	TBlocks extends Record<string, BlockDefinition>,
+  TConfig,
+  TBlocks extends Record<string, BlockDefinition>,
 > = TConfig extends { allowedBlocks?: string[] }
-	? Omit<TConfig, "allowedBlocks"> & {
-			allowedBlocks?: (keyof TBlocks & string)[];
-		}
-	: TConfig;
+  ? Omit<TConfig, "allowedBlocks"> & {
+      allowedBlocks?: (keyof TBlocks & string)[];
+    }
+  : TConfig;
 
 /**
  * Helper type to inject field registry into nested callbacks.
@@ -69,35 +69,35 @@ type InjectBlocksConfig<
  * This enables type-safe autocomplete in nested field definitions.
  */
 type InjectFieldRegistry<
-	TConfig,
-	TFields extends Record<string, FieldDefinition<any, any>>,
-	TBlocks extends Record<string, BlockDefinition> = Record<
-		string,
-		BlockDefinition
-	>,
+  TConfig,
+  TFields extends Record<string, FieldDefinition<any, any>>,
+  TBlocks extends Record<string, BlockDefinition> = Record<
+    string,
+    BlockDefinition
+  >,
 > = TConfig extends {
-	fields?: (ctx: { r: any }) => any;
+  fields?: (ctx: { r: any }) => any;
 }
-	? Omit<TConfig, "fields"> & {
-			fields?: (ctx: {
-				r: FieldRegistryProxy<TFields, TBlocks>;
-			}) => ReturnType<NonNullable<TConfig["fields"]>>;
-		}
-	: TConfig extends { item?: (ctx: { r: any }) => any }
-		? Omit<TConfig, "item"> & {
-				item?: (ctx: {
-					r: FieldRegistryProxy<TFields, TBlocks>;
-				}) => ReturnType<NonNullable<TConfig["item"]>>;
-			}
-		: TConfig;
+  ? Omit<TConfig, "fields"> & {
+      fields?: (ctx: {
+        r: FieldRegistryProxy<TFields, TBlocks>;
+      }) => ReturnType<NonNullable<TConfig["fields"]>>;
+    }
+  : TConfig extends { item?: (ctx: { r: any }) => any }
+    ? Omit<TConfig, "item"> & {
+        item?: (ctx: {
+          r: FieldRegistryProxy<TFields, TBlocks>;
+        }) => ReturnType<NonNullable<TConfig["item"]>>;
+      }
+    : TConfig;
 
 /**
  * Apply all config injections (blocks, nested fields)
  */
 type InjectAllConfig<
-	TConfig,
-	TFields extends Record<string, FieldDefinition<any, any>>,
-	TBlocks extends Record<string, BlockDefinition>,
+  TConfig,
+  TFields extends Record<string, FieldDefinition<any, any>>,
+  TBlocks extends Record<string, BlockDefinition>,
 > = InjectBlocksConfig<InjectFieldRegistry<TConfig, TFields, TBlocks>, TBlocks>;
 
 /**
@@ -115,46 +115,46 @@ type InjectAllConfig<
  * @typeParam TBlocks - Block definitions from admin registry
  */
 export type FieldRegistryProxy<
-	TFields extends Record<string, FieldDefinition<any, any>>,
-	TBlocks extends Record<string, BlockDefinition> = Record<
-		string,
-		BlockDefinition
-	>,
+  TFields extends Record<string, FieldDefinition<any, any>>,
+  TBlocks extends Record<string, BlockDefinition> = Record<
+    string,
+    BlockDefinition
+  >,
 > = {
-	[K in keyof TFields]: TFields[K] extends FieldDefinition<
-		infer TName,
-		infer TFieldOptions
-	>
-		? (
-				options?: InjectAllConfig<TFieldOptions, TFields, TBlocks>,
-			) => FieldDefinition<
-				TName,
-				InjectAllConfig<TFieldOptions, TFields, TBlocks>
-			>
-		: never;
+  [K in keyof TFields]: TFields[K] extends FieldDefinition<
+    infer TName,
+    infer TFieldOptions
+  >
+    ? (
+        options?: InjectAllConfig<TFieldOptions, TFields, TBlocks>,
+      ) => FieldDefinition<
+        TName,
+        InjectAllConfig<TFieldOptions, TFields, TBlocks>
+      >
+    : never;
 };
 
 /**
  * Creates a field registry proxy at runtime
  */
 export function createFieldRegistryProxy<
-	TFields extends Record<string, FieldDefinition<any, any>>,
+  TFields extends Record<string, FieldDefinition<any, any>>,
 >(fields: TFields): FieldRegistryProxy<TFields> {
-	const proxy = {} as any;
-	for (const key in fields) {
-		proxy[key] = (options?: any) => {
-			const fieldDef = fields[key];
-			// Important: Access getters explicitly to ensure they're evaluated
-			// FieldBuilder uses getters for 'name', 'field', 'cell', '~options'
-			return {
-				name: fieldDef.name,
-				"~options": { ...fieldDef["~options"], ...options },
-				field: fieldDef.field,
-				cell: fieldDef.cell,
-			} as FieldDefinition;
-		};
-	}
-	return proxy;
+  const proxy = {} as any;
+  for (const key in fields) {
+    proxy[key] = (options?: any) => {
+      const fieldDef = fields[key];
+      // Important: Access getters explicitly to ensure they're evaluated
+      // FieldBuilder uses getters for 'name', 'field', 'cell', '~options'
+      return {
+        name: fieldDef.name,
+        "~options": { ...fieldDef["~options"], ...options },
+        field: fieldDef.field,
+        cell: fieldDef.cell,
+      } as FieldDefinition;
+    };
+  }
+  return proxy;
 }
 
 // ============================================================================
@@ -165,8 +165,8 @@ export function createFieldRegistryProxy<
  * Helper type to make config optional when it's unknown or empty object
  */
 type ViewConfigArg<TConfig> = unknown extends TConfig
-	? TConfig | undefined
-	: TConfig;
+  ? TConfig | undefined
+  : TConfig;
 
 /**
  * View Registry Proxy - Type-safe view builder methods
@@ -186,36 +186,36 @@ type ViewConfigArg<TConfig> = unknown extends TConfig
  * ```
  */
 export type ViewRegistryProxy<TViews extends Record<string, any>> = {
-	[K in keyof TViews]: TViews[K] extends ListViewDefinition<
-		any,
-		infer TListConfig
-	>
-		? (config?: ViewConfigArg<TListConfig>) => TViews[K]
-		: TViews[K] extends EditViewDefinition<any, infer TEditConfig>
-			? (config?: ViewConfigArg<TEditConfig>) => TViews[K]
-			: never;
+  [K in keyof TViews]: TViews[K] extends ListViewDefinition<
+    any,
+    infer TListConfig
+  >
+    ? (config?: ViewConfigArg<TListConfig>) => TViews[K]
+    : TViews[K] extends EditViewDefinition<any, infer TEditConfig>
+      ? (config?: ViewConfigArg<TEditConfig>) => TViews[K]
+      : never;
 };
 
 /**
  * Creates a view registry proxy at runtime
  */
 export function createViewRegistryProxy<TViews extends Record<string, any>>(
-	views: TViews,
+  views: TViews,
 ): ViewRegistryProxy<TViews> {
-	const proxy = {} as any;
-	for (const key in views) {
-		proxy[key] = (config?: any) => {
-			const view = views[key];
-			// Access state directly to avoid getter issues with class instances
-			const existingConfig = view.state?.["~config"] ?? view["~config"] ?? {};
-			return {
-				name: view.name,
-				kind: view.kind,
-				component: view.component,
-				state: view.state,
-				"~config": { ...existingConfig, ...config },
-			};
-		};
-	}
-	return proxy;
+  const proxy = {} as any;
+  for (const key in views) {
+    proxy[key] = (config?: any) => {
+      const view = views[key];
+      // Access state directly to avoid getter issues with class instances
+      const existingConfig = view.state?.["~config"] ?? view["~config"] ?? {};
+      return {
+        name: view.name,
+        kind: view.kind,
+        component: view.component,
+        state: view.state,
+        "~config": { ...existingConfig, ...config },
+      };
+    };
+  }
+  return proxy;
 }

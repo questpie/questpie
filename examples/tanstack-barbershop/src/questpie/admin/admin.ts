@@ -17,8 +17,8 @@ import { builder } from "./builder";
  * The client fetches translations from the server via getAdminTranslations() RPC.
  */
 export const admin = builder.locale({
-	default: "en",
-	supported: ["en", "sk"],
+  default: "en",
+  supported: ["en", "sk"],
 });
 
 export type AdminConfig = typeof admin;

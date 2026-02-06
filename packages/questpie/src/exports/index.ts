@@ -6,8 +6,8 @@ import { config } from "#questpie/cli/config.js";
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 // Import for q namespace
 import {
-	createCallableBuilder,
-	questpie,
+  createCallableBuilder,
+  questpie,
 } from "#questpie/server/config/builder.js";
 import { defaultFields } from "#questpie/server/fields/builtin/defaults.js";
 import { fn } from "#questpie/server/functions/define-function.js";
@@ -71,23 +71,23 @@ const callableQ = createCallableBuilder(baseBuilder);
  * ```
  */
 const q = Object.assign(callableQ, {
-	/**
-	 * Starter module - opt-in "batteries included" module
-	 * Includes auth collections and assets with file upload support
-	 * @example q({ name: "app" }).use(q.starter).build({...})
-	 */
-	starter: starterModule,
+  /**
+   * Starter module - opt-in "batteries included" module
+   * Includes auth collections and assets with file upload support
+   * @example q({ name: "app" }).use(q.starter).build({...})
+   */
+  starter: starterModule,
 
-	/**
-	 * Define CLI configuration (questpie.config.ts)
-	 * @example export default q.config({ app: cms, cli: { migrations: { directory: "./migrations" } } })
-	 */
-	config,
+  /**
+   * Define CLI configuration (questpie.config.ts)
+   * @example export default q.config({ app: cms, cli: { migrations: { directory: "./migrations" } } })
+   */
+  config,
 
-	/**
-	 * Create standalone RPC contract builder.
-	 */
-	rpc,
+  /**
+   * Create standalone RPC contract builder.
+   */
+  rpc,
 });
 
 export { q };

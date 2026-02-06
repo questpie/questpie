@@ -67,7 +67,7 @@ function SheetContent({
               />
             }
           >
-            <Icon icon="ph:x"  />
+            <Icon icon="ph:x" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
         )}

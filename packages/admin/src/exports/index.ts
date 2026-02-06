@@ -19,20 +19,20 @@ import "../augmentation.js";
 
 // Re-export admin meta types for consumers
 export type {
-	AnyAdminMeta,
-	ArrayFieldAdminMeta,
-	BaseAdminMeta,
-	BooleanFieldAdminMeta,
-	DateFieldAdminMeta,
-	JsonFieldAdminMeta,
-	NumberFieldAdminMeta,
-	ObjectFieldAdminMeta,
-	RelationFieldAdminMeta,
-	SelectFieldAdminMeta,
-	TextareaFieldAdminMeta,
-	TextFieldAdminMeta,
-	TimeFieldAdminMeta,
-	UploadFieldAdminMeta,
+  AnyAdminMeta,
+  ArrayFieldAdminMeta,
+  BaseAdminMeta,
+  BooleanFieldAdminMeta,
+  DateFieldAdminMeta,
+  JsonFieldAdminMeta,
+  NumberFieldAdminMeta,
+  ObjectFieldAdminMeta,
+  RelationFieldAdminMeta,
+  SelectFieldAdminMeta,
+  TextareaFieldAdminMeta,
+  TextFieldAdminMeta,
+  TimeFieldAdminMeta,
+  UploadFieldAdminMeta,
 } from "../augmentation.js";
 
 // Re-export everything from client

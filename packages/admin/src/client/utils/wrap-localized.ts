@@ -17,311 +17,311 @@ import { createFieldRegistryProxy } from "#questpie/admin/client/builder/proxies
  * I18n marker value wrapper
  */
 interface I18nWrapper<T = unknown> {
-	$i18n: T;
+  $i18n: T;
 }
 
 /**
  * Check if a value is already wrapped with $i18n
  */
 function isI18nWrapped(value: unknown): value is I18nWrapper {
-	return (
-		value !== null &&
-		typeof value === "object" &&
-		"$i18n" in value &&
-		Object.keys(value).length === 1
-	);
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "$i18n" in value &&
+    Object.keys(value).length === 1
+  );
 }
 
 /**
  * Wrap a value with $i18n marker
  */
 function wrapI18n<T>(value: T): I18nWrapper<T> {
-	return { $i18n: value };
+  return { $i18n: value };
 }
 
 /**
  * Get nested field definitions from a field's options
  */
 function getNestedFields(
-	fieldDef: FieldDefinition | undefined,
-	registry: Record<string, FieldDefinition> | undefined,
+  fieldDef: FieldDefinition | undefined,
+  registry: Record<string, FieldDefinition> | undefined,
 ): Record<string, FieldDefinition> | undefined {
-	if (!fieldDef) return undefined;
+  if (!fieldDef) return undefined;
 
-	const options = (fieldDef as any)["~options"];
-	if (!options) return undefined;
+  const options = (fieldDef as any)["~options"];
+  if (!options) return undefined;
 
-	// Object field - has `fields` callback
-	if (options.fields) {
-		if (typeof options.fields === "function") {
-			if (!registry) return undefined;
-			try {
-				return options.fields({ r: createFieldRegistryProxy(registry) });
-			} catch {
-				return undefined;
-			}
-		}
-		if (typeof options.fields === "object") {
-			return options.fields as Record<string, FieldDefinition>;
-		}
-	}
+  // Object field - has `fields` callback
+  if (options.fields) {
+    if (typeof options.fields === "function") {
+      if (!registry) return undefined;
+      try {
+        return options.fields({ r: createFieldRegistryProxy(registry) });
+      } catch {
+        return undefined;
+      }
+    }
+    if (typeof options.fields === "object") {
+      return options.fields as Record<string, FieldDefinition>;
+    }
+  }
 
-	// Array field with object items - has `item` callback
-	if (options.item) {
-		if (typeof options.item === "function") {
-			if (!registry) return undefined;
-			try {
-				return options.item({ r: createFieldRegistryProxy(registry) });
-			} catch {
-				return undefined;
-			}
-		}
-		if (typeof options.item === "object") {
-			return options.item as Record<string, FieldDefinition>;
-		}
-	}
+  // Array field with object items - has `item` callback
+  if (options.item) {
+    if (typeof options.item === "function") {
+      if (!registry) return undefined;
+      try {
+        return options.item({ r: createFieldRegistryProxy(registry) });
+      } catch {
+        return undefined;
+      }
+    }
+    if (typeof options.item === "object") {
+      return options.item as Record<string, FieldDefinition>;
+    }
+  }
 
-	return undefined;
+  return undefined;
 }
 
 /**
  * Check if a field is localized
  */
 function isFieldLocalized(fieldDef: FieldDefinition | undefined): boolean {
-	if (!fieldDef) return false;
-	const options = (fieldDef as any)["~options"];
-	return options?.localized === true;
+  if (!fieldDef) return false;
+  const options = (fieldDef as any)["~options"];
+  return options?.localized === true;
 }
 
 /**
  * Check if a field is computed (has compute function = UI-only, not submitted to backend)
  */
 function isFieldComputed(fieldDef: FieldDefinition | undefined): boolean {
-	if (!fieldDef) return false;
-	const options = (fieldDef as any)["~options"];
-	return typeof options?.compute === "function";
+  if (!fieldDef) return false;
+  const options = (fieldDef as any)["~options"];
+  return typeof options?.compute === "function";
 }
 
 /**
  * Check if nested fields contain any localized fields
  */
 function hasLocalizedFields(
-	nestedFields: Record<string, FieldDefinition> | undefined,
-	registry: Record<string, FieldDefinition> | undefined,
+  nestedFields: Record<string, FieldDefinition> | undefined,
+  registry: Record<string, FieldDefinition> | undefined,
 ): boolean {
-	if (!nestedFields) return false;
-	return Object.values(nestedFields).some((fieldDef) => {
-		if (isFieldLocalized(fieldDef)) return true;
-		// Check deeper nested fields
-		const deepNested = getNestedFields(fieldDef, registry);
-		if (deepNested) return hasLocalizedFields(deepNested, registry);
-		return false;
-	});
+  if (!nestedFields) return false;
+  return Object.values(nestedFields).some((fieldDef) => {
+    if (isFieldLocalized(fieldDef)) return true;
+    // Check deeper nested fields
+    const deepNested = getNestedFields(fieldDef, registry);
+    if (deepNested) return hasLocalizedFields(deepNested, registry);
+    return false;
+  });
 }
 
 /**
  * Check if a field is a blocks field
  */
 function isBlocksField(fieldDef: FieldDefinition | undefined): boolean {
-	if (!fieldDef) return false;
-	return (fieldDef as any).name === "blocks";
+  if (!fieldDef) return false;
+  return (fieldDef as any).name === "blocks";
 }
 
 /**
  * Check if a field is an object field
  */
 function isObjectField(fieldDef: FieldDefinition | undefined): boolean {
-	if (!fieldDef) return false;
-	return (fieldDef as any).name === "object";
+  if (!fieldDef) return false;
+  return (fieldDef as any).name === "object";
 }
 
 /**
  * Check if a field is an array field
  */
 function isArrayField(fieldDef: FieldDefinition | undefined): boolean {
-	if (!fieldDef) return false;
-	return (fieldDef as any).name === "array";
+  if (!fieldDef) return false;
+  return (fieldDef as any).name === "array";
 }
 
 /**
  * Process object value - wrap localized nested fields
  */
 function processObjectValue(
-	value: Record<string, unknown>,
-	nestedFields: Record<string, FieldDefinition>,
-	blocks?: Record<string, BlockDefinition>,
-	registry?: Record<string, FieldDefinition>,
+  value: Record<string, unknown>,
+  nestedFields: Record<string, FieldDefinition>,
+  blocks?: Record<string, BlockDefinition>,
+  registry?: Record<string, FieldDefinition>,
 ): Record<string, unknown> {
-	const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = {};
 
-	for (const [key, fieldValue] of Object.entries(value)) {
-		const nestedFieldDef = nestedFields[key];
+  for (const [key, fieldValue] of Object.entries(value)) {
+    const nestedFieldDef = nestedFields[key];
 
-		if (fieldValue === undefined || fieldValue === null) {
-			result[key] = fieldValue;
-			continue;
-		}
+    if (fieldValue === undefined || fieldValue === null) {
+      result[key] = fieldValue;
+      continue;
+    }
 
-		// Already wrapped - keep as is
-		if (isI18nWrapped(fieldValue)) {
-			result[key] = fieldValue;
-			continue;
-		}
+    // Already wrapped - keep as is
+    if (isI18nWrapped(fieldValue)) {
+      result[key] = fieldValue;
+      continue;
+    }
 
-		// Check if this nested field is localized
-		if (isFieldLocalized(nestedFieldDef)) {
-			result[key] = wrapI18n(fieldValue);
-			continue;
-		}
+    // Check if this nested field is localized
+    if (isFieldLocalized(nestedFieldDef)) {
+      result[key] = wrapI18n(fieldValue);
+      continue;
+    }
 
-		// Recursively process nested object fields
-		if (isObjectField(nestedFieldDef)) {
-			const deepNestedFields = getNestedFields(nestedFieldDef, registry);
-			if (
-				deepNestedFields &&
-				hasLocalizedFields(deepNestedFields, registry) &&
-				typeof fieldValue === "object" &&
-				!Array.isArray(fieldValue)
-			) {
-				result[key] = processObjectValue(
-					fieldValue as Record<string, unknown>,
-					deepNestedFields,
-					blocks,
-					registry,
-				);
-				continue;
-			}
-		}
+    // Recursively process nested object fields
+    if (isObjectField(nestedFieldDef)) {
+      const deepNestedFields = getNestedFields(nestedFieldDef, registry);
+      if (
+        deepNestedFields &&
+        hasLocalizedFields(deepNestedFields, registry) &&
+        typeof fieldValue === "object" &&
+        !Array.isArray(fieldValue)
+      ) {
+        result[key] = processObjectValue(
+          fieldValue as Record<string, unknown>,
+          deepNestedFields,
+          blocks,
+          registry,
+        );
+        continue;
+      }
+    }
 
-		// Recursively process nested array fields (only if item has localized fields)
-		if (isArrayField(nestedFieldDef)) {
-			const itemFields = getNestedFields(nestedFieldDef, registry);
-			if (
-				itemFields &&
-				hasLocalizedFields(itemFields, registry) &&
-				Array.isArray(fieldValue)
-			) {
-				result[key] = fieldValue.map((item) => {
-					if (
-						typeof item === "object" &&
-						item !== null &&
-						!Array.isArray(item)
-					) {
-						return processObjectValue(
-							item as Record<string, unknown>,
-							itemFields,
-							blocks,
-							registry,
-						);
-					}
-					return item;
-				});
-				continue;
-			}
-		}
+    // Recursively process nested array fields (only if item has localized fields)
+    if (isArrayField(nestedFieldDef)) {
+      const itemFields = getNestedFields(nestedFieldDef, registry);
+      if (
+        itemFields &&
+        hasLocalizedFields(itemFields, registry) &&
+        Array.isArray(fieldValue)
+      ) {
+        result[key] = fieldValue.map((item) => {
+          if (
+            typeof item === "object" &&
+            item !== null &&
+            !Array.isArray(item)
+          ) {
+            return processObjectValue(
+              item as Record<string, unknown>,
+              itemFields,
+              blocks,
+              registry,
+            );
+          }
+          return item;
+        });
+        continue;
+      }
+    }
 
-		// Recursively process nested blocks fields
-		if (isBlocksField(nestedFieldDef) && blocks) {
-			result[key] = processBlocksValue(fieldValue as BlockContent, blocks);
-			continue;
-		}
+    // Recursively process nested blocks fields
+    if (isBlocksField(nestedFieldDef) && blocks) {
+      result[key] = processBlocksValue(fieldValue as BlockContent, blocks);
+      continue;
+    }
 
-		// Not localized - keep as is
-		result[key] = fieldValue;
-	}
+    // Not localized - keep as is
+    result[key] = fieldValue;
+  }
 
-	return result;
+  return result;
 }
 
 /**
  * Process blocks content - wrap localized block field values
  */
 function processBlocksValue(
-	content: BlockContent,
-	blocks: Record<string, BlockDefinition>,
-	registry?: Record<string, FieldDefinition>,
+  content: BlockContent,
+  blocks: Record<string, BlockDefinition>,
+  registry?: Record<string, FieldDefinition>,
 ): BlockContent {
-	if (!content || !content._values) {
-		return content;
-	}
+  if (!content || !content._values) {
+    return content;
+  }
 
-	const processedValues: Record<string, Record<string, unknown>> = {};
+  const processedValues: Record<string, Record<string, unknown>> = {};
 
-	for (const [blockId, blockValues] of Object.entries(content._values)) {
-		// Find block type from tree
-		const blockNode = findBlockInTree(content._tree, blockId);
-		if (!blockNode) {
-			processedValues[blockId] = blockValues;
-			continue;
-		}
+  for (const [blockId, blockValues] of Object.entries(content._values)) {
+    // Find block type from tree
+    const blockNode = findBlockInTree(content._tree, blockId);
+    if (!blockNode) {
+      processedValues[blockId] = blockValues;
+      continue;
+    }
 
-		const blockDef = blocks[blockNode.type];
-		if (!blockDef) {
-			processedValues[blockId] = blockValues;
-			continue;
-		}
+    const blockDef = blocks[blockNode.type];
+    if (!blockDef) {
+      processedValues[blockId] = blockValues;
+      continue;
+    }
 
-		// Get block field definitions
-		const blockFields = (blockDef as any).fields as
-			| Record<string, FieldDefinition>
-			| undefined;
-		if (!blockFields || !hasLocalizedFields(blockFields, registry)) {
-			processedValues[blockId] = blockValues;
-			continue;
-		}
+    // Get block field definitions
+    const blockFields = (blockDef as any).fields as
+      | Record<string, FieldDefinition>
+      | undefined;
+    if (!blockFields || !hasLocalizedFields(blockFields, registry)) {
+      processedValues[blockId] = blockValues;
+      continue;
+    }
 
-		// Process block values
-		processedValues[blockId] = processObjectValue(
-			blockValues,
-			blockFields,
-			blocks,
-			registry,
-		);
-	}
+    // Process block values
+    processedValues[blockId] = processObjectValue(
+      blockValues,
+      blockFields,
+      blocks,
+      registry,
+    );
+  }
 
-	return {
-		...content,
-		_values: processedValues,
-	};
+  return {
+    ...content,
+    _values: processedValues,
+  };
 }
 
 /**
  * Find a block node in the tree by ID
  */
 function findBlockInTree(
-	tree: BlockContent["_tree"],
-	blockId: string,
+  tree: BlockContent["_tree"],
+  blockId: string,
 ): BlockContent["_tree"][number] | undefined {
-	for (const node of tree) {
-		if (node.id === blockId) {
-			return node;
-		}
-		if (node.children?.length) {
-			const found = findBlockInTree(node.children, blockId);
-			if (found) return found;
-		}
-	}
-	return undefined;
+  for (const node of tree) {
+    if (node.id === blockId) {
+      return node;
+    }
+    if (node.children.length) {
+      const found = findBlockInTree(node.children, blockId);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }
 
 /**
  * Options for wrapLocalizedNestedValues
  */
 export interface WrapLocalizedOptions {
-	/**
-	 * Field definitions from collection/global config
-	 */
-	fields: Record<string, FieldDefinition>;
+  /**
+   * Field definitions from collection/global config
+   */
+  fields: Record<string, FieldDefinition>;
 
-	/**
-	 * Field registry from admin builder (required for nested field callbacks)
-	 */
-	registry?: Record<string, FieldDefinition>;
+  /**
+   * Field registry from admin builder (required for nested field callbacks)
+   */
+  registry?: Record<string, FieldDefinition>;
 
-	/**
-	 * Block definitions (required if using blocks fields)
-	 */
-	blocks?: Record<string, BlockDefinition>;
+  /**
+   * Block definitions (required if using blocks fields)
+   */
+  blocks?: Record<string, BlockDefinition>;
 }
 
 /**
@@ -347,85 +347,85 @@ export interface WrapLocalizedOptions {
  * ```
  */
 export function wrapLocalizedNestedValues(
-	data: Record<string, unknown>,
-	options: WrapLocalizedOptions,
+  data: Record<string, unknown>,
+  options: WrapLocalizedOptions,
 ): Record<string, unknown> {
-	const { fields, blocks } = options;
-	const registry = options.registry;
-	const result: Record<string, unknown> = {};
+  const { fields, blocks } = options;
+  const registry = options.registry;
+  const result: Record<string, unknown> = {};
 
-	for (const [fieldName, fieldValue] of Object.entries(data)) {
-		const fieldDef = fields[fieldName];
+  for (const [fieldName, fieldValue] of Object.entries(data)) {
+    const fieldDef = fields[fieldName];
 
-		// Skip computed fields - they are UI-only and should not be submitted
-		if (isFieldComputed(fieldDef)) {
-			continue;
-		}
+    // Skip computed fields - they are UI-only and should not be submitted
+    if (isFieldComputed(fieldDef)) {
+      continue;
+    }
 
-		if (fieldValue === undefined || fieldValue === null) {
-			result[fieldName] = fieldValue;
-			continue;
-		}
+    if (fieldValue === undefined || fieldValue === null) {
+      result[fieldName] = fieldValue;
+      continue;
+    }
 
-		// Process object fields (only if has localized nested fields)
-		if (isObjectField(fieldDef)) {
-			const nestedFields = getNestedFields(fieldDef, registry);
-			if (
-				nestedFields &&
-				hasLocalizedFields(nestedFields, registry) &&
-				typeof fieldValue === "object" &&
-				!Array.isArray(fieldValue)
-			) {
-				result[fieldName] = processObjectValue(
-					fieldValue as Record<string, unknown>,
-					nestedFields,
-					blocks,
-					registry,
-				);
-				continue;
-			}
-		}
+    // Process object fields (only if has localized nested fields)
+    if (isObjectField(fieldDef)) {
+      const nestedFields = getNestedFields(fieldDef, registry);
+      if (
+        nestedFields &&
+        hasLocalizedFields(nestedFields, registry) &&
+        typeof fieldValue === "object" &&
+        !Array.isArray(fieldValue)
+      ) {
+        result[fieldName] = processObjectValue(
+          fieldValue as Record<string, unknown>,
+          nestedFields,
+          blocks,
+          registry,
+        );
+        continue;
+      }
+    }
 
-		// Process array fields (only if item has localized fields)
-		if (isArrayField(fieldDef)) {
-			const itemFields = getNestedFields(fieldDef, registry);
-			if (
-				itemFields &&
-				hasLocalizedFields(itemFields, registry) &&
-				Array.isArray(fieldValue)
-			) {
-				result[fieldName] = fieldValue.map((item) => {
-					if (
-						typeof item === "object" &&
-						item !== null &&
-						!Array.isArray(item)
-					) {
-						return processObjectValue(
-							item as Record<string, unknown>,
-							itemFields,
-							blocks,
-							registry,
-						);
-					}
-					return item;
-				});
-				continue;
-			}
-		}
+    // Process array fields (only if item has localized fields)
+    if (isArrayField(fieldDef)) {
+      const itemFields = getNestedFields(fieldDef, registry);
+      if (
+        itemFields &&
+        hasLocalizedFields(itemFields, registry) &&
+        Array.isArray(fieldValue)
+      ) {
+        result[fieldName] = fieldValue.map((item) => {
+          if (
+            typeof item === "object" &&
+            item !== null &&
+            !Array.isArray(item)
+          ) {
+            return processObjectValue(
+              item as Record<string, unknown>,
+              itemFields,
+              blocks,
+              registry,
+            );
+          }
+          return item;
+        });
+        continue;
+      }
+    }
 
-		// Process blocks fields
-		if (isBlocksField(fieldDef) && blocks) {
-			result[fieldName] = processBlocksValue(
-				fieldValue as BlockContent,
-				blocks,
-				registry,
-			);
-			continue;
-		}
+    // Process blocks fields
+    if (isBlocksField(fieldDef) && blocks) {
+      result[fieldName] = processBlocksValue(
+        fieldValue as BlockContent,
+        blocks,
+        registry,
+      );
+      continue;
+    }
 
-		// Not a nested field type or no localized fields - keep as is
-		result[fieldName] = fieldValue;
-	}
+    // Not a nested field type or no localized fields - keep as is
+    result[fieldName] = fieldValue;
+  }
 
-	return result;
+  return result;
 }

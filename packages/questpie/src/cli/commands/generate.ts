@@ -38,7 +38,7 @@ function mockStdinForNonInteractive(): () => void {
   };
 
   // Also intercept key events if using readline
-  mockStream.on = function(event: string, listener: any) {
+  mockStream.on = function (event: string, listener: any) {
     if (event === "keypress") {
       // Auto-trigger keypress with Enter
       setTimeout(() => listener("\r", { name: "return", sequence: "\r" }), 50);
@@ -56,7 +56,9 @@ function mockStdinForNonInteractive(): () => void {
     if (originalSetRawMode) {
       (process.stdin as any).setRawMode = originalSetRawMode;
     }
-    console.log(`\n✅ Auto-answered ${promptCount} prompts in non-interactive mode`);
+    console.log(
+      `\n✅ Auto-answered ${promptCount} prompts in non-interactive mode`,
+    );
   };
 }
 
@@ -79,7 +81,9 @@ export async function generateMigrationCommand(
   // Handle non-interactive mode by auto-answering prompts
   let stdinRestore: (() => void) | undefined;
   if (options.nonInteractive) {
-    console.log("🤖 Running in non-interactive mode (auto-selecting defaults)\n");
+    console.log(
+      "🤖 Running in non-interactive mode (auto-selecting defaults)\n",
+    );
     stdinRestore = mockStdinForNonInteractive();
   }
 

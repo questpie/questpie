@@ -4,9 +4,9 @@ import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Checkbox } from "../ui/checkbox";
 import type {
-	CheckboxGroupProps,
-	CheckboxInputProps,
-	RadioGroupProps,
+  CheckboxGroupProps,
+  CheckboxInputProps,
+  RadioGroupProps,
 } from "./types";
 
 /**
@@ -23,23 +23,23 @@ import type {
  * ```
  */
 export function CheckboxInput({
-	value,
-	onChange,
-	disabled,
-	className,
-	id,
-	"aria-invalid": ariaInvalid,
+  value,
+  onChange,
+  disabled,
+  className,
+  id,
+  "aria-invalid": ariaInvalid,
 }: CheckboxInputProps) {
-	return (
-		<Checkbox
-			id={id}
-			checked={value}
-			onCheckedChange={(checked) => onChange(checked === true)}
-			disabled={disabled}
-			aria-invalid={ariaInvalid}
-			className={className}
-		/>
-	);
+  return (
+    <Checkbox
+      id={id}
+      checked={value}
+      onCheckedChange={(checked) => onChange(checked === true)}
+      disabled={disabled}
+      aria-invalid={ariaInvalid}
+      className={className}
+    />
+  );
 }
 
 /**
@@ -63,61 +63,61 @@ export function CheckboxInput({
  * ```
  */
 export function CheckboxGroup<TValue extends string = string>({
-	value,
-	onChange,
-	options,
-	orientation = "vertical",
-	disabled,
-	className,
-	id,
-	"aria-invalid": ariaInvalid,
+  value,
+  onChange,
+  options,
+  orientation = "vertical",
+  disabled,
+  className,
+  id,
+  "aria-invalid": ariaInvalid,
 }: CheckboxGroupProps<TValue>) {
-	const resolveText = useResolveText();
-	const handleChange = (optionValue: TValue, checked: boolean) => {
-		if (checked) {
-			onChange([...value, optionValue]);
-		} else {
-			onChange(value.filter((v) => v !== optionValue));
-		}
-	};
+  const resolveText = useResolveText();
+  const handleChange = (optionValue: TValue, checked: boolean) => {
+    if (checked) {
+      onChange([...value, optionValue]);
+    } else {
+      onChange(value.filter((v) => v !== optionValue));
+    }
+  };
 
-	return (
-		<div
-			id={id}
-			role="group"
-			aria-invalid={ariaInvalid}
-			className={cn(
-				"flex gap-3",
-				orientation === "vertical" ? "flex-col" : "flex-row flex-wrap",
-				className,
-			)}
-		>
-			{options.map((option) => {
-				const optionId = `${id}-${String(option.value)}`;
-				return (
-					<div
-						key={String(option.value)}
-						className={cn(
-							"flex items-center gap-2",
-							option.disabled || disabled
-								? "opacity-50 cursor-not-allowed"
-								: "cursor-pointer",
-						)}
-					>
-						<CheckboxInput
-							id={optionId}
-							value={value.includes(option.value)}
-							onChange={(checked) => handleChange(option.value, checked)}
-							disabled={option.disabled || disabled}
-						/>
-						<label htmlFor={optionId} className="text-sm cursor-pointer">
-							{resolveText(option.label)}
-						</label>
-					</div>
-				);
-			})}
-		</div>
-	);
+  return (
+    <div
+      id={id}
+      role="group"
+      aria-invalid={ariaInvalid}
+      className={cn(
+        "flex gap-3",
+        orientation === "vertical" ? "flex-col" : "flex-row flex-wrap",
+        className,
+      )}
+    >
+      {options.map((option) => {
+        const optionId = `${id}-${String(option.value)}`;
+        return (
+          <div
+            key={String(option.value)}
+            className={cn(
+              "flex items-center gap-2",
+              option.disabled || disabled
+                ? "opacity-50 cursor-not-allowed"
+                : "cursor-pointer",
+            )}
+          >
+            <CheckboxInput
+              id={optionId}
+              value={value.includes(option.value)}
+              onChange={(checked) => handleChange(option.value, checked)}
+              disabled={option.disabled || disabled}
+            />
+            <label htmlFor={optionId} className="text-sm cursor-pointer">
+              {resolveText(option.label)}
+            </label>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 /**
@@ -140,57 +140,57 @@ export function CheckboxGroup<TValue extends string = string>({
  * ```
  */
 export function RadioGroup<TValue extends string = string>({
-	value,
-	onChange,
-	options,
-	orientation = "vertical",
-	disabled,
-	className,
-	id,
-	"aria-invalid": ariaInvalid,
+  value,
+  onChange,
+  options,
+  orientation = "vertical",
+  disabled,
+  className,
+  id,
+  "aria-invalid": ariaInvalid,
 }: RadioGroupProps<TValue>) {
-	const resolveText = useResolveText();
-	return (
-		<div
-			id={id}
-			role="radiogroup"
-			aria-invalid={ariaInvalid}
-			className={cn(
-				"flex gap-3",
-				orientation === "vertical" ? "flex-col" : "flex-row flex-wrap",
-				className,
-			)}
-		>
-			{options.map((option) => {
-				const optionId = `${id}-${String(option.value)}`;
-				return (
-					<div
-						key={String(option.value)}
-						className={cn(
-							"flex items-center gap-2",
-							option.disabled || disabled
-								? "opacity-50 cursor-not-allowed"
-								: "cursor-pointer",
-						)}
-					>
-						<input
-							type="radio"
-							id={optionId}
-							name={id}
-							checked={value === option.value}
-							onChange={() => onChange(option.value)}
-							disabled={option.disabled || disabled}
-							className={cn(
-								"size-4 shrink-0 accent-primary",
-								"disabled:cursor-not-allowed disabled:opacity-50",
-							)}
-						/>
-						<label htmlFor={optionId} className="text-sm cursor-pointer">
-							{resolveText(option.label)}
-						</label>
-					</div>
-				);
-			})}
-		</div>
-	);
+  const resolveText = useResolveText();
+  return (
+    <div
+      id={id}
+      role="radiogroup"
+      aria-invalid={ariaInvalid}
+      className={cn(
+        "flex gap-3",
+        orientation === "vertical" ? "flex-col" : "flex-row flex-wrap",
+        className,
+      )}
+    >
+      {options.map((option) => {
+        const optionId = `${id}-${String(option.value)}`;
+        return (
+          <div
+            key={String(option.value)}
+            className={cn(
+              "flex items-center gap-2",
+              option.disabled || disabled
+                ? "opacity-50 cursor-not-allowed"
+                : "cursor-pointer",
+            )}
+          >
+            <input
+              type="radio"
+              id={optionId}
+              name={id}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+              disabled={option.disabled || disabled}
+              className={cn(
+                "size-4 shrink-0 accent-primary",
+                "disabled:cursor-not-allowed disabled:opacity-50",
+              )}
+            />
+            <label htmlFor={optionId} className="text-sm cursor-pointer">
+              {resolveText(option.label)}
+            </label>
+          </div>
+        );
+      })}
+    </div>
+  );
 }

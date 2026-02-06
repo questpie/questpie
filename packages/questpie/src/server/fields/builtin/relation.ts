@@ -18,9 +18,9 @@ import { jsonb, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { defineField } from "../define-field.js";
 import type {
-	BaseFieldConfig,
-	FieldMetadataBase,
-	RelationFieldMetadata,
+  BaseFieldConfig,
+  FieldMetadataBase,
+  RelationFieldMetadata,
 } from "../types.js";
 import { operator } from "../types.js";
 
@@ -49,8 +49,8 @@ import { operator } from "../types.js";
  * ```
  */
 export interface RelationFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
-	_?: never;
+  /** Phantom property to prevent interface collapse - enables module augmentation */
+  _?: never;
 }
 
 // ============================================================================
@@ -61,21 +61,21 @@ export interface RelationFieldMeta {
  * Referential action options for FK constraints.
  */
 export type ReferentialAction =
-	| "cascade"
-	| "set null"
-	| "restrict"
-	| "no action";
+  | "cascade"
+  | "set null"
+  | "restrict"
+  | "no action";
 
 /**
  * Inferred relation type based on config.
  */
 export type InferredRelationType =
-	| "belongsTo"
-	| "hasMany"
-	| "manyToMany"
-	| "multiple"
-	| "morphTo"
-	| "morphMany";
+  | "belongsTo"
+  | "hasMany"
+  | "manyToMany"
+  | "multiple"
+  | "morphTo"
+  | "morphMany";
 
 /**
  * Target collection specification.
@@ -85,9 +85,9 @@ export type InferredRelationType =
  * - Polymorphic object: `{ users: "users", posts: "posts" }` - multiple possible targets
  */
 export type RelationTarget =
-	| string
-	| (() => { name: string; table?: { id: AnyPgColumn } })
-	| Record<string, string | (() => { name: string })>;
+  | string
+  | (() => { name: string; table?: { id: AnyPgColumn } })
+  | Record<string, string | (() => { name: string })>;
 
 /**
  * Junction table specification for manyToMany relations.
@@ -100,105 +100,105 @@ export type JunctionTarget = string | (() => { name: string });
  * Relation field configuration options.
  */
 export interface RelationFieldConfig extends BaseFieldConfig {
-	/** Field-specific metadata, augmentable by external packages. */
-	meta?: RelationFieldMeta;
+  /** Field-specific metadata, augmentable by external packages. */
+  meta?: RelationFieldMeta;
 
-	/**
-	 * Target collection(s).
-	 * - String: `"users"` - collection name (recommended for most cases)
-	 * - Callback: `() => users` - lazy reference with FK constraint
-	 * - Object: `{ users: "users", posts: "posts" }` for polymorphic
-	 */
-	to: RelationTarget;
+  /**
+   * Target collection(s).
+   * - String: `"users"` - collection name (recommended for most cases)
+   * - Callback: `() => users` - lazy reference with FK constraint
+   * - Object: `{ users: "users", posts: "posts" }` for polymorphic
+   */
+  to: RelationTarget;
 
-	/**
-	 * Makes this a "to-many" relation (hasMany or manyToMany).
-	 * - false (default): belongsTo - FK stored on this table
-	 * - true: hasMany/manyToMany - FK on target or junction table
-	 * @default false
-	 */
-	hasMany?: boolean;
+  /**
+   * Makes this a "to-many" relation (hasMany or manyToMany).
+   * - false (default): belongsTo - FK stored on this table
+   * - true: hasMany/manyToMany - FK on target or junction table
+   * @default false
+   */
+  hasMany?: boolean;
 
-	/**
-	 * Stores array of FKs inline (jsonb column).
-	 * Use for embedded arrays without junction table.
-	 * @default false
-	 */
-	multiple?: boolean;
+  /**
+   * Stores array of FKs inline (jsonb column).
+   * Use for embedded arrays without junction table.
+   * @default false
+   */
+  multiple?: boolean;
 
-	/**
-	 * Foreign key column name on TARGET collection.
-	 * Required for hasMany relations.
-	 * @example "authorId" - FK column on posts that references this collection
-	 */
-	foreignKey?: string;
+  /**
+   * Foreign key column name on TARGET collection.
+   * Required for hasMany relations.
+   * @example "authorId" - FK column on posts that references this collection
+   */
+  foreignKey?: string;
 
-	/**
-	 * Junction collection for manyToMany relations.
-	 * When provided, relation becomes manyToMany.
-	 * - String: `"post_tags"` - junction collection name
-	 * - Callback: `() => postTags` - lazy reference
-	 */
-	through?: JunctionTarget;
+  /**
+   * Junction collection for manyToMany relations.
+   * When provided, relation becomes manyToMany.
+   * - String: `"post_tags"` - junction collection name
+   * - Callback: `() => postTags` - lazy reference
+   */
+  through?: JunctionTarget;
 
-	/**
-	 * Source field on junction table (points to this collection).
-	 * @default "{thisCollection}Id"
-	 */
-	sourceField?: string;
+  /**
+   * Source field on junction table (points to this collection).
+   * @default "{thisCollection}Id"
+   */
+  sourceField?: string;
 
-	/**
-	 * Target field on junction table (points to target collection).
-	 * @default "{targetCollection}Id"
-	 */
-	targetField?: string;
+  /**
+   * Target field on junction table (points to target collection).
+   * @default "{targetCollection}Id"
+   */
+  targetField?: string;
 
-	/**
-	 * For reverse polymorphic (morphMany).
-	 * Name of the morphTo field on target collection.
-	 */
-	morphName?: string;
+  /**
+   * For reverse polymorphic (morphMany).
+   * Name of the morphTo field on target collection.
+   */
+  morphName?: string;
 
-	/**
-	 * For reverse polymorphic (morphMany).
-	 * Value to match in the type column.
-	 */
-	morphType?: string;
+  /**
+   * For reverse polymorphic (morphMany).
+   * Value to match in the type column.
+   */
+  morphType?: string;
 
-	/**
-	 * Action on delete of referenced record.
-	 * - For belongsTo: DB-level FK constraint
-	 * - For hasMany/manyToMany: Application-level cascade (hooks)
-	 * @default "no action"
-	 */
-	onDelete?: ReferentialAction;
+  /**
+   * Action on delete of referenced record.
+   * - For belongsTo: DB-level FK constraint
+   * - For hasMany/manyToMany: Application-level cascade (hooks)
+   * @default "no action"
+   */
+  onDelete?: ReferentialAction;
 
-	/**
-	 * Action on update of referenced record's ID.
-	 * @default "no action"
-	 */
-	onUpdate?: ReferentialAction;
+  /**
+   * Action on update of referenced record's ID.
+   * @default "no action"
+   */
+  onUpdate?: ReferentialAction;
 
-	/**
-	 * Drizzle relation name for disambiguation.
-	 * Use when multiple relations point to same collection.
-	 */
-	relationName?: string;
+  /**
+   * Drizzle relation name for disambiguation.
+   * Use when multiple relations point to same collection.
+   */
+  relationName?: string;
 
-	/**
-	 * Default ordering for hasMany/manyToMany results.
-	 */
-	orderBy?: Record<string, "asc" | "desc">;
+  /**
+   * Default ordering for hasMany/manyToMany results.
+   */
+  orderBy?: Record<string, "asc" | "desc">;
 
-	/**
-	 * Limit number of related records.
-	 */
-	limit?: number;
+  /**
+   * Limit number of related records.
+   */
+  limit?: number;
 
-	/**
-	 * Default filter conditions for relation.
-	 */
-	where?: Record<string, unknown>;
+  /**
+   * Default filter conditions for relation.
+   */
+  where?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -210,54 +210,54 @@ export interface RelationFieldConfig extends BaseFieldConfig {
  * Works with both strings and callbacks.
  */
 export function resolveTargetName(
-	target: RelationTarget,
+  target: RelationTarget,
 ): string | string[] | undefined {
-	if (typeof target === "string") {
-		return target;
-	}
-	if (typeof target === "function") {
-		try {
-			return target().name;
-		} catch {
-			return undefined; // Circular reference, will be resolved later
-		}
-	}
-	if (typeof target === "object") {
-		// Polymorphic - return array of type names
-		return Object.keys(target);
-	}
-	return undefined;
+  if (typeof target === "string") {
+    return target;
+  }
+  if (typeof target === "function") {
+    try {
+      return target().name;
+    } catch {
+      return undefined; // Circular reference, will be resolved later
+    }
+  }
+  if (typeof target === "object") {
+    // Polymorphic - return array of type names
+    return Object.keys(target);
+  }
+  return undefined;
 }
 
 /**
  * Resolve junction name from JunctionTarget.
  */
 export function resolveJunctionName(
-	target: JunctionTarget | undefined,
+  target: JunctionTarget | undefined,
 ): string | undefined {
-	if (!target) return undefined;
-	if (typeof target === "string") {
-		return target;
-	}
-	if (typeof target === "function") {
-		try {
-			return target().name;
-		} catch {
-			return undefined;
-		}
-	}
-	return undefined;
+  if (!target) return undefined;
+  if (typeof target === "string") {
+    return target;
+  }
+  if (typeof target === "function") {
+    try {
+      return target().name;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 /**
  * Check if target is polymorphic (object with multiple targets).
  */
 function isPolymorphicTarget(target: RelationTarget): boolean {
-	return (
-		typeof target === "object" &&
-		target !== null &&
-		typeof target !== "function"
-	);
+  return (
+    typeof target === "object" &&
+    target !== null &&
+    typeof target !== "function"
+  );
 }
 
 // ============================================================================
@@ -268,35 +268,35 @@ function isPolymorphicTarget(target: RelationTarget): boolean {
  * Infer relation type from config.
  */
 export function inferRelationType(
-	config: RelationFieldConfig,
+  config: RelationFieldConfig,
 ): InferredRelationType {
-	const isPolymorphic = isPolymorphicTarget(config.to);
+  const isPolymorphic = isPolymorphicTarget(config.to);
 
-	// Polymorphic relations
-	if (isPolymorphic) {
-		if (config.hasMany && config.morphName) {
-			return "morphMany";
-		}
-		return "morphTo";
-	}
+  // Polymorphic relations
+  if (isPolymorphic) {
+    if (config.hasMany && config.morphName) {
+      return "morphMany";
+    }
+    return "morphTo";
+  }
 
-	// Multiple (inline array)
-	if (config.multiple) {
-		return "multiple";
-	}
+  // Multiple (inline array)
+  if (config.multiple) {
+    return "multiple";
+  }
 
-	// ManyToMany (has junction table)
-	if (config.hasMany && config.through) {
-		return "manyToMany";
-	}
+  // ManyToMany (has junction table)
+  if (config.hasMany && config.through) {
+    return "manyToMany";
+  }
 
-	// HasMany (FK on target)
-	if (config.hasMany) {
-		return "hasMany";
-	}
+  // HasMany (FK on target)
+  if (config.hasMany) {
+    return "hasMany";
+  }
 
-	// Default: BelongsTo
-	return "belongsTo";
+  // Default: BelongsTo
+  return "belongsTo";
 }
 
 // ============================================================================
@@ -307,132 +307,132 @@ export function inferRelationType(
  * Operators for belongsTo relation (FK field).
  */
 function getBelongsToOperators() {
-	return {
-		column: {
-			eq: operator<string, unknown>((col, value) => eq(col, value)),
-			ne: operator<string, unknown>((col, value) => ne(col, value)),
-			in: operator<string[], unknown>((col, values) => inArray(col, values)),
-			notIn: operator<string[], unknown>((col, values) =>
-				notInArray(col, values),
-			),
-			isNull: operator<boolean, unknown>((col, value) =>
-				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
-			),
-			isNotNull: operator<boolean, unknown>((col, value) =>
-				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
-			),
-		},
-		jsonb: {
-			eq: operator<string, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' = ${value}`;
-			}),
-			ne: operator<string, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' != ${value}`;
-			}),
-			in: operator<string[], unknown>((col, values, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[])`;
-			}),
-			notIn: operator<string[], unknown>((col, values, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`NOT (${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[]))`;
-			}),
-			isNull: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return value
-					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
-					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			}),
-			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return value
-					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
-					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			}),
-		},
-	};
+  return {
+    column: {
+      eq: operator<string, unknown>((col, value) => eq(col, value)),
+      ne: operator<string, unknown>((col, value) => ne(col, value)),
+      in: operator<string[], unknown>((col, values) => inArray(col, values)),
+      notIn: operator<string[], unknown>((col, values) =>
+        notInArray(col, values),
+      ),
+      isNull: operator<boolean, unknown>((col, value) =>
+        value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+      ),
+      isNotNull: operator<boolean, unknown>((col, value) =>
+        value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+      ),
+    },
+    jsonb: {
+      eq: operator<string, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>>'{${sql.raw(path)}}' = ${value}`;
+      }),
+      ne: operator<string, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>>'{${sql.raw(path)}}' != ${value}`;
+      }),
+      in: operator<string[], unknown>((col, values, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[])`;
+      }),
+      notIn: operator<string[], unknown>((col, values, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`NOT (${col}#>>'{${sql.raw(path)}}' = ANY(${values}::text[]))`;
+      }),
+      isNull: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return value
+          ? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+          : sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+      }),
+      isNotNull: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return value
+          ? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+          : sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+      }),
+    },
+  };
 }
 
 /**
  * Operators for multiple (jsonb array of FKs).
  */
 function getMultipleOperators() {
-	return {
-		column: {
-			contains: operator<string, unknown>(
-				(col, value) => sql`${col} @> ${JSON.stringify([value])}::jsonb`,
-			),
-			containsAll: operator<string[], unknown>(
-				(col, values) => sql`${col} @> ${JSON.stringify(values)}::jsonb`,
-			),
-			containsAny: operator<string[], unknown>(
-				(col, values) =>
-					sql`${col} ?| ARRAY[${sql.join(
-						values.map((v) => sql`${v}`),
-						sql`, `,
-					)}]::text[]`,
-			),
-			isEmpty: operator<boolean, unknown>(
-				(col) => sql`(${col} = '[]'::jsonb OR ${col} IS NULL)`,
-			),
-			isNotEmpty: operator<boolean, unknown>(
-				(col) => sql`(${col} != '[]'::jsonb AND ${col} IS NOT NULL)`,
-			),
-			count: operator<number, unknown>(
-				(col, value) =>
-					sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) = ${value}`,
-			),
-			isNull: operator<boolean, unknown>((col, value) =>
-				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
-			),
-			isNotNull: operator<boolean, unknown>((col, value) =>
-				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
-			),
-		},
-		jsonb: {
-			contains: operator<string, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify([value])}::jsonb`;
-			}),
-			containsAll: operator<string[], unknown>((col, values, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(values)}::jsonb`;
-			}),
-			containsAny: operator<string[], unknown>((col, values, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' ?| ARRAY[${sql.join(
-					values.map((v) => sql`${v}`),
-					sql`, `,
-				)}]::text[]`;
-			}),
-			isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>'{${sql.raw(path)}}' = '[]'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
-			}),
-			isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>'{${sql.raw(path)}}' != '[]'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
-			}),
-			count: operator<number, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`jsonb_array_length(COALESCE(${col}#>'{${sql.raw(path)}}', '[]'::jsonb)) = ${value}`;
-			}),
-			isNull: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return value
-					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
-					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			}),
-			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return value
-					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
-					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			}),
-		},
-	};
+  return {
+    column: {
+      contains: operator<string, unknown>(
+        (col, value) => sql`${col} @> ${JSON.stringify([value])}::jsonb`,
+      ),
+      containsAll: operator<string[], unknown>(
+        (col, values) => sql`${col} @> ${JSON.stringify(values)}::jsonb`,
+      ),
+      containsAny: operator<string[], unknown>(
+        (col, values) =>
+          sql`${col} ?| ARRAY[${sql.join(
+            values.map((v) => sql`${v}`),
+            sql`, `,
+          )}]::text[]`,
+      ),
+      isEmpty: operator<boolean, unknown>(
+        (col) => sql`(${col} = '[]'::jsonb OR ${col} IS NULL)`,
+      ),
+      isNotEmpty: operator<boolean, unknown>(
+        (col) => sql`(${col} != '[]'::jsonb AND ${col} IS NOT NULL)`,
+      ),
+      count: operator<number, unknown>(
+        (col, value) =>
+          sql`jsonb_array_length(COALESCE(${col}, '[]'::jsonb)) = ${value}`,
+      ),
+      isNull: operator<boolean, unknown>((col, value) =>
+        value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+      ),
+      isNotNull: operator<boolean, unknown>((col, value) =>
+        value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+      ),
+    },
+    jsonb: {
+      contains: operator<string, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify([value])}::jsonb`;
+      }),
+      containsAll: operator<string[], unknown>((col, values, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(values)}::jsonb`;
+      }),
+      containsAny: operator<string[], unknown>((col, values, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>'{${sql.raw(path)}}' ?| ARRAY[${sql.join(
+          values.map((v) => sql`${v}`),
+          sql`, `,
+        )}]::text[]`;
+      }),
+      isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>'{${sql.raw(path)}}' = '[]'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
+      }),
+      isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>'{${sql.raw(path)}}' != '[]'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
+      }),
+      count: operator<number, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`jsonb_array_length(COALESCE(${col}#>'{${sql.raw(path)}}', '[]'::jsonb)) = ${value}`;
+      }),
+      isNull: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return value
+          ? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+          : sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+      }),
+      isNotNull: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return value
+          ? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+          : sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+      }),
+    },
+  };
 }
 
 /**
@@ -440,21 +440,21 @@ function getMultipleOperators() {
  * These require subqueries built at query time.
  */
 function getToManyOperators() {
-	return {
-		column: {
-			// Placeholder operators - actual implementation in query builder
-			some: operator<unknown, unknown>(() => sql`TRUE`),
-			none: operator<unknown, unknown>(() => sql`TRUE`),
-			every: operator<unknown, unknown>(() => sql`TRUE`),
-			count: operator<number, unknown>(() => sql`0`),
-		},
-		jsonb: {
-			some: operator<unknown, unknown>(() => sql`TRUE`),
-			none: operator<unknown, unknown>(() => sql`TRUE`),
-			every: operator<unknown, unknown>(() => sql`TRUE`),
-			count: operator<number, unknown>(() => sql`0`),
-		},
-	};
+  return {
+    column: {
+      // Placeholder operators - actual implementation in query builder
+      some: operator<unknown, unknown>(() => sql`TRUE`),
+      none: operator<unknown, unknown>(() => sql`TRUE`),
+      every: operator<unknown, unknown>(() => sql`TRUE`),
+      count: operator<number, unknown>(() => sql`0`),
+    },
+    jsonb: {
+      some: operator<unknown, unknown>(() => sql`TRUE`),
+      none: operator<unknown, unknown>(() => sql`TRUE`),
+      every: operator<unknown, unknown>(() => sql`TRUE`),
+      count: operator<number, unknown>(() => sql`0`),
+    },
+  };
 }
 
 // ============================================================================
@@ -513,214 +513,214 @@ function getToManyOperators() {
  * ```
  */
 export const relationField = defineField<
-	RelationFieldConfig,
-	string | string[] | { type: string; id: string } | null
+  RelationFieldConfig,
+  string | string[] | { type: string; id: string } | null
 >()({
-	type: "relation" as const,
-	_value: undefined as unknown as
-		| string
-		| string[]
-		| { type: string; id: string }
-		| null,
-	toColumn(name: string, config: RelationFieldConfig) {
-		const relationType = inferRelationType(config);
+  type: "relation" as const,
+  _value: undefined as unknown as
+    | string
+    | string[]
+    | { type: string; id: string }
+    | null,
+  toColumn(name: string, config: RelationFieldConfig) {
+    const relationType = inferRelationType(config);
 
-		// HasMany, ManyToMany, MorphMany - no column on this table
-		if (
-			relationType === "hasMany" ||
-			relationType === "manyToMany" ||
-			relationType === "morphMany"
-		) {
-			return null as any;
-		}
+    // HasMany, ManyToMany, MorphMany - no column on this table
+    if (
+      relationType === "hasMany" ||
+      relationType === "manyToMany" ||
+      relationType === "morphMany"
+    ) {
+      return null as any;
+    }
 
-		// Multiple - jsonb array of FKs
-		if (relationType === "multiple") {
-			// Don't specify column name - Drizzle uses the key name
-			let column: any = jsonb();
+    // Multiple - jsonb array of FKs
+    if (relationType === "multiple") {
+      // Don't specify column name - Drizzle uses the key name
+      let column: any = jsonb();
 
-			if (config.required && config.nullable !== true) {
-				column = column.notNull();
-			}
-			if (config.default !== undefined) {
-				const defaultValue =
-					typeof config.default === "function"
-						? config.default()
-						: config.default;
-				column = column.default(JSON.stringify(defaultValue));
-			}
+      if (config.required && config.nullable !== true) {
+        column = column.notNull();
+      }
+      if (config.default !== undefined) {
+        const defaultValue =
+          typeof config.default === "function"
+            ? config.default()
+            : config.default;
+        column = column.default(JSON.stringify(defaultValue));
+      }
 
-			return column;
-		}
+      return column;
+    }
 
-		// MorphTo - creates two columns (type + id)
-		// Note: These use derived names (${name}Type, ${name}Id) because
-		// they need distinct columns stored under different keys
-		if (relationType === "morphTo") {
-			const types = config.to as Record<
-				string,
-				string | (() => { name: string })
-			>;
-			const typeNames = Object.keys(types);
+    // MorphTo - creates two columns (type + id)
+    // Note: These use derived names (${name}Type, ${name}Id) because
+    // they need distinct columns stored under different keys
+    if (relationType === "morphTo") {
+      const types = config.to as Record<
+        string,
+        string | (() => { name: string })
+      >;
+      const typeNames = Object.keys(types);
 
-			const maxTypeLength = Math.max(...typeNames.map((t) => t.length), 50);
+      const maxTypeLength = Math.max(...typeNames.map((t) => t.length), 50);
 
-			// MorphTo columns don't specify name - they get stored under derived keys
-			// (${name}Type, ${name}Id) by collection-builder
-			let typeColumn: any = varchar({ length: maxTypeLength });
-			let idColumn: any = varchar({ length: 36 });
+      // MorphTo columns don't specify name - they get stored under derived keys
+      // (${name}Type, ${name}Id) by collection-builder
+      let typeColumn: any = varchar({ length: maxTypeLength });
+      let idColumn: any = varchar({ length: 36 });
 
-			if (config.required && config.nullable !== true) {
-				typeColumn = typeColumn.notNull();
-				idColumn = idColumn.notNull();
-			}
+      if (config.required && config.nullable !== true) {
+        typeColumn = typeColumn.notNull();
+        idColumn = idColumn.notNull();
+      }
 
-			// Return both columns as array - collection-builder handles key naming
-			return [typeColumn, idColumn] as any;
-		}
+      // Return both columns as array - collection-builder handles key naming
+      return [typeColumn, idColumn] as any;
+    }
 
-		// BelongsTo - single FK column
-		// Don't specify column name - Drizzle uses the key name
-		// User's casing config handles: author → author or author → author_id
-		let column: any = varchar({ length: 36 }); // UUID length
+    // BelongsTo - single FK column
+    // Don't specify column name - Drizzle uses the key name
+    // User's casing config handles: author → author or author → author_id
+    let column: any = varchar({ length: 36 }); // UUID length
 
-		// Apply NOT NULL
-		if (config.required && config.nullable !== true) {
-			column = column.notNull();
-		}
+    // Apply NOT NULL
+    if (config.required && config.nullable !== true) {
+      column = column.notNull();
+    }
 
-		// Apply default
-		if (config.default !== undefined) {
-			const defaultValue =
-				typeof config.default === "function"
-					? config.default()
-					: config.default;
-			column = column.default(defaultValue as string);
-		}
-		// NOTE: unique constraint removed from field level
-		// Use .indexes() on collection builder instead
+    // Apply default
+    if (config.default !== undefined) {
+      const defaultValue =
+        typeof config.default === "function"
+          ? config.default()
+          : config.default;
+      column = column.default(defaultValue as string);
+    }
+    // NOTE: unique constraint removed from field level
+    // Use .indexes() on collection builder instead
 
-		// Apply FK constraint only if we have a callback with table access
-		if (typeof config.to === "function") {
-			const targetGetter = config.to as () => {
-				name: string;
-				table?: { id: AnyPgColumn };
-			};
-			try {
-				const target = targetGetter();
-				if (target.table?.id) {
-					column = column.references(() => target.table!.id, {
-						onDelete: config.onDelete,
-						onUpdate: config.onUpdate,
-					});
-				}
-			} catch {
-				// Callback failed (likely circular ref) - skip FK constraint
-				// The relation will still work, just without DB-level constraint
-			}
-		}
-		// For string targets, FK constraint is added at collection build time
-		// when we have access to all collections
+    // Apply FK constraint only if we have a callback with table access
+    if (typeof config.to === "function") {
+      const targetGetter = config.to as () => {
+        name: string;
+        table?: { id: AnyPgColumn };
+      };
+      try {
+        const target = targetGetter();
+        if (target.table?.id) {
+          column = column.references(() => target.table!.id, {
+            onDelete: config.onDelete,
+            onUpdate: config.onUpdate,
+          });
+        }
+      } catch {
+        // Callback failed (likely circular ref) - skip FK constraint
+        // The relation will still work, just without DB-level constraint
+      }
+    }
+    // For string targets, FK constraint is added at collection build time
+    // when we have access to all collections
 
-		return column;
-	},
+    return column;
+  },
 
-	toZodSchema(config: RelationFieldConfig) {
-		const relationType = inferRelationType(config);
+  toZodSchema(config: RelationFieldConfig) {
+    const relationType = inferRelationType(config);
 
-		// MorphTo - object with type + id
-		if (relationType === "morphTo") {
-			const types = config.to as Record<
-				string,
-				string | (() => { name: string })
-			>;
-			const typeNames = Object.keys(types) as [string, ...string[]];
+    // MorphTo - object with type + id
+    if (relationType === "morphTo") {
+      const types = config.to as Record<
+        string,
+        string | (() => { name: string })
+      >;
+      const typeNames = Object.keys(types) as [string, ...string[]];
 
-			const schema = z.object({
-				type: z.enum(typeNames),
-				id: z.string().uuid(),
-			});
+      const schema = z.object({
+        type: z.enum(typeNames),
+        id: z.string().uuid(),
+      });
 
-			if (!config.required && config.nullable !== false) {
-				return schema.nullish();
-			}
-			return schema;
-		}
+      if (!config.required && config.nullable !== false) {
+        return schema.nullish();
+      }
+      return schema;
+    }
 
-		// Multiple or to-many relations - array of IDs
-		if (
-			relationType === "multiple" ||
-			relationType === "hasMany" ||
-			relationType === "manyToMany" ||
-			relationType === "morphMany"
-		) {
-			const schema = z.array(z.string().uuid());
+    // Multiple or to-many relations - array of IDs
+    if (
+      relationType === "multiple" ||
+      relationType === "hasMany" ||
+      relationType === "manyToMany" ||
+      relationType === "morphMany"
+    ) {
+      const schema = z.array(z.string().uuid());
 
-			if (!config.required && config.nullable !== false) {
-				return schema.nullish();
-			}
-			return schema;
-		}
+      if (!config.required && config.nullable !== false) {
+        return schema.nullish();
+      }
+      return schema;
+    }
 
-		// BelongsTo - single ID
-		const schema = z.string().uuid();
+    // BelongsTo - single ID
+    const schema = z.string().uuid();
 
-		if (!config.required && config.nullable !== false) {
-			return schema.nullish();
-		}
-		return schema;
-	},
+    if (!config.required && config.nullable !== false) {
+      return schema.nullish();
+    }
+    return schema;
+  },
 
-	getOperators<TApp>(config: RelationFieldConfig) {
-		const relationType = inferRelationType(config);
+  getOperators<TApp>(config: RelationFieldConfig) {
+    const relationType = inferRelationType(config);
 
-		if (relationType === "multiple") {
-			return getMultipleOperators();
-		}
+    if (relationType === "multiple") {
+      return getMultipleOperators();
+    }
 
-		if (
-			relationType === "hasMany" ||
-			relationType === "manyToMany" ||
-			relationType === "morphMany"
-		) {
-			return getToManyOperators();
-		}
+    if (
+      relationType === "hasMany" ||
+      relationType === "manyToMany" ||
+      relationType === "morphMany"
+    ) {
+      return getToManyOperators();
+    }
 
-		return getBelongsToOperators();
-	},
+    return getBelongsToOperators();
+  },
 
-	getMetadata(config: RelationFieldConfig): RelationFieldMetadata {
-		const relationType = inferRelationType(config);
+  getMetadata(config: RelationFieldConfig): RelationFieldMetadata {
+    const relationType = inferRelationType(config);
 
-		// Resolve target collection name(s)
-		const targetCollection = resolveTargetName(config.to) ?? "__unresolved__";
-		const through = resolveJunctionName(config.through);
+    // Resolve target collection name(s)
+    const targetCollection = resolveTargetName(config.to) ?? "__unresolved__";
+    const through = resolveJunctionName(config.through);
 
-		return {
-			type: "relation",
-			label: config.label,
-			description: config.description,
-			required: config.required ?? false,
-			localized: config.localized ?? false,
-			readOnly: config.input === false,
-			writeOnly: config.output === false,
-			relationType,
-			targetCollection,
-			foreignKey: config.foreignKey,
-			through,
-			sourceField: config.sourceField,
-			targetField: config.targetField,
-			morphName: config.morphName,
-			morphType: config.morphType,
-			onDelete: config.onDelete,
-			onUpdate: config.onUpdate,
-			relationName: config.relationName,
-			// Store original configs for runtime resolution
-			_toConfig: config.to,
-			_throughConfig: config.through,
-			meta: config.meta,
-		};
-	},
+    return {
+      type: "relation",
+      label: config.label,
+      description: config.description,
+      required: config.required ?? false,
+      localized: config.localized ?? false,
+      readOnly: config.input === false,
+      writeOnly: config.output === false,
+      relationType,
+      targetCollection,
+      foreignKey: config.foreignKey,
+      through,
+      sourceField: config.sourceField,
+      targetField: config.targetField,
+      morphName: config.morphName,
+      morphType: config.morphType,
+      onDelete: config.onDelete,
+      onUpdate: config.onUpdate,
+      relationName: config.relationName,
+      // Store original configs for runtime resolution
+      _toConfig: config.to,
+      _throughConfig: config.through,
+      meta: config.meta,
+    };
+  },
 });
 
 // Register in default registry

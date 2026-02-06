@@ -29,20 +29,20 @@ import type * as React from "react";
  */
 // biome-ignore lint/suspicious/noEmptyInterface: Augmentation target for user's message types
 export interface MessageRegistry {
-	// Augment this interface to provide type-safe message keys:
-	// declare module "@questpie/admin" {
-	//   interface MessageRegistry {
-	//     messages: typeof adminMessagesEN;
-	//   }
-	// }
+  // Augment this interface to provide type-safe message keys:
+  // declare module "@questpie/admin" {
+  //   interface MessageRegistry {
+  //     messages: typeof adminMessagesEN;
+  //   }
+  // }
 }
 
 /**
  * Extract message keys from MessageRegistry if augmented, otherwise string.
  */
 export type MessageKey = MessageRegistry extends { messages: infer T }
-	? keyof T & string
-	: string;
+  ? keyof T & string
+  : string;
 
 // ============================================================================
 // Core Adapter Interface
@@ -55,61 +55,61 @@ export type MessageKey = MessageRegistry extends { messages: infer T }
  * Designed to be easily implemented by wrapping i18next, react-intl, etc.
  */
 export interface I18nAdapter {
-	/**
-	 * Current UI locale (e.g., "en", "de", "sk")
-	 */
-	readonly locale: string;
+  /**
+   * Current UI locale (e.g., "en", "de", "sk")
+   */
+  readonly locale: string;
 
-	/**
-	 * Available locales
-	 */
-	readonly locales: string[];
+  /**
+   * Available locales
+   */
+  readonly locales: string[];
 
-	/**
-	 * Translate a key
-	 *
-	 * @param key - Translation key (e.g., "common.save")
-	 * @param params - Interpolation values (e.g., { count: 5 })
-	 */
-	t(key: string, params?: Record<string, unknown>): string;
+  /**
+   * Translate a key
+   *
+   * @param key - Translation key (e.g., "common.save")
+   * @param params - Interpolation values (e.g., { count: 5 })
+   */
+  t(key: string, params?: Record<string, unknown>): string;
 
-	/**
-	 * Change the current locale
-	 */
-	setLocale(locale: string): void | Promise<void>;
+  /**
+   * Change the current locale
+   */
+  setLocale(locale: string): void | Promise<void>;
 
-	/**
-	 * Subscribe to locale changes
-	 *
-	 * @param callback - Called when locale changes
-	 * @returns Unsubscribe function
-	 */
-	onLocaleChange(callback: (locale: string) => void): () => void;
+  /**
+   * Subscribe to locale changes
+   *
+   * @param callback - Called when locale changes
+   * @returns Unsubscribe function
+   */
+  onLocaleChange(callback: (locale: string) => void): () => void;
 
-	/**
-	 * Format a date (uses Intl.DateTimeFormat)
-	 */
-	formatDate(date: Date | number, options?: Intl.DateTimeFormatOptions): string;
+  /**
+   * Format a date (uses Intl.DateTimeFormat)
+   */
+  formatDate(date: Date | number, options?: Intl.DateTimeFormatOptions): string;
 
-	/**
-	 * Format a number (uses Intl.NumberFormat)
-	 */
-	formatNumber(value: number, options?: Intl.NumberFormatOptions): string;
+  /**
+   * Format a number (uses Intl.NumberFormat)
+   */
+  formatNumber(value: number, options?: Intl.NumberFormatOptions): string;
 
-	/**
-	 * Format relative time (e.g., "2 days ago")
-	 */
-	formatRelative?(date: Date | number): string;
+  /**
+   * Format relative time (e.g., "2 days ago")
+   */
+  formatRelative?(date: Date | number): string;
 
-	/**
-	 * Get display name for a locale (e.g., "en" -> "English")
-	 */
-	getLocaleName(locale: string): string;
+  /**
+   * Get display name for a locale (e.g., "en" -> "English")
+   */
+  getLocaleName(locale: string): string;
 
-	/**
-	 * Check if current locale is RTL
-	 */
-	isRTL(): boolean;
+  /**
+   * Check if current locale is RTL
+   */
+  isRTL(): boolean;
 }
 
 // ============================================================================
@@ -125,7 +125,7 @@ export interface I18nAdapter {
  * ```
  */
 export type I18nLocaleMap = {
-	[locale: string]: string;
+  [locale: string]: string;
 };
 
 /**
@@ -153,19 +153,19 @@ export type I18nLocaleMap = {
  * ```
  */
 export type I18nText =
-	| string
-	| { key: string; fallback?: string; params?: Record<string, unknown> }
-	| I18nLocaleMap
-	| ((ctx: I18nContext) => string);
+  | string
+  | { key: string; fallback?: string; params?: Record<string, unknown> }
+  | I18nLocaleMap
+  | ((ctx: I18nContext) => string);
 
 /**
  * Context passed to I18nText functions
  */
 export interface I18nContext {
-	locale: string;
-	t: I18nAdapter["t"];
-	formatDate: I18nAdapter["formatDate"];
-	formatNumber: I18nAdapter["formatNumber"];
+  locale: string;
+  t: I18nAdapter["t"];
+  formatDate: I18nAdapter["formatDate"];
+  formatNumber: I18nAdapter["formatNumber"];
 }
 
 // ============================================================================
@@ -176,35 +176,35 @@ export interface I18nContext {
  * Props for the I18nProvider component
  */
 export interface I18nProviderProps {
-	/**
-	 * I18n adapter instance (source of truth for UI locale)
-	 */
-	adapter: I18nAdapter;
+  /**
+   * I18n adapter instance (source of truth for UI locale)
+   */
+  adapter: I18nAdapter;
 
-	/**
-	 * Children to render
-	 */
-	children: React.ReactNode;
+  /**
+   * Children to render
+   */
+  children: React.ReactNode;
 }
 
 /**
  * Return type of useTranslation hook
  */
 export interface UseTranslationResult {
-	/** Current locale */
-	locale: string;
-	/** Available locales */
-	locales: string[];
-	/** Translate function */
-	t: I18nAdapter["t"];
-	/** Change locale */
-	setLocale: I18nAdapter["setLocale"];
-	/** Format date */
-	formatDate: I18nAdapter["formatDate"];
-	/** Format number */
-	formatNumber: I18nAdapter["formatNumber"];
-	/** Get locale display name */
-	getLocaleName: I18nAdapter["getLocaleName"];
-	/** Is RTL locale */
-	isRTL: boolean;
+  /** Current locale */
+  locale: string;
+  /** Available locales */
+  locales: string[];
+  /** Translate function */
+  t: I18nAdapter["t"];
+  /** Change locale */
+  setLocale: I18nAdapter["setLocale"];
+  /** Format date */
+  formatDate: I18nAdapter["formatDate"];
+  /** Format number */
+  formatNumber: I18nAdapter["formatNumber"];
+  /** Get locale display name */
+  getLocaleName: I18nAdapter["getLocaleName"];
+  /** Is RTL locale */
+  isRTL: boolean;
 }

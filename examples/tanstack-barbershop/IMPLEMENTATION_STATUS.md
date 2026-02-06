@@ -7,22 +7,23 @@
 
 ## 📊 Quick Summary
 
-| Phase | Status | Completion | Priority |
-|-------|--------|------------|----------|
-| Phase 1: Foundation | ✅ Complete | 95% | - |
-| Phase 2: Layout | ✅ Complete | 100% | - |
-| Phase 3: Blocks | ✅ Complete | 100% (18/18) | - |
-| Phase 4: Backend Functions | ✅ Complete | 100% | - |
-| Phase 5: Seed Script | ✅ Complete | 100% | - |
-| Phase 6: Routes | ✅ Complete | 100% | - |
-| Phase 7: Booking Wizard | ✅ Complete | 75% | MEDIUM |
-| Phase 8: Polish | ⚠️ In Progress | 50% | MEDIUM |
+| Phase                      | Status         | Completion   | Priority |
+| -------------------------- | -------------- | ------------ | -------- |
+| Phase 1: Foundation        | ✅ Complete    | 95%          | -        |
+| Phase 2: Layout            | ✅ Complete    | 100%         | -        |
+| Phase 3: Blocks            | ✅ Complete    | 100% (18/18) | -        |
+| Phase 4: Backend Functions | ✅ Complete    | 100%         | -        |
+| Phase 5: Seed Script       | ✅ Complete    | 100%         | -        |
+| Phase 6: Routes            | ✅ Complete    | 100%         | -        |
+| Phase 7: Booking Wizard    | ✅ Complete    | 75%          | MEDIUM   |
+| Phase 8: Polish            | ⚠️ In Progress | 50%          | MEDIUM   |
 
 ---
 
 ## ✅ What's Working
 
 ### Backend (100% Core Features)
+
 - ✅ All 6 collections defined and migrated
 - ✅ Barbers with auto-slug, working hours, specialties
 - ✅ Services with pricing and duration
@@ -33,6 +34,7 @@
 - ✅ Database seeded with realistic demo data
 
 ### Frontend (100% Routes)
+
 - ✅ Homepage with CMS blocks
 - ✅ Services listing page
 - ✅ Barbers listing and detail pages
@@ -41,6 +43,7 @@
 - ✅ Dynamic CMS pages
 
 ### Admin (95% Configuration)
+
 - ✅ Admin instance configured
 - ✅ All collections with proper fields
 - ✅ Live preview for barbers
@@ -48,6 +51,7 @@
 - ✅ I18n (EN + SK)
 
 ### Layout & Design (100%)
+
 - ✅ Header with navigation, CTA, theme/locale toggles
 - ✅ Footer with contact info, business hours, social links
 - ✅ Responsive mobile-first design
@@ -63,6 +67,7 @@
 **All 18 blocks are now complete:**
 
 **Section Blocks:**
+
 - ✅ `hero` - Full-width hero banner
 - ✅ `services` - Auto-fetch all services
 - ✅ `services-featured` - Manual service selection
@@ -74,6 +79,7 @@
 - ✅ `booking-cta` - Specialized booking CTA
 
 **Content Blocks:**
+
 - ✅ `text` - Rich text content
 - ✅ `heading` - h1-h4 heading block
 - ✅ `image-text` - Side-by-side image/text
@@ -83,6 +89,7 @@
 - ✅ `contact-info` - Contact with map
 
 **Layout Blocks:**
+
 - ✅ `columns` - Multi-column layout
 - ✅ `spacer` - Vertical spacing
 - ✅ `divider` - Visual separator
@@ -96,22 +103,27 @@
 ### High Priority
 
 #### 2. Toast Notifications 🟡 MEDIUM
+
 **Impact:** Poor UX feedback on errors/success
 
 **Current State:**
+
 - ✅ Sonner package installed
 - ❌ Not used in booking flow
 - ❌ Not used for API errors
 
 **Estimated Time:** 1 hour
 **Files to Update:**
+
 - `src/routes/_app/booking.tsx`
 - Error boundary handlers
 
 #### 3. Error Boundaries 🟡 MEDIUM
+
 **Impact:** Unhandled errors crash pages
 
 **Missing:**
+
 - ❌ Route-level error.tsx files
 - ❌ Translated error messages
 - ❌ Graceful fallback UI
@@ -122,9 +134,11 @@
 ### Medium Priority
 
 #### 4. Accessibility 🟢 LOW
+
 **Impact:** Reduced usability for screen readers
 
 **Missing:**
+
 - ❌ ARIA labels on interactive elements
 - ❌ Semantic HTML improvements
 - ❌ Keyboard navigation testing
@@ -132,9 +146,11 @@
 **Estimated Time:** 2-3 hours
 
 #### 5. Loading States 🟢 LOW
+
 **Impact:** Poor perception of performance
 
 **Missing:**
+
 - ❌ Skeleton screens
 - ❌ Route-level loading.tsx files
 - ❌ Suspense boundaries
@@ -183,11 +199,13 @@ tanstack-barbershop/
 ## 🎯 Roadmap to 100%
 
 ### ✅ Sprint 1: Content Blocks (COMPLETED!)
+
 **Goal:** Implement all 9 missing blocks
 **Status:** ✅ DONE
 **Time Spent:** ~2 hours
 
 **Completed Tasks:**
+
 1. ✅ Created heading block
 2. ✅ Created services-featured block
 3. ✅ Created barbers-featured block
@@ -202,6 +220,7 @@ tanstack-barbershop/
 12. ✅ Updated pages.ts allowedBlocks configuration
 
 **Files Created:**
+
 - ✅ `src/questpie/admin/blocks/heading.tsx`
 - ✅ `src/questpie/admin/blocks/services-featured.tsx`
 - ✅ `src/questpie/admin/blocks/barbers-featured.tsx`
@@ -214,15 +233,18 @@ tanstack-barbershop/
 - ✅ `src/questpie/admin/blocks/contact-info.tsx`
 
 **Files Updated:**
+
 - ✅ `src/questpie/admin/blocks/index.tsx`
 - ✅ `src/questpie/admin/collections/pages.ts`
 
 ### Sprint 2: UX Polish (→ 95%)
+
 **Goal:** Better error handling and user feedback
 **Time:** 3 hours
 **Priority:** MEDIUM
 
 **Tasks:**
+
 1. Add toast notifications (1 hour)
    - Booking success/error toasts
    - Form validation toasts
@@ -234,28 +256,33 @@ tanstack-barbershop/
    - Add fallback UI
 
 **Files:**
+
 - `src/routes/_app/booking.error.tsx`
 - `src/routes/_app/services.error.tsx`
 - `src/routes/_app/barbers.error.tsx`
 - Update `src/routes/_app/booking.tsx` (add toasts)
 
 ### Sprint 3: Accessibility (→ 98%)
+
 **Goal:** WCAG 2.1 Level AA compliance
 **Time:** 2-3 hours
 **Priority:** LOW
 
 **Tasks:**
+
 1. Add ARIA labels
 2. Improve semantic HTML
 3. Test keyboard navigation
 4. Add focus indicators
 
 ### Sprint 4: Production Ready (→ 100%)
+
 **Goal:** Final polish and testing
 **Time:** 2-3 hours
 **Priority:** LOW
 
 **Tasks:**
+
 1. Add loading states
 2. SEO meta tags review
 3. Performance optimization
@@ -288,14 +315,14 @@ tanstack-barbershop/
 
 ### Completion by Category
 
-| Category | Complete | In Progress | Not Started | Total |
-|----------|----------|-------------|-------------|-------|
-| Collections | 6 | 0 | 0 | 6 (100%) ✅ |
-| Routes | 7 | 0 | 0 | 7 (100%) ✅ |
-| Blocks | 18 | 0 | 0 | 18 (100%) ✅ |
-| Functions | 4 | 0 | 0 | 4 (100%) ✅ |
-| Admin Config | 5 | 0 | 0 | 5 (100%) ✅ |
-| UI Components | 12 | 0 | 3 | 15 (80%) |
+| Category      | Complete | In Progress | Not Started | Total        |
+| ------------- | -------- | ----------- | ----------- | ------------ |
+| Collections   | 6        | 0           | 0           | 6 (100%) ✅  |
+| Routes        | 7        | 0           | 0           | 7 (100%) ✅  |
+| Blocks        | 18       | 0           | 0           | 18 (100%) ✅ |
+| Functions     | 4        | 0           | 0           | 4 (100%) ✅  |
+| Admin Config  | 5        | 0           | 0           | 5 (100%) ✅  |
+| UI Components | 12       | 0           | 3           | 15 (80%)     |
 
 ### Code Statistics
 
@@ -344,17 +371,20 @@ tanstack-barbershop/
 ## 🚀 Next Steps
 
 ### Immediate (Today)
+
 1. ✅ Complete this status report
 2. ✅ Implement all 18 blocks (Sprint 1) - DONE!
 3. ✅ Update IMPLEMENTATION_PLAN.md with progress
 4. 🔲 Choose next phase (Sprint 2, 3, or 4)
 
 ### This Week
+
 1. ✅ Implement all 9 missing blocks (Sprint 1) - COMPLETED!
 2. 🔲 Add toast notifications and error boundaries (Sprint 2)
 3. 🔲 Test all new blocks in admin
 
 ### This Month
+
 1. 🔲 Accessibility improvements (Sprint 3)
 2. 🔲 Production readiness (Sprint 4)
 3. 🔲 Deploy to staging environment
@@ -381,17 +411,20 @@ tanstack-barbershop/
 ## 📚 Resources
 
 ### Documentation
+
 - QuestPie Docs: `/apps/docs/`
 - IMPLEMENTATION_PLAN.md: Original detailed plan
 - ARCHITECTURE.md: System architecture overview
 
 ### Key Files
+
 - Backend Entry: `src/questpie/server/cms.ts`
 - Admin Entry: `src/questpie/admin/admin.ts`
 - Frontend Entry: `src/routes/_app.tsx`
 - Seed Script: `seed.ts`
 
 ### Commands
+
 ```bash
 # Development
 bun run dev                    # Start dev server

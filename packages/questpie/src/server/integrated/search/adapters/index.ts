@@ -6,15 +6,15 @@
 
 // PostgreSQL + pgvector (semantic search)
 export {
-	createPgVectorSearchAdapter,
-	PgVectorSearchAdapter,
-	type PgVectorSearchAdapterOptions,
+  createPgVectorSearchAdapter,
+  PgVectorSearchAdapter,
+  type PgVectorSearchAdapterOptions,
 } from "./pgvector.js";
 // PostgreSQL FTS + Trigram (default, minimal extensions)
 export {
-	createPostgresSearchAdapter,
-	PostgresSearchAdapter,
-	type PostgresSearchAdapterOptions,
+  createPostgresSearchAdapter,
+  PostgresSearchAdapter,
+  type PostgresSearchAdapterOptions,
 } from "./postgres.js";
 
 // ============================================================================

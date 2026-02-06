@@ -14,8 +14,8 @@ import type { Questpie } from "questpie";
 import { useMemo } from "react";
 import type { FieldValues, Resolver } from "react-hook-form";
 import type {
-	RegisteredCMS,
-	RegisteredCollectionNames,
+  RegisteredCMS,
+  RegisteredCollectionNames,
 } from "../builder/registry";
 import { useCollectionSchema } from "./use-collection-schema";
 import { useGlobalSchema } from "./use-global-schema";
@@ -28,7 +28,7 @@ import { useGlobalSchema } from "./use-global-schema";
  * Resolved collection names (string if not registered)
  */
 type ResolvedCollectionNames =
-	RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
+  RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
 
 /**
  * Validation mode for the hook
@@ -39,24 +39,24 @@ export type ValidationMode = "create" | "update";
  * Options for useServerValidation hook
  */
 export interface UseServerValidationOptions {
-	/** Validation mode - determines which JSON Schema to use */
-	mode?: ValidationMode;
-	/** Whether to enable validation (defaults to true) */
-	enabled?: boolean;
+  /** Validation mode - determines which JSON Schema to use */
+  mode?: ValidationMode;
+  /** Whether to enable validation (defaults to true) */
+  enabled?: boolean;
 }
 
 /**
  * Result of useServerValidation hook
  */
 export interface ServerValidationResult<TFieldValues extends FieldValues> {
-	/** Resolver for react-hook-form, undefined if schema not available */
-	resolver: Resolver<TFieldValues> | undefined;
-	/** Whether server validation schema is available */
-	hasServerSchema: boolean;
-	/** Whether the schema is currently loading */
-	isLoading: boolean;
-	/** Any error that occurred while fetching the schema */
-	error: Error | null;
+  /** Resolver for react-hook-form, undefined if schema not available */
+  resolver: Resolver<TFieldValues> | undefined;
+  /** Whether server validation schema is available */
+  hasServerSchema: boolean;
+  /** Whether the schema is currently loading */
+  isLoading: boolean;
+  /** Any error that occurred while fetching the schema */
+  error: Error | null;
 }
 
 // ============================================================================
@@ -67,13 +67,13 @@ export interface ServerValidationResult<TFieldValues extends FieldValues> {
  * Default AJV options for form validation
  */
 const DEFAULT_AJV_OPTIONS: AjvOptions = {
-	allErrors: true,
-	// Allow additional properties by default (forms may have extra fields)
-	strict: false,
-	// Coerce types for better form compatibility
-	coerceTypes: true,
-	// Use defaults from schema
-	useDefaults: true,
+  allErrors: true,
+  // Allow additional properties by default (forms may have extra fields)
+  strict: false,
+  // Coerce types for better form compatibility
+  coerceTypes: true,
+  // Use defaults from schema
+  useDefaults: true,
 };
 
 // ============================================================================
@@ -123,78 +123,78 @@ const DEFAULT_AJV_OPTIONS: AjvOptions = {
  * ```
  */
 export function useServerValidation<
-	K extends ResolvedCollectionNames,
-	TFieldValues extends FieldValues = FieldValues,
+  K extends ResolvedCollectionNames,
+  TFieldValues extends FieldValues = FieldValues,
 >(
-	collection: K,
-	options: UseServerValidationOptions = {},
+  collection: K,
+  options: UseServerValidationOptions = {},
 ): ServerValidationResult<TFieldValues> {
-	const { mode = "create", enabled = true } = options;
+  const { mode = "create", enabled = true } = options;
 
-	const {
-		data: schema,
-		isLoading,
-		error,
-	} = useCollectionSchema(collection, {
-		enabled,
-	});
+  const {
+    data: schema,
+    isLoading,
+    error,
+  } = useCollectionSchema(collection, {
+    enabled,
+  });
 
-	const result = useMemo((): ServerValidationResult<TFieldValues> => {
-		// Get the appropriate JSON Schema based on mode
-		const jsonSchema =
-			mode === "create"
-				? schema?.validation?.insert
-				: schema?.validation?.update;
+  const result = useMemo((): ServerValidationResult<TFieldValues> => {
+    // Get the appropriate JSON Schema based on mode
+    const jsonSchema =
+      mode === "create"
+        ? schema?.validation?.insert
+        : schema?.validation?.update;
 
-		if (!jsonSchema || typeof jsonSchema !== "object") {
-			return {
-				resolver: undefined,
-				hasServerSchema: false,
-				isLoading,
-				error: error ?? null,
-			};
-		}
+    if (!jsonSchema || typeof jsonSchema !== "object") {
+      return {
+        resolver: undefined,
+        hasServerSchema: false,
+        isLoading,
+        error: error ?? null,
+      };
+    }
 
-		try {
-			// Create resolver using AJV
-			const resolver = ajvResolver(
-				jsonSchema as JSONSchemaType<TFieldValues>,
-				{
-					// Use our pre-configured AJV instance options
-					allErrors: true,
-					strict: false,
-					coerceTypes: true,
-					useDefaults: true,
-					// AJV formats plugin options
-					formats: {},
-				},
-				{
-					mode: "async",
-				},
-			);
+    try {
+      // Create resolver using AJV
+      const resolver = ajvResolver(
+        jsonSchema as JSONSchemaType<TFieldValues>,
+        {
+          // Use our pre-configured AJV instance options
+          allErrors: true,
+          strict: false,
+          coerceTypes: true,
+          useDefaults: true,
+          // AJV formats plugin options
+          formats: {},
+        },
+        {
+          mode: "async",
+        },
+      );
 
-			return {
-				resolver,
-				hasServerSchema: true,
-				isLoading: false,
-				error: null,
-			};
-		} catch (e) {
-			// If schema compilation fails, return undefined resolver
-			console.warn(
-				`[useServerValidation] Failed to compile JSON Schema for ${collection}:`,
-				e,
-			);
-			return {
-				resolver: undefined,
-				hasServerSchema: false,
-				isLoading: false,
-				error: e instanceof Error ? e : new Error(String(e)),
-			};
-		}
-	}, [schema, mode, isLoading, error, collection]);
+      return {
+        resolver,
+        hasServerSchema: true,
+        isLoading: false,
+        error: null,
+      };
+    } catch (e) {
+      // If schema compilation fails, return undefined resolver
+      console.warn(
+        `[useServerValidation] Failed to compile JSON Schema for ${collection}:`,
+        e,
+      );
+      return {
+        resolver: undefined,
+        hasServerSchema: false,
+        isLoading: false,
+        error: e instanceof Error ? e : new Error(String(e)),
+      };
+    }
+  }, [schema, mode, isLoading, error, collection]);
 
-	return result;
+  return result;
 }
 
 /**
@@ -221,19 +221,19 @@ export function useServerValidation<
  * ```
  */
 export function usePreferServerValidation<
-	K extends ResolvedCollectionNames,
-	TFieldValues extends FieldValues = FieldValues,
+  K extends ResolvedCollectionNames,
+  TFieldValues extends FieldValues = FieldValues,
 >(
-	collection: K,
-	options: UseServerValidationOptions = {},
-	fallbackResolver?: Resolver<TFieldValues>,
+  collection: K,
+  options: UseServerValidationOptions = {},
+  fallbackResolver?: Resolver<TFieldValues>,
 ): Resolver<TFieldValues> | undefined {
-	const { resolver: serverResolver, hasServerSchema } = useServerValidation<
-		K,
-		TFieldValues
-	>(collection, options);
+  const { resolver: serverResolver, hasServerSchema } = useServerValidation<
+    K,
+    TFieldValues
+  >(collection, options);
 
-	return hasServerSchema ? serverResolver : fallbackResolver;
+  return hasServerSchema ? serverResolver : fallbackResolver;
 }
 
 // ============================================================================
@@ -248,69 +248,69 @@ export function usePreferServerValidation<
  * @returns Server validation result with resolver
  */
 export function useGlobalServerValidation<
-	TFieldValues extends FieldValues = FieldValues,
+  TFieldValues extends FieldValues = FieldValues,
 >(
-	globalName: string,
-	options: Omit<UseServerValidationOptions, "mode"> = {},
+  globalName: string,
+  options: Omit<UseServerValidationOptions, "mode"> = {},
 ): ServerValidationResult<TFieldValues> {
-	const { enabled = true } = options;
+  const { enabled = true } = options;
 
-	// Import dynamically to avoid circular dependencies
-	const { useGlobalSchema } = require("./use-global-schema");
-	const {
-		data: schema,
-		isLoading,
-		error,
-	} = useGlobalSchema(globalName, {
-		enabled,
-	});
+  // Import dynamically to avoid circular dependencies
+  const { useGlobalSchema } = require("./use-global-schema");
+  const {
+    data: schema,
+    isLoading,
+    error,
+  } = useGlobalSchema(globalName, {
+    enabled,
+  });
 
-	const result = useMemo((): ServerValidationResult<TFieldValues> => {
-		// Globals only have update validation
-		const jsonSchema = schema?.validation?.update;
+  const result = useMemo((): ServerValidationResult<TFieldValues> => {
+    // Globals only have update validation
+    const jsonSchema = schema?.validation?.update;
 
-		if (!jsonSchema || typeof jsonSchema !== "object") {
-			return {
-				resolver: undefined,
-				hasServerSchema: false,
-				isLoading,
-				error: error ?? null,
-			};
-		}
+    if (!jsonSchema || typeof jsonSchema !== "object") {
+      return {
+        resolver: undefined,
+        hasServerSchema: false,
+        isLoading,
+        error: error ?? null,
+      };
+    }
 
-		try {
-			const resolver = ajvResolver(
-				jsonSchema as JSONSchemaType<TFieldValues>,
-				{
-					allErrors: true,
-					strict: false,
-					coerceTypes: true,
-					useDefaults: true,
-				},
-				{
-					mode: "async",
-				},
-			);
+    try {
+      const resolver = ajvResolver(
+        jsonSchema as JSONSchemaType<TFieldValues>,
+        {
+          allErrors: true,
+          strict: false,
+          coerceTypes: true,
+          useDefaults: true,
+        },
+        {
+          mode: "async",
+        },
+      );
 
-			return {
-				resolver,
-				hasServerSchema: true,
-				isLoading: false,
-				error: null,
-			};
-		} catch (e) {
-			console.warn(
-				`[useGlobalServerValidation] Failed to compile JSON Schema for ${globalName}:`,
-				e,
-			);
-			return {
-				resolver: undefined,
-				hasServerSchema: false,
-				isLoading: false,
-				error: e instanceof Error ? e : new Error(String(e)),
-			};
-		}
-	}, [schema, isLoading, error, globalName]);
+      return {
+        resolver,
+        hasServerSchema: true,
+        isLoading: false,
+        error: null,
+      };
+    } catch (e) {
+      console.warn(
+        `[useGlobalServerValidation] Failed to compile JSON Schema for ${globalName}:`,
+        e,
+      );
+      return {
+        resolver: undefined,
+        hasServerSchema: false,
+        isLoading: false,
+        error: e instanceof Error ? e : new Error(String(e)),
+      };
+    }
+  }, [schema, isLoading, error, globalName]);
 
-	return result;
+  return result;
 }

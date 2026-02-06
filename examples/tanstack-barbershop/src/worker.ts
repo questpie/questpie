@@ -8,20 +8,20 @@
 import { cms } from "@/questpie/server/cms";
 
 async function startWorker() {
-	console.log("Starting job worker...");
+  console.log("Starting job worker...");
 
-	try {
-		await cms.queue.listen({
-			teamSize: 5, // Concurrent jobs
-			batchSize: 3, // Jobs to fetch at once
-		});
+  try {
+    await cms.queue.listen({
+      teamSize: 5, // Concurrent jobs
+      batchSize: 3, // Jobs to fetch at once
+    });
 
-		console.log("Job worker started successfully");
-		console.log("Listening for jobs...");
-	} catch (error) {
-		console.error("Failed to start job worker:", error);
-		process.exit(1);
-	}
+    console.log("Job worker started successfully");
+    console.log("Listening for jobs...");
+  } catch (error) {
+    console.error("Failed to start job worker:", error);
+    process.exit(1);
+  }
 }
 
 startWorker();

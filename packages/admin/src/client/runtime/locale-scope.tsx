@@ -19,9 +19,9 @@
 
 import * as React from "react";
 import {
-	selectContentLocale,
-	selectSetContentLocale,
-	useAdminStore,
+  selectContentLocale,
+  selectSetContentLocale,
+  useAdminStore,
 } from "./index";
 
 // ============================================================================
@@ -29,12 +29,12 @@ import {
 // ============================================================================
 
 interface LocaleScopeContextValue {
-	/** Current locale in this scope */
-	locale: string;
-	/** Set locale for this scope only */
-	setLocale: (locale: string) => void;
-	/** Whether we're in a scoped context (nested form) */
-	isScoped: boolean;
+  /** Current locale in this scope */
+  locale: string;
+  /** Set locale for this scope only */
+  setLocale: (locale: string) => void;
+  /** Whether we're in a scoped context (nested form) */
+  isScoped: boolean;
 }
 
 // ============================================================================
@@ -42,7 +42,7 @@ interface LocaleScopeContextValue {
 // ============================================================================
 
 const LocaleScopeContext = React.createContext<LocaleScopeContextValue | null>(
-	null,
+  null,
 );
 
 // ============================================================================
@@ -50,9 +50,9 @@ const LocaleScopeContext = React.createContext<LocaleScopeContextValue | null>(
 // ============================================================================
 
 interface LocaleScopeProviderProps {
-	children: React.ReactNode;
-	/** Initial locale (defaults to current global content locale) */
-	initialLocale?: string;
+  children: React.ReactNode;
+  /** Initial locale (defaults to current global content locale) */
+  initialLocale?: string;
 }
 
 /**
@@ -60,41 +60,41 @@ interface LocaleScopeProviderProps {
  * Locale changes inside this provider don't affect the global state.
  */
 export function LocaleScopeProvider({
-	children,
-	initialLocale,
+  children,
+  initialLocale,
 }: LocaleScopeProviderProps) {
-	const globalLocale = useAdminStore(selectContentLocale);
-	const [scopedLocale, setScopedLocale] = React.useState(
-		initialLocale ?? globalLocale,
-	);
+  const globalLocale = useAdminStore(selectContentLocale);
+  const [scopedLocale, setScopedLocale] = React.useState(
+    initialLocale ?? globalLocale,
+  );
 
-	// Sync with global locale on mount or when global changes (only if not yet modified)
-	const hasModifiedRef = React.useRef(false);
-	React.useEffect(() => {
-		if (!hasModifiedRef.current) {
-			setScopedLocale(globalLocale);
-		}
-	}, [globalLocale]);
+  // Sync with global locale on mount or when global changes (only if not yet modified)
+  const hasModifiedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!hasModifiedRef.current) {
+      setScopedLocale(globalLocale);
+    }
+  }, [globalLocale]);
 
-	const setLocale = React.useCallback((locale: string) => {
-		hasModifiedRef.current = true;
-		setScopedLocale(locale);
-	}, []);
+  const setLocale = React.useCallback((locale: string) => {
+    hasModifiedRef.current = true;
+    setScopedLocale(locale);
+  }, []);
 
-	const value = React.useMemo<LocaleScopeContextValue>(
-		() => ({
-			locale: scopedLocale,
-			setLocale,
-			isScoped: true,
-		}),
-		[scopedLocale, setLocale],
-	);
+  const value = React.useMemo<LocaleScopeContextValue>(
+    () => ({
+      locale: scopedLocale,
+      setLocale,
+      isScoped: true,
+    }),
+    [scopedLocale, setLocale],
+  );
 
-	return (
-		<LocaleScopeContext.Provider value={value}>
-			{children}
-		</LocaleScopeContext.Provider>
-	);
+  return (
+    <LocaleScopeContext.Provider value={value}>
+      {children}
+    </LocaleScopeContext.Provider>
+  );
 }
 
 // ============================================================================
@@ -106,27 +106,27 @@ export function LocaleScopeProvider({
  * Use this in components that need locale-aware behavior (FieldWrapper, FormView).
  */
 export function useScopedLocale(): LocaleScopeContextValue {
-	const scopedContext = React.useContext(LocaleScopeContext);
-	const globalLocale = useAdminStore(selectContentLocale);
-	const globalSetLocale = useAdminStore(selectSetContentLocale);
+  const scopedContext = React.useContext(LocaleScopeContext);
+  const globalLocale = useAdminStore(selectContentLocale);
+  const globalSetLocale = useAdminStore(selectSetContentLocale);
 
-	// If we're in a scoped context, use that
-	if (scopedContext) {
-		return scopedContext;
-	}
+  // If we're in a scoped context, use that
+  if (scopedContext) {
+    return scopedContext;
+  }
 
-	// Otherwise, use global locale
-	return {
-		locale: globalLocale,
-		setLocale: globalSetLocale,
-		isScoped: false,
-	};
+  // Otherwise, use global locale
+  return {
+    locale: globalLocale,
+    setLocale: globalSetLocale,
+    isScoped: false,
+  };
 }
 
 /**
  * Returns true if we're currently in a scoped locale context (nested form).
  */
 export function useIsLocaleScopeActive(): boolean {
-	const scopedContext = React.useContext(LocaleScopeContext);
-	return scopedContext !== null;
+  const scopedContext = React.useContext(LocaleScopeContext);
+  return scopedContext !== null;
 }

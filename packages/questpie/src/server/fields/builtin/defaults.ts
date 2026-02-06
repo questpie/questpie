@@ -41,36 +41,36 @@ import { urlField } from "./url.js";
  * ```
  */
 export const builtinFields = {
-	// Text-based
-	text: textField,
-	textarea: textareaField,
-	email: emailField,
-	url: urlField,
+  // Text-based
+  text: textField,
+  textarea: textareaField,
+  email: emailField,
+  url: urlField,
 
-	// Numeric
-	number: numberField,
+  // Numeric
+  number: numberField,
 
-	// Boolean
-	boolean: booleanField,
+  // Boolean
+  boolean: booleanField,
 
-	// Date/Time
-	date: dateField,
-	datetime: datetimeField,
-	time: timeField,
+  // Date/Time
+  date: dateField,
+  datetime: datetimeField,
+  time: timeField,
 
-	// Selection
-	select: selectField,
+  // Selection
+  select: selectField,
 
-	// Upload
-	upload: uploadField,
+  // Upload
+  upload: uploadField,
 
-	// Relations
-	relation: relationField,
+  // Relations
+  relation: relationField,
 
-	// Complex types
-	object: objectField,
-	array: arrayField,
-	json: jsonField,
+  // Complex types
+  object: objectField,
+  array: arrayField,
+  json: jsonField,
 } as const;
 
 /**

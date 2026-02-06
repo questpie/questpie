@@ -90,7 +90,10 @@ export function useSetAdminPreference<T = unknown>(key: string) {
 
       if (existing) {
         // Update existing
-        return collections.admin_preferences.update({ id: existing.id, data: { value } });
+        return collections.admin_preferences.update({
+          id: existing.id,
+          data: { value },
+        });
       }
       // Create new
       return collections.admin_preferences.create({

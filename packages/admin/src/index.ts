@@ -9,12 +9,12 @@
 // ============================================================================
 
 export type {
-	AdminTypeRegistry,
-	IsRegistered,
-	RegisteredAdmin,
-	RegisteredCMS,
-	RegisteredCollectionNames,
-	RegisteredGlobalNames,
+  AdminTypeRegistry,
+  IsRegistered,
+  RegisteredAdmin,
+  RegisteredCMS,
+  RegisteredCollectionNames,
+  RegisteredGlobalNames,
 } from "./client/builder/registry.js";
 
 // ============================================================================
@@ -22,13 +22,13 @@ export type {
 // ============================================================================
 
 export type {
-	AdminBuilderState,
-	AppAdmin,
-	CollectionFieldKeys,
-	CollectionItem,
-	CollectionNames,
-	GlobalNames,
-	InferAdminCMS,
+  AdminBuilderState,
+  AppAdmin,
+  CollectionFieldKeys,
+  CollectionItem,
+  CollectionNames,
+  GlobalNames,
+  InferAdminCMS,
 } from "./client/builder/index.js";
 export { Admin, AdminBuilder, qa } from "./client/builder/index.js";
 
@@ -37,23 +37,23 @@ export { Admin, AdminBuilder, qa } from "./client/builder/index.js";
 // ============================================================================
 
 export type {
-	AdminProviderProps,
-	AdminState,
-	AdminStore,
+  AdminProviderProps,
+  AdminState,
+  AdminStore,
 } from "./client/runtime/index.js";
 export {
-	AdminProvider,
-	// Selectors
-	selectAdmin,
-	selectAuthClient,
-	selectBasePath,
-	selectBrandName,
-	selectClient,
-	selectContentLocale,
-	selectNavigate,
-	selectNavigation,
-	selectSetContentLocale,
-	useAdminStore,
-	// Utilities
-	useShallow,
+  AdminProvider,
+  // Selectors
+  selectAdmin,
+  selectAuthClient,
+  selectBasePath,
+  selectBrandName,
+  selectClient,
+  selectContentLocale,
+  selectNavigate,
+  selectNavigation,
+  selectSetContentLocale,
+  useAdminStore,
+  // Utilities
+  useShallow,
 } from "./client/runtime/index.js";

@@ -9,7 +9,7 @@ const comparisons = [
       ["Postgres-only (simple)", "MongoDB + Postgres"],
       ["Backend & Admin separate", "Tightly coupled"],
       ["Builder pattern config", "JSON/TS config"],
-    ]
+    ],
   },
   {
     target: "Strapi",
@@ -18,7 +18,7 @@ const comparisons = [
       ["Your schema, your migrations", "Auto-generated schema"],
       ["No lock-in", "Plugin marketplace lock-in"],
       ["Native libraries", "Custom implementations"],
-    ]
+    ],
   },
   {
     target: "Building from Scratch",
@@ -27,8 +27,8 @@ const comparisons = [
       ["Auth, jobs, email wired", "Wire everything yourself"],
       ["Type-safe CRUD", "Write all CRUD"],
       ["Native Drizzle", "Use Drizzle directly"],
-    ]
-  }
+    ],
+  },
 ];
 
 export function Differentiators() {
@@ -39,12 +39,10 @@ export function Differentiators() {
           <h2 className="font-mono text-sm tracking-[0.2em] uppercase text-primary">
             Differentiators
           </h2>
-          <h3 className="text-3xl md:text-4xl font-bold">
-            How We Compare
-          </h3>
+          <h3 className="text-3xl md:text-4xl font-bold">How We Compare</h3>
           <p className="text-muted-foreground">
-            QUESTPIE is built for developers who want full control over their code
-            while having all the boilerplate handled.
+            QUESTPIE is built for developers who want full control over their
+            code while having all the boilerplate handled.
           </p>
         </div>
 
@@ -59,13 +57,20 @@ export function Differentiators() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left p-4 font-bold text-primary">QUESTPIE</th>
-                      <th className="text-left p-4 font-bold text-muted-foreground">{comp.target}</th>
+                      <th className="text-left p-4 font-bold text-primary">
+                        QUESTPIE
+                      </th>
+                      <th className="text-left p-4 font-bold text-muted-foreground">
+                        {comp.target}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {comp.rows.map((row, i) => (
-                      <tr key={i} className="group hover:bg-white/5 transition-colors">
+                      <tr
+                        key={i}
+                        className="group hover:bg-white/5 transition-colors"
+                      >
                         <td className="p-4 align-top">
                           <div className="flex gap-2">
                             <Check className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />

@@ -118,9 +118,12 @@ export type AppServer = typeof server;
 import { questpieNextRouteHandlers } from "@questpie/next";
 import { app } from "@/app";
 
-export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(app, {
-  basePath: "/api/cms",
-});
+export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(
+  app,
+  {
+    basePath: "/api/cms",
+  },
+);
 
 export const dynamic = "force-dynamic";
 ```
@@ -324,12 +327,14 @@ export const postsAdmin = qab
     }),
   }))
   .list(({ v, f }) => v.table({ columns: [f.title, f.status] }))
-  .form(({ v, f }) => v.form({
-    sections: [
-      { title: "Content", fields: [f.title, f.content] },
-      { title: "Publishing", fields: [f.status] },
-    ],
-  }));
+  .form(({ v, f }) =>
+    v.form({
+      sections: [
+        { title: "Content", fields: [f.title, f.content] },
+        { title: "Publishing", fields: [f.status] },
+      ],
+    }),
+  );
 ```
 
 ```tsx
@@ -366,11 +371,11 @@ bun questpie migrate:fresh     # Reset + run all migrations
 
 ## Framework Adapters
 
-| Adapter  | Package            | Client                                            |
-| -------- | ------------------ | ------------------------------------------------- |
-| Hono     | `@questpie/hono`   | `createClientFromHono` (CMS CRUD + Hono RPC)      |
-| Elysia   | `@questpie/elysia` | `createClientFromEden` (CMS CRUD + Eden Treaty)   |
-| Next.js  | `@questpie/next`   | `createClient` from `questpie/client`             |
+| Adapter | Package            | Client                                          |
+| ------- | ------------------ | ----------------------------------------------- |
+| Hono    | `@questpie/hono`   | `createClientFromHono` (CMS CRUD + Hono RPC)    |
+| Elysia  | `@questpie/elysia` | `createClientFromEden` (CMS CRUD + Eden Treaty) |
+| Next.js | `@questpie/next`   | `createClient` from `questpie/client`           |
 
 ## Examples
 

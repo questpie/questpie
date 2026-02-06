@@ -21,7 +21,10 @@ program
   .option("-n, --name <name>", "Custom migration name")
   .option("--dry-run", "Show what would be generated without creating files")
   .option("--verbose", "Show verbose output")
-  .option("--non-interactive", "Skip interactive prompts (auto-select defaults)")
+  .option(
+    "--non-interactive",
+    "Skip interactive prompts (auto-select defaults)",
+  )
   .action(async (options) => {
     try {
       await generateMigrationCommand(options.config, {

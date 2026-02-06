@@ -44,9 +44,11 @@ function AccordionTrigger({
         {...props}
       >
         {children}
-        <Icon icon="ph:caret-down"
+        <Icon
+          icon="ph:caret-down"
           data-slot="accordion-trigger-icon"
-          className="pointer-events-none shrink-0 transition-transform duration-200 group-aria-expanded/accordion-trigger:rotate-180" />
+          className="pointer-events-none shrink-0 transition-transform duration-200 group-aria-expanded/accordion-trigger:rotate-180"
+        />
       </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
   );

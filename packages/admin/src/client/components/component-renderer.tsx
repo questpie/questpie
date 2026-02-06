@@ -27,14 +27,14 @@ import { selectAdmin, useAdminStore } from "../runtime";
  * Props for IconifyIcon component
  */
 export interface IconifyIconProps {
-	/** Iconify icon name (e.g., "ph:users", "mdi:home") */
-	name: string;
-	/** Icon size */
-	size?: number | string;
-	/** Additional class name */
-	className?: string;
-	/** Icon color */
-	color?: string;
+  /** Iconify icon name (e.g., "ph:users", "mdi:home") */
+  name: string;
+  /** Icon size */
+  size?: number | string;
+  /** Additional class name */
+  className?: string;
+  /** Icon color */
+  color?: string;
 }
 
 /**
@@ -48,20 +48,20 @@ export interface IconifyIconProps {
  * ```
  */
 export function IconifyIcon({
-	name,
-	size,
-	className,
-	color,
+  name,
+  size,
+  className,
+  color,
 }: IconifyIconProps): React.ReactElement {
-	return (
-		<Icon
-			icon={name}
-			width={size}
-			height={size}
-			className={className}
-			color={color}
-		/>
-	);
+  return (
+    <Icon
+      icon={name}
+      width={size}
+      height={size}
+      className={className}
+      color={color}
+    />
+  );
 }
 
 // ============================================================================
@@ -72,44 +72,44 @@ export function IconifyIcon({
  * Props for Badge component
  */
 export interface BadgeProps {
-	/** Badge text */
-	text: string;
-	/** Badge color variant */
-	color?:
-		| "default"
-		| "primary"
-		| "secondary"
-		| "destructive"
-		| "success"
-		| "warning";
-	/** Additional class name */
-	className?: string;
+  /** Badge text */
+  text: string;
+  /** Badge color variant */
+  color?:
+    | "default"
+    | "primary"
+    | "secondary"
+    | "destructive"
+    | "success"
+    | "warning";
+  /** Additional class name */
+  className?: string;
 }
 
 /**
  * Badge component for status indicators
  */
 export function Badge({
-	text,
-	color = "default",
-	className,
+  text,
+  color = "default",
+  className,
 }: BadgeProps): React.ReactElement {
-	const colorClasses: Record<string, string> = {
-		default: "bg-gray-100 text-gray-800",
-		primary: "bg-primary/10 text-primary",
-		secondary: "bg-secondary/10 text-secondary",
-		destructive: "bg-destructive/10 text-destructive",
-		success: "bg-green-100 text-green-800",
-		warning: "bg-yellow-100 text-yellow-800",
-	};
+  const colorClasses: Record<string, string> = {
+    default: "bg-gray-100 text-gray-800",
+    primary: "bg-primary/10 text-primary",
+    secondary: "bg-secondary/10 text-secondary",
+    destructive: "bg-destructive/10 text-destructive",
+    success: "bg-green-100 text-green-800",
+    warning: "bg-yellow-100 text-yellow-800",
+  };
 
-	return (
-		<span
-			className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${colorClasses[color] ?? colorClasses.default} ${className ?? ""}`}
-		>
-			{text}
-		</span>
-	);
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${colorClasses[color] ?? colorClasses.default} ${className ?? ""}`}
+    >
+      {text}
+    </span>
+  );
 }
 
 // ============================================================================
@@ -120,8 +120,8 @@ export function Badge({
  * Component renderer registry type
  */
 export type ComponentRendererRegistry = Record<
-	string,
-	React.ComponentType<any>
+  string,
+  React.ComponentType<any>
 >;
 
 // ============================================================================
@@ -132,14 +132,14 @@ export type ComponentRendererRegistry = Record<
  * Props for ComponentRenderer
  */
 export interface ComponentRendererProps {
-	/** Server-defined component reference */
-	reference: ComponentReference | null | undefined;
-	/** Component registry override (defaults to admin context registry) */
-	registry?: ComponentRendererRegistry;
-	/** Fallback to render if component type not found */
-	fallback?: React.ReactNode;
-	/** Additional props to pass to the component */
-	additionalProps?: Record<string, unknown>;
+  /** Server-defined component reference */
+  reference: ComponentReference | null | undefined;
+  /** Component registry override (defaults to admin context registry) */
+  registry?: ComponentRendererRegistry;
+  /** Fallback to render if component type not found */
+  fallback?: React.ReactNode;
+  /** Additional props to pass to the component */
+  additionalProps?: Record<string, unknown>;
 }
 
 /**
@@ -167,32 +167,32 @@ export interface ComponentRendererProps {
  * ```
  */
 export function ComponentRenderer({
-	reference,
-	registry,
-	fallback = null,
-	additionalProps,
+  reference,
+  registry,
+  fallback = null,
+  additionalProps,
 }: ComponentRendererProps): React.ReactNode {
-	if (!reference) {
-		return fallback;
-	}
+  if (!reference) {
+    return fallback;
+  }
 
-	const admin = useAdminStore(selectAdmin);
-	const contextRegistry =
-		(admin?.getComponents?.() as ComponentRendererRegistry | undefined) ?? {};
-	const mergedRegistry = registry ?? contextRegistry;
-	const Component = mergedRegistry[reference.type];
+  const admin = useAdminStore(selectAdmin);
+  const contextRegistry =
+    (admin?.getComponents?.() as ComponentRendererRegistry | undefined) ?? {};
+  const mergedRegistry = registry ?? contextRegistry;
+  const Component = mergedRegistry[reference.type];
 
-	if (!Component) {
-		if (process.env.NODE_ENV === "development") {
-			console.warn(
-				`[ComponentRenderer] Unknown component type: "${reference.type}". ` +
-					`Available types: ${Object.keys(mergedRegistry).join(", ")}`,
-			);
-		}
-		return fallback;
-	}
+  if (!Component) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        `[ComponentRenderer] Unknown component type: "${reference.type}". ` +
+          `Available types: ${Object.keys(mergedRegistry).join(", ")}`,
+      );
+    }
+    return fallback;
+  }
 
-	return <Component {...reference.props} {...additionalProps} />;
+  return <Component {...reference.props} {...additionalProps} />;
 }
 
 // ============================================================================
@@ -203,16 +203,16 @@ export function ComponentRenderer({
  * Check if a value is a component reference
  */
 export function isComponentReference(
-	value: unknown,
+  value: unknown,
 ): value is ComponentReference {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		"type" in value &&
-		"props" in value &&
-		typeof (value as any).type === "string" &&
-		typeof (value as any).props === "object"
-	);
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    "props" in value &&
+    typeof (value as any).type === "string" &&
+    typeof (value as any).props === "object"
+  );
 }
 
 /**
@@ -224,53 +224,53 @@ export function isComponentReference(
  * @returns React element or null
  */
 export function resolveIconElement(
-	icon:
-		| ComponentReference
-		| React.ComponentType<any>
-		| string
-		| undefined
-		| null,
-	props?: Record<string, unknown>,
-	registry?: ComponentRendererRegistry,
+  icon:
+    | ComponentReference
+    | React.ComponentType<any>
+    | string
+    | undefined
+    | null,
+  props?: Record<string, unknown>,
+  registry?: ComponentRendererRegistry,
 ): React.ReactNode {
-	if (!icon) {
-		return null;
-	}
+  if (!icon) {
+    return null;
+  }
 
-	// Handle ComponentReference
-	if (isComponentReference(icon)) {
-		return (
-			<ComponentRenderer
-				reference={icon}
-				additionalProps={props}
-				registry={registry}
-			/>
-		);
-	}
+  // Handle ComponentReference
+  if (isComponentReference(icon)) {
+    return (
+      <ComponentRenderer
+        reference={icon}
+        additionalProps={props}
+        registry={registry}
+      />
+    );
+  }
 
-	// Handle legacy string icon names by treating them as icon component references
-	if (typeof icon === "string") {
-		return (
-			<ComponentRenderer
-				reference={{ type: "icon", props: { name: icon } }}
-				additionalProps={props}
-				registry={registry}
-			/>
-		);
-	}
+  // Handle legacy string icon names by treating them as icon component references
+  if (typeof icon === "string") {
+    return (
+      <ComponentRenderer
+        reference={{ type: "icon", props: { name: icon } }}
+        additionalProps={props}
+        registry={registry}
+      />
+    );
+  }
 
-	// Handle React component
-	if (typeof icon === "function") {
-		const IconComponent = icon;
-		return <IconComponent {...props} />;
-	}
+  // Handle React component
+  if (typeof icon === "function") {
+    const IconComponent = icon;
+    return <IconComponent {...props} />;
+  }
 
-	// Handle object that might be a React element
-	if (typeof icon === "object" && React.isValidElement(icon)) {
-		return icon;
-	}
+  // Handle object that might be a React element
+  if (typeof icon === "object" && React.isValidElement(icon)) {
+    return icon;
+  }
 
-	return null;
+  return null;
 }
 
 /**
@@ -281,17 +281,17 @@ export function resolveIconElement(
  * @returns Function that renders an icon from a ComponentReference
  */
 export function createIconRenderer(registry?: ComponentRendererRegistry) {
-	return (
-		icon:
-			| ComponentReference
-			| React.ComponentType<any>
-			| string
-			| undefined
-			| null,
-		props?: Record<string, unknown>,
-	): React.ReactNode => {
-		if (!icon) return null;
+  return (
+    icon:
+      | ComponentReference
+      | React.ComponentType<any>
+      | string
+      | undefined
+      | null,
+    props?: Record<string, unknown>,
+  ): React.ReactNode => {
+    if (!icon) return null;
 
-		return resolveIconElement(icon, props, registry);
-	};
+    return resolveIconElement(icon, props, registry);
+  };
 }

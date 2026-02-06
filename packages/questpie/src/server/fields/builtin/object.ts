@@ -10,10 +10,10 @@ import { json, jsonb } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { defineField } from "../define-field.js";
 import type {
-	AnyFieldDefinition,
-	BaseFieldConfig,
-	FieldDefinition,
-	NestedFieldMetadata,
+  AnyFieldDefinition,
+  BaseFieldConfig,
+  FieldDefinition,
+  NestedFieldMetadata,
 } from "../types.js";
 import { operator } from "../types.js";
 
@@ -38,8 +38,8 @@ import { operator } from "../types.js";
  * ```
  */
 export interface ObjectFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
-	_?: never;
+  /** Phantom property to prevent interface collapse - enables module augmentation */
+  _?: never;
 }
 
 // ============================================================================
@@ -50,25 +50,25 @@ export interface ObjectFieldMeta {
  * Object field configuration options.
  */
 export interface ObjectFieldConfig extends BaseFieldConfig {
-	/** Field-specific metadata, augmentable by external packages. */
-	meta?: ObjectFieldMeta;
-	/**
-	 * Nested field definitions.
-	 * Can be:
-	 * - Direct field definitions map
-	 * - Factory function for deferred definition (avoids circular refs)
-	 */
-	fields:
-		| Record<string, AnyFieldDefinition>
-		| (() => Record<string, AnyFieldDefinition>);
+  /** Field-specific metadata, augmentable by external packages. */
+  meta?: ObjectFieldMeta;
+  /**
+   * Nested field definitions.
+   * Can be:
+   * - Direct field definitions map
+   * - Factory function for deferred definition (avoids circular refs)
+   */
+  fields:
+    | Record<string, AnyFieldDefinition>
+    | (() => Record<string, AnyFieldDefinition>);
 
-	/**
-	 * Storage mode.
-	 * - jsonb: Binary JSON, supports indexing and operators (default)
-	 * - json: Text JSON, exact representation
-	 * @default "jsonb"
-	 */
-	mode?: "jsonb" | "json";
+  /**
+   * Storage mode.
+   * - jsonb: Binary JSON, supports indexing and operators (default)
+   * - json: Text JSON, exact representation
+   * @default "jsonb"
+   */
+  mode?: "jsonb" | "json";
 }
 
 // ============================================================================
@@ -80,92 +80,92 @@ export interface ObjectFieldConfig extends BaseFieldConfig {
  * Provides JSONB operators for containment and key operations.
  */
 function getObjectOperators() {
-	return {
-		column: {
-			// Contains the given key-value pairs
-			contains: operator<unknown, unknown>(
-				(col, value) => sql`${col} @> ${JSON.stringify(value)}::jsonb`,
-			),
-			// Is contained by the given object
-			containedBy: operator<unknown, unknown>(
-				(col, value) => sql`${col} <@ ${JSON.stringify(value)}::jsonb`,
-			),
-			// Has the given key
-			hasKey: operator<string, unknown>((col, value) => sql`${col} ? ${value}`),
-			// Has all the given keys
-			hasKeys: operator<string[], unknown>(
-				(col, values) =>
-					sql`${col} ?& ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
-			),
-			// Has any of the given keys
-			hasAnyKeys: operator<string[], unknown>(
-				(col, values) =>
-					sql`${col} ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
-			),
-			// Value at path equals
-			pathEquals: operator<{ path: string[]; val: unknown }, unknown>(
-				(col, value) => {
-					return sql`${col}#>>'{${sql.raw(value.path.join(","))}}' = ${value.val}`;
-				},
-			),
-			// JSON path query
-			jsonPath: operator<string, unknown>(
-				(col, value) => sql`${col} @@ ${value}::jsonpath`,
-			),
-			// Is empty object
-			isEmpty: operator<boolean, unknown>(
-				(col) => sql`(${col} = '{}'::jsonb OR ${col} IS NULL)`,
-			),
-			// Is not empty
-			isNotEmpty: operator<boolean, unknown>(
-				(col) => sql`(${col} != '{}'::jsonb AND ${col} IS NOT NULL)`,
-			),
-			isNull: operator<boolean, unknown>((col, value) =>
-				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
-			),
-			isNotNull: operator<boolean, unknown>((col, value) =>
-				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
-			),
-		},
-		jsonb: {
-			contains: operator<unknown, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(value)}::jsonb`;
-			}),
-			containedBy: operator<unknown, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' <@ ${JSON.stringify(value)}::jsonb`;
-			}),
-			hasKey: operator<string, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' ? ${value}`;
-			}),
-			hasKeys: operator<string[], unknown>((col, values, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>'{${sql.raw(path)}}' ?& ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`;
-			}),
-			isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>'{${sql.raw(path)}}' = '{}'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
-			}),
-			isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>'{${sql.raw(path)}}' != '{}'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
-			}),
-			isNull: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return value
-					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
-					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			}),
-			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return value
-					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
-					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			}),
-		},
-	};
+  return {
+    column: {
+      // Contains the given key-value pairs
+      contains: operator<unknown, unknown>(
+        (col, value) => sql`${col} @> ${JSON.stringify(value)}::jsonb`,
+      ),
+      // Is contained by the given object
+      containedBy: operator<unknown, unknown>(
+        (col, value) => sql`${col} <@ ${JSON.stringify(value)}::jsonb`,
+      ),
+      // Has the given key
+      hasKey: operator<string, unknown>((col, value) => sql`${col} ? ${value}`),
+      // Has all the given keys
+      hasKeys: operator<string[], unknown>(
+        (col, values) =>
+          sql`${col} ?& ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
+      ),
+      // Has any of the given keys
+      hasAnyKeys: operator<string[], unknown>(
+        (col, values) =>
+          sql`${col} ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
+      ),
+      // Value at path equals
+      pathEquals: operator<{ path: string[]; val: unknown }, unknown>(
+        (col, value) => {
+          return sql`${col}#>>'{${sql.raw(value.path.join(","))}}' = ${value.val}`;
+        },
+      ),
+      // JSON path query
+      jsonPath: operator<string, unknown>(
+        (col, value) => sql`${col} @@ ${value}::jsonpath`,
+      ),
+      // Is empty object
+      isEmpty: operator<boolean, unknown>(
+        (col) => sql`(${col} = '{}'::jsonb OR ${col} IS NULL)`,
+      ),
+      // Is not empty
+      isNotEmpty: operator<boolean, unknown>(
+        (col) => sql`(${col} != '{}'::jsonb AND ${col} IS NOT NULL)`,
+      ),
+      isNull: operator<boolean, unknown>((col, value) =>
+        value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+      ),
+      isNotNull: operator<boolean, unknown>((col, value) =>
+        value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+      ),
+    },
+    jsonb: {
+      contains: operator<unknown, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(value)}::jsonb`;
+      }),
+      containedBy: operator<unknown, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>'{${sql.raw(path)}}' <@ ${JSON.stringify(value)}::jsonb`;
+      }),
+      hasKey: operator<string, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>'{${sql.raw(path)}}' ? ${value}`;
+      }),
+      hasKeys: operator<string[], unknown>((col, values, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`${col}#>'{${sql.raw(path)}}' ?& ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`;
+      }),
+      isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>'{${sql.raw(path)}}' = '{}'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
+      }),
+      isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>'{${sql.raw(path)}}' != '{}'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
+      }),
+      isNull: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return value
+          ? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+          : sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+      }),
+      isNotNull: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return value
+          ? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+          : sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+      }),
+    },
+  };
 }
 
 // ============================================================================
@@ -176,11 +176,11 @@ function getObjectOperators() {
  * Resolve fields from config (handles factory functions).
  */
 function resolveFields(
-	fields:
-		| Record<string, AnyFieldDefinition>
-		| (() => Record<string, AnyFieldDefinition>),
+  fields:
+    | Record<string, AnyFieldDefinition>
+    | (() => Record<string, AnyFieldDefinition>),
 ): Record<string, AnyFieldDefinition> {
-	return typeof fields === "function" ? fields() : fields;
+  return typeof fields === "function" ? fields() : fields;
 }
 
 /**
@@ -210,77 +210,77 @@ function resolveFields(
  * ```
  */
 export const objectField = defineField<
-	ObjectFieldConfig,
-	Record<string, unknown>
+  ObjectFieldConfig,
+  Record<string, unknown>
 >()({
-	type: "object" as const,
-	_value: undefined as unknown as Record<string, unknown>,
-	toColumn(_name: string, config: ObjectFieldConfig) {
-		const { mode = "jsonb" } = config;
+  type: "object" as const,
+  _value: undefined as unknown as Record<string, unknown>,
+  toColumn(_name: string, config: ObjectFieldConfig) {
+    const { mode = "jsonb" } = config;
 
-		// Don't specify column name - Drizzle uses the key name
-		let column: any = mode === "json" ? json() : jsonb();
+    // Don't specify column name - Drizzle uses the key name
+    let column: any = mode === "json" ? json() : jsonb();
 
-		// Apply constraints
-		if (config.required && config.nullable !== true) {
-			column = column.notNull();
-		}
-		if (config.default !== undefined) {
-			const defaultValue =
-				typeof config.default === "function"
-					? config.default()
-					: config.default;
-			column = column.default(defaultValue);
-		}
+    // Apply constraints
+    if (config.required && config.nullable !== true) {
+      column = column.notNull();
+    }
+    if (config.default !== undefined) {
+      const defaultValue =
+        typeof config.default === "function"
+          ? config.default()
+          : config.default;
+      column = column.default(defaultValue);
+    }
 
-		return column;
-	},
+    return column;
+  },
 
-	toZodSchema(config: ObjectFieldConfig) {
-		const nestedFields = resolveFields(config.fields);
+  toZodSchema(config: ObjectFieldConfig) {
+    const nestedFields = resolveFields(config.fields);
 
-		// Build Zod object schema from nested field definitions
-		const shape: Record<string, z.ZodTypeAny> = {};
+    // Build Zod object schema from nested field definitions
+    const shape: Record<string, z.ZodTypeAny> = {};
 
-		for (const [fieldName, fieldDef] of Object.entries(nestedFields)) {
-			shape[fieldName] = fieldDef.toZodSchema();
-		}
+    for (const [fieldName, fieldDef] of Object.entries(nestedFields)) {
+      shape[fieldName] = fieldDef.toZodSchema();
+    }
 
-		const schema = z.object(shape);
+    const schema = z.object(shape);
 
-		// Nullability
-		if (!config.required && config.nullable !== false) {
-			return schema.nullish();
-		}
+    // Nullability
+    if (!config.required && config.nullable !== false) {
+      return schema.nullish();
+    }
 
-		return schema;
-	},
+    return schema;
+  },
 
-	getOperators<TApp>(config: ObjectFieldConfig) {
-		return getObjectOperators();
-	},
+  getOperators<TApp>(config: ObjectFieldConfig) {
+    return getObjectOperators();
+  },
 
-	getMetadata(config: ObjectFieldConfig): NestedFieldMetadata {
-		const nestedFields = resolveFields(config.fields);
+  getMetadata(config: ObjectFieldConfig): NestedFieldMetadata {
+    const nestedFields = resolveFields(config.fields);
 
-		// Build nested metadata
-		const nestedMetadata: Record<string, any> = {};
-		for (const [fieldName, fieldDef] of Object.entries(nestedFields)) {
-			nestedMetadata[fieldName] = fieldDef.getMetadata();
-		}
+    // Build nested metadata
+    const nestedMetadata: Record<string, any> = {};
+    for (const [fieldName, fieldDef] of Object.entries(nestedFields)) {
+      nestedMetadata[fieldName] = fieldDef.getMetadata();
+    }
 
-		return {
-			type: "object",
-			label: config.label,
-			description: config.description,
-			required: config.required ?? false,
-			localized: config.localized ?? false,
-			readOnly: config.input === false,
-			writeOnly: config.output === false,
-			nestedFields: nestedMetadata,
-			meta: config.meta,
-		};
-	},
+    return {
+      type: "object",
+      label: config.label,
+      description: config.description,
+      required: config.required ?? false,
+      localized: config.localized ?? false,
+      readOnly: config.input === false,
+      writeOnly: config.output === false,
+      nestedFields: nestedMetadata,
+      meta: config.meta,
+    };
+  },
 });
 
 // Register in default registry

@@ -48,7 +48,10 @@ function SelectTrigger({
       {children}
       <SelectPrimitive.Icon
         render={
-          <Icon icon="ph:caret-down" className="text-muted-foreground size-4 pointer-events-none" />
+          <Icon
+            icon="ph:caret-down"
+            className="text-muted-foreground size-4 pointer-events-none"
+          />
         }
       />
     </SelectPrimitive.Trigger>
@@ -166,7 +169,7 @@ function SelectScrollUpButton({
       )}
       {...props}
     >
-      <Icon icon="ph:caret-up"  />
+      <Icon icon="ph:caret-up" />
     </SelectPrimitive.ScrollUpArrow>
   );
 }
@@ -184,7 +187,7 @@ function SelectScrollDownButton({
       )}
       {...props}
     >
-      <Icon icon="ph:caret-down"  />
+      <Icon icon="ph:caret-down" />
     </SelectPrimitive.ScrollDownArrow>
   );
 }

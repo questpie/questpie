@@ -129,10 +129,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * Transaction context stored in AsyncLocalStorage
  */
 export interface TransactionContext {
-	/** The active database transaction */
-	tx: any;
-	/** Callbacks to run after the outermost transaction commits */
-	afterCommit: Array<() => Promise<void>>;
+  /** The active database transaction */
+  tx: any;
+  /** Callbacks to run after the outermost transaction commits */
+  afterCommit: Array<() => Promise<void>>;
 }
 
 /**
@@ -146,7 +146,7 @@ const transactionStorage = new AsyncLocalStorage<TransactionContext>();
  * @returns The current transaction context or undefined if not in a transaction
  */
 export function getTransactionContext(): TransactionContext | undefined {
-	return transactionStorage.getStore();
+  return transactionStorage.getStore();
 }
 
 /**
@@ -158,7 +158,7 @@ export function getTransactionContext(): TransactionContext | undefined {
  * @returns The current transaction or undefined
  */
 export function getCurrentTransaction(): any | undefined {
-	return transactionStorage.getStore()?.tx;
+  return transactionStorage.getStore()?.tx;
 }
 
 /**
@@ -167,7 +167,7 @@ export function getCurrentTransaction(): any | undefined {
  * @returns true if inside a transaction, false otherwise
  */
 export function isInTransaction(): boolean {
-	return transactionStorage.getStore() !== undefined;
+  return transactionStorage.getStore() !== undefined;
 }
 
 /**
@@ -226,22 +226,22 @@ export function isInTransaction(): boolean {
  * ```
  */
 export function onAfterCommit(callback: () => Promise<void>): void {
-	const ctx = transactionStorage.getStore();
+  const ctx = transactionStorage.getStore();
 
-	if (ctx) {
-		// Inside a transaction - queue for later
-		ctx.afterCommit.push(callback);
-	} else {
-		// Outside transaction - run immediately (fire and forget)
-		// We don't await here to match the "after commit" semantics
-		// where the main operation has already "completed"
-		callback().catch((error) => {
-			console.error(
-				"[onAfterCommit] Callback failed outside transaction:",
-				error,
-			);
-		});
-	}
+  if (ctx) {
+    // Inside a transaction - queue for later
+    ctx.afterCommit.push(callback);
+  } else {
+    // Outside transaction - run immediately (fire and forget)
+    // We don't await here to match the "after commit" semantics
+    // where the main operation has already "completed"
+    callback().catch((error) => {
+      console.error(
+        "[onAfterCommit] Callback failed outside transaction:",
+        error,
+      );
+    });
+  }
 }
 
 /**
@@ -287,44 +287,44 @@ export function onAfterCommit(callback: () => Promise<void>): void {
  * ```
  */
 export async function withTransaction<T>(
-	db: any,
-	fn: (tx: any) => Promise<T>,
+  db: any,
+  fn: (tx: any) => Promise<T>,
 ): Promise<T> {
-	const existingCtx = transactionStorage.getStore();
+  const existingCtx = transactionStorage.getStore();
 
-	if (existingCtx) {
-		// Already in a transaction - reuse it (no nested transaction needed)
-		// afterCommit callbacks added here will be queued to the existing context
-		return fn(existingCtx.tx);
-	}
+  if (existingCtx) {
+    // Already in a transaction - reuse it (no nested transaction needed)
+    // afterCommit callbacks added here will be queued to the existing context
+    return fn(existingCtx.tx);
+  }
 
-	// New top-level transaction
-	const ctx: TransactionContext = {
-		tx: null as any,
-		afterCommit: [],
-	};
+  // New top-level transaction
+  const ctx: TransactionContext = {
+    tx: null as any,
+    afterCommit: [],
+  };
 
-	// Execute transaction within the AsyncLocalStorage context
-	const result = await transactionStorage.run(ctx, async () => {
-		return db.transaction(async (tx: any) => {
-			ctx.tx = tx;
-			return fn(tx);
-		});
-	});
+  // Execute transaction within the AsyncLocalStorage context
+  const result = await transactionStorage.run(ctx, async () => {
+    return db.transaction(async (tx: any) => {
+      ctx.tx = tx;
+      return fn(tx);
+    });
+  });
 
-	// Transaction committed successfully - run afterCommit callbacks
-	// These run sequentially to maintain predictable ordering
-	for (const callback of ctx.afterCommit) {
-		try {
-			await callback();
-		} catch (error) {
-			// Log but don't throw - the main transaction already committed
-			// The caller should handle any critical failures in the callback itself
-			console.error("[withTransaction] afterCommit callback failed:", error);
-		}
-	}
+  // Transaction committed successfully - run afterCommit callbacks
+  // These run sequentially to maintain predictable ordering
+  for (const callback of ctx.afterCommit) {
+    try {
+      await callback();
+    } catch (error) {
+      // Log but don't throw - the main transaction already committed
+      // The caller should handle any critical failures in the callback itself
+      console.error("[withTransaction] afterCommit callback failed:", error);
+    }
+  }
 
-	return result;
+  return result;
 }
 
 /**
@@ -341,28 +341,28 @@ export async function withTransaction<T>(
  * @returns The result of the function
  */
 export async function withTransactionOrExisting<T>(
-	db: any,
-	fn: (tx: any) => Promise<T>,
+  db: any,
+  fn: (tx: any) => Promise<T>,
 ): Promise<T> {
-	const existingCtx = transactionStorage.getStore();
+  const existingCtx = transactionStorage.getStore();
 
-	if (existingCtx) {
-		// Already in a managed transaction context - reuse
-		return fn(existingCtx.tx);
-	}
+  if (existingCtx) {
+    // Already in a managed transaction context - reuse
+    return fn(existingCtx.tx);
+  }
 
-	// Check if db is already a transaction (has rollback method but no transaction method,
-	// or is the same reference as would be created)
-	// This handles the case where context.db is passed as a transaction
-	const isLikelyTransaction =
-		db.rollback && typeof db.transaction !== "function";
+  // Check if db is already a transaction (has rollback method but no transaction method,
+  // or is the same reference as would be created)
+  // This handles the case where context.db is passed as a transaction
+  const isLikelyTransaction =
+    db.rollback && typeof db.transaction !== "function";
 
-	if (isLikelyTransaction) {
-		// db is already a transaction, use it directly
-		// Note: afterCommit won't work properly here since we're not managing it
-		return fn(db);
-	}
+  if (isLikelyTransaction) {
+    // db is already a transaction, use it directly
+    // Note: afterCommit won't work properly here since we're not managing it
+    return fn(db);
+  }
 
-	// Start a new managed transaction
-	return withTransaction(db, fn);
+  // Start a new managed transaction
+  return withTransaction(db, fn);
 }

@@ -83,9 +83,15 @@ export function SearchInput({
     <InputGroup className={cn("bg-transparent", containerClassName)}>
       <InputGroupAddon align="inline-start">
         {isLoading ? (
-          <Icon icon="ph:spinner-gap" className="size-4 animate-spin text-muted-foreground" />
+          <Icon
+            icon="ph:spinner-gap"
+            className="size-4 animate-spin text-muted-foreground"
+          />
         ) : (
-          <Icon icon="ph:magnifying-glass" className="size-4 text-muted-foreground" />
+          <Icon
+            icon="ph:magnifying-glass"
+            className="size-4 text-muted-foreground"
+          />
         )}
       </InputGroupAddon>
 

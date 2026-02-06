@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { assetsCollection } from "#questpie/server/collection/defaults/assets.js";
 import {
-	accountsCollection,
-	apiKeysCollection,
-	sessionsCollection,
-	usersCollection,
-	verificationsCollection,
+  accountsCollection,
+  apiKeysCollection,
+  sessionsCollection,
+  usersCollection,
+  verificationsCollection,
 } from "#questpie/server/collection/defaults/auth.js";
 import { QuestpieBuilder } from "#questpie/server/config/builder.js";
 import { coreAuthOptions } from "#questpie/server/integrated/auth/index.js";
@@ -72,29 +72,29 @@ import { coreBackendMessages } from "./messages.js";
 const starterBase = QuestpieBuilder.empty("questpie-starter");
 
 const realtimeCleanupJob = starterBase.job({
-	name: "questpie.realtime.cleanup",
-	schema: z.object({}),
-	options: {
-		cron: "0 * * * *",
-	},
-	handler: async ({ app }) => {
-		await app.realtime.cleanupOutbox(true);
-	},
+  name: "questpie.realtime.cleanup",
+  schema: z.object({}),
+  options: {
+    cron: "0 * * * *",
+  },
+  handler: async ({ app }) => {
+    await app.realtime.cleanupOutbox(true);
+  },
 });
 
 export const starterModule = starterBase
-	.collections({
-		assets: assetsCollection,
-		user: usersCollection,
-		session: sessionsCollection,
-	})
-	.collections({
-		account: accountsCollection,
-		verification: verificationsCollection,
-		apikey: apiKeysCollection,
-	})
-	.jobs({
-		realtimeCleanup: realtimeCleanupJob,
-	})
-	.auth(coreAuthOptions)
-	.messages(coreBackendMessages);
+  .collections({
+    assets: assetsCollection,
+    user: usersCollection,
+    session: sessionsCollection,
+  })
+  .collections({
+    account: accountsCollection,
+    verification: verificationsCollection,
+    apikey: apiKeysCollection,
+  })
+  .jobs({
+    realtimeCleanup: realtimeCleanupJob,
+  })
+  .auth(coreAuthOptions)
+  .messages(coreBackendMessages);

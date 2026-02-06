@@ -15,21 +15,21 @@ import type { ToggleInputProps } from "./types";
  * ```
  */
 export function ToggleInput({
-	value,
-	onChange,
-	disabled,
-	className,
-	id,
-	"aria-invalid": ariaInvalid,
+  value,
+  onChange,
+  disabled,
+  className,
+  id,
+  "aria-invalid": ariaInvalid,
 }: ToggleInputProps) {
-	return (
-		<Switch
-			id={id}
-			checked={value}
-			onCheckedChange={onChange}
-			disabled={disabled}
-			aria-invalid={ariaInvalid}
-			className={className}
-		/>
-	);
+  return (
+    <Switch
+      id={id}
+      checked={value}
+      onCheckedChange={onChange}
+      disabled={disabled}
+      aria-invalid={ariaInvalid}
+      className={className}
+    />
+  );
 }

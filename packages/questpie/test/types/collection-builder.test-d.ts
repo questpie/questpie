@@ -15,13 +15,13 @@ import type { RelationConfig } from "#questpie/server/collection/builder/types.j
 import { questpie } from "#questpie/server/config/builder.js";
 import { builtinFields } from "#questpie/server/fields/builtin/defaults.js";
 import type {
-	Equal,
-	Expect,
-	Extends,
-	HasKey,
-	IsLiteral,
-	IsNullable,
-	OptionalKeys,
+  Equal,
+  Expect,
+  Extends,
+  HasKey,
+  IsLiteral,
+  IsNullable,
+  OptionalKeys,
 } from "./type-test-utils.js";
 
 // ============================================================================
@@ -31,11 +31,11 @@ import type {
 const q = questpie({ name: "test" }).fields(builtinFields);
 
 const postsCollection = q.collection("posts").fields((f) => ({
-	title: f.text({ required: true, maxLength: 255 }),
-	content: f.textarea(),
-	views: f.number({ default: 0 }),
-	published: f.boolean({ default: false }),
-	authorId: f.textarea(),
+  title: f.text({ required: true, maxLength: 255 }),
+  content: f.textarea(),
+  views: f.number({ default: 0 }),
+  published: f.boolean({ default: false }),
+  authorId: f.textarea(),
 }));
 
 // ============================================================================
@@ -94,21 +94,21 @@ type _updateViewsOptional = Expect<Extends<"views", UpdateOptional>>;
 // ============================================================================
 
 const withSoftDelete = q
-	.collection("posts")
-	.fields((f) => ({ title: f.textarea() }))
-	.options({ softDelete: true });
+  .collection("posts")
+  .fields((f) => ({ title: f.textarea() }))
+  .options({ softDelete: true });
 
 type SoftDeleteSelect = typeof withSoftDelete.$infer.select;
 type _hasDeletedAt = Expect<Equal<HasKey<SoftDeleteSelect, "deletedAt">, true>>;
 
 const withoutTimestamps = q
-	.collection("posts")
-	.fields((f) => ({ title: f.textarea() }))
-	.options({ timestamps: false });
+  .collection("posts")
+  .fields((f) => ({ title: f.textarea() }))
+  .options({ timestamps: false });
 
 type NoTimestampsSelect = typeof withoutTimestamps.$infer.select;
 type _noCreatedAt = Expect<
-	Equal<HasKey<NoTimestampsSelect, "createdAt">, false>
+  Equal<HasKey<NoTimestampsSelect, "createdAt">, false>
 >;
 
 // ============================================================================
@@ -116,28 +116,28 @@ type _noCreatedAt = Expect<
 // ============================================================================
 
 const withRelations = q.collection("posts").fields((f) => ({
-	title: f.textarea(),
-	author: f.relation({
-		to: "users",
-		required: true,
-		relationName: "author",
-	}),
-	comments: f.relation({
-		to: "comments",
-		hasMany: true,
-		foreignKey: "postId",
-		relationName: "post",
-	}),
+  title: f.textarea(),
+  author: f.relation({
+    to: "users",
+    required: true,
+    relationName: "author",
+  }),
+  comments: f.relation({
+    to: "comments",
+    hasMany: true,
+    foreignKey: "postId",
+    relationName: "post",
+  }),
 }));
 
 type RelationsState =
-	typeof withRelations extends CollectionBuilder<infer S> ? S : never;
+  typeof withRelations extends CollectionBuilder<infer S> ? S : never;
 type Relations = RelationsState["relations"];
 
 type _hasAuthor = Expect<Equal<HasKey<Relations, "author">, true>>;
 type _hasComments = Expect<Equal<HasKey<Relations, "comments">, true>>;
 type _authorIsRelationConfig = Expect<
-	Extends<Relations["author"], RelationConfig>
+  Extends<Relations["author"], RelationConfig>
 >;
 
 // ============================================================================
@@ -145,12 +145,12 @@ type _authorIsRelationConfig = Expect<
 // ============================================================================
 
 const withTitle = q
-	.collection("posts")
-	.fields((f) => ({ name: f.textarea(), slug: f.textarea() }))
-	.title(({ f }) => f.name);
+  .collection("posts")
+  .fields((f) => ({ name: f.textarea(), slug: f.textarea() }))
+  .title(({ f }) => f.name);
 
 type TitleState =
-	typeof withTitle extends CollectionBuilder<infer S> ? S : never;
+  typeof withTitle extends CollectionBuilder<infer S> ? S : never;
 type TitleField = TitleState["title"];
 
 type _titleIsName = Expect<Equal<TitleField, "name">>;
@@ -161,9 +161,9 @@ type _titleIsLiteral = Expect<IsLiteral<TitleField>>;
 // ============================================================================
 
 const withUpload = q
-	.collection("media")
-	.fields((f) => ({ alt: f.textarea() }))
-	.upload({ visibility: "public" });
+  .collection("media")
+  .fields((f) => ({ alt: f.textarea() }))
+  .upload({ visibility: "public" });
 
 type UploadSelect = typeof withUpload.$infer.select;
 
@@ -177,15 +177,15 @@ type _hasSize = Expect<Equal<HasKey<UploadSelect, "size">, true>>;
 // ============================================================================
 
 const withOutput = q
-	.collection("assets")
-	.fields((f) => ({ key: f.text({ required: true }) }))
-	.$outputType<{ url: string; thumbnailUrl?: string }>();
+  .collection("assets")
+  .fields((f) => ({ key: f.text({ required: true }) }))
+  .$outputType<{ url: string; thumbnailUrl?: string }>();
 
 type OutputSelect = typeof withOutput.$infer.select;
 
 // Basic type check - withOutput exists and has $infer
 type _outputSelectExists = Expect<
-	Equal<OutputSelect extends object ? true : false, true>
+  Equal<OutputSelect extends object ? true : false, true>
 >;
 
 // ============================================================================
@@ -194,13 +194,13 @@ type _outputSelectExists = Expect<
 
 const base = q.collection("posts").fields((f) => ({ title: f.textarea() }));
 const extended = base.merge(
-	q.collection("posts").fields((f) => ({
-		featured: f.boolean(),
-	})),
+  q.collection("posts").fields((f) => ({
+    featured: f.boolean(),
+  })),
 );
 
 type MergedState =
-	typeof extended extends CollectionBuilder<infer S> ? S : never;
+  typeof extended extends CollectionBuilder<infer S> ? S : never;
 type MergedFields = MergedState["fields"];
 
 type _mergedHasTitle = Expect<Equal<HasKey<MergedFields, "title">, true>>;
@@ -221,26 +221,26 @@ type _inferHasUpdate = Expect<Equal<HasKey<Infer, "update">, true>>;
 // ============================================================================
 
 const fullCollection = q
-	.collection("articles")
-	.fields((f) => ({
-		title: f.text({ required: true, maxLength: 255 }),
-		content: f.textarea(),
-		views: f.number({ default: 0 }),
-		author: f.relation({
-			to: "users",
-			required: true,
-			relationName: "author",
-		}),
-		comments: f.relation({
-			to: "comments",
-			hasMany: true,
-			foreignKey: "articleId",
-			relationName: "article",
-		}),
-		metadata: f.json(),
-	}))
-	.options({ timestamps: true, softDelete: true, versioning: true })
-	.title(({ f }) => f.title);
+  .collection("articles")
+  .fields((f) => ({
+    title: f.text({ required: true, maxLength: 255 }),
+    content: f.textarea(),
+    views: f.number({ default: 0 }),
+    author: f.relation({
+      to: "users",
+      required: true,
+      relationName: "author",
+    }),
+    comments: f.relation({
+      to: "comments",
+      hasMany: true,
+      foreignKey: "articleId",
+      relationName: "article",
+    }),
+    metadata: f.json(),
+  }))
+  .options({ timestamps: true, softDelete: true, versioning: true })
+  .title(({ f }) => f.title);
 
 type FullSelect = typeof fullCollection.$infer.select;
 

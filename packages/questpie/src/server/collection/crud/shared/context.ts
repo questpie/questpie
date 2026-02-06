@@ -12,9 +12,9 @@ import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
  * Normalized context with required fields
  */
 export type NormalizedContext = Required<
-	Pick<CRUDContext, "accessMode" | "locale" | "defaultLocale">
+  Pick<CRUDContext, "accessMode" | "locale" | "defaultLocale">
 > &
-	CRUDContext;
+  CRUDContext;
 
 /**
  * Normalize context with defaults
@@ -27,12 +27,12 @@ export type NormalizedContext = Required<
  * @default defaultLocale: 'en'
  */
 export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
-	return {
-		...context,
-		accessMode: context.accessMode ?? "system",
-		locale: context.locale ?? context.defaultLocale ?? DEFAULT_LOCALE,
-		defaultLocale: context.defaultLocale ?? DEFAULT_LOCALE,
-	};
+  return {
+    ...context,
+    accessMode: context.accessMode ?? "system",
+    locale: context.locale ?? context.defaultLocale ?? DEFAULT_LOCALE,
+    defaultLocale: context.defaultLocale ?? DEFAULT_LOCALE,
+  };
 }
 
 /**
@@ -43,5 +43,5 @@ export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
  * @returns Database instance to use for the operation
  */
 export function getDb(defaultDb: any, context?: CRUDContext): any {
-	return context?.db ?? defaultDb;
+  return context?.db ?? defaultDb;
 }

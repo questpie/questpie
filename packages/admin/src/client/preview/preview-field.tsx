@@ -16,24 +16,24 @@ import { useBlockScope, useResolveFieldPath } from "./block-scope-context.js";
 // ============================================================================
 
 export type PreviewFieldProps = {
-	/** Field name (for click-to-focus) - will be resolved with block scope if available */
-	field: string;
-	/** Field type for routing (regular, block, or relation) */
-	fieldType?: "regular" | "block" | "relation";
-	/** Content to render */
-	children: React.ReactNode;
-	/** HTML element type */
-	as?: React.ElementType;
-	/** Additional class names */
-	className?: string;
-	/** Click handler (uses context by default) */
-	onClick?: (
-		fieldPath: string,
-		context?: {
-			blockId?: string;
-			fieldType?: "regular" | "block" | "relation";
-		},
-	) => void;
+  /** Field name (for click-to-focus) - will be resolved with block scope if available */
+  field: string;
+  /** Field type for routing (regular, block, or relation) */
+  fieldType?: "regular" | "block" | "relation";
+  /** Content to render */
+  children: React.ReactNode;
+  /** HTML element type */
+  as?: React.ElementType;
+  /** Additional class names */
+  className?: string;
+  /** Click handler (uses context by default) */
+  onClick?: (
+    fieldPath: string,
+    context?: {
+      blockId?: string;
+      fieldType?: "regular" | "block" | "relation";
+    },
+  ) => void;
 };
 
 // ============================================================================
@@ -41,15 +41,15 @@ export type PreviewFieldProps = {
 // ============================================================================
 
 type PreviewContextValue = {
-	isPreviewMode: boolean;
-	handleFieldClick: (
-		fieldPath: string,
-		context?: {
-			blockId?: string;
-			fieldType?: "regular" | "block" | "relation";
-		},
-	) => void;
-	focusedField: string | null;
+  isPreviewMode: boolean;
+  handleFieldClick: (
+    fieldPath: string,
+    context?: {
+      blockId?: string;
+      fieldType?: "regular" | "block" | "relation";
+    },
+  ) => void;
+  focusedField: string | null;
 };
 
 const PreviewContext = React.createContext<PreviewContextValue | null>(null);
@@ -59,41 +59,41 @@ const PreviewContext = React.createContext<PreviewContextValue | null>(null);
  * Use this at the root of your preview page.
  */
 export function PreviewProvider({
-	isPreviewMode,
-	focusedField,
-	onFieldClick,
-	children,
+  isPreviewMode,
+  focusedField,
+  onFieldClick,
+  children,
 }: {
-	isPreviewMode: boolean;
-	focusedField: string | null;
-	onFieldClick: (
-		fieldPath: string,
-		context?: {
-			blockId?: string;
-			fieldType?: "regular" | "block" | "relation";
-		},
-	) => void;
-	children: React.ReactNode;
+  isPreviewMode: boolean;
+  focusedField: string | null;
+  onFieldClick: (
+    fieldPath: string,
+    context?: {
+      blockId?: string;
+      fieldType?: "regular" | "block" | "relation";
+    },
+  ) => void;
+  children: React.ReactNode;
 }) {
-	const value = React.useMemo(
-		() => ({
-			isPreviewMode,
-			focusedField,
-			handleFieldClick: onFieldClick,
-		}),
-		[isPreviewMode, focusedField, onFieldClick],
-	);
+  const value = React.useMemo(
+    () => ({
+      isPreviewMode,
+      focusedField,
+      handleFieldClick: onFieldClick,
+    }),
+    [isPreviewMode, focusedField, onFieldClick],
+  );
 
-	return (
-		<PreviewContext.Provider value={value}>{children}</PreviewContext.Provider>
-	);
+  return (
+    <PreviewContext.Provider value={value}>{children}</PreviewContext.Provider>
+  );
 }
 
 /**
  * Hook to access preview context.
  */
 export function usePreviewContext(): PreviewContextValue | null {
-	return React.useContext(PreviewContext);
+  return React.useContext(PreviewContext);
 }
 
 // ============================================================================
@@ -125,57 +125,57 @@ export function usePreviewContext(): PreviewContextValue | null {
  * ```
  */
 export function PreviewField({
-	field,
-	fieldType = "regular",
-	children,
-	as: Component = "div",
-	className,
-	onClick,
+  field,
+  fieldType = "regular",
+  children,
+  as: Component = "div",
+  className,
+  onClick,
 }: PreviewFieldProps) {
-	const context = usePreviewContext();
-	const blockScope = useBlockScope();
-	const fullPath = useResolveFieldPath(field);
+  const context = usePreviewContext();
+  const blockScope = useBlockScope();
+  const fullPath = useResolveFieldPath(field);
 
-	// If no context or not in preview mode, just render normally
-	if (!context?.isPreviewMode) {
-		return <Component className={className}>{children}</Component>;
-	}
+  // If no context or not in preview mode, just render normally
+  if (!context?.isPreviewMode) {
+    return <Component className={className}>{children}</Component>;
+  }
 
-	const { handleFieldClick, focusedField } = context;
-	const isFocused = focusedField === fullPath;
+  const { handleFieldClick, focusedField } = context;
+  const isFocused = focusedField === fullPath;
 
-	const handleClick = (e: React.MouseEvent) => {
-		e.stopPropagation();
-		if (onClick) {
-			onClick(fullPath, {
-				blockId: blockScope?.blockId,
-				fieldType,
-			});
-		} else {
-			handleFieldClick(fullPath, {
-				blockId: blockScope?.blockId,
-				fieldType,
-			});
-		}
-	};
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onClick) {
+      onClick(fullPath, {
+        blockId: blockScope?.blockId,
+        fieldType,
+      });
+    } else {
+      handleFieldClick(fullPath, {
+        blockId: blockScope?.blockId,
+        fieldType,
+      });
+    }
+  };
 
-	return (
-		<Component
-			data-preview-field={fullPath}
-			data-block-id={blockScope?.blockId}
-			data-field-type={fieldType}
-			onClick={handleClick}
-			className={cn(
-				className,
-				"group relative cursor-pointer transition-all duration-150",
-				"hover:outline hover:outline-2 hover:outline-dashed hover:outline-primary/60 hover:outline-offset-2 hover:rounded-sm",
-				isFocused &&
-					"outline outline-2 outline-primary outline-offset-2 rounded-sm",
-			)}
-		>
-			{children}
-		</Component>
-	);
+  return (
+    <Component
+      data-preview-field={fullPath}
+      data-block-id={blockScope?.blockId}
+      data-field-type={fieldType}
+      onClick={handleClick}
+      className={cn(
+        className,
+        "group relative cursor-pointer transition-all duration-150",
+        "hover:outline hover:outline-2 hover:outline-dashed hover:outline-primary/60 hover:outline-offset-2 hover:rounded-sm",
+        isFocused &&
+          "outline outline-2 outline-primary outline-offset-2 rounded-sm",
+      )}
+    >
+      {children}
+    </Component>
+  );
 }
 
 /**
@@ -183,55 +183,55 @@ export function PreviewField({
  * Useful when you can't use PreviewProvider.
  */
 export function StandalonePreviewField({
-	field,
-	fieldType = "regular",
-	children,
-	as: Component = "div",
-	className,
-	isPreviewMode,
-	isFocused,
-	onFieldClick,
+  field,
+  fieldType = "regular",
+  children,
+  as: Component = "div",
+  className,
+  isPreviewMode,
+  isFocused,
+  onFieldClick,
 }: PreviewFieldProps & {
-	isPreviewMode: boolean;
-	isFocused?: boolean;
-	onFieldClick: (
-		fieldPath: string,
-		context?: {
-			blockId?: string;
-			fieldType?: "regular" | "block" | "relation";
-		},
-	) => void;
+  isPreviewMode: boolean;
+  isFocused?: boolean;
+  onFieldClick: (
+    fieldPath: string,
+    context?: {
+      blockId?: string;
+      fieldType?: "regular" | "block" | "relation";
+    },
+  ) => void;
 }) {
-	const blockScope = useBlockScope();
-	const fullPath = useResolveFieldPath(field);
+  const blockScope = useBlockScope();
+  const fullPath = useResolveFieldPath(field);
 
-	if (!isPreviewMode) {
-		return <Component className={className}>{children}</Component>;
-	}
+  if (!isPreviewMode) {
+    return <Component className={className}>{children}</Component>;
+  }
 
-	const handleClick = (e: React.MouseEvent) => {
-		e.stopPropagation();
-		onFieldClick(fullPath, {
-			blockId: blockScope?.blockId,
-			fieldType,
-		});
-	};
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onFieldClick(fullPath, {
+      blockId: blockScope?.blockId,
+      fieldType,
+    });
+  };
 
-	return (
-		<Component
-			data-preview-field={fullPath}
-			data-block-id={blockScope?.blockId}
-			data-field-type={fieldType}
-			onClick={handleClick}
-			className={cn(
-				className,
-				"group relative cursor-pointer transition-all duration-150",
-				"hover:outline hover:outline-2 hover:outline-dashed hover:outline-primary/60 hover:outline-offset-2 hover:rounded-sm",
-				isFocused &&
-					"outline outline-2 outline-primary outline-offset-2 rounded-sm",
-			)}
-		>
-			{children}
-		</Component>
-	);
+  return (
+    <Component
+      data-preview-field={fullPath}
+      data-block-id={blockScope?.blockId}
+      data-field-type={fieldType}
+      onClick={handleClick}
+      className={cn(
+        className,
+        "group relative cursor-pointer transition-all duration-150",
+        "hover:outline hover:outline-2 hover:outline-dashed hover:outline-primary/60 hover:outline-offset-2 hover:rounded-sm",
+        isFocused &&
+          "outline outline-2 outline-primary outline-offset-2 rounded-sm",
+      )}
+    >
+      {children}
+    </Component>
+  );
 }

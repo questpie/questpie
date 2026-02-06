@@ -1734,20 +1734,20 @@ export function useFormValidation(options: UseFormValidationOptions) {
 
 | Validation              | JSON Schema (FE) | Zod (BE) |
 | ----------------------- | ---------------- | -------- |
-| Type checking           | ✅                | ✅        |
-| Required fields         | ✅                | ✅        |
-| Min/max length          | ✅                | ✅        |
-| Min/max value           | ✅                | ✅        |
-| Pattern (regex)         | ✅                | ✅        |
-| Email/URL format        | ✅                | ✅        |
-| Enum values             | ✅                | ✅        |
-| Array min/max items     | ✅                | ✅        |
-| Nested object schema    | ✅                | ✅        |
-| Async refinements       | ❌                | ✅        |
-| DB uniqueness check     | ❌                | ✅        |
-| Cross-field validation  | ❌                | ✅        |
-| Custom async validators | ❌                | ✅        |
-| Transform/coerce        | ❌                | ✅        |
+| Type checking           | ✅               | ✅       |
+| Required fields         | ✅               | ✅       |
+| Min/max length          | ✅               | ✅       |
+| Min/max value           | ✅               | ✅       |
+| Pattern (regex)         | ✅               | ✅       |
+| Email/URL format        | ✅               | ✅       |
+| Enum values             | ✅               | ✅       |
+| Array min/max items     | ✅               | ✅       |
+| Nested object schema    | ✅               | ✅       |
+| Async refinements       | ❌               | ✅       |
+| DB uniqueness check     | ❌               | ✅       |
+| Cross-field validation  | ❌               | ✅       |
+| Custom async validators | ❌               | ✅       |
+| Transform/coerce        | ❌               | ✅       |
 
 ---
 

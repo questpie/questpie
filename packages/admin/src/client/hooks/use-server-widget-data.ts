@@ -22,16 +22,16 @@ import { selectClient, useAdminStore } from "../runtime";
  * ```
  */
 export function useServerWidgetData<T = unknown>(
-	widgetId: string,
-	options?: { enabled?: boolean; refreshInterval?: number },
+  widgetId: string,
+  options?: { enabled?: boolean; refreshInterval?: number },
 ): UseQueryResult<T> {
-	const client = useAdminStore(selectClient);
+  const client = useAdminStore(selectClient);
 
-	return useQuery<T>({
-		queryKey: ["widget", "serverData", widgetId],
-		queryFn: () =>
-			(client as any).rpc.fetchWidgetData({ widgetId }) as Promise<T>,
-		enabled: options?.enabled ?? true,
-		refetchInterval: options?.refreshInterval,
-	});
+  return useQuery<T>({
+    queryKey: ["widget", "serverData", widgetId],
+    queryFn: () =>
+      (client as any).rpc.fetchWidgetData({ widgetId }) as Promise<T>,
+    enabled: options?.enabled ?? true,
+    refetchInterval: options?.refreshInterval,
+  });
 }

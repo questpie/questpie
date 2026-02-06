@@ -69,7 +69,7 @@ function DialogContent({
               />
             }
           >
-            <Icon icon="ph:x"  />
+            <Icon icon="ph:x" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}

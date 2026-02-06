@@ -25,45 +25,45 @@ import { FieldWrapper } from "./field-wrapper";
 // ============================================================================
 
 export interface AssetPreviewFieldProps {
-	/**
-	 * Field name (not used for value, just for form integration)
-	 */
-	name?: string;
+  /**
+   * Field name (not used for value, just for form integration)
+   */
+  name?: string;
 
-	/**
-	 * Label for the field (supports I18nText)
-	 */
-	label?: I18nText;
+  /**
+   * Label for the field (supports I18nText)
+   */
+  label?: I18nText;
 
-	/**
-	 * Description text (supports I18nText)
-	 */
-	description?: I18nText;
+  /**
+   * Description text (supports I18nText)
+   */
+  description?: I18nText;
 
-	/**
-	 * Additional className
-	 */
-	className?: string;
+  /**
+   * Additional className
+   */
+  className?: string;
 
-	/**
-	 * URL field name to watch (defaults to "url")
-	 */
-	urlField?: string;
+  /**
+   * URL field name to watch (defaults to "url")
+   */
+  urlField?: string;
 
-	/**
-	 * MIME type field name to watch (defaults to "mimeType")
-	 */
-	mimeTypeField?: string;
+  /**
+   * MIME type field name to watch (defaults to "mimeType")
+   */
+  mimeTypeField?: string;
 
-	/**
-	 * Filename field name to watch (defaults to "filename")
-	 */
-	filenameField?: string;
+  /**
+   * Filename field name to watch (defaults to "filename")
+   */
+  filenameField?: string;
 
-	/**
-	 * Alt text field name to watch (defaults to "alt")
-	 */
-	altField?: string;
+  /**
+   * Alt text field name to watch (defaults to "alt")
+   */
+  altField?: string;
 }
 
 // ============================================================================
@@ -71,66 +71,66 @@ export interface AssetPreviewFieldProps {
 // ============================================================================
 
 export function AssetPreviewField({
-	name = "preview",
-	label = "Preview",
-	description,
-	className,
-	urlField = "url",
-	mimeTypeField = "mimeType",
-	filenameField = "filename",
-	altField = "alt",
+  name = "preview",
+  label = "Preview",
+  description,
+  className,
+  urlField = "url",
+  mimeTypeField = "mimeType",
+  filenameField = "filename",
+  altField = "alt",
 }: AssetPreviewFieldProps) {
-	const form = useFormContext();
+  const form = useFormContext();
 
-	// Watch the relevant fields
-	const url = useWatch({ control: form?.control, name: urlField }) as
-		| string
-		| undefined;
-	const mimeType = useWatch({ control: form?.control, name: mimeTypeField }) as
-		| string
-		| undefined;
-	const filename = useWatch({ control: form?.control, name: filenameField }) as
-		| string
-		| undefined;
-	const alt = useWatch({ control: form?.control, name: altField }) as
-		| string
-		| undefined;
+  // Watch the relevant fields
+  const url = useWatch({ control: form?.control, name: urlField }) as
+    | string
+    | undefined;
+  const mimeType = useWatch({ control: form?.control, name: mimeTypeField }) as
+    | string
+    | undefined;
+  const filename = useWatch({ control: form?.control, name: filenameField }) as
+    | string
+    | undefined;
+  const alt = useWatch({ control: form?.control, name: altField }) as
+    | string
+    | undefined;
 
-	// Build asset object for AssetThumbnail
-	const asset = url
-		? {
-				url,
-				mimeType,
-				filename,
-				alt,
-			}
-		: null;
+  // Build asset object for AssetThumbnail
+  const asset = url
+    ? {
+        url,
+        mimeType,
+        filename,
+        alt,
+      }
+    : null;
 
-	// No URL means no preview available
-	if (!asset) {
-		return (
-			<FieldWrapper name={name} label={label} description={description}>
-				<div
-					className={cn(
-						"flex items-center justify-center rounded-lg border border-dashed p-8",
-						"bg-muted/30 text-muted-foreground",
-						className,
-					)}
-				>
-					<p className="text-sm">No preview available</p>
-				</div>
-			</FieldWrapper>
-		);
-	}
+  // No URL means no preview available
+  if (!asset) {
+    return (
+      <FieldWrapper name={name} label={label} description={description}>
+        <div
+          className={cn(
+            "flex items-center justify-center rounded-lg border border-dashed p-8",
+            "bg-muted/30 text-muted-foreground",
+            className,
+          )}
+        >
+          <p className="text-sm">No preview available</p>
+        </div>
+      </FieldWrapper>
+    );
+  }
 
-	return (
-		<FieldWrapper name={name} label={label} description={description}>
-			<AssetThumbnail
-				asset={asset}
-				size="lg"
-				showControls
-				className={className}
-			/>
-		</FieldWrapper>
-	);
+  return (
+    <FieldWrapper name={name} label={label} description={description}>
+      <AssetThumbnail
+        asset={asset}
+        size="lg"
+        showControls
+        className={className}
+      />
+    </FieldWrapper>
+  );
 }

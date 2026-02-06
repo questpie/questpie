@@ -14,45 +14,45 @@ type BreadcrumbIcon = React.ComponentType<{ className?: string }>;
  * Menu item for breadcrumb dropdown
  */
 export interface BreadcrumbMenuItem {
-	label: I18nText;
-	href: string;
-	icon?: BreadcrumbIcon;
+  label: I18nText;
+  href: string;
+  icon?: BreadcrumbIcon;
 }
 
 /**
  * Single breadcrumb item
  */
 export interface Breadcrumb {
-	/**
-	 * Display label (supports I18nText for localization)
-	 */
-	label: I18nText;
+  /**
+   * Display label (supports I18nText for localization)
+   */
+  label: I18nText;
 
-	/**
-	 * Navigation href (optional - last item usually doesn't have one)
-	 */
-	href?: string;
+  /**
+   * Navigation href (optional - last item usually doesn't have one)
+   */
+  href?: string;
 
-	/**
-	 * Icon component (optional)
-	 */
-	icon?: BreadcrumbIcon;
+  /**
+   * Icon component (optional)
+   */
+  icon?: BreadcrumbIcon;
 
-	/**
-	 * Dropdown menu items for quick navigation
-	 * e.g., switch between collections or items
-	 */
-	menu?: {
-		items: BreadcrumbMenuItem[];
-	};
+  /**
+   * Dropdown menu items for quick navigation
+   * e.g., switch between collections or items
+   */
+  menu?: {
+    items: BreadcrumbMenuItem[];
+  };
 }
 
 /**
  * Breadcrumb context value
  */
 interface BreadcrumbContextValue {
-	breadcrumbs: Breadcrumb[];
-	setBreadcrumbs: (breadcrumbs: Breadcrumb[]) => void;
+  breadcrumbs: Breadcrumb[];
+  setBreadcrumbs: (breadcrumbs: Breadcrumb[]) => void;
 }
 
 // ============================================================================
@@ -60,7 +60,7 @@ interface BreadcrumbContextValue {
 // ============================================================================
 
 const BreadcrumbContext = React.createContext<BreadcrumbContextValue | null>(
-	null,
+  null,
 );
 
 // ============================================================================
@@ -68,27 +68,27 @@ const BreadcrumbContext = React.createContext<BreadcrumbContextValue | null>(
 // ============================================================================
 
 export interface BreadcrumbProviderProps {
-	children: React.ReactNode;
+  children: React.ReactNode;
 }
 
 export function BreadcrumbProvider({
-	children,
+  children,
 }: BreadcrumbProviderProps): React.ReactElement {
-	const [breadcrumbs, setBreadcrumbs] = React.useState<Breadcrumb[]>([]);
+  const [breadcrumbs, setBreadcrumbs] = React.useState<Breadcrumb[]>([]);
 
-	const value = React.useMemo(
-		() => ({
-			breadcrumbs,
-			setBreadcrumbs,
-		}),
-		[breadcrumbs],
-	);
+  const value = React.useMemo(
+    () => ({
+      breadcrumbs,
+      setBreadcrumbs,
+    }),
+    [breadcrumbs],
+  );
 
-	return (
-		<BreadcrumbContext.Provider value={value}>
-			{children}
-		</BreadcrumbContext.Provider>
-	);
+  return (
+    <BreadcrumbContext.Provider value={value}>
+      {children}
+    </BreadcrumbContext.Provider>
+  );
 }
 
 // ============================================================================
@@ -100,20 +100,20 @@ export function BreadcrumbProvider({
  * @throws if used outside BreadcrumbProvider
  */
 export function useBreadcrumbContext(): BreadcrumbContextValue {
-	const context = React.useContext(BreadcrumbContext);
-	if (!context) {
-		throw new Error(
-			"useBreadcrumbContext must be used within a BreadcrumbProvider",
-		);
-	}
-	return context;
+  const context = React.useContext(BreadcrumbContext);
+  if (!context) {
+    throw new Error(
+      "useBreadcrumbContext must be used within a BreadcrumbProvider",
+    );
+  }
+  return context;
 }
 
 /**
  * Get breadcrumb context (optional - returns null if not in provider)
  */
 export function useBreadcrumbContextOptional(): BreadcrumbContextValue | null {
-	return React.useContext(BreadcrumbContext);
+  return React.useContext(BreadcrumbContext);
 }
 
 /**
@@ -133,23 +133,23 @@ export function useBreadcrumbContextOptional(): BreadcrumbContextValue | null {
  * ```
  */
 export function useBreadcrumbs(breadcrumbs: Breadcrumb[]): void {
-	const context = useBreadcrumbContextOptional();
+  const context = useBreadcrumbContextOptional();
 
-	React.useEffect(() => {
-		if (!context) return;
+  React.useEffect(() => {
+    if (!context) return;
 
-		context.setBreadcrumbs(breadcrumbs);
+    context.setBreadcrumbs(breadcrumbs);
 
-		return () => {
-			context.setBreadcrumbs([]);
-		};
-	}, [context, breadcrumbs]);
+    return () => {
+      context.setBreadcrumbs([]);
+    };
+  }, [context, breadcrumbs]);
 }
 
 /**
  * Get current breadcrumbs (read-only)
  */
 export function useCurrentBreadcrumbs(): Breadcrumb[] {
-	const context = useBreadcrumbContextOptional();
-	return context?.breadcrumbs ?? [];
+  const context = useBreadcrumbContextOptional();
+  return context?.breadcrumbs ?? [];
 }

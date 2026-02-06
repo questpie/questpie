@@ -10,26 +10,26 @@ import { Badge } from "./badge";
 // ============================================================================
 
 export interface FilterBadgeProps {
-	/**
-	 * Number of active filters
-	 */
-	count: number;
+  /**
+   * Number of active filters
+   */
+  count: number;
 
-	/**
-	 * Label for the filter type
-	 * @default "filter"
-	 */
-	label?: I18nText;
+  /**
+   * Label for the filter type
+   * @default "filter"
+   */
+  label?: I18nText;
 
-	/**
-	 * Callback when clear button is clicked
-	 */
-	onClear?: () => void;
+  /**
+   * Callback when clear button is clicked
+   */
+  onClear?: () => void;
 
-	/**
-	 * Additional className
-	 */
-	className?: string;
+  /**
+   * Additional className
+   */
+  className?: string;
 }
 
 // ============================================================================
@@ -54,31 +54,31 @@ export interface FilterBadgeProps {
  * ```
  */
 export function FilterBadge({
-	count,
-	label = "filter",
-	onClear,
-	className,
+  count,
+  label = "filter",
+  onClear,
+  className,
 }: FilterBadgeProps): React.ReactElement | null {
-	const resolveText = useResolveText();
-	const resolvedLabel = resolveText(label ?? "filter");
-	if (count === 0) return null;
+  const resolveText = useResolveText();
+  const resolvedLabel = resolveText(label ?? "filter");
+  if (count === 0) return null;
 
-	const pluralLabel = count !== 1 ? `${resolvedLabel}s` : resolvedLabel;
+  const pluralLabel = count !== 1 ? `${resolvedLabel}s` : resolvedLabel;
 
-	return (
-		<Badge variant="secondary" className={cn("gap-1.5", className)}>
-			<Icon icon="ph:funnel-fill" width={12} height={12} />
-			{count} active {pluralLabel}
-			{onClear && (
-				<button
-					type="button"
-					onClick={onClear}
-					className="ml-1 hover:text-foreground transition-colors"
-					aria-label={`Clear ${pluralLabel}`}
-				>
-					<Icon icon="ph:x" width={10} height={10} />
-				</button>
-			)}
-		</Badge>
-	);
+  return (
+    <Badge variant="secondary" className={cn("gap-1.5", className)}>
+      <Icon icon="ph:funnel-fill" width={12} height={12} />
+      {count} active {pluralLabel}
+      {onClear && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="ml-1 hover:text-foreground transition-colors"
+          aria-label={`Clear ${pluralLabel}`}
+        >
+          <Icon icon="ph:x" width={10} height={10} />
+        </button>
+      )}
+    </Badge>
+  );
 }

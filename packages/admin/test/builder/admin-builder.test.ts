@@ -322,4 +322,3 @@ describe("AdminBuilder state immutability", () => {
     expect(admin.state.pages.dashboard).toBeDefined();
   });
 });
-

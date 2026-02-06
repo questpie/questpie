@@ -13,31 +13,31 @@ import type { IconComponent } from "../types/common";
 import type { GlobalBuilderState } from "../types/global-types";
 
 export class GlobalBuilder<TState extends GlobalBuilderState> {
-	constructor(public readonly state: TState) {}
+  constructor(public readonly state: TState) {}
 
-	/**
-	 * Merge admin module into state
-	 */
-	use<TAdminApp extends AdminBuilder<any>>(
-		adminApp: TAdminApp,
-	): GlobalBuilder<SetProperty<TState, "~adminApp", TAdminApp>> {
-		return new GlobalBuilder({
-			...this.state,
-			"~adminApp": adminApp,
-		} as any);
-	}
+  /**
+   * Merge admin module into state
+   */
+  use<TAdminApp extends AdminBuilder<any>>(
+    adminApp: TAdminApp,
+  ): GlobalBuilder<SetProperty<TState, "~adminApp", TAdminApp>> {
+    return new GlobalBuilder({
+      ...this.state,
+      "~adminApp": adminApp,
+    } as any);
+  }
 
-	/**
-	 * Set global metadata
-	 */
-	meta(meta: {
-		label?: I18nText;
-		icon?: IconComponent | ComponentReference;
-		description?: I18nText;
-	}): GlobalBuilder<TState> {
-		return new GlobalBuilder({
-			...this.state,
-			...meta,
-		} as any);
-	}
+  /**
+   * Set global metadata
+   */
+  meta(meta: {
+    label?: I18nText;
+    icon?: IconComponent | ComponentReference;
+    description?: I18nText;
+  }): GlobalBuilder<TState> {
+    return new GlobalBuilder({
+      ...this.state,
+      ...meta,
+    } as any);
+  }
 }

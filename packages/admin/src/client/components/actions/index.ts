@@ -7,7 +7,7 @@
 export { ActionButton, type ActionButtonProps } from "./action-button";
 export { ActionDialog, type ActionDialogProps } from "./action-dialog";
 export {
-	ConfirmationDialog,
-	type ConfirmationDialogProps,
+  ConfirmationDialog,
+  type ConfirmationDialogProps,
 } from "./confirmation-dialog";
 export { HeaderActions, type HeaderActionsProps } from "./header-actions";

@@ -5,22 +5,22 @@ import type { z } from "zod";
 export type FunctionType = "query" | "mutation";
 
 export interface FunctionAccessContext<TApp = any> {
-	app: TApp;
-	session?: any | null;
-	db: any;
-	locale?: string;
-	request?: Request;
+  app: TApp;
+  session?: any | null;
+  db: any;
+  locale?: string;
+  request?: Request;
 }
 
 export type FunctionAccessRule<TApp = any> =
-	| boolean
-	| ((ctx: FunctionAccessContext<TApp>) => boolean | Promise<boolean>);
+  | boolean
+  | ((ctx: FunctionAccessContext<TApp>) => boolean | Promise<boolean>);
 
 export type FunctionAccess<TApp = any> =
-	| FunctionAccessRule<TApp>
-	| {
-			execute?: FunctionAccessRule<TApp>;
-	  };
+  | FunctionAccessRule<TApp>
+  | {
+      execute?: FunctionAccessRule<TApp>;
+    };
 
 // ============================================================================
 // Function Context Types
@@ -62,25 +62,25 @@ export type FunctionAccess<TApp = any> =
  * ```
  */
 export interface FunctionHandlerArgs<TInput = any, TApp = any> {
-	/** Validated input data */
-	input: TInput;
-	/** CMS instance - use getApp<AppCMS>(app) for type-safe access */
-	app: TApp;
-	/**
-	 * Auth session (user + session) from Better Auth.
-	 * Use getSession<AppCMS>(session) for type-safe access.
-	 * - undefined = session not resolved
-	 * - null = explicitly unauthenticated
-	 * - object = authenticated
-	 */
-	session?: any | null;
-	/** Current locale */
-	locale?: string;
-	/**
-	 * Database client (may be transaction).
-	 * Use getDb<AppCMS>(db) for type-safe access.
-	 */
-	db: any;
+  /** Validated input data */
+  input: TInput;
+  /** CMS instance - use getApp<AppCMS>(app) for type-safe access */
+  app: TApp;
+  /**
+   * Auth session (user + session) from Better Auth.
+   * Use getSession<AppCMS>(session) for type-safe access.
+   * - undefined = session not resolved
+   * - null = explicitly unauthenticated
+   * - object = authenticated
+   */
+  session?: any | null;
+  /** Current locale */
+  locale?: string;
+  /**
+   * Database client (may be transaction).
+   * Use getDb<AppCMS>(db) for type-safe access.
+   */
+  db: any;
 }
 
 /**
@@ -105,25 +105,25 @@ export interface FunctionHandlerArgs<TInput = any, TApp = any> {
  * ```
  */
 export interface RawFunctionHandlerArgs<TApp = any> {
-	/** Raw request object */
-	request: Request;
-	/** CMS instance - use getApp<AppCMS>(app) for type-safe access */
-	app: TApp;
-	/**
-	 * Auth session (user + session) from Better Auth.
-	 * Use getSession<AppCMS>(session) for type-safe access.
-	 * - undefined = session not resolved
-	 * - null = explicitly unauthenticated
-	 * - object = authenticated
-	 */
-	session?: any | null;
-	/** Current locale */
-	locale?: string;
-	/**
-	 * Database client (may be transaction).
-	 * Use getDb<AppCMS>(db) for type-safe access.
-	 */
-	db: any;
+  /** Raw request object */
+  request: Request;
+  /** CMS instance - use getApp<AppCMS>(app) for type-safe access */
+  app: TApp;
+  /**
+   * Auth session (user + session) from Better Auth.
+   * Use getSession<AppCMS>(session) for type-safe access.
+   * - undefined = session not resolved
+   * - null = explicitly unauthenticated
+   * - object = authenticated
+   */
+  session?: any | null;
+  /** Current locale */
+  locale?: string;
+  /**
+   * Database client (may be transaction).
+   * Use getDb<AppCMS>(db) for type-safe access.
+   */
+  db: any;
 }
 
 // ============================================================================
@@ -150,14 +150,14 @@ export interface RawFunctionHandlerArgs<TApp = any> {
  * ```
  */
 export type JsonFunctionDefinition<TInput = any, TOutput = any, TApp = any> = {
-	mode?: "json";
-	type?: FunctionType;
-	access?: FunctionAccess<TApp>;
-	schema: z.ZodSchema<TInput>;
-	outputSchema?: z.ZodSchema<TOutput>;
-	handler: (
-		args: FunctionHandlerArgs<TInput, TApp>,
-	) => TOutput | Promise<TOutput>;
+  mode?: "json";
+  type?: FunctionType;
+  access?: FunctionAccess<TApp>;
+  schema: z.ZodSchema<TInput>;
+  outputSchema?: z.ZodSchema<TOutput>;
+  handler: (
+    args: FunctionHandlerArgs<TInput, TApp>,
+  ) => TOutput | Promise<TOutput>;
 };
 
 /**
@@ -178,35 +178,35 @@ export type JsonFunctionDefinition<TInput = any, TOutput = any, TApp = any> = {
  * ```
  */
 export type RawFunctionDefinition<TApp = any> = {
-	mode: "raw";
-	type?: FunctionType;
-	access?: FunctionAccess<TApp>;
-	handler: (args: RawFunctionHandlerArgs<TApp>) => Response | Promise<Response>;
+  mode: "raw";
+  type?: FunctionType;
+  access?: FunctionAccess<TApp>;
+  handler: (args: RawFunctionHandlerArgs<TApp>) => Response | Promise<Response>;
 };
 
 export type FunctionDefinition<TInput = any, TOutput = any, TApp = any> =
-	| JsonFunctionDefinition<TInput, TOutput, TApp>
-	| RawFunctionDefinition<TApp>;
+  | JsonFunctionDefinition<TInput, TOutput, TApp>
+  | RawFunctionDefinition<TApp>;
 
 export type FunctionsMap = Record<string, FunctionDefinition>;
 export type JsonFunctionsMap = Record<string, JsonFunctionDefinition<any, any>>;
 
 export type InferFunctionInput<T> = T extends {
-	schema: z.ZodSchema<infer Input>;
+  schema: z.ZodSchema<infer Input>;
 }
-	? Input
-	: never;
+  ? Input
+  : never;
 
 export type InferFunctionOutput<T> = T extends {
-	outputSchema: z.ZodSchema<infer Output>;
+  outputSchema: z.ZodSchema<infer Output>;
 }
-	? Output
-	: T extends { handler: (args: any) => infer Result }
-		? Awaited<Result>
-		: never;
+  ? Output
+  : T extends { handler: (args: any) => infer Result }
+    ? Awaited<Result>
+    : never;
 
 export type ExtractJsonFunctions<T extends FunctionsMap> = {
-	[K in keyof T as T[K] extends JsonFunctionDefinition<any, any>
-		? K
-		: never]: T[K];
+  [K in keyof T as T[K] extends JsonFunctionDefinition<any, any>
+    ? K
+    : never]: T[K];
 };

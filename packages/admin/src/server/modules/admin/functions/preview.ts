@@ -17,21 +17,21 @@ import { z } from "zod";
 // ============================================================================
 
 function base64UrlEncode(input: string | Buffer): string {
-	const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
-	return buffer
-		.toString("base64")
-		.replace(/\+/g, "-")
-		.replace(/\//g, "_")
-		.replace(/=+$/g, "");
+  const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
+  return buffer
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
 function base64UrlDecode(input: string): string {
-	let base64 = input.replace(/-/g, "+").replace(/_/g, "/");
-	const padding = base64.length % 4;
-	if (padding) {
-		base64 += "=".repeat(4 - padding);
-	}
-	return Buffer.from(base64, "base64").toString("utf8");
+  let base64 = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = base64.length % 4;
+  if (padding) {
+    base64 += "=".repeat(4 - padding);
+  }
+  return Buffer.from(base64, "base64").toString("utf8");
 }
 
 // ============================================================================
@@ -39,23 +39,23 @@ function base64UrlDecode(input: string): string {
 // ============================================================================
 
 const mintPreviewTokenSchema = z.object({
-	path: z.string().min(1, "Path is required"),
-	ttlMs: z.number().positive().optional(),
+  path: z.string().min(1, "Path is required"),
+  ttlMs: z.number().positive().optional(),
 });
 
 const mintPreviewTokenOutputSchema = z.object({
-	token: z.string(),
-	expiresAt: z.number(),
+  token: z.string(),
+  expiresAt: z.number(),
 });
 
 const verifyPreviewTokenSchema = z.object({
-	token: z.string(),
+  token: z.string(),
 });
 
 const verifyPreviewTokenOutputSchema = z.object({
-	valid: z.boolean(),
-	path: z.string().optional(),
-	error: z.string().optional(),
+  valid: z.boolean(),
+  path: z.string().optional(),
+  error: z.string().optional(),
 });
 
 // ============================================================================
@@ -63,8 +63,8 @@ const verifyPreviewTokenOutputSchema = z.object({
 // ============================================================================
 
 export interface PreviewTokenPayload {
-	path: string;
-	exp: number;
+  path: string;
+  exp: number;
 }
 
 // ============================================================================
@@ -80,119 +80,119 @@ const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
  * @returns Object with preview functions
  */
 export function createPreviewFunctions(secret: string) {
-	const signPayload = (payload: string): string => {
-		const signature = createHmac("sha256", secret).update(payload).digest();
-		return base64UrlEncode(signature);
-	};
+  const signPayload = (payload: string): string => {
+    const signature = createHmac("sha256", secret).update(payload).digest();
+    return base64UrlEncode(signature);
+  };
 
-	/**
-	 * Mint a preview token for draft mode access.
-	 *
-	 * Requires authenticated admin session.
-	 * Token contains the target path and expiration time.
-	 *
-	 * @example
-	 * ```ts
-	 * const { token } = await client.rpc.mintPreviewToken({
-	 *   path: "/pages/about",
-	 *   ttlMs: 30 * 60 * 1000, // 30 minutes
-	 * });
-	 * // Use: /api/preview?token=${token}
-	 * ```
-	 */
-	const mintPreviewToken = fn({
-		type: "mutation",
-		schema: mintPreviewTokenSchema,
-		outputSchema: mintPreviewTokenOutputSchema,
-		handler: async ({ input, session }) => {
-			// Require authenticated admin session
-			if (!session) {
-				throw new Error("Unauthorized: Admin session required");
-			}
+  /**
+   * Mint a preview token for draft mode access.
+   *
+   * Requires authenticated admin session.
+   * Token contains the target path and expiration time.
+   *
+   * @example
+   * ```ts
+   * const { token } = await client.rpc.mintPreviewToken({
+   *   path: "/pages/about",
+   *   ttlMs: 30 * 60 * 1000, // 30 minutes
+   * });
+   * // Use: /api/preview?token=${token}
+   * ```
+   */
+  const mintPreviewToken = fn({
+    type: "mutation",
+    schema: mintPreviewTokenSchema,
+    outputSchema: mintPreviewTokenOutputSchema,
+    handler: async ({ input, session }) => {
+      // Require authenticated admin session
+      if (!session) {
+        throw new Error("Unauthorized: Admin session required");
+      }
 
-			const { path, ttlMs = DEFAULT_TTL_MS } = input;
-			const expiresAt = Date.now() + ttlMs;
+      const { path, ttlMs = DEFAULT_TTL_MS } = input;
+      const expiresAt = Date.now() + ttlMs;
 
-			const payload: PreviewTokenPayload = { path, exp: expiresAt };
-			const payloadString = JSON.stringify(payload);
-			const encodedPayload = base64UrlEncode(payloadString);
-			const signature = signPayload(encodedPayload);
+      const payload: PreviewTokenPayload = { path, exp: expiresAt };
+      const payloadString = JSON.stringify(payload);
+      const encodedPayload = base64UrlEncode(payloadString);
+      const signature = signPayload(encodedPayload);
 
-			return {
-				token: `${encodedPayload}.${signature}`,
-				expiresAt,
-			};
-		},
-	});
+      return {
+        token: `${encodedPayload}.${signature}`,
+        expiresAt,
+      };
+    },
+  });
 
-	/**
-	 * Verify a preview token.
-	 *
-	 * Used by the preview route to validate tokens before setting draft mode cookie.
-	 * Does not require authentication (token IS the authentication).
-	 *
-	 * @example
-	 * ```ts
-	 * const result = await client.rpc.verifyPreviewToken({ token });
-	 * if (result.valid) {
-	 *   // Redirect to result.path with draft mode cookie
-	 * }
-	 * ```
-	 */
-	const verifyPreviewToken = fn({
-		type: "query",
-		schema: verifyPreviewTokenSchema,
-		outputSchema: verifyPreviewTokenOutputSchema,
-		handler: async ({ input }) => {
-			const { token } = input;
+  /**
+   * Verify a preview token.
+   *
+   * Used by the preview route to validate tokens before setting draft mode cookie.
+   * Does not require authentication (token IS the authentication).
+   *
+   * @example
+   * ```ts
+   * const result = await client.rpc.verifyPreviewToken({ token });
+   * if (result.valid) {
+   *   // Redirect to result.path with draft mode cookie
+   * }
+   * ```
+   */
+  const verifyPreviewToken = fn({
+    type: "query",
+    schema: verifyPreviewTokenSchema,
+    outputSchema: verifyPreviewTokenOutputSchema,
+    handler: async ({ input }) => {
+      const { token } = input;
 
-			const [encodedPayload, signature] = token.split(".");
-			if (!encodedPayload || !signature) {
-				return { valid: false, error: "Invalid token format" };
-			}
+      const [encodedPayload, signature] = token.split(".");
+      if (!encodedPayload || !signature) {
+        return { valid: false, error: "Invalid token format" };
+      }
 
-			// Verify signature
-			const expectedSignature = signPayload(encodedPayload);
-			const signatureBuffer = Uint8Array.from(Buffer.from(signature));
-			const expectedBuffer = Uint8Array.from(Buffer.from(expectedSignature));
+      // Verify signature
+      const expectedSignature = signPayload(encodedPayload);
+      const signatureBuffer = Uint8Array.from(Buffer.from(signature));
+      const expectedBuffer = Uint8Array.from(Buffer.from(expectedSignature));
 
-			if (signatureBuffer.length !== expectedBuffer.length) {
-				return { valid: false, error: "Invalid signature" };
-			}
+      if (signatureBuffer.length !== expectedBuffer.length) {
+        return { valid: false, error: "Invalid signature" };
+      }
 
-			if (!timingSafeEqual(signatureBuffer, expectedBuffer)) {
-				return { valid: false, error: "Invalid signature" };
-			}
+      if (!timingSafeEqual(signatureBuffer, expectedBuffer)) {
+        return { valid: false, error: "Invalid signature" };
+      }
 
-			// Parse and validate payload
-			try {
-				const payload = JSON.parse(
-					base64UrlDecode(encodedPayload),
-				) as PreviewTokenPayload;
+      // Parse and validate payload
+      try {
+        const payload = JSON.parse(
+          base64UrlDecode(encodedPayload),
+        ) as PreviewTokenPayload;
 
-				if (!payload?.exp || typeof payload.exp !== "number") {
-					return { valid: false, error: "Invalid payload" };
-				}
+        if (!payload?.exp || typeof payload.exp !== "number") {
+          return { valid: false, error: "Invalid payload" };
+        }
 
-				if (payload.exp < Date.now()) {
-					return { valid: false, error: "Token expired" };
-				}
+        if (payload.exp < Date.now()) {
+          return { valid: false, error: "Token expired" };
+        }
 
-				if (!payload.path || typeof payload.path !== "string") {
-					return { valid: false, error: "Invalid path" };
-				}
+        if (!payload.path || typeof payload.path !== "string") {
+          return { valid: false, error: "Invalid path" };
+        }
 
-				return { valid: true, path: payload.path };
-			} catch {
-				return { valid: false, error: "Invalid payload" };
-			}
-		},
-	});
+        return { valid: true, path: payload.path };
+      } catch {
+        return { valid: false, error: "Invalid payload" };
+      }
+    },
+  });
 
-	return {
-		mintPreviewToken,
-		verifyPreviewToken,
-	};
+  return {
+    mintPreviewToken,
+    verifyPreviewToken,
+  };
 }
 
 // ============================================================================
@@ -208,35 +208,35 @@ export function createPreviewFunctions(secret: string) {
  * @returns The payload if valid, null otherwise
  */
 export function verifyPreviewTokenDirect(
-	token: string,
-	secret: string,
+  token: string,
+  secret: string,
 ): PreviewTokenPayload | null {
-	const [encodedPayload, signature] = token.split(".");
-	if (!encodedPayload || !signature) return null;
+  const [encodedPayload, signature] = token.split(".");
+  if (!encodedPayload || !signature) return null;
 
-	const expectedSignature = base64UrlEncode(
-		createHmac("sha256", secret).update(encodedPayload).digest(),
-	);
+  const expectedSignature = base64UrlEncode(
+    createHmac("sha256", secret).update(encodedPayload).digest(),
+  );
 
-	const signatureBuffer = Uint8Array.from(Buffer.from(signature));
-	const expectedBuffer = Uint8Array.from(Buffer.from(expectedSignature));
+  const signatureBuffer = Uint8Array.from(Buffer.from(signature));
+  const expectedBuffer = Uint8Array.from(Buffer.from(expectedSignature));
 
-	if (signatureBuffer.length !== expectedBuffer.length) return null;
-	if (!timingSafeEqual(signatureBuffer, expectedBuffer)) return null;
+  if (signatureBuffer.length !== expectedBuffer.length) return null;
+  if (!timingSafeEqual(signatureBuffer, expectedBuffer)) return null;
 
-	try {
-		const payload = JSON.parse(
-			base64UrlDecode(encodedPayload),
-		) as PreviewTokenPayload;
+  try {
+    const payload = JSON.parse(
+      base64UrlDecode(encodedPayload),
+    ) as PreviewTokenPayload;
 
-		if (!payload?.exp || typeof payload.exp !== "number") return null;
-		if (payload.exp < Date.now()) return null;
-		if (!payload.path || typeof payload.path !== "string") return null;
+    if (!payload?.exp || typeof payload.exp !== "number") return null;
+    if (payload.exp < Date.now()) return null;
+    if (!payload.path || typeof payload.path !== "string") return null;
 
-		return payload;
-	} catch {
-		return null;
-	}
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 // ============================================================================
@@ -263,11 +263,11 @@ export function verifyPreviewTokenDirect(
  * ```
  */
 export function createPreviewTokenVerifier(secret?: string) {
-	const resolvedSecret = secret ?? getPreviewSecret();
+  const resolvedSecret = secret ?? getPreviewSecret();
 
-	return (token: string): PreviewTokenPayload | null => {
-		return verifyPreviewTokenDirect(token, resolvedSecret);
-	};
+  return (token: string): PreviewTokenPayload | null => {
+    return verifyPreviewTokenDirect(token, resolvedSecret);
+  };
 }
 
 // ============================================================================

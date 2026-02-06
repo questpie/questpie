@@ -1,7 +1,7 @@
 import type {
-	FunctionDefinition,
-	JsonFunctionDefinition,
-	RawFunctionDefinition,
+  FunctionDefinition,
+  JsonFunctionDefinition,
+  RawFunctionDefinition,
 } from "./types.js";
 
 // ============================================================================
@@ -9,11 +9,11 @@ import type {
 // ============================================================================
 
 export function fn<TInput, TOutput>(
-	definition: JsonFunctionDefinition<TInput, TOutput>,
+  definition: JsonFunctionDefinition<TInput, TOutput>,
 ): JsonFunctionDefinition<TInput, TOutput>;
 export function fn(definition: RawFunctionDefinition): RawFunctionDefinition;
 export function fn(definition: FunctionDefinition): FunctionDefinition {
-	return definition;
+  return definition;
 }
 
 // ============================================================================
@@ -41,16 +41,16 @@ export function fn(definition: FunctionDefinition): FunctionDefinition {
  * ```
  */
 fn.typed = function typedFn<TApp = any>() {
-	function createFn<TInput, TOutput>(
-		definition: JsonFunctionDefinition<TInput, TOutput, TApp>,
-	): JsonFunctionDefinition<TInput, TOutput, TApp>;
-	function createFn(
-		definition: RawFunctionDefinition<TApp>,
-	): RawFunctionDefinition<TApp>;
-	function createFn(
-		definition: FunctionDefinition<any, any, TApp>,
-	): FunctionDefinition<any, any, TApp> {
-		return definition;
-	}
-	return createFn;
+  function createFn<TInput, TOutput>(
+    definition: JsonFunctionDefinition<TInput, TOutput, TApp>,
+  ): JsonFunctionDefinition<TInput, TOutput, TApp>;
+  function createFn(
+    definition: RawFunctionDefinition<TApp>,
+  ): RawFunctionDefinition<TApp>;
+  function createFn(
+    definition: FunctionDefinition<any, any, TApp>,
+  ): FunctionDefinition<any, any, TApp> {
+    return definition;
+  }
+  return createFn;
 };

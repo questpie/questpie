@@ -30,12 +30,12 @@ export type TranslationsMap = Record<string, SimpleMessages>;
 
 export type FieldDefinitionMap = Record<string, FieldDefinition<string, any>>;
 export type ListViewDefinitionMap = Record<
-	string,
-	ListViewDefinition<string, any>
+  string,
+  ListViewDefinition<string, any>
 >;
 export type EditViewDefinitionMap = Record<
-	string,
-	EditViewDefinition<string, any>
+  string,
+  EditViewDefinition<string, any>
 >;
 export type PageDefinitionMap = Record<string, PageDefinition<string>>;
 export type WidgetDefinitionMap = Record<string, WidgetDefinition<string, any>>;
@@ -57,49 +57,49 @@ export type EmptyMap = Record<never, never>;
  * TApp: Backend Questpie app type - provides collection/global names for autocomplete
  */
 export interface AdminBuilderState<
-	TApp = any,
-	TFields extends FieldDefinitionMap = FieldDefinitionMap,
-	TComponents extends ComponentDefinitionMap = ComponentDefinitionMap,
-	TListViews extends ListViewDefinitionMap = ListViewDefinitionMap,
-	TEditViews extends EditViewDefinitionMap = EditViewDefinitionMap,
-	TPages extends PageDefinitionMap = PageDefinitionMap,
-	TWidgets extends WidgetDefinitionMap = WidgetDefinitionMap,
-	TBlocks extends BlockDefinitionMap = BlockDefinitionMap,
+  TApp = any,
+  TFields extends FieldDefinitionMap = FieldDefinitionMap,
+  TComponents extends ComponentDefinitionMap = ComponentDefinitionMap,
+  TListViews extends ListViewDefinitionMap = ListViewDefinitionMap,
+  TEditViews extends EditViewDefinitionMap = EditViewDefinitionMap,
+  TPages extends PageDefinitionMap = PageDefinitionMap,
+  TWidgets extends WidgetDefinitionMap = WidgetDefinitionMap,
+  TBlocks extends BlockDefinitionMap = BlockDefinitionMap,
 > {
-	// Context for deep inference
-	"~app": TApp;
+  // Context for deep inference
+  "~app": TApp;
 
-	// Extensible definitions (like collections/globals/jobs in questpie)
-	fields: TFields;
-	components: TComponents;
-	listViews: TListViews;
-	editViews: TEditViews;
-	pages: TPages;
-	widgets: TWidgets;
-	blocks: TBlocks;
+  // Extensible definitions (like collections/globals/jobs in questpie)
+  fields: TFields;
+  components: TComponents;
+  listViews: TListViews;
+  editViews: TEditViews;
+  pages: TPages;
+  widgets: TWidgets;
+  blocks: TBlocks;
 
-	// App-level UI configs (last wins)
-	locale: LocaleConfig;
-	defaultViews: DefaultViewsConfig;
+  // App-level UI configs (last wins)
+  locale: LocaleConfig;
+  defaultViews: DefaultViewsConfig;
 
-	// I18n translations
-	translations: TranslationsMap;
+  // I18n translations
+  translations: TranslationsMap;
 }
 
 /**
  * Empty builder state - starting point
  */
 export interface EmptyBuilderState extends AdminBuilderState<any> {
-	"~app": any;
-	fields: EmptyMap;
-	components: EmptyMap;
-	listViews: EmptyMap;
-	editViews: EmptyMap;
-	pages: EmptyMap;
-	widgets: EmptyMap;
-	blocks: EmptyMap;
-	defaultViews: DefaultViewsConfig;
-	translations: Record<never, never>;
+  "~app": any;
+  fields: EmptyMap;
+  components: EmptyMap;
+  listViews: EmptyMap;
+  editViews: EmptyMap;
+  pages: EmptyMap;
+  widgets: EmptyMap;
+  blocks: EmptyMap;
+  defaultViews: DefaultViewsConfig;
+  translations: Record<never, never>;
 }
 
 // ============================================================================
@@ -110,46 +110,46 @@ export interface EmptyBuilderState extends AdminBuilderState<any> {
  * Extract backend app type from AdminBuilder
  */
 export type ExtractBackendApp<TAdminBuilder> = TAdminBuilder extends {
-	state: { "~app": infer TApp };
+  state: { "~app": infer TApp };
 }
-	? TApp
-	: never;
+  ? TApp
+  : never;
 
 /**
  * Extract fields from AdminBuilder state
  */
 export type ExtractFields<TAdminBuilder> = TAdminBuilder extends {
-	state: { fields: infer TFields };
+  state: { fields: infer TFields };
 }
-	? TFields
-	: {};
+  ? TFields
+  : {};
 
 /**
  * Extract list views from AdminBuilder state
  */
 export type ExtractListViews<TAdminBuilder> = TAdminBuilder extends {
-	state: { listViews: infer TViews };
+  state: { listViews: infer TViews };
 }
-	? TViews
-	: {};
+  ? TViews
+  : {};
 
 /**
  * Extract edit views from AdminBuilder state
  */
 export type ExtractEditViews<TAdminBuilder> = TAdminBuilder extends {
-	state: { editViews: infer TViews };
+  state: { editViews: infer TViews };
 }
-	? TViews
-	: {};
+  ? TViews
+  : {};
 
 /**
  * Extract blocks from AdminBuilder state
  */
 export type ExtractBlocks<TAdminBuilder> = TAdminBuilder extends {
-	state: { blocks: infer TBlocks };
+  state: { blocks: infer TBlocks };
 }
-	? TBlocks
-	: {};
+  ? TBlocks
+  : {};
 
 // ============================================================================
 // Type Utils - View Kind Detection
@@ -160,10 +160,10 @@ export type ExtractBlocks<TAdminBuilder> = TAdminBuilder extends {
  * Normalizes the two patterns into one
  */
 export type GetViewKind<T> = T extends { state: { kind: infer K } }
-	? K
-	: T extends { kind: infer K }
-		? K
-		: never;
+  ? K
+  : T extends { kind: infer K }
+    ? K
+    : never;
 
 /**
  * Check if a view is a list view (works with both Builder and Definition)
@@ -179,12 +179,12 @@ export type IsEditView<T> = GetViewKind<T> extends "edit" ? true : false;
  * Filter record to only list views
  */
 export type FilterListViews<T extends Record<string, any>> = {
-	[K in keyof T as IsListView<T[K]> extends true ? K : never]: T[K];
+  [K in keyof T as IsListView<T[K]> extends true ? K : never]: T[K];
 };
 
 /**
  * Filter record to only edit views
  */
 export type FilterEditViews<T extends Record<string, any>> = {
-	[K in keyof T as IsEditView<T[K]> extends true ? K : never]: T[K];
+  [K in keyof T as IsEditView<T[K]> extends true ? K : never]: T[K];
 };

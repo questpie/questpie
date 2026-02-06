@@ -8,8 +8,8 @@
 import { text, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import {
-	stringColumnOperators,
-	stringJsonbOperators,
+  stringColumnOperators,
+  stringJsonbOperators,
 } from "../common-operators.js";
 import { defineField } from "../define-field.js";
 import type { FieldMetadataBase } from "../types.js";
@@ -38,8 +38,8 @@ import type { FieldMetadataBase } from "../types.js";
 
 // biome-ignore lint/suspicious/noEmptyInterface: we need interface for module augmentation
 export interface TextFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
-	_?: never;
+  /** Phantom property to prevent interface collapse - enables module augmentation */
+  _?: never;
 }
 
 // ============================================================================
@@ -50,53 +50,53 @@ export interface TextFieldMeta {
  * Text field configuration options.
  */
 export interface TextFieldConfig extends BaseFieldConfig {
-	/**
-	 * Field-specific metadata, augmentable by external packages.
-	 */
-	meta?: TextFieldMeta;
-	/**
-	 * Storage mode: varchar (default) or text.
-	 * - varchar: Fixed max length, slightly more efficient for short strings
-	 * - text: Unlimited length, use for potentially long content
-	 * @default "varchar"
-	 */
-	mode?: "varchar" | "text";
+  /**
+   * Field-specific metadata, augmentable by external packages.
+   */
+  meta?: TextFieldMeta;
+  /**
+   * Storage mode: varchar (default) or text.
+   * - varchar: Fixed max length, slightly more efficient for short strings
+   * - text: Unlimited length, use for potentially long content
+   * @default "varchar"
+   */
+  mode?: "varchar" | "text";
 
-	/**
-	 * Maximum character length.
-	 * Applied to varchar mode and Zod validation.
-	 * @default 255
-	 */
-	maxLength?: number;
+  /**
+   * Maximum character length.
+   * Applied to varchar mode and Zod validation.
+   * @default 255
+   */
+  maxLength?: number;
 
-	/**
-	 * Minimum character length for validation.
-	 */
-	minLength?: number;
+  /**
+   * Minimum character length for validation.
+   */
+  minLength?: number;
 
-	/**
-	 * Regex pattern for validation.
-	 * Can be a RegExp or string pattern.
-	 */
-	pattern?: RegExp | string;
+  /**
+   * Regex pattern for validation.
+   * Can be a RegExp or string pattern.
+   */
+  pattern?: RegExp | string;
 
-	/**
-	 * Trim whitespace from input.
-	 * Applied as Zod transform.
-	 */
-	trim?: boolean;
+  /**
+   * Trim whitespace from input.
+   * Applied as Zod transform.
+   */
+  trim?: boolean;
 
-	/**
-	 * Convert to lowercase.
-	 * Applied as Zod transform.
-	 */
-	lowercase?: boolean;
+  /**
+   * Convert to lowercase.
+   * Applied as Zod transform.
+   */
+  lowercase?: boolean;
 
-	/**
-	 * Convert to uppercase.
-	 * Applied as Zod transform.
-	 */
-	uppercase?: boolean;
+  /**
+   * Convert to uppercase.
+   * Applied as Zod transform.
+   */
+  uppercase?: boolean;
 }
 
 import type { BaseFieldConfig } from "../types.js";
@@ -110,10 +110,10 @@ import type { BaseFieldConfig } from "../types.js";
  * Provides rich text search and comparison.
  */
 function getTextOperators(_config: TextFieldConfig) {
-	return {
-		column: stringColumnOperators,
-		jsonb: stringJsonbOperators,
-	};
+  return {
+    column: stringColumnOperators,
+    jsonb: stringJsonbOperators,
+  };
 }
 
 // ============================================================================
@@ -132,88 +132,88 @@ function getTextOperators(_config: TextFieldConfig) {
  * ```
  */
 export const textField = defineField<TextFieldConfig, string>()({
-	type: "text" as const,
-	_value: undefined as unknown as string,
+  type: "text" as const,
+  _value: undefined as unknown as string,
 
-	toColumn(_name: string, config: TextFieldConfig) {
-		const { mode = "varchar", maxLength = 255 } = config;
+  toColumn(_name: string, config: TextFieldConfig) {
+    const { mode = "varchar", maxLength = 255 } = config;
 
-		// Don't specify column name - Drizzle uses the key name
-		let column: any = mode === "text" ? text() : varchar({ length: maxLength });
+    // Don't specify column name - Drizzle uses the key name
+    let column: any = mode === "text" ? text() : varchar({ length: maxLength });
 
-		// Apply constraints
-		if (config.required && config.nullable !== true) {
-			column = column.notNull();
-		}
-		if (config.default !== undefined) {
-			const defaultValue =
-				typeof config.default === "function"
-					? config.default()
-					: config.default;
-			column = column.default(defaultValue as string);
-		}
+    // Apply constraints
+    if (config.required && config.nullable !== true) {
+      column = column.notNull();
+    }
+    if (config.default !== undefined) {
+      const defaultValue =
+        typeof config.default === "function"
+          ? config.default()
+          : config.default;
+      column = column.default(defaultValue as string);
+    }
 
-		return column;
-	},
+    return column;
+  },
 
-	toZodSchema(config: TextFieldConfig) {
-		let schema = z.string();
+  toZodSchema(config: TextFieldConfig) {
+    let schema = z.string();
 
-		// Validation rules
-		if (config.maxLength !== undefined) {
-			schema = schema.max(config.maxLength);
-		}
-		if (config.minLength !== undefined) {
-			schema = schema.min(config.minLength);
-		}
-		if (config.pattern) {
-			const regex =
-				typeof config.pattern === "string"
-					? new RegExp(config.pattern)
-					: config.pattern;
-			schema = schema.regex(regex);
-		}
+    // Validation rules
+    if (config.maxLength !== undefined) {
+      schema = schema.max(config.maxLength);
+    }
+    if (config.minLength !== undefined) {
+      schema = schema.min(config.minLength);
+    }
+    if (config.pattern) {
+      const regex =
+        typeof config.pattern === "string"
+          ? new RegExp(config.pattern)
+          : config.pattern;
+      schema = schema.regex(regex);
+    }
 
-		// Transforms
-		if (config.trim) {
-			schema = schema.trim();
-		}
-		if (config.lowercase) {
-			schema = schema.toLowerCase();
-		}
-		if (config.uppercase) {
-			schema = schema.toUpperCase();
-		}
+    // Transforms
+    if (config.trim) {
+      schema = schema.trim();
+    }
+    if (config.lowercase) {
+      schema = schema.toLowerCase();
+    }
+    if (config.uppercase) {
+      schema = schema.toUpperCase();
+    }
 
-		// Nullability
-		if (!config.required && config.nullable !== false) {
-			return schema.nullish();
-		}
+    // Nullability
+    if (!config.required && config.nullable !== false) {
+      return schema.nullish();
+    }
 
-		return schema;
-	},
+    return schema;
+  },
 
-	getOperators<TApp>(config: TextFieldConfig) {
-		return getTextOperators(config);
-	},
+  getOperators<TApp>(config: TextFieldConfig) {
+    return getTextOperators(config);
+  },
 
-	getMetadata(config: TextFieldConfig): FieldMetadataBase {
-		return {
-			type: "text",
-			label: config.label,
-			description: config.description,
-			required: config.required ?? false,
-			localized: config.localized ?? false,
-			readOnly: config.input === false,
-			writeOnly: config.output === false,
-			validation: {
-				maxLength: config.maxLength,
-				minLength: config.minLength,
-				pattern: config.pattern?.toString(),
-			},
-			meta: config.meta,
-		};
-	},
+  getMetadata(config: TextFieldConfig): FieldMetadataBase {
+    return {
+      type: "text",
+      label: config.label,
+      description: config.description,
+      required: config.required ?? false,
+      localized: config.localized ?? false,
+      readOnly: config.input === false,
+      writeOnly: config.output === false,
+      validation: {
+        maxLength: config.maxLength,
+        minLength: config.minLength,
+        pattern: config.pattern?.toString(),
+      },
+      meta: config.meta,
+    };
+  },
 });
 
 // Register in default registry

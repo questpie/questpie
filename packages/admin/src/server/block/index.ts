@@ -16,27 +16,27 @@
  */
 
 export {
-	type AnyBlockBuilder,
-	type AnyBlockDefinition,
-	BlockBuilder,
-	type BlockBuilderState,
-	type BlockDefinition,
-	type BlockPrefetchContext,
-	type BlockPrefetchFn,
-	block,
-	type InferBlockValues,
+  type AnyBlockBuilder,
+  type AnyBlockDefinition,
+  BlockBuilder,
+  type BlockBuilderState,
+  type BlockDefinition,
+  type BlockPrefetchContext,
+  type BlockPrefetchFn,
+  block,
+  type InferBlockValues,
 } from "./block-builder.js";
 // Introspection
 export {
-	type BlockSchema,
-	getBlocksByCategory,
-	introspectBlock,
-	introspectBlocks,
+  type BlockSchema,
+  getBlocksByCategory,
+  introspectBlock,
+  introspectBlocks,
 } from "./introspection.js";
 // Prefetch utilities
 export {
-	type BlocksPrefetchContext,
-	createBlocksPrefetchHook,
-	processBlocksDocument,
-	processDocumentBlocksPrefetch,
+  type BlocksPrefetchContext,
+  createBlocksPrefetchHook,
+  processBlocksDocument,
+  processDocumentBlocksPrefetch,
 } from "./prefetch.js";

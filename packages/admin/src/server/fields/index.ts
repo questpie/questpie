@@ -23,19 +23,18 @@
 
 // Export types
 export type {
-	BlockNode,
-	BlocksDocument,
-	BlocksFieldMeta,
-	BlockValues,
+  BlockNode,
+  BlocksDocument,
+  BlocksFieldMeta,
+  BlockValues,
 } from "./blocks.js";
 // Export field factories
 export { type BlocksFieldConfig, blocksField } from "./blocks.js";
 export type {
-	RichTextFeature,
-	RichTextFieldMeta,
-	RichTextOutputFormat,
-	TipTapDocument,
-	TipTapNode,
+  RichTextFeature,
+  RichTextFieldMeta,
+  TipTapDocument,
+  TipTapNode,
 } from "./rich-text.js";
 export { type RichTextFieldConfig, richTextField } from "./rich-text.js";
 
@@ -48,6 +47,6 @@ import { richTextField } from "./rich-text.js";
  * These are automatically registered when adminModule is used.
  */
 export const adminFields = {
-	richText: richTextField,
-	blocks: blocksField,
+  richText: richTextField,
+  blocks: blocksField,
 } as const;

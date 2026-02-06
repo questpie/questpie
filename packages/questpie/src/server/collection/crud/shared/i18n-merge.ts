@@ -11,28 +11,28 @@
  */
 
 import {
-	hasI18nMarkers,
-	LOCALIZED_COLUMN,
-	mergeNestedLocalizedFromColumn,
+  hasI18nMarkers,
+  LOCALIZED_COLUMN,
+  mergeNestedLocalizedFromColumn,
 } from "./localization.js";
 
 /**
  * Parse a localized field name to extract field name and mode.
  */
 function parseLocalizedField(localizedField: string): {
-	name: string;
-	mode: "whole" | "nested";
+  name: string;
+  mode: "whole" | "nested";
 } {
-	if (localizedField.endsWith(":nested")) {
-		return {
-			name: localizedField.slice(0, -7),
-			mode: "nested",
-		};
-	}
-	return {
-		name: localizedField,
-		mode: "whole",
-	};
+  if (localizedField.endsWith(":nested")) {
+    return {
+      name: localizedField.slice(0, -7),
+      mode: "nested",
+    };
+  }
+  return {
+    name: localizedField,
+    mode: "whole",
+  };
 }
 
 /**
@@ -49,10 +49,10 @@ export const I18N_FALLBACK_PREFIX = "_i18n_fallback_";
  * Options for merging i18n row data
  */
 export interface MergeI18nOptions {
-	/** List of field names that are flat localized (entire column) */
-	localizedFields: readonly string[];
-	/** Whether fallback was used (if false, no fallback columns exist) */
-	hasFallback: boolean;
+  /** List of field names that are flat localized (entire column) */
+  localizedFields: readonly string[];
+  /** Whether fallback was used (if false, no fallback columns exist) */
+  hasFallback: boolean;
 }
 
 /**
@@ -78,80 +78,80 @@ export interface MergeI18nOptions {
  * @returns Row with merged localized field values (prefixed columns removed)
  */
 export function mergeI18nRow<T extends Record<string, unknown>>(
-	row: T,
-	options: MergeI18nOptions,
+  row: T,
+  options: MergeI18nOptions,
 ): T {
-	const result = { ...row } as Record<string, unknown>;
+  const result = { ...row } as Record<string, unknown>;
 
-	// 1. Handle flat localized fields and JSONB whole-mode fields
-	// Both have prefixed columns in the i18n table
-	// Nested-mode JSONB fields use _localized column instead
-	for (const localizedField of options.localizedFields) {
-		const parsed = parseLocalizedField(localizedField);
+  // 1. Handle flat localized fields and JSONB whole-mode fields
+  // Both have prefixed columns in the i18n table
+  // Nested-mode JSONB fields use _localized column instead
+  for (const localizedField of options.localizedFields) {
+    const parsed = parseLocalizedField(localizedField);
 
-		// Skip nested-mode fields - they're handled via _localized column
-		if (parsed.mode === "nested") {
-			continue;
-		}
+    // Skip nested-mode fields - they're handled via _localized column
+    if (parsed.mode === "nested") {
+      continue;
+    }
 
-		const fieldName = parsed.name;
-		const currentKey = `${I18N_CURRENT_PREFIX}${fieldName}`;
-		const fallbackKey = `${I18N_FALLBACK_PREFIX}${fieldName}`;
+    const fieldName = parsed.name;
+    const currentKey = `${I18N_CURRENT_PREFIX}${fieldName}`;
+    const fallbackKey = `${I18N_FALLBACK_PREFIX}${fieldName}`;
 
-		// Only process if this field has prefixed columns in result
-		if (!(currentKey in result)) {
-			continue;
-		}
+    // Only process if this field has prefixed columns in result
+    if (!(currentKey in result)) {
+      continue;
+    }
 
-		// Priority: current locale > fallback locale > null
-		const currentValue = result[currentKey];
-		const fallbackValue = result[fallbackKey];
+    // Priority: current locale > fallback locale > null
+    const currentValue = result[currentKey];
+    const fallbackValue = result[fallbackKey];
 
-		result[fieldName] =
-			currentValue ?? (options.hasFallback ? fallbackValue : null) ?? null;
+    result[fieldName] =
+      currentValue ?? (options.hasFallback ? fallbackValue : null) ?? null;
 
-		// Cleanup internal prefixed keys
-		delete result[currentKey];
-		if (options.hasFallback) {
-			delete result[fallbackKey];
-		}
-	}
+    // Cleanup internal prefixed keys
+    delete result[currentKey];
+    if (options.hasFallback) {
+      delete result[fallbackKey];
+    }
+  }
 
-	// 2. Handle _localized column (nested localized values)
-	const localizedCurrentKey = `${I18N_CURRENT_PREFIX}${LOCALIZED_COLUMN}`;
-	const localizedFallbackKey = `${I18N_FALLBACK_PREFIX}${LOCALIZED_COLUMN}`;
+  // 2. Handle _localized column (nested localized values)
+  const localizedCurrentKey = `${I18N_CURRENT_PREFIX}${LOCALIZED_COLUMN}`;
+  const localizedFallbackKey = `${I18N_FALLBACK_PREFIX}${LOCALIZED_COLUMN}`;
 
-	const localizedCurrent = result[localizedCurrentKey] as
-		| Record<string, any>
-		| null
-		| undefined;
-	const localizedFallback = options.hasFallback
-		? (result[localizedFallbackKey] as Record<string, any> | null | undefined)
-		: null;
+  const localizedCurrent = result[localizedCurrentKey] as
+    | Record<string, any>
+    | null
+    | undefined;
+  const localizedFallback = options.hasFallback
+    ? (result[localizedFallbackKey] as Record<string, any> | null | undefined)
+    : null;
 
-	// Cleanup _localized prefixed keys
-	delete result[localizedCurrentKey];
-	if (options.hasFallback) {
-		delete result[localizedFallbackKey];
-	}
+  // Cleanup _localized prefixed keys
+  delete result[localizedCurrentKey];
+  if (options.hasFallback) {
+    delete result[localizedFallbackKey];
+  }
 
-	const hasNestedMarkers = Object.values(result).some(hasI18nMarkers);
+  const hasNestedMarkers = Object.values(result).some(hasI18nMarkers);
 
-	// Merge nested localized values if markers exist or _localized data is present
-	if (
-		hasNestedMarkers ||
-		localizedCurrent != null ||
-		localizedFallback != null
-	) {
-		const merged = mergeNestedLocalizedFromColumn(
-			result as Record<string, any>,
-			localizedCurrent,
-			localizedFallback,
-		);
-		return merged as T;
-	}
+  // Merge nested localized values if markers exist or _localized data is present
+  if (
+    hasNestedMarkers ||
+    localizedCurrent != null ||
+    localizedFallback != null
+  ) {
+    const merged = mergeNestedLocalizedFromColumn(
+      result as Record<string, any>,
+      localizedCurrent,
+      localizedFallback,
+    );
+    return merged as T;
+  }
 
-	return result as T;
+  return result as T;
 }
 
 /**
@@ -162,10 +162,10 @@ export function mergeI18nRow<T extends Record<string, unknown>>(
  * @returns Rows with merged localized field values
  */
 export function mergeI18nRows<T extends Record<string, unknown>>(
-	rows: T[],
-	options: MergeI18nOptions,
+  rows: T[],
+  options: MergeI18nOptions,
 ): T[] {
-	return rows.map((row) => mergeI18nRow(row, options));
+  return rows.map((row) => mergeI18nRow(row, options));
 }
 
 /**
@@ -175,5 +175,5 @@ export function mergeI18nRows<T extends Record<string, unknown>>(
  * @returns True if row contains i18n prefixed columns
  */
 export function hasI18nPrefixedColumns(row: Record<string, unknown>): boolean {
-	return Object.keys(row).some((key) => key.startsWith(I18N_CURRENT_PREFIX));
+  return Object.keys(row).some((key) => key.startsWith(I18N_CURRENT_PREFIX));
 }

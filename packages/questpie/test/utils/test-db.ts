@@ -15,66 +15,65 @@ const dirname = path.dirname(filename);
 export const testMigrationDir = join(dirname, "test-migrations-generate");
 
 export const createTestDb = async () => {
-	// Create PGlite with pg_trgm extension for trigram search support
-	const client = await PGlite.create({
-		extensions: { pg_trgm },
-	});
+  // Create PGlite with pg_trgm extension for trigram search support
+  const client = await PGlite.create({
+    extensions: { pg_trgm },
+  });
 
-	return client;
+  return client;
 };
 
 export const runTestDbMigrations = async (
-	app: Questpie<any> | MockApp<any>,
+  app: Questpie<any> | MockApp<any>,
 ) => {
-	// Generate migrations in-memory using drizzle-kit API
-	const { generateDrizzleJson, generateMigration } = await import(
-		"drizzle-kit/api-postgres"
-	);
+  // Generate migrations in-memory using drizzle-kit API
+  const { generateDrizzleJson, generateMigration } =
+    await import("drizzle-kit/api-postgres");
 
-	const schema = app.getSchema();
-	const emptySnapshot = {
-		id: "00000000-0000-0000-0000-000000000000",
-		dialect: "postgres" as const,
-		prevIds: [],
-		version: "8" as const,
-		ddl: [],
-		renames: [],
-	};
+  const schema = app.getSchema();
+  const emptySnapshot = {
+    id: "00000000-0000-0000-0000-000000000000",
+    dialect: "postgres" as const,
+    prevIds: [],
+    version: "8" as const,
+    ddl: [],
+    renames: [],
+  };
 
-	// Generate snapshot from current schema
-	const snapshot = await generateDrizzleJson(schema, emptySnapshot.id);
+  // Generate snapshot from current schema
+  const snapshot = await generateDrizzleJson(schema, emptySnapshot.id);
 
-	// Generate SQL statements
-	const upStatements = await generateMigration(emptySnapshot, snapshot);
-	const downStatements = await generateMigration(snapshot, emptySnapshot);
+  // Generate SQL statements
+  const upStatements = await generateMigration(emptySnapshot, snapshot);
+  const downStatements = await generateMigration(snapshot, emptySnapshot);
 
-	// Create migration object
-	const migration = {
-		id: "test_migration",
-		async up({ db }: any) {
-			for (const statement of upStatements) {
-				if (statement.trim()) {
-					await db.execute(sql.raw(statement));
-				}
-			}
-		},
-		async down({ db }: any) {
-			for (const statement of downStatements) {
-				if (statement.trim()) {
-					await db.execute(sql.raw(statement));
-				}
-			}
-		},
-	};
+  // Create migration object
+  const migration = {
+    id: "test_migration",
+    async up({ db }: any) {
+      for (const statement of upStatements) {
+        if (statement.trim()) {
+          await db.execute(sql.raw(statement));
+        }
+      }
+    },
+    async down({ db }: any) {
+      for (const statement of downStatements) {
+        if (statement.trim()) {
+          await db.execute(sql.raw(statement));
+        }
+      }
+    },
+  };
 
-	// Add migration to config
-	app.config.migrations = {
-		migrations: [migration],
-	};
+  // Add migration to config
+  app.config.migrations = {
+    migrations: [migration],
+  };
 
-	// Run migrations
-	await app.migrations.up();
+  // Run migrations
+  await app.migrations.up();
 
-	// Ensure search service is initialized (in case fire-and-forget init hasn't completed)
-	await app.search?.initialize?.();
+  // Ensure search service is initialized (in case fire-and-forget init hasn't completed)
+  await app.search?.initialize?.();
 };

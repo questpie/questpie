@@ -31,15 +31,15 @@ declare const __dateInputBrand: unique symbol;
  * { createdAt: { gte: new Date() } }     // ✓ Date
  */
 export type DateInput = (Date | string) & {
-	readonly [__dateInputBrand]?: never;
+  readonly [__dateInputBrand]?: never;
 };
 
 import type {
-	Collection,
-	CollectionBuilder,
-	FunctionDefinition,
-	Global,
-	GlobalBuilder,
+  Collection,
+  CollectionBuilder,
+  FunctionDefinition,
+  Global,
+  GlobalBuilder,
 } from "#questpie/server/index.js";
 
 // ============================================================================
@@ -50,26 +50,26 @@ import type {
  * Materialize computed types
  */
 export type Prettify<T> = {
-	[K in keyof T]: T[K];
+  [K in keyof T]: T[K];
 } & {};
 
 /**
  * Merge two types - U overrides T. Stays lazy.
  */
 export type TypeMerge<T, U> = {
-	[K in keyof T | keyof U]: K extends keyof U
-		? U[K]
-		: K extends keyof T
-			? T[K]
-			: never;
+  [K in keyof T | keyof U]: K extends keyof U
+    ? U[K]
+    : K extends keyof T
+      ? T[K]
+      : never;
 };
 
 /**
  * Set a property in a type. Stays lazy.
  */
 export type SetProperty<T, K extends PropertyKey, V> = TypeMerge<
-	Omit<T, K>,
-	{ [P in K]: V }
+  Omit<T, K>,
+  { [P in K]: V }
 >;
 
 /**
@@ -89,22 +89,22 @@ export type AnyGlobalBuilder = GlobalBuilder<any>;
 export type AnyGlobalOrBuilder = AnyGlobal | AnyGlobalBuilder;
 
 export type PrettifiedAnyCollectionOrBuilder<
-	TCollectionOrBuilder extends AnyCollectionOrBuilder,
+  TCollectionOrBuilder extends AnyCollectionOrBuilder,
 > =
-	TCollectionOrBuilder extends Collection<infer TState>
-		? Collection<Prettify<TState>>
-		: TCollectionOrBuilder extends CollectionBuilder<infer TState>
-			? CollectionBuilder<Prettify<TState>>
-			: never;
+  TCollectionOrBuilder extends Collection<infer TState>
+    ? Collection<Prettify<TState>>
+    : TCollectionOrBuilder extends CollectionBuilder<infer TState>
+      ? CollectionBuilder<Prettify<TState>>
+      : never;
 
 export type PrettifiedAnyGlobalOrBuilder<
-	TGlobalOrBuilder extends AnyGlobalOrBuilder,
+  TGlobalOrBuilder extends AnyGlobalOrBuilder,
 > =
-	TGlobalOrBuilder extends Global<infer TState>
-		? Global<Prettify<TState>>
-		: TGlobalOrBuilder extends GlobalBuilder<infer TState>
-			? GlobalBuilder<Prettify<TState>>
-			: never;
+  TGlobalOrBuilder extends Global<infer TState>
+    ? Global<Prettify<TState>>
+    : TGlobalOrBuilder extends GlobalBuilder<infer TState>
+      ? GlobalBuilder<Prettify<TState>>
+      : never;
 // ============================================================================
 // Collection Type Inference (from $infer property)
 // ============================================================================
@@ -113,47 +113,47 @@ export type PrettifiedAnyGlobalOrBuilder<
  * Extract the $infer property from a Collection or CollectionBuilder
  */
 export type CollectionInfer<T> = T extends { $infer: infer Infer }
-	? Infer
-	: never;
+  ? Infer
+  : never;
 
 /**
  * Extract field access configuration from a Collection state
  */
 type CollectionFieldAccess<T> =
-	CollectionState<T> extends {
-		fieldDefinitions: infer FieldDefinitions;
-	}
-		? FieldDefinitions extends Record<string, any>
-			? {
-					[K in keyof FieldDefinitions as FieldDefinitions[K] extends {
-						state: { config?: { access?: any } };
-					}
-						? NonNullable<
-								FieldDefinitions[K]["state"]["config"]
-							>["access"] extends undefined
-							? never
-							: K
-						: never]?: true;
-				}
-			: Record<never, never>
-		: Record<never, never>;
+  CollectionState<T> extends {
+    fieldDefinitions: infer FieldDefinitions;
+  }
+    ? FieldDefinitions extends Record<string, any>
+      ? {
+          [K in keyof FieldDefinitions as FieldDefinitions[K] extends {
+            state: { config?: { access?: any } };
+          }
+            ? NonNullable<
+                FieldDefinitions[K]["state"]["config"]
+              >["access"] extends undefined
+              ? never
+              : K
+            : never]?: true;
+        }
+      : Record<never, never>
+    : Record<never, never>;
 
 /**
  * Make fields optional if they have access rules defined
  * TODO: this should be used only in client select context
  */
 type MakeFieldsWithAccessOptional<TSelect, TFieldAccess> =
-	TFieldAccess extends Record<string, any>
-		? {
-				[K in keyof TSelect as K extends keyof TFieldAccess
-					? never
-					: K]: TSelect[K];
-			} & {
-				[K in keyof TSelect as K extends keyof TFieldAccess
-					? K
-					: never]?: TSelect[K];
-			}
-		: TSelect;
+  TFieldAccess extends Record<string, any>
+    ? {
+        [K in keyof TSelect as K extends keyof TFieldAccess
+          ? never
+          : K]: TSelect[K];
+      } & {
+        [K in keyof TSelect as K extends keyof TFieldAccess
+          ? K
+          : never]?: TSelect[K];
+      }
+    : TSelect;
 
 /**
  * Extract the select type from a Collection or CollectionBuilder
@@ -161,62 +161,62 @@ type MakeFieldsWithAccessOptional<TSelect, TFieldAccess> =
  * @example type Post = CollectionSelect<typeof posts>
  */
 export type CollectionSelect<T> =
-	CollectionInfer<T> extends {
-		select: infer Select;
-	}
-		? MakeFieldsWithAccessOptional<Select, CollectionFieldAccess<T>>
-		: never;
+  CollectionInfer<T> extends {
+    select: infer Select;
+  }
+    ? MakeFieldsWithAccessOptional<Select, CollectionFieldAccess<T>>
+    : never;
 
 /**
  * Extract the insert type from a Collection or CollectionBuilder
  * @example type PostInsert = CollectionInsert<typeof posts>
  */
 export type CollectionInsert<T> =
-	CollectionInfer<T> extends {
-		insert: infer Insert;
-	}
-		? Insert
-		: never;
+  CollectionInfer<T> extends {
+    insert: infer Insert;
+  }
+    ? Insert
+    : never;
 
 /**
  * Extract the update type from a Collection or CollectionBuilder
  * @example type PostUpdate = CollectionUpdate<typeof posts>
  */
 export type CollectionUpdate<T> =
-	CollectionInfer<T> extends {
-		update: infer Update;
-	}
-		? Update
-		: never;
+  CollectionInfer<T> extends {
+    update: infer Update;
+  }
+    ? Update
+    : never;
 
 /**
  * Extract the state from a Collection or CollectionBuilder
  */
 export type CollectionState<T> = T extends { state: infer State }
-	? State
-	: never;
+  ? State
+  : never;
 
 /**
  * Extract functions from a Collection or CollectionBuilder
  */
 export type CollectionFunctions<T> =
-	CollectionState<T> extends { functions: infer Functions }
-		? Functions extends Record<string, FunctionDefinition>
-			? Functions
-			: Record<string, FunctionDefinition>
-		: Record<string, FunctionDefinition>;
+  CollectionState<T> extends { functions: infer Functions }
+    ? Functions extends Record<string, FunctionDefinition>
+      ? Functions
+      : Record<string, FunctionDefinition>
+    : Record<string, FunctionDefinition>;
 
 /**
  * Extract relations from a Collection or CollectionBuilder
  */
 export type CollectionRelations<T> =
-	CollectionState<T> extends {
-		relations: infer Relations;
-	}
-		? Relations extends Record<string, RelationConfig>
-			? Relations
-			: Record<string, RelationConfig>
-		: Record<string, RelationConfig>;
+  CollectionState<T> extends {
+    relations: infer Relations;
+  }
+    ? Relations extends Record<string, RelationConfig>
+      ? Relations
+      : Record<string, RelationConfig>
+    : Record<string, RelationConfig>;
 
 // ============================================================================
 // Global Type Inference (from $infer property)
@@ -231,22 +231,22 @@ export type GlobalInfer<T> = T extends { $infer: infer Infer } ? Infer : never;
  * Extract field access configuration from a Global state
  */
 type GlobalFieldAccess<T> = T extends {
-	state: { fieldDefinitions: infer FieldDefinitions };
+  state: { fieldDefinitions: infer FieldDefinitions };
 }
-	? FieldDefinitions extends Record<string, any>
-		? {
-				[K in keyof FieldDefinitions as FieldDefinitions[K] extends {
-					state: { config?: { access?: any } };
-				}
-					? NonNullable<
-							FieldDefinitions[K]["state"]["config"]
-						>["access"] extends undefined
-						? never
-						: K
-					: never]?: true;
-			}
-		: {}
-	: {};
+  ? FieldDefinitions extends Record<string, any>
+    ? {
+        [K in keyof FieldDefinitions as FieldDefinitions[K] extends {
+          state: { config?: { access?: any } };
+        }
+          ? NonNullable<
+              FieldDefinitions[K]["state"]["config"]
+            >["access"] extends undefined
+            ? never
+            : K
+          : never]?: true;
+      }
+    : {}
+  : {};
 
 /**
  * Extract the select type from a Global or GlobalBuilder
@@ -254,23 +254,23 @@ type GlobalFieldAccess<T> = T extends {
  * @example type Settings = GlobalSelect<typeof siteSettings>
  */
 export type GlobalSelect<T> =
-	GlobalInfer<T> extends { select: infer Select }
-		? MakeFieldsWithAccessOptional<Select, GlobalFieldAccess<T>>
-		: never;
+  GlobalInfer<T> extends { select: infer Select }
+    ? MakeFieldsWithAccessOptional<Select, GlobalFieldAccess<T>>
+    : never;
 
 /**
  * Extract the insert type from a Global or GlobalBuilder
  * @example type SettingsInsert = GlobalInsert<typeof siteSettings>
  */
 export type GlobalInsert<T> =
-	GlobalInfer<T> extends { insert: infer Insert } ? Insert : never;
+  GlobalInfer<T> extends { insert: infer Insert } ? Insert : never;
 
 /**
  * Extract the update type from a Global or GlobalBuilder
  * @example type SettingsUpdate = GlobalUpdate<typeof siteSettings>
  */
 export type GlobalUpdate<T> =
-	GlobalInfer<T> extends { update: infer Update } ? Update : never;
+  GlobalInfer<T> extends { update: infer Update } ? Update : never;
 
 /**
  * Extract the state from a Global or GlobalBuilder
@@ -281,23 +281,23 @@ export type GlobalState<T> = T extends { state: infer State } ? State : never;
  * Extract functions from a Global or GlobalBuilder
  */
 export type GlobalFunctions<T> =
-	GlobalState<T> extends { functions: infer F }
-		? F extends Record<string, FunctionDefinition>
-			? F
-			: Record<string, FunctionDefinition>
-		: Record<string, FunctionDefinition>;
+  GlobalState<T> extends { functions: infer F }
+    ? F extends Record<string, FunctionDefinition>
+      ? F
+      : Record<string, FunctionDefinition>
+    : Record<string, FunctionDefinition>;
 
 /**
  * Extract relations from a Global or GlobalBuilder
  */
 export type GlobalRelations<T> =
-	GlobalState<T> extends {
-		relations: infer Relations;
-	}
-		? Relations extends Record<string, RelationConfig>
-			? Relations
-			: Record<string, RelationConfig>
-		: Record<string, RelationConfig>;
+  GlobalState<T> extends {
+    relations: infer Relations;
+  }
+    ? Relations extends Record<string, RelationConfig>
+      ? Relations
+      : Record<string, RelationConfig>
+    : Record<string, RelationConfig>;
 
 // ============================================================================
 // Collection Name Extraction & Lookup
@@ -308,13 +308,14 @@ export type GlobalRelations<T> =
  * @example type Posts = GetCollection<{ posts: typeof posts, pages: typeof pages }, "posts">
  */
 export type GetCollection<
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
-	Name extends keyof TCollections,
-> = TCollections[Name] extends Collection<infer TState>
-	? Collection<TState>
-	: TCollections[Name] extends CollectionBuilder<infer TState>
-		? Collection<TState>
-		: never;
+  TCollections extends Record<string, AnyCollectionOrBuilder>,
+  Name extends keyof TCollections,
+> =
+  TCollections[Name] extends Collection<infer TState>
+    ? Collection<TState>
+    : TCollections[Name] extends CollectionBuilder<infer TState>
+      ? Collection<TState>
+      : never;
 
 // ============================================================================
 // Global Name Extraction & Lookup
@@ -325,13 +326,14 @@ export type GetCollection<
  * @example type Settings = GetGlobal<{ siteSettings: typeof siteSettings, themeConfig: typeof themeConfig }, "siteSettings">
  */
 export type GetGlobal<
-	TGlobals extends Record<string, AnyGlobalOrBuilder>,
-	Name extends keyof TGlobals,
-> = TGlobals[Name] extends Global<infer TState>
-	? Global<TState>
-	: TGlobals[Name] extends GlobalBuilder<infer TState>
-		? Global<TState>
-		: never;
+  TGlobals extends Record<string, AnyGlobalOrBuilder>,
+  Name extends keyof TGlobals,
+> =
+  TGlobals[Name] extends Global<infer TState>
+    ? Global<TState>
+    : TGlobals[Name] extends GlobalBuilder<infer TState>
+      ? Global<TState>
+      : never;
 
 // ============================================================================
 // Relation Resolution
@@ -341,71 +343,71 @@ export type GetGlobal<
  * Resolve a collection select type by name
  */
 type ResolveCollectionSelect<
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
-	C,
+  TCollections extends Record<string, AnyCollectionOrBuilder>,
+  C,
 > = C extends keyof TCollections
-	? CollectionSelect<GetCollection<TCollections, C>>
-	: any;
+  ? CollectionSelect<GetCollection<TCollections, C>>
+  : any;
 
 type DecrementDepth<Depth extends unknown[]> = Depth extends [
-	unknown,
-	...infer Rest,
+  unknown,
+  ...infer Rest,
 ]
-	? Rest
-	: [];
+  ? Rest
+  : [];
 
 export type RelationShape<
-	TSelect,
-	TRelations,
-	TInsert = TSelect,
-	TCollection = unknown,
-	TApp = unknown,
+  TSelect,
+  TRelations,
+  TInsert = TSelect,
+  TCollection = unknown,
+  TApp = unknown,
 > = {
-	__select: TSelect;
-	__relations: TRelations;
-	__insert: TInsert;
-	__collection: TCollection;
-	__app: TApp;
+  __select: TSelect;
+  __relations: TRelations;
+  __insert: TInsert;
+  __collection: TCollection;
+  __app: TApp;
 };
 
 export type ExtractRelationSelect<T> =
-	T extends RelationShape<infer Select, any, any, any, any> ? Select : T;
+  T extends RelationShape<infer Select, any, any, any, any> ? Select : T;
 
 export type ExtractRelationRelations<T> =
-	T extends RelationShape<any, infer Relations, any, any, any>
-		? Relations
-		: never;
+  T extends RelationShape<any, infer Relations, any, any, any>
+    ? Relations
+    : never;
 
 export type ExtractRelationInsert<T> =
-	T extends RelationShape<any, any, infer Insert, any, any> ? Insert : T;
+  T extends RelationShape<any, any, infer Insert, any, any> ? Insert : T;
 
 export type ExtractRelationCollection<T> =
-	T extends RelationShape<any, any, any, infer Collection, any>
-		? Collection
-		: unknown;
+  T extends RelationShape<any, any, any, infer Collection, any>
+    ? Collection
+    : unknown;
 
 export type ExtractRelationApp<T> =
-	T extends RelationShape<any, any, any, any, infer App> ? App : unknown;
+  T extends RelationShape<any, any, any, any, infer App> ? App : unknown;
 
 type ResolveCollectionRelation<
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
-	C,
-	Depth extends unknown[],
+  TCollections extends Record<string, AnyCollectionOrBuilder>,
+  C,
+  Depth extends unknown[],
 > = C extends keyof TCollections
-	? RelationShape<
-			CollectionSelect<GetCollection<TCollections, C>>,
-			Depth extends []
-				? never
-				: ResolveRelationsDeep<
-						CollectionRelations<GetCollection<TCollections, C>>,
-						TCollections,
-						DecrementDepth<Depth>
-					>,
-			CollectionInsert<GetCollection<TCollections, C>>,
-			GetCollection<TCollections, C>,
-			unknown
-		>
-	: RelationShape<any, never, any, unknown, unknown>;
+  ? RelationShape<
+      CollectionSelect<GetCollection<TCollections, C>>,
+      Depth extends []
+        ? never
+        : ResolveRelationsDeep<
+            CollectionRelations<GetCollection<TCollections, C>>,
+            TCollections,
+            DecrementDepth<Depth>
+          >,
+      CollectionInsert<GetCollection<TCollections, C>>,
+      GetCollection<TCollections, C>,
+      unknown
+    >
+  : RelationShape<any, never, any, unknown, unknown>;
 
 /**
  * Resolve all relations from a RelationConfig to actual types
@@ -419,36 +421,36 @@ type ResolveCollectionRelation<
  * // => { author: User, comments: Comment[], tags: Tag[] }
  */
 export type ResolveRelations<
-	TRelations extends Record<string, RelationConfig>,
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
+  TRelations extends Record<string, RelationConfig>,
+  TCollections extends Record<string, AnyCollectionOrBuilder>,
 > = {
-	[K in keyof TRelations]: TRelations[K] extends {
-		type: "many" | "manyToMany";
-		collection: infer C;
-	}
-		? ResolveCollectionSelect<TCollections, C>[]
-		: TRelations[K] extends {
-					type: "one";
-					collection: infer C;
-				}
-			? ResolveCollectionSelect<TCollections, C>
-			: never;
+  [K in keyof TRelations]: TRelations[K] extends {
+    type: "many" | "manyToMany";
+    collection: infer C;
+  }
+    ? ResolveCollectionSelect<TCollections, C>[]
+    : TRelations[K] extends {
+          type: "one";
+          collection: infer C;
+        }
+      ? ResolveCollectionSelect<TCollections, C>
+      : never;
 };
 
 export type ResolveRelationsDeep<
-	TRelations extends Record<string, RelationConfig>,
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
-	Depth extends unknown[] = [1, 1, 1, 1, 1],
+  TRelations extends Record<string, RelationConfig>,
+  TCollections extends Record<string, AnyCollectionOrBuilder>,
+  Depth extends unknown[] = [1, 1, 1, 1, 1],
 > = {
-	[K in keyof TRelations]: TRelations[K] extends {
-		type: "many" | "manyToMany";
-		collection: infer C;
-	}
-		? ResolveCollectionRelation<TCollections, C, Depth>[]
-		: TRelations[K] extends {
-					type: "one";
-					collection: infer C;
-				}
-			? ResolveCollectionRelation<TCollections, C, Depth>
-			: never;
+  [K in keyof TRelations]: TRelations[K] extends {
+    type: "many" | "manyToMany";
+    collection: infer C;
+  }
+    ? ResolveCollectionRelation<TCollections, C, Depth>[]
+    : TRelations[K] extends {
+          type: "one";
+          collection: infer C;
+        }
+      ? ResolveCollectionRelation<TCollections, C, Depth>
+      : never;
 };

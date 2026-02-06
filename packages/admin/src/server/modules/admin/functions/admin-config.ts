@@ -17,12 +17,12 @@
 import { executeAccessRule, fn, type Questpie } from "questpie";
 import { z } from "zod";
 import type {
-	AdminCollectionConfig,
-	AdminGlobalConfig,
-	ServerDashboardConfig,
-	ServerDashboardItem,
-	ServerSidebarConfig,
-	ServerSidebarSection,
+  AdminCollectionConfig,
+  AdminGlobalConfig,
+  ServerDashboardConfig,
+  ServerDashboardItem,
+  ServerSidebarConfig,
+  ServerSidebarSection,
 } from "../../../augmentation.js";
 import { introspectBlocks } from "../../../block/introspection.js";
 
@@ -31,19 +31,19 @@ import { introspectBlocks } from "../../../block/introspection.js";
 // ============================================================================
 
 type AdminConfigItemMeta = {
-	label?: unknown;
-	description?: unknown;
-	icon?: { type: "icon"; props: Record<string, unknown> };
-	hidden?: boolean;
-	group?: string;
-	order?: number;
+  label?: unknown;
+  description?: unknown;
+  icon?: { type: "icon"; props: Record<string, unknown> };
+  hidden?: boolean;
+  group?: string;
+  order?: number;
 };
 
 /**
  * Helper to get typed CMS app from handler context.
  */
 function getApp(ctx: { app: unknown }): Questpie<any> {
-	return ctx.app as Questpie<any>;
+  return ctx.app as Questpie<any>;
 }
 
 // ============================================================================
@@ -56,22 +56,22 @@ function getApp(ctx: { app: unknown }): Questpie<any> {
  * Fail-open: returns true on errors to avoid hiding content due to rule bugs.
  */
 async function hasReadAccess(
-	readRule: unknown,
-	ctx: { app: unknown; session?: any; db: any; locale?: string },
+  readRule: unknown,
+  ctx: { app: unknown; session?: any; db: any; locale?: string },
 ): Promise<boolean> {
-	if (readRule === undefined || readRule === true) return true;
-	if (readRule === false) return false;
-	try {
-		const result = await executeAccessRule(readRule as any, {
-			cms: ctx.app as any,
-			db: ctx.db,
-			session: ctx.session,
-			locale: ctx.locale,
-		});
-		return result !== false; // AccessWhere = still visible (row-level filter, but collection itself is accessible)
-	} catch {
-		return true; // Fail-open: don't hide content due to access rule errors
-	}
+  if (readRule === undefined || readRule === true) return true;
+  if (readRule === false) return false;
+  try {
+    const result = await executeAccessRule(readRule as any, {
+      cms: ctx.app as any,
+      db: ctx.db,
+      session: ctx.session,
+      locale: ctx.locale,
+    });
+    return result !== false; // AccessWhere = still visible (row-level filter, but collection itself is accessible)
+  } catch {
+    return true; // Fail-open: don't hide content due to access rule errors
+  }
 }
 
 // ============================================================================
@@ -82,57 +82,57 @@ async function hasReadAccess(
  * Extract admin metadata from all registered collections.
  */
 function extractCollectionsMeta(
-	cms: Questpie<any>,
+  cms: Questpie<any>,
 ): Record<string, AdminConfigItemMeta> {
-	const result: Record<string, AdminConfigItemMeta> = {};
-	const collections = cms.getCollections();
+  const result: Record<string, AdminConfigItemMeta> = {};
+  const collections = cms.getCollections();
 
-	for (const [name, collection] of Object.entries(collections)) {
-		const admin: AdminCollectionConfig | undefined = (collection as any)
-			.state?.admin;
-		if (admin) {
-			result[name] = {
-				label: admin.label,
-				description: admin.description,
-				icon: admin.icon,
-				hidden: admin.hidden,
-				group: admin.group,
-				order: admin.order,
-			};
-		} else {
-			result[name] = {};
-		}
-	}
+  for (const [name, collection] of Object.entries(collections)) {
+    const admin: AdminCollectionConfig | undefined = (collection as any).state
+      ?.admin;
+    if (admin) {
+      result[name] = {
+        label: admin.label,
+        description: admin.description,
+        icon: admin.icon,
+        hidden: admin.hidden,
+        group: admin.group,
+        order: admin.order,
+      };
+    } else {
+      result[name] = {};
+    }
+  }
 
-	return result;
+  return result;
 }
 
 /**
  * Extract admin metadata from all registered globals.
  */
 function extractGlobalsMeta(
-	cms: Questpie<any>,
+  cms: Questpie<any>,
 ): Record<string, AdminConfigItemMeta> {
-	const result: Record<string, AdminConfigItemMeta> = {};
-	const globals = cms.getGlobals();
+  const result: Record<string, AdminConfigItemMeta> = {};
+  const globals = cms.getGlobals();
 
-	for (const [name, global] of Object.entries(globals)) {
-		const admin: AdminGlobalConfig | undefined = (global as any).state?.admin;
-		if (admin) {
-			result[name] = {
-				label: admin.label,
-				description: admin.description,
-				icon: admin.icon,
-				hidden: admin.hidden,
-				group: admin.group,
-				order: admin.order,
-			};
-		} else {
-			result[name] = {};
-		}
-	}
+  for (const [name, global] of Object.entries(globals)) {
+    const admin: AdminGlobalConfig | undefined = (global as any).state?.admin;
+    if (admin) {
+      result[name] = {
+        label: admin.label,
+        description: admin.description,
+        icon: admin.icon,
+        hidden: admin.hidden,
+        group: admin.group,
+        order: admin.order,
+      };
+    } else {
+      result[name] = {};
+    }
+  }
 
-	return result;
+  return result;
 }
 
 // ============================================================================
@@ -144,90 +144,88 @@ function extractGlobalsMeta(
  * Used when no explicit `.sidebar()` is configured.
  */
 function buildAutoSidebar(
-	collectionsMeta: Record<string, AdminConfigItemMeta>,
-	globalsMeta: Record<string, AdminConfigItemMeta>,
+  collectionsMeta: Record<string, AdminConfigItemMeta>,
+  globalsMeta: Record<string, AdminConfigItemMeta>,
 ): ServerSidebarConfig {
-	// Group collections by their admin.group property
-	const ungrouped: Array<{ name: string; meta: AdminConfigItemMeta }> = [];
-	const grouped: Record<
-		string,
-		Array<{ name: string; meta: AdminConfigItemMeta }>
-	> = {};
+  // Group collections by their admin.group property
+  const ungrouped: Array<{ name: string; meta: AdminConfigItemMeta }> = [];
+  const grouped: Record<
+    string,
+    Array<{ name: string; meta: AdminConfigItemMeta }>
+  > = {};
 
-	for (const [name, meta] of Object.entries(collectionsMeta)) {
-		if (meta.hidden) continue;
-		if (meta.group) {
-			if (!grouped[meta.group]) grouped[meta.group] = [];
-			grouped[meta.group].push({ name, meta });
-		} else {
-			ungrouped.push({ name, meta });
-		}
-	}
+  for (const [name, meta] of Object.entries(collectionsMeta)) {
+    if (meta.hidden) continue;
+    if (meta.group) {
+      if (!grouped[meta.group]) grouped[meta.group] = [];
+      grouped[meta.group].push({ name, meta });
+    } else {
+      ungrouped.push({ name, meta });
+    }
+  }
 
-	// Sort by order within each group
-	const sortByOrder = (
-		a: { meta: AdminConfigItemMeta },
-		b: { meta: AdminConfigItemMeta },
-	) => (a.meta.order ?? 0) - (b.meta.order ?? 0);
+  // Sort by order within each group
+  const sortByOrder = (
+    a: { meta: AdminConfigItemMeta },
+    b: { meta: AdminConfigItemMeta },
+  ) => (a.meta.order ?? 0) - (b.meta.order ?? 0);
 
-	ungrouped.sort(sortByOrder);
-	for (const items of Object.values(grouped)) {
-		items.sort(sortByOrder);
-	}
+  ungrouped.sort(sortByOrder);
+  for (const items of Object.values(grouped)) {
+    items.sort(sortByOrder);
+  }
 
-	const sections: ServerSidebarSection[] = [];
+  const sections: ServerSidebarSection[] = [];
 
-	// Content section: ungrouped collections
-	if (ungrouped.length > 0) {
-		sections.push({
-			id: "content",
-			title: { en: "Content" },
-			items: ungrouped.map(({ name, meta }) => ({
-				type: "collection" as const,
-				collection: name,
-				label: meta.label as any,
-				icon: meta.icon,
-			})),
-		});
-	}
+  // Content section: ungrouped collections
+  if (ungrouped.length > 0) {
+    sections.push({
+      id: "content",
+      title: { en: "Content" },
+      items: ungrouped.map(({ name, meta }) => ({
+        type: "collection" as const,
+        collection: name,
+        label: meta.label as any,
+        icon: meta.icon,
+      })),
+    });
+  }
 
-	// Named sections for grouped collections
-	const sortedGroupNames = Object.keys(grouped).sort();
-	for (const groupName of sortedGroupNames) {
-		const items = grouped[groupName];
-		sections.push({
-			id: `group:${groupName}`,
-			title: { en: groupName.charAt(0).toUpperCase() + groupName.slice(1) },
-			items: items.map(({ name, meta }) => ({
-				type: "collection" as const,
-				collection: name,
-				label: meta.label as any,
-				icon: meta.icon,
-			})),
-		});
-	}
+  // Named sections for grouped collections
+  const sortedGroupNames = Object.keys(grouped).sort();
+  for (const groupName of sortedGroupNames) {
+    const items = grouped[groupName];
+    sections.push({
+      id: `group:${groupName}`,
+      title: { en: groupName.charAt(0).toUpperCase() + groupName.slice(1) },
+      items: items.map(({ name, meta }) => ({
+        type: "collection" as const,
+        collection: name,
+        label: meta.label as any,
+        icon: meta.icon,
+      })),
+    });
+  }
 
-	// Globals section
-	const visibleGlobals = Object.entries(globalsMeta).filter(
-		([, meta]) => !meta.hidden,
-	);
-	if (visibleGlobals.length > 0) {
-		visibleGlobals.sort(
-			([, a], [, b]) => (a.order ?? 0) - (b.order ?? 0),
-		);
-		sections.push({
-			id: "globals",
-			title: { en: "Globals" },
-			items: visibleGlobals.map(([name, meta]) => ({
-				type: "global" as const,
-				global: name,
-				label: meta.label as any,
-				icon: meta.icon,
-			})),
-		});
-	}
+  // Globals section
+  const visibleGlobals = Object.entries(globalsMeta).filter(
+    ([, meta]) => !meta.hidden,
+  );
+  if (visibleGlobals.length > 0) {
+    visibleGlobals.sort(([, a], [, b]) => (a.order ?? 0) - (b.order ?? 0));
+    sections.push({
+      id: "globals",
+      title: { en: "Globals" },
+      items: visibleGlobals.map(([name, meta]) => ({
+        type: "global" as const,
+        global: name,
+        label: meta.label as any,
+        icon: meta.icon,
+      })),
+    });
+  }
 
-	return { sections };
+  return { sections };
 }
 
 // ============================================================================
@@ -240,26 +238,24 @@ function buildAutoSidebar(
  * Removes empty sections after filtering.
  */
 function filterSidebarConfig(
-	config: ServerSidebarConfig,
-	accessibleCollections: Set<string>,
-	accessibleGlobals: Set<string>,
+  config: ServerSidebarConfig,
+  accessibleCollections: Set<string>,
+  accessibleGlobals: Set<string>,
 ): ServerSidebarConfig {
-	return {
-		sections: config.sections
-			.map((s) => ({
-				...s,
-				items: s.items.filter((item) => {
-					if (item.type === "collection")
-						return accessibleCollections.has(
-							(item as any).collection,
-						);
-					if (item.type === "global")
-						return accessibleGlobals.has((item as any).global);
-					return true; // pages, links, dividers always pass
-				}),
-			}))
-			.filter((s) => s.items.length > 0),
-	};
+  return {
+    sections: config.sections
+      .map((s) => ({
+        ...s,
+        items: s.items.filter((item) => {
+          if (item.type === "collection")
+            return accessibleCollections.has((item as any).collection);
+          if (item.type === "global")
+            return accessibleGlobals.has((item as any).global);
+          return true; // pages, links, dividers always pass
+        }),
+      }))
+      .filter((s) => s.items.length > 0),
+  };
 }
 
 // ============================================================================
@@ -271,24 +267,24 @@ function filterSidebarConfig(
  * Needed for fetchWidgetData lookup by widget ID.
  */
 function assignWidgetIds(items: ServerDashboardItem[]): void {
-	let counter = 0;
-	function walk(items: ServerDashboardItem[]) {
-		for (const item of items) {
-			if (item.type === "section") {
-				walk((item as any).items || []);
-			} else if (item.type === "tabs") {
-				for (const tab of (item as any).tabs || []) {
-					walk(tab.items || []);
-				}
-			} else {
-				// Widget — assign ID if missing
-				if (!(item as any).id) {
-					(item as any).id = `__auto_${item.type}_${counter++}`;
-				}
-			}
-		}
-	}
-	walk(items);
+  let counter = 0;
+  function walk(items: ServerDashboardItem[]) {
+    for (const item of items) {
+      if (item.type === "section") {
+        walk((item as any).items || []);
+      } else if (item.type === "tabs") {
+        for (const tab of (item as any).tabs || []) {
+          walk(tab.items || []);
+        }
+      } else {
+        // Widget — assign ID if missing
+        if (!(item as any).id) {
+          (item as any).id = `__auto_${item.type}_${counter++}`;
+        }
+      }
+    }
+  }
+  walk(items);
 }
 
 /**
@@ -296,88 +292,85 @@ function assignWidgetIds(items: ServerDashboardItem[]): void {
  * mark hasFetchFn, and filter by collection access.
  */
 async function processDashboardItems(
-	items: ServerDashboardItem[],
-	accessibleCollections: Set<string>,
-	accessCtx: { app: unknown; session?: any; db: any; locale?: string },
+  items: ServerDashboardItem[],
+  accessibleCollections: Set<string>,
+  accessCtx: { app: unknown; session?: any; db: any; locale?: string },
 ): Promise<ServerDashboardItem[]> {
-	const result: ServerDashboardItem[] = [];
+  const result: ServerDashboardItem[] = [];
 
-	for (const item of items) {
-		// Recurse into sections
-		if (item.type === "section") {
-			const filtered = await processDashboardItems(
-				(item as any).items || [],
-				accessibleCollections,
-				accessCtx,
-			);
-			if (filtered.length > 0) {
-				result.push({ ...item, items: filtered } as any);
-			}
-			continue;
-		}
+  for (const item of items) {
+    // Recurse into sections
+    if (item.type === "section") {
+      const filtered = await processDashboardItems(
+        (item as any).items || [],
+        accessibleCollections,
+        accessCtx,
+      );
+      if (filtered.length > 0) {
+        result.push({ ...item, items: filtered } as any);
+      }
+      continue;
+    }
 
-		// Recurse into tabs
-		if (item.type === "tabs") {
-			const tabs = [];
-			for (const tab of (item as any).tabs || []) {
-				const filtered = await processDashboardItems(
-					tab.items || [],
-					accessibleCollections,
-					accessCtx,
-				);
-				tabs.push({ ...tab, items: filtered });
-			}
-			result.push({ ...item, tabs } as any);
-			continue;
-		}
+    // Recurse into tabs
+    if (item.type === "tabs") {
+      const tabs = [];
+      for (const tab of (item as any).tabs || []) {
+        const filtered = await processDashboardItems(
+          tab.items || [],
+          accessibleCollections,
+          accessCtx,
+        );
+        tabs.push({ ...tab, items: filtered });
+      }
+      result.push({ ...item, tabs } as any);
+      continue;
+    }
 
-		// Widget processing
-		const widget = item as any;
+    // Widget processing
+    const widget = item as any;
 
-		// 1. Check per-widget access
-		if (widget.access !== undefined) {
-			const widgetAccessResult =
-				typeof widget.access === "function"
-					? await widget.access({
-							cms: accessCtx.app,
-							db: accessCtx.db,
-							session: accessCtx.session,
-							locale: accessCtx.locale,
-						})
-					: widget.access;
-			if (widgetAccessResult === false) continue;
-		}
+    // 1. Check per-widget access
+    if (widget.access !== undefined) {
+      const widgetAccessResult =
+        typeof widget.access === "function"
+          ? await widget.access({
+              cms: accessCtx.app,
+              db: accessCtx.db,
+              session: accessCtx.session,
+              locale: accessCtx.locale,
+            })
+          : widget.access;
+      if (widgetAccessResult === false) continue;
+    }
 
-		// 2. Check collection access for collection-bound widgets
-		if (
-			widget.collection &&
-			!accessibleCollections.has(widget.collection)
-		) {
-			continue;
-		}
+    // 2. Check collection access for collection-bound widgets
+    if (widget.collection && !accessibleCollections.has(widget.collection)) {
+      continue;
+    }
 
-		// 3. Filter quickActions' individual actions by collection access
-		if (widget.type === "quickActions") {
-			const actions = (widget.actions || []).filter((action: any) => {
-				if (action.action?.type === "create") {
-					return accessibleCollections.has(action.action.collection);
-				}
-				return true;
-			});
-			const { fetchFn, access, ...serializable } = widget;
-			result.push({ ...serializable, actions } as any);
-			continue;
-		}
+    // 3. Filter quickActions' individual actions by collection access
+    if (widget.type === "quickActions") {
+      const actions = (widget.actions || []).filter((action: any) => {
+        if (action.action?.type === "create") {
+          return accessibleCollections.has(action.action.collection);
+        }
+        return true;
+      });
+      const { fetchFn, access, ...serializable } = widget;
+      result.push({ ...serializable, actions } as any);
+      continue;
+    }
 
-		// 4. Strip non-serializable props, mark hasFetchFn
-		const { fetchFn, access, filterFn, ...serializable } = widget;
-		if (fetchFn) {
-			serializable.hasFetchFn = true;
-		}
-		result.push(serializable);
-	}
+    // 4. Strip non-serializable props, mark hasFetchFn
+    const { fetchFn, access, filterFn, ...serializable } = widget;
+    if (fetchFn) {
+      serializable.hasFetchFn = true;
+    }
+    result.push(serializable);
+  }
 
-	return result;
+  return result;
 }
 
 // ============================================================================
@@ -388,12 +381,12 @@ const getAdminConfigSchema = z.object({}).optional();
 
 // Output schema is flexible since dashboard/sidebar configs are complex
 const getAdminConfigOutputSchema = z.object({
-	dashboard: z.unknown().optional(),
-	sidebar: z.unknown().optional(),
-	branding: z.unknown().optional(),
-	blocks: z.record(z.string(), z.unknown()).optional(),
-	collections: z.record(z.string(), z.unknown()).optional(),
-	globals: z.record(z.string(), z.unknown()).optional(),
+  dashboard: z.unknown().optional(),
+  sidebar: z.unknown().optional(),
+  branding: z.unknown().optional(),
+  blocks: z.record(z.string(), z.unknown()).optional(),
+  collections: z.record(z.string(), z.unknown()).optional(),
+  globals: z.record(z.string(), z.unknown()).optional(),
 });
 
 // ============================================================================
@@ -425,119 +418,107 @@ const getAdminConfigOutputSchema = z.object({
  * ```
  */
 export const getAdminConfig = fn({
-	type: "query",
-	schema: getAdminConfigSchema,
-	outputSchema: getAdminConfigOutputSchema,
-	handler: async (ctx) => {
-		const cms = getApp(ctx);
-		const state = (cms as any).state || {};
+  type: "query",
+  schema: getAdminConfigSchema,
+  outputSchema: getAdminConfigOutputSchema,
+  handler: async (ctx) => {
+    const cms = getApp(ctx);
+    const state = (cms as any).state || {};
 
-		// 1. Compute accessible collections and globals
-		const collections = cms.getCollections();
-		const globals = cms.getGlobals();
-		const accessCtx = {
-			app: cms,
-			session: (ctx as any).session,
-			db: (ctx as any).db,
-			locale: (ctx as any).locale,
-		};
+    // 1. Compute accessible collections and globals
+    const collections = cms.getCollections();
+    const globals = cms.getGlobals();
+    const accessCtx = {
+      app: cms,
+      session: (ctx as any).session,
+      db: (ctx as any).db,
+      locale: (ctx as any).locale,
+    };
 
-		const accessibleCollections = new Set<string>();
-		for (const [name, col] of Object.entries(collections)) {
-			if (
-				await hasReadAccess(
-					(col as any).state?.access?.read,
-					accessCtx,
-				)
-			) {
-				accessibleCollections.add(name);
-			}
-		}
+    const accessibleCollections = new Set<string>();
+    for (const [name, col] of Object.entries(collections)) {
+      if (await hasReadAccess((col as any).state?.access?.read, accessCtx)) {
+        accessibleCollections.add(name);
+      }
+    }
 
-		const accessibleGlobals = new Set<string>();
-		for (const [name, g] of Object.entries(globals)) {
-			if (
-				await hasReadAccess(
-					(g as any).state?.access?.read,
-					accessCtx,
-				)
-			) {
-				accessibleGlobals.add(name);
-			}
-		}
+    const accessibleGlobals = new Set<string>();
+    for (const [name, g] of Object.entries(globals)) {
+      if (await hasReadAccess((g as any).state?.access?.read, accessCtx)) {
+        accessibleGlobals.add(name);
+      }
+    }
 
-		// 2. Extract and filter metadata
-		const allCollectionsMeta = extractCollectionsMeta(cms);
-		const allGlobalsMeta = extractGlobalsMeta(cms);
+    // 2. Extract and filter metadata
+    const allCollectionsMeta = extractCollectionsMeta(cms);
+    const allGlobalsMeta = extractGlobalsMeta(cms);
 
-		const filteredCollectionsMeta = Object.fromEntries(
-			Object.entries(allCollectionsMeta).filter(([n]) =>
-				accessibleCollections.has(n),
-			),
-		);
-		const filteredGlobalsMeta = Object.fromEntries(
-			Object.entries(allGlobalsMeta).filter(([n]) =>
-				accessibleGlobals.has(n),
-			),
-		);
+    const filteredCollectionsMeta = Object.fromEntries(
+      Object.entries(allCollectionsMeta).filter(([n]) =>
+        accessibleCollections.has(n),
+      ),
+    );
+    const filteredGlobalsMeta = Object.fromEntries(
+      Object.entries(allGlobalsMeta).filter(([n]) => accessibleGlobals.has(n)),
+    );
 
-		const response: {
-			dashboard?: unknown;
-			sidebar?: unknown;
-			branding?: { name?: unknown; logo?: unknown };
-			blocks?: Record<string, unknown>;
-			collections?: Record<string, unknown>;
-			globals?: Record<string, unknown>;
-		} = {};
+    const response: {
+      dashboard?: unknown;
+      sidebar?: unknown;
+      branding?: { name?: unknown; logo?: unknown };
+      blocks?: Record<string, unknown>;
+      collections?: Record<string, unknown>;
+      globals?: Record<string, unknown>;
+    } = {};
 
-		// Branding config
-		if (state.branding) {
-			response.branding = state.branding;
-		}
+    // Branding config
+    if (state.branding) {
+      response.branding = state.branding;
+    }
 
-		// 3. Dashboard: assign IDs, process access, strip non-serializable
-		if (state.dashboard) {
-			const dashboard = state.dashboard as ServerDashboardConfig;
-			if (dashboard.items) {
-				assignWidgetIds(dashboard.items);
-			}
-			response.dashboard = {
-				...dashboard,
-				items: dashboard.items
-					? await processDashboardItems(
-							dashboard.items,
-							accessibleCollections,
-							accessCtx,
-						)
-					: undefined,
-			};
-		}
+    // 3. Dashboard: assign IDs, process access, strip non-serializable
+    if (state.dashboard) {
+      const dashboard = state.dashboard as ServerDashboardConfig;
+      if (dashboard.items) {
+        assignWidgetIds(dashboard.items);
+      }
+      response.dashboard = {
+        ...dashboard,
+        items: dashboard.items
+          ? await processDashboardItems(
+              dashboard.items,
+              accessibleCollections,
+              accessCtx,
+            )
+          : undefined,
+      };
+    }
 
-		// 4. Sidebar: explicit → filter; auto → build from filtered meta
-		if (state.sidebar) {
-			response.sidebar = filterSidebarConfig(
-				state.sidebar,
-				accessibleCollections,
-				accessibleGlobals,
-			);
-		} else {
-			response.sidebar = buildAutoSidebar(
-				filteredCollectionsMeta,
-				filteredGlobalsMeta,
-			);
-		}
+    // 4. Sidebar: explicit → filter; auto → build from filtered meta
+    if (state.sidebar) {
+      response.sidebar = filterSidebarConfig(
+        state.sidebar,
+        accessibleCollections,
+        accessibleGlobals,
+      );
+    } else {
+      response.sidebar = buildAutoSidebar(
+        filteredCollectionsMeta,
+        filteredGlobalsMeta,
+      );
+    }
 
-		// 5. Blocks: unchanged (not access-controlled)
-		if (state.blocks && Object.keys(state.blocks).length > 0) {
-			response.blocks = introspectBlocks(state.blocks);
-		}
+    // 5. Blocks: unchanged (not access-controlled)
+    if (state.blocks && Object.keys(state.blocks).length > 0) {
+      response.blocks = introspectBlocks(state.blocks);
+    }
 
-		// 6. Return filtered metadata
-		response.collections = filteredCollectionsMeta;
-		response.globals = filteredGlobalsMeta;
+    // 6. Return filtered metadata
+    response.collections = filteredCollectionsMeta;
+    response.globals = filteredGlobalsMeta;
 
-		return response;
-	},
+    return response;
+  },
 });
 
 // ============================================================================
@@ -549,5 +530,5 @@ export const getAdminConfig = fn({
  * Add to your CMS via `.functions(adminConfigFunctions)`.
  */
 export const adminConfigFunctions = {
-	getAdminConfig,
+  getAdminConfig,
 } as const;

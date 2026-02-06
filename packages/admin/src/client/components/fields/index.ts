@@ -25,34 +25,34 @@ export { EmbeddedCollectionField } from "./embedded-collection";
 // Types (note: RelationDisplayMode and RelationDisplayFields are exported from ./relation above)
 // BooleanFieldProps is now exported from ./boolean-field above
 export type {
-	ArrayFieldConfig,
-	ArrayItemType,
-	BaseFieldProps,
-	CheckboxGroupFieldProps,
-	DateFieldProps,
-	DateRangeFieldProps,
-	DateTimeFieldProps,
-	EmbeddedFieldConfig,
-	FormFieldProps,
-	FormFieldType,
-	NumberFieldProps,
-	ObjectFieldConfig,
-	ObjectFieldLayout,
-	RadioGroupFieldProps,
-	RelationFieldConfig,
-	ReverseRelationFieldConfig,
-	RichTextFieldConfig,
-	SelectFieldProps,
-	SelectOption,
-	SelectOptionGroup,
-	TagsFieldProps,
-	TextareaFieldProps,
-	TextFieldProps,
-	TimeFieldConfig,
-	TimeFieldProps,
-	UploadFieldConfig,
+  ArrayFieldConfig,
+  ArrayItemType,
+  BaseFieldProps,
+  CheckboxGroupFieldProps,
+  DateFieldProps,
+  DateRangeFieldProps,
+  DateTimeFieldProps,
+  EmbeddedFieldConfig,
+  FormFieldProps,
+  FormFieldType,
+  NumberFieldProps,
+  ObjectFieldConfig,
+  ObjectFieldLayout,
+  RadioGroupFieldProps,
+  RelationFieldConfig,
+  ReverseRelationFieldConfig,
+  RichTextFieldConfig,
+  SelectFieldProps,
+  SelectOption,
+  SelectOptionGroup,
+  TagsFieldProps,
+  TextareaFieldProps,
+  TextFieldProps,
+  TimeFieldConfig,
+  TimeFieldProps,
+  UploadFieldConfig,
 
-	// Note: RichTextFeatures is exported from ./rich-text-editor
+  // Note: RichTextFeatures is exported from ./rich-text-editor
 } from "./field-types";
 export { useResolvedControl } from "./field-utils";
 export { FieldWrapper } from "./field-wrapper";
@@ -68,11 +68,11 @@ export { ObjectField } from "./object-field";
 
 // Relation display components (shared between relation fields)
 export {
-	type RelationDisplayFields,
-	type RelationDisplayMode,
-	type RelationDisplayProps,
-	type RelationItemActions,
-	RelationItemsDisplay,
+  type RelationDisplayFields,
+  type RelationDisplayMode,
+  type RelationDisplayProps,
+  type RelationItemActions,
+  RelationItemsDisplay,
 } from "./relation";
 export type { RelationFieldProps } from "./relation-field";
 export { RelationField } from "./relation-field";

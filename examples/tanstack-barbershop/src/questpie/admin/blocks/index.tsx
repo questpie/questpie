@@ -51,28 +51,28 @@ import { contactInfoBlock } from "./contact-info";
 import { columnsBlock, dividerBlock, spacerBlock } from "./layout";
 
 export const blocks = {
-	// Sections
-	hero: heroBlock,
-	services: servicesBlock,
-	"services-featured": servicesFeaturedBlock,
-	team: teamBlock,
-	"barbers-featured": barbersFeaturedBlock,
-	reviews: reviewsBlock,
-	"reviews-grid": reviewsGridBlock,
-	cta: ctaBlock,
-	"booking-cta": bookingCtaBlock,
-	// Content
-	text: textBlock,
-	heading: headingBlock,
-	"image-text": imageTextBlock,
-	gallery: galleryBlock,
-	stats: statsBlock,
-	hours: hoursBlock,
-	"contact-info": contactInfoBlock,
-	// Layout
-	columns: columnsBlock,
-	spacer: spacerBlock,
-	divider: dividerBlock,
+  // Sections
+  hero: heroBlock,
+  services: servicesBlock,
+  "services-featured": servicesFeaturedBlock,
+  team: teamBlock,
+  "barbers-featured": barbersFeaturedBlock,
+  reviews: reviewsBlock,
+  "reviews-grid": reviewsGridBlock,
+  cta: ctaBlock,
+  "booking-cta": bookingCtaBlock,
+  // Content
+  text: textBlock,
+  heading: headingBlock,
+  "image-text": imageTextBlock,
+  gallery: galleryBlock,
+  stats: statsBlock,
+  hours: hoursBlock,
+  "contact-info": contactInfoBlock,
+  // Layout
+  columns: columnsBlock,
+  spacer: spacerBlock,
+  divider: dividerBlock,
 } as const;
 
 export default blocks;

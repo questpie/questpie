@@ -17,37 +17,37 @@ export type { FormFieldProps } from "../../components/fields/field-types";
  * FormField - Generic form field with React Hook Form integration
  */
 export function FormField({
-	type = "text",
-	component,
-	options,
-	...baseProps
+  type = "text",
+  component,
+  options,
+  ...baseProps
 }: FormFieldProps): React.ReactElement {
-	if (component) {
-		return <CustomField {...baseProps} component={component} />;
-	}
+  if (component) {
+    return <CustomField {...baseProps} component={component} />;
+  }
 
-	switch (type) {
-		case "textarea":
-			return <TextareaField {...baseProps} />;
-		case "checkbox":
-			return <BooleanField {...baseProps} displayAs="checkbox" />;
-		case "switch":
-			return <BooleanField {...baseProps} displayAs="switch" />;
-		case "select":
-			return <SelectField {...baseProps} options={options} />;
-		case "number":
-			return <NumberField {...baseProps} />;
-		case "date":
-			return <DateField {...baseProps} />;
-		case "datetime":
-			return <DatetimeField {...baseProps} />;
-		case "email":
-			return <EmailField {...baseProps} />;
-		case "password":
-			return <TextField {...baseProps} type="password" />;
-		case "json":
-			return <JsonField {...baseProps} />;
-		default:
-			return <TextField {...baseProps} />;
-	}
+  switch (type) {
+    case "textarea":
+      return <TextareaField {...baseProps} />;
+    case "checkbox":
+      return <BooleanField {...baseProps} displayAs="checkbox" />;
+    case "switch":
+      return <BooleanField {...baseProps} displayAs="switch" />;
+    case "select":
+      return <SelectField {...baseProps} options={options} />;
+    case "number":
+      return <NumberField {...baseProps} />;
+    case "date":
+      return <DateField {...baseProps} />;
+    case "datetime":
+      return <DatetimeField {...baseProps} />;
+    case "email":
+      return <EmailField {...baseProps} />;
+    case "password":
+      return <TextField {...baseProps} type="password" />;
+    case "json":
+      return <JsonField {...baseProps} />;
+    default:
+      return <TextField {...baseProps} />;
+  }
 }

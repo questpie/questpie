@@ -19,35 +19,35 @@ import type { FormFieldProps } from "./form-field";
  * Note: label, description, placeholder can be I18nText - resolve them before passing to components.
  */
 export type FieldContext = {
-	fieldName: string;
-	fullFieldName: string;
-	collection: string;
-	fieldDef?: FieldDefinition;
-	fieldValue: any;
-	/** Can be I18nText - must be resolved before passing to component */
-	label?: DynamicI18nText;
-	/** Can be I18nText - must be resolved before passing to component */
-	description?: DynamicI18nText;
-	/** Can be I18nText - must be resolved before passing to component */
-	placeholder?: DynamicI18nText;
-	options?: Array<{ label: string; value: any }>;
-	/** Whether field is hidden (not rendered). Default false. */
-	isHidden: boolean;
-	/** Whether field is read-only (normal look, not editable). Computed fields are always readonly. */
-	isReadOnly: boolean;
-	/** Whether field is disabled (grayed out). */
-	isDisabled: boolean;
-	isRequired: boolean;
-	isLocalized: boolean;
-	/** Whether field has a compute function */
-	isComputed: boolean;
-	locale?: string;
-	fieldError?: string;
-	updateValue: (nextValue: any) => void;
-	type?: string;
-	component?: React.ComponentType<any>;
-	/** Compute function if field is computed */
-	compute?: (values: Record<string, any>) => any;
+  fieldName: string;
+  fullFieldName: string;
+  collection: string;
+  fieldDef?: FieldDefinition;
+  fieldValue: any;
+  /** Can be I18nText - must be resolved before passing to component */
+  label?: DynamicI18nText;
+  /** Can be I18nText - must be resolved before passing to component */
+  description?: DynamicI18nText;
+  /** Can be I18nText - must be resolved before passing to component */
+  placeholder?: DynamicI18nText;
+  options?: Array<{ label: string; value: any }>;
+  /** Whether field is hidden (not rendered). Default false. */
+  isHidden: boolean;
+  /** Whether field is read-only (normal look, not editable). Computed fields are always readonly. */
+  isReadOnly: boolean;
+  /** Whether field is disabled (grayed out). */
+  isDisabled: boolean;
+  isRequired: boolean;
+  isLocalized: boolean;
+  /** Whether field has a compute function */
+  isComputed: boolean;
+  locale?: string;
+  fieldError?: string;
+  updateValue: (nextValue: any) => void;
+  type?: string;
+  component?: React.ComponentType<any>;
+  /** Compute function if field is computed */
+  compute?: (values: Record<string, any>) => any;
 };
 
 // ============================================================================
@@ -59,12 +59,12 @@ export type FieldContext = {
  * FieldDefinition.name contains the type name (e.g., "text", "relation")
  */
 export function getFieldType(
-	fieldDef: FieldDefinition | undefined,
+  fieldDef: FieldDefinition | undefined,
 ): string | undefined {
-	if (!fieldDef) return undefined;
-	// FieldDefinition stores the field type in 'name' property
-	// This comes from field("text", ...) where "text" is the type
-	return fieldDef.name;
+  if (!fieldDef) return undefined;
+  // FieldDefinition stores the field type in 'name' property
+  // This comes from field("text", ...) where "text" is the type
+  return fieldDef.name;
 }
 
 /**
@@ -72,10 +72,10 @@ export function getFieldType(
  * Options are stored in "~options" property
  */
 export function getFieldOptions(
-	fieldDef: FieldDefinition | undefined,
+  fieldDef: FieldDefinition | undefined,
 ): Record<string, any> {
-	if (!fieldDef) return {};
-	return (fieldDef as any)["~options"] || {};
+  if (!fieldDef) return {};
+  return (fieldDef as any)["~options"] || {};
 }
 
 /**
@@ -83,10 +83,10 @@ export function getFieldOptions(
  * Component is stored in field.component
  */
 export function getFieldComponent(
-	fieldDef: FieldDefinition | undefined,
+  fieldDef: FieldDefinition | undefined,
 ): React.ComponentType<any> | undefined {
-	if (!fieldDef?.field?.component) return undefined;
-	return fieldDef.field.component as React.ComponentType<any>;
+  if (!fieldDef?.field?.component) return undefined;
+  return fieldDef.field.component as React.ComponentType<any>;
 }
 
 // ============================================================================
@@ -96,15 +96,15 @@ export function getFieldComponent(
 type ValueResolver<T> = T | ((values: any) => T);
 
 export function resolveValue<T>(
-	value: ValueResolver<T> | undefined,
-	formValues: any,
-	defaultValue: T,
+  value: ValueResolver<T> | undefined,
+  formValues: any,
+  defaultValue: T,
 ): T {
-	if (value === undefined) return defaultValue;
-	if (typeof value === "function") {
-		return (value as (values: any) => T)(formValues);
-	}
-	return value;
+  if (value === undefined) return defaultValue;
+  if (typeof value === "function") {
+    return (value as (values: any) => T)(formValues);
+  }
+  return value;
 }
 
 /**
@@ -122,13 +122,13 @@ export function resolveValue<T>(
  * ```
  */
 export function getFormValues(form: any, fieldPrefix?: string) {
-	if (!form?.watch) return {};
-	const values = fieldPrefix ? form.watch(fieldPrefix) : form.watch();
-	return values ?? {};
+  if (!form?.watch) return {};
+  const values = fieldPrefix ? form.watch(fieldPrefix) : form.watch();
+  return values ?? {};
 }
 
 export function getFullFieldName(fieldName: string, fieldPrefix?: string) {
-	return fieldPrefix ? `${fieldPrefix}.${fieldName}` : fieldName;
+  return fieldPrefix ? `${fieldPrefix}.${fieldName}` : fieldName;
 }
 
 // ============================================================================
@@ -136,20 +136,20 @@ export function getFullFieldName(fieldName: string, fieldPrefix?: string) {
 // ============================================================================
 
 export interface GetFieldContextParams {
-	fieldName: string;
-	fieldDef?: FieldDefinition;
-	collection: string;
-	form: any;
-	fieldPrefix?: string;
-	locale?: string;
-	/** Collection metadata from backend (for inferring localized fields) */
-	collectionMeta?: { localizedFields?: string[] };
-	/**
-	 * Pre-watched form values from useWatch hook.
-	 * If provided, avoids calling form.watch() internally.
-	 * This is the preferred pattern for better React integration.
-	 */
-	formValues?: Record<string, any>;
+  fieldName: string;
+  fieldDef?: FieldDefinition;
+  collection: string;
+  form: any;
+  fieldPrefix?: string;
+  locale?: string;
+  /** Collection metadata from backend (for inferring localized fields) */
+  collectionMeta?: { localizedFields?: string[] };
+  /**
+   * Pre-watched form values from useWatch hook.
+   * If provided, avoids calling form.watch() internally.
+   * This is the preferred pattern for better React integration.
+   */
+  formValues?: Record<string, any>;
 }
 
 /**
@@ -157,87 +157,87 @@ export interface GetFieldContextParams {
  * Contains all information needed to render a field component.
  */
 export function getFieldContext({
-	fieldName,
-	fieldDef,
-	collection,
-	form,
-	fieldPrefix,
-	locale,
-	formValues: formValuesProp,
-	collectionMeta,
+  fieldName,
+  fieldDef,
+  collection,
+  form,
+  fieldPrefix,
+  locale,
+  formValues: formValuesProp,
+  collectionMeta,
 }: GetFieldContextParams): FieldContext {
-	// Use pre-watched values if provided (preferred), otherwise fall back to form.watch()
-	const formValues = formValuesProp ?? getFormValues(form, fieldPrefix);
-	const fullFieldName = getFullFieldName(fieldName, fieldPrefix);
-	const fieldState = form?.getFieldState
-		? form.getFieldState(fullFieldName)
-		: undefined;
-	const fieldError = fieldState?.error?.message;
-	const fieldValue = formValues[fieldName];
+  // Use pre-watched values if provided (preferred), otherwise fall back to form.watch()
+  const formValues = formValuesProp ?? getFormValues(form, fieldPrefix);
+  const fullFieldName = getFullFieldName(fieldName, fieldPrefix);
+  const fieldState = form?.getFieldState
+    ? form.getFieldState(fullFieldName)
+    : undefined;
+  const fieldError = fieldState?.error?.message;
+  const fieldValue = formValues[fieldName];
 
-	// Get options from FieldDefinition
-	const options = getFieldOptions(fieldDef);
-	const type = getFieldType(fieldDef);
-	const component = getFieldComponent(fieldDef);
+  // Get options from FieldDefinition
+  const options = getFieldOptions(fieldDef);
+  const type = getFieldType(fieldDef);
+  const component = getFieldComponent(fieldDef);
 
-	const label = options.label;
-	const description = options.description;
-	const placeholder = options.placeholder;
+  const label = options.label;
+  const description = options.description;
+  const placeholder = options.placeholder;
 
-	// hidden: false/undefined = visible, true = hidden
-	const isHidden = resolveValue(options.hidden, formValues, false);
-	// compute implies readonly
-	const isComputed = typeof options.compute === "function";
-	const isReadOnly =
-		isComputed || resolveValue(options.readOnly, formValues, false);
-	const isDisabled = resolveValue(options.disabled, formValues, false);
-	const isRequired = resolveValue(options.required, formValues, false);
+  // hidden: false/undefined = visible, true = hidden
+  const isHidden = resolveValue(options.hidden, formValues, false);
+  // compute implies readonly
+  const isComputed = typeof options.compute === "function";
+  const isReadOnly =
+    isComputed || resolveValue(options.readOnly, formValues, false);
+  const isDisabled = resolveValue(options.disabled, formValues, false);
+  const isRequired = resolveValue(options.required, formValues, false);
 
-	// Check if field is localized: explicit config takes priority, fallback to BE metadata
-	const isLocalized =
-		options.localized !== undefined
-			? !!options.localized
-			: (collectionMeta?.localizedFields?.includes(fieldName) ?? false);
+  // Check if field is localized: explicit config takes priority, fallback to BE metadata
+  const isLocalized =
+    options.localized !== undefined
+      ? !!options.localized
+      : (collectionMeta?.localizedFields?.includes(fieldName) ?? false);
 
-	// Resolve dynamic options for select fields
-	const selectOptions = options.options
-		? typeof options.options === "function"
-			? options.options(formValues)
-			: options.options
-		: undefined;
+  // Resolve dynamic options for select fields
+  const selectOptions = options.options
+    ? typeof options.options === "function"
+      ? options.options(formValues)
+      : options.options
+    : undefined;
 
-	const updateValue = (nextValue: any) => {
-		if (form?.setValue) {
-			form.setValue(fullFieldName, nextValue, {
-				shouldDirty: true,
-				shouldTouch: true,
-			});
-		}
-	};
+  const updateValue = (nextValue: any) => {
+    if (form?.setValue) {
+      form.setValue(fullFieldName, nextValue, {
+        shouldDirty: true,
+        shouldTouch: true,
+      });
+    }
+  };
 
-	return {
-		fieldName,
-		fullFieldName,
-		collection,
-		fieldDef,
-		fieldValue,
-		label,
-		description,
-		placeholder,
-		options: selectOptions,
-		isHidden,
-		isReadOnly,
-		isDisabled,
-		isRequired,
-		isLocalized,
-		isComputed,
-		locale,
-		fieldError,
-		updateValue,
-		type,
-		component,
-		compute: options.compute,
-	};
+  return {
+    fieldName,
+    fullFieldName,
+    collection,
+    fieldDef,
+    fieldValue,
+    label,
+    description,
+    placeholder,
+    options: selectOptions,
+    isHidden,
+    isReadOnly,
+    isDisabled,
+    isRequired,
+    isLocalized,
+    isComputed,
+    locale,
+    fieldError,
+    updateValue,
+    type,
+    component,
+    compute: options.compute,
+  };
 }
 
 // ============================================================================
@@ -248,18 +248,18 @@ export function getFieldContext({
  * Raw component props with I18nText (needs resolution before passing to components)
  */
 export type RawComponentProps = {
-	name: string;
-	value: any;
-	onChange: (value: any) => void;
-	label?: DynamicI18nText;
-	description?: DynamicI18nText;
-	placeholder?: DynamicI18nText;
-	required: boolean;
-	disabled: boolean;
-	readOnly: boolean;
-	error?: string;
-	localized: boolean;
-	locale?: string;
+  name: string;
+  value: any;
+  onChange: (value: any) => void;
+  label?: DynamicI18nText;
+  description?: DynamicI18nText;
+  placeholder?: DynamicI18nText;
+  required: boolean;
+  disabled: boolean;
+  readOnly: boolean;
+  error?: string;
+  localized: boolean;
+  locale?: string;
 };
 
 /**
@@ -267,32 +267,32 @@ export type RawComponentProps = {
  * Returns raw props with I18nText - resolve before passing to component.
  */
 export function buildComponentProps(context: FieldContext): RawComponentProps {
-	return {
-		name: context.fullFieldName,
-		value: context.fieldValue,
-		onChange: context.updateValue,
-		label: context.label,
-		description: context.description,
-		placeholder: context.placeholder,
-		required: context.isRequired,
-		disabled: context.isDisabled,
-		readOnly: context.isReadOnly,
-		error: context.fieldError,
-		localized: context.isLocalized,
-		locale: context.locale,
-	};
+  return {
+    name: context.fullFieldName,
+    value: context.fieldValue,
+    onChange: context.updateValue,
+    label: context.label,
+    description: context.description,
+    placeholder: context.placeholder,
+    required: context.isRequired,
+    disabled: context.isDisabled,
+    readOnly: context.isReadOnly,
+    error: context.fieldError,
+    localized: context.isLocalized,
+    locale: context.locale,
+  };
 }
 
 /**
  * Raw form field props with I18nText (needs resolution before passing to components)
  */
 export type RawFormFieldProps = Omit<
-	FormFieldProps,
-	"label" | "description" | "placeholder"
+  FormFieldProps,
+  "label" | "description" | "placeholder"
 > & {
-	label?: DynamicI18nText;
-	description?: DynamicI18nText;
-	placeholder?: DynamicI18nText;
+  label?: DynamicI18nText;
+  description?: DynamicI18nText;
+  placeholder?: DynamicI18nText;
 };
 
 /**
@@ -300,14 +300,14 @@ export type RawFormFieldProps = Omit<
  * Returns raw props with I18nText - resolve before passing to FormField.
  */
 export function buildFormFieldProps(context: FieldContext): RawFormFieldProps {
-	return {
-		name: context.fullFieldName,
-		label: context.label,
-		description: context.description,
-		placeholder: context.placeholder,
-		required: context.isRequired,
-		disabled: context.isDisabled || context.isReadOnly,
-		localized: context.isLocalized,
-		locale: context.locale,
-	};
+  return {
+    name: context.fullFieldName,
+    label: context.label,
+    description: context.description,
+    placeholder: context.placeholder,
+    required: context.isRequired,
+    disabled: context.isDisabled || context.isReadOnly,
+    localized: context.isLocalized,
+    locale: context.locale,
+  };
 }

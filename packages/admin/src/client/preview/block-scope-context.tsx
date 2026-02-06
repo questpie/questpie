@@ -15,10 +15,10 @@ import * as React from "react";
 // ============================================================================
 
 export type BlockScopeContextValue = {
-	/** Current block ID */
-	blockId: string;
-	/** Field path prefix (e.g., "content._values.abc123") */
-	fieldPrefix: string;
+  /** Current block ID */
+  blockId: string;
+  /** Field path prefix (e.g., "content._values.abc123") */
+  fieldPrefix: string;
 };
 
 // ============================================================================
@@ -26,7 +26,7 @@ export type BlockScopeContextValue = {
 // ============================================================================
 
 const BlockScopeContext = React.createContext<BlockScopeContextValue | null>(
-	null,
+  null,
 );
 
 // ============================================================================
@@ -34,11 +34,11 @@ const BlockScopeContext = React.createContext<BlockScopeContextValue | null>(
 // ============================================================================
 
 export type BlockScopeProviderProps = {
-	/** Block ID for this scope */
-	blockId: string;
-	/** Base path for blocks field (e.g., "content._values") */
-	basePath?: string;
-	children: React.ReactNode;
+  /** Block ID for this scope */
+  blockId: string;
+  /** Base path for blocks field (e.g., "content._values") */
+  basePath?: string;
+  children: React.ReactNode;
 };
 
 /**
@@ -57,35 +57,35 @@ export type BlockScopeProviderProps = {
  * ```
  */
 export function BlockScopeProvider({
-	blockId,
-	basePath = "content._values",
-	children,
+  blockId,
+  basePath = "content._values",
+  children,
 }: BlockScopeProviderProps) {
-	const parentScope = React.useContext(BlockScopeContext);
+  const parentScope = React.useContext(BlockScopeContext);
 
-	// Build field prefix based on parent scope
-	const fieldPrefix = React.useMemo(() => {
-		if (parentScope) {
-			// Nested block: append to parent prefix
-			return `${parentScope.fieldPrefix}.${blockId}`;
-		}
-		// Top-level block: use basePath
-		return `${basePath}.${blockId}`;
-	}, [parentScope, basePath, blockId]);
+  // Build field prefix based on parent scope
+  const fieldPrefix = React.useMemo(() => {
+    if (parentScope) {
+      // Nested block: append to parent prefix
+      return `${parentScope.fieldPrefix}.${blockId}`;
+    }
+    // Top-level block: use basePath
+    return `${basePath}.${blockId}`;
+  }, [parentScope, basePath, blockId]);
 
-	const value = React.useMemo<BlockScopeContextValue>(
-		() => ({
-			blockId,
-			fieldPrefix,
-		}),
-		[blockId, fieldPrefix],
-	);
+  const value = React.useMemo<BlockScopeContextValue>(
+    () => ({
+      blockId,
+      fieldPrefix,
+    }),
+    [blockId, fieldPrefix],
+  );
 
-	return (
-		<BlockScopeContext.Provider value={value}>
-			{children}
-		</BlockScopeContext.Provider>
-	);
+  return (
+    <BlockScopeContext.Provider value={value}>
+      {children}
+    </BlockScopeContext.Provider>
+  );
 }
 
 // ============================================================================
@@ -107,7 +107,7 @@ export function BlockScopeProvider({
  * ```
  */
 export function useBlockScope(): BlockScopeContextValue | null {
-	return React.useContext(BlockScopeContext);
+  return React.useContext(BlockScopeContext);
 }
 
 /**
@@ -128,12 +128,12 @@ export function useBlockScope(): BlockScopeContextValue | null {
  * ```
  */
 export function useResolveFieldPath(fieldName: string): string {
-	const scope = useBlockScope();
+  const scope = useBlockScope();
 
-	return React.useMemo(() => {
-		if (!scope) {
-			return fieldName;
-		}
-		return `${scope.fieldPrefix}.${fieldName}`;
-	}, [scope, fieldName]);
+  return React.useMemo(() => {
+    if (!scope) {
+      return fieldName;
+    }
+    return `${scope.fieldPrefix}.${fieldName}`;
+  }, [scope, fieldName]);
 }

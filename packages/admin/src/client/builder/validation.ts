@@ -32,140 +32,140 @@ type FieldRegistry = Record<string, any>;
  * Build a string schema with validations (fallback)
  */
 function buildStringSchema(validation?: FieldValidationConfig): z.ZodString {
-	let schema = z.string();
+  let schema = z.string();
 
-	if (validation) {
-		if (validation.minLength !== undefined) {
-			schema = schema.min(
-				validation.minLength,
-				`Must be at least ${validation.minLength} characters`,
-			);
-		}
-		if (validation.maxLength !== undefined) {
-			schema = schema.max(
-				validation.maxLength,
-				`Must be at most ${validation.maxLength} characters`,
-			);
-		}
-		if (validation.email) {
-			schema = schema.email("Invalid email address");
-		}
-		if (validation.url) {
-			schema = schema.url("Invalid URL");
-		}
-		if (validation.pattern) {
-			const regex =
-				typeof validation.pattern === "string"
-					? new RegExp(validation.pattern)
-					: validation.pattern;
-			schema = schema.regex(
-				regex,
-				validation.patternMessage || "Invalid format",
-			);
-		}
-	}
+  if (validation) {
+    if (validation.minLength !== undefined) {
+      schema = schema.min(
+        validation.minLength,
+        `Must be at least ${validation.minLength} characters`,
+      );
+    }
+    if (validation.maxLength !== undefined) {
+      schema = schema.max(
+        validation.maxLength,
+        `Must be at most ${validation.maxLength} characters`,
+      );
+    }
+    if (validation.email) {
+      schema = schema.email("Invalid email address");
+    }
+    if (validation.url) {
+      schema = schema.url("Invalid URL");
+    }
+    if (validation.pattern) {
+      const regex =
+        typeof validation.pattern === "string"
+          ? new RegExp(validation.pattern)
+          : validation.pattern;
+      schema = schema.regex(
+        regex,
+        validation.patternMessage || "Invalid format",
+      );
+    }
+  }
 
-	return schema;
+  return schema;
 }
 
 /**
  * Build a number schema with validations (fallback)
  */
 function buildNumberSchema(validation?: FieldValidationConfig): z.ZodNumber {
-	let schema = z.number();
+  let schema = z.number();
 
-	if (validation) {
-		if (validation.min !== undefined) {
-			schema = schema.min(validation.min, `Must be at least ${validation.min}`);
-		}
-		if (validation.max !== undefined) {
-			schema = schema.max(validation.max, `Must be at most ${validation.max}`);
-		}
-	}
+  if (validation) {
+    if (validation.min !== undefined) {
+      schema = schema.min(validation.min, `Must be at least ${validation.min}`);
+    }
+    if (validation.max !== undefined) {
+      schema = schema.max(validation.max, `Must be at most ${validation.max}`);
+    }
+  }
 
-	return schema;
+  return schema;
 }
 
 /**
  * Fallback schema builder for fields without createZod
  */
 function buildFallbackSchema(
-	fieldType: string,
-	required?: boolean,
-	validation?: FieldValidationConfig,
+  fieldType: string,
+  required?: boolean,
+  validation?: FieldValidationConfig,
 ): z.ZodTypeAny {
-	let schema: z.ZodTypeAny;
+  let schema: z.ZodTypeAny;
 
-	switch (fieldType) {
-		case "text":
-		case "textarea":
-		case "email":
-		case "password":
-		case "slug":
-		case "code":
-		case "time":
-			schema = buildStringSchema(validation);
-			break;
+  switch (fieldType) {
+    case "text":
+    case "textarea":
+    case "email":
+    case "password":
+    case "slug":
+    case "code":
+    case "time":
+      schema = buildStringSchema(validation);
+      break;
 
-		case "number":
-		case "currency":
-			schema = buildNumberSchema(validation);
-			break;
+    case "number":
+    case "currency":
+      schema = buildNumberSchema(validation);
+      break;
 
-		case "switch":
-		case "checkbox":
-			schema = z.boolean();
-			break;
+    case "switch":
+    case "checkbox":
+      schema = z.boolean();
+      break;
 
-		case "date":
-		case "datetime":
-			schema = z.date().or(z.string());
-			break;
+    case "date":
+    case "datetime":
+      schema = z.date().or(z.string());
+      break;
 
-		case "select":
-			schema = z.string().or(z.number());
-			break;
+    case "select":
+      schema = z.string().or(z.number());
+      break;
 
-		case "relation":
-			schema = z.string().or(z.array(z.string()));
-			break;
+    case "relation":
+      schema = z.string().or(z.array(z.string()));
+      break;
 
-		case "upload":
-			schema = z.string();
-			break;
+    case "upload":
+      schema = z.string();
+      break;
 
-		case "uploadMany":
-			schema = z.array(z.string());
-			break;
+    case "uploadMany":
+      schema = z.array(z.string());
+      break;
 
-		case "array":
-			schema = z.array(z.any());
-			break;
+    case "array":
+      schema = z.array(z.any());
+      break;
 
-		case "object":
-			schema = z.record(z.string(), z.any());
-			break;
+    case "object":
+      schema = z.record(z.string(), z.any());
+      break;
 
-		case "json":
-		case "richText":
-			schema = z.any();
-			break;
+    case "json":
+    case "richText":
+      schema = z.any();
+      break;
 
-		default:
-			schema = z.any();
-	}
+    default:
+      schema = z.any();
+  }
 
-	// Apply custom refinement from validation config
-	if (validation?.refine) {
-		schema = validation.refine(schema);
-	}
+  // Apply custom refinement from validation config
+  if (validation?.refine) {
+    schema = validation.refine(schema);
+  }
 
-	// Handle required/optional
-	if (!required) {
-		schema = schema.optional().nullable();
-	}
+  // Handle required/optional
+  if (!required) {
+    schema = schema.optional().nullable();
+  }
 
-	return schema;
+  return schema;
 }
 
 // ============================================================================
@@ -176,22 +176,22 @@ function buildFallbackSchema(
  * Creates the ZodBuildContext for recursive schema building
  */
 function createBuildContext(registry: FieldRegistry): ZodBuildContext {
-	const ctx: ZodBuildContext = {
-		registry,
-		buildSchema: (fieldDef: FieldDefinition): z.ZodTypeAny => {
-			const opts = fieldDef["~options"] || {};
+  const ctx: ZodBuildContext = {
+    registry,
+    buildSchema: (fieldDef: FieldDefinition): z.ZodTypeAny => {
+      const opts = fieldDef["~options"] || {};
 
-			// If field has createZod, use it
-			if (fieldDef.createZod) {
-				return fieldDef.createZod(opts, ctx);
-			}
+      // If field has createZod, use it
+      if (fieldDef.createZod) {
+        return fieldDef.createZod(opts, ctx);
+      }
 
-			// Fallback to generic schema based on field type name
-			return buildFallbackSchema(fieldDef.name, opts.required, opts.validation);
-		},
-	};
+      // Fallback to generic schema based on field type name
+      return buildFallbackSchema(fieldDef.name, opts.required, opts.validation);
+    },
+  };
 
-	return ctx;
+  return ctx;
 }
 
 /**
@@ -215,17 +215,17 @@ function createBuildContext(registry: FieldRegistry): ZodBuildContext {
  * ```
  */
 export function buildValidationSchema(
-	fields: FieldsMap,
-	registry: FieldRegistry,
+  fields: FieldsMap,
+  registry: FieldRegistry,
 ): z.ZodObject<Record<string, z.ZodTypeAny>> {
-	const ctx = createBuildContext(registry);
-	const shape: Record<string, z.ZodTypeAny> = {};
+  const ctx = createBuildContext(registry);
+  const shape: Record<string, z.ZodTypeAny> = {};
 
-	for (const [name, fieldDef] of Object.entries(fields)) {
-		shape[name] = ctx.buildSchema(fieldDef);
-	}
+  for (const [name, fieldDef] of Object.entries(fields)) {
+    shape[name] = ctx.buildSchema(fieldDef);
+  }
 
-	return z.object(shape);
+  return z.object(shape);
 }
 
 /**
@@ -239,45 +239,45 @@ export function buildValidationSchema(
  * @returns Zod schema with superRefine for custom validators
  */
 export function buildValidationSchemaWithCustom(
-	fields: FieldsMap,
-	registry: FieldRegistry,
+  fields: FieldsMap,
+  registry: FieldRegistry,
 ): z.ZodTypeAny {
-	const baseSchema = buildValidationSchema(fields, registry);
+  const baseSchema = buildValidationSchema(fields, registry);
 
-	// Collect fields with custom validate functions
-	const customValidators: Array<{
-		name: string;
-		validate: NonNullable<FieldValidationConfig["validate"]>;
-	}> = [];
+  // Collect fields with custom validate functions
+  const customValidators: Array<{
+    name: string;
+    validate: NonNullable<FieldValidationConfig["validate"]>;
+  }> = [];
 
-	for (const [name, fieldDef] of Object.entries(fields)) {
-		const options = fieldDef["~options"] || {};
-		if (options.validation?.validate) {
-			customValidators.push({
-				name,
-				validate: options.validation.validate,
-			});
-		}
-	}
+  for (const [name, fieldDef] of Object.entries(fields)) {
+    const options = fieldDef["~options"] || {};
+    if (options.validation?.validate) {
+      customValidators.push({
+        name,
+        validate: options.validation.validate,
+      });
+    }
+  }
 
-	// If no custom validators, return base schema
-	if (customValidators.length === 0) {
-		return baseSchema;
-	}
+  // If no custom validators, return base schema
+  if (customValidators.length === 0) {
+    return baseSchema;
+  }
 
-	// Apply custom validators via superRefine
-	return baseSchema.superRefine((data, ctx) => {
-		for (const { name, validate } of customValidators) {
-			const error = validate(data[name], data);
-			if (error) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					message: error,
-					path: [name],
-				});
-			}
-		}
-	});
+  // Apply custom validators via superRefine
+  return baseSchema.superRefine((data, ctx) => {
+    for (const { name, validate } of customValidators) {
+      const error = validate(data[name], data);
+      if (error) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: error,
+          path: [name],
+        });
+      }
+    }
+  });
 }
 
 /**
@@ -316,10 +316,10 @@ export function buildValidationSchemaWithCustom(
  * ```
  */
 export function createFormSchema(
-	fields: FieldsMap,
-	registry: FieldRegistry,
+  fields: FieldsMap,
+  registry: FieldRegistry,
 ): z.ZodTypeAny {
-	return buildValidationSchemaWithCustom(fields, registry);
+  return buildValidationSchemaWithCustom(fields, registry);
 }
 
 // ============================================================================

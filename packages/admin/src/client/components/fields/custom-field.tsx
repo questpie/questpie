@@ -5,46 +5,46 @@ import { useResolvedControl } from "./field-utils";
 import { FieldWrapper } from "./field-wrapper";
 
 type CustomFieldProps = BaseFieldProps & {
-	component: React.ComponentType<any>;
+  component: React.ComponentType<any>;
 };
 
 export function CustomField({
-	name,
-	label,
-	description,
-	placeholder,
-	required,
-	disabled,
-	localized,
-	locale,
-	control,
-	component: Component,
+  name,
+  label,
+  description,
+  placeholder,
+  required,
+  disabled,
+  localized,
+  locale,
+  control,
+  component: Component,
 }: CustomFieldProps) {
-	const resolvedControl = useResolvedControl(control);
+  const resolvedControl = useResolvedControl(control);
 
-	return (
-		<Controller
-			name={name}
-			control={resolvedControl}
-			render={({ field, fieldState }) => (
-				<FieldWrapper
-					name={name}
-					label={label}
-					description={description}
-					required={required}
-					disabled={disabled}
-					localized={localized}
-					locale={locale}
-					error={fieldState.error?.message}
-				>
-					<Component
-						{...field}
-						id={name}
-						disabled={disabled}
-						placeholder={placeholder}
-					/>
-				</FieldWrapper>
-			)}
-		/>
-	);
+  return (
+    <Controller
+      name={name}
+      control={resolvedControl}
+      render={({ field, fieldState }) => (
+        <FieldWrapper
+          name={name}
+          label={label}
+          description={description}
+          required={required}
+          disabled={disabled}
+          localized={localized}
+          locale={locale}
+          error={fieldState.error?.message}
+        >
+          <Component
+            {...field}
+            id={name}
+            disabled={disabled}
+            placeholder={placeholder}
+          />
+        </FieldWrapper>
+      )}
+    />
+  );
 }

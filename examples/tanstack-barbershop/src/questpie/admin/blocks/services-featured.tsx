@@ -8,189 +8,159 @@
 import { Clock, CurrencyDollar } from "@phosphor-icons/react";
 import type { BlockRendererProps } from "@questpie/admin/client";
 import { buttonVariants } from "../../../components/ui/button";
-import { client } from "../../../lib/cms-client";
 import { cn } from "../../../lib/utils";
 import { builder } from "../builder";
 
 type Service = {
-	id: string;
-	name: string;
-	description: string | null;
-	price: number;
-	duration: number;
-	image: string | null;
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  duration: number;
+  image: string | null;
 };
 
 type ServicesFeaturedValues = {
-	title: string;
-	subtitle?: string;
-	serviceIds: string[];
-	columns: "2" | "3" | "4";
+  title: string;
+  subtitle?: string;
+  serviceIds: string[];
+  columns: "2" | "3" | "4";
 };
 
 function ServicesFeaturedRenderer({
-	values,
-	data,
+  values,
+  data,
 }: BlockRendererProps<ServicesFeaturedValues>) {
-	const { services = [] } = (data as { services: Service[] }) || {};
+  const { services = [] } = (data as { services: Service[] }) || {};
 
-	const columnsClass = {
-		"2": "md:grid-cols-2",
-		"3": "md:grid-cols-2 lg:grid-cols-3",
-		"4": "md:grid-cols-2 lg:grid-cols-4",
-	}[values.columns || "3"];
+  const columnsClass = {
+    "2": "md:grid-cols-2",
+    "3": "md:grid-cols-2 lg:grid-cols-3",
+    "4": "md:grid-cols-2 lg:grid-cols-4",
+  }[values.columns || "3"];
 
-	const formatPrice = (cents: number) => {
-		return new Intl.NumberFormat("sk-SK", {
-			style: "currency",
-			currency: "EUR",
-		}).format(cents / 100);
-	};
+  const formatPrice = (cents: number) => {
+    return new Intl.NumberFormat("sk-SK", {
+      style: "currency",
+      currency: "EUR",
+    }).format(cents / 100);
+  };
 
-	return (
-		<section className="py-20 px-6">
-			<div className="container">
-				{/* Header */}
-				{(values.title || values.subtitle) && (
-					<div className="text-center mb-16 max-w-2xl mx-auto">
-						{values.title && (
-							<h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">
-								{values.title}
-							</h2>
-						)}
-						{values.subtitle && (
-							<p className="text-lg text-muted-foreground">{values.subtitle}</p>
-						)}
-					</div>
-				)}
+  return (
+    <section className="py-20 px-6">
+      <div className="container">
+        {/* Header */}
+        {(values.title || values.subtitle) && (
+          <div className="text-center mb-16 max-w-2xl mx-auto">
+            {values.title && (
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">
+                {values.title}
+              </h2>
+            )}
+            {values.subtitle && (
+              <p className="text-lg text-muted-foreground">{values.subtitle}</p>
+            )}
+          </div>
+        )}
 
-				{/* Services Grid */}
-				<div className={cn("grid grid-cols-1 gap-8", columnsClass)}>
-					{services.map((service, _i) => (
-						<article
-							key={service.id}
-							className="group bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300"
-						>
-							{/* Image */}
-							{service.image && (
-								<div className="aspect-[4/3] overflow-hidden bg-muted">
-									<img
-										src={service.image}
-										alt={service.name}
-										className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-									/>
-								</div>
-							)}
+        {/* Services Grid */}
+        <div className={cn("grid grid-cols-1 gap-8", columnsClass)}>
+          {services.map((service, _i) => (
+            <article
+              key={service.id}
+              className="group bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300"
+            >
+              {/* Image */}
+              {service.image && (
+                <div className="aspect-[4/3] overflow-hidden bg-muted">
+                  <img
+                    src={service.image}
+                    alt={service.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                </div>
+              )}
 
-							{/* Content */}
-							<div className="p-6">
-								<h3 className="text-xl font-bold mb-2">{service.name}</h3>
-								{service.description && (
-									<p className="text-muted-foreground mb-4 line-clamp-2">
-										{service.description}
-									</p>
-								)}
+              {/* Content */}
+              <div className="p-6">
+                <h3 className="text-xl font-bold mb-2">{service.name}</h3>
+                {service.description && (
+                  <p className="text-muted-foreground mb-4 line-clamp-2">
+                    {service.description}
+                  </p>
+                )}
 
-								{/* Meta */}
-								<div className="flex items-center justify-between pt-4 border-t">
-									<div className="flex items-center gap-4 text-sm text-muted-foreground">
-										<span className="flex items-center gap-1">
-											<Clock className="size-4" weight="bold" />
-											{service.duration} min
-										</span>
-										<span className="flex items-center gap-1 font-semibold text-foreground">
-											<CurrencyDollar className="size-4" weight="bold" />
-											{formatPrice(service.price)}
-										</span>
-									</div>
-								</div>
-							</div>
-						</article>
-					))}
-				</div>
+                {/* Meta */}
+                <div className="flex items-center justify-between pt-4 border-t">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Clock className="size-4" weight="bold" />
+                      {service.duration} min
+                    </span>
+                    <span className="flex items-center gap-1 font-semibold text-foreground">
+                      <CurrencyDollar className="size-4" weight="bold" />
+                      {formatPrice(service.price)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
 
-				{/* CTA */}
-				<div className="text-center mt-12">
-					<a
-						href="/booking"
-						className={cn(
-							buttonVariants({ size: "lg" }),
-							"text-base font-semibold",
-						)}
-					>
-						Book Appointment
-					</a>
-				</div>
-			</div>
-		</section>
-	);
+        {/* CTA */}
+        <div className="text-center mt-12">
+          <a
+            href="/booking"
+            className={cn(
+              buttonVariants({ size: "lg" }),
+              "text-base font-semibold",
+            )}
+          >
+            Book Appointment
+          </a>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export const servicesFeaturedBlock = builder
-	.block("services-featured")
-	.label({ en: "Services (Featured)", sk: "Služby (vybrané)" })
-	.description({
-		en: "Manually selected services",
-		sk: "Ručne vybrané služby",
-	})
-	.icon("Scissors")
-	.category("content")
-	.fields(({ r }) => ({
-		title: r.text({
-			label: { en: "Title", sk: "Nadpis" },
-			required: true,
-			localized: true,
-			defaultValue: { en: "Our Services", sk: "Naše služby" },
-		}),
-		subtitle: r.text({
-			label: { en: "Subtitle", sk: "Podnadpis" },
-			localized: true,
-		}),
-		serviceIds: r.relation({
-			label: { en: "Select Services", sk: "Vybrať služby" },
-			targetCollection: "services",
-			required: true,
-			type: "multiple",
-			maxItems: 12,
-		}),
-		columns: r.select({
-			label: { en: "Columns", sk: "Stĺpce" },
-			options: [
-				{ value: "2", label: { en: "2 columns", sk: "2 stĺpce" } },
-				{ value: "3", label: { en: "3 columns", sk: "3 stĺpce" } },
-				{ value: "4", label: { en: "4 columns", sk: "4 stĺpce" } },
-			],
-			defaultValue: "3",
-		}),
-	}))
-	.prefetch(async ({ values, locale }) => {
-		const serviceIds = (values.serviceIds as string[]) || [];
-		if (serviceIds.length === 0) return { services: [] };
-
-		const servicesResult = await client.collections.services.find({
-			where: {
-				id: { in: serviceIds },
-				isActive: true,
-			},
-			locale,
-		});
-
-		// Maintain order from serviceIds
-		const servicesMap = new Map(servicesResult.docs.map((s: any) => [s.id, s]));
-		const orderedServices = serviceIds
-			.map((id: string) => servicesMap.get(id))
-			.filter(Boolean);
-
-		return {
-			services: orderedServices.map((s: any) => ({
-				id: s.id,
-				name: s.name,
-				description: s.description,
-				price: s.price,
-				duration: s.duration,
-				image: s.image,
-			})),
-		};
-	})
-	.renderer(ServicesFeaturedRenderer)
-	.build();
+  .block("services-featured")
+  .label({ en: "Services (Featured)", sk: "Služby (vybrané)" })
+  .description({
+    en: "Manually selected services",
+    sk: "Ručne vybrané služby",
+  })
+  .icon("Scissors")
+  .category("content")
+  .fields(({ r }) => ({
+    title: r.text({
+      label: { en: "Title", sk: "Nadpis" },
+      required: true,
+      localized: true,
+      defaultValue: { en: "Our Services", sk: "Naše služby" },
+    }),
+    subtitle: r.text({
+      label: { en: "Subtitle", sk: "Podnadpis" },
+      localized: true,
+    }),
+    serviceIds: r.relation({
+      label: { en: "Select Services", sk: "Vybrať služby" },
+      targetCollection: "services",
+      required: true,
+      type: "multiple",
+      maxItems: 12,
+    }),
+    columns: r.select({
+      label: { en: "Columns", sk: "Stĺpce" },
+      options: [
+        { value: "2", label: { en: "2 columns", sk: "2 stĺpce" } },
+        { value: "3", label: { en: "3 columns", sk: "3 stĺpce" } },
+        { value: "4", label: { en: "4 columns", sk: "4 stĺpce" } },
+      ],
+      defaultValue: "3",
+    }),
+  }))
+  .renderer(ServicesFeaturedRenderer)
+  .build();

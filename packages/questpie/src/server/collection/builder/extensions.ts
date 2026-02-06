@@ -57,8 +57,8 @@ export type StateOf<T> = T extends { state: infer S } ? S : never;
  * ```
  */
 export type FieldsOf<T> =
-	StateOf<T> extends { fieldDefinitions?: infer F }
-		? F extends Record<string, any>
-			? F
-			: Record<string, any>
-		: Record<string, any>;
+  StateOf<T> extends { fieldDefinitions?: infer F }
+    ? F extends Record<string, any>
+      ? F
+      : Record<string, any>
+    : Record<string, any>;

@@ -33,18 +33,14 @@
 import type { SetProperty } from "questpie/shared";
 import type * as React from "react";
 import type { ComponentReference } from "#questpie/admin/server";
-import type {
-	BlockCategory,
-	BlockPrefetch,
-	BlockRendererProps,
-} from "../../blocks/types.js";
+import type { BlockCategory, BlockRendererProps } from "../../blocks/types.js";
 import type { I18nText } from "../../i18n/types.js";
 import type { AdminBuilder } from "../admin-builder.js";
 import type { ExtractBlocks, ExtractFields } from "../admin-types.js";
 import type { FieldDefinition } from "../field/field.js";
 import {
-	createFieldRegistryProxy,
-	type FieldRegistryProxy,
+  createFieldRegistryProxy,
+  type FieldRegistryProxy,
 } from "../proxies.js";
 import type { BlockBuilderState, BlockDefinition } from "./types.js";
 
@@ -56,233 +52,209 @@ import type { BlockBuilderState, BlockDefinition } from "./types.js";
  * Helper to get fields from AdminApp - simplifies conditional type chains
  */
 type AdminAppFields<TAdminApp> =
-	ExtractFields<TAdminApp> extends Record<string, any>
-		? ExtractFields<TAdminApp>
-		: {};
+  ExtractFields<TAdminApp> extends Record<string, any>
+    ? ExtractFields<TAdminApp>
+    : {};
 
 /**
  * Helper to get blocks from AdminApp
  */
 type AdminAppBlocks<TAdminApp> =
-	ExtractBlocks<TAdminApp> extends Record<string, any>
-		? ExtractBlocks<TAdminApp>
-		: {};
+  ExtractBlocks<TAdminApp> extends Record<string, any>
+    ? ExtractBlocks<TAdminApp>
+    : {};
 
 /**
  * Legacy type alias for backwards compatibility.
  * @deprecated Use FieldRegistryProxy from "../proxies.js" instead
  */
 export type LegacyFieldRegistryProxy = ReturnType<
-	typeof createFieldRegistryProxy
+  typeof createFieldRegistryProxy
 >;
 
 /**
  * Block builder class with fluent API.
  */
 export class BlockBuilder<TState extends BlockBuilderState> {
-	constructor(public readonly state: TState) {}
+  constructor(public readonly state: TState) {}
 
-	/**
-	 * Connect to admin app for type-safe field registry access.
-	 * This enables autocomplete for custom fields defined in the admin app.
-	 *
-	 * @example
-	 * ```ts
-	 * const heroBlock = block("hero")
-	 *   .use(admin)  // Connect to admin for field registry
-	 *   .fields(({ r }) => ({
-	 *     // Now r has access to admin's custom fields!
-	 *     content: r.richText({ label: "Content" }),
-	 *   }))
-	 * ```
-	 */
-	use<TAdminApp extends AdminBuilder<any>>(
-		adminApp: TAdminApp,
-	): BlockBuilder<SetProperty<TState, "~adminApp", TAdminApp>> {
-		return new BlockBuilder({
-			...this.state,
-			"~adminApp": adminApp,
-		} as any);
-	}
+  /**
+   * Connect to admin app for type-safe field registry access.
+   * This enables autocomplete for custom fields defined in the admin app.
+   *
+   * @example
+   * ```ts
+   * const heroBlock = block("hero")
+   *   .use(admin)  // Connect to admin for field registry
+   *   .fields(({ r }) => ({
+   *     // Now r has access to admin's custom fields!
+   *     content: r.richText({ label: "Content" }),
+   *   }))
+   * ```
+   */
+  use<TAdminApp extends AdminBuilder<any>>(
+    adminApp: TAdminApp,
+  ): BlockBuilder<SetProperty<TState, "~adminApp", TAdminApp>> {
+    return new BlockBuilder({
+      ...this.state,
+      "~adminApp": adminApp,
+    } as any);
+  }
 
-	/**
-	 * Set the display label for the block.
-	 * Shown in the block picker and block tree.
-	 */
-	label(label: I18nText): BlockBuilder<TState & { label: I18nText }> {
-		return new BlockBuilder({ ...this.state, label });
-	}
+  /**
+   * Set the display label for the block.
+   * Shown in the block picker and block tree.
+   */
+  label(label: I18nText): BlockBuilder<TState & { label: I18nText }> {
+    return new BlockBuilder({ ...this.state, label });
+  }
 
-	/**
-	 * Set the description for the block.
-	 * Shown in the block picker to help users understand the block's purpose.
-	 */
-	description(
-		description: I18nText,
-	): BlockBuilder<TState & { description: I18nText }> {
-		return new BlockBuilder({ ...this.state, description });
-	}
+  /**
+   * Set the description for the block.
+   * Shown in the block picker to help users understand the block's purpose.
+   */
+  description(
+    description: I18nText,
+  ): BlockBuilder<TState & { description: I18nText }> {
+    return new BlockBuilder({ ...this.state, description });
+  }
 
-	/**
-	 * Set the icon for the block.
-	 * Prefer ComponentReference from server config; string icons are legacy.
-	 */
-	icon(
-		icon: ComponentReference | string,
-	): BlockBuilder<TState & { icon: ComponentReference | string }> {
-		return new BlockBuilder({ ...this.state, icon });
-	}
+  /**
+   * Set the icon for the block.
+   * Prefer ComponentReference from server config; string icons are legacy.
+   */
+  icon(
+    icon: ComponentReference | string,
+  ): BlockBuilder<TState & { icon: ComponentReference | string }> {
+    return new BlockBuilder({ ...this.state, icon });
+  }
 
-	/**
-	 * Set the category for grouping in the block picker.
-	 */
-	category(
-		category: BlockCategory,
-	): BlockBuilder<TState & { category: BlockCategory }> {
-		return new BlockBuilder({ ...this.state, category });
-	}
+  /**
+   * Set the category for grouping in the block picker.
+   */
+  category(
+    category: BlockCategory,
+  ): BlockBuilder<TState & { category: BlockCategory }> {
+    return new BlockBuilder({ ...this.state, category });
+  }
 
-	/**
-	 * Define fields for this block.
-	 * Fields marked with `localized: true` will be stored with $i18n markers.
-	 *
-	 * Requires an admin builder registry via `.use(admin)` or `builder.block()`.
-	 * The field registry is inferred from the admin builder chain.
-	 *
-	 * @example
-	 * ```ts
-	 * .fields(({ r }) => ({
-	 *   title: r.text({ label: "Title", localized: true }),
-	 *   columns: r.select({ label: "Columns", options: [...] }),
-	 * }))
-	 * ```
-	 */
-	fields<TFields extends Record<string, FieldDefinition>>(
-		callback: (ctx: {
-			r: FieldRegistryProxy<
-				AdminAppFields<TState["~adminApp"]>,
-				AdminAppBlocks<TState["~adminApp"]>
-			>;
-		}) => TFields,
-	): BlockBuilder<TState & { fields: TFields }> {
-		// Extract field registry from admin app if available
-		const adminApp = this.state["~adminApp"] as AdminBuilder<any> | undefined;
-		if (!adminApp) {
-			throw new Error(
-				"BlockBuilder.fields requires an admin builder registry. Use qa<AppCMS>().use(adminModule).block(...), or qa.block(...).use(builder).",
-			);
-		}
-		const adminFields =
-			adminApp && typeof adminApp === "object" && "state" in adminApp
-				? (adminApp as any).state?.fields || {}
-				: {};
+  /**
+   * Define fields for this block.
+   * Fields marked with `localized: true` will be stored with $i18n markers.
+   *
+   * Requires an admin builder registry via `.use(admin)` or `builder.block()`.
+   * The field registry is inferred from the admin builder chain.
+   *
+   * @example
+   * ```ts
+   * .fields(({ r }) => ({
+   *   title: r.text({ label: "Title", localized: true }),
+   *   columns: r.select({ label: "Columns", options: [...] }),
+   * }))
+   * ```
+   */
+  fields<TFields extends Record<string, FieldDefinition>>(
+    callback: (ctx: {
+      r: FieldRegistryProxy<
+        AdminAppFields<TState["~adminApp"]>,
+        AdminAppBlocks<TState["~adminApp"]>
+      >;
+    }) => TFields,
+  ): BlockBuilder<TState & { fields: TFields }> {
+    // Extract field registry from admin app if available
+    const adminApp = this.state["~adminApp"] as AdminBuilder<any> | undefined;
+    if (!adminApp) {
+      throw new Error(
+        "BlockBuilder.fields requires an admin builder registry. Use qa<AppCMS>().use(adminModule).block(...), or qa.block(...).use(builder).",
+      );
+    }
+    const adminFields =
+      adminApp && typeof adminApp === "object" && "state" in adminApp
+        ? (adminApp as any).state?.fields || {}
+        : {};
 
-		const r = createFieldRegistryProxy(adminFields);
-		const fields = callback({ r } as any);
-		return new BlockBuilder({ ...this.state, fields });
-	}
+    const r = createFieldRegistryProxy(adminFields);
+    const fields = callback({ r } as any);
+    return new BlockBuilder({ ...this.state, fields });
+  }
 
-	/**
-	 * Allow this block to contain child blocks.
-	 * Used for layout blocks like columns, grids, containers.
-	 *
-	 * @param allow - Whether children are allowed
-	 * @param options - Optional constraints
-	 * @param options.max - Maximum number of children
-	 * @param options.allowedTypes - Allowed child block types (if not set, all are allowed)
-	 *
-	 * @example
-	 * ```ts
-	 * // Allow up to 4 children of any type
-	 * .allowChildren(true, { max: 4 })
-	 *
-	 * // Allow only specific child types
-	 * .allowChildren(true, { allowedTypes: ["text", "image"] })
-	 * ```
-	 */
-	allowChildren(
-		allow: boolean,
-		options?: { max?: number; allowedTypes?: string[] },
-	): BlockBuilder<
-		TState & {
-			allowChildren: boolean;
-			maxChildren?: number;
-			allowedChildTypes?: string[];
-		}
-	> {
-		return new BlockBuilder({
-			...this.state,
-			allowChildren: allow,
-			maxChildren: options?.max,
-			allowedChildTypes: options?.allowedTypes,
-		});
-	}
+  /**
+   * Allow this block to contain child blocks.
+   * Used for layout blocks like columns, grids, containers.
+   *
+   * @param allow - Whether children are allowed
+   * @param options - Optional constraints
+   * @param options.max - Maximum number of children
+   * @param options.allowedTypes - Allowed child block types (if not set, all are allowed)
+   *
+   * @example
+   * ```ts
+   * // Allow up to 4 children of any type
+   * .allowChildren(true, { max: 4 })
+   *
+   * // Allow only specific child types
+   * .allowChildren(true, { allowedTypes: ["text", "image"] })
+   * ```
+   */
+  allowChildren(
+    allow: boolean,
+    options?: { max?: number; allowedTypes?: string[] },
+  ): BlockBuilder<
+    TState & {
+      allowChildren: boolean;
+      maxChildren?: number;
+      allowedChildTypes?: string[];
+    }
+  > {
+    return new BlockBuilder({
+      ...this.state,
+      allowChildren: allow,
+      maxChildren: options?.max,
+      allowedChildTypes: options?.allowedTypes,
+    });
+  }
 
-	/**
-	 * Set the renderer component for this block.
-	 * The renderer receives BlockRendererProps with values and optional children.
-	 *
-	 * @example
-	 * ```ts
-	 * function HeroRenderer({ id, values, isSelected }: BlockRendererProps) {
-	 *   return (
-	 *     <section data-block-id={id}>
-	 *       <h1>{values.title}</h1>
-	 *       <p>{values.subtitle}</p>
-	 *     </section>
-	 *   );
-	 * }
-	 *
-	 * .renderer(HeroRenderer)
-	 * ```
-	 */
-	renderer<TValues = Record<string, unknown>>(
-		component: React.ComponentType<BlockRendererProps<TValues>>,
-	): BlockBuilder<
-		TState & { renderer: React.ComponentType<BlockRendererProps<TValues>> }
-	> {
-		return new BlockBuilder({
-			...this.state,
-			renderer: component as React.ComponentType<BlockRendererProps<any>>,
-		});
-	}
+  /**
+   * Set the renderer component for this block.
+   * The renderer receives BlockRendererProps with values and optional children.
+   *
+   * @example
+   * ```ts
+   * function HeroRenderer({ id, values, isSelected }: BlockRendererProps) {
+   *   return (
+   *     <section data-block-id={id}>
+   *       <h1>{values.title}</h1>
+   *       <p>{values.subtitle}</p>
+   *     </section>
+   *   );
+   * }
+   *
+   * .renderer(HeroRenderer)
+   * ```
+   */
+  renderer<TValues = Record<string, unknown>>(
+    component: React.ComponentType<BlockRendererProps<TValues>>,
+  ): BlockBuilder<
+    TState & { renderer: React.ComponentType<BlockRendererProps<TValues>> }
+  > {
+    return new BlockBuilder({
+      ...this.state,
+      renderer: component as React.ComponentType<BlockRendererProps<any>>,
+    });
+  }
 
-	/**
-	 * Set the prefetch function for SSR data fetching.
-	 * Called during SSR to fetch data needed by the block.
-	 *
-	 * @example
-	 * ```ts
-	 * .prefetch(async ({ values, locale }) => {
-	 *   // Fetch related products for this block
-	 *   return await fetchProducts(values.productIds, locale);
-	 * })
-	 * ```
-	 */
-	prefetch<TData>(
-		fn: BlockPrefetch<TData>,
-	): BlockBuilder<TState & { prefetch: BlockPrefetch<TData> }> {
-		return new BlockBuilder({
-			...this.state,
-			prefetch: fn as BlockPrefetch<any>,
-		});
-	}
-
-	/**
-	 * Build the block definition.
-	 * Validates that required properties are set.
-	 *
-	 * @throws Error if name or renderer is not set
-	 */
-	build(): BlockDefinition<TState> {
-		if (!this.state.name) {
-			throw new Error("Block name is required");
-		}
-		if (!this.state.renderer) {
-			throw new Error(`Block "${this.state.name}" requires a renderer`);
-		}
-		return this.state as unknown as BlockDefinition<TState>;
-	}
+  /**
+   * Build the block definition.
+   * Validates that required properties are set.
+   *
+   * @throws Error if name is not set
+   */
+  build(): BlockDefinition<TState> {
+    if (!this.state.name) {
+      throw new Error("Block name is required");
+    }
+    return this.state as unknown as BlockDefinition<TState>;
+  }
 }
 
 /**
@@ -304,7 +276,7 @@ export class BlockBuilder<TState extends BlockBuilderState> {
  * ```
  */
 export function block<TName extends string>(
-	name: TName,
+  name: TName,
 ): BlockBuilder<{ name: TName }> {
-	return new BlockBuilder({ name });
+  return new BlockBuilder({ name });
 }

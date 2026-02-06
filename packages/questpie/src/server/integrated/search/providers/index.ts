@@ -5,10 +5,10 @@
  */
 
 export {
-	CustomEmbeddingProvider,
-	type CustomEmbeddingProviderOptions,
-	createCustomEmbeddingProvider,
-	createOpenAIEmbeddingProvider,
-	OpenAIEmbeddingProvider,
-	type OpenAIEmbeddingProviderOptions,
+  CustomEmbeddingProvider,
+  type CustomEmbeddingProviderOptions,
+  createCustomEmbeddingProvider,
+  createOpenAIEmbeddingProvider,
+  OpenAIEmbeddingProvider,
+  type OpenAIEmbeddingProviderOptions,
 } from "./embeddings.js";

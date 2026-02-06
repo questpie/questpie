@@ -8,12 +8,12 @@ export * from "./actions";
 export type { AdminLinkProps } from "./admin-link";
 // Navigation components
 export {
-	AdminLink,
-	CollectionCreateLink,
-	CollectionEditLink,
-	CollectionLink,
-	DashboardLink,
-	GlobalLink,
+  AdminLink,
+  CollectionCreateLink,
+  CollectionEditLink,
+  CollectionLink,
+  DashboardLink,
+  GlobalLink,
 } from "./admin-link";
 // Auth components
 export * from "./auth";
@@ -24,9 +24,9 @@ export * from "./fields";
 export * from "./filter-builder";
 // Locale switcher (agnostic)
 export type {
-	LocaleOption,
-	LocaleSwitcherLabelMode,
-	LocaleSwitcherProps,
+  LocaleOption,
+  LocaleSwitcherLabelMode,
+  LocaleSwitcherProps,
 } from "./locale-switcher";
 export { LocaleSwitcher } from "./locale-switcher";
 // Sheet components

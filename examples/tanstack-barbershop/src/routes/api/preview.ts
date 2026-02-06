@@ -19,50 +19,50 @@ import { createFileRoute } from "@tanstack/react-router";
 const verifyPreviewToken = createPreviewTokenVerifier();
 
 export const Route = createFileRoute("/api/preview")({
-	server: {
-		handlers: {
-			GET: async ({ request }) => {
-				const url = new URL(request.url);
-				const disable = url.searchParams.get("disable");
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        const url = new URL(request.url);
+        const disable = url.searchParams.get("disable");
 
-				// Handle preview disable (clear cookie)
-				if (disable === "true") {
-					return new Response(null, {
-						status: 302,
-						headers: {
-							Location: "/",
-							"Set-Cookie": createDraftModeCookie(false), // Max-Age=0
-							"Cache-Control": "private, no-store",
-						},
-					});
-				}
+        // Handle preview disable (clear cookie)
+        if (disable === "true") {
+          return new Response(null, {
+            status: 302,
+            headers: {
+              Location: "/",
+              "Set-Cookie": createDraftModeCookie(false), // Max-Age=0
+              "Cache-Control": "private, no-store",
+            },
+          });
+        }
 
-				// Handle preview enable (normal flow)
-				const token = url.searchParams.get("token");
+        // Handle preview enable (normal flow)
+        const token = url.searchParams.get("token");
 
-				if (!token) {
-					return new Response("Missing token parameter", { status: 400 });
-				}
+        if (!token) {
+          return new Response("Missing token parameter", { status: 400 });
+        }
 
-				// Verify the token (checks signature and expiration)
-				const payload = verifyPreviewToken(token);
+        // Verify the token (checks signature and expiration)
+        const payload = verifyPreviewToken(token);
 
-				if (!payload) {
-					return new Response("Invalid or expired preview token", {
-						status: 401,
-					});
-				}
+        if (!payload) {
+          return new Response("Invalid or expired preview token", {
+            status: 401,
+          });
+        }
 
-				// Set draft mode cookie and redirect to the path from token
-				return new Response(null, {
-					status: 302,
-					headers: {
-						Location: payload.path,
-						"Set-Cookie": createDraftModeCookie(true),
-						"Cache-Control": "private, no-store",
-					},
-				});
-			},
-		},
-	},
+        // Set draft mode cookie and redirect to the path from token
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: payload.path,
+            "Set-Cookie": createDraftModeCookie(true),
+            "Cache-Control": "private, no-store",
+          },
+        });
+      },
+    },
+  },
 });

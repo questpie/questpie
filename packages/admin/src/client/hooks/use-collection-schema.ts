@@ -12,8 +12,8 @@ import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
 import type { CollectionSchema } from "questpie/client";
 import type {
-	RegisteredCMS,
-	RegisteredCollectionNames,
+  RegisteredCMS,
+  RegisteredCollectionNames,
 } from "../builder/registry";
 import { selectClient, useAdminStore } from "../runtime";
 
@@ -25,7 +25,7 @@ import { selectClient, useAdminStore } from "../runtime";
  * Resolved collection names (string if not registered)
  */
 type ResolvedCollectionNames =
-	RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
+  RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
 
 // ============================================================================
 // Hook
@@ -58,24 +58,24 @@ type ResolvedCollectionNames =
  * ```
  */
 export function useCollectionSchema<K extends ResolvedCollectionNames>(
-	collection: K,
-	queryOptions?: Omit<
-		UseQueryOptions<CollectionSchema>,
-		"queryKey" | "queryFn"
-	>,
+  collection: K,
+  queryOptions?: Omit<
+    UseQueryOptions<CollectionSchema>,
+    "queryKey" | "queryFn"
+  >,
 ) {
-	const client = useAdminStore(selectClient);
+  const client = useAdminStore(selectClient);
 
-	return useQuery<CollectionSchema>({
-		queryKey: getCollectionSchemaQueryKey(collection),
-		queryFn: async () => {
-			return (client as any).collections[collection].schema();
-		},
-		// Schema rarely changes, cache aggressively
-		staleTime: 5 * 60 * 1000, // 5 minutes
-		gcTime: 30 * 60 * 1000, // 30 minutes
-		...queryOptions,
-	});
+  return useQuery<CollectionSchema>({
+    queryKey: getCollectionSchemaQueryKey(collection),
+    queryFn: async () => {
+      return (client as any).collections[collection].schema();
+    },
+    // Schema rarely changes, cache aggressively
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    ...queryOptions,
+  });
 }
 
 /**
@@ -83,5 +83,5 @@ export function useCollectionSchema<K extends ResolvedCollectionNames>(
  * Useful for prefetching or invalidation
  */
 export function getCollectionSchemaQueryKey(collection: string) {
-	return ["questpie", "collections", collection, "schema"] as const;
+  return ["questpie", "collections", collection, "schema"] as const;
 }

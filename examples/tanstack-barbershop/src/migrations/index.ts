@@ -1,6 +1,8 @@
 import type { Migration } from "questpie";
 
 import { gentleAzureEagle20260206T174642 } from "./20260206T174642_gentle_azure_eagle.js";
+import { fancyGreenTiger20260206T180920 } from "./20260206T180920_fancy_green_tiger.js";
 export const migrations: Migration[] = [
-	gentleAzureEagle20260206T174642,
+  gentleAzureEagle20260206T174642,
+  fancyGreenTiger20260206T180920,
 ];

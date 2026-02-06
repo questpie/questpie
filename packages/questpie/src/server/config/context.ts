@@ -15,10 +15,10 @@ import type { AccessMode } from "./types.js";
  * ```
  */
 export type InferSessionFromApp<TApp> = TApp extends {
-	auth: { $Infer: { Session: infer S } };
+  auth: { $Infer: { Session: infer S } };
 }
-	? S
-	: { user: User; session: Session };
+  ? S
+  : { user: User; session: Session };
 
 /**
  * Infer the database type from a CMS app instance.
@@ -56,8 +56,8 @@ export type InferDbFromApp<TApp> = TApp extends { db: infer D } ? D : any;
  * ```
  */
 export type InferBaseCMS<T> = T extends { config: infer TConfig }
-	? { config: Omit<TConfig, "functions">; [key: string]: any }
-	: never;
+  ? { config: Omit<TConfig, "functions">; [key: string]: any }
+  : never;
 
 /**
  * Get typed CMS app instance from hook/job/function context.
@@ -79,7 +79,7 @@ export type InferBaseCMS<T> = T extends { config: infer TConfig }
  * ```
  */
 export function getApp<TApp>(app: unknown): TApp {
-	return app as TApp;
+  return app as TApp;
 }
 
 /**
@@ -103,7 +103,7 @@ export function getApp<TApp>(app: unknown): TApp {
  * ```
  */
 export function getDb<TApp>(db: unknown): InferDbFromApp<TApp> {
-	return db as InferDbFromApp<TApp>;
+  return db as InferDbFromApp<TApp>;
 }
 
 /**
@@ -131,9 +131,9 @@ export function getDb<TApp>(db: unknown): InferDbFromApp<TApp> {
  * ```
  */
 export function getSession<TApp>(
-	session: unknown,
+  session: unknown,
 ): InferSessionFromApp<TApp> | null | undefined {
-	return session as InferSessionFromApp<TApp> | null | undefined;
+  return session as InferSessionFromApp<TApp> | null | undefined;
 }
 
 /**
@@ -189,11 +189,11 @@ export type InferAppFromApp<TApp> = TApp;
  * Used when getContext() is called without explicit context parameter.
  */
 const cmsContextStorage = new AsyncLocalStorage<{
-	app: unknown;
-	session?: unknown | null;
-	db?: unknown;
-	locale?: string;
-	accessMode?: string;
+  app: unknown;
+  session?: unknown | null;
+  db?: unknown;
+  locale?: string;
+  accessMode?: string;
 }>();
 
 /**
@@ -209,16 +209,16 @@ const cmsContextStorage = new AsyncLocalStorage<{
  * ```
  */
 export function runWithContext<T>(
-	ctx: {
-		app: unknown;
-		session?: unknown | null;
-		db?: unknown;
-		locale?: string;
-		accessMode?: string;
-	},
-	fn: () => T | Promise<T>,
+  ctx: {
+    app: unknown;
+    session?: unknown | null;
+    db?: unknown;
+    locale?: string;
+    accessMode?: string;
+  },
+  fn: () => T | Promise<T>,
 ): Promise<T> {
-	return cmsContextStorage.run(ctx, fn) as Promise<T>;
+  return cmsContextStorage.run(ctx, fn) as Promise<T>;
 }
 
 /**
@@ -253,60 +253,60 @@ export function runWithContext<T>(
 
 // Type helpers for smart return type based on input
 type GetContextReturn<TApp, TCtx> = {
-	app: TCtx extends { app: unknown } ? InferAppFromApp<TApp> : never;
-	session: TCtx extends { session: infer S }
-		? S
-		: InferSessionFromApp<TApp> | null | undefined;
-	db: TCtx extends { db: unknown } ? InferDbFromApp<TApp> : never;
-	locale: TCtx extends { locale: infer L } ? L : string | undefined;
-	accessMode: TCtx extends { accessMode: infer A } ? A : string | undefined;
+  app: TCtx extends { app: unknown } ? InferAppFromApp<TApp> : never;
+  session: TCtx extends { session: infer S }
+    ? S
+    : InferSessionFromApp<TApp> | null | undefined;
+  db: TCtx extends { db: unknown } ? InferDbFromApp<TApp> : never;
+  locale: TCtx extends { locale: infer L } ? L : string | undefined;
+  accessMode: TCtx extends { accessMode: infer A } ? A : string | undefined;
 };
 
 // Overload: No context provided - gets everything from AsyncLocalStorage
 export function getContext<TApp>(): {
-	app: InferAppFromApp<TApp>;
-	session: InferSessionFromApp<TApp> | null | undefined;
-	db: InferDbFromApp<TApp>;
-	locale: string | undefined;
-	accessMode: string | undefined;
+  app: InferAppFromApp<TApp>;
+  session: InferSessionFromApp<TApp> | null | undefined;
+  db: InferDbFromApp<TApp>;
+  locale: string | undefined;
+  accessMode: string | undefined;
 };
 
 // Overload: With context object - smart return type based on what you pass
 export function getContext<
-	TApp,
-	TCtx extends {
-		app?: unknown;
-		session?: unknown | null;
-		db?: unknown;
-		locale?: string;
-		accessMode?: string;
-	},
+  TApp,
+  TCtx extends {
+    app?: unknown;
+    session?: unknown | null;
+    db?: unknown;
+    locale?: string;
+    accessMode?: string;
+  },
 >(ctx: TCtx): GetContextReturn<TApp, TCtx>;
 
 // Implementation
 export function getContext<TApp>(ctx?: {
-	app?: unknown;
-	session?: unknown | null;
-	db?: unknown;
-	locale?: string;
-	accessMode?: string;
-	[key: string]: any;
+  app?: unknown;
+  session?: unknown | null;
+  db?: unknown;
+  locale?: string;
+  accessMode?: string;
+  [key: string]: any;
 }): any {
-	// If explicit context provided, use it
-	if (ctx) {
-		return ctx;
-	}
+  // If explicit context provided, use it
+  if (ctx) {
+    return ctx;
+  }
 
-	// Otherwise, try to get from AsyncLocalStorage
-	const stored = cmsContextStorage.getStore();
-	if (!stored) {
-		throw new Error(
-			"getContext() called without explicit context and no request scope available. " +
-				"Either pass context as parameter or call within runWithContext() scope.",
-		);
-	}
+  // Otherwise, try to get from AsyncLocalStorage
+  const stored = cmsContextStorage.getStore();
+  if (!stored) {
+    throw new Error(
+      "getContext() called without explicit context and no request scope available. " +
+        "Either pass context as parameter or call within runWithContext() scope.",
+    );
+  }
 
-	return stored;
+  return stored;
 }
 
 // ============================================================================
@@ -319,71 +319,71 @@ export function getContext<TApp>(ctx?: {
  * Services are accessed via app.* not context.*
  */
 export interface RequestContext {
-	/**
-	 * Auth session from Better Auth (contains user + session).
-	 * - undefined = session not resolved (e.g. system operation without request)
-	 * - null = explicitly unauthenticated
-	 * - object = authenticated session with user
-	 *
-	 * @example
-	 * ```ts
-	 * // Check if authenticated
-	 * if (!ctx.session) {
-	 *   throw new Error('Unauthorized');
-	 * }
-	 *
-	 * // Access user
-	 * const userId = ctx.session.user.id;
-	 * const role = ctx.session.user.role;
-	 *
-	 * // Access session metadata
-	 * const expiresAt = ctx.session.session.expiresAt;
-	 * ```
-	 */
-	session?: { user: User; session: Session } | null;
+  /**
+   * Auth session from Better Auth (contains user + session).
+   * - undefined = session not resolved (e.g. system operation without request)
+   * - null = explicitly unauthenticated
+   * - object = authenticated session with user
+   *
+   * @example
+   * ```ts
+   * // Check if authenticated
+   * if (!ctx.session) {
+   *   throw new Error('Unauthorized');
+   * }
+   *
+   * // Access user
+   * const userId = ctx.session.user.id;
+   * const role = ctx.session.user.role;
+   *
+   * // Access session metadata
+   * const expiresAt = ctx.session.session.expiresAt;
+   * ```
+   */
+  session?: { user: User; session: Session } | null;
 
-	/**
-	 * Current locale for this request
-	 */
-	locale?: string;
+  /**
+   * Current locale for this request
+   */
+  locale?: string;
 
-	/**
-	 * Default locale (fallback)
-	 */
-	defaultLocale?: string;
+  /**
+   * Default locale (fallback)
+   */
+  defaultLocale?: string;
 
-	/**
-	 * Whether to fallback to default locale when current locale translation is missing.
-	 */
-	localeFallback?: boolean;
+  /**
+   * Whether to fallback to default locale when current locale translation is missing.
+   */
+  localeFallback?: boolean;
 
-	/**
-	 * Access mode - defaults to 'system' since CMS API is backend-only.
-	 * Set to 'user' explicitly when handling user requests with access control.
-	 */
-	accessMode?: AccessMode;
+  /**
+   * Access mode - defaults to 'system' since CMS API is backend-only.
+   * Set to 'user' explicitly when handling user requests with access control.
+   */
+  accessMode?: AccessMode;
 
-	/**
-	 * Database client - may be transaction within hook/handler scope.
-	 * All operations on this client participate in the current transaction if one is active.
-	 *
-	 * @example
-	 * ```ts
-	 * afterChange: async ({ db, data }) => {
-	 *   // This INSERT is part of the same transaction as the main CRUD operation
-	 *   await db.insert(auditLog).values({
-	 *     recordId: data.id,
-	 *     action: 'created',
-	 *     timestamp: new Date()
-	 *   });
-	 * }
-	 * ```
-	 */
-	db?: any;
+  /**
+   * Database client - may be transaction within hook/handler scope.
+   * All operations on this client participate in the current transaction if one is active.
+   *
+   * @example
+   * ```ts
+   * afterChange: async ({ db, data }) => {
+   *   // This INSERT is part of the same transaction as the main CRUD operation
+   *   await db.insert(auditLog).values({
+   *     recordId: data.id,
+   *     action: 'created',
+   *     timestamp: new Date()
+   *   });
+   * }
+   * ```
+   */
+  db?: any;
 
-	/**
-	 * Allow extensions for custom context properties.
-	 * Use `extendContext` in adapter config to add custom properties.
-	 */
-	[key: string]: unknown;
+  /**
+   * Allow extensions for custom context properties.
+   * Use `extendContext` in adapter config to add custom properties.
+   */
+  [key: string]: unknown;
 }

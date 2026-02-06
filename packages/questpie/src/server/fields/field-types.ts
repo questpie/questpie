@@ -18,20 +18,20 @@
 
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type {
-	CollectionOptions,
-	UploadOptions,
+  CollectionOptions,
+  UploadOptions,
 } from "#questpie/server/collection/builder/types.js";
 import { datetimeField } from "#questpie/server/fields/builtin/datetime.js";
 import { numberField } from "#questpie/server/fields/builtin/number.js";
 import { textField } from "#questpie/server/fields/builtin/text.js";
 import { createFieldDefinition } from "#questpie/server/fields/define-field.js";
 import type {
-	ContextualOperators,
-	ExtractOperatorParamType,
-	FieldDefinition,
-	FieldDefinitionState,
-	OperatorMap,
-	OperatorsToWhereInput,
+  ContextualOperators,
+  ExtractOperatorParamType,
+  FieldDefinition,
+  FieldDefinitionState,
+  OperatorMap,
+  OperatorsToWhereInput,
 } from "#questpie/server/fields/types.js";
 
 // ============================================================================
@@ -43,18 +43,18 @@ import type {
  * The field knows what kind of relation it is from its config alone.
  */
 export type InferRelationSubtype<TConfig> = TConfig extends {
-	morphName: string;
+  morphName: string;
 }
-	? "morphMany"
-	: TConfig extends { to: Record<string, any> }
-		? "morphTo"
-		: TConfig extends { hasMany: true; through: any }
-			? "manyToMany"
-			: TConfig extends { hasMany: true }
-				? "hasMany"
-				: TConfig extends { multiple: true }
-					? "multiple"
-					: "belongsTo";
+  ? "morphMany"
+  : TConfig extends { to: Record<string, any> }
+    ? "morphTo"
+    : TConfig extends { hasMany: true; through: any }
+      ? "manyToMany"
+      : TConfig extends { hasMany: true }
+        ? "hasMany"
+        : TConfig extends { multiple: true }
+          ? "multiple"
+          : "belongsTo";
 
 // ============================================================================
 // Relation FK Select — what value sits in the row for a relation field?
@@ -65,10 +65,10 @@ export type InferRelationSubtype<TConfig> = TConfig extends {
  * e.g. { users: "users", posts: "posts" } → "users" | "posts"
  */
 type MorphToTypeKeys<TConfig> = TConfig extends { to: infer TTo }
-	? TTo extends Record<string, any>
-		? Extract<keyof TTo, string>
-		: string
-	: string;
+  ? TTo extends Record<string, any>
+    ? Extract<keyof TTo, string>
+    : string
+  : string;
 
 /**
  * Base FK type per relation sub-type (before nullable applied).
@@ -78,24 +78,24 @@ type MorphToTypeKeys<TConfig> = TConfig extends { to: infer TTo }
  * - toMany:     never (no column on this table)
  */
 type RelationFKBase<TConfig> =
-	InferRelationSubtype<TConfig> extends "belongsTo"
-		? string
-		: InferRelationSubtype<TConfig> extends "multiple"
-			? string[]
-			: InferRelationSubtype<TConfig> extends "morphTo"
-				? { type: MorphToTypeKeys<TConfig>; id: string }
-				: never; // hasMany, manyToMany, morphMany → no FK column
+  InferRelationSubtype<TConfig> extends "belongsTo"
+    ? string
+    : InferRelationSubtype<TConfig> extends "multiple"
+      ? string[]
+      : InferRelationSubtype<TConfig> extends "morphTo"
+        ? { type: MorphToTypeKeys<TConfig>; id: string }
+        : never; // hasMany, manyToMany, morphMany → no FK column
 
 /**
  * FK select type with nullable applied from config.
  * Returns `never` for toMany relations (they have no column).
  */
 export type InferRelationFKSelect<TConfig> =
-	RelationFKBase<TConfig> extends never
-		? never
-		: TConfig extends { required: true }
-			? RelationFKBase<TConfig>
-			: RelationFKBase<TConfig> | null;
+  RelationFKBase<TConfig> extends never
+    ? never
+    : TConfig extends { required: true }
+      ? RelationFKBase<TConfig>
+      : RelationFKBase<TConfig> | null;
 
 // ============================================================================
 // FieldSelect — "what value does this field contribute to a row?"
@@ -115,16 +115,14 @@ export type InferRelationFKSelect<TConfig> =
  * The app-aware block document type (BlocksSelectFromApp) is handled at the
  * collection level in crud/types.ts since it needs TApp context.
  */
-export type FieldSelect<
-	TFieldDef,
-	_TApp = unknown,
-> = TFieldDef extends FieldDefinition<infer TState>
-	? TState extends FieldDefinitionState
-		? TState["type"] extends "relation"
-			? InferRelationFKSelect<TState["config"]>
-			: TState["select"]
-		: never
-	: never;
+export type FieldSelect<TFieldDef, _TApp = unknown> =
+  TFieldDef extends FieldDefinition<infer TState>
+    ? TState extends FieldDefinitionState
+      ? TState["type"] extends "relation"
+        ? InferRelationFKSelect<TState["config"]>
+        : TState["select"]
+      : never
+    : never;
 
 // ============================================================================
 // FieldWhere — "how do I filter on this field?"
@@ -139,22 +137,22 @@ export type FieldSelect<
  *
  * Returns `never` for fields that don't support filtering (blocks, toMany relations without FK).
  */
-export type FieldWhere<
-	TFieldDef,
-	_TApp = unknown,
-> = TFieldDef extends FieldDefinition<infer TState>
-	? TState extends FieldDefinitionState
-		? TState extends { operators: { column: infer TColumnOps } }
-			? TState["type"] extends "blocks"
-				? never // blocks don't support where
-				: TColumnOps extends Record<string, any>
-					? {
-							[K in keyof TColumnOps]?: ExtractOperatorParamType<TColumnOps[K]>;
-						}
-					: never
-			: never // no operators = not queryable
-		: never
-	: never;
+export type FieldWhere<TFieldDef, _TApp = unknown> =
+  TFieldDef extends FieldDefinition<infer TState>
+    ? TState extends FieldDefinitionState
+      ? TState extends { operators: { column: infer TColumnOps } }
+        ? TState["type"] extends "blocks"
+          ? never // blocks don't support where
+          : TColumnOps extends Record<string, any>
+            ? {
+                [K in keyof TColumnOps]?: ExtractOperatorParamType<
+                  TColumnOps[K]
+                >;
+              }
+            : never
+        : never // no operators = not queryable
+      : never
+    : never;
 
 // ============================================================================
 // System Field Instances — real field definitions, not phantom types
@@ -170,42 +168,42 @@ export type FieldWhere<
 
 /** id: text, required, has default */
 const _systemIdField = createFieldDefinition(textField, {
-	required: true,
-	default: () => "",
+  required: true,
+  default: () => "",
 } as const);
 
 /** _title: text, required, virtual (computed) */
 const _systemTitleField = createFieldDefinition(textField, {
-	required: true,
-	virtual: true,
+  required: true,
+  virtual: true,
 } as const);
 
 /** createdAt / updatedAt: datetime, required, has default */
 const _systemTimestampField = createFieldDefinition(datetimeField, {
-	required: true,
-	default: () => new Date(),
+  required: true,
+  default: () => new Date(),
 } as const);
 
 /** deletedAt: datetime, nullable */
 const _systemNullableTimestampField = createFieldDefinition(
-	datetimeField,
-	{} as const,
+  datetimeField,
+  {} as const,
 );
 
 /** Upload text fields (key, filename, mimeType): text, required */
 const _systemUploadTextField = createFieldDefinition(textField, {
-	required: true,
+  required: true,
 } as const);
 
 /** Upload size field: number, required */
 const _systemUploadNumberField = createFieldDefinition(numberField, {
-	required: true,
+  required: true,
 } as const);
 
 /** Upload visibility field: text, required, default "public" — public/private enum stored as text */
 const _systemUploadVisibilityField = createFieldDefinition(textField, {
-	required: true,
-	default: "public",
+  required: true,
+  default: "public",
 } as const);
 
 // Extract types from real field instances
@@ -233,70 +231,70 @@ type UploadVisibilityField = typeof _systemUploadVisibilityField;
  * - upload:    only if upload options are set
  */
 export type AutoInsertedFields<
-	TUserFields extends Record<string, any>,
-	TOptions extends CollectionOptions,
-	TUpload extends UploadOptions | undefined,
+  TUserFields extends Record<string, any>,
+  TOptions extends CollectionOptions,
+  TUpload extends UploadOptions | undefined,
 > = ("id" extends keyof TUserFields // id — skip if user defined their own
-	? {}
-	: { readonly id: IdField }) &
-	// _title — always
-	("_title" extends keyof TUserFields ? {} : { readonly _title: TitleField }) &
-	// timestamps — unless disabled
-	(TOptions extends { timestamps: false }
-		? {}
-		: ("createdAt" extends keyof TUserFields
-				? {}
-				: {
-						readonly createdAt: TimestampField;
-					}) &
-				("updatedAt" extends keyof TUserFields
-					? {}
-					: {
-							readonly updatedAt: TimestampField;
-						})) &
-	// softDelete
-	(TOptions extends { softDelete: true }
-		? "deletedAt" extends keyof TUserFields
-			? {}
-			: {
-					readonly deletedAt: NullableTimestampField;
-				}
-		: {}) &
-	// upload fields
-	(TUpload extends UploadOptions
-		? ("key" extends keyof TUserFields
-				? {}
-				: {
-						readonly key: UploadTextField;
-					}) &
-				("filename" extends keyof TUserFields
-					? {}
-					: {
-							readonly filename: UploadTextField;
-						}) &
-				("mimeType" extends keyof TUserFields
-					? {}
-					: {
-							readonly mimeType: UploadTextField;
-						}) &
-				("size" extends keyof TUserFields
-					? {}
-					: {
-							readonly size: UploadNumberField;
-						}) &
-				("visibility" extends keyof TUserFields
-					? {}
-					: {
-							readonly visibility: UploadVisibilityField;
-						})
-		: {});
+  ? {}
+  : { readonly id: IdField }) &
+  // _title — always
+  ("_title" extends keyof TUserFields ? {} : { readonly _title: TitleField }) &
+  // timestamps — unless disabled
+  (TOptions extends { timestamps: false }
+    ? {}
+    : ("createdAt" extends keyof TUserFields
+        ? {}
+        : {
+            readonly createdAt: TimestampField;
+          }) &
+        ("updatedAt" extends keyof TUserFields
+          ? {}
+          : {
+              readonly updatedAt: TimestampField;
+            })) &
+  // softDelete
+  (TOptions extends { softDelete: true }
+    ? "deletedAt" extends keyof TUserFields
+      ? {}
+      : {
+          readonly deletedAt: NullableTimestampField;
+        }
+    : {}) &
+  // upload fields
+  (TUpload extends UploadOptions
+    ? ("key" extends keyof TUserFields
+        ? {}
+        : {
+            readonly key: UploadTextField;
+          }) &
+        ("filename" extends keyof TUserFields
+          ? {}
+          : {
+              readonly filename: UploadTextField;
+            }) &
+        ("mimeType" extends keyof TUserFields
+          ? {}
+          : {
+              readonly mimeType: UploadTextField;
+            }) &
+        ("size" extends keyof TUserFields
+          ? {}
+          : {
+              readonly size: UploadNumberField;
+            }) &
+        ("visibility" extends keyof TUserFields
+          ? {}
+          : {
+              readonly visibility: UploadVisibilityField;
+            })
+    : {});
 
 /**
  * Merges user-defined field definitions with auto-inserted system fields.
  * User fields always win — if user defines `id`, the auto-inserted one is skipped.
  */
 export type FieldDefinitionsWithSystem<
-	TUserFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
-	TOptions extends CollectionOptions,
-	TUpload extends UploadOptions | undefined,
+  TUserFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
+  TOptions extends CollectionOptions,
+  TUpload extends UploadOptions | undefined,
 > = AutoInsertedFields<TUserFields, TOptions, TUpload> & TUserFields;

@@ -20,12 +20,12 @@ import type { AppCMS } from "../server/cms";
 
 // Create typed hooks for this app's CMS
 export const {
-	useCollectionList,
-	useCollectionCount,
-	useCollectionItem,
-	useCollectionCreate,
-	useCollectionUpdate,
-	useCollectionDelete,
-	useGlobal,
-	useGlobalUpdate,
+  useCollectionList,
+  useCollectionCount,
+  useCollectionItem,
+  useCollectionCreate,
+  useCollectionUpdate,
+  useCollectionDelete,
+  useGlobal,
+  useGlobalUpdate,
 } = createTypedHooks<AppCMS>();

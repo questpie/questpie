@@ -48,95 +48,95 @@ import type { LinkComponentProps } from "./admin-sidebar";
 // ============================================================================
 
 export interface AdminRootProps<TApp extends Questpie<any> = Questpie<any>> {
-	/**
-	 * Admin configuration instance (from admin().build())
-	 */
-	admin: Admin;
+  /**
+   * Admin configuration instance (from admin().build())
+   */
+  admin: Admin;
 
-	/**
-	 * API client for data fetching
-	 */
-	client: QuestpieClient<TApp>;
+  /**
+   * API client for data fetching
+   */
+  client: QuestpieClient<TApp>;
 
-	/**
-	 * Current route segments after /admin
-	 * Example: ["collections", "posts"] for /admin/collections/posts
-	 */
-	segments: string[];
+  /**
+   * Current route segments after /admin
+   * Example: ["collections", "posts"] for /admin/collections/posts
+   */
+  segments: string[];
 
-	/**
-	 * Navigate function from your router
-	 */
-	navigate: (path: string) => void;
+  /**
+   * Navigate function from your router
+   */
+  navigate: (path: string) => void;
 
-	/**
-	 * Link component from your router
-	 */
-	LinkComponent: React.ComponentType<LinkComponentProps>;
+  /**
+   * Link component from your router
+   */
+  LinkComponent: React.ComponentType<LinkComponentProps>;
 
-	/**
-	 * Current active route path (for sidebar highlighting)
-	 */
-	activeRoute?: string;
+  /**
+   * Current active route path (for sidebar highlighting)
+   */
+  activeRoute?: string;
 
-	/**
-	 * Base path for admin routes (default: "/admin")
-	 */
-	basePath?: string;
+  /**
+   * Base path for admin routes (default: "/admin")
+   */
+  basePath?: string;
 
-	/**
-	 * Optional QueryClient instance
-	 */
-	queryClient?: QueryClient;
+  /**
+   * Optional QueryClient instance
+   */
+  queryClient?: QueryClient;
 
-	/**
-	 * Custom dashboard component (overrides admin config)
-	 */
-	DashboardComponent?: React.ComponentType;
+  /**
+   * Custom dashboard component (overrides admin config)
+   */
+  DashboardComponent?: React.ComponentType;
 
-	/**
-	 * Custom collection components
-	 */
-	collectionComponents?: Record<
-		string,
-		{
-			List?: React.ComponentType;
-			Form?: React.ComponentType;
-		}
-	>;
+  /**
+   * Custom collection components
+   */
+  collectionComponents?: Record<
+    string,
+    {
+      List?: React.ComponentType;
+      Form?: React.ComponentType;
+    }
+  >;
 
-	/**
-	 * Custom global components
-	 */
-	globalComponents?: Record<
-		string,
-		{
-			Form?: React.ComponentType;
-		}
-	>;
+  /**
+   * Custom global components
+   */
+  globalComponents?: Record<
+    string,
+    {
+      Form?: React.ComponentType;
+    }
+  >;
 
-	/**
-	 * Custom not found component
-	 */
-	NotFoundComponent?: React.ComponentType;
+  /**
+   * Custom not found component
+   */
+  NotFoundComponent?: React.ComponentType;
 
-	/**
-	 * Header content
-	 */
-	header?: React.ReactNode;
+  /**
+   * Header content
+   */
+  header?: React.ReactNode;
 
-	/**
-	 * Footer content
-	 */
-	footer?: React.ReactNode;
+  /**
+   * Footer content
+   */
+  footer?: React.ReactNode;
 
-	/**
-	 * Sidebar props (footer, collapsed state, etc.)
-	 */
-	sidebarProps?: {
-		footer?: React.ReactNode;
-		collapsed?: boolean;
-	};
+  /**
+   * Sidebar props (footer, collapsed state, etc.)
+   */
+  sidebarProps?: {
+    footer?: React.ReactNode;
+    collapsed?: boolean;
+  };
 }
 
 // ============================================================================
@@ -150,44 +150,44 @@ export interface AdminRootProps<TApp extends Questpie<any> = Questpie<any>> {
  * Uses the new admin() builder architecture.
  */
 export function AdminRoot<TApp extends Questpie<any>>({
-	admin,
-	client,
-	segments,
-	navigate,
-	LinkComponent,
-	activeRoute,
-	basePath = "/admin",
-	queryClient,
-	DashboardComponent,
-	collectionComponents,
-	globalComponents,
-	NotFoundComponent,
-	header,
-	footer,
-	sidebarProps,
+  admin,
+  client,
+  segments,
+  navigate,
+  LinkComponent,
+  activeRoute,
+  basePath = "/admin",
+  queryClient,
+  DashboardComponent,
+  collectionComponents,
+  globalComponents,
+  NotFoundComponent,
+  header,
+  footer,
+  sidebarProps,
 }: AdminRootProps<TApp>): React.ReactElement {
-	return (
-		<AdminProvider admin={admin} client={client} queryClient={queryClient}>
-			<AdminLayout
-				LinkComponent={LinkComponent}
-				activeRoute={activeRoute}
-				basePath={basePath}
-				header={header}
-				footer={footer}
-				sidebarProps={sidebarProps}
-			>
-				<AdminRouter
-					segments={segments}
-					navigate={navigate}
-					basePath={basePath}
-					DashboardComponent={DashboardComponent}
-					collectionComponents={collectionComponents}
-					globalComponents={globalComponents}
-					NotFoundComponent={NotFoundComponent}
-				/>
-			</AdminLayout>
-		</AdminProvider>
-	);
+  return (
+    <AdminProvider admin={admin} client={client} queryClient={queryClient}>
+      <AdminLayout
+        LinkComponent={LinkComponent}
+        activeRoute={activeRoute}
+        basePath={basePath}
+        header={header}
+        footer={footer}
+        sidebarProps={sidebarProps}
+      >
+        <AdminRouter
+          segments={segments}
+          navigate={navigate}
+          basePath={basePath}
+          DashboardComponent={DashboardComponent}
+          collectionComponents={collectionComponents}
+          globalComponents={globalComponents}
+          NotFoundComponent={NotFoundComponent}
+        />
+      </AdminLayout>
+    </AdminProvider>
+  );
 }
 
 // ============================================================================

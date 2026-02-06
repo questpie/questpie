@@ -15,27 +15,27 @@ import { z, type ZodType } from "zod";
  * @returns Schema with appropriate nullability
  */
 export function applyNullability<T extends ZodType>(
-	schema: T,
-	required?: boolean,
-	nullable?: boolean,
+  schema: T,
+  required?: boolean,
+  nullable?: boolean,
 ): ZodType {
-	// If explicitly nullable, make it nullable
-	if (nullable === true) {
-		return schema.nullable();
-	}
+  // If explicitly nullable, make it nullable
+  if (nullable === true) {
+    return schema.nullable();
+  }
 
-	// If required, don't add nullability
-	if (required) {
-		return schema;
-	}
+  // If required, don't add nullability
+  if (required) {
+    return schema;
+  }
 
-	// If explicitly not nullable, keep as is
-	if (nullable === false) {
-		return schema;
-	}
+  // If explicitly not nullable, keep as is
+  if (nullable === false) {
+    return schema;
+  }
 
-	// Default: not required means nullish (null | undefined)
-	return schema.nullish();
+  // Default: not required means nullish (null | undefined)
+  return schema.nullish();
 }
 
 /**
@@ -45,41 +45,41 @@ export function applyNullability<T extends ZodType>(
  * @returns Configured Zod string schema
  */
 export function createStringSchema(options: {
-	minLength?: number;
-	maxLength?: number;
-	pattern?: RegExp | string;
-	trim?: boolean;
-	lowercase?: boolean;
-	uppercase?: boolean;
-	required?: boolean;
-	nullable?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: RegExp | string;
+  trim?: boolean;
+  lowercase?: boolean;
+  uppercase?: boolean;
+  required?: boolean;
+  nullable?: boolean;
 }): ZodType {
-	let schema = z.string();
+  let schema = z.string();
 
-	if (options.minLength !== undefined) {
-		schema = schema.min(options.minLength);
-	}
-	if (options.maxLength !== undefined) {
-		schema = schema.max(options.maxLength);
-	}
-	if (options.pattern) {
-		const regex =
-			typeof options.pattern === "string"
-				? new RegExp(options.pattern)
-				: options.pattern;
-		schema = schema.regex(regex);
-	}
-	if (options.trim) {
-		schema = schema.trim();
-	}
-	if (options.lowercase) {
-		schema = schema.toLowerCase();
-	}
-	if (options.uppercase) {
-		schema = schema.toUpperCase();
-	}
+  if (options.minLength !== undefined) {
+    schema = schema.min(options.minLength);
+  }
+  if (options.maxLength !== undefined) {
+    schema = schema.max(options.maxLength);
+  }
+  if (options.pattern) {
+    const regex =
+      typeof options.pattern === "string"
+        ? new RegExp(options.pattern)
+        : options.pattern;
+    schema = schema.regex(regex);
+  }
+  if (options.trim) {
+    schema = schema.trim();
+  }
+  if (options.lowercase) {
+    schema = schema.toLowerCase();
+  }
+  if (options.uppercase) {
+    schema = schema.toUpperCase();
+  }
 
-	return applyNullability(schema, options.required, options.nullable);
+  return applyNullability(schema, options.required, options.nullable);
 }
 
 /**
@@ -89,37 +89,37 @@ export function createStringSchema(options: {
  * @returns Configured Zod number schema
  */
 export function createNumberSchema(options: {
-	min?: number;
-	max?: number;
-	int?: boolean;
-	positive?: boolean;
-	negative?: boolean;
-	multipleOf?: number;
-	required?: boolean;
-	nullable?: boolean;
+  min?: number;
+  max?: number;
+  int?: boolean;
+  positive?: boolean;
+  negative?: boolean;
+  multipleOf?: number;
+  required?: boolean;
+  nullable?: boolean;
 }): ZodType {
-	let schema = z.number();
+  let schema = z.number();
 
-	if (options.int) {
-		schema = schema.int();
-	}
-	if (options.min !== undefined) {
-		schema = schema.min(options.min);
-	}
-	if (options.max !== undefined) {
-		schema = schema.max(options.max);
-	}
-	if (options.positive) {
-		schema = schema.positive();
-	}
-	if (options.negative) {
-		schema = schema.negative();
-	}
-	if (options.multipleOf !== undefined) {
-		schema = schema.multipleOf(options.multipleOf);
-	}
+  if (options.int) {
+    schema = schema.int();
+  }
+  if (options.min !== undefined) {
+    schema = schema.min(options.min);
+  }
+  if (options.max !== undefined) {
+    schema = schema.max(options.max);
+  }
+  if (options.positive) {
+    schema = schema.positive();
+  }
+  if (options.negative) {
+    schema = schema.negative();
+  }
+  if (options.multipleOf !== undefined) {
+    schema = schema.multipleOf(options.multipleOf);
+  }
 
-	return applyNullability(schema, options.required, options.nullable);
+  return applyNullability(schema, options.required, options.nullable);
 }
 
 /**
@@ -129,11 +129,11 @@ export function createNumberSchema(options: {
  * @returns Configured Zod boolean schema
  */
 export function createBooleanSchema(options: {
-	required?: boolean;
-	nullable?: boolean;
+  required?: boolean;
+  nullable?: boolean;
 }): ZodType {
-	const schema = z.boolean();
-	return applyNullability(schema, options.required, options.nullable);
+  const schema = z.boolean();
+  return applyNullability(schema, options.required, options.nullable);
 }
 
 /**
@@ -143,21 +143,21 @@ export function createBooleanSchema(options: {
  * @returns Configured Zod date schema
  */
 export function createDateSchema(options: {
-	min?: Date;
-	max?: Date;
-	required?: boolean;
-	nullable?: boolean;
+  min?: Date;
+  max?: Date;
+  required?: boolean;
+  nullable?: boolean;
 }): ZodType {
-	let schema = z.date();
+  let schema = z.date();
 
-	if (options.min) {
-		schema = schema.min(options.min);
-	}
-	if (options.max) {
-		schema = schema.max(options.max);
-	}
+  if (options.min) {
+    schema = schema.min(options.min);
+  }
+  if (options.max) {
+    schema = schema.max(options.max);
+  }
 
-	return applyNullability(schema, options.required, options.nullable);
+  return applyNullability(schema, options.required, options.nullable);
 }
 
 /**
@@ -168,14 +168,14 @@ export function createDateSchema(options: {
  * @returns Configured Zod enum schema
  */
 export function createEnumSchema<T extends string>(
-	options: readonly [T, ...T[]],
-	config: {
-		required?: boolean;
-		nullable?: boolean;
-	},
+  options: readonly [T, ...T[]],
+  config: {
+    required?: boolean;
+    nullable?: boolean;
+  },
 ): ZodType {
-	const schema = z.enum(options);
-	return applyNullability(schema, config.required, config.nullable);
+  const schema = z.enum(options);
+  return applyNullability(schema, config.required, config.nullable);
 }
 
 /**
@@ -186,22 +186,22 @@ export function createEnumSchema<T extends string>(
  * @returns Configured Zod array schema
  */
 export function createArraySchema(
-	itemSchema: ZodType,
-	options: {
-		minItems?: number;
-		maxItems?: number;
-		required?: boolean;
-		nullable?: boolean;
-	},
+  itemSchema: ZodType,
+  options: {
+    minItems?: number;
+    maxItems?: number;
+    required?: boolean;
+    nullable?: boolean;
+  },
 ): ZodType {
-	let schema = z.array(itemSchema);
+  let schema = z.array(itemSchema);
 
-	if (options.minItems !== undefined) {
-		schema = schema.min(options.minItems);
-	}
-	if (options.maxItems !== undefined) {
-		schema = schema.max(options.maxItems);
-	}
+  if (options.minItems !== undefined) {
+    schema = schema.min(options.minItems);
+  }
+  if (options.maxItems !== undefined) {
+    schema = schema.max(options.maxItems);
+  }
 
-	return applyNullability(schema, options.required, options.nullable);
+  return applyNullability(schema, options.required, options.nullable);
 }

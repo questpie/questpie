@@ -8,9 +8,9 @@ import type * as React from "react";
 import type { ComponentReference } from "#questpie/admin/server";
 import type { I18nText } from "../../i18n/types";
 import type {
-	DynamicI18nText,
-	IconComponent,
-	MaybeLazyComponent,
+  DynamicI18nText,
+  IconComponent,
+  MaybeLazyComponent,
 } from "./common";
 
 // ============================================================================
@@ -26,88 +26,88 @@ export type WidgetCardVariant = "default" | "compact" | "featured";
  * Base widget configuration shared by all widget types
  */
 export interface BaseWidgetConfig {
-	/**
-	 * Widget ID
-	 */
-	id: string;
+  /**
+   * Widget ID
+   */
+  id: string;
 
-	/**
-	 * Widget title
-	 */
-	title?: I18nText;
+  /**
+   * Widget title
+   */
+  title?: I18nText;
 
-	/**
-	 * Widget description
-	 */
-	description?: I18nText;
+  /**
+   * Widget description
+   */
+  description?: I18nText;
 
-	/**
-	 * Widget icon
-	 */
-	icon?: IconComponent | ComponentReference | string;
+  /**
+   * Widget icon
+   */
+  icon?: IconComponent | ComponentReference | string;
 
-	/**
-	 * Card visual variant
-	 */
-	cardVariant?: WidgetCardVariant;
+  /**
+   * Card visual variant
+   */
+  cardVariant?: WidgetCardVariant;
 
-	/**
-	 * Widget size
-	 */
-	size?: "small" | "medium" | "large" | "full";
+  /**
+   * Widget size
+   */
+  size?: "small" | "medium" | "large" | "full";
 
-	/**
-	 * Column span (1-12)
-	 */
-	span?: number;
+  /**
+   * Column span (1-12)
+   */
+  span?: number;
 
-	/**
-	 * Grid position (for dashboard layouts)
-	 */
-	position?: {
-		x?: number;
-		y?: number;
-		w?: number;
-		h?: number;
-	};
+  /**
+   * Grid position (for dashboard layouts)
+   */
+  position?: {
+    x?: number;
+    y?: number;
+    w?: number;
+    h?: number;
+  };
 
-	/**
-	 * Data source configuration
-	 */
-	dataSource?: WidgetDataSource;
+  /**
+   * Data source configuration
+   */
+  dataSource?: WidgetDataSource;
 
-	/**
-	 * Widget-specific options
-	 */
-	options?: Record<string, any>;
+  /**
+   * Widget-specific options
+   */
+  options?: Record<string, any>;
 
-	/**
-	 * Refresh interval in milliseconds
-	 */
-	refreshInterval?: number;
+  /**
+   * Refresh interval in milliseconds
+   */
+  refreshInterval?: number;
 
-	/**
-	 * Enable realtime invalidation for widget data queries.
-	 * Falls back to AdminProvider realtime config when undefined.
-	 */
-	realtime?: boolean;
+  /**
+   * Enable realtime invalidation for widget data queries.
+   * Falls back to AdminProvider realtime config when undefined.
+   */
+  realtime?: boolean;
 
-	/**
-	 * Header actions
-	 */
-	actions?: WidgetAction[];
+  /**
+   * Header actions
+   */
+  actions?: WidgetAction[];
 
-	/**
-	 * Custom CSS class
-	 */
-	className?: string;
+  /**
+   * Custom CSS class
+   */
+  className?: string;
 
-	/**
-	 * Indicates server has a fetchFn for this widget (set by getAdminConfig).
-	 * When true, the widget fetches data via the fetchWidgetData RPC endpoint
-	 * instead of calling a client-side fetchFn.
-	 */
-	hasFetchFn?: boolean;
+  /**
+   * Indicates server has a fetchFn for this widget (set by getAdminConfig).
+   * When true, the widget fetches data via the fetchWidgetData RPC endpoint
+   * instead of calling a client-side fetchFn.
+   */
+  hasFetchFn?: boolean;
 }
 
 // ============================================================================
@@ -118,119 +118,119 @@ export interface BaseWidgetConfig {
  * Date filter presets for time-based filtering
  */
 export type DateFilterPreset =
-	| "today"
-	| "yesterday"
-	| "thisWeek"
-	| "lastWeek"
-	| "thisMonth"
-	| "lastMonth"
-	| "last7days"
-	| "last30days"
-	| "last90days"
-	| "thisYear"
-	| "lastYear";
+  | "today"
+  | "yesterday"
+  | "thisWeek"
+  | "lastWeek"
+  | "thisMonth"
+  | "lastMonth"
+  | "last7days"
+  | "last30days"
+  | "last90days"
+  | "thisYear"
+  | "lastYear";
 
 /**
  * Date filter configuration
  */
 export interface DateFilterConfig {
-	/**
-	 * Field name to filter on (e.g., "createdAt", "scheduledAt")
-	 */
-	field: string;
-	/**
-	 * Preset time range
-	 */
-	range: DateFilterPreset;
+  /**
+   * Field name to filter on (e.g., "createdAt", "scheduledAt")
+   */
+  field: string;
+  /**
+   * Preset time range
+   */
+  range: DateFilterPreset;
 }
 
 /**
  * Stats widget configuration
  */
 export interface StatsWidgetConfig extends BaseWidgetConfig {
-	type: "stats";
-	collection: string;
-	label?: I18nText;
-	/**
-	 * Static filter (evaluated at build time)
-	 */
-	filter?: Record<string, any>;
-	/**
-	 * Dynamic filter function (evaluated at render time)
-	 * Use this for filters that depend on current date/time
-	 */
-	filterFn?: () => Record<string, any>;
-	/**
-	 * Date filter preset (evaluated at render time)
-	 * Shorthand for common date-based filters
-	 */
-	dateFilter?: DateFilterConfig;
-	variant?: "default" | "primary" | "success" | "warning" | "danger";
+  type: "stats";
+  collection: string;
+  label?: I18nText;
+  /**
+   * Static filter (evaluated at build time)
+   */
+  filter?: Record<string, any>;
+  /**
+   * Dynamic filter function (evaluated at render time)
+   * Use this for filters that depend on current date/time
+   */
+  filterFn?: () => Record<string, any>;
+  /**
+   * Date filter preset (evaluated at render time)
+   * Shorthand for common date-based filters
+   */
+  dateFilter?: DateFilterConfig;
+  variant?: "default" | "primary" | "success" | "warning" | "danger";
 }
 
 /**
  * Chart widget configuration
  */
 export interface ChartWidgetConfig extends BaseWidgetConfig {
-	type: "chart";
-	collection: string;
-	field: string;
-	chartType?: "line" | "bar" | "area" | "pie";
-	timeRange?: "7d" | "30d" | "90d" | "1y";
-	label?: I18nText;
-	color?: string;
-	showGrid?: boolean;
-	aggregation?: "count" | "sum" | "average";
-	valueField?: string;
+  type: "chart";
+  collection: string;
+  field: string;
+  chartType?: "line" | "bar" | "area" | "pie";
+  timeRange?: "7d" | "30d" | "90d" | "1y";
+  label?: I18nText;
+  color?: string;
+  showGrid?: boolean;
+  aggregation?: "count" | "sum" | "average";
+  valueField?: string;
 }
 
 /**
  * Recent items widget configuration
  */
 export interface RecentItemsWidgetConfig extends BaseWidgetConfig {
-	type: "recentItems";
-	collection: string;
-	limit?: number;
-	titleField?: string;
-	dateField?: string;
-	subtitleFields?: string[];
-	label?: I18nText;
+  type: "recentItems";
+  collection: string;
+  limit?: number;
+  titleField?: string;
+  dateField?: string;
+  subtitleFields?: string[];
+  label?: I18nText;
 }
 
 /**
  * Quick action item configuration
  */
 export interface QuickActionItem {
-	/** Action label */
-	label: I18nText;
-	/** Action icon */
-	icon?: IconComponent | ComponentReference | string;
-	/** Link URL */
-	href?: string;
-	/** Click handler */
-	onClick?: () => void;
-	/** Visual variant */
-	variant?: "default" | "primary" | "secondary" | "outline";
+  /** Action label */
+  label: I18nText;
+  /** Action icon */
+  icon?: IconComponent | ComponentReference | string;
+  /** Link URL */
+  href?: string;
+  /** Click handler */
+  onClick?: () => void;
+  /** Visual variant */
+  variant?: "default" | "primary" | "secondary" | "outline";
 }
 
 /**
  * Quick actions widget configuration
  */
 export interface QuickActionsWidgetConfig extends BaseWidgetConfig {
-	type: "quickActions";
-	/** List of quick action items */
-	quickActions: Array<string | QuickActionItem>;
-	/** Layout variant */
-	layout?: "grid" | "list";
+  type: "quickActions";
+  /** List of quick action items */
+  quickActions: Array<string | QuickActionItem>;
+  /** Layout variant */
+  layout?: "grid" | "list";
 }
 
 /**
  * Custom widget configuration
  */
 export interface CustomWidgetConfig extends BaseWidgetConfig {
-	type: "custom";
-	component: MaybeLazyComponent<WidgetComponentProps>;
-	config?: Record<string, any>;
+  type: "custom";
+  component: MaybeLazyComponent<WidgetComponentProps>;
+  config?: Record<string, any>;
 }
 
 // ============================================================================
@@ -241,58 +241,58 @@ export interface CustomWidgetConfig extends BaseWidgetConfig {
  * ClassNames for styling value widget parts
  */
 export interface ValueWidgetClassNames {
-	/** Card container */
-	root?: string;
-	/** Header wrapper */
-	header?: string;
-	/** Label text */
-	label?: string;
-	/** Main icon */
-	icon?: ComponentReference | string;
-	/** Content wrapper */
-	content?: string;
-	/** Main value display */
-	value?: string;
-	/** Trend wrapper + text */
-	trend?: string;
-	/** Trend icon */
-	trendIcon?: string;
-	/** Subtitle text */
-	subtitle?: string;
-	/** Footer text */
-	footer?: string;
+  /** Card container */
+  root?: string;
+  /** Header wrapper */
+  header?: string;
+  /** Label text */
+  label?: string;
+  /** Main icon */
+  icon?: ComponentReference | string;
+  /** Content wrapper */
+  content?: string;
+  /** Main value display */
+  value?: string;
+  /** Trend wrapper + text */
+  trend?: string;
+  /** Trend icon */
+  trendIcon?: string;
+  /** Subtitle text */
+  subtitle?: string;
+  /** Footer text */
+  footer?: string;
 }
 
 /**
  * Trend indicator configuration
  */
 export interface ValueWidgetTrend {
-	/** Trend value (e.g., "+15.3%", "-5%") */
-	value: string;
-	/** Optional trend icon */
-	icon?: IconComponent | ComponentReference;
+  /** Trend value (e.g., "+15.3%", "-5%") */
+  value: string;
+  /** Optional trend icon */
+  icon?: IconComponent | ComponentReference;
 }
 
 /**
  * Result returned by fetchFn
  */
 export interface ValueWidgetResult {
-	/** Main value to display */
-	value: number | string;
-	/** Formatted value (if not provided, value.toLocaleString() is used) */
-	formatted?: string;
-	/** Label/title - supports i18n objects */
-	label?: I18nText | string;
-	/** Subtitle text - supports i18n objects */
-	subtitle?: I18nText | string;
-	/** Footer text - supports i18n objects */
-	footer?: I18nText | string;
-	/** Main icon */
-	icon?: IconComponent | ComponentReference;
-	/** Trend indicator */
-	trend?: ValueWidgetTrend;
-	/** Tailwind classes for each part */
-	classNames?: ValueWidgetClassNames;
+  /** Main value to display */
+  value: number | string;
+  /** Formatted value (if not provided, value.toLocaleString() is used) */
+  formatted?: string;
+  /** Label/title - supports i18n objects */
+  label?: I18nText | string;
+  /** Subtitle text - supports i18n objects */
+  subtitle?: I18nText | string;
+  /** Footer text - supports i18n objects */
+  footer?: I18nText | string;
+  /** Main icon */
+  icon?: IconComponent | ComponentReference;
+  /** Trend indicator */
+  trend?: ValueWidgetTrend;
+  /** Tailwind classes for each part */
+  classNames?: ValueWidgetClassNames;
 }
 
 /**
@@ -323,20 +323,20 @@ export interface ValueWidgetResult {
  * ```
  */
 export interface ValueWidgetConfig extends BaseWidgetConfig {
-	type: "value";
+  type: "value";
 
-	/**
-	 * Async function to fetch and transform data.
-	 * Receives the Questpie client and returns widget display data.
-	 * Optional when hasFetchFn is true (server provides the data).
-	 */
-	fetchFn?: (client: any) => Promise<ValueWidgetResult>;
+  /**
+   * Async function to fetch and transform data.
+   * Receives the Questpie client and returns widget display data.
+   * Optional when hasFetchFn is true (server provides the data).
+   */
+  fetchFn?: (client: any) => Promise<ValueWidgetResult>;
 
-	/**
-	 * Refresh interval in milliseconds
-	 * If set, the widget will refetch data at this interval
-	 */
-	refreshInterval?: number;
+  /**
+   * Refresh interval in milliseconds
+   * If set, the widget will refetch data at this interval
+   */
+  refreshInterval?: number;
 }
 
 // ============================================================================
@@ -347,16 +347,16 @@ export interface ValueWidgetConfig extends BaseWidgetConfig {
  * Table column configuration with overrides
  */
 export interface TableWidgetColumnConfig {
-	/** Column key (field name) */
-	key: string;
-	/** Override column header label (defaults to field label) */
-	label?: I18nText;
-	/** Column width */
-	width?: number | string;
-	/** Text alignment */
-	align?: "left" | "center" | "right";
-	/** Custom cell renderer (overrides field's cell) */
-	render?: (value: any, row: any) => React.ReactNode;
+  /** Column key (field name) */
+  key: string;
+  /** Override column header label (defaults to field label) */
+  label?: I18nText;
+  /** Column width */
+  width?: number | string;
+  /** Text alignment */
+  align?: "left" | "center" | "right";
+  /** Custom cell renderer (overrides field's cell) */
+  render?: (value: any, row: any) => React.ReactNode;
 }
 
 /**
@@ -409,25 +409,25 @@ export type TableWidgetColumn = string | TableWidgetColumnConfig;
  * ```
  */
 export interface TableWidgetConfig extends BaseWidgetConfig {
-	type: "table";
-	/** Collection to fetch from */
-	collection: string;
-	/** Columns to display - field keys or config objects */
-	columns: TableWidgetColumn[];
-	/** Number of rows to show */
-	limit?: number;
-	/** Sort field */
-	sortBy?: string;
-	/** Sort direction */
-	sortOrder?: "asc" | "desc";
-	/** Filter */
-	filter?: Record<string, any>;
-	/** Show row actions */
-	showActions?: boolean;
-	/** Link rows to detail */
-	linkToDetail?: boolean;
-	/** Empty state message */
-	emptyMessage?: I18nText;
+  type: "table";
+  /** Collection to fetch from */
+  collection: string;
+  /** Columns to display - field keys or config objects */
+  columns: TableWidgetColumn[];
+  /** Number of rows to show */
+  limit?: number;
+  /** Sort field */
+  sortBy?: string;
+  /** Sort direction */
+  sortOrder?: "asc" | "desc";
+  /** Filter */
+  filter?: Record<string, any>;
+  /** Show row actions */
+  showActions?: boolean;
+  /** Link rows to detail */
+  linkToDetail?: boolean;
+  /** Empty state message */
+  emptyMessage?: I18nText;
 }
 
 // ============================================================================
@@ -438,22 +438,22 @@ export interface TableWidgetConfig extends BaseWidgetConfig {
  * Timeline item configuration
  */
 export interface TimelineItem {
-	/** Item ID */
-	id: string;
-	/** Title */
-	title: string;
-	/** Description */
-	description?: string;
-	/** Timestamp */
-	timestamp: Date | string;
-	/** Icon */
-	icon?: IconComponent | ComponentReference;
-	/** Status/color variant */
-	variant?: "default" | "success" | "warning" | "error" | "info";
-	/** Link URL */
-	href?: string;
-	/** Additional metadata */
-	meta?: Record<string, any>;
+  /** Item ID */
+  id: string;
+  /** Title */
+  title: string;
+  /** Description */
+  description?: string;
+  /** Timestamp */
+  timestamp: Date | string;
+  /** Icon */
+  icon?: IconComponent | ComponentReference;
+  /** Status/color variant */
+  variant?: "default" | "success" | "warning" | "error" | "info";
+  /** Link URL */
+  href?: string;
+  /** Additional metadata */
+  meta?: Record<string, any>;
 }
 
 /**
@@ -482,17 +482,17 @@ export interface TimelineItem {
  * ```
  */
 export interface TimelineWidgetConfig extends BaseWidgetConfig {
-	type: "timeline";
-	/** Async function to fetch timeline items. Optional when hasFetchFn is true. */
-	fetchFn?: (client: any) => Promise<TimelineItem[]>;
-	/** Max items to show */
-	maxItems?: number;
-	/** Show timestamps */
-	showTimestamps?: boolean;
-	/** Timestamp format */
-	timestampFormat?: "relative" | "absolute" | "datetime";
-	/** Empty state message */
-	emptyMessage?: I18nText;
+  type: "timeline";
+  /** Async function to fetch timeline items. Optional when hasFetchFn is true. */
+  fetchFn?: (client: any) => Promise<TimelineItem[]>;
+  /** Max items to show */
+  maxItems?: number;
+  /** Show timestamps */
+  showTimestamps?: boolean;
+  /** Timestamp format */
+  timestampFormat?: "relative" | "absolute" | "datetime";
+  /** Empty state message */
+  emptyMessage?: I18nText;
 }
 
 // ============================================================================
@@ -517,18 +517,18 @@ export interface TimelineWidgetConfig extends BaseWidgetConfig {
  * ```
  */
 export interface ProgressWidgetConfig extends BaseWidgetConfig {
-	type: "progress";
-	/** Async function to fetch progress data. Optional when hasFetchFn is true. */
-	fetchFn?: (client: any) => Promise<{
-		current: number;
-		target: number;
-		label?: string;
-		subtitle?: string;
-	}>;
-	/** Progress bar color */
-	color?: string;
-	/** Show percentage */
-	showPercentage?: boolean;
+  type: "progress";
+  /** Async function to fetch progress data. Optional when hasFetchFn is true. */
+  fetchFn?: (client: any) => Promise<{
+    current: number;
+    target: number;
+    label?: string;
+    subtitle?: string;
+  }>;
+  /** Progress bar color */
+  color?: string;
+  /** Show percentage */
+  showPercentage?: boolean;
 }
 
 // ============================================================================
@@ -539,39 +539,39 @@ export interface ProgressWidgetConfig extends BaseWidgetConfig {
  * Known widget types (for type narrowing)
  */
 export type KnownWidgetType =
-	| "stats"
-	| "chart"
-	| "recentItems"
-	| "quickActions"
-	| "custom"
-	| "value"
-	| "table"
-	| "timeline"
-	| "progress";
+  | "stats"
+  | "chart"
+  | "recentItems"
+  | "quickActions"
+  | "custom"
+  | "value"
+  | "table"
+  | "timeline"
+  | "progress";
 
 /**
  * Widget configuration - discriminated union of all widget types
  */
 export type WidgetConfig =
-	| StatsWidgetConfig
-	| ChartWidgetConfig
-	| RecentItemsWidgetConfig
-	| QuickActionsWidgetConfig
-	| CustomWidgetConfig
-	| ValueWidgetConfig
-	| TableWidgetConfig
-	| TimelineWidgetConfig
-	| ProgressWidgetConfig;
+  | StatsWidgetConfig
+  | ChartWidgetConfig
+  | RecentItemsWidgetConfig
+  | QuickActionsWidgetConfig
+  | CustomWidgetConfig
+  | ValueWidgetConfig
+  | TableWidgetConfig
+  | TimelineWidgetConfig
+  | ProgressWidgetConfig;
 
 /**
  * Generic widget configuration (for unknown/custom types registered at runtime)
  * This is kept separate from WidgetConfig to allow proper type narrowing
  */
 export interface GenericWidgetConfig extends BaseWidgetConfig {
-	type: string;
-	component?: MaybeLazyComponent<WidgetComponentProps>;
-	actions?: WidgetAction[];
-	[key: string]: any;
+  type: string;
+  component?: MaybeLazyComponent<WidgetComponentProps>;
+  actions?: WidgetAction[];
+  [key: string]: any;
 }
 
 /**
@@ -587,105 +587,105 @@ export type AnyWidgetConfig = WidgetConfig | GenericWidgetConfig;
  * Props passed to widget components
  */
 export interface WidgetComponentProps<TData = any> {
-	/**
-	 * Widget configuration
-	 */
-	config: WidgetConfig | Record<string, any>;
+  /**
+   * Widget configuration
+   */
+  config: WidgetConfig | Record<string, any>;
 
-	/**
-	 * Widget data (from data source)
-	 */
-	data?: TData;
+  /**
+   * Widget data (from data source)
+   */
+  data?: TData;
 
-	/**
-	 * Loading state
-	 */
-	isLoading?: boolean;
+  /**
+   * Loading state
+   */
+  isLoading?: boolean;
 
-	/**
-	 * Error state
-	 */
-	error?: Error | null;
+  /**
+   * Error state
+   */
+  error?: Error | null;
 
-	/**
-	 * Refresh data
-	 */
-	onRefresh?: () => void;
+  /**
+   * Refresh data
+   */
+  onRefresh?: () => void;
 
-	/**
-	 * Column span for grid layout
-	 */
-	span?: number;
+  /**
+   * Column span for grid layout
+   */
+  span?: number;
 }
 
 /**
  * Widget data source configuration
  */
 export interface WidgetDataSource {
-	/**
-	 * Data source type
-	 */
-	type: "collection" | "global" | "function" | "custom";
+  /**
+   * Data source type
+   */
+  type: "collection" | "global" | "function" | "custom";
 
-	/**
-	 * Collection name (for collection type)
-	 */
-	collection?: string;
+  /**
+   * Collection name (for collection type)
+   */
+  collection?: string;
 
-	/**
-	 * Global name (for global type)
-	 */
-	global?: string;
+  /**
+   * Global name (for global type)
+   */
+  global?: string;
 
-	/**
-	 * Function name (for function type)
-	 */
-	function?: string;
+  /**
+   * Function name (for function type)
+   */
+  function?: string;
 
-	/**
-	 * Query options
-	 */
-	query?: Record<string, any>;
+  /**
+   * Query options
+   */
+  query?: Record<string, any>;
 
-	/**
-	 * Custom data fetcher
-	 */
-	fetcher?: () => Promise<any>;
+  /**
+   * Custom data fetcher
+   */
+  fetcher?: () => Promise<any>;
 }
 
 /**
  * Widget action configuration
  */
 export interface WidgetAction {
-	/**
-	 * Action ID
-	 */
-	id: string;
+  /**
+   * Action ID
+   */
+  id: string;
 
-	/**
-	 * Action label
-	 */
-	label: string;
+  /**
+   * Action label
+   */
+  label: string;
 
-	/**
-	 * Action icon
-	 */
-	icon?: IconComponent | ComponentReference | string;
+  /**
+   * Action icon
+   */
+  icon?: IconComponent | ComponentReference | string;
 
-	/**
-	 * Action handler
-	 */
-	onClick?: () => void;
+  /**
+   * Action handler
+   */
+  onClick?: () => void;
 
-	/**
-	 * Link target
-	 */
-	href?: string;
+  /**
+   * Link target
+   */
+  href?: string;
 
-	/**
-	 * Variant
-	 */
-	variant?: "default" | "primary" | "secondary" | "destructive";
+  /**
+   * Variant
+   */
+  variant?: "default" | "primary" | "secondary" | "destructive";
 }
 
 // ============================================================================
@@ -696,28 +696,28 @@ export interface WidgetAction {
  * Extended dashboard configuration with widgets
  */
 export interface DashboardWidgetConfig {
-	/**
-	 * Dashboard layout
-	 */
-	layout?: "grid" | "list" | "masonry";
+  /**
+   * Dashboard layout
+   */
+  layout?: "grid" | "list" | "masonry";
 
-	/**
-	 * Grid columns
-	 */
-	columns?: number;
+  /**
+   * Grid columns
+   */
+  columns?: number;
 
-	/**
-	 * Gap between widgets
-	 */
-	gap?: number;
+  /**
+   * Gap between widgets
+   */
+  gap?: number;
 
-	/**
-	 * Widget instances
-	 */
-	widgets?: WidgetConfig[];
+  /**
+   * Widget instances
+   */
+  widgets?: WidgetConfig[];
 
-	/**
-	 * Default widgets (used when no custom config)
-	 */
-	defaultWidgets?: string[];
+  /**
+   * Default widgets (used when no custom config)
+   */
+  defaultWidgets?: string[];
 }

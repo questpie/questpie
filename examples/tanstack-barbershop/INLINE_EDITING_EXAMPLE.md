@@ -70,6 +70,7 @@ export const barbersAdmin = builder
 ```
 
 **Key Points:**
+
 - `.preview()` enables live preview in admin
 - `preset: "simple"` gives RichText without images/tables
 - Preview URL uses field values (dynamic slug)
@@ -111,6 +112,7 @@ export const getBarber = createServerFn({ method: "GET" })
 ```
 
 **Key Points:**
+
 - Use `find()` for paginated results, not `findMany()`
 - Result is `{ docs: [...], totalDocs, ... }`
 - Load relations separately if needed
@@ -183,6 +185,7 @@ function BarberProfileComponent() {
 ```
 
 **Key Points:**
+
 - `useCollectionPreview` handles admin communication
 - `InlineEditingProvider` enables inline editing
 - `PreviewProvider` handles field clicks
@@ -202,6 +205,7 @@ function BarberProfileComponent() {
 ```
 
 **Behavior:**
+
 - In preview mode: Click to edit
 - Shows auto-save spinner
 - Success/error feedback
@@ -233,6 +237,7 @@ function BarberProfileComponent() {
 ```
 
 **Features:**
+
 - Bubble menu on text selection
 - Simple preset (headings, lists, formatting, links)
 - No toolbar (clean inline UI)
@@ -266,6 +271,7 @@ function BarberProfileComponent() {
 ```
 
 **Features:**
+
 - Click badge to edit
 - X button to remove
 - ↑↓ buttons to reorder
@@ -355,6 +361,7 @@ const { enabled, setEnabled } = useInlineEditing();
 ### Issue: Changes not saving
 
 **Cause:** Update API signature incorrect
+
 ```typescript
 // ❌ Wrong
 await client.collections.barbers.update({
@@ -363,15 +370,13 @@ await client.collections.barbers.update({
 });
 
 // ✅ Correct
-await client.collections.barbers.update(
-  data.id,
-  { name: value },
-);
+await client.collections.barbers.update(data.id, { name: value });
 ```
 
 ### Issue: Preview not loading
 
 **Check:**
+
 1. Preview URL is correct in admin config
 2. Route accepts `?preview=true` query param
 3. `useCollectionPreview` is called
@@ -379,6 +384,7 @@ await client.collections.barbers.update(
 ### Issue: Inline editing not working
 
 **Check:**
+
 1. `InlineEditingProvider` wraps component
 2. `editable={isPreviewMode}` is set
 3. `onSave` handler is provided

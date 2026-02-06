@@ -46,14 +46,14 @@ export type AdminMessages = Record<string, MessageValue>;
  * Used by getAdminTranslations to serve messages for requested locale.
  */
 export const allAdminMessages: Record<string, AdminMessages> = {
-	en: adminMessagesEN,
-	sk: adminMessagesSK,
-	cs: adminMessagesCS,
-	de: adminMessagesDE,
-	fr: adminMessagesFR,
-	es: adminMessagesES,
-	pt: adminMessagesPT,
-	pl: adminMessagesPL,
+  en: adminMessagesEN,
+  sk: adminMessagesSK,
+  cs: adminMessagesCS,
+  de: adminMessagesDE,
+  fr: adminMessagesFR,
+  es: adminMessagesES,
+  pt: adminMessagesPT,
+  pl: adminMessagesPL,
 };
 
 /**
@@ -64,7 +64,7 @@ export const allAdminMessages: Record<string, AdminMessages> = {
  * @returns Messages for the locale
  */
 export function getAdminMessagesForLocale(locale: string): AdminMessages {
-	return allAdminMessages[locale] ?? allAdminMessages.en ?? {};
+  return allAdminMessages[locale] ?? allAdminMessages.en ?? {};
 }
 
 /**
@@ -72,5 +72,5 @@ export function getAdminMessagesForLocale(locale: string): AdminMessages {
  * These are locales that have message files.
  */
 export function getSupportedAdminLocales(): string[] {
-	return Object.keys(allAdminMessages);
+  return Object.keys(allAdminMessages);
 }

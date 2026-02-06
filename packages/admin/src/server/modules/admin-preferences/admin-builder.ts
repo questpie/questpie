@@ -12,4 +12,4 @@ import { defaultFields, QuestpieBuilder } from "questpie";
  * Use this to define admin collections with the field builder pattern.
  */
 export const adminBuilder =
-	QuestpieBuilder.empty("admin:builder").fields(defaultFields);
+  QuestpieBuilder.empty("admin:builder").fields(defaultFields);

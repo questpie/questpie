@@ -6,15 +6,15 @@
 
 ### ⚠️ CRITICAL - Must Match Exactly
 
-| Package       | Version                 | Notes                                           |
-| ------------- | ----------------------- | ----------------------------------------------- |
-| `zod`         | `^4.2.1`                | **v4 ONLY!** Not v3.x                           |
-| `drizzle-orm` | `^beta` | **Specific beta version**                       |
-| `drizzle-kit` | `^beta` | **Must match drizzle-orm**                      |
-| `better-auth` | `^1.4.9`                | Authentication provider                         |
-| `pg`          | `^8.13.1`               | PostgreSQL driver                               |
-| `pg-boss`     | `^12.5.4`               | Queue system (uses Postgres)                    |
-| `superjson`   | `^2.2.1`                | Enhanced serialization (Date, Map, Set, BigInt) |
+| Package       | Version   | Notes                                           |
+| ------------- | --------- | ----------------------------------------------- |
+| `zod`         | `^4.2.1`  | **v4 ONLY!** Not v3.x                           |
+| `drizzle-orm` | `^beta`   | **Specific beta version**                       |
+| `drizzle-kit` | `^beta`   | **Must match drizzle-orm**                      |
+| `better-auth` | `^1.4.9`  | Authentication provider                         |
+| `pg`          | `^8.13.1` | PostgreSQL driver                               |
+| `pg-boss`     | `^12.5.4` | Queue system (uses Postgres)                    |
+| `superjson`   | `^2.2.1`  | Enhanced serialization (Date, Map, Set, BigInt) |
 
 ### Frontend Frameworks
 
@@ -83,7 +83,7 @@ Always use `workspace:*` for internal packages:
   "dependencies": {
     "@questpie/cms": "workspace:*",
     "@questpie/admin": "workspace:*",
-        "@questpie/tanstack-query": "workspace:*"
+    "@questpie/tanstack-query": "workspace:*"
   }
 }
 ```

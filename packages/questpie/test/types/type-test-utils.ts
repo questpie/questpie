@@ -19,9 +19,9 @@ export type Expect<T extends true> = T;
  * Uses a technique that catches edge cases like distributive conditional types.
  */
 export type Equal<A, B> =
-	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-		? true
-		: false;
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false;
 
 /**
  * Checks if A is assignable to B (A extends B).
@@ -44,35 +44,33 @@ export type IsAny<T> = 0 extends 1 & T ? true : false;
  * Checks if type is `unknown`.
  */
 export type IsUnknown<T> =
-	IsAny<T> extends true ? false : unknown extends T ? true : false;
+  IsAny<T> extends true ? false : unknown extends T ? true : false;
 
 /**
  * Gets keys of T that are required (non-optional).
  */
 export type RequiredKeys<T> = {
-	[K in keyof T]-?: {} extends Pick<T, K> ? never : K;
+  [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
 }[keyof T];
 
 /**
  * Gets keys of T that are optional.
  */
 export type OptionalKeys<T> = {
-	[K in keyof T]-?: {} extends Pick<T, K> ? K : never;
+  [K in keyof T]-?: {} extends Pick<T, K> ? K : never;
 }[keyof T];
 
 /**
  * Checks if a key is required in T.
  */
-export type IsRequired<T, K extends keyof T> = K extends RequiredKeys<T>
-	? true
-	: false;
+export type IsRequired<T, K extends keyof T> =
+  K extends RequiredKeys<T> ? true : false;
 
 /**
  * Checks if a key is optional in T.
  */
-export type IsOptional<T, K extends keyof T> = K extends OptionalKeys<T>
-	? true
-	: false;
+export type IsOptional<T, K extends keyof T> =
+  K extends OptionalKeys<T> ? true : false;
 
 /**
  * Checks if type T has key K.
@@ -83,27 +81,27 @@ export type HasKey<T, K> = K extends keyof T ? true : false;
  * Checks if type T is a literal type (not widened).
  */
 export type IsLiteral<T> = T extends string
-	? string extends T
-		? false
-		: true
-	: T extends number
-		? number extends T
-			? false
-			: true
-		: T extends boolean
-			? boolean extends T
-				? false
-				: true
-			: false;
+  ? string extends T
+    ? false
+    : true
+  : T extends number
+    ? number extends T
+      ? false
+      : true
+    : T extends boolean
+      ? boolean extends T
+        ? false
+        : true
+      : false;
 
 /**
  * Checks if type T is nullable (includes null or undefined).
  */
 export type IsNullable<T> = null extends T
-	? true
-	: undefined extends T
-		? true
-		: false;
+  ? true
+  : undefined extends T
+    ? true
+    : false;
 
 /**
  * Checks if type T is an array type.
@@ -119,12 +117,12 @@ export type IsFunction<T> = T extends (...args: any[]) => any ? true : false;
  * Checks if type T is an object type (not array, not function).
  */
 export type IsObject<T> = T extends object
-	? T extends readonly any[]
-		? false
-		: T extends (...args: any[]) => any
-			? false
-			: true
-	: false;
+  ? T extends readonly any[]
+    ? false
+    : T extends (...args: any[]) => any
+      ? false
+      : true
+  : false;
 
 /**
  * Extracts the element type from an array type.
@@ -135,7 +133,7 @@ export type ArrayElement<T> = T extends readonly (infer E)[] ? E : never;
  * Extracts the return type, unwrapping Promise if async.
  */
 export type UnwrapReturn<T extends (...args: any[]) => any> = Awaited<
-	ReturnType<T>
+  ReturnType<T>
 >;
 
 /**
@@ -143,12 +141,12 @@ export type UnwrapReturn<T extends (...args: any[]) => any> = Awaited<
  * Note: This is approximate and works for simple object types.
  */
 export type KeyCount<T> = keyof T extends never
-	? 0
-	: [keyof T] extends [infer K]
-		? K extends any
-			? 1
-			: never
-		: never;
+  ? 0
+  : [keyof T] extends [infer K]
+    ? K extends any
+      ? 1
+      : never
+    : never;
 
 /**
  * Checks if two types have the same keys.
@@ -171,18 +169,18 @@ export type AssertFalse<T extends false> = T;
  * Prettier type display - expands type for better IDE hover info.
  */
 export type Prettify<T> = {
-	[K in keyof T]: T[K];
+  [K in keyof T]: T[K];
 } & {};
 
 /**
  * Deep prettify - expands nested types.
  */
 export type DeepPrettify<T> = {
-	[K in keyof T]: T[K] extends object
-		? T[K] extends (...args: any[]) => any
-			? T[K]
-			: DeepPrettify<T[K]>
-		: T[K];
+  [K in keyof T]: T[K] extends object
+    ? T[K] extends (...args: any[]) => any
+      ? T[K]
+      : DeepPrettify<T[K]>
+    : T[K];
 } & {};
 
 /**
@@ -194,19 +192,19 @@ export type Not<T extends boolean> = T extends true ? false : true;
  * AND operation for type booleans.
  */
 export type And<A extends boolean, B extends boolean> = A extends true
-	? B extends true
-		? true
-		: false
-	: false;
+  ? B extends true
+    ? true
+    : false
+  : false;
 
 /**
  * OR operation for type booleans.
  */
 export type Or<A extends boolean, B extends boolean> = A extends true
-	? true
-	: B extends true
-		? true
-		: false;
+  ? true
+  : B extends true
+    ? true
+    : false;
 
 /**
  * Debug helper - use this to inspect types in IDE.

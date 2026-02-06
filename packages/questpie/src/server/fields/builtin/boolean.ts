@@ -31,8 +31,8 @@ import { operator } from "../types.js";
  * ```
  */
 export interface BooleanFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
-	_?: never;
+  /** Phantom property to prevent interface collapse - enables module augmentation */
+  _?: never;
 }
 
 // ============================================================================
@@ -43,22 +43,22 @@ export interface BooleanFieldMeta {
  * Boolean field configuration options.
  */
 export interface BooleanFieldConfig extends BaseFieldConfig {
-	/**
-	 * Field-specific metadata, augmentable by external packages.
-	 */
-	meta?: BooleanFieldMeta;
+  /**
+   * Field-specific metadata, augmentable by external packages.
+   */
+  meta?: BooleanFieldMeta;
 
-	/**
-	 * Default to true.
-	 * Convenience option equivalent to `default: true`.
-	 */
-	defaultTrue?: boolean;
+  /**
+   * Default to true.
+   * Convenience option equivalent to `default: true`.
+   */
+  defaultTrue?: boolean;
 
-	/**
-	 * Default to false.
-	 * Convenience option equivalent to `default: false`.
-	 */
-	defaultFalse?: boolean;
+  /**
+   * Default to false.
+   * Convenience option equivalent to `default: false`.
+   */
+  defaultFalse?: boolean;
 }
 
 // ============================================================================
@@ -70,60 +70,60 @@ export interface BooleanFieldConfig extends BaseFieldConfig {
  * Supports both column and JSONB path access.
  */
 function getBooleanOperators() {
-	return {
-		column: {
-			eq: operator<boolean, unknown>((col, value) => eq(col, value)),
-			ne: operator<boolean, unknown>((col, value) => ne(col, value)),
-			is: operator<boolean, unknown>((col, value) => eq(col, value)),
-			isNot: operator<boolean, unknown>((col, value) => ne(col, value)),
-			isTrue: operator<boolean, unknown>((col) => eq(col, true)),
-			isFalse: operator<boolean, unknown>((col) => eq(col, false)),
-			isNull: operator<boolean, unknown>((col, value) =>
-				value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
-			),
-			isNotNull: operator<boolean, unknown>((col, value) =>
-				value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
-			),
-		},
-		jsonb: {
-			eq: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = ${value}`;
-			}),
-			ne: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean != ${value}`;
-			}),
-			is: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = ${value}`;
-			}),
-			isNot: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean != ${value}`;
-			}),
-			isTrue: operator<boolean, unknown>((col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = true`;
-			}),
-			isFalse: operator<boolean, unknown>((col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = false`;
-			}),
-			isNull: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return value
-					? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
-					: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
-			}),
-			isNotNull: operator<boolean, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return value
-					? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
-					: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
-			}),
-		},
-	};
+  return {
+    column: {
+      eq: operator<boolean, unknown>((col, value) => eq(col, value)),
+      ne: operator<boolean, unknown>((col, value) => ne(col, value)),
+      is: operator<boolean, unknown>((col, value) => eq(col, value)),
+      isNot: operator<boolean, unknown>((col, value) => ne(col, value)),
+      isTrue: operator<boolean, unknown>((col) => eq(col, true)),
+      isFalse: operator<boolean, unknown>((col) => eq(col, false)),
+      isNull: operator<boolean, unknown>((col, value) =>
+        value ? sql`${col} IS NULL` : sql`${col} IS NOT NULL`,
+      ),
+      isNotNull: operator<boolean, unknown>((col, value) =>
+        value ? sql`${col} IS NOT NULL` : sql`${col} IS NULL`,
+      ),
+    },
+    jsonb: {
+      eq: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = ${value}`;
+      }),
+      ne: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>>'{${sql.raw(path)}}')::boolean != ${value}`;
+      }),
+      is: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = ${value}`;
+      }),
+      isNot: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>>'{${sql.raw(path)}}')::boolean != ${value}`;
+      }),
+      isTrue: operator<boolean, unknown>((col, _value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = true`;
+      }),
+      isFalse: operator<boolean, unknown>((col, _value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return sql`(${col}#>>'{${sql.raw(path)}}')::boolean = false`;
+      }),
+      isNull: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return value
+          ? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
+          : sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+      }),
+      isNotNull: operator<boolean, unknown>((col, value, ctx) => {
+        const path = ctx.jsonbPath?.join(",") ?? "";
+        return value
+          ? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
+          : sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+      }),
+    },
+  };
 }
 
 // ============================================================================
@@ -142,66 +142,66 @@ function getBooleanOperators() {
  * ```
  */
 export const booleanField = defineField<BooleanFieldConfig, boolean>()({
-	type: "boolean" as const,
-	_value: undefined as unknown as boolean,
-	toColumn(_name: string, config: BooleanFieldConfig) {
-		// Don't specify column name - Drizzle uses the key name
-		let column: any = boolean();
+  type: "boolean" as const,
+  _value: undefined as unknown as boolean,
+  toColumn(_name: string, config: BooleanFieldConfig) {
+    // Don't specify column name - Drizzle uses the key name
+    let column: any = boolean();
 
-		// Apply constraints
-		if (config.required && config.nullable !== true) {
-			column = column.notNull();
-		}
+    // Apply constraints
+    if (config.required && config.nullable !== true) {
+      column = column.notNull();
+    }
 
-		// Determine default value
-		let defaultValue: boolean | undefined;
-		if (config.default !== undefined) {
-			defaultValue =
-				typeof config.default === "function"
-					? (config.default() as boolean)
-					: (config.default as boolean);
-		} else if (config.defaultTrue) {
-			defaultValue = true;
-		} else if (config.defaultFalse) {
-			defaultValue = false;
-		}
+    // Determine default value
+    let defaultValue: boolean | undefined;
+    if (config.default !== undefined) {
+      defaultValue =
+        typeof config.default === "function"
+          ? (config.default() as boolean)
+          : (config.default as boolean);
+    } else if (config.defaultTrue) {
+      defaultValue = true;
+    } else if (config.defaultFalse) {
+      defaultValue = false;
+    }
 
-		if (defaultValue !== undefined) {
-			column = column.default(defaultValue);
-		}
-		// NOTE: unique constraint removed from field level
-		// Use .indexes() on collection builder instead
+    if (defaultValue !== undefined) {
+      column = column.default(defaultValue);
+    }
+    // NOTE: unique constraint removed from field level
+    // Use .indexes() on collection builder instead
 
-		return column;
-	},
+    return column;
+  },
 
-	toZodSchema(config: BooleanFieldConfig) {
-		const schema = z.boolean();
+  toZodSchema(config: BooleanFieldConfig) {
+    const schema = z.boolean();
 
-		// Nullability
-		if (!config.required && config.nullable !== false) {
-			return schema.nullish();
-		}
+    // Nullability
+    if (!config.required && config.nullable !== false) {
+      return schema.nullish();
+    }
 
-		return schema;
-	},
+    return schema;
+  },
 
-	getOperators<TApp>(config: BooleanFieldConfig) {
-		return getBooleanOperators();
-	},
+  getOperators<TApp>(config: BooleanFieldConfig) {
+    return getBooleanOperators();
+  },
 
-	getMetadata(config: BooleanFieldConfig): FieldMetadataBase {
-		return {
-			type: "boolean",
-			label: config.label,
-			description: config.description,
-			required: config.required ?? false,
-			localized: config.localized ?? false,
-			readOnly: config.input === false,
-			writeOnly: config.output === false,
-			meta: config.meta,
-		};
-	},
+  getMetadata(config: BooleanFieldConfig): FieldMetadataBase {
+    return {
+      type: "boolean",
+      label: config.label,
+      description: config.description,
+      required: config.required ?? false,
+      localized: config.localized ?? false,
+      readOnly: config.input === false,
+      writeOnly: config.output === false,
+      meta: config.meta,
+    };
+  },
 });
 
 // Register in default registry

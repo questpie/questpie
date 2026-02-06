@@ -7,23 +7,23 @@ import { selectClient, useAdminStore } from "../runtime";
 import type { AdminConfigResponse } from "../types/admin-config";
 
 export function useAdminConfig(
-	queryOptions?: Omit<
-		UseQueryOptions<AdminConfigResponse>,
-		"queryKey" | "queryFn"
-	>,
+  queryOptions?: Omit<
+    UseQueryOptions<AdminConfigResponse>,
+    "queryKey" | "queryFn"
+  >,
 ) {
-	const client = useAdminStore(selectClient);
+  const client = useAdminStore(selectClient);
 
-	return useQuery<AdminConfigResponse>({
-		queryKey: ["questpie", "admin", "config"],
-		queryFn: async () => {
-			if (!client || !(client as any).functions?.getAdminConfig) {
-				return {};
-			}
-			return (client as any).rpc.getAdminConfig();
-		},
-		staleTime: 5 * 60 * 1000,
-		gcTime: 30 * 60 * 1000,
-		...queryOptions,
-	});
+  return useQuery<AdminConfigResponse>({
+    queryKey: ["questpie", "admin", "config"],
+    queryFn: async () => {
+      if (!client || !(client as any).functions?.getAdminConfig) {
+        return {};
+      }
+      return (client as any).rpc.getAdminConfig();
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    ...queryOptions,
+  });
 }

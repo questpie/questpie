@@ -1,0 +1,123 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-06T18:09:20.611Z",
+      "migrationId": "fancyGreenTiger20260206T180920"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-06T18:09:20.611Z",
+      "migrationId": "fancyGreenTiger20260206T180920"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T18:09:20.611Z",
+      "migrationId": "fancyGreenTiger20260206T180920"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T18:09:20.611Z",
+      "migrationId": "fancyGreenTiger20260206T180920"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-06T18:09:20.611Z",
+      "migrationId": "fancyGreenTiger20260206T180920"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-06T18:09:20.611Z",
+      "migrationId": "fancyGreenTiger20260206T180920"
+    }
+  ],
+  "metadata": {
+    "migrationId": "fancyGreenTiger20260206T180920",
+    "timestamp": "2026-02-06T18:09:20.642Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

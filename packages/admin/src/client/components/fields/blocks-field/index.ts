@@ -1,5 +1,5 @@
 export {
-	BlocksField,
-	type BlocksFieldConfig,
-	type BlocksFieldProps,
+  BlocksField,
+  type BlocksFieldConfig,
+  type BlocksFieldProps,
 } from "./blocks-field";

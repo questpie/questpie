@@ -18,31 +18,31 @@ import type { TextareaInputProps } from "./types";
  * ```
  */
 export function TextareaInput({
-	value,
-	onChange,
-	rows = 3,
-	maxLength,
-	placeholder,
-	disabled,
-	readOnly,
-	className,
-	id,
-	"aria-invalid": ariaInvalid,
+  value,
+  onChange,
+  rows = 3,
+  maxLength,
+  placeholder,
+  disabled,
+  readOnly,
+  className,
+  id,
+  "aria-invalid": ariaInvalid,
 }: TextareaInputProps) {
-	const resolveText = useResolveText();
+  const resolveText = useResolveText();
 
-	return (
-		<Textarea
-			id={id}
-			value={value}
-			onChange={(e) => onChange(e.target.value)}
-			rows={rows}
-			maxLength={maxLength}
-			placeholder={resolveText(placeholder)}
-			disabled={disabled}
-			readOnly={readOnly}
-			aria-invalid={ariaInvalid}
-			className={className}
-		/>
-	);
+  return (
+    <Textarea
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={rows}
+      maxLength={maxLength}
+      placeholder={resolveText(placeholder)}
+      disabled={disabled}
+      readOnly={readOnly}
+      aria-invalid={ariaInvalid}
+      className={className}
+    />
+  );
 }

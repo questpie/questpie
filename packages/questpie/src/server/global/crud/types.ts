@@ -1,13 +1,13 @@
 import type {
-	ApplyQuery,
-	Columns,
-	CRUDContext,
-	NestedRelationMutation,
-	With,
+  ApplyQuery,
+  Columns,
+  CRUDContext,
+  NestedRelationMutation,
+  With,
 } from "#questpie/server/collection/crud/types.js";
 import type {
-	ExtractRelationInsert,
-	Prettify,
+  ExtractRelationInsert,
+  Prettify,
 } from "#questpie/shared/type-utils.js";
 
 /**
@@ -26,26 +26,26 @@ type RelationValue<T> = T extends (infer U)[] ? U : T;
  * Uses the same pattern as collection RelationMutations
  */
 type GlobalRelationMutations<TRelations> = [TRelations] extends [never]
-	? {}
-	: IsAny<TRelations> extends true
-		? {} // When TRelations is `any`, don't create index signature
-		: string extends keyof TRelations
-			? {} // TRelations has index signature (e.g., Record<string, ...>), don't add relation fields
-			: [TRelations] extends [Record<string, any>]
-				? keyof TRelations extends never
-					? {} // No relations, return empty object
-					: {
-							[K in keyof TRelations]?: NestedRelationMutation<
-								ExtractRelationInsert<RelationValue<TRelations[K]>>
-							>;
-						}
-				: {}; // Not a record type or unknown, return empty object
+  ? {}
+  : IsAny<TRelations> extends true
+    ? {} // When TRelations is `any`, don't create index signature
+    : string extends keyof TRelations
+      ? {} // TRelations has index signature (e.g., Record<string, ...>), don't add relation fields
+      : [TRelations] extends [Record<string, any>]
+        ? keyof TRelations extends never
+          ? {} // No relations, return empty object
+          : {
+              [K in keyof TRelations]?: NestedRelationMutation<
+                ExtractRelationInsert<RelationValue<TRelations[K]>>
+              >;
+            }
+        : {}; // Not a record type or unknown, return empty object
 
 /**
  * Global update input with optional nested relation mutations
  */
 export type GlobalUpdateInput<TUpdate = any, TRelations = any> = Prettify<
-	Partial<TUpdate> & GlobalRelationMutations<TRelations>
+  Partial<TUpdate> & GlobalRelationMutations<TRelations>
 >;
 
 /**
@@ -53,25 +53,25 @@ export type GlobalUpdateInput<TUpdate = any, TRelations = any> = Prettify<
  * Type-safe with support for partial selection and relation loading
  */
 export interface GlobalGetOptions<TFields = any, TRelations = any> {
-	/**
-	 * Load relations
-	 */
-	with?: With<TRelations>;
+  /**
+   * Load relations
+   */
+  with?: With<TRelations>;
 
-	/**
-	 * Select specific columns only (partial selection)
-	 */
-	columns?: Columns<TFields>;
+  /**
+   * Select specific columns only (partial selection)
+   */
+  columns?: Columns<TFields>;
 
-	/**
-	 * Override locale for this request.
-	 */
-	locale?: string;
+  /**
+   * Override locale for this request.
+   */
+  locale?: string;
 
-	/**
-	 * Disable fallback to default locale when translation is missing.
-	 */
-	localeFallback?: boolean;
+  /**
+   * Disable fallback to default locale when translation is missing.
+   */
+  localeFallback?: boolean;
 }
 
 /**
@@ -79,42 +79,42 @@ export interface GlobalGetOptions<TFields = any, TRelations = any> {
  * Type-safe with support for relation loading in response
  */
 export interface GlobalUpdateOptions<TRelations = any> {
-	/**
-	 * Load relations in the response
-	 */
-	with?: With<TRelations>;
+  /**
+   * Load relations in the response
+   */
+  with?: With<TRelations>;
 
-	/**
-	 * Override locale for this request.
-	 */
-	locale?: string;
+  /**
+   * Override locale for this request.
+   */
+  locale?: string;
 
-	/**
-	 * Disable fallback to default locale when translation is missing.
-	 */
-	localeFallback?: boolean;
+  /**
+   * Disable fallback to default locale when translation is missing.
+   */
+  localeFallback?: boolean;
 }
 
 export interface GlobalFindVersionsOptions {
-	id?: string;
-	limit?: number;
-	offset?: number;
+  id?: string;
+  limit?: number;
+  offset?: number;
 }
 
 export interface GlobalRevertVersionOptions {
-	id?: string;
-	version?: number;
-	versionId?: string;
+  id?: string;
+  version?: number;
+  versionId?: string;
 }
 
 export interface GlobalVersionRecord {
-	id: string;
-	versionId: string;
-	versionNumber: number;
-	versionOperation: string;
-	versionUserId: string | null;
-	versionCreatedAt: Date;
-	[key: string]: any;
+  id: string;
+  versionId: string;
+  versionNumber: number;
+  versionOperation: string;
+  versionUserId: string | null;
+  versionCreatedAt: Date;
+  [key: string]: any;
 }
 
 /**
@@ -122,37 +122,37 @@ export interface GlobalVersionRecord {
  * Similar to Collection CRUD but adapted for singleton pattern
  */
 export interface GlobalCRUD<
-	TSelect = any,
-	_TInsert = any,
-	TUpdate = any,
-	TRelations = any,
+  TSelect = any,
+  _TInsert = any,
+  TUpdate = any,
+  TRelations = any,
 > {
-	/**
-	 * Get the global record (singleton)
-	 * Supports partial selection and relation loading
-	 */
-	get<TQuery extends GlobalGetOptions<TSelect, TRelations>>(
-		options?: TQuery,
-		context?: CRUDContext,
-	): Promise<ApplyQuery<TSelect, TRelations, TQuery> | null>;
+  /**
+   * Get the global record (singleton)
+   * Supports partial selection and relation loading
+   */
+  get<TQuery extends GlobalGetOptions<TSelect, TRelations>>(
+    options?: TQuery,
+    context?: CRUDContext,
+  ): Promise<ApplyQuery<TSelect, TRelations, TQuery> | null>;
 
-	/**
-	 * Update the global record
-	 * Supports loading relations in response and nested relation mutations
-	 */
-	update<TQuery extends GlobalUpdateOptions<TRelations>>(
-		data: GlobalUpdateInput<TUpdate, TRelations>,
-		context?: CRUDContext,
-		options?: TQuery,
-	): Promise<ApplyQuery<TSelect, TRelations, TQuery>>;
+  /**
+   * Update the global record
+   * Supports loading relations in response and nested relation mutations
+   */
+  update<TQuery extends GlobalUpdateOptions<TRelations>>(
+    data: GlobalUpdateInput<TUpdate, TRelations>,
+    context?: CRUDContext,
+    options?: TQuery,
+  ): Promise<ApplyQuery<TSelect, TRelations, TQuery>>;
 
-	findVersions(
-		options?: GlobalFindVersionsOptions,
-		context?: CRUDContext,
-	): Promise<GlobalVersionRecord[]>;
+  findVersions(
+    options?: GlobalFindVersionsOptions,
+    context?: CRUDContext,
+  ): Promise<GlobalVersionRecord[]>;
 
-	revertToVersion(
-		options: GlobalRevertVersionOptions,
-		context?: CRUDContext,
-	): Promise<TSelect>;
+  revertToVersion(
+    options: GlobalRevertVersionOptions,
+    context?: CRUDContext,
+  ): Promise<TSelect>;
 }

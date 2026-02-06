@@ -290,9 +290,7 @@ describe("qa namespace - Complete Example", () => {
       });
 
     // 2. Define collections using builder directly
-    const posts = builder
-      .collection("posts")
-      .meta({ label: "Blog Posts" });
+    const posts = builder.collection("posts").meta({ label: "Blog Posts" });
 
     // 3. Define globals using builder directly
     const settings = builder

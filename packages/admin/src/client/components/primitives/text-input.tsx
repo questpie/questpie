@@ -19,33 +19,33 @@ import type { TextInputProps } from "./types";
  * ```
  */
 export function TextInput({
-	value,
-	onChange,
-	type = "text",
-	placeholder,
-	disabled,
-	readOnly,
-	maxLength,
-	autoComplete,
-	className,
-	id,
-	"aria-invalid": ariaInvalid,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  disabled,
+  readOnly,
+  maxLength,
+  autoComplete,
+  className,
+  id,
+  "aria-invalid": ariaInvalid,
 }: TextInputProps) {
-	const resolveText = useResolveText();
+  const resolveText = useResolveText();
 
-	return (
-		<Input
-			id={id}
-			type={type}
-			value={value}
-			onChange={(e) => onChange(e.target.value)}
-			placeholder={resolveText(placeholder)}
-			disabled={disabled}
-			readOnly={readOnly}
-			maxLength={maxLength}
-			autoComplete={autoComplete}
-			aria-invalid={ariaInvalid}
-			className={className}
-		/>
-	);
+  return (
+    <Input
+      id={id}
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={resolveText(placeholder)}
+      disabled={disabled}
+      readOnly={readOnly}
+      maxLength={maxLength}
+      autoComplete={autoComplete}
+      aria-invalid={ariaInvalid}
+      className={className}
+    />
+  );
 }

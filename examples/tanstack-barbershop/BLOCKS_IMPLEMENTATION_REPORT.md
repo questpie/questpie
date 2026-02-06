@@ -19,8 +19,10 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ## ✨ New Blocks Implemented
 
 ### 1. **heading.tsx** - Heading Block
+
 **Purpose:** Customizable h1-h4 headings with alignment
 **Features:**
+
 - Level selection (h1, h2, h3, h4)
 - Text alignment (left, center, right)
 - Padding options
@@ -28,6 +30,7 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 - Localized text
 
 **Admin Fields:**
+
 ```typescript
 - text: r.text (localized, required)
 - level: r.select (h1-h4)
@@ -38,14 +41,17 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ---
 
 ### 2. **booking-cta.tsx** - Booking CTA Block
+
 **Purpose:** Specialized call-to-action for bookings
 **Features:**
+
 - Pre-select service & barber via query params
 - Multiple button variants (default, highlight, outline)
 - Size options
 - Localized title, description, button text
 
 **Admin Fields:**
+
 ```typescript
 - title: r.text (localized)
 - description: r.text (localized, optional)
@@ -57,39 +63,47 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ```
 
 **Smart Features:**
+
 - Builds booking URL: `/booking?service=X&barber=Y`
 - Auto-pre-selection in booking flow
 
 ---
 
 ### 3. **hours.tsx** - Business Hours Block
+
 **Purpose:** Display shop opening hours
 **Features:**
+
 - Fetches hours from site settings
 - Toggle to show/hide closed days
 - Clean table layout
 - Responsive design
 
 **Admin Fields:**
+
 ```typescript
 - title: r.text (localized, optional)
 - showClosed: r.checkbox
 ```
 
 **Prefetch:**
+
 - Loads `businessHours` from `siteSettings` global
 
 ---
 
 ### 4. **stats.tsx** - Statistics Block
+
 **Purpose:** Display key metrics in grid
 **Features:**
+
 - Array of stat items (value, label, description)
 - Column layout (2, 3, or 4 columns)
 - Responsive grid
 - Large numbers with labels
 
 **Admin Fields:**
+
 ```typescript
 - title: r.text (localized, optional)
 - stats: r.array ([
@@ -101,6 +115,7 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ```
 
 **Use Cases:**
+
 - "1000+ Happy Clients"
 - "15 Years Experience"
 - "5000+ Haircuts"
@@ -108,8 +123,10 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ---
 
 ### 5. **reviews-grid.tsx** - Reviews Grid Block
+
 **Purpose:** Customer reviews in static grid (no carousel)
 **Features:**
+
 - Filter: featured, recent, or all
 - Column layout (2, 3, or 4)
 - Star ratings
@@ -117,6 +134,7 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 - Customer names
 
 **Admin Fields:**
+
 ```typescript
 - title: r.text (localized)
 - subtitle: r.text (localized, optional)
@@ -126,6 +144,7 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ```
 
 **Prefetch:**
+
 - Fetches approved reviews
 - Applies filter logic
 - Orders by createdAt
@@ -133,14 +152,17 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ---
 
 ### 6. **services-featured.tsx** - Featured Services Block
+
 **Purpose:** Manually selected services
 **Features:**
+
 - Manual service selection (vs auto-fetch all)
 - Maintains selected order
 - Same design as services block
 - Pricing, duration, images
 
 **Admin Fields:**
+
 ```typescript
 - title: r.text (localized)
 - subtitle: r.text (localized, optional)
@@ -149,14 +171,17 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ```
 
 **Prefetch:**
+
 - Fetches selected services by ID
 - Preserves order from admin selection
 
 ---
 
 ### 7. **barbers-featured.tsx** - Featured Barbers Block
+
 **Purpose:** Manually selected barbers
 **Features:**
+
 - Manual barber selection
 - Avatar images
 - Specialties badges
@@ -164,6 +189,7 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 - Profile links
 
 **Admin Fields:**
+
 ```typescript
 - title: r.text (localized)
 - subtitle: r.text (localized, optional)
@@ -172,6 +198,7 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ```
 
 **Prefetch:**
+
 - Fetches selected barbers by ID
 - Loads avatar URLs
 - Preserves order
@@ -179,8 +206,10 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ---
 
 ### 8. **image-text.tsx** - Image + Text Block
+
 **Purpose:** Side-by-side image and text
 **Features:**
+
 - Image on left or right
 - Aspect ratio options (square, portrait, landscape)
 - Rich text content
@@ -188,6 +217,7 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 - Responsive (stacks on mobile)
 
 **Admin Fields:**
+
 ```typescript
 - image: r.asset (required)
 - imagePosition: r.select (left/right)
@@ -199,13 +229,16 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ```
 
 **Prefetch:**
+
 - Fetches asset URL for image
 
 ---
 
 ### 9. **gallery.tsx** - Gallery Block
+
 **Purpose:** Image gallery grid
 **Features:**
+
 - Multiple images with captions
 - Column layout (2, 3, or 4)
 - Gap size options
@@ -213,6 +246,7 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 - Caption overlay on hover
 
 **Admin Fields:**
+
 ```typescript
 - title: r.text (localized, optional)
 - images: r.array ([
@@ -224,14 +258,17 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ```
 
 **Prefetch:**
+
 - Fetches all asset URLs in batch
 - Maps IDs to URLs
 
 ---
 
 ### 10. **contact-info.tsx** - Contact Info Block
+
 **Purpose:** Contact details with optional map
 **Features:**
+
 - Phone, email, address cards
 - Google Maps embed
 - Icons from Phosphor
@@ -239,12 +276,14 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 - Data from site settings
 
 **Admin Fields:**
+
 ```typescript
 - title: r.text (localized, optional)
 - showMap: r.checkbox (default: true)
 ```
 
 **Prefetch:**
+
 - Loads all contact data from `siteSettings` global:
   - contactEmail
   - contactPhone
@@ -256,7 +295,9 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 ## 🗂️ Files Modified
 
 ### 1. `src/questpie/admin/blocks/index.tsx`
+
 **Changes:**
+
 - Added imports for all 9 new blocks
 - Updated `blocks` export object with 18 total blocks
 - Organized by category (sections, content, layout)
@@ -265,31 +306,47 @@ All **18 blocks** for the TanStack Barbershop project have been successfully imp
 **After:** 18 blocks
 
 ### 2. `src/questpie/admin/collections/pages.ts`
+
 **Changes:**
+
 - Updated `allowedBlocks` array from 6 to 18 blocks
 - Organized by category for clarity
 
 **Before:**
+
 ```typescript
-allowedBlocks: ["hero", "text", "services", "reviews", "cta", "columns"]
+allowedBlocks: ["hero", "text", "services", "reviews", "cta", "columns"];
 ```
 
 **After:**
+
 ```typescript
 allowedBlocks: [
   // Sections (9)
-  "hero", "services", "services-featured",
-  "team", "barbers-featured",
-  "reviews", "reviews-grid",
-  "cta", "booking-cta",
+  "hero",
+  "services",
+  "services-featured",
+  "team",
+  "barbers-featured",
+  "reviews",
+  "reviews-grid",
+  "cta",
+  "booking-cta",
 
   // Content (7)
-  "text", "heading", "image-text",
-  "gallery", "stats", "hours", "contact-info",
+  "text",
+  "heading",
+  "image-text",
+  "gallery",
+  "stats",
+  "hours",
+  "contact-info",
 
   // Layout (3)
-  "columns", "spacer", "divider",
-]
+  "columns",
+  "spacer",
+  "divider",
+];
 ```
 
 ---
@@ -297,6 +354,7 @@ allowedBlocks: [
 ## 📁 Complete Block Inventory
 
 ### Section Blocks (9)
+
 1. ✅ `hero` - Full-width hero banner
 2. ✅ `services` - Auto-fetch all services
 3. ✅ `services-featured` - Manual service selection **(NEW)**
@@ -308,6 +366,7 @@ allowedBlocks: [
 9. ✅ `booking-cta` - Specialized booking CTA **(NEW)**
 
 ### Content Blocks (7)
+
 10. ✅ `text` - Rich text content
 11. ✅ `heading` - h1-h4 heading block **(NEW)**
 12. ✅ `image-text` - Side-by-side image/text **(NEW)**
@@ -317,6 +376,7 @@ allowedBlocks: [
 16. ✅ `contact-info` - Contact with map **(NEW)**
 
 ### Layout Blocks (2)
+
 17. ✅ `columns` - Multi-column layout
 18. ✅ `spacer` - Vertical spacing
 19. ✅ `divider` - Visual separator
@@ -326,7 +386,9 @@ allowedBlocks: [
 ## 🎨 Design Patterns Used
 
 ### 1. **Consistent Field API**
+
 All blocks use QuestPie admin builder pattern:
+
 ```typescript
 builder.block("name")
   .label({ en: "...", sk: "..." })
@@ -340,17 +402,21 @@ builder.block("name")
 ```
 
 ### 2. **Localization Support**
+
 - All user-facing text fields are localized (EN + SK)
 - Consistent use of `{ en: "...", sk: "..." }`
 
 ### 3. **Responsive Design**
+
 - Mobile-first approach
 - Grid columns: `grid-cols-1 md:grid-cols-2 lg:grid-cols-3`
 - Responsive font sizes
 - Stacking on mobile
 
 ### 4. **Prefetch Pattern**
+
 Blocks that need CMS data use `.prefetch()`:
+
 - `hours` → fetches business hours from site settings
 - `contact-info` → fetches contact data from site settings
 - `reviews-grid` → fetches filtered reviews
@@ -360,7 +426,9 @@ Blocks that need CMS data use `.prefetch()`:
 - `gallery` → fetches multiple asset URLs
 
 ### 5. **TypeScript Types**
+
 All blocks properly typed:
+
 ```typescript
 type BlockNameValues = {
   field1: string;
@@ -386,6 +454,7 @@ function BlockRenderer({
 ## 🧪 Testing Checklist
 
 ### Admin Testing
+
 - [ ] All blocks appear in block picker
 - [ ] Block icons render correctly (Phosphor icons)
 - [ ] Field labels are localized (EN/SK)
@@ -395,6 +464,7 @@ function BlockRenderer({
 - [ ] Asset picker works (image-text, gallery)
 
 ### Frontend Testing
+
 - [ ] All blocks render without errors
 - [ ] Prefetch data loads correctly
 - [ ] Responsive design works (mobile/tablet/desktop)
@@ -404,6 +474,7 @@ function BlockRenderer({
 - [ ] Images load (image-text, gallery, services-featured)
 
 ### Specific Block Tests
+
 - [ ] **heading**: All h1-h4 levels render with correct sizes
 - [ ] **booking-cta**: Query params are correct in URL
 - [ ] **hours**: Business hours display correctly, toggle works
@@ -420,14 +491,17 @@ function BlockRenderer({
 ## 📈 Impact on Project Completion
 
 ### Before (85%)
+
 - Blocks: 9/18 (50%)
 - Overall: 85%
 
 ### After (95%)
+
 - Blocks: 18/18 (100%) ✅
 - Overall: **95%**
 
 ### Remaining to 100%
+
 1. **UX Polish (Sprint 2)** - 3%
    - Toast notifications
    - Error boundaries
@@ -443,22 +517,26 @@ function BlockRenderer({
 ## 🚀 What's Next?
 
 ### Immediate Next Steps
+
 1. ✅ Update IMPLEMENTATION_STATUS.md
 2. 🔲 Test all blocks in admin UI
 3. 🔲 Create sample pages using new blocks
 4. 🔲 Update seed.ts to include pages with new blocks
 
 ### Sprint 2: UX Polish (~3 hours)
+
 1. Add toast notifications (sonner)
 2. Create error boundaries
 3. Add loading states
 
 ### Sprint 3: Accessibility (~2 hours)
+
 1. Add ARIA labels
 2. Improve semantic HTML
 3. Test keyboard navigation
 
 ### Sprint 4: Production Ready (~2 hours)
+
 1. Performance optimization
 2. SEO review
 3. Final testing
@@ -500,6 +578,7 @@ function BlockRenderer({
 This implementation brings the TanStack Barbershop project from 85% to 95% completion, providing content creators with a comprehensive set of building blocks to create rich, engaging pages without code.
 
 The project now has:
+
 - ✅ Complete backend (collections, functions, globals)
 - ✅ Complete admin UI (all blocks, configuration)
 - ✅ Complete frontend (all routes, components)

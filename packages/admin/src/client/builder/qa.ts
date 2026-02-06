@@ -27,22 +27,22 @@ import { widget } from "./widget/widget";
  * ```
  */
 function qaFactory<TApp = any>() {
-	return AdminBuilder.empty<TApp>();
+  return AdminBuilder.empty<TApp>();
 }
 
 /**
  * QA namespace with helpers
  */
 export const qa = Object.assign(qaFactory, {
-	// Primitive definition helpers (for advanced use)
-	field,
-	listView,
-	editView,
-	widget,
-	page,
+  // Primitive definition helpers (for advanced use)
+  field,
+  listView,
+  editView,
+  widget,
+  page,
 
-	// Standalone factories (for use outside builder context)
-	collection,
-	global,
-	block,
+  // Standalone factories (for use outside builder context)
+  collection,
+  global,
+  block,
 });

@@ -30,7 +30,7 @@ import { RichTextSimple } from "@questpie/admin/client";
   value={content}
   onChange={setContent}
   placeholder="Start writing..."
-/>
+/>;
 ```
 
 ## Available Presets
@@ -42,14 +42,11 @@ Perfect for: Comments, notes, simple text fields
 ```tsx
 import { RichTextMinimal } from "@questpie/admin/client";
 
-<RichTextMinimal
-  name="comment"
-  value={comment}
-  onChange={setComment}
-/>
+<RichTextMinimal name="comment" value={comment} onChange={setComment} />;
 ```
 
 **Features:**
+
 - No toolbar (only bubble menu on selection)
 - Bold, Italic, Underline, Link
 - Minimal UI footprint
@@ -69,10 +66,11 @@ import { RichTextSimple } from "@questpie/admin/client";
   onChange={setDescription}
   showCharacterCount
   maxCharacters={500}
-/>
+/>;
 ```
 
 **Features:**
+
 - Headings (H1-H6)
 - Text formatting (bold, italic, underline, strikethrough, code)
 - Lists (bullet, numbered)
@@ -96,10 +94,11 @@ import { RichTextStandard } from "@questpie/admin/client";
   value={content}
   onChange={setContent}
   onImageUpload={handleImageUpload}
-/>
+/>;
 ```
 
 **Features:**
+
 - Everything in Simple
 - Text alignment (left, center, right, justify)
 - Images (URL + upload)
@@ -121,10 +120,11 @@ import { RichTextAdvanced } from "@questpie/admin/client";
   onChange={setDocs}
   onImageUpload={handleImageUpload}
   showCharacterCount
-/>
+/>;
 ```
 
 **Features:**
+
 - Everything in Standard
 - Reserved for future advanced features (math, diagrams, etc.)
 
@@ -148,7 +148,7 @@ import { RichTextEditor } from "@questpie/admin/client";
     heading: false,
   }}
   onImageUpload={handleImageUpload}
-/>
+/>;
 ```
 
 ### Manual Feature Configuration
@@ -190,7 +190,7 @@ const handleImageUpload = async (file: File): Promise<string> => {
 <RichTextStandard
   onImageUpload={handleImageUpload}
   enableImages // Optional, defaults to true if onImageUpload provided
-/>
+/>;
 ```
 
 ## Output Formats
@@ -225,10 +225,7 @@ The editor supports multiple output formats:
 Add character/word counting with optional limits:
 
 ```tsx
-<RichTextSimple
-  showCharacterCount
-  maxCharacters={500}
-/>
+<RichTextSimple showCharacterCount maxCharacters={500} />
 ```
 
 ## Keyboard Shortcuts
@@ -290,9 +287,7 @@ Add custom Tiptap extensions:
 ```tsx
 import { CustomExtension } from "./custom-extension";
 
-<RichTextEditor
-  extensions={[CustomExtension]}
-/>
+<RichTextEditor extensions={[CustomExtension]} />;
 ```
 
 ### Read-only Mode
@@ -300,10 +295,7 @@ import { CustomExtension } from "./custom-extension";
 Disable editing:
 
 ```tsx
-<RichTextEditor
-  readOnly
-  value={content}
-/>
+<RichTextEditor readOnly value={content} />
 ```
 
 ### Localization

@@ -52,11 +52,11 @@ export type MessagesShape = Record<string, LocaleMessagesShape>;
  * ```
  */
 export type InferMessageKeys<T extends MessagesShape> =
-	T[keyof T] extends infer LocaleMessages
-		? LocaleMessages extends LocaleMessagesShape
-			? keyof LocaleMessages & string
-			: never
-		: never;
+  T[keyof T] extends infer LocaleMessages
+    ? LocaleMessages extends LocaleMessagesShape
+      ? keyof LocaleMessages & string
+      : never
+    : never;
 
 /**
  * Typed translator function with inferred keys
@@ -69,9 +69,9 @@ export type InferMessageKeys<T extends MessagesShape> =
  * ```
  */
 export type TypedTranslateFn<TCustomKeys extends string = never> = (
-	key: BackendMessageKey | TCustomKeys,
-	params?: Record<string, unknown>,
-	locale?: string,
+  key: BackendMessageKey | TCustomKeys,
+  params?: Record<string, unknown>,
+  locale?: string,
 ) => string;
 
 // ============================================================================
@@ -113,8 +113,8 @@ export type TypedTranslateFn<TCustomKeys extends string = never> = (
  */
 // biome-ignore lint/suspicious/noEmptyInterface: Module augmentation target for backwards compatibility
 export interface BackendMessageRegistry {
-	// Empty - message keys now flow through builder chain via .messages()
-	// Legacy keys can still be added via module augmentation
+  // Empty - message keys now flow through builder chain via .messages()
+  // Legacy keys can still be added via module augmentation
 }
 
 /**
@@ -137,9 +137,9 @@ export type BackendMessageKey = keyof BackendMessageRegistry | (string & {});
  * for known keys.
  */
 export type BackendTranslateFn = (
-	key: BackendMessageKey | (string & {}),
-	params?: Record<string, unknown>,
-	locale?: string,
+  key: BackendMessageKey | (string & {}),
+  params?: Record<string, unknown>,
+  locale?: string,
 ) => string;
 
 // ============================================================================
@@ -155,15 +155,15 @@ export type LocaleMessages = Record<string, string | PluralMessages>;
  * Translation configuration for the builder
  */
 export interface TranslationsConfig {
-	/**
-	 * Messages keyed by locale
-	 * e.g. { en: { "error.notFound": "Not found" }, sk: { "error.notFound": "Nenájdené" } }
-	 */
-	messages: Record<string, LocaleMessages>;
+  /**
+   * Messages keyed by locale
+   * e.g. { en: { "error.notFound": "Not found" }, sk: { "error.notFound": "Nenájdené" } }
+   */
+  messages: Record<string, LocaleMessages>;
 
-	/**
-	 * Fallback locale when translation not found
-	 * @default "en"
-	 */
-	fallbackLocale?: string;
+  /**
+   * Fallback locale when translation not found
+   * @default "en"
+   */
+  fallbackLocale?: string;
 }
