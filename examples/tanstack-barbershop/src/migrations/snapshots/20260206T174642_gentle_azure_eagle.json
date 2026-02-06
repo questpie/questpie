@@ -1,0 +1,6292 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__assets",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "assets",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__user",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "user",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__session",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "session",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__account",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "account",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__verification",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "verification",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__apikey",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "apikey",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__admin_saved_views",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "admin_saved_views",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__admin_preferences",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "admin_preferences",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__barbers",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "barbers",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__barbers_i18n",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "barbers_i18n",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__services",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "services",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__services_i18n",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "services_i18n",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__barber_services",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "barber_services",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__appointments",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "appointments",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__reviews",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "reviews",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__reviews_i18n",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "reviews_i18n",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__pages",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "pages",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__pages_i18n",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "pages_i18n",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__site_settings",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "site_settings",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__site_settings_i18n",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "site_settings_i18n",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__site_settings_versions",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "site_settings_versions",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__site_settings_i18n_versions",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "site_settings_i18n_versions",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_realtime_log",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_realtime_log",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_search",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_search",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_search_facets",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_search_facets",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__width",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "width",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__height",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "height",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__alt",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "alt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__caption",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "caption",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__key",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__filename",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "filename",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__mime_type",
+      "value": {
+        "type": "varchar(100)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "mime_type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__size",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "size",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__visibility",
+      "value": {
+        "type": "varchar(20)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'public'",
+        "generated": null,
+        "identity": null,
+        "name": "visibility",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__email",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "email",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__emailVerified",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "emailVerified",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__image",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "image",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__role",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "role",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__banned",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "banned",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__banReason",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "banReason",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__banExpires",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "banExpires",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__token",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "token",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__ipAddress",
+      "value": {
+        "type": "varchar(45)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "ipAddress",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__userAgent",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userAgent",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__impersonatedBy",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "impersonatedBy",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__accountId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "accountId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__providerId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "providerId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__accessToken",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "accessToken",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__refreshToken",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refreshToken",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__accessTokenExpiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "accessTokenExpiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__refreshTokenExpiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refreshTokenExpiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__scope",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scope",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__idToken",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "idToken",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__password",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "password",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__identifier",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "identifier",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__value",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__start",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "start",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__prefix",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "prefix",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__key",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__refillInterval",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refillInterval",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__refillAmount",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refillAmount",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__lastRefillAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "lastRefillAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__enabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "enabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__rateLimitEnabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "rateLimitEnabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__rateLimitTimeWindow",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "rateLimitTimeWindow",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__rateLimitMax",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "rateLimitMax",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__requestCount",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "requestCount",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__remaining",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "remaining",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__lastRequest",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "lastRequest",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__permissions",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "permissions",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__metadata",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__collectionName",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "collectionName",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__configuration",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "configuration",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__isDefault",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "isDefault",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__key",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__value",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__slug",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "slug",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__email",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "email",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__phone",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "phone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__avatar",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "avatar",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__isActive",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "isActive",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__workingHours",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "workingHours",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__socialLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "socialLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers_i18n__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers_i18n__DOT__parent_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "parent_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers_i18n__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers_i18n__DOT___localized",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "_localized",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers_i18n__DOT__bio",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "bio",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers_i18n__DOT__specialties",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "specialties",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__image",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "image",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__duration",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "duration",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__price",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "price",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__isActive",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "isActive",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services_i18n__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services_i18n__DOT__parent_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "parent_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services_i18n__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services_i18n__DOT___localized",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "_localized",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services_i18n__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services_i18n__DOT__description",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "description",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barber_services__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barber_services__DOT__barber",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "barber",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barber_services__DOT__service",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "service",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barber_services__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barber_services__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__customer",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "customer",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__barber",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "barber",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__service",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "service",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__scheduledAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scheduledAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__status",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'pending'",
+        "generated": null,
+        "identity": null,
+        "name": "status",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__notes",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "notes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__cancelledAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "cancelledAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__cancellationReason",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "cancellationReason",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__customer",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "customer",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__customerName",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "customerName",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__customerEmail",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "customerEmail",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__barber",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "barber",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__appointment",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "appointment",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__rating",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "rating",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__isApproved",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "isApproved",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__isFeatured",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "isFeatured",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews_i18n__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews_i18n__DOT__parent_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "parent_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews_i18n__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews_i18n__DOT___localized",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "_localized",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews_i18n__DOT__comment",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "comment",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__slug",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "slug",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__isPublished",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "isPublished",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_i18n__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_i18n__DOT__parent_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "parent_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_i18n__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_i18n__DOT___localized",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "_localized",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_i18n__DOT__title",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_i18n__DOT__description",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "description",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_i18n__DOT__content",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "content",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_i18n__DOT__metaTitle",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metaTitle",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_i18n__DOT__metaDescription",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metaDescription",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__shopName",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'Sharp Cuts'",
+        "generated": null,
+        "identity": null,
+        "name": "shopName",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__logo",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "logo",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__ctaButtonLink",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'/booking'",
+        "generated": null,
+        "identity": null,
+        "name": "ctaButtonLink",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__contactEmail",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'hello@barbershop.com'",
+        "generated": null,
+        "identity": null,
+        "name": "contactEmail",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__contactPhone",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'+1 555 0100'",
+        "generated": null,
+        "identity": null,
+        "name": "contactPhone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__address",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'123 Main Street'",
+        "generated": null,
+        "identity": null,
+        "name": "address",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__city",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'New York'",
+        "generated": null,
+        "identity": null,
+        "name": "city",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__zipCode",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'10001'",
+        "generated": null,
+        "identity": null,
+        "name": "zipCode",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__country",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'USA'",
+        "generated": null,
+        "identity": null,
+        "name": "country",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__mapEmbedUrl",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "mapEmbedUrl",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__isOpen",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "isOpen",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__bookingEnabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "bookingEnabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__businessHours",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'{\"monday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"18:00\"},\"tuesday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"18:00\"},\"wednesday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"18:00\"},\"thursday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"20:00\"},\"friday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"20:00\"},\"saturday\":{\"isOpen\":true,\"start\":\"10:00\",\"end\":\"16:00\"},\"sunday\":{\"isOpen\":false,\"start\":\"\",\"end\":\"\"}}'",
+        "generated": null,
+        "identity": null,
+        "name": "businessHours",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__bookingSettings",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'{\"minAdvanceHours\":2,\"maxAdvanceDays\":30,\"slotDurationMinutes\":30,\"allowCancellation\":true,\"cancellationDeadlineHours\":24}'",
+        "generated": null,
+        "identity": null,
+        "name": "bookingSettings",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__socialLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"platform\":\"instagram\",\"url\":\"https://instagram.com/sharpcuts\"},{\"platform\":\"facebook\",\"url\":\"https://facebook.com/sharpcuts\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "socialLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__parent_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "parent_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__tagline",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Your Style, Our Passion'",
+        "generated": null,
+        "identity": null,
+        "name": "tagline",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__ctaButtonText",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Book Now'",
+        "generated": null,
+        "identity": null,
+        "name": "ctaButtonText",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__footerTagline",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Your Style, Our Passion'",
+        "generated": null,
+        "identity": null,
+        "name": "footerTagline",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Contact\",\"href\":\"/contact\"},{\"label\":\"Privacy Policy\",\"href\":\"/privacy\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__copyrightText",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Sharp Cuts. All rights reserved.'",
+        "generated": null,
+        "identity": null,
+        "name": "copyrightText",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__metaTitle",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Sharp Cuts - Premium Barbershop'",
+        "generated": null,
+        "identity": null,
+        "name": "metaTitle",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__metaDescription",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Professional barbershop services - haircuts, beard grooming, and more.'",
+        "generated": null,
+        "identity": null,
+        "name": "metaDescription",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "version_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_number",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_number",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_operation",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_operation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_user_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_user_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "version_created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__shopName",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'Sharp Cuts'",
+        "generated": null,
+        "identity": null,
+        "name": "shopName",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__logo",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "logo",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__ctaButtonLink",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'/booking'",
+        "generated": null,
+        "identity": null,
+        "name": "ctaButtonLink",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__contactEmail",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'hello@barbershop.com'",
+        "generated": null,
+        "identity": null,
+        "name": "contactEmail",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__contactPhone",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'+1 555 0100'",
+        "generated": null,
+        "identity": null,
+        "name": "contactPhone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__address",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'123 Main Street'",
+        "generated": null,
+        "identity": null,
+        "name": "address",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__city",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'New York'",
+        "generated": null,
+        "identity": null,
+        "name": "city",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__zipCode",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'10001'",
+        "generated": null,
+        "identity": null,
+        "name": "zipCode",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__country",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'USA'",
+        "generated": null,
+        "identity": null,
+        "name": "country",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__mapEmbedUrl",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "mapEmbedUrl",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__isOpen",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "isOpen",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__bookingEnabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "bookingEnabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__businessHours",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'{\"monday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"18:00\"},\"tuesday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"18:00\"},\"wednesday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"18:00\"},\"thursday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"20:00\"},\"friday\":{\"isOpen\":true,\"start\":\"09:00\",\"end\":\"20:00\"},\"saturday\":{\"isOpen\":true,\"start\":\"10:00\",\"end\":\"16:00\"},\"sunday\":{\"isOpen\":false,\"start\":\"\",\"end\":\"\"}}'",
+        "generated": null,
+        "identity": null,
+        "name": "businessHours",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__bookingSettings",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'{\"minAdvanceHours\":2,\"maxAdvanceDays\":30,\"slotDurationMinutes\":30,\"allowCancellation\":true,\"cancellationDeadlineHours\":24}'",
+        "generated": null,
+        "identity": null,
+        "name": "bookingSettings",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__socialLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"platform\":\"instagram\",\"url\":\"https://instagram.com/sharpcuts\"},{\"platform\":\"facebook\",\"url\":\"https://facebook.com/sharpcuts\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "socialLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__parent_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "parent_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__version_number",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_number",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__tagline",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Your Style, Our Passion'",
+        "generated": null,
+        "identity": null,
+        "name": "tagline",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__ctaButtonText",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Book Now'",
+        "generated": null,
+        "identity": null,
+        "name": "ctaButtonText",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__footerTagline",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Your Style, Our Passion'",
+        "generated": null,
+        "identity": null,
+        "name": "footerTagline",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Contact\",\"href\":\"/contact\"},{\"label\":\"Privacy Policy\",\"href\":\"/privacy\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__copyrightText",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Sharp Cuts. All rights reserved.'",
+        "generated": null,
+        "identity": null,
+        "name": "copyrightText",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__metaTitle",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Sharp Cuts - Premium Barbershop'",
+        "generated": null,
+        "identity": null,
+        "name": "metaTitle",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__metaDescription",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Professional barbershop services - haircuts, beard grooming, and more.'",
+        "generated": null,
+        "identity": null,
+        "name": "metaDescription",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__seq",
+      "value": {
+        "type": "bigserial",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "seq",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__resource_type",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resource_type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__resource",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resource",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__operation",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "operation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__record_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "record_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__payload",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'{}'",
+        "generated": null,
+        "identity": null,
+        "name": "payload",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__collection_name",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "collection_name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__record_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "record_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__title",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__content",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "content",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__metadata",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'{}'",
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__fts_vector",
+      "value": {
+        "type": "tsvector",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": {
+          "as": "setweight(to_tsvector('simple', coalesce(title, '')), 'A') || setweight(to_tsvector('simple', coalesce(content, '')), 'B')",
+          "type": "stored"
+        },
+        "identity": null,
+        "name": "fts_vector",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__search_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "search_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__collection_name",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "collection_name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__facet_name",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "facet_name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__facet_value",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "facet_value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__numeric_value",
+      "value": {
+        "type": "numeric",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "numeric_value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__admin_preferences__DOT__admin_preferences_user_key_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "userId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "key",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "admin_preferences_user_key_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__barbers__DOT__barbers_slug_unique",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "slug",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "barbers_slug_unique",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__barbers__DOT__barbers_email_unique",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "email",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "barbers_email_unique",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__barbers_i18n__DOT__barbers_i18n_parent_id_locale_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "parent_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "barbers_i18n_parent_id_locale_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "barbers_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__services_i18n__DOT__services_i18n_parent_id_locale_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "parent_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "services_i18n_parent_id_locale_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "services_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__reviews_i18n__DOT__reviews_i18n_parent_id_locale_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "parent_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "reviews_i18n_parent_id_locale_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "reviews_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__pages__DOT__pages_slug_unique",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "slug",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "pages_slug_unique",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__pages_i18n__DOT__pages_i18n_parent_id_locale_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "parent_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "pages_i18n_parent_id_locale_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings_i18n__DOT__site_settings_i18n_parent_id_locale_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "parent_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_i18n_parent_id_locale_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings_versions__DOT__site_settings_versions_id_version_number_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "version_number",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_versions_id_version_number_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings_versions__DOT__site_settings_versions_version_created_at_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "version_created_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_versions_version_created_at_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings_i18n_versions__DOT__site_settings_i18n_versions_parent_id_version_number_locale_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "parent_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "version_number",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_i18n_versions_parent_id_version_number_locale_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings_i18n_versions__DOT__site_settings_i18n_versions_parent_id_version_number_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "parent_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "version_number",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_i18n_versions_parent_id_version_number_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_log__DOT__idx_realtime_log_seq",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "seq",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_realtime_log_seq",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_log__DOT__idx_realtime_log_resource",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "resource_type",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "resource",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_realtime_log_resource",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_log__DOT__idx_realtime_log_created_at",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "created_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_realtime_log_created_at",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search__DOT__idx_search_fts",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "fts_vector",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "gin",
+        "concurrently": false,
+        "name": "idx_search_fts",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search__DOT__idx_search_trigram",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "\"title\" gin_trgm_ops",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "gin",
+        "concurrently": false,
+        "name": "idx_search_trigram",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search__DOT__idx_search_collection_locale",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "collection_name",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_search_collection_locale",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search__DOT__idx_search_record_id",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "record_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_search_record_id",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search_facets__DOT__idx_facets_agg",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "collection_name",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "facet_name",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "facet_value",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_facets_agg",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search_facets__DOT__idx_facets_search_id",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "search_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_facets_search_id",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search_facets__DOT__idx_facets_collection",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "collection_name",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_facets_collection",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.fk__COLON__public__DOT__barbers_i18n__DOT__barbers_i18n_parent_id_barbers_id_fkey",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          "parent_id"
+        ],
+        "schemaTo": "public",
+        "tableTo": "barbers",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "name": "barbers_i18n_parent_id_barbers_id_fkey",
+        "entityType": "fks",
+        "schema": "public",
+        "table": "barbers_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.fk__COLON__public__DOT__services_i18n__DOT__services_i18n_parent_id_services_id_fkey",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          "parent_id"
+        ],
+        "schemaTo": "public",
+        "tableTo": "services",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "name": "services_i18n_parent_id_services_id_fkey",
+        "entityType": "fks",
+        "schema": "public",
+        "table": "services_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.fk__COLON__public__DOT__barber_services__DOT__barber_services_barber_barbers_id_fkey",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          "barber"
+        ],
+        "schemaTo": "public",
+        "tableTo": "barbers",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "name": "barber_services_barber_barbers_id_fkey",
+        "entityType": "fks",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.fk__COLON__public__DOT__barber_services__DOT__barber_services_service_services_id_fkey",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          "service"
+        ],
+        "schemaTo": "public",
+        "tableTo": "services",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "name": "barber_services_service_services_id_fkey",
+        "entityType": "fks",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.fk__COLON__public__DOT__reviews_i18n__DOT__reviews_i18n_parent_id_reviews_id_fkey",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          "parent_id"
+        ],
+        "schemaTo": "public",
+        "tableTo": "reviews",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "name": "reviews_i18n_parent_id_reviews_id_fkey",
+        "entityType": "fks",
+        "schema": "public",
+        "table": "reviews_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.fk__COLON__public__DOT__pages_i18n__DOT__pages_i18n_parent_id_pages_id_fkey",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          "parent_id"
+        ],
+        "schemaTo": "public",
+        "tableTo": "pages",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "name": "pages_i18n_parent_id_pages_id_fkey",
+        "entityType": "fks",
+        "schema": "public",
+        "table": "pages_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.fk__COLON__public__DOT__site_settings_i18n__DOT__site_settings_i18n_parent_id_site_settings_id_fkey",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          "parent_id"
+        ],
+        "schemaTo": "public",
+        "tableTo": "site_settings",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "name": "site_settings_i18n_parent_id_site_settings_id_fkey",
+        "entityType": "fks",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__assets__DOT__assets_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "assets_pkey",
+        "schema": "public",
+        "table": "assets",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__user__DOT__user_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "user_pkey",
+        "schema": "public",
+        "table": "user",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__session__DOT__session_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "session_pkey",
+        "schema": "public",
+        "table": "session",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__account__DOT__account_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "account_pkey",
+        "schema": "public",
+        "table": "account",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__verification__DOT__verification_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "verification_pkey",
+        "schema": "public",
+        "table": "verification",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__apikey__DOT__apikey_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "apikey_pkey",
+        "schema": "public",
+        "table": "apikey",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__admin_saved_views__DOT__admin_saved_views_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "admin_saved_views_pkey",
+        "schema": "public",
+        "table": "admin_saved_views",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__admin_preferences__DOT__admin_preferences_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "admin_preferences_pkey",
+        "schema": "public",
+        "table": "admin_preferences",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__barbers__DOT__barbers_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "barbers_pkey",
+        "schema": "public",
+        "table": "barbers",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__barbers_i18n__DOT__barbers_i18n_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "barbers_i18n_pkey",
+        "schema": "public",
+        "table": "barbers_i18n",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__services__DOT__services_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "services_pkey",
+        "schema": "public",
+        "table": "services",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__services_i18n__DOT__services_i18n_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "services_i18n_pkey",
+        "schema": "public",
+        "table": "services_i18n",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__barber_services__DOT__barber_services_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "barber_services_pkey",
+        "schema": "public",
+        "table": "barber_services",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__appointments__DOT__appointments_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "appointments_pkey",
+        "schema": "public",
+        "table": "appointments",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__reviews__DOT__reviews_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "reviews_pkey",
+        "schema": "public",
+        "table": "reviews",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__reviews_i18n__DOT__reviews_i18n_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "reviews_i18n_pkey",
+        "schema": "public",
+        "table": "reviews_i18n",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__pages__DOT__pages_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "pages_pkey",
+        "schema": "public",
+        "table": "pages",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__pages_i18n__DOT__pages_i18n_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "pages_i18n_pkey",
+        "schema": "public",
+        "table": "pages_i18n",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__site_settings__DOT__site_settings_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "site_settings_pkey",
+        "schema": "public",
+        "table": "site_settings",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__site_settings_i18n__DOT__site_settings_i18n_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "site_settings_i18n_pkey",
+        "schema": "public",
+        "table": "site_settings_i18n",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__site_settings_versions__DOT__site_settings_versions_pkey",
+      "value": {
+        "columns": [
+          "version_id"
+        ],
+        "nameExplicit": false,
+        "name": "site_settings_versions_pkey",
+        "schema": "public",
+        "table": "site_settings_versions",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__site_settings_i18n_versions__DOT__site_settings_i18n_versions_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "site_settings_i18n_versions_pkey",
+        "schema": "public",
+        "table": "site_settings_i18n_versions",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_realtime_log__DOT__questpie_realtime_log_pkey",
+      "value": {
+        "columns": [
+          "seq"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_realtime_log_pkey",
+        "schema": "public",
+        "table": "questpie_realtime_log",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_search__DOT__questpie_search_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_search_pkey",
+        "schema": "public",
+        "table": "questpie_search",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_search_facets__DOT__questpie_search_facets_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_search_facets_pkey",
+        "schema": "public",
+        "table": "questpie_search_facets",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    },
+    {
+      "type": "set",
+      "path": "ddl.uniques__COLON__{\"nameExplicit\"__COLON__true,\"columns\"__COLON__[\"collection_name\",\"record_id\",\"locale\"],\"nullsNotDistinct\"__COLON__false,\"name\"__COLON__\"uq_search_entry\",\"entityType\"__COLON__\"uniques\",\"schema\"__COLON__\"public\",\"table\"__COLON__\"questpie_search\"}",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          "collection_name",
+          "record_id",
+          "locale"
+        ],
+        "nullsNotDistinct": false,
+        "name": "uq_search_entry",
+        "entityType": "uniques",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-06T17:46:42.959Z",
+      "migrationId": "gentleAzureEagle20260206T174642"
+    }
+  ],
+  "metadata": {
+    "migrationId": "gentleAzureEagle20260206T174642",
+    "timestamp": "2026-02-06T17:46:43.001Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}
