@@ -39,6 +39,7 @@ import { localeFunctions } from "./functions/locales.js";
 import { previewFunctions } from "./functions/preview.js";
 import { setupFunctions } from "./functions/setup.js";
 import { translationFunctions } from "./functions/translations.js";
+import { widgetDataFunctions } from "./functions/widget-data.js";
 
 // Re-export admin preferences collection
 export { adminPreferencesCollection } from "../admin-preferences/collections/admin-preferences.collection.js";
@@ -88,6 +89,11 @@ export {
 	getAdminTranslations,
 	translationFunctions,
 } from "./functions/translations.js";
+// Re-export widget data functions
+export {
+	fetchWidgetData,
+	widgetDataFunctions,
+} from "./functions/widget-data.js";
 
 const r = rpc();
 
@@ -98,6 +104,7 @@ export const adminRpc = r.router({
 	...adminConfigFunctions,
 	...actionFunctions,
 	...translationFunctions,
+	...widgetDataFunctions,
 });
 
 /**

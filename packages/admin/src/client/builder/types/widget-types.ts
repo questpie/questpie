@@ -101,6 +101,13 @@ export interface BaseWidgetConfig {
 	 * Custom CSS class
 	 */
 	className?: string;
+
+	/**
+	 * Indicates server has a fetchFn for this widget (set by getAdminConfig).
+	 * When true, the widget fetches data via the fetchWidgetData RPC endpoint
+	 * instead of calling a client-side fetchFn.
+	 */
+	hasFetchFn?: boolean;
 }
 
 // ============================================================================
@@ -319,10 +326,11 @@ export interface ValueWidgetConfig extends BaseWidgetConfig {
 	type: "value";
 
 	/**
-	 * Async function to fetch and transform data
-	 * Receives the Questpie client and returns widget display data
+	 * Async function to fetch and transform data.
+	 * Receives the Questpie client and returns widget display data.
+	 * Optional when hasFetchFn is true (server provides the data).
 	 */
-	fetchFn: (client: any) => Promise<ValueWidgetResult>;
+	fetchFn?: (client: any) => Promise<ValueWidgetResult>;
 
 	/**
 	 * Refresh interval in milliseconds
@@ -475,8 +483,8 @@ export interface TimelineItem {
  */
 export interface TimelineWidgetConfig extends BaseWidgetConfig {
 	type: "timeline";
-	/** Async function to fetch timeline items */
-	fetchFn: (client: any) => Promise<TimelineItem[]>;
+	/** Async function to fetch timeline items. Optional when hasFetchFn is true. */
+	fetchFn?: (client: any) => Promise<TimelineItem[]>;
 	/** Max items to show */
 	maxItems?: number;
 	/** Show timestamps */
@@ -510,8 +518,8 @@ export interface TimelineWidgetConfig extends BaseWidgetConfig {
  */
 export interface ProgressWidgetConfig extends BaseWidgetConfig {
 	type: "progress";
-	/** Async function to fetch progress data */
-	fetchFn: (client: any) => Promise<{
+	/** Async function to fetch progress data. Optional when hasFetchFn is true. */
+	fetchFn?: (client: any) => Promise<{
 		current: number;
 		target: number;
 		label?: string;

@@ -13,6 +13,7 @@ import type {
 	DateFilterPreset,
 } from "../../builder/types/widget-types";
 import { useCollectionCount } from "../../hooks/use-collection";
+import { useServerWidgetData } from "../../hooks/use-server-widget-data";
 import { useResolveText } from "../../i18n/hooks";
 import { cn, formatCollectionName } from "../../lib/utils";
 import { WidgetCard } from "../../views/dashboard/widget-card";
@@ -22,6 +23,7 @@ import { StatsWidgetSkeleton } from "./widget-skeletons";
  * Stats widget config (local type for component props)
  */
 export type StatsWidgetConfig = {
+	id: string;
 	collection: string;
 	label?: string;
 	realtime?: boolean;
@@ -38,6 +40,10 @@ export type StatsWidgetConfig = {
 		| string;
 	/** Color variant for the stat card */
 	variant?: "default" | "primary" | "success" | "warning" | "danger";
+	/** Server has a fetchFn for this widget */
+	hasFetchFn?: boolean;
+	/** Refresh interval in ms */
+	refreshInterval?: number;
 };
 
 /**
@@ -171,7 +177,15 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 		icon: Icon,
 		variant = "default",
 		realtime,
+		hasFetchFn,
+		refreshInterval,
 	} = config;
+
+	// Server-side data fetching (when hasFetchFn is true)
+	const serverQuery = useServerWidgetData<{ count: number }>(config.id, {
+		enabled: !!hasFetchFn,
+		refreshInterval,
+	});
 
 	// Build the final filter - evaluated at render time
 	const computedFilter = useMemo(() => {
@@ -200,17 +214,24 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 	}, [filter, filterFn, dateFilter]);
 
 	// Fetch count using dedicated count endpoint (more efficient than fetching all docs)
-	const {
-		data: count = 0,
-		isLoading,
-		error,
-		refetch,
-	} = useCollectionCount(
+	const collectionQuery = useCollectionCount(
 		collection as any,
 		computedFilter ? { where: computedFilter } : undefined,
 		undefined,
 		{ realtime },
 	);
+
+	// Use server data or client data
+	const {
+		data: rawData,
+		isLoading,
+		error,
+		refetch,
+	} = hasFetchFn ? serverQuery : collectionQuery;
+
+	const count = hasFetchFn
+		? (rawData as { count: number } | undefined)?.count ?? 0
+		: (rawData as number | undefined) ?? 0;
 
 	const displayLabel = label
 		? resolveText(label)

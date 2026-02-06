@@ -258,6 +258,26 @@ export interface AdminGlobalConfig {
 // ============================================================================
 
 /**
+ * Context available to widget fetchFn and access functions on the server.
+ */
+export type WidgetFetchContext = {
+	cms: any;
+	db: any;
+	session?: any;
+	locale?: string;
+};
+
+/**
+ * Per-widget access rule. Can be a boolean or async function.
+ * - `true` or `undefined`: always visible
+ * - `false`: always hidden
+ * - function: evaluated at request time
+ */
+export type WidgetAccessRule =
+	| boolean
+	| ((ctx: WidgetFetchContext) => boolean | Promise<boolean>);
+
+/**
  * Server-side dashboard widget configuration.
  * These are serializable and can be sent via introspection API.
  */
@@ -266,7 +286,11 @@ export type ServerDashboardWidget =
 	| ServerChartWidget
 	| ServerRecentItemsWidget
 	| ServerQuickActionsWidget
-	| ServerCustomWidget;
+	| ServerCustomWidget
+	| ServerValueWidget
+	| ServerTableWidget
+	| ServerTimelineWidget
+	| ServerProgressWidget;
 
 /**
  * Stats widget - shows count from a collection
@@ -285,6 +309,10 @@ export interface ServerStatsWidget {
 	filter?: Record<string, unknown>;
 	/** Grid span (1-4) */
 	span?: number;
+	/** Optional server-side data fetcher (overrides collection count) */
+	fetchFn?: (ctx: WidgetFetchContext) => Promise<{ count: number }>;
+	/** Per-widget access rule */
+	access?: WidgetAccessRule;
 }
 
 /**
@@ -308,6 +336,12 @@ export interface ServerChartWidget {
 	filter?: Record<string, unknown>;
 	/** Grid span (1-4) */
 	span?: number;
+	/** Optional server-side data fetcher (overrides collection query) */
+	fetchFn?: (
+		ctx: WidgetFetchContext,
+	) => Promise<Array<{ name: string; value: number }>>;
+	/** Per-widget access rule */
+	access?: WidgetAccessRule;
 }
 
 /**
@@ -329,6 +363,10 @@ export interface ServerRecentItemsWidget {
 	filter?: Record<string, unknown>;
 	/** Grid span (1-4) */
 	span?: number;
+	/** Optional server-side data fetcher */
+	fetchFn?: (ctx: WidgetFetchContext) => Promise<unknown>;
+	/** Per-widget access rule */
+	access?: WidgetAccessRule;
 }
 
 /**
@@ -344,6 +382,8 @@ export interface ServerQuickActionsWidget {
 	actions: ServerQuickAction[];
 	/** Grid span (1-4) */
 	span?: number;
+	/** Per-widget access rule */
+	access?: WidgetAccessRule;
 }
 
 /**
@@ -376,6 +416,130 @@ export interface ServerCustomWidget {
 	props?: Record<string, unknown>;
 	/** Grid span (1-4) */
 	span?: number;
+	/** Optional server-side data fetcher */
+	fetchFn?: (ctx: WidgetFetchContext) => Promise<unknown>;
+	/** Per-widget access rule */
+	access?: WidgetAccessRule;
+}
+
+/**
+ * Value widget - displays a single metric with optional trend
+ */
+export interface ServerValueWidget {
+	type: "value";
+	/** Unique widget ID */
+	id: string;
+	/** Widget label */
+	label?: I18nText;
+	/** Icon reference */
+	icon?: ComponentReference<"icon">;
+	/** Grid span (1-4) */
+	span?: number;
+	/** Server-side data fetcher (required) */
+	fetchFn: (ctx: WidgetFetchContext) => Promise<{
+		value: number | string;
+		formatted?: string;
+		label?: I18nText | string;
+		subtitle?: I18nText | string;
+		footer?: I18nText | string;
+		icon?: ComponentReference;
+		trend?: { value: string; icon?: ComponentReference };
+		classNames?: Record<string, string>;
+	}>;
+	/** Per-widget access rule */
+	access?: WidgetAccessRule;
+}
+
+/**
+ * Table widget - displays a mini table from a collection
+ */
+export interface ServerTableWidget {
+	type: "table";
+	/** Unique widget ID */
+	id: string;
+	/** Widget label */
+	label?: I18nText;
+	/** Collection to fetch from */
+	collection: string;
+	/** Columns to display */
+	columns: Array<string | { key: string; label?: I18nText }>;
+	/** Number of rows */
+	limit?: number;
+	/** Sort field */
+	sortBy?: string;
+	/** Sort direction */
+	sortOrder?: "asc" | "desc";
+	/** Filter */
+	filter?: Record<string, unknown>;
+	/** Grid span (1-4) */
+	span?: number;
+	/** Optional server-side data fetcher */
+	fetchFn?: (ctx: WidgetFetchContext) => Promise<unknown>;
+	/** Per-widget access rule */
+	access?: WidgetAccessRule;
+}
+
+/**
+ * Timeline widget - displays activity/event timeline
+ */
+export interface ServerTimelineWidget {
+	type: "timeline";
+	/** Unique widget ID */
+	id: string;
+	/** Widget label */
+	label?: I18nText;
+	/** Max items to show */
+	maxItems?: number;
+	/** Show timestamps */
+	showTimestamps?: boolean;
+	/** Timestamp format */
+	timestampFormat?: "relative" | "absolute" | "datetime";
+	/** Empty state message */
+	emptyMessage?: I18nText;
+	/** Grid span (1-4) */
+	span?: number;
+	/** Server-side data fetcher (required) */
+	fetchFn: (
+		ctx: WidgetFetchContext,
+	) => Promise<
+		Array<{
+			id: string;
+			title: string;
+			description?: string;
+			timestamp: Date | string;
+			icon?: ComponentReference;
+			variant?: "default" | "success" | "warning" | "error" | "info";
+			href?: string;
+		}>
+	>;
+	/** Per-widget access rule */
+	access?: WidgetAccessRule;
+}
+
+/**
+ * Progress widget - displays progress towards a goal
+ */
+export interface ServerProgressWidget {
+	type: "progress";
+	/** Unique widget ID */
+	id: string;
+	/** Widget label */
+	label?: I18nText;
+	/** Progress bar color */
+	color?: string;
+	/** Show percentage */
+	showPercentage?: boolean;
+	/** Grid span (1-4) */
+	span?: number;
+	/** Server-side data fetcher (required) */
+	fetchFn: (ctx: WidgetFetchContext) => Promise<{
+		current: number;
+		target: number;
+		label?: string;
+		subtitle?: string;
+	}>;
+	/** Per-widget access rule */
+	access?: WidgetAccessRule;
 }
 
 /**
@@ -873,6 +1037,18 @@ export interface DashboardConfigContext {
 		) => ServerQuickActionsWidget;
 		/** Create a custom widget */
 		custom: (config: Omit<ServerCustomWidget, "type">) => ServerCustomWidget;
+		/** Create a value widget */
+		value: (config: Omit<ServerValueWidget, "type">) => ServerValueWidget;
+		/** Create a table widget */
+		table: (config: Omit<ServerTableWidget, "type">) => ServerTableWidget;
+		/** Create a timeline widget */
+		timeline: (
+			config: Omit<ServerTimelineWidget, "type">,
+		) => ServerTimelineWidget;
+		/** Create a progress widget */
+		progress: (
+			config: Omit<ServerProgressWidget, "type">,
+		) => ServerProgressWidget;
 	};
 	/** Component helpers */
 	c: {

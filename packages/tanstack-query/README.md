@@ -30,7 +30,7 @@ const cmsClient = createClient<AppCMS, AppRpc>({
   basePath: "/api/cms",
 });
 
-export const q = createQuestpieQueryOptions(cmsClient, {
+export const cmsQueries = createQuestpieQueryOptions(cmsClient, {
   keyPrefix: ["cms"], // Optional: prefix for all query keys
 });
 ```
@@ -39,17 +39,17 @@ export const q = createQuestpieQueryOptions(cmsClient, {
 
 ```typescript
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { q } from "@/lib/queries"
+import { cmsQueries } from "@/lib/queries"
 
 function PostsList() {
   // Queries
-  const { data: posts } = useQuery(q.collections.posts.find({ limit: 10 }))
+  const { data: posts } = useQuery(cmsQueries.collections.posts.find({ limit: 10 }))
 
   // Mutations
   const queryClient = useQueryClient()
 
   const createPost = useMutation({
-    ...q.collections.posts.create(),
+    ...cmsQueries.collections.posts.create(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cms", "collections", "posts"] })
     },
@@ -74,7 +74,7 @@ function PostsList() {
 
 ```typescript
 // Find many
-q.collections.posts.find({
+cmsQueries.collections.posts.find({
   where: { published: { eq: true } },
   orderBy: { createdAt: "desc" },
   limit: 10,
@@ -83,25 +83,25 @@ q.collections.posts.find({
 });
 
 // Find one
-q.collections.posts.findOne({
+cmsQueries.collections.posts.findOne({
   where: { id: "post-id" },
   with: { author: true, comments: true },
 });
 
 // Create
-q.collections.posts.create();
+cmsQueries.collections.posts.create();
 // Usage: mutation.mutate({ title: "...", content: "..." })
 
 // Update
-q.collections.posts.update();
+cmsQueries.collections.posts.update();
 // Usage: mutation.mutate({ id: "...", data: { title: "..." } })
 
 // Delete
-q.collections.posts.delete();
+cmsQueries.collections.posts.delete();
 // Usage: mutation.mutate({ id: "..." })
 
 // Restore (soft delete)
-q.collections.posts.restore();
+cmsQueries.collections.posts.restore();
 // Usage: mutation.mutate({ id: "..." })
 ```
 
@@ -109,17 +109,17 @@ q.collections.posts.restore();
 
 ```typescript
 // Get
-q.globals.siteSettings.get();
+cmsQueries.globals.siteSettings.get();
 
 // Update
-q.globals.siteSettings.update();
+cmsQueries.globals.siteSettings.update();
 // Usage: mutation.mutate({ data: { siteName: "..." } })
 ```
 
 ### Custom Queries
 
 ```typescript
-const searchQuery = q.custom.query({
+const searchQuery = cmsQueries.custom.query({
   key: ["search", query],
   queryFn: () => fetch(`/api/search?q=${query}`).then((r) => r.json()),
 });
@@ -131,15 +131,15 @@ useQuery(searchQuery);
 
 ```typescript
 // Query options from RPC procedure
-const statsQuery = q.rpc.dashboard.getStats.query({ period: "week" });
+const statsQuery = cmsQueries.rpc.dashboard.getStats.query({ period: "week" });
 
 // Mutation options from RPC procedure
-const publishPost = useMutation(q.rpc.posts.publish.mutation());
+const publishPost = useMutation(cmsQueries.rpc.posts.publish.mutation());
 publishPost.mutate({ id: "post_123" });
 
 // Stable key helper for invalidation/prefetch
 queryClient.invalidateQueries({
-  queryKey: q.rpc.dashboard.getStats.key({ period: "week" }),
+  queryKey: cmsQueries.rpc.dashboard.getStats.key({ period: "week" }),
 });
 ```
 
@@ -151,12 +151,12 @@ queryClient.invalidateQueries({
 // src/routes/posts.tsx
 import { createFileRoute } from "@tanstack/react-router"
 import { useSuspenseQuery } from "@tanstack/react-query"
-import { q } from "@/lib/queries"
+import { cmsQueries } from "@/lib/queries"
 
 export const Route = createFileRoute("/posts")({
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(
-      q.collections.posts.find({ limit: 10 })
+      cmsQueries.collections.posts.find({ limit: 10 })
     )
   },
   component: PostsPage,
@@ -164,7 +164,7 @@ export const Route = createFileRoute("/posts")({
 
 function PostsPage() {
   const { data: posts } = useSuspenseQuery(
-    q.collections.posts.find({ limit: 10 })
+    cmsQueries.collections.posts.find({ limit: 10 })
   )
 
   return (
@@ -183,14 +183,14 @@ function PostsPage() {
 // app/posts/page.tsx
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query"
 import { getQueryClient } from "@/lib/query-client"
-import { q } from "@/lib/queries"
+import { cmsQueries } from "@/lib/queries"
 import { PostsList } from "./posts-list"
 
 export default async function PostsPage() {
   const queryClient = getQueryClient()
 
   await queryClient.prefetchQuery(
-    q.collections.posts.find({ limit: 10 })
+    cmsQueries.collections.posts.find({ limit: 10 })
   )
 
   return (
@@ -207,7 +207,7 @@ export default async function PostsPage() {
 const queryClient = useQueryClient();
 
 const updatePost = useMutation({
-  ...q.collections.posts.update(),
+  ...cmsQueries.collections.posts.update(),
   onMutate: async ({ id, data }) => {
     await queryClient.cancelQueries({
       queryKey: ["cms", "collections", "posts"],
@@ -288,6 +288,10 @@ All query keys follow this structure:
 // Globals
 [...keyPrefix, "globals", globalName, "get", options]
 
+// RPC
+[...keyPrefix, "rpc", ...segments, "query", input]
+[...keyPrefix, "rpc", ...segments, "mutation"]
+
 // Custom
 [...keyPrefix, ...customKey]
 ```
@@ -298,13 +302,22 @@ Full type inference from your CMS schema:
 
 ```typescript
 import type { CollectionSelect } from "questpie";
-import type { AppCMS } from "@/cms";
+import type { AppCMS, AppRpc } from "@/cms";
+import { createClient } from "questpie/client";
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
+
+const cmsClient = createClient<AppCMS, AppRpc>({
+  baseURL: "http://localhost:3000",
+  basePath: "/api/cms",
+});
+
+const cmsQueries = createQuestpieQueryOptions(cmsClient);
 
 // Collection item type
 type Post = CollectionSelect<AppCMS["config"]["collections"]["posts"]>;
 
 // Query result types are automatically inferred
-const { data } = useQuery(q.collections.posts.find({ limit: 10 }));
+const { data } = useQuery(cmsQueries.collections.posts.find({ limit: 10 }));
 //    ^? { docs: Post[], totalDocs: number, ... }
 ```
 

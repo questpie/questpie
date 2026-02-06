@@ -292,15 +292,19 @@ const wrapMutationFn = <TVariables, TData>(
  * ```ts
  * import { createQuestpieQueryOptions } from "@questpie/tanstack-query"
  * import { createClient } from "questpie/client"
+ * import type { AppCMS, AppRpc } from "@/cms"
  *
- * const client = createClient<typeof cms>({ baseURL: "http://localhost:3000" })
- * const qpo = createQuestpieQueryOptions(client)
+ * const client = createClient<AppCMS, AppRpc>({ baseURL: "http://localhost:3000" })
+ * const cmsQueries = createQuestpieQueryOptions(client)
  *
  * // Use with useQuery
- * const { data } = useQuery(qpo.collections.posts.find({ limit: 10 }))
+ * const { data } = useQuery(cmsQueries.collections.posts.find({ limit: 10 }))
  *
  * // Use with useMutation
- * const mutation = useMutation(qpo.collections.posts.create())
+ * const mutation = useMutation(cmsQueries.collections.posts.create())
+ *
+ * // Use with RPC
+ * const stats = useQuery(cmsQueries.rpc.dashboard.getStats.query({ period: "week" }))
  * ```
  */
 export function createQuestpieQueryOptions<

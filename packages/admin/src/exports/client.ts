@@ -255,6 +255,8 @@ export {
 	type SetupStatus,
 	useSetupStatus,
 } from "#questpie/admin/client/hooks/use-setup-status.js";
+// Server widget data hook
+export { useServerWidgetData } from "#questpie/admin/client/hooks/use-server-widget-data.js";
 
 // ============================================================================
 // UTILITIES

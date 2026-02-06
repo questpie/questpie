@@ -7,6 +7,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { ProgressWidgetConfig } from "../../builder/types/widget-types";
+import { useServerWidgetData } from "../../hooks/use-server-widget-data";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime";
@@ -47,16 +48,26 @@ export default function ProgressWidget({ config }: ProgressWidgetProps) {
 	const resolveText = useResolveText();
 	const { color, showPercentage = true } = config;
 
-	const { data, isLoading, error, refetch } = useQuery<{
+	type ProgressData = {
 		current: number;
 		target: number;
 		label?: string;
 		subtitle?: string;
-	}>({
+	};
+	const useServerData = !!config.hasFetchFn;
+	const serverQuery = useServerWidgetData<ProgressData>(config.id, {
+		enabled: useServerData,
+		refreshInterval: config.refreshInterval,
+	});
+	const clientQuery = useQuery<ProgressData>({
 		queryKey: ["widget", "progress", config.id],
-		queryFn: () => config.fetchFn(client),
+		queryFn: () => config.fetchFn!(client),
+		enabled: !useServerData && !!config.fetchFn,
 		refetchInterval: config.refreshInterval,
 	});
+	const { data, isLoading, error, refetch } = useServerData
+		? serverQuery
+		: clientQuery;
 
 	const title = config.title ? resolveText(config.title) : undefined;
 

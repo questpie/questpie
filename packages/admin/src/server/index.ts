@@ -78,7 +78,13 @@ export type {
 	ServerSidebarPageItem,
 	ServerSidebarSection,
 	ServerStatsWidget,
+	ServerValueWidget,
+	ServerTableWidget,
+	ServerTimelineWidget,
+	ServerProgressWidget,
 	SidebarConfigContext,
+	WidgetAccessRule,
+	WidgetFetchContext,
 	WithAdminMethods,
 	WithCollectionAdminMethods,
 	WithGlobalAdminMethods,
@@ -157,6 +163,8 @@ export {
 	setupFunctions,
 	type ViewConfiguration,
 	verifyPreviewTokenDirect,
+	widgetDataFunctions,
+	fetchWidgetData,
 } from "./modules/admin/index.js";
 // Runtime patching (applied automatically when this module is imported)
 export {

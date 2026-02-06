@@ -13,6 +13,7 @@ import type {
 	TimelineWidgetConfig,
 } from "../../builder/types/widget-types";
 import { resolveIconElement } from "../../components/component-renderer";
+import { useServerWidgetData } from "../../hooks/use-server-widget-data";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime";
@@ -113,11 +114,20 @@ export default function TimelineWidget({
 		emptyMessage,
 	} = config;
 
-	const { data, isLoading, error, refetch } = useQuery<TimelineItem[]>({
+	const useServerData = !!config.hasFetchFn;
+	const serverQuery = useServerWidgetData<TimelineItem[]>(config.id, {
+		enabled: useServerData,
+		refreshInterval: config.refreshInterval,
+	});
+	const clientQuery = useQuery<TimelineItem[]>({
 		queryKey: ["widget", "timeline", config.id],
-		queryFn: () => config.fetchFn(client),
+		queryFn: () => config.fetchFn!(client),
+		enabled: !useServerData && !!config.fetchFn,
 		refetchInterval: config.refreshInterval,
 	});
+	const { data, isLoading, error, refetch } = useServerData
+		? serverQuery
+		: clientQuery;
 
 	const items = data?.slice(0, maxItems) ?? [];
 	const title = config.title ? resolveText(config.title) : undefined;

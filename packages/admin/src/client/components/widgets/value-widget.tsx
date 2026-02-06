@@ -11,6 +11,7 @@ import type {
 	ValueWidgetResult,
 } from "../../builder/types/widget-types";
 import { resolveIconElement } from "../../components/component-renderer";
+import { useServerWidgetData } from "../../hooks/use-server-widget-data";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime";
@@ -58,12 +59,20 @@ export default function ValueWidget({ config }: ValueWidgetProps) {
 	const client = useAdminStore(selectClient);
 	const resolveText = useResolveText();
 
-	const { data, isLoading, error, refetch, isFetching } =
-		useQuery<ValueWidgetResult>({
-			queryKey: ["widget", "value", config.id],
-			queryFn: () => config.fetchFn(client),
-			refetchInterval: config.refreshInterval,
-		});
+	const useServerData = !!config.hasFetchFn;
+	const serverQuery = useServerWidgetData<ValueWidgetResult>(config.id, {
+		enabled: useServerData,
+		refreshInterval: config.refreshInterval,
+	});
+	const clientQuery = useQuery<ValueWidgetResult>({
+		queryKey: ["widget", "value", config.id],
+		queryFn: () => config.fetchFn!(client),
+		enabled: !useServerData && !!config.fetchFn,
+		refetchInterval: config.refreshInterval,
+	});
+	const { data, isLoading, error, refetch, isFetching } = useServerData
+		? serverQuery
+		: clientQuery;
 
 	// Determine if this is a featured variant based on config
 	const isFeatured = config.cardVariant === "featured";

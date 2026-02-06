@@ -263,85 +263,121 @@ function filterSidebarConfig(
 }
 
 // ============================================================================
-// Dashboard Filtering
+// Dashboard Processing (access + serialization + ID assignment)
 // ============================================================================
 
 /**
- * Filter dashboard config to remove widgets referencing inaccessible collections.
- * Recursively handles sections and tabs.
+ * Auto-assign IDs to widgets that don't have one.
+ * Needed for fetchWidgetData lookup by widget ID.
  */
-function filterDashboardConfig(
-	config: ServerDashboardConfig,
-	accessibleCollections: Set<string>,
-): ServerDashboardConfig {
-	if (!config.items) return config;
-	return {
-		...config,
-		items: filterDashboardItems(config.items, accessibleCollections),
-	};
+function assignWidgetIds(items: ServerDashboardItem[]): void {
+	let counter = 0;
+	function walk(items: ServerDashboardItem[]) {
+		for (const item of items) {
+			if (item.type === "section") {
+				walk((item as any).items || []);
+			} else if (item.type === "tabs") {
+				for (const tab of (item as any).tabs || []) {
+					walk(tab.items || []);
+				}
+			} else {
+				// Widget — assign ID if missing
+				if (!(item as any).id) {
+					(item as any).id = `__auto_${item.type}_${counter++}`;
+				}
+			}
+		}
+	}
+	walk(items);
 }
 
 /**
- * Filter a list of dashboard items recursively.
+ * Process dashboard items: evaluate access, strip non-serializable props,
+ * mark hasFetchFn, and filter by collection access.
  */
-function filterDashboardItems(
+async function processDashboardItems(
 	items: ServerDashboardItem[],
 	accessibleCollections: Set<string>,
-): ServerDashboardItem[] {
-	return items
-		.filter((item) => {
-			// Filter out collection-bound widgets for inaccessible collections
-			if (
-				item.type === "stats" ||
-				item.type === "chart" ||
-				item.type === "recentItems"
-			) {
-				return accessibleCollections.has((item as any).collection);
+	accessCtx: { app: unknown; session?: any; db: any; locale?: string },
+): Promise<ServerDashboardItem[]> {
+	const result: ServerDashboardItem[] = [];
+
+	for (const item of items) {
+		// Recurse into sections
+		if (item.type === "section") {
+			const filtered = await processDashboardItems(
+				(item as any).items || [],
+				accessibleCollections,
+				accessCtx,
+			);
+			if (filtered.length > 0) {
+				result.push({ ...item, items: filtered } as any);
 			}
-			// quickActions: filter individual actions that reference collections
-			if (item.type === "quickActions") {
-				return true; // handled below by filtering actions
-			}
-			return true;
-		})
-		.map((item) => {
-			// Recurse into sections
-			if (item.type === "section") {
-				const filtered = filterDashboardItems(
-					(item as any).items || [],
+			continue;
+		}
+
+		// Recurse into tabs
+		if (item.type === "tabs") {
+			const tabs = [];
+			for (const tab of (item as any).tabs || []) {
+				const filtered = await processDashboardItems(
+					tab.items || [],
 					accessibleCollections,
+					accessCtx,
 				);
-				return { ...item, items: filtered };
+				tabs.push({ ...tab, items: filtered });
 			}
-			// Recurse into tabs
-			if (item.type === "tabs") {
-				const tabs = ((item as any).tabs || []).map(
-					(tab: any) => ({
-						...tab,
-						items: filterDashboardItems(
-							tab.items || [],
-							accessibleCollections,
-						),
-					}),
-				);
-				return { ...item, tabs };
-			}
-			// Filter quickActions' individual actions
-			if (item.type === "quickActions") {
-				const actions = ((item as any).actions || []).filter(
-					(action: any) => {
-						if (action.action?.type === "create") {
-							return accessibleCollections.has(
-								action.action.collection,
-							);
-						}
-						return true;
-					},
-				);
-				return { ...item, actions };
-			}
-			return item;
-		});
+			result.push({ ...item, tabs } as any);
+			continue;
+		}
+
+		// Widget processing
+		const widget = item as any;
+
+		// 1. Check per-widget access
+		if (widget.access !== undefined) {
+			const widgetAccessResult =
+				typeof widget.access === "function"
+					? await widget.access({
+							cms: accessCtx.app,
+							db: accessCtx.db,
+							session: accessCtx.session,
+							locale: accessCtx.locale,
+						})
+					: widget.access;
+			if (widgetAccessResult === false) continue;
+		}
+
+		// 2. Check collection access for collection-bound widgets
+		if (
+			widget.collection &&
+			!accessibleCollections.has(widget.collection)
+		) {
+			continue;
+		}
+
+		// 3. Filter quickActions' individual actions by collection access
+		if (widget.type === "quickActions") {
+			const actions = (widget.actions || []).filter((action: any) => {
+				if (action.action?.type === "create") {
+					return accessibleCollections.has(action.action.collection);
+				}
+				return true;
+			});
+			const { fetchFn, access, ...serializable } = widget;
+			result.push({ ...serializable, actions } as any);
+			continue;
+		}
+
+		// 4. Strip non-serializable props, mark hasFetchFn
+		const { fetchFn, access, filterFn, ...serializable } = widget;
+		if (fetchFn) {
+			serializable.hasFetchFn = true;
+		}
+		result.push(serializable);
+	}
+
+	return result;
 }
 
 // ============================================================================
@@ -452,12 +488,22 @@ export const getAdminConfig = fn({
 			globals?: Record<string, unknown>;
 		} = {};
 
-		// 3. Dashboard: filter by accessible collections
+		// 3. Dashboard: assign IDs, process access, strip non-serializable
 		if (state.dashboard) {
-			response.dashboard = filterDashboardConfig(
-				state.dashboard,
-				accessibleCollections,
-			);
+			const dashboard = state.dashboard as ServerDashboardConfig;
+			if (dashboard.items) {
+				assignWidgetIds(dashboard.items);
+			}
+			response.dashboard = {
+				...dashboard,
+				items: dashboard.items
+					? await processDashboardItems(
+							dashboard.items,
+							accessibleCollections,
+							accessCtx,
+						)
+					: undefined,
+			};
 		}
 
 		// 4. Sidebar: explicit → filter; auto → build from filtered meta

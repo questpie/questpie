@@ -474,6 +474,10 @@ function patchQuestpieBuilder() {
 					...config,
 				}),
 				custom: (config) => ({ type: "custom" as const, ...config }),
+				value: (config) => ({ type: "value" as const, ...config }),
+				table: (config) => ({ type: "table" as const, ...config }),
+				timeline: (config) => ({ type: "timeline" as const, ...config }),
+				progress: (config) => ({ type: "progress" as const, ...config }),
 			},
 			c: {
 				icon: (name: string) => ({ type: "icon" as const, props: { name } }),

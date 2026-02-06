@@ -28,6 +28,7 @@ import type {
 	ValueType,
 } from "recharts/types/component/DefaultTooltipContent";
 import { useCollectionList } from "../../hooks/use-collection";
+import { useServerWidgetData } from "../../hooks/use-server-widget-data";
 import { useResolveText } from "../../i18n/hooks";
 import { formatCollectionName } from "../../lib/utils";
 import { WidgetCard } from "../../views/dashboard/widget-card";
@@ -37,6 +38,7 @@ import { ChartWidgetSkeleton } from "./widget-skeletons";
  * Chart widget config (local type for component props)
  */
 export type ChartWidgetConfig = {
+	id: string;
 	collection: string;
 	/** Field to aggregate by (e.g., "createdAt" for time series, "status" for categories) */
 	field: string;
@@ -52,6 +54,10 @@ export type ChartWidgetConfig = {
 	aggregation?: "count" | "sum" | "average";
 	/** Value field for sum/average aggregation */
 	valueField?: string;
+	/** Server has a fetchFn for this widget */
+	hasFetchFn?: boolean;
+	/** Refresh interval in ms */
+	refreshInterval?: number;
 };
 
 /**
@@ -113,10 +119,19 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 		color = "var(--color-chart-1)",
 		showGrid = true,
 		realtime,
+		hasFetchFn,
+		refreshInterval,
 	} = config;
 
+	// Server-side data fetching (when hasFetchFn is true)
+	type ChartDataPoint = { name: string; value: number };
+	const serverQuery = useServerWidgetData<ChartDataPoint[]>(config.id, {
+		enabled: !!hasFetchFn,
+		refreshInterval,
+	});
+
 	// Fetch collection data (limited to 1000 items for performance)
-	const { data, isLoading, error, refetch } = useCollectionList(
+	const collectionQuery = useCollectionList(
 		collection as any,
 		{
 			limit: 1000,
@@ -125,18 +140,31 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 		{ realtime },
 	);
 
+	const { isLoading, error, refetch } = hasFetchFn
+		? serverQuery
+		: collectionQuery;
+
 	// API returns PaginatedResult with { docs, totalDocs, ... }
-	const items = Array.isArray(data?.docs) ? data.docs : [];
+	const collectionItems = hasFetchFn
+		? []
+		: Array.isArray((collectionQuery.data as any)?.docs)
+			? (collectionQuery.data as any).docs
+			: [];
 	const displayLabel = label
 		? resolveText(label)
 		: `${formatCollectionName(collection)} by ${field}`;
 
 	// Process data for chart
 	const chartData = React.useMemo(() => {
-		if (!items.length) return [];
+		// When using server data, it's already in the right format
+		if (hasFetchFn) {
+			return (serverQuery.data as ChartDataPoint[] | undefined) ?? [];
+		}
+
+		if (!collectionItems.length) return [];
 
 		// Group by field value
-		const grouped = items.reduce(
+		const grouped = collectionItems.reduce(
 			(acc: Record<string, number>, item: any) => {
 				const value = item[field];
 				if (value === undefined || value === null) return acc;
@@ -160,7 +188,7 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 		return Object.entries(grouped)
 			.map(([name, value]) => ({ name, value: value as number }))
 			.sort((a, b) => a.name.localeCompare(b.name));
-	}, [items, field, timeRange]);
+	}, [hasFetchFn, serverQuery.data, collectionItems, field, timeRange]);
 
 	// Empty state content
 	const emptyContent = (
