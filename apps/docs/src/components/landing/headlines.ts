@@ -5,8 +5,8 @@ export type Headline = {
 
 export const headlines: Headline[] = [
 	{
-		top: "The CMS You'd Build",
-		highlight: "If You Had Time",
+		top: "Stop Building Admin Panels.",
+		highlight: "Start Shipping Products.",
 	},
 ];
 

@@ -138,14 +138,12 @@ export const builder = qa<AppCMS>().use(adminModule);
 
 ```typescript
 // admin/collections/barbers.ts
-import { UsersIcon } from "@phosphor-icons/react";
 import { builder } from "../builder";
 
 export const barbersAdmin = builder
   .collection("barbers")
   .meta({
     label: { en: "Barbers", sk: "Holici" },
-    icon: UsersIcon,
   })
   .fields(({ r }) => ({
     name: r.text({

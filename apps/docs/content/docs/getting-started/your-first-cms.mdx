@@ -134,69 +134,45 @@ export const cms = q({ name: "blog-cms" })
 export type AppCMS = typeof cms;
 ```
 
-## Step 2: Create the Admin UI
+## Step 2: Add Admin Configuration (Server-Side)
 
-### Create the Builder
-
-```typescript
-// src/questpie/admin/builder.ts
-import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
-
-export const builder = qa<AppCMS>().use(adminModule);
-```
-
-### Define Collection UIs
+Admin UI configuration lives on the **server** alongside your collection definitions. Add `.admin()`, `.list()`, and `.form()` to each collection:
 
 ```typescript
-// src/questpie/admin/collections/posts.ts
-import { FileTextIcon } from "@phosphor-icons/react";
-import { builder } from "../builder";
+// src/questpie/server/collections/posts.ts (updated)
+import { q, text, boolean, datetime, integer } from "questpie";
 
-export const postsAdmin = builder
-  .collection("posts")
-  .meta({
-    label: "Posts",
-    icon: FileTextIcon,
+export const posts = q.collection("posts")
+  .fields({
+    title: text("title").notNull(),
+    slug: text("slug").notNull().unique(),
+    excerpt: text("excerpt"),
+    content: text("content"),
+    published: boolean("published").default(false),
+    publishedAt: datetime("publishedAt"),
+    authorId: text("authorId"),
+    categoryId: text("categoryId"),
+    viewCount: integer("viewCount").default(0),
   })
-  .fields(({ r }) => ({
-    title: r.text({
-      label: "Title",
-      required: true,
-      maxLength: 200,
-    }),
-    slug: r.text({
-      label: "Slug",
-      description: "URL-friendly identifier",
-    }),
-    excerpt: r.textarea({
-      label: "Excerpt",
-      rows: 3,
-      maxLength: 500,
-    }),
-    content: r.richText({
-      label: "Content",
-    }),
-    author: r.relation({
-      label: "Author",
-      targetCollection: "authors",
-    }),
-    category: r.relation({
-      label: "Category",
-      targetCollection: "categories",
-    }),
-    published: r.switch({
-      label: "Published",
-    }),
-    publishedAt: r.datetime({
-      label: "Publish Date",
-      visible: (values) => values.published,
-    }),
+  .relations(({ one }) => ({
+    author: one("authors", { fields: ["authorId"], references: ["id"] }),
+    category: one("categories", { fields: ["categoryId"], references: ["id"] }),
+  }))
+  .validation(({ z }) => ({
+    title: z.string().min(1).max(200),
+    slug: z.string().regex(/^[a-z0-9-]+$/),
+  }))
+  // Admin UI configuration
+  .admin(({ c }) => ({
+    label: "Posts",
+    icon: c.icon("ph:article"),
+    description: "Blog posts and articles",
   }))
   .list(({ v, f }) => v.table({
     columns: [f.title, f.author, f.category, f.published, f.publishedAt],
     defaultSort: { field: "publishedAt", direction: "desc" },
-    filters: [f.published, f.category, f.author],
+    filterable: [f.published, f.category, f.author],
+    searchable: ["title"],
   }))
   .form(({ v, f }) => v.form({
     sidebar: {
@@ -205,7 +181,7 @@ export const postsAdmin = builder
     },
     sections: [
       {
-        title: "Content",
+        label: "Content",
         fields: [f.title, f.slug, f.excerpt, f.content],
       },
     ],
@@ -213,51 +189,44 @@ export const postsAdmin = builder
 ```
 
 ```typescript
-// src/questpie/admin/collections/authors.ts
-import { UsersIcon } from "@phosphor-icons/react";
-import { builder } from "../builder";
+// src/questpie/server/collections/authors.ts (updated)
+import { q, text, boolean } from "questpie";
 
-export const authorsAdmin = builder
-  .collection("authors")
-  .meta({
-    label: "Authors",
-    icon: UsersIcon,
+export const authors = q.collection("authors")
+  .fields({
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    bio: text("bio"),
+    avatarUrl: text("avatarUrl"),
+    isActive: boolean("isActive").default(true),
   })
-  .fields(({ r }) => ({
-    name: r.text({ label: "Name", required: true }),
-    email: r.email({ label: "Email", required: true }),
-    bio: r.textarea({ label: "Bio", rows: 4 }),
-    avatarUrl: r.text({ label: "Avatar URL" }),
-    isActive: r.switch({ label: "Active" }),
+  .admin(({ c }) => ({
+    label: "Authors",
+    icon: c.icon("ph:users"),
   }))
   .list(({ v, f }) => v.table({
     columns: [f.name, f.email, f.isActive],
   }))
   .form(({ v, f }) => v.form({
-    sidebar: {
-      position: "right",
-      fields: [f.isActive, f.avatarUrl],
-    },
+    sidebar: { position: "right", fields: [f.isActive, f.avatarUrl] },
     fields: [f.name, f.email, f.bio],
   }));
 ```
 
 ```typescript
-// src/questpie/admin/collections/categories.ts
-import { FolderIcon } from "@phosphor-icons/react";
-import { builder } from "../builder";
+// src/questpie/server/collections/categories.ts (updated)
+import { q, text, integer } from "questpie";
 
-export const categoriesAdmin = builder
-  .collection("categories")
-  .meta({
-    label: "Categories",
-    icon: FolderIcon,
+export const categories = q.collection("categories")
+  .fields({
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    description: text("description"),
+    order: integer("order").default(0),
   })
-  .fields(({ r }) => ({
-    name: r.text({ label: "Name", required: true }),
-    slug: r.text({ label: "Slug", required: true }),
-    description: r.textarea({ label: "Description" }),
-    order: r.number({ label: "Sort Order", min: 0 }),
+  .admin(({ c }) => ({
+    label: "Categories",
+    icon: c.icon("ph:folder"),
   }))
   .list(({ v, f }) => v.table({
     columns: [f.name, f.slug, f.order],
@@ -268,69 +237,72 @@ export const categoriesAdmin = builder
   }));
 ```
 
-### Configure Sidebar
+### Configure Sidebar and Dashboard (Server-Side)
 
 ```typescript
-// src/questpie/admin/sidebar.ts
-import { qa } from "@questpie/admin/client";
-import { HouseIcon, FileTextIcon, UsersIcon, FolderIcon } from "@phosphor-icons/react";
-import type { AppCMS } from "../server/cms";
+// src/questpie/server/cms.ts (updated)
+import { q } from "questpie";
+import { adminModule } from "@questpie/admin/server";
+import { posts } from "./collections/posts";
+import { authors } from "./collections/authors";
+import { categories } from "./collections/categories";
 
-export const sidebarConfig = qa
-  .sidebar<AppCMS>()
-  .section("main", (s) =>
-    s.items([
-      { type: "link", label: "Dashboard", href: "/admin", icon: HouseIcon },
-    ])
-  )
-  .section("content", (s) =>
-    s
-      .title("Content")
-      .icon(FileTextIcon)
-      .items([
-        { type: "collection", collection: "posts", icon: FileTextIcon },
-        { type: "collection", collection: "categories", icon: FolderIcon },
-      ])
-  )
-  .section("people", (s) =>
-    s
-      .title("People")
-      .icon(UsersIcon)
-      .items([
-        { type: "collection", collection: "authors", icon: UsersIcon },
-      ])
-  );
+export const cms = q({ name: "blog-cms" })
+  .use(adminModule)
+  .collections({ posts, authors, categories })
+  .auth({
+    emailAndPassword: { enabled: true },
+    secret: process.env.AUTH_SECRET!,
+    baseURL: process.env.APP_URL,
+    basePath: "/api/cms/auth",
+  })
+  .sidebar(({ s, c }) => s.sidebar({
+    sections: [
+      s.section({
+        id: "content",
+        title: "Content",
+        icon: c.icon("ph:files"),
+        items: [
+          { type: "collection", collection: "posts", icon: c.icon("ph:article") },
+          { type: "collection", collection: "categories", icon: c.icon("ph:folder") },
+        ],
+      }),
+      s.section({
+        id: "people",
+        title: "People",
+        icon: c.icon("ph:users"),
+        items: [
+          { type: "collection", collection: "authors", icon: c.icon("ph:users") },
+        ],
+      }),
+    ],
+  }))
+  .dashboard(({ d, c }) => d.dashboard({
+    items: [
+      d.stats({ collection: "posts", label: "Total Posts", icon: c.icon("ph:article") }),
+      d.stats({ collection: "authors", label: "Authors", icon: c.icon("ph:users") }),
+      d.recentItems({ collection: "posts", label: "Recent Posts", limit: 5 }),
+    ],
+  }))
+  .build({
+    db: { url: process.env.DATABASE_URL! },
+  });
+
+export type AppCMS = typeof cms;
 ```
 
-### Build Admin Config
+### Create Client Admin Config
+
+The client-side `qa()` builder only handles rendering and branding:
 
 ```typescript
 // src/questpie/admin/admin.ts
 import { qa, adminModule } from "@questpie/admin/client";
 import type { AppCMS } from "../server/cms";
-import { postsAdmin } from "./collections/posts";
-import { authorsAdmin } from "./collections/authors";
-import { categoriesAdmin } from "./collections/categories";
-import { sidebarConfig } from "./sidebar";
 
 export const admin = qa<AppCMS>()
   .use(adminModule)
-  .branding({
-    name: "My Blog CMS",
-  })
-  .collections({
-    posts: postsAdmin,
-    authors: authorsAdmin,
-    categories: categoriesAdmin,
-  })
-  .sidebar(sidebarConfig);
-
-declare module "@questpie/admin/client" {
-  interface AdminTypeRegistry {
-    cms: AppCMS;
-    admin: typeof admin;
-  }
-}
+  .branding({ name: "My Blog CMS" });
 ```
 
 ## Step 3: Mount the API and Admin

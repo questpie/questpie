@@ -1,112 +1,124 @@
 ---
 title: Dashboard Configuration
-description: Build beautiful dashboards with widgets, charts, and analytics
+description: Build dashboards with widgets, charts, and server-side data fetching
 ---
 
 # Dashboard Configuration
 
-The dashboard builder creates customizable admin dashboards with widgets for stats, charts, tables, and more.
+The dashboard is configured on the **server** using the `.dashboard()` method. It supports 9 widget types, server-side data fetching via `fetchFn`, and per-widget access control.
 
 ## Basic Configuration
 
 ```typescript
-import { qa } from "@questpie/admin/client";
-
-export const dashboard = qa.dashboard({
-  title: { en: "Dashboard", sk: "Prehlad" },
-  description: { en: "Overview and analytics", sk: "Prehlad a analytika" },
-  columns: 4,
-  items: [
-    // Widget items
-  ],
-});
+// src/questpie/server/cms.ts
+const cms = q({ name: "my-cms" })
+  .use(adminModule)
+  .collections({ posts, users })
+  .dashboard(({ d, c }) => d.dashboard({
+    title: { en: "Dashboard", sk: "Prehľad" },
+    columns: 4,
+    items: [
+      d.stats({
+        collection: "posts",
+        label: { en: "Total Posts" },
+        icon: c.icon("ph:article"),
+        span: 1,
+      }),
+    ],
+  }))
+  .build({ db: { url: "..." } });
 ```
+
+The `({ d, c })` callback provides:
+- **`d`** — Dashboard builder helpers (`d.stats()`, `d.chart()`, `d.value()`, etc.)
+- **`c`** — Component helpers (`c.icon("ph:icon-name")`)
 
 ## Grid System
 
 Dashboards use a column-based grid. Each widget can span multiple columns:
 
 ```typescript
-{
+.dashboard(({ d, c }) => d.dashboard({
   columns: 4,  // 4-column grid
   items: [
-    { type: "stats", span: 1, ... },  // 1/4 width
-    { type: "stats", span: 2, ... },  // 2/4 width
-    { type: "chart", span: 4, ... },  // Full width
+    d.stats({ span: 1, ... }),  // 1/4 width
+    d.stats({ span: 2, ... }),  // 2/4 width
+    d.chart({ span: 4, ... }),  // Full width
   ],
-}
+}))
 ```
 
 ## Widget Types
 
 ### Stats Widget
 
-Display collection counts:
+Display collection counts with optional filters:
 
 ```typescript
-{
+d.stats({
   id: "total-posts",
-  type: "stats",
   collection: "posts",
-  label: { en: "Total Posts", sk: "Celkom prispevkov" },
-  icon: FileTextIcon,
+  label: { en: "Total Posts" },
+  icon: c.icon("ph:article"),
   span: 1,
-  variant: "primary",  // "default" | "primary" | "success" | "warning" | "error"
-}
-```
+})
 
-With filters:
-
-```typescript
-{
+// With static filter
+d.stats({
   id: "active-barbers",
-  type: "stats",
   collection: "barbers",
-  label: "Active Barbers",
-  filter: { isActive: true },  // Only count active
-  icon: UsersIcon,
-}
-```
+  label: { en: "Active Barbers" },
+  icon: c.icon("ph:users"),
+  filter: { isActive: true },
+})
 
-With date filter:
-
-```typescript
-{
+// With date filter
+d.stats({
   id: "monthly-appointments",
-  type: "stats",
   collection: "appointments",
-  label: "This Month",
+  label: { en: "This Month" },
   dateFilter: {
     field: "scheduledAt",
     range: "thisMonth",  // "today" | "thisWeek" | "thisMonth" | "thisYear"
   },
-}
+})
+
+// With server-side fetchFn for custom count logic
+d.stats({
+  id: "custom-count",
+  collection: "posts",
+  label: { en: "Featured Posts" },
+  fetchFn: async ({ db }) => {
+    const count = await db.select(...).where(...);
+    return { count };
+  },
+})
 ```
 
 ### Value Widget
 
-Display custom values with trends:
+Display custom values with trends and formatting. Requires a `fetchFn`:
 
 ```typescript
-{
+d.value({
   id: "revenue",
-  type: "value",
+  label: { en: "Monthly Revenue" },
+  icon: c.icon("ph:currency-dollar"),
   span: 2,
-  cardVariant: "featured",
-  fetchFn: async () => {
-    const stats = await client.rpc.getRevenueStats();
+  fetchFn: async ({ db }) => {
+    const stats = await getRevenueStats(db);
     const change = calculateChange(stats);
 
     return {
       value: stats.totalRevenue / 100,
       formatted: `${stats.totalRevenue.toLocaleString()} €`,
-      label: { en: "Monthly Revenue", sk: "Mesacne trzby" },
-      subtitle: { en: `${stats.count} completed`, sk: `${stats.count} dokonceno` },
-      footer: { en: "vs. last month", sk: "vs. minuly mesiac" },
-      icon: CurrencyIcon,
+      label: { en: "Monthly Revenue" },
+      subtitle: { en: `${stats.count} completed` },
+      footer: { en: "vs. last month" },
+      icon: c.icon("ph:currency-dollar"),
       trend: {
         value: `${change >= 0 ? "+" : ""}${change}%`,
-        icon: change >= 0 ? ArrowUpIcon : ArrowDownIcon,
+        icon: change >= 0 ? c.icon("ph:arrow-up") : c.icon("ph:arrow-down"),
       },
       classNames: {
         root: change >= 0 ? "border-green-500/30" : "border-red-500/30",
@@ -114,7 +126,7 @@ Display custom values with trends:
       },
     };
   },
-}
+})
 ```
 
 ### Chart Widget
@@ -123,179 +135,187 @@ Display time-series or categorical charts:
 
 ```typescript
 // Area/line chart (time-series)
-{
+d.chart({
   id: "appointments-chart",
-  type: "chart",
   collection: "appointments",
-  field: "scheduledAt",
-  chartType: "area",  // "area" | "line" | "bar"
+  dateField: "scheduledAt",
+  chartType: "area",  // "area" | "line" | "bar" | "pie"
   timeRange: "30d",   // "7d" | "30d" | "90d" | "1y"
-  label: { en: "Appointments (30 days)", sk: "Rezervacie (30 dni)" },
-  color: "var(--color-chart-1)",
+  label: { en: "Appointments (30 days)" },
   span: 2,
-}
+})
 
-// Pie chart (categorical)
-{
-  id: "status-breakdown",
-  type: "chart",
+// With custom data via fetchFn
+d.chart({
+  id: "revenue-chart",
   collection: "appointments",
-  field: "status",
-  chartType: "pie",
-  label: "By Status",
-  span: 1,
-}
-
-// Bar chart
-{
-  id: "reviews-chart",
-  type: "chart",
-  collection: "reviews",
-  field: "createdAt",
-  chartType: "bar",
-  timeRange: "30d",
-  color: "var(--color-chart-2)",
-  span: 2,
-}
+  dateField: "createdAt",
+  chartType: "line",
+  label: { en: "Revenue Trend" },
+  span: 3,
+  fetchFn: async ({ db }) => {
+    // Return array of { name, value } pairs
+    return [
+      { name: "Jan", value: 4200 },
+      { name: "Feb", value: 5100 },
+      { name: "Mar", value: 3800 },
+    ];
+  },
+})
 ```
 
 ### Progress Widget
 
-Display goal progress:
+Display goal progress. Requires a `fetchFn`:
 
 ```typescript
-{
+d.progress({
   id: "monthly-goal",
-  type: "progress",
-  title: { en: "Revenue Goal", sk: "Ciel trzby" },
+  label: { en: "Revenue Goal" },
   showPercentage: true,
-  fetchFn: async () => {
-    const stats = await client.rpc.getRevenueStats();
-    const target = 500000;  // 5000€
-
+  span: 1,
+  fetchFn: async ({ db }) => {
+    const stats = await getRevenueStats(db);
     return {
       current: stats.totalRevenue,
-      target,
-      label: `${(stats.totalRevenue / 100).toLocaleString()} € / ${(target / 100).toLocaleString()} €`,
-      subtitle: stats.totalRevenue >= target
+      target: 500000,
+      label: `${(stats.totalRevenue / 100).toLocaleString()} € / 5,000 €`,
+      subtitle: stats.totalRevenue >= 500000
         ? "Goal reached!"
-        : `${((target - stats.totalRevenue) / 100).toLocaleString()} € to go`,
+        : `${((500000 - stats.totalRevenue) / 100).toLocaleString()} € to go`,
     };
   },
-  span: 1,
-}
+})
 ```
 
 ### Recent Items Widget
 
-Show recently created/updated items:
+Show recently created/updated collection items:
 
 ```typescript
-{
+d.recentItems({
   id: "recent-appointments",
-  type: "recentItems",
   collection: "appointments",
-  label: { en: "Recent Appointments", sk: "Posledne rezervacie" },
-  limit: 5,
+  label: { en: "Recent Appointments" },
   dateField: "scheduledAt",
-  subtitleFields: ["status"],
+  limit: 5,
   span: 1,
-}
+})
 ```
 
 ### Table Widget
 
-Display collection data in a table:
+Display collection data in a mini table:
 
 ```typescript
-{
+d.table({
   id: "barbers-table",
-  type: "table",
-  title: { en: "Team", sk: "Tim" },
+  label: { en: "Team" },
   collection: "barbers",
-  columns: ["name", "email", "isActive"],
+  columns: [
+    "name",
+    "email",
+    { key: "isActive", label: { en: "Status" } },
+  ],
   limit: 5,
   sortBy: "name",
   sortOrder: "asc",
-  linkToDetail: true,
-  emptyMessage: { en: "No barbers yet", sk: "Ziadni holici" },
   span: 2,
-}
-
-// With custom rendering
-{
-  id: "reviews-table",
-  type: "table",
-  collection: "reviews",
-  columns: [
-    {
-      key: "rating",
-      width: 80,
-      render: (value: number) => `${value}/5`,
-    },
-    "comment",
-  ],
-  limit: 5,
-}
+})
 ```
 
 ### Timeline Widget
 
-Display activity timeline:
+Display activity timeline. Requires a `fetchFn`:
 
 ```typescript
-{
+d.timeline({
   id: "activity",
-  type: "timeline",
-  title: { en: "Recent Activity", sk: "Posledna aktivita" },
+  label: { en: "Recent Activity" },
   maxItems: 8,
   showTimestamps: true,
-  timestampFormat: "relative",
-  emptyMessage: { en: "No activity", sk: "Ziadna aktivita" },
-  fetchFn: async () => {
-    const appointments = await client.collections.appointments.find({
+  timestampFormat: "relative",  // "relative" | "absolute" | "datetime"
+  emptyMessage: { en: "No activity yet" },
+  span: 2,
+  fetchFn: async ({ cms }) => {
+    const appointments = await cms.api.collections.appointments.find({
       limit: 8,
       orderBy: { updatedAt: "desc" },
     });
 
     return appointments.docs.map((apt) => ({
       id: apt.id,
-      title: apt._title || `Appointment #${apt.id.slice(0, 8)}`,
-      description: getStatusLabel(apt.status),
+      title: `Appointment #${apt.id.slice(0, 8)}`,
+      description: `Status: ${apt.status}`,
       timestamp: apt.updatedAt,
-      variant: getStatusVariant(apt.status),  // "default" | "info" | "success" | "warning" | "error"
+      variant: apt.status === "completed" ? "success" : "default",
+      // variant: "default" | "info" | "success" | "warning" | "error"
+      icon: c.icon("ph:calendar"),
       href: `/admin/collections/appointments/${apt.id}`,
     }));
   },
-  span: 1,
-}
+})
 ```
 
 ### Quick Actions Widget
 
-Display action buttons:
+Display action buttons for common tasks:
 
 ```typescript
-{
+d.quickActions({
   id: "quick-actions",
-  type: "quickActions",
-  title: { en: "Quick Actions", sk: "Rychle akcie" },
-  layout: "list",  // "list" | "grid"
-  quickActions: [
+  label: { en: "Quick Actions" },
+  actions: [
     {
-      label: { en: "New Appointment", sk: "Nova rezervacia" },
-      href: "/admin/collections/appointments/create",
-      icon: CalendarIcon,
-      variant: "primary",
+      label: { en: "New Appointment" },
+      icon: c.icon("ph:calendar-plus"),
+      action: { type: "create", collection: "appointments" },
     },
     {
-      label: { en: "Add Barber", sk: "Pridat holica" },
-      href: "/admin/collections/barbers/create",
-      icon: UsersIcon,
+      label: { en: "Add Barber" },
+      icon: c.icon("ph:user-plus"),
+      action: { type: "create", collection: "barbers" },
+    },
+    {
+      label: { en: "Documentation" },
+      icon: c.icon("ph:book-open"),
+      action: { type: "link", href: "https://docs.example.com" },
     },
   ],
   span: 1,
-}
+})
+```
+
+### Custom Widget
+
+Render a custom React component registered on the client:
+
+```typescript
+// Server: define the custom widget
+d.custom({
+  id: "weather",
+  widgetType: "weather",  // Matches client-side widget name
+  label: { en: "Weather" },
+  props: { city: "Bratislava" },
+  span: 1,
+  fetchFn: async () => {
+    // Optional: fetch data server-side
+    return { temperature: 22, condition: "sunny" };
+  },
+})
+```
+
+```typescript
+// Client: register the widget renderer
+import { qa, widget } from "@questpie/admin/client";
+
+const weatherWidget = widget("weather", {
+  component: lazy(() => import("./widgets/weather")),
+});
+
+const admin = qa<AppCMS>()
+  .use(adminModule)
+  .widgets({ weather: weatherWidget });
 ```
 
 ## Layout Containers
@@ -305,187 +325,218 @@ Display action buttons:
 Group widgets with a header:
 
 ```typescript
-{
-  type: "section",
-  label: { en: "Key Metrics", sk: "Klucove metriky" },
-  wrapper: "flat",  // "flat" | "card"
+d.section({
+  label: { en: "Key Metrics" },
+  icon: c.icon("ph:chart-line"),
   layout: "grid",
   columns: 4,
+  wrapper: "flat",  // "flat" | "card" | "collapsible"
   items: [
-    { type: "stats", ... },
-    { type: "stats", ... },
+    d.stats({ ... }),
+    d.stats({ ... }),
+    d.value({ ... }),
   ],
-}
+})
 ```
 
 ### Tabs
 
-Organize widgets in tabs:
+Organize widgets into tabs:
 
 ```typescript
-{
-  type: "tabs",
-  variant: "line",  // "line" | "pills"
+d.tabs({
   defaultTab: "overview",
   tabs: [
     {
       id: "overview",
-      label: { en: "Overview", sk: "Prehlad" },
-      icon: ListChecksIcon,
+      label: { en: "Overview" },
       items: [
-        { type: "stats", ... },
-        { type: "recentItems", ... },
+        d.stats({ ... }),
+        d.recentItems({ ... }),
       ],
     },
     {
       id: "analytics",
-      label: { en: "Analytics", sk: "Analytika" },
-      icon: ChartIcon,
+      label: { en: "Analytics" },
       items: [
-        { type: "chart", ... },
-        { type: "progress", ... },
+        d.chart({ ... }),
+        d.progress({ ... }),
       ],
     },
   ],
+})
+```
+
+## Server-Side Data Fetching (`fetchFn`)
+
+Widgets can fetch data on the server via `fetchFn`. This keeps sensitive database queries and business logic off the client:
+
+```typescript
+d.value({
+  id: "revenue",
+  fetchFn: async ({ cms, db, session, locale }) => {
+    // Full access to CMS context, database, and user session
+    const result = await db.select(...).from(...);
+    return { value: result.total, formatted: `$${result.total}` };
+  },
+})
+```
+
+The `fetchFn` context provides:
+- **`cms`** — The CMS instance with full API access
+- **`db`** — Direct database access (Drizzle)
+- **`session`** — Current user's session (for role-based data)
+- **`locale`** — Current admin locale
+
+### How it works
+
+1. Server stores the `fetchFn` but doesn't serialize it to the client
+2. Client receives `hasFetchFn: true` flag on the widget config
+3. Client calls the `fetchWidgetData` RPC endpoint with the widget ID
+4. Server executes the `fetchFn` and returns the result
+
+### Client-side hook
+
+For custom widgets, use `useServerWidgetData` to consume server-provided data:
+
+```typescript
+import { useServerWidgetData } from "@questpie/admin/client";
+
+function MyCustomWidget({ config }) {
+  const { data, isLoading } = useServerWidgetData<{ total: number }>(
+    config.id,
+    { enabled: config.hasFetchFn }
+  );
+
+  if (isLoading) return <Spinner />;
+  return <div>{data?.total}</div>;
 }
 ```
+
+## Access Control
+
+Control widget visibility per-user with the `access` property:
+
+```typescript
+// Always visible
+d.stats({ access: true, ... })
+
+// Hidden from all users
+d.stats({ access: false, ... })
+
+// Dynamic: check user role
+d.value({
+  id: "revenue",
+  access: ({ session }) => session?.user?.role === "admin",
+  fetchFn: async ({ db }) => { ... },
+})
+```
+
+Access rules are evaluated server-side. Widgets that fail access checks are stripped from the config before it reaches the client.
 
 ## Complete Example
 
 ```typescript
-// admin/dashboard.ts
-import { qa, type DashboardConfig } from "@questpie/admin/client";
-import { client } from "@/lib/cms-client";
-
-export const dashboard = qa.dashboard({
-  title: { en: "Dashboard", sk: "Prehlad" },
-  columns: 4,
-  items: [
-    // Key metrics section
-    {
-      type: "section",
-      label: { en: "Key Metrics", sk: "Klucove metriky" },
-      wrapper: "flat",
-      layout: "grid",
-      columns: 4,
-      items: [
-        {
-          id: "revenue",
-          type: "value",
-          span: 2,
-          cardVariant: "featured",
-          fetchFn: async () => {
-            const stats = await client.rpc.getRevenueStats();
-            return {
-              value: stats.total,
-              formatted: `${stats.total.toLocaleString()} €`,
-              label: "Revenue",
-              icon: CurrencyIcon,
-            };
-          },
-        },
-        {
-          id: "pending",
-          type: "stats",
-          collection: "appointments",
-          filter: { status: "pending" },
-          label: "Pending",
-          icon: ClockIcon,
-          span: 1,
-        },
-        {
-          id: "rating",
-          type: "value",
-          span: 1,
-          fetchFn: async () => {
-            const reviews = await client.collections.reviews.find({
-              limit: 1000,
-            });
-            const avg =
-              reviews.docs.reduce((sum, r) => sum + r.rating, 0) /
-              reviews.docs.length;
-            return {
-              value: avg.toFixed(1),
-              formatted: `${avg.toFixed(1)}/5`,
-              label: "Rating",
-              icon: StarIcon,
-            };
-          },
-        },
-      ],
-    },
-
-    // Main content tabs
-    {
-      type: "tabs",
-      defaultTab: "overview",
-      tabs: [
-        {
-          id: "overview",
-          label: "Overview",
-          items: [
-            {
-              type: "section",
-              wrapper: "flat",
-              layout: "grid",
-              columns: 2,
-              items: [
-                {
-                  id: "recent",
-                  type: "recentItems",
-                  collection: "appointments",
-                  label: "Recent Appointments",
-                  limit: 5,
-                  span: 1,
-                },
-                {
-                  id: "actions",
-                  type: "quickActions",
-                  title: "Quick Actions",
-                  quickActions: [
-                    {
-                      label: "New Appointment",
-                      href: "/admin/collections/appointments/create",
-                      variant: "primary",
-                    },
-                  ],
-                  span: 1,
-                },
-              ],
+// src/questpie/server/cms.ts
+const cms = q({ name: "barbershop" })
+  .use(baseInstance)
+  .dashboard(({ d, c }) => d.dashboard({
+    title: { en: "Dashboard" },
+    columns: 4,
+    items: [
+      // Stats section
+      d.section({
+        label: { en: "Overview" },
+        layout: "grid",
+        columns: 4,
+        items: [
+          d.stats({
+            collection: "appointments",
+            label: { en: "Today's Appointments" },
+            icon: c.icon("ph:calendar"),
+            span: 1,
+          }),
+          d.stats({
+            collection: "barbers",
+            label: { en: "Active Barbers" },
+            icon: c.icon("ph:users"),
+            filter: { isActive: true },
+            span: 1,
+          }),
+          d.value({
+            id: "revenue",
+            label: { en: "Revenue" },
+            icon: c.icon("ph:currency-dollar"),
+            span: 1,
+            fetchFn: async ({ db }) => {
+              const total = await getMonthlyRevenue(db);
+              return { value: total, formatted: `${total.toLocaleString()} €` };
             },
-          ],
-        },
-        {
-          id: "analytics",
-          label: "Analytics",
-          items: [
-            {
-              type: "chart",
-              collection: "appointments",
-              field: "scheduledAt",
-              chartType: "area",
-              timeRange: "30d",
-              label: "Appointments",
-              span: 2,
-            },
-          ],
-        },
-      ],
-    },
-  ],
-} satisfies DashboardConfig);
-```
+            access: ({ session }) => session?.user?.role === "admin",
+          }),
+          d.progress({
+            id: "booking-goal",
+            label: { en: "Monthly Goal" },
+            span: 1,
+            fetchFn: async ({ db }) => ({
+              current: 45,
+              target: 100,
+              label: "45 / 100 bookings",
+            }),
+          }),
+        ],
+      }),
 
-## Adding to Admin
-
-```typescript
-// admin/admin.ts
-import { dashboard } from "./dashboard";
-
-export const admin = qa().use(adminModule).dashboard(dashboard);
+      // Tabs for different views
+      d.tabs({
+        defaultTab: "overview",
+        tabs: [
+          {
+            id: "overview",
+            label: { en: "Overview" },
+            items: [
+              d.recentItems({
+                collection: "appointments",
+                label: { en: "Recent Appointments" },
+                dateField: "scheduledAt",
+                limit: 5,
+                span: 2,
+              }),
+              d.quickActions({
+                actions: [
+                  {
+                    label: { en: "New Appointment" },
+                    icon: c.icon("ph:calendar-plus"),
+                    action: { type: "create", collection: "appointments" },
+                  },
+                ],
+                span: 2,
+              }),
+            ],
+          },
+          {
+            id: "analytics",
+            label: { en: "Analytics" },
+            items: [
+              d.chart({
+                collection: "appointments",
+                dateField: "scheduledAt",
+                chartType: "area",
+                timeRange: "30d",
+                label: { en: "Appointments (30 days)" },
+                span: 4,
+              }),
+            ],
+          },
+        ],
+      }),
+    ],
+  }))
+  .build({ ... });
 ```
 
 ## Related
 
-- [Hooks](/docs/admin/hooks) - Access data in custom widgets
-- [Custom Widgets](/docs/admin/extensibility/custom-widgets) - Create your own widgets
+- [Hooks](/docs/admin/hooks) — `useServerWidgetData` and other data hooks
+- [Custom Widgets](/docs/admin/extensibility/custom-widgets) — Create your own widget renderers
+- [Collections](/docs/admin/collections) — Collection configuration

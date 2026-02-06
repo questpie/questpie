@@ -1,90 +1,64 @@
 ---
-title: Global UI Configuration
+title: Global Admin Configuration
 description: Configure admin interface for singleton globals
 ---
 
-# Global UI Configuration
+# Global Admin Configuration
 
-Globals are singleton documents - settings, configurations, or other data that exists as a single instance. The admin UI for globals is similar to collections but without list views.
+Globals are singleton documents — settings, configurations, or other data that exists as a single instance. The admin UI for globals is configured on the **server**, similar to collections but without list views.
 
-## Creating a Global Config
+## Creating a Global
 
 ```typescript
-import { builder } from "./builder";
-import { GearIcon } from "@phosphor-icons/react";
+// src/questpie/server/globals/site-settings.ts
+import { qb } from "../builder";
 
-export const siteSettingsAdmin = builder
-  .global("siteSettings")      // Must match backend global name
-  .meta({                      // UI metadata
-    label: "Site Settings",
-    icon: GearIcon,
-  })
-  .fields(({ r }) => ({...}))  // Field configurations
-  .form(({ v, f }) => {...});  // Edit form
+export const siteSettings = qb
+  .global("site_settings")
+  .fields((f) => ({...}))           // Database schema
+  .admin(({ c }) => ({...}))        // Admin UI metadata
+  .form(({ v, f }) => {...});       // Edit form
 ```
 
-## `.meta()` - UI Metadata
+## `.admin()` — UI Metadata
 
 ```typescript
-.meta({
-  label: { en: "Site Settings", sk: "Nastavenia stranky" },
-  icon: GearIcon,
-  description: "Configure global site settings",
-})
+.admin(({ c }) => ({
+  label: { en: "Site Settings", sk: "Nastavenia stránky" },
+  icon: c.icon("ph:gear"),
+  description: { en: "Configure global site settings" },
+}))
 ```
 
-## `.fields()` - Field Configurations
-
-Define global fields the same way as collections:
+## `.fields()` — Define Fields
 
 ```typescript
-.fields(({ r }) => ({
-  siteName: r.text({
-    label: { en: "Site Name", sk: "Nazov stranky" },
-    maxLength: 100,
-    required: true,
-  }),
-
-  siteDescription: r.textarea({
-    label: { en: "Description", sk: "Popis" },
-    rows: 3,
-  }),
-
-  logo: r.upload({
-    label: { en: "Logo", sk: "Logo" },
-    accept: ["image/*"],
-  }),
-
-  contactEmail: r.email({
-    label: { en: "Contact Email", sk: "Kontaktny email" },
-  }),
-
-  socialLinks: r.array({
-    label: { en: "Social Links", sk: "Socialne siete" },
-    item: ({ r }) => ({
-      platform: r.select({
-        label: "Platform",
-        options: [
-          { label: "Facebook", value: "facebook" },
-          { label: "Instagram", value: "instagram" },
-          { label: "Twitter", value: "twitter" },
-        ],
-      }),
-      url: r.text({ label: "URL" }),
+.fields((f) => ({
+  siteName: f.text({ required: true, default: "My Site" }),
+  siteDescription: f.textarea(),
+  logo: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
+  contactEmail: f.email(),
+  socialLinks: f.array({
+    of: f.object({
+      fields: {
+        platform: f.select({
+          options: [
+            { label: "Facebook", value: "facebook" },
+            { label: "Instagram", value: "instagram" },
+            { label: "Twitter", value: "twitter" },
+          ],
+        }),
+        url: f.text(),
+      },
     }),
   }),
-
-  maintenanceMode: r.switch({
-    label: { en: "Maintenance Mode", sk: "Udrzba" },
-    description: {
-      en: "When enabled, shows maintenance page to visitors",
-      sk: "Ked je zapnute, zobrazuje udrzbu navstevnikom",
-    },
+  maintenanceMode: f.boolean({
+    default: false,
   }),
 }))
 ```
 
-## `.form()` - Edit Form
+## `.form()` — Edit Form
 
 Configure the global edit form:
 
@@ -92,17 +66,40 @@ Configure the global edit form:
 .form(({ v, f }) => v.form({
   sections: [
     {
-      title: { en: "General", sk: "Vseobecne" },
+      label: { en: "General" },
       fields: [f.siteName, f.siteDescription, f.logo],
     },
     {
-      title: { en: "Contact", sk: "Kontakt" },
+      label: { en: "Contact" },
       fields: [f.contactEmail, f.socialLinks],
     },
     {
-      title: { en: "Advanced", sk: "Pokrocile" },
+      label: { en: "Advanced" },
       collapsible: true,
       fields: [f.maintenanceMode],
+    },
+  ],
+}))
+```
+
+### Tabbed Layout
+
+```typescript
+.form(({ v, f, c }) => v.form({
+  tabs: [
+    {
+      label: { en: "General" },
+      icon: c.icon("ph:gear"),
+      sections: [
+        { fields: [f.siteName, f.logo] },
+      ],
+    },
+    {
+      label: { en: "Contact" },
+      icon: c.icon("ph:envelope"),
+      sections: [
+        { fields: [f.contactEmail, f.socialLinks] },
+      ],
     },
   ],
 }))
@@ -111,128 +108,104 @@ Configure the global edit form:
 ## Complete Example
 
 ```typescript
-// admin/globals/site-settings.ts
-import { GearIcon } from "@phosphor-icons/react";
-import { builder } from "../builder";
+// src/questpie/server/globals/site-settings.ts
+import { qb } from "../builder";
 
-export const siteSettingsAdmin = builder
-  .global("siteSettings")
-  .meta({
+export const siteSettings = qb
+  .global("site_settings")
+  .fields((f) => ({
+    siteName: f.text({ required: true }),
+    tagline: f.text(),
+    logo: f.upload({ to: "assets", mimeTypes: ["image/png", "image/svg+xml"] }),
+    favicon: f.upload({ to: "assets", mimeTypes: ["image/x-icon", "image/png"] }),
+    contactEmail: f.email(),
+    contactPhone: f.text(),
+    address: f.textarea(),
+    businessHours: f.object({
+      fields: {
+        weekdays: f.text(),
+        saturday: f.text(),
+        sunday: f.text(),
+      },
+    }),
+    socialLinks: f.array({
+      of: f.object({
+        fields: {
+          platform: f.select({
+            options: [
+              { label: "Facebook", value: "facebook" },
+              { label: "Instagram", value: "instagram" },
+              { label: "Twitter", value: "twitter" },
+              { label: "LinkedIn", value: "linkedin" },
+            ],
+          }),
+          url: f.text(),
+        },
+      }),
+      max: 5,
+    }),
+  }))
+  .admin(({ c }) => ({
     label: { en: "Site Settings", sk: "Nastavenia" },
-    icon: GearIcon,
-  })
-  .fields(({ r }) => ({
-    siteName: r.text({
-      label: { en: "Site Name", sk: "Nazov" },
-      required: true,
-    }),
-    tagline: r.text({
-      label: { en: "Tagline", sk: "Slogan" },
-    }),
-    logo: r.upload({
-      label: { en: "Logo", sk: "Logo" },
-      accept: ["image/png", "image/svg+xml"],
-    }),
-    favicon: r.upload({
-      label: { en: "Favicon", sk: "Favicon" },
-      accept: ["image/x-icon", "image/png"],
-    }),
-    contactEmail: r.email({
-      label: { en: "Contact Email", sk: "Kontaktny email" },
-    }),
-    contactPhone: r.text({
-      label: { en: "Phone", sk: "Telefon" },
-    }),
-    address: r.textarea({
-      label: { en: "Address", sk: "Adresa" },
-      rows: 3,
-    }),
-    businessHours: r.object({
-      label: { en: "Business Hours", sk: "Otvaracie hodiny" },
-      fields: ({ r }) => ({
-        weekdays: r.text({ label: { en: "Weekdays", sk: "Pracovne dni" } }),
-        saturday: r.text({ label: { en: "Saturday", sk: "Sobota" } }),
-        sunday: r.text({ label: { en: "Sunday", sk: "Nedela" } }),
-      }),
-    }),
-    socialLinks: r.array({
-      label: { en: "Social Media", sk: "Socialne siete" },
-      item: ({ r }) => ({
-        platform: r.select({
-          label: "Platform",
-          options: [
-            { label: "Facebook", value: "facebook" },
-            { label: "Instagram", value: "instagram" },
-            { label: "Twitter", value: "twitter" },
-            { label: "LinkedIn", value: "linkedin" },
-          ],
-        }),
-        url: r.text({ label: "URL" }),
-      }),
-      maxItems: 5,
-    }),
+    icon: c.icon("ph:gear"),
   }))
   .form(({ v, f }) => v.form({
     tabs: [
       {
-        id: "general",
-        label: { en: "General", sk: "Vseobecne" },
-        fields: [f.siteName, f.tagline, f.logo, f.favicon],
-      },
-      {
-        id: "contact",
-        label: { en: "Contact", sk: "Kontakt" },
-        fields: [
-          f.contactEmail,
-          f.contactPhone,
-          f.address,
-          f.businessHours,
+        label: { en: "General" },
+        sections: [
+          { fields: [f.siteName, f.tagline, f.logo, f.favicon] },
         ],
       },
       {
-        id: "social",
-        label: { en: "Social", sk: "Socialne siete" },
-        fields: [f.socialLinks],
+        label: { en: "Contact" },
+        sections: [
+          { fields: [f.contactEmail, f.contactPhone, f.address, f.businessHours] },
+        ],
+      },
+      {
+        label: { en: "Social" },
+        sections: [
+          { fields: [f.socialLinks] },
+        ],
       },
     ],
-  }));
-```
-
-## Adding Globals to Admin
-
-Register globals in your main admin config:
-
-```typescript
-// admin/admin.ts
-import { qa, adminModule } from "@questpie/admin/client";
-import { siteSettingsAdmin } from "./globals/site-settings";
-
-export const admin = qa()
-  .use(adminModule)
-  .globals({
-    siteSettings: siteSettingsAdmin,
+  }))
+  .access({
+    read: true,
+    update: "admin",
   });
 ```
 
-## Adding to Sidebar
+## Adding Globals to CMS
 
-Add a link to the global in your sidebar:
+Register globals in your main CMS config:
 
 ```typescript
-// admin/sidebar.ts
-.section("settings", (s) =>
-  s
-    .title("Settings")
-    .icon(GearIcon)
-    .items([
-      { type: "global", global: "siteSettings", icon: GearIcon },
-    ])
-)
+// src/questpie/server/cms.ts
+import { siteSettings } from "./globals/site-settings";
+
+const cms = q({ name: "my-cms" })
+  .use(adminModule)
+  .globals({ siteSettings })
+  .sidebar(({ s, c }) => s.sidebar({
+    sections: [
+      s.section({
+        id: "settings",
+        title: { en: "Settings" },
+        icon: c.icon("ph:gear"),
+        items: [
+          { type: "global", global: "siteSettings", icon: c.icon("ph:gear") },
+        ],
+      }),
+    ],
+  }))
+  .build({ ... });
 ```
 
 ## Accessing Global Data
 
-Use the `useGlobal` hook to read global data:
+Use the `useGlobal` hook to read global data in React:
 
 ```typescript
 import { useGlobal, useGlobalUpdate } from "@questpie/admin/client";
@@ -256,6 +229,6 @@ function SettingsPage() {
 
 ## Related
 
-- [Field Types](/docs/admin/fields) - All available field types
-- [Form View](/docs/admin/views/form-view) - Configure edit forms
-- [Sidebar](/docs/admin/sidebar) - Configure navigation
+- [Field Types](/docs/admin/fields) — All available field types
+- [Form View](/docs/admin/views/form-view) — Configure edit forms
+- [Sidebar](/docs/admin/sidebar) — Configure navigation

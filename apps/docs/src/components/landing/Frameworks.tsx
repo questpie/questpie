@@ -43,13 +43,12 @@ export function Frameworks() {
     <section className="py-24 border-t border-border/30">
       <div className="w-full max-w-7xl mx-auto px-4 text-center">
         <h2 className="font-mono text-sm tracking-[0.2em] uppercase text-primary mb-4">
-          Framework Adapters
+          Adapters
         </h2>
-        <h3 className="text-3xl font-bold mb-6">One Backend, Any Framework</h3>
+        <h3 className="text-3xl font-bold mb-6">Deploy Anywhere</h3>
         <p className="text-muted-foreground max-w-2xl mx-auto mb-12">
-          Define your backend once, run it anywhere. Native adapters for the
-          most popular modern frameworks. All follow the same HTTP standard —
-          swap anytime.
+          Write your CMS once. Mount it on any HTTP framework with a one-line adapter.
+          Hono, Elysia, Next.js — pick your runtime, keep your code.
         </p>
 
         <div className="max-w-3xl mx-auto">

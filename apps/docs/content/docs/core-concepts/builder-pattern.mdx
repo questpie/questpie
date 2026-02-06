@@ -43,28 +43,16 @@ What `.build()` does:
 
 ### Admin Builder (`qa`)
 
-The `qa()` builder configures your admin UI:
+The `qa()` builder configures your admin UI renderer:
 
 ```typescript
 import { qa, adminModule } from "@questpie/admin/client";
+import type { AppCMS } from "./server/cms";
 
-const admin = qa()
+const admin = qa<AppCMS>()
   .use(adminModule)
-  .collections({
-    posts: qa.collection("posts")
-      .fields(({ r }) => ({
-        title: r.text({ label: "Title" }),
-        published: r.switch({ label: "Published" }),
-      })),
-  })
-  .sidebar(
-    qa.sidebar()
-      .section("content", (s) =>
-        s.title("Content").items([
-          { type: "collection", collection: "posts" },
-        ])
-      )
-  );
+  .branding({ name: "My CMS" })
+  .locale({ defaultLocale: "en" });
 ```
 
 **Key characteristic**: NO `.build()` - the state IS the configuration.
@@ -73,6 +61,10 @@ Why no `.build()`:
 - Admin config is pure data, no runtime setup needed
 - Components read from state directly
 - Enables tree-shaking and code splitting
+
+<Callout type="info">
+Collection definitions, sidebar, and dashboard are configured on the **server** using the `q()` builder with `.admin()`, `.list()`, `.form()`, `.sidebar()`, and `.dashboard()` methods. The client `qa()` builder only handles rendering, branding, and locale.
+</Callout>
 
 ## Method Chaining
 
@@ -182,17 +174,13 @@ export type AppCMS = typeof cms;
 ```
 
 ```typescript
-// Admin uses backend types
+// Admin uses backend types for type-safe rendering
 import type { AppCMS } from "./cms";
 
 const admin = qa<AppCMS>()
-  .collections({
-    // TypeScript knows "posts" exists and its fields
-    posts: qa.collection("posts")
-      .fields(({ r }) => ({
-        title: r.text(),  // Matches backend field
-      })),
-  });
+  .use(adminModule)
+  .branding({ name: "My CMS" });
+// TypeScript knows all collections, fields, and their types from AppCMS
 ```
 
 ## Configuration vs Runtime
@@ -284,29 +272,33 @@ const admin = qa().collections({...});
 // admin.state has the config
 ```
 
-### Don't use string icons
+### Don't use string icons without `c.icon()`
 
 ```typescript
-// WRONG
-.meta({ icon: "Users" })
+// WRONG — plain string
+.admin(() => ({ icon: "Users" }))
 
-// CORRECT
-import { Users } from "lucide-react";
-.meta({ icon: Users })
+// CORRECT — use c.icon() helper on the server
+.admin(({ c }) => ({ icon: c.icon("ph:users") }))
 ```
 
 ### Don't mix backend and admin definitions
 
 ```typescript
-// WRONG - importing backend into admin
+// WRONG — backend collections go in q(), not qa()
 import { postsCollection } from "./cms";
 const admin = qa().collections({
   posts: postsCollection,  // This is a backend collection!
 });
 
-// CORRECT - separate admin config
-const postsAdmin = qa.collection("posts")
-  .fields(({ r }) => ({...}));
+// CORRECT — collections are defined on the server
+// Server (q builder):
+const posts = q.collection("posts")
+  .fields({...})
+  .admin(({ c }) => ({ label: "Posts", icon: c.icon("ph:article") }));
+
+// Client (qa builder) — just renderer setup
+const admin = qa<AppCMS>().use(adminModule).branding({ name: "My CMS" });
 ```
 
 ## Related

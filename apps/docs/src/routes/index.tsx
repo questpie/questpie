@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { AdminExperience } from "@/components/landing/AdminExperience";
+import { CallToAction } from "@/components/landing/CallToAction";
 import { Examples } from "@/components/landing/Examples";
 import { Features } from "@/components/landing/Features";
 import { Footer } from "@/components/landing/Footer";
 import { Frameworks } from "@/components/landing/Frameworks";
 import { Hero } from "@/components/landing/Hero";
 import { getRandomHeadlineIndex } from "@/components/landing/headlines";
+import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Navbar } from "@/components/landing/Navbar";
-import { Philosophy } from "@/components/landing/Philosophy";
+import { NumbersStrip } from "@/components/landing/NumbersStrip";
 import { Stack } from "@/components/landing/Stack";
 import { UseCases } from "@/components/landing/UseCases";
 import { baseOptions } from "@/lib/layout.shared";
@@ -79,13 +81,15 @@ function Home() {
 				{/* Main Content */}
 				<main className="flex-1 relative z-10">
 					<Hero headlineIndex={headlineIndex} />
+					<NumbersStrip />
+					<HowItWorks />
 					<AdminExperience />
-					<Stack />
 					<Features />
-					<Philosophy />
+					<Stack />
 					<Frameworks />
-					<Examples />
 					<UseCases />
+					<Examples />
+					<CallToAction />
 				</main>
 
 				<Footer />

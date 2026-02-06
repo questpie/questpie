@@ -1,207 +1,152 @@
 ---
 title: Architecture
-description: Understanding QUESTPIE Admin's internal architecture
+description: Understanding QUESTPIE Admin's two-layer architecture
 ---
 
 # Architecture Overview
 
-QUESTPIE Admin is built on a registry-based architecture that enables type-safe, extensible configuration.
+QUESTPIE Admin uses a **two-layer architecture** where the server defines admin configuration and the client provides rendering components.
 
-## Core Concepts
+## Two-Layer Architecture
 
-### 1. Registry Pattern
-
-Everything in QUESTPIE Admin is registered in typed registries:
-
-- **Field Registry**: All available field types (text, select, relation, etc.)
-- **View Registry**: All available view types (table, form, etc.)
-- **Widget Registry**: All available dashboard widgets
-- **Block Registry**: All available content blocks
-
-```typescript
-// Fields are registered
-const adminModule = qa()
-  .fields({
-    text: textField,
-    select: selectField,
-    relation: relationField,
-  })
-  .views({
-    table: tableView,
-    form: formView,
-  })
-  .widgets({
-    stats: statsWidget,
-    chart: chartWidget,
-  });
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     SERVER (q builder)                           │
+│                                                                  │
+│  Defines WHAT to show:                                           │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │
+│  │ Collections  │ │ Dashboard    │ │ Sidebar      │             │
+│  │ .admin()     │ │ .dashboard() │ │ .sidebar()   │             │
+│  │ .list()      │ │ d.stats()    │ │ s.section()  │             │
+│  │ .form()      │ │ d.chart()    │ │ collections  │             │
+│  │ .actions()   │ │ d.value()    │ │ globals      │             │
+│  │ .preview()   │ │ d.timeline() │ │ links        │             │
+│  └──────────────┘ └──────────────┘ └──────────────┘             │
+│                                                                  │
+│  Serialized config sent via getAdminConfig RPC                   │
+│  fetchFn data sent via fetchWidgetData RPC                       │
+├──────────────────────────────────────────────────────────────────┤
+│                     CLIENT (qa builder)                          │
+│                                                                  │
+│  Defines HOW to render:                                          │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │
+│  │ Field        │ │ View         │ │ Widget       │             │
+│  │ Registry     │ │ Registry     │ │ Registry     │             │
+│  │ - text       │ │ - table      │ │ - stats      │             │
+│  │ - select     │ │ - form       │ │ - chart      │             │
+│  │ - relation   │ │ - cards      │ │ - value      │             │
+│  │ - richText   │ │ - wizard     │ │ - timeline   │             │
+│  │ - ...        │ │              │ │ - custom     │             │
+│  └──────────────┘ └──────────────┘ └──────────────┘             │
+│                                                                  │
+│  + Branding, locale, translations                                │
+│  + Block Registry (client-side page builder blocks)              │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Module Composition
+### Why Two Layers?
 
-Admin configuration is built by composing modules:
+1. **Security** — Server-side `fetchFn` and `access` rules keep sensitive logic off the client
+2. **Serialization** — Server config is JSON-serializable, sent via RPC to the client
+3. **Flexibility** — Different clients can render the same server config differently
+4. **Separation** — Data structure concerns (server) vs presentation concerns (client)
+
+## Data Flow
+
+```
+1. Configuration Phase (build time)
+   Server: q().use(adminModule).collections({...}).dashboard({...}).sidebar({...}).build()
+   Client: qa().use(adminModule).branding({...}).locale({...})
+
+2. Runtime Phase (page load)
+   Client calls getAdminConfig RPC → Server evaluates access rules → Returns config
+   Client merges server config with local registries → Renders UI
+
+3. Widget Data Phase (dashboard)
+   Client sees hasFetchFn: true → Calls fetchWidgetData RPC → Server runs fetchFn → Returns data
+
+4. Data Operations (user actions)
+   User Action → React Hook → CMS Client → RPC → Server Handler → Database
+```
+
+## Registry Pattern
+
+Everything in QUESTPIE Admin is registered in typed registries. The built-in `adminModule` provides default renderers:
 
 ```typescript
+// Client-side: adminModule provides all built-in renderers
+import { adminModule, qa } from "@questpie/admin/client";
+
 const admin = qa()
-  .use(adminModule)        // Core fields, views, widgets
-  .use(blogModule)         // Blog-specific extensions
-  .use(ecommerceModule);   // E-commerce extensions
+  .use(adminModule)        // Built-in fields, views, widgets
+  .use(myCustomModule);    // Custom extensions
 ```
 
-Modules are merged using these strategies:
+Registries are merged with a "last wins" strategy:
 
 | Property | Merge Strategy |
 |----------|----------------|
 | `fields` | Spread (later wins) |
 | `views` | Spread (later wins) |
 | `widgets` | Spread (later wins) |
-| `collections` | Spread (later wins) |
-| `sidebar` | Concatenate sections |
+| `blocks` | Spread (later wins) |
 | `translations` | Deep merge |
 
-### 3. Proxy Pattern
+## Icon System
 
-The proxy pattern provides type-safe autocomplete:
+Server-side icons use `c.icon("ph:icon-name")` which creates serializable `ComponentReference` objects:
 
 ```typescript
-.fields(({ r }) => ({
-  // r is a FieldRegistryProxy
-  // It provides autocomplete for all registered fields
-  title: r.text({ maxLength: 200 }),
-  status: r.select({ options: [...] }),
-}))
+// Server creates a serializable reference
+c.icon("ph:users")  →  { type: "icon", props: { name: "ph:users" } }
 
-.list(({ v, f }) => v.table({
-  // v is ViewRegistryProxy
-  // f is FieldProxy (your defined fields)
-  columns: [f.title, f.status],  // Autocomplete!
-}))
+// Client resolves this to an @iconify/react <Icon> component
 ```
 
-### 4. State-Based Config
+Icons use the [Phosphor](https://phosphoricons.com/) icon set via `@iconify/react`:
 
-Unlike the backend CMS, admin uses state as configuration:
+| Variant | Suffix | Example |
+|---------|--------|---------|
+| Regular | (none) | `ph:users` |
+| Fill | `-fill` | `ph:users-fill` |
+| Bold | `-bold` | `ph:users-bold` |
+| Duotone | `-duotone` | `ph:users-duotone` |
+| Light | `-light` | `ph:users-light` |
+| Thin | `-thin` | `ph:users-thin` |
+
+## State-Based Configuration
+
+The client-side `qa()` builder uses state as configuration — no `.build()` method:
 
 ```typescript
-const admin = qa()
+const admin = qa<AppCMS>()
   .use(adminModule)
-  .collections({ posts: postsAdmin });
+  .branding({ name: "My Admin" });
 
-// NO .build() - state IS the config
-admin.state.fields;       // Available field types
-admin.state.collections;  // Collection configs
-admin.state.sidebar;      // Navigation config
+// State IS the config — used directly by React components
+<AdminLayoutProvider admin={admin} ... />
 ```
 
-## Architecture Diagram
+## Type Inference
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         qa() Builder                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Field        │  │ View         │  │ Widget       │          │
-│  │ Registry     │  │ Registry     │  │ Registry     │          │
-│  │              │  │              │  │              │          │
-│  │ - text       │  │ - table      │  │ - stats      │          │
-│  │ - select     │  │ - form       │  │ - chart      │          │
-│  │ - relation   │  │              │  │ - table      │          │
-│  │ - richText   │  │              │  │              │          │
-│  │ - ...        │  │              │  │              │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    Collection Configs                     │  │
-│  │                                                           │  │
-│  │  posts: { fields, list, form, meta, preview }            │  │
-│  │  users: { fields, list, form, meta }                     │  │
-│  │  pages: { fields, list, form, meta, blocks }             │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    Sidebar Config                         │  │
-│  │                                                           │  │
-│  │  [link, section, collection, global, divider]            │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    Dashboard Config                       │  │
-│  │                                                           │  │
-│  │  { widgets: [...], layout: [...] }                       │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│                        admin.state                              │
-│                                                                 │
-│  React components read from this state directly                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+For global type inference, declare the type registry:
 
-## Data Flow
-
-```
-1. Configuration Phase
-   ─────────────────────
-   qa() → .use(modules) → .collections() → .sidebar() → admin.state
-
-2. Runtime Phase
-   ─────────────────────
-   admin.state → AdminProvider → React Components → UI
-
-3. Data Operations
-   ─────────────────────
-   User Action → React Hook → API Call → Backend CMS → Database
-```
-
-## Component Architecture
-
-Admin UI components read configuration and render accordingly:
-
-```tsx
-// Simplified internal architecture
-function CollectionListPage({ collectionName }) {
-  // Get config from state
-  const admin = useAdminStore(s => s.admin);
-  const config = admin.state.collections[collectionName];
-
-  // Get data via hooks
-  const { data } = useCollectionList(collectionName, config.list.query);
-
-  // Render based on config
-  return (
-    <ListView
-      columns={config.list.columns}
-      data={data}
-      filters={config.list.filters}
-    />
-  );
+```typescript
+declare module "@questpie/admin/client" {
+  interface AdminTypeRegistry {
+    cms: AppCMS;
+    admin: typeof admin;
+  }
 }
 ```
 
-## Type System
-
-QUESTPIE Admin uses advanced TypeScript for type safety:
-
-```typescript
-// Types are inferred from config
-const admin = qa()
-  .use(adminModule)
-  .collections({
-    posts: postsAdmin,
-    users: usersAdmin,
-  });
-
-// CollectionNames is inferred as "posts" | "users"
-type Names = CollectionNames<typeof admin>;
-
-// Field types are inferred
-type PostFields = FieldNames<typeof postsAdmin>;
-```
+This enables:
+- Autocomplete for collection and global names
+- Type-safe navigation helpers
+- Inferred field types in hooks
 
 ## Related
 
-- [Registry Pattern](/docs/admin/architecture/registry-pattern) - Deep dive into registries
-- [Module Composition](/docs/admin/architecture/module-composition) - How modules merge
-- [Type Inference](/docs/admin/architecture/type-inference) - TypeScript magic
+- [Registry Pattern](/docs/admin/architecture/registry-pattern) — Deep dive into registries
+- [Module Composition](/docs/admin/architecture/module-composition) — How modules merge
+- [Type Inference](/docs/admin/architecture/type-inference) — TypeScript integration

@@ -78,37 +78,27 @@ const posts = q
   .title(({ f }) => f.title);
 ```
 
-### Admin Definition
+### Admin Configuration (Server-Side)
+
+Admin UI is configured on the **server** alongside your collection definition using `.admin()`, `.list()`, and `.form()`:
 
 ```typescript
-import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "./server/cms";
-
-const builder = qa<AppCMS>().use(adminModule);
-
-const postsAdmin = builder
-  .collection("posts")
-  .meta({
+// src/questpie/server/collections/posts.ts
+const posts = q.collection("posts")
+  .fields({
+    title: text("title").notNull(),
+    slug: text("slug").notNull().unique(),
+    content: text("content"),
+    excerpt: text("excerpt"),
+    published: boolean("published").default(false),
+    publishedAt: datetime("publishedAt"),
+    authorId: text("authorId"),
+  })
+  // Admin UI configuration
+  .admin(({ c }) => ({
     label: "Posts",
     labelSingular: "Post",
-    icon: FileText,
-  })
-  .fields(({ r }) => ({
-    title: r.text({ label: "Title", required: true }),
-    slug: r.text({ label: "Slug", description: "URL-friendly identifier" }),
-    content: r.richText({ label: "Content" }),
-    excerpt: r.textarea({ label: "Excerpt", maxLength: 300 }),
-    published: r.switch({ label: "Published" }),
-    publishedAt: r.datetime({ label: "Publish Date" }),
-    author: r.relation({
-      label: "Author",
-      targetCollection: "user",
-    }),
-    tags: r.relation({
-      label: "Tags",
-      targetCollection: "tags",
-      multiple: true,
-    }),
+    icon: c.icon("ph:article"),
   }))
   .list(({ v, f }) =>
     v.table({

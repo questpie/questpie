@@ -11,32 +11,32 @@ const useCases = [
 	{
 		title: "Marketing Sites",
 		icon: Megaphone,
-		items: ["Blogs, landing pages", "Block editor", "Live preview"],
+		items: ["Blog & landing pages", "Visual block editor", "Live preview & i18n"],
 	},
 	{
-		title: "E-commerce",
+		title: "E-commerce Backends",
 		icon: ShoppingCart,
-		items: ["Product catalogs", "Order management", "Customer data"],
+		items: ["Product catalogs", "Order management", "Inventory tracking"],
 	},
 	{
-		title: "SaaS Admin",
+		title: "SaaS Admin Panels",
 		icon: Settings,
-		items: ["User management", "Configuration", "Activity logs"],
+		items: ["User & org management", "Feature flags", "Activity audit logs"],
 	},
 	{
-		title: "Booking Systems",
+		title: "Booking Platforms",
 		icon: Calendar,
-		items: ["Appointments", "Staff management", "Reminders"],
+		items: ["Appointments & scheduling", "Staff management", "Email reminders"],
 	},
 	{
 		title: "Internal Tools",
 		icon: Layout,
-		items: ["Directories", "Documents", "Workflows"],
+		items: ["Employee directories", "Document management", "Approval workflows"],
 	},
 	{
 		title: "Content Platforms",
 		icon: Users,
-		items: ["Multi-author blogs", "Courses", "Media libraries"],
+		items: ["Multi-author publishing", "Online courses", "Media libraries"],
 	},
 ];
 
@@ -49,11 +49,13 @@ export function UseCases() {
 			<div className="w-full max-w-7xl mx-auto px-4 relative z-10">
 				<div className="text-center max-w-2xl mx-auto space-y-4 mb-16">
 					<h2 className="font-mono text-sm tracking-[0.2em] uppercase text-primary">
-						Use Cases
+						Built For
 					</h2>
-					<h3 className="text-3xl md:text-4xl font-bold">What You Can Build</h3>
+					<h3 className="text-3xl md:text-4xl font-bold">
+						From Blogs to SaaS Dashboards
+					</h3>
 					<p className="text-muted-foreground">
-						Flexible enough for any content-driven application.
+						Any application that needs structured content and an admin interface. Define the data model, QuestPie handles the rest.
 					</p>
 				</div>
 

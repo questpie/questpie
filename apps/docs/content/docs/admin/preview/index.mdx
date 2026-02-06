@@ -36,9 +36,9 @@ Admin Editor                 Preview Panel
 Add `.preview()` to your collection config:
 
 ```typescript
-export const pagesAdmin = builder
+export const pages = qb
   .collection("pages")
-  .meta({ label: "Pages" })
+  .admin(({ c }) => ({ label: "Pages", icon: c.icon("ph:file-text") }))
   .preview({
     url: (values) => {
       const slug = values.slug || values.id;
@@ -214,12 +214,12 @@ Enable preview conditionally:
 ## Example: Barbershop Barber Preview
 
 ```typescript
-export const barbersAdmin = builder
+export const barbers = qb
   .collection("barbers")
-  .meta({
+  .admin(({ c }) => ({
     label: { en: "Barbers", sk: "Holici" },
-    icon: UsersIcon,
-  })
+    icon: c.icon("ph:users"),
+  }))
   .preview({
     url: (values) => {
       // Generate URL-friendly slug from name

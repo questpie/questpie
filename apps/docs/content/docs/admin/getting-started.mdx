@@ -24,90 +24,74 @@ We recommend organizing your QUESTPIE configuration like this:
 ```
 src/
 └── questpie/
-    ├── server/              # Backend CMS (q builder)
-    │   ├── cms.ts           # Main CMS instance
-    │   └── collections/     # Collection definitions
+    ├── server/              # Backend CMS (q builder) — defines everything
+    │   ├── cms.ts           # Main CMS instance with dashboard, sidebar
+    │   ├── builder.ts       # Shared q builder instance
+    │   ├── collections/     # Collection definitions (fields, admin, list, form, actions)
+    │   └── globals/         # Global definitions
     │
-    └── admin/               # Admin UI (qa builder)
-        ├── admin.ts         # Main admin config
-        ├── builder.ts       # Shared builder instance
-        ├── collections/     # Collection UI configs
-        ├── globals/         # Global UI configs
-        ├── sidebar.ts       # Navigation
-        └── dashboard.ts     # Dashboard widgets
+    └── admin/               # Admin UI (qa builder) — renderers & branding only
+        ├── admin.ts         # Branding, locale config
+        └── builder.ts       # Shared builder instance
 ```
 
-## Step 1: Create the Builder
+<Callout type="info">
+Collections, dashboard, sidebar, and actions are all defined on the **server** using the `q` builder. The client-side `qa` builder only handles rendering components and branding.
+</Callout>
 
-The builder is a typed instance that provides autocomplete for your backend collections:
+## Step 1: Create the Server Builder
+
+Create a shared builder instance for your server-side collections:
 
 ```typescript
-// src/questpie/admin/builder.ts
-import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+// src/questpie/server/builder.ts
+import { q } from "questpie";
+import { adminModule } from "@questpie/admin/server";
 
-/**
- * Admin builder with type-safe access to backend collections.
- *
- * Usage:
- * ```ts
- * import { builder } from "./builder";
- *
- * const posts = builder.collection("posts")  // ← Autocomplete!
- *   .fields(({ r }) => ({
- *     title: r.text(),  // ← Autocomplete!
- *   }))
- * ```
- */
-export const builder = qa<AppCMS>().use(adminModule);
+export const qb = q({ name: "base" }).use(adminModule);
 ```
 
-## Step 2: Define Collection UI
+## Step 2: Define a Collection
 
-Create admin configurations for your collections:
+Define your collection with fields, admin metadata, list view, and form layout — all on the server:
 
 ```typescript
-// src/questpie/admin/collections/posts.ts
-import { FileTextIcon } from "@phosphor-icons/react";
-import { builder } from "../builder";
+// src/questpie/server/collections/posts.ts
+import { qb } from "../builder";
 
-export const postsAdmin = builder
+export const posts = qb
   .collection("posts")
-  .meta({
-    label: "Blog Posts",
-    icon: FileTextIcon,
-  })
-  .fields(({ r }) => ({
-    title: r.text({
-      label: "Title",
-      placeholder: "Enter post title...",
-      maxLength: 200,
-    }),
-    slug: r.text({
-      label: "Slug",
-      description: "URL-friendly identifier",
-    }),
-    content: r.richText({
-      label: "Content",
-    }),
-    status: r.select({
-      label: "Status",
+  .fields((f) => ({
+    title: f.text({ required: true }),
+    slug: f.text({ required: true }),
+    content: f.richText({ localized: true }),
+    status: f.select({
       options: [
         { label: "Draft", value: "draft" },
         { label: "Published", value: "published" },
       ],
+      default: "draft",
     }),
-    publishedAt: r.datetime({
-      label: "Publish Date",
-    }),
-    author: r.relation({
-      label: "Author",
-      targetCollection: "users",
-    }),
+    publishedAt: f.datetime(),
   }))
+  .title(({ f }) => f.title)
+
+  // Admin UI metadata
+  .admin(({ c }) => ({
+    label: { en: "Blog Posts" },
+    icon: c.icon("ph:article"),
+    group: "Content",
+  }))
+
+  // List/table view
   .list(({ v, f }) => v.table({
-    columns: [f.title, f.status, f.author, f.publishedAt],
+    columns: [f.title, f.status, f.publishedAt],
+    defaultSort: { field: "publishedAt", direction: "desc" },
+    searchable: ["title"],
+    filterable: ["status"],
   }))
+
+  // Create/edit form
   .form(({ v, f }) => v.form({
     sidebar: {
       position: "right",
@@ -115,79 +99,83 @@ export const postsAdmin = builder
     },
     sections: [
       {
-        title: "Content",
+        label: { en: "Content" },
         fields: [f.title, f.slug, f.content],
-      },
-      {
-        title: "Author",
-        fields: [f.author],
       },
     ],
   }));
 ```
 
-## Step 3: Configure Sidebar
+## Step 3: Configure Dashboard & Sidebar
 
-Define the navigation structure:
+Wire everything together in your main CMS file:
 
 ```typescript
-// src/questpie/admin/sidebar.ts
-import { qa } from "@questpie/admin/client";
-import {
-  HouseIcon,
-  FileTextIcon,
-  UsersIcon,
-  GearIcon,
-} from "@phosphor-icons/react";
-import type { AppCMS } from "../server/cms";
+// src/questpie/server/cms.ts
+import { q } from "questpie";
+import { adminModule, adminRpc } from "@questpie/admin/server";
+import { posts } from "./collections/posts";
 
-export const sidebarConfig = qa
-  .sidebar<AppCMS>()
-  .section("main", (s) =>
-    s.items([
-      { type: "link", label: "Dashboard", href: "/admin", icon: HouseIcon },
-    ])
-  )
-  .section("content", (s) =>
-    s
-      .title("Content")
-      .icon(FileTextIcon)
-      .items([
-        { type: "collection", collection: "posts", icon: FileTextIcon },
-        { type: "collection", collection: "pages", icon: FileTextIcon },
-      ])
-  )
-  .section("users", (s) =>
-    s
-      .title("Users")
-      .icon(UsersIcon)
-      .items([
-        { type: "collection", collection: "users", icon: UsersIcon },
-      ])
-  )
-  .section("settings", (s) =>
-    s
-      .title("Settings")
-      .icon(GearIcon)
-      .items([
-        { type: "global", global: "siteSettings", icon: GearIcon },
-      ])
-  );
+export const cms = q({ name: "my-cms" })
+  .use(adminModule)
+  .collections({ posts })
+
+  // Dashboard widgets
+  .dashboard(({ d, c }) => d.dashboard({
+    columns: 4,
+    items: [
+      d.stats({
+        collection: "posts",
+        label: { en: "Total Posts" },
+        icon: c.icon("ph:article"),
+        span: 1,
+      }),
+      d.stats({
+        collection: "posts",
+        label: { en: "Published" },
+        icon: c.icon("ph:check-circle"),
+        filter: { status: "published" },
+        span: 1,
+      }),
+    ],
+  }))
+
+  // Sidebar navigation
+  .sidebar(({ s, c }) => s.sidebar({
+    sections: [
+      s.section({
+        id: "content",
+        title: { en: "Content" },
+        icon: c.icon("ph:files"),
+        items: [
+          { type: "collection", collection: "posts" },
+        ],
+      }),
+    ],
+  }))
+
+  .auth({
+    emailAndPassword: { enabled: true },
+    baseURL: process.env.APP_URL,
+    basePath: "/api/cms/auth",
+    secret: process.env.BETTER_AUTH_SECRET,
+  })
+  .build({
+    db: { url: process.env.DATABASE_URL },
+    storage: { basePath: "/api/cms" },
+  });
+
+export type AppCMS = typeof cms;
 ```
 
-## Step 4: Build Admin Configuration
+## Step 4: Create the Client Admin Config
 
-Combine everything into the main admin config:
+The client-side only configures branding and locale:
 
 ```typescript
 // src/questpie/admin/admin.ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
-
-import { postsAdmin } from "./collections/posts";
-import { usersAdmin } from "./collections/users";
-import { siteSettingsAdmin } from "./globals/site-settings";
-import { sidebarConfig } from "./sidebar";
+import type { AppCMS } from "@/questpie/server/cms";
 
 export const admin = qa<AppCMS>()
   .use(adminModule)
@@ -197,15 +185,7 @@ export const admin = qa<AppCMS>()
   .locale({
     default: "en",
     supported: ["en"],
-  })
-  .collections({
-    posts: postsAdmin,
-    users: usersAdmin,
-  })
-  .globals({
-    siteSettings: siteSettingsAdmin,
-  })
-  .sidebar(sidebarConfig);
+  });
 
 // Type registry for global type inference
 declare module "@questpie/admin/client" {
@@ -282,10 +262,12 @@ Start your development server and navigate to `/admin`. You should see:
 1. The sidebar with your configured sections
 2. Collection list pages with tables
 3. Create/edit forms with your field configurations
+4. Dashboard with your configured widgets
 
 ## Related
 
-- [Builder API](/docs/admin/builder-api) - Deep dive into the qa() builder
-- [Field Types](/docs/admin/fields) - Configure all 22+ field types
-- [Dashboard](/docs/admin/dashboard) - Add widgets and analytics
-- [Full Example](/docs/examples/barbershop) - See a complete implementation
+- [Builder API](/docs/admin/builder-api) — Deep dive into the qa() builder
+- [Collections](/docs/admin/collections) — Server-side collection configuration
+- [Dashboard](/docs/admin/dashboard) — Add widgets and analytics
+- [Sidebar](/docs/admin/sidebar) — Configure navigation
+- [Full Example](/docs/examples/barbershop) — See a complete implementation

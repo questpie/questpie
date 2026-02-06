@@ -1,183 +1,77 @@
 ---
-title: Collection UI Configuration
+title: Collection Admin Configuration
 description: Configure admin interface for your collections
 ---
 
-# Collection UI Configuration
+# Collection Admin Configuration
 
-Collection admin configurations define how your data is displayed and edited in the admin interface.
+Collection admin configurations define how your data is displayed and edited in the admin interface. These are configured on the **server** using chainable methods on the collection builder.
 
-## Creating a Collection Config
+## Overview
 
 ```typescript
-import { builder } from "./builder";
-import { FileTextIcon } from "@phosphor-icons/react";
+// src/questpie/server/collections/posts.ts
+import { qb } from "../builder";
 
-export const postsAdmin = builder
-  .collection("posts")         // Must match backend collection name
-  .meta({...})                 // UI metadata
-  .preview({...})              // Live preview (optional)
-  .fields(({ r }) => ({...}))  // Field configurations
-  .list(({ v, f }) => {...})   // List/table view
-  .form(({ v, f }) => {...});  // Create/edit form
+export const posts = qb
+  .collection("posts")
+  .fields((f) => ({...}))         // Database schema
+  .title(({ f }) => f.title)      // Title field for display
+  .admin(({ c }) => ({...}))      // Admin UI metadata
+  .list(({ v, f, a }) => {...})   // List/table view
+  .form(({ v, f }) => {...})      // Create/edit form
+  .preview({...})                  // Live preview (optional)
+  .actions(({ a, c, f }) => ({...})); // Custom actions (optional)
 ```
 
-## `.meta()` - UI Metadata
+## `.admin()` — UI Metadata
 
-Configure how the collection appears in navigation:
-
-```typescript
-.meta({
-  // Label shown in sidebar and page headers
-  label: "Blog Posts",
-  // Or with i18n
-  label: { en: "Blog Posts", sk: "Blogove prispevky" },
-
-  // Icon component (from @phosphor-icons/react)
-  icon: FileTextIcon,
-
-  // Optional description
-  description: "Manage your blog content",
-})
-```
-
-<Callout type="warning">
-Icons must be React components, not strings. Import from a library like `@phosphor-icons/react`.
-</Callout>
-
-## `.preview()` - Live Preview
-
-Enable real-time preview while editing:
+Configure how the collection appears in navigation and headers:
 
 ```typescript
-.preview({
-  // Generate preview URL from form values
-  url: (values) => {
-    const slug = values.slug || values.id;
-    return `/posts/${slug}?preview=true`;
-  },
-
-  // Enable/disable preview
-  enabled: true,
-
-  // Panel position
-  position: "right",  // "right" | "bottom"
-
-  // Default width as percentage
-  defaultWidth: 50,
-})
-```
-
-The preview panel shows a live iframe of your content. See [Preview System](/docs/admin/preview) for details.
-
-## `.fields()` - Field Configurations
-
-Define how each field appears in forms:
-
-```typescript
-.fields(({ r }) => ({
-  title: r.text({
-    label: "Title",
-    placeholder: "Enter title...",
-    maxLength: 200,
-    required: true,
-  }),
-
-  content: r.richText({
-    label: "Content",
-    description: "Main article content",
-  }),
-
-  status: r.select({
-    label: "Status",
-    options: [
-      { label: "Draft", value: "draft" },
-      { label: "Published", value: "published" },
-    ],
-    defaultValue: "draft",
-  }),
-
-  author: r.relation({
-    label: "Author",
-    targetCollection: "users",
-  }),
-
-  publishedAt: r.datetime({
-    label: "Publish Date",
-    // Conditional visibility
-    visible: (values) => values.status === "published",
-  }),
+.admin(({ c }) => ({
+  label: { en: "Blog Posts", sk: "Blogové príspevky" },
+  icon: c.icon("ph:article"),
+  description: { en: "Manage your blog content" },
+  group: "Content",      // Sidebar grouping (for auto-generated sidebars)
+  order: 1,              // Order within group
+  hidden: false,         // Hide from sidebar
 }))
 ```
 
-### Common Field Options
+Icons use the `c.icon("ph:icon-name")` helper which creates a serializable reference rendered by `@iconify/react` on the client.
 
-All field types support these options:
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `label` | `string \| I18nText` | Display label |
-| `description` | `string \| I18nText` | Help text below field |
-| `placeholder` | `string \| I18nText` | Placeholder text |
-| `required` | `boolean \| (values) => boolean` | Validation requirement |
-| `readOnly` | `boolean \| (values) => boolean` | Disable editing |
-| `visible` | `(values) => boolean` | Conditional visibility |
-| `defaultValue` | `any` | Default value for new items |
-
-### Conditional Fields
-
-Make fields conditional based on other values:
-
-```typescript
-.fields(({ r }) => ({
-  status: r.select({
-    label: "Status",
-    options: [
-      { label: "Active", value: "active" },
-      { label: "Cancelled", value: "cancelled" },
-    ],
-  }),
-
-  // Only show when cancelled
-  cancellationReason: r.textarea({
-    label: "Cancellation Reason",
-    visible: (values) => values.status === "cancelled",
-    required: (values) => values.status === "cancelled",
-  }),
-
-  // Readonly unless draft
-  publishedAt: r.datetime({
-    label: "Published",
-    readOnly: (values) => values.status !== "draft",
-  }),
-}))
-```
-
-## `.list()` - Table View
+## `.list()` — Table View
 
 Configure the collection list page:
 
 ```typescript
-.list(({ v, f }) => v.table({
+.list(({ v, f, a }) => v.table({
   // Columns to display
   columns: [f.title, f.status, f.author, f.createdAt],
 
   // Default sorting
   defaultSort: { field: "createdAt", direction: "desc" },
 
-  // Enable search
-  searchable: true,
+  // Searchable fields
+  searchable: ["title", "author"],
 
   // Filterable fields
-  filters: [f.status, f.author],
+  filterable: ["status", "author"],
 
-  // Bulk actions
-  bulkActions: ["delete"],
-
-  // Row click behavior
-  rowAction: "edit",  // "edit" | "view" | "none"
+  // Actions
+  actions: {
+    header: { primary: [a.create] },
+    row: [a.duplicate, a.delete],
+    bulk: [a.deleteMany],
+  },
 }))
 ```
+
+The `({ v, f, a })` callback provides:
+- **`v`** — View helpers: `v.table()`, `v.cards()`
+- **`f`** — Field proxy with autocomplete for all defined fields
+- **`a`** — Action helpers: `a.create`, `a.delete`, `a.duplicate`, etc.
 
 ### Empty Table Config
 
@@ -189,7 +83,7 @@ Pass an empty config to use defaults (shows all fields):
 
 See [Table View](/docs/admin/views/table-view) for all options.
 
-## `.form()` - Edit Form
+## `.form()` — Edit Form
 
 Configure the create/edit form:
 
@@ -198,129 +92,232 @@ Configure the create/edit form:
   // Sidebar layout
   sidebar: {
     position: "right",
-    width: "300px",
     fields: [f.status, f.publishedAt, f.author],
   },
 
   // Main sections
   sections: [
     {
-      title: "Content",
-      description: "Main article content",
+      label: { en: "Content" },
+      description: { en: "Main article content" },
       fields: [f.title, f.slug, f.content],
     },
     {
-      title: "SEO",
+      label: { en: "SEO" },
       collapsible: true,
-      defaultOpen: false,
+      defaultCollapsed: true,
       fields: [f.metaTitle, f.metaDescription],
     },
   ],
 }))
 ```
 
+The `({ v, f })` callback provides:
+- **`v`** — View helpers: `v.form()`, `v.wizard()`
+- **`f`** — Field proxy with autocomplete
+
 ### Layout Options
 
 Forms support various layouts:
 
 ```typescript
-// Columns layout
+// Column layout
 {
-  title: "Contact Info",
-  layout: "columns",
+  label: { en: "Contact Info" },
+  layout: "grid",
   columns: 2,
   fields: [f.firstName, f.lastName, f.email, f.phone],
 }
 
-// Grid layout with spans
-{
-  layout: "grid",
-  grid: { columns: 4, gap: 4 },
-  fields: [
-    { field: f.title, span: 4 },      // Full width
-    { field: f.price, span: 1 },      // 1/4
-    { field: f.currency, span: 1 },   // 1/4
-    { field: f.stock, span: 2 },      // 2/4
-  ],
-}
-
 // Tabs
-{
+v.form({
   tabs: [
     {
-      id: "content",
-      label: "Content",
-      fields: [f.title, f.body],
+      label: { en: "Content" },
+      icon: c.icon("ph:article"),
+      sections: [
+        { fields: [f.title, f.body] },
+      ],
     },
     {
-      id: "settings",
-      label: "Settings",
-      fields: [f.status, f.visibility],
+      label: { en: "Settings" },
+      icon: c.icon("ph:gear"),
+      sections: [
+        { fields: [f.status, f.visibility] },
+      ],
     },
   ],
-}
+})
 ```
 
 See [Form Layouts](/docs/admin/views/form-layouts) for all options.
 
+## `.preview()` — Live Preview
+
+Enable real-time preview while editing:
+
+```typescript
+.preview({
+  enabled: true,
+  url: ({ record, locale }) => {
+    const slug = record.slug || record.id;
+    return `/posts/${slug}?preview=true&locale=${locale}`;
+  },
+  position: "right",    // "right" | "bottom"
+  defaultWidth: 50,     // Percentage
+})
+```
+
+See [Preview System](/docs/admin/preview) for details.
+
+## `.actions()` — Custom Actions
+
+Define server-side actions that can be triggered from the admin UI:
+
+```typescript
+.actions(({ a, c, f }) => ({
+  // Built-in actions
+  builtin: [a.create(), a.delete(), a.deleteMany(), a.duplicate()],
+
+  // Custom actions
+  custom: [
+    // Simple action with confirmation
+    a.action({
+      id: "publish",
+      label: { en: "Publish" },
+      icon: c.icon("ph:arrow-up"),
+      confirmation: {
+        title: { en: "Publish Post?" },
+        description: { en: "This will make the post visible to everyone." },
+        confirmLabel: { en: "Publish" },
+      },
+      handler: async ({ itemId, db }) => {
+        await db.update(posts).set({ status: "published" }).where(eq(posts.id, itemId));
+        return { type: "success", toast: { message: "Post published!" } };
+      },
+    }),
+
+    // Action with a form
+    a.action({
+      id: "send-email",
+      label: { en: "Send Email" },
+      icon: c.icon("ph:envelope"),
+      form: {
+        title: { en: "Send Email" },
+        fields: {
+          subject: f.text({ label: { en: "Subject" }, required: true }),
+          message: f.textarea({ label: { en: "Message" } }),
+        },
+        width: "md",
+      },
+      handler: async ({ data, itemId }) => {
+        await sendEmail({ to: "...", subject: data.subject, body: data.message });
+        return {
+          type: "success",
+          toast: { message: "Email sent!" },
+          effects: { closeModal: true },
+        };
+      },
+    }),
+
+    // Bulk action
+    a.bulkAction({
+      id: "archive-many",
+      label: { en: "Archive Selected" },
+      icon: c.icon("ph:archive"),
+      variant: "destructive",
+      confirmation: {
+        title: { en: "Archive items?" },
+        destructive: true,
+      },
+      handler: async ({ itemIds, db }) => {
+        await db.update(posts).set({ status: "archived" }).where(inArray(posts.id, itemIds));
+        return {
+          type: "success",
+          toast: { message: `${itemIds.length} items archived` },
+          effects: { invalidate: true },
+        };
+      },
+    }),
+  ],
+}))
+```
+
+### Action Handler Results
+
+Action handlers return typed results:
+
+```typescript
+// Success
+{ type: "success", toast: { message: "Done!" }, effects: { invalidate: true } }
+
+// Error
+{ type: "error", toast: { message: "Failed" }, errors: { email: "Invalid email" } }
+
+// Redirect
+{ type: "redirect", url: "/admin/collections/posts" }
+
+// File download
+{ type: "download", file: { name: "export.csv", content: csvData, mimeType: "text/csv" } }
+```
+
+### Action Form Field Types
+
+Action forms support these field types via the `f` proxy:
+
+```typescript
+f.text()      f.email()      f.textarea()
+f.number()    f.boolean()    f.date()
+f.datetime()  f.time()       f.select()
+f.json()      f.url()
+```
+
 ## Complete Example
 
 ```typescript
-// admin/collections/appointments.ts
-import { CalendarIcon } from "@phosphor-icons/react";
-import { builder } from "../builder";
+// src/questpie/server/collections/appointments.ts
+import { qb } from "../builder";
 
-export const appointmentsAdmin = builder
+export const appointments = qb
   .collection("appointments")
-  .meta({
-    label: { en: "Appointments", sk: "Rezervacie" },
-    icon: CalendarIcon,
-  })
-  .fields(({ r }) => ({
-    customerName: r.text({
-      label: { en: "Customer Name", sk: "Meno zakaznika" },
-      required: true,
-    }),
-    customerEmail: r.email({
-      label: { en: "Email", sk: "Email" },
-      required: true,
-    }),
-    customerPhone: r.text({
-      label: { en: "Phone", sk: "Telefon" },
-    }),
-    barber: r.relation({
-      label: { en: "Barber", sk: "Holic" },
-      targetCollection: "barbers",
-      required: true,
-    }),
-    service: r.relation({
-      label: { en: "Service", sk: "Sluzba" },
-      targetCollection: "services",
-      required: true,
-    }),
-    scheduledAt: r.datetime({
-      label: { en: "Date & Time", sk: "Datum a cas" },
-      required: true,
-    }),
-    status: r.select({
-      label: { en: "Status", sk: "Stav" },
+  .fields((f) => ({
+    customerName: f.text({ required: true }),
+    customerEmail: f.email({ required: true }),
+    customerPhone: f.text(),
+    barber: f.relation({ to: "barbers", required: true }),
+    service: f.relation({ to: "services", required: true }),
+    scheduledAt: f.datetime({ required: true }),
+    status: f.select({
       options: [
-        { label: { en: "Pending", sk: "Cakajuce" }, value: "pending" },
-        { label: { en: "Confirmed", sk: "Potvrdene" }, value: "confirmed" },
-        { label: { en: "Completed", sk: "Dokoncene" }, value: "completed" },
-        { label: { en: "Cancelled", sk: "Zrusene" }, value: "cancelled" },
+        { label: "Pending", value: "pending" },
+        { label: "Confirmed", value: "confirmed" },
+        { label: "Completed", value: "completed" },
+        { label: "Cancelled", value: "cancelled" },
       ],
-      defaultValue: "pending",
+      default: "pending",
     }),
-    notes: r.textarea({
-      label: { en: "Notes", sk: "Poznamky" },
-    }),
+    notes: f.textarea(),
   }))
-  .list(({ v, f }) => v.table({
+  .title(({ f }) => f.customerName)
+
+  .admin(({ c }) => ({
+    label: { en: "Appointments", sk: "Rezervácie" },
+    icon: c.icon("ph:calendar-check"),
+    group: "Bookings",
+  }))
+
+  .list(({ v, f, a }) => v.table({
     columns: [f.customerName, f.barber, f.service, f.scheduledAt, f.status],
     defaultSort: { field: "scheduledAt", direction: "desc" },
-    filters: [f.status, f.barber],
+    searchable: ["customerName", "customerEmail"],
+    filterable: ["status", "barber"],
+    actions: {
+      header: { primary: [a.create] },
+      row: [a.duplicate, a.delete],
+      bulk: [a.deleteMany],
+    },
   }))
+
   .form(({ v, f }) => v.form({
     sidebar: {
       position: "right",
@@ -328,36 +325,44 @@ export const appointmentsAdmin = builder
     },
     sections: [
       {
-        title: { en: "Customer", sk: "Zakaznik" },
+        label: { en: "Customer", sk: "Zákazník" },
         layout: "grid",
-        grid: { columns: 2 },
-        fields: [
-          f.customerName,
-          f.customerEmail,
-          f.customerPhone,
-        ],
+        columns: 2,
+        fields: [f.customerName, f.customerEmail, f.customerPhone],
       },
       {
-        title: { en: "Appointment", sk: "Rezervacia" },
+        label: { en: "Appointment", sk: "Rezervácia" },
         layout: "grid",
-        grid: { columns: 2 },
-        fields: [
-          f.barber,
-          f.service,
-          { field: f.scheduledAt, span: 2 },
-        ],
+        columns: 2,
+        fields: [f.barber, f.service, f.scheduledAt],
       },
       {
-        title: { en: "Notes", sk: "Poznamky" },
+        label: { en: "Notes", sk: "Poznámky" },
         fields: [f.notes],
       },
+    ],
+  }))
+
+  .actions(({ a, c, f }) => ({
+    builtin: [a.create(), a.delete(), a.deleteMany()],
+    custom: [
+      a.action({
+        id: "confirm",
+        label: { en: "Confirm Appointment" },
+        icon: c.icon("ph:check-circle"),
+        handler: async ({ itemId, db }) => {
+          await db.update(appointments).set({ status: "confirmed" }).where(eq(appointments.id, itemId));
+          return { type: "success", toast: { message: "Appointment confirmed!" } };
+        },
+      }),
     ],
   }));
 ```
 
 ## Related
 
-- [Field Types](/docs/admin/fields) - All 22+ field types
-- [Table View](/docs/admin/views/table-view) - Configure list pages
-- [Form View](/docs/admin/views/form-view) - Configure edit forms
-- [Live Preview](/docs/admin/preview) - Real-time content preview
+- [Field Types](/docs/admin/fields) — All 22+ field types
+- [Table View](/docs/admin/views/table-view) — Configure list pages
+- [Form View](/docs/admin/views/form-view) — Configure edit forms
+- [Form Layouts](/docs/admin/views/form-layouts) — Layout options
+- [Live Preview](/docs/admin/preview) — Real-time content preview

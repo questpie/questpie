@@ -1,11 +1,15 @@
 ---
 title: Admin Builder API
-description: Complete reference for the qa() builder pattern
+description: Complete reference for the client-side qa() builder
 ---
 
 # Admin Builder API
 
-The `qa()` builder is the entry point for configuring your admin interface. It provides a fluent, type-safe API for defining collections, globals, navigation, and more.
+The `qa()` builder is the **client-side** entry point for configuring your admin interface. It registers rendering components (fields, views, widgets, blocks) and configures branding and locale.
+
+<Callout type="info">
+For server-side configuration (collections, dashboard, sidebar, actions), see the [Collections](/docs/admin/collections), [Dashboard](/docs/admin/dashboard), and [Sidebar](/docs/admin/sidebar) docs.
+</Callout>
 
 ## Creating an Admin Builder
 
@@ -14,19 +18,13 @@ import { qa, adminModule } from "@questpie/admin/client";
 import type { AppCMS } from "./server/cms";
 
 const admin = qa<AppCMS>()
-  .use(adminModule)
+  .use(adminModule)          // Built-in field/view/widget renderers
   .branding({ name: "My Admin" })
-  .collections({ posts: postsAdmin })
-  .globals({ settings: settingsAdmin })
-  .sidebar(sidebarConfig)
-  .dashboard(dashboardConfig)
   .locale({ default: "en", supported: ["en", "sk"] })
   .messages(customMessages);
 ```
 
-<Callout type="info">
 The generic `<AppCMS>` provides type inference for your backend collections, globals, and other definitions.
-</Callout>
 
 ## Builder Methods
 
@@ -43,11 +41,11 @@ const admin = qa()
 ```
 
 The merge strategy:
-- **fields** - Spread (last wins on conflicts)
-- **views** - Spread (last wins on conflicts)
-- **widgets** - Spread (last wins on conflicts)
-- **sidebar** - Sections concatenated
-- **translations** - Deep merged
+- **fields** — Spread (last wins on conflicts)
+- **views** — Spread (last wins on conflicts)
+- **widgets** — Spread (last wins on conflicts)
+- **blocks** — Spread (last wins on conflicts)
+- **translations** — Deep merged
 
 ### `.branding(config)`
 
@@ -60,74 +58,6 @@ Configure admin branding:
   favicon: "/favicon.ico",     // Optional
 })
 ```
-
-### `.collections(config)`
-
-Register collection UI configurations:
-
-```typescript
-.collections({
-  posts: postsAdmin,
-  users: usersAdmin,
-  pages: pagesAdmin,
-})
-```
-
-Each value must be a collection admin configuration created with `builder.collection()`.
-
-### `.globals(config)`
-
-Register global UI configurations:
-
-```typescript
-.globals({
-  siteSettings: settingsAdmin,
-  navigation: navAdmin,
-})
-```
-
-### `.sidebar(config)`
-
-Configure navigation structure:
-
-```typescript
-.sidebar(
-  qa.sidebar<AppCMS>()
-    .section("main", (s) => s.items([...]))
-    .section("content", (s) => s.title("Content").items([...]))
-)
-```
-
-See [Sidebar Configuration](/docs/admin/sidebar) for details.
-
-### `.dashboard(config)`
-
-Configure dashboard widgets:
-
-```typescript
-.dashboard({
-  title: "Dashboard",
-  columns: 4,
-  items: [
-    { type: "stats", collection: "posts", label: "Posts" },
-    { type: "chart", collection: "posts", field: "createdAt" },
-  ],
-})
-```
-
-See [Dashboard Configuration](/docs/admin/dashboard) for details.
-
-### `.blocks(config)`
-
-Register page builder blocks:
-
-```typescript
-import blocks from "./blocks";
-
-.blocks(blocks)
-```
-
-See [Block System](/docs/admin/blocks) for details.
 
 ### `.locale(config)`
 
@@ -152,14 +82,14 @@ Add custom translation messages:
   },
   sk: {
     "custom.greeting": "Ahoj!",
-    "collection.posts.title": "Blogove prispevky",
+    "collection.posts.title": "Blogové príspevky",
   },
 })
 ```
 
 ### `.fields(registry)`
 
-Register custom field types:
+Register custom field type renderers:
 
 ```typescript
 .fields({
@@ -168,9 +98,11 @@ Register custom field types:
 })
 ```
 
+See [Custom Fields](/docs/admin/extensibility/custom-fields) for details.
+
 ### `.views(registry)`
 
-Register custom view types:
+Register custom view type renderers:
 
 ```typescript
 .views({
@@ -179,9 +111,11 @@ Register custom view types:
 })
 ```
 
+See [Custom Views](/docs/admin/extensibility/custom-views) for details.
+
 ### `.widgets(registry)`
 
-Register custom dashboard widgets:
+Register custom dashboard widget renderers:
 
 ```typescript
 .widgets({
@@ -190,9 +124,59 @@ Register custom dashboard widgets:
 })
 ```
 
+See [Custom Widgets](/docs/admin/extensibility/custom-widgets) for details.
+
+### `.blocks(registry)`
+
+Register page builder blocks:
+
+```typescript
+import blocks from "./blocks";
+
+.blocks(blocks)
+```
+
+See [Block System](/docs/admin/blocks) for details.
+
+### `.collections(config)`
+
+Register client-side collection UI overrides:
+
+```typescript
+.collections({
+  posts: postsAdmin,
+  users: usersAdmin,
+})
+```
+
+<Callout type="info">
+In most cases, collection configuration is done on the **server** via `.admin()`, `.list()`, `.form()`, and `.actions()`. Client-side collection configs are used for overrides or when extending the server config.
+</Callout>
+
+### `.globals(config)`
+
+Register client-side global UI overrides:
+
+```typescript
+.globals({
+  siteSettings: settingsAdmin,
+})
+```
+
+### `.defaultViews(config)`
+
+Configure default view types for collections:
+
+```typescript
+.defaultViews({
+  list: "table",
+  edit: "form",
+})
+```
+
 ## Why No `.build()` Method?
 
-Unlike the backend `q()` builder, the admin `qa()` builder does NOT have a `.build()` method. This is intentional:
+Unlike the backend `q()` builder, the admin `qa()` builder does NOT have a `.build()` method:
 
 | Backend (`q`) | Admin (`qa`) |
 |---------------|--------------|
@@ -202,31 +186,12 @@ Unlike the backend `q()` builder, the admin `qa()` builder does NOT have a `.bui
 | Must call `.build()` | NO `.build()` needed |
 
 ```typescript
-// Backend - .build() creates runtime
+// Backend — .build() creates runtime
 const cms = q().collections({...}).build({ db: {...} });
-cms.collections.posts.table;  // Drizzle table instance
 
-// Admin - state IS the config
-const admin = qa().collections({...});
-admin.state.collections.posts;  // Configuration object
-```
-
-The admin builder's internal state is accessed directly by React components at runtime.
-
-## Accessing Builder State
-
-You can access the configuration state directly:
-
-```typescript
-const admin = qa()
-  .use(adminModule)
-  .collections({ posts: postsAdmin });
-
-// Access state
-admin.state.collections.posts;    // PostsAdmin config
-admin.state.fields;               // Registered fields
-admin.state.views;                // Registered views
-admin.state.sidebar;              // Sidebar config
+// Admin — state IS the config, pass directly
+const admin = qa().use(adminModule).branding({...});
+<AdminLayoutProvider admin={admin} ... />
 ```
 
 ## Mounting the Admin UI
@@ -236,8 +201,16 @@ Pass the builder directly to `AdminLayoutProvider`:
 ```typescript
 import { AdminLayoutProvider } from "@questpie/admin/client";
 
-// Pass the builder directly - no need for Admin.from()
-<AdminLayoutProvider admin={admin} client={cmsClient} ... />
+<AdminLayoutProvider
+  admin={admin}
+  client={cmsClient}
+  queryClient={queryClient}
+  LinkComponent={Link}
+  activeRoute={location.pathname}
+  basePath="/admin"
+>
+  <Outlet />
+</AdminLayoutProvider>
 ```
 
 ## Type Inference
@@ -258,44 +231,10 @@ This enables:
 - Type-safe navigation helpers
 - Inferred field types in hooks
 
-## Collection Builder
-
-Create collection UI configurations:
-
-```typescript
-const postsAdmin = builder
-  .collection("posts")          // Collection name (must match backend)
-  .meta({                       // UI metadata
-    label: "Posts",
-    icon: PostIcon,
-  })
-  .preview({...})               // Live preview config
-  .fields(({ r }) => ({...}))   // Field configurations
-  .list(({ v, f }) => {...})    // List view
-  .form(({ v, f }) => {...});   // Form view
-```
-
-See [Collection Configuration](/docs/admin/collections) for details.
-
-## Global Builder
-
-Create global UI configurations:
-
-```typescript
-const settingsAdmin = builder
-  .global("siteSettings")
-  .meta({
-    label: "Site Settings",
-    icon: GearIcon,
-  })
-  .fields(({ r }) => ({...}))
-  .form(({ v, f }) => {...});
-```
-
-See [Global Configuration](/docs/admin/globals) for details.
-
 ## Related
 
-- [Scoped Helpers](/docs/admin/qa-from) - Using qa.from() for type-safe field access
-- [Collections](/docs/admin/collections) - Configure collection UI
-- [Fields](/docs/admin/fields) - All 22+ field types
+- [Collections](/docs/admin/collections) — Server-side collection configuration
+- [Dashboard](/docs/admin/dashboard) — Server-side dashboard configuration
+- [Sidebar](/docs/admin/sidebar) — Server-side sidebar configuration
+- [Scoped Helpers](/docs/admin/qa-from) — Using qa.from() for type-safe field access
+- [Fields](/docs/admin/fields) — All 22+ field types

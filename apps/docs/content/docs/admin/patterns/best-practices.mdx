@@ -93,35 +93,35 @@ const admin = qa()
 
 ### Centralize Sidebar Config
 
-Keep sidebar in a dedicated file:
+Keep sidebar configuration in your main CMS file on the server:
 
 ```typescript
-// sidebar.ts
-import {
-  LayoutDashboard,
-  FileText,
-  Users,
-  Settings
-} from "lucide-react";
-
-export const sidebarConfig = ({ s }) => [
-  s.link({ label: "Dashboard", icon: LayoutDashboard, href: "/admin" }),
-  s.section({
-    label: "Content",
-    items: [
-      s.collection({ collection: "posts", icon: FileText }),
-      s.collection({ collection: "users", icon: Users }),
-    ],
-  }),
-  s.global({ global: "settings", icon: Settings }),
-];
-
-// admin.ts
-import { sidebarConfig } from "./sidebar";
-
-const admin = qa()
+// src/questpie/server/cms.ts
+const cms = q({ name: "my-cms" })
   .use(adminModule)
-  .sidebar(sidebarConfig);
+  .collections({ posts, users })
+  .sidebar(({ s, c }) => s.sidebar({
+    sections: [
+      s.section({
+        id: "content",
+        title: { en: "Content" },
+        icon: c.icon("ph:files"),
+        items: [
+          { type: "collection", collection: "posts", icon: c.icon("ph:article") },
+          { type: "collection", collection: "users", icon: c.icon("ph:users") },
+        ],
+      }),
+      s.section({
+        id: "settings",
+        title: { en: "Settings" },
+        icon: c.icon("ph:gear"),
+        items: [
+          { type: "global", global: "settings", icon: c.icon("ph:gear") },
+        ],
+      }),
+    ],
+  }))
+  .build({ ... });
 ```
 
 ## Field Configuration
@@ -410,7 +410,7 @@ test("renders post form", () => {
 - [ ] Group related fields in sections
 - [ ] Limit list view columns
 - [ ] Enable search and filters
-- [ ] Use icons as components (not strings)
+- [ ] Use `c.icon("ph:icon-name")` for icons
 - [ ] Validate on backend, not just admin
 - [ ] Handle loading and error states
 - [ ] Use toast for user feedback

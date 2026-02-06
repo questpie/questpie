@@ -37,13 +37,15 @@ bun add -D drizzle-kit
 
 ### 3. Define Your CMS
 
+Collections, admin UI configuration, sidebar, and dashboard are all defined on the **server**:
+
 ```typescript
 // src/questpie/server/cms.ts
-import { q, text, integer, boolean, datetime } from "questpie";
+import { q, text, boolean, datetime } from "questpie";
 import { adminModule } from "@questpie/admin/server";
 
 export const cms = q({ name: "my-cms" })
-  .use(adminModule)  // Adds auth and assets
+  .use(adminModule)
   .collections({
     posts: q.collection("posts")
       .fields({
@@ -52,13 +54,30 @@ export const cms = q({ name: "my-cms" })
         published: boolean("published").default(false),
         publishedAt: datetime("publishedAt"),
       })
-      .validation({
-        exclude: { id: true, createdAt: true, updatedAt: true },
-        refine: {
-          title: (s) => s.min(1).max(200),
-        },
-      }),
+      // Admin UI config on the server
+      .admin(({ c }) => ({
+        label: "Posts",
+        icon: c.icon("ph:article"),
+      }))
+      .list(({ v, f }) => v.table({
+        columns: [f.title, f.published, f.publishedAt],
+      }))
+      .form(({ v, f }) => v.form({
+        fields: [f.title, f.content, f.published, f.publishedAt],
+      })),
   })
+  .sidebar(({ s, c }) => s.sidebar({
+    sections: [
+      s.section({
+        id: "content",
+        title: "Content",
+        icon: c.icon("ph:files"),
+        items: [
+          { type: "collection", collection: "posts", icon: c.icon("ph:article") },
+        ],
+      }),
+    ],
+  }))
   .auth({
     emailAndPassword: { enabled: true },
     secret: process.env.AUTH_SECRET,
@@ -70,7 +89,9 @@ export const cms = q({ name: "my-cms" })
 export type AppCMS = typeof cms;
 ```
 
-### 4. Configure Admin UI
+### 4. Create Client Admin Config
+
+The client-side `qa()` builder only handles rendering and branding:
 
 ```typescript
 // src/questpie/admin/admin.ts
@@ -79,31 +100,7 @@ import type { AppCMS } from "../server/cms";
 
 export const admin = qa<AppCMS>()
   .use(adminModule)
-  .branding({ name: "My CMS" })
-  .collections({
-    posts: qa.collection("posts")
-      .meta({ label: "Posts" })
-      .fields(({ r }) => ({
-        title: r.text({ label: "Title", required: true }),
-        content: r.richText({ label: "Content" }),
-        published: r.switch({ label: "Published" }),
-        publishedAt: r.datetime({ label: "Published At" }),
-      }))
-      .list(({ v, f }) => v.table({
-        columns: [f.title, f.published, f.publishedAt],
-      }))
-      .form(({ v, f }) => v.form({
-        fields: [f.title, f.content, f.published, f.publishedAt],
-      })),
-  })
-  .sidebar(
-    qa.sidebar<AppCMS>()
-      .section("content", (s) =>
-        s.title("Content").items([
-          { type: "collection", collection: "posts" },
-        ])
-      )
-  );
+  .branding({ name: "My CMS" });
 ```
 
 ### 5. Mount the API
@@ -168,16 +165,13 @@ Recommended structure for QUESTPIE projects:
 ```
 src/
 ├── questpie/
-│   ├── server/           # Backend CMS
-│   │   ├── cms.ts        # Main CMS instance
-│   │   ├── collections/  # Collection definitions
+│   ├── server/           # Backend CMS + admin config
+│   │   ├── cms.ts        # CMS instance (collections, sidebar, dashboard)
+│   │   ├── collections/  # Collection definitions + admin config
 │   │   └── globals/      # Global definitions
 │   │
-│   └── admin/            # Admin UI
-│       ├── admin.ts      # Main admin config
-│       ├── builder.ts    # Shared builder
-│       ├── collections/  # Collection UI configs
-│       └── sidebar.ts    # Navigation
+│   └── admin/            # Client admin (minimal)
+│       └── admin.ts      # Branding + locale only
 │
 ├── routes/
 │   ├── api/cms.ts        # CMS API routes

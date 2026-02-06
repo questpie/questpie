@@ -5,60 +5,55 @@ description: Configure admin navigation structure
 
 # Sidebar Configuration
 
-The sidebar builder creates the navigation structure for your admin interface.
+The sidebar is configured on the **server** using the `.sidebar()` method. It defines the navigation structure with sections, collection links, global links, and custom links.
 
-## Creating a Sidebar Config
+## Basic Configuration
 
 ```typescript
-import { qa } from "@questpie/admin/client";
-import {
-  HouseIcon,
-  FileTextIcon,
-  UsersIcon,
-  GearIcon,
-} from "@phosphor-icons/react";
-import type { AppCMS } from "../server/cms";
-
-export const sidebarConfig = qa
-  .sidebar<AppCMS>()
-  .section("main", (s) => s.items([...]))
-  .section("content", (s) => s.title("Content").items([...]))
-  .section("settings", (s) => s.title("Settings").items([...]));
+// src/questpie/server/cms.ts
+const cms = q({ name: "my-cms" })
+  .use(adminModule)
+  .collections({ posts, users })
+  .sidebar(({ s, c }) => s.sidebar({
+    sections: [
+      s.section({
+        id: "content",
+        title: { en: "Content" },
+        icon: c.icon("ph:files"),
+        items: [
+          { type: "collection", collection: "posts" },
+          { type: "collection", collection: "users" },
+        ],
+      }),
+    ],
+  }))
+  .build({ db: { url: "..." } });
 ```
 
-The generic `<AppCMS>` provides autocomplete for collection and global names.
+The `({ s, c })` callback provides:
+- **`s`** — Sidebar builder helpers (`s.sidebar()`, `s.section()`)
+- **`c`** — Component helpers (`c.icon("ph:icon-name")`)
 
 ## Sections
 
-Sections group navigation items. Each section can have:
+Sections group navigation items. Each section has:
 
-- **id** - Unique identifier (first argument to `.section()`)
-- **title** - Optional header text
-- **icon** - Optional section icon
-- **items** - Navigation items
-
-```typescript
-.section("content", (s) =>
-  s
-    .title({ en: "Content", sk: "Obsah" })
-    .icon(FileTextIcon)
-    .items([
-      { type: "collection", collection: "posts" },
-      { type: "collection", collection: "pages" },
-    ])
-)
-```
-
-### Section Without Title
-
-For top-level items without a group header:
+- **id** — Unique identifier
+- **title** — Optional header text (i18n supported)
+- **icon** — Optional section icon
+- **collapsed** — Start collapsed (default: `false`)
+- **items** — Navigation items
 
 ```typescript
-.section("main", (s) =>
-  s.items([
-    { type: "link", label: "Dashboard", href: "/admin", icon: HouseIcon },
-  ])
-)
+s.section({
+  id: "content",
+  title: { en: "Content", sk: "Obsah" },
+  icon: c.icon("ph:files"),
+  items: [
+    { type: "collection", collection: "posts" },
+    { type: "collection", collection: "pages" },
+  ],
+})
 ```
 
 ## Item Types
@@ -70,11 +65,13 @@ Link to a collection list:
 ```typescript
 {
   type: "collection",
-  collection: "posts",           // Backend collection name (autocomplete!)
-  icon: FileTextIcon,            // Optional override
-  label: "Blog Posts",           // Optional override (uses collection meta.label by default)
+  collection: "posts",                         // Backend collection name
+  label: { en: "Blog Posts" },                 // Optional label override
+  icon: c.icon("ph:article"),                  // Optional icon override
 }
 ```
+
+If `label` and `icon` are omitted, they default to the collection's `.admin()` config.
 
 ### Global Item
 
@@ -83,9 +80,9 @@ Link to a global edit page:
 ```typescript
 {
   type: "global",
-  global: "siteSettings",        // Backend global name (autocomplete!)
-  icon: GearIcon,
-  label: "Site Settings",        // Optional override
+  global: "siteSettings",                      // Backend global name
+  label: { en: "Site Settings" },              // Optional label override
+  icon: c.icon("ph:gear"),                     // Optional icon override
 }
 ```
 
@@ -96,10 +93,23 @@ Custom navigation link:
 ```typescript
 {
   type: "link",
-  label: { en: "Dashboard", sk: "Prehlad" },
-  href: "/admin",
-  icon: HouseIcon,
-  external: false,               // Open in new tab
+  label: { en: "Documentation" },
+  href: "https://docs.example.com",
+  icon: c.icon("ph:book-open"),
+  external: true,                              // Opens in new tab
+}
+```
+
+### Page Item
+
+Link to a custom admin page:
+
+```typescript
+{
+  type: "page",
+  pageId: "analytics",
+  label: { en: "Analytics" },
+  icon: c.icon("ph:chart-line"),
 }
 ```
 
@@ -111,142 +121,104 @@ Visual separator:
 { type: "divider" }
 ```
 
+## Auto-Generated Sidebar
+
+If you don't call `.sidebar()`, one is automatically generated from your collections and globals:
+
+1. Collections are grouped by their `.admin()` `group` property
+2. Globals appear in a "Globals" section
+3. Items are sorted by their `.admin()` `order` property
+
+```typescript
+// These admin configs...
+.admin(({ c }) => ({ label: { en: "Posts" }, group: "Content", order: 1 }))
+.admin(({ c }) => ({ label: { en: "Pages" }, group: "Content", order: 2 }))
+.admin(({ c }) => ({ label: { en: "Users" }, group: "Team", order: 1 }))
+
+// ...auto-generate a sidebar with "Content" and "Team" sections
+```
+
 ## Complete Example
 
 ```typescript
-// admin/sidebar.ts
-import { qa } from "@questpie/admin/client";
-import {
-  CalendarCheckIcon,
-  FileTextIcon,
-  GearIcon,
-  HouseIcon,
-  ScissorsIcon,
-  StarIcon,
-  UsersIcon,
-} from "@phosphor-icons/react";
-import type { AppCMS } from "../server/cms";
+// src/questpie/server/cms.ts
+const cms = q({ name: "barbershop" })
+  .use(baseInstance)
+  .sidebar(({ s, c }) => s.sidebar({
+    sections: [
+      // Team management
+      s.section({
+        id: "team",
+        title: { en: "Team Management", sk: "Správa tímu" },
+        icon: c.icon("ph:users"),
+        items: [
+          { type: "collection", collection: "barbers", icon: c.icon("ph:user") },
+          { type: "collection", collection: "services", icon: c.icon("ph:scissors") },
+        ],
+      }),
 
-export const sidebarConfig = qa
-  .sidebar<AppCMS>()
-  // Dashboard link (no section title)
-  .section("main", (s) =>
-    s.items([
-      {
-        type: "link",
-        label: { en: "Dashboard", sk: "Prehlad" },
-        href: "/admin",
-        icon: HouseIcon,
-      },
-    ])
-  )
-  // Content section
-  .section("content", (s) =>
-    s
-      .title({ en: "Content", sk: "Obsah" })
-      .icon(FileTextIcon)
-      .items([
-        { type: "collection", collection: "pages", icon: FileTextIcon },
-      ])
-  )
-  // Bookings section
-  .section("bookings", (s) =>
-    s
-      .title({ en: "Bookings", sk: "Rezervacie" })
-      .icon(CalendarCheckIcon)
-      .items([
-        { type: "collection", collection: "appointments", icon: CalendarCheckIcon },
-        { type: "collection", collection: "reviews", icon: StarIcon },
-      ])
-  )
-  // Staff section
-  .section("staff", (s) =>
-    s
-      .title({ en: "Staff & Services", sk: "Personal a sluzby" })
-      .icon(UsersIcon)
-      .items([
-        { type: "collection", collection: "barbers", icon: UsersIcon },
-        { type: "collection", collection: "services", icon: ScissorsIcon },
-      ])
-  )
-  // Settings section
-  .section("settings", (s) =>
-    s
-      .title({ en: "Settings", sk: "Nastavenia" })
-      .icon(GearIcon)
-      .items([
-        { type: "global", global: "siteSettings", icon: GearIcon },
-        { type: "divider" },
-        {
-          type: "link",
-          label: "Documentation",
-          href: "https://questpie.dev/docs",
-          icon: FileTextIcon,
-          external: true,
-        },
-      ])
-  );
-```
+      // Bookings
+      s.section({
+        id: "bookings",
+        title: { en: "Bookings", sk: "Rezervácie" },
+        icon: c.icon("ph:calendar"),
+        items: [
+          { type: "collection", collection: "appointments" },
+          { type: "collection", collection: "reviews", icon: c.icon("ph:star") },
+        ],
+      }),
 
-## Typed Sidebar Items
+      // Content
+      s.section({
+        id: "content",
+        title: { en: "Content", sk: "Obsah" },
+        icon: c.icon("ph:files"),
+        items: [
+          { type: "collection", collection: "pages" },
+          { type: "global", global: "siteSettings", icon: c.icon("ph:gear") },
+        ],
+      }),
 
-For standalone item arrays with type safety:
-
-```typescript
-import type { SidebarItemForApp } from "@questpie/admin/client";
-
-const contentItems: SidebarItemForApp<AppCMS>[] = [
-  { type: "collection", collection: "posts" },
-  { type: "collection", collection: "pages" },
-];
-```
-
-## Adding to Admin
-
-Register the sidebar in your main admin config:
-
-```typescript
-// admin/admin.ts
-import { sidebarConfig } from "./sidebar";
-
-export const admin = qa()
-  .use(adminModule)
-  .sidebar(sidebarConfig);
-```
-
-## Conditional Items
-
-Show items based on user role or permissions:
-
-```typescript
-// In a component, use hooks to conditionally render
-import { useCurrentUser, useHasRole } from "@questpie/admin/client";
-
-function ConditionalNav() {
-  const hasAdminRole = useHasRole("admin");
-
-  // Sidebar items can be filtered based on roles
-  // The admin framework handles this automatically when
-  // you configure access control on collections
-}
+      // External links
+      s.section({
+        id: "external",
+        title: { en: "External" },
+        items: [
+          {
+            type: "link",
+            label: { en: "Documentation" },
+            href: "https://questpie.dev/docs",
+            icon: c.icon("ph:book-open"),
+            external: true,
+          },
+          { type: "divider" },
+          {
+            type: "link",
+            label: { en: "Visit Site" },
+            href: "https://example.com",
+            icon: c.icon("ph:arrow-square-out"),
+            external: true,
+          },
+        ],
+      }),
+    ],
+  }))
+  .build({ ... });
 ```
 
 ## Icons
 
-Always use React component icons, not strings:
+Use `c.icon("ph:icon-name")` for all sidebar icons. Icons use the [Phosphor](https://phosphoricons.com/) icon set via `@iconify/react`:
 
 ```typescript
-// Correct
-import { FileTextIcon } from "@phosphor-icons/react";
-{ type: "collection", collection: "posts", icon: FileTextIcon }
-
-// Incorrect - will not work
-{ type: "collection", collection: "posts", icon: "FileTextIcon" }
+c.icon("ph:users")          // Regular weight
+c.icon("ph:users-fill")     // Fill variant
+c.icon("ph:users-bold")     // Bold variant
+c.icon("ph:users-duotone")  // Duotone variant
 ```
-
-Recommended icon library: `@phosphor-icons/react`
 
 ## Related
 
-- [Dashboard](/docs/admin/dashboard) - Configure dashboard widgets
-- [Collections](/docs/admin/collections) - Collection UI configuration
+- [Dashboard](/docs/admin/dashboard) — Configure dashboard widgets
+- [Collections](/docs/admin/collections) — Collection admin configuration
+- [Icons](/docs/admin/patterns/icons-as-components) — Icon usage patterns

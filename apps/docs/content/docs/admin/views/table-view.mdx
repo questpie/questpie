@@ -201,7 +201,7 @@ filters: [
     {
       id: "publish",
       label: "Publish Selected",
-      icon: CheckIcon,
+      icon: c.icon("ph:check"),
       action: async (ids) => {
         await client.collections.posts.updateMany({
           where: { id: { in: ids } },
@@ -212,7 +212,7 @@ filters: [
     {
       id: "archive",
       label: "Archive Selected",
-      icon: ArchiveIcon,
+      icon: c.icon("ph:archive"),
       variant: "warning",
       action: async (ids) => {...},
     },
@@ -279,13 +279,13 @@ columns: [
 ## Complete Example
 
 ```typescript
-export const appointmentsAdmin = builder
+export const appointments = qb
   .collection("appointments")
-  .meta({
+  .admin(({ c }) => ({
     label: "Appointments",
-    icon: CalendarIcon,
-  })
-  .fields(({ r }) => ({
+    icon: c.icon("ph:calendar"),
+  }))
+  .fields({
     customerName: r.text({ label: "Customer" }),
     customerEmail: r.email({ label: "Email" }),
     barber: r.relation({ label: "Barber", targetCollection: "barbers" }),
@@ -325,7 +325,7 @@ export const appointmentsAdmin = builder
       {
         id: "confirm",
         label: "Confirm Selected",
-        icon: CheckIcon,
+        icon: c.icon("ph:check"),
         action: async (ids) => {
           // Bulk confirm logic
         },

@@ -5,31 +5,92 @@ description: Building reusable modules for QUESTPIE Admin
 
 # Custom Modules
 
-Modules are the way to package and distribute QUESTPIE Admin extensions. A module can include fields, views, widgets, collections, and more.
+Modules are the way to package and distribute QUESTPIE extensions. A module can include collections, fields, views, widgets, and more.
 
-## Module Structure
+## Architecture
 
-A module is simply a `qa()` builder with extensions:
+QUESTPIE has two layers of modules:
+
+- **Server modules** — package collections, hooks, jobs, and admin configuration (sidebar, dashboard, actions)
+- **Client modules** — package custom field renderers, views, widgets, and blocks for the admin UI
+
+## Server Modules
+
+Server modules use the `q()` builder to define collections with full admin configuration:
 
 ```typescript
-const myModule = qa()
-  .fields({ ... })
-  .views({ ... })
-  .widgets({ ... })
-  .collections({ ... })
-  .sidebar(({ s }) => [...])
-  .dashboard(({ w }) => ({ ... }));
+// modules/blog/server.ts
+import { q, text, boolean, datetime } from "questpie";
+
+const posts = q.collection("posts")
+  .fields({
+    title: text("title").notNull(),
+    content: text("content"),
+    published: boolean("published").default(false),
+    publishedAt: datetime("publishedAt"),
+  })
+  .admin(({ c }) => ({
+    label: "Posts",
+    icon: c.icon("ph:article"),
+  }))
+  .list(({ v, f }) => v.table({
+    columns: [f.title, f.published, f.publishedAt],
+  }))
+  .form(({ v, f }) => v.form({
+    sections: [{ fields: [f.title, f.content, f.published, f.publishedAt] }],
+  }));
+
+const categories = q.collection("categories")
+  .fields({
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+  })
+  .admin(({ c }) => ({
+    label: "Categories",
+    icon: c.icon("ph:tag"),
+  }));
+
+// Export as a composable module
+export const blogCollections = { posts, categories };
 ```
 
-## Creating a Module
-
-### Basic Module
+Use in your CMS:
 
 ```typescript
-// modules/seo-module.ts
+// src/questpie/server/cms.ts
+import { blogCollections } from "./modules/blog/server";
+
+export const cms = q({ name: "my-app" })
+  .use(adminModule)
+  .collections({
+    ...blogCollections,
+    // Your own collections...
+  })
+  .sidebar(({ s, c }) => s.sidebar({
+    sections: [
+      s.section({
+        id: "blog",
+        title: "Blog",
+        icon: c.icon("ph:article"),
+        items: [
+          { type: "collection", collection: "posts", icon: c.icon("ph:article") },
+          { type: "collection", collection: "categories", icon: c.icon("ph:tag") },
+        ],
+      }),
+    ],
+  }))
+  .build({ db: { url: process.env.DATABASE_URL! } });
+```
+
+## Client Modules
+
+Client modules use the `qa()` builder to register custom renderers:
+
+```typescript
+// modules/seo-module/client.ts
 import { qa, field } from "@questpie/admin/client";
 
-// Custom field
+// Custom field renderer
 const seoTitleField = field("seoTitle", {
   component: SeoTitleField,
   cell: SeoTitleCell,
@@ -44,69 +105,23 @@ const seoDescriptionField = field("seoDescription", {
   defaultConfig: { maxLength: 160 },
 });
 
-// Export module
+// Export client module
 export const seoModule = qa()
   .fields({
     seoTitle: seoTitleField,
     seoDescription: seoDescriptionField,
   });
 
-// Usage
+// Usage in client admin
 const admin = qa()
   .use(adminModule)
-  .use(seoModule);  // Now r.seoTitle() and r.seoDescription() are available
+  .use(seoModule);  // Now seoTitle and seoDescription are available
 ```
 
-### Module with Collections
+## Client Module with Widgets
 
 ```typescript
-// modules/blog-module.ts
-import { qa } from "@questpie/admin/client";
-import { Newspaper, Tag, Users } from "lucide-react";
-
-// Define collection configs
-const postsCollection = qa.collection("posts")
-  .meta({
-    label: "Posts",
-    icon: Newspaper,
-  });
-
-const categoriesCollection = qa.collection("categories")
-  .meta({
-    label: "Categories",
-    icon: Tag,
-  });
-
-const authorsCollection = qa.collection("authors")
-  .meta({
-    label: "Authors",
-    icon: Users,
-  });
-
-// Export module with collections and sidebar
-export const blogModule = qa()
-  .collections({
-    posts: postsCollection,
-    categories: categoriesCollection,
-    authors: authorsCollection,
-  })
-  .sidebar(({ s }) => [
-    s.section({
-      label: "Blog",
-      icon: Newspaper,
-      items: [
-        s.collection({ collection: "posts" }),
-        s.collection({ collection: "categories" }),
-        s.collection({ collection: "authors" }),
-      ],
-    }),
-  ]);
-```
-
-### Module with Widgets and Dashboard
-
-```typescript
-// modules/analytics-module.ts
+// modules/analytics-module/client.ts
 import { qa, widget } from "@questpie/admin/client";
 
 const pageViewsWidget = widget("pageViews", {
@@ -123,13 +138,7 @@ export const analyticsModule = qa()
   .widgets({
     pageViews: pageViewsWidget,
     topPages: topPagesWidget,
-  })
-  .dashboard(({ w }) => ({
-    widgets: [
-      w.pageViews({ period: "week" }),
-      w.topPages({ limit: 10 }),
-    ],
-  }));
+  });
 ```
 
 ## Module Patterns
@@ -141,96 +150,72 @@ export const analyticsModule = qa()
 interface BlogModuleOptions {
   enableComments?: boolean;
   enableDrafts?: boolean;
-  customFields?: Record<string, any>;
 }
 
-export function createBlogModule<TApp>(options: BlogModuleOptions = {}) {
-  const builder = qa<TApp>().use(adminModule);
+export function createBlogCollections(options: BlogModuleOptions = {}) {
+  const posts = q.collection("posts")
+    .fields({
+      title: text("title").notNull(),
+      content: text("content"),
+      ...(options.enableDrafts && {
+        status: text("status").$type<"draft" | "published">().default("draft"),
+      }),
+    })
+    .admin(({ c }) => ({
+      label: "Posts",
+      icon: c.icon("ph:article"),
+    }));
 
-  const collections: Record<string, any> = {
-    posts: builder.collection("posts")
-      .fields(({ r }) => ({
-        title: r.text({ label: "Title" }),
-        content: r.richText({ label: "Content" }),
-        ...(options.enableDrafts && {
-          status: r.select({
-            label: "Status",
-            options: [
-              { label: "Draft", value: "draft" },
-              { label: "Published", value: "published" },
-            ],
-          }),
-        }),
-        ...options.customFields,
-      })),
-  };
+  const collections: Record<string, any> = { posts };
 
   if (options.enableComments) {
-    collections.comments = builder.collection("comments")
-      .fields(({ r }) => ({
-        content: r.textarea({ label: "Content" }),
-        author: r.text({ label: "Author" }),
+    collections.comments = q.collection("comments")
+      .fields({
+        content: text("content").notNull(),
+        author: text("author").notNull(),
+      })
+      .admin(({ c }) => ({
+        label: "Comments",
+        icon: c.icon("ph:chat-circle"),
       }));
   }
 
-  return qa().collections(collections);
+  return collections;
 }
 
 // Usage
-const admin = qa()
+const cms = q({ name: "my-app" })
   .use(adminModule)
-  .use(createBlogModule({
-    enableComments: true,
-    enableDrafts: true,
-  }));
+  .collections({
+    ...createBlogCollections({ enableComments: true, enableDrafts: true }),
+  })
+  .build({ db: { url: "..." } });
 ```
 
 ### Plugin Architecture
 
 ```typescript
 // modules/plugin-system.ts
-interface AdminPlugin {
+interface Plugin {
   name: string;
-  module: ReturnType<typeof qa>;
+  collections: Record<string, any>;
+  clientModule?: ReturnType<typeof qa>;
   priority?: number;
 }
 
-export function createAdminWithPlugins(plugins: AdminPlugin[]) {
-  // Sort by priority
-  const sorted = [...plugins].sort(
-    (a, b) => (a.priority ?? 0) - (b.priority ?? 0)
-  );
+export function buildCmsWithPlugins(plugins: Plugin[]) {
+  const sorted = [...plugins].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 
-  let builder = qa().use(adminModule);
-
+  const allCollections = {};
   for (const plugin of sorted) {
-    builder = builder.use(plugin.module);
+    Object.assign(allCollections, plugin.collections);
   }
 
-  return builder;
+  return allCollections;
 }
-
-// Plugins
-const blogPlugin: AdminPlugin = {
-  name: "blog",
-  module: blogModule,
-  priority: 10,
-};
-
-const ecommercePlugin: AdminPlugin = {
-  name: "ecommerce",
-  module: ecommerceModule,
-  priority: 20,
-};
-
-// Usage
-const admin = createAdminWithPlugins([
-  blogPlugin,
-  ecommercePlugin,
-]);
 ```
 
-### Theme Module
+### Theme Module (Client)
 
 ```typescript
 // modules/theme-module.ts
@@ -260,7 +245,7 @@ const admin = qa()
   }));
 ```
 
-### Localization Module
+### Localization Module (Client)
 
 ```typescript
 // modules/i18n-module.ts
@@ -272,51 +257,10 @@ export function createI18nModule(translations: Record<string, any>) {
     });
 }
 
-// translations/en.ts
-export const enTranslations = {
-  collections: {
-    posts: {
-      label: "Posts",
-      fields: {
-        title: "Title",
-        content: "Content",
-      },
-    },
-  },
-  common: {
-    save: "Save",
-    cancel: "Cancel",
-    delete: "Delete",
-  },
-};
-
 // Usage
 const admin = qa()
   .use(adminModule)
   .use(createI18nModule({ en: enTranslations }));
-```
-
-## Module Dependencies
-
-Modules can depend on other modules:
-
-```typescript
-// This module requires adminModule's fields
-const builder = qa<AppCMS>().use(adminModule);
-
-export const blogModule = qa()
-  .collections({
-    posts: builder.collection("posts")
-      .fields(({ r }) => ({
-        // r.text() comes from adminModule
-        title: r.text({ label: "Title" }),
-      })),
-  });
-
-// User must include adminModule first
-const admin = qa()
-  .use(adminModule)    // ← Provides fields
-  .use(blogModule);    // ← Uses those fields
 ```
 
 ## Publishing Modules
@@ -324,13 +268,17 @@ const admin = qa()
 ### Package Structure
 
 ```
-my-admin-module/
+my-questpie-module/
 ├── src/
-│   ├── index.ts         # Main export
-│   ├── fields/          # Custom fields
-│   ├── widgets/         # Custom widgets
-│   ├── collections/     # Collection configs
-│   └── components/      # React components
+│   ├── server/           # Server-side collections + admin config
+│   │   ├── index.ts
+│   │   └── collections/
+│   ├── client/           # Client-side renderers
+│   │   ├── index.ts
+│   │   ├── fields/
+│   │   ├── widgets/
+│   │   └── components/
+│   └── index.ts          # Re-exports
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -340,90 +288,50 @@ my-admin-module/
 
 ```json
 {
-  "name": "@my-org/admin-blog-module",
+  "name": "@my-org/questpie-blog-module",
   "version": "1.0.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "exports": {
+    "./server": {
+      "import": "./dist/server/index.js",
+      "types": "./dist/server/index.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client/index.js",
+      "types": "./dist/client/index.d.ts"
+    }
+  },
   "peerDependencies": {
+    "questpie": "^1.0.0",
     "@questpie/admin": "^1.0.0",
     "react": "^18.0.0"
-  },
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
   }
 }
 ```
 
-### Main Export
+### Main Exports
 
 ```typescript
-// src/index.ts
-export { blogModule, createBlogModule } from "./modules/blog";
-export type { BlogModuleOptions } from "./modules/blog";
+// src/server/index.ts
+export { blogCollections, createBlogCollections } from "./collections";
+export type { BlogModuleOptions } from "./types";
 
-// Re-export components for customization
+// src/client/index.ts
+export { blogClientModule } from "./module";
 export { PostCard } from "./components/PostCard";
-export { CategoryBadge } from "./components/CategoryBadge";
-```
-
-## Testing Modules
-
-```typescript
-// __tests__/blog-module.test.ts
-import { blogModule } from "../src";
-
-describe("blogModule", () => {
-  it("includes posts collection", () => {
-    expect(blogModule.state.collections.posts).toBeDefined();
-  });
-
-  it("includes sidebar section", () => {
-    const sidebar = blogModule.state.sidebar;
-    expect(sidebar).toHaveLength(1);
-    expect(sidebar[0].label).toBe("Blog");
-  });
-
-  it("posts collection has required fields", () => {
-    const fields = blogModule.state.collections.posts.fields;
-    expect(fields.title).toBeDefined();
-    expect(fields.content).toBeDefined();
-  });
-});
 ```
 
 ## Best Practices
 
-### 1. Document Your Module
+### 1. Separate Server and Client
 
-```typescript
-/**
- * Blog module for QUESTPIE Admin
- *
- * Provides:
- * - Posts collection with rich text editor
- * - Categories collection
- * - Authors collection
- * - Blog sidebar section
- *
- * @example
- * const admin = qa()
- *   .use(adminModule)
- *   .use(blogModule);
- */
-export const blogModule = qa()...
-```
+Keep server-side (collections, admin config) and client-side (renderers, components) in separate entry points.
 
 ### 2. Make It Configurable
 
 ```typescript
 // Don't hardcode values
 export function createModule(options: ModuleOptions) {
-  return qa().collections({
-    posts: createPostsCollection(options),
-  });
+  return createBlogCollections(options);
 }
 ```
 
@@ -434,14 +342,11 @@ export type { BlogModuleOptions } from "./types";
 export type { PostFields, CategoryFields } from "./collections";
 ```
 
-### 4. Version Carefully
+### 4. Use `c.icon()` for Icons
 
-Follow semver:
-- Breaking changes → major version
-- New features → minor version
-- Bug fixes → patch version
+Always use the `c.icon("ph:icon-name")` helper for icons in server-side admin config.
 
 ## Related
 
-- [Module Composition](/docs/admin/architecture/module-composition) - How modules merge
 - [Custom Fields](/docs/admin/extensibility/custom-fields) - Create new field types
+- [Architecture](/docs/admin/architecture) - Server vs client layers

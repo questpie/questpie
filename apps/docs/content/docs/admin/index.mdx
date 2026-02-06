@@ -5,140 +5,135 @@ description: Config-driven, type-safe admin interface for QUESTPIE CMS
 
 # Admin UI Overview
 
-The `@questpie/admin` package provides a beautiful, config-driven admin interface for QUESTPIE CMS. Instead of writing custom React components for every form, you define your admin UI using the `qa()` builder pattern and let the framework generate everything for you.
+The `@questpie/admin` package provides a beautiful, config-driven admin interface for QUESTPIE CMS. You define your admin UI using a two-layer architecture — server-side configuration for structure and data, client-side registration for rendering components — and the framework generates everything for you.
 
 ## Key Features
 
-- **Builder Pattern** - Type-safe `qa()` builder with full autocomplete
+- **Two-Layer Architecture** - Server defines structure, client renders UI
+- **Builder Pattern** - Type-safe builders with full autocomplete
 - **Config-Driven** - UI automatically generated from configuration
 - **22+ Field Types** - Text, relations, uploads, rich text, JSON, and more
 - **Form Layouts** - Sections, tabs, columns, grids, sidebars
-- **Dashboard Widgets** - Stats, charts, tables, timelines
+- **Dashboard Widgets** - Stats, charts, tables, timelines with server-side data fetching
+- **Custom Actions** - Server-side action handlers with forms and confirmations
 - **Block System** - Visual page builder with custom blocks
 - **Live Preview** - Real-time preview with click-to-focus
 - **i18n Ready** - Full localization support
 
-## Architecture: Backend vs Admin
+## Architecture: Server vs Client
 
-QUESTPIE separates backend (data) from admin (UI) configuration:
+QUESTPIE uses a **two-layer architecture** where the server is the single source of truth for admin configuration:
 
-| Backend (`q`) | Admin (`qa`) |
-|---------------|--------------|
-| Defines database schema | Defines UI presentation |
-| Creates Drizzle tables | Configures form fields |
-| Handles CRUD operations | Configures list/table views |
-| Runs on server | Runs in browser |
+| Server (`q` builder) | Client (`qa` builder) |
+|---|---|
+| Defines database schema & fields | Registers field **renderers** (React components) |
+| Configures admin metadata (`.admin()`) | Registers view **renderers** (table, form) |
+| Configures list views (`.list()`) | Registers widget **renderers** |
+| Configures form layouts (`.form()`) | Configures branding & locale |
+| Configures custom actions (`.actions()`) | Extends with custom translations |
+| Configures dashboard widgets (`.dashboard()`) | — |
+| Configures sidebar navigation (`.sidebar()`) | — |
+| Uses serializable icons: `c.icon("ph:users")` | Uses `@iconify/react` to render icons |
 | **Has `.build()` method** | **NO `.build()` method** |
 
-This separation allows you to:
-- Have different UI for the same data
-- Reuse backend across multiple admin interfaces
-- Deploy backend and admin independently
+This separation means:
+- **Server** defines WHAT to show — data schemas, layouts, navigation, widgets, actions
+- **Client** defines HOW to render — React components, styles, branding
+- Admin config is fetched at runtime via the `getAdminConfig` RPC endpoint
+- Server-side `fetchFn` on widgets keeps sensitive data logic on the server
 
-## The `qa()` Builder
+## Server-Side Configuration
 
-The admin builder creates configuration objects (not runtime instances):
+The server is where you define collections, admin UI structure, dashboard, and sidebar:
 
 ```typescript
-import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "./server/cms";
+// src/questpie/server/cms.ts
+import { q } from "questpie";
+import { adminModule } from "@questpie/admin/server";
 
-// Create admin configuration
-const admin = qa<AppCMS>()
-  .use(adminModule)           // Include built-in fields/views
-  .branding({
-    name: "My Admin",
-    logo: LogoComponent,
-  })
+const cms = q({ name: "my-app" })
+  .use(adminModule)
   .collections({
-    posts: postsAdmin,        // Collection UI configs
-    users: usersAdmin,
+    posts: q.collection("posts")
+      .fields((f) => ({
+        title: f.text({ required: true }),
+        content: f.richText(),
+        status: f.select({ options: ["draft", "published"] }),
+      }))
+      .admin(({ c }) => ({
+        label: { en: "Posts" },
+        icon: c.icon("ph:article"),
+      }))
+      .list(({ v, f }) => v.table({
+        columns: [f.title, f.status],
+      }))
+      .form(({ v, f }) => v.form({
+        sections: [{ fields: [f.title, f.content, f.status] }],
+      })),
   })
-  .globals({
-    settings: settingsAdmin,  // Global UI configs
-  })
-  .sidebar(sidebarConfig)     // Navigation
-  .dashboard(dashboardConfig) // Dashboard widgets
-  .locale({
-    default: "en",
-    supported: ["en", "sk"],
-  });
+  .dashboard(({ d, c }) => d.dashboard({
+    items: [
+      d.stats({ collection: "posts", label: { en: "Total Posts" }, icon: c.icon("ph:article") }),
+    ],
+  }))
+  .sidebar(({ s, c }) => s.sidebar({
+    sections: [
+      s.section({ id: "content", title: { en: "Content" }, icon: c.icon("ph:files"), items: [
+        { type: "collection", collection: "posts" },
+      ]}),
+    ],
+  }))
+  .build({ db: { url: "..." } });
+```
+
+## Client-Side Configuration
+
+The client registers renderers and configures branding — it does NOT define collections or layouts:
+
+```typescript
+// src/questpie/admin/admin.ts
+import { qa, adminModule } from "@questpie/admin/client";
+import type { AppCMS } from "@/questpie/server/cms";
+
+const admin = qa<AppCMS>()
+  .use(adminModule)        // Built-in field/view/widget renderers
+  .branding({ name: "My Admin" })
+  .locale({ default: "en", supported: ["en", "sk"] });
 ```
 
 <Callout type="warning">
-**Important:** The admin builder does NOT have a `.build()` method. The configuration state IS the final config - it's used directly by React components.
+**Important:** The admin builder does NOT have a `.build()` method. The configuration state IS the final config — it's used directly by React components.
 </Callout>
 
-## Quick Example
+## Icons
 
-Here's a complete collection admin configuration:
+QUESTPIE uses `@iconify/react` with the Phosphor icon set. On the server, icons are created as serializable references:
 
 ```typescript
-// admin/collections/posts.ts
-import { builder } from "../builder";
-import { FileTextIcon } from "@phosphor-icons/react";
-
-export const postsAdmin = builder
-  .collection("posts")
-  .meta({
-    label: "Blog Posts",
-    icon: FileTextIcon,
-  })
-  .fields(({ r }) => ({
-    title: r.text({
-      label: "Title",
-      maxLength: 200,
-    }),
-    content: r.richText({
-      label: "Content",
-    }),
-    status: r.select({
-      label: "Status",
-      options: [
-        { label: "Draft", value: "draft" },
-        { label: "Published", value: "published" },
-      ],
-    }),
-    author: r.relation({
-      label: "Author",
-      targetCollection: "users",
-    }),
-  }))
-  .list(({ v, f }) => v.table({
-    columns: [f.title, f.status, f.author],
-  }))
-  .form(({ v, f }) => v.form({
-    sections: [
-      {
-        title: "Content",
-        fields: [f.title, f.content],
-      },
-      {
-        title: "Publishing",
-        fields: [f.status, f.author],
-      },
-    ],
-  }));
+// Server-side: serializable icon reference
+c.icon("ph:users")         // → { type: "icon", props: { name: "ph:users" } }
+c.icon("ph:article-fill")  // Phosphor "fill" variant
+c.icon("ph:gear-bold")     // Phosphor "bold" variant
 ```
+
+The client renders these automatically using the `Icon` component from `@iconify/react`.
 
 ## The Proxy Pattern
 
-Notice the `({ r })` and `({ v, f })` callbacks? These provide type-safe proxies:
+Server-side config uses type-safe proxy callbacks:
 
-- **`r`** (Registry Proxy) - Autocomplete for all registered field types
-- **`v`** (View Proxy) - Autocomplete for all registered views
-- **`f`** (Field Proxy) - Autocomplete for fields defined in the collection
+- **`c`** (Component Proxy) — `c.icon("ph:name")` for icon references
+- **`f`** (Field Proxy) — Autocomplete for fields defined in the collection
+- **`v`** (View Proxy) — `v.table()`, `v.form()`, `v.cards()`, `v.wizard()`
+- **`a`** (Action Proxy) — `a.create()`, `a.delete()`, `a.action()`, `a.bulkAction()`
+- **`d`** (Dashboard Proxy) — `d.stats()`, `d.chart()`, `d.value()`, `d.timeline()`, etc.
+- **`s`** (Sidebar Proxy) — `s.sidebar()`, `s.section()`
 
 ```typescript
-.fields(({ r }) => ({
-  title: r.text(),      // r.text, r.email, r.select, etc.
-  author: r.relation({
-    targetCollection: "users",  // Autocomplete backend collections!
-  }),
-}))
-
-.list(({ v, f }) => v.table({
-  columns: [f.title, f.author],  // f.title, f.author autocomplete!
+// Server-side collection config
+.list(({ v, f, a }) => v.table({
+  columns: [f.title, f.status],           // f provides field autocomplete
+  actions: { row: [a.duplicate, a.delete] },  // a provides action helpers
 }))
 ```
 
@@ -159,7 +154,9 @@ The `adminModule` provides 22+ field types:
 
 ## Related
 
-- [Getting Started](/docs/admin/getting-started) - Set up your first admin interface
-- [Builder API](/docs/admin/builder-api) - Complete qa() builder reference
-- [Field Types](/docs/admin/fields) - All 22+ field types explained
-- [Views](/docs/admin/views) - Table and form view configuration
+- [Getting Started](/docs/admin/getting-started) — Set up your first admin interface
+- [Collections](/docs/admin/collections) — Configure collection admin UI
+- [Dashboard](/docs/admin/dashboard) — Add widgets and analytics
+- [Sidebar](/docs/admin/sidebar) — Configure navigation
+- [Custom Actions](/docs/admin/collections#actions---custom-actions) — Server-side action handlers
+- [Builder API](/docs/admin/builder-api) — Client-side qa() builder reference

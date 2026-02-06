@@ -5,7 +5,7 @@ description: Hooks for accessing admin data and functionality
 
 # React Hooks
 
-QUESTPIE Admin provides React hooks for accessing collections, globals, authentication, and navigation.
+QUESTPIE Admin provides React hooks for accessing collections, globals, authentication, navigation, and server-provided widget data.
 
 ## Data Hooks
 
@@ -151,6 +151,52 @@ function SettingsForm() {
 }
 ```
 
+## Widget Data Hooks
+
+### useServerWidgetData
+
+Fetch server-provided widget data. Used when a dashboard widget has a server-side `fetchFn`:
+
+```typescript
+import { useServerWidgetData } from "@questpie/admin/client";
+
+function MyCustomWidget({ config }) {
+  const { data, isLoading, error } = useServerWidgetData<{
+    value: number;
+    formatted: string;
+  }>(config.id, {
+    enabled: config.hasFetchFn,    // Only fetch if server has a fetchFn
+    refreshInterval: 30000,         // Auto-refresh every 30s (optional)
+  });
+
+  if (isLoading) return <Spinner />;
+  if (error) return <div>Error loading data</div>;
+
+  return (
+    <div>
+      <span>{data?.formatted}</span>
+    </div>
+  );
+}
+```
+
+**How it works:**
+
+1. Server-side widgets with `fetchFn` get `hasFetchFn: true` in the client config
+2. `useServerWidgetData` calls the `fetchWidgetData` RPC endpoint with the widget ID
+3. Server executes the `fetchFn` with full context (CMS, DB, session) and returns the result
+4. Data is cached and can auto-refresh via `refreshInterval`
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `widgetId` | `string` | The widget's unique ID |
+| `options.enabled` | `boolean` | Whether to fetch (default: `true`) |
+| `options.refreshInterval` | `number` | Auto-refresh interval in ms |
+
+See [Dashboard Configuration](/docs/admin/dashboard#server-side-data-fetching-fetchfn) for server-side `fetchFn` setup.
+
 ## Navigation Hooks
 
 ### useAdminRoutes
@@ -184,20 +230,11 @@ function Navigation() {
 ```typescript
 const { navigate } = useAdminRoutes();
 
-// Navigate to dashboard
-navigate.dashboard();
-
-// Navigate to collection list
-navigate.collection("posts");
-
-// Navigate to create form
-navigate.collectionCreate("posts");
-
-// Navigate to edit form
-navigate.collectionEdit("posts", "post-id");
-
-// Navigate to global
-navigate.global("siteSettings");
+navigate.dashboard();                          // Dashboard
+navigate.collection("posts");                  // Collection list
+navigate.collectionCreate("posts");            // Create form
+navigate.collectionEdit("posts", "post-id");   // Edit form
+navigate.global("siteSettings");               // Global edit
 ```
 
 ## Store Hooks
@@ -302,5 +339,6 @@ function AdminOnly({ children }) {
 
 ## Related
 
-- [Field Renderers](/docs/admin/fields) - Customize form fields
-- [Views](/docs/admin/views) - List and form views
+- [Dashboard](/docs/admin/dashboard) — Server-side widget `fetchFn` and `useServerWidgetData`
+- [Field Types](/docs/admin/fields) — Customize form fields
+- [Views](/docs/admin/views) — List and form views

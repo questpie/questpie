@@ -13,7 +13,7 @@ const stack = [
 		layer: "Schema & DB",
 		library: "Drizzle ORM",
 		description:
-			"Type-safe schemas, raw SQL when you need it. The ORM the community loves.",
+			"Your schema is real Drizzle. Type-safe queries, raw SQL when you need it, zero abstraction tax.",
 		href: "https://orm.drizzle.team/",
 	},
 	{
@@ -21,7 +21,7 @@ const stack = [
 		layer: "Migrations",
 		library: "Drizzle Kit",
 		description:
-			"Auto-generated migrations with full rollback support. Batched and reversible.",
+			"Schema changes auto-generate migrations. Push, pull, and rollback with a single command.",
 		href: "https://orm.drizzle.team/kit-docs/overview",
 	},
 	{
@@ -29,7 +29,7 @@ const stack = [
 		layer: "Authentication",
 		library: "Better Auth",
 		description:
-			"Sessions, OAuth, 2FA, organizations. Modern auth that just works.",
+			"Sessions, OAuth, 2FA, organizations out of the box. Production-grade auth, not a toy.",
 		href: "https://www.better-auth.com/",
 	},
 	{
@@ -37,7 +37,7 @@ const stack = [
 		layer: "Background Jobs",
 		library: "pg-boss",
 		description:
-			"Job queues powered by PostgreSQL. No Redis needed. Retries, scheduling built-in.",
+			"Job queues on Postgres. No Redis, no extra infrastructure. Retries, scheduling, priorities built in.",
 		href: "https://github.com/timgit/pg-boss",
 	},
 	{
@@ -45,7 +45,7 @@ const stack = [
 		layer: "File Storage",
 		library: "Flydrive",
 		description:
-			"Unified API for local disk, S3, R2, GCS. Swap providers without changing code.",
+			"Local disk, S3, R2, GCS — same API. Switch storage providers without touching your code.",
 		href: "https://flydrive.dev/",
 	},
 	{
@@ -53,7 +53,7 @@ const stack = [
 		layer: "Email",
 		library: "React Email",
 		description:
-			"Battle-tested delivery with modern React templates. SMTP, Resend, Sendgrid.",
+			"Build email templates with React. Send via SMTP, Resend, or Sendgrid. No HTML table nightmares.",
 		href: "https://react.email/",
 	},
 ];
@@ -67,14 +67,14 @@ export function Stack() {
 			<div className="w-full max-w-7xl mx-auto px-4 relative z-10">
 				<div className="text-center max-w-2xl mx-auto space-y-4 mb-16">
 					<h2 className="font-mono text-sm tracking-[0.2em] uppercase text-primary">
-						The Stack
+						Built With
 					</h2>
 					<h3 className="text-3xl md:text-4xl font-bold">
-						Built on Libraries You Already Know
+						Libraries You Already Know
 					</h3>
 					<p className="text-muted-foreground">
-						We integrate the best TypeScript libraries instead of reinventing
-						them. Learn once, use everywhere.
+						No proprietary ORM. No custom auth. QuestPie integrates
+						battle-tested TypeScript libraries you can learn, debug, and use independently.
 					</p>
 				</div>
 
@@ -109,9 +109,9 @@ export function Stack() {
 
 				<div className="mt-12 text-center">
 					<p className="text-sm text-muted-foreground">
-						All libraries are swappable via adapters.{" "}
+						Every integration is swappable via adapters.{" "}
 						<span className="text-foreground">
-							Postgres is the only requirement.
+							Postgres is the only hard requirement.
 						</span>
 					</p>
 				</div>

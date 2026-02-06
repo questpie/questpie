@@ -5,12 +5,12 @@ const example = {
 	title: "Fullstack Barbershop",
 	stack: "TanStack Start",
 	description:
-		"Booking system with appointments, services, barbers. SSR, TanStack Query, type-safe client.",
+		"A complete booking system — appointments, services, barbers, customer management. Server-rendered with TanStack Query and a type-safe client SDK.",
 	features: [
-		"Collections + relations",
-		"Custom RPC functions",
-		"TanStack Query integration",
-		"Type-safe client SDK",
+		"6 collections with relations",
+		"18 page builder blocks",
+		"Dashboard with real analytics",
+		"i18n (EN/SK)",
 	],
 	githubLink:
 		"https://github.com/questpie/questpie-cms/tree/main/examples/tanstack-barbershop",
@@ -29,11 +29,11 @@ export function Examples() {
 				<div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
 					<div className="space-y-4">
 						<h2 className="font-mono text-sm tracking-[0.2em] uppercase text-primary">
-							Examples
+							Templates
 						</h2>
-						<h3 className="text-3xl font-bold">Start with a Template</h3>
+						<h3 className="text-3xl font-bold">Clone and Ship</h3>
 						<p className="text-muted-foreground max-w-xl">
-							Clone a production-ready example to see best practices in action.
+							Production-ready starters with best practices built in. Clone, customize, deploy.
 						</p>
 					</div>
 					<a

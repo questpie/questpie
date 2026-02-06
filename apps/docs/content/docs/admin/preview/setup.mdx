@@ -19,9 +19,9 @@ Add `.preview()` to your collection admin configuration:
 
 ```typescript
 // admin/collections/pages.ts
-export const pagesAdmin = builder
+export const pages = qb
   .collection("pages")
-  .meta({ label: "Pages", icon: FileTextIcon })
+  .admin(({ c }) => ({ label: "Pages", icon: c.icon("ph:file-text") }))
   .preview({
     url: (values) => `/pages/${values.slug || "preview"}?preview=true`,
     enabled: true,

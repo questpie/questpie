@@ -33,19 +33,29 @@ bun add questpie @questpie/admin @questpie/hono
 ```
 
 ```typescript
-// Backend - Define your data
+// Server — Define your data + admin config
 import { q, text, boolean } from "questpie";
-import { starterModule } from "questpie/server";
+import { adminModule } from "@questpie/admin/server";
 
 const cms = q({ name: "my-cms" })
-  .use(starterModule)
+  .use(adminModule)
   .collections({
     posts: q.collection("posts")
       .fields({
         title: text("title").notNull(),
         content: text("content"),
         published: boolean("published").default(false),
-      }),
+      })
+      .admin(({ c }) => ({
+        label: "Posts",
+        icon: c.icon("ph:article"),
+      }))
+      .list(({ v, f }) => v.table({
+        columns: [f.title, f.published],
+      }))
+      .form(({ v, f }) => v.form({
+        fields: [f.title, f.content, f.published],
+      })),
   })
   .build({ db: { url: process.env.DATABASE_URL } });
 
@@ -53,20 +63,13 @@ export type AppCMS = typeof cms;
 ```
 
 ```typescript
-// Admin UI - Configure the interface
+// Client — Minimal renderer setup
 import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "./cms";
+import type { AppCMS } from "./server/cms";
 
 const admin = qa<AppCMS>()
   .use(adminModule)
-  .collections({
-    posts: qa.collection("posts")
-      .fields(({ r }) => ({
-        title: r.text({ label: "Title" }),
-        content: r.richText({ label: "Content" }),
-        published: r.switch({ label: "Published" }),
-      })),
-  });
+  .branding({ name: "My CMS" });
 ```
 
 ## Documentation Sections
@@ -111,36 +114,27 @@ const admin = qa<AppCMS>()
 
 ## Architecture
 
-QUESTPIE separates **backend** (data) from **admin** (UI):
+QUESTPIE uses a **server-first** architecture. The server defines WHAT (collections, admin config, dashboard, sidebar). The client defines HOW (renderers, branding):
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Your Application                        │
+│  Server — q() builder                                        │
+│  Defines: collections, fields, hooks, access, validation     │
+│  Defines: .admin(), .list(), .form(), .dashboard(), .sidebar │
 ├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌─────────────────────┐     ┌─────────────────────┐       │
-│  │   Backend (q)       │     │   Admin UI (qa)     │       │
-│  │   questpie          │     │   @questpie/admin   │       │
-│  ├─────────────────────┤     ├─────────────────────┤       │
-│  │ • Collections       │────>│ • Field configs     │       │
-│  │ • Validation        │     │ • Table views       │       │
-│  │ • Hooks             │     │ • Form views        │       │
-│  │ • Access control    │     │ • Dashboard         │       │
-│  │ • Authentication    │     │ • Sidebar           │       │
-│  └─────────────────────┘     └─────────────────────┘       │
-│           │                                                  │
-│           │                                                  │
-│  ┌─────────────────────────────────────────────────┐       │
-│  │              Database (PostgreSQL)               │       │
-│  └─────────────────────────────────────────────────┘       │
+│  Client — qa() builder                                       │
+│  Registers: field renderers, view renderers, widget renderers│
+│  Configures: branding, locale, custom components             │
+├─────────────────────────────────────────────────────────────┤
+│  Database (PostgreSQL)                                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Backend (`questpie`)**: Handles data, validation, business logic, and authentication. Runs on the server.
+**Server (`questpie`)**: Collections, validation, hooks, access control, auth, admin configuration (dashboard, sidebar, list/form views). Single source of truth.
 
-**Admin UI (`@questpie/admin`)**: Provides the user interface for content management. Configures how data is displayed and edited.
+**Client (`@questpie/admin`)**: Renders the admin UI from server config. Handles branding, locale, custom field/view/widget components.
 
-Types flow from backend to admin, ensuring end-to-end type safety.
+Types flow from server to client, ensuring end-to-end type safety.
 
 ## Example Project
 

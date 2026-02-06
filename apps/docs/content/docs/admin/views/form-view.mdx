@@ -114,19 +114,19 @@ Organize content in tabs:
     {
       id: "content",
       label: "Content",
-      icon: FileTextIcon,
+      icon: c.icon("ph:file-text"),
       fields: [f.title, f.content],
     },
     {
       id: "media",
       label: "Media",
-      icon: ImageIcon,
+      icon: c.icon("ph:image"),
       fields: [f.featuredImage, f.gallery],
     },
     {
       id: "seo",
       label: "SEO",
-      icon: SearchIcon,
+      icon: c.icon("ph:magnifying-glass"),
       fields: [f.metaTitle, f.metaDescription, f.canonicalUrl],
     },
   ],
@@ -139,7 +139,7 @@ Organize content in tabs:
 |--------|------|-------------|
 | `id` | `string` | Unique identifier |
 | `label` | `string \| I18nText` | Tab label |
-| `icon` | `IconComponent` | Tab icon |
+| `icon` | `ComponentReference` | Tab icon via `c.icon()` |
 | `fields` | `FieldConfig[]` | Tab content |
 
 ## Tabs with Sidebar
@@ -217,13 +217,13 @@ See [Form Layouts](/docs/admin/views/form-layouts) for detailed layout options i
 ## Complete Example
 
 ```typescript
-export const barbersAdmin = builder
+export const barbers = qb
   .collection("barbers")
-  .meta({
+  .admin(({ c }) => ({
     label: { en: "Barbers", sk: "Holici" },
-    icon: UsersIcon,
-  })
-  .fields(({ r }) => ({
+    icon: c.icon("ph:users"),
+  }))
+  .fields({
     name: r.text({ label: "Name", required: true }),
     email: r.email({ label: "Email" }),
     phone: r.text({ label: "Phone" }),

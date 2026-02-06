@@ -208,29 +208,49 @@ export const appointments = q
 
 ## Admin Configuration
 
-### Builder Setup
+### Client Admin Setup
+
+The client-side admin only handles rendering and branding — collection config is on the server:
 
 ```typescript
-// src/questpie/admin/builder.ts
+// src/questpie/admin/admin.ts
 import { qa, adminModule } from "@questpie/admin/client";
 import type { AppCMS } from "../server/cms";
 
-export const builder = qa<AppCMS>().use(adminModule);
+export const admin = qa<AppCMS>()
+  .use(adminModule)
+  .branding({ name: "Barbershop" });
 ```
 
-### Barbers Admin
+### Barbers Collection (Server-Side)
+
+Admin UI is configured on the server alongside collection definitions using `.admin()`, `.list()`, and `.form()`:
 
 ```typescript
-// src/questpie/admin/collections/barbers.ts
-import { UsersIcon } from "@phosphor-icons/react";
-import { builder } from "../builder";
+// src/questpie/server/collections/barbers.ts
+import { q, text, boolean, json } from "questpie";
 
-export const barbersAdmin = builder
+export const barbers = q
   .collection("barbers")
-  .meta({
-    label: { en: "Barbers", sk: "Holiči" },
-    icon: UsersIcon,
+  .fields({
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    phone: text("phone"),
+    bio: text("bio"),
+    avatarId: text("avatarId"),
+    isActive: boolean("isActive").default(true),
+    workingHours: json("workingHours").$type<WorkingHours>(),
+    socialLinks: json("socialLinks").$type<SocialLink[]>(),
   })
+  .relations(({ many }) => ({
+    services: many("barberServices"),
+    appointments: many("appointments"),
+  }))
+  // Admin UI configuration
+  .admin(({ c }) => ({
+    label: { en: "Barbers", sk: "Holiči" },
+    icon: c.icon("ph:users"),
+  }))
   .preview({
     url: (values) => {
       const slug = values.name?.toLowerCase().replace(/\s+/g, "-") || "barber";
@@ -240,60 +260,6 @@ export const barbersAdmin = builder
     position: "right",
     defaultWidth: 50,
   })
-  .fields(({ r }) => ({
-    name: r.text({
-      label: { en: "Full Name", sk: "Celé meno" },
-      maxLength: 255,
-      required: true,
-    }),
-    email: r.email({
-      label: { en: "Email", sk: "Email" },
-      required: true,
-    }),
-    phone: r.text({
-      label: { en: "Phone", sk: "Telefón" },
-    }),
-    bio: r.richText({
-      label: { en: "Biography", sk: "Životopis" },
-      localized: true,
-    }),
-    avatar: r.upload({
-      label: { en: "Photo", sk: "Fotka" },
-      accept: ["image/*"],
-      maxSize: 5_000_000,
-    }),
-    isActive: r.switch({
-      label: { en: "Active", sk: "Aktívny" },
-    }),
-    services: r.relation({
-      label: { en: "Services", sk: "Služby" },
-      targetCollection: "services",
-      type: "multiple",
-    }),
-    workingHours: r.object({
-      label: { en: "Working Hours", sk: "Pracovná doba" },
-      wrapper: "collapsible",
-      fields: ({ r }) => ({
-        monday: dayFields(r, "Monday", "Pondelok"),
-        tuesday: dayFields(r, "Tuesday", "Utorok"),
-        // ... other days
-      }),
-    }),
-    socialLinks: r.array({
-      label: { en: "Social Links", sk: "Sociálne siete" },
-      item: ({ r }) => ({
-        platform: r.select({
-          label: "Platform",
-          options: [
-            { label: "Instagram", value: "instagram" },
-            { label: "Facebook", value: "facebook" },
-          ],
-        }),
-        url: r.text({ label: "URL" }),
-      }),
-      maxItems: 5,
-    }),
-  }))
   .list(({ v }) => v.table({}))
   .form(({ v, f }) =>
     v.form({
@@ -320,80 +286,73 @@ export const barbersAdmin = builder
   );
 ```
 
-### Dashboard
+### Dashboard (Server-Side)
+
+The dashboard is configured on the server using `.dashboard()` with full access to the database:
 
 ```typescript
-// src/questpie/admin/dashboard.ts
-import { qa, type DashboardConfig } from "@questpie/admin/client";
-import { client } from "@/lib/cms-client";
-
-export const dashboard = qa.dashboard({
+// src/questpie/server/cms.ts (dashboard section)
+.dashboard(({ d, c }) => d.dashboard({
   title: { en: "Dashboard", sk: "Prehľad" },
   columns: 4,
   items: [
-    // Key metrics section
-    {
-      type: "section",
+    d.section({
       label: { en: "Key Metrics", sk: "Kľúčové metriky" },
       wrapper: "flat",
-      layout: "grid",
       columns: 4,
       items: [
-        {
+        d.value({
           id: "revenue",
-          type: "value",
+          label: { en: "Monthly Revenue", sk: "Mesačné tržby" },
+          icon: c.icon("ph:currency-circle-dollar"),
           span: 2,
-          cardVariant: "featured",
-          fetchFn: async () => {
-            const stats = await client.rpc.getRevenueStats();
+          fetchFn: async ({ db }) => {
+            // Direct database access on the server
+            const result = await db.query(...);
             return {
-              value: stats.totalRevenue / 100,
-              formatted: `${stats.totalRevenue.toLocaleString()} €`,
-              label: { en: "Monthly Revenue", sk: "Mesačné tržby" },
-              icon: CurrencyIcon,
+              value: result.totalRevenue / 100,
+              formatted: `${result.totalRevenue.toLocaleString()} €`,
             };
           },
-        },
-        {
-          id: "pending",
-          type: "stats",
+        }),
+        d.stats({
           collection: "appointments",
           filter: { status: "pending" },
           label: { en: "Pending", sk: "Čakajúce" },
+          icon: c.icon("ph:clock"),
           span: 1,
-        },
-        {
+        }),
+        d.value({
           id: "rating",
-          type: "value",
+          label: { en: "Avg Rating", sk: "Hodnotenie" },
+          icon: c.icon("ph:star"),
           span: 1,
-          fetchFn: async () => {
-            // Calculate average rating
+          fetchFn: async ({ cms }) => {
+            // Calculate average rating using CMS API
           },
-        },
+        }),
       ],
-    },
-    // Tabs for different views
-    {
-      type: "tabs",
+    }),
+    d.tabs({
       tabs: [
         {
           id: "overview",
           label: { en: "Overview", sk: "Prehľad" },
           items: [
-            /* stats, recent items */
+            d.recentItems({ collection: "appointments", label: "Recent Bookings", limit: 5 }),
           ],
         },
         {
           id: "analytics",
           label: { en: "Analytics", sk: "Analytika" },
           items: [
-            /* charts, progress */
+            d.chart({ id: "bookings-chart", label: "Bookings Over Time" }),
           ],
         },
       ],
-    },
+    }),
   ],
-} satisfies DashboardConfig);
+}))
 ```
 
 ## Page Builder Blocks
@@ -405,7 +364,7 @@ export const dashboard = qa.dashboard({
 export const heroBlock = builder
   .block("hero")
   .label({ en: "Hero", sk: "Hero" })
-  .icon("Image")
+  .icon("ph:image")
   .category("sections")
   .fields(({ r }) => ({
     title: r.text({ label: "Title", localized: true, required: true }),

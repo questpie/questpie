@@ -1,285 +1,145 @@
 ---
-title: Icons as Components
-description: Proper icon usage in QUESTPIE Admin
+title: Icon System
+description: Using icons in QUESTPIE Admin with @iconify/react
 ---
 
-# Icons as Components
+# Icon System
 
-In QUESTPIE Admin, **icons must be React components**, not strings. This ensures type safety and allows for consistent icon rendering.
+QUESTPIE Admin uses `@iconify/react` with the **Phosphor** icon set. Icons are created as serializable references on the server using `c.icon()` and rendered automatically on the client.
 
-## The Rule
+## Server-Side: `c.icon()`
 
-```typescript
-import { Newspaper, Users, Settings } from "lucide-react";
-
-// ✅ Correct - Component reference
-.meta({ icon: Newspaper })
-
-// ❌ Wrong - String
-.meta({ icon: "Newspaper" })
-
-// ❌ Wrong - JSX element
-.meta({ icon: <Newspaper /> })
-```
-
-## Why Components?
-
-### 1. Type Safety
-
-TypeScript can verify the icon is a valid component:
+In server-side configuration (`.admin()`, `.dashboard()`, `.sidebar()`, `.actions()`), use the `c.icon()` helper:
 
 ```typescript
-import { IconType } from "lucide-react";
-
-interface MetaConfig {
-  icon?: IconType;  // Only accepts component
-}
-
-// TypeScript catches errors
-.meta({ icon: "NotAComponent" })  // ❌ Type error!
+// Server-side: creates a serializable ComponentReference
+c.icon("ph:users")         // → { type: "icon", props: { name: "ph:users" } }
+c.icon("ph:article-fill")  // Phosphor "fill" variant
+c.icon("ph:gear-bold")     // Phosphor "bold" variant
 ```
 
-### 2. Flexible Rendering
-
-Components can be rendered with different props:
-
-```tsx
-// Admin can render with appropriate size/color
-function SidebarItem({ icon: Icon, label }) {
-  return (
-    <div>
-      <Icon className="h-4 w-4" />  {/* Render with props */}
-      <span>{label}</span>
-    </div>
-  );
-}
-```
-
-### 3. Tree Shaking
-
-Only imported icons are included in the bundle:
+### Usage in Config
 
 ```typescript
-// Only Newspaper is bundled
-import { Newspaper } from "lucide-react";
+// Collection admin metadata
+.admin(({ c }) => ({
+  label: { en: "Posts" },
+  icon: c.icon("ph:article"),
+}))
 
-.meta({ icon: Newspaper })
-```
-
-## Usage Examples
-
-### Collection Icons
-
-```typescript
-import { Newspaper, Users, Image, Tag } from "lucide-react";
-
-const postsAdmin = qab.collection("posts")
-  .meta({
-    icon: Newspaper,
-    label: "Posts",
-  });
-
-const usersAdmin = qab.collection("users")
-  .meta({
-    icon: Users,
-    label: "Users",
-  });
-
-const mediaAdmin = qab.collection("media")
-  .meta({
-    icon: Image,
-    label: "Media",
-  });
-
-const tagsAdmin = qab.collection("tags")
-  .meta({
-    icon: Tag,
-    label: "Tags",
-  });
-```
-
-### Sidebar Icons
-
-```typescript
-import {
-  LayoutDashboard,
-  FileText,
-  Users,
-  Settings,
-  Folder,
-} from "lucide-react";
-
-qa.sidebar(({ s }) => [
-  s.link({
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    href: "/admin",
-  }),
-  s.section({
-    label: "Content",
-    icon: Folder,
-    items: [
-      s.collection({ collection: "posts", icon: FileText }),
-      s.collection({ collection: "users", icon: Users }),
-    ],
-  }),
-  s.global({
-    global: "settings",
-    icon: Settings,
-  }),
-]);
-```
-
-### Dashboard Widget Icons
-
-```typescript
-import { FileText, Users, Eye, TrendingUp } from "lucide-react";
-
-.dashboard(({ w }) => ({
-  widgets: [
-    w.stats({
-      label: "Posts",
-      icon: FileText,
-      value: async () => postsCount,
+// Dashboard widgets
+.dashboard(({ d, c }) => d.dashboard({
+  items: [
+    d.stats({
+      collection: "posts",
+      label: { en: "Total Posts" },
+      icon: c.icon("ph:article"),
     }),
-    w.stats({
-      label: "Users",
-      icon: Users,
-      value: async () => usersCount,
+  ],
+}))
+
+// Sidebar navigation
+.sidebar(({ s, c }) => s.sidebar({
+  sections: [
+    s.section({
+      id: "content",
+      title: { en: "Content" },
+      icon: c.icon("ph:files"),
+      items: [
+        { type: "collection", collection: "posts", icon: c.icon("ph:article") },
+      ],
+    }),
+  ],
+}))
+
+// Custom actions
+.actions(({ a, c }) => ({
+  custom: [
+    a.action({
+      id: "publish",
+      label: { en: "Publish" },
+      icon: c.icon("ph:arrow-up"),
+      handler: async ({ itemId }) => { ... },
     }),
   ],
 }))
 ```
 
-## Icon Libraries
+## Icon Naming Convention
 
-QUESTPIE Admin works with any icon library that exports React components:
+Icons follow the pattern `ph:icon-name[-variant]`:
 
-### Lucide React (Recommended)
+| Variant | Suffix | Example |
+|---------|--------|---------|
+| Regular | (none) | `ph:users` |
+| Fill | `-fill` | `ph:users-fill` |
+| Bold | `-bold` | `ph:users-bold` |
+| Duotone | `-duotone` | `ph:users-duotone` |
+| Light | `-light` | `ph:users-light` |
+| Thin | `-thin` | `ph:users-thin` |
 
-```typescript
-import { Home, Settings, User } from "lucide-react";
-```
+### Finding Icon Names
 
-### Heroicons
+1. Browse icons at [phosphoricons.com](https://phosphoricons.com/)
+2. Convert PascalCase to kebab-case: `CaretDown` → `caret-down`
+3. Add the `ph:` prefix: `ph:caret-down`
+4. Add variant suffix if needed: `ph:caret-down-fill`
 
-```typescript
-import { HomeIcon, CogIcon, UserIcon } from "@heroicons/react/24/outline";
-```
-
-### Phosphor Icons
-
-```typescript
-import { House, Gear, User } from "@phosphor-icons/react";
-```
-
-### React Icons
+### Common Icons
 
 ```typescript
-import { FiHome, FiSettings, FiUser } from "react-icons/fi";
+c.icon("ph:article")          // Posts, articles
+c.icon("ph:users")            // Users, team
+c.icon("ph:gear")             // Settings
+c.icon("ph:calendar")         // Appointments, dates
+c.icon("ph:calendar-check")   // Confirmed dates
+c.icon("ph:calendar-plus")    // Create appointment
+c.icon("ph:star")             // Reviews, favorites
+c.icon("ph:scissors")         // Services (barbershop)
+c.icon("ph:files")            // Content, pages
+c.icon("ph:image")            // Media, images
+c.icon("ph:envelope")         // Email
+c.icon("ph:currency-dollar")  // Revenue, money
+c.icon("ph:chart-line")       // Analytics
+c.icon("ph:arrow-up")         // Upload, publish
+c.icon("ph:arrow-square-out") // External link
+c.icon("ph:book-open")        // Documentation
+c.icon("ph:check-circle")     // Completed, confirmed
+c.icon("ph:archive")          // Archive
+c.icon("ph:trash")            // Delete
 ```
 
-## Custom Icons
+## Client-Side: Direct Usage
 
-You can create custom icon components:
+For custom React components, use `@iconify/react` directly:
 
 ```tsx
-// Custom SVG icon
-function CustomIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      {...props}
-    >
-      <path d="M12 2L2 7l10 5 10-5-10-5z" />
-      <path d="M2 17l10 5 10-5" />
-      <path d="M2 12l10 5 10-5" />
-    </svg>
-  );
-}
+import { Icon } from "@iconify/react";
 
-// Use in config
-.meta({ icon: CustomIcon })
-```
-
-## Common Mistakes
-
-### ❌ String Icons
-
-```typescript
-// Doesn't work - strings can't be rendered
-.meta({ icon: "Newspaper" })
-```
-
-### ❌ JSX Elements
-
-```typescript
-// Doesn't work - can't pass props to JSX
-.meta({ icon: <Newspaper size={16} /> })
-```
-
-### ❌ Inline Components
-
-```typescript
-// Works but bad for performance (creates new component each render)
-.meta({ icon: () => <Newspaper /> })
-
-// Better - use imported component
-.meta({ icon: Newspaper })
-```
-
-### ❌ Wrong Import
-
-```typescript
-// Wrong - importing from wrong path
-import Newspaper from "lucide-react/dist/esm/icons/newspaper";
-
-// Correct
-import { Newspaper } from "lucide-react";
-```
-
-## TypeScript Integration
-
-Define icon types for your collections:
-
-```typescript
-import type { LucideIcon } from "lucide-react";
-
-interface CollectionMeta {
-  label: string;
-  labelPlural?: string;
-  icon?: LucideIcon;
-  description?: string;
+function MyComponent() {
+  return <Icon icon="ph:users" width={20} height={20} />;
 }
 ```
 
-## Best Practices
+## Why Not Direct React Imports?
 
-1. **Import at the top** - Keep icon imports organized
-2. **Use consistent library** - Stick to one icon library
-3. **Match visual style** - Use icons with similar stroke weight
-4. **Be semantic** - Choose icons that represent the content
+Previous versions used direct React component imports from `@phosphor-icons/react`:
 
 ```typescript
-// Good - imports at top, consistent library
-import {
-  Newspaper,
-  Users,
-  Settings,
-  Image
-} from "lucide-react";
-
-// Bad - mixed libraries
-import { Newspaper } from "lucide-react";
-import { FiUsers } from "react-icons/fi";
-import { CogIcon } from "@heroicons/react/24/outline";
+// ❌ Old pattern — no longer recommended
+import { FileTextIcon, UsersIcon } from "@phosphor-icons/react";
+.meta({ icon: FileTextIcon })
 ```
+
+The `c.icon("ph:name")` pattern is preferred because:
+
+1. **Serializable** — Icons can be sent from server to client via JSON
+2. **No bundling** — Iconify loads icons on demand, no tree-shaking needed
+3. **Consistent** — Same pattern across all config surfaces (admin, dashboard, sidebar, actions)
+4. **Lightweight** — Only loads icons that are actually rendered
 
 ## Related
 
-- [Best Practices](/docs/admin/patterns/best-practices) - Production recommendations
-- [Sidebar](/docs/admin/sidebar) - Configure navigation
+- [Architecture](/docs/admin/architecture) — Icon system in the two-layer architecture
+- [Dashboard](/docs/admin/dashboard) — Using icons in dashboard widgets
+- [Sidebar](/docs/admin/sidebar) — Using icons in navigation

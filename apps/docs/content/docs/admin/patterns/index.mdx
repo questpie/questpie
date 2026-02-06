@@ -24,18 +24,18 @@ admin.state.collections; // Access directly
 
 [Learn more about this pattern →](/docs/admin/patterns/no-build-method)
 
-### Icons as Components
+### Icon System
 
-Icons must be React components, not strings:
+Icons use `c.icon("ph:icon-name")` on the server, rendered via `@iconify/react`:
 
 ```typescript
-import { Newspaper } from "lucide-react";
+// ✅ Correct — server-side config
+.admin(({ c }) => ({
+  icon: c.icon("ph:article"),
+}))
 
-// ✅ Correct
-.meta({ icon: Newspaper })
-
-// ❌ Wrong
-.meta({ icon: "Newspaper" })
+// ❌ Wrong — strings without c.icon()
+.admin(() => ({ icon: "article" }))
 ```
 
 [Learn more about icons →](/docs/admin/patterns/icons-as-components)
@@ -76,51 +76,46 @@ const posts = builder.collection("posts")
 
 ## Common Patterns
 
-### Collection with Full Configuration
+### Collection with Full Configuration (Server-Side)
 
 ```typescript
-const builder = qa<AppCMS>().use(adminModule);
-
-export const postsAdmin = builder.collection("posts")
-  .meta({
-    label: "Posts",
-    labelPlural: "Posts",
-    icon: Newspaper,
-    description: "Blog posts and articles",
-  })
-  .fields(({ r }) => ({
-    title: r.text({ label: "Title" }),
-    slug: r.text({ label: "Slug" }),
-    content: r.richText({ label: "Content" }),
-    status: r.select({
-      label: "Status",
+// src/questpie/server/collections/posts.ts
+export const posts = qb
+  .collection("posts")
+  .fields((f) => ({
+    title: f.text({ required: true }),
+    slug: f.text({ required: true }),
+    content: f.richText(),
+    status: f.select({
       options: [
         { label: "Draft", value: "draft" },
         { label: "Published", value: "published" },
       ],
     }),
-    author: r.relation({
-      label: "Author",
-      targetCollection: "users",
-    }),
-    publishedAt: r.datetime({ label: "Publish Date" }),
+    author: f.relation({ to: "users" }),
+    publishedAt: f.datetime(),
+  }))
+  .admin(({ c }) => ({
+    label: { en: "Posts" },
+    icon: c.icon("ph:article"),
+    description: { en: "Blog posts and articles" },
   }))
   .list(({ v, f }) => v.table({
     columns: [f.title, f.status, f.author, f.publishedAt],
     defaultSort: { field: "publishedAt", direction: "desc" },
     searchable: ["title"],
-    filters: [f.status, f.author],
+    filterable: ["status", "author"],
   }))
   .form(({ v, f }) => v.form({
-    layout: [
-      v.section({
-        title: "Content",
+    sections: [
+      {
+        label: { en: "Content" },
         fields: [f.title, f.slug, f.content],
-      }),
-      v.section({
-        title: "Publishing",
+      },
+      {
+        label: { en: "Publishing" },
         fields: [f.status, f.author, f.publishedAt],
-      }),
+      },
     ],
   }));
 ```
@@ -197,11 +192,11 @@ export const pagesAdmin = qab.collection("pages")
 const admin = qa().collections({...}).build();
 ```
 
-### ❌ String Icons
+### ❌ Plain String Icons
 
 ```typescript
-// Wrong - icons must be components
-.meta({ icon: "Newspaper" })
+// Wrong — use c.icon() helper on the server
+.admin(() => ({ icon: "Newspaper" }))
 ```
 
 ### ❌ Importing Internal Paths
