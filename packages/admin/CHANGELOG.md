@@ -1,5 +1,13 @@
 # @questpie/admin
 
+## 1.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`7172275`](https://github.com/questpie/questpie-cms/commit/71722757a95e1f30521ac1eeca1080a8691bb9fc)]:
+  - questpie@1.1.1
+  - @questpie/tanstack-query@1.1.1
+
 ## 1.1.0
 
 ### Minor Changes
