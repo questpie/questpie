@@ -5,7 +5,7 @@
  * Blocks are registered on the CMS builder and can be used in blocks fields.
  *
  * Each block has:
- * - Metadata (label, description, icon, category)
+ * - Admin metadata (label, description, icon, category) via .admin()
  * - Fields (using the same field system as collections)
  * - Optional prefetch function (runs on CRUD read to fetch related data)
  * - Optional children configuration (for nested blocks)
@@ -15,9 +15,14 @@
  * import { block } from "@questpie/admin/server";
  *
  * const heroBlock = block("hero")
- *   .label({ en: "Hero Section" })
- *   .icon("ph:image")
- *   .category("layout")
+ *   .admin(({ c }) => ({
+ *     label: { en: "Hero Section", sk: "Hero sekcia" },
+ *     icon: c.icon("ph:image"),
+ *     category: {
+ *       label: { en: "Sections", sk: "Sekcie" },
+ *       icon: c.icon("ph:layout"),
+ *     },
+ *   }))
  *   .fields((f) => ({
  *     title: f.text({ required: true }),
  *     subtitle: f.text(),
@@ -35,7 +40,7 @@ import type {
 	FieldDefinition,
 	FieldDefinitionState,
 } from "questpie";
-import type { I18nText } from "questpie/shared";
+import type { AdminBlockConfig, AdminConfigContext } from "../augmentation.js";
 
 // ============================================================================
 // Block Types
@@ -82,14 +87,8 @@ export interface BlockBuilderState<
 > {
 	/** Block type name */
 	name: TName;
-	/** Display label */
-	label?: I18nText;
-	/** Description */
-	description?: I18nText;
-	/** Icon identifier (e.g., "ph:image") */
-	icon?: string;
-	/** Category for grouping in block picker */
-	category?: string;
+	/** Admin configuration (label, icon, description, category, etc.) */
+	admin?: AdminBlockConfig;
 	/** Field definitions */
 	fields?: TFields;
 	/** Allow child blocks */
@@ -98,10 +97,6 @@ export interface BlockBuilderState<
 	maxChildren?: number;
 	/** Prefetch function */
 	prefetch?: BlockPrefetchFn;
-	/** Order in block picker */
-	order?: number;
-	/** Hide from block picker */
-	hidden?: boolean;
 }
 
 /**
@@ -124,14 +119,34 @@ export interface BlockDefinition<
 }
 
 // ============================================================================
+// Component Proxy Factory (same pattern as collections)
+// ============================================================================
+
+/**
+ * Create a component proxy for type-safe icon and UI element references.
+ * Used in .admin() config functions.
+ */
+function createComponentProxy(): AdminConfigContext["c"] {
+	return {
+		icon: (name: string) => ({ type: "icon", props: { name } }) as const,
+		badge: (props: { text: string; color?: string }) =>
+			({ type: "badge", props }) as const,
+	};
+}
+
+// ============================================================================
 // Block Builder Class
 // ============================================================================
 
 /**
  * Builder class for defining block types.
+ *
+ * @template TState - Block builder state
+ * @template TFieldMap - Field type map for typed field proxy (from builder's registered fields)
  */
 export class BlockBuilder<
 	TState extends BlockBuilderState = BlockBuilderState,
+	TFieldMap extends Record<string, any> = Record<string, any>,
 > {
 	private _state: TState;
 
@@ -140,82 +155,40 @@ export class BlockBuilder<
 	}
 
 	/**
-	 * Set display label for the block.
+	 * Set admin metadata for the block.
+	 * Follows the same pattern as collection .admin() method.
 	 *
 	 * @example
 	 * ```ts
-	 * block("hero").label({ en: "Hero Section", sk: "Hero sekcia" })
+	 * block("hero")
+	 *   .admin(({ c }) => ({
+	 *     label: { en: "Hero Section", sk: "Hero sekcia" },
+	 *     icon: c.icon("ph:image"),
+	 *     description: { en: "Full-width hero with background image" },
+	 *     category: {
+	 *       label: { en: "Sections", sk: "Sekcie" },
+	 *       icon: c.icon("ph:layout"),
+	 *       order: 1,
+	 *     },
+	 *     order: 1,
+	 *     hidden: false,
+	 *   }))
 	 * ```
 	 */
-	label(label: I18nText): BlockBuilder<TState & { label: I18nText }> {
-		return new BlockBuilder({
-			...this._state,
-			label,
-		} as TState & { label: I18nText });
-	}
+	admin(
+		configOrFn:
+			| AdminBlockConfig
+			| ((ctx: AdminConfigContext) => AdminBlockConfig),
+	): BlockBuilder<TState & { admin: AdminBlockConfig }, TFieldMap> {
+		const config =
+			typeof configOrFn === "function"
+				? configOrFn({ c: createComponentProxy() })
+				: configOrFn;
 
-	/**
-	 * Set description for the block.
-	 */
-	description(
-		description: I18nText,
-	): BlockBuilder<TState & { description: I18nText }> {
 		return new BlockBuilder({
 			...this._state,
-			description,
-		} as TState & { description: I18nText });
-	}
-
-	/**
-	 * Set icon for the block (Iconify format).
-	 *
-	 * @example
-	 * ```ts
-	 * block("hero").icon("ph:image")
-	 * ```
-	 */
-	icon(icon: string): BlockBuilder<TState & { icon: string }> {
-		return new BlockBuilder({
-			...this._state,
-			icon,
-		} as TState & { icon: string });
-	}
-
-	/**
-	 * Set category for grouping in block picker.
-	 *
-	 * @example
-	 * ```ts
-	 * block("hero").category("layout")
-	 * block("text").category("content")
-	 * ```
-	 */
-	category(category: string): BlockBuilder<TState & { category: string }> {
-		return new BlockBuilder({
-			...this._state,
-			category,
-		} as TState & { category: string });
-	}
-
-	/**
-	 * Set order in block picker.
-	 */
-	order(order: number): BlockBuilder<TState & { order: number }> {
-		return new BlockBuilder({
-			...this._state,
-			order,
-		} as TState & { order: number });
-	}
-
-	/**
-	 * Hide block from block picker.
-	 * Useful for deprecated blocks that should still render but not be addable.
-	 */
-	hidden(hidden = true): BlockBuilder<TState & { hidden: boolean }> {
-		return new BlockBuilder({
-			...this._state,
-			hidden,
-		} as TState & { hidden: boolean });
+			admin: config,
+		} as TState & { admin: AdminBlockConfig });
 	}
 
 	/**
@@ -234,8 +207,8 @@ export class BlockBuilder<
 	fields<
 		TNewFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
 	>(
-		factory: (f: FieldBuilderProxy<Record<string, any>>) => TNewFields,
-	): BlockBuilder<Omit<TState, "fields"> & { fields: TNewFields }> {
+		factory: (f: FieldBuilderProxy<TFieldMap>) => TNewFields,
+	): BlockBuilder<Omit<TState, "fields"> & { fields: TNewFields }, TFieldMap> {
 		// Store the factory for later resolution when CMS is built
 		// The actual field definitions are created when block is registered
 		return new BlockBuilder({
@@ -255,7 +228,10 @@ export class BlockBuilder<
 	 */
 	allowChildren(
 		maxChildren?: number,
-	): BlockBuilder<TState & { allowChildren: true; maxChildren?: number }> {
+	): BlockBuilder<
+		TState & { allowChildren: true; maxChildren?: number },
+		TFieldMap
+	> {
 		return new BlockBuilder({
 			...this._state,
 			allowChildren: true,
@@ -284,7 +260,7 @@ export class BlockBuilder<
 	 */
 	prefetch<TValues = Record<string, unknown>>(
 		fn: BlockPrefetchFn<TValues>,
-	): BlockBuilder<TState & { prefetch: BlockPrefetchFn<TValues> }> {
+	): BlockBuilder<TState & { prefetch: BlockPrefetchFn<TValues> }, TFieldMap> {
 		return new BlockBuilder({
 			...this._state,
 			prefetch: fn,
@@ -339,8 +315,13 @@ export class BlockBuilder<
  * import { block } from "@questpie/admin/server";
  *
  * const heroBlock = block("hero")
- *   .label({ en: "Hero Section" })
- *   .icon("ph:image")
+ *   .admin(({ c }) => ({
+ *     label: { en: "Hero Section" },
+ *     icon: c.icon("ph:image"),
+ *     category: {
+ *       label: { en: "Layout" },
+ *     },
+ *   }))
  *   .fields((f) => ({
  *     title: f.text({ required: true }),
  *     subtitle: f.text(),
@@ -376,7 +357,7 @@ export type InferBlockValues<TState extends BlockBuilderState> =
 /**
  * Any block builder (for generic usage).
  */
-export type AnyBlockBuilder = BlockBuilder<BlockBuilderState>;
+export type AnyBlockBuilder = BlockBuilder<BlockBuilderState, any>;
 
 /**
  * Any block definition (for generic usage).

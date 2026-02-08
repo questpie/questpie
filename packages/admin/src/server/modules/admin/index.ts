@@ -168,6 +168,7 @@ export const adminModule = q({ name: "questpie-admin" })
         label: { key: "defaults.users.label" },
         icon: c.icon("ph:users"),
         description: { key: "defaults.users.description" },
+        group: "administration",
       }))
       .list(({ v, f, a }) =>
         v.table({
@@ -203,6 +204,7 @@ export const adminModule = q({ name: "questpie-admin" })
       label: { key: "defaults.assets.label" },
       icon: c.icon("ph:image"),
       description: { key: "defaults.assets.description" },
+      group: "administration",
     })),
 
     // Hide internal auth collections
@@ -213,9 +215,9 @@ export const adminModule = q({ name: "questpie-admin" })
     }),
     apikey: starterModule.state.collections.apikey.admin({ hidden: true }),
 
-    // Admin-specific collections
-    admin_saved_views: savedViewsCollection,
-    admin_preferences: adminPreferencesCollection,
+    // Admin-specific collections (hidden from sidebar)
+    adminSavedViews: savedViewsCollection.admin({ hidden: true }),
+    adminPreferences: adminPreferencesCollection.admin({ hidden: true }),
   })
   // Default sidebar
   .sidebar(({ s, c }) =>

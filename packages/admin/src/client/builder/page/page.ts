@@ -17,6 +17,7 @@ export interface PageBuilderState {
   readonly name: string;
   readonly component: any;
   readonly path?: string;
+  readonly showInNav?: boolean;
 }
 
 export class PageBuilder<TState extends PageBuilderState> {
@@ -38,15 +39,17 @@ export function page<
   TComponent extends MaybeLazyComponent,
 >(
   name: TName,
-  config: { component: TComponent },
+  config: { component: TComponent; showInNav?: boolean },
 ): PageBuilder<{
   name: TName;
   component: TComponent;
   path: undefined;
+  showInNav: boolean | undefined;
 }> {
   return new PageBuilder({
     name,
     component: config.component,
     path: undefined,
+    showInNav: config.showInNav,
   } as any);
 }

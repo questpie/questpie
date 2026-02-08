@@ -20,7 +20,7 @@ import { q } from "questpie";
  *   .build({ ... });
  *
  * // Access preferences
- * const prefs = await cms.api.collections.admin_preferences.findOne({
+ * const prefs = await cms.api.collections.adminPreferences.findOne({
  *   where: { userId: currentUser.id, key: "viewState:posts" }
  * });
  * ```

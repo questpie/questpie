@@ -1,34 +1,35 @@
 import type {
-  GetColumnData,
-  InferInsertModel,
-  InferSelectModel,
-  SQL,
+	GetColumnData,
+	InferInsertModel,
+	InferSelectModel,
+	SQL,
 } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import {
-  bigint,
-  char,
-  index,
-  integer,
-  pgTable,
-  smallint,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-  varchar,
+	bigint,
+	char,
+	index,
+	integer,
+	pgTable,
+	smallint,
+	text,
+	timestamp,
+	uniqueIndex,
+	uuid,
+	varchar,
 } from "drizzle-orm/pg-core";
 import { Collection } from "#questpie/server/collection/builder/collection.js";
 import type {
-  ExtractFieldsByLocation,
-  I18nFieldAccessor,
-  InferSQLType,
+	ExtractFieldsByLocation,
+	I18nFieldAccessor,
+	InferSQLType,
 } from "#questpie/server/collection/builder/types.js";
 import type {
-  GlobalBuilderState,
-  InferGlobalTableWithColumns,
+	GlobalBuilderState,
+	InferGlobalTableWithColumns,
 } from "#questpie/server/global/builder/types.js";
+import { createGlobalValidationSchema } from "#questpie/server/global/builder/validation-helpers.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import { GlobalCRUDGenerator } from "../crud/global-crud-generator.js";
 import type { GlobalCRUD } from "../crud/types.js";
@@ -37,395 +38,421 @@ import type { GlobalCRUD } from "../crud/types.js";
  * Default ID column factory for globals
  */
 const defaultIdColumn = () =>
-  text("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`);
+	text("id").primaryKey().default(sql`gen_random_uuid()`);
 
 /**
  * Helper to get column config from a Drizzle column
  */
 function getColumnConfig(column: PgColumn): any {
-  return (column as any).config || {};
+	return (column as any).config || {};
 }
 
 /**
  * Creates a column of the same type as the source column but with a different name.
  */
 function cloneColumnType(sourceColumn: PgColumn, newName: string) {
-  const config = getColumnConfig(sourceColumn);
-  const columnType = config.columnType || sourceColumn.constructor.name;
+	const config = getColumnConfig(sourceColumn);
+	const columnType = config.columnType || sourceColumn.constructor.name;
 
-  switch (columnType) {
-    case "PgUUID":
-      return uuid(newName);
-    case "PgText":
-      return text(newName);
-    case "PgVarchar":
-      return varchar(newName, { length: config.length });
-    case "PgChar":
-      return char(newName, { length: config.length });
-    case "PgInteger":
-      return integer(newName);
-    case "PgSerial":
-      return integer(newName);
-    case "PgSmallInt":
-      return smallint(newName);
-    case "PgSmallSerial":
-      return smallint(newName);
-    case "PgBigInt53":
-    case "PgBigInt64":
-      return bigint(newName, { mode: config.mode || "number" });
-    case "PgBigSerial53":
-    case "PgBigSerial64":
-      return bigint(newName, { mode: config.mode || "number" });
-    default:
-      return text(newName);
-  }
+	switch (columnType) {
+		case "PgUUID":
+			return uuid(newName);
+		case "PgText":
+			return text(newName);
+		case "PgVarchar":
+			return varchar(newName, { length: config.length });
+		case "PgChar":
+			return char(newName, { length: config.length });
+		case "PgInteger":
+			return integer(newName);
+		case "PgSerial":
+			return integer(newName);
+		case "PgSmallInt":
+			return smallint(newName);
+		case "PgSmallSerial":
+			return smallint(newName);
+		case "PgBigInt53":
+		case "PgBigInt64":
+			return bigint(newName, { mode: config.mode || "number" });
+		case "PgBigSerial53":
+		case "PgBigSerial64":
+			return bigint(newName, { mode: config.mode || "number" });
+		default:
+			return text(newName);
+	}
 }
 
 /**
  * Infer select type from Global
  */
 type InferGlobalSelect<
-  TTable extends PgTable,
-  TFields extends Record<string, any>,
-  TLocalized extends ReadonlyArray<keyof TFields>,
-  TVirtuals extends Record<string, SQL>,
+	TTable extends PgTable,
+	TFields extends Record<string, any>,
+	TLocalized extends ReadonlyArray<keyof TFields>,
+	TVirtuals extends Record<string, SQL>,
 > = InferSelectModel<TTable> & {
-  [K in keyof TVirtuals]: InferSQLType<TVirtuals[K]>;
+	[K in keyof TVirtuals]: InferSQLType<TVirtuals[K]>;
 } & {
-  [K in TLocalized[number]]: GetColumnData<TFields[K]>;
+	[K in TLocalized[number]]: GetColumnData<TFields[K]>;
 };
 
 /**
  * Infer insert type from Global
  */
 type InferGlobalInsert<
-  TTable extends PgTable,
-  TFields extends Record<string, any>,
-  TLocalized extends ReadonlyArray<keyof TFields>,
+	TTable extends PgTable,
+	TFields extends Record<string, any>,
+	TLocalized extends ReadonlyArray<keyof TFields>,
 > = InferInsertModel<TTable> & {
-  [K in TLocalized[number]]?: GetColumnData<TFields[K]>;
+	[K in TLocalized[number]]?: GetColumnData<TFields[K]>;
 };
 
 /**
  * Infer update type from Global
  */
 type InferGlobalUpdate<
-  TTable extends PgTable,
-  TFields extends Record<string, any>,
-  TLocalized extends ReadonlyArray<keyof TFields>,
+	TTable extends PgTable,
+	TFields extends Record<string, any>,
+	TLocalized extends ReadonlyArray<keyof TFields>,
 > = Partial<InferInsertModel<TTable>> & {
-  [K in TLocalized[number]]?: GetColumnData<TFields[K]>;
+	[K in TLocalized[number]]?: GetColumnData<TFields[K]>;
 };
 
 export class Global<TState extends GlobalBuilderState> {
-  public readonly name: TState["name"];
-  public readonly table: InferGlobalTableWithColumns<
-    TState["name"],
-    TState["fieldDefinitions"] extends Record<string, any>
-      ? ExtractFieldsByLocation<TState["fieldDefinitions"], "main">
-      : Omit<TState["fields"], TState["localized"][number]>,
-    TState["options"]
-  >;
-  public readonly i18nTable: TState["localized"][number] extends never
-    ? null
-    : PgTable; // Simplified type for now
-  public readonly versionsTable: PgTable | null;
-  public readonly i18nVersionsTable: PgTable | null;
-  public readonly state: TState;
+	public readonly name: TState["name"];
+	public readonly table: InferGlobalTableWithColumns<
+		TState["name"],
+		TState["fieldDefinitions"] extends Record<string, any>
+			? ExtractFieldsByLocation<TState["fieldDefinitions"], "main">
+			: Omit<TState["fields"], TState["localized"][number]>,
+		TState["options"]
+	>;
+	public readonly i18nTable: TState["localized"][number] extends never
+		? null
+		: PgTable; // Simplified type for now
+	public readonly versionsTable: PgTable | null;
+	public readonly i18nVersionsTable: PgTable | null;
+	public readonly state: TState;
 
-  /**
-   * Type inference helper
-   */
-  public readonly $infer!: {
-    select: InferGlobalSelect<
-      InferGlobalTableWithColumns<
-        TState["name"],
-        TState["fieldDefinitions"] extends Record<string, any>
-          ? ExtractFieldsByLocation<TState["fieldDefinitions"], "main">
-          : Omit<TState["fields"], TState["localized"][number]>,
-        TState["options"]
-      >,
-      TState["fields"],
-      TState["localized"],
-      TState["virtuals"]
-    >;
-    insert: InferGlobalInsert<
-      InferGlobalTableWithColumns<
-        TState["name"],
-        TState["fieldDefinitions"] extends Record<string, any>
-          ? ExtractFieldsByLocation<TState["fieldDefinitions"], "main">
-          : Omit<TState["fields"], TState["localized"][number]>,
-        TState["options"]
-      >,
-      TState["fields"],
-      TState["localized"]
-    >;
-    update: InferGlobalUpdate<
-      InferGlobalTableWithColumns<
-        TState["name"],
-        TState["fieldDefinitions"] extends Record<string, any>
-          ? ExtractFieldsByLocation<TState["fieldDefinitions"], "main">
-          : Omit<TState["fields"], TState["localized"][number]>,
-        TState["options"]
-      >,
-      TState["fields"],
-      TState["localized"]
-    >;
-  };
+	/**
+	 * Type inference helper
+	 */
+	public readonly $infer!: {
+		select: InferGlobalSelect<
+			InferGlobalTableWithColumns<
+				TState["name"],
+				TState["fieldDefinitions"] extends Record<string, any>
+					? ExtractFieldsByLocation<TState["fieldDefinitions"], "main">
+					: Omit<TState["fields"], TState["localized"][number]>,
+				TState["options"]
+			>,
+			TState["fields"],
+			TState["localized"],
+			TState["virtuals"]
+		>;
+		insert: InferGlobalInsert<
+			InferGlobalTableWithColumns<
+				TState["name"],
+				TState["fieldDefinitions"] extends Record<string, any>
+					? ExtractFieldsByLocation<TState["fieldDefinitions"], "main">
+					: Omit<TState["fields"], TState["localized"][number]>,
+				TState["options"]
+			>,
+			TState["fields"],
+			TState["localized"]
+		>;
+		update: InferGlobalUpdate<
+			InferGlobalTableWithColumns<
+				TState["name"],
+				TState["fieldDefinitions"] extends Record<string, any>
+					? ExtractFieldsByLocation<TState["fieldDefinitions"], "main">
+					: Omit<TState["fields"], TState["localized"][number]>,
+				TState["options"]
+			>,
+			TState["fields"],
+			TState["localized"]
+		>;
+	};
 
-  constructor(state: TState) {
-    this.state = state;
-    this.name = state.name;
+	constructor(state: TState) {
+		this.state = state;
+		this.name = state.name;
 
-    this.table = this.generateMainTable() as any;
-    this.i18nTable = this.generateI18nTable() as any;
-    this.versionsTable = this.generateVersionsTable();
-    this.i18nVersionsTable = this.generateI18nVersionsTable();
+		this.table = this.generateMainTable() as any;
+		this.i18nTable = this.generateI18nTable() as any;
+		this.versionsTable = this.generateVersionsTable();
+		this.i18nVersionsTable = this.generateI18nVersionsTable();
 
-    // Relations are now defined via f.relation() in fields() and resolved in global-builder.ts
+		// Relations are now defined via f.relation() in fields() and resolved in global-builder.ts
 
-    this.$infer = {} as any;
-  }
+		// Auto-generate validation schema if not explicitly provided
+		if (!state.validation) {
+			const localizedFieldNames = new Set(state.localized as readonly string[]);
+			const mainFields: Record<string, any> = {};
+			const localizedFields: Record<string, any> = {};
 
-  public getVirtuals(_context: any): TState["virtuals"] {
-    return this.state.virtuals;
-  }
+			// Include auto-generated ID field if user didn't define one
+			const hasUserDefinedId = "id" in state.fields;
+			if (!hasUserDefinedId) {
+				mainFields.id = defaultIdColumn();
+			}
 
-  public getVirtualsForVersions(_context: any): TState["virtuals"] {
-    return this.state.virtuals;
-  }
+			for (const [key, column] of Object.entries(state.fields)) {
+				if (localizedFieldNames.has(key)) {
+					localizedFields[key] = column;
+				} else {
+					mainFields[key] = column;
+				}
+			}
 
-  /**
-   * Generate CRUD operations
-   */
-  generateCRUD(
-    db: any,
-    cms?: any,
-  ): GlobalCRUD<
-    InferGlobalSelect<
-      any,
-      TState["fields"],
-      TState["localized"],
-      TState["virtuals"]
-    >,
-    InferGlobalInsert<any, TState["fields"], TState["localized"]>,
-    InferGlobalUpdate<any, TState["fields"], TState["localized"]>,
-    TState["relations"]
-  > {
-    const crud = new GlobalCRUDGenerator(
-      this.state,
-      this.table,
-      this.i18nTable,
-      this.versionsTable,
-      this.i18nVersionsTable,
-      db,
-      this.getVirtuals.bind(this),
-      this.getVirtualsForVersions.bind(this),
-      cms,
-    );
-    return crud.generate() as any;
-  }
+			// Include system fields in validation schema
+			if (state.options.timestamps !== false) {
+				Object.assign(mainFields, Collection.timestampsCols());
+			}
 
-  private generateMainTable(): PgTable {
-    const tableName = this.state.name;
-    const columns: Record<string, any> = {};
+			state.validation = createGlobalValidationSchema(
+				state.name,
+				mainFields,
+				localizedFields,
+			) as any;
+		}
 
-    // Check if user defined 'id' in fields
-    const hasUserDefinedId = "id" in this.state.fields;
+		this.$infer = {} as any;
+	}
 
-    // Add default ID if user didn't provide one
-    if (!hasUserDefinedId) {
-      columns.id = defaultIdColumn();
-    }
+	public getVirtuals(_context: any): TState["virtuals"] {
+		return this.state.virtuals;
+	}
 
-    for (const [fieldName, column] of Object.entries(this.state.fields)) {
-      if (this.state.localized.includes(fieldName as any)) continue;
-      columns[fieldName] = column;
-    }
+	public getVirtualsForVersions(_context: any): TState["virtuals"] {
+		return this.state.virtuals;
+	}
 
-    if (this.state.options.timestamps !== false) {
-      Object.assign(columns, Collection.timestampsCols());
-    }
+	/**
+	 * Generate CRUD operations
+	 */
+	generateCRUD(
+		db: any,
+		cms?: any,
+	): GlobalCRUD<
+		InferGlobalSelect<
+			any,
+			TState["fields"],
+			TState["localized"],
+			TState["virtuals"]
+		>,
+		InferGlobalInsert<any, TState["fields"], TState["localized"]>,
+		InferGlobalUpdate<any, TState["fields"], TState["localized"]>,
+		TState["relations"]
+	> {
+		const crud = new GlobalCRUDGenerator(
+			this.state,
+			this.table,
+			this.i18nTable,
+			this.versionsTable,
+			this.i18nVersionsTable,
+			db,
+			this.getVirtuals.bind(this),
+			this.getVirtualsForVersions.bind(this),
+			cms,
+		);
+		return crud.generate() as any;
+	}
 
-    return pgTable(tableName, columns as any);
-  }
+	private generateMainTable(): PgTable {
+		const tableName = this.state.name;
+		const columns: Record<string, any> = {};
 
-  private generateI18nTable(): PgTable | null {
-    if (this.state.localized.length === 0) return null;
+		// Check if user defined 'id' in fields
+		const hasUserDefinedId = "id" in this.state.fields;
 
-    const tableName = `${this.state.name}_i18n`;
+		// Add default ID if user didn't provide one
+		if (!hasUserDefinedId) {
+			columns.id = defaultIdColumn();
+		}
 
-    // Get the parent table's ID column to match its type for parentId
-    const parentIdColumn = (this.table as any).id as PgColumn;
+		for (const [fieldName, column] of Object.entries(this.state.fields)) {
+			if (this.state.localized.includes(fieldName as any)) continue;
+			columns[fieldName] = column;
+		}
 
-    const columns: Record<string, any> = {
-      id: text("id")
-        .primaryKey()
-        .default(sql`gen_random_uuid()`),
-      parentId: cloneColumnType(parentIdColumn, "parent_id")
-        .notNull()
-        .references(() => (this.table as any).id, { onDelete: "cascade" }),
-      locale: text("locale").notNull(),
-    };
+		if (this.state.options.timestamps !== false) {
+			Object.assign(columns, Collection.timestampsCols());
+		}
 
-    for (const fieldName of this.state.localized) {
-      const column = this.state.fields[fieldName];
-      if (column) {
-        columns[fieldName as string] = column;
-      }
-    }
+		return pgTable(tableName, columns as any);
+	}
 
-    return pgTable(tableName, columns as any, (t) => ({
-      parentLocaleIdx: uniqueIndex().on(t.parentId, t.locale),
-    }));
-  }
+	private generateI18nTable(): PgTable | null {
+		if (this.state.localized.length === 0) return null;
 
-  private generateVersionsTable(): PgTable | null {
-    const versioning = this.state.options.versioning;
-    if (!versioning) return null;
-    if (typeof versioning === "object" && !versioning.enabled) return null;
+		const tableName = `${this.state.name}_i18n`;
 
-    const tableName = `${this.state.name}_versions`;
+		// Get the parent table's ID column to match its type for parentId
+		const parentIdColumn = (this.table as any).id as PgColumn;
 
-    // Get the parent table's ID column to match its type
-    const parentIdColumn = (this.table as any).id as PgColumn;
+		const columns: Record<string, any> = {
+			id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+			parentId: cloneColumnType(parentIdColumn, "parent_id")
+				.notNull()
+				.references(() => (this.table as any).id, { onDelete: "cascade" }),
+			locale: text("locale").notNull(),
+		};
 
-    const columns: Record<string, any> = {
-      versionId: text("version_id")
-        .primaryKey()
-        .default(sql`gen_random_uuid()`),
-      id: cloneColumnType(parentIdColumn, "id").notNull(),
-      versionNumber: integer("version_number").notNull(),
-      versionOperation: text("version_operation").notNull(),
-      versionUserId: text("version_user_id"),
-      versionCreatedAt: timestamp("version_created_at", { mode: "date" })
-        .defaultNow()
-        .notNull(),
-    };
+		for (const fieldName of this.state.localized) {
+			const column = this.state.fields[fieldName];
+			if (column) {
+				columns[fieldName as string] = column;
+			}
+		}
 
-    for (const [fieldName, column] of Object.entries(this.state.fields)) {
-      if (this.state.localized.includes(fieldName as any)) continue;
-      // Skip id field as it's already included above
-      if (fieldName === "id") continue;
-      columns[fieldName as string] = column;
-    }
+		return pgTable(tableName, columns as any, (t) => ({
+			parentLocaleIdx: uniqueIndex().on(t.parentId, t.locale),
+		}));
+	}
 
-    if (this.state.options.timestamps !== false) {
-      Object.assign(columns, Collection.timestampsCols());
-    }
+	private generateVersionsTable(): PgTable | null {
+		const versioning = this.state.options.versioning;
+		if (!versioning) return null;
+		if (typeof versioning === "object" && !versioning.enabled) return null;
 
-    return pgTable(tableName, columns as any, (t) => ({
-      recordVersionIdx: index().on(t.id, t.versionNumber),
-      versionCreatedAtIdx: index().on(t.versionCreatedAt),
-    }));
-  }
+		const tableName = `${this.state.name}_versions`;
 
-  private generateI18nVersionsTable(): PgTable | null {
-    const versioning = this.state.options.versioning;
-    if (!versioning) return null;
-    if (typeof versioning === "object" && !versioning.enabled) return null;
-    if (this.state.localized.length === 0) return null;
+		// Get the parent table's ID column to match its type
+		const parentIdColumn = (this.table as any).id as PgColumn;
 
-    const tableName = `${this.state.name}_i18n_versions`;
+		const columns: Record<string, any> = {
+			versionId: text("version_id")
+				.primaryKey()
+				.default(sql`gen_random_uuid()`),
+			id: cloneColumnType(parentIdColumn, "id").notNull(),
+			versionNumber: integer("version_number").notNull(),
+			versionOperation: text("version_operation").notNull(),
+			versionUserId: text("version_user_id"),
+			versionCreatedAt: timestamp("version_created_at", { mode: "date" })
+				.defaultNow()
+				.notNull(),
+		};
 
-    // Get the parent table's ID column to match its type
-    const parentIdColumn = (this.table as any).id as PgColumn;
+		for (const [fieldName, column] of Object.entries(this.state.fields)) {
+			if (this.state.localized.includes(fieldName as any)) continue;
+			// Skip id field as it's already included above
+			if (fieldName === "id") continue;
+			columns[fieldName as string] = column;
+		}
 
-    const columns: Record<string, any> = {
-      id: text("id")
-        .primaryKey()
-        .default(sql`gen_random_uuid()`),
-      parentId: cloneColumnType(parentIdColumn, "parent_id").notNull(),
-      versionNumber: integer("version_number").notNull(),
-      locale: text("locale").notNull(),
-    };
+		if (this.state.options.timestamps !== false) {
+			Object.assign(columns, Collection.timestampsCols());
+		}
 
-    for (const fieldName of this.state.localized) {
-      const column = this.state.fields[fieldName];
-      if (column) {
-        columns[fieldName as string] = column;
-      }
-    }
+		return pgTable(tableName, columns as any, (t) => ({
+			recordVersionIdx: index().on(t.id, t.versionNumber),
+			versionCreatedAtIdx: index().on(t.versionCreatedAt),
+		}));
+	}
 
-    return pgTable(tableName, columns as any, (t) => ({
-      parentVersionLocaleIdx: uniqueIndex().on(
-        t.parentId,
-        t.versionNumber,
-        t.locale,
-      ),
-      parentVersionIdx: index().on(t.parentId, t.versionNumber),
-    }));
-  }
+	private generateI18nVersionsTable(): PgTable | null {
+		const versioning = this.state.options.versioning;
+		if (!versioning) return null;
+		if (typeof versioning === "object" && !versioning.enabled) return null;
+		if (this.state.localized.length === 0) return null;
 
-  private createI18nAccessor(
-    context: any,
-  ): I18nFieldAccessor<TState["fields"], TState["localized"]> {
-    const accessor: any = {};
-    const defaultLocale = context?.defaultLocale || DEFAULT_LOCALE;
+		const tableName = `${this.state.name}_i18n_versions`;
 
-    if (!this.i18nTable) return accessor;
+		// Get the parent table's ID column to match its type
+		const parentIdColumn = (this.table as any).id as PgColumn;
 
-    for (const fieldName of this.state.localized) {
-      const i18nTable = this.i18nTable as any;
-      if (context?.localeFallback === false) {
-        accessor[fieldName] = i18nTable[fieldName];
-      } else {
-        accessor[fieldName] = sql`COALESCE(
+		const columns: Record<string, any> = {
+			id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+			parentId: cloneColumnType(parentIdColumn, "parent_id").notNull(),
+			versionNumber: integer("version_number").notNull(),
+			locale: text("locale").notNull(),
+		};
+
+		for (const fieldName of this.state.localized) {
+			const column = this.state.fields[fieldName];
+			if (column) {
+				columns[fieldName as string] = column;
+			}
+		}
+
+		return pgTable(tableName, columns as any, (t) => ({
+			parentVersionLocaleIdx: uniqueIndex().on(
+				t.parentId,
+				t.versionNumber,
+				t.locale,
+			),
+			parentVersionIdx: index().on(t.parentId, t.versionNumber),
+		}));
+	}
+
+	private createI18nAccessor(
+		context: any,
+	): I18nFieldAccessor<TState["fields"], TState["localized"]> {
+		const accessor: any = {};
+		const defaultLocale = context?.defaultLocale || DEFAULT_LOCALE;
+
+		if (!this.i18nTable) return accessor;
+
+		for (const fieldName of this.state.localized) {
+			const i18nTable = this.i18nTable as any;
+			if (context?.localeFallback === false) {
+				accessor[fieldName] = i18nTable[fieldName];
+			} else {
+				accessor[fieldName] = sql`COALESCE(
 					${i18nTable[fieldName]},
 					(SELECT ${i18nTable[fieldName]} FROM ${this.i18nTable}
 					 WHERE ${i18nTable.parentId} = ${(this.table as any).id}
 					 AND ${i18nTable.locale} = ${defaultLocale} LIMIT 1)
 				)`;
-      }
-    }
+			}
+		}
 
-    return accessor;
-  }
+		return accessor;
+	}
 
-  private createI18nAccessorForVersions(
-    table: any,
-    i18nTable: any | null,
-    context: any,
-  ): I18nFieldAccessor<TState["fields"], TState["localized"]> {
-    const accessor: any = {};
-    const defaultLocale = context?.defaultLocale || DEFAULT_LOCALE;
+	private createI18nAccessorForVersions(
+		table: any,
+		i18nTable: any | null,
+		context: any,
+	): I18nFieldAccessor<TState["fields"], TState["localized"]> {
+		const accessor: any = {};
+		const defaultLocale = context?.defaultLocale || DEFAULT_LOCALE;
 
-    if (!i18nTable) return accessor;
+		if (!i18nTable) return accessor;
 
-    for (const fieldName of this.state.localized) {
-      const i18nRef = i18nTable as any;
-      if (context?.localeFallback === false) {
-        accessor[fieldName] = i18nRef[fieldName];
-      } else {
-        accessor[fieldName] = sql`COALESCE(
+		for (const fieldName of this.state.localized) {
+			const i18nRef = i18nTable as any;
+			if (context?.localeFallback === false) {
+				accessor[fieldName] = i18nRef[fieldName];
+			} else {
+				accessor[fieldName] = sql`COALESCE(
 					${i18nRef[fieldName]},
 					(SELECT ${i18nRef[fieldName]} FROM ${i18nTable}
 					 WHERE ${i18nRef.parentId} = ${(table as any).id}
 					 AND ${i18nRef.versionNumber} = ${(table as any).versionNumber}
 					 AND ${i18nRef.locale} = ${defaultLocale} LIMIT 1)
 				)`;
-      }
-    }
+			}
+		}
 
-    return accessor;
-  }
+		return accessor;
+	}
 
-  getMeta() {
-    return {
-      name: this.state.name,
-      fields: Object.entries(this.state.fields).map(([name, column]) => ({
-        name,
-        column,
-        localized: this.state.localized.includes(name as any),
-        virtual: name in this.state.virtuals,
-      })),
-      isGlobal: true,
-      timestamps: this.state.options.timestamps !== false,
-      virtualFields: Object.keys(this.state.virtuals),
-      localizedFields: Array.from(this.state.localized),
-      relations: Object.keys(this.state.relations),
-    };
-  }
+	getMeta() {
+		return {
+			name: this.state.name,
+			fields: Object.entries(this.state.fields).map(([name, column]) => ({
+				name,
+				column,
+				localized: this.state.localized.includes(name as any),
+				virtual: name in this.state.virtuals,
+			})),
+			isGlobal: true,
+			timestamps: this.state.options.timestamps !== false,
+			virtualFields: Object.keys(this.state.virtuals),
+			localizedFields: Array.from(this.state.localized),
+			relations: Object.keys(this.state.relations),
+		};
+	}
 }

@@ -1,10 +1,8 @@
-import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import {
   type UseMutationOptions,
   type UseQueryOptions,
   useMutation,
   useQuery,
-  useQueryClient,
 } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
 import type { QuestpieClient } from "questpie/client";
@@ -12,7 +10,7 @@ import type {
   RegisteredCMS,
   RegisteredCollectionNames,
 } from "../builder/registry";
-import { selectClient, useAdminStore, useScopedLocale } from "../runtime";
+import { useQuestpieQueryOptions } from "./use-questpie-query-options";
 import { useCollectionRealtimeInvalidation } from "./use-realtime-query";
 
 type CollectionRealtimeOptions = {
@@ -56,21 +54,11 @@ export function useCollectionList<K extends ResolvedCollectionNames>(
   queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
   realtimeOptions?: CollectionRealtimeOptions,
 ): any {
-  const client = useAdminStore(selectClient);
-  // Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
-  const { locale: contentLocale } = useScopedLocale();
-  const keyPrefix = ["questpie", "collections"] as const;
-  const queryOpts = createQuestpieQueryOptions(
-    client as any,
-    {
-      keyPrefix,
-      locale: contentLocale,
-    } as any,
-  );
+  const { queryOpts, locale } = useQuestpieQueryOptions();
 
   const findOptions = {
     ...options,
-    locale: contentLocale,
+    locale,
   };
   const baseQuery = (queryOpts as any).collections[collection as string].find(
     findOptions as any,
@@ -123,21 +111,11 @@ export function useCollectionCount<K extends ResolvedCollectionNames>(
   queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
   realtimeOptions?: CollectionRealtimeOptions,
 ): any {
-  const client = useAdminStore(selectClient);
-  // Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
-  const { locale: contentLocale } = useScopedLocale();
-  const keyPrefix = ["questpie", "collections"] as const;
-  const queryOpts = createQuestpieQueryOptions(
-    client as any,
-    {
-      keyPrefix,
-      locale: contentLocale,
-    } as any,
-  );
+  const { queryOpts, locale } = useQuestpieQueryOptions();
 
   const countOptions = {
     ...options,
-    locale: contentLocale,
+    locale,
   };
   const baseQuery = (queryOpts as any).collections[collection as string].count(
     countOptions as any,
@@ -189,19 +167,12 @@ export function useCollectionItem<K extends ResolvedCollectionNames>(
   },
   queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 ): any {
-  const client = useAdminStore(selectClient);
-  // Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
-  const { locale: contentLocale } = useScopedLocale();
-  const keyPrefix = ["questpie", "collections"] as const;
-  const queryOpts = createQuestpieQueryOptions(client as any, {
-    keyPrefix,
-    locale: contentLocale,
-  });
+  const { queryOpts, locale } = useQuestpieQueryOptions();
 
   return useQuery({
     ...(queryOpts as any).collections[collection as string].findOne({
       where: { id },
-      locale: contentLocale,
+      locale,
       ...options,
     }),
     ...queryOptions,
@@ -224,28 +195,20 @@ export function useCollectionCreate<K extends ResolvedCollectionNames>(
   collection: K,
   mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 ): any {
-  const client = useAdminStore(selectClient);
-  // Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
-  const { locale: contentLocale } = useScopedLocale();
-  const queryClient = useQueryClient();
-  const keyPrefix = ["questpie", "collections"] as const;
-  const queryOpts = createQuestpieQueryOptions(client as any, {
-    keyPrefix,
-    locale: contentLocale,
-  });
+  const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
   const baseOptions = queryOpts.collections[collection as string].create();
   const listQueryKey = queryOpts.key([
     "collections",
     collection as string,
     "find",
-    contentLocale,
+    locale,
   ]);
   const countQueryKey = queryOpts.key([
     "collections",
     collection as string,
     "count",
-    contentLocale,
+    locale,
   ]);
 
   return useMutation({
@@ -288,34 +251,26 @@ export function useCollectionUpdate<K extends ResolvedCollectionNames>(
   collection: K,
   mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 ): any {
-  const client = useAdminStore(selectClient);
-  // Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
-  const { locale: contentLocale } = useScopedLocale();
-  const queryClient = useQueryClient();
-  const keyPrefix = ["questpie", "collections"] as const;
-  const queryOpts = createQuestpieQueryOptions(client as any, {
-    keyPrefix,
-    locale: contentLocale,
-  });
+  const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
   const baseOptions = queryOpts.collections[collection as string].update();
   const listQueryKey = queryOpts.key([
     "collections",
     collection as string,
     "find",
-    contentLocale,
+    locale,
   ]);
   const countQueryKey = queryOpts.key([
     "collections",
     collection as string,
     "count",
-    contentLocale,
+    locale,
   ]);
   const itemQueryKey = queryOpts.key([
     "collections",
     collection as string,
     "findOne",
-    contentLocale,
+    locale,
   ]);
 
   return useMutation({
@@ -364,34 +319,26 @@ export function useCollectionDelete<K extends ResolvedCollectionNames>(
   collection: K,
   mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 ): any {
-  const client = useAdminStore(selectClient);
-  // Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
-  const { locale: contentLocale } = useScopedLocale();
-  const queryClient = useQueryClient();
-  const keyPrefix = ["questpie", "collections"] as const;
-  const queryOpts = createQuestpieQueryOptions(client as any, {
-    keyPrefix,
-    locale: contentLocale,
-  });
+  const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
   const baseOptions = queryOpts.collections[collection as string].delete();
   const listQueryKey = queryOpts.key([
     "collections",
     collection as string,
     "find",
-    contentLocale,
+    locale,
   ]);
   const countQueryKey = queryOpts.key([
     "collections",
     collection as string,
     "count",
-    contentLocale,
+    locale,
   ]);
   const itemQueryKey = queryOpts.key([
     "collections",
     collection as string,
     "findOne",
-    contentLocale,
+    locale,
   ]);
 
   return useMutation({

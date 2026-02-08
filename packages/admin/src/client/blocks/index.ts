@@ -43,7 +43,6 @@ export type {
   BlockRendererProps,
 } from "./types.js";
 export {
-  createBlockNode,
   EMPTY_BLOCK_CONTENT,
   isBlockContent,
 } from "./types.js";

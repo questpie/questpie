@@ -302,26 +302,20 @@ export function BlockItemDropdownMenu({
 import type { BlockSchema } from "#questpie/admin/server";
 
 function getBlockLabel(blockDef: BlockSchema): string {
-	if (!blockDef.label) {
+	const label = blockDef.admin?.label;
+
+	if (!label) {
 		return blockDef.name || "Block";
 	}
-
-	const label = blockDef.label;
 
 	if (typeof label === "string") {
 		return label;
-	}
-
-	if (typeof label === "function") {
-		return blockDef.name || "Block";
 	}
 
 	if ("key" in label) {
 		return label.fallback || blockDef.name || "Block";
 	}
 
-	const localeMap = label as Record<string, string>;
-	return (
-		localeMap.en || Object.values(localeMap)[0] || blockDef.name || "Block"
-	);
+	// I18nLocaleMap
+	return label.en || Object.values(label)[0] || blockDef.name || "Block";
 }

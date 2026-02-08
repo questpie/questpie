@@ -208,17 +208,11 @@ function getBlockLabel(
 	}
 
 	// Fall back to block type label
-	if (blockDef?.label) {
-		const label = blockDef.label;
-
+	const label = blockDef?.admin?.label;
+	if (label) {
 		// Handle string directly
 		if (typeof label === "string") {
 			return label;
-		}
-
-		// Handle function (not ideal but return type name)
-		if (typeof label === "function") {
-			return block.type.charAt(0).toUpperCase() + block.type.slice(1);
 		}
 
 		// Handle key-based translation object
@@ -227,7 +221,7 @@ function getBlockLabel(
 		}
 
 		// Handle I18nLocaleMap - use English or first available
-		const localeLabel = (label as Record<string, string>).en;
+		const localeLabel = label.en;
 		if (localeLabel) {
 			return localeLabel;
 		}

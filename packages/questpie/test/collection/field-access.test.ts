@@ -12,23 +12,24 @@ const users = q
   .fields((f) => ({
     email: f.text({ required: true, maxLength: 255 }),
     name: f.textarea({ required: true }),
-    ssn: f.text({ maxLength: 20 }), // Restricted field - string role
-    salary: f.textarea(), // Restricted field - function
+    ssn: f.text({
+      maxLength: 20,
+      access: {
+        read: (ctx) => (ctx.user as any)?.role === "admin",
+        create: (ctx) => (ctx.user as any)?.role === "admin",
+        update: (ctx) => (ctx.user as any)?.role === "admin",
+      },
+    }), // Restricted field - role function
+    salary: f.textarea({
+      access: {
+        read: (ctx) => (ctx.user as any)?.role === "admin",
+        create: (ctx) => (ctx.user as any)?.role === "admin",
+        update: (ctx) => (ctx.user as any)?.role === "admin",
+      },
+    }), // Restricted field - function
     bio: f.textarea(), // Unrestricted field
   }))
   .title(({ f }) => f.name)
-  .access({
-    fields: {
-      ssn: {
-        read: "admin",
-        write: "admin",
-      },
-      salary: {
-        read: ({ session }) => (session?.user as any)?.role === "admin",
-        write: ({ session }) => (session?.user as any)?.role === "admin",
-      },
-    },
-  })
   .options({
     timestamps: true,
   });
@@ -151,7 +152,7 @@ describe("field-level access control", () => {
       expect(retrieved?.salary).toBeUndefined();
     });
 
-    it("string read access (role): field accessible when role matches", async () => {
+    it("function read access (role check): field accessible when role matches", async () => {
       const adminCtx = createTestContext({
         accessMode: "user",
         role: "admin",

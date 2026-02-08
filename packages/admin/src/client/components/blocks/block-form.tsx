@@ -64,9 +64,9 @@ export function BlockForm() {
 			</div>
 
 			{/* Description */}
-			{blockDef.description && (
+			{blockDef.admin?.description && (
 				<p className="border-b px-4 py-2 text-sm text-muted-foreground">
-					{getDescriptionText(blockDef.description)}
+					{getDescriptionText(blockDef.admin.description)}
 				</p>
 			)}
 
@@ -241,24 +241,20 @@ function getDescriptionText(description: I18nText | undefined): string {
 }
 
 function getBlockDisplayLabel(blockDef: BlockSchema, block: BlockNode): string {
-	if (!blockDef.label) {
+	const label = blockDef.admin?.label;
+
+	if (!label) {
 		return block.type.charAt(0).toUpperCase() + block.type.slice(1);
 	}
-
-	const label = blockDef.label;
 
 	if (typeof label === "string") {
 		return label;
-	}
-
-	if (typeof label === "function") {
-		return block.type.charAt(0).toUpperCase() + block.type.slice(1);
 	}
 
 	if ("key" in label) {
 		return label.fallback || block.type;
 	}
 
-	const localeMap = label as Record<string, string>;
-	return localeMap.en || Object.values(localeMap)[0] || block.type;
+	// I18nLocaleMap
+	return label.en || Object.values(label)[0] || block.type;
 }

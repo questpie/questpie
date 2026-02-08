@@ -17,7 +17,7 @@ export function useAdminConfig(
   return useQuery<AdminConfigResponse>({
     queryKey: ["questpie", "admin", "config"],
     queryFn: async () => {
-      if (!client || !(client as any).functions?.getAdminConfig) {
+      if (!client || !(client as any).rpc) {
         return {};
       }
       return (client as any).rpc.getAdminConfig();

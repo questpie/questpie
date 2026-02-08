@@ -1,6 +1,5 @@
 import { adminModule, adminRpc } from "@questpie/admin/server";
-import { ConsoleAdapter, pgBossAdapter, q, rpc, SmtpAdapter } from "questpie";
-// Import jobs
+import { ConsoleAdapter, pgBossAdapter, q, SmtpAdapter } from "questpie";
 import { appointments } from "@/questpie/server/collections";
 import {
 	createBooking,
@@ -9,33 +8,23 @@ import {
 	getRevenueStats,
 } from "@/questpie/server/functions";
 import { migrations } from "../../migrations";
-// Import blocks
-import { serverBlocks } from "./blocks";
+import { blocks } from "./blocks";
 import { barberServices } from "./collections/barber-services";
-// Import collections
 import { barbers } from "./collections/barbers";
 import { pages } from "./collections/pages";
 import { reviews } from "./collections/reviews";
 import { services } from "./collections/services";
-// Import globals
 import { siteSettings } from "./globals";
 import {
 	sendAppointmentCancellation,
 	sendAppointmentConfirmation,
 	sendAppointmentReminder,
 } from "./jobs";
+import { r } from "./rpc";
 
 const DATABASE_URL =
 	process.env.DATABASE_URL || "postgres://localhost/barbershop";
 
-// ============================================================================
-// I18n Messages (Backend + Admin UI)
-// ============================================================================
-
-/**
- * Backend messages for API responses and validation errors.
- * These are used by the server for error messages, etc.
- */
 const backendMessages = {
 	en: {
 		"appointment.created": "Appointment booked for {{date}} at {{time}}",
@@ -56,16 +45,8 @@ const backendMessages = {
 	},
 } as const;
 
-/**
- * Admin UI messages for the barbershop app.
- * These are fetched by the admin client via getAdminTranslations() RPC.
- *
- * The admin client will merge these with built-in admin messages
- * (common.save, auth.login, etc.) automatically.
- */
 const adminUiMessages = {
 	en: {
-		// Custom labels for barbershop
 		"barbershop.welcome": "Welcome to Barbershop Admin",
 		"barbershop.bookNow": "Book Now",
 		"barbershop.todaysAppointments": "Today's Appointments",
@@ -73,7 +54,6 @@ const adminUiMessages = {
 		"barbershop.activeBarbers": "Active Barbers",
 		"barbershop.totalServices": "Total Services",
 		"barbershop.pendingReviews": "Pending Reviews",
-		// Collection-specific labels
 		"collection.barbers.title": "Barbers",
 		"collection.barbers.description": "Manage your team of barbers",
 		"collection.services.title": "Services",
@@ -82,7 +62,6 @@ const adminUiMessages = {
 		"collection.appointments.description": "Customer bookings and schedules",
 	},
 	sk: {
-		// Custom labels for barbershop
 		"barbershop.welcome": "Vitajte v Barbershop Admin",
 		"barbershop.bookNow": "Rezervovať",
 		"barbershop.todaysAppointments": "Dnešné rezervácie",
@@ -90,7 +69,6 @@ const adminUiMessages = {
 		"barbershop.activeBarbers": "Aktívni holiči",
 		"barbershop.totalServices": "Celkom služieb",
 		"barbershop.pendingReviews": "Čakajúce recenzie",
-		// Collection-specific labels
 		"collection.barbers.title": "Holiči",
 		"collection.barbers.description": "Spravujte váš tím holičov",
 		"collection.services.title": "Služby",
@@ -100,15 +78,9 @@ const adminUiMessages = {
 	},
 } as const;
 
-// ============================================================================
-// CMS Instance
-// ============================================================================
-
-const baseInstance = q({
-	name: "base",
-})
+const baseInstance = q({ name: "base" })
 	.use(adminModule)
-	.blocks(serverBlocks as any)
+	.blocks(blocks as any)
 	.collections({
 		barbers,
 		services,
@@ -117,11 +89,7 @@ const baseInstance = q({
 		reviews,
 		pages,
 	})
-	// Define global settings
-	.globals({
-		siteSettings,
-	})
-	// Sidebar navigation
+	.globals({ siteSettings })
 	.sidebar(({ s, c }) =>
 		s.sidebar({
 			sections: [
@@ -133,11 +101,13 @@ const baseInstance = q({
 							type: "link",
 							label: { en: "Dashboard", sk: "Dashboard" },
 							href: "/admin",
+							icon: c.icon("ph:house"),
 						},
 						{
 							type: "global",
 							global: "siteSettings",
 							label: { en: "Site Settings", sk: "Nastavenia webu" },
+							icon: c.icon("ph:gear"),
 						},
 					],
 				}),
@@ -149,11 +119,13 @@ const baseInstance = q({
 							type: "collection",
 							collection: "appointments",
 							label: { en: "Appointments", sk: "Rezervácie" },
+							icon: c.icon("ph:calendar"),
 						},
 						{
 							type: "collection",
 							collection: "reviews",
 							label: { en: "Reviews", sk: "Recenzie" },
+							icon: c.icon("ph:star"),
 						},
 					],
 				}),
@@ -165,11 +137,13 @@ const baseInstance = q({
 							type: "collection",
 							collection: "pages",
 							label: { en: "Pages", sk: "Stránky" },
+							icon: c.icon("ph:article"),
 						},
 						{
 							type: "collection",
 							collection: "services",
 							label: { en: "Services", sk: "Služby" },
+							icon: c.icon("ph:scissors"),
 						},
 					],
 				}),
@@ -181,11 +155,13 @@ const baseInstance = q({
 							type: "collection",
 							collection: "barbers",
 							label: { en: "Barbers", sk: "Holiči" },
+							icon: c.icon("ph:users"),
 						},
 						{
 							type: "collection",
 							collection: "barberServices",
 							label: { en: "Barber Services", sk: "Služby holičov" },
+							icon: c.icon("ph:link"),
 						},
 					],
 				}),
@@ -198,17 +174,16 @@ const baseInstance = q({
 							label: { en: "Open Website", sk: "Otvoriť web" },
 							href: "/",
 							external: true,
+							icon: c.icon("ph:arrow-square-out"),
 						},
 					],
 				}),
 			],
 		}),
 	)
-	// Branding
 	.branding({
 		name: { en: "Barbershop Control", sk: "Riadenie barbershopu" },
 	})
-	// Dashboard
 	.dashboard(({ d }: any) =>
 		d.dashboard({
 			title: { en: "Barbershop Control", sk: "Riadenie barbershopu" },
@@ -477,20 +452,18 @@ const baseInstance = q({
 			],
 		}),
 	)
-	// Define background jobs
 	.jobs({
 		sendAppointmentConfirmation,
 		sendAppointmentCancellation,
 		sendAppointmentReminder,
 	})
-	// Configure content locales (for i18n tables)
 	.locale({
 		locales: [
 			{
 				code: "en",
 				label: "English",
 				fallback: true,
-				flagCountryCode: "us", // Show US flag instead of UK
+				flagCountryCode: "us",
 			},
 			{ code: "sk", label: "Slovenčina" },
 		],
@@ -500,22 +473,15 @@ const baseInstance = q({
 			"en-GB": "en",
 		},
 	})
-	// Configure admin UI locales (separate from content locales)
-	// The admin interface can be in different languages than the content
 	.adminLocale({
 		locales: ["en", "sk"],
 		defaultLocale: "en",
 	})
-	// Add custom messages for both backend and admin UI
-	// Backend messages are used for API error messages
-	// Admin UI messages are fetched by the client via getAdminTranslations()
 	.messages({
 		...backendMessages,
-		// Merge admin UI messages (they get merged with built-in admin messages)
 		en: { ...backendMessages.en, ...adminUiMessages.en },
 		sk: { ...backendMessages.sk, ...adminUiMessages.sk },
 	})
-	// Configure authentication (Better Auth)
 	.auth({
 		emailAndPassword: {
 			enabled: true,
@@ -526,13 +492,10 @@ const baseInstance = q({
 		secret:
 			process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
 	})
-	// Add migrations
 	.migrations(migrations);
 
 export const cms = q({ name: "barbershop" })
-	// Include starter module for auth and file uploads
 	.use(baseInstance)
-	// Build with runtime configuration
 	.build({
 		app: {
 			url: process.env.APP_URL || "http://localhost:3000",
@@ -563,8 +526,6 @@ export const cms = q({ name: "barbershop" })
 		},
 	});
 
-const r = rpc();
-
 export const appRpc = r.router({
 	...adminRpc,
 	getActiveBarbers,
@@ -573,33 +534,5 @@ export const appRpc = r.router({
 	createBooking,
 });
 
-// ============================================================================
-// Type Exports
-// ============================================================================
-
-/**
- * Full CMS runtime type including modules, collections, globals, and jobs.
- * Use this type with getApp<AppCMS>() in hooks and jobs.
- */
 export type AppCMS = typeof cms;
 export type AppRpc = typeof appRpc;
-
-/**
- * Base CMS shape without runtime/RPC coupling - useful in RPC handlers
- * to avoid circular dependencies.
- * Use this with getApp<BaseCMS>() when defining procedures that need to reference the CMS.
- *
- * @example
- * ```ts
- * import { getApp } from "questpie";
- * import type { BaseCMS } from "./cms";
- *
- * export const getStats = q.fn({
- *   handler: async ({ app }) => {
- *     const cms = getApp<BaseCMS>(app);
- *     return cms.api.collections.posts.find();
- *   },
- * });
- * ```
- */
-export type BaseCMS = typeof baseInstance.$inferCms;

@@ -52,16 +52,6 @@ function trackDependencies<T>(
   return { result, deps: [...new Set(deps)] }; // dedupe
 }
 
-/**
- * Execute a function with tracked values (for computing)
- */
-export function computeWithTracking<T>(
-  values: Record<string, any>,
-  computeFn: (values: Record<string, any>) => T,
-): TrackingResult<T> {
-  return trackDependencies(values, computeFn);
-}
-
 // ============================================================================
 // Types
 // ============================================================================

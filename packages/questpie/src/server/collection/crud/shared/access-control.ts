@@ -2,7 +2,7 @@
  * Access Control Utilities
  *
  * Pure functions for handling access control in CRUD operations.
- * Supports boolean, string (role), and function-based access rules.
+ * Supports boolean and function-based access rules.
  */
 
 import type {
@@ -40,7 +40,6 @@ export interface AccessRuleEvaluationContext {
 export async function executeAccessRule(
   rule:
     | boolean
-    | string
     | ((
         ctx: AccessContext,
       ) => boolean | AccessWhere | Promise<boolean | AccessWhere>)
@@ -53,11 +52,6 @@ export async function executeAccessRule(
   // Boolean rule
   if (typeof rule === "boolean") {
     return rule;
-  }
-
-  // Role string rule
-  if (typeof rule === "string") {
-    return (context.session?.user as any)?.role === rule;
   }
 
   // Function rule

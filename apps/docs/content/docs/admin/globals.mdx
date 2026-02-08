@@ -173,7 +173,7 @@ export const siteSettings = qb
   }))
   .access({
     read: true,
-    update: "admin",
+    update: ({ session }) => session?.user?.role === "admin",
   });
 ```
 

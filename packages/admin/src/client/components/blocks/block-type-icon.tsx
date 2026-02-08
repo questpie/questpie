@@ -16,12 +16,12 @@ import { useBlockDefinition } from "./block-editor-context.js";
 // ============================================================================
 
 export type BlockTypeIconProps = {
-  /** Block type name */
-  type: string;
-  /** Custom class name */
-  className?: string;
-  /** Icon size */
-  size?: number;
+	/** Block type name */
+	type: string;
+	/** Custom class name */
+	className?: string;
+	/** Icon size */
+	size?: number;
 };
 
 // ============================================================================
@@ -29,24 +29,24 @@ export type BlockTypeIconProps = {
 // ============================================================================
 
 export function BlockTypeIcon({
-  type,
-  className,
-  size = 16,
+	type,
+	className,
+	size = 16,
 }: BlockTypeIconProps) {
-  const blockDef = useBlockDefinition(type);
-  const iconRef = blockDef?.icon;
-  const reference = normalizeIconReference(iconRef);
+	const blockDef = useBlockDefinition(type);
+	const iconRef = blockDef?.admin?.icon;
+	const reference = normalizeIconReference(iconRef);
 
-  if (!reference) {
-    return null;
-  }
+	if (!reference) {
+		return null;
+	}
 
-  return (
-    <ComponentRenderer
-      reference={reference}
-      additionalProps={{ className: cn("shrink-0", className), size }}
-    />
-  );
+	return (
+		<ComponentRenderer
+			reference={reference}
+			additionalProps={{ className: cn("shrink-0", className), size }}
+		/>
+	);
 }
 
 /**
@@ -54,24 +54,24 @@ export function BlockTypeIcon({
  * Useful for rendering icons outside the editor.
  */
 export function BlockIcon({
-  icon,
-  className,
-  size = 16,
+	icon,
+	className,
+	size = 16,
 }: {
-  icon?: ComponentReference | string;
-  className?: string;
-  size?: number;
+	icon?: ComponentReference | string;
+	className?: string;
+	size?: number;
 }) {
-  const reference = normalizeIconReference(icon);
-  if (!reference) {
-    return null;
-  }
-  return (
-    <ComponentRenderer
-      reference={reference}
-      additionalProps={{ className: cn("shrink-0", className), size }}
-    />
-  );
+	const reference = normalizeIconReference(icon);
+	if (!reference) {
+		return null;
+	}
+	return (
+		<ComponentRenderer
+			reference={reference}
+			additionalProps={{ className: cn("shrink-0", className), size }}
+		/>
+	);
 }
 
 // ============================================================================
@@ -79,11 +79,11 @@ export function BlockIcon({
 // ============================================================================
 
 function normalizeIconReference(
-  icon?: ComponentReference | string,
+	icon?: ComponentReference | string,
 ): ComponentReference | undefined {
-  if (!icon) return undefined;
-  if (typeof icon === "string") {
-    return { type: "icon", props: { name: icon } };
-  }
-  return icon;
+	if (!icon) return undefined;
+	if (typeof icon === "string") {
+		return { type: "icon", props: { name: icon } };
+	}
+	return icon;
 }

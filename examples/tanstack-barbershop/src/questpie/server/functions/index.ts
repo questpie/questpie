@@ -1,43 +1,30 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
-import { getApp, q } from "questpie";
 import z from "zod";
-import type { BaseCMS } from "@/questpie/server/cms";
+import { r } from "@/questpie/server/rpc";
 
-/**
- * Get all active barbers.
- * Uses BaseCMS type to avoid circular dependencies while maintaining type safety.
- */
 export * from "./booking";
-export const getActiveBarbers = q.fn({
+
+export const getActiveBarbers = r.fn({
   schema: z.object({}),
   handler: async ({ app }) => {
-    const cms = getApp<BaseCMS>(app);
-    // ✅ Return type is fully inferred from cms.api.collections.barbers.find()
-    return await cms.api.collections.barbers.find({
+    return await app.api.collections.barbers.find({
       where: { isActive: true },
     });
   },
 });
 
-/**
- * Get revenue statistics for a date range.
- * Demonstrates BaseCMS pattern with complex return type inference.
- */
-export const getRevenueStats = q.fn({
+export const getRevenueStats = r.fn({
   schema: z.object({
     startDate: z.string().datetime(),
     endDate: z.string().datetime(),
-    /** Only count completed appointments */
     completedOnly: z.boolean().optional().default(true),
   }),
   handler: async ({ input, app }) => {
-    const cms = getApp<BaseCMS>(app);
     const { startDate, endDate, completedOnly } = input;
 
-    const appointmentsTable = cms.config.collections.appointments.table;
-    const servicesTable = cms.config.collections.services.table;
+    const appointmentsTable = app.config.collections.appointments.table;
+    const servicesTable = app.config.collections.services.table;
 
-    // Build where conditions
     const conditions = [
       gte(appointmentsTable.scheduledAt as any, new Date(startDate)),
       lte(appointmentsTable.scheduledAt as any, new Date(endDate)),
@@ -47,8 +34,7 @@ export const getRevenueStats = q.fn({
       conditions.push(eq(appointmentsTable.status as any, "completed"));
     }
 
-    // Aggregate revenue by joining with services
-    const result = await cms.db
+    const result = await app.db
       .select({
         totalRevenue: sql<number>`COALESCE(SUM(${servicesTable.price}), 0)`,
         appointmentCount: sql<number>`COUNT(*)`,

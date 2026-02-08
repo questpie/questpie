@@ -12,7 +12,14 @@ const errorTest = q
   .collection("error_test")
   .fields((f) => ({
     title: f.textarea({ required: true }),
-    status: f.text({ required: true, maxLength: 50 }),
+    status: f.text({
+      required: true,
+      maxLength: 50,
+      access: {
+        create: (ctx) => (ctx.user as any)?.role === "admin",
+        update: (ctx) => (ctx.user as any)?.role === "admin",
+      },
+    }),
   }))
   .title(({ f }) => f.title)
   .access({
@@ -22,12 +29,6 @@ const errorTest = q
     read: ({ session }) => !!session,
     // Update requires specific role
     update: ({ session }) => (session?.user as any)?.role === "admin",
-    // Field-level access
-    fields: {
-      status: {
-        write: ({ session }) => (session?.user as any)?.role === "admin",
-      },
-    },
   })
   .options({
     timestamps: true,

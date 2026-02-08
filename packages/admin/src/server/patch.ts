@@ -14,7 +14,13 @@
  * @internal This module is automatically imported by adminModule.
  */
 
-import { CollectionBuilder, GlobalBuilder, QuestpieBuilder } from "questpie";
+import {
+	CollectionBuilder,
+	GlobalBuilder,
+	QuestpieBuilder,
+	createFieldBuilder,
+	createFieldDefinition,
+} from "questpie";
 import type {
 	ActionsConfigContext,
 	AdminCollectionConfig,
@@ -34,11 +40,12 @@ import type {
 	ServerSidebarConfig,
 	SidebarConfigContext,
 } from "./augmentation.js";
-import type {
-	AnyBlockBuilder,
-	AnyBlockDefinition,
-	BlockPrefetchContext,
-	BlockPrefetchFn,
+import {
+	BlockBuilder,
+	type AnyBlockBuilder,
+	type AnyBlockDefinition,
+	type BlockPrefetchContext,
+	type BlockPrefetchFn,
 } from "./block/block-builder.js";
 
 /**
@@ -438,22 +445,8 @@ function patchQuestpieBuilder() {
 				// Resolve fields using the builder's field registry
 				const state = blockBuilder.state as any;
 				if (state._fieldsFactory && this.state.fields) {
-					// Create field proxy from registered fields
-					const fieldProxy = new Proxy(
-						{},
-						{
-							get: (_target, prop: string) => {
-								const factory = this.state.fields[prop];
-								if (!factory) {
-									throw new Error(
-										`Unknown field type: "${prop}". ` +
-											`Available types: ${Object.keys(this.state.fields).join(", ")}`,
-									);
-								}
-								return factory;
-							},
-						},
-					);
+					// Create field builder proxy from registered field types
+					const fieldProxy = createFieldBuilder(this.state.fields);
 
 					// Execute the fields factory to get field definitions
 					const fields = state._fieldsFactory(fieldProxy);
@@ -512,6 +505,31 @@ function patchQuestpieBuilder() {
 			...this.state,
 			blocks: { ...(this.state.blocks || {}), ...builtBlocks },
 		});
+	};
+
+	/**
+	 * Create a block builder bound to this Questpie builder.
+	 * The block has access to all registered field types from `.fields()`.
+	 *
+	 * @example
+	 * ```ts
+	 * const qb = q.use(adminModule);
+	 *
+	 * const heroBlock = qb.block("hero")
+	 *   .label({ en: "Hero Section" })
+	 *   .icon("ph:image")
+	 *   .fields((f) => ({
+	 *     title: f.text({ required: true }),  // ✅ typed from builder's field registry
+	 *     subtitle: f.text(),
+	 *   }));
+	 *
+	 * const cms = qb
+	 *   .blocks({ hero: heroBlock })
+	 *   .build({ ... });
+	 * ```
+	 */
+	proto.block = function (name: string) {
+		return new BlockBuilder({ name });
 	};
 
 	/**
@@ -709,7 +727,8 @@ function patchQuestpieBuilder() {
 
 	/**
 	 * Patch .build() to inject block definitions into blocks-type field configs
-	 * before the real build. This enables per-block field validation.
+	 * before the real build, and to store admin extension state on the built
+	 * Questpie instance so getAdminConfig can read sidebar/dashboard/etc.
 	 */
 	const originalBuild = proto.build;
 	proto.build = function (...args: any[]): any {
@@ -720,7 +739,29 @@ function patchQuestpieBuilder() {
 			// Validate allowedBlocks references
 			validateAllowedBlocks(this.state, blockDefs);
 		}
-		return originalBuild.apply(this, args);
+		const instance = originalBuild.apply(this, args);
+
+		// Store admin extension state on the built instance
+		// so getAdminConfig can access sidebar, dashboard, branding, etc.
+		const extensionKeys = [
+			"sidebar",
+			"dashboard",
+			"branding",
+			"blocks",
+			"listViews",
+			"editViews",
+			"components",
+			"adminLocale",
+		];
+		const adminState: Record<string, any> = {};
+		for (const key of extensionKeys) {
+			if (this.state[key] !== undefined) {
+				adminState[key] = this.state[key];
+			}
+		}
+		(instance as any).state = adminState;
+
+		return instance;
 	};
 }
 
@@ -1032,9 +1073,21 @@ function patchCollectionBuilder() {
 			ctx: ActionsConfigContext<Record<string, unknown>>,
 		) => ServerActionsConfig,
 	): CollectionBuilder<any> {
-		// Execute with default field registry
-		// Custom field types can be added via the field registry
-		const ctx = createActionsConfigContext();
+		// Use the builder's registered field types for action form fields if available
+		const questpieApp = (this.state as any)["~questpieApp"];
+		const builderFields = questpieApp?.state?.fields;
+		let fieldRegistry: Record<string, (config?: any) => any> | undefined;
+
+		if (builderFields && Object.keys(builderFields).length > 0) {
+			// Convert raw field defs into factory functions for the actions context
+			fieldRegistry = {};
+			for (const [name, fieldDef] of Object.entries(builderFields)) {
+				fieldRegistry[name] = (config?: any) =>
+					createFieldDefinition(fieldDef as any, config);
+			}
+		}
+
+		const ctx = createActionsConfigContext(fieldRegistry);
 		const config = configFn(ctx);
 
 		const newState = {

@@ -10,11 +10,9 @@ export const appointments = qb
     service: f.relation({ to: "services", required: true }),
     scheduledAt: f.datetime({ required: true }),
     status: f.text({ required: true, maxLength: 50, default: "pending" }),
-    // Status: pending, confirmed, completed, cancelled, no-show
     notes: f.textarea(),
     cancelledAt: f.datetime(),
     cancellationReason: f.textarea(),
-    // Display title computed at read time
     displayTitle: f.text({ virtual: true }),
   }))
   .title(({ f }) => f.displayTitle)
@@ -28,18 +26,15 @@ export const appointments = qb
       (data as any).displayTitle =
         `${(data as any).customer ?? "Customer"} - ${dateLabel}`.trim();
     },
-    // Use getApp<AppCMS>() for type-safe access
     afterChange: async ({ data, operation, original, app }) => {
       const cms = getApp<AppCMS>(app);
 
       if (operation === "create") {
-        // Send confirmation email after booking
         await cms.queue.sendAppointmentConfirmation.publish({
           appointmentId: (data as any).id,
           customerId: (data as any).customer,
         });
       } else if (operation === "update" && original) {
-        // Notify customer if appointment is cancelled
         if ((data as any).status === "cancelled" && (data as any).cancelledAt) {
           await cms.queue.sendAppointmentCancellation.publish({
             appointmentId: (data as any).id,

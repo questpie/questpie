@@ -51,10 +51,10 @@ function mergeVisibleColumns(
 /**
  * Hook to manage view configuration state with database persistence
  *
- * Syncs view state (filters, sort, visible columns) to the admin_preferences
+ * Syncs view state (filters, sort, visible columns) to the adminPreferences
  * collection in the database. Falls back to local state when:
  * - User is not logged in
- * - admin_preferences collection is not available
+ * - adminPreferences collection is not available
  * - Data is still loading
  *
  * @param defaultColumns - Default columns to show when no config is set

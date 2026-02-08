@@ -14,8 +14,6 @@ import {
 } from "#questpie/admin/client/builder/view/view";
 import { WidgetBuilder } from "#questpie/admin/client/builder/widget/widget";
 import { PageBuilder } from "#questpie/admin/client/builder/page/page";
-import { CollectionBuilder } from "#questpie/admin/client/builder/collection/collection-builder";
-import { GlobalBuilder } from "#questpie/admin/client/builder/global/global-builder";
 import {
   createTextField,
   createEmailField,
@@ -187,92 +185,6 @@ describe("qa.page()", () => {
   });
 });
 
-describe("qa.collection()", () => {
-  it("should create CollectionBuilder", () => {
-    const posts = qa.collection("posts");
-
-    expect(posts).toBeInstanceOf(CollectionBuilder);
-  });
-
-  it("should set collection name", () => {
-    const posts = qa.collection("posts");
-
-    expect(posts.state.name).toBe("posts");
-  });
-
-  it("should initialize without admin module", () => {
-    const posts = qa.collection("posts");
-
-    expect(posts.state["~adminApp"]).toBeUndefined();
-  });
-});
-
-describe("qa.global()", () => {
-  it("should create GlobalBuilder", () => {
-    const settings = qa.global("settings");
-
-    expect(settings).toBeInstanceOf(GlobalBuilder);
-  });
-
-  it("should set global name", () => {
-    const settings = qa.global("settings");
-
-    expect(settings.state.name).toBe("settings");
-  });
-
-  it("should initialize without admin module", () => {
-    const settings = qa.global("settings");
-
-    expect(settings.state["~adminApp"]).toBeUndefined();
-  });
-});
-
-describe("AdminBuilder.collection() / AdminBuilder.global()", () => {
-  it("should create collection builder pre-bound to module", () => {
-    const adminModule = qa().fields({ text: createTextField() });
-
-    const posts = adminModule.collection("posts");
-
-    expect(posts).toBeInstanceOf(CollectionBuilder);
-    expect(posts.state.name).toBe("posts");
-    expect(posts.state["~adminApp"]).toBe(adminModule);
-  });
-
-  it("should create global builder pre-bound to module", () => {
-    const adminModule = qa().fields({ text: createTextField() });
-
-    const settings = adminModule.global("settings");
-
-    expect(settings).toBeInstanceOf(GlobalBuilder);
-    expect(settings.state.name).toBe("settings");
-    expect(settings.state["~adminApp"]).toBe(adminModule);
-  });
-
-  it("should allow chaining use() and meta() on collection", () => {
-    const adminModule = qa().fields({
-      text: createTextField(),
-      email: createEmailField(),
-    });
-
-    const posts = adminModule.collection("posts").meta({ label: "Blog Posts" });
-
-    expect(posts.state.name).toBe("posts");
-    expect(posts.state.label).toBe("Blog Posts");
-  });
-
-  it("should allow chaining use() and meta() on global", () => {
-    const adminModule = qa().fields({
-      text: createTextField(),
-      email: createEmailField(),
-    });
-
-    const settings = adminModule.global("settings").meta({ label: "Settings" });
-
-    expect(settings.state.name).toBe("settings");
-    expect(settings.state.label).toBe("Settings");
-  });
-});
-
 describe("qa namespace - Complete Example", () => {
   it("should support full admin configuration flow", () => {
     // 1. Create admin builder with fields and views
@@ -289,26 +201,12 @@ describe("qa namespace - Complete Example", () => {
         stats: qa.widget("stats", { component: MockStatsWidget }),
       });
 
-    // 2. Define collections using builder directly
-    const posts = builder.collection("posts").meta({ label: "Blog Posts" });
-
-    // 3. Define globals using builder directly
-    const settings = builder
-      .global("settings")
-      .meta({ label: "Site Settings" });
-
     // Verify builder has all registries
     expect(builder.state.fields.text).toBeDefined();
     expect(builder.state.fields.email).toBeDefined();
     expect(builder.state.listViews.table).toBeDefined();
     expect(builder.state.editViews.form).toBeDefined();
     expect(builder.state.widgets.stats).toBeDefined();
-
-    // Verify entity builders work
-    expect(posts.state.name).toBe("posts");
-    expect(posts.state.label).toBe("Blog Posts");
-    expect(settings.state.name).toBe("settings");
-    expect(settings.state.label).toBe("Site Settings");
   });
 });
 
@@ -323,7 +221,5 @@ describe("qa namespace members", () => {
     expect(typeof qa.editView).toBe("function");
     expect(typeof qa.widget).toBe("function");
     expect(typeof qa.page).toBe("function");
-    expect(typeof qa.collection).toBe("function");
-    expect(typeof qa.global).toBe("function");
   });
 });

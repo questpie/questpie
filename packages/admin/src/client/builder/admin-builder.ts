@@ -187,7 +187,12 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 			TypeMerge<
 				UnsetProperty<
 					TState,
-					"fields" | "listViews" | "editViews" | "widgets" | "pages"
+					| "fields"
+					| "listViews"
+					| "editViews"
+					| "widgets"
+					| "pages"
+					| "components"
 				>,
 				{
 					fields: Prettify<
@@ -203,6 +208,12 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 						TypeMerge<TState["widgets"], TOther["state"]["widgets"]>
 					>;
 					pages: Prettify<TypeMerge<TState["pages"], TOther["state"]["pages"]>>;
+					components: Prettify<
+						TypeMerge<
+							TState["components"],
+							TOther["state"]["components"]
+						>
+					>;
 				}
 			>
 		>
@@ -216,6 +227,7 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 			editViews: { ...this.state.editViews, ...otherState.editViews },
 			widgets: { ...this.state.widgets, ...otherState.widgets },
 			pages: { ...this.state.pages, ...otherState.pages },
+			components: { ...this.state.components, ...otherState.components },
 		} as any);
 	}
 

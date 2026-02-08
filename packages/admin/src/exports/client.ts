@@ -345,7 +345,6 @@ export type {
 	ServerBlockNames,
 	TypedBlockRendererProps,
 } from "#questpie/admin/client/blocks/index.js";
-export { createBlockNode } from "#questpie/admin/client/blocks/index.js";
 // Field definition factory (for custom field components)
 export {
 	FieldBuilder,

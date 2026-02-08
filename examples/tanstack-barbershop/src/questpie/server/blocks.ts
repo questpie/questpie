@@ -1,9 +1,43 @@
-import { block } from "@questpie/admin/server";
+import type {
+	AdminConfigContext,
+	BlockCategoryConfig,
+} from "@questpie/admin/server";
+import { qb } from "./builder";
 
-export const heroBlock = block("hero")
-	.label({ en: "Hero Section", sk: "Hero sekcia" })
-	.icon("ph:image")
-	.category("sections")
+// ============================================================================
+// Category Helpers
+// ============================================================================
+
+const sections = (c: AdminConfigContext["c"]): BlockCategoryConfig => ({
+	label: { en: "Sections", sk: "Sekcie" },
+	icon: c.icon("ph:layout"),
+	order: 1,
+});
+
+const content = (c: AdminConfigContext["c"]): BlockCategoryConfig => ({
+	label: { en: "Content", sk: "Obsah" },
+	icon: c.icon("ph:text-t"),
+	order: 2,
+});
+
+const layout = (c: AdminConfigContext["c"]): BlockCategoryConfig => ({
+	label: { en: "Layout", sk: "Rozloženie" },
+	icon: c.icon("ph:columns"),
+	order: 3,
+});
+
+// ============================================================================
+// Section Blocks
+// ============================================================================
+
+export const heroBlock = qb
+	.block("hero")
+	.admin(({ c }) => ({
+		label: { en: "Hero Section", sk: "Hero sekcia" },
+		icon: c.icon("ph:image"),
+		category: sections(c),
+		order: 1,
+	}))
 	.fields((f) => ({
 		title: f.text({
 			label: { en: "Title", sk: "Nadpis" },
@@ -47,94 +81,25 @@ export const heroBlock = block("hero")
 		}),
 	}));
 
-export const textBlock = block("text")
-	.label({ en: "Text Block", sk: "Textový blok" })
-	.icon("ph:text-t")
-	.category("content")
-	.fields((f) => ({
-		content: f.richText({
-			label: { en: "Content", sk: "Obsah" },
-			localized: true,
-			required: true,
-		}),
-		maxWidth: f.select({
-			label: { en: "Max Width", sk: "Max šírka" },
-			options: [
-				{ value: "narrow", label: { en: "Narrow", sk: "Úzky" } },
-				{ value: "medium", label: { en: "Medium", sk: "Stredný" } },
-				{ value: "wide", label: { en: "Wide", sk: "Široký" } },
-				{ value: "full", label: { en: "Full", sk: "Plný" } },
-			],
-			defaultValue: "medium",
-		}),
-		padding: f.select({
-			label: { en: "Padding", sk: "Odsadenie" },
-			options: [
-				{ value: "none", label: { en: "None", sk: "Žiadne" } },
-				{ value: "small", label: { en: "Small", sk: "Malé" } },
-				{ value: "medium", label: { en: "Medium", sk: "Stredné" } },
-				{ value: "large", label: { en: "Large", sk: "Veľké" } },
-			],
-			defaultValue: "medium",
-		}),
-	}));
-
-export const headingBlock = block("heading")
-	.label({ en: "Heading", sk: "Nadpis" })
-	.icon("ph:text-h-one")
-	.category("content")
-	.fields((f) => ({
-		text: f.text({
-			label: { en: "Text", sk: "Text" },
-			localized: true,
-			required: true,
-		}),
-		level: f.select({
-			label: { en: "Level", sk: "Úroveň" },
-			options: [
-				{ value: "h1", label: "H1" },
-				{ value: "h2", label: "H2" },
-				{ value: "h3", label: "H3" },
-				{ value: "h4", label: "H4" },
-			],
-			defaultValue: "h2",
-		}),
-		align: f.select({
-			label: { en: "Alignment", sk: "Zarovnanie" },
-			options: [
-				{ value: "left", label: { en: "Left", sk: "Vľavo" } },
-				{ value: "center", label: { en: "Center", sk: "Stred" } },
-				{ value: "right", label: { en: "Right", sk: "Vpravo" } },
-			],
-			defaultValue: "left",
-		}),
-		padding: f.select({
-			label: { en: "Padding", sk: "Odsadenie" },
-			options: [
-				{ value: "none", label: { en: "None", sk: "Žiadne" } },
-				{ value: "small", label: { en: "Small", sk: "Malé" } },
-				{ value: "medium", label: { en: "Medium", sk: "Stredné" } },
-				{ value: "large", label: { en: "Large", sk: "Veľké" } },
-			],
-			defaultValue: "medium",
-		}),
-	}));
-
-export const servicesBlock = block("services")
-	.label({ en: "Services Grid", sk: "Prehľad služieb" })
-	.icon("ph:scissors")
-	.category("sections")
+export const servicesBlock = qb
+	.block("services")
+	.admin(({ c }) => ({
+		label: { en: "Services Grid", sk: "Prehľad služieb" },
+		icon: c.icon("ph:scissors"),
+		category: sections(c),
+		order: 2,
+	}))
 	.fields((f) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		subtitle: f.textarea({
 			label: { en: "Subtitle", sk: "Podnadpis" },
 			localized: true,
 		}),
-		showPrices: f.checkbox({
+		showPrices: f.boolean({
 			label: { en: "Show Prices", sk: "Zobraziť ceny" },
 			defaultValue: true,
 		}),
-		showDuration: f.checkbox({
+		showDuration: f.boolean({
 			label: { en: "Show Duration", sk: "Zobraziť trvanie" },
 			defaultValue: true,
 		}),
@@ -157,10 +122,14 @@ export const servicesBlock = block("services")
 		return { services: res.docs };
 	});
 
-export const teamBlock = block("team")
-	.label({ en: "Team Grid", sk: "Náš tím" })
-	.icon("ph:users")
-	.category("sections")
+export const teamBlock = qb
+	.block("team")
+	.admin(({ c }) => ({
+		label: { en: "Team Grid", sk: "Náš tím" },
+		icon: c.icon("ph:users"),
+		category: sections(c),
+		order: 3,
+	}))
 	.fields((f) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		subtitle: f.textarea({
@@ -186,10 +155,14 @@ export const teamBlock = block("team")
 		return { barbers: res.docs };
 	});
 
-export const reviewsBlock = block("reviews")
-	.label({ en: "Reviews", sk: "Recenzie" })
-	.icon("ph:star")
-	.category("sections")
+export const reviewsBlock = qb
+	.block("reviews")
+	.admin(({ c }) => ({
+		label: { en: "Reviews", sk: "Recenzie" },
+		icon: c.icon("ph:star"),
+		category: sections(c),
+		order: 4,
+	}))
 	.fields((f) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		subtitle: f.textarea({
@@ -207,10 +180,14 @@ export const reviewsBlock = block("reviews")
 		return { reviews: res.docs };
 	});
 
-export const ctaBlock = block("cta")
-	.label({ en: "CTA", sk: "Výzva k akcii" })
-	.icon("ph:megaphone")
-	.category("sections")
+export const ctaBlock = qb
+	.block("cta")
+	.admin(({ c }) => ({
+		label: { en: "CTA", sk: "Výzva k akcii" },
+		icon: c.icon("ph:megaphone"),
+		category: sections(c),
+		order: 5,
+	}))
 	.fields((f) => ({
 		title: f.text({
 			label: { en: "Title", sk: "Nadpis" },
@@ -246,128 +223,14 @@ export const ctaBlock = block("cta")
 		}),
 	}));
 
-export const columnsBlock = block("columns")
-	.label({ en: "Columns", sk: "Stĺpce" })
-	.icon("ph:columns")
-	.category("layout")
-	.allowChildren()
-	.fields((f) => ({
-		columns: f.select({
-			label: { en: "Columns", sk: "Počet stĺpcov" },
-			options: [
-				{ value: "2", label: "2" },
-				{ value: "3", label: "3" },
-				{ value: "4", label: "4" },
-			],
-			defaultValue: "2",
-		}),
-		gap: f.select({
-			label: { en: "Gap", sk: "Medzera" },
-			options: [
-				{ value: "small", label: "Small" },
-				{ value: "medium", label: "Medium" },
-				{ value: "large", label: "Large" },
-			],
-			defaultValue: "medium",
-		}),
-		padding: f.select({
-			label: { en: "Padding", sk: "Odsadenie" },
-			options: [
-				{ value: "none", label: { en: "None", sk: "Žiadne" } },
-				{ value: "small", label: { en: "Small", sk: "Malé" } },
-				{ value: "medium", label: { en: "Medium", sk: "Stredné" } },
-				{ value: "large", label: { en: "Large", sk: "Veľké" } },
-			],
-			defaultValue: "medium",
-		}),
-	}));
-
-export const spacerBlock = block("spacer")
-	.label({ en: "Spacer", sk: "Medzera" })
-	.icon("ph:arrows-out-vertical")
-	.category("layout")
-	.fields((f) => ({
-		size: f.select({
-			label: { en: "Size", sk: "Veľkosť" },
-			options: [
-				{ value: "small", label: "S" },
-				{ value: "medium", label: "M" },
-				{ value: "large", label: "L" },
-				{ value: "xlarge", label: "XL" },
-			],
-			defaultValue: "medium",
-		}),
-	}));
-
-export const dividerBlock = block("divider")
-	.label({ en: "Divider", sk: "Oddelovač" })
-	.icon("ph:minus")
-	.category("layout")
-	.fields((f) => ({
-		style: f.select({
-			label: { en: "Style", sk: "Štýl" },
-			options: [
-				{ value: "solid", label: "Solid" },
-				{ value: "dashed", label: "Dashed" },
-			],
-			defaultValue: "solid",
-		}),
-		width: f.select({
-			label: { en: "Width", sk: "Šírka" },
-			options: [
-				{ value: "full", label: { en: "Full", sk: "Plná" } },
-				{ value: "medium", label: { en: "Medium", sk: "Stredná" } },
-				{ value: "small", label: { en: "Small", sk: "Malá" } },
-			],
-			defaultValue: "full",
-		}),
-	}));
-
-export const hoursBlock = block("hours")
-	.label({ en: "Business Hours", sk: "Otváracie hodiny" })
-	.icon("ph:clock")
-	.category("content")
-	.fields((f) => ({
-		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
-		showClosed: f.checkbox({
-			label: { en: "Show Closed Days", sk: "Zobraziť zatvorené dni" },
-			defaultValue: true,
-		}),
+export const bookingCtaBlock = qb
+	.block("booking-cta")
+	.admin(({ c }) => ({
+		label: { en: "Booking CTA", sk: "Rezervačná výzva" },
+		icon: c.icon("ph:calendar-plus"),
+		category: sections(c),
+		order: 6,
 	}))
-	.prefetch(async ({ ctx }) => {
-		const settings = await (ctx.app as any).api.globals.siteSettings.get({});
-		return { businessHours: settings?.businessHours };
-	});
-
-export const contactInfoBlock = block("contact-info")
-	.label({ en: "Contact Info", sk: "Kontaktné údaje" })
-	.icon("ph:phone")
-	.category("content")
-	.fields((f) => ({
-		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
-		showMap: f.checkbox({
-			label: { en: "Show Map", sk: "Zobraziť mapu" },
-			defaultValue: true,
-		}),
-	}))
-	.prefetch(async ({ ctx }) => {
-		const settings = await (ctx.app as any).api.globals.siteSettings.get({});
-		return {
-			shopName: settings?.shopName,
-			contactEmail: settings?.contactEmail,
-			contactPhone: settings?.contactPhone,
-			address: settings?.address,
-			city: settings?.city,
-			zipCode: settings?.zipCode,
-			country: settings?.country,
-			mapEmbedUrl: settings?.mapEmbedUrl,
-		};
-	});
-
-export const bookingCtaBlock = block("booking-cta")
-	.label({ en: "Booking CTA", sk: "Rezervačná výzva" })
-	.icon("ph:calendar-plus")
-	.category("sections")
 	.fields((f) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		description: f.textarea({
@@ -403,110 +266,14 @@ export const bookingCtaBlock = block("booking-cta")
 		}),
 	}));
 
-export const galleryBlock = block("gallery")
-	.label({ en: "Gallery", sk: "Galéria" })
-	.icon("ph:images")
-	.category("content")
-	.fields((f) => ({
-		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
-		images: f.json({ label: { en: "Images", sk: "Obrázky" } }),
-		columns: f.select({
-			label: { en: "Columns", sk: "Stĺpce" },
-			options: [
-				{ value: "2", label: "2" },
-				{ value: "3", label: "3" },
-				{ value: "4", label: "4" },
-			],
-			defaultValue: "3",
-		}),
-		gap: f.select({
-			label: { en: "Gap", sk: "Medzera" },
-			options: [
-				{ value: "small", label: "Small" },
-				{ value: "medium", label: "Medium" },
-				{ value: "large", label: "Large" },
-			],
-			defaultValue: "medium",
-		}),
+export const barbersFeaturedBlock = qb
+	.block("barbers-featured")
+	.admin(({ c }) => ({
+		label: { en: "Featured Barbers", sk: "Vybraní holiči" },
+		icon: c.icon("ph:users-three"),
+		category: sections(c),
+		order: 7,
 	}))
-	.prefetch(async ({ values, ctx }) => {
-		const imageIds =
-			(values.images as any[])
-				?.map((img: any) => img.id)
-				.filter(Boolean) || [];
-		if (imageIds.length === 0) return { imageUrls: {} };
-		const res = await (ctx.app as any).api.collections.uploads.find({
-			where: { id: { in: imageIds } },
-			limit: imageIds.length,
-		});
-		const imageUrls: Record<string, string> = {};
-		for (const doc of res.docs) {
-			imageUrls[doc.id] = doc.url;
-		}
-		return { imageUrls };
-	});
-
-export const imageTextBlock = block("image-text")
-	.label({ en: "Image + Text", sk: "Obrázok + Text" })
-	.icon("ph:layout")
-	.category("content")
-	.fields((f) => ({
-		image: f.upload({ label: { en: "Image", sk: "Obrázok" } }),
-		imagePosition: f.select({
-			label: { en: "Image Position", sk: "Pozícia obrázka" },
-			options: [
-				{ value: "left", label: { en: "Left", sk: "Vľavo" } },
-				{ value: "right", label: { en: "Right", sk: "Vpravo" } },
-			],
-			defaultValue: "left",
-		}),
-		title: f.text({
-			label: { en: "Title", sk: "Nadpis" },
-			localized: true,
-			required: true,
-		}),
-		content: f.richText({
-			label: { en: "Content", sk: "Obsah" },
-			localized: true,
-		}),
-		ctaText: f.text({
-			label: { en: "CTA Text", sk: "Text tlačidla" },
-			localized: true,
-		}),
-		ctaLink: f.text({ label: { en: "CTA Link", sk: "Odkaz" } }),
-		imageAspect: f.select({
-			label: { en: "Image Aspect", sk: "Pomer strán" },
-			options: [
-				{ value: "square", label: "Square" },
-				{ value: "portrait", label: "Portrait" },
-				{ value: "landscape", label: "Landscape" },
-			],
-			defaultValue: "square",
-		}),
-	}));
-
-export const statsBlock = block("stats")
-	.label({ en: "Stats", sk: "Štatistiky" })
-	.icon("ph:chart-bar")
-	.category("content")
-	.fields((f) => ({
-		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
-		stats: f.json({ label: { en: "Stats", sk: "Štatistiky" } }),
-		columns: f.select({
-			label: { en: "Columns", sk: "Stĺpce" },
-			options: [
-				{ value: "2", label: "2" },
-				{ value: "3", label: "3" },
-				{ value: "4", label: "4" },
-			],
-			defaultValue: "3",
-		}),
-	}));
-
-export const barbersFeaturedBlock = block("barbers-featured")
-	.label({ en: "Featured Barbers", sk: "Vybraní holiči" })
-	.icon("ph:users-three")
-	.category("sections")
 	.fields((f) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		subtitle: f.textarea({
@@ -534,10 +301,14 @@ export const barbersFeaturedBlock = block("barbers-featured")
 		return { barbers: res.docs };
 	});
 
-export const servicesFeaturedBlock = block("services-featured")
-	.label({ en: "Featured Services", sk: "Vybrané služby" })
-	.icon("ph:star")
-	.category("sections")
+export const servicesFeaturedBlock = qb
+	.block("services-featured")
+	.admin(({ c }) => ({
+		label: { en: "Featured Services", sk: "Vybrané služby" },
+		icon: c.icon("ph:star"),
+		category: sections(c),
+		order: 8,
+	}))
 	.fields((f) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		subtitle: f.textarea({
@@ -565,10 +336,14 @@ export const servicesFeaturedBlock = block("services-featured")
 		return { services: res.docs };
 	});
 
-export const reviewsGridBlock = block("reviews-grid")
-	.label({ en: "Reviews Grid", sk: "Mriežka recenzií" })
-	.icon("ph:star-half")
-	.category("sections")
+export const reviewsGridBlock = qb
+	.block("reviews-grid")
+	.admin(({ c }) => ({
+		label: { en: "Reviews Grid", sk: "Mriežka recenzií" },
+		icon: c.icon("ph:star-half"),
+		category: sections(c),
+		order: 9,
+	}))
 	.fields((f) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		subtitle: f.textarea({
@@ -608,7 +383,348 @@ export const reviewsGridBlock = block("reviews-grid")
 		return { reviews: res.docs };
 	});
 
-export const serverBlocks = {
+// ============================================================================
+// Content Blocks
+// ============================================================================
+
+export const textBlock = qb
+	.block("text")
+	.admin(({ c }) => ({
+		label: { en: "Text Block", sk: "Textový blok" },
+		icon: c.icon("ph:text-t"),
+		category: content(c),
+		order: 1,
+	}))
+	.fields((f) => ({
+		content: f.richText({
+			label: { en: "Content", sk: "Obsah" },
+			localized: true,
+			required: true,
+		}),
+		maxWidth: f.select({
+			label: { en: "Max Width", sk: "Max šírka" },
+			options: [
+				{ value: "narrow", label: { en: "Narrow", sk: "Úzky" } },
+				{ value: "medium", label: { en: "Medium", sk: "Stredný" } },
+				{ value: "wide", label: { en: "Wide", sk: "Široký" } },
+				{ value: "full", label: { en: "Full", sk: "Plný" } },
+			],
+			defaultValue: "medium",
+		}),
+		padding: f.select({
+			label: { en: "Padding", sk: "Odsadenie" },
+			options: [
+				{ value: "none", label: { en: "None", sk: "Žiadne" } },
+				{ value: "small", label: { en: "Small", sk: "Malé" } },
+				{ value: "medium", label: { en: "Medium", sk: "Stredné" } },
+				{ value: "large", label: { en: "Large", sk: "Veľké" } },
+			],
+			defaultValue: "medium",
+		}),
+	}));
+
+export const headingBlock = qb
+	.block("heading")
+	.admin(({ c }) => ({
+		label: { en: "Heading", sk: "Nadpis" },
+		icon: c.icon("ph:text-h-one"),
+		category: content(c),
+		order: 2,
+	}))
+	.fields((f) => ({
+		text: f.text({
+			label: { en: "Text", sk: "Text" },
+			localized: true,
+			required: true,
+		}),
+		level: f.select({
+			label: { en: "Level", sk: "Úroveň" },
+			options: [
+				{ value: "h1", label: "H1" },
+				{ value: "h2", label: "H2" },
+				{ value: "h3", label: "H3" },
+				{ value: "h4", label: "H4" },
+			],
+			defaultValue: "h2",
+		}),
+		align: f.select({
+			label: { en: "Alignment", sk: "Zarovnanie" },
+			options: [
+				{ value: "left", label: { en: "Left", sk: "Vľavo" } },
+				{ value: "center", label: { en: "Center", sk: "Stred" } },
+				{ value: "right", label: { en: "Right", sk: "Vpravo" } },
+			],
+			defaultValue: "left",
+		}),
+		padding: f.select({
+			label: { en: "Padding", sk: "Odsadenie" },
+			options: [
+				{ value: "none", label: { en: "None", sk: "Žiadne" } },
+				{ value: "small", label: { en: "Small", sk: "Malé" } },
+				{ value: "medium", label: { en: "Medium", sk: "Stredné" } },
+				{ value: "large", label: { en: "Large", sk: "Veľké" } },
+			],
+			defaultValue: "medium",
+		}),
+	}));
+
+export const hoursBlock = qb
+	.block("hours")
+	.admin(({ c }) => ({
+		label: { en: "Business Hours", sk: "Otváracie hodiny" },
+		icon: c.icon("ph:clock"),
+		category: content(c),
+		order: 3,
+	}))
+	.fields((f) => ({
+		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
+		showClosed: f.boolean({
+			label: { en: "Show Closed Days", sk: "Zobraziť zatvorené dni" },
+			defaultValue: true,
+		}),
+	}))
+	.prefetch(async ({ ctx }) => {
+		const settings = await (ctx.app as any).api.globals.siteSettings.get({});
+		return { businessHours: settings?.businessHours };
+	});
+
+export const contactInfoBlock = qb
+	.block("contact-info")
+	.admin(({ c }) => ({
+		label: { en: "Contact Info", sk: "Kontaktné údaje" },
+		icon: c.icon("ph:phone"),
+		category: content(c),
+		order: 4,
+	}))
+	.fields((f) => ({
+		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
+		showMap: f.boolean({
+			label: { en: "Show Map", sk: "Zobraziť mapu" },
+			defaultValue: true,
+		}),
+	}))
+	.prefetch(async ({ ctx }) => {
+		const settings = await (ctx.app as any).api.globals.siteSettings.get({});
+		return {
+			shopName: settings?.shopName,
+			contactEmail: settings?.contactEmail,
+			contactPhone: settings?.contactPhone,
+			address: settings?.address,
+			city: settings?.city,
+			zipCode: settings?.zipCode,
+			country: settings?.country,
+			mapEmbedUrl: settings?.mapEmbedUrl,
+		};
+	});
+
+export const galleryBlock = qb
+	.block("gallery")
+	.admin(({ c }) => ({
+		label: { en: "Gallery", sk: "Galéria" },
+		icon: c.icon("ph:images"),
+		category: content(c),
+		order: 5,
+	}))
+	.fields((f) => ({
+		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
+		images: f.json({ label: { en: "Images", sk: "Obrázky" } }),
+		columns: f.select({
+			label: { en: "Columns", sk: "Stĺpce" },
+			options: [
+				{ value: "2", label: "2" },
+				{ value: "3", label: "3" },
+				{ value: "4", label: "4" },
+			],
+			defaultValue: "3",
+		}),
+		gap: f.select({
+			label: { en: "Gap", sk: "Medzera" },
+			options: [
+				{ value: "small", label: "Small" },
+				{ value: "medium", label: "Medium" },
+				{ value: "large", label: "Large" },
+			],
+			defaultValue: "medium",
+		}),
+	}))
+	.prefetch(async ({ values, ctx }) => {
+		const imageIds =
+			(values.images as any[])?.map((img: any) => img.id).filter(Boolean) || [];
+		if (imageIds.length === 0) return { imageUrls: {} };
+		const res = await (ctx.app as any).api.collections.uploads.find({
+			where: { id: { in: imageIds } },
+			limit: imageIds.length,
+		});
+		const imageUrls: Record<string, string> = {};
+		for (const doc of res.docs) {
+			imageUrls[doc.id] = doc.url;
+		}
+		return { imageUrls };
+	});
+
+export const imageTextBlock = qb
+	.block("image-text")
+	.admin(({ c }) => ({
+		label: { en: "Image + Text", sk: "Obrázok + Text" },
+		icon: c.icon("ph:layout"),
+		category: content(c),
+		order: 6,
+	}))
+	.fields((f) => ({
+		image: f.upload({ label: { en: "Image", sk: "Obrázok" } }),
+		imagePosition: f.select({
+			label: { en: "Image Position", sk: "Pozícia obrázka" },
+			options: [
+				{ value: "left", label: { en: "Left", sk: "Vľavo" } },
+				{ value: "right", label: { en: "Right", sk: "Vpravo" } },
+			],
+			defaultValue: "left",
+		}),
+		title: f.text({
+			label: { en: "Title", sk: "Nadpis" },
+			localized: true,
+			required: true,
+		}),
+		content: f.richText({
+			label: { en: "Content", sk: "Obsah" },
+			localized: true,
+		}),
+		ctaText: f.text({
+			label: { en: "CTA Text", sk: "Text tlačidla" },
+			localized: true,
+		}),
+		ctaLink: f.text({ label: { en: "CTA Link", sk: "Odkaz" } }),
+		imageAspect: f.select({
+			label: { en: "Image Aspect", sk: "Pomer strán" },
+			options: [
+				{ value: "square", label: "Square" },
+				{ value: "portrait", label: "Portrait" },
+				{ value: "landscape", label: "Landscape" },
+			],
+			defaultValue: "square",
+		}),
+	}));
+
+export const statsBlock = qb
+	.block("stats")
+	.admin(({ c }) => ({
+		label: { en: "Stats", sk: "Štatistiky" },
+		icon: c.icon("ph:chart-bar"),
+		category: content(c),
+		order: 7,
+	}))
+	.fields((f) => ({
+		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
+		stats: f.json({ label: { en: "Stats", sk: "Štatistiky" } }),
+		columns: f.select({
+			label: { en: "Columns", sk: "Stĺpce" },
+			options: [
+				{ value: "2", label: "2" },
+				{ value: "3", label: "3" },
+				{ value: "4", label: "4" },
+			],
+			defaultValue: "3",
+		}),
+	}));
+
+// ============================================================================
+// Layout Blocks
+// ============================================================================
+
+export const columnsBlock = qb
+	.block("columns")
+	.admin(({ c }) => ({
+		label: { en: "Columns", sk: "Stĺpce" },
+		icon: c.icon("ph:columns"),
+		category: layout(c),
+		order: 1,
+	}))
+	.allowChildren()
+	.fields((f) => ({
+		columns: f.select({
+			label: { en: "Columns", sk: "Počet stĺpcov" },
+			options: [
+				{ value: "2", label: "2" },
+				{ value: "3", label: "3" },
+				{ value: "4", label: "4" },
+			],
+			defaultValue: "2",
+		}),
+		gap: f.select({
+			label: { en: "Gap", sk: "Medzera" },
+			options: [
+				{ value: "small", label: "Small" },
+				{ value: "medium", label: "Medium" },
+				{ value: "large", label: "Large" },
+			],
+			defaultValue: "medium",
+		}),
+		padding: f.select({
+			label: { en: "Padding", sk: "Odsadenie" },
+			options: [
+				{ value: "none", label: { en: "None", sk: "Žiadne" } },
+				{ value: "small", label: { en: "Small", sk: "Malé" } },
+				{ value: "medium", label: { en: "Medium", sk: "Stredné" } },
+				{ value: "large", label: { en: "Large", sk: "Veľké" } },
+			],
+			defaultValue: "medium",
+		}),
+	}));
+
+export const spacerBlock = qb
+	.block("spacer")
+	.admin(({ c }) => ({
+		label: { en: "Spacer", sk: "Medzera" },
+		icon: c.icon("ph:arrows-out-vertical"),
+		category: layout(c),
+		order: 2,
+	}))
+	.fields((f) => ({
+		size: f.select({
+			label: { en: "Size", sk: "Veľkosť" },
+			options: [
+				{ value: "small", label: "S" },
+				{ value: "medium", label: "M" },
+				{ value: "large", label: "L" },
+				{ value: "xlarge", label: "XL" },
+			],
+			defaultValue: "medium",
+		}),
+	}));
+
+export const dividerBlock = qb
+	.block("divider")
+	.admin(({ c }) => ({
+		label: { en: "Divider", sk: "Oddelovač" },
+		icon: c.icon("ph:minus"),
+		category: layout(c),
+		order: 3,
+	}))
+	.fields((f) => ({
+		style: f.select({
+			label: { en: "Style", sk: "Štýl" },
+			options: [
+				{ value: "solid", label: "Solid" },
+				{ value: "dashed", label: "Dashed" },
+			],
+			defaultValue: "solid",
+		}),
+		width: f.select({
+			label: { en: "Width", sk: "Šírka" },
+			options: [
+				{ value: "full", label: { en: "Full", sk: "Plná" } },
+				{ value: "medium", label: { en: "Medium", sk: "Stredná" } },
+				{ value: "small", label: { en: "Small", sk: "Malá" } },
+			],
+			defaultValue: "full",
+		}),
+	}));
+
+// ============================================================================
+// Export all blocks
+// ============================================================================
+
+export const blocks = {
 	hero: heroBlock,
 	text: textBlock,
 	heading: headingBlock,

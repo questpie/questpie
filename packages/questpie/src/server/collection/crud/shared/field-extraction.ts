@@ -6,8 +6,8 @@
  */
 
 import type {
-  FieldDefinition,
-  FieldDefinitionState,
+	FieldDefinition,
+	FieldDefinitionState,
 } from "#questpie/server/fields/types.js";
 
 /**
@@ -15,16 +15,16 @@ import type {
  * Runtime version of ExtractFieldsByLocation type.
  */
 export function extractFieldNamesByLocation(
-  fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
-  location: "main" | "i18n" | "virtual" | "relation",
+	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	location: "main" | "i18n" | "virtual" | "relation",
 ): string[] {
-  const names: string[] = [];
-  for (const [name, fieldDef] of Object.entries(fieldDefinitions)) {
-    if (fieldDef.state.location === location) {
-      names.push(name);
-    }
-  }
-  return names;
+	const names: string[] = [];
+	for (const [name, fieldDef] of Object.entries(fieldDefinitions)) {
+		if (fieldDef.state.location === location) {
+			names.push(name);
+		}
+	}
+	return names;
 }
 
 /**
@@ -32,51 +32,51 @@ export function extractFieldNamesByLocation(
  * Replaces the old state.localized array.
  */
 export function extractLocalizedFieldNames(
-  fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
 ): string[] {
-  return extractFieldNamesByLocation(fieldDefinitions, "i18n");
+	return extractFieldNamesByLocation(fieldDefinitions, "i18n");
 }
 
 /**
  * Extract main field names.
  */
 export function extractMainFieldNames(
-  fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
 ): string[] {
-  return extractFieldNamesByLocation(fieldDefinitions, "main");
+	return extractFieldNamesByLocation(fieldDefinitions, "main");
 }
 
 /**
  * Extract virtual field names.
  */
 export function extractVirtualFieldNames(
-  fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
 ): string[] {
-  return extractFieldNamesByLocation(fieldDefinitions, "virtual");
+	return extractFieldNamesByLocation(fieldDefinitions, "virtual");
 }
 
 /**
  * Check if collection has any localized fields.
  */
 export function hasLocalizedFields(
-  fieldDefinitions:
-    | Record<string, FieldDefinition<FieldDefinitionState>>
-    | undefined,
+	fieldDefinitions:
+		| Record<string, FieldDefinition<FieldDefinitionState>>
+		| undefined,
 ): boolean {
-  if (!fieldDefinitions) return false;
-  return extractLocalizedFieldNames(fieldDefinitions).length > 0;
+	if (!fieldDefinitions) return false;
+	return extractLocalizedFieldNames(fieldDefinitions).length > 0;
 }
 
 /**
  * Check if collection has any virtual fields.
  */
 export function hasVirtualFields(
-  fieldDefinitions:
-    | Record<string, FieldDefinition<FieldDefinitionState>>
-    | undefined,
+	fieldDefinitions:
+		| Record<string, FieldDefinition<FieldDefinitionState>>
+		| undefined,
 ): boolean {
-  if (!fieldDefinitions) return false;
-  return extractVirtualFieldNames(fieldDefinitions).length > 0;
+	if (!fieldDefinitions) return false;
+	return extractVirtualFieldNames(fieldDefinitions).length > 0;
 }
 
 /**
@@ -84,23 +84,23 @@ export function hasVirtualFields(
  * Returns { main: Record, localized: Record }
  */
 export function splitFieldsByLocation<T extends Record<string, any>>(
-  data: T,
-  fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	data: T,
+	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
 ): { main: Partial<T>; localized: Partial<T> } {
-  const main: Partial<T> = {};
-  const localized: Partial<T> = {};
+	const main: Partial<T> = {};
+	const localized: Partial<T> = {};
 
-  const localizedNames = new Set(extractLocalizedFieldNames(fieldDefinitions));
+	const localizedNames = new Set(extractLocalizedFieldNames(fieldDefinitions));
 
-  for (const [key, value] of Object.entries(data)) {
-    if (localizedNames.has(key)) {
-      (localized as any)[key] = value;
-    } else {
-      (main as any)[key] = value;
-    }
-  }
+	for (const [key, value] of Object.entries(data)) {
+		if (localizedNames.has(key)) {
+			(localized as any)[key] = value;
+		} else {
+			(main as any)[key] = value;
+		}
+	}
 
-  return { main, localized };
+	return { main, localized };
 }
 
 /**
@@ -108,10 +108,10 @@ export function splitFieldsByLocation<T extends Record<string, any>>(
  * Inverse of splitFieldsByLocation.
  */
 export function mergeFieldsByLocation<T extends Record<string, any>>(
-  main: Partial<T>,
-  localized: Partial<T>,
+	main: Partial<T>,
+	localized: Partial<T>,
 ): Partial<T> {
-  return { ...main, ...localized };
+	return { ...main, ...localized };
 }
 
 // ============================================================================
@@ -162,23 +162,41 @@ export function mergeFieldsByLocation<T extends Record<string, any>>(
  * Schema for object nested fields - maps field names to their localization schemas.
  */
 export interface NestedObjectSchema {
-  [fieldName: string]: NestedLocalizationSchema;
+	[fieldName: string]: NestedLocalizationSchema;
 }
 
 /**
  * Schema for array items - uses special _item key.
  */
 export interface NestedArraySchema {
-  _item: NestedLocalizationSchema;
+	_item: NestedLocalizationSchema;
+}
+
+/**
+ * Schema for blocks field - maps block types to their field schemas.
+ * Uses special _blocks key to identify this as a blocks schema.
+ *
+ * @example
+ * // Blocks field with hero block having localized title:
+ * {
+ *   _blocks: {
+ *     hero: { title: true, subtitle: true },
+ *     text: { content: true }
+ *   }
+ * }
+ */
+export interface NestedBlocksSchema {
+	_blocks: Record<string, NestedLocalizationSchema>;
 }
 
 /**
  * Union type for nested localization schema.
  */
 export type NestedLocalizationSchema =
-  | true // Leaf localized field
-  | NestedArraySchema // Array item schema
-  | NestedObjectSchema; // Object fields schema
+	| true // Leaf localized field
+	| NestedArraySchema // Array item schema
+	| NestedBlocksSchema // Blocks field schema
+	| NestedObjectSchema; // Object fields schema
 
 /**
  * Extract nested localization schema from a field definition.
@@ -187,73 +205,118 @@ export type NestedLocalizationSchema =
  * Returns the schema for localized nested paths, or null if no nested localization.
  */
 export function extractNestedLocalizationSchema(
-  fieldDef: FieldDefinition<FieldDefinitionState>,
+	fieldDef: FieldDefinition<FieldDefinitionState>,
 ): NestedLocalizationSchema | null {
-  const config = fieldDef.state.config as Record<string, unknown>;
-  const fieldType = fieldDef.state.type;
+	const config = fieldDef.state.config as Record<string, unknown>;
+	const fieldType = fieldDef.state.type;
 
-  // Handle object fields
-  if (fieldType === "object" && config.fields) {
-    const nestedFields = resolveFieldsConfig(config.fields);
-    if (!nestedFields) return null;
+	// Handle object fields
+	if (fieldType === "object" && config.fields) {
+		const nestedFields = resolveFieldsConfig(config.fields);
+		if (!nestedFields) return null;
 
-    const schema: Record<string, NestedLocalizationSchema> = {};
-    let hasLocalized = false;
+		const schema: Record<string, NestedLocalizationSchema> = {};
+		let hasLocalized = false;
 
-    for (const [fieldName, nestedFieldDef] of Object.entries(nestedFields)) {
-      const nestedConfig = nestedFieldDef.state.config as Record<
-        string,
-        unknown
-      >;
+		for (const [fieldName, nestedFieldDef] of Object.entries(nestedFields)) {
+			const nestedConfig = nestedFieldDef.state.config as Record<
+				string,
+				unknown
+			>;
 
-      // Check if this nested field is directly localized
-      if (nestedConfig.localized === true) {
-        schema[fieldName] = true;
-        hasLocalized = true;
-        continue;
-      }
+			// Check if this nested field is directly localized
+			if (nestedConfig.localized === true) {
+				schema[fieldName] = true;
+				hasLocalized = true;
+				continue;
+			}
 
-      // Recursively check for nested localized fields
-      const nestedSchema = extractNestedLocalizationSchema(nestedFieldDef);
-      if (nestedSchema !== null) {
-        schema[fieldName] = nestedSchema;
-        hasLocalized = true;
-      }
-    }
+			// Recursively check for nested localized fields
+			const nestedSchema = extractNestedLocalizationSchema(nestedFieldDef);
+			if (nestedSchema !== null) {
+				schema[fieldName] = nestedSchema;
+				hasLocalized = true;
+			}
+		}
 
-    return hasLocalized ? schema : null;
-  }
+		return hasLocalized ? schema : null;
+	}
 
-  // Handle array fields
-  if (fieldType === "array" && config.of) {
-    const itemFieldDef = resolveItemConfig(config.of);
-    if (!itemFieldDef) return null;
+	// Handle array fields
+	if (fieldType === "array" && config.of) {
+		const itemFieldDef = resolveItemConfig(config.of);
+		if (!itemFieldDef) return null;
 
-    const itemConfig = itemFieldDef.state.config as Record<string, unknown>;
+		const itemConfig = itemFieldDef.state.config as Record<string, unknown>;
 
-    // Check if array item itself is localized (whole array item is localized)
-    if (itemConfig.localized === true) {
-      return { _item: true };
-    }
+		// Check if array item itself is localized (whole array item is localized)
+		if (itemConfig.localized === true) {
+			return { _item: true };
+		}
 
-    // Recursively check array item for nested localized fields
-    const itemSchema = extractNestedLocalizationSchema(itemFieldDef);
-    if (itemSchema !== null) {
-      return { _item: itemSchema };
-    }
+		// Recursively check array item for nested localized fields
+		const itemSchema = extractNestedLocalizationSchema(itemFieldDef);
+		if (itemSchema !== null) {
+			return { _item: itemSchema };
+		}
 
-    return null;
-  }
+		return null;
+	}
 
-  // For blocks field, treat similarly to array with special handling
-  if (fieldType === "blocks") {
-    // Blocks have their own localization handling via _values
-    // For now, return null - blocks use the $i18n wrapper approach
-    return null;
-  }
+	// Handle blocks field - extract schema from block definitions
+	if (fieldType === "blocks") {
+		const blockDefinitions = config._blockDefinitions as
+			| Record<string, { state?: { fields?: unknown } }>
+			| undefined;
 
-  // Primitive fields - no nested localization possible
-  return null;
+		if (!blockDefinitions) return null;
+
+		const blocksSchema: Record<string, NestedLocalizationSchema> = {};
+		let hasBlocksLocalized = false;
+
+		for (const [blockType, blockDef] of Object.entries(blockDefinitions)) {
+			const blockFields = resolveFieldsConfig(blockDef.state?.fields);
+			if (!blockFields) continue;
+
+			// Extract schema for this block type's fields (inline logic)
+			const blockSchema: Record<string, NestedLocalizationSchema> = {};
+			let hasFieldLocalized = false;
+
+			for (const [fieldName, blockFieldDef] of Object.entries(blockFields)) {
+				const blockFieldConfig = blockFieldDef.state.config as Record<
+					string,
+					unknown
+				>;
+
+				// Check if this field is directly localized
+				if (blockFieldConfig.localized === true) {
+					blockSchema[fieldName] = true;
+					hasFieldLocalized = true;
+					continue;
+				}
+
+				// Recursively check for nested localized fields
+				const nestedSchema = extractNestedLocalizationSchema(blockFieldDef);
+				if (nestedSchema !== null) {
+					blockSchema[fieldName] = nestedSchema;
+					hasFieldLocalized = true;
+				}
+			}
+
+			if (hasFieldLocalized) {
+				blocksSchema[blockType] = blockSchema;
+				hasBlocksLocalized = true;
+			}
+		}
+
+		if (hasBlocksLocalized) {
+			return { _blocks: blocksSchema };
+		}
+		return null;
+	}
+
+	// Primitive fields - no nested localization possible
+	return null;
 }
 
 /**
@@ -263,45 +326,45 @@ export function extractNestedLocalizationSchema(
  * Only includes fields that have nested localized content (not top-level localized).
  */
 export function extractNestedLocalizationSchemas(
-  fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
 ): Record<string, NestedLocalizationSchema> {
-  const schemas: Record<string, NestedLocalizationSchema> = {};
+	const schemas: Record<string, NestedLocalizationSchema> = {};
 
-  for (const [fieldName, fieldDef] of Object.entries(fieldDefinitions)) {
-    // Skip top-level localized fields (they go to i18n table columns directly)
-    if (fieldDef.state.location === "i18n") continue;
+	for (const [fieldName, fieldDef] of Object.entries(fieldDefinitions)) {
+		// Skip top-level localized fields (they go to i18n table columns directly)
+		if (fieldDef.state.location === "i18n") continue;
 
-    // Skip non-JSONB fields (only object/array/blocks can have nested localization)
-    const fieldType = fieldDef.state.type;
-    if (
-      fieldType !== "object" &&
-      fieldType !== "array" &&
-      fieldType !== "blocks"
-    ) {
-      continue;
-    }
+		// Skip non-JSONB fields (only object/array/blocks can have nested localization)
+		const fieldType = fieldDef.state.type;
+		if (
+			fieldType !== "object" &&
+			fieldType !== "array" &&
+			fieldType !== "blocks"
+		) {
+			continue;
+		}
 
-    const schema = extractNestedLocalizationSchema(fieldDef);
-    if (schema !== null) {
-      schemas[fieldName] = schema;
-    }
-  }
+		const schema = extractNestedLocalizationSchema(fieldDef);
+		if (schema !== null) {
+			schemas[fieldName] = schema;
+		}
+	}
 
-  return schemas;
+	return schemas;
 }
 
 /**
  * Check if a collection has any nested localized fields (in JSONB).
  */
 export function hasNestedLocalizedFields(
-  fieldDefinitions:
-    | Record<string, FieldDefinition<FieldDefinitionState>>
-    | undefined,
+	fieldDefinitions:
+		| Record<string, FieldDefinition<FieldDefinitionState>>
+		| undefined,
 ): boolean {
-  if (!fieldDefinitions) return false;
-  return (
-    Object.keys(extractNestedLocalizationSchemas(fieldDefinitions)).length > 0
-  );
+	if (!fieldDefinitions) return false;
+	return (
+		Object.keys(extractNestedLocalizationSchemas(fieldDefinitions)).length > 0
+	);
 }
 
 // ============================================================================
@@ -312,24 +375,24 @@ export function hasNestedLocalizedFields(
  * Resolve fields config (handles factory functions).
  */
 function resolveFieldsConfig(
-  fields: unknown,
+	fields: unknown,
 ): Record<string, FieldDefinition<FieldDefinitionState>> | null {
-  if (!fields) return null;
-  if (typeof fields === "function") {
-    return fields() as Record<string, FieldDefinition<FieldDefinitionState>>;
-  }
-  return fields as Record<string, FieldDefinition<FieldDefinitionState>>;
+	if (!fields) return null;
+	if (typeof fields === "function") {
+		return fields() as Record<string, FieldDefinition<FieldDefinitionState>>;
+	}
+	return fields as Record<string, FieldDefinition<FieldDefinitionState>>;
 }
 
 /**
  * Resolve array item config (handles factory functions).
  */
 function resolveItemConfig(
-  of: unknown,
+	of: unknown,
 ): FieldDefinition<FieldDefinitionState> | null {
-  if (!of) return null;
-  if (typeof of === "function") {
-    return of() as FieldDefinition<FieldDefinitionState>;
-  }
-  return of as FieldDefinition<FieldDefinitionState>;
+	if (!of) return null;
+	if (typeof of === "function") {
+		return of() as FieldDefinition<FieldDefinitionState>;
+	}
+	return of as FieldDefinition<FieldDefinitionState>;
 }

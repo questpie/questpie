@@ -80,7 +80,6 @@ import {
 	detectManyToManyRelations,
 	hasManyToManyRelations,
 } from "../../utils/detect-relations";
-import { wrapLocalizedNestedValues } from "../../utils/wrap-localized";
 
 import { AutoFormFields } from "./auto-form-fields";
 
@@ -414,23 +413,14 @@ export default function FormView({
 	}, [form]);
 
 	const onSubmit = React.useEffectEvent(async (data: any) => {
-		// Transform nested localized values with $i18n wrappers
-		const transformedData = resolvedFields
-			? wrapLocalizedNestedValues(data, {
-					fields: resolvedFields,
-					registry: admin.getFields(),
-					blocks: adminConfig?.blocks,
-				})
-			: data;
-
 		const savePromise = async () => {
 			if (isEditMode) {
 				return await updateMutation.mutateAsync({
 					id: id!,
-					data: transformedData,
+					data,
 				});
 			} else {
-				return await createMutation.mutateAsync(transformedData);
+				return await createMutation.mutateAsync(data);
 			}
 		};
 
@@ -507,19 +497,10 @@ export default function FormView({
 			try {
 				setIsSaving(true);
 				await form.handleSubmit(async (data) => {
-					// Transform nested localized values with $i18n wrappers
-					const transformedData = resolvedFields
-						? wrapLocalizedNestedValues(data, {
-								fields: resolvedFields,
-								registry: admin.getFields(),
-								blocks: adminConfig?.blocks,
-							})
-						: data;
-
 					// Silent save (no toast)
 					const result = await updateMutation.mutateAsync({
 						id: id!,
-						data: transformedData,
+						data,
 					});
 
 					// Reset form to mark as not dirty
@@ -586,7 +567,10 @@ export default function FormView({
 			if ((e.metaKey || e.ctrlKey) && e.key === "s") {
 				e.preventDefault();
 				e.stopPropagation();
-				form.handleSubmit(onSubmit)();
+				form.handleSubmit(onSubmit, (errors) => {
+					console.warn("[FormView] Validation errors:", errors);
+					toast.error(t("toast.validationFailed"));
+				})();
 			}
 		};
 		document.addEventListener("keydown", handleKeyDown);
@@ -986,7 +970,12 @@ export default function FormView({
 				<form
 					onSubmit={(e) => {
 						e.stopPropagation();
-						form.handleSubmit(onSubmit)(e);
+						form.handleSubmit(onSubmit, (errors) => {
+							console.warn("[FormView] Validation errors:", errors);
+							toast.error(t("toast.validationFailed"), {
+								description: t("toast.validationDescription"),
+							});
+						})(e);
 					}}
 					className="space-y-4"
 				>

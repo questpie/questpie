@@ -276,11 +276,11 @@ export function AdminLayout({
         >
           {/* Sidebar */}
           <AdminSidebar
-            navigation={navigation}
+            navigation={navigationProp}
             LinkComponent={LinkComponent}
             activeRoute={activeRoute}
             basePath={basePath}
-            brandName={brandName}
+            brandName={brandNameProp}
             {...sidebarProps}
           />
 

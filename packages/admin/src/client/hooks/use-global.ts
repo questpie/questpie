@@ -55,14 +55,10 @@ export function useGlobal<K extends ResolvedGlobalNames>(
 ): any {
   const client = useAdminStore(selectClient);
   const contentLocale = useAdminStore(selectContentLocale);
-  const keyPrefix = ["questpie", "globals"] as const;
-  const queryOpts = createQuestpieQueryOptions(
-    client as any,
-    {
-      keyPrefix,
-      locale: contentLocale,
-    } as any,
-  );
+  const queryOpts = createQuestpieQueryOptions(client as any, {
+    keyPrefix: ["questpie", "globals"],
+    locale: contentLocale,
+  });
 
   const globalOptions = {
     ...options,
@@ -109,14 +105,10 @@ export function useGlobalUpdate<K extends ResolvedGlobalNames>(
   const client = useAdminStore(selectClient);
   const contentLocale = useAdminStore(selectContentLocale);
   const queryClient = useQueryClient();
-  const keyPrefix = ["questpie", "globals"] as const;
-  const queryOpts = createQuestpieQueryOptions(
-    client as any,
-    {
-      keyPrefix,
-      locale: contentLocale,
-    } as any,
-  );
+  const queryOpts = createQuestpieQueryOptions(client as any, {
+    keyPrefix: ["questpie", "globals"],
+    locale: contentLocale,
+  });
 
   const globalQueryKey = queryOpts.key([
     "globals",

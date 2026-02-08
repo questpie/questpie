@@ -72,6 +72,18 @@ function FileIcon({ className }: { className?: string }) {
 // ============================================================================
 
 /**
+ * Extract typed props from server config entries (collections/globals).
+ * Server config entries come as plain objects without strict typing.
+ */
+function getConfigProps(config: unknown) {
+  const c = config as Record<string, any>;
+  return {
+    label: c?.label as string | undefined,
+    icon: c?.icon as React.ComponentType<{ className?: string }> | undefined,
+  };
+}
+
+/**
  * Simple fuzzy search - matches if query words appear anywhere in text
  */
 function fuzzyMatch(text: string, query: string): boolean {
@@ -215,39 +227,36 @@ export function GlobalSearch({
 
     // Add collections
     for (const [name, config] of Object.entries(collections)) {
-      const label = resolveText((config as any).label, name);
-      // Get icon from collection config (getCollections already extracts .state)
-      const icon = (config as any)?.icon || FolderIcon;
+      const { label: rawLabel, icon } = getConfigProps(config);
+      const label = resolveText(rawLabel, name);
       items.push({
         id: `col-${name}`,
         type: "collection",
         label,
         href: `${basePath}/collections/${name}`,
-        icon,
+        icon: icon || FolderIcon,
         keywords: [name, "collection", "list"],
       });
     }
 
     // Add globals
     for (const [name, config] of Object.entries(globals)) {
-      const label = resolveText((config as any).label, name);
-      // Get icon from global config (getGlobals already extracts .state)
-      const icon = (config as any)?.icon || GearIcon;
+      const { label: rawLabel, icon } = getConfigProps(config);
+      const label = resolveText(rawLabel, name);
       items.push({
         id: `glob-${name}`,
         type: "global",
         label,
         href: `${basePath}/globals/${name}`,
-        icon,
+        icon: icon || GearIcon,
         keywords: [name, "global", "settings", "config"],
       });
     }
 
     // Add quick actions (create new)
     for (const [name, config] of Object.entries(collections)) {
-      const label = resolveText((config as any).label, name);
-      // Get icon from collection config for the action too
-      const collectionIcon = (config as any)?.icon;
+      const { label: rawLabel, icon: collectionIcon } = getConfigProps(config);
+      const label = resolveText(rawLabel, name);
       items.push({
         id: `action-create-${name}`,
         type: "action",
@@ -276,13 +285,9 @@ export function GlobalSearch({
     return searchResults.docs.map((doc): SearchItem => {
       const collectionName = doc._collection;
       const collectionConfig = collections[collectionName];
-      // Use resolveText for proper localization of collection label
-      const collectionLabel = resolveText(
-        (collectionConfig as any)?.label,
-        collectionName,
-      );
-      // Get icon from collection config (getCollections already extracts .state)
-      const icon = (collectionConfig as any)?.icon || FileIcon;
+      const { label: rawLabel, icon: configIcon } = getConfigProps(collectionConfig);
+      const collectionLabel = resolveText(rawLabel, collectionName);
+      const icon = configIcon || FileIcon;
 
       return {
         id: `record-${collectionName}-${doc.id}`,

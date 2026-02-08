@@ -90,16 +90,3 @@ export function isBlockContent(value: unknown): value is BlockContent {
   );
 }
 
-/**
- * Create a new block node with generated ID.
- */
-export function createBlockNode(
-  type: string,
-  children: BlockNode[] = [],
-): BlockNode {
-  return {
-    id: crypto.randomUUID(),
-    type,
-    children,
-  };
-}

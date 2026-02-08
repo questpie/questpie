@@ -32,11 +32,11 @@ export function useAdminPreference<T = unknown>(key: string) {
   const user = useCurrentUser();
 
   return useQuery({
-    queryKey: ["admin_preferences", user?.id, key],
+    queryKey: ["adminPreferences", user?.id, key],
     queryFn: async (): Promise<T | null> => {
       if (!user?.id) return null;
 
-      const result = await client.collections.admin_preferences.findOne({
+      const result = await client.collections.adminPreferences.findOne({
         where: { userId: user.id, key },
       });
 
@@ -77,26 +77,26 @@ export function useSetAdminPreference<T = unknown>(key: string) {
       const collections = client?.collections as
         | Record<string, any>
         | undefined;
-      if (!collections?.admin_preferences) {
+      if (!collections?.adminPreferences) {
         throw new Error(
-          "admin_preferences collection not available. Make sure to use adminModule in your CMS setup.",
+          "adminPreferences collection not available. Make sure to use adminModule in your CMS setup.",
         );
       }
 
       // Try to find existing preference
-      const existing = await collections.admin_preferences.findOne({
+      const existing = await collections.adminPreferences.findOne({
         where: { userId: user.id, key },
       });
 
       if (existing) {
         // Update existing
-        return collections.admin_preferences.update({
+        return collections.adminPreferences.update({
           id: existing.id,
           data: { value },
         });
       }
       // Create new
-      return collections.admin_preferences.create({
+      return collections.adminPreferences.create({
         userId: user.id,
         key,
         value,
@@ -104,7 +104,7 @@ export function useSetAdminPreference<T = unknown>(key: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["admin_preferences", user?.id, key],
+        queryKey: ["adminPreferences", user?.id, key],
       });
     },
   });
@@ -139,26 +139,26 @@ export function useDeleteAdminPreference(key: string) {
       const collections = client?.collections as
         | Record<string, any>
         | undefined;
-      if (!collections?.admin_preferences) {
+      if (!collections?.adminPreferences) {
         throw new Error(
-          "admin_preferences collection not available. Make sure to use adminModule in your CMS setup.",
+          "adminPreferences collection not available. Make sure to use adminModule in your CMS setup.",
         );
       }
 
       // Find existing preference
-      const existing = await collections.admin_preferences.findOne({
+      const existing = await collections.adminPreferences.findOne({
         where: { userId: user.id, key },
       });
 
       if (existing) {
-        return collections.admin_preferences.delete({ id: existing.id });
+        return collections.adminPreferences.delete({ id: existing.id });
       }
 
       return null;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["admin_preferences", user?.id, key],
+        queryKey: ["adminPreferences", user?.id, key],
       });
     },
   });

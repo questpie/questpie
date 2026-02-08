@@ -5,7 +5,7 @@ import { useRender } from "@base-ui/react/use-render";
 import { Icon } from "@iconify/react";
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
-import { useIsMobile } from "../../hooks/use-mobile";
+import { useIsMobile } from "../../hooks/use-media-query";
 import { cn } from "../../lib/utils";
 import { Button } from "./button";
 import { Input } from "./input";

@@ -477,14 +477,3 @@ function isSystemField(fieldName: string): boolean {
   return systemFields.includes(fieldName);
 }
 
-/**
- * Check if a field should be hidden from list views.
- * writeOnly fields (output: false) should not appear in lists.
- */
-export function isListViewField(metadata: FieldMetadata): boolean {
-  // writeOnly fields should not appear in list views
-  if (metadata.writeOnly) {
-    return false;
-  }
-  return true;
-}

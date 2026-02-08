@@ -180,7 +180,10 @@ export function MediaPickerDialog({
     },
   );
 
-  const assets = (data?.docs || []) as Asset[];
+  const assets = React.useMemo(
+    () => (data?.docs || []) as Asset[],
+    [data?.docs],
+  );
   const previewAsset = React.useMemo(
     () => assets.find((asset) => asset.id === previewAssetId) ?? null,
     [assets, previewAssetId],
@@ -195,17 +198,20 @@ export function MediaPickerDialog({
       setPreviewAssetId(null);
       return;
     }
+  }, [open]);
 
-    if (!previewAssetId && assets.length > 0) {
+  // Auto-select first asset for preview
+  React.useEffect(() => {
+    if (!open || assets.length === 0) return;
+
+    if (!previewAssetId) {
       setPreviewAssetId(assets[0].id);
       return;
     }
 
-    if (previewAssetId && assets.length > 0) {
-      const stillExists = assets.some((asset) => asset.id === previewAssetId);
-      if (!stillExists) {
-        setPreviewAssetId(assets[0].id);
-      }
+    const stillExists = assets.some((asset) => asset.id === previewAssetId);
+    if (!stillExists) {
+      setPreviewAssetId(assets[0].id);
     }
   }, [open, assets, previewAssetId]);
 

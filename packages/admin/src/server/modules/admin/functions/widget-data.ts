@@ -84,7 +84,7 @@ export const fetchWidgetData = fn({
       const accessResult =
         typeof widget.access === "function"
           ? await widget.access({
-              cms,
+              app: cms,
               db: (ctx as any).db,
               session: (ctx as any).session,
               locale: (ctx as any).locale,
@@ -97,7 +97,7 @@ export const fetchWidgetData = fn({
 
     // Execute fetchFn with server context
     return widget.fetchFn({
-      cms,
+      app: cms,
       db: (ctx as any).db,
       session: (ctx as any).session,
       locale: (ctx as any).locale,

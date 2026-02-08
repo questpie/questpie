@@ -47,7 +47,6 @@ export type AdminInput<TState extends AdminBuilderState = AdminBuilderState> =
  * Admin runtime instance
  *
  * Provides methods to access admin configuration at runtime.
- * Can be created from an AdminBuilder directly - no need for Admin.from().
  *
  * @example
  * ```ts
@@ -57,32 +56,11 @@ export type AdminInput<TState extends AdminBuilderState = AdminBuilderState> =
  * <AdminLayoutProvider admin={admin} ... />
  *
  * // Or create Admin instance explicitly if needed
- * const adminInstance = Admin.from(adminBuilder);
+ * const adminInstance = Admin.normalize(adminBuilder);
  * ```
  */
 export class Admin<TState extends AdminBuilderState = AdminBuilderState> {
   constructor(public readonly state: TState) {}
-
-  /**
-   * Create Admin from an AdminBuilder or return existing Admin instance.
-   * This is called internally by AdminLayoutProvider - you don't need to call it manually.
-   *
-   * @deprecated Pass the builder directly to AdminLayoutProvider instead
-   */
-  static from<TBuilder extends AdminBuilder<any> | Admin<any>>(
-    input: TBuilder,
-  ): TBuilder extends AdminBuilder<infer TState>
-    ? Admin<TState>
-    : TBuilder extends Admin<infer TState>
-      ? Admin<TState>
-      : never {
-    // If already an Admin instance, return as-is
-    if (input instanceof Admin) {
-      return input as any;
-    }
-    // Otherwise extract state from builder
-    return new Admin((input as AdminBuilder<any>).state) as any;
-  }
 
   /**
    * Normalize input to Admin instance (internal helper)

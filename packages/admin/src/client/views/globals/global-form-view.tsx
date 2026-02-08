@@ -24,7 +24,6 @@ import {
 	useSafeContentLocales,
 	useScopedLocale,
 } from "../../runtime";
-import { wrapLocalizedNestedValues } from "../../utils/wrap-localized";
 import { AutoFormFields } from "../collection/auto-form-fields";
 
 // ============================================================================
@@ -153,20 +152,9 @@ export default function GlobalFormView({
 
 	const onSubmit = React.useCallback(
 		async (data: any) => {
-			// Transform nested localized values with $i18n wrappers
-			const fieldsForTransform =
-				Object.keys(mergedFields).length > 0 ? mergedFields : config?.fields;
-			const transformedData = fieldsForTransform
-				? wrapLocalizedNestedValues(data, {
-						fields: fieldsForTransform,
-						registry: admin.getFields(),
-						blocks: adminConfig?.blocks,
-					})
-				: data;
-
 			try {
 				const result = await updateMutation.mutateAsync({
-					data: transformedData,
+					data,
 				});
 				if (result) {
 					form.reset(result as any);
@@ -296,6 +284,7 @@ export default function GlobalFormView({
 				{/* Main Content - Form Fields */}
 				<AutoFormFields
 					collection={globalName}
+					mode="global"
 					config={config}
 					registry={registry}
 				/>

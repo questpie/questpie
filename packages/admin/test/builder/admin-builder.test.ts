@@ -245,56 +245,6 @@ describe("AdminBuilder.defaultViews()", () => {
   });
 });
 
-describe("AdminBuilder.collection() / .global()", () => {
-  it("should create collection builder bound to admin module", () => {
-    const admin = AdminBuilder.empty().fields({
-      text: createTextField(),
-    });
-
-    const postsBuilder = admin.collection("posts");
-
-    expect(postsBuilder.state.name).toBe("posts");
-    // The builder should have ~adminApp bound
-    expect(postsBuilder.state["~adminApp"]).toBe(admin);
-  });
-
-  it("should create global builder bound to admin module", () => {
-    const admin = AdminBuilder.empty().fields({
-      text: createTextField(),
-    });
-
-    const settingsBuilder = admin.global("settings");
-
-    expect(settingsBuilder.state.name).toBe("settings");
-    // The builder should have ~adminApp bound
-    expect(settingsBuilder.state["~adminApp"]).toBe(admin);
-  });
-
-  it("should allow chaining use() and meta() on collection", () => {
-    const admin = AdminBuilder.empty().fields({
-      text: createTextField(),
-      email: createEmailField(),
-    });
-
-    const posts = admin.collection("posts").meta({ label: "Blog Posts" });
-
-    expect(posts.state.name).toBe("posts");
-    expect(posts.state.label).toBe("Blog Posts");
-  });
-
-  it("should allow chaining use() and meta() on global", () => {
-    const admin = AdminBuilder.empty().fields({
-      text: createTextField(),
-      email: createEmailField(),
-    });
-
-    const settings = admin.global("settings").meta({ label: "Settings" });
-
-    expect(settings.state.name).toBe("settings");
-    expect(settings.state.label).toBe("Settings");
-  });
-});
-
 describe("AdminBuilder state immutability", () => {
   it("should create new instance on every mutation", () => {
     const a = AdminBuilder.empty();

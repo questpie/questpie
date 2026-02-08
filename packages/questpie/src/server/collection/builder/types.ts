@@ -761,12 +761,10 @@ export type AccessWhere<TFields = any> =
 /**
  * Access control function can return:
  * - boolean: true (allow all) or false (deny all)
- * - string: role name to check
  * - AccessWhere: query conditions to filter results (TYPE-SAFE!)
  */
 export type AccessRule<TRow = any, TFields = any, TApp = any> =
   | boolean
-  | string // Role name
   | ((
       ctx: AccessContext<TRow, TApp>,
     ) =>

@@ -376,7 +376,7 @@ function getBlockLabel(
 ): string {
 	if (!blockDef) return formatBlockType(type);
 	const fallback = blockDef.name || formatBlockType(type);
-	return resolveText(blockDef.label, fallback) || fallback;
+	return resolveText(blockDef.admin?.label, fallback) || fallback;
 }
 
 function collectBlockStats(tree: BlockNode[]): {

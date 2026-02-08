@@ -1,52 +1,23 @@
-/**
- * Site Settings Global
- *
- * Singleton configuration for the barbershop site.
- * Features:
- * - Basic shop info (name, tagline, logo)
- * - Navigation (header nav items, localized)
- * - Footer configuration (links, localized)
- * - Contact details
- * - Business hours
- * - Booking configuration
- * - Social media links
- * - SEO settings
- *
- * Note: Hero and page content are managed via Pages collection with blocks!
- */
-
 import { qb } from "@/questpie/server/builder";
 import type { WorkingHours } from "../collections/barbers";
 
-/**
- * Navigation item type (for header navigation)
- */
 export type NavItem = {
   label: string;
   href: string;
   isExternal?: boolean;
 };
 
-/**
- * Footer link type
- */
 export type FooterLink = {
   label: string;
   href: string;
   isExternal?: boolean;
 };
 
-/**
- * Social media link type
- */
 export type SocialLink = {
   platform: "instagram" | "facebook" | "twitter" | "tiktok" | "youtube";
   url: string;
 };
 
-/**
- * Booking settings type
- */
 export type BookingSettings = {
   minAdvanceHours: number;
   maxAdvanceDays: number;
@@ -58,12 +29,10 @@ export type BookingSettings = {
 export const siteSettings = qb
   .global("site_settings")
   .fields((f) => ({
-    // === Branding ===
     shopName: f.text({ required: true, default: "Sharp Cuts" }),
     tagline: f.text({ default: "Your Style, Our Passion", localized: true }),
     logo: f.upload({ to: "assets" }),
 
-    // === Navigation (Header) ===
     navigation: f.array({
       localized: true,
       default: [
@@ -83,7 +52,6 @@ export const siteSettings = qb
     ctaButtonText: f.text({ default: "Book Now", localized: true }),
     ctaButtonLink: f.text({ default: "/booking" }),
 
-    // === Footer ===
     footerTagline: f.text({
       default: "Your Style, Our Passion",
       localized: true,
@@ -109,7 +77,6 @@ export const siteSettings = qb
       localized: true,
     }),
 
-    // === Contact ===
     contactEmail: f.email({ required: true, default: "hello@barbershop.com" }),
     contactPhone: f.text({ default: "+1 555 0100" }),
     address: f.text({ default: "123 Main Street" }),
@@ -118,11 +85,9 @@ export const siteSettings = qb
     country: f.text({ default: "USA" }),
     mapEmbedUrl: f.text(),
 
-    // === Business Settings ===
     isOpen: f.boolean({ default: true, required: true }),
     bookingEnabled: f.boolean({ default: true, required: true }),
 
-    // === Working Hours (shop-wide defaults) ===
     businessHours: f.object({
       default: {
         monday: { isOpen: true, start: "09:00", end: "18:00" },
@@ -186,7 +151,6 @@ export const siteSettings = qb
       },
     }),
 
-    // === Booking Configuration ===
     bookingSettings: f.object({
       default: {
         minAdvanceHours: 2,
@@ -204,7 +168,6 @@ export const siteSettings = qb
       },
     }),
 
-    // === Social Media ===
     socialLinks: f.array({
       default: [
         { platform: "instagram", url: "https://instagram.com/sharpcuts" },
@@ -227,7 +190,6 @@ export const siteSettings = qb
       }),
     }),
 
-    // === SEO ===
     metaTitle: f.text({
       default: "Sharp Cuts - Premium Barbershop",
       localized: true,
@@ -243,7 +205,7 @@ export const siteSettings = qb
     versioning: true,
   })
   .access({
-    read: true, // Anyone can read
-    update: "admin", // Only admins can update
+    read: true,
+    update: ({ session }) => (session?.user as any)?.role === "admin",
   })
   .build();

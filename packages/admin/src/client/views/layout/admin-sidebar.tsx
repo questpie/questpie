@@ -138,6 +138,26 @@ export interface AdminSidebarProps {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Extract typed props from untyped sidebar config items.
+ * Server sidebar items come as plain objects without strict typing.
+ */
+function getSidebarItemProps(item: unknown) {
+  const i = item as Record<string, any>;
+  return {
+    collection: i.collection as string | undefined,
+    global: i.global as string | undefined,
+    pageId: i.pageId as string | undefined,
+    label: i.label as string | undefined,
+    icon: i.icon as NavigationItem["icon"] | undefined,
+    href: i.href as string | undefined,
+  };
+}
+
+// ============================================================================
 // Internal Hook - Build navigation from server config
 // ============================================================================
 
@@ -175,53 +195,54 @@ function useServerNavigation(): NavigationGroup[] | undefined {
       collapsed: section.collapsed,
       items: section.items
         .map((item): NavigationElement | undefined => {
+          const props = getSidebarItemProps(item);
           switch (item.type) {
             case "collection": {
-              const collectionName = (item as any).collection as string;
+              const collectionName = props.collection!;
               const meta = serverConfig?.collections?.[collectionName];
               return {
                 id: `collection:${collectionName}`,
                 label:
-                  (item as any).label ??
+                  props.label ??
                   meta?.label ??
                   formatLabel(collectionName),
                 href: `${basePath}/collections/${collectionName}`,
-                icon: (item as any).icon ?? meta?.icon,
+                icon: props.icon ?? meta?.icon,
                 type: "collection" as const,
                 order: 0,
               };
             }
 
             case "global": {
-              const globalName = (item as any).global as string;
+              const globalName = props.global!;
               const meta = serverConfig?.globals?.[globalName];
               return {
                 id: `global:${globalName}`,
                 label:
-                  (item as any).label ?? meta?.label ?? formatLabel(globalName),
+                  props.label ?? meta?.label ?? formatLabel(globalName),
                 href: `${basePath}/globals/${globalName}`,
-                icon: (item as any).icon ?? meta?.icon,
+                icon: props.icon ?? meta?.icon,
                 type: "global" as const,
                 order: 0,
               };
             }
 
             case "page": {
-              const found = pageMap.get(`page:${(item as any).pageId}`);
+              const found = pageMap.get(`page:${props.pageId}`);
               if (!found) return undefined;
               return {
                 ...found,
-                label: (item as any).label ?? found.label,
-                icon: (item as any).icon ?? found.icon,
+                label: props.label ?? found.label,
+                icon: props.icon ?? found.icon,
               };
             }
 
             case "link":
               return {
-                id: `link:${(item as any).href}`,
-                label: (item as any).label ?? "",
-                href: (item as any).href,
-                icon: (item as any).icon,
+                id: `link:${props.href}`,
+                label: props.label ?? "",
+                href: props.href!,
+                icon: props.icon,
                 type: "link" as const,
                 order: 0,
               };
