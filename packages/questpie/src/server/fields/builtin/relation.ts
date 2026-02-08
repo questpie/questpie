@@ -17,6 +17,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { jsonb, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { defineField } from "../define-field.js";
+import type { OptionsConfig } from "../reactive.js";
 import type {
 	BaseFieldConfig,
 	FieldMetadataBase,
@@ -199,6 +200,42 @@ export interface RelationFieldConfig extends BaseFieldConfig {
 	 * Default filter conditions for relation.
 	 */
 	where?: Record<string, unknown>;
+
+	/**
+	 * Dynamic options configuration for relation picker.
+	 * Allows filtering related records based on form data.
+	 *
+	 * By default, relations use the target collection's records as options.
+	 * Use this to add custom filtering, search, and pagination.
+	 *
+	 * @example Cascading city → country filter
+	 * ```ts
+	 * city: f.relation({
+	 *   to: 'cities',
+	 *   options: {
+	 *     handler: async ({ data, search, page, limit, ctx }) => {
+	 *       if (!data.country) {
+	 *         return { options: [], hasMore: false };
+	 *       }
+	 *       const cities = await ctx.db.query.cities.findMany({
+	 *         where: {
+	 *           countryId: data.country,
+	 *           ...(search && { name: { ilike: `%${search}%` } }),
+	 *         },
+	 *         limit,
+	 *         offset: page * limit,
+	 *       });
+	 *       return {
+	 *         options: cities.map(c => ({ value: c.id, label: c.name })),
+	 *         hasMore: cities.length === limit,
+	 *       };
+	 *     },
+	 *     deps: ({ data }) => [data.country],
+	 *   },
+	 * })
+	 * ```
+	 */
+	options?: OptionsConfig;
 }
 
 // ============================================================================

@@ -10,6 +10,7 @@ import { jsonb, pgEnum, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 import { defineField } from "../define-field.js";
+import type { OptionsConfig } from "../reactive.js";
 import type { BaseFieldConfig, SelectFieldMetadata } from "../types.js";
 import { operator } from "../types.js";
 
@@ -68,8 +69,36 @@ export interface SelectFieldConfig extends BaseFieldConfig {
 
 	/**
 	 * Available options for selection.
+	 *
+	 * Can be static array of options or dynamic OptionsConfig handler.
+	 *
+	 * @example Static options
+	 * ```ts
+	 * options: [
+	 *   { value: 'draft', label: 'Draft' },
+	 *   { value: 'published', label: 'Published' },
+	 * ]
+	 * ```
+	 *
+	 * @example Dynamic options
+	 * ```ts
+	 * options: {
+	 *   handler: async ({ data, search, page, limit, ctx }) => {
+	 *     const results = await ctx.db.query.statuses.findMany({
+	 *       where: { category: data.category },
+	 *       limit,
+	 *       offset: page * limit,
+	 *     });
+	 *     return {
+	 *       options: results.map(r => ({ value: r.id, label: r.name })),
+	 *       hasMore: results.length === limit,
+	 *     };
+	 *   },
+	 *   deps: ({ data }) => [data.category],
+	 * }
+	 * ```
 	 */
-	options: readonly SelectOption[];
+	options: readonly SelectOption[] | OptionsConfig;
 
 	/**
 	 * Allow multiple selections.
@@ -81,6 +110,7 @@ export interface SelectFieldConfig extends BaseFieldConfig {
 	/**
 	 * Use PostgreSQL enum type for storage.
 	 * More efficient but requires migration for changes.
+	 * Only works with static options (not OptionsConfig).
 	 * @default false
 	 */
 	enumType?: boolean;
@@ -90,6 +120,28 @@ export interface SelectFieldConfig extends BaseFieldConfig {
 	 * Generated from field name if not provided.
 	 */
 	enumName?: string;
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Check if options is a static array (not OptionsConfig).
+ */
+function isStaticOptions(
+	options: readonly SelectOption[] | OptionsConfig,
+): options is readonly SelectOption[] {
+	return Array.isArray(options);
+}
+
+/**
+ * Get static options from config, or empty array if dynamic.
+ */
+function getStaticOptions(
+	options: readonly SelectOption[] | OptionsConfig,
+): readonly SelectOption[] {
+	return isStaticOptions(options) ? options : [];
 }
 
 // ============================================================================
@@ -280,15 +332,16 @@ export const selectField = defineField<SelectFieldConfig, string | string[]>()({
 	_value: undefined as unknown as string | string[],
 	toColumn(name: string, config: SelectFieldConfig) {
 		const { multiple = false, enumType = false, enumName } = config;
+		const staticOptions = getStaticOptions(config.options);
 
 		let column: any;
 
 		if (multiple) {
 			// Multi-select: store as JSONB array
 			column = jsonb(name);
-		} else if (enumType) {
-			// Single select with PostgreSQL enum
-			const enumValues = config.options.map((o) => String(o.value)) as [
+		} else if (enumType && staticOptions.length > 0) {
+			// Single select with PostgreSQL enum (only for static options)
+			const enumValues = staticOptions.map((o) => String(o.value)) as [
 				string,
 				...string[],
 			];
@@ -304,10 +357,11 @@ export const selectField = defineField<SelectFieldConfig, string | string[]>()({
 			column = (enumDef as any)(name);
 		} else {
 			// Single select: store as varchar
-			const maxLength = Math.max(
-				...config.options.map((o) => String(o.value).length),
-				50,
-			);
+			// For dynamic options, use a reasonable max length
+			const maxLength =
+				staticOptions.length > 0
+					? Math.max(...staticOptions.map((o) => String(o.value).length), 50)
+					: 255; // Default for dynamic options
 			column = varchar(name, { length: maxLength });
 		}
 
@@ -332,7 +386,27 @@ export const selectField = defineField<SelectFieldConfig, string | string[]>()({
 
 	toZodSchema(config: SelectFieldConfig) {
 		const { multiple = false } = config;
-		const validValues = config.options.map((o) => String(o.value));
+		const staticOptions = getStaticOptions(config.options);
+
+		// For dynamic options, allow any string value
+		// Server-side validation will verify against actual options
+		if (!isStaticOptions(config.options)) {
+			if (multiple) {
+				const schema = z.array(z.string());
+				if (!config.required && config.nullable !== false) {
+					return schema.nullish();
+				}
+				return schema;
+			} else {
+				const schema = z.string();
+				if (!config.required && config.nullable !== false) {
+					return schema.nullish();
+				}
+				return schema;
+			}
+		}
+
+		const validValues = staticOptions.map((o) => String(o.value));
 
 		if (multiple) {
 			// Multi-select: array of valid values
@@ -364,6 +438,11 @@ export const selectField = defineField<SelectFieldConfig, string | string[]>()({
 	},
 
 	getMetadata(config: SelectFieldConfig): SelectFieldMetadata {
+		const staticOptions = getStaticOptions(config.options);
+		// For dynamic options, we don't include options in metadata
+		// The client fetches them via the /options endpoint
+		const hasDynamicOptions = !isStaticOptions(config.options);
+
 		return {
 			type: "select",
 			label: config.label,
@@ -372,10 +451,13 @@ export const selectField = defineField<SelectFieldConfig, string | string[]>()({
 			localized: config.localized ?? false,
 			readOnly: config.input === false,
 			writeOnly: config.output === false,
-			options: config.options.map((o) => ({
-				value: o.value,
-				label: o.label,
-			})),
+			// Only include static options in metadata
+			options: hasDynamicOptions
+				? []
+				: staticOptions.map((o) => ({
+						value: o.value,
+						label: o.label,
+					})),
 			multiple: config.multiple,
 			meta: config.meta,
 		};
