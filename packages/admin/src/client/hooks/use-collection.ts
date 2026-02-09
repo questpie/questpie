@@ -1,20 +1,19 @@
 import {
-  type UseMutationOptions,
-  type UseQueryOptions,
-  useMutation,
-  useQuery,
+	type UseMutationOptions,
+	type UseQueryOptions,
+	useMutation,
+	useQuery,
 } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
 import type { QuestpieClient } from "questpie/client";
 import type {
-  RegisteredCMS,
-  RegisteredCollectionNames,
+	RegisteredCMS,
+	RegisteredCollectionNames,
 } from "../builder/registry";
 import { useQuestpieQueryOptions } from "./use-questpie-query-options";
-import { useCollectionRealtimeInvalidation } from "./use-realtime-query";
 
 type CollectionRealtimeOptions = {
-  realtime?: boolean;
+	realtime?: boolean;
 };
 
 // ============================================================================
@@ -25,13 +24,13 @@ type CollectionRealtimeOptions = {
  * Resolved CMS type (Questpie<any> if not registered)
  */
 type ResolvedCMS =
-  RegisteredCMS extends Questpie<any> ? RegisteredCMS : Questpie<any>;
+	RegisteredCMS extends Questpie<any> ? RegisteredCMS : Questpie<any>;
 
 /**
  * Resolved collection names (string if not registered)
  */
 type ResolvedCollectionNames =
-  RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
+	RegisteredCMS extends Questpie<any> ? RegisteredCollectionNames : string;
 
 // ============================================================================
 // Collection Hooks
@@ -49,43 +48,28 @@ type ResolvedCollectionNames =
  * ```
  */
 export function useCollectionList<K extends ResolvedCollectionNames>(
-  collection: K,
-  options?: any,
-  queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
-  realtimeOptions?: CollectionRealtimeOptions,
+	collection: K,
+	options?: any,
+	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
+	realtimeOptions?: CollectionRealtimeOptions,
 ): any {
-  const { queryOpts, locale } = useQuestpieQueryOptions();
+	const { queryOpts, locale } = useQuestpieQueryOptions();
 
-  const findOptions = {
-    ...options,
-    locale,
-  };
-  const baseQuery = (queryOpts as any).collections[collection as string].find(
-    findOptions as any,
-  );
+	const findOptions = {
+		...options,
+		locale,
+	};
 
-  useCollectionRealtimeInvalidation({
-    collection: collection as string,
-    queryKey: (baseQuery as any).queryKey,
-    realtime: realtimeOptions?.realtime,
-    options: {
-      where: findOptions.where,
-      with: findOptions.with,
-      orderBy: findOptions.orderBy,
-      limit: findOptions.limit,
-      offset: findOptions.offset,
-      page: findOptions.page,
-      includeDeleted: findOptions.includeDeleted,
-      search: findOptions.search,
-      locale: findOptions.locale,
-      localeFallback: findOptions.localeFallback,
-    },
-  });
+	// Pass realtime option to query options builder - this uses streamedQuery internally
+	const baseQuery = (queryOpts as any).collections[collection as string].find(
+		findOptions as any,
+		{ realtime: realtimeOptions?.realtime },
+	);
 
-  return useQuery({
-    ...baseQuery,
-    ...queryOptions,
-  });
+	return useQuery({
+		...baseQuery,
+		...queryOptions,
+	});
 }
 
 /**
@@ -106,40 +90,29 @@ export function useCollectionList<K extends ResolvedCollectionNames>(
  * ```
  */
 export function useCollectionCount<K extends ResolvedCollectionNames>(
-  collection: K,
-  options?: { where?: any; includeDeleted?: boolean },
-  queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
-  realtimeOptions?: CollectionRealtimeOptions,
+	collection: K,
+	options?: { where?: any; includeDeleted?: boolean },
+	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
+	realtimeOptions?: CollectionRealtimeOptions,
 ): any {
-  const { queryOpts, locale } = useQuestpieQueryOptions();
+	const { queryOpts, locale } = useQuestpieQueryOptions();
 
-  const countOptions = {
-    ...options,
-    locale,
-  };
-  const baseQuery = (queryOpts as any).collections[collection as string].count(
-    countOptions as any,
-  );
+	const countOptions = {
+		...options,
+		locale,
+	};
 
-  useCollectionRealtimeInvalidation({
-    collection: collection as string,
-    queryKey: (baseQuery as any).queryKey,
-    realtime: realtimeOptions?.realtime,
-    mapSnapshotToQueryData: (snapshotData) => {
-      const totalDocs = (snapshotData as { totalDocs?: unknown })?.totalDocs;
-      return typeof totalDocs === "number" ? totalDocs : undefined;
-    },
-    options: {
-      where: countOptions.where,
-      includeDeleted: countOptions.includeDeleted,
-      locale: countOptions.locale,
-    },
-  });
+	// Pass realtime option to query options builder - this uses streamedQuery internally
+	// The reducer in tanstack-query already extracts totalDocs from the snapshot
+	const baseQuery = (queryOpts as any).collections[collection as string].count(
+		countOptions as any,
+		{ realtime: realtimeOptions?.realtime },
+	);
 
-  return useQuery({
-    ...baseQuery,
-    ...queryOptions,
-  });
+	return useQuery({
+		...baseQuery,
+		...queryOptions,
+	});
 }
 
 /**
@@ -154,29 +127,29 @@ export function useCollectionCount<K extends ResolvedCollectionNames>(
  * ```
  */
 export function useCollectionItem<K extends ResolvedCollectionNames>(
-  collection: K,
-  id: string,
-  options?: Omit<
-    Parameters<
-      QuestpieClient<ResolvedCMS>["collections"][K & string]["findOne"]
-    >[0],
-    "where"
-  > & {
-    localeFallback?: boolean;
-    with?: Record<string, boolean>;
-  },
-  queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
+	collection: K,
+	id: string,
+	options?: Omit<
+		Parameters<
+			QuestpieClient<ResolvedCMS>["collections"][K & string]["findOne"]
+		>[0],
+		"where"
+	> & {
+		localeFallback?: boolean;
+		with?: Record<string, boolean>;
+	},
+	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 ): any {
-  const { queryOpts, locale } = useQuestpieQueryOptions();
+	const { queryOpts, locale } = useQuestpieQueryOptions();
 
-  return useQuery({
-    ...(queryOpts as any).collections[collection as string].findOne({
-      where: { id },
-      locale,
-      ...options,
-    }),
-    ...queryOptions,
-  });
+	return useQuery({
+		...(queryOpts as any).collections[collection as string].findOne({
+			where: { id },
+			locale,
+			...options,
+		}),
+		...queryOptions,
+	});
 }
 
 /**
@@ -192,47 +165,47 @@ export function useCollectionItem<K extends ResolvedCollectionNames>(
  * ```
  */
 export function useCollectionCreate<K extends ResolvedCollectionNames>(
-  collection: K,
-  mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
+	collection: K,
+	mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 ): any {
-  const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
+	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
-  const baseOptions = queryOpts.collections[collection as string].create();
-  const listQueryKey = queryOpts.key([
-    "collections",
-    collection as string,
-    "find",
-    locale,
-  ]);
-  const countQueryKey = queryOpts.key([
-    "collections",
-    collection as string,
-    "count",
-    locale,
-  ]);
+	const baseOptions = queryOpts.collections[collection as string].create();
+	const listQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"find",
+		locale,
+	]);
+	const countQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"count",
+		locale,
+	]);
 
-  return useMutation({
-    ...baseOptions,
-    onSuccess: (data: any, variables: any, context: any) => {
-      queryClient.invalidateQueries({
-        queryKey: listQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: countQueryKey,
-      });
-      (mutationOptions?.onSuccess as any)?.(data, variables, context);
-    },
-    onSettled: (data: any, error: any, variables: any, context: any) => {
-      queryClient.invalidateQueries({
-        queryKey: listQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: countQueryKey,
-      });
-      (mutationOptions?.onSettled as any)?.(data, error, variables, context);
-    },
-    ...mutationOptions,
-  } as any);
+	return useMutation({
+		...baseOptions,
+		onSuccess: (data: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({
+				queryKey: listQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: countQueryKey,
+			});
+			(mutationOptions?.onSuccess as any)?.(data, variables, context);
+		},
+		onSettled: (data: any, error: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({
+				queryKey: listQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: countQueryKey,
+			});
+			(mutationOptions?.onSettled as any)?.(data, error, variables, context);
+		},
+		...mutationOptions,
+	} as any);
 }
 
 /**
@@ -248,59 +221,59 @@ export function useCollectionCreate<K extends ResolvedCollectionNames>(
  * ```
  */
 export function useCollectionUpdate<K extends ResolvedCollectionNames>(
-  collection: K,
-  mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
+	collection: K,
+	mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 ): any {
-  const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
+	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
-  const baseOptions = queryOpts.collections[collection as string].update();
-  const listQueryKey = queryOpts.key([
-    "collections",
-    collection as string,
-    "find",
-    locale,
-  ]);
-  const countQueryKey = queryOpts.key([
-    "collections",
-    collection as string,
-    "count",
-    locale,
-  ]);
-  const itemQueryKey = queryOpts.key([
-    "collections",
-    collection as string,
-    "findOne",
-    locale,
-  ]);
+	const baseOptions = queryOpts.collections[collection as string].update();
+	const listQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"find",
+		locale,
+	]);
+	const countQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"count",
+		locale,
+	]);
+	const itemQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"findOne",
+		locale,
+	]);
 
-  return useMutation({
-    ...baseOptions,
-    onSuccess: (data: any, variables: any, context: any) => {
-      queryClient.invalidateQueries({
-        queryKey: listQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: countQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: itemQueryKey,
-      });
-      (mutationOptions?.onSuccess as any)?.(data, variables, context);
-    },
-    onSettled: (data: any, error: any, variables: any, context: any) => {
-      queryClient.invalidateQueries({
-        queryKey: listQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: countQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: itemQueryKey,
-      });
-      (mutationOptions?.onSettled as any)?.(data, error, variables, context);
-    },
-    ...mutationOptions,
-  } as any);
+	return useMutation({
+		...baseOptions,
+		onSuccess: (data: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({
+				queryKey: listQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: countQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: itemQueryKey,
+			});
+			(mutationOptions?.onSuccess as any)?.(data, variables, context);
+		},
+		onSettled: (data: any, error: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({
+				queryKey: listQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: countQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: itemQueryKey,
+			});
+			(mutationOptions?.onSettled as any)?.(data, error, variables, context);
+		},
+		...mutationOptions,
+	} as any);
 }
 
 /**
@@ -316,57 +289,57 @@ export function useCollectionUpdate<K extends ResolvedCollectionNames>(
  * ```
  */
 export function useCollectionDelete<K extends ResolvedCollectionNames>(
-  collection: K,
-  mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
+	collection: K,
+	mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 ): any {
-  const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
+	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
-  const baseOptions = queryOpts.collections[collection as string].delete();
-  const listQueryKey = queryOpts.key([
-    "collections",
-    collection as string,
-    "find",
-    locale,
-  ]);
-  const countQueryKey = queryOpts.key([
-    "collections",
-    collection as string,
-    "count",
-    locale,
-  ]);
-  const itemQueryKey = queryOpts.key([
-    "collections",
-    collection as string,
-    "findOne",
-    locale,
-  ]);
+	const baseOptions = queryOpts.collections[collection as string].delete();
+	const listQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"find",
+		locale,
+	]);
+	const countQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"count",
+		locale,
+	]);
+	const itemQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"findOne",
+		locale,
+	]);
 
-  return useMutation({
-    ...baseOptions,
-    onSuccess: (data: any, variables: any, context: any) => {
-      queryClient.invalidateQueries({
-        queryKey: listQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: countQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: itemQueryKey,
-      });
-      (mutationOptions?.onSuccess as any)?.(data, variables, context);
-    },
-    onSettled: (data: any, error: any, variables: any, context: any) => {
-      queryClient.invalidateQueries({
-        queryKey: listQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: countQueryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: itemQueryKey,
-      });
-      (mutationOptions?.onSettled as any)?.(data, error, variables, context);
-    },
-    ...mutationOptions,
-  } as any);
+	return useMutation({
+		...baseOptions,
+		onSuccess: (data: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({
+				queryKey: listQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: countQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: itemQueryKey,
+			});
+			(mutationOptions?.onSuccess as any)?.(data, variables, context);
+		},
+		onSettled: (data: any, error: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({
+				queryKey: listQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: countQueryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: itemQueryKey,
+			});
+			(mutationOptions?.onSettled as any)?.(data, error, variables, context);
+		},
+		...mutationOptions,
+	} as any);
 }

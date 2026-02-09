@@ -3,6 +3,7 @@ import {
 	mutationOptions,
 	type QueryKey,
 	queryOptions,
+	experimental_streamedQuery as streamedQuery,
 	type UseMutationOptions,
 	type UseQueryOptions,
 } from "@tanstack/react-query";
@@ -22,16 +23,15 @@ export type { QueryKey, DefaultError, UseQueryOptions, UseMutationOptions };
 export {
 	buildCollectionRealtimeUrl,
 	buildGlobalRealtimeUrl,
-	createRealtimeStream,
-	type RealtimeEvent,
 	type RealtimeQueryConfig,
-	type SSEOptions,
-	sseToAsyncIterable,
+	type SSESnapshotOptions,
+	sseSnapshotStream,
 } from "./realtime.js";
 
 import {
 	buildCollectionRealtimeUrl,
 	buildGlobalRealtimeUrl,
+	sseSnapshotStream,
 } from "./realtime.js";
 
 // ============================================================================
@@ -377,26 +377,86 @@ export function createQuestpieQueryOptions<
 				const baseKey: QueryKey = ["collections", collectionName];
 
 				return {
-					find: (options?: any) =>
-						queryOptions({
-							queryKey: buildKey(keyPrefix, [
-								...baseKey,
-								"find",
-								locale,
-								normalizeQueryKeyOptions(options),
-							]),
+					find: (options?: any, queryConfig?: { realtime?: boolean }) => {
+						const qKey = buildKey(keyPrefix, [
+							...baseKey,
+							"find",
+							locale,
+							normalizeQueryKeyOptions(options),
+						]);
+
+						const realtimeUrl =
+							queryConfig?.realtime && config.realtime?.baseUrl
+								? buildCollectionRealtimeUrl(
+										{
+											baseUrl: config.realtime.baseUrl,
+											enabled: config.realtime.enabled,
+											withCredentials: config.realtime.withCredentials,
+										},
+										collectionName,
+										options,
+									)
+								: null;
+
+						if (realtimeUrl) {
+							return queryOptions({
+								queryKey: qKey,
+								queryFn: streamedQuery({
+									streamFn: ({ signal }) =>
+										sseSnapshotStream({ url: realtimeUrl, signal }),
+									reducer: (_: any, chunk: any) => chunk,
+									initialValue: undefined,
+								}),
+							});
+						}
+
+						return queryOptions({
+							queryKey: qKey,
 							queryFn: wrapQueryFn(() => collection.find(options), errorMap),
-						}),
-					count: (options?: any) =>
-						queryOptions({
-							queryKey: buildKey(keyPrefix, [
-								...baseKey,
-								"count",
-								locale,
-								normalizeQueryKeyOptions(options),
-							]),
+						});
+					},
+					count: (options?: any, queryConfig?: { realtime?: boolean }) => {
+						const qKey = buildKey(keyPrefix, [
+							...baseKey,
+							"count",
+							locale,
+							normalizeQueryKeyOptions(options),
+						]);
+
+						const realtimeUrl =
+							queryConfig?.realtime && config.realtime?.baseUrl
+								? buildCollectionRealtimeUrl(
+										{
+											baseUrl: config.realtime.baseUrl,
+											enabled: config.realtime.enabled,
+											withCredentials: config.realtime.withCredentials,
+										},
+										collectionName,
+										options,
+									)
+								: null;
+
+						if (realtimeUrl) {
+							// For count, we extract totalDocs from the snapshot
+							return queryOptions({
+								queryKey: qKey,
+								queryFn: streamedQuery({
+									streamFn: ({ signal }) =>
+										sseSnapshotStream({ url: realtimeUrl, signal }),
+									reducer: (_: any, chunk: any) =>
+										typeof chunk?.totalDocs === "number"
+											? chunk.totalDocs
+											: chunk,
+									initialValue: undefined,
+								}),
+							});
+						}
+
+						return queryOptions({
+							queryKey: qKey,
 							queryFn: wrapQueryFn(() => collection.count(options), errorMap),
-						}),
+						});
+					},
 					findOne: (options: any) =>
 						queryOptions({
 							queryKey: buildKey(keyPrefix, [
@@ -506,16 +566,44 @@ export function createQuestpieQueryOptions<
 				const baseKey: QueryKey = ["globals", globalName];
 
 				return {
-					get: (options?: any) =>
-						queryOptions({
-							queryKey: buildKey(keyPrefix, [
-								...baseKey,
-								"get",
-								locale,
-								normalizeQueryKeyOptions(options),
-							]),
+					get: (options?: any, queryConfig?: { realtime?: boolean }) => {
+						const qKey = buildKey(keyPrefix, [
+							...baseKey,
+							"get",
+							locale,
+							normalizeQueryKeyOptions(options),
+						]);
+
+						const realtimeUrl =
+							queryConfig?.realtime && config.realtime?.baseUrl
+								? buildGlobalRealtimeUrl(
+										{
+											baseUrl: config.realtime.baseUrl,
+											enabled: config.realtime.enabled,
+											withCredentials: config.realtime.withCredentials,
+										},
+										globalName as string,
+										options,
+									)
+								: null;
+
+						if (realtimeUrl) {
+							return queryOptions({
+								queryKey: qKey,
+								queryFn: streamedQuery({
+									streamFn: ({ signal }) =>
+										sseSnapshotStream({ url: realtimeUrl, signal }),
+									reducer: (_: any, chunk: any) => chunk,
+									initialValue: undefined,
+								}),
+							});
+						}
+
+						return queryOptions({
+							queryKey: qKey,
 							queryFn: wrapQueryFn(() => global.get(options), errorMap),
-						}),
+						});
+					},
 					update: () =>
 						mutationOptions({
 							mutationKey: buildKey(keyPrefix, [...baseKey, "update", locale]),

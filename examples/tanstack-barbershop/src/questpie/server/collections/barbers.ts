@@ -58,7 +58,44 @@ export const barbers = qb
 				required: true,
 				maxLength: 255,
 			}),
-			slug: f.text({ required: true, maxLength: 255, input: "optional" }),
+			slug: f.text({
+				label: { en: "Slug", sk: "Slug" },
+				description: {
+					en: "URL-friendly identifier (auto-generated from name)",
+					sk: "URL-friendly identifikátor (auto-generovaný z mena)",
+				},
+				required: true,
+				maxLength: 255,
+				input: "optional",
+				meta: {
+					admin: {
+						compute: {
+							handler: ({
+								data,
+								prev,
+							}: {
+								data: Record<string, unknown>;
+								prev?: Record<string, unknown>;
+							}) => {
+								// Only auto-generate if name changed and slug wasn't manually edited
+								if (
+									data.name &&
+									(!data.slug ||
+										data.slug === slugify(String(prev?.name ?? "")))
+								) {
+									return slugify(String(data.name));
+								}
+								return data.slug;
+							},
+							deps: ({ data }: { data: Record<string, unknown> }) => [
+								data.name,
+								data.slug,
+							],
+							debounce: 300,
+						},
+					},
+				},
+			}),
 			email: f.email({
 				label: { en: "Email Address", sk: "Emailová adresa" },
 				meta: { admin: { placeholder: "barber@example.com" } } as any,
@@ -228,7 +265,7 @@ export const barbers = qb
 					label: { en: "Contact Information", sk: "Kontaktné informácie" },
 					layout: "grid",
 					columns: 2,
-					fields: [f.name, f.email, f.phone],
+					fields: [f.name, f.slug, f.email, f.phone],
 				},
 				{
 					type: "section",

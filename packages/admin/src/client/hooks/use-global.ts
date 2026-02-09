@@ -1,19 +1,23 @@
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import {
-  type UseMutationOptions,
-  type UseQueryOptions,
-  useMutation,
-  useQuery,
-  useQueryClient,
+	type UseMutationOptions,
+	type UseQueryOptions,
+	useMutation,
+	useQuery,
+	useQueryClient,
 } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
 import type { QuestpieClient } from "questpie/client";
 import type { RegisteredCMS, RegisteredGlobalNames } from "../builder/registry";
-import { selectClient, selectContentLocale, useAdminStore } from "../runtime";
-import { useGlobalRealtimeInvalidation } from "./use-realtime-query";
+import {
+	selectClient,
+	selectContentLocale,
+	selectRealtime,
+	useAdminStore,
+} from "../runtime";
 
 type GlobalRealtimeOptions = {
-  realtime?: boolean;
+	realtime?: boolean;
 };
 
 // ============================================================================
@@ -24,13 +28,13 @@ type GlobalRealtimeOptions = {
  * Resolved CMS type (Questpie<any> if not registered)
  */
 type ResolvedCMS =
-  RegisteredCMS extends Questpie<any> ? RegisteredCMS : Questpie<any>;
+	RegisteredCMS extends Questpie<any> ? RegisteredCMS : Questpie<any>;
 
 /**
  * Resolved global names (string if not registered)
  */
 type ResolvedGlobalNames =
-  RegisteredCMS extends Questpie<any> ? RegisteredGlobalNames : string;
+	RegisteredCMS extends Questpie<any> ? RegisteredGlobalNames : string;
 
 // ============================================================================
 // Global Hooks
@@ -48,42 +52,41 @@ type ResolvedGlobalNames =
  * ```
  */
 export function useGlobal<K extends ResolvedGlobalNames>(
-  globalName: K,
-  options?: any,
-  queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
-  realtimeOptions?: GlobalRealtimeOptions,
+	globalName: K,
+	options?: any,
+	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
+	realtimeOptions?: GlobalRealtimeOptions,
 ): any {
-  const client = useAdminStore(selectClient);
-  const contentLocale = useAdminStore(selectContentLocale);
-  const queryOpts = createQuestpieQueryOptions(client as any, {
-    keyPrefix: ["questpie", "globals"],
-    locale: contentLocale,
-  });
+	const client = useAdminStore(selectClient);
+	const contentLocale = useAdminStore(selectContentLocale);
+	const realtimeConfig = useAdminStore(selectRealtime);
+	const queryOpts = createQuestpieQueryOptions(client as any, {
+		keyPrefix: ["questpie", "globals"],
+		locale: contentLocale,
+		realtime: realtimeConfig.enabled
+			? {
+					baseUrl: realtimeConfig.basePath,
+					enabled: realtimeConfig.enabled,
+					withCredentials: true,
+				}
+			: undefined,
+	});
 
-  const globalOptions = {
-    ...options,
-    locale: contentLocale,
-  };
-  const baseQuery = (queryOpts as any).globals[globalName as string].get(
-    globalOptions as any,
-  );
+	const globalOptions = {
+		...options,
+		locale: contentLocale,
+	};
 
-  useGlobalRealtimeInvalidation({
-    global: globalName as string,
-    queryKey: (baseQuery as any).queryKey,
-    realtime: realtimeOptions?.realtime,
-    options: {
-      with: globalOptions.with,
-      columns: globalOptions.columns,
-      locale: globalOptions.locale,
-      localeFallback: globalOptions.localeFallback,
-    },
-  });
+	// Pass realtime option to query options builder - this uses streamedQuery internally
+	const baseQuery = (queryOpts as any).globals[globalName as string].get(
+		globalOptions as any,
+		{ realtime: realtimeOptions?.realtime },
+	);
 
-  return useQuery({
-    ...baseQuery,
-    ...queryOptions,
-  });
+	return useQuery({
+		...baseQuery,
+		...queryOptions,
+	});
 }
 
 /**
@@ -99,38 +102,46 @@ export function useGlobal<K extends ResolvedGlobalNames>(
  * ```
  */
 export function useGlobalUpdate<K extends ResolvedGlobalNames>(
-  globalName: K,
-  mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
+	globalName: K,
+	mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 ): any {
-  const client = useAdminStore(selectClient);
-  const contentLocale = useAdminStore(selectContentLocale);
-  const queryClient = useQueryClient();
-  const queryOpts = createQuestpieQueryOptions(client as any, {
-    keyPrefix: ["questpie", "globals"],
-    locale: contentLocale,
-  });
+	const client = useAdminStore(selectClient);
+	const contentLocale = useAdminStore(selectContentLocale);
+	const realtimeConfig = useAdminStore(selectRealtime);
+	const queryClient = useQueryClient();
+	const queryOpts = createQuestpieQueryOptions(client as any, {
+		keyPrefix: ["questpie", "globals"],
+		locale: contentLocale,
+		realtime: realtimeConfig.enabled
+			? {
+					baseUrl: realtimeConfig.basePath,
+					enabled: realtimeConfig.enabled,
+					withCredentials: true,
+				}
+			: undefined,
+	});
 
-  const globalQueryKey = queryOpts.key([
-    "globals",
-    globalName as string,
-    "get",
-    contentLocale,
-  ]);
+	const globalQueryKey = queryOpts.key([
+		"globals",
+		globalName as string,
+		"get",
+		contentLocale,
+	]);
 
-  return useMutation({
-    ...(queryOpts as any).globals[globalName as string].update(),
-    onSuccess: (data: any, variables: any, context: any) => {
-      queryClient.invalidateQueries({
-        queryKey: globalQueryKey,
-      });
-      (mutationOptions?.onSuccess as any)?.(data, variables, context);
-    },
-    onSettled: (data: any, error: any, variables: any, context: any) => {
-      queryClient.invalidateQueries({
-        queryKey: globalQueryKey,
-      });
-      (mutationOptions?.onSettled as any)?.(data, error, variables, context);
-    },
-    ...mutationOptions,
-  } as any);
+	return useMutation({
+		...(queryOpts as any).globals[globalName as string].update(),
+		onSuccess: (data: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({
+				queryKey: globalQueryKey,
+			});
+			(mutationOptions?.onSuccess as any)?.(data, variables, context);
+		},
+		onSettled: (data: any, error: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({
+				queryKey: globalQueryKey,
+			});
+			(mutationOptions?.onSettled as any)?.(data, error, variables, context);
+		},
+		...mutationOptions,
+	} as any);
 }

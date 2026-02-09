@@ -1,37 +1,40 @@
 /**
  * Realtime utilities for TanStack Query integration
  *
- * Provides SSE to AsyncIterable conversion for use with streamedQuery.
+ * Provides SSE streaming for use with experimental_streamedQuery.
  */
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type RealtimeEvent<TData = unknown> = {
-	type: "snapshot" | "change" | "error";
-	data?: TData;
-	error?: string;
-	seq?: number;
-};
-
-export type SSEOptions = {
+export type SSESnapshotOptions = {
 	/** SSE endpoint URL */
 	url: string;
-	/** Include credentials (cookies) */
+	/** Include credentials (cookies) - defaults to true */
 	withCredentials?: boolean;
-	/** Event types to listen for */
-	eventTypes?: string[];
 	/** Abort signal for cleanup */
 	signal?: AbortSignal;
 };
 
+export type RealtimeQueryConfig = {
+	/** Base URL for realtime endpoints */
+	baseUrl: string;
+	/** Whether realtime is enabled */
+	enabled?: boolean;
+	/** Include credentials */
+	withCredentials?: boolean;
+};
+
 // ============================================================================
-// SSE to AsyncIterable
+// SSE Snapshot Stream
 // ============================================================================
 
 /**
- * Convert Server-Sent Events stream to AsyncIterable.
+ * Create an AsyncGenerator that yields snapshot data from SSE.
+ *
+ * The server sends `snapshot` events with format: `{ seq: number, data: TData }`
+ * This function extracts and yields the `data` field directly.
  *
  * Use with TanStack Query's experimental `streamedQuery`:
  *
@@ -42,26 +45,23 @@ export type SSEOptions = {
  * const { data } = useQuery({
  *   queryKey: ['posts'],
  *   queryFn: streamedQuery({
- *     queryFn: () => fetchPosts(),
- *     streamFn: () => sseToAsyncIterable({
+ *     streamFn: ({ signal }) => sseSnapshotStream({
  *       url: '/api/cms/realtime/posts',
+ *       signal,
  *     }),
+ *     reducer: (_, chunk) => chunk, // Replace with latest snapshot
+ *     initialValue: undefined,
  *   }),
  * })
  * ```
  */
-export async function* sseToAsyncIterable<TData = unknown>(
-	options: SSEOptions,
-): AsyncGenerator<RealtimeEvent<TData>, void, unknown> {
-	const {
-		url,
-		withCredentials = true,
-		eventTypes = ["snapshot", "change", "message"],
-		signal,
-	} = options;
+export async function* sseSnapshotStream<TData>(
+	options: SSESnapshotOptions,
+): AsyncGenerator<TData, void, unknown> {
+	const { url, withCredentials = true, signal } = options;
 
 	// Queue for events waiting to be consumed
-	const queue: RealtimeEvent<TData>[] = [];
+	const queue: TData[] = [];
 
 	// Promise resolver for when new events arrive
 	let resolveNext: (() => void) | null = null;
@@ -82,46 +82,39 @@ export async function* sseToAsyncIterable<TData = unknown>(
 
 	// Handle abort signal
 	if (signal) {
+		if (signal.aborted) {
+			cleanup();
+			return;
+		}
 		signal.addEventListener("abort", cleanup);
 	}
 
-	// Handle errors
+	// Handle connection errors
 	eventSource.onerror = () => {
 		closeError = new Error("SSE connection error");
 		cleanup();
 	};
 
-	// Parse and queue events
-	const handleEvent = (event: MessageEvent) => {
+	// Handle snapshot events
+	const onSnapshot = (event: MessageEvent) => {
 		try {
-			const parsed = JSON.parse(event.data) as RealtimeEvent<TData>;
-			queue.push(parsed);
-			resolveNext?.();
+			const parsed = JSON.parse(event.data) as { seq?: number; data?: TData };
+			if (parsed.data !== undefined) {
+				queue.push(parsed.data);
+				resolveNext?.();
+			}
 		} catch {
 			// Ignore parse errors
 		}
 	};
 
-	// Listen to specified event types
-	for (const eventType of eventTypes) {
-		eventSource.addEventListener(eventType, handleEvent);
-	}
-
-	// Also handle generic message events
-	eventSource.onmessage = handleEvent;
+	eventSource.addEventListener("snapshot", onSnapshot);
 
 	try {
 		while (!closed) {
 			// If queue has items, yield them
 			while (queue.length > 0) {
-				const event = queue.shift()!;
-
-				// Check for error events
-				if (event.type === "error") {
-					throw new Error(event.error ?? "Unknown realtime error");
-				}
-
-				yield event;
+				yield queue.shift()!;
 			}
 
 			// Wait for more events
@@ -146,17 +139,8 @@ export async function* sseToAsyncIterable<TData = unknown>(
 }
 
 // ============================================================================
-// Realtime Query Helpers
+// URL Builders
 // ============================================================================
-
-export type RealtimeQueryConfig = {
-	/** Base URL for realtime endpoints */
-	baseUrl: string;
-	/** Whether realtime is enabled */
-	enabled?: boolean;
-	/** Include credentials */
-	withCredentials?: boolean;
-};
 
 /**
  * Build realtime URL for a collection
@@ -211,75 +195,5 @@ function appendQueryParams(
 		} else {
 			params.append(fullKey, String(value));
 		}
-	}
-}
-
-// ============================================================================
-// Stream Merger for Initial Data + Updates
-// ============================================================================
-
-/**
- * Create a streaming query function that combines initial fetch with SSE updates.
- *
- * The first yield is the initial data from queryFn.
- * Subsequent yields are updates from the SSE stream.
- *
- * @example
- * ```ts
- * const { data } = useQuery({
- *   queryKey: ['posts'],
- *   queryFn: streamedQuery({
- *     queryFn: async () => {
- *       const posts = await fetchPosts();
- *       return posts; // Initial data
- *     },
- *     streamFn: (context) => createRealtimeStream({
- *       initialData: context.data, // Data from queryFn
- *       realtimeUrl: '/api/cms/realtime/posts',
- *       onEvent: (event, currentData) => {
- *         // Merge event into current data
- *         return [...currentData, event.data];
- *       },
- *     }),
- *   }),
- * })
- * ```
- */
-export async function* createRealtimeStream<TData>(config: {
-	/** Initial data to start with */
-	initialData: TData;
-	/** SSE endpoint URL */
-	realtimeUrl: string;
-	/** Merge function: receives event and current data, returns new data */
-	onEvent: (event: RealtimeEvent, currentData: TData) => TData;
-	/** SSE options */
-	sseOptions?: Partial<SSEOptions>;
-	/** Abort signal */
-	signal?: AbortSignal;
-}): AsyncGenerator<TData, void, unknown> {
-	const { initialData, realtimeUrl, onEvent, sseOptions, signal } = config;
-
-	let currentData = initialData;
-
-	// Yield initial data first
-	yield currentData;
-
-	// Then stream updates
-	const stream = sseToAsyncIterable({
-		url: realtimeUrl,
-		signal,
-		...sseOptions,
-	});
-
-	for await (const event of stream) {
-		if (event.type === "snapshot" && event.data !== undefined) {
-			// Full snapshot replaces data
-			currentData = event.data as TData;
-		} else if (event.type === "change") {
-			// Incremental change - use merge function
-			currentData = onEvent(event, currentData);
-		}
-
-		yield currentData;
 	}
 }
