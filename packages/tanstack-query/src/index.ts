@@ -16,6 +16,25 @@ import type { QuestpieClient } from "questpie/client";
 export type { QueryKey, DefaultError, UseQueryOptions, UseMutationOptions };
 
 // ============================================================================
+// Re-export realtime utilities
+// ============================================================================
+
+export {
+	buildCollectionRealtimeUrl,
+	buildGlobalRealtimeUrl,
+	createRealtimeStream,
+	type RealtimeEvent,
+	type RealtimeQueryConfig,
+	type SSEOptions,
+	sseToAsyncIterable,
+} from "./realtime.js";
+
+import {
+	buildCollectionRealtimeUrl,
+	buildGlobalRealtimeUrl,
+} from "./realtime.js";
+
+// ============================================================================
 // Core Types
 // ============================================================================
 
@@ -25,6 +44,18 @@ export type QuestpieQueryOptionsConfig = {
 	keyPrefix?: QueryKey;
 	errorMap?: QuestpieQueryErrorMap;
 	locale?: string;
+	/**
+	 * Realtime configuration for SSE streaming.
+	 * When provided, queries can use `streamedQuery` for live updates.
+	 */
+	realtime?: {
+		/** Base URL for realtime endpoints (e.g., "/api/cms" or "https://api.example.com/cms") */
+		baseUrl: string;
+		/** Whether realtime is enabled globally */
+		enabled?: boolean;
+		/** Include credentials (cookies) in SSE requests */
+		withCredentials?: boolean;
+	};
 };
 
 // ============================================================================
@@ -184,6 +215,13 @@ type CollectionQueryOptionsAPI<
 		{ where: any },
 		{ success: boolean; count: number }
 	>;
+	/**
+	 * Get realtime SSE URL for this collection.
+	 * Use with `sseToAsyncIterable` or `streamedQuery`.
+	 */
+	realtimeUrl: (
+		options?: FirstArg<CollectionFind<TCMS, TRPC, K>>,
+	) => string | null;
 };
 
 type GlobalQueryOptionsAPI<
@@ -199,6 +237,11 @@ type GlobalQueryOptionsAPI<
 		},
 		QueryData<GlobalUpdate<TCMS, TRPC, K>>
 	>;
+	/**
+	 * Get realtime SSE URL for this global.
+	 * Use with `sseToAsyncIterable` or `streamedQuery`.
+	 */
+	realtimeUrl: (options?: FirstArg<GlobalGet<TCMS, TRPC, K>>) => string | null;
 };
 
 export type QuestpieQueryOptionsProxy<
@@ -435,6 +478,18 @@ export function createQuestpieQueryOptions<
 								errorMap,
 							),
 						}),
+					realtimeUrl: (options?: any) => {
+						if (!config.realtime?.baseUrl) return null;
+						return buildCollectionRealtimeUrl(
+							{
+								baseUrl: config.realtime.baseUrl,
+								enabled: config.realtime.enabled,
+								withCredentials: config.realtime.withCredentials,
+							},
+							collectionName,
+							options,
+						);
+					},
 				};
 			},
 		},
@@ -473,6 +528,18 @@ export function createQuestpieQueryOptions<
 								errorMap,
 							),
 						}),
+					realtimeUrl: (options?: any) => {
+						if (!config.realtime?.baseUrl) return null;
+						return buildGlobalRealtimeUrl(
+							{
+								baseUrl: config.realtime.baseUrl,
+								enabled: config.realtime.enabled,
+								withCredentials: config.realtime.withCredentials,
+							},
+							globalName as string,
+							options,
+						);
+					},
 				};
 			},
 		},
