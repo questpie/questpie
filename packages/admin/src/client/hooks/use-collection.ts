@@ -187,12 +187,6 @@ export function useCollectionCreate<K extends ResolvedCollectionNames>(
 	return useMutation({
 		...baseOptions,
 		onSuccess: (data: any, variables: any, context: any) => {
-			queryClient.invalidateQueries({
-				queryKey: listQueryKey,
-			});
-			queryClient.invalidateQueries({
-				queryKey: countQueryKey,
-			});
 			(mutationOptions?.onSuccess as any)?.(data, variables, context);
 		},
 		onSettled: (data: any, error: any, variables: any, context: any) => {
@@ -249,15 +243,6 @@ export function useCollectionUpdate<K extends ResolvedCollectionNames>(
 	return useMutation({
 		...baseOptions,
 		onSuccess: (data: any, variables: any, context: any) => {
-			queryClient.invalidateQueries({
-				queryKey: listQueryKey,
-			});
-			queryClient.invalidateQueries({
-				queryKey: countQueryKey,
-			});
-			queryClient.invalidateQueries({
-				queryKey: itemQueryKey,
-			});
 			(mutationOptions?.onSuccess as any)?.(data, variables, context);
 		},
 		onSettled: (data: any, error: any, variables: any, context: any) => {
@@ -317,15 +302,6 @@ export function useCollectionDelete<K extends ResolvedCollectionNames>(
 	return useMutation({
 		...baseOptions,
 		onSuccess: (data: any, variables: any, context: any) => {
-			queryClient.invalidateQueries({
-				queryKey: listQueryKey,
-			});
-			queryClient.invalidateQueries({
-				queryKey: countQueryKey,
-			});
-			queryClient.invalidateQueries({
-				queryKey: itemQueryKey,
-			});
 			(mutationOptions?.onSuccess as any)?.(data, variables, context);
 		},
 		onSettled: (data: any, error: any, variables: any, context: any) => {
