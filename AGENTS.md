@@ -45,6 +45,70 @@ This is the source-of-truth guidance for AI agents working in this repo. It supe
   - `specifications/ADVANCED_LAYOUTS_AND_DASHBOARD.md`
   - `specifications/RICH_TEXT_AND_BLOCKS.md`
 
+## Reactive Field System
+
+Fields can have reactive behaviors defined in `meta.admin`:
+
+- **`hidden`**: Conditionally hide fields based on form data
+- **`readOnly`**: Make fields read-only based on conditions
+- **`disabled`**: Disable fields conditionally
+- **`compute`**: Auto-compute field values from other fields
+
+All reactive handlers run **server-side** with access to `ctx.db` and `ctx.user`.
+
+**Example - Auto-slug generation:**
+
+```ts
+slug: f.text({
+  meta: {
+    admin: {
+      compute: {
+        handler: ({ data }) => slugify(data.title),
+        deps: ({ data }) => [data.title],
+        debounce: 300,
+      },
+    },
+  },
+});
+```
+
+**Example - Conditional visibility:**
+
+```ts
+cancellationReason: f.textarea({
+  meta: {
+    admin: {
+      hidden: ({ data }) => data.status !== "cancelled",
+    },
+  },
+});
+```
+
+**Dynamic Options** for select/relation fields:
+
+```ts
+city: f.relation({
+  to: "cities",
+  options: {
+    handler: async ({ data, search, ctx }) => {
+      const cities = await ctx.db.query.cities.findMany({
+        where: { countryId: data.country },
+      });
+      return { options: cities.map((c) => ({ value: c.id, label: c.name })) };
+    },
+    deps: ({ data }) => [data.country],
+  },
+});
+```
+
+**Type annotations** - ReactiveContext is generic, so use explicit types:
+
+```ts
+hidden: ({ data }: { data: Record<string, unknown> }) => !data.isPublished;
+```
+
+See `specifications/form-reactive-system.md` for full specification.
+
 ## Conventions
 
 - Formatting/linting: Biome (`biome.json`) uses tabs + double quotes.
