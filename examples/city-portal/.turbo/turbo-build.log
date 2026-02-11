@@ -1,0 +1,119 @@
+$ vite build
+vite v7.3.1 building client environment for production...
+transforming...
+✓ 3435 modules transformed.
+Export "useAdminStore" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/value-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "selectClient" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/value-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "useAdminStore" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/timeline-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "selectClient" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/timeline-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "useAdminStore" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/progress-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "selectClient" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/progress-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "useAdminStore" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/hooks/use-server-widget-data.ts" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "selectClient" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/hooks/use-server-widget-data.ts" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+rendering chunks...
+computing gzip size...
+.output/public/assets/styles-jd7hG6Gm.css                    24.91 kB │ gzip:   5.53 kB
+.output/public/assets/use-server-widget-data-CmEOqcVq.js      0.25 kB │ gzip:   0.21 kB
+.output/public/assets/dashboard-page-BvjAD2xZ.js              0.42 kB │ gzip:   0.30 kB
+.output/public/assets/index-CeBl6kox.js                       0.73 kB │ gzip:   0.45 kB
+.output/public/assets/_-CRxadffN.js                           0.81 kB │ gzip:   0.50 kB
+.output/public/assets/progress-widget-CYTqdKue.js             1.62 kB │ gzip:   0.86 kB
+.output/public/assets/_citySlug.pages._slug-3eI5lhIp.js       1.66 kB │ gzip:   0.81 kB
+.output/public/assets/_citySlug.index-G-egW91T.js             1.66 kB │ gzip:   0.80 kB
+.output/public/assets/value-widget-DFbzziup.js                1.67 kB │ gzip:   0.85 kB
+.output/public/assets/alert-O2407vRw.js                       1.71 kB │ gzip:   0.75 kB
+.output/public/assets/recent-items-widget-CKOUeIid.js         1.86 kB │ gzip:   0.98 kB
+.output/public/assets/quick-actions-widget-iP8FmKFJ.js        2.47 kB │ gzip:   1.00 kB
+.output/public/assets/stats-widget-B6qzZMqG.js                2.55 kB │ gzip:   1.08 kB
+.output/public/assets/table-widget-B0WBXdq7.js                2.65 kB │ gzip:   1.20 kB
+.output/public/assets/timeline-widget-B3j7DmdS.js             2.75 kB │ gzip:   1.34 kB
+.output/public/assets/widget-skeletons-TE7P8mci.js            3.14 kB │ gzip:   0.75 kB
+.output/public/assets/forgot-password-page-BmIPTqoc.js        3.38 kB │ gzip:   1.50 kB
+.output/public/assets/login-page-BiAgrOlf.js                  4.13 kB │ gzip:   1.71 kB
+.output/public/assets/setup-page-Ciqc6lwe.js                  4.43 kB │ gzip:   1.53 kB
+.output/public/assets/reset-password-page-CglK07uS.js         4.61 kB │ gzip:   1.71 kB
+.output/public/assets/QueryClientProvider-CZ1IuDxl.js        16.97 kB │ gzip:   5.39 kB
+.output/public/assets/_citySlug-mtrxheBD.js                  19.65 kB │ gzip:   7.09 kB
+.output/public/assets/index-CjJAkVJt.js                      20.76 kB │ gzip:   6.01 kB
+.output/public/assets/utils-CRR31v-j.js                      25.63 kB │ gzip:   8.25 kB
+.output/public/assets/main-CRf2IwCY.js                      361.90 kB │ gzip: 116.23 kB
+.output/public/assets/chart-widget-BHvZ8ftW.js              435.08 kB │ gzip: 116.33 kB
+.output/public/assets/admin-3lX4ipX8.js                   1,793.62 kB │ gzip: 551.82 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 5.80s
+vite v7.3.1 building ssr environment for production...
+transforming...
+✓ 3034 modules transformed.
+Export "useAdminStore" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/value-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "selectClient" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/value-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "useAdminStore" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/timeline-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "selectClient" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/timeline-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "useAdminStore" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/progress-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "selectClient" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/components/widgets/progress-widget.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "useAdminStore" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/hooks/use-server-widget-data.ts" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+Export "selectClient" of module "../../packages/admin/src/client/runtime/provider.tsx" was reexported through module "../../packages/admin/src/client/runtime/index.ts" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "../../packages/admin/src/client/hooks/use-server-widget-data.ts" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+rendering chunks...
+[plugin vite:reporter] 
+(!)  /Users/drepkovsky/questpie/repos/questpie-cms/node_modules/.bun/nodemailer@7.0.13/node_modules/nodemailer/lib/nodemailer.js?commonjs-es-import is dynamically imported by /Users/drepkovsky/questpie/repos/questpie-cms/packages/questpie/src/server/integrated/mailer/adapters/smtp.adapter.ts but also statically imported by /Users/drepkovsky/questpie/repos/questpie-cms/packages/questpie/src/server/integrated/mailer/adapters/smtp.adapter.ts, dynamic import will not move module into another chunk.
+
+node_modules/.nitro/vite/services/ssr/assets/styles-D8AoNwuc.css                       119.72 kB
+node_modules/.nitro/vite/services/ssr/assets/start-HYkvq4Ni.js                           0.06 kB
+node_modules/.nitro/vite/services/ssr/assets/utils-P1tbtlFB.js                           0.36 kB
+node_modules/.nitro/vite/services/ssr/assets/use-server-widget-data-C3Mqkn8Z.js          0.49 kB
+node_modules/.nitro/vite/services/ssr/assets/index-CBgCaryp.js                           1.19 kB
+node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-mqTWFjX4.js      2.06 kB
+node_modules/.nitro/vite/services/ssr/assets/dashboard-page-By6XvfX8.js                  2.47 kB
+node_modules/.nitro/vite/services/ssr/assets/alert-DSUNWvis.js                           2.54 kB
+node_modules/.nitro/vite/services/ssr/assets/index-BmXFRawP.js                           2.80 kB
+node_modules/.nitro/vite/services/ssr/assets/_-Cv1eSAd5.js                               2.97 kB
+node_modules/.nitro/vite/services/ssr/assets/pg-notify-Cnptf8Rb.js                       3.22 kB
+node_modules/.nitro/vite/services/ssr/assets/_citySlug.pages._slug-CBaFoaq2.js           3.50 kB
+node_modules/.nitro/vite/services/ssr/assets/_citySlug.index-Bg8mHfmz.js                 3.52 kB
+node_modules/.nitro/vite/services/ssr/assets/progress-widget-B0FtXfWa.js                 4.60 kB
+node_modules/.nitro/vite/services/ssr/assets/value-widget-YEzabJEJ.js                    4.75 kB
+node_modules/.nitro/vite/services/ssr/assets/recent-items-widget-ryXXhrXP.js             5.31 kB
+node_modules/.nitro/vite/services/ssr/assets/bun-sqlite-dialect-DYuF9Has.js              5.33 kB
+node_modules/.nitro/vite/services/ssr/assets/node-sqlite-dialect-Dir7dq9K.js             5.34 kB
+node_modules/.nitro/vite/services/ssr/assets/widget-skeletons-i0KIuI2-.js                5.82 kB
+node_modules/.nitro/vite/services/ssr/assets/quick-actions-widget-CvBK6Pf_.js            6.27 kB
+node_modules/.nitro/vite/services/ssr/assets/stats-widget-RnS7yPPh.js                    6.51 kB
+node_modules/.nitro/vite/services/ssr/assets/timeline-widget-DleLa0QJ.js                 6.87 kB
+node_modules/.nitro/vite/services/ssr/assets/table-widget-uZbhujMU.js                    6.93 kB
+node_modules/.nitro/vite/services/ssr/assets/forgot-password-page-DB0DeqIi.js            7.98 kB
+node_modules/.nitro/vite/services/ssr/assets/login-page-B3uX4Vt2.js                     10.08 kB
+node_modules/.nitro/vite/services/ssr/assets/index-KffjMoRX.js                          10.28 kB
+node_modules/.nitro/vite/services/ssr/assets/reset-password-page-Bh2pOcj0.js            10.52 kB
+node_modules/.nitro/vite/services/ssr/assets/setup-page-Do2OOC5I.js                     10.65 kB
+node_modules/.nitro/vite/services/ssr/assets/_citySlug-DANCvJr6.js                      12.31 kB
+node_modules/.nitro/vite/services/ssr/assets/index-Dh-UuRmK.js                          15.34 kB
+node_modules/.nitro/vite/services/ssr/assets/index-BGKMlmAV.js                          36.73 kB
+node_modules/.nitro/vite/services/ssr/index.js                                         111.84 kB
+node_modules/.nitro/vite/services/ssr/assets/chart-widget-CNFE1mLk.js                  979.85 kB
+node_modules/.nitro/vite/services/ssr/assets/admin-NRknLhg2.js                       2,971.40 kB
+node_modules/.nitro/vite/services/ssr/assets/router-DfekICpe.js                      3,906.08 kB
+✓ built in 5.76s
+
+[nitro] ◐ Building [Nitro] (preset: bun, compatibility: 2026-02-11)
+[nitro] ✔ Generated public .output/public
+vite v7.3.1 building nitro environment for production...
+transforming...

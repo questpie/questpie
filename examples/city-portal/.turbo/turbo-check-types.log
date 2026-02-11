@@ -1,0 +1,145 @@
+$ tsc --noEmit
+src/lib/cms-functions.ts(21,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
+src/lib/cms-functions.ts(38,35): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
+src/lib/cms-functions.ts(58,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
+src/lib/cms-functions.ts(97,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
+src/lib/cms-functions.ts(132,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
+src/lib/cms-functions.ts(154,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
+src/lib/cms-functions.ts(187,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
+src/lib/cms-functions.ts(203,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
+src/migrations/index.ts(2,10): error TS2305: Module '"./20260211T164057_bright_yellow_tiger.js"' has no exported member 'brightYellowTiger'.
+src/questpie/admin/blocks/accordion.tsx(18,24): error TS2339: Property 'items' does not exist on type 'never'.
+src/questpie/admin/blocks/accordion.tsx(22,32): error TS2339: Property 'allowMultipleOpen' does not exist on type 'never'.
+src/questpie/admin/blocks/accordion.tsx(35,13): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/accordion.tsx(37,15): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/cta.tsx(11,24): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ highlight: { section: string; button: string; }; dark: { section: string; button: string; }; light: { section: string; button: string; }; }'.
+src/questpie/admin/blocks/cta.tsx(24,11): error TS2339: Property 'variant' does not exist on type 'never'.
+src/questpie/admin/blocks/cta.tsx(30,14): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/cta.tsx(33,13): error TS2339: Property 'description' does not exist on type 'never'.
+src/questpie/admin/blocks/cta.tsx(35,15): error TS2339: Property 'description' does not exist on type 'never'.
+src/questpie/admin/blocks/cta.tsx(39,13): error TS2339: Property 'buttonText' does not exist on type 'never'.
+src/questpie/admin/blocks/cta.tsx(41,20): error TS2339: Property 'buttonLink' does not exist on type 'never'.
+src/questpie/admin/blocks/cta.tsx(44,15): error TS2339: Property 'buttonText' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(18,21): error TS2339: Property 'news' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(23,13): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(25,15): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(37,14): error TS2339: Property 'layout' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(85,25): error TS2339: Property 'contacts' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(90,13): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(92,15): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(160,26): error TS2339: Property 'documents' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(165,13): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(167,15): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/dynamic.tsx(221,30): error TS2339: Property 'announcements' does not exist on type 'never'.
+src/questpie/admin/blocks/gallery.tsx(18,25): error TS2339: Property 'images' does not exist on type 'never'.
+src/questpie/admin/blocks/gallery.tsx(20,23): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ "2": string; "3": string; "4": string; }'.
+src/questpie/admin/blocks/gallery.tsx(24,11): error TS2339: Property 'columns' does not exist on type 'never'.
+src/questpie/admin/blocks/gallery.tsx(26,19): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ small: string; medium: string; large: string; }'.
+src/questpie/admin/blocks/gallery.tsx(30,11): error TS2339: Property 'gap' does not exist on type 'never'.
+src/questpie/admin/blocks/gallery.tsx(35,13): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/gallery.tsx(37,15): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/gallery.tsx(60,17): error TS2339: Property 'showCaptions' does not exist on type 'never'.
+src/questpie/admin/blocks/heading.tsx(11,21): error TS2339: Property 'level' does not exist on type 'never'.
+src/questpie/admin/blocks/heading.tsx(13,20): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ h1: string; h2: string; h3: string; h4: string; }'.
+src/questpie/admin/blocks/heading.tsx(20,21): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ left: string; center: string; right: string; }'.
+src/questpie/admin/blocks/heading.tsx(24,11): error TS2339: Property 'align' does not exist on type 'never'.
+src/questpie/admin/blocks/heading.tsx(31,13): error TS2339: Property 'text' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(16,27): error TS2339: Property 'backgroundImage' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(16,58): error TS2339: Property 'backgroundImage' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(18,22): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ small: string; medium: string; large: string; full: string; }'.
+src/questpie/admin/blocks/hero.tsx(23,11): error TS2339: Property 'height' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(25,21): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ left: string; center: string; right: string; }'.
+src/questpie/admin/blocks/hero.tsx(29,11): error TS2339: Property 'alignment' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(42,31): error TS2339: Property 'overlayOpacity' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(50,14): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(53,13): error TS2339: Property 'subtitle' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(55,15): error TS2339: Property 'subtitle' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(59,13): error TS2339: Property 'ctaText' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(61,20): error TS2339: Property 'ctaLink' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(64,15): error TS2339: Property 'ctaText' does not exist on type 'never'.
+src/questpie/admin/blocks/hero.tsx(82,13): error TS2339: Property 'showSearch' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(15,25): error TS2339: Property 'image' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(15,46): error TS2339: Property 'image' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(17,29): error TS2339: Property 'imagePosition' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(31,20): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(43,14): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(45,16): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(49,14): error TS2339: Property 'content' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(51,42): error TS2339: Property 'content' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(55,14): error TS2339: Property 'ctaText' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(57,21): error TS2339: Property 'ctaLink' does not exist on type 'never'.
+src/questpie/admin/blocks/image-text.tsx(60,16): error TS2339: Property 'ctaText' does not exist on type 'never'.
+src/questpie/admin/blocks/image.tsx(12,25): error TS2339: Property 'image' does not exist on type 'never'.
+src/questpie/admin/blocks/image.tsx(12,46): error TS2339: Property 'image' does not exist on type 'never'.
+src/questpie/admin/blocks/image.tsx(14,21): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ full: string; medium: string; small: string; }'.
+src/questpie/admin/blocks/image.tsx(18,11): error TS2339: Property 'width' does not exist on type 'never'.
+src/questpie/admin/blocks/image.tsx(20,22): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ original: string; square: string; video: string; portrait: string; }'.
+src/questpie/admin/blocks/image.tsx(25,11): error TS2339: Property 'aspectRatio' does not exist on type 'never'.
+src/questpie/admin/blocks/image.tsx(32,18): error TS2339: Property 'alt' does not exist on type 'never'.
+src/questpie/admin/blocks/image.tsx(32,32): error TS2339: Property 'caption' does not exist on type 'never'.
+src/questpie/admin/blocks/image.tsx(42,12): error TS2339: Property 'caption' does not exist on type 'never'.
+src/questpie/admin/blocks/image.tsx(44,14): error TS2339: Property 'caption' does not exist on type 'never'.
+src/questpie/admin/blocks/layout.tsx(18,23): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ "2": string; "3": string; "4": string; }'.
+src/questpie/admin/blocks/layout.tsx(22,11): error TS2339: Property 'columns' does not exist on type 'never'.
+src/questpie/admin/blocks/layout.tsx(24,19): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ small: string; medium: string; large: string; }'.
+src/questpie/admin/blocks/layout.tsx(28,11): error TS2339: Property 'gap' does not exist on type 'never'.
+src/questpie/admin/blocks/layout.tsx(30,23): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ none: string; small: string; medium: string; large: string; }'.
+src/questpie/admin/blocks/layout.tsx(35,11): error TS2339: Property 'padding' does not exist on type 'never'.
+src/questpie/admin/blocks/layout.tsx(55,20): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ small: string; medium: string; large: string; xlarge: string; }'.
+src/questpie/admin/blocks/layout.tsx(60,11): error TS2339: Property 'size' does not exist on type 'never'.
+src/questpie/admin/blocks/layout.tsx(72,21): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ full: string; medium: string; small: string; }'.
+src/questpie/admin/blocks/layout.tsx(76,11): error TS2339: Property 'width' does not exist on type 'never'.
+src/questpie/admin/blocks/layout.tsx(79,10): error TS2339: Property 'style' does not exist on type 'never'.
+src/questpie/admin/blocks/layout.tsx(81,13): error TS2339: Property 'style' does not exist on type 'never'.
+src/questpie/admin/blocks/text.tsx(14,24): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ narrow: string; medium: string; wide: string; full: string; }'.
+src/questpie/admin/blocks/text.tsx(19,11): error TS2339: Property 'maxWidth' does not exist on type 'never'.
+src/questpie/admin/blocks/text.tsx(21,23): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ none: string; small: string; medium: string; large: string; }'.
+src/questpie/admin/blocks/text.tsx(26,11): error TS2339: Property 'padding' does not exist on type 'never'.
+src/questpie/admin/blocks/text.tsx(43,39): error TS2339: Property 'content' does not exist on type 'never'.
+src/questpie/admin/blocks/video.tsx(25,26): error TS2339: Property 'url' does not exist on type 'never'.
+src/questpie/admin/blocks/video.tsx(25,51): error TS2339: Property 'url' does not exist on type 'never'.
+src/questpie/admin/blocks/video.tsx(30,13): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/video.tsx(32,15): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/video.tsx(40,22): error TS2339: Property 'title' does not exist on type 'never'.
+src/questpie/admin/blocks/video.tsx(48,15): error TS2339: Property 'url' does not exist on type 'never'.
+src/questpie/admin/blocks/video.tsx(52,13): error TS2339: Property 'caption' does not exist on type 'never'.
+src/questpie/admin/blocks/video.tsx(54,15): error TS2339: Property 'caption' does not exist on type 'never'.
+src/questpie/server/blocks.ts(540,21): error TS18046: 'ctx.app' is of type 'unknown'.
+src/questpie/server/collections/news.ts(104,27): error TS18048: 'prev' is possibly 'undefined'.
+src/questpie/server/collections/pages.ts(95,27): error TS18048: 'prev' is possibly 'undefined'.
+src/questpie/server/globals/site-settings.ts(291,24): error TS2339: Property 'cityId' does not exist on type 'BaseRequestContext'.
+src/routes/admin/$.tsx(61,4): error TS2322: Type '{ children: Element; admin: AdminBuilder<{ blocks: {}; fields: { number: FieldBuilder<{ name: "number"; "~options": NumberFieldConfig & Partial<Pick<BaseFieldConfigProps, "description" | ... 2 more ... | "placeholder"> & Pick<...>> & FieldStateOptions & FieldHookOptions; component: ({ name, label, description, place...' is not assignable to type 'IntrinsicAttributes & AdminLayoutProps'.
+  Property 'admin' does not exist on type 'IntrinsicAttributes & AdminLayoutProps'.
+src/routes/admin/index.tsx(54,4): error TS2322: Type '{ children: Element; admin: AdminBuilder<{ blocks: {}; fields: { number: FieldBuilder<{ name: "number"; "~options": NumberFieldConfig & Partial<Pick<BaseFieldConfigProps, "description" | ... 2 more ... | "placeholder"> & Pick<...>> & FieldStateOptions & FieldHookOptions; component: ({ name, label, description, place...' is not assignable to type 'IntrinsicAttributes & AdminLayoutProps'.
+  Property 'admin' does not exist on type 'IntrinsicAttributes & AdminLayoutProps'.
+../../packages/admin/src/client/builder/types/action-registry.ts(8,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/builder/types/action-types.ts(12,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/builder/types/collection-types.ts(5,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/builder/types/field-types.ts(8,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/builder/types/global-types.ts(5,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/builder/types/ui-config.ts(7,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/builder/types/widget-types.ts(8,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-editor-context.tsx(10,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-editor-provider.tsx(10,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-form.tsx(221,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-item-menu.tsx(302,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-item.tsx(195,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-library.tsx(12,55): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-type-icon.tsx(9,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/component-renderer.tsx(19,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/fields/blocks-field/blocks-field.tsx(12,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/fields/relation/displays/types.ts(6,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/ui/alert.tsx(4,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
+../../packages/admin/src/client/components/ui/command.tsx(6,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
+../../packages/admin/src/client/components/ui/command.tsx(13,8): error TS2307: Cannot find module '#questpie/admin/client/components/ui/dialog' or its corresponding type declarations.
+../../packages/admin/src/client/components/ui/command.tsx(17,8): error TS2307: Cannot find module '#questpie/admin/client/components/ui/input-group' or its corresponding type declarations.
+../../packages/admin/src/client/components/ui/context-menu.tsx(4,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
+../../packages/admin/src/client/components/ui/drawer.tsx(6,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
+../../packages/admin/src/client/components/ui/resizable.tsx(10,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
+../../packages/admin/src/client/components/ui/responsive-dialog.tsx(5,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
+../../packages/admin/src/client/components/ui/responsive-dialog.tsx(6,29): error TS2307: Cannot find module '#questpie/admin/client/hooks/use-media-query' or its corresponding type declarations.
+../../packages/admin/src/client/components/widgets/stats-widget.tsx(10,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/runtime/routes.ts(8,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/types/admin-config.ts(5,8): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/views/collection/cells/complex-cells.tsx(12,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/components/rich-text/rich-text-renderer.tsx(3,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.

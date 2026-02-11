@@ -1,0 +1,6466 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__assets",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "assets",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__user",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "user",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__session",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "session",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__account",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "account",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__verification",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "verification",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__apikey",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "apikey",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__admin_saved_views",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "admin_saved_views",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__admin_preferences",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "admin_preferences",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__admin_locks",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "admin_locks",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__cities",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "cities",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__cityMembers",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "cityMembers",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__pages",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "pages",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__news",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "news",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__announcements",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "announcements",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__documents",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "documents",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__contacts",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "contacts",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__submissions",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "submissions",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__site_settings",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "site_settings",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__site_settings_versions",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "site_settings_versions",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_realtime_log",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_realtime_log",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_search",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_search",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__questpie_search_facets",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "questpie_search_facets",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__width",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "width",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__height",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "height",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__alt",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "alt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__caption",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "caption",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__key",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__filename",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "filename",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__mime_type",
+      "value": {
+        "type": "varchar(100)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "mime_type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__size",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "size",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__visibility",
+      "value": {
+        "type": "varchar(20)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'public'",
+        "generated": null,
+        "identity": null,
+        "name": "visibility",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__email",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "email",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__emailVerified",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "emailVerified",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__image",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "image",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__role",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "role",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__banned",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "banned",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__banReason",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "banReason",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__banExpires",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "banExpires",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__token",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "token",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__ipAddress",
+      "value": {
+        "type": "varchar(45)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "ipAddress",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__userAgent",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userAgent",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__impersonatedBy",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "impersonatedBy",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__accountId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "accountId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__providerId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "providerId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__accessToken",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "accessToken",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__refreshToken",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refreshToken",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__accessTokenExpiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "accessTokenExpiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__refreshTokenExpiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refreshTokenExpiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__scope",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scope",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__idToken",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "idToken",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__password",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "password",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__identifier",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "identifier",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__value",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__start",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "start",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__prefix",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "prefix",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__key",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__refillInterval",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refillInterval",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__refillAmount",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refillAmount",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__lastRefillAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "lastRefillAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__enabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "enabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__rateLimitEnabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "rateLimitEnabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__rateLimitTimeWindow",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "rateLimitTimeWindow",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__rateLimitMax",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "rateLimitMax",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__requestCount",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "requestCount",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__remaining",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "remaining",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__lastRequest",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "lastRequest",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__permissions",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "permissions",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__metadata",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__collectionName",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "collectionName",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__configuration",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "configuration",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__isDefault",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "isDefault",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__key",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__value",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__resourceType",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resourceType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__resource",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resource",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__resourceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resourceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__user",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "user",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__sessionId",
+      "value": {
+        "type": "varchar(64)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "sessionId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__expiresAt",
+      "value": {
+        "type": "date",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__slug",
+      "value": {
+        "type": "varchar(100)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "slug",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__logo",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "logo",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__email",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "email",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__phone",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "phone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__address",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "address",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__website",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "website",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__population",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "population",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__isActive",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "isActive",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cities__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cityMembers__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cityMembers"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cityMembers__DOT__user",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "user",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cityMembers"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cityMembers__DOT__city",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "city",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cityMembers"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cityMembers__DOT__role",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'editor'",
+        "generated": null,
+        "identity": null,
+        "name": "role",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cityMembers"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cityMembers__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cityMembers"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__cityMembers__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "cityMembers"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__city",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "city",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__title",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__slug",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "slug",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__content",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "content",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__excerpt",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "excerpt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__parent",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "parent",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__order",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "order",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__showInNav",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "showInNav",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__featuredImage",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "featuredImage",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__isPublished",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "isPublished",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__metaTitle",
+      "value": {
+        "type": "varchar(70)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metaTitle",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__metaDescription",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metaDescription",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__city",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "city",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__title",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__slug",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "slug",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__excerpt",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "excerpt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__content",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "content",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__image",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "image",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__category",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'general'",
+        "generated": null,
+        "identity": null,
+        "name": "category",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__publishedAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "publishedAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__author",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "author",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__isPublished",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "isPublished",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__isFeatured",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "isFeatured",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__news__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__city",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "city",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__title",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__content",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "content",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__category",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'notice'",
+        "generated": null,
+        "identity": null,
+        "name": "category",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__validFrom",
+      "value": {
+        "type": "date",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "validFrom",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__validTo",
+      "value": {
+        "type": "date",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "validTo",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__isPinned",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "isPinned",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__attachments",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "attachments",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__referenceNumber",
+      "value": {
+        "type": "varchar(100)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "referenceNumber",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__announcements__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "announcements"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__city",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "city",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__title",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__description",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "description",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__category",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'other'",
+        "generated": null,
+        "identity": null,
+        "name": "category",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__file",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "file",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__publishedDate",
+      "value": {
+        "type": "date",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "publishedDate",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__version",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__isPublished",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "isPublished",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__documents__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "documents"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__city",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "city",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__department",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "department",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__description",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "description",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__contactPerson",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "contactPerson",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__position",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "position",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__email",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "email",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__phone",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "phone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__address",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "address",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__officeHours",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "officeHours",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__order",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "order",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__contacts__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "contacts"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__city",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "city",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__email",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "email",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__phone",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "phone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__subject",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "subject",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__message",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "message",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__department",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'general'",
+        "generated": null,
+        "identity": null,
+        "name": "department",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__status",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'new'",
+        "generated": null,
+        "identity": null,
+        "name": "status",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__notes",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "notes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__submissions__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "submissions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__scope_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scope_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__siteName",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'City Council'",
+        "generated": null,
+        "identity": null,
+        "name": "siteName",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__tagline",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Working for our community'",
+        "generated": null,
+        "identity": null,
+        "name": "tagline",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__logo",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "logo",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__favicon",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "favicon",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__primaryColour",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'#1e40af'",
+        "generated": null,
+        "identity": null,
+        "name": "primaryColour",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__secondaryColour",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'#64748b'",
+        "generated": null,
+        "identity": null,
+        "name": "secondaryColour",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"News\",\"href\":\"/news\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__footerText",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Your local council, working for you.'",
+        "generated": null,
+        "identity": null,
+        "name": "footerText",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Privacy Policy\",\"href\":\"/privacy\"},{\"label\":\"Accessibility\",\"href\":\"/accessibility\"},{\"label\":\"Contact Us\",\"href\":\"/contact\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__copyrightText",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'City Council. All rights reserved.'",
+        "generated": null,
+        "identity": null,
+        "name": "copyrightText",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__socialLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[]'",
+        "generated": null,
+        "identity": null,
+        "name": "socialLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__contactEmail",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'enquiries@council.gov.uk'",
+        "generated": null,
+        "identity": null,
+        "name": "contactEmail",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__contactPhone",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'+44 20 7123 4567'",
+        "generated": null,
+        "identity": null,
+        "name": "contactPhone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__address",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Council House\nCity Centre\nPostcode'",
+        "generated": null,
+        "identity": null,
+        "name": "address",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__emergencyPhone",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "emergencyPhone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__openingHours",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Monday - Friday: 9:00 - 17:00\nSaturday - Sunday: Closed'",
+        "generated": null,
+        "identity": null,
+        "name": "openingHours",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__metaTitle",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'City Council - Official Website'",
+        "generated": null,
+        "identity": null,
+        "name": "metaTitle",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__metaDescription",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Official website of the City Council. Find information about local services, news, and how to contact us.'",
+        "generated": null,
+        "identity": null,
+        "name": "metaDescription",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__ogImage",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "ogImage",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__googleAnalyticsId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "googleAnalyticsId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__alertEnabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "alertEnabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__alertMessage",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "alertMessage",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__alertType",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'info'",
+        "generated": null,
+        "identity": null,
+        "name": "alertType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__alertLink",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "alertLink",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "version_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_number",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_number",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_operation",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_operation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_user_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_user_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "version_created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__scope_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scope_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__siteName",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'City Council'",
+        "generated": null,
+        "identity": null,
+        "name": "siteName",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__tagline",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Working for our community'",
+        "generated": null,
+        "identity": null,
+        "name": "tagline",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__logo",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "logo",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__favicon",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "favicon",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__primaryColour",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'#1e40af'",
+        "generated": null,
+        "identity": null,
+        "name": "primaryColour",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__secondaryColour",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'#64748b'",
+        "generated": null,
+        "identity": null,
+        "name": "secondaryColour",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"News\",\"href\":\"/news\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__footerText",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Your local council, working for you.'",
+        "generated": null,
+        "identity": null,
+        "name": "footerText",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Privacy Policy\",\"href\":\"/privacy\"},{\"label\":\"Accessibility\",\"href\":\"/accessibility\"},{\"label\":\"Contact Us\",\"href\":\"/contact\"}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__copyrightText",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'City Council. All rights reserved.'",
+        "generated": null,
+        "identity": null,
+        "name": "copyrightText",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__socialLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[]'",
+        "generated": null,
+        "identity": null,
+        "name": "socialLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__contactEmail",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'enquiries@council.gov.uk'",
+        "generated": null,
+        "identity": null,
+        "name": "contactEmail",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__contactPhone",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'+44 20 7123 4567'",
+        "generated": null,
+        "identity": null,
+        "name": "contactPhone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__address",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Council House\nCity Centre\nPostcode'",
+        "generated": null,
+        "identity": null,
+        "name": "address",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__emergencyPhone",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "emergencyPhone",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__openingHours",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Monday - Friday: 9:00 - 17:00\nSaturday - Sunday: Closed'",
+        "generated": null,
+        "identity": null,
+        "name": "openingHours",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__metaTitle",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'City Council - Official Website'",
+        "generated": null,
+        "identity": null,
+        "name": "metaTitle",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__metaDescription",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'Official website of the City Council. Find information about local services, news, and how to contact us.'",
+        "generated": null,
+        "identity": null,
+        "name": "metaDescription",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__ogImage",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "ogImage",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__googleAnalyticsId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "googleAnalyticsId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__alertEnabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "alertEnabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__alertMessage",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "alertMessage",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__alertType",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'info'",
+        "generated": null,
+        "identity": null,
+        "name": "alertType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__alertLink",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "alertLink",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__seq",
+      "value": {
+        "type": "bigserial",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "seq",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__resource_type",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resource_type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__resource",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resource",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__operation",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "operation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__record_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "record_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__payload",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'{}'",
+        "generated": null,
+        "identity": null,
+        "name": "payload",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__collection_name",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "collection_name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__record_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "record_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__title",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__content",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "content",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__metadata",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'{}'",
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__fts_vector",
+      "value": {
+        "type": "tsvector",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": {
+          "as": "setweight(to_tsvector('simple', coalesce(title, '')), 'A') || setweight(to_tsvector('simple', coalesce(content, '')), 'B')",
+          "type": "stored"
+        },
+        "identity": null,
+        "name": "fts_vector",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__search_id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "search_id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__collection_name",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "collection_name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__locale",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "locale",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__facet_name",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "facet_name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__facet_value",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "facet_value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__numeric_value",
+      "value": {
+        "type": "numeric",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "numeric_value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__admin_preferences__DOT__admin_preferences_user_key_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "userId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "key",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "admin_preferences_user_key_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__cities__DOT__cities_slug_unique",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "slug",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "cities_slug_unique",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "cities"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__cityMembers__DOT__city_members_unique",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "user",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "city",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "city_members_unique",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "cityMembers"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__pages__DOT__pages_city_slug_unique",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "city",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "slug",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "pages_city_slug_unique",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__news__DOT__news_city_slug_unique",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "city",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "slug",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "news_city_slug_unique",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "news"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings__DOT__site_settings_scope_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scope_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_scope_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings_versions__DOT__site_settings_versions_id_version_number_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "version_number",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_versions_id_version_number_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings_versions__DOT__site_settings_versions_version_created_at_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "version_created_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_versions_version_created_at_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_log__DOT__idx_realtime_log_seq",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "seq",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_realtime_log_seq",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_log__DOT__idx_realtime_log_resource",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "resource_type",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "resource",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_realtime_log_resource",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_realtime_log__DOT__idx_realtime_log_created_at",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "created_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_realtime_log_created_at",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search__DOT__idx_search_fts",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "fts_vector",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "gin",
+        "concurrently": false,
+        "name": "idx_search_fts",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search__DOT__idx_search_trigram",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "\"title\" gin_trgm_ops",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "gin",
+        "concurrently": false,
+        "name": "idx_search_trigram",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search__DOT__idx_search_collection_locale",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "collection_name",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_search_collection_locale",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search__DOT__idx_search_record_id",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "record_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_search_record_id",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search_facets__DOT__idx_facets_agg",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "collection_name",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "locale",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "facet_name",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "facet_value",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_facets_agg",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search_facets__DOT__idx_facets_search_id",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "search_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_facets_search_id",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__questpie_search_facets__DOT__idx_facets_collection",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "collection_name",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "idx_facets_collection",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__assets__DOT__assets_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "assets_pkey",
+        "schema": "public",
+        "table": "assets",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__user__DOT__user_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "user_pkey",
+        "schema": "public",
+        "table": "user",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__session__DOT__session_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "session_pkey",
+        "schema": "public",
+        "table": "session",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__account__DOT__account_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "account_pkey",
+        "schema": "public",
+        "table": "account",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__verification__DOT__verification_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "verification_pkey",
+        "schema": "public",
+        "table": "verification",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__apikey__DOT__apikey_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "apikey_pkey",
+        "schema": "public",
+        "table": "apikey",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__admin_saved_views__DOT__admin_saved_views_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "admin_saved_views_pkey",
+        "schema": "public",
+        "table": "admin_saved_views",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__admin_preferences__DOT__admin_preferences_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "admin_preferences_pkey",
+        "schema": "public",
+        "table": "admin_preferences",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__admin_locks__DOT__admin_locks_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "admin_locks_pkey",
+        "schema": "public",
+        "table": "admin_locks",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__cities__DOT__cities_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "cities_pkey",
+        "schema": "public",
+        "table": "cities",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__cityMembers__DOT__cityMembers_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "cityMembers_pkey",
+        "schema": "public",
+        "table": "cityMembers",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__pages__DOT__pages_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "pages_pkey",
+        "schema": "public",
+        "table": "pages",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__news__DOT__news_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "news_pkey",
+        "schema": "public",
+        "table": "news",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__announcements__DOT__announcements_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "announcements_pkey",
+        "schema": "public",
+        "table": "announcements",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__documents__DOT__documents_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "documents_pkey",
+        "schema": "public",
+        "table": "documents",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__contacts__DOT__contacts_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "contacts_pkey",
+        "schema": "public",
+        "table": "contacts",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__submissions__DOT__submissions_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "submissions_pkey",
+        "schema": "public",
+        "table": "submissions",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__site_settings__DOT__site_settings_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "site_settings_pkey",
+        "schema": "public",
+        "table": "site_settings",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__site_settings_versions__DOT__site_settings_versions_pkey",
+      "value": {
+        "columns": [
+          "version_id"
+        ],
+        "nameExplicit": false,
+        "name": "site_settings_versions_pkey",
+        "schema": "public",
+        "table": "site_settings_versions",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_realtime_log__DOT__questpie_realtime_log_pkey",
+      "value": {
+        "columns": [
+          "seq"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_realtime_log_pkey",
+        "schema": "public",
+        "table": "questpie_realtime_log",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_search__DOT__questpie_search_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_search_pkey",
+        "schema": "public",
+        "table": "questpie_search",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__questpie_search_facets__DOT__questpie_search_facets_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "questpie_search_facets_pkey",
+        "schema": "public",
+        "table": "questpie_search_facets",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    },
+    {
+      "type": "set",
+      "path": "ddl.uniques__COLON__{\"nameExplicit\"__COLON__true,\"columns\"__COLON__[\"collection_name\",\"record_id\",\"locale\"],\"nullsNotDistinct\"__COLON__false,\"name\"__COLON__\"uq_search_entry\",\"entityType\"__COLON__\"uniques\",\"schema\"__COLON__\"public\",\"table\"__COLON__\"questpie_search\"}",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          "collection_name",
+          "record_id",
+          "locale"
+        ],
+        "nullsNotDistinct": false,
+        "name": "uq_search_entry",
+        "entityType": "uniques",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-02-11T16:40:57.640Z",
+      "migrationId": "brightYellowTiger20260211T164057"
+    }
+  ],
+  "metadata": {
+    "migrationId": "brightYellowTiger20260211T164057",
+    "timestamp": "2026-02-11T16:40:57.671Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}
