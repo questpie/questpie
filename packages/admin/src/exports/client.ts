@@ -430,3 +430,25 @@ export type {
 	I18nContext,
 	I18nText,
 } from "#questpie/admin/client/i18n/types.js";
+
+// ============================================================================
+// SCOPE PRIMITIVES
+// Multi-tenant / scope selection system
+// ============================================================================
+
+// Scope types
+export type {
+	ScopeContextValue,
+	ScopeOption,
+	ScopePickerProps,
+	ScopeProviderProps,
+} from "#questpie/admin/client/scope/index.js";
+// Scope provider and hooks
+export {
+	createScopedFetch,
+	ScopePicker,
+	ScopeProvider,
+	useScope,
+	useScopedFetch,
+	useScopeSafe,
+} from "#questpie/admin/client/scope/index.js";

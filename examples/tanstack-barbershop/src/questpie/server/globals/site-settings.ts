@@ -441,5 +441,4 @@ export const siteSettings = qb
 	.access({
 		read: true,
 		update: ({ session }) => (session?.user as any)?.role === "admin",
-	})
-	.build();
+	});

@@ -1,0 +1,22 @@
+export default  {
+		"barbershop.welcome": "Vitajte v Barbershop Admin",
+		"barbershop.bookNow": "Rezervovať",
+		"barbershop.todaysAppointments": "Dnešné rezervácie",
+		"barbershop.upcomingSlots": "Nadchádzajúce termíny",
+		"barbershop.activeBarbers": "Aktívni holiči",
+		"barbershop.totalServices": "Celkom služieb",
+		"barbershop.pendingReviews": "Čakajúce recenzie",
+		"collection.barbers.title": "Holiči",
+		"collection.barbers.description": "Spravujte váš tím holičov",
+		"collection.services.title": "Služby",
+		"collection.services.description": "Strihanie a úprava vlasov",
+		"collection.appointments.title": "Rezervácie",
+		"collection.appointments.description": "Zákaznícke rezervácie a rozvrhy",
+        "appointment.created": "Rezervácia vytvorená na {{date}} o {{time}}",
+		"appointment.cancelled": "Rezervácia bola zrušená",
+		"appointment.slotNotAvailable": "Tento termín už nie je dostupný",
+		"appointment.pastDateNotAllowed":
+			"Nie je možné rezervovať termín v minulosti",
+		"barber.notAvailable": "Vybraný holič nie je v tomto čase dostupný",
+		"service.notOffered": "Vybranú službu tento holič neposkytuje",
+	}

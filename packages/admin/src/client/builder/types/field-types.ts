@@ -551,7 +551,7 @@ export type WrapperMode = "flat" | "collapsible";
  * }
  * ```
  */
-export interface SectionLayout {
+export interface SectionLayout<TData = any> {
 	type: "section";
 
 	// Visual grouping
@@ -568,7 +568,7 @@ export interface SectionLayout {
 	gap?: number;
 
 	// Content
-	fields: FieldLayoutItem[];
+	fields: FieldLayoutItem<TData>[];
 
 	// Conditional visibility (hidden: false/undefined = visible, true = hidden)
 	hidden?: boolean | ((values: Record<string, any>) => boolean);
@@ -580,89 +580,126 @@ export interface SectionLayout {
 /**
  * Tab configuration for tabbed forms
  */
-export interface TabConfig {
+export interface TabConfig<TData = any> {
 	id: string;
 	label: DynamicI18nText;
 	icon?: IconComponent | ComponentReference;
-	fields: FieldLayoutItem[];
+	fields: FieldLayoutItem<TData>[];
 	// Conditional visibility (hidden: false/undefined = visible, true = hidden)
 	hidden?: boolean | ((values: Record<string, any>) => boolean);
 }
 
 /**
- * Tabs layout - tabbed navigation container
- *
- * @example Simple tabs
- * ```ts
- * {
- *   type: 'tabs',
- *   tabs: [
- *     { id: 'basic', label: 'Basic Info', fields: [f.name, f.email] },
- *     { id: 'advanced', label: 'Advanced', fields: [f.settings] }
- *   ]
- * }
- * ```
- *
- * @example Tabs with sections
- * ```ts
- * {
- *   type: 'tabs',
- *   tabs: [
- *     {
- *       id: 'profile',
- *       label: 'Profile',
- *       fields: [
- *         { type: 'section', layout: 'grid', columns: 2, fields: [f.name, f.email] },
- *         { type: 'section', label: 'Bio', fields: [f.bio] }
- *       ]
- *     }
- *   ]
- * }
- * ```
+ * Tabs layout container for tabbed forms.
  */
-export interface TabsLayout {
+export interface TabsLayout<TData = any> {
 	type: "tabs";
-	tabs: TabConfig[];
+	tabs: TabConfig<TData>[];
 }
 
 /**
- * Field layout item - union of field reference or layout container
- *
- * Can be:
- * - Field name string: "name"
- * - Field with className: { field: "name", className: "..." }
- * - Section layout: { type: 'section', ... }
- * - Tabs layout: { type: 'tabs', ... }
+ * Context passed to reactive handlers.
+ */
+export interface FieldReactiveContext<TData = any> {
+	data: TData;
+	sibling: Record<string, any>;
+	ctx?: Record<string, any>;
+	prev?: {
+		data: TData;
+		sibling: Record<string, any>;
+	};
+}
+
+/**
+ * Reactive handler config (short function form or object form).
+ */
+export type FieldReactiveHandlerConfig<TData = any, TReturn = any> =
+	| ((ctx: FieldReactiveContext<TData>) => TReturn | Promise<TReturn>)
+	| {
+			handler: (ctx: FieldReactiveContext<TData>) => TReturn | Promise<TReturn>;
+			deps?: string[] | ((ctx: { data: TData }) => any[]);
+			debounce?: number;
+	  };
+
+/**
+ * Serialized reactive config from server introspection.
+ */
+export interface SerializedReactiveDepsConfig {
+	deps: string[];
+	debounce?: number;
+}
+
+/**
+ * Reactive field config for form layout.
+ * Handlers are executed server-side; deps tracked for client reactivity.
+ */
+export interface FieldReactiveConfig<TData = any> {
+	/** Hide field conditionally */
+	hidden?:
+		| boolean
+		| FieldReactiveHandlerConfig<TData, boolean>
+		| SerializedReactiveDepsConfig;
+	/** Make field read-only conditionally */
+	readOnly?:
+		| boolean
+		| FieldReactiveHandlerConfig<TData, boolean>
+		| SerializedReactiveDepsConfig;
+	/** Disable field conditionally */
+	disabled?:
+		| boolean
+		| FieldReactiveHandlerConfig<TData, boolean>
+		| SerializedReactiveDepsConfig;
+	/** Auto-compute field value */
+	compute?:
+		| FieldReactiveHandlerConfig<TData, any>
+		| SerializedReactiveDepsConfig;
+}
+
+/**
+ * Field layout item with optional reactive config
+ */
+export interface FieldLayoutItemWithReactive<TData = any>
+	extends FieldReactiveConfig<TData> {
+	field: string;
+	className?: string;
+}
+
+/**
+ * Field layout item - can be a simple field name, field with config, section, or tabs
  *
  * @example
  * ```ts
  * fields: [
- *   f.name,  // string
+ *   f.name,  // simple field reference
  *   { field: f.email, className: 'col-span-2' },  // with className
+ *   { field: f.slug, compute: { handler: ({ data }) => slugify(data.name), deps: ['name'] } },  // with compute
+ *   { field: f.reason, hidden: ({ data }) => data.status !== 'cancelled' },  // with hidden
  *   { type: 'section', layout: 'grid', columns: 2, fields: [...] },  // section
  *   { type: 'tabs', tabs: [...] }  // tabs
  * ]
  * ```
  */
-export type FieldLayoutItem =
+export type FieldLayoutItem<TData = any> =
 	| string
-	| { field: string; className?: string }
-	| SectionLayout
-	| TabsLayout;
+	| FieldLayoutItemWithReactive<TData>
+	| SectionLayout<TData>
+	| TabsLayout<TData>;
 
 /**
  * Helper to check if item is a field reference (string or object with field)
  */
-export function isFieldReference(
-	item: FieldLayoutItem,
-): item is string | { field: string; className?: string } {
+export function isFieldReference<TData = any>(
+	item: FieldLayoutItem<TData>,
+): item is string | FieldLayoutItemWithReactive<TData> {
 	return typeof item === "string" || ("field" in item && !("type" in item));
 }
 
 /**
  * Helper to get field name from layout item
  */
-export function getFieldName(item: FieldLayoutItem): string | null {
+export function getFieldName<TData = any>(
+	item: FieldLayoutItem<TData>,
+): string | null {
 	if (typeof item === "string") return item;
 	if ("field" in item && typeof item.field === "string") return item.field;
 	return null;
@@ -671,7 +708,9 @@ export function getFieldName(item: FieldLayoutItem): string | null {
 /**
  * Helper to get className from field layout item
  */
-export function getFieldClassName(item: FieldLayoutItem): string | undefined {
+export function getFieldClassName<TData = any>(
+	item: FieldLayoutItem<TData>,
+): string | undefined {
 	return typeof item === "string"
 		? undefined
 		: "className" in item
@@ -687,9 +726,9 @@ export function getFieldClassName(item: FieldLayoutItem): string | undefined {
  * Form sidebar configuration
  * Uses `fields` array (same structure as main form)
  */
-export interface FormSidebarConfig {
+export interface FormSidebarConfig<TData = any> {
 	position?: "left" | "right";
-	fields: FieldLayoutItem[];
+	fields: FieldLayoutItem<TData>[];
 }
 
 /**
@@ -710,9 +749,9 @@ export interface FormSidebarConfig {
  * }))
  * ```
  */
-export interface FormViewConfig {
-	fields: FieldLayoutItem[];
-	sidebar?: FormSidebarConfig;
+export interface FormViewConfig<TData = any> {
+	fields: FieldLayoutItem<TData>[];
+	sidebar?: FormSidebarConfig<TData>;
 	actions?: FormViewActionsConfig;
 }
 

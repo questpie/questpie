@@ -98,6 +98,18 @@ export function splitByNestedSchema(
 ): SplitResult {
 	// Schema is `true` - this entire value is localized
 	if (schema === true) {
+		// Backward compatibility: unwrap legacy wrapper input
+		// `{ $i18n: value }` -> `value`
+		if (isPlainObject(data)) {
+			const entries = Object.entries(data as Record<string, unknown>);
+			if (entries.length === 1 && entries[0]?.[0] === I18N_MARKER) {
+				return {
+					structure: { [I18N_MARKER]: true },
+					i18nValues: entries[0][1],
+				};
+			}
+		}
+
 		return {
 			structure: { [I18N_MARKER]: true },
 			i18nValues: data,

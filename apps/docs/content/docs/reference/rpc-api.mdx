@@ -10,12 +10,15 @@ RPC (Remote Procedure Call) provides type-safe server functions callable from th
 ## Creating an RPC Builder
 
 ```ts
-import { rpc } from "@questpie/questpie";
+import { rpc } from "questpie";
+import type { AppCMS } from "../cms";
 
-const r = rpc<typeof cms>();
+const r = rpc<AppCMS>();
 ```
 
 The type parameter connects the RPC builder to your CMS instance for typed `app` access in handlers.
+
+If you do not want to pass generic parameters to `rpc()`, you can still type handler context with [`getContext<AppCMS>()`](/docs/server/type-safe-contexts).
 
 ## Defining Functions
 
@@ -76,6 +79,18 @@ Both function types receive a context object:
   app: Questpie;           // CMS instance
   session: Session | null; // Authenticated user
   locale: string;          // Current locale
+}
+```
+
+For strongly typed `app`, `db`, and `session`, use `rpc<AppCMS>()`, or cast inside the handler:
+
+```ts
+import { getContext } from "questpie";
+import type { AppCMS } from "../cms";
+
+handler: async (ctx) => {
+  const { app, db, session } = getContext<AppCMS>(ctx);
+  // app, db, session are now strongly typed
 }
 ```
 
@@ -209,6 +224,7 @@ Content-Type: application/json
 ## Related Pages
 
 - [RPC](/docs/server/rpc) — Conceptual guide with patterns
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — Typed `app`, `db`, and `session` patterns
 - [q Builder API](/docs/reference/q-builder-api) — `q.fn()` factory
 - [Collection Builder API](/docs/reference/collection-builder-api) — `.functions()` method
 - [Adapter API](/docs/reference/adapter-api) — Mounting the handler

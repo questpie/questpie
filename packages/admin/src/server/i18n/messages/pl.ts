@@ -1,7 +1,7 @@
 /**
  * Polish Admin UI Messages
  */
-export const adminMessagesPL = {
+export default {
   // Common
   "common.save": "Zapisz",
   "common.cancel": "Anuluj",

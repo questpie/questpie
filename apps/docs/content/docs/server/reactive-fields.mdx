@@ -5,75 +5,214 @@ description: Server-side form behavior with hidden/readOnly/disabled/compute/opt
 
 # Reactive Fields
 
-Reactive handlers run on the server and receive runtime context.
+Reactive field behaviors are defined in the form view, not in field definitions. This keeps schema concerns (what data exists) separate from UI concerns (how the form behaves).
 
-Available handlers in `meta.admin`:
+Available reactive behaviors:
 
-- `hidden`
-- `readOnly`
-- `disabled`
-- `compute`
-- `options` (for dynamic select/relation options)
+- `hidden` — conditionally hide fields
+- `readOnly` — make fields read-only based on data
+- `disabled` — disable fields conditionally
+- `compute` — auto-compute values from other fields
+- `options` — dynamic options for select/relation fields (defined on field config)
 
-## Compute example (auto slug)
+## Defining Reactive Behaviors
+
+Use the form view (via admin module's `.form()`) to add reactive behaviors inline with field layout:
 
 ```ts
-slug: f.text({
-  required: true,
-  input: "optional",
-  meta: {
-    admin: {
-      compute: {
-        handler: ({ data }) => {
-          const title = data.title;
-          if (!title || typeof title !== "string") return undefined;
-          return title
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/(^-|-$)/g, "");
+import { slugify } from "./utils";
+
+export const pages = qb
+  .collection("pages")
+  .fields((f) => ({
+    title: f.text({ required: true }),
+    slug: f.text({ required: true, input: "optional" }),
+    status: f.select({ options: ["draft", "published", "cancelled"] }),
+    cancellationReason: f.textarea({}),
+    publishedAt: f.datetime({}),
+  }))
+  .form(({ f }) => ({
+    fields: [
+      f.title,
+      // Field with auto-compute
+      {
+        field: f.slug,
+        compute: {
+          handler: ({ data }) => slugify(data.title),
+          deps: ({ data }) => [data.title],
+          debounce: 300,
         },
-        deps: ({ data }) => [data.title],
-        debounce: 300,
       },
-    },
-  },
-});
+      f.status,
+      // Field visible only when status is "cancelled"
+      {
+        field: f.cancellationReason,
+        hidden: ({ data }) => data.status !== "cancelled",
+      },
+      // Field visible only when published
+      {
+        field: f.publishedAt,
+        hidden: ({ data }) => data.status !== "published",
+      },
+    ],
+  }));
 ```
 
-## Visibility example (conditional field)
+## Compute Example (Auto Slug)
+
+The `compute` handler auto-generates values based on other fields:
 
 ```ts
-cancellationReason: f.textarea({
-  meta: {
-    admin: {
-      hidden: ({ data }) => data.status !== "cancelled",
+{
+  field: f.slug,
+  compute: {
+    handler: ({ data }) => {
+      const title = data.title;
+      if (!title || typeof title !== "string") return undefined;
+      return title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
     },
+    deps: ({ data }) => [data.title],
+    debounce: 300, // Wait 300ms after typing stops
   },
-});
+}
 ```
 
-## Dynamic options example
+Key points:
+- Return `undefined` to keep the current value
+- Return `null` to clear the field
+- Use `debounce` to avoid excessive server calls during typing
+- The `deps` function tracks which fields trigger recomputation
+
+## Visibility Example (Conditional Field)
+
+Show fields based on form state:
+
+```ts
+{
+  field: f.cancellationReason,
+  hidden: ({ data }) => data.status !== "cancelled",
+}
+```
+
+Short syntax (just the handler function):
+```ts
+{ field: f.notes, hidden: ({ data }) => !data.showNotes }
+```
+
+Full syntax (with explicit deps):
+```ts
+{
+  field: f.notes,
+  hidden: {
+    handler: ({ data }) => !data.showNotes,
+    deps: ({ data }) => [data.showNotes],
+  },
+}
+```
+
+## ReadOnly and Disabled
+
+```ts
+// Read-only based on status
+{
+  field: f.approvedBy,
+  readOnly: ({ data }) => data.status === "approved",
+}
+
+// Disabled based on user role
+{
+  field: f.internalNotes,
+  disabled: ({ ctx }) => ctx.user?.role !== "admin",
+}
+```
+
+## Dynamic Options
+
+For `select` and `relation` fields with dynamic options, use the `options` config on the field definition (not in form view):
 
 ```ts
 barber: f.relation({
   to: "barbers",
   options: {
-    handler: async ({ search, ctx }) => {
-      // TODO: query with ctx.db and return filtered options
-      return { options: [] };
+    handler: async ({ data, search, ctx }) => {
+      const barbers = await ctx.db.query.barbers.findMany({
+        where: data.service 
+          ? { services: { contains: data.service } }
+          : undefined,
+      });
+      return {
+        options: barbers.map(b => ({ value: b.id, label: b.name })),
+      };
     },
     deps: ({ data }) => [data.service],
   },
 });
 ```
 
-## Context available to handlers
+## Handler Context
 
-- `data`: current form data
-- `prev`: previous data (where relevant)
-- `ctx.db`: database access
-- `ctx.user`: current authenticated user
+All reactive handlers receive:
 
-## Practical rule
+```ts
+interface FormReactiveContext<TData> {
+  /** Current form data — typed based on collection fields */
+  data: TData;
+  /** Sibling data (for fields inside arrays/objects) */
+  sibling: Record<string, any>;
+  /** Server context */
+  ctx: {
+    db: any;      // Database access
+    user?: any;   // Authenticated user
+    locale?: string;
+  };
+}
+```
 
-Keep business-critical reactive logic on the server. Client-side behavior should be presentation-only.
+## Using with Sections and Tabs
+
+Reactive fields work within any form layout:
+
+```ts
+.form(({ f }) => ({
+  sections: [
+    {
+      label: "Basic Info",
+      fields: [
+        f.title,
+        { field: f.slug, compute: { ... } },
+      ],
+    },
+    {
+      label: "Publishing",
+      fields: [
+        f.status,
+        { field: f.publishedAt, hidden: ({ data }) => data.status !== "published" },
+      ],
+    },
+  ],
+}))
+```
+
+## Execution Model
+
+1. Client sends form data changes to the server
+2. Server runs reactive handlers with full context (db, user, etc.)
+3. Server returns computed values and field states (hidden/readOnly/disabled)
+4. Client updates the form UI accordingly
+
+This ensures business logic stays on the server while the client remains responsive.
+
+## Common Mistakes
+
+- **Putting reactive config in field definitions** — Reactive behaviors belong in `.form()`, not in field config. Field definitions are for schema, form view is for UI behavior.
+- **Forgetting `deps` on compute** — Without deps, the handler runs on every form change. Explicit deps improve performance.
+- **Heavy compute without debounce** — For expensive computations, use `debounce` to avoid server overload.
+
+## Related Pages
+
+- [Field Builder](/docs/server/field-builder) — Field definitions and schema
+- [Collections](/docs/server/collections) — Collection builder API
+- [Access Control](/docs/server/access-control) — Field-level access (security, not UI)

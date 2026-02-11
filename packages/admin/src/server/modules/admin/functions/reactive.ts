@@ -68,6 +68,19 @@ function buildOptionsContext(
 }
 
 /**
+ * Get collection builder by name.
+ */
+function getCollection(cms: Questpie<any>, collectionName: string) {
+	const collections = cms.getCollections();
+	const collection = collections[collectionName];
+	if (!collection) {
+		throw new Error(`Collection '${collectionName}' not found`);
+	}
+
+	return collection;
+}
+
+/**
  * Get field definition from collection.
  */
 function getFieldDefinition(
@@ -75,11 +88,7 @@ function getFieldDefinition(
 	collectionName: string,
 	fieldPath: string,
 ) {
-	const collections = cms.getCollections();
-	const collection = collections[collectionName];
-	if (!collection) {
-		throw new Error(`Collection '${collectionName}' not found`);
-	}
+	const collection = getCollection(cms, collectionName);
 
 	const fieldDefinitions = collection.state.fieldDefinitions || {};
 
@@ -124,29 +133,222 @@ function getFieldDefinition(
 }
 
 /**
- * Get reactive handler from field config.
+ * Remove numeric indices from nested field paths.
+ */
+function normalizeFieldPath(fieldPath: string): string {
+	return fieldPath
+		.split(".")
+		.filter((part) => !/^\d+$/.test(part))
+		.join(".");
+}
+
+/**
+ * Generate candidate field paths for matching form entries.
+ */
+function getFieldPathCandidates(fieldPath: string): Set<string> {
+	const normalized = normalizeFieldPath(fieldPath);
+	const candidates = new Set<string>([normalized]);
+
+	const parts = normalized.split(".");
+	if (parts.length > 1) {
+		const leaf = parts[parts.length - 1];
+		if (leaf) {
+			candidates.add(leaf);
+		}
+	}
+
+	return candidates;
+}
+
+/**
+ * Find a reactive field entry in form layout items recursively.
+ */
+function findReactiveFieldEntryInLayoutItems(
+	items: unknown,
+	fieldCandidates: Set<string>,
+): Record<string, unknown> | null {
+	if (!Array.isArray(items)) {
+		return null;
+	}
+
+	for (const item of items) {
+		if (!item || typeof item !== "object") {
+			continue;
+		}
+
+		const entry = item as Record<string, unknown>;
+
+		if (typeof entry.field === "string" && fieldCandidates.has(entry.field)) {
+			return entry;
+		}
+
+		if (entry.type === "section") {
+			const found = findReactiveFieldEntryInLayoutItems(
+				entry.fields,
+				fieldCandidates,
+			);
+			if (found) {
+				return found;
+			}
+			continue;
+		}
+
+		if (entry.type === "tabs") {
+			const found = findReactiveFieldEntryInTabs(entry.tabs, fieldCandidates);
+			if (found) {
+				return found;
+			}
+		}
+	}
+
+	return null;
+}
+
+/**
+ * Find a reactive field entry in form sections.
+ */
+function findReactiveFieldEntryInSections(
+	sections: unknown,
+	fieldCandidates: Set<string>,
+): Record<string, unknown> | null {
+	if (!Array.isArray(sections)) {
+		return null;
+	}
+
+	for (const section of sections) {
+		if (!section || typeof section !== "object") {
+			continue;
+		}
+
+		const sectionConfig = section as Record<string, unknown>;
+		const found = findReactiveFieldEntryInLayoutItems(
+			sectionConfig.fields,
+			fieldCandidates,
+		);
+
+		if (found) {
+			return found;
+		}
+	}
+
+	return null;
+}
+
+/**
+ * Find a reactive field entry in form tabs.
+ */
+function findReactiveFieldEntryInTabs(
+	tabs: unknown,
+	fieldCandidates: Set<string>,
+): Record<string, unknown> | null {
+	if (!Array.isArray(tabs)) {
+		return null;
+	}
+
+	for (const tab of tabs) {
+		if (!tab || typeof tab !== "object") {
+			continue;
+		}
+
+		const tabConfig = tab as Record<string, unknown>;
+
+		const fromFields = findReactiveFieldEntryInLayoutItems(
+			tabConfig.fields,
+			fieldCandidates,
+		);
+		if (fromFields) {
+			return fromFields;
+		}
+
+		const fromSections = findReactiveFieldEntryInSections(
+			tabConfig.sections,
+			fieldCandidates,
+		);
+		if (fromSections) {
+			return fromSections;
+		}
+	}
+
+	return null;
+}
+
+/**
+ * Find field entry config from collection form configuration.
+ */
+function findReactiveFieldEntry(
+	formConfig: unknown,
+	fieldPath: string,
+): Record<string, unknown> | null {
+	if (!formConfig || typeof formConfig !== "object") {
+		return null;
+	}
+
+	const fieldCandidates = getFieldPathCandidates(fieldPath);
+	const form = formConfig as Record<string, unknown>;
+
+	const fromFields = findReactiveFieldEntryInLayoutItems(
+		form.fields,
+		fieldCandidates,
+	);
+	if (fromFields) {
+		return fromFields;
+	}
+
+	const fromSections = findReactiveFieldEntryInSections(
+		form.sections,
+		fieldCandidates,
+	);
+	if (fromSections) {
+		return fromSections;
+	}
+
+	const fromTabs = findReactiveFieldEntryInTabs(form.tabs, fieldCandidates);
+	if (fromTabs) {
+		return fromTabs;
+	}
+
+	if (form.sidebar && typeof form.sidebar === "object") {
+		const sidebar = form.sidebar as Record<string, unknown>;
+		return findReactiveFieldEntryInLayoutItems(sidebar.fields, fieldCandidates);
+	}
+
+	return null;
+}
+
+/**
+ * Get reactive handler from collection form config.
  */
 function getReactiveHandler(
-	fieldDef: any,
+	cms: Questpie<any>,
+	collectionName: string,
+	fieldPath: string,
 	handlerType: "hidden" | "readOnly" | "disabled" | "compute",
 ): ((ctx: ReactiveContext) => any) | null {
-	const config = fieldDef.state?.config;
-	const admin = config?.meta?.admin;
+	const collection = getCollection(cms, collectionName);
+	const formConfig = (collection.state as any).adminForm;
 
-	if (!admin) return null;
+	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
+	if (!fieldEntry) {
+		return null;
+	}
 
-	const handlerConfig = admin[handlerType];
-	if (!handlerConfig) return null;
+	const handlerConfig = fieldEntry[handlerType];
+	if (!handlerConfig || typeof handlerConfig === "boolean") {
+		return null;
+	}
 
-	// Static boolean - not reactive
-	if (typeof handlerConfig === "boolean") return null;
+	if (typeof handlerConfig === "function") {
+		return handlerConfig as (ctx: ReactiveContext) => any;
+	}
 
-	// Short syntax - just a function
-	if (typeof handlerConfig === "function") return handlerConfig;
-
-	// Full syntax - object with handler
-	if (typeof handlerConfig === "object" && "handler" in handlerConfig) {
-		return handlerConfig.handler;
+	if (
+		typeof handlerConfig === "object" &&
+		handlerConfig !== null &&
+		"handler" in handlerConfig &&
+		typeof (handlerConfig as { handler?: unknown }).handler === "function"
+	) {
+		return (handlerConfig as { handler: (ctx: ReactiveContext) => any })
+			.handler;
 	}
 
 	return null;
@@ -306,10 +508,10 @@ export const batchReactive = fn({
 
 			try {
 				// Get field definition
-				const fieldDef = getFieldDefinition(cms, collectionName, field);
+				getFieldDefinition(cms, collectionName, field);
 
 				// Get reactive handler
-				const handler = getReactiveHandler(fieldDef, type);
+				const handler = getReactiveHandler(cms, collectionName, field, type);
 
 				if (!handler) {
 					// No handler found - skip

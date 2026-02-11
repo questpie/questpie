@@ -26,15 +26,14 @@ appointments ── references barber + service + customer data
 ```ts
 const services = q.collection("services")
   .fields((f) => ({
-    name: f.text().notNull(),
+    name: f.text({ required: true }),
     description: f.textarea(),
-    duration: f.number({ min: 15 }).notNull(),  // minutes
-    price: f.number({ min: 0, precision: 10, scale: 2 }).notNull(),
-    isActive: f.boolean().notNull().default(true),
+    duration: f.number({ min: 15, required: true }),  // minutes
+    price: f.number({ min: 0, precision: 10, scale: 2, required: true }),
+    isActive: f.boolean({ required: true }).default(true),
   }))
   .title((t) => t.name)
-  .options({ timestamps: true })
-  .build();
+  .options({ timestamps: true });
 ```
 
 ### Barbers
@@ -42,16 +41,15 @@ const services = q.collection("services")
 ```ts
 const barbers = q.collection("barbers")
   .fields((f) => ({
-    name: f.text().notNull(),
-    email: f.email().notNull(),
+    name: f.text({ required: true }),
+    email: f.email({ required: true }),
     phone: f.text(),
     avatar: f.upload(),
     bio: f.textarea(),
-    services: f.relation("services", { type: "manyToMany", through: "barberServices" }),
+    services: f.relation({ to: "services", hasMany: true, through: "barberServices" }),
   }))
   .title((t) => t.name)
-  .options({ timestamps: true })
-  .build();
+  .options({ timestamps: true });
 ```
 
 ### Appointments
@@ -59,23 +57,22 @@ const barbers = q.collection("barbers")
 ```ts
 const appointments = q.collection("appointments")
   .fields((f) => ({
-    barber: f.relation("barbers").notNull(),
-    service: f.relation("services").notNull(),
-    customerName: f.text().notNull(),
-    customerEmail: f.email().notNull(),
+    barber: f.relation({ to: "barbers", required: true }),
+    service: f.relation({ to: "services", required: true }),
+    customerName: f.text({ required: true }),
+    customerEmail: f.email({ required: true }),
     customerPhone: f.text(),
-    date: f.date().notNull(),
-    startTime: f.time().notNull(),
-    endTime: f.time().notNull(),
-    status: f.select(["pending", "confirmed", "completed", "cancelled"]).notNull().default("pending"),
+    date: f.date({ required: true }),
+    startTime: f.time({ required: true }),
+    endTime: f.time({ required: true }),
+    status: f.select(["pending", "confirmed", "completed", "cancelled"], { required: true }).default("pending"),
     notes: f.textarea(),
     // Cancellation fields — only visible when status is "cancelled"
     cancellationReason: f.textarea(),
     cancelledAt: f.datetime(),
   }))
   .title((t) => t.customerName)
-  .options({ timestamps: true })
-  .build();
+  .options({ timestamps: true });
 ```
 
 ## Step 2: Reactive Fields

@@ -11,25 +11,20 @@
  * ```
  */
 
-// Re-export all message files
-export { adminMessagesCS } from "./messages/cs.js";
-export { adminMessagesDE } from "./messages/de.js";
-export { adminMessagesEN } from "./messages/en.js";
-export { adminMessagesES } from "./messages/es.js";
-export { adminMessagesFR } from "./messages/fr.js";
-export { adminMessagesPL } from "./messages/pl.js";
-export { adminMessagesPT } from "./messages/pt.js";
-export { adminMessagesSK } from "./messages/sk.js";
+import { messages } from "./messages/index.js";
 
-// Import for internal use
-import { adminMessagesCS } from "./messages/cs.js";
-import { adminMessagesDE } from "./messages/de.js";
-import { adminMessagesEN } from "./messages/en.js";
-import { adminMessagesES } from "./messages/es.js";
-import { adminMessagesFR } from "./messages/fr.js";
-import { adminMessagesPL } from "./messages/pl.js";
-import { adminMessagesPT } from "./messages/pt.js";
-import { adminMessagesSK } from "./messages/sk.js";
+// Re-export messages
+export { messages } from "./messages/index.js";
+
+// Export individual locale messages for direct access
+export const adminMessagesEN = messages.en;
+export const adminMessagesSK = messages.sk;
+export const adminMessagesCS = messages.cs;
+export const adminMessagesDE = messages.de;
+export const adminMessagesFR = messages.fr;
+export const adminMessagesES = messages.es;
+export const adminMessagesPT = messages.pt;
+export const adminMessagesPL = messages.pl;
 
 /**
  * Message value type - string or plural form
@@ -45,16 +40,7 @@ export type AdminMessages = Record<string, MessageValue>;
  * All admin messages indexed by locale code.
  * Used by getAdminTranslations to serve messages for requested locale.
  */
-export const allAdminMessages: Record<string, AdminMessages> = {
-  en: adminMessagesEN,
-  sk: adminMessagesSK,
-  cs: adminMessagesCS,
-  de: adminMessagesDE,
-  fr: adminMessagesFR,
-  es: adminMessagesES,
-  pt: adminMessagesPT,
-  pl: adminMessagesPL,
-};
+export const allAdminMessages: Record<string, AdminMessages> = messages;
 
 /**
  * Get admin messages for a specific locale.
@@ -64,7 +50,7 @@ export const allAdminMessages: Record<string, AdminMessages> = {
  * @returns Messages for the locale
  */
 export function getAdminMessagesForLocale(locale: string): AdminMessages {
-  return allAdminMessages[locale] ?? allAdminMessages.en ?? {};
+	return messages[locale as keyof typeof messages] ?? messages.en ?? {};
 }
 
 /**
@@ -72,5 +58,5 @@ export function getAdminMessagesForLocale(locale: string): AdminMessages {
  * These are locales that have message files.
  */
 export function getSupportedAdminLocales(): string[] {
-  return Object.keys(allAdminMessages);
+	return Object.keys(messages);
 }

@@ -143,7 +143,7 @@ describe("realtime", () => {
           title: f.textarea({ required: true, localized: true }),
           slug: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({ posts }).locale({
         locales: [{ code: "en" }, { code: "sk" }],
@@ -197,7 +197,7 @@ describe("realtime", () => {
           title: f.textarea({ required: true }),
           slug: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         posts,
@@ -244,7 +244,7 @@ describe("realtime", () => {
           title: f.textarea({ required: true }),
           status: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         posts,
@@ -290,7 +290,7 @@ describe("realtime", () => {
           chatId: f.textarea({ required: true }),
           content: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         messages,
@@ -362,7 +362,7 @@ describe("realtime", () => {
           authorId: f.textarea({ required: true }),
           title: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         posts,
@@ -426,7 +426,7 @@ describe("realtime", () => {
           status: f.textarea({ required: true }),
           authorId: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({ posts });
 
@@ -468,7 +468,7 @@ describe("realtime", () => {
           title: f.textarea({ required: true }),
           status: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({ posts });
 
@@ -510,7 +510,7 @@ describe("realtime", () => {
           title: f.textarea({ required: true }),
           completed: f.boolean({ required: true, default: false }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         tasks,
@@ -559,7 +559,7 @@ describe("realtime", () => {
           name: f.textarea({ required: true }),
           categoryId: f.number({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         products,
@@ -603,11 +603,11 @@ describe("realtime", () => {
       const posts = q
         .collection("posts")
         .fields((f) => ({ title: f.textarea({ required: true }) }))
-        .build();
+        ;
       const comments = q
         .collection("comments")
         .fields((f) => ({ content: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const testModule = q.collections({
         posts,
@@ -650,7 +650,7 @@ describe("realtime", () => {
           title: f.textarea({ required: true }),
           status: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({ posts });
 
@@ -699,7 +699,7 @@ describe("realtime", () => {
           title: f.textarea({ required: true }),
           status: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({ posts });
 
@@ -748,7 +748,7 @@ describe("realtime", () => {
       const users = q
         .collection("users")
         .fields((f) => ({ name: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const messages = q
         .collection("messages")
@@ -761,7 +761,7 @@ describe("realtime", () => {
             relationName: "user",
           }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         users,
@@ -825,7 +825,7 @@ describe("realtime", () => {
       const users = q
         .collection("users")
         .fields((f) => ({ name: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const posts = q
         .collection("posts")
@@ -837,7 +837,7 @@ describe("realtime", () => {
             relationName: "user",
           }),
         }))
-        .build();
+        ;
 
       const comments = q
         .collection("comments")
@@ -849,7 +849,7 @@ describe("realtime", () => {
             relationName: "post",
           }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         users,
@@ -927,7 +927,7 @@ describe("realtime", () => {
       const categories = q
         .collection("categories")
         .fields((f) => ({ name: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const products = q
         .collection("products")
@@ -939,7 +939,7 @@ describe("realtime", () => {
             relationName: "category",
           }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         categories,
@@ -998,7 +998,7 @@ describe("realtime", () => {
       const settings = q
         .global("settings")
         .fields((f) => ({ title: f.textarea() }))
-        .build();
+        ;
 
       const testModule = q.globals({
         settings,
@@ -1043,7 +1043,7 @@ describe("realtime", () => {
       const categories = q
         .collection("categories")
         .fields((f) => ({ name: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const settings = q
         .global("settings")
@@ -1054,7 +1054,7 @@ describe("realtime", () => {
             relationName: "defaultCategory",
           }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({ categories }).globals({ settings });
 
@@ -1123,7 +1123,7 @@ describe("realtime", () => {
       const items = q
         .collection("items")
         .fields((f) => ({ name: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const testModule = q.collections({ items });
 
@@ -1161,7 +1161,7 @@ describe("realtime", () => {
           customerId: f.textarea({ required: true }),
           total: f.number({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         orders,
@@ -1231,7 +1231,7 @@ describe("realtime", () => {
       const items = q
         .collection("items")
         .fields((f) => ({ name: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const testModule = q.collections({
         items,
@@ -1267,7 +1267,7 @@ describe("realtime", () => {
       const logs = q
         .collection("logs")
         .fields((f) => ({ message: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const testModule = q.collections({
         logs,
@@ -1303,7 +1303,7 @@ describe("realtime", () => {
           roomId: f.textarea({ required: true }),
           content: f.textarea({ required: true }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({ messages });
 
@@ -1360,7 +1360,7 @@ describe("realtime", () => {
       const items = q
         .collection("items")
         .fields((f) => ({ name: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const testModule = q.collections({ items });
 
@@ -1400,7 +1400,7 @@ describe("realtime", () => {
       const items = q
         .collection("items")
         .fields((f) => ({ name: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const testModule = q.collections({ items });
 
@@ -1468,7 +1468,7 @@ describe("realtime", () => {
           read: ({ session }) => (session?.user as any)?.role === "admin",
           create: true,
         })
-        .build();
+        ;
 
       const testModule = q.collections({
         secrets,
@@ -1524,7 +1524,7 @@ describe("realtime", () => {
           read: ({ session }) => (session?.user as any)?.role === "admin",
           create: true,
         })
-        .build();
+        ;
 
       const testModule = q.collections({
         secrets,
@@ -1580,7 +1580,7 @@ describe("realtime", () => {
             },
           },
         })
-        .build();
+        ;
 
       const testModule = q.collections({
         documents,
@@ -1636,7 +1636,7 @@ describe("realtime", () => {
           read: ({ session }) => (session?.user as any)?.role === "admin",
           update: ({ session }) => (session?.user as any)?.role === "admin",
         })
-        .build();
+        ;
 
       const testModule = q.globals({
         config,
@@ -1701,7 +1701,7 @@ describe("realtime", () => {
           name: f.textarea({ required: true }),
           value: f.number({ required: true, default: 0 }),
         }))
-        .build();
+        ;
 
       const testModule = q.collections({
         counters,
@@ -1782,7 +1782,7 @@ describe("realtime", () => {
       const items = q
         .collection("items")
         .fields((f) => ({ name: f.textarea({ required: true }) }))
-        .build();
+        ;
 
       const testModule = q.collections({
         items,

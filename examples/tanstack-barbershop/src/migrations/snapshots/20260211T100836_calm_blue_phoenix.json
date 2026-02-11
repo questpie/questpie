@@ -1,0 +1,227 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__admin_locks",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "admin_locks",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__resourceType",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resourceType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__resource",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resource",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__resourceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resourceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__user",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "user",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__sessionId",
+      "value": {
+        "type": "varchar(64)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "sessionId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__expiresAt",
+      "value": {
+        "type": "date",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__rating",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "rating",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__admin_locks__DOT__admin_locks_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "admin_locks_pkey",
+        "schema": "public",
+        "table": "admin_locks",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-02-11T10:08:37.289Z",
+      "migrationId": "calmBluePhoenix20260211T100836"
+    }
+  ],
+  "metadata": {
+    "migrationId": "calmBluePhoenix20260211T100836",
+    "timestamp": "2026-02-11T10:08:37.379Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

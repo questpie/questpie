@@ -71,9 +71,31 @@ const cms = q({ name: "barbershop" })
 The dashboard is defined on the server with `.dashboard()`:
 
 ```ts
-.dashboard(({ d }) =>
+.dashboard(({ d, c, a }) =>
   d.dashboard({
     columns: 4,
+    actions: [
+      a.create({
+        id: "new-appointment",
+        collection: "appointments",
+        label: "New Appointment",
+        icon: c.icon("ph:calendar-plus"),
+        variant: "primary",
+      }),
+      a.global({
+        id: "site-settings",
+        global: "siteSettings",
+        label: "Site Settings",
+        icon: c.icon("ph:gear-six"),
+      }),
+      a.link({
+        id: "open-site",
+        label: "Open Website",
+        href: "/",
+        icon: c.icon("ph:arrow-square-out"),
+        variant: "outline",
+      }),
+    ],
     items: [
       d.stats({
         collection: "appointments",
@@ -118,6 +140,17 @@ The dashboard is defined on the server with `.dashboard()`:
 | `refreshInterval` | `number` | — | Auto-refresh (ms) |
 | `realtime` | `boolean` | — | Enable realtime updates |
 | `actions` | `DashboardAction[]` | — | Header action buttons |
+
+### Header Action Helpers (`a`)
+
+Use `a` helpers in `.dashboard(({ d, c, a }) => ...)` for typed, consistent admin routes.
+
+| Helper | Input | Resolves to |
+|---|---|---|
+| `a.create(...)` | `{ collection: "appointments" }` | `/admin/collections/appointments/create` |
+| `a.global(...)` | `{ global: "siteSettings" }` | `/admin/globals/siteSettings` |
+| `a.link(...)` | `{ href: "/custom" }` | `/custom` |
+| `a.action(...)` | `{ href: "/custom" }` | `/custom` |
 
 ### Widget Types
 

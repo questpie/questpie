@@ -44,11 +44,23 @@ interface HookContext<TData, TOriginal, TOperation, TApp> {
 | `data` | `TData` | Current record or input data (mutable in before* hooks) |
 | `original` | `TOriginal \| undefined` | Previous record state (update/delete only) |
 | `operation` | `string` | `"create"`, `"update"`, `"delete"`, or `"read"` |
-| `app` | `TApp` | CMS instance — use `getApp(app)` |
+| `app` | `TApp` | CMS instance — use `getApp<AppCMS>(app)` or `getContext<AppCMS>(ctx)` |
 | `session` | `Session \| null` | Authenticated user session |
 | `locale` | `string` | Current locale |
 | `accessMode` | `string` | `"system"` or `"user"` |
-| `db` | `Database` | Database client — use `getDb(db)` |
+| `db` | `Database` | Database client — use `getDb<AppCMS>(db)` or `getContext<AppCMS>(ctx)` |
+
+### Type-Safe Context Pattern
+
+```ts
+import { getContext } from "questpie";
+import type { AppCMS } from "../cms";
+
+afterChange: async (ctx) => {
+  const { app, db, session } = getContext<AppCMS>(ctx);
+  // app, db, session are strongly typed here
+}
+```
 
 ## Execution Order
 
@@ -164,3 +176,4 @@ Throw to prevent deletion.
 - [Hooks & Lifecycle](/docs/server/hooks-and-lifecycle) — Detailed guide with examples
 - [CRUD API](/docs/reference/crud-api) — Operations that trigger hooks
 - [Context & Transactions](/docs/server/context-and-transactions) — Transaction behavior
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — Typed `app`, `db`, and `session` pattern

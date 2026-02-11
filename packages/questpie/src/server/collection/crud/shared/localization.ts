@@ -13,11 +13,78 @@
 import type { NestedLocalizationSchema } from "./field-extraction.js";
 import { deepMergeI18n } from "./nested-i18n-merge.js";
 import { splitByNestedSchema } from "./nested-i18n-split.js";
+import { isPlainObject } from "./path-utils.js";
 
 /**
  * Constant for the _localized column name in i18n table
  */
 export const LOCALIZED_COLUMN = "_localized";
+
+/**
+ * Split legacy `{ $i18n: value }` wrappers into structure + localized values.
+ *
+ * Backward compatibility path for fields without explicit nested localization schema.
+ */
+function splitLegacyI18nWrappers(value: unknown): {
+	structure: unknown;
+	i18nValues: unknown | null;
+} {
+	if (value == null) {
+		return { structure: value, i18nValues: null };
+	}
+
+	if (isPlainObject(value)) {
+		const obj = value as Record<string, unknown>;
+		const entries = Object.entries(obj);
+
+		if (entries.length === 1 && entries[0]?.[0] === "$i18n") {
+			return {
+				structure: { $i18n: true },
+				i18nValues: entries[0][1],
+			};
+		}
+
+		const structureObj: Record<string, unknown> = {};
+		const i18nObj: Record<string, unknown> = {};
+		let hasI18n = false;
+
+		for (const [key, child] of entries) {
+			const split = splitLegacyI18nWrappers(child);
+			structureObj[key] = split.structure;
+			if (split.i18nValues != null) {
+				i18nObj[key] = split.i18nValues;
+				hasI18n = true;
+			}
+		}
+
+		return {
+			structure: structureObj,
+			i18nValues: hasI18n ? i18nObj : null,
+		};
+	}
+
+	if (Array.isArray(value)) {
+		const structureArr: unknown[] = [];
+		const i18nArr: Array<unknown | null> = [];
+		let hasI18n = false;
+
+		for (const item of value) {
+			const split = splitLegacyI18nWrappers(item);
+			structureArr.push(split.structure);
+			i18nArr.push(split.i18nValues);
+			if (split.i18nValues != null) {
+				hasI18n = true;
+			}
+		}
+
+		return {
+			structure: structureArr,
+			i18nValues: hasI18n ? i18nArr : null,
+		};
+	}
+
+	return { structure: value, i18nValues: null };
+}
 
 /**
  * Split input data into localized and non-localized fields using field definition schemas.
@@ -83,7 +150,12 @@ export function splitLocalizedFields(
 		}
 
 		// Case 3: Non-localized field - goes to main table
-		nonLocalized[key] = value;
+		const split = splitLegacyI18nWrappers(value);
+		nonLocalized[key] = split.structure;
+		if (split.i18nValues != null) {
+			nestedLocalized[key] = split.i18nValues;
+			hasNestedLocalized = true;
+		}
 	}
 
 	return {

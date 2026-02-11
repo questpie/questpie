@@ -10,11 +10,10 @@ description: All collection-level methods — fields, hooks, access, options, se
 ```ts
 const posts = q.collection("posts")
   .fields((f) => ({ ... }))
-  .title((t) => t.title)
+  .title(({ f }) => f.title)
   .hooks({ ... })
   .access({ ... })
-  .options({ timestamps: true })
-  .build();
+  .options({ timestamps: true });
 ```
 
 All methods are chainable and return a new builder instance.
@@ -27,11 +26,15 @@ Define the collection's fields using the field builder proxy.
 
 ```ts
 .fields((f) => ({
-  title: f.text().notNull(),
-  slug: f.text().notNull(),
+  title: f.text({ required: true }),
+  slug: f.text({ required: true }),
   body: f.richText(),
-  status: f.select(["draft", "published", "archived"]).notNull().default("draft"),
-  author: f.relation("users"),
+  status: f.select({
+    options: ["draft", "published", "archived"],
+    required: true,
+    defaultValue: "draft",
+  }),
+  author: f.relation({ to: "users" }),
   publishedAt: f.datetime(),
 }))
 ```
@@ -51,7 +54,7 @@ Also accepts raw Drizzle columns for escape hatches:
 Define which field to use as the display title in the admin panel.
 
 ```ts
-.title((t) => t.title)
+.title(({ f }) => f.title)
 ```
 
 **Parameter:** `(proxy) => FieldProxy` — callback receiving a field name proxy.
@@ -61,24 +64,13 @@ Define which field to use as the display title in the admin panel.
 Define database indexes and constraints.
 
 ```ts
-.indexes((table, helpers) => [
-  helpers.uniqueIndex("slug_unique").on(table.slug),
-  helpers.index("status_idx").on(table.status),
+.indexes(({ table }) => [
+  uniqueIndex("slug_unique").on(table.slug),
+  index("status_idx").on(table.status),
 ])
 ```
 
-**Parameter:** `(table, helpers) => PgTableExtraConfigValue[]`
-
-### `.$outputType<T>()`
-
-Declare output-only type extensions for computed fields added in hooks. These don't create database columns.
-
-```ts
-.$outputType<{
-  fullName: string;
-  isActive: boolean;
-}>()
-```
+**Parameter:** `({ table }) => PgTableExtraConfigValue[]`
 
 ## Behavior
 
@@ -150,7 +142,7 @@ Set collection options.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `timestamps` | `boolean` | `false` | Add `createdAt` and `updatedAt` columns |
+| `timestamps` | `boolean` | `true` | Add `createdAt` and `updatedAt` columns |
 | `softDelete` | `boolean` | `false` | Add `deletedAt` column, enable `.restore()` |
 | `versioning` | `boolean \| CollectionVersioningOptions` | `false` | Enable version history |
 
@@ -288,17 +280,25 @@ const extendedPosts = postsCollection.merge(
 );
 ```
 
-## Build
+## Finalization
 
-### `.build()`
+Collection builders are passed directly to `q.collections({ ... })` and finalized during top-level CMS `.build(...)`.
 
-Finalize the collection. Called automatically when the collection is used in `q.collections()`.
+In app code, prefer this pattern:
 
-**Returns:** `Collection<TState>` with lazy getters for `table`, `i18nTable`, `versionsTable`.
+```ts
+const posts = q.collection("posts")
+  .fields((f) => ({ ... }))
+  .hooks({ ... });
+
+export const cms = q({ name: "app" })
+  .collections({ posts })
+  .build({ app: { url: process.env.APP_URL! }, db: { url: process.env.DATABASE_URL! } });
+```
 
 ## Runtime
 
-After build, CRUD operations are available at:
+After CMS build, CRUD operations are available at:
 
 ```ts
 cms.api.collections.posts.find(options)

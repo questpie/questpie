@@ -11,10 +11,23 @@ import type {
 	RelationConfig,
 	RelationVariant,
 } from "#questpie/server/collection/builder/types.js";
+import type { BaseRequestContext } from "#questpie/server/config/context.js";
 // Note: any, any, and any are deprecated.
 // Users should use getApp<AppCMS>(), getDb<AppCMS>(), and getSession<AppCMS>() instead.
-import type { AccessMode } from "#questpie/server/config/types.js";
+import type {
+	AccessMode,
+	QuestpieContextExtension,
+} from "#questpie/server/config/types.js";
+import type { FieldDefinitionAccess } from "#questpie/server/fields/types.js";
 import type { FunctionDefinition } from "#questpie/server/functions/types.js";
+
+/**
+ * Scope resolver function type for globals.
+ * Returns a scope ID based on the request context.
+ */
+export type GlobalScopeResolver = (
+	ctx: BaseRequestContext & QuestpieContextExtension,
+) => string | null | undefined;
 
 /**
  * Options for global configuration
@@ -29,6 +42,39 @@ export interface GlobalOptions {
 	 * Versioning configuration
 	 */
 	versioning?: boolean | CollectionVersioningOptions;
+	/**
+	 * Scope resolver for multi-tenant globals.
+	 * When provided, each scope gets its own instance of the global.
+	 *
+	 * The resolver receives the request context (including custom extensions
+	 * from `.context()` on builder) and returns the scope ID.
+	 *
+	 * @example
+	 * ```ts
+	 * // Per-tenant settings
+	 * const tenantSettings = qb
+	 *   .global('tenant_settings')
+	 *   .options({
+	 *     scoped: (ctx) => ctx.tenantId  // From context extension
+	 *   })
+	 *   .fields((f) => ({
+	 *     welcomeMessage: f.text(),
+	 *     theme: f.select({ options: ['light', 'dark'] })
+	 *   }))
+	 *
+	 * // Per-property settings (multi-property management)
+	 * const propertySettings = qb
+	 *   .global('property_settings')
+	 *   .options({
+	 *     scoped: (ctx) => ctx.propertyId
+	 *   })
+	 *   .fields((f) => ({
+	 *     checkInTime: f.text({ default: '14:00' }),
+	 *     checkOutTime: f.text({ default: '11:00' })
+	 *   }))
+	 * ```
+	 */
+	scoped?: GlobalScopeResolver;
 }
 
 /**
@@ -146,6 +192,11 @@ export type GlobalAccessRule<TRow = any, TApp = any> =
 export interface GlobalAccess<TRow = any, TApp = any> {
 	read?: GlobalAccessRule<TRow, TApp>;
 	update?: GlobalAccessRule<TRow, TApp>;
+	/**
+	 * Field-scoped access rules.
+	 * Source-of-truth for per-field authorization in globals.
+	 */
+	fields?: Record<string, Pick<FieldDefinitionAccess, "read" | "update">>;
 }
 
 export type GlobalBuilderRelationFn<

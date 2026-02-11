@@ -70,18 +70,21 @@ Type-safe helpers for accessing CMS services from hooks and RPC handlers:
 
 ```ts
 import { getApp, getDb, getSession } from "questpie";
+import type { AppCMS } from "../cms";
 
 .hooks({
   afterChange: async ({ app, db, session }) => {
-    const cms = getApp(app);         // Typed CMS instance
-    const typedDb = getDb(db);       // Typed Drizzle client
-    const typedSession = getSession(session); // Typed session
+    const cms = getApp<AppCMS>(app);
+    const typedDb = getDb<AppCMS>(db);
+    const typedSession = getSession<AppCMS>(session);
 
     await cms.kv.set("cache:key", "value");
     await typedDb.execute(sql`SELECT 1`);
   },
 })
 ```
+
+Or type everything at once with `getContext<AppCMS>(ctx)`.
 
 ### createContext
 
@@ -303,3 +306,4 @@ const processBooking = rpc.fn({
 - [Access Control](/docs/server/access-control) — Access checks within context
 - [Database & Migrations](/docs/infrastructure/database-and-migrations) — Database connection setup
 - [Queue & Jobs](/docs/infrastructure/queue-and-jobs) — Deferring work with `onAfterCommit`
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — Canonical typed context examples

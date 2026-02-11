@@ -112,6 +112,3 @@ export type {
 	SelectFieldMetadata,
 	SelectModifier,
 } from "./types.js";
-
-// Utilities
-export * from "./utils/index.js";

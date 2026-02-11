@@ -43,16 +43,9 @@ export const appointments = qb
 		cancelledAt: f.datetime({
 			label: { en: "Cancelled At", sk: "Zrušené dňa" },
 		}),
-		// Cancellation reason - only shown when status is "cancelled"
+		// Cancellation reason - visibility controlled in .form()
 		cancellationReason: f.textarea({
 			label: { en: "Cancellation Reason", sk: "Dôvod zrušenia" },
-			meta: {
-				admin: {
-					// Only show when appointment is cancelled
-					hidden: ({ data }: { data: Record<string, unknown> }) =>
-						data.status !== "cancelled",
-				},
-			},
 		}),
 		displayTitle: f.text({ virtual: true }),
 	}))
@@ -84,34 +77,39 @@ export const appointments = qb
 				{
 					type: "section",
 					label: { en: "Cancellation", sk: "Zrušenie" },
-					fields: [f.cancelledAt, f.cancellationReason],
+					fields: [
+						f.cancelledAt,
+						{
+							field: f.cancellationReason,
+							hidden: ({ data }) => data.status !== "cancelled",
+						},
+					],
 				},
 			],
 		}),
 	)
 	.hooks({
 		afterRead: ({ data }) => {
-			if (!data) return;
-			const scheduledAt = (data as any).scheduledAt as Date | undefined;
+			const scheduledAt = data.scheduledAt;
 			const dateLabel = scheduledAt
 				? scheduledAt.toISOString().replace("T", " ").slice(0, 16)
 				: "";
-			(data as any).displayTitle =
-				`${(data as any).customer ?? "Customer"} - ${dateLabel}`.trim();
+			data.displayTitle =
+				`${data.customer ?? "Customer"} - ${dateLabel}`.trim();
 		},
 		afterChange: async ({ data, operation, original, app }) => {
 			const cms = getApp<AppCMS>(app);
 
 			if (operation === "create") {
 				await cms.queue.sendAppointmentConfirmation.publish({
-					appointmentId: (data as any).id,
-					customerId: (data as any).customer,
+					appointmentId: data.id,
+					customerId: data.customer,
 				});
 			} else if (operation === "update" && original) {
-				if ((data as any).status === "cancelled" && (data as any).cancelledAt) {
+				if (data.status === "cancelled" && data.cancelledAt) {
 					await cms.queue.sendAppointmentCancellation.publish({
-						appointmentId: (data as any).id,
-						customerId: (data as any).customer,
+						appointmentId: data.id,
+						customerId: data.customer,
 					});
 				}
 			}

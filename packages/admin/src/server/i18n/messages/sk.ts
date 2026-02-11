@@ -1,7 +1,7 @@
 /**
  * Slovak Admin UI Messages
  */
-export const adminMessagesSK = {
+export default {
   // Common
   "common.save": "Uložiť",
   "common.cancel": "Zrušiť",

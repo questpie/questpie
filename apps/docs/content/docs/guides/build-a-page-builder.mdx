@@ -16,7 +16,7 @@ import { adminModule } from "@questpie/admin/server";
 
 const heroBlock = adminModule.block("hero")
   .fields((f) => ({
-    heading: f.text().notNull(),
+    heading: f.text({ required: true }),
     subheading: f.text(),
     image: f.upload(),
     ctaLabel: f.text(),
@@ -30,7 +30,7 @@ const heroBlock = adminModule.block("hero")
 
 const textBlock = adminModule.block("text")
   .fields((f) => ({
-    body: f.richText().notNull(),
+    body: f.richText({ required: true }),
   }))
   .admin({
     label: "Text Block",
@@ -39,7 +39,7 @@ const textBlock = adminModule.block("text")
 
 const imageBlock = adminModule.block("image")
   .fields((f) => ({
-    image: f.upload().notNull(),
+    image: f.upload({ required: true }),
     alt: f.text(),
     caption: f.text(),
   }))
@@ -50,7 +50,7 @@ const imageBlock = adminModule.block("image")
 
 const columnsBlock = adminModule.block("columns")
   .fields((f) => ({
-    columns: f.number({ min: 2, max: 4 }).notNull().default(2),
+    columns: f.number({ min: 2, max: 4, required: true }).default(2),
     items: f.array({
       items: z.object({
         heading: z.string(),
@@ -70,12 +70,12 @@ const columnsBlock = adminModule.block("columns")
 ```ts
 const pages = q.collection("pages")
   .fields((f) => ({
-    title: f.text().notNull().localized(),
-    slug: f.text().notNull(),
+    title: f.text({ required: true, localized: true }),
+    slug: f.text({ required: true }),
     content: f.blocks({
       types: [heroBlock, textBlock, imageBlock, columnsBlock],
     }).localized(),
-    isPublished: f.boolean().notNull().default(false),
+    isPublished: f.boolean({ required: true }).default(false),
     // SEO fields
     metaTitle: f.text().localized(),
     metaDescription: f.textarea().localized(),
@@ -93,8 +93,7 @@ const pages = q.collection("pages")
           .replace(/(^-|-$)/g, "");
       }
     },
-  })
-  .build();
+  });
 ```
 
 ## Step 3: Configure Admin Form

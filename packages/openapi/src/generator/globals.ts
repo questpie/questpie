@@ -37,6 +37,9 @@ export function generateGlobalPaths(
 		const pascalName = toPascalCase(name);
 		const valueSchemaName = `${pascalName}Global`;
 		const updateSchemaName = `${pascalName}GlobalUpdate`;
+		const fieldDefinitionSchema = buildGlobalSchemaFromFieldDefinitions(
+			state.fieldDefinitions,
+		);
 
 		// Generate value schema from validation or field definitions
 		if (state.validation?.updateSchema) {
@@ -51,6 +54,8 @@ export function generateGlobalPaths(
 					description: `Update schema for ${name} global`,
 				};
 			}
+		} else if (fieldDefinitionSchema != null) {
+			schemas[updateSchemaName] = fieldDefinitionSchema;
 		} else {
 			schemas[updateSchemaName] = {
 				type: "object",
@@ -126,4 +131,41 @@ function toPascalCase(str: string): string {
 	return str
 		.replace(/[-_](.)/g, (_, c) => c.toUpperCase())
 		.replace(/^(.)/, (_, c) => c.toUpperCase());
+}
+
+function buildGlobalSchemaFromFieldDefinitions(
+	fieldDefinitions: unknown,
+): unknown | null {
+	if (!fieldDefinitions || typeof fieldDefinitions !== "object") {
+		return null;
+	}
+
+	const shape: Record<string, z.ZodTypeAny> = {};
+
+	for (const [fieldName, fieldDefinition] of Object.entries(
+		fieldDefinitions as Record<string, unknown>,
+	)) {
+		const toZodSchema = (fieldDefinition as { toZodSchema?: () => unknown })
+			.toZodSchema;
+		if (typeof toZodSchema !== "function") {
+			continue;
+		}
+
+		try {
+			const schema = toZodSchema();
+			if (schema && typeof schema === "object" && "_def" in schema) {
+				shape[fieldName] = schema as z.ZodTypeAny;
+			}
+		} catch {
+			// Ignore fields that cannot be converted; keep generating the rest.
+		}
+	}
+
+	if (Object.keys(shape).length === 0) {
+		return null;
+	}
+
+	return z.toJSONSchema(z.object(shape).partial(), {
+		unrepresentable: "any",
+	});
 }

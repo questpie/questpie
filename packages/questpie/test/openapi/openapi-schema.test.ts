@@ -22,12 +22,9 @@ describe("OpenAPI schema generation", () => {
 				}),
 			}));
 
-			// Just build the collections - generateOpenApiSpec expects Questpie instance
-			const builtPosts = posts.build();
-
 			// Create a minimal mock CMS for testing
 			const mockCms = {
-				getCollections: () => ({ posts: builtPosts }),
+				getCollections: () => ({ posts }),
 				getGlobals: () => ({}),
 			};
 
@@ -65,10 +62,8 @@ describe("OpenAPI schema generation", () => {
 				title: f.text({ required: true }),
 			}));
 
-			const builtPosts = posts.build();
-
 			const mockCms = {
-				getCollections: () => ({ posts: builtPosts }),
+				getCollections: () => ({ posts }),
 				getGlobals: () => ({}),
 			};
 
@@ -104,11 +99,8 @@ describe("OpenAPI schema generation", () => {
 				author: f.relation({ to: "authors" }),
 			}));
 
-			const builtAuthors = authors.build();
-			const builtPosts = posts.build();
-
 			const mockCms = {
-				getCollections: () => ({ authors: builtAuthors, posts: builtPosts }),
+				getCollections: () => ({ authors, posts }),
 				getGlobals: () => ({}),
 			};
 
@@ -134,10 +126,8 @@ describe("OpenAPI schema generation", () => {
 				views: f.number(),
 			}));
 
-			const builtPosts = posts.build();
-
 			const mockCms = {
-				getCollections: () => ({ posts: builtPosts }),
+				getCollections: () => ({ posts }),
 				getGlobals: () => ({}),
 			};
 
@@ -171,11 +161,9 @@ describe("OpenAPI schema generation", () => {
 				maintenanceMode: f.boolean({ default: false }),
 			}));
 
-			const builtSettings = settings.build();
-
 			const mockCms = {
 				getCollections: () => ({}),
-				getGlobals: () => ({ settings: builtSettings }),
+				getGlobals: () => ({ settings }),
 			};
 
 			const spec = generateOpenApiSpec(mockCms as any, undefined, {

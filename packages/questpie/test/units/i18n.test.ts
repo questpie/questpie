@@ -493,7 +493,7 @@ describe("i18n", () => {
       expect(error.messageParams).toEqual({ resource: "User", id: "123" });
     });
 
-    test("should translate forbidden error", () => {
+    test("should keep custom forbidden reason when translator provided", () => {
       const error = ApiError.forbidden({
         operation: "delete",
         resource: "post",
@@ -501,6 +501,19 @@ describe("i18n", () => {
       });
       const json = error.toJSON(false, t, "sk");
 
+      expect(error.messageKey).toBeUndefined();
+      expect(json.message).toBe("Not authorized");
+    });
+
+    test("should translate default forbidden reason", () => {
+      const error = ApiError.forbidden({
+        operation: "delete",
+        resource: "post",
+        reason: "Access denied",
+      });
+      const json = error.toJSON(false, t, "sk");
+
+      expect(error.messageKey).toBe("error.forbidden");
       expect(json.message).toBe("Pristup zamietnuty");
     });
 

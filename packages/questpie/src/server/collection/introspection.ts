@@ -11,7 +11,6 @@ import { buildCollectionSchemas } from "#questpie/server/collection/builder/fiel
 import type {
 	AccessContext,
 	AccessRule,
-	CollectionAccess,
 	CollectionBuilderState,
 } from "#questpie/server/collection/builder/types.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
@@ -149,32 +148,70 @@ export interface AdminListViewSchema {
 }
 
 /**
+ * Reactive field config for form views.
+ * These are evaluated server-side and results sent to the client.
+ */
+export interface FormFieldReactiveConfig {
+	/** Hide field based on form data */
+	hidden?: boolean | { deps: string[] };
+	/** Make field read-only based on form data */
+	readOnly?: boolean | { deps: string[] };
+	/** Disable field based on form data */
+	disabled?: boolean | { deps: string[] };
+	/** Auto-compute field value from other fields */
+	compute?: {
+		deps: string[];
+		debounce?: number;
+	};
+}
+
+/**
+ * Form field entry - either a simple field name or field with reactive config.
+ *
+ * @example Simple field
+ * ```ts
+ * f.name  // resolves to "name"
+ * ```
+ *
+ * @example Field with reactive config
+ * ```ts
+ * { field: f.slug, compute: { deps: ["title"], debounce: 300 } }
+ * { field: f.reason, hidden: { deps: ["status"] } }
+ * ```
+ */
+export type FormFieldEntry =
+	| string
+	| ({
+			/** Field name (use f.fieldName proxy) */
+			field: string;
+	  } & FormFieldReactiveConfig);
+
+/**
+ * Form section with fields that can have inline reactive config.
+ */
+export interface FormSection {
+	label?: I18nText;
+	description?: I18nText;
+	fields: FormFieldEntry[];
+	collapsible?: boolean;
+	defaultCollapsed?: boolean;
+}
+
+/**
  * Admin form view schema (from .form())
  */
 export interface AdminFormViewSchema {
 	/** View type (form, wizard, etc.) */
 	view?: string;
-	/** Fields to include */
-	fields?: string[];
+	/** Fields to include - can be simple names or objects with reactive config */
+	fields?: FormFieldEntry[];
 	/** Form sections */
-	sections?: Array<{
-		label?: I18nText;
-		description?: I18nText;
-		fields: string[];
-		collapsible?: boolean;
-		defaultCollapsed?: boolean;
-	}>;
+	sections?: FormSection[];
 	/** Form tabs */
 	tabs?: Array<{
 		label: I18nText;
 		icon?: { type: string; props: Record<string, unknown> };
-		sections: Array<{
-			label?: I18nText;
-			description?: I18nText;
-			fields: string[];
-			collapsible?: boolean;
-			defaultCollapsed?: boolean;
-		}>;
+		sections: FormSection[];
 	}>;
 }
 
@@ -364,6 +401,9 @@ export async function introspectCollection(
 ): Promise<CollectionSchema> {
 	const { state } = collection;
 	const fieldDefinitions = state.fieldDefinitions || {};
+	const formReactiveByField = extractFormReactiveConfigs(
+		(state as any).adminForm,
+	);
 
 	// Evaluate collection-level access
 	const access = await evaluateCollectionAccess(state, context, cms);
@@ -383,8 +423,11 @@ export async function introspectCollection(
 			// Field doesn't support JSON Schema generation
 		}
 
-		// Extract reactive configuration from field metadata
-		const reactive = extractFieldReactiveConfig(fieldDef);
+		// Extract reactive configuration from form config + dynamic field options
+		const reactive = extractFieldReactiveConfig(
+			fieldDef,
+			formReactiveByField[name],
+		);
 
 		fields[name] = {
 			name,
@@ -811,29 +854,149 @@ export async function introspectCollections(
 // ============================================================================
 
 /**
- * Admin meta properties that can be reactive.
+ * Reactive properties supported in form field entries.
  */
-type ReactiveAdminMetaKey = "hidden" | "readOnly" | "disabled" | "compute";
+type ReactiveFormFieldKey = "hidden" | "readOnly" | "disabled" | "compute";
 
 /**
  * Extract reactive configuration from a field definition.
- * Checks meta.admin for reactive properties and serializes them.
+ * Merges form-level reactive config with field-level dynamic options config.
  *
  * @param fieldDef - Field definition to extract reactive config from
+ * @param formReactive - Reactive config extracted from form layout for this field
  * @returns Serialized reactive config or undefined if no reactive behavior
  */
 function extractFieldReactiveConfig(
 	fieldDef: FieldDefinition<FieldDefinitionState>,
+	formReactive?: FieldReactiveSchema,
 ): FieldReactiveSchema | undefined {
-	const config = fieldDef.state.config as Record<string, unknown> | undefined;
-	const meta = config?.meta as Record<string, unknown> | undefined;
-	const admin = meta?.admin as Record<string, unknown> | undefined;
+	const optionsReactive = extractFieldOptionsReactiveConfig(fieldDef);
 
-	if (!admin) {
+	if (!formReactive && !optionsReactive) {
 		return undefined;
 	}
 
-	const reactiveKeys: ReactiveAdminMetaKey[] = [
+	return {
+		...(formReactive ?? {}),
+		...(optionsReactive ?? {}),
+	};
+}
+
+/**
+ * Extract reactive config map from form view configuration.
+ * Supports fields in root layout, sections, tabs, and sidebar.
+ */
+function extractFormReactiveConfigs(
+	formConfig: unknown,
+): Record<string, FieldReactiveSchema> {
+	const result: Record<string, FieldReactiveSchema> = {};
+
+	if (!formConfig || typeof formConfig !== "object") {
+		return result;
+	}
+
+	const form = formConfig as Record<string, unknown>;
+
+	collectReactiveFromLayoutItems(form.fields, result);
+	collectReactiveFromSections(form.sections, result);
+	collectReactiveFromTabs(form.tabs, result);
+
+	if (form.sidebar && typeof form.sidebar === "object") {
+		const sidebar = form.sidebar as Record<string, unknown>;
+		collectReactiveFromLayoutItems(sidebar.fields, result);
+	}
+
+	return result;
+}
+
+/**
+ * Collect reactive configs from layout items recursively.
+ */
+function collectReactiveFromLayoutItems(
+	items: unknown,
+	result: Record<string, FieldReactiveSchema>,
+): void {
+	if (!Array.isArray(items)) {
+		return;
+	}
+
+	for (const item of items) {
+		if (!item || typeof item !== "object") {
+			continue;
+		}
+
+		const entry = item as Record<string, unknown>;
+
+		if (typeof entry.field === "string") {
+			const reactive = serializeFormFieldReactiveConfig(entry);
+			if (reactive) {
+				const existing = result[entry.field] ?? {};
+				result[entry.field] = { ...existing, ...reactive };
+			}
+			continue;
+		}
+
+		if (entry.type === "section") {
+			collectReactiveFromLayoutItems(entry.fields, result);
+			continue;
+		}
+
+		if (entry.type === "tabs") {
+			collectReactiveFromTabs(entry.tabs, result);
+		}
+	}
+}
+
+/**
+ * Collect reactive configs from sections.
+ */
+function collectReactiveFromSections(
+	sections: unknown,
+	result: Record<string, FieldReactiveSchema>,
+): void {
+	if (!Array.isArray(sections)) {
+		return;
+	}
+
+	for (const section of sections) {
+		if (!section || typeof section !== "object") {
+			continue;
+		}
+
+		const sectionConfig = section as Record<string, unknown>;
+		collectReactiveFromLayoutItems(sectionConfig.fields, result);
+	}
+}
+
+/**
+ * Collect reactive configs from tabs.
+ */
+function collectReactiveFromTabs(
+	tabs: unknown,
+	result: Record<string, FieldReactiveSchema>,
+): void {
+	if (!Array.isArray(tabs)) {
+		return;
+	}
+
+	for (const tab of tabs) {
+		if (!tab || typeof tab !== "object") {
+			continue;
+		}
+
+		const tabConfig = tab as Record<string, unknown>;
+		collectReactiveFromLayoutItems(tabConfig.fields, result);
+		collectReactiveFromSections(tabConfig.sections, result);
+	}
+}
+
+/**
+ * Serialize reactive config for a single form field entry.
+ */
+function serializeFormFieldReactiveConfig(
+	fieldEntry: Record<string, unknown>,
+): FieldReactiveSchema | undefined {
+	const reactiveKeys: ReactiveFormFieldKey[] = [
 		"hidden",
 		"readOnly",
 		"disabled",
@@ -844,30 +1007,53 @@ function extractFieldReactiveConfig(
 	let hasReactive = false;
 
 	for (const key of reactiveKeys) {
-		const value = admin[key];
+		const value = fieldEntry[key];
 
-		// Skip static boolean values (true/false) - only process reactive configs
-		if (typeof value === "boolean") {
+		if (typeof value === "boolean" || value === undefined) {
 			continue;
 		}
 
-		// Check if it's a reactive config (function or object with handler)
 		if (isReactiveConfig(value)) {
 			hasReactive = true;
-
-			const serialized: SerializedReactiveConfig = {
+			result[key] = {
 				watch: extractDependencies(value),
 				debounce: getDebounce(value),
 			};
+			continue;
+		}
 
-			result[key] = serialized;
+		if (
+			value &&
+			typeof value === "object" &&
+			"deps" in value &&
+			Array.isArray((value as { deps?: unknown }).deps)
+		) {
+			hasReactive = true;
+			const serializedValue = value as { deps: string[]; debounce?: unknown };
+			result[key] = {
+				watch: serializedValue.deps,
+				debounce:
+					typeof serializedValue.debounce === "number"
+						? serializedValue.debounce
+						: undefined,
+			};
 		}
 	}
+
+	return hasReactive ? result : undefined;
+}
+
+/**
+ * Extract reactive options config from field definition.
+ */
+function extractFieldOptionsReactiveConfig(
+	fieldDef: FieldDefinition<FieldDefinitionState>,
+): Pick<FieldReactiveSchema, "options"> | undefined {
+	const config = fieldDef.state.config as Record<string, unknown> | undefined;
 
 	// Also check for dynamic options on select/relation fields
 	const options = config?.options;
 	if (options && typeof options === "object" && "handler" in options) {
-		hasReactive = true;
 		// Options is an OptionsConfig - extract deps
 		const optionsConfig = options as { handler: unknown; deps?: unknown };
 
@@ -900,12 +1086,14 @@ function extractFieldReactiveConfig(
 			watch = [...deps];
 		}
 
-		result.options = {
-			watch,
-			searchable: true,
-			paginated: true,
+		return {
+			options: {
+				watch,
+				searchable: true,
+				paginated: true,
+			},
 		};
 	}
 
-	return hasReactive ? result : undefined;
+	return undefined;
 }

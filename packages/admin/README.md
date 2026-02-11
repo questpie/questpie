@@ -292,6 +292,52 @@ const items: SidebarItemForApp<AppCMS>[] = [
 ];
 ```
 
+### Server Dashboard Actions (`a` proxy)
+
+When configuring dashboard on the server with `q().use(adminModule)`, use `a` helpers for header actions instead of hardcoded links.
+
+```typescript
+import { adminModule } from "@questpie/admin/server";
+import { q } from "questpie";
+
+const cms = q({ name: "app" })
+  .use(adminModule)
+  .dashboard(({ d, c, a }) =>
+    d.dashboard({
+      title: { en: "Control Panel" },
+      actions: [
+        a.create({
+          id: "new-post",
+          collection: "posts",
+          label: { en: "New Post" },
+          icon: c.icon("ph:plus"),
+          variant: "primary",
+        }),
+        a.global({
+          id: "site-settings",
+          global: "siteSettings",
+          label: { en: "Site Settings" },
+          icon: c.icon("ph:gear-six"),
+        }),
+        a.link({
+          id: "open-site",
+          label: { en: "Open Site" },
+          href: "/",
+          icon: c.icon("ph:arrow-square-out"),
+          variant: "outline",
+        }),
+      ],
+      items: [],
+    }),
+  );
+```
+
+Helpers:
+
+- `a.create({ collection })` -> `/admin/collections/:collection/create`
+- `a.global({ global })` -> `/admin/globals/:global`
+- `a.link({ href })` / `a.action({ href })` -> explicit URL
+
 ## Built-in Field Types
 
 The `adminModule` provides these field types:

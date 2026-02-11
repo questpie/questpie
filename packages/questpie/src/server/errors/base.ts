@@ -142,11 +142,14 @@ export class ApiError extends Error {
    * Create FORBIDDEN error with access context
    */
   static forbidden(context: AccessErrorContext): ApiError {
+    const useDefaultTranslation = context.reason === "Access denied";
     return new ApiError({
       code: "FORBIDDEN",
       message: context.reason,
-      messageKey: "error.forbidden",
-      messageParams: { reason: context.reason },
+      messageKey: useDefaultTranslation ? "error.forbidden" : undefined,
+      messageParams: useDefaultTranslation
+        ? { reason: context.reason }
+        : undefined,
       context: { access: context },
     });
   }

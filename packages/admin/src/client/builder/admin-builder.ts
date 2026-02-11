@@ -209,10 +209,7 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 					>;
 					pages: Prettify<TypeMerge<TState["pages"], TOther["state"]["pages"]>>;
 					components: Prettify<
-						TypeMerge<
-							TState["components"],
-							TOther["state"]["components"]
-						>
+						TypeMerge<TState["components"], TOther["state"]["components"]>
 					>;
 				}
 			>
@@ -228,16 +225,6 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 			widgets: { ...this.state.widgets, ...otherState.widgets },
 			pages: { ...this.state.pages, ...otherState.pages },
 			components: { ...this.state.components, ...otherState.components },
-		} as any);
-	}
-
-	/**
-	 * Set locale config
-	 */
-	locale(config: any): AdminBuilder<TState> {
-		return new AdminBuilder({
-			...this.state,
-			locale: { ...this.state.locale, ...config },
 		} as any);
 	}
 

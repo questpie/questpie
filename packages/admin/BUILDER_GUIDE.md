@@ -335,6 +335,45 @@ const admin = qa()
   });
 ```
 
+### Server Dashboard Actions (`a` proxy)
+
+For server-side builder (`q().use(adminModule)`), dashboard config callback also exposes `a` for header actions.
+
+```typescript
+import { adminModule } from "@questpie/admin/server";
+import { q } from "questpie";
+
+const cms = q({ name: "app" })
+  .use(adminModule)
+  .dashboard(({ d, c, a }) =>
+    d.dashboard({
+      title: { en: "Dashboard" },
+      actions: [
+        a.create({
+          id: "new-post",
+          collection: "posts",
+          label: { en: "New Post" },
+          icon: c.icon("ph:plus"),
+          variant: "primary",
+        }),
+        a.global({
+          id: "settings",
+          global: "siteSettings",
+          label: { en: "Settings" },
+          icon: c.icon("ph:gear-six"),
+        }),
+      ],
+      items: [],
+    }),
+  );
+```
+
+Action helpers:
+
+- `a.create({ collection })` -> `/admin/collections/:collection/create`
+- `a.global({ global })` -> `/admin/globals/:global`
+- `a.link({ href })` / `a.action({ href })` -> direct URL
+
 ### Sidebar Configuration
 
 ```typescript

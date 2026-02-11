@@ -119,28 +119,42 @@ Global access rules return `boolean` only — no row-level filtering (there's on
 
 ## Field-Level Access
 
-Individual fields can define their own read/write rules:
+Define field-specific rules in the collection's `.access()` method:
 
 ```ts
-.fields((f) => ({
-  name: f.text({ required: true }),
-  email: f.text({ required: true }),
+export const employees = qb
+  .collection("employees")
+  .fields((f) => ({
+    name: f.text({ required: true }),
+    email: f.text({ required: true }),
+    ssn: f.text({ maxLength: 20 }),
+    salary: f.number({}),
+    internalNotes: f.textarea({}),
+  }))
+  .access({
+    // Operation-level access
+    read: true,
+    create: ({ session }) => !!session?.user,
+    update: ({ session }) => !!session?.user,
+    delete: ({ session }) => (session?.user as any)?.role === "admin",
 
-  ssn: f.text({
-    maxLength: 20,
-    access: {
-      read: (ctx) => (ctx.user as any)?.role === "admin",
-      create: (ctx) => (ctx.user as any)?.role === "admin",
-      update: (ctx) => (ctx.user as any)?.role === "admin",
+    // Field-level access — source of truth for per-field authorization
+    fields: {
+      ssn: {
+        read: (ctx) => (ctx.user as any)?.role === "admin",
+        create: (ctx) => (ctx.user as any)?.role === "admin",
+        update: (ctx) => (ctx.user as any)?.role === "admin",
+      },
+      salary: {
+        read: (ctx) => (ctx.user as any)?.role === "admin",
+        create: (ctx) => (ctx.user as any)?.role === "admin",
+        update: (ctx) => (ctx.user as any)?.role === "admin",
+      },
+      internalNotes: {
+        read: (ctx) => !!ctx.user, // Only authenticated users
+      },
     },
-  }),
-
-  internalNotes: f.textarea({
-    access: {
-      read: (ctx) => !!ctx.user, // Only authenticated users
-    },
-  }),
-}))
+  });
 ```
 
 ### Field Access Behavior
@@ -151,7 +165,7 @@ Individual fields can define their own read/write rules:
 | `create: false` | Error if field present in create payload |
 | `update: false` | Error if field present in update payload |
 
-Field access context differs from collection access context:
+Field access context:
 
 ```ts
 interface FieldAccessContext {
@@ -181,11 +195,12 @@ interface AccessContext<TData, TApp> {
 
 ```ts
 import { getApp, getDb } from "questpie";
+import type { AppCMS } from "../cms";
 
 .access({
   delete: async ({ session, data, app, db }) => {
-    const cms = getApp(app);
-    const typedDb = getDb(db);
+    const cms = getApp<AppCMS>(app);
+    const typedDb = getDb<AppCMS>(db);
 
     // Complex check: can't delete if referenced elsewhere
     const refs = await typedDb
@@ -196,6 +211,18 @@ import { getApp, getDb } from "questpie";
     return refs[0].count === 0;
   },
 })
+```
+
+For full context typing in one line:
+
+```ts
+import { getContext } from "questpie";
+import type { AppCMS } from "../cms";
+
+update: (ctx) => {
+  const { app, db, session } = getContext<AppCMS>(ctx);
+  return !!session?.user;
+}
 ```
 
 ## Default Access
@@ -259,3 +286,4 @@ Access control runs before hooks:
 - [Globals](/docs/server/globals) — Global access rules
 - [Authentication](/docs/infrastructure/authentication) — Session management with Better Auth
 - [Hooks & Lifecycle](/docs/server/hooks-and-lifecycle) — Hooks run after access checks
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — Typed `app`, `db`, and `session` pattern

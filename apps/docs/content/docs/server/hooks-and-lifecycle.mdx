@@ -226,13 +226,25 @@ Every hook receives a context object with these properties:
 
 ```ts
 import { getApp, getDb } from "questpie";
+import type { AppCMS } from "../cms";
 
 afterChange: async ({ app, db, data }) => {
-  const cms = getApp(app);    // Typed CMS instance
-  const typedDb = getDb(db);  // Typed Drizzle client
+  const cms = getApp<AppCMS>(app);
+  const typedDb = getDb<AppCMS>(db);
 
   await cms.kv.set(`cache:${data.id}`, data, 300);
   await typedDb.execute(sql`UPDATE counters SET value = value + 1`);
+}
+```
+
+You can also use one helper call:
+
+```ts
+import { getContext } from "questpie";
+import type { AppCMS } from "../cms";
+
+afterChange: async (ctx) => {
+  const { app, db, session } = getContext<AppCMS>(ctx);
 }
 ```
 
@@ -318,3 +330,4 @@ export const appointments = qb
 - [Context & Transactions](/docs/server/context-and-transactions) — Transaction behavior and `onAfterCommit`
 - [Access Control](/docs/server/access-control) — Permission checks before hooks run
 - [Queue & Jobs](/docs/infrastructure/queue-and-jobs) — Publishing jobs from hooks
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — Typed context patterns across all server handlers

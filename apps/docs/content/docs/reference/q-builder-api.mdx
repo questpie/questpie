@@ -10,7 +10,7 @@ description: Core server builder — all chainable methods, entity factories, an
 ## Creating a Builder
 
 ```ts
-import { q } from "@questpie/questpie";
+import { q } from "questpie";
 
 const cms = q({ name: "my-app" });
 ```
@@ -30,7 +30,7 @@ Register collections as a named map. Keys become the collection slugs and API pa
 })
 ```
 
-**Parameter:** `Record<string, Collection | CollectionBuilder>` — map of collection names to builders or built collections.
+**Parameter:** `Record<string, CollectionBuilder>` — map of collection names to collection builders.
 
 ### `.globals(map)`
 
@@ -43,7 +43,7 @@ Register globals as a named map.
 })
 ```
 
-**Parameter:** `Record<string, Global | GlobalBuilder>` — map of global names to builders or built globals.
+**Parameter:** `Record<string, GlobalBuilder>` — map of global names to global builders.
 
 ### `.fields(map)`
 
@@ -117,7 +117,11 @@ Configure localization.
 
 ```ts
 .locale({
-  locales: ["en", "de", "sk"],
+  locales: [
+    { code: "en", label: "English" },
+    { code: "de", label: "Deutsch" },
+    { code: "sk", label: "Slovenčina" },
+  ],
   defaultLocale: "en",
 })
 ```
@@ -208,10 +212,13 @@ Create a new `CollectionBuilder`.
 ```ts
 const posts = q.collection("posts")
   .fields((f) => ({
-    title: f.text().notNull(),
-    status: f.select(["draft", "published"]).notNull(),
-  }))
-  .build();
+    title: f.text({ required: true }),
+    status: f.select({
+      options: ["draft", "published"],
+      required: true,
+      defaultValue: "draft",
+    }),
+  }));
 ```
 
 **Returns:** `CollectionBuilder`
@@ -223,10 +230,9 @@ Create a new `GlobalBuilder`.
 ```ts
 const settings = q.global("siteSettings")
   .fields((f) => ({
-    siteName: f.text().notNull(),
+    siteName: f.text({ required: true }),
     logo: f.upload(),
-  }))
-  .build();
+  }));
 ```
 
 **Returns:** `GlobalBuilder`
@@ -290,6 +296,29 @@ const welcome = q.email({
 
 **Returns:** `EmailTemplateDefinition<TContext, TName>`
 
+## Type-Safe Handler Contexts
+
+After build, export `AppCMS` once and reuse it in hooks/access/RPC/jobs:
+
+```ts
+export const cms = q({ name: "app" })
+  .collections({ posts })
+  .build({ app: { url: process.env.APP_URL! }, db: { url: process.env.DATABASE_URL! } });
+
+export type AppCMS = typeof cms;
+```
+
+Then in handlers:
+
+```ts
+import { getContext } from "questpie";
+import type { AppCMS } from "../cms";
+
+afterChange: async (ctx) => {
+  const { app, db, session } = getContext<AppCMS>(ctx);
+}
+```
+
 ## Build
 
 ### `.build(runtimeConfig)`
@@ -304,12 +333,12 @@ const cms = q({ name: "app" })
   .build({
     app: { url: process.env.APP_URL! },
     db: { url: process.env.DATABASE_URL! },
-    storage: { adapter: s3Adapter },
-    email: { adapter: smtpAdapter },
-    queue: { adapter: pgBossAdapter },
-    search: { adapter: pgSearchAdapter },
-    kv: { adapter: memoryKvAdapter },
-    logger: { adapter: pinoAdapter },
+    storage: { driver: s3Driver(...) },
+    email: { adapter: smtpAdapter(...) },
+    queue: { adapter: pgBossAdapter(...) },
+    search: createPostgresSearchAdapter(),
+    kv: { adapter: memoryKVAdapter() },
+    logger: { level: "info" },
     realtime: { adapter: pgNotifyAdapter },
   });
 ```
@@ -320,12 +349,12 @@ const cms = q({ name: "app" })
 |---|---|---|
 | `app.url` | Yes | Public URL of the application |
 | `db.url` | Yes | PostgreSQL connection string |
-| `storage` | No | Storage adapter (default: local filesystem) |
+| `storage` | No | Storage config (`driver` for custom storage) |
 | `email` | No | Email adapter (default: console) |
 | `queue` | No | Queue adapter (default: pg-boss) |
-| `search` | No | Search adapter (default: PostgreSQL FTS) |
+| `search` | No | Search adapter instance |
 | `kv` | No | KV adapter (default: in-memory) |
-| `logger` | No | Logger adapter (default: Pino) |
+| `logger` | No | Logger config (`level`, `pretty`, optional adapter) |
 | `realtime` | No | Realtime adapter (default: none) |
 
 **Returns:** `Questpie<TConfig>` — the runtime CMS instance with typed access to all APIs.
@@ -337,7 +366,7 @@ After `.build()`, the CMS instance exposes:
 ```ts
 cms.api.collections.posts.find(...)    // CRUD
 cms.api.globals.siteSettings.get()     // Globals
-cms.queue.sendConfirmation.publish()   // Jobs
+cms.queue.sendConfirmation.publish(...) // Jobs
 cms.email.sendTemplate(...)            // Email
 cms.storage.disk()                     // Storage
 cms.search.search(...)                 // Search
@@ -353,3 +382,4 @@ cms.migrate()                          // Run migrations
 - [Global Builder API](/docs/reference/global-builder-api) — Global methods
 - [Field API](/docs/reference/field-api) — Field definitions
 - [Modules & Extensions](/docs/server/modules-and-extensions) — `.use()` pattern
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — Typed app/db/session patterns in handlers

@@ -33,18 +33,20 @@ Jobs are defined with `job()` and registered in the builder:
 ```ts
 import { job } from "questpie";
 import { z } from "zod";
+import type { AppCMS } from "../cms";
 
-export const sendAppointmentConfirmation = job({
+export const sendAppointmentConfirmation = job<AppCMS>()({
   name: "sendAppointmentConfirmation",
   schema: z.object({
     appointmentId: z.string(),
     customerEmail: z.string(),
   }),
   handler: async ({ payload, app }) => {
-    const appointment = await app.api.collections.appointments.findOne(
-      payload.appointmentId,
-      { with: { barber: true, service: true } },
-    );
+    const appointment = await app.api.collections.appointments.findOne({
+      where: { id: payload.appointmentId },
+      with: { barber: true, service: true },
+    });
+    if (!appointment) throw new Error("Appointment not found");
 
     await app.email.sendTemplate({
       template: "appointmentConfirmation",
@@ -84,7 +86,7 @@ Publish jobs from hooks, RPC handlers, or anywhere you have access to `app`:
 .hooks({
   afterChange: async ({ data, operation, app }) => {
     if (operation === "create") {
-      await app.queue.publish("sendAppointmentConfirmation", {
+      await app.queue.sendAppointmentConfirmation.publish({
         appointmentId: data.id,
         customerEmail: data.customerEmail,
       });
@@ -94,7 +96,7 @@ Publish jobs from hooks, RPC handlers, or anywhere you have access to `app`:
 
 // In an RPC handler
 handler: async ({ input, app }) => {
-  await app.queue.publish("sendAppointmentReminder", {
+  await app.queue.sendAppointmentReminder.publish({
     appointmentId: input.id,
   });
 }
@@ -118,11 +120,11 @@ For recurring tasks, use cron scheduling:
 
 ```ts
 // Register a cron schedule
-await app.queue.schedule("sendDailyReport", {}, "0 9 * * *");
+await app.queue.sendDailyReport.schedule({}, "0 9 * * *");
 // Runs at 9 AM every day
 
 // Unschedule
-await app.queue.unschedule("sendDailyReport");
+await app.queue.sendDailyReport.unschedule();
 ```
 
 ## Workflows
@@ -131,11 +133,26 @@ Chain multiple jobs together with the workflow builder:
 
 ```ts
 import { workflow } from "questpie";
+import { z } from "zod";
+import type { AppCMS } from "../cms";
 
-const bookingWorkflow = workflow("processBooking")
-  .step(validateBooking)
-  .step(createAppointment)
-  .step(sendConfirmation)
+const bookingWorkflow = workflow<AppCMS>()<{
+  barberId: string;
+  serviceId: string;
+  date: string;
+}>("processBooking")
+  .step("validate", async ({ payload }) => payload)
+  .step("createAppointment", async ({ payload, app }) => {
+    const appointment = await app.api.collections.appointments.create(payload);
+    return { appointment };
+  })
+  .step("sendConfirmation", async ({ payload, app }) => {
+    await app.queue.sendAppointmentConfirmation.publish({
+      appointmentId: payload.appointment.id,
+      customerEmail: "user@example.com",
+    });
+    return payload;
+  })
   .build(z.object({ barberId: z.string(), serviceId: z.string(), date: z.string() }));
 ```
 
@@ -177,9 +194,17 @@ For Cloudflare Workers deployments (push-based consumer model).
 - **Not running a worker** — Jobs are published to the queue but won't run without a worker process. Start one with `cms.queue.listen()`.
 - **Synchronous email in hooks** — Move email sending to jobs so API responses stay fast.
 - **No retry configuration** — External service calls (email, APIs) should have `retryLimit` and `retryBackoff` for resilience.
+- **Using legacy `queue.publish(name, payload)`** — Use typed job methods: `app.queue.jobName.publish(payload)`.
+
+## Type Safety Notes
+
+- `job<AppCMS>()({...})` gives typed `app` in job handlers.
+- `workflow<AppCMS>()(...)` gives typed `app` in each workflow step.
+- In untyped contexts, use `getApp<AppCMS>(app)` or `getContext<AppCMS>(ctx)`.
 
 ## Related Pages
 
 - [Email](/docs/infrastructure/email) — Send emails from jobs
 - [Hooks & Lifecycle](/docs/server/hooks-and-lifecycle) — Publish jobs from hooks
 - [Infrastructure API Reference](/docs/reference/infrastructure-api) — Queue method signatures
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — Typed job/workflow handler patterns

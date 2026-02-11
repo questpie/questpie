@@ -93,7 +93,6 @@ import { ApiError, parseDatabaseError } from "#questpie/server/errors/index.js";
 import {
 	applyFieldInputHooks,
 	applyFieldOutputHooks,
-	extractFieldDefinitionAccessRules,
 } from "#questpie/server/fields/runtime.js";
 import type { FieldDefinitionAccess } from "#questpie/server/fields/types.js";
 
@@ -211,7 +210,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	private getFieldAccessRules():
 		| Record<string, FieldDefinitionAccess>
 		| undefined {
-		return extractFieldDefinitionAccessRules(this.state.fieldDefinitions);
+		// Source field access from collection-level .access({ fields: {...} })
+		const collectionAccess = this.state.access as
+			| { fields?: Record<string, FieldDefinitionAccess> }
+			| undefined;
+		return collectionAccess?.fields;
 	}
 
 	private async runFieldInputHooks(

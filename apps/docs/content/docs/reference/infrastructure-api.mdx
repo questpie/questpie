@@ -9,7 +9,9 @@ Reference for all infrastructure service methods available on the CMS instance.
 
 ## Queue — `cms.queue`
 
-### `publish(jobName, payload)`
+Queue methods are job-scoped. If you register `.jobs({ sendConfirmation })`, you call `cms.queue.sendConfirmation.*`.
+
+### `cms.queue.<job>.publish(payload, options?)`
 
 ```ts
 await cms.queue.sendConfirmation.publish({
@@ -18,25 +20,49 @@ await cms.queue.sendConfirmation.publish({
 });
 ```
 
-### `schedule(jobName, payload, cron)`
+### `cms.queue.<job>.schedule(payload, cron, options?)`
 
 ```ts
-await cms.queue.schedule("dailyReport", {}, "0 9 * * *");
+await cms.queue.dailyReport.schedule({}, "0 9 * * *");
 ```
 
-### `unschedule(jobName)`
+### `cms.queue.<job>.unschedule()`
 
 ```ts
-await cms.queue.unschedule("dailyReport");
+await cms.queue.dailyReport.unschedule();
 ```
 
-### `listen()`
+### `listen(options?)`
 
 Start long-running worker to process jobs.
 
-### `runOnce()`
+### `runOnce(options?)`
 
 Process one batch of jobs (for serverless).
+
+### `registerSchedules(options?)`
+
+Registers cron schedules declared in job definitions.
+
+```ts
+await cms.queue.registerSchedules();
+```
+
+### `stop()`
+
+Stops running consumers and the queue adapter.
+
+### Typed Queue Context
+
+```ts
+import { getContext } from "questpie";
+import type { AppCMS } from "../cms";
+
+afterChange: async (ctx) => {
+  const { app } = getContext<AppCMS>(ctx);
+  await app.queue.sendConfirmation.publish({ appointmentId: ctx.data.id });
+}
+```
 
 ## Email — `cms.email`
 
@@ -206,3 +232,4 @@ Realtime events are automatically published when data changes. There is no manua
 - [Search](/docs/infrastructure/search) — Search configuration
 - [KV Store](/docs/infrastructure/kv-store) — KV adapter configuration
 - [Logger](/docs/infrastructure/logger) — Logger configuration
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — Typed access pattern for infrastructure services

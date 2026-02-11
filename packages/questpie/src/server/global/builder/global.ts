@@ -262,6 +262,7 @@ export class Global<TState extends GlobalBuilderState> {
 	private generateMainTable(): PgTable {
 		const tableName = this.state.name;
 		const columns: Record<string, any> = {};
+		const isScoped = !!this.state.options.scoped;
 
 		// Check if user defined 'id' in fields
 		const hasUserDefinedId = "id" in this.state.fields;
@@ -271,6 +272,11 @@ export class Global<TState extends GlobalBuilderState> {
 			columns.id = defaultIdColumn();
 		}
 
+		// Add scope_id column for scoped globals
+		if (isScoped) {
+			columns.scopeId = text("scope_id");
+		}
+
 		for (const [fieldName, column] of Object.entries(this.state.fields)) {
 			if (this.state.localized.includes(fieldName as any)) continue;
 			columns[fieldName] = column;
@@ -278,6 +284,13 @@ export class Global<TState extends GlobalBuilderState> {
 
 		if (this.state.options.timestamps !== false) {
 			Object.assign(columns, Collection.timestampsCols());
+		}
+
+		// Add unique index on scope_id for scoped globals
+		if (isScoped) {
+			return pgTable(tableName, columns as any, (t) => ({
+				scopeIdx: uniqueIndex(`${tableName}_scope_idx`).on(t.scopeId),
+			}));
 		}
 
 		return pgTable(tableName, columns as any);
@@ -317,6 +330,7 @@ export class Global<TState extends GlobalBuilderState> {
 		if (typeof versioning === "object" && !versioning.enabled) return null;
 
 		const tableName = `${this.state.name}_versions`;
+		const isScoped = !!this.state.options.scoped;
 
 		// Get the parent table's ID column to match its type
 		const parentIdColumn = (this.table as any).id as PgColumn;
@@ -333,6 +347,11 @@ export class Global<TState extends GlobalBuilderState> {
 				.defaultNow()
 				.notNull(),
 		};
+
+		// Add scope_id for scoped globals
+		if (isScoped) {
+			columns.scopeId = text("scope_id");
+		}
 
 		for (const [fieldName, column] of Object.entries(this.state.fields)) {
 			if (this.state.localized.includes(fieldName as any)) continue;

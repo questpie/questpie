@@ -10,8 +10,7 @@
  * import { qa, adminModule } from "@questpie/admin/client";
  *
  * const admin = qa()
- *   .use(adminModule)
- *   .locale({ default: "en", supported: ["en", "sk"] });
+ *   .use(adminModule);
  * ```
  */
 

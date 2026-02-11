@@ -204,7 +204,7 @@ Lifecycle callbacks that run during CRUD operations:
   afterChange: async ({ data, original, operation, app }) => {
     // Runs after create/update DB write
     if (operation === "create") {
-      await app.queue.publish("sendWelcomeEmail", { id: data.id });
+      await app.queue.sendWelcomeEmail.publish({ id: data.id });
     }
   },
   beforeDelete: async ({ data, app }) => { /* ... */ },

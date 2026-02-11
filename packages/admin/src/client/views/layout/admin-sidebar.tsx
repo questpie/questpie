@@ -126,9 +126,39 @@ export interface AdminSidebarProps {
 	}) => React.ReactNode;
 
 	/**
-	 * Custom footer content
+	 * Custom footer content (replaces entire footer including UserFooter)
 	 */
 	footer?: React.ReactNode;
+
+	/**
+	 * Content to render after the brand header.
+	 * Perfect for scope/tenant pickers in multi-tenant apps.
+	 *
+	 * @example
+	 * ```tsx
+	 * <AdminSidebar
+	 *   afterBrand={<ScopePicker collection="properties" />}
+	 * />
+	 * ```
+	 */
+	afterBrand?: React.ReactNode;
+
+	/**
+	 * Content to render before the user footer.
+	 * Useful for additional actions or quick links.
+	 *
+	 * @example
+	 * ```tsx
+	 * <AdminSidebar
+	 *   beforeFooter={
+	 *     <Button variant="outline" className="w-full">
+	 *       Need Help?
+	 *     </Button>
+	 *   }
+	 * />
+	 * ```
+	 */
+	beforeFooter?: React.ReactNode;
 
 	/**
 	 * Use framework-specific active link props (e.g., TanStack Router's activeProps)
@@ -874,6 +904,8 @@ export function AdminSidebar({
 	renderBrand,
 	renderNavItem,
 	footer,
+	afterBrand,
+	beforeFooter,
 	useActiveProps = true,
 }: AdminSidebarProps): React.ReactElement {
 	// Resolve navigation and brandName from props or store
@@ -955,6 +987,13 @@ export function AdminSidebar({
 				</SidebarMenu>
 			</SidebarHeader>
 
+			{/* After Brand Slot - for scope pickers, etc */}
+			{afterBrand && !collapsed && (
+				<div className="px-3 py-2 border-b border-sidebar-border/50">
+					{afterBrand}
+				</div>
+			)}
+
 			{/* Navigation */}
 			<SidebarContent>
 				{navigation.map((group, index) => (
@@ -969,6 +1008,13 @@ export function AdminSidebar({
 					/>
 				))}
 			</SidebarContent>
+
+			{/* Before Footer Slot - for additional actions */}
+			{beforeFooter && !collapsed && (
+				<div className="px-3 py-2 border-t border-sidebar-border/50">
+					{beforeFooter}
+				</div>
+			)}
 
 			{/* Footer */}
 			{footer ?? <UserFooter />}

@@ -46,6 +46,9 @@ export function generateCollectionPaths(
 		const documentSchemaName = `${pascalName}Document`;
 		const insertSchemaName = `${pascalName}Insert`;
 		const updateSchemaName = `${pascalName}Update`;
+		const fieldDefinitionSchema = buildSchemaFromFieldDefinitions(
+			state.fieldDefinitions,
+		);
 
 		// Document schema (response shape) — from validation.insertSchema or field definitions
 		if (state.validation?.insertSchema) {
@@ -60,6 +63,8 @@ export function generateCollectionPaths(
 					description: `Insert schema for ${name}`,
 				};
 			}
+		} else if (fieldDefinitionSchema != null) {
+			schemas[insertSchemaName] = fieldDefinitionSchema.insert;
 		} else {
 			schemas[insertSchemaName] = {
 				type: "object",
@@ -79,6 +84,8 @@ export function generateCollectionPaths(
 					description: `Update schema for ${name}`,
 				};
 			}
+		} else if (fieldDefinitionSchema != null) {
+			schemas[updateSchemaName] = fieldDefinitionSchema.update;
 		} else {
 			schemas[updateSchemaName] = {
 				type: "object",
@@ -318,4 +325,46 @@ function toPascalCase(str: string): string {
 	return str
 		.replace(/[-_](.)/g, (_, c) => c.toUpperCase())
 		.replace(/^(.)/, (_, c) => c.toUpperCase());
+}
+
+function buildSchemaFromFieldDefinitions(fieldDefinitions: unknown): {
+	insert: unknown;
+	update: unknown;
+} | null {
+	if (!fieldDefinitions || typeof fieldDefinitions !== "object") {
+		return null;
+	}
+
+	const shape: Record<string, z.ZodTypeAny> = {};
+
+	for (const [fieldName, fieldDefinition] of Object.entries(
+		fieldDefinitions as Record<string, unknown>,
+	)) {
+		const toZodSchema = (fieldDefinition as { toZodSchema?: () => unknown })
+			.toZodSchema;
+		if (typeof toZodSchema !== "function") {
+			continue;
+		}
+
+		try {
+			const schema = toZodSchema();
+			if (schema && typeof schema === "object" && "_def" in schema) {
+				shape[fieldName] = schema as z.ZodTypeAny;
+			}
+		} catch {
+			// Ignore fields that cannot be converted; keep generating the rest.
+		}
+	}
+
+	if (Object.keys(shape).length === 0) {
+		return null;
+	}
+
+	const insertSchema = z.object(shape);
+	const updateSchema = insertSchema.partial();
+
+	return {
+		insert: z.toJSONSchema(insertSchema, { unrepresentable: "any" }),
+		update: z.toJSONSchema(updateSchema, { unrepresentable: "any" }),
+	};
 }

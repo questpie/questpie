@@ -1,7 +1,7 @@
 /**
  * German Admin UI Messages
  */
-export const adminMessagesDE = {
+export default {
   // Common
   "common.save": "Speichern",
   "common.cancel": "Abbrechen",

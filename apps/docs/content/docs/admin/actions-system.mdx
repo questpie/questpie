@@ -5,90 +5,75 @@ description: Custom actions with forms, bulk operations, and context-aware trigg
 
 # Actions System
 
-Actions let you add custom operations to collections and globals. They appear as buttons in the admin UI — on table rows, bulk selections, and form headers.
+Actions let you add custom operations to collection UIs (row, bulk, and header areas) with server handlers and optional forms.
 
 ## Defining Actions
 
-Actions are defined on the server using the collection builder:
+Use `.actions(({ a, c, f }) => ...)` on a collection:
 
-```typescript
-const posts = qb.collection("posts")
+```ts
+import { getContext } from "questpie";
+import type { AppCMS } from "../cms";
+
+const posts = q
+  .collection("posts")
   .fields((f) => ({
     title: f.text({ required: true }),
     status: f.select({ options: ["draft", "published", "archived"] }),
   }))
-  .functions({
-    publish: {
-      input: z.object({ id: z.string() }),
-      handler: async ({ input, app }) => {
-        await app.collections.posts.update(input.id, {
-          status: "published",
-        });
-        return { success: true };
-      },
-    },
-    archive: {
-      input: z.object({ ids: z.array(z.string()) }),
-      handler: async ({ input, app }) => {
-        await app.collections.posts.updateMany(
-          { id: { in: input.ids } },
-          { status: "archived" },
-        );
-        return { archived: input.ids.length };
-      },
-    },
-  });
-```
+  .actions(({ a, c, f }) => ({
+    builtin: [a.create(), a.delete(), a.deleteMany()],
+    custom: [
+      a.bulkAction({
+        id: "archive-selected",
+        label: { en: "Archive selected" },
+        icon: c.icon("ph:archive"),
+        form: {
+          title: { en: "Archive posts" },
+          fields: {
+            reason: f.text({ label: { en: "Reason" } }),
+          },
+        },
+        handler: async (ctx) => {
+          const { app, session } = getContext<AppCMS>(ctx);
+          if (!session?.user) {
+            return { type: "error", toast: { message: "Unauthorized" } };
+          }
 
-## Action Forms
+          await app.api.collections.posts.updateMany({
+            where: { id: { $in: ctx.itemIds ?? [] } },
+            data: { status: "archived" },
+          });
 
-Actions can include input forms that collect user data before executing:
-
-```typescript
-const posts = qb.collection("posts")
-  .functions({
-    schedulePublish: {
-      input: z.object({
-        id: z.string(),
-        publishAt: z.string().datetime(),
-        notifySubscribers: z.boolean().default(true),
+          return { type: "success", toast: { message: "Archived" } };
+        },
       }),
-      handler: async ({ input, app }) => {
-        // Schedule the publish job
-        await app.queue.schedulePublish.publish({
-          postId: input.id,
-          publishAt: input.publishAt,
-          notify: input.notifySubscribers,
-        });
-        return { scheduled: true };
-      },
-    },
-  });
+    ],
+  }));
 ```
 
-The admin panel automatically generates a form dialog for the `input` schema, with field types inferred from Zod validators.
+## Action Result Types
 
-## Bulk Actions
+Handlers return one of these server result shapes:
 
-Actions that accept an array of IDs appear in the bulk actions toolbar when multiple rows are selected in a table view.
+- `success` with optional toast and side effects
+- `error` with optional toast and field errors
+- `redirect` with URL
+- `download` with file payload
 
-## Access Control
+## Typed Context in Handlers
 
-Action visibility and execution can be controlled via access rules:
+Action handler context is `ServerActionContext` (`data`, `itemId`, `itemIds`, `app`, `db`, `session`, `locale`).
 
-```typescript
-const posts = qb.collection("posts")
-  .functions({
-    publish: {
-      access: ({ session }) => session?.user?.role === "editor",
-      input: z.object({ id: z.string() }),
-      handler: async ({ input, app }) => {
-        // ...
-      },
-    },
-  });
-```
+Use `getContext<AppCMS>(ctx)` as the standard cast point for typed app/db/session.
 
-## RPC Integration
+## Common Mistakes
 
-Actions are powered by the same RPC system used for typed client SDK calls. They're fully type-safe from server definition to client invocation.
+- Defining actions with `.functions()` instead of `.actions()`.
+- Using untyped `app` directly inside handlers and losing queue/API autocomplete.
+- Returning plain objects without `type` (`success`, `error`, `redirect`, `download`).
+
+## Related Pages
+
+- [Dashboard, Sidebar & Branding](/docs/admin/dashboard-sidebar-branding)
+- [Type-Safe Contexts](/docs/server/type-safe-contexts)

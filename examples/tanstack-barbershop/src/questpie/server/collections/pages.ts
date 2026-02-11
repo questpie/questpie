@@ -17,42 +17,6 @@ export const pages = qb
 			maxLength: 255,
 			// Allow user to provide slug manually, but auto-generate if empty
 			input: "optional",
-			meta: {
-				admin: {
-					// Auto-generate slug from title when title changes and slug is empty
-					compute: {
-						handler: ({
-							data,
-							prev,
-						}: {
-							data: Record<string, unknown>;
-							prev: { data: Record<string, unknown> };
-						}) => {
-							// Only compute if slug is empty or title changed
-							const title = data.title;
-							const currentSlug = data.slug;
-							const prevTitle = prev.data.title;
-
-							// If slug already exists and wasn't auto-generated, keep it
-							if (currentSlug && prevTitle === title) {
-								return undefined; // No change
-							}
-
-							// Auto-generate from title
-							if (title && typeof title === "string") {
-								return slugify(title);
-							}
-
-							return undefined;
-						},
-						deps: ({ data }: { data: Record<string, unknown> }) => [
-							data.title,
-							data.slug,
-						],
-						debounce: 300,
-					},
-				},
-			},
 		}),
 		description: f.textarea({
 			label: { en: "Description", sk: "Popis" },
@@ -67,24 +31,10 @@ export const pages = qb
 			label: { en: "Meta Title", sk: "Meta názov" },
 			maxLength: 255,
 			localized: true,
-			meta: {
-				admin: {
-					// Show SEO fields only when page is published
-					hidden: ({ data }: { data: Record<string, unknown> }) =>
-						!data.isPublished,
-				},
-			},
 		}),
 		metaDescription: f.textarea({
 			label: { en: "Meta Description", sk: "Meta popis" },
 			localized: true,
-			meta: {
-				admin: {
-					// Show SEO fields only when page is published
-					hidden: ({ data }: { data: Record<string, unknown> }) =>
-						!data.isPublished,
-				},
-			},
 		}),
 		isPublished: f.boolean({
 			label: { en: "Published", sk: "Publikované" },
@@ -105,7 +55,31 @@ export const pages = qb
 		v.form({
 			sidebar: {
 				position: "right",
-				fields: [f.slug, f.isPublished],
+				fields: [
+					{
+						field: f.slug,
+						compute: {
+							handler: ({ data }) => {
+								const title = data.title;
+								const currentSlug = data.slug;
+
+								if (
+									title &&
+									typeof title === "string" &&
+									(!currentSlug ||
+										(typeof currentSlug === "string" && !currentSlug.trim()))
+								) {
+									return slugify(title);
+								}
+
+								return undefined;
+							},
+							deps: ({ data }) => [data.title, data.slug],
+							debounce: 300,
+						},
+					},
+					f.isPublished,
+				],
 			},
 			fields: [
 				{
@@ -125,7 +99,16 @@ export const pages = qb
 					label: { en: "SEO", sk: "SEO" },
 					layout: "grid",
 					columns: 2,
-					fields: [f.metaTitle, f.metaDescription],
+					fields: [
+						{
+							field: f.metaTitle,
+							hidden: ({ data }) => !data.isPublished,
+						},
+						{
+							field: f.metaDescription,
+							hidden: ({ data }) => !data.isPublished,
+						},
+					],
 				},
 			],
 		}),

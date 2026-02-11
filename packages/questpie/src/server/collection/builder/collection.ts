@@ -148,14 +148,16 @@ type ExtractInputObject<
 /**
  * Extract output types from field definitions.
  * Maps each field to its output type from $types.output.
- * For object/array fields, dispatches through FieldSelect to resolve nested types.
+ * For object/array/upload/relation fields, dispatches through FieldSelect to resolve nested/narrowed types.
+ * Relation fields especially need FieldSelect because their TValue is a broad union (string | string[] | { type, id } | null)
+ * but FieldSelect narrows based on actual config (belongsTo -> string, multiple -> string[], etc.)
  */
 type ExtractOutputTypes<
 	TFieldDefs extends Record<string, FieldDefinition<FieldDefinitionState>>,
 > = {
 	[K in keyof TFieldDefs]: TFieldDefs[K] extends FieldDefinition<infer TState>
 		? TState extends FieldDefinitionState
-			? TState["type"] extends "object" | "array" | "upload"
+			? TState["type"] extends "object" | "array" | "upload" | "relation"
 				? FieldSelect<TFieldDefs[K]>
 				: TState["output"]
 			: never
@@ -244,7 +246,7 @@ type InferLegacyUpdate<
 /**
  * CollectionSelect - works with both field builder and raw Drizzle columns.
  */
-/** Extract output type extensions ($outputType / .upload() url) from state */
+/** Extract output type extensions (for example, .upload() adds url) from state */
 type OutputExtensions<TState extends CollectionBuilderState> =
 	TState["output"] extends Record<string, any> ? TState["output"] : {};
 

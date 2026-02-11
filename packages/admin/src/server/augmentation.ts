@@ -260,6 +260,38 @@ export interface ListViewConfig {
 // ============================================================================
 
 /**
+ * Context passed to form reactive handlers.
+ */
+export interface FormReactiveContext<TData = Record<string, unknown>> {
+	data: TData;
+	sibling: Record<string, unknown>;
+	ctx: {
+		db: any;
+		user?: any;
+		locale?: string;
+	};
+	prev?: {
+		data: TData;
+		sibling: Record<string, unknown>;
+	};
+}
+
+/**
+ * Reactive config for field-level form behavior.
+ */
+export type FormReactiveConfig<TData = any, TReturn = any> =
+	| ((ctx: FormReactiveContext<TData>) => TReturn | Promise<TReturn>)
+	| {
+			handler: (ctx: FormReactiveContext<TData>) => TReturn | Promise<TReturn>;
+			deps?: string[] | ((ctx: FormReactiveContext<TData>) => any[]);
+			debounce?: number;
+	  }
+	| {
+			deps: string[];
+			debounce?: number;
+	  };
+
+/**
  * Section layout for form views.
  * Groups fields with optional visual wrapper and layout mode.
  *
@@ -334,6 +366,18 @@ export interface FormTabsLayout {
 }
 
 /**
+ * Field entry with optional reactive form behavior.
+ */
+export interface FormFieldLayoutItem<TData = any> {
+	field: string;
+	className?: string;
+	hidden?: boolean | FormReactiveConfig<TData, boolean>;
+	readOnly?: boolean | FormReactiveConfig<TData, boolean>;
+	disabled?: boolean | FormReactiveConfig<TData, boolean>;
+	compute?: FormReactiveConfig<TData, any>;
+}
+
+/**
  * Field layout item - union of field reference or layout container.
  *
  * Can be:
@@ -344,7 +388,7 @@ export interface FormTabsLayout {
  */
 export type FieldLayoutItem =
 	| string
-	| { field: string; className?: string }
+	| FormFieldLayoutItem
 	| FormSectionLayout
 	| FormTabsLayout;
 
@@ -777,6 +821,22 @@ export type ServerDashboardItem =
 	| ServerDashboardTabs;
 
 /**
+ * Dashboard header action shown beside title/description.
+ */
+export interface ServerDashboardAction {
+	/** Unique action ID */
+	id: string;
+	/** Action label */
+	label: I18nText;
+	/** Action icon */
+	icon?: ComponentReference;
+	/** Action URL */
+	href: string;
+	/** Visual variant */
+	variant?: "default" | "primary" | "secondary" | "outline" | "ghost";
+}
+
+/**
  * Server-side dashboard configuration
  */
 export interface ServerDashboardConfig {
@@ -784,12 +844,16 @@ export interface ServerDashboardConfig {
 	title?: I18nText;
 	/** Dashboard description */
 	description?: I18nText;
+	/** Header actions */
+	actions?: ServerDashboardAction[];
 	/** Grid columns (default: 4) */
 	columns?: number;
 	/** Gap between widgets */
 	gap?: number;
 	/** Dashboard items */
 	items?: ServerDashboardItem[];
+	/** Enable realtime invalidation for dashboard widgets by default */
+	realtime?: boolean;
 	/** Auto-refresh interval in milliseconds */
 	refreshInterval?: number;
 }
@@ -1203,11 +1267,31 @@ export interface ActionsConfigContext<
 // ============================================================================
 
 /**
+ * Action factory for dashboard header actions.
+ */
+export interface DashboardActionFactory {
+	/** Return action as-is */
+	action: (config: ServerDashboardAction) => ServerDashboardAction;
+	/** Link action */
+	link: (config: ServerDashboardAction) => ServerDashboardAction;
+	/** Create action linking to collection create view */
+	create: (
+		config: Omit<ServerDashboardAction, "href"> & { collection: string },
+	) => ServerDashboardAction;
+	/** Global action linking to global edit view */
+	global: (
+		config: Omit<ServerDashboardAction, "href"> & { global: string },
+	) => ServerDashboardAction;
+}
+
+/**
  * Context for dashboard config function
  */
 export interface DashboardConfigContext<
 	TComponentNames extends string = string,
 > {
+	/** Dashboard action helpers */
+	a: DashboardActionFactory;
 	/** Dashboard builder helpers */
 	d: {
 		/** Create dashboard config */
@@ -1292,19 +1376,20 @@ type BuilderStateOf<TBuilder> = TBuilder extends { state: infer TState }
  * - Collection/Global builders: use `state["~questpieApp"].state`
  * - QuestpieBuilder: use `state`
  */
-type RegistrySourceStateOf<TBuilder> = QuestpieStateOf<
-	BuilderStateOf<TBuilder> extends { "~questpieApp"?: infer TQuestpieApp }
-		? NonNullable<TQuestpieApp>
-		: never
-> extends never
-	? BuilderStateOf<TBuilder>
-	: QuestpieStateOf<
-			BuilderStateOf<TBuilder> extends {
-				"~questpieApp"?: infer TQuestpieApp;
-			}
-				? NonNullable<TQuestpieApp>
-				: never
-		>;
+type RegistrySourceStateOf<TBuilder> =
+	QuestpieStateOf<
+		BuilderStateOf<TBuilder> extends { "~questpieApp"?: infer TQuestpieApp }
+			? NonNullable<TQuestpieApp>
+			: never
+	> extends never
+		? BuilderStateOf<TBuilder>
+		: QuestpieStateOf<
+				BuilderStateOf<TBuilder> extends {
+					"~questpieApp"?: infer TQuestpieApp;
+				}
+					? NonNullable<TQuestpieApp>
+					: never
+			>;
 
 /**
  * Extract registered list view names from a builder.
@@ -1461,8 +1546,16 @@ export interface QuestpieBuilderAdminMethods<
 	 *
 	 * @example
 	 * ```ts
-	 * .dashboard(({ d, c }) => d.dashboard({
+	 * .dashboard(({ d, c, a }) => d.dashboard({
 	 *   title: { en: "Dashboard" },
+	 *   actions: [
+	 *     a.create({
+	 *       id: "new-user",
+	 *       collection: "users",
+	 *       label: { en: "New User" },
+	 *       icon: c.icon("ph:user-plus"),
+	 *     }),
+	 *   ],
 	 *   items: [
 	 *     d.section({
 	 *       label: { en: "Overview" },
@@ -1665,18 +1758,6 @@ declare module "questpie" {
 	 * Added via runtime monkey patching in ./patch.ts.
 	 */
 	interface QuestpieBuilderExtensions extends QuestpieBuilderAdminMethods {
-		dashboard(
-			configFn: (
-				ctx: DashboardConfigContext<RegisteredComponentNamesOfBuilder<this>>,
-			) => ServerDashboardConfig,
-		): this;
-
-		sidebar(
-			configFn: (
-				ctx: SidebarConfigContext<RegisteredComponentNamesOfBuilder<this>>,
-			) => ServerSidebarConfig,
-		): this;
-
 		/**
 		 * Configure admin UI locales (separate from content locales).
 		 *

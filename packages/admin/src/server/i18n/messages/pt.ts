@@ -1,7 +1,7 @@
 /**
  * Portuguese Admin UI Messages
  */
-export const adminMessagesPT = {
+export default {
   // Common
   "common.save": "Salvar",
   "common.cancel": "Cancelar",

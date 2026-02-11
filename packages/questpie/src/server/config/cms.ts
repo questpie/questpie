@@ -298,6 +298,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 */
 	private validateRelations() {
 		const collectionKeys = Object.keys(this._collections);
+		const globalKeys = Object.keys(this._globals);
+		const relationTargetKeys = [...collectionKeys, ...globalKeys];
 		const errors: string[] = [];
 
 		// Validate collection relations
@@ -312,11 +314,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				// Validate target collection
 				if (
 					relation.collection &&
-					!collectionKeys.includes(relation.collection)
+					!relationTargetKeys.includes(relation.collection)
 				) {
 					errors.push(
-						`Collection "${collectionKey}" has relation "${relationName}" pointing to unknown collection "${relation.collection}". ` +
-							`Available collections: ${collectionKeys.join(", ")}`,
+						`Collection "${collectionKey}" has relation "${relationName}" pointing to unknown target "${relation.collection}". ` +
+							`Available collections/globals: ${relationTargetKeys.join(", ")}`,
 					);
 				}
 				// Validate through/junction collection for many-to-many
@@ -339,11 +341,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				// Validate target collection
 				if (
 					relation.collection &&
-					!collectionKeys.includes(relation.collection)
+					!relationTargetKeys.includes(relation.collection)
 				) {
 					errors.push(
-						`Global "${globalKey}" has relation "${relationName}" pointing to unknown collection "${relation.collection}". ` +
-							`Available collections: ${collectionKeys.join(", ")}`,
+						`Global "${globalKey}" has relation "${relationName}" pointing to unknown target "${relation.collection}". ` +
+							`Available collections/globals: ${relationTargetKeys.join(", ")}`,
 					);
 				}
 				// Validate through/junction collection for many-to-many

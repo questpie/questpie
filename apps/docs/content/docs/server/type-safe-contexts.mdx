@@ -1,0 +1,200 @@
+---
+title: Type-Safe Contexts
+description: One pattern for strongly typed app, db, and session across hooks, access, RPC, jobs, workflows, and admin handlers
+---
+
+# Type-Safe Contexts
+
+Most server callbacks in QUESTPIE intentionally expose `app`, `db`, and `session` as broad types. This keeps builder composition fast and avoids type explosions in large apps.
+
+The recommended pattern is to type these values at the edge with `AppCMS`:
+
+```ts
+import { getApp, getContext, getDb, getSession } from "questpie";
+import type { AppCMS } from "../cms";
+
+function useTypedContext(ctx: {
+  app?: unknown;
+  db?: unknown;
+  session?: unknown;
+  locale?: string;
+}) {
+  const cms = getApp<AppCMS>(ctx.app);
+  const db = getDb<AppCMS>(ctx.db);
+  const session = getSession<AppCMS>(ctx.session);
+
+  // Alternative one-liner
+  const typed = getContext<AppCMS>(ctx);
+
+  return { cms, db, session, typed };
+}
+```
+
+## Type Safety Matrix
+
+| Surface | Callback shape | Recommended typing helper |
+|---|---|---|
+| Collection hooks | `({ app, db, session, data, operation })` | `getApp<AppCMS>()`, `getDb<AppCMS>()`, `getSession<AppCMS>()` |
+| Collection access | `({ app, db, session, data, input })` | `getContext<AppCMS>(ctx)` |
+| Global hooks/access | same as collection variants | `getContext<AppCMS>(ctx)` |
+| RPC `r.fn` / `q.fn` | `({ input, app, db, session })` | `rpc<AppCMS>()` or `fn.typed<AppCMS>()` |
+| Jobs | `({ payload, app, db, session })` | `job<AppCMS>()` (or `getApp<AppCMS>()`) |
+| Workflows | `step(name, async ({ payload, app }))` | `workflow<AppCMS>()` |
+| Admin action handlers | `({ data, itemId, itemIds, app, db, session })` | `getContext<AppCMS>(ctx)` |
+| Dashboard widget `fetchFn` / `access` | `({ app, db, session, locale })` | `getContext<AppCMS>(ctx)` |
+
+## Canonical Setup
+
+Export your app type once:
+
+```ts
+// src/questpie/server/cms.ts
+export const cms = q({ name: "my-app" })
+  .collections({ /* ... */ })
+  .globals({ /* ... */ })
+  .jobs({ /* ... */ })
+  .build({ /* ... */ });
+
+export type AppCMS = typeof cms;
+```
+
+Then import `AppCMS` in server-only files where callbacks run.
+
+## Hooks and Access
+
+```ts
+import { getContext } from "questpie";
+import type { AppCMS } from "../cms";
+
+q.collection("appointments")
+  .hooks({
+    afterChange: async (ctx) => {
+      const { app, session } = getContext<AppCMS>(ctx);
+      if (ctx.operation === "create") {
+        await app.queue.sendAppointmentConfirmation.publish({
+          appointmentId: ctx.data.id,
+          customerEmail: (ctx.data as { customerEmail?: string }).customerEmail ?? "",
+        });
+      }
+      if (!session) return;
+    },
+  })
+  .access({
+    update: (ctx) => {
+      const { session } = getContext<AppCMS>(ctx);
+      return !!session?.user;
+    },
+  });
+```
+
+## RPC
+
+Use typed RPC builder when you want `ctx.app` strongly typed in handlers:
+
+```ts
+import { rpc } from "questpie";
+import z from "zod";
+import type { AppCMS } from "../cms";
+
+const r = rpc<AppCMS>();
+
+export const appRpc = r.router({
+  booking: r.router({
+    create: r.fn({
+      schema: z.object({ barber: z.string(), service: z.string() }),
+      handler: async ({ input, app }) => {
+        return app.api.collections.appointments.create({
+          barber: input.barber,
+          service: input.service,
+        });
+      },
+    }),
+  }),
+});
+```
+
+If you are outside `rpc()` and defining standalone functions, use `fn.typed<AppCMS>()`.
+
+## Jobs and Workflows
+
+```ts
+import { job, workflow } from "questpie";
+import z from "zod";
+import type { AppCMS } from "../cms";
+
+const notify = job<AppCMS>()({
+  name: "notify-booking",
+  schema: z.object({ appointmentId: z.string() }),
+  handler: async ({ payload, app }) => {
+    await app.email.sendTemplate({
+      template: "booking-confirmation",
+      to: "user@example.com",
+      context: { appointmentId: payload.appointmentId },
+    });
+  },
+});
+
+const processBooking = workflow<AppCMS>()<{
+  appointmentId: string;
+}>("process-booking")
+  .step("load", async ({ payload, app }) => {
+    const appointment = await app.api.collections.appointments.findOne({
+      where: { id: payload.appointmentId },
+    });
+    if (!appointment) throw new Error("Appointment not found");
+    return { appointment };
+  })
+  .step("notify", async ({ payload, app }) => {
+    await app.queue.sendAppointmentConfirmation.publish({
+      appointmentId: payload.appointment.id,
+      customerEmail: "user@example.com",
+    });
+    return payload;
+  })
+  .build(z.object({ appointmentId: z.string() }));
+```
+
+## Admin Action and Widget Contexts
+
+```ts
+import { getContext } from "questpie";
+import type { ServerActionContext, WidgetFetchContext } from "@questpie/admin/server";
+import type { AppCMS } from "../cms";
+
+const executeBulkArchive = async (ctx: ServerActionContext) => {
+  const { app, session } = getContext<AppCMS>(ctx);
+  if (!session?.user) {
+    return { type: "error", toast: { message: "Unauthorized" } } as const;
+  }
+
+  await app.api.collections.posts.updateMany({
+    where: { id: { $in: ctx.itemIds ?? [] } },
+    data: { status: "archived" },
+  });
+
+  return { type: "success", toast: { message: "Archived" } } as const;
+};
+
+const dashboardCount = async (ctx: WidgetFetchContext) => {
+  const { app } = getContext<AppCMS>(ctx);
+  const count = await app.api.collections.appointments.count({});
+  return { count };
+};
+```
+
+## Common Mistakes
+
+- Importing runtime `cms` in many files instead of importing only `type AppCMS`.
+- Using generic queue access instead of job-specific typed calls (`app.queue.jobName.publish(payload)`).
+- Using untyped `session` directly and losing user field autocomplete.
+- Forgetting that `session` can be `undefined` or `null`.
+- Returning loosely typed objects from actions/jobs without schema guards.
+
+## Related Pages
+
+- [Context & Transactions](/docs/server/context-and-transactions)
+- [Hooks & Lifecycle](/docs/server/hooks-and-lifecycle)
+- [Access Control](/docs/server/access-control)
+- [RPC](/docs/server/rpc)
+- [Queue & Jobs](/docs/infrastructure/queue-and-jobs)
+- [Actions System](/docs/admin/actions-system)

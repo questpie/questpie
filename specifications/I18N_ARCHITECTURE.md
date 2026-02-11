@@ -71,14 +71,16 @@ import { backendMessagesEN, backendMessagesSK } from "questpie/server";
 ### Basic Setup
 
 ```typescript
-// src/admin/admin.ts
-import { qa } from "@questpie/admin/client";
+// src/questpie/server/cms.ts
+import { q } from "questpie";
+import { adminModule } from "@questpie/admin/server";
 import { adminMessagesSK } from "@questpie/admin/client";
 
-const admin = qa()
-  .locale({
-    default: "en",
-    supported: ["en", "sk"],
+const cms = q({ name: "my-app" })
+  .use(adminModule)
+  .adminLocale({
+    locales: ["en", "sk"],
+    defaultLocale: "en",
   })
   .messages({
     en: {
@@ -325,10 +327,13 @@ export { adminMessagesDE } from "./de.js"; // NEW
 3. Use in app:
 
 ```typescript
+import { q } from "questpie";
+import { adminModule } from "@questpie/admin/server";
 import { adminMessagesDE } from "@questpie/admin/client";
 
-const admin = qa()
-  .locale({ default: "en", supported: ["en", "sk", "de"] })
+const cms = q({ name: "my-app" })
+  .use(adminModule)
+  .adminLocale({ locales: ["en", "sk", "de"], defaultLocale: "en" })
   .messages({
     de: adminMessagesDE,
   })

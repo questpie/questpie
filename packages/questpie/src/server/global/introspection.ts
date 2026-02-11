@@ -150,32 +150,59 @@ export interface AdminGlobalSchema {
 }
 
 /**
+ * Reactive field config for form views.
+ * These are evaluated server-side and results sent to the client.
+ */
+export interface FormFieldReactiveConfig {
+	/** Hide field based on form data */
+	hidden?: boolean | { deps: string[] };
+	/** Make field read-only based on form data */
+	readOnly?: boolean | { deps: string[] };
+	/** Disable field based on form data */
+	disabled?: boolean | { deps: string[] };
+	/** Auto-compute field value from other fields */
+	compute?: {
+		deps: string[];
+		debounce?: number;
+	};
+}
+
+/**
+ * Form field entry - either a simple field name or field with reactive config.
+ */
+export type FormFieldEntry =
+	| string
+	| ({
+			/** Field name (use f.fieldName proxy) */
+			field: string;
+	  } & FormFieldReactiveConfig);
+
+/**
+ * Form section with fields that can have inline reactive config.
+ */
+export interface FormSection {
+	label?: I18nText;
+	description?: I18nText;
+	fields: FormFieldEntry[];
+	collapsible?: boolean;
+	defaultCollapsed?: boolean;
+}
+
+/**
  * Admin form view schema (from .form())
  */
 export interface AdminFormViewSchema {
 	/** View type (form, wizard, etc.) */
 	view?: string;
-	/** Fields to include */
-	fields?: string[];
+	/** Fields to include - can be simple names or objects with reactive config */
+	fields?: FormFieldEntry[];
 	/** Form sections */
-	sections?: Array<{
-		label?: I18nText;
-		description?: I18nText;
-		fields: string[];
-		collapsible?: boolean;
-		defaultCollapsed?: boolean;
-	}>;
+	sections?: FormSection[];
 	/** Form tabs */
 	tabs?: Array<{
 		label: I18nText;
 		icon?: { type: string; props: Record<string, unknown> };
-		sections: Array<{
-			label?: I18nText;
-			description?: I18nText;
-			fields: string[];
-			collapsible?: boolean;
-			defaultCollapsed?: boolean;
-		}>;
+		sections: FormSection[];
 	}>;
 }
 

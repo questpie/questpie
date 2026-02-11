@@ -28,6 +28,7 @@ import type {
 	AdminLocaleConfig,
 	BuiltinActionType,
 	ComponentDefinition,
+	DashboardActionFactory,
 	DashboardConfigContext,
 	EditViewDefinition,
 	FormViewConfig,
@@ -36,6 +37,7 @@ import type {
 	PreviewConfig,
 	ServerActionDefinition,
 	ServerActionsConfig,
+	ServerDashboardAction,
 	ServerDashboardConfig,
 	ServerSidebarConfig,
 	SidebarConfigContext,
@@ -385,6 +387,34 @@ function createActionProxy() {
 }
 
 /**
+ * Create action helpers for dashboard header actions.
+ */
+function createDashboardActionProxy() {
+	const toCollectionCreatePath = (collection: string) =>
+		`/admin/collections/${collection}/create`;
+	const toGlobalPath = (global: string) => `/admin/globals/${global}`;
+
+	return {
+		action: (config: ServerDashboardAction) => config,
+		link: (config: ServerDashboardAction) => config,
+		create: ({
+			collection,
+			...config
+		}: Omit<ServerDashboardAction, "href"> & { collection: string }) => ({
+			...config,
+			href: toCollectionCreatePath(collection),
+		}),
+		global: ({
+			global,
+			...config
+		}: Omit<ServerDashboardAction, "href"> & { global: string }) => ({
+			...config,
+			href: toGlobalPath(global),
+		}),
+	} satisfies DashboardActionFactory;
+}
+
+/**
  * Create an actions config context for the .actions() method.
  * Provides builders for both built-in and custom actions.
  *
@@ -705,8 +735,16 @@ function patchQuestpieBuilder() {
 	 *
 	 * @example
 	 * ```ts
-	 * .dashboard(({ d, c }) => d.dashboard({
+	 * .dashboard(({ d, c, a }) => d.dashboard({
 	 *   title: { en: "Dashboard" },
+	 *   actions: [
+	 *     a.create({
+	 *       id: "new-user",
+	 *       collection: "users",
+	 *       label: { en: "New User" },
+	 *       icon: c.icon("ph:user-plus"),
+	 *     }),
+	 *   ],
 	 *   items: [
 	 *     d.section({
 	 *       label: { en: "Overview" },
@@ -722,6 +760,7 @@ function patchQuestpieBuilder() {
 		configFn: (ctx: DashboardConfigContext) => ServerDashboardConfig,
 	): QuestpieBuilder<any> {
 		const ctx: DashboardConfigContext = {
+			a: createDashboardActionProxy(),
 			d: {
 				dashboard: (config) => config,
 				section: (config) => ({ type: "section" as const, ...config }),

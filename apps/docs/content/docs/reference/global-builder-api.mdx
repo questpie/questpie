@@ -10,7 +10,7 @@ description: Global-level methods — singleton fields, hooks, access, versionin
 ```ts
 const siteSettings = q.global("siteSettings")
   .fields((f) => ({
-    siteName: f.text().notNull(),
+    siteName: f.text({ required: true }),
     logo: f.upload(),
     description: f.textarea(),
     maintenanceMode: f.boolean().default(false),
@@ -18,8 +18,7 @@ const siteSettings = q.global("siteSettings")
   .access({
     read: true,
     update: ({ session }) => session?.user?.role === "admin",
-  })
-  .build();
+  });
 ```
 
 All methods are chainable and return a new builder instance.
@@ -32,7 +31,7 @@ Define the global's fields using the field builder proxy.
 
 ```ts
 .fields((f) => ({
-  siteName: f.text().notNull(),
+  siteName: f.text({ required: true }),
   logo: f.upload(),
   footerText: f.richText(),
   socialLinks: f.json<{ platform: string; url: string }[]>(),
@@ -143,13 +142,9 @@ Configure the edit form layout.
 })
 ```
 
-## Build
+## Finalization
 
-### `.build()`
-
-Finalize the global. Called automatically when used in `q.globals()`.
-
-**Returns:** `Global<TState>` with lazy getters for `table`, `i18nTable`, `versionsTable`.
+Global builders are passed directly to `q.globals({ ... })` and finalized during top-level CMS `.build(...)`.
 
 ## Runtime
 

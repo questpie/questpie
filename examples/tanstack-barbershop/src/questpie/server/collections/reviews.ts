@@ -1,9 +1,5 @@
 import { qb } from "@/questpie/server/builder";
 
-// Type helper for reactive context
-type Data = Record<string, unknown>;
-type Prev = { data: Data };
-
 export const reviews = qb
 	.collection("reviews")
 	.fields((f) => ({
@@ -16,22 +12,10 @@ export const reviews = qb
 			label: { en: "Customer Name", sk: "Meno zákazníka" },
 			required: true,
 			maxLength: 255,
-			meta: {
-				admin: {
-					// Read-only when customer relation is set (use customer's name)
-					readOnly: ({ data }: { data: Data }) => !!data.customer,
-				},
-			},
 		}),
 		customerEmail: f.email({
 			label: { en: "Customer Email", sk: "Email zákazníka" },
 			maxLength: 255,
-			meta: {
-				admin: {
-					// Only show when no customer relation (manual entry)
-					hidden: ({ data }: { data: Data }) => !!data.customer,
-				},
-			},
 		}),
 		barber: f.relation({
 			to: "barbers",
@@ -67,19 +51,6 @@ export const reviews = qb
 			label: { en: "Featured", sk: "Odporúčané" },
 			default: false,
 			required: true,
-			meta: {
-				admin: {
-					// Only show featured option when review is approved
-					hidden: ({ data }: { data: Data }) => !data.isApproved,
-					// Reset featured when unapproved
-					compute: ({ data, prev }: { data: Data; prev: Prev }) => {
-						if (!data.isApproved && prev.data.isApproved) {
-							return false; // Reset to false when unapproved
-						}
-						return undefined; // No change
-					},
-				},
-			},
 		}),
 	}))
 	.title(({ f }) => f.customerName)
@@ -92,7 +63,18 @@ export const reviews = qb
 		v.form({
 			sidebar: {
 				position: "right",
-				fields: [f.isApproved, f.isFeatured, f.rating],
+				fields: [
+					f.isApproved,
+					{
+						field: f.isFeatured,
+						hidden: ({ data }) => !data.isApproved,
+						compute: {
+							handler: ({ data }) => (!data.isApproved ? false : undefined),
+							deps: ({ data }) => [data.isApproved],
+						},
+					},
+					f.rating,
+				],
 			},
 			fields: [
 				{
@@ -100,7 +82,17 @@ export const reviews = qb
 					label: { en: "Customer", sk: "Zákazník" },
 					layout: "grid",
 					columns: 2,
-					fields: [f.customer, f.customerName, f.customerEmail],
+					fields: [
+						f.customer,
+						{
+							field: f.customerName,
+							readOnly: ({ data }) => !!data.customer,
+						},
+						{
+							field: f.customerEmail,
+							hidden: ({ data }) => !!data.customer,
+						},
+					],
 				},
 				{
 					type: "section",

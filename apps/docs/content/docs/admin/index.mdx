@@ -32,8 +32,16 @@ const cms = q({ name: "app" })
       ],
     }),
   )
-  .dashboard(({ d }) =>
+  .dashboard(({ d, c, a }) =>
     d.dashboard({
+      actions: [
+        a.create({
+          id: "new-post",
+          collection: "posts",
+          label: "New Post",
+          icon: c.icon("ph:plus"),
+        }),
+      ],
       items: [
         d.stats({ collection: "posts", label: "Total Posts" }),
         d.recentItems({ collection: "barbers", limit: 5 }),

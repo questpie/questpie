@@ -7,6 +7,15 @@ description: Typed rpc contracts for custom application workflows
 
 RPC is used for custom operations that do not fit plain CRUD.
 
+For end-to-end type safety, bind RPC to your CMS type:
+
+```ts
+import { rpc } from "questpie";
+import type { AppCMS } from "./cms";
+
+export const r = rpc<AppCMS>();
+```
+
 ## Pattern
 
 1. create root `const r = rpc()`
@@ -19,8 +28,9 @@ RPC is used for custom operations that do not fit plain CRUD.
 ```ts
 import { rpc } from "questpie";
 import z from "zod";
+import type { AppCMS } from "../cms";
 
-export const r = rpc();
+export const r = rpc<AppCMS>();
 
 export const getRevenueStats = r.fn({
   schema: z.object({
@@ -43,6 +53,25 @@ export const getRevenueStats = r.fn({
 export const appRpc = r.router({ getRevenueStats });
 ```
 
+## Alternative: Typed fn Factory
+
+If you need typed functions outside `rpc()`, use `fn.typed<AppCMS>()`:
+
+```ts
+import { fn } from "questpie";
+import z from "zod";
+import type { AppCMS } from "../cms";
+
+const f = fn.typed<AppCMS>();
+
+export const recalculateStats = f({
+  schema: z.object({ date: z.string() }),
+  handler: async ({ input, app }) => {
+    return app.api.collections.analytics.find({ where: { date: input.date } });
+  },
+});
+```
+
 ## Client usage
 
 ```ts
@@ -58,3 +87,7 @@ const stats = await client.rpc.getRevenueStats({
 - analytics aggregation
 - external API workflows
 - multi-step domain logic
+
+## Related
+
+- [Type-Safe Contexts](/docs/server/type-safe-contexts)

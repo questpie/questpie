@@ -41,12 +41,11 @@ const currencyField = defineField<CurrencyFieldConfig, number>()({
 // Define collections
 const products = q.collection("products")
   .fields((f) => ({
-    name: f.text().notNull(),
-    price: f.currency({ currency: "USD" }).notNull(),
-    sku: f.text().notNull(),
+    name: f.text({ required: true }),
+    price: f.currency({ currency: "USD", required: true }),
+    sku: f.text({ required: true }),
   }))
-  .options({ timestamps: true })
-  .build();
+  .options({ timestamps: true });
 
 // Define jobs
 const syncInventory = q.job({

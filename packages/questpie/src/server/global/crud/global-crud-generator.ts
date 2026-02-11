@@ -48,7 +48,6 @@ import { ApiError } from "#questpie/server/errors/index.js";
 import {
 	applyFieldInputHooks,
 	applyFieldOutputHooks,
-	extractFieldDefinitionAccessRules,
 } from "#questpie/server/fields/runtime.js";
 import type { FieldDefinitionAccess } from "#questpie/server/fields/types.js";
 import type {
@@ -108,7 +107,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 	private getFieldAccessRules():
 		| Record<string, FieldDefinitionAccess>
 		| undefined {
-		return extractFieldDefinitionAccessRules(this.state.fieldDefinitions);
+		// Source field access from global-level .access({ fields: {...} })
+		const globalAccess = this.state.access as
+			| { fields?: Record<string, FieldDefinitionAccess> }
+			| undefined;
+		return globalAccess?.fields;
 	}
 
 	private async runFieldInputHooks(
@@ -275,8 +278,32 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		return { query, useI18n, needsFallback };
 	}
 
-	private async getCurrentRow(db: any) {
-		const rows = await db.select().from(this.table).limit(1);
+	/**
+	 * Resolve the scope ID from context using the scoped resolver
+	 */
+	private resolveScopeId(context: CRUDContext): string | null | undefined {
+		const scopeResolver = this.state.options.scoped;
+		if (!scopeResolver) return undefined;
+		return scopeResolver(context as any);
+	}
+
+	private async getCurrentRow(db: any, context?: CRUDContext) {
+		const scopeId = context ? this.resolveScopeId(context) : undefined;
+		const isScoped = this.state.options.scoped !== undefined;
+
+		let query = db.select().from(this.table);
+
+		// Filter by scope if this is a scoped global
+		if (isScoped) {
+			if (scopeId) {
+				query = query.where(eq((this.table as any).scopeId, scopeId));
+			} else {
+				// null scope - global instance
+				query = query.where(sql`${(this.table as any).scopeId} IS NULL`);
+			}
+		}
+
+		const rows = await query.limit(1);
 		return rows[0] || null;
 	}
 
@@ -287,6 +314,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		) => {
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext(context);
+			const isScoped = this.state.options.scoped !== undefined;
+			const scopeId = isScoped ? this.resolveScopeId(normalized) : undefined;
 
 			// Enforce access control
 			const canRead = await this.enforceAccessControl(
@@ -314,7 +343,20 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				normalized,
 				options.columns,
 			);
-			let rows = await query.limit(1);
+
+			// Apply scope filter if this is a scoped global
+			let scopedQuery = query;
+			if (isScoped) {
+				if (scopeId) {
+					scopedQuery = query.where(eq((this.table as any).scopeId, scopeId));
+				} else {
+					scopedQuery = query.where(
+						sql`${(this.table as any).scopeId} IS NULL`,
+					);
+				}
+			}
+
+			let rows = await scopedQuery.limit(1);
 
 			// Application-side i18n merge
 			if (useI18n && rows.length > 0 && this.state.localized.length > 0) {
@@ -328,7 +370,16 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 			if (!row) {
 				row = await withTransaction(db, async (tx: any) => {
-					const [inserted] = await tx.insert(this.table).values({}).returning();
+					// Auto-create with scope_id if scoped
+					const insertValues: Record<string, any> = {};
+					if (isScoped) {
+						insertValues.scopeId = scopeId ?? null;
+					}
+
+					const [inserted] = await tx
+						.insert(this.table)
+						.values(insertValues)
+						.returning();
 					if (!inserted) {
 						throw ApiError.internal("Failed to auto-create global record");
 					}
@@ -427,7 +478,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		) => {
 			const db = this.getDb(context);
 			const normalized = this.normalizeContext(context);
-			const existing = await this.getCurrentRow(db);
+			const isScoped = this.state.options.scoped !== undefined;
+			const scopeId = isScoped ? this.resolveScopeId(normalized) : undefined;
+			const existing = await this.getCurrentRow(db, normalized);
 
 			const canUpdate = await this.enforceAccessControl(
 				"update",
@@ -502,9 +555,14 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 							.where(eq((this.table as any).id, existing.id));
 					}
 				} else {
+					// Include scope_id when creating new record for scoped globals
+					const insertValues = {
+						...nonLocalized,
+						...(isScoped ? { scopeId: scopeId ?? null } : {}),
+					};
 					const [inserted] = await tx
 						.insert(this.table)
-						.values(nonLocalized)
+						.values(insertValues)
 						.returning();
 					updatedId = inserted?.id;
 				}
