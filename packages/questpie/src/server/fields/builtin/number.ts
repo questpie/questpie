@@ -26,7 +26,7 @@ import {
 	smallint,
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
 
@@ -232,7 +232,7 @@ function getNumberOperators() {
  * const rating = numberField({ min: 1, max: 5, step: 0.5 });
  * ```
  */
-export const numberField = defineField<NumberFieldConfig, number>()({
+export const numberField = field<NumberFieldConfig, number>()({
 	type: "number" as const,
 	_value: undefined as unknown as number,
 	toColumn(name: string, config: NumberFieldConfig) {

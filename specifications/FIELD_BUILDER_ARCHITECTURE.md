@@ -1240,7 +1240,7 @@ interface TextFieldConfig extends BaseFieldConfig {
   uppercase?: boolean;
 }
 
-const textField = defineField<"text", TextFieldConfig, string>("text", {
+const textField = field<"text", TextFieldConfig, string>("text", {
   toColumn(name, config) {
     const {
       mode = "varchar",
@@ -1392,7 +1392,7 @@ interface NumberFieldConfig extends BaseFieldConfig {
   step?: number;
 }
 
-const numberField = defineField<"number", NumberFieldConfig, number>("number", {
+const numberField = field<"number", NumberFieldConfig, number>("number", {
   toColumn(name, config) {
     const {
       mode = "integer",
@@ -1538,7 +1538,7 @@ interface BooleanFieldConfig extends BaseFieldConfig {
   defaultTrue?: boolean;
 }
 
-const booleanField = defineField<"boolean", BooleanFieldConfig, boolean>(
+const booleanField = field<"boolean", BooleanFieldConfig, boolean>(
   "boolean",
   {
     toColumn(name, config) {
@@ -1629,7 +1629,7 @@ interface DateFieldConfig extends BaseFieldConfig {
   autoNowUpdate?: boolean;
 }
 
-const dateField = defineField<"date", DateFieldConfig, Date>("date", {
+const dateField = field<"date", DateFieldConfig, Date>("date", {
   toColumn(name, config) {
     let column = date(name, { mode: "date" });
 
@@ -1745,7 +1745,7 @@ interface DatetimeFieldConfig extends BaseFieldConfig {
   withTimezone?: boolean;
 }
 
-const datetimeField = defineField<"datetime", DatetimeFieldConfig, Date>(
+const datetimeField = field<"datetime", DatetimeFieldConfig, Date>(
   "datetime",
   {
     toColumn(name, config) {
@@ -1914,7 +1914,7 @@ interface TimeFieldConfig extends BaseFieldConfig {
   precision?: number;
 }
 
-const timeField = defineField<"time", TimeFieldConfig, string>("time", {
+const timeField = field<"time", TimeFieldConfig, string>("time", {
   toColumn(name, config) {
     const { precision = 0 } = config;
 
@@ -2057,7 +2057,7 @@ interface SelectFieldConfig extends BaseFieldConfig {
   enumName?: string;
 }
 
-const selectField = defineField<"select", SelectFieldConfig, string | string[]>(
+const selectField = field<"select", SelectFieldConfig, string | string[]>(
   "select",
   {
     toColumn(name, config) {
@@ -2226,7 +2226,7 @@ interface EmailFieldConfig extends BaseFieldConfig {
   strict?: boolean;
 }
 
-const emailField = defineField<"email", EmailFieldConfig, string>("email", {
+const emailField = field<"email", EmailFieldConfig, string>("email", {
   toColumn(name, config) {
     let column = varchar(name, { length: 255 });
 
@@ -2313,7 +2313,7 @@ interface UrlFieldConfig extends BaseFieldConfig {
   maxLength?: number;
 }
 
-const urlField = defineField<"url", UrlFieldConfig, string>("url", {
+const urlField = field<"url", UrlFieldConfig, string>("url", {
   toColumn(name, config) {
     const maxLength = config.maxLength ?? 2048;
     let column = varchar(name, { length: maxLength });
@@ -2434,7 +2434,7 @@ interface TextareaFieldConfig extends BaseFieldConfig {
   trim?: boolean;
 }
 
-const textareaField = defineField<"textarea", TextareaFieldConfig, string>(
+const textareaField = field<"textarea", TextareaFieldConfig, string>(
   "textarea",
   {
     toColumn(name, config) {
@@ -2508,7 +2508,7 @@ interface UploadFieldConfig extends BaseFieldConfig {
   targetField?: string;
 }
 
-const uploadField = defineField<
+const uploadField = field<
   "upload",
   UploadFieldConfig,
   string | string[] // ID or array of IDs
@@ -2960,7 +2960,7 @@ interface PolymorphicRelationConfig extends BaseFieldConfig {
   onDelete?: "cascade" | "set null" | "restrict";
 }
 
-const polymorphicRelationField = defineField<
+const polymorphicRelationField = field<
   "polymorphicRelation",
   PolymorphicRelationConfig,
   { type: string; id: string }
@@ -3172,7 +3172,7 @@ interface ObjectFieldConfig extends BaseFieldConfig {
   mode?: "jsonb" | "json";
 }
 
-const objectField = defineField<
+const objectField = field<
   "object",
   ObjectFieldConfig,
   Record<string, unknown>
@@ -3357,7 +3357,7 @@ interface ArrayFieldConfig extends BaseFieldConfig {
   mode?: "jsonb" | "array"; // PostgreSQL array or JSONB
 }
 
-const arrayField = defineField<"array", ArrayFieldConfig, unknown[]>("array", {
+const arrayField = field<"array", ArrayFieldConfig, unknown[]>("array", {
   toColumn(name, config) {
     const { mode = "jsonb", required } = config;
 
@@ -3652,7 +3652,7 @@ interface JsonFieldConfig extends BaseFieldConfig {
   schema?: JSONSchema7;
 }
 
-const jsonField = defineField<"json", JsonFieldConfig, unknown>("json", {
+const jsonField = field<"json", JsonFieldConfig, unknown>("json", {
   toColumn(name, config) {
     const { mode = "jsonb", required } = config;
 
@@ -3819,7 +3819,7 @@ const jsonField = defineField<"json", JsonFieldConfig, unknown>("json", {
 import { z } from "zod";
 
 // Field implements only Zod schema
-const textField = defineField("text", {
+const textField = field("text", {
   toZodSchema(config) {
     let schema = z.string();
     if (config.maxLength) schema = schema.max(config.maxLength);
@@ -4290,7 +4290,7 @@ interface GeometryFieldConfig extends BaseFieldConfig {
   srid?: number;
 }
 
-const geometryField = defineField<"geometry", GeometryFieldConfig, GeoJSON>(
+const geometryField = field<"geometry", GeometryFieldConfig, GeoJSON>(
   "geometry",
   {
     toColumn(name, config) {
@@ -6384,7 +6384,7 @@ const products = q.collection("products").fields((f) => ({
 
 ### Type-Safe Field Definition
 
-The `defineField` function captures all type information at definition time:
+The `field` function captures all type information at definition time:
 
 ```typescript
 // packages/questpie/src/server/fields/define-field.ts
@@ -6398,7 +6398,7 @@ The `defineField` function captures all type information at definition time:
  * @typeParam TInput - Input type (what you provide when writing) - defaults to TValue
  * @typeParam TColumn - Drizzle column type - inferred from toColumn return
  */
-function defineField<
+function field<
   TType extends string,
   TConfig extends object,
   TValue,
@@ -6479,7 +6479,7 @@ const geometry = customType<{
 });
 
 // Usage in field definition
-const geometryField = defineField("geometry", {
+const geometryField = field("geometry", {
   toColumn(name, config) {
     return geometry(name, { srid: config.srid, type: config.geometryType });
   },
@@ -6493,7 +6493,7 @@ const geometryField = defineField("geometry", {
 // packages/questpie/src/server/fields/custom/geometry.ts
 
 import { customType } from "drizzle-orm/pg-core";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 
 // GeoJSON types
 interface Point {
@@ -6557,7 +6557,7 @@ const geometryColumn = customType<{
 });
 
 // Field definition with full type inference
-export const geometryField = defineField<
+export const geometryField = field<
   "geometry",
   GeometryFieldConfig,
   GeoJSON, // TValue - what you read
@@ -6800,7 +6800,7 @@ const citext = customType<{ data: string; driverData: string }>({
   dataType: () => "citext",
 });
 
-const citextField = defineField<"citext", {}, string>("citext", {
+const citextField = field<"citext", {}, string>("citext", {
   toColumn: (name, config) => {
     const col = citext(name);
     return config.required ? col.notNull() : col;
@@ -6829,7 +6829,7 @@ const tsvector = customType<{ data: string; driverData: string }>({
   dataType: () => "tsvector",
 });
 
-const tsvectorField = defineField<"tsvector", { language?: string }, string>(
+const tsvectorField = field<"tsvector", { language?: string }, string>(
   "tsvector",
   {
     toColumn: (name) => tsvector(name),
@@ -6859,7 +6859,7 @@ const inet = customType<{ data: string; driverData: string }>({
   dataType: () => "inet",
 });
 
-const inetField = defineField<"inet", {}, string>("inet", {
+const inetField = field<"inet", {}, string>("inet", {
   toColumn: (name, config) => {
     const col = inet(name);
     return config.required ? col.notNull() : col;
@@ -6891,7 +6891,7 @@ const inetField = defineField<"inet", {}, string>("inet", {
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  defineField<TType, TConfig, TValue, TInput, TColumn>               │
+│  field<TType, TConfig, TValue, TInput, TColumn>               │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  TConfig ─────► toColumn() ─────► TColumn (Drizzle column type)     │
@@ -7106,7 +7106,7 @@ f.text({ required: true, output: false });
  * @param TValueMap - Mapping from config to value type (for mode/multiple)
  * @param TColumnMap - Mapping from config to column type (for mode)
  */
-function defineField<
+function field<
   TType extends string,
   TConfigBase extends object,
   TValueMap extends ConfigToValueMap,
@@ -7155,7 +7155,7 @@ type ConfigToColumnMap = {
 ### Text Field
 
 ```typescript
-const textFieldFactory = defineField<
+const textFieldFactory = field<
   "text",
   TextFieldConfig,
   // Value map: mode → value type
@@ -7181,7 +7181,7 @@ f.text({ mode: "text", required: true });
 ### Number Field
 
 ```typescript
-const numberFieldFactory = defineField<
+const numberFieldFactory = field<
   "number",
   NumberFieldConfig,
   // Value map: mode → value type
@@ -7215,7 +7215,7 @@ f.number({ mode: "decimal", precision: 10, scale: 2 });
 ### Select Field
 
 ```typescript
-const selectFieldFactory = defineField<
+const selectFieldFactory = field<
   "select",
   SelectFieldConfig,
   // Value map: multiple → value type
@@ -7539,7 +7539,7 @@ The `toColumn` method must return properly typed Drizzle columns based on config
 ```typescript
 // packages/questpie/src/server/fields/builtin/text.ts
 
-const textField = defineField("text", {
+const textField = field("text", {
   toColumn<TConfig extends TextFieldConfig>(
     name: string,
     config: TConfig,

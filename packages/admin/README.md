@@ -103,20 +103,11 @@ export const postsAdmin = qab
 ### 3. Build Admin Configuration
 
 ```typescript
-// src/admin/admin.ts
+// src/admin/builder.ts
 import { qa, adminModule } from "@questpie/admin/client";
-import { postsAdmin } from "./collections/posts";
-import { sidebarConfig } from "./sidebar";
+import type { AppCMS } from "./server/cms";
 
-export const admin = qa()
-  .use(adminModule)
-  .branding({
-    name: "My Admin",
-  })
-  .collections({
-    posts: postsAdmin,
-  })
-  .sidebar(sidebarConfig);
+export const admin = qa<AppCMS>().use(adminModule);
 
 // Module augmentation for global type inference
 declare module "@questpie/admin/client" {
@@ -127,24 +118,46 @@ declare module "@questpie/admin/client" {
 }
 ```
 
-### 4. Configure Sidebar
+**Note:** Branding, sidebar, and dashboard are configured server-side via `q().use(adminModule)` from `@questpie/admin/server`.
+
+### 4. Server-Side Configuration
+
+Branding, sidebar, and dashboard are configured on the server:
 
 ```typescript
-// src/admin/sidebar.ts
-import { qa } from "@questpie/admin/client";
-export const sidebarConfig = qa
-  .sidebar()
-  .section("main", (s) =>
-    s.items([
-      { type: "link", label: "Dashboard", href: "/admin", icon: "ph:house" },
-    ]),
+// src/questpie/server/app.ts
+import { adminModule } from "@questpie/admin/server";
+import { q } from "questpie";
+
+export const cms = q({ name: "my-app" })
+  .use(adminModule)
+  .branding({ name: "My Admin" })
+  .sidebar(({ s, c }) =>
+    s.sidebar({
+      sections: [
+        {
+          id: "main",
+          items: [
+            { type: "link", label: "Dashboard", href: "/admin", icon: c.icon("ph:house") },
+          ],
+        },
+        {
+          id: "content",
+          label: "Content",
+          icon: c.icon("ph:file-text"),
+          items: [
+            { type: "collection", collection: "posts" },
+          ],
+        },
+      ],
+    }),
   )
-  .section("content", (s) =>
-    s
-      .title("Content")
-      .icon("ph:file-text")
-      .items([{ type: "collection", collection: "posts", icon: FileTextIcon }]),
-  );
+  .dashboard(({ d, c }) =>
+    d.dashboard({
+      items: [],
+    }),
+  )
+  .build({ ... });
 ```
 
 ### 5. Setup Tailwind CSS
@@ -170,7 +183,7 @@ In your main CSS file, import admin styles and configure Tailwind to scan the ad
 // routes/admin.tsx (TanStack Router example)
 import { Admin, AdminLayoutProvider } from "@questpie/admin/client";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
-import { admin } from "~/admin/admin";
+import { admin } from "~/admin/builder";
 import { cmsClient } from "~/lib/cms-client";
 import { queryClient } from "~/lib/query-client";
 
@@ -201,16 +214,19 @@ function AdminLayout() {
 
 ```typescript
 import { qa, adminModule } from "@questpie/admin/client";
+import type { AppCMS } from "./server/cms";
 
 // Start from admin module (includes built-in fields/views + user management)
-const admin = qa()
-  .use(adminModule)
-  .branding({ name: "My Admin" })
-  .collections({ posts: postsAdmin })
-  .globals({ settings: settingsAdmin })
-  .sidebar(sidebarConfig)
-  .dashboard(dashboardConfig);
+const admin = qa<AppCMS>().use(adminModule);
+
+// Then use the builder to configure collections
+const postsAdmin = admin.collection("posts").fields(({ r }) => ({
+  title: r.text(),
+  // ...
+}));
 ```
+
+**Note:** Branding, sidebar, and dashboard are configured server-side via `q().use(adminModule)` from `@questpie/admin/server`.
 
 ### Collection Builder
 
@@ -250,25 +266,35 @@ const settingsAdmin = qa
   );
 ```
 
-### Sidebar Builder
+### Sidebar Configuration (Server-side)
 
 ```typescript
-const sidebarConfig = qa
-  .sidebar()
-  .section("main", (s) =>
-    s.items([
-      { type: "link", label: "Dashboard", href: "/admin", icon: HomeIcon },
-    ]),
-  )
-  .section("content", (s) =>
-    s
-      .title("Content")
-      .items([
-        { type: "collection", collection: "posts" },
-        { type: "collection", collection: "pages" },
-        { type: "divider" },
-        { type: "global", global: "settings" },
-      ]),
+import { adminModule } from "@questpie/admin/server";
+import { q } from "questpie";
+
+const cms = q({ name: "app" })
+  .use(adminModule)
+  .sidebar(({ s, c }) =>
+    s.sidebar({
+      sections: [
+        {
+          id: "main",
+          items: [
+            { type: "link", label: "Dashboard", href: "/admin", icon: c.icon("ph:house") },
+          ],
+        },
+        {
+          id: "content",
+          label: "Content",
+          items: [
+            { type: "collection", collection: "posts" },
+            { type: "collection", collection: "pages" },
+            { type: "divider" },
+            { type: "global", global: "settings" },
+          ],
+        },
+      ],
+    }),
   );
 ```
 

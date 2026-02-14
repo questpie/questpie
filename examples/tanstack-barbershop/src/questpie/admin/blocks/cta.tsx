@@ -6,20 +6,11 @@
  */
 
 import { ArrowRight } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 
-type CTAValues = {
-  title: string;
-  description: string;
-  buttonText: string;
-  buttonLink: string;
-  variant: "highlight" | "dark" | "light";
-  size: "small" | "medium" | "large";
-};
-
-export function CTARenderer({ values }: BlockRendererProps<CTAValues>) {
+export function CTARenderer({ values }: BlockProps<"cta">) {
   const variantStyles = {
     highlight: {
       section: "bg-highlight text-highlight-foreground",
@@ -29,7 +20,7 @@ export function CTARenderer({ values }: BlockRendererProps<CTAValues>) {
       button: "bg-highlight text-highlight-foreground hover:bg-highlight/90" },
     light: {
       section: "bg-muted text-foreground",
-      button: "bg-foreground text-background hover:bg-foreground/90" } }[values.variant || "highlight"];
+      button: "bg-foreground text-background hover:bg-foreground/90" } }[values.variant || "highlight"]!;
 
   const sizeStyles = {
     small: "py-12",

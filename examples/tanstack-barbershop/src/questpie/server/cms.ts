@@ -1,7 +1,5 @@
 import { adminRpc } from "@questpie/admin/server";
 import { ConsoleAdapter, pgBossAdapter, SmtpAdapter } from "questpie";
-import { qb } from "@/questpie/server/builder";
-import { appointments } from "@/questpie/server/collections";
 import {
 	createBooking,
 	getActiveBarbers,
@@ -11,11 +9,15 @@ import {
 import { messages } from "@/questpie/server/i18n";
 import { migrations } from "../../migrations";
 import { blocks } from "./blocks";
-import { barberServices } from "./collections/barber-services";
-import { barbers } from "./collections/barbers";
-import { pages } from "./collections/pages";
-import { reviews } from "./collections/reviews";
-import { services } from "./collections/services";
+import { qb } from "./builder";
+import {
+	appointments,
+	barberServices,
+	barbers,
+	pages,
+	reviews,
+	services,
+} from "./collections";
 import { dashboard } from "./dashboard";
 import { siteSettings } from "./globals";
 import {
@@ -29,10 +31,9 @@ import { sidebar } from "./sidebar";
 const DATABASE_URL =
 	process.env.DATABASE_URL || "postgres://localhost/barbershop";
 
-export const cms = qb
+export const baseCms = qb
 	.use(sidebar)
 	.use(dashboard)
-	.blocks(blocks)
 	.collections({
 		barbers,
 		services,
@@ -77,36 +78,37 @@ export const cms = qb
 		secret:
 			process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
 	})
-	.migrations(migrations)
-	.build({
-		app: {
-			url: process.env.APP_URL || "http://localhost:3000",
-		},
-		db: {
-			url: DATABASE_URL,
-		},
-		storage: {
-			basePath: "/api/cms",
-		},
-		secret: process.env.SECRET,
-		email: {
-			adapter:
-				process.env.MAIL_ADAPTER === "console"
-					? new ConsoleAdapter({ logHtml: false })
-					: new SmtpAdapter({
-							transport: {
-								host: process.env.SMTP_HOST || "localhost",
-								port: Number.parseInt(process.env.SMTP_PORT || "1025", 10),
-								secure: false,
-							},
-						}),
-		},
-		queue: {
-			adapter: pgBossAdapter({
-				connectionString: DATABASE_URL,
-			}),
-		},
-	});
+	.migrations(migrations);
+
+export const cms = baseCms.blocks(blocks).build({
+	app: {
+		url: process.env.APP_URL || "http://localhost:3000",
+	},
+	db: {
+		url: DATABASE_URL,
+	},
+	storage: {
+		basePath: "/api/cms",
+	},
+	secret: process.env.SECRET,
+	email: {
+		adapter:
+			process.env.MAIL_ADAPTER === "console"
+				? new ConsoleAdapter({ logHtml: false })
+				: new SmtpAdapter({
+						transport: {
+							host: process.env.SMTP_HOST || "localhost",
+							port: Number.parseInt(process.env.SMTP_PORT || "1025", 10),
+							secure: false,
+						},
+					}),
+	},
+	queue: {
+		adapter: pgBossAdapter({
+			connectionString: DATABASE_URL,
+		}),
+	},
+});
 
 export const appRpc = r.router({
 	...adminRpc,

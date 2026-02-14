@@ -9,7 +9,7 @@
 import { sql } from "drizzle-orm";
 import { json, jsonb } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
 
@@ -197,7 +197,7 @@ export type JsonValue =
  * const config = jsonField({ required: true });
  * ```
  */
-export const jsonField = defineField<JsonFieldConfig, JsonValue>()({
+export const jsonField = field<JsonFieldConfig, JsonValue>()({
 	type: "json" as const,
 	_value: undefined as unknown as JsonValue,
 	toColumn(name: string, config: JsonFieldConfig) {

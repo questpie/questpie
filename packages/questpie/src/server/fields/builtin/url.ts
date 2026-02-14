@@ -12,7 +12,7 @@ import {
 	stringColumnOperators,
 	stringJsonbOperators,
 } from "../common-operators.js";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
 
@@ -127,7 +127,7 @@ function getUrlOperators() {
  * const internalLink = urlField({ allowedHosts: ["example.com", "app.example.com"] });
  * ```
  */
-export const urlField = defineField<UrlFieldConfig, string>()({
+export const urlField = field<UrlFieldConfig, string>()({
 	type: "url" as const,
 	_value: undefined as unknown as string,
 

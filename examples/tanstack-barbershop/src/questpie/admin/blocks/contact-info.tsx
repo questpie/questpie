@@ -6,34 +6,20 @@
  */
 
 import { Envelope, MapPin, Phone } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
-
-type ContactInfoValues = {
-  title?: string;
-  showMap: boolean;
-};
-
-type ContactInfoPrefetchedData = {
-  shopName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  address?: string;
-  city?: string;
-  zipCode?: string;
-  country?: string;
-  mapEmbedUrl?: string;
-};
 
 export function ContactInfoRenderer({
   values,
-  data }: BlockRendererProps<ContactInfoValues>) {
-  const contactData = (data as ContactInfoPrefetchedData) || {};
+  data }: BlockProps<"contact-info">) {
+  const contactPhone = data?.contactPhone as string | undefined;
+  const contactEmail = data?.contactEmail as string | undefined;
+  const mapEmbedUrl = data?.mapEmbedUrl as string | undefined;
   const fullAddress = [
-    contactData?.address,
-    contactData?.city,
-    contactData?.zipCode,
-    contactData?.country,
+    data?.address as string | undefined,
+    data?.city as string | undefined,
+    data?.zipCode as string | undefined,
+    data?.country as string | undefined,
   ]
     .filter(Boolean)
     .join(", ");
@@ -50,14 +36,14 @@ export function ContactInfoRenderer({
         <div
           className={cn(
             "grid gap-8",
-            values.showMap && contactData?.mapEmbedUrl
+            values.showMap && data?.mapEmbedUrl
               ? "grid-cols-1 lg:grid-cols-2"
               : "max-w-2xl mx-auto",
           )}
         >
           {/* Contact Info Cards */}
           <div className="space-y-6">
-            {contactData?.contactPhone && (
+            {contactPhone && (
               <div className="flex items-start gap-4 p-6 bg-card border rounded-lg">
                 <Phone
                   className="size-6 text-highlight flex-shrink-0 mt-1"
@@ -66,16 +52,16 @@ export function ContactInfoRenderer({
                 <div>
                   <h3 className="font-semibold mb-1">Phone</h3>
                   <a
-                    href={`tel:${contactData.contactPhone}`}
+                    href={`tel:${contactPhone}`}
                     className="text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {contactData.contactPhone}
+                    {contactPhone}
                   </a>
                 </div>
               </div>
             )}
 
-            {contactData?.contactEmail && (
+            {contactEmail && (
               <div className="flex items-start gap-4 p-6 bg-card border rounded-lg">
                 <Envelope
                   className="size-6 text-highlight flex-shrink-0 mt-1"
@@ -84,10 +70,10 @@ export function ContactInfoRenderer({
                 <div>
                   <h3 className="font-semibold mb-1">Email</h3>
                   <a
-                    href={`mailto:${contactData.contactEmail}`}
+                    href={`mailto:${contactEmail}`}
                     className="text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {contactData.contactEmail}
+                    {contactEmail}
                   </a>
                 </div>
               </div>
@@ -108,10 +94,10 @@ export function ContactInfoRenderer({
           </div>
 
           {/* Map */}
-          {values.showMap && contactData?.mapEmbedUrl && (
+          {values.showMap && mapEmbedUrl && (
             <div className="rounded-lg overflow-hidden border bg-muted aspect-square lg:aspect-auto">
               <iframe
-                src={contactData.mapEmbedUrl}
+                src={mapEmbedUrl}
                 width="100%"
                 height="100%"
                 style={{ border: 0, minHeight: "400px" }}

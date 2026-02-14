@@ -79,7 +79,8 @@ export const heroBlock = qb
 			],
 			defaultValue: "medium",
 		}),
-	}));
+	}))
+	.prefetch({ with: { backgroundImage: true } });
 
 export const servicesBlock = qb
 	.block("services")
@@ -115,10 +116,11 @@ export const servicesBlock = qb
 		limit: f.number({ label: { en: "Limit", sk: "Limit" }, defaultValue: 6 }),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const res = await (ctx.app as any).api.collections.services.find({
+		const res = await ctx.app.api.collections.services.find({
 			limit: values.limit || 6,
-			orderBy: { order: "asc" },
+			// orderBy: { order: "asc" },
 		});
+
 		return { services: res.docs };
 	});
 
@@ -148,7 +150,7 @@ export const teamBlock = qb
 		limit: f.number({ label: { en: "Limit", sk: "Limit" }, defaultValue: 4 }),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const res = await (ctx.app as any).api.collections.barbers.find({
+		const res = await ctx.app.api.collections.barbers.find({
 			limit: values.limit || 4,
 			where: { isActive: true },
 		});
@@ -172,9 +174,9 @@ export const reviewsBlock = qb
 		limit: f.number({ label: { en: "Limit", sk: "Limit" }, defaultValue: 3 }),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const res = await (ctx.app as any).api.collections.reviews.find({
+		const res = await ctx.app.api.collections.reviews.find({
 			limit: values.limit || 3,
-			where: { rating: { gte: 4 } },
+			where: { rating: { in: ["4", "5"] } },
 			orderBy: { createdAt: "desc" },
 		});
 		return { reviews: res.docs };
@@ -280,7 +282,11 @@ export const barbersFeaturedBlock = qb
 			label: { en: "Subtitle", sk: "Podnadpis" },
 			localized: true,
 		}),
-		barberIds: f.json({ label: { en: "Barber IDs", sk: "ID holičov" } }),
+		barbers: f.relation({
+			to: "barbers",
+			hasMany: true,
+			label: { en: "Barbers", sk: "Holiči" },
+		}),
 		columns: f.select({
 			label: { en: "Columns", sk: "Stĺpce" },
 			options: [
@@ -292,9 +298,9 @@ export const barbersFeaturedBlock = qb
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const ids = (values.barberIds as string[]) || [];
+		const ids = (values.barbers as string[]) || [];
 		if (ids.length === 0) return { barbers: [] };
-		const res = await (ctx.app as any).api.collections.barbers.find({
+		const res = await ctx.app.api.collections.barbers.find({
 			where: { id: { in: ids } },
 			limit: ids.length,
 		});
@@ -315,7 +321,11 @@ export const servicesFeaturedBlock = qb
 			label: { en: "Subtitle", sk: "Podnadpis" },
 			localized: true,
 		}),
-		serviceIds: f.json({ label: { en: "Service IDs", sk: "ID služieb" } }),
+		services: f.relation({
+			to: "services",
+			hasMany: true,
+			label: { en: "Services", sk: "Služby" },
+		}),
 		columns: f.select({
 			label: { en: "Columns", sk: "Stĺpce" },
 			options: [
@@ -327,9 +337,9 @@ export const servicesFeaturedBlock = qb
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const ids = (values.serviceIds as string[]) || [];
+		const ids = (values.services as string[]) || [];
 		if (ids.length === 0) return { services: [] };
-		const res = await (ctx.app as any).api.collections.services.find({
+		const res = await ctx.app.api.collections.services.find({
 			where: { id: { in: ids } },
 			limit: ids.length,
 		});
@@ -373,9 +383,9 @@ export const reviewsGridBlock = qb
 	.prefetch(async ({ values, ctx }) => {
 		const where: Record<string, any> = {};
 		if (values.filter === "featured") {
-			where.rating = { gte: 4 };
+			where.rating = { in: ["4", "5"] };
 		}
-		const res = await (ctx.app as any).api.collections.reviews.find({
+		const res = await ctx.app.api.collections.reviews.find({
 			limit: values.limit || 6,
 			where,
 			orderBy: { createdAt: "desc" },
@@ -484,7 +494,7 @@ export const hoursBlock = qb
 		}),
 	}))
 	.prefetch(async ({ ctx }) => {
-		const settings = await (ctx.app as any).api.globals.siteSettings.get({});
+		const settings = await ctx.app.api.globals.siteSettings.get({});
 		return { businessHours: settings?.businessHours };
 	});
 
@@ -504,7 +514,7 @@ export const contactInfoBlock = qb
 		}),
 	}))
 	.prefetch(async ({ ctx }) => {
-		const settings = await (ctx.app as any).api.globals.siteSettings.get({});
+		const settings = await ctx.app.api.globals.siteSettings.get({});
 		return {
 			shopName: settings?.shopName,
 			contactEmail: settings?.contactEmail,
@@ -527,7 +537,10 @@ export const galleryBlock = qb
 	}))
 	.fields((f) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
-		images: f.json({ label: { en: "Images", sk: "Obrázky" } }),
+		images: f.upload({
+			label: { en: "Images", sk: "Obrázky" },
+			multiple: true,
+		}),
 		columns: f.select({
 			label: { en: "Columns", sk: "Stĺpce" },
 			options: [
@@ -548,12 +561,12 @@ export const galleryBlock = qb
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const imageIds =
-			(values.images as any[])?.map((img: any) => img.id).filter(Boolean) || [];
-		if (imageIds.length === 0) return { imageUrls: {} };
-		const res = await (ctx.app as any).api.collections.uploads.find({
-			where: { id: { in: imageIds } },
-			limit: imageIds.length,
+		const ids = values.images || [];
+		if (ids.length === 0) return { imageUrls: {} };
+		// assets is a module-provided collection (not in RegisteredCollections)
+		const res = await (ctx.app as any).api.collections.assets.find({
+			where: { id: { in: ids } },
+			limit: ids.length,
 		});
 		const imageUrls: Record<string, string> = {};
 		for (const doc of res.docs) {
@@ -603,7 +616,8 @@ export const imageTextBlock = qb
 			],
 			defaultValue: "square",
 		}),
-	}));
+	}))
+	.prefetch({ with: { image: true } });
 
 export const statsBlock = qb
 	.block("stats")
@@ -615,7 +629,24 @@ export const statsBlock = qb
 	}))
 	.fields((f) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
-		stats: f.json({ label: { en: "Stats", sk: "Štatistiky" } }),
+		stats: f.array({
+			of: f.object({
+				fields: {
+					value: f.text({
+						label: { en: "Value", sk: "Hodnota" },
+						required: true,
+					}),
+					label: f.text({
+						label: { en: "Label", sk: "Popisok" },
+						required: true,
+					}),
+					description: f.text({
+						label: { en: "Description", sk: "Popis" },
+					}),
+				},
+			}),
+			label: { en: "Stats", sk: "Štatistiky" },
+		}),
 		columns: f.select({
 			label: { en: "Columns", sk: "Stĺpce" },
 			options: [

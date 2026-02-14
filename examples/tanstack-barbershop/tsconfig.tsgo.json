@@ -1,0 +1,19 @@
+{
+	"include": ["src/questpie/server/cms.ts"],
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"lib": ["ES2022", "DOM"],
+		"moduleResolution": "bundler",
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"outDir": "./dist-test",
+		"skipLibCheck": true,
+		"strict": true,
+		"paths": {
+			"@/*": ["./src/*"],
+			"~/*": ["./src/*"],
+			"*": ["./*"]
+		}
+	}
+}

@@ -11,7 +11,7 @@ import {
 	stringColumnOperators,
 	stringJsonbOperators,
 } from "../common-operators.js";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { FieldMetadataBase } from "../types.js";
 
 // ============================================================================
@@ -131,7 +131,7 @@ function getTextOperators(_config: TextFieldConfig) {
  * const content = f.text({ mode: "text" });
  * ```
  */
-export const textField = defineField<TextFieldConfig, string>()({
+export const textField = field<TextFieldConfig, string>()({
 	type: "text" as const,
 	_value: undefined as unknown as string,
 

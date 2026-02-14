@@ -9,7 +9,7 @@ import { eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { jsonb, pgEnum, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { OptionsConfig } from "../reactive.js";
 import type { BaseFieldConfig, SelectFieldMetadata } from "../types.js";
 import { operator } from "../types.js";
@@ -327,7 +327,7 @@ const enumCache = new Map<string, any>();
  * });
  * ```
  */
-export const selectField = defineField<SelectFieldConfig, string | string[]>()({
+export const selectField = field<SelectFieldConfig, string | string[]>()({
 	type: "select" as const,
 	_value: undefined as unknown as string | string[],
 	toColumn(name: string, config: SelectFieldConfig) {

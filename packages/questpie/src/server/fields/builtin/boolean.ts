@@ -8,7 +8,7 @@
 import { eq, ne, sql } from "drizzle-orm";
 import { boolean } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
 
@@ -141,7 +141,7 @@ function getBooleanOperators() {
  * const isAdmin = booleanField({ required: true });
  * ```
  */
-export const booleanField = defineField<BooleanFieldConfig, boolean>()({
+export const booleanField = field<BooleanFieldConfig, boolean>()({
 	type: "boolean" as const,
 	_value: undefined as unknown as boolean,
 	toColumn(name: string, config: BooleanFieldConfig) {

@@ -53,14 +53,20 @@ export type BlockCategory =
 /**
  * Props passed to block renderer components.
  * Each block receives these props when being rendered.
+ *
+ * @template TValues - Block field values type (inferred from `.fields()`)
+ * @template TData - Prefetch data type (inferred from `.prefetch()`)
  */
-export type BlockRendererProps<TValues = Record<string, unknown>> = {
+export type BlockRendererProps<
+  TValues = Record<string, unknown>,
+  TData = Record<string, unknown>,
+> = {
   /** Block instance ID */
   id: string;
   /** Block field values (merged with i18n for current locale) */
   values: TValues;
   /** Data from server prefetch (populated via afterRead hook into _data[blockId]) */
-  data?: unknown;
+  data?: TData;
   /** Rendered child blocks (for layout blocks) */
   children?: React.ReactNode;
   /** Whether this block is currently selected in the editor */

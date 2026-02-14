@@ -12,7 +12,7 @@ import {
 	stringColumnOperators,
 	stringJsonbOperators,
 } from "../common-operators.js";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
 
@@ -114,7 +114,7 @@ function getEmailOperators() {
  * const contactEmail = emailField({ blockedDomains: ["spam.com"] });
  * ```
  */
-export const emailField = defineField<EmailFieldConfig, string>()({
+export const emailField = field<EmailFieldConfig, string>()({
 	type: "email" as const,
 	_value: undefined as unknown as string,
 

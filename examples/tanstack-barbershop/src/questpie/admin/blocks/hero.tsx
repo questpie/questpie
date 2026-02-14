@@ -4,33 +4,19 @@
  * Full-width banner with background image, title, subtitle, and CTA.
  * Design: Modern minimalist with smooth animations.
  *
- * The `backgroundImage` upload field is auto-expanded by the server
- * afterRead hook — no manual prefetch needed.
+ * The `backgroundImage` upload field is expanded via `.prefetch({ with: ['backgroundImage'] })`.
  */
 
 import { ArrowRight } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
-
-type HeroValues = {
-  title: string;
-  subtitle: string;
-  backgroundImage: string;
-  overlayOpacity: number;
-  alignment: "left" | "center" | "right";
-  ctaText: string;
-  ctaLink: string;
-  height: "small" | "medium" | "large" | "full";
-};
 
 export function HeroRenderer({
   values,
   data,
-  children }: BlockRendererProps<HeroValues>) {
-  // backgroundImage is auto-expanded from ID to full asset record
-  const bgAsset = (data as Record<string, any> | undefined)?.backgroundImage;
-  const bgImageUrl = bgAsset?.url || values.backgroundImage;
+  children }: BlockProps<"hero">) {
+  const bgImageUrl = data?.backgroundImage?.url as string | undefined;
 
   const heightClass = {
     small: "min-h-[50vh]",
@@ -97,5 +83,4 @@ export function HeroRenderer({
     </section>
   );
 }
-
 

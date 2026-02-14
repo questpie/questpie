@@ -32,7 +32,7 @@ The Admin Builder provides a type-safe, declarative API for configuring the admi
 │  - Field registry (fields)              │
 │  - View registry (listViews, editViews) │
 │  - Collections/Globals configs          │
-│  - UI config (dashboard, sidebar)       │
+│  - Pages, Widgets, Components           │
 └─────────────────────────────────────────┘
            │
            ├─► CollectionBuilder<TState>
@@ -47,6 +47,8 @@ The Admin Builder provides a type-safe, declarative API for configuring the admi
            └─► Pages, Widgets, Custom fields/views
 ```
 
+**Server-side config** (branding, sidebar, dashboard, locales) is configured via `q().use(adminModule)` from `@questpie/admin/server`.
+
 ---
 
 ## Core Concepts
@@ -56,11 +58,10 @@ The Admin Builder provides a type-safe, declarative API for configuring the admi
 Every builder has a readonly `state` property that contains the configuration:
 
 ```typescript
-const admin = qa().use(coreAdminModule).branding({ name: "My Admin" });
+const admin = qa().use(coreAdminModule);
 
 // State is the config - no .build() needed!
 console.log(admin.state.fields); // { text: FieldBuilder<...>, ... }
-console.log(admin.state.branding); // { name: "My Admin" }
 ```
 
 ### 2. Context Flow
@@ -103,13 +104,12 @@ import { coreAdminModule } from "@questpie/admin/builder/defaults";
 // Option 1: Start empty and add modules
 const admin = qa()
   .use(coreAdminModule)
-  .branding({ name: "My Admin" })
-  .collections({ ... })
-  .globals({ ... })
-  .dashboard({ ... })
-  .sidebar(sidebarConfig);
+  .fields({ ... })
+  .views({ ... })
+  .widgets({ ... })
+  .pages({ ... });
 
-// Option 2: Create typed builder with namespace
+// Option 2: Create typed builder with namespace (recommended)
 import type { AppCMS } from "./server/cms";
 
 const qab = qa<AppCMS>()
@@ -121,6 +121,8 @@ const postsAdmin = qab.collection("posts")
   .fields(({ r }) => ({ ... }));
 ```
 
+**Note:** Branding, sidebar, dashboard, and locales are configured server-side via `q().use(adminModule)` from `@questpie/admin/server`.
+
 ### AdminBuilder Methods
 
 | Method                  | Description                                          |
@@ -130,14 +132,15 @@ const postsAdmin = qab.collection("posts")
 | `.views(views)`         | Register view definitions (auto-sorted to list/edit) |
 | `.widgets(widgets)`     | Register widget definitions                          |
 | `.pages(pages)`         | Register page definitions                            |
-| `.collections(configs)` | Register collection UI configs                       |
-| `.globals(configs)`     | Register global UI configs                           |
-| `.branding(config)`     | Set branding (name, logo, colors)                    |
-| `.sidebar(config)`      | Set sidebar navigation                               |
-| `.extendSidebar(fn)`    | Extend existing sidebar                              |
-| `.dashboard(config)`    | Set dashboard widgets                                |
-| `.locale(config)`       | Set locale settings                                  |
+| `.components(comps)`    | Register component implementations                   |
+| `.defaultViews(config)` | Set default views configuration                      |
 | `.toNamespace()`        | Create scoped qa-like namespace                      |
+
+**Server-side methods** (via `q().use(adminModule)` from `@questpie/admin/server`):
+- `.branding(config)` - Set branding (name, logo, colors)
+- `.sidebar(config)` - Set sidebar navigation  
+- `.dashboard(config)` - Set dashboard widgets
+- `.adminLocale(config)` - Set admin UI locale settings
 
 ### Field Registration
 
@@ -303,37 +306,26 @@ const settingsAdmin = qab
   );
 ```
 
-### Dashboard & Widgets
+### Widgets (Client-side)
+
+Register reusable widgets for use in dashboards:
 
 ```typescript
 import { widget } from "@questpie/admin/builder";
 
 const admin = qa()
   .use(coreAdminModule)
-  .dashboard({
-    layout: "grid",
-    widgets: [
-      {
-        id: "stats",
-        type: "stats",
-        position: { x: 0, y: 0, w: 3, h: 2 },
-        config: {
-          collection: "posts",
-          label: "Total Posts",
-        },
-      },
-      {
-        id: "recent",
-        type: "recent-items",
-        position: { x: 3, y: 0, w: 6, h: 4 },
-        config: {
-          collection: "posts",
-          limit: 5,
-        },
-      },
-    ],
+  .widgets({
+    stats: widget("stats", {
+      component: StatsWidget,
+    }),
+    recentItems: widget("recent-items", {
+      component: RecentItemsWidget,
+    }),
   });
 ```
+
+**Dashboard configuration** is done server-side via `q().use(adminModule)` from `@questpie/admin/server`.
 
 ### Server Dashboard Actions (`a` proxy)
 
@@ -374,33 +366,45 @@ Action helpers:
 - `a.global({ global })` -> `/admin/globals/:global`
 - `a.link({ href })` / `a.action({ href })` -> direct URL
 
-### Sidebar Configuration
+### Sidebar Configuration (Server-side)
+
+Sidebar is configured on the server builder:
 
 ```typescript
-const sidebarConfig = qa
-  .sidebar()
-  .section("main", (s) =>
-    s.items([
-      { type: "link", label: "Dashboard", href: "/admin", icon: HomeIcon },
-    ]),
-  )
-  .section("content", (s) =>
-    s
-      .title("Content")
-      .icon(FileTextIcon)
-      .items([
-        { type: "collection", collection: "posts" },
-        { type: "collection", collection: "pages" },
-      ]),
-  )
-  .section("settings", (s) =>
-    s
-      .title("Settings")
-      .items([
-        { type: "global", global: "siteSettings" },
-        { type: "divider" },
-        { type: "page", pageId: "analytics" },
-      ]),
+import { adminModule } from "@questpie/admin/server";
+import { q } from "questpie";
+
+const cms = q({ name: "app" })
+  .use(adminModule)
+  .sidebar(({ s, c }) =>
+    s.sidebar({
+      sections: [
+        {
+          id: "main",
+          items: [
+            { type: "link", label: "Dashboard", href: "/admin", icon: c.icon("ph:house") },
+          ],
+        },
+        {
+          id: "content",
+          label: "Content",
+          icon: c.icon("ph:file-text"),
+          items: [
+            { type: "collection", collection: "posts" },
+            { type: "collection", collection: "pages" },
+          ],
+        },
+        {
+          id: "settings",
+          label: "Settings",
+          items: [
+            { type: "global", global: "siteSettings" },
+            { type: "divider" },
+            { type: "page", pageId: "analytics" },
+          ],
+        },
+      ],
+    }),
   );
 ```
 

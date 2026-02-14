@@ -47,6 +47,7 @@ export {
 export * from "./config/builder.js";
 export * from "./config/builder-types.js";
 export * from "./config/cms.js";
+export * from "./config/register.js";
 // Re-export type safety helpers (getApp, getDb, getSession already exported via context.js)
 export type {
   InferAppFromApp,

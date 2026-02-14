@@ -6,7 +6,7 @@
  */
 
 import { Quotes, Star } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
 type Review = {
@@ -17,18 +17,10 @@ type Review = {
   createdAt: string;
 };
 
-type ReviewsGridValues = {
-  title: string;
-  subtitle?: string;
-  filter: "featured" | "recent" | "all";
-  limit: number;
-  columns: "2" | "3" | "4";
-};
-
 export function ReviewsGridRenderer({
   values,
-  data }: BlockRendererProps<ReviewsGridValues>) {
-  const { reviews = [] } = (data as { reviews: Review[] }) || {};
+  data }: BlockProps<"reviews-grid">) {
+  const reviews = (data?.reviews ?? []) as Review[];
 
   const columnsClass = {
     "2": "md:grid-cols-2",
@@ -98,5 +90,4 @@ export function ReviewsGridRenderer({
     </section>
   );
 }
-
 

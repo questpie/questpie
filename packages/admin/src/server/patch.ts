@@ -49,6 +49,7 @@ import {
 	type BlockPrefetchContext,
 	type BlockPrefetchFn,
 } from "./block/block-builder.js";
+import { createBlocksPrefetchHook } from "./block/prefetch.js";
 
 /**
  * Input shape for `.blocks()` registration.
@@ -938,6 +939,7 @@ function patchQuestpieBuilder() {
 		const blockDefs = this.state.blocks;
 		if (blockDefs && Object.keys(blockDefs).length > 0) {
 			injectBlockDefinitions(this.state, blockDefs);
+			injectBlocksPrefetchHooks(this.state);
 			// Validate allowedBlocks references
 			validateAllowedBlocks(this.state, blockDefs);
 		}
@@ -999,6 +1001,54 @@ function injectBlockDefinitions(
 					fieldDef.state.config._blockDefinitions = blockDefs;
 				}
 			}
+		}
+	}
+}
+
+/**
+ * Auto-inject afterRead hook for blocks prefetch on collections/globals
+ * that have at least one blocks-type field.
+ *
+ * This eliminates the need for manually adding:
+ * ```ts
+ * .hooks({ afterRead: createBlocksPrefetchHook() })
+ * ```
+ * @internal
+ */
+function injectBlocksPrefetchHooks(state: any): void {
+	const prefetchHook = createBlocksPrefetchHook();
+
+	const injectIfHasBlocksField = (entity: any) => {
+		const fields = entity?.state?.fields;
+		if (!fields) return;
+
+		const hasBlocksField = Object.values(fields).some(
+			(fieldDef: any) => fieldDef?.state?.config?.type === "blocks",
+		);
+		if (!hasBlocksField) return;
+
+		// Append to existing afterRead hooks (don't overwrite)
+		if (!entity.state.hooks) {
+			entity.state.hooks = {};
+		}
+		const existing = entity.state.hooks.afterRead;
+		if (!existing) {
+			entity.state.hooks.afterRead = prefetchHook;
+		} else {
+			const existingArray = Array.isArray(existing) ? existing : [existing];
+			entity.state.hooks.afterRead = [...existingArray, prefetchHook];
+		}
+	};
+
+	if (state.collections) {
+		for (const collection of Object.values(state.collections)) {
+			injectIfHasBlocksField(collection);
+		}
+	}
+
+	if (state.globals) {
+		for (const global of Object.values(state.globals)) {
+			injectIfHasBlocksField(global);
 		}
 	}
 }

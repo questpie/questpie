@@ -6,7 +6,7 @@
  */
 
 import { Quotes, Star } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
 type Review = {
@@ -17,14 +17,8 @@ type Review = {
   createdAt: string;
 };
 
-type ReviewsValues = {
-  title: string;
-  subtitle: string;
-  limit: number;
-};
-
-export function ReviewsRenderer({ values, data }: BlockRendererProps<ReviewsValues>) {
-  const { reviews = [] } = (data as { reviews: Review[] }) || {};
+export function ReviewsRenderer({ values, data }: BlockProps<"reviews">) {
+  const reviews = (data?.reviews ?? []) as Review[];
 
   return (
     <section className="py-20 px-6 bg-muted/30">
@@ -97,5 +91,4 @@ export function ReviewsRenderer({ values, data }: BlockRendererProps<ReviewsValu
     </section>
   );
 }
-
 

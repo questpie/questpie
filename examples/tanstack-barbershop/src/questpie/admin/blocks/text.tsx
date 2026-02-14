@@ -5,19 +5,12 @@
  * Design: Clean typography with proper spacing.
  */
 
-import {
-  type BlockRendererProps,
-  RichTextRenderer,
+import {  RichTextRenderer,
   type TipTapDoc } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
-type TextValues = {
-  content: TipTapDoc | null;
-  maxWidth: "narrow" | "medium" | "wide" | "full";
-  padding: "none" | "small" | "medium" | "large";
-};
-
-export function TextRenderer({ values }: BlockRendererProps<TextValues>) {
+export function TextRenderer({ values }: BlockProps<"text">) {
   const maxWidthClass = {
     narrow: "max-w-xl",
     medium: "max-w-3xl",
@@ -60,5 +53,4 @@ export function TextRenderer({ values }: BlockRendererProps<TextValues>) {
     </section>
   );
 }
-
 

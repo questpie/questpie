@@ -1027,13 +1027,13 @@ type _textMetaNotEmpty = Expect<Not<Equal<keyof TextFieldMeta, never>>>;
 type _numberMetaNotEmpty = Expect<Not<Equal<keyof NumberFieldMeta, never>>>;
 
 // ============================================================================
-// Q) Standalone Field Operator Inference — concrete types from defineField
+// Q) Standalone Field Operator Inference — concrete types from field
 // ============================================================================
 
 import { datetimeField } from "#questpie/server/fields/builtin/datetime.js";
 import { numberField } from "#questpie/server/fields/builtin/number.js";
 import { textField } from "#questpie/server/fields/builtin/text.js";
-import { createFieldDefinition } from "#questpie/server/fields/define-field.js";
+import { createFieldDefinition } from "#questpie/server/fields/field.js";
 import type { FieldWhere } from "#questpie/server/fields/field-types.js";
 import type { OperatorsToWhereInput } from "#questpie/server/fields/types.js";
 

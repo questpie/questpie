@@ -6,31 +6,15 @@
  */
 
 import { ArrowRight, Clock } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
-type Service = {
-  id: string;
-  name: string;
-  description: string | null;
-  imageUrl?: string | null;
-  price: number;
-  duration: number;
-};
-
-type ServicesValues = {
-  title: string;
-  subtitle: string;
-  showPrices: boolean;
-  showDuration: boolean;
-  columns: "2" | "3" | "4";
-  limit: number;
-};
 
 export function ServicesRenderer({
   values,
-  data }: BlockRendererProps<ServicesValues>) {
-  const { services = [] } = (data as { services: Service[] }) || {};
+  data }: BlockProps<"services">) {
+
+    const services = data?.services ?? []
 
   const columnsClass = {
     "2": "md:grid-cols-2",

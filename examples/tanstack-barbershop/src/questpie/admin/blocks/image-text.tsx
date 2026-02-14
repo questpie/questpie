@@ -3,34 +3,20 @@
  *
  * Image and text content side by side.
  * Design: Flexible layout with image on left or right.
+ *
+ * The `image` upload field is expanded via `.prefetch({ with: ['image'] })`.
  */
 
-import {
-  type BlockRendererProps,
-  RichTextRenderer,
+import {  RichTextRenderer,
   type TipTapDoc } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 
-type ImageTextValues = {
-  image: string;
-  imagePosition: "left" | "right";
-  title: string;
-  content: TipTapDoc | null;
-  ctaText?: string;
-  ctaLink?: string;
-  imageAspect: "square" | "portrait" | "landscape";
-};
-
-type ImageTextPrefetchedData = {
-  imageUrl?: string;
-};
-
 export function ImageTextRenderer({
   values,
-  data }: BlockRendererProps<ImageTextValues>) {
-  const imageData = (data as ImageTextPrefetchedData) || {};
-  const imageUrl = imageData?.imageUrl || values.image;
+  data }: BlockProps<"image-text">) {
+  const imageUrl = (data?.image?.url as string | undefined) || values.image;
 
   const aspectClass = {
     square: "aspect-square",
@@ -104,5 +90,4 @@ export function ImageTextRenderer({
     </section>
   );
 }
-
 

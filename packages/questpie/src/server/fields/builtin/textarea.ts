@@ -12,7 +12,7 @@ import {
 	stringColumnOperators,
 	stringJsonbOperators,
 } from "../common-operators.js";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
 
@@ -124,7 +124,7 @@ function getTextareaOperators() {
  * const notes = textareaField({ rows: 10 });
  * ```
  */
-export const textareaField = defineField<TextareaFieldConfig, string>()({
+export const textareaField = field<TextareaFieldConfig, string>()({
 	type: "textarea" as const,
 	_value: undefined as unknown as string,
 	toColumn(name: string, config: TextareaFieldConfig) {

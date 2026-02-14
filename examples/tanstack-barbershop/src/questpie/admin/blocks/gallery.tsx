@@ -5,28 +5,11 @@
  * Design: Responsive masonry-style grid with lightbox support.
  */
 
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
-type GalleryImage = {
-  id: string;
-  caption?: string;
-};
-
-type GalleryValues = {
-  title?: string;
-  images: GalleryImage[];
-  columns: "2" | "3" | "4";
-  gap: "small" | "medium" | "large";
-};
-
-type GalleryPrefetchedData = {
-  imageUrls: Record<string, string>;
-};
-
-export function GalleryRenderer({ values, data }: BlockRendererProps<GalleryValues>) {
-  const galleryData = (data as GalleryPrefetchedData) || {};
-  const imageUrls = galleryData?.imageUrls || {};
+export function GalleryRenderer({ values, data }: BlockProps<"gallery">) {
+  const imageUrls = data?.imageUrls as Record<string, string> | undefined ?? {};
 
   const columnsClass = {
     "2": "md:grid-cols-2",
@@ -48,28 +31,23 @@ export function GalleryRenderer({ values, data }: BlockRendererProps<GalleryValu
         )}
 
         <div className={cn("grid grid-cols-1", columnsClass, gapClass)}>
-          {values.images?.map((image) => {
-            const url = imageUrls[image.id];
+          {values.images?.map((imageId) => {
+            const url = imageUrls[imageId];
             return (
               <figure
-                key={image.id}
+                key={imageId}
                 className="group relative overflow-hidden rounded-lg bg-muted aspect-square cursor-pointer hover:shadow-lg transition-all"
               >
                 {url ? (
                   <img
                     src={url}
-                    alt={image.caption || ""}
+                    alt=""
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                     No image
                   </div>
-                )}
-                {image.caption && (
-                  <figcaption className="absolute bottom-0 left-0 right-0 bg-black/60 text-white p-3 text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                    {image.caption}
-                  </figcaption>
                 )}
               </figure>
             );
@@ -79,5 +57,3 @@ export function GalleryRenderer({ values, data }: BlockRendererProps<GalleryValu
     </section>
   );
 }
-
-

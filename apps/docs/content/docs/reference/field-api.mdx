@@ -299,12 +299,12 @@ f.text().hidden()  // e.g. internal tracking field
 
 ## Custom Field Definitions
 
-Create new field types using `defineField`:
+Create new field types using `field`:
 
 ```ts
-import { defineField } from "@questpie/questpie/server/fields";
+import { field } from "@questpie/questpie/server/fields";
 
-const colorField = defineField<ColorFieldConfig, string>()({
+const colorField = field<ColorFieldConfig, string>()({
   type: "color",
   _value: undefined as unknown as string,
   toColumn: (name, config) => {

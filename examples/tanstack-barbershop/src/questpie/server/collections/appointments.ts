@@ -1,4 +1,4 @@
-import { getApp } from "questpie";
+import { getApp, sql } from "questpie";
 import { qb } from "@/questpie/server/builder";
 import type { AppCMS } from "@/questpie/server/cms";
 
@@ -47,7 +47,16 @@ export const appointments = qb
 		cancellationReason: f.textarea({
 			label: { en: "Cancellation Reason", sk: "Dôvod zrušenia" },
 		}),
-		displayTitle: f.text({ virtual: true }),
+		displayTitle: f.text({
+			virtual: sql<string>`(
+				SELECT 
+					COALESCE(
+						(SELECT name FROM "user" WHERE id = appointments.customer),
+						'Customer'
+					) || ' - ' || 
+					TO_CHAR(appointments."scheduledAt", 'YYYY-MM-DD HH24:MI')
+			)`,
+		}),
 	}))
 	.title(({ f }) => f.displayTitle)
 	.admin(({ c }) => ({
@@ -89,14 +98,6 @@ export const appointments = qb
 		}),
 	)
 	.hooks({
-		afterRead: ({ data }) => {
-			const scheduledAt = data.scheduledAt;
-			const dateLabel = scheduledAt
-				? scheduledAt.toISOString().replace("T", " ").slice(0, 16)
-				: "";
-			data.displayTitle =
-				`${data.customer ?? "Customer"} - ${dateLabel}`.trim();
-		},
 		afterChange: async ({ data, operation, original, app }) => {
 			const cms = getApp<AppCMS>(app);
 

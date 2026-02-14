@@ -17,4 +17,4 @@
 import { adminModule, qa } from "@questpie/admin/client";
 import type { AppCMS } from "@/questpie/server/cms";
 
-export const builder = qa<AppCMS>().use(adminModule);
+export const admin = qa<AppCMS>().use(adminModule);

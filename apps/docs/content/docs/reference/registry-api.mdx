@@ -198,7 +198,7 @@ This decoupling means the server never imports React — it only emits strings a
 
 To add a custom field type end-to-end:
 
-1. Define the field on the server: `defineField(...)` with `getMetadata()` returning `{ type: "myType" }`
+1. Define the field on the server: `field(...)` with `getMetadata()` returning `{ type: "myType" }`
 2. Register the field type on `q`: `.fields({ myType: myFieldDefinition })`
 3. Register the renderer on `qa`: `.fields({ myType: { type: "myType", component: MyRenderer } })`
 

@@ -12,7 +12,7 @@ import {
 	stringColumnOperators,
 	stringJsonbOperators,
 } from "../common-operators.js";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import {
 	type BaseFieldConfig,
 	operator,
@@ -144,7 +144,7 @@ function getToManyUploadOperators() {
  * });
  * ```
  */
-export const uploadField = defineField<UploadFieldConfig, string | string[]>()({
+export const uploadField = field<UploadFieldConfig, string | string[]>()({
 	type: "upload" as const,
 	_value: undefined as unknown as string | string[],
 	toColumn(name: string, config: UploadFieldConfig) {

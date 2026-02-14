@@ -16,7 +16,7 @@ import { eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { jsonb, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { OptionsConfig } from "../reactive.js";
 import type {
 	BaseFieldConfig,
@@ -549,7 +549,7 @@ function getToManyOperators() {
  * })
  * ```
  */
-export const relationField = defineField<
+export const relationField = field<
 	RelationFieldConfig,
 	string | string[] | { type: string; id: string } | null
 >()({

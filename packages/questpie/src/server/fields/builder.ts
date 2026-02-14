@@ -4,7 +4,7 @@
  * Creates a type-safe proxy object that provides field factory methods.
  * Usage: f.text({ required: true }), f.number({ min: 0 }), etc.
  *
- * Fields are plain objects (via defineField). The proxy wraps each field
+ * Fields are plain objects (via field). The proxy wraps each field
  * into a callable factory: f.text(config) → FieldDefinition<...>.
  */
 
@@ -19,7 +19,7 @@ import {
   type ExtractOpsFromFieldDef,
   type ExtractTypeFromFieldDef,
   type ExtractValueFromFieldDef,
-} from "./define-field.js";
+} from "./field.js";
 import type { FieldDefinition, FieldDefinitionState } from "./types.js";
 
 // ============================================================================

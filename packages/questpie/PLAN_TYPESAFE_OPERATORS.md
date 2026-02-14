@@ -16,14 +16,14 @@ Make where clauses reject invalid operators per field type:
 
 ## Root Cause
 
-`defineField<"text", TextFieldConfig, string>("text", impl)` — when explicit type params are provided, TypeScript uses defaults for omitted params. The implementation's concrete `getOperators` return type is erased to `ContextualOperators`.
+`field<"text", TextFieldConfig, string>("text", impl)` — when explicit type params are provided, TypeScript uses defaults for omitted params. The implementation's concrete `getOperators` return type is erased to `ContextualOperators`.
 
 ## Solution: Curried "as const satisfies" Pattern
 
-Each field is a **plain object** with generic methods. `defineField` uses the curried pattern:
+Each field is a **plain object** with generic methods. `field` uses the curried pattern:
 
 ```ts
-export const defineField =
+export const field =
   <TConfig extends BaseFieldConfig, TValue>() =>
   <const TImpl extends FieldDef<TConfig, TValue>>(impl: TImpl): TImpl =>
     impl;
@@ -36,7 +36,7 @@ export const defineField =
 ### How types flow
 
 ```
-textField = defineField<TextFieldConfig, string>()({
+textField = field<TextFieldConfig, string>()({
   type: "text" as const,
   getOperators<TApp>(config: TextFieldConfig) {
     return { column: stringColumnOperators, jsonb: stringJsonbOperators };
@@ -63,15 +63,15 @@ textField = defineField<TextFieldConfig, string>()({
 
 ## Progress Tracker
 
-### ✅ Step 1: `define-field.ts` — DONE
+### ✅ Step 1: `field.ts` — DONE
 
 - New `FieldDef<TConfig, TValue>` interface — constraint type for field objects
 - `getOperators` has `<TApp>` generic on the interface
-- New curried `defineField` — validates shape, returns `TImpl` unchanged
+- New curried `field` — validates shape, returns `TImpl` unchanged
 - New `createFieldDefinition(fieldDef, config)` — runtime function creates `FieldDefinition`
 - Export type helpers: `ExtractConfigFromFieldDef`, `ExtractValueFromFieldDef`, `ExtractTypeFromFieldDef`, `ExtractOpsFromFieldDef`, `BuildFieldState`
 - Kept all `Infer*` types (`InferInputType`, `InferOutputType`, etc.)
-- Removed old `FieldImplementation` interface, `createFieldFactory`, old `defineField`
+- Removed old `FieldImplementation` interface, `createFieldFactory`, old `field`
 
 ### ✅ Step 2: All 15 builtin fields — DONE
 
@@ -98,7 +98,7 @@ All 15 fields converted from old to new pattern:
 Each field now follows the pattern:
 
 ```ts
-export const xField = defineField<XFieldConfig, ValueType>()({
+export const xField = field<XFieldConfig, ValueType>()({
   type: "x" as const,
   _value: undefined as unknown as ValueType,
   toColumn(_name: string, config: XFieldConfig) { ... },
@@ -129,7 +129,7 @@ import {
   type ExtractTypeFromFieldDef,
   type ExtractValueFromFieldDef,
   createFieldDefinition,
-} from "./define-field.js";
+} from "./field.js";
 
 export type FieldBuilderProxy<TFields = DefaultFieldTypeMap> = {
   [K in keyof TFields]: <
@@ -194,7 +194,7 @@ export function createFieldBuilder<TMap = DefaultFieldTypeMap>(
 **Required changes:**
 
 - Change from `textField({ required: true })` to `createFieldDefinition(textField, { required: true } as const)`
-- Import `createFieldDefinition` from `./define-field.js`
+- Import `createFieldDefinition` from `./field.js`
 - All system field instances:
   - `_systemIdField = createFieldDefinition(textField, { required: true, default: () => "" } as const)`
   - `_systemTitleField = createFieldDefinition(textField, { required: true, virtual: true } as const)`
@@ -236,7 +236,7 @@ bun run check-types  # all 6 packages
 
 | File                                                                    | Purpose                                                                                           | Status        |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------- |
-| `packages/questpie/src/server/fields/define-field.ts`                   | `FieldDef`, curried `defineField`, `createFieldDefinition`, `BuildFieldState`, extraction helpers | ✅ DONE       |
+| `packages/questpie/src/server/fields/field.ts`                   | `FieldDef`, curried `field`, `createFieldDefinition`, `BuildFieldState`, extraction helpers | ✅ DONE       |
 | `packages/questpie/src/server/fields/builtin/*.ts`                      | All 15 builtin field definitions                                                                  | ✅ DONE       |
 | `packages/questpie/src/server/fields/builtin/defaults.ts`               | `defaultFields` map — no changes needed, types flow automatically                                 | ✅ NO CHANGES |
 | `packages/questpie/src/server/fields/builder.ts`                        | `FieldBuilderProxy` type, `createFieldBuilder` runtime                                            | ❌ NEXT       |
@@ -304,8 +304,8 @@ Follow-up can add conditional return type annotations for narrowing.
 
 ### Breaking change for custom field users
 
-`defineField` API changes from `defineField<"type", Config, Value>("type", {...})` to
-`defineField<Config, Value>()({type: "type" as const, ...})`. Custom fields need updating.
+`field` API changes from `field<"type", Config, Value>("type", {...})` to
+`field<Config, Value>()({type: "type" as const, ...})`. Custom fields need updating.
 
 ---
 

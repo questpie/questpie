@@ -8,7 +8,7 @@
 import { sql } from "drizzle-orm";
 import { json, jsonb } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type {
 	AnyFieldDefinition,
 	BaseFieldConfig,
@@ -209,7 +209,7 @@ function resolveFields(
  * });
  * ```
  */
-export const objectField = defineField<
+export const objectField = field<
 	ObjectFieldConfig,
 	Record<string, unknown>
 >()({

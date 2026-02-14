@@ -9,7 +9,7 @@
  *
  * @example
  * ```ts
- * import { defineField, createFieldBuilder, builtinFields } from "questpie/server/fields";
+ * import { field, createFieldBuilder, builtinFields } from "questpie/server/fields";
  *
  * // Using built-in fields
  * const posts = collection("posts").fields((f) => ({
@@ -24,7 +24,7 @@
  * }));
  *
  * // Creating custom fields
- * const slugField = defineField<SlugFieldConfig, string>()({
+ * const slugField = field<SlugFieldConfig, string>()({
  *   type: "slug" as const,
  *   _value: undefined as unknown as string,
  *   toColumn: (name, config) => varchar({ length: 255 }),
@@ -56,13 +56,13 @@ export * from "./builtin/index.js";
 export {
 	type BuildFieldState,
 	createFieldDefinition,
-	defineField,
+	field,
 	type ExtractConfigFromFieldDef,
 	type ExtractOpsFromFieldDef,
 	type ExtractTypeFromFieldDef,
 	type ExtractValueFromFieldDef,
 	type FieldDef,
-} from "./define-field.js";
+} from "./field.js";
 // Reactive field system
 export {
 	extractDependencies,

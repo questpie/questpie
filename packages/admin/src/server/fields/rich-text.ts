@@ -10,7 +10,7 @@
 import {
   type BaseFieldConfig,
   type ContextualOperators,
-  defineField,
+  field,
   type FieldMetadataBase,
   isNotNull,
   isNull,
@@ -281,7 +281,7 @@ const DEFAULT_HEADING_LEVELS: (1 | 2 | 3 | 4 | 5 | 6)[] = [1, 2, 3];
  * });
  * ```
  */
-export const richTextField = defineField<RichTextFieldConfig, TipTapDocument>()(
+export const richTextField = field<RichTextFieldConfig, TipTapDocument>()(
   {
     type: "richText" as const,
     _value: undefined as unknown as TipTapDocument,

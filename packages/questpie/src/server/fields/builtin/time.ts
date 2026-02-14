@@ -8,7 +8,7 @@
 import { between, eq, gt, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { time } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
 
@@ -148,7 +148,7 @@ function getTimeOperators() {
  * const startTime = timeField({ required: true });
  * ```
  */
-export const timeField = defineField<TimeFieldConfig, string>()({
+export const timeField = field<TimeFieldConfig, string>()({
   type: "time" as const,
   _value: undefined as unknown as string,
   toColumn(name: string, config: TimeFieldConfig) {

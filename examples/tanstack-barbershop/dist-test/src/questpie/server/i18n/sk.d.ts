@@ -1,0 +1,22 @@
+declare const _default: {
+    "barbershop.welcome": string;
+    "barbershop.bookNow": string;
+    "barbershop.todaysAppointments": string;
+    "barbershop.upcomingSlots": string;
+    "barbershop.activeBarbers": string;
+    "barbershop.totalServices": string;
+    "barbershop.pendingReviews": string;
+    "collection.barbers.title": string;
+    "collection.barbers.description": string;
+    "collection.services.title": string;
+    "collection.services.description": string;
+    "collection.appointments.title": string;
+    "collection.appointments.description": string;
+    "appointment.created": string;
+    "appointment.cancelled": string;
+    "appointment.slotNotAvailable": string;
+    "appointment.pastDateNotAllowed": string;
+    "barber.notAvailable": string;
+    "service.notOffered": string;
+};
+export default _default;

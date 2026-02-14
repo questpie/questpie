@@ -1,0 +1,44 @@
+export declare const messages: {
+    readonly en: {
+        "appointment.created": string;
+        "appointment.cancelled": string;
+        "appointment.slotNotAvailable": string;
+        "appointment.pastDateNotAllowed": string;
+        "barber.notAvailable": string;
+        "service.notOffered": string;
+        "barbershop.welcome": string;
+        "barbershop.bookNow": string;
+        "barbershop.todaysAppointments": string;
+        "barbershop.upcomingSlots": string;
+        "barbershop.activeBarbers": string;
+        "barbershop.totalServices": string;
+        "barbershop.pendingReviews": string;
+        "collection.barbers.title": string;
+        "collection.barbers.description": string;
+        "collection.services.title": string;
+        "collection.services.description": string;
+        "collection.appointments.title": string;
+        "collection.appointments.description": string;
+    };
+    readonly sk: {
+        "barbershop.welcome": string;
+        "barbershop.bookNow": string;
+        "barbershop.todaysAppointments": string;
+        "barbershop.upcomingSlots": string;
+        "barbershop.activeBarbers": string;
+        "barbershop.totalServices": string;
+        "barbershop.pendingReviews": string;
+        "collection.barbers.title": string;
+        "collection.barbers.description": string;
+        "collection.services.title": string;
+        "collection.services.description": string;
+        "collection.appointments.title": string;
+        "collection.appointments.description": string;
+        "appointment.created": string;
+        "appointment.cancelled": string;
+        "appointment.slotNotAvailable": string;
+        "appointment.pastDateNotAllowed": string;
+        "barber.notAvailable": string;
+        "service.notOffered": string;
+    };
+};

@@ -17,7 +17,7 @@ A custom field has two parts:
 ## Step 1: Define the Field
 
 ```ts
-import { defineField, commonStringOperators } from "@questpie/questpie/server/fields";
+import { field, commonStringOperators } from "@questpie/questpie/server/fields";
 import { varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -26,7 +26,7 @@ interface ColorFieldConfig {
   swatches?: string[];
 }
 
-const colorField = defineField<ColorFieldConfig, string>()({
+const colorField = field<ColorFieldConfig, string>()({
   type: "color",
   _value: undefined as unknown as string,
 
@@ -198,7 +198,7 @@ Register it alongside the field renderer:
 ```
 Server                          Admin
 ───────                         ─────
-defineField({ type: "color" })  →  getMetadata() emits { type: "color" }
+field({ type: "color" })  →  getMetadata() emits { type: "color" }
          ↓                              ↓
 q.fields({ color })             qa.fields({ color: { type: "color", component } })
          ↓                              ↓

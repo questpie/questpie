@@ -199,7 +199,8 @@ export function Hero() {
 									<span className="text-xs font-semibold text-foreground">
 										Posts
 									</span>
-									<span className="inline-flex items-center gap-1 border border-primary/20 bg-primary/[0.05] px-1.5 py-0.5">
+								</div>
+								<span className="inline-flex items-center gap-1 border border-primary/20 bg-primary/[0.05] px-1.5 py-0.5">
 										<span className="relative flex h-1.5 w-1.5">
 											<span className="absolute inline-flex h-full w-full animate-ping bg-primary opacity-75" />
 											<span className="relative inline-flex h-1.5 w-1.5 bg-primary" />
@@ -208,14 +209,6 @@ export function Hero() {
 											LIVE
 										</span>
 									</span>
-								</div>
-								<span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground tabular-nums">
-									<span className="relative flex h-1.5 w-1.5">
-										<span className="absolute inline-flex h-full w-full animate-ping bg-primary opacity-75" />
-										<span className="relative inline-flex h-1.5 w-1.5 bg-primary" />
-									</span>
-									streaming
-								</span>
 							</div>
 
 							{/* Column headers */}

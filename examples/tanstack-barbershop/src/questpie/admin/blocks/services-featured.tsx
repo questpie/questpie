@@ -6,7 +6,7 @@
  */
 
 import { Clock, CurrencyDollar } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 
@@ -19,17 +19,10 @@ type Service = {
   image: string | null;
 };
 
-type ServicesFeaturedValues = {
-  title: string;
-  subtitle?: string;
-  serviceIds: string[];
-  columns: "2" | "3" | "4";
-};
-
 export function ServicesFeaturedRenderer({
   values,
-  data }: BlockRendererProps<ServicesFeaturedValues>) {
-  const { services = [] } = (data as { services: Service[] }) || {};
+  data }: BlockProps<"services-featured">) {
+  const services = (data?.services ?? []) as Service[];
 
   const columnsClass = {
     "2": "md:grid-cols-2",
@@ -120,5 +113,4 @@ export function ServicesFeaturedRenderer({
     </section>
   );
 }
-
 

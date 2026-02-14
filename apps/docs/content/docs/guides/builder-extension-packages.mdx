@@ -33,7 +33,7 @@ Exports a builder with collections, fields, jobs, and any server-side state.
 import { q } from "@questpie/questpie";
 
 // Define custom field types
-const currencyField = defineField<CurrencyFieldConfig, number>()({
+const currencyField = field<CurrencyFieldConfig, number>()({
   type: "currency",
   // ...
 });

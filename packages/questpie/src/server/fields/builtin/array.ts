@@ -8,7 +8,7 @@
 import { sql } from "drizzle-orm";
 import { jsonb } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type {
 	AnyFieldDefinition,
 	BaseFieldConfig,
@@ -238,7 +238,7 @@ function resolveItemField(
  * });
  * ```
  */
-export const arrayField = defineField<ArrayFieldConfig, unknown[]>()({
+export const arrayField = field<ArrayFieldConfig, unknown[]>()({
 	type: "array" as const,
 	_value: undefined as unknown as unknown[],
 	toColumn(name: string, config: ArrayFieldConfig) {

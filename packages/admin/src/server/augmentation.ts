@@ -49,6 +49,7 @@ import type {
 	GlobalFieldsOf,
 	QuestpieBuilderState,
 	QuestpieStateOf,
+	RegisteredApp,
 } from "questpie";
 import type { I18nText } from "questpie/shared";
 import type {
@@ -483,9 +484,10 @@ export interface AdminGlobalConfig {
 
 /**
  * Context available to widget fetchFn and access functions on the server.
+ * When you register your app via `Register.app`, `ctx.app` is automatically typed.
  */
 export type WidgetFetchContext = {
-	app: any;
+	app: RegisteredApp;
 	db: any;
 	session?: any;
 	locale?: string;
@@ -1060,8 +1062,8 @@ export interface ServerActionContext<TData = Record<string, unknown>> {
 	itemId?: string;
 	/** Item IDs (for bulk actions) */
 	itemIds?: string[];
-	/** CMS app instance */
-	app: unknown;
+	/** CMS app instance — typed via Register.app */
+	app: RegisteredApp;
 	/** Database client */
 	db: unknown;
 	/** Current user session */

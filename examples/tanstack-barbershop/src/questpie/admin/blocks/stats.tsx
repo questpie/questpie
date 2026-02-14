@@ -5,22 +5,10 @@
  * Design: Clean cards with large numbers and labels.
  */
 
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
-type Stat = {
-  value: string;
-  label: string;
-  description?: string;
-};
-
-type StatsValues = {
-  title?: string;
-  stats: Stat[];
-  columns: "2" | "3" | "4";
-};
-
-export function StatsRenderer({ values }: BlockRendererProps<StatsValues>) {
+export function StatsRenderer({ values }: BlockProps<"stats">) {
   const columnsClass = {
     "2": "md:grid-cols-2",
     "3": "md:grid-cols-3",
@@ -58,5 +46,4 @@ export function StatsRenderer({ values }: BlockRendererProps<StatsValues>) {
     </section>
   );
 }
-
 

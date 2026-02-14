@@ -390,11 +390,11 @@ All field types support these base options:
 You can register custom field types through the builder:
 
 ```ts
-import { defineField } from "questpie/server/fields";
+import { field } from "questpie/server/fields";
 import { varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-const slugField = defineField<{ maxLength?: number }, string>()({
+const slugField = field<{ maxLength?: number }, string>()({
   type: "slug",
   _value: undefined as unknown as string,
   toColumn: (name, config) =>

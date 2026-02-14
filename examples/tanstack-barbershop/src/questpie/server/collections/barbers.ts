@@ -279,9 +279,9 @@ export const barbers = qb
 		}),
 	)
 	.hooks({
-		beforeValidate: async ({ data, operation }) => {
+		beforeValidate: async ({ data }) => {
 			// Generate slug from name if not provided (for create or update)
-			const d = data as { name?: string; slug?: string };
+			const d = data;
 			if (d.name && !d.slug) {
 				d.slug = slugify(d.name);
 			}

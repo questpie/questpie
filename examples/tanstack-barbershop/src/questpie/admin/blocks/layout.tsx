@@ -5,22 +5,16 @@
  * Design: Minimal utility blocks.
  */
 
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
 // ============================================================================
 // COLUMNS
 // ============================================================================
 
-type ColumnsValues = {
-  columns: "2" | "3" | "4";
-  gap: "small" | "medium" | "large";
-  padding: "none" | "small" | "medium" | "large";
-};
-
 export function ColumnsRenderer({
   values,
-  children }: BlockRendererProps<ColumnsValues>) {
+  children }: BlockProps<"columns">) {
   const columnsClass = {
     "2": "md:grid-cols-2",
     "3": "md:grid-cols-2 lg:grid-cols-3",
@@ -46,17 +40,11 @@ export function ColumnsRenderer({
   );
 }
 
-
-
 // ============================================================================
 // SPACER
 // ============================================================================
 
-type SpacerValues = {
-  size: "small" | "medium" | "large" | "xlarge";
-};
-
-export function SpacerRenderer({ values }: BlockRendererProps<SpacerValues>) {
+export function SpacerRenderer({ values }: BlockProps<"spacer">) {
   const sizeClass = {
     small: "h-8 md:h-12",
     medium: "h-12 md:h-20",
@@ -66,18 +54,11 @@ export function SpacerRenderer({ values }: BlockRendererProps<SpacerValues>) {
   return <div className={sizeClass} aria-hidden="true" />;
 }
 
-
-
 // ============================================================================
 // DIVIDER
 // ============================================================================
 
-type DividerValues = {
-  style: "solid" | "dashed";
-  width: "full" | "medium" | "small";
-};
-
-export function DividerRenderer({ values }: BlockRendererProps<DividerValues>) {
+export function DividerRenderer({ values }: BlockProps<"divider">) {
   const widthClass = {
     full: "w-full",
     medium: "w-1/2 mx-auto",
@@ -95,5 +76,4 @@ export function DividerRenderer({ values }: BlockRendererProps<DividerValues>) {
     </div>
   );
 }
-
 

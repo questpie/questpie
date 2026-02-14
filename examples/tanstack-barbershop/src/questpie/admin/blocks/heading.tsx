@@ -5,18 +5,11 @@
  * Design: Bold typography with consistent spacing.
  */
 
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
-type HeadingValues = {
-  text: string;
-  level: "h1" | "h2" | "h3" | "h4";
-  align: "left" | "center" | "right";
-  padding: "none" | "small" | "medium" | "large";
-};
-
-export function HeadingRenderer({ values }: BlockRendererProps<HeadingValues>) {
-  const Tag = values.level || "h2";
+export function HeadingRenderer({ values }: BlockProps<"heading">) {
+  const Tag = (values.level || "h2") as "h1" | "h2" | "h3" | "h4";
 
   const sizeClass = {
     h1: "text-5xl md:text-6xl lg:text-7xl",
@@ -50,5 +43,4 @@ export function HeadingRenderer({ values }: BlockRendererProps<HeadingValues>) {
     </section>
   );
 }
-
 

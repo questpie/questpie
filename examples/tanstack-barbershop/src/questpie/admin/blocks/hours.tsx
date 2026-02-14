@@ -5,29 +5,14 @@
  * Design: Simple, scannable layout with day/hours pairs.
  */
 
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
-type HoursValues = {
-  title?: string;
-  showClosed: boolean;
-};
+type BusinessHoursDay = { isOpen: boolean; start: string; end: string };
+type BusinessHours = Record<string, BusinessHoursDay | undefined>;
 
-type HoursPrefetchedData = {
-  businessHours?: {
-    monday?: { isOpen: boolean; start: string; end: string };
-    tuesday?: { isOpen: boolean; start: string; end: string };
-    wednesday?: { isOpen: boolean; start: string; end: string };
-    thursday?: { isOpen: boolean; start: string; end: string };
-    friday?: { isOpen: boolean; start: string; end: string };
-    saturday?: { isOpen: boolean; start: string; end: string };
-    sunday?: { isOpen: boolean; start: string; end: string };
-  };
-};
-
-export function HoursRenderer({ values, data }: BlockRendererProps<HoursValues>) {
-  const hoursData = (data as HoursPrefetchedData) || {};
-  const businessHours = hoursData?.businessHours;
+export function HoursRenderer({ values, data }: BlockProps<"hours">) {
+  const businessHours = data?.businessHours as BusinessHours | undefined;
 
   const days = [
     { key: "monday", label: "Monday" },

@@ -9,7 +9,7 @@ import { between, eq, gt, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { timestamp } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { DateInput } from "#questpie/shared/type-utils.js";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
 
@@ -181,7 +181,7 @@ function getDatetimeOperators() {
  * const eventTime = datetimeField({ precision: 0 }); // No fractional seconds
  * ```
  */
-export const datetimeField = defineField<DatetimeFieldConfig, Date>()({
+export const datetimeField = field<DatetimeFieldConfig, Date>()({
 	type: "datetime" as const,
 	_value: undefined as unknown as Date,
 	toColumn(name: string, config: DatetimeFieldConfig) {

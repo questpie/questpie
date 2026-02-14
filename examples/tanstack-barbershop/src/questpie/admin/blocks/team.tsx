@@ -6,7 +6,7 @@
  */
 
 import { ArrowRight, User } from "@phosphor-icons/react";
-import type { BlockRendererProps } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
 type Barber = {
@@ -17,15 +17,8 @@ type Barber = {
   specialties: string[] | null;
 };
 
-type TeamValues = {
-  title: string;
-  subtitle: string;
-  columns: "2" | "3" | "4";
-  limit: number;
-};
-
-export function TeamRenderer({ values, data }: BlockRendererProps<TeamValues>) {
-  const { barbers = [] } = (data as { barbers: Barber[] }) || {};
+export function TeamRenderer({ values, data }: BlockProps<"team">) {
+  const barbers = (data?.barbers ?? []) as Barber[];
 
   const columnsClass = {
     "2": "md:grid-cols-2",
@@ -113,5 +106,4 @@ export function TeamRenderer({ values, data }: BlockRendererProps<TeamValues>) {
     </section>
   );
 }
-
 

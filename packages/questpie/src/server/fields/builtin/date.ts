@@ -8,7 +8,7 @@
 import { between, eq, gt, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { date } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { defineField } from "../define-field.js";
+import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
 
@@ -141,7 +141,7 @@ function getDateOperators() {
  * const createdAt = dateField({ autoNow: true, input: false });
  * ```
  */
-export const dateField = defineField<DateFieldConfig, string>()({
+export const dateField = field<DateFieldConfig, string>()({
   type: "date" as const,
   _value: undefined as unknown as string,
   toColumn(name: string, config: DateFieldConfig) {

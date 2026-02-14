@@ -5,10 +5,9 @@
  * Design: Team member cards with photos and specialties.
  */
 
-import {
-  type BlockRendererProps,
-  RichTextRenderer,
+import {  RichTextRenderer,
   type TipTapDoc } from "@questpie/admin/client";
+import type { BlockProps } from "./types";
 import { cn } from "../../../lib/utils";
 
 type Barber = {
@@ -20,17 +19,10 @@ type Barber = {
   specialties: string[] | null;
 };
 
-type BarbersFeaturedValues = {
-  title: string;
-  subtitle?: string;
-  barberIds: string[];
-  columns: "2" | "3" | "4";
-};
-
 export function BarbersFeaturedRenderer({
   values,
-  data }: BlockRendererProps<BarbersFeaturedValues>) {
-  const { barbers = [] } = (data as { barbers: Barber[] }) || {};
+  data }: BlockProps<"barbers-featured">) {
+  const barbers = (data?.barbers ?? []) as Barber[];
 
   const columnsClass = {
     "2": "md:grid-cols-2",
@@ -119,5 +111,4 @@ export function BarbersFeaturedRenderer({
     </section>
   );
 }
-
 

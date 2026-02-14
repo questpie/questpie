@@ -23,7 +23,12 @@ export {
   type BlockDefinition,
   type BlockPrefetchContext,
   type BlockPrefetchFn,
+  type BlockPrefetchWith,
+  type BlockPrefetchWithOptions,
+  type ExpandWithResult,
+  type ExpandedRecord,
   block,
+  type InferBlockData,
   type InferBlockValues,
 } from "./block-builder.js";
 // Introspection
