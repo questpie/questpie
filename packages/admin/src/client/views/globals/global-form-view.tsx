@@ -19,10 +19,33 @@ import { LocaleSwitcher } from "../../components/locale-switcher";
 import { Button } from "../../components/ui/button";
 import { useGlobal, useGlobalUpdate } from "../../hooks";
 import { useGlobalFields } from "../../hooks/use-global-fields";
+import { useReactiveFields } from "../../hooks/use-reactive-fields";
 import { useGlobalServerValidation } from "../../hooks/use-server-validation";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { useSafeContentLocales, useScopedLocale } from "../../runtime";
 import { AutoFormFields } from "../collection/auto-form-fields";
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Extract reactive configs from global schema fields.
+ * Used to determine which fields have server-side reactive behaviors.
+ */
+function extractReactiveConfigs(schema: any): Record<string, any> {
+	if (!schema?.fields) return {};
+
+	const configs: Record<string, any> = {};
+
+	for (const [fieldName, fieldDef] of Object.entries(schema.fields)) {
+		if ((fieldDef as any).reactive) {
+			configs[fieldName] = (fieldDef as any).reactive;
+		}
+	}
+
+	return configs;
+}
 
 // ============================================================================
 // Types
@@ -145,6 +168,21 @@ export default function GlobalFormView({
 			form.reset(globalData as any);
 		}
 	}, [form, globalData]);
+
+	// Extract reactive configs from schema for server-side reactive handlers
+	const reactiveConfigs = React.useMemo(
+		() => extractReactiveConfigs(schemaFields),
+		[schemaFields],
+	);
+
+	// Use reactive fields hook for server-side compute/hidden/readOnly/disabled
+	useReactiveFields({
+		collection: globalName,
+		mode: "global",
+		reactiveConfigs,
+		enabled: !dataLoading && Object.keys(reactiveConfigs).length > 0,
+		debounce: 300,
+	});
 
 	const resolvedConfig = React.useMemo(() => {
 		if (!viewConfig) return config;

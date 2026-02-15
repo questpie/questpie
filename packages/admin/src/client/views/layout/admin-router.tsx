@@ -954,9 +954,14 @@ function AdminRouterInner({
 		const custom = globalComponents[name];
 		const viewNameFromSchema = (activeGlobalSchema as any)?.admin?.form?.view;
 		const viewNameFromConfig = getConfiguredViewName((config as any)?.form);
+		// For globals, only use editViews registry if a custom view is explicitly specified
+		// Otherwise, use the dedicated globalForm default view
+		const hasCustomViewSpecified = !!(viewNameFromSchema ?? viewNameFromConfig);
 		const selectedEditView =
 			viewNameFromSchema ?? viewNameFromConfig ?? DEFAULT_EDIT_VIEW_ID;
-		const selectedEditViewDefinition = editViews[selectedEditView];
+		const selectedEditViewDefinition = hasCustomViewSpecified
+			? editViews[selectedEditView]
+			: undefined;
 		const selectedEditViewConfig = mergeViewConfig(
 			getViewBaseConfig(selectedEditViewDefinition),
 			(config as any)?.form?.["~config"] ??
@@ -964,9 +969,12 @@ function AdminRouterInner({
 				(activeGlobalSchema as any)?.admin?.form,
 		);
 
+		// For globals: prefer defaultViews.globalForm.component (GlobalFormView)
+		// Only use editViews registry if a custom view was explicitly specified
 		const globalViewLoader =
-			getViewLoader(selectedEditViewDefinition) ??
-			defaultViews?.globalForm?.component;
+			(hasCustomViewSpecified
+				? getViewLoader(selectedEditViewDefinition)
+				: undefined) ?? defaultViews?.globalForm?.component;
 
 		if (custom?.Form) {
 			return <custom.Form />;

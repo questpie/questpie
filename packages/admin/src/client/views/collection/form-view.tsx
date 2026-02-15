@@ -124,10 +124,12 @@ function extractReactiveConfigs(
  */
 function ReactiveFieldsManager({
 	collection,
+	mode = "collection",
 	reactiveConfigs,
 	enabled,
 }: {
 	collection: string;
+	mode?: "collection" | "global";
 	reactiveConfigs: Record<string, FieldReactiveSchema>;
 	enabled: boolean;
 }) {
@@ -137,6 +139,7 @@ function ReactiveFieldsManager({
 	// 3. Setting computed values via form.setValue
 	useReactiveFields({
 		collection,
+		mode,
 		reactiveConfigs,
 		enabled: enabled && Object.keys(reactiveConfigs).length > 0,
 		debounce: 300,

@@ -37,8 +37,11 @@ export interface ReactiveFieldResult {
  * Options for useReactiveFields hook
  */
 export interface UseReactiveFieldsOptions {
-	/** Collection name */
+	/** Collection or global name */
 	collection: string;
+
+	/** Entity type - collection or global */
+	mode?: "collection" | "global";
 
 	/** Map of field paths to their reactive configs */
 	reactiveConfigs: Record<string, FieldReactiveSchema>;
@@ -151,6 +154,7 @@ function buildWatchDependencies(
  */
 export function useReactiveFields({
 	collection,
+	mode = "collection",
 	reactiveConfigs,
 	debounce = 100,
 	enabled = true,
@@ -236,6 +240,7 @@ export function useReactiveFields({
 		try {
 			const response = await (client.rpc as any).batchReactive({
 				collection,
+				type: mode,
 				requests,
 			});
 
@@ -273,6 +278,7 @@ export function useReactiveFields({
 		enabled,
 		client,
 		collection,
+		mode,
 		reactiveConfigs,
 		formValues,
 		fieldStates,

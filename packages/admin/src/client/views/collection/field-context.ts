@@ -141,8 +141,8 @@ export interface GetFieldContextParams {
 	form: any;
 	fieldPrefix?: string;
 	locale?: string;
-	/** Collection metadata from backend (for inferring localized fields) */
-	collectionMeta?: { localizedFields?: string[] };
+	/** Entity metadata from backend (for inferring localized fields) */
+	entityMeta?: { localizedFields?: string[] };
 	/**
 	 * Pre-watched form values from useWatch hook.
 	 * If provided, avoids calling form.watch() internally.
@@ -163,7 +163,7 @@ export function getFieldContext({
 	fieldPrefix,
 	locale,
 	formValues: formValuesProp,
-	collectionMeta,
+	entityMeta,
 }: GetFieldContextParams): FieldContext {
 	// Use pre-watched values if provided (preferred), otherwise fall back to form.watch()
 	const formValues = formValuesProp ?? getFormValues(form, fieldPrefix);
@@ -196,7 +196,7 @@ export function getFieldContext({
 	const isLocalized =
 		options.localized !== undefined
 			? !!options.localized
-			: (collectionMeta?.localizedFields?.includes(fieldName) ?? false);
+			: (entityMeta?.localizedFields?.includes(fieldName) ?? false);
 
 	// Resolve dynamic options for select fields
 	const selectOptions = options.options

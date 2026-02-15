@@ -1,33 +1,32 @@
 /**
  * Block Editor Layout
  *
- * Side-by-side layout: tree on left, form on right when block selected.
- * Uses resizable panels for flexible sizing.
+ * Main layout for the block editor with inline editable blocks.
+ * Uses a scrollable container with FAB for adding blocks.
  */
 
 "use client";
 
+import { Icon } from "@iconify/react";
 import * as React from "react";
-import { useFocusOptional } from "../../context/focus-context.js";
 import { cn } from "../../lib/utils.js";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "../ui/resizable.js";
+import { Button } from "../ui/button.js";
 import { BlockCanvas } from "./block-canvas.js";
-import { useBlockEditor } from "./block-editor-context.js";
-import { BlockForm } from "./block-form.js";
+import {
+	useBlockEditor,
+	useBlockEditorActions,
+} from "./block-editor-context.js";
+import { BlockLibrarySidebar } from "./block-library-sidebar.js";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export type BlockEditorLayoutProps = {
-  /** Custom class name */
-  className?: string;
-  /** Minimum height for the editor */
-  minHeight?: number;
+	/** Custom class name */
+	className?: string;
+	/** Minimum height for the editor */
+	minHeight?: number;
 };
 
 // ============================================================================
@@ -35,74 +34,70 @@ export type BlockEditorLayoutProps = {
 // ============================================================================
 
 export function BlockEditorLayout({
-  className,
-  minHeight = 500,
+	className,
+	minHeight = 500,
 }: BlockEditorLayoutProps) {
-  const { state, actions } = useBlockEditor();
-  const focusContext = useFocusOptional();
-  const hasSelectedBlock = !!state.selectedBlockId;
-  const hasBlocks = state.content._tree.length > 0;
+	const { state } = useBlockEditor();
+	const actions = useBlockEditorActions();
+	const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
-  // Sync FocusContext block focus to BlockEditor
-  React.useEffect(() => {
-    if (!focusContext) return;
+	// Open sidebar with insert position at end of root
+	const handleOpenSidebar = () => {
+		actions.openLibrary({ parentId: null, index: state.content._tree.length });
+		setSidebarOpen(true);
+	};
 
-    const { state: focusState } = focusContext;
+	// Handle sidebar close
+	const handleCloseSidebar = () => {
+		setSidebarOpen(false);
+		actions.closeLibrary();
+	};
 
-    if (focusState.type === "block") {
-      const blockId = focusState.blockId;
+	// Sync sidebar state with context
+	React.useEffect(() => {
+		if (state.isLibraryOpen && !sidebarOpen) {
+			setSidebarOpen(true);
+		}
+	}, [state.isLibraryOpen, sidebarOpen]);
 
-      // Select the block
-      actions.selectBlock(blockId);
+	const hasBlocks = state.content._tree.length > 0;
 
-      // Expand if collapsed
-      if (!state.expandedBlockIds.has(blockId)) {
-        actions.toggleExpanded(blockId);
-      }
-    }
-  }, [focusContext?.state, state.expandedBlockIds, actions]);
+	return (
+		<div
+			className={cn("relative flex flex-col", className)}
+			style={{ minHeight }}
+		>
+			{/* Main content area */}
+				<BlockCanvas />
 
-  return (
-    <div
-      className={cn(
-        "rounded-lg border bg-background overflow-hidden",
-        className,
-      )}
-      style={{ height: minHeight }}
-    >
-      <ResizablePanelGroup orientation="horizontal" className="h-full">
-        {/* Block Tree Panel - always visible */}
-        <ResizablePanel
-          defaultSize={hasSelectedBlock ? 40 : 100}
-          minSize={20}
-          className="bg-muted/30"
-        >
-          <div className="h-full overflow-x-auto overflow-y-auto p-2">
-            <div className="min-w-fit">
-              <BlockCanvas />
+				{/* Empty state hint */}
+				{!hasBlocks && (
+					<div className="py-8 text-center">
+						<div className="text-muted-foreground">
+							<Icon
+								icon="ph:stack"
+								className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4"
+							/>
+							<p className="text-sm font-medium">No blocks yet</p>
+							<p className="text-xs text-muted-foreground mt-1">
+								Add your first block to get started
+							</p>
+						</div>
+						<Button
+							variant="outline"
+							size="sm"
+							className="mt-4"
+							onClick={handleOpenSidebar}
+						>
+							<Icon icon="ph:plus" className="mr-2 h-4 w-4" />
+							Add block
+						</Button>
+					</div>
+				)}
 
-              {/* Empty state hint when no blocks */}
-              {!hasBlocks && (
-                <div className="p-4 text-center text-sm text-muted-foreground">
-                  Click the + button above to add your first block
-                </div>
-              )}
-            </div>
-          </div>
-        </ResizablePanel>
 
-        {/* Resize handle and form panel - only when block selected */}
-        {hasSelectedBlock && (
-          <>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={60} minSize={30}>
-              <div className="h-full overflow-auto">
-                <BlockForm />
-              </div>
-            </ResizablePanel>
-          </>
-        )}
-      </ResizablePanelGroup>
-    </div>
-  );
+			{/* Block Library Sidebar */}
+			<BlockLibrarySidebar open={sidebarOpen} onClose={handleCloseSidebar} />
+		</div>
+	);
 }

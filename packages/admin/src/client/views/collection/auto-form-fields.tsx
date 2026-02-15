@@ -218,6 +218,7 @@ interface FieldLayoutRendererProps {
 	fieldItems: FieldLayoutItem[];
 	fields: Record<string, FieldDefinition>;
 	collection: string;
+	mode?: "collection" | "global";
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
@@ -237,6 +238,7 @@ function renderFields({
 	fieldItems,
 	fields,
 	collection,
+	mode = "collection",
 	registry,
 	fieldPrefix,
 	allCollectionsConfig,
@@ -248,6 +250,7 @@ function renderFields({
 	fieldItems: FieldLayoutItem[];
 	fields: Record<string, FieldDefinition>;
 	collection: string;
+	mode?: "collection" | "global";
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
@@ -283,6 +286,7 @@ function renderFields({
 				fieldName={item.field}
 				fieldDef={fields[item.field]}
 				collection={collection}
+				mode={mode}
 				registry={registry}
 				fieldPrefix={fieldPrefix}
 				allCollectionsConfig={allCollectionsConfig}
@@ -295,6 +299,7 @@ function renderFields({
 				}) => (
 					<AutoFormFields
 						collection={embeddedCollection}
+						mode="collection"
 						config={embeddedCollectionConfig}
 						registry={registry}
 						fieldPrefix={`${fullFieldName}.${embeddedIndex}`}
@@ -358,6 +363,7 @@ function renderFieldLayoutItems({
 	fieldItems,
 	fields,
 	collection,
+	mode = "collection",
 	registry,
 	fieldPrefix,
 	allCollectionsConfig,
@@ -391,6 +397,7 @@ function renderFieldLayoutItems({
 					fieldName={fieldName}
 					fieldDef={fieldDef}
 					collection={collection}
+					mode={mode}
 					registry={registry}
 					fieldPrefix={fieldPrefix}
 					allCollectionsConfig={allCollectionsConfig}
@@ -407,6 +414,7 @@ function renderFieldLayoutItems({
 					}) => (
 						<AutoFormFields
 							collection={embeddedCollection}
+							mode="collection"
 							config={embeddedCollectionConfig}
 							registry={registry}
 							fieldPrefix={`${fullFieldName}.${embeddedIndex}`}
@@ -427,6 +435,7 @@ function renderFieldLayoutItems({
 								tabsLayout: item,
 								fields,
 								collection,
+								mode,
 								registry,
 								fieldPrefix,
 								allCollectionsConfig,
@@ -445,6 +454,7 @@ function renderFieldLayoutItems({
 								index,
 								fields,
 								collection,
+								mode,
 								registry,
 								fieldPrefix,
 								allCollectionsConfig,
@@ -481,6 +491,7 @@ function renderSection({
 	index,
 	fields,
 	collection,
+	mode = "collection",
 	registry,
 	fieldPrefix,
 	allCollectionsConfig,
@@ -492,6 +503,7 @@ function renderSection({
 	index: number;
 	fields: Record<string, FieldDefinition>;
 	collection: string;
+	mode?: "collection" | "global";
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
@@ -520,6 +532,7 @@ function renderSection({
 				fieldItems: section.fields,
 				fields,
 				collection,
+				mode,
 				registry,
 				fieldPrefix,
 				allCollectionsConfig,
@@ -553,6 +566,7 @@ function renderSection({
 								fieldName={fieldName}
 								fieldDef={fieldDef}
 								collection={collection}
+								mode={mode}
 								registry={registry}
 								fieldPrefix={fieldPrefix}
 								allCollectionsConfig={allCollectionsConfig}
@@ -569,6 +583,7 @@ function renderSection({
 								}) => (
 									<AutoFormFields
 										collection={embeddedCollection}
+										mode="collection"
 										config={embeddedCollectionConfig}
 										registry={registry}
 										fieldPrefix={`${fullFieldName}.${embeddedIndex}`}
@@ -587,6 +602,7 @@ function renderSection({
 			fieldItems: section.fields,
 			fields,
 			collection,
+			mode,
 			registry,
 			fieldPrefix,
 			allCollectionsConfig,
@@ -662,6 +678,7 @@ function renderTabs({
 	tabsLayout,
 	fields,
 	collection,
+	mode = "collection",
 	registry,
 	fieldPrefix,
 	allCollectionsConfig,
@@ -672,6 +689,7 @@ function renderTabs({
 	tabsLayout: TabsLayout;
 	fields: Record<string, FieldDefinition>;
 	collection: string;
+	mode?: "collection" | "global";
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
@@ -707,6 +725,7 @@ function renderTabs({
 						fieldItems: tab.fields,
 						fields,
 						collection,
+						mode,
 						registry,
 						fieldPrefix,
 						allCollectionsConfig,
@@ -727,6 +746,7 @@ function renderSidebar({
 	sidebar,
 	fields,
 	collection,
+	mode = "collection",
 	registry,
 	fieldPrefix,
 	allCollectionsConfig,
@@ -736,6 +756,7 @@ function renderSidebar({
 	sidebar: FormSidebarConfig;
 	fields: Record<string, FieldDefinition>;
 	collection: string;
+	mode?: "collection" | "global";
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
@@ -750,6 +771,7 @@ function renderSidebar({
 		fieldItems: sidebar.fields,
 		fields,
 		collection,
+		mode,
 		registry,
 		fieldPrefix,
 		allCollectionsConfig,
@@ -898,6 +920,7 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 				fieldItems: formConfig.fields,
 				fields,
 				collection,
+				mode,
 				registry,
 				fieldPrefix,
 				allCollectionsConfig,
@@ -914,6 +937,7 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 				fieldItems: autoFields,
 				fields,
 				collection,
+				mode,
 				registry,
 				fieldPrefix,
 				allCollectionsConfig,
@@ -933,6 +957,7 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 			sidebar: formConfig.sidebar,
 			fields,
 			collection,
+			mode,
 			registry,
 			fieldPrefix,
 			allCollectionsConfig,

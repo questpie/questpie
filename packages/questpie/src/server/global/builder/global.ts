@@ -31,6 +31,7 @@ import type {
 } from "#questpie/server/global/builder/types.js";
 import { createGlobalValidationSchema } from "#questpie/server/global/builder/validation-helpers.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
+import type { GlobalMeta } from "#questpie/shared/global-meta.js";
 import { GlobalCRUDGenerator } from "../crud/global-crud-generator.js";
 import type { GlobalCRUD } from "../crud/types.js";
 
@@ -458,20 +459,28 @@ export class Global<TState extends GlobalBuilderState> {
 		return accessor;
 	}
 
-	getMeta() {
-		return {
-			name: this.state.name,
-			fields: Object.entries(this.state.fields).map(([name, column]) => ({
+	getMeta(): GlobalMeta {
+		const fieldDefinitions = this.state.fieldDefinitions || {};
+		const fields = Object.entries(fieldDefinitions).map(
+			([name, def]: [string, any]) => ({
 				name,
-				column,
 				localized: this.state.localized.includes(name as any),
 				virtual: name in this.state.virtuals,
-			})),
-			isGlobal: true,
+			}),
+		);
+
+		const versioning = this.state.options.versioning;
+		const hasVersioning =
+			!!versioning &&
+			(typeof versioning !== "object" || versioning.enabled !== false);
+
+		return {
+			name: this.state.name,
+			fields,
 			timestamps: this.state.options.timestamps !== false,
+			versioning: hasVersioning,
 			virtualFields: Object.keys(this.state.virtuals),
 			localizedFields: Array.from(this.state.localized),
-			relations: Object.keys(this.state.relations),
 		};
 	}
 }

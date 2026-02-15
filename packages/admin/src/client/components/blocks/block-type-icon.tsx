@@ -35,23 +35,15 @@ export function BlockTypeIcon({
 }: BlockTypeIconProps) {
 	const blockDef = useBlockDefinition(type);
 	const iconRef = blockDef?.admin?.icon;
-	const reference = normalizeIconReference(iconRef);
 
-	if (!reference) {
-		return null;
-	}
-
-	return (
-		<ComponentRenderer
-			reference={reference}
-			additionalProps={{ className: cn("shrink-0", className), size }}
-		/>
-	);
+	// Use BlockIcon which provides default cube icon
+	return <BlockIcon icon={iconRef} className={className} size={size} />;
 }
 
 /**
  * Standalone icon component that doesn't require context.
  * Useful for rendering icons outside the editor.
+ * Shows a default cube icon if no icon is provided.
  */
 export function BlockIcon({
 	icon,
@@ -63,12 +55,16 @@ export function BlockIcon({
 	size?: number;
 }) {
 	const reference = normalizeIconReference(icon);
-	if (!reference) {
-		return null;
-	}
+
+	// Use default cube icon if no icon provided
+	const finalReference = reference ?? {
+		type: "icon",
+		props: { name: "ph:cube" },
+	};
+
 	return (
 		<ComponentRenderer
-			reference={reference}
+			reference={finalReference}
 			additionalProps={{ className: cn("shrink-0", className), size }}
 		/>
 	);

@@ -715,7 +715,7 @@ export const spacerBlock = qb
 	.block("spacer")
 	.admin(({ c }) => ({
 		label: { en: "Spacer", sk: "Medzera" },
-		icon: c.icon("ph:arrows-out-vertical"),
+		icon: c.icon("ph:arrows-vertical"),
 		category: layout(c),
 		order: 2,
 	}))

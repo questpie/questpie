@@ -81,16 +81,44 @@ function getCollection(cms: Questpie<any>, collectionName: string) {
 }
 
 /**
- * Get field definition from collection.
+ * Get global builder by name.
+ */
+function getGlobal(cms: Questpie<any>, globalName: string) {
+	const globals = cms.getGlobals();
+	const global = globals[globalName];
+	if (!global) {
+		throw new Error(`Global '${globalName}' not found`);
+	}
+
+	return global;
+}
+
+/**
+ * Get entity (collection or global) builder by name and type.
+ */
+function getEntity(
+	cms: Questpie<any>,
+	entityName: string,
+	type: "collection" | "global",
+) {
+	if (type === "global") {
+		return getGlobal(cms, entityName);
+	}
+	return getCollection(cms, entityName);
+}
+
+/**
+ * Get field definition from collection or global.
  */
 function getFieldDefinition(
 	cms: Questpie<any>,
-	collectionName: string,
+	entityName: string,
 	fieldPath: string,
+	type: "collection" | "global" = "collection",
 ) {
-	const collection = getCollection(cms, collectionName);
+	const entity = getEntity(cms, entityName, type);
 
-	const fieldDefinitions = collection.state.fieldDefinitions || {};
+	const fieldDefinitions = entity.state.fieldDefinitions || {};
 
 	// Handle nested field paths (e.g., "items.0.variant" -> "items.variant")
 	const parts = fieldPath.split(".");
@@ -124,8 +152,9 @@ function getFieldDefinition(
 	}
 
 	if (!fieldDef) {
+		const entityType = type === "global" ? "global" : "collection";
 		throw new Error(
-			`Field '${fieldPath}' not found in collection '${collectionName}'`,
+			`Field '${fieldPath}' not found in ${entityType} '${entityName}'`,
 		);
 	}
 
@@ -316,16 +345,17 @@ function findReactiveFieldEntry(
 }
 
 /**
- * Get reactive handler from collection form config.
+ * Get reactive handler from collection/global form config.
  */
 function getReactiveHandler(
 	cms: Questpie<any>,
-	collectionName: string,
+	entityName: string,
 	fieldPath: string,
 	handlerType: "hidden" | "readOnly" | "disabled" | "compute",
+	type: "collection" | "global" = "collection",
 ): ((ctx: ReactiveContext) => any) | null {
-	const collection = getCollection(cms, collectionName);
-	const formConfig = (collection.state as any).adminForm;
+	const entity = getEntity(cms, entityName, type);
+	const formConfig = (entity.state as any).adminForm;
 
 	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
 	if (!fieldEntry) {
@@ -404,8 +434,11 @@ const reactiveRequestSchema = z.object({
  * Batch reactive request.
  */
 const batchReactiveInputSchema = z.object({
-	/** Collection name */
+	/** Collection or global name */
 	collection: z.string(),
+
+	/** Entity type - collection or global */
+	type: z.enum(["collection", "global"]).default("collection"),
 
 	/** Array of reactive requests */
 	requests: z.array(reactiveRequestSchema),
@@ -439,8 +472,11 @@ const batchReactiveOutputSchema = z.object({
  * Options request.
  */
 const optionsInputSchema = z.object({
-	/** Collection name */
+	/** Collection or global name */
 	collection: z.string(),
+
+	/** Entity type - collection or global */
+	type: z.enum(["collection", "global"]).default("collection"),
 
 	/** Field path */
 	field: z.string(),
@@ -490,7 +526,7 @@ export const batchReactive = fn({
 
 	handler: async (ctx) => {
 		const cms = getApp(ctx);
-		const { collection: collectionName, requests } = ctx.input;
+		const { collection: entityName, type: entityType, requests } = ctx.input;
 
 		// Build server context (req is not available in function handlers)
 		const serverCtx: ReactiveServerContext = {
@@ -508,10 +544,16 @@ export const batchReactive = fn({
 
 			try {
 				// Get field definition
-				getFieldDefinition(cms, collectionName, field);
+				getFieldDefinition(cms, entityName, field, entityType);
 
 				// Get reactive handler
-				const handler = getReactiveHandler(cms, collectionName, field, type);
+				const handler = getReactiveHandler(
+					cms,
+					entityName,
+					field,
+					type,
+					entityType,
+				);
 
 				if (!handler) {
 					// No handler found - skip
@@ -568,7 +610,8 @@ export const fieldOptions = fn({
 	handler: async (ctx) => {
 		const cms = getApp(ctx);
 		const {
-			collection: collectionName,
+			collection: entityName,
+			type: entityType,
 			field,
 			formData,
 			siblingData,
@@ -587,7 +630,7 @@ export const fieldOptions = fn({
 
 		try {
 			// Get field definition
-			const fieldDef = getFieldDefinition(cms, collectionName, field);
+			const fieldDef = getFieldDefinition(cms, entityName, field, entityType);
 
 			// Get options handler
 			const handler = getOptionsHandler(fieldDef);
@@ -651,7 +694,7 @@ export const fieldOptions = fn({
 			};
 		} catch (error) {
 			console.error(
-				`Error fetching options for ${collectionName}.${field}:`,
+				`Error fetching options for ${entityName}.${field}:`,
 				error,
 			);
 			return {

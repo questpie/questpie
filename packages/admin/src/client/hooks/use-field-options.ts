@@ -26,8 +26,11 @@ export interface OptionItem {
  * Options for useFieldOptions hook
  */
 export interface UseFieldOptionsOptions {
-	/** Collection name */
+	/** Collection or global name */
 	collection: string;
+
+	/** Entity type - collection or global */
+	mode?: "collection" | "global";
 
 	/** Field path */
 	field: string;
@@ -162,6 +165,7 @@ function getWatchedValues(
  */
 export function useFieldOptions({
 	collection,
+	mode = "collection",
 	field,
 	optionsConfig,
 	staticOptions,
@@ -235,6 +239,7 @@ export function useFieldOptions({
 			try {
 				const response = await (client.rpc as any).fieldOptions({
 					collection,
+					type: mode,
 					field,
 					formData: formValues,
 					siblingData,
@@ -263,6 +268,7 @@ export function useFieldOptions({
 		[
 			client,
 			collection,
+			mode,
 			field,
 			formValues,
 			siblingData,

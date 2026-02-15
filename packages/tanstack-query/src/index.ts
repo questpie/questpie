@@ -17,25 +17,20 @@ import type { QuestpieClient } from "questpie/client";
 export type { QueryKey, DefaultError, UseQueryOptions, UseMutationOptions };
 
 // ============================================================================
-// Re-export realtime utilities
+// Re-export realtime utilities from core client
 // ============================================================================
 
 export {
 	buildCollectionTopic,
 	buildGlobalTopic,
-	destroyAllMultiplexers,
-	getMultiplexer,
-	type RealtimeQueryConfig,
-	type SSESnapshotOptions,
-	sseSnapshotStream,
 	type TopicConfig,
-} from "./realtime.js";
+	type RealtimeAPI,
+} from "questpie/client";
 
 import {
 	buildCollectionTopic,
 	buildGlobalTopic,
-	sseSnapshotStream,
-} from "./realtime.js";
+} from "questpie/client";
 
 // ============================================================================
 // Core Types
@@ -47,18 +42,6 @@ export type QuestpieQueryOptionsConfig = {
 	keyPrefix?: QueryKey;
 	errorMap?: QuestpieQueryErrorMap;
 	locale?: string;
-	/**
-	 * Realtime configuration for SSE streaming.
-	 * When provided, queries can use `streamedQuery` for live updates.
-	 */
-	realtime?: {
-		/** Base URL for realtime endpoints (e.g., "/api/cms" or "https://api.example.com/cms") */
-		baseUrl: string;
-		/** Whether realtime is enabled globally */
-		enabled?: boolean;
-		/** Include credentials (cookies) in SSE requests */
-		withCredentials?: boolean;
-	};
 };
 
 // ============================================================================
@@ -376,20 +359,16 @@ export function createQuestpieQueryOptions<
 							normalizeQueryKeyOptions(options),
 						]);
 
-						if (queryConfig?.realtime && config.realtime?.baseUrl) {
+						if (queryConfig?.realtime && client.realtime) {
 							const topic = buildCollectionTopic(collectionName, options);
 							return queryOptions({
 								queryKey: qKey,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
-										sseSnapshotStream({
-											baseUrl: config.realtime!.baseUrl,
-											topic,
-											withCredentials: config.realtime?.withCredentials,
-											signal,
-										}),
+										client.realtime.stream(topic, signal),
 									reducer: (_: any, chunk: any) => chunk,
 									initialValue: undefined,
+									refetchMode: "append",
 								}),
 							});
 						}
@@ -407,24 +386,20 @@ export function createQuestpieQueryOptions<
 							normalizeQueryKeyOptions(options),
 						]);
 
-						if (queryConfig?.realtime && config.realtime?.baseUrl) {
+						if (queryConfig?.realtime && client.realtime) {
 							const topic = buildCollectionTopic(collectionName, options);
 							// For count, we extract totalDocs from the snapshot
 							return queryOptions({
 								queryKey: qKey,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
-										sseSnapshotStream({
-											baseUrl: config.realtime!.baseUrl,
-											topic,
-											withCredentials: config.realtime?.withCredentials,
-											signal,
-										}),
+										client.realtime.stream(topic, signal),
 									reducer: (_: any, chunk: any) =>
 										typeof chunk?.totalDocs === "number"
 											? chunk.totalDocs
 											: chunk,
 									initialValue: undefined,
+									refetchMode: "append",
 								}),
 							});
 						}
@@ -539,20 +514,16 @@ export function createQuestpieQueryOptions<
 							normalizeQueryKeyOptions(options),
 						]);
 
-						if (queryConfig?.realtime && config.realtime?.baseUrl) {
+						if (queryConfig?.realtime && client.realtime) {
 							const topic = buildGlobalTopic(globalName as string, options);
 							return queryOptions({
 								queryKey: qKey,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
-										sseSnapshotStream({
-											baseUrl: config.realtime!.baseUrl,
-											topic,
-											withCredentials: config.realtime?.withCredentials,
-											signal,
-										}),
+										client.realtime.stream(topic, signal),
 									reducer: (_: any, chunk: any) => chunk,
 									initialValue: undefined,
+									refetchMode: "append",
 								}),
 							});
 						}

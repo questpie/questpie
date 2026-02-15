@@ -1,5 +1,6 @@
 import qs from "qs";
 import superjson from "superjson";
+import { createRealtimeAPI, type RealtimeAPI } from "./realtime/index.js";
 import type {
 	ExtractJsonFunctions,
 	InferFunctionInput,
@@ -92,6 +93,7 @@ import type {
 import type { CollectionSchema } from "#questpie/server/collection/introspection.js";
 import type { CollectionMeta } from "#questpie/shared/collection-meta.js";
 import type { ApiErrorShape } from "#questpie/shared/error-types.js";
+import type { GlobalMeta } from "#questpie/shared/global-meta.js";
 
 /**
  * Type-safe client error with support for ApiErrorShape
@@ -473,6 +475,11 @@ type GlobalAPI<
 	 * Get global schema with full introspection (fields, access, validation)
 	 */
 	schema: () => Promise<GlobalSchema>;
+
+	/**
+	 * Get global metadata (timestamps, versioning, localized fields)
+	 */
+	meta: () => Promise<GlobalMeta>;
 } & GlobalFunctionsAPI<TGlobal>;
 
 /**
@@ -601,6 +608,7 @@ export type QuestpieClient<
 	globals: GlobalsAPI<TCMS>;
 	rpc: RpcClientAPI<TRPC>;
 	search: SearchAPI;
+	realtime: RealtimeAPI;
 	setLocale?: (locale?: string) => void;
 	getLocale?: () => string | undefined;
 	getBasePath?: () => string;
@@ -1096,6 +1104,10 @@ export function createClient<
 				schema: async () => {
 					return request(`${cmsBasePath}/globals/${globalName}/schema`);
 				},
+
+				meta: async () => {
+					return request(`${cmsBasePath}/globals/${globalName}/meta`);
+				},
 			};
 
 			return new Proxy(base as any, {
@@ -1162,11 +1174,18 @@ export function createClient<
 		},
 	};
 
+	const realtimeApi = createRealtimeAPI({
+		baseUrl: `${config.baseURL}${cmsBasePath}`,
+		withCredentials: true,
+		debounceMs: 50,
+	});
+
 	return {
 		collections,
 		globals,
 		rpc,
 		search,
+		realtime: realtimeApi,
 		setLocale: (locale?: string) => {
 			currentLocale = locale;
 			if (locale) {
@@ -1193,9 +1212,13 @@ export type {
 	RelationSchema,
 } from "#questpie/server/collection/introspection.js";
 export type { GlobalSchema } from "#questpie/server/global/introspection.js";
-// Re-export collection meta types
+// Re-export collection and global meta types
 export type {
 	CollectionFieldMeta,
 	CollectionMeta,
 	CollectionTitleMeta,
 } from "#questpie/shared/collection-meta.js";
+export type { GlobalMeta } from "#questpie/shared/global-meta.js";
+// Re-export realtime types and helpers
+export type { RealtimeAPI, TopicConfig, TopicInput } from "./realtime/index.js";
+export { buildCollectionTopic, buildGlobalTopic } from "./realtime/index.js";

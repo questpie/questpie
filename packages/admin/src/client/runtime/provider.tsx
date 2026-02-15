@@ -91,8 +91,6 @@ export interface AdminState {
   navigate: (path: string) => void;
   realtime: {
     enabled: boolean;
-    basePath: string;
-    debounceMs: number;
   };
 
   // Content locale state (CMS content language)
@@ -119,8 +117,6 @@ interface CreateAdminStoreProps {
   navigate: (path: string) => void;
   realtime: {
     enabled: boolean;
-    basePath: string;
-    debounceMs: number;
   };
   initialContentLocale: string;
 }
@@ -196,19 +192,18 @@ export interface AdminProviderProps {
   /**
    * Realtime settings for auto-refreshing collection/global queries via SSE.
    *
-   * - `true`: enable with inferred API base path from client
+   * - `true`: enable (default)
    * - `false`: disabled
    * - `undefined`: enabled by default
-   * - object: configure enabled flag and API base path
+   * - object: configure enabled flag
+   *
+   * The SSE connection config (base URL, credentials) is handled by the client's
+   * built-in `realtime` API — see `createClient()` from `questpie/client`.
    */
   realtime?:
     | boolean
     | {
         enabled?: boolean;
-        /** API base path where CMS routes are mounted (e.g. `/api/cms`) */
-        basePath?: string;
-        /** Debounce window for snapshot invalidation (default: 150ms) */
-        debounceMs?: number;
       };
 
   /**
@@ -423,23 +418,11 @@ export function AdminProvider({
 
   // Create store (once per provider instance)
   const storeRef = useRef<AdminStore | null>(null);
-  const inferredCmsBasePath =
-    typeof (client as any)?.getBasePath === "function"
-      ? ((client as any).getBasePath() as string)
-      : "/cms";
 
-  const realtimeConfig =
-    typeof realtime === "boolean"
-      ? {
-          enabled: realtime,
-          basePath: inferredCmsBasePath,
-          debounceMs: 150,
-        }
-      : {
-          enabled: realtime?.enabled ?? true,
-          basePath: realtime?.basePath ?? inferredCmsBasePath,
-          debounceMs: realtime?.debounceMs ?? 150,
-        };
+  const realtimeConfig = {
+    enabled:
+      typeof realtime === "boolean" ? realtime : (realtime?.enabled ?? true),
+  };
 
   if (!storeRef.current) {
     storeRef.current = createAdminStore({

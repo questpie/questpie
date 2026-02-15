@@ -1,2 +1,15 @@
 
 [0m[2m[35m$[0m [2m[1mvite build[0m
+[31mfailed to load config from /Users/drepkovsky/questpie/repos/questpie-cms/examples/city-portal/vite.config.ts[39m
+[31merror during build:
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@tanstack/devtools-vite' imported from /Users/drepkovsky/questpie/repos/questpie-cms/examples/city-portal/node_modules/.vite-temp/vite.config.ts.timestamp-1771178092044-815f5e86ee2d8.mjs
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:267:9)
+    at packageResolve (node:internal/modules/esm/resolve:768:81)
+    at moduleResolve (node:internal/modules/esm/resolve:854:18)
+    at defaultResolve (node:internal/modules/esm/resolve:984:11)
+    at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:780:12)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:704:25)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:687:38)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:305:38)
+    at ModuleJob._link (node:internal/modules/esm/module_job:137:49)[39m
+[0m[31merror[0m[2m:[0m script [1m"build"[0m exited with code 1[0m

@@ -222,6 +222,15 @@ export type AdapterRoutes = {
 			context?: AdapterContext,
 			input?: unknown,
 		) => Promise<Response>;
+		/**
+		 * Get global metadata (timestamps, versioning, localized fields).
+		 * Used by admin UI to determine field behaviors.
+		 */
+		meta: (
+			request: Request,
+			params: { global: string },
+			context?: AdapterContext,
+		) => Promise<Response>;
 	};
 	search: {
 		search: (

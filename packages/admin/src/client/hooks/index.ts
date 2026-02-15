@@ -120,6 +120,11 @@ export {
 // Global hooks
 export { useGlobal, useGlobalUpdate } from "./use-global";
 export { useGlobalFields } from "./use-global-fields";
+export {
+	getGlobalMetaQueryKey,
+	useGlobalMeta,
+	useSuspenseGlobalMeta,
+} from "./use-global-meta";
 export { getGlobalSchemaQueryKey, useGlobalSchema } from "./use-global-schema";
 // Lock hooks (collaborative editing)
 export {

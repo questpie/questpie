@@ -1,15 +1,18 @@
-import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "vite";
+import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
-import { nitro } from "nitro/vite";
-import { defineConfig } from "vite";
 import viteTsConfigPaths from "vite-tsconfig-paths";
+import tailwindcss from "@tailwindcss/vite";
+import { nitro } from "nitro/vite";
 
 const config = defineConfig({
 	plugins: [
+		devtools(),
 		nitro({
 			preset: "bun",
 		}) as any,
+		// this is the plugin that enables path aliases
 		viteTsConfigPaths({
 			projects: ["./tsconfig.json"],
 		}),
@@ -24,19 +27,9 @@ const config = defineConfig({
 		rollupOptions: {
 			external: [
 				"bun",
+				// drizzle-kit and its optional dependencies (used only at dev/migration time)
 				/^drizzle-kit/,
-				"postgres",
-				"@vercel/postgres",
-				"@neondatabase/serverless",
-				"@aws-sdk/client-rds-data",
-				"@planetscale/database",
 			],
-		},
-	},
-	resolve: {
-		alias: {
-			"react-resizable-panels":
-				"react-resizable-panels/dist/react-resizable-panels.js",
 		},
 	},
 });

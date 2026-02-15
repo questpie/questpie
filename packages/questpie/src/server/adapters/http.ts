@@ -289,6 +289,16 @@ export const createFetchHandler = (
 				);
 			}
 
+			if (globalAction === "meta") {
+				if (request.method === "GET") {
+					return routes.globals.meta(request, { global: globalName }, context);
+				}
+				return errorResponse(
+					ApiError.badRequest("Method not allowed"),
+					request,
+				);
+			}
+
 			if (request.method === "GET") {
 				return routes.globals.get(request, { global: globalName }, context);
 			}

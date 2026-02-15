@@ -12,6 +12,7 @@ import type { FieldDefinition } from "../../builder/field/field";
 import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useCollectionMeta } from "../../hooks/use-collection-meta";
 import { useFieldHooks } from "../../hooks/use-field-hooks";
+import { useGlobalMeta } from "../../hooks/use-global-meta";
 import { useResolveText } from "../../i18n/hooks";
 import { useScopedLocale } from "../../runtime";
 import {
@@ -30,6 +31,8 @@ export interface FieldRendererProps {
 	fieldName: string;
 	fieldDef?: FieldDefinition;
 	collection: string;
+	/** Entity type - determines which meta hook to use */
+	mode?: "collection" | "global";
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
 	className?: string;
@@ -48,9 +51,9 @@ export interface FieldRendererProps {
 	 */
 	allCollectionsConfig?: Record<string, any>;
 	/**
-	 * Collection metadata from backend (for inferring localized fields)
+	 * Entity metadata from backend (for inferring localized fields)
 	 */
-	collectionMeta?: { localizedFields?: string[] };
+	entityMeta?: { localizedFields?: string[] };
 }
 
 // ============================================================================
@@ -190,12 +193,13 @@ export function FieldRenderer({
 	fieldName,
 	fieldDef,
 	collection,
+	mode = "collection",
 	registry,
 	fieldPrefix,
 	allCollectionsConfig,
 	renderEmbeddedFields,
 	className,
-	collectionMeta: collectionMetaProp,
+	entityMeta: entityMetaProp,
 }: FieldRendererProps) {
 	const form = useFormContext() as any;
 	// Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
@@ -227,12 +231,18 @@ export function FieldRenderer({
 		return (result ?? {}) as Record<string, any>;
 	}, [watchedValues, fieldPrefix]);
 
-	// Fetch collection metadata for inferring localized fields
-	// Use prop if provided, otherwise fetch from backend
-	const { data: fetchedMeta } = useCollectionMeta(collection, {
-		enabled: !collectionMetaProp,
+	// Fetch entity metadata for inferring localized fields
+	// Use prop if provided, otherwise fetch from backend based on mode
+	const { data: fetchedCollectionMeta } = useCollectionMeta(collection, {
+		enabled: !entityMetaProp && mode === "collection",
 	});
-	const collectionMeta = collectionMetaProp ?? fetchedMeta;
+	const { data: fetchedGlobalMeta } = useGlobalMeta(collection, {
+		enabled: !entityMetaProp && mode === "global",
+	});
+
+	const entityMeta =
+		entityMetaProp ??
+		(mode === "global" ? fetchedGlobalMeta : fetchedCollectionMeta);
 
 	const context = getFieldContext({
 		fieldName,
@@ -241,7 +251,7 @@ export function FieldRenderer({
 		form,
 		fieldPrefix,
 		locale,
-		collectionMeta,
+		entityMeta,
 		formValues, // Pass pre-watched values to avoid calling form.watch() internally
 	});
 
@@ -278,8 +288,9 @@ export function FieldRenderer({
 
 	// Field not found in config
 	if (!fieldDef) {
+		const entityType = mode === "global" ? "global" : "collection";
 		return renderConfigError(
-			`Field "${fieldName}" not found in collection "${collection}" config.`,
+			`Field "${fieldName}" not found in ${entityType} "${collection}" config.`,
 		);
 	}
 

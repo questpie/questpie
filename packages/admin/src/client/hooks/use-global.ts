@@ -12,7 +12,6 @@ import type { RegisteredCMS, RegisteredGlobalNames } from "../builder/registry";
 import {
 	selectClient,
 	selectContentLocale,
-	selectRealtime,
 	useAdminStore,
 } from "../runtime";
 
@@ -59,17 +58,9 @@ export function useGlobal<K extends ResolvedGlobalNames>(
 ): any {
 	const client = useAdminStore(selectClient);
 	const contentLocale = useAdminStore(selectContentLocale);
-	const realtimeConfig = useAdminStore(selectRealtime);
 	const queryOpts = createQuestpieQueryOptions(client as any, {
 		keyPrefix: ["questpie", "globals"],
 		locale: contentLocale,
-		realtime: realtimeConfig.enabled
-			? {
-					baseUrl: realtimeConfig.basePath,
-					enabled: realtimeConfig.enabled,
-					withCredentials: true,
-				}
-			: undefined,
 	});
 
 	const globalOptions = {
@@ -107,18 +98,10 @@ export function useGlobalUpdate<K extends ResolvedGlobalNames>(
 ): any {
 	const client = useAdminStore(selectClient);
 	const contentLocale = useAdminStore(selectContentLocale);
-	const realtimeConfig = useAdminStore(selectRealtime);
 	const queryClient = useQueryClient();
 	const queryOpts = createQuestpieQueryOptions(client as any, {
 		keyPrefix: ["questpie", "globals"],
 		locale: contentLocale,
-		realtime: realtimeConfig.enabled
-			? {
-					baseUrl: realtimeConfig.basePath,
-					enabled: realtimeConfig.enabled,
-					withCredentials: true,
-				}
-			: undefined,
 	});
 
 	const globalQueryKey = queryOpts.key([

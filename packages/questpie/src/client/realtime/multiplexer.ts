@@ -42,7 +42,7 @@ type SSEEvent = {
 // Helper: Stable stringify for nested objects
 // ============================================================================
 
-function stableStringify(x: unknown): string {
+export function stableStringify(x: unknown): string {
 	if (x === null || typeof x !== "object") {
 		return JSON.stringify(x);
 	}
@@ -197,12 +197,7 @@ export class RealtimeMultiplexer {
 			const isAbort = (error as Error).name === "AbortError";
 
 			if (isAbort) {
-				if (this.reconnectPending) {
-					this.connecting = false;
-					this.reconnectPending = false;
-					this.connect();
-					return;
-				}
+				// Let finally block handle reconnectPending cleanly
 				return;
 			}
 
@@ -338,48 +333,4 @@ export class RealtimeMultiplexer {
 		}
 		return count;
 	}
-}
-
-// ============================================================================
-// Singleton Management - using globalThis for proper singleton across HMR/navigation
-// ============================================================================
-
-const REGISTRY_KEY = "__questpie_realtime_multiplexers__";
-
-type Registry = Map<string, RealtimeMultiplexer>;
-
-function getRegistry(): Registry {
-	const g = globalThis as Record<string, unknown>;
-	if (!g[REGISTRY_KEY]) {
-		g[REGISTRY_KEY] = new Map();
-	}
-	return g[REGISTRY_KEY] as Registry;
-}
-
-/**
- * Get or create a multiplexer for the given base URL.
- */
-export function getMultiplexer(
-	baseUrl: string,
-	withCredentials = true,
-): RealtimeMultiplexer {
-	const key = `${baseUrl}:${withCredentials}`;
-	const reg = getRegistry();
-
-	if (!reg.has(key)) {
-		reg.set(key, new RealtimeMultiplexer(baseUrl, withCredentials));
-	}
-
-	return reg.get(key)!;
-}
-
-/**
- * Destroy all multiplexers. Useful for testing or app shutdown.
- */
-export function destroyAllMultiplexers(): void {
-	const reg = getRegistry();
-	for (const multiplexer of reg.values()) {
-		multiplexer.destroy();
-	}
-	reg.clear();
 }

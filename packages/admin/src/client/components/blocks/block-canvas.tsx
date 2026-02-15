@@ -2,6 +2,7 @@
  * Block Canvas
  *
  * Main canvas area for displaying and editing the block tree.
+ * Supports drag-and-drop reordering and inline field editing.
  */
 
 "use client";
@@ -20,10 +21,13 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Icon } from "@iconify/react";
 import * as React from "react";
-import { useBlockEditor } from "./block-editor-context.js";
-import { BlockInsertButton } from "./block-insert-button.js";
+import { Button } from "../ui/button.js";
+import {
+	useBlockEditor,
+	useBlockEditorActions,
+} from "./block-editor-context.js";
 import { BlockTree } from "./block-tree.js";
-import { BlockTypeIcon } from "./block-type-icon.js";
+import { BlockIcon } from "./block-type-icon.js";
 import { findBlockById, findBlockPosition } from "./utils/tree-utils.js";
 
 // ============================================================================
@@ -31,7 +35,8 @@ import { findBlockById, findBlockPosition } from "./utils/tree-utils.js";
 // ============================================================================
 
 export function BlockCanvas() {
-	const { state, actions } = useBlockEditor();
+	const { state } = useBlockEditor();
+	const actions = useBlockEditorActions();
 	const [activeId, setActiveId] = React.useState<string | null>(null);
 
 	// Configure drag sensors with keyboard support
@@ -98,23 +103,34 @@ export function BlockCanvas() {
 	const activeBlock = activeId
 		? findBlockById(state.content._tree, activeId)
 		: null;
-	const activeBlockDef = activeBlock ? state.blocks[activeBlock.type] : null;
+	const activeBlockSchema = activeBlock ? state.blocks[activeBlock.type] : null;
 
 	// Empty state
 	if (state.content._tree.length === 0) {
 		return (
 			<div className="flex h-full flex-col items-center justify-center p-8">
-				<div className="mb-4 text-center text-muted-foreground">
+				<div className="mb-6 text-center text-muted-foreground">
+					<Icon
+						icon="ph:stack"
+						className="mx-auto h-16 w-16 text-muted-foreground/30 mb-4"
+					/>
 					<p className="text-lg font-medium">No blocks yet</p>
-					<p className="text-sm">Add your first block to get started</p>
+					<p className="text-sm mt-1">Add your first block to get started</p>
 				</div>
-				<BlockInsertButton position={{ parentId: null, index: 0 }} />
+				<Button
+					variant="default"
+					size="lg"
+					onClick={() => actions.openLibrary({ parentId: null, index: 0 })}
+				>
+					<Icon icon="ph:plus" className="mr-2 h-5 w-5" />
+					Add block
+				</Button>
 			</div>
 		);
 	}
 
 	return (
-		<div className="">
+		<div className="space-y-4">
 			<DndContext
 				sensors={sensors}
 				collisionDetection={closestCenter}
@@ -131,40 +147,44 @@ export function BlockCanvas() {
 								icon="ph:dots-six-vertical"
 								className="h-4 w-4 text-muted-foreground"
 							/>
-							<BlockTypeIcon
-								type={activeBlock.type}
+							<BlockIcon
+								icon={activeBlockSchema?.admin?.icon}
+								size={16}
 								className="text-muted-foreground"
 							/>
 							<span className="text-sm font-medium">
-								{getBlockLabel(activeBlockDef, activeBlock.type)}
+								{getBlockLabel(activeBlockSchema, activeBlock.type)}
 							</span>
 						</div>
 					)}
 				</DragOverlay>
 			</DndContext>
-
-			{/* Add block at end */}
-			<div className="mt-4">
-				<BlockInsertButton
-					position={{ parentId: null, index: state.content._tree.length }}
-				/>
-			</div>
 		</div>
 	);
 }
 
-// Helper to get block label
+// ============================================================================
+// Helpers
+// ============================================================================
+
+import type { BlockSchema } from "#questpie/admin/server";
+
 function getBlockLabel(
-	blockDef: { admin?: { label?: unknown } } | null | undefined,
+	blockSchema: BlockSchema | null | undefined,
 	type: string,
 ): string {
-	const label = blockDef?.admin?.label;
+	if (!blockSchema) {
+		return type.charAt(0).toUpperCase() + type.slice(1);
+	}
+
+	const label = blockSchema.admin?.label;
 
 	if (!label) {
 		return type.charAt(0).toUpperCase() + type.slice(1);
 	}
 
 	if (typeof label === "string") return label;
+
 	if (typeof label === "object" && label !== null) {
 		if ("en" in label && typeof label.en === "string") return label.en;
 		const first = Object.values(label)[0];
