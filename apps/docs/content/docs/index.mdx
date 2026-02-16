@@ -1,13 +1,17 @@
 ---
 title: QUESTPIE Documentation
-description: v1 Beta — Server-first TypeScript backend framework documentation
+description: v2 — Server-first TypeScript backend framework with field builder platform, standalone RPC, and config-driven admin UI
 ---
 
-# QUESTPIE Documentation
+# QuestPie Documentation
 
-**v1 Beta** — QUESTPIE is a server-first TypeScript backend framework. The core `questpie` package is a fully standalone backend — collections, fields, relations, hooks, access control, validation, jobs, RPC, and a generated REST API. No admin panel required.
+<Callout type="warn">
+**Active Development** — QUESTPIE is a bootstrapped, community-driven framework under active development. The API may still change between releases, but we follow semantic versioning to communicate breaking changes clearly. We do not recommend it for mission-critical production workloads yet. Full API stability is targeted for **v3**.
+</Callout>
 
-`@questpie/admin` is a separate module that reads your server schema and generates a complete admin panel — dashboard, table views, form editors, sidebar navigation — all from the definitions you already wrote.
+**v2** — QUESTPIE is a server-first TypeScript backend framework. The core `questpie` package is a fully standalone backend — a proxy-based field builder, collections, globals, relations, hooks, access control, validation, standalone RPC, jobs, and a generated REST API. No admin panel required.
+
+`@questpie/admin` is a separate module that reads your server schema via introspection and generates a complete admin panel — dashboard, table views, form editors, sidebar navigation, block editor — all from the definitions you already wrote. You're also free to learn the internals and build your own admin experience — either on top of `@questpie/admin` primitives or entirely from scratch using the server's introspection API.
 
 ## Two Packages, One Schema
 
