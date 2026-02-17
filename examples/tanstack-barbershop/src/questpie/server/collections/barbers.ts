@@ -210,8 +210,13 @@ export const barbers = qb
 		position: "right",
 		defaultWidth: 50,
 		url: ({ record }) => {
-			const name = record.name as string | undefined;
-			const slug = name?.toLowerCase().replace(/\s+/g, "-") || "barber";
+			const recordSlug =
+				typeof record.slug === "string" ? record.slug.trim() : "";
+
+			const slug =
+				recordSlug ||
+				(typeof record.name === "string" ? slugify(record.name) : "barber");
+
 			return `/barbers/${slug}?preview=true`;
 		},
 	})

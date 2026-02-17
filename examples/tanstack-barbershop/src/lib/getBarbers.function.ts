@@ -1,15 +1,24 @@
+import { isDraftMode } from "@questpie/admin/shared";
 import { notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders } from "@tanstack/react-start/server";
 import { cms, createServerContext } from "@/lib/server-helpers";
 
 export const getBarber = createServerFn({ method: "GET" })
 	.inputValidator((data: { slug: string; locale?: string }) => data)
 	.handler(async ({ data }) => {
+		const headers = getRequestHeaders();
+		const cookie = headers.get("cookie");
+		const cookieHeader = cookie ? String(cookie) : undefined;
+		const draftMode = isDraftMode(cookieHeader);
+
 		const ctx = await createServerContext(data.locale);
 
 		const barber = await cms.api.collections.barbers.findOne(
 			{
-				where: { slug: data.slug },
+				where: draftMode
+					? { slug: data.slug }
+					: { slug: data.slug, isActive: true },
 				with: {
 					avatar: true,
 					services: {
@@ -35,7 +44,8 @@ export const getBarber = createServerFn({ method: "GET" })
 				isActive: barber.isActive,
 				specialties: barber.specialties,
 				services: barber.services,
-				socialLinks: barber.socialLinks,
+				socialLinks:
+					(barber.socialLinks as Record<string, unknown>[] | null) ?? null,
 				workingHours: barber.workingHours,
 			},
 		};
