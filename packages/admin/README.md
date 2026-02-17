@@ -6,10 +6,10 @@ Server-driven admin UI for QUESTPIE. Reads your server schema via introspection 
 
 QUESTPIE follows a **server-first** architecture. All schema, layout, and behavior is defined on the server with the `questpie` core package. The admin UI consumes this via introspection — no duplicate config needed on the client.
 
-| Layer | Package | Defines |
-| ----- | ------- | ------- |
-| **Server** | `questpie` + `@questpie/admin/server` | Schema, fields, access, hooks, sidebar, dashboard, branding |
-| **Client** | `@questpie/admin/client` | Field renderers, view renderers, component registry, UI overrides |
+| Layer      | Package                               | Defines                                                           |
+| ---------- | ------------------------------------- | ----------------------------------------------------------------- |
+| **Server** | `questpie` + `@questpie/admin/server` | Schema, fields, access, hooks, sidebar, dashboard, branding       |
+| **Client** | `@questpie/admin/client`              | Field renderers, view renderers, component registry, UI overrides |
 
 ## Installation
 
@@ -291,13 +291,13 @@ function Page({ blocks }) {
 
 Collection-level actions with multiple handler types:
 
-| Type | Description |
-| ---- | ----------- |
-| `navigate` | Client-side routing |
-| `api` | HTTP API call |
-| `form` | Dialog with field inputs |
-| `server` | Server-side execution with full app context |
-| `custom` | Arbitrary client-side code |
+| Type       | Description                                 |
+| ---------- | ------------------------------------------- |
+| `navigate` | Client-side routing                         |
+| `api`      | HTTP API call                               |
+| `form`     | Dialog with field inputs                    |
+| `server`   | Server-side execution with full app context |
+| `custom`   | Arbitrary client-side code                  |
 
 Actions can be scoped to `header` (list toolbar), `bulk` (selected items), `single` (per-item), or `row`.
 

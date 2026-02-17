@@ -61,20 +61,20 @@ const client = createClient<AppCMS, AppRpc>({
 
 The adapter automatically creates:
 
-| Method | Route | Description |
-| ------ | ----- | ----------- |
-| GET | `/api/cms/collections/:name` | List items |
-| POST | `/api/cms/collections/:name` | Create item |
-| GET | `/api/cms/collections/:name/:id` | Get item |
-| PATCH | `/api/cms/collections/:name/:id` | Update item |
-| DELETE | `/api/cms/collections/:name/:id` | Delete item |
-| POST | `/api/cms/collections/:name/:id/restore` | Restore soft-deleted |
-| GET | `/api/cms/globals/:name` | Get global |
-| PATCH | `/api/cms/globals/:name` | Update global |
-| POST | `/api/cms/collections/:name/upload` | Upload file |
-| ALL | `/api/cms/auth/*` | Better Auth routes |
-| POST | `/api/cms/rpc/*` | RPC procedures |
-| GET | `/api/cms/collections/:name/subscribe` | SSE realtime |
+| Method | Route                                    | Description          |
+| ------ | ---------------------------------------- | -------------------- |
+| GET    | `/api/cms/collections/:name`             | List items           |
+| POST   | `/api/cms/collections/:name`             | Create item          |
+| GET    | `/api/cms/collections/:name/:id`         | Get item             |
+| PATCH  | `/api/cms/collections/:name/:id`         | Update item          |
+| DELETE | `/api/cms/collections/:name/:id`         | Delete item          |
+| POST   | `/api/cms/collections/:name/:id/restore` | Restore soft-deleted |
+| GET    | `/api/cms/globals/:name`                 | Get global           |
+| PATCH  | `/api/cms/globals/:name`                 | Update global        |
+| POST   | `/api/cms/collections/:name/upload`      | Upload file          |
+| ALL    | `/api/cms/auth/*`                        | Better Auth routes   |
+| POST   | `/api/cms/rpc/*`                         | RPC procedures       |
+| GET    | `/api/cms/collections/:name/subscribe`   | SSE realtime         |
 
 ## Documentation
 

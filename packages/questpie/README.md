@@ -392,11 +392,11 @@ export default {
 
 ## Framework Adapters
 
-| Adapter | Package | Server |
-| ------- | ------- | ------ |
-| Hono | `@questpie/hono` | `questpieHono(cms, { basePath, rpc })` |
-| Elysia | `@questpie/elysia` | `questpieElysia(cms, { basePath, rpc })` |
-| Next.js | `@questpie/next` | `questpieNextRouteHandlers(cms, { basePath, rpc })` |
+| Adapter | Package            | Server                                              |
+| ------- | ------------------ | --------------------------------------------------- |
+| Hono    | `@questpie/hono`   | `questpieHono(cms, { basePath, rpc })`              |
+| Elysia  | `@questpie/elysia` | `questpieElysia(cms, { basePath, rpc })`            |
+| Next.js | `@questpie/next`   | `questpieNextRouteHandlers(cms, { basePath, rpc })` |
 
 Or use `createFetchHandler` directly with any framework that supports the Fetch API.
 

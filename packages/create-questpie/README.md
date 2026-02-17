@@ -16,11 +16,11 @@ bunx create-questpie my-app
 
 ## Options
 
-| Flag | Description |
-| ---- | ----------- |
+| Flag                    | Description                                 |
+| ----------------------- | ------------------------------------------- |
 | `-t, --template <name>` | Template to use (default: `tanstack-start`) |
-| `--no-install` | Skip dependency installation |
-| `--no-git` | Skip git initialization |
+| `--no-install`          | Skip dependency installation                |
+| `--no-git`              | Skip git initialization                     |
 
 ## Templates
 
