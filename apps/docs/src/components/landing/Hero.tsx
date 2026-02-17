@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Github, Lock, Sparkles, Terminal } from "lucide-react";
 import { motion } from "motion/react";
