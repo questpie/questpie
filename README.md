@@ -1,8 +1,5 @@
 # QUESTPIE
 
-> The server-first framework where backend architecture builds itself.
-
-
 <p align="center">
   <img src="https://img.shields.io/github/license/questpie/questpie" />
   <img src="https://img.shields.io/github/stars/questpie/questpie?style=social" />
@@ -11,22 +8,12 @@
   <img src="https://img.shields.io/badge/runtime-Bun%20%7C%20Node-black" />
 </p>
 
+> The server-first framework where backend architecture builds itself.
 
 QUESTPIE is a server-first TypeScript framework where backend architecture becomes executable.
 
 Instead of manually building APIs, admin dashboards, and operational tooling,
 QUESTPIE derives them automatically from your backend schema.
-
-### What QuestPie generates from your schema
-
-- REST & realtime APIs
-- Admin interfaces
-- Typed SDK clients
-- Background jobs & workflows
-- Auth & permissions
-- AI-operable system capabilities
-
----
 
 ## Why QUESTPIE?
 
