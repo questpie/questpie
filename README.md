@@ -1,8 +1,41 @@
 # QUESTPIE
 
-**Type-safe, modular backend framework for modern TypeScript applications**
+> The server-first framework where backend architecture builds itself.
 
-A batteries-optional CMS engine built with Drizzle ORM. Opt into authentication, storage, background jobs, email, and realtime as needed.
+<p align="center">
+  <strong>Define a schema. Get a system.</strong>
+</p>
+
+<p align="center">
+  Schema-driven backend framework that derives APIs, realtime infrastructure,
+  admin interfaces, and typed clients automatically.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/license/questpie/questpie" />
+  <img src="https://img.shields.io/github/stars/questpie/questpie?style=social" />
+  <img src="https://img.shields.io/npm/v/questpie" />
+  <img src="https://img.shields.io/badge/types-TypeScript-blue" />
+  <img src="https://img.shields.io/badge/runtime-Bun%20%7C%20Node-black" />
+</p>
+
+---
+
+QUESTPIE is a server-first TypeScript framework where backend architecture becomes executable.
+
+Instead of manually building APIs, admin dashboards, and operational tooling,
+QUESTPIE derives them automatically from your backend schema.
+
+### What QuestPie generates from your schema
+
+- REST & realtime APIs
+- Admin interfaces
+- Typed SDK clients
+- Background jobs & workflows
+- Auth & permissions
+- AI-operable system capabilities
+
+---
 
 ## Why QUESTPIE?
 
