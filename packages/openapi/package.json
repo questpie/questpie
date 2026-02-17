@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/openapi",
-	"version": "1.0.0",
+	"version": "2.0.0",
 	"type": "module",
 	"repository": {
 		"type": "git",
@@ -23,7 +23,7 @@
 		"tsdown": "^0.18.3"
 	},
 	"peerDependencies": {
-		"questpie": "^1.0.0"
+		"questpie": "^2.0.0"
 	},
 	"exports": {
 		".": "./src/server.ts",
