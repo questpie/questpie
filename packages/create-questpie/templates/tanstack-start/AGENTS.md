@@ -1,13 +1,13 @@
 # AGENTS.md
 
-Source-of-truth guidance for AI agents working in this QuestPie CMS project.
+Source-of-truth guidance for AI agents working in this QUESTPIE CMS project.
 
 > **Docs for LLMs**: https://questpie.com/llms.txt (sitemap), https://questpie.com/llms-full.txt (full content)
 
 ## Project Overview
 
 - **Framework**: TanStack Start (React) + Vite + Nitro (Bun preset)
-- **CMS**: QuestPie — headless CMS framework with config-driven admin UI
+- **CMS**: QUESTPIE — headless CMS framework with config-driven admin UI
 - **Database**: PostgreSQL (via Drizzle ORM)
 - **Styling**: Tailwind CSS v4 + shadcn/ui components
 - **Auth**: Better Auth (email/password)
@@ -16,7 +16,7 @@ Source-of-truth guidance for AI agents working in this QuestPie CMS project.
 
 ## Documentation & Resources
 
-When you need more context about QuestPie APIs, consult these resources in order:
+When you need more context about QUESTPIE APIs, consult these resources in order:
 
 1. **LLMs full docs**: https://questpie.com/llms-full.txt — complete documentation in a single LLM-optimized file
 2. **Online docs**: https://questpie.com/docs — browsable documentation
@@ -195,7 +195,7 @@ Then register it:
 
 ### Creating an RPC Function (End-to-End Type-Safe)
 
-QuestPie provides standalone RPC — `cms` and `appRpc` are two independent instances, no circular dependency.
+QUESTPIE provides standalone RPC — `cms` and `appRpc` are two independent instances, no circular dependency.
 
 **How typing works:**
 ```ts
