@@ -107,7 +107,7 @@ export function Hero() {
 						</motion.div>
 
 						<motion.h1
-							className="mt-6 text-4xl font-bold leading-[1.08] tracking-[-0.03em] text-balance text-foreground md:text-5xl lg:text-6xl"
+							className="mt-6 max-w-[12ch] text-4xl font-bold leading-[1.08] tracking-[-0.03em] text-balance text-foreground md:text-5xl lg:text-6xl"
 							initial={{ opacity: 0, y: 16 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.08 }}
@@ -125,13 +125,13 @@ export function Hero() {
 						</motion.h1>
 
 						<motion.p
-							className="mt-5 text-base leading-relaxed text-balance text-muted-foreground lg:text-lg"
+							className="mt-5 max-w-xl text-base leading-relaxed text-balance text-muted-foreground lg:text-lg"
 							initial={{ opacity: 0, y: 16 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.16 }}
 						>
-							Model your backend in TypeScript. QUESTPIE turns it into REST,
-							RPC, realtime, typed clients, and optional admin UI.
+							Model in TypeScript. Ship REST, RPC, realtime, typed clients, and
+							optional admin UI.
 						</motion.p>
 
 						<motion.div

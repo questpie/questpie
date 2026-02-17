@@ -235,7 +235,7 @@ export function AdminShowcase() {
 						Admin UI
 					</h2>
 					<h3 className="text-3xl font-bold tracking-[-0.02em] text-balance md:text-4xl">
-						Ship admin without babysitting another app
+						Ship admin without building a second app
 					</h3>
 					<p className="text-muted-foreground text-balance">
 						Lists, forms, and dashboard come from backend config. Override
