@@ -440,6 +440,171 @@ export interface RelationSchema {
 	onUpdate?: ReferentialAction;
 }
 
+/**
+ * Synthetic upload system fields added by `.upload()`.
+ *
+ * `.upload()` extends collection columns/output with these fields, but they are
+ * not represented as FieldDefinitions. Introspection adds them so admin clients
+ * can render forms/tables consistently (including asset preview).
+ */
+function getUploadSystemFieldSchemas(): Record<string, FieldSchema> {
+	const readOnlyAccess: FieldAccessInfo = {
+		read: { allowed: true },
+		create: { allowed: false },
+		update: { allowed: false },
+	};
+
+	return {
+		preview: {
+			name: "preview",
+			location: "virtual",
+			access: readOnlyAccess,
+			metadata: {
+				type: "assetPreview",
+				label: {
+					key: "defaults.assets.fields.preview.label",
+					fallback: "Preview",
+				},
+				required: false,
+				localized: false,
+				readOnly: true,
+			},
+		},
+		key: {
+			name: "key",
+			location: "main",
+			access: readOnlyAccess,
+			metadata: {
+				type: "text",
+				label: "Key",
+				required: true,
+				localized: false,
+				readOnly: true,
+				validation: {
+					maxLength: 255,
+				},
+			},
+		},
+		filename: {
+			name: "filename",
+			location: "main",
+			access: readOnlyAccess,
+			metadata: {
+				type: "text",
+				label: {
+					key: "defaults.assets.fields.filename.label",
+					fallback: "Filename",
+				},
+				description: {
+					key: "defaults.assets.fields.filename.description",
+					fallback: "Original filename of the uploaded file",
+				},
+				required: true,
+				localized: false,
+				readOnly: true,
+				validation: {
+					maxLength: 255,
+				},
+			},
+		},
+		mimeType: {
+			name: "mimeType",
+			location: "main",
+			access: readOnlyAccess,
+			metadata: {
+				type: "text",
+				label: {
+					key: "defaults.assets.fields.mimeType.label",
+					fallback: "Type",
+				},
+				description: {
+					key: "defaults.assets.fields.mimeType.description",
+					fallback: "MIME type of the file",
+				},
+				required: true,
+				localized: false,
+				readOnly: true,
+				validation: {
+					maxLength: 100,
+				},
+			},
+		},
+		size: {
+			name: "size",
+			location: "main",
+			access: readOnlyAccess,
+			metadata: {
+				type: "number",
+				label: {
+					key: "defaults.assets.fields.size.label",
+					fallback: "Size (bytes)",
+				},
+				description: {
+					key: "defaults.assets.fields.size.description",
+					fallback: "File size in bytes",
+				},
+				required: true,
+				localized: false,
+				readOnly: true,
+				validation: {
+					min: 0,
+				},
+			},
+		},
+		visibility: {
+			name: "visibility",
+			location: "main",
+			access: {
+				read: { allowed: true },
+				create: { allowed: false },
+				update: { allowed: true },
+			},
+			metadata: {
+				type: "select",
+				label: {
+					key: "defaults.assets.fields.visibility.label",
+					fallback: "Visibility",
+				},
+				description: {
+					key: "defaults.assets.fields.visibility.description",
+					fallback:
+						"Public files are accessible without authentication. Private files require signed URLs.",
+				},
+				required: true,
+				localized: false,
+				options: [
+					{
+						value: "public",
+						label: {
+							key: "defaults.assets.fields.visibility.options.public",
+							fallback: "Public",
+						},
+					},
+					{
+						value: "private",
+						label: {
+							key: "defaults.assets.fields.visibility.options.private",
+							fallback: "Private",
+						},
+					},
+				],
+			},
+		},
+		url: {
+			name: "url",
+			location: "virtual",
+			access: readOnlyAccess,
+			metadata: {
+				type: "url",
+				label: "URL",
+				required: false,
+				localized: false,
+				readOnly: true,
+			},
+		},
+	};
+}
+
 // ============================================================================
 // Introspection Functions
 // ============================================================================
@@ -491,6 +656,15 @@ export async function introspectCollection(
 			validation,
 			...(reactive && { reactive }),
 		};
+	}
+
+	if (state.upload) {
+		const uploadFields = getUploadSystemFieldSchemas();
+		for (const [name, schema] of Object.entries(uploadFields)) {
+			if (!fields[name]) {
+				fields[name] = schema;
+			}
+		}
 	}
 
 	// Build relations metadata
@@ -651,7 +825,7 @@ function extractAdminConfig(
 		// Strip handlers from custom actions for client consumption
 		const customActions = (actionsConfig.custom || []).map(
 			(action: { handler?: unknown; [key: string]: unknown }) => {
-				const { handler, ...rest } = action;
+				const { handler: _handler, ...rest } = action;
 				return rest;
 			},
 		);

@@ -221,7 +221,7 @@ export const adminModule = adminBaseBuilder
 					searchable: [f.name, f.email],
 					defaultSort: { field: f.name, direction: "asc" },
 					actions: {
-						header: { primary: [a.create], secondary: [] },
+						header: { primary: [], secondary: [] },
 						row: [a.delete],
 						bulk: [a.deleteMany],
 					},
@@ -246,7 +246,13 @@ export const adminModule = adminBaseBuilder
 											label: { key: "defaults.users.sections.basicInfo" },
 											layout: "grid",
 											columns: 2,
-											fields: [f.name, f.email],
+											fields: [
+												f.name,
+												{
+													field: f.email,
+													readOnly: ({ data }) => Boolean((data as any)?.id),
+												},
+											],
 										},
 									],
 								},
@@ -257,7 +263,17 @@ export const adminModule = adminBaseBuilder
 										{
 											type: "section",
 											label: { key: "defaults.users.sections.accessControl" },
-											fields: [f.banned, f.banReason, f.banExpires],
+											fields: [
+												f.banned,
+												{
+													field: f.banReason,
+													hidden: ({ data }) => !(data as any)?.banned,
+												},
+												{
+													field: f.banExpires,
+													hidden: ({ data }) => !(data as any)?.banned,
+												},
+											],
 										},
 									],
 								},
@@ -265,7 +281,195 @@ export const adminModule = adminBaseBuilder
 						},
 					],
 				}),
-			),
+			)
+			.actions(({ a, c, f }) => ({
+				builtin: [a.save(), a.delete(), a.deleteMany(), a.duplicate()],
+				custom: [
+					a.headerAction({
+						id: "createUser",
+						label: { key: "defaults.users.actions.createUser.label" },
+						icon: c.icon("ph:user-plus"),
+						form: {
+							title: { key: "defaults.users.actions.createUser.title" },
+							description: {
+								key: "defaults.users.actions.createUser.description",
+							},
+							submitLabel: { key: "defaults.users.actions.createUser.submit" },
+							fields: {
+								name: f.text({
+									label: { key: "defaults.users.fields.name.label" },
+									required: true,
+								}),
+								email: f.email({
+									label: { key: "defaults.users.fields.email.label" },
+									required: true,
+								}),
+								password: f.text({
+									label: {
+										key: "defaults.users.actions.createUser.fields.password.label",
+									},
+									required: true,
+									type: "password",
+									autoComplete: "new-password",
+								}),
+								role: f.select({
+									label: { key: "defaults.users.fields.role.label" },
+									options: [
+										{
+											value: "admin",
+											label: {
+												key: "defaults.users.fields.role.options.admin",
+											},
+										},
+										{
+											value: "user",
+											label: { key: "defaults.users.fields.role.options.user" },
+										},
+									],
+									defaultValue: "user",
+								}),
+							},
+						},
+						handler: async ({ data, app, session }) => {
+							const authApi = (app as any)?.auth?.api;
+							if (!authApi?.createUser) {
+								return {
+									type: "error",
+									toast: {
+										message:
+											"Auth admin API is not configured. Cannot create user.",
+									},
+								};
+							}
+
+							const token = (session as any)?.session?.token;
+							const headers = token
+								? new Headers({ authorization: `Bearer ${token}` })
+								: undefined;
+
+							const result = await authApi.createUser({
+								body: {
+									email: String((data as any).email || ""),
+									password: String((data as any).password || ""),
+									name: String((data as any).name || ""),
+									role: (data as any).role
+										? String((data as any).role)
+										: undefined,
+								},
+								...(headers ? { headers } : {}),
+							});
+
+							const createdUserId = (result as any)?.user?.id;
+							const createdUserEmail = (result as any)?.user?.email;
+
+							if (!createdUserId) {
+								return {
+									type: "error",
+									toast: {
+										message: "Failed to create user",
+									},
+								};
+							}
+
+							return {
+								type: "success",
+								toast: {
+									message: `User ${createdUserEmail || ""} created successfully`,
+								},
+								effects: {
+									invalidate: ["user"],
+									redirect: `/admin/collections/user/${createdUserId}`,
+								},
+							};
+						},
+					}),
+					a.action({
+						id: "resetPassword",
+						label: { key: "defaults.users.actions.resetPassword.label" },
+						icon: c.icon("ph:key"),
+						variant: "outline",
+						form: {
+							title: { key: "defaults.users.actions.resetPassword.title" },
+							description: {
+								key: "defaults.users.actions.resetPassword.description",
+							},
+							submitLabel: {
+								key: "defaults.users.actions.resetPassword.submit",
+							},
+							fields: {
+								newPassword: f.text({
+									label: {
+										key: "defaults.users.actions.resetPassword.fields.newPassword.label",
+									},
+									required: true,
+									type: "password",
+									autoComplete: "new-password",
+								}),
+								confirmPassword: f.text({
+									label: {
+										key: "defaults.users.actions.resetPassword.fields.confirmPassword.label",
+									},
+									required: true,
+									type: "password",
+									autoComplete: "new-password",
+								}),
+							},
+						},
+						handler: async ({ data, itemId, app, session }) => {
+							if (!itemId) {
+								return {
+									type: "error",
+									toast: { message: "User ID is required" },
+								};
+							}
+
+							const newPassword = String((data as any).newPassword || "");
+							const confirmPassword = String(
+								(data as any).confirmPassword || "",
+							);
+
+							if (newPassword !== confirmPassword) {
+								return {
+									type: "error",
+									toast: {
+										message: "Passwords do not match",
+									},
+								};
+							}
+
+							const authApi = (app as any)?.auth?.api;
+							if (!authApi?.setUserPassword) {
+								return {
+									type: "error",
+									toast: {
+										message:
+											"Auth admin API is not configured. Cannot reset password.",
+									},
+								};
+							}
+
+							const token = (session as any)?.session?.token;
+							const headers = token
+								? new Headers({ authorization: `Bearer ${token}` })
+								: undefined;
+
+							await authApi.setUserPassword({
+								body: {
+									userId: itemId,
+									newPassword,
+								},
+								...(headers ? { headers } : {}),
+							});
+
+							return {
+								type: "success",
+								toast: { message: "Password reset successfully" },
+								effects: { invalidate: ["user"] },
+							};
+						},
+					}),
+				],
+			})),
 
 		assets: bindCollectionToBuilder(
 			starterModule.state.collections.assets,
@@ -281,7 +485,7 @@ export const adminModule = adminBaseBuilder
 				v.table({
 					// Note: filename, mimeType, size, createdAt are upload fields (added by .upload())
 					// so we use string literals instead of f.* proxy
-					columns: ["filename", "mimeType", "size"],
+					columns: ["preview", "filename", "mimeType", "size"],
 					searchable: ["filename", f.alt],
 					defaultSort: { field: "createdAt", direction: "desc" },
 					actions: {
@@ -300,7 +504,13 @@ export const adminModule = adminBaseBuilder
 								type: "section",
 								label: { key: "defaults.assets.sections.fileInfo" },
 								// Note: filename, mimeType, size, visibility are upload fields
-								fields: ["filename", "mimeType", "size", "visibility"],
+								fields: [
+									"preview",
+									"filename",
+									"mimeType",
+									"size",
+									"visibility",
+								],
 							},
 						],
 					},
