@@ -1,5 +1,5 @@
 ---
-"questpie": major
+"questpie": patch
 ---
 
 Remove deprecated collection/global scoped `.functions()` RPC from builders and runtime routes. RPC is now app-level only via `rpc().router(...)` on `/rpc/:path...`.
