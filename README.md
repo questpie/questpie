@@ -8,8 +8,6 @@
   <img src="https://img.shields.io/badge/runtime-Bun%20%7C%20Node-black" />
 </p>
 
-> The server-first framework where backend architecture builds itself.
-
 QUESTPIE is a server-first TypeScript framework where backend architecture becomes executable.
 
 Instead of manually building APIs, admin dashboards, and operational tooling,
