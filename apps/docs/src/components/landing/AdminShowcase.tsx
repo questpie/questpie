@@ -15,22 +15,22 @@ const tabs: { id: TabId; label: string; description: string }[] = [
 	{
 		id: "dashboard",
 		label: "Dashboard",
-		description: "Server-defined stats and activity",
+		description: "Server-defined stats",
 	},
 	{
 		id: "table",
 		label: "Table View",
-		description: "List projection with filters and sorting",
+		description: "List projection with filters",
 	},
 	{
 		id: "form",
 		label: "Form View",
-		description: "Schema-driven editor projection",
+		description: "Schema-driven form projection",
 	},
 	{
 		id: "sidebar",
 		label: "Sidebar",
-		description: "Navigation generated from builder config",
+		description: "Config-generated navigation",
 	},
 ];
 
@@ -238,9 +238,8 @@ export function AdminShowcase() {
 						One interface generated from your server model
 					</h3>
 					<p className="text-muted-foreground text-balance">
-						The admin consumes the same introspection and projection data as
-						your API and SDK layers. Swap UI pieces through registries when you
-						need product-specific UX.
+						Admin reads the same introspection contract as your APIs and
+						clients. Override UI through registries when needed.
 					</p>
 				</motion.div>
 

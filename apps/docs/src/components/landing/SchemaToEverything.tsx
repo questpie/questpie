@@ -14,8 +14,8 @@ const outputs = [
 		label: "Introspection",
 		sublabel: "Server metadata graph",
 		items: [
-			"CollectionSchema + FieldSchema",
-			"Operators, access, and hooks metadata",
+			"Collection and field schema",
+			"Access and hook metadata",
 			"View and component references",
 		],
 	},
@@ -23,11 +23,7 @@ const outputs = [
 		id: "projections",
 		label: "Runtime Projections",
 		sublabel: "Interfaces from one model",
-		items: [
-			"REST + RPC endpoints",
-			"Streamed queries and events",
-			"Typed client and query helpers",
-		],
+		items: ["REST + RPC endpoints", "Realtime streams", "Typed client helpers"],
 	},
 	{
 		id: "admin",
@@ -36,7 +32,7 @@ const outputs = [
 		items: [
 			"List and form projections",
 			"Sidebar and dashboard from config",
-			"Registry overrides for custom UI",
+			"Registry overrides",
 		],
 	},
 ];
@@ -60,9 +56,8 @@ export function SchemaToEverything() {
 						Model once, project everywhere.
 					</h3>
 					<p className="text-muted-foreground text-balance">
-						Your server schema becomes introspection data that powers APIs,
-						realtime, typed clients, and the admin UI. The model stays central;
-						interfaces stay in sync.
+						Your schema becomes introspection data for APIs, realtime, typed
+						clients, and admin. One model, synced interfaces.
 					</p>
 				</motion.div>
 

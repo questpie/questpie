@@ -16,56 +16,56 @@ const features = [
 		icon: Blocks,
 		title: "Blocks System",
 		description:
-			"Define reusable block types server-side, then render them in admin or custom frontends with the same schema.",
+			"Define reusable blocks on the server and render them in admin or custom UIs.",
 		link: "admin/blocks-system",
 	},
 	{
 		icon: Search,
 		title: "Search & Semantic",
 		description:
-			"Full-text search via PostgreSQL FTS, semantic search via pgVector embeddings, faceted filtering — all built-in.",
+			"Built-in PostgreSQL FTS, pgVector semantic search, and faceted filters.",
 		link: "infrastructure/search",
 	},
 	{
 		icon: FileText,
 		title: "OpenAPI & Scalar",
 		description:
-			"Auto-generated OpenAPI spec from your collections, globals, and RPC. Ships with Scalar UI for interactive docs.",
+			"Generate OpenAPI from collections, globals, and RPC with built-in Scalar docs.",
 		link: "client/openapi",
 	},
 	{
 		icon: Languages,
 		title: "i18n / Localization",
 		description:
-			"Multi-locale content at the field level. Localized fields, locale switching in the admin, and typed locale keys.",
+			"Field-level localization with typed locales and admin locale switching.",
 		link: "server/localization",
 	},
 	{
 		icon: ListTodo,
 		title: "Jobs & Queues",
 		description:
-			"Background jobs powered by pg-boss. Cron scheduling, workflows, retries, priority queues — no external worker needed.",
+			"pg-boss jobs with cron schedules, retries, and priority queues.",
 		link: "infrastructure/queue-and-jobs",
 	},
 	{
 		icon: Shield,
 		title: "Access Control",
 		description:
-			"Field-level and collection-level access rules. Context-aware evaluation with full access to the current user and session.",
+			"Collection and field-level rules evaluated with full user/session context.",
 		link: "server/access-control",
 	},
 	{
 		icon: Building2,
 		title: "Multitenancy & Scopes",
 		description:
-			"Built-in scope system with ScopeProvider, header-based tenant isolation, row-level access filtering, and admin scope picker.",
+			"Scopes, tenant isolation, row-level filters, and admin scope picker.",
 		link: "server/access-control",
 	},
 	{
 		icon: KeyRound,
 		title: "Auth (Better Auth)",
 		description:
-			"Email/password, OAuth, 2FA, sessions, API keys — all integrated via Better Auth. No external auth service required.",
+			"Better Auth integration: email/password, OAuth, 2FA, sessions, and API keys.",
 		link: "infrastructure/authentication",
 	},
 ];
@@ -85,12 +85,11 @@ export function Features() {
 						Platform Capabilities
 					</h2>
 					<h3 className="text-3xl font-bold tracking-[-0.02em] text-balance md:text-4xl">
-						Infrastructure and primitives built in
+						Built-in platform capabilities
 					</h3>
 					<p className="text-muted-foreground text-balance">
-						Search, i18n, jobs, auth, multitenancy, and blocks are all
-						configured in your server model, then projected into APIs, clients,
-						and interfaces.
+						Search, i18n, jobs, auth, multitenancy, and blocks are configured in
+						your server model and projected across APIs and interfaces.
 					</p>
 				</motion.div>
 

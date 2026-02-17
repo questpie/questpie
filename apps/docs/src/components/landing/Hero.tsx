@@ -130,10 +130,9 @@ export function Hero() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.16 }}
 						>
-							Define schema, access, and workflows in TypeScript. QUESTPIE
-							introspects your server model and projects REST, RPC, realtime,
-							typed clients, and an admin interface from the same source of
-							truth.
+							Define schema, access, and workflows once in TypeScript. QUESTPIE
+							projects REST, RPC, realtime, typed clients, and admin from the
+							same server model.
 						</motion.p>
 
 						<motion.div
