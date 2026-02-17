@@ -1045,7 +1045,7 @@ export default function FormView({
 
 	const updatePreviewUrl = React.useCallback(
 		(record: Record<string, unknown>) => {
-			if (!hasPreview || !client) {
+			if (!client) {
 				setPreviewUrl(null);
 				return;
 			}
@@ -1064,11 +1064,11 @@ export default function FormView({
 					setPreviewUrl(null);
 				});
 		},
-		[hasPreview, client, collection, contentLocale],
+		[client, collection, contentLocale],
 	);
 
 	React.useEffect(() => {
-		if (!hasPreview || !client) {
+		if (!isLivePreviewOpen || !hasPreview || !client) {
 			setPreviewUrl(null);
 			return;
 		}
@@ -1096,7 +1096,7 @@ export default function FormView({
 				clearTimeout(previewTimerRef.current);
 			}
 		};
-	}, [hasPreview, client, form, updatePreviewUrl]);
+	}, [isLivePreviewOpen, hasPreview, client, form, updatePreviewUrl]);
 
 	// Show skeleton until form data is ready (edit mode only)
 	// This prevents race conditions where form fields render before data is loaded
