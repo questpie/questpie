@@ -38,7 +38,7 @@ export function CallToAction() {
 					viewport={{ once: true }}
 					transition={{ duration: 0.6, delay: 0.15 }}
 				>
-					Start with the platform. Add interfaces later.
+					Start with one backend. Ship fast.
 				</motion.h2>
 
 				<motion.p
@@ -48,8 +48,8 @@ export function CallToAction() {
 					viewport={{ once: true }}
 					transition={{ duration: 0.6, delay: 0.2 }}
 				>
-					Use quickstart to model your backend, then add the admin module or
-					custom clients when needed.
+					Get CRUD + RPC running first. Add admin UI and client SDKs when you
+					need them.
 				</motion.p>
 
 				<motion.div
@@ -101,7 +101,7 @@ export function CallToAction() {
 							<span className="text-primary">$</span> bun i questpie
 						</div>
 						<div className="text-[10px] text-muted-foreground/80">
-							optional generated admin interface
+							optional generated admin UI
 						</div>
 					</div>
 				</motion.div>

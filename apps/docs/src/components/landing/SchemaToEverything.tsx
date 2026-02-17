@@ -11,8 +11,8 @@ const schemaFields = [
 const outputs = [
 	{
 		id: "introspection",
-		label: "Introspection",
-		sublabel: "Server metadata graph",
+		label: "Platform Contract",
+		sublabel: "Generated from your schema",
 		items: [
 			"Collection and field schema",
 			"Access and hook metadata",
@@ -22,13 +22,13 @@ const outputs = [
 	{
 		id: "projections",
 		label: "Runtime Projections",
-		sublabel: "Interfaces from one model",
+		sublabel: "APIs and clients out of the box",
 		items: ["REST + RPC endpoints", "Realtime streams", "Typed client helpers"],
 	},
 	{
 		id: "admin",
-		label: "Admin Interface",
-		sublabel: "One platform consumer",
+		label: "Admin UI",
+		sublabel: "Optional internal surface",
 		items: [
 			"List and form projections",
 			"Sidebar and dashboard from config",
@@ -50,14 +50,14 @@ export function SchemaToEverything() {
 					transition={{ duration: 0.6 }}
 				>
 					<h2 className="font-mono text-sm uppercase tracking-[0.2em] text-primary">
-						Schema to Introspection to Projections
+						From Schema to Shipping
 					</h2>
 					<h3 className="text-3xl font-bold tracking-[-0.02em] text-balance md:text-4xl">
-						Model once, project everywhere.
+						Define the backend once. Get the rest for free.
 					</h3>
 					<p className="text-muted-foreground text-balance">
-						Your schema becomes introspection data for APIs, realtime, typed
-						clients, and admin. One model, synced interfaces.
+						No duplicate wiring across API, clients, and admin. One backend
+						model drives all runtime outputs.
 					</p>
 				</motion.div>
 

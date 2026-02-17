@@ -15,22 +15,22 @@ const tabs: { id: TabId; label: string; description: string }[] = [
 	{
 		id: "dashboard",
 		label: "Dashboard",
-		description: "Server-defined stats",
+		description: "Live stats from your data",
 	},
 	{
 		id: "table",
 		label: "Table View",
-		description: "List projection with filters",
+		description: "Filterable content list",
 	},
 	{
 		id: "form",
 		label: "Form View",
-		description: "Schema-driven form projection",
+		description: "Schema-driven edit form",
 	},
 	{
 		id: "sidebar",
 		label: "Sidebar",
-		description: "Config-generated navigation",
+		description: "Menu from backend config",
 	},
 ];
 
@@ -232,14 +232,14 @@ export function AdminShowcase() {
 					transition={{ duration: 0.6 }}
 				>
 					<h2 className="font-mono text-sm uppercase tracking-[0.2em] text-primary">
-						Admin Interface
+						Admin UI
 					</h2>
 					<h3 className="text-3xl font-bold tracking-[-0.02em] text-balance md:text-4xl">
-						One interface generated from your server model
+						Ship admin without babysitting another app
 					</h3>
 					<p className="text-muted-foreground text-balance">
-						Admin reads the same introspection contract as your APIs and
-						clients. Override UI through registries when needed.
+						Lists, forms, and dashboard come from backend config. Override
+						components only where your product needs custom UX.
 					</p>
 				</motion.div>
 

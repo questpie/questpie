@@ -88,8 +88,8 @@ export function Features() {
 						Built-in platform capabilities
 					</h3>
 					<p className="text-muted-foreground text-balance">
-						Search, i18n, jobs, auth, multitenancy, and blocks are configured in
-						your server model and projected across APIs and interfaces.
+						Search, i18n, jobs, auth, multitenancy, and blocks are all built in.
+						Configure once in backend, use everywhere.
 					</p>
 				</motion.div>
 

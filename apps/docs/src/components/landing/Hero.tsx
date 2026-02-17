@@ -112,9 +112,9 @@ export function Hero() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.08 }}
 						>
-							Build your server platform once.{" "}
+							One backend.{" "}
 							<span className="relative inline-block">
-								<span className="text-primary">Project it everywhere</span>
+								<span className="text-primary">Ship everywhere</span>
 								<motion.span
 									className="absolute -bottom-1 left-0 h-[2px] bg-primary/30"
 									initial={{ width: 0 }}
@@ -130,9 +130,8 @@ export function Hero() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.16 }}
 						>
-							Define schema, access, and workflows once in TypeScript. QUESTPIE
-							projects REST, RPC, realtime, typed clients, and admin from the
-							same server model.
+							Model your backend in TypeScript. QUESTPIE turns it into REST,
+							RPC, realtime, typed clients, and optional admin UI.
 						</motion.p>
 
 						<motion.div
@@ -142,9 +141,9 @@ export function Hero() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 						>
 							{[
-								"Server-first by default",
-								"Schema introspection powered",
-								"Admin is one interface",
+								"Backend-first",
+								"Types end-to-end",
+								"Admin is optional UI",
 							].map((pill) => (
 								<span
 									key={pill}
@@ -208,7 +207,7 @@ export function Hero() {
 						</motion.div>
 					</div>
 
-					{/* Right — live interface projection preview */}
+					{/* Right — live admin preview */}
 					<motion.div
 						className="relative"
 						initial={{ opacity: 0, x: 20 }}
@@ -244,7 +243,7 @@ export function Hero() {
 							<div className="relative flex items-center justify-between border-b border-border px-4 py-3 bg-card/5">
 								<div className="flex items-center gap-2">
 									<span className="text-sm font-semibold text-foreground">
-										Posts Interface
+										Posts View
 									</span>
 								</div>
 								<div className="flex items-center gap-2">
