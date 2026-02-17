@@ -66,6 +66,7 @@ export interface UploadManyOptions extends UploadOptions {
 type LocaleOptions = {
 	locale?: string;
 	localeFallback?: boolean;
+	stage?: string;
 };
 
 /**
@@ -178,7 +179,7 @@ export class QuestpieClientError extends Error {
  */
 export type QuestpieClientConfig = {
 	/**
-	 * Base URL of the CMS API
+	 * Base URL of the app API
 	 * @example 'http://localhost:3000'
 	 */
 	baseURL: string;
@@ -191,8 +192,8 @@ export type QuestpieClientConfig = {
 
 	/**
 	 * Base path for API routes
-	 * Use '/cms' for server-only apps or '/api/cms' for fullstack apps.
-	 * @default '/cms'
+	 * Use '/' for server-only apps or '/api' for fullstack apps.
+	 * @default '/'
 	 */
 	basePath?: string;
 
@@ -356,6 +357,14 @@ type CollectionAPI<
 	) => Promise<CollectionSelect<TCollection>>;
 
 	/**
+	 * Transition a record to a different workflow stage (no data mutation)
+	 */
+	transitionStage: (
+		params: { id: string; stage: string },
+		options?: LocaleOptions,
+	) => Promise<CollectionSelect<TCollection>>;
+
+	/**
 	 * Update multiple records matching a where clause
 	 */
 	updateMany: (
@@ -437,6 +446,7 @@ type GlobalAPI<
 			columns?: any;
 			locale?: string;
 			localeFallback?: boolean;
+			stage?: string;
 		},
 	>(
 		options?: TQuery,
@@ -457,6 +467,7 @@ type GlobalAPI<
 			with?: With<ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>>;
 			locale?: string;
 			localeFallback?: boolean;
+			stage?: string;
 		},
 	>(
 		data: GlobalUpdateInput<
@@ -491,6 +502,7 @@ type GlobalAPI<
 		offset?: number;
 		locale?: string;
 		localeFallback?: boolean;
+		stage?: string;
 	}) => Promise<
 		Array<
 			GlobalSelect<TGlobal> & {
@@ -508,6 +520,18 @@ type GlobalAPI<
 	 */
 	revertToVersion: (
 		params: { id?: string; version?: number; versionId?: string },
+		options?: {
+			locale?: string;
+			localeFallback?: boolean;
+			stage?: string;
+		},
+	) => Promise<GlobalSelect<TGlobal>>;
+
+	/**
+	 * Transition global to a different workflow stage (no data mutation)
+	 */
+	transitionStage: (
+		params: { stage: string },
 		options?: {
 			locale?: string;
 			localeFallback?: boolean;
@@ -634,11 +658,11 @@ type SearchAPI = {
  * Questpie Client
  */
 export type QuestpieClient<
-	TCMS extends Questpie<any>,
+	TApp extends Questpie<any>,
 	TRPC extends Record<string, any> = Record<string, never>,
 > = {
-	collections: CollectionsAPI<TCMS>;
-	globals: GlobalsAPI<TCMS>;
+	collections: CollectionsAPI<TApp>;
+	globals: GlobalsAPI<TApp>;
 	rpc: RpcClientAPI<TRPC>;
 	search: SearchAPI;
 	realtime: RealtimeAPI;
@@ -648,14 +672,14 @@ export type QuestpieClient<
 };
 
 /**
- * Create type-safe QUESTPIE CMS client
+ * Create type-safe QUESTPIE client
  *
  * @example
  * ```ts
  * import { createClient } from 'questpie/client'
- * import type { cms } from './server'
+ * import type { app } from './app'
  *
- * const client = createClient<typeof cms>({
+ * const client = createClient<typeof app>({
  *   baseURL: 'http://localhost:3000'
  * })
  *
@@ -667,25 +691,22 @@ export type QuestpieClient<
  * ```
  */
 export function createClient<
-	TCMS extends Questpie<any>,
+	TApp extends Questpie<any>,
 	TRPC extends Record<string, any> = Record<string, never>,
->(config: QuestpieClientConfig): QuestpieClient<TCMS, TRPC> {
+>(config: QuestpieClientConfig): QuestpieClient<TApp, TRPC> {
 	const fetcher = config.fetch || globalThis.fetch;
-	const basePath = config.basePath ?? "/cms";
+	const basePath = config.basePath ?? "/";
 	const normalizedBasePath = basePath.startsWith("/")
 		? basePath
 		: `/${basePath}`;
 	const trimmedBasePath = normalizedBasePath.replace(/\/$/, "");
-	const cmsBasePath =
-		trimmedBasePath.endsWith("/cms") || trimmedBasePath === "/cms"
-			? trimmedBasePath
-			: `${trimmedBasePath}/cms`;
+	const apiBasePath = trimmedBasePath || "";
 	const defaultHeaders = config.headers || {};
 	let currentLocale: string | undefined =
 		defaultHeaders["accept-language"] ?? defaultHeaders["Accept-Language"];
 
 	/**
-	 * Make a request to the CMS API
+	 * Make a request to the app API
 	 */
 	async function request(
 		path: string,
@@ -781,7 +802,7 @@ export function createClient<
 	/**
 	 * Collections API
 	 */
-	const collections = new Proxy({} as CollectionsAPI<TCMS>, {
+	const collections = new Proxy({} as CollectionsAPI<TApp>, {
 		get(_, collectionName: string) {
 			const base = {
 				find: async (options: any = {}) => {
@@ -791,7 +812,7 @@ export function createClient<
 						arrayFormat: "brackets",
 					});
 
-					const path = `${cmsBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 
 					return request(path);
 				},
@@ -802,7 +823,7 @@ export function createClient<
 						arrayFormat: "brackets",
 					});
 
-					const path = `${cmsBasePath}/${collectionName}/count${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/count${queryString ? `?${queryString}` : ""}`;
 					const result = await request(path);
 					return result.count;
 				},
@@ -819,6 +840,7 @@ export function createClient<
 								includeDeleted: options.includeDeleted,
 								locale: options.locale,
 								localeFallback: options.localeFallback,
+								stage: options.stage,
 							},
 							{
 								skipNulls: true,
@@ -826,7 +848,7 @@ export function createClient<
 							},
 						);
 
-						const path = `${cmsBasePath}/${collectionName}/${where.id}${queryString ? `?${queryString}` : ""}`;
+						const path = `${apiBasePath}/${collectionName}/${where.id}${queryString ? `?${queryString}` : ""}`;
 						return request(path);
 					}
 
@@ -839,7 +861,7 @@ export function createClient<
 						},
 					);
 
-					const path = `${cmsBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 					const result = await request(path);
 					return result?.docs?.[0] ?? null;
 				},
@@ -849,7 +871,7 @@ export function createClient<
 						skipNulls: true,
 						arrayFormat: "brackets",
 					});
-					const path = `${cmsBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 					return request(path, {
 						method: "POST",
 						body: JSON.stringify(data),
@@ -864,7 +886,7 @@ export function createClient<
 						skipNulls: true,
 						arrayFormat: "brackets",
 					});
-					const path = `${cmsBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
 					return request(path, {
 						method: "PATCH",
 						body: JSON.stringify(data),
@@ -876,7 +898,7 @@ export function createClient<
 						skipNulls: true,
 						arrayFormat: "brackets",
 					});
-					const path = `${cmsBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
 					return request(path, {
 						method: "DELETE",
 					});
@@ -890,7 +912,7 @@ export function createClient<
 						skipNulls: true,
 						arrayFormat: "brackets",
 					});
-					const path = `${cmsBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
 					return request(path, {
 						method: "POST",
 					});
@@ -915,7 +937,7 @@ export function createClient<
 							arrayFormat: "brackets",
 						},
 					);
-					const path = `${cmsBasePath}/${collectionName}/${id}/versions${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${id}/versions${queryString ? `?${queryString}` : ""}`;
 					return request(path);
 				},
 
@@ -931,10 +953,25 @@ export function createClient<
 						skipNulls: true,
 						arrayFormat: "brackets",
 					});
-					const path = `${cmsBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
 					return request(path, {
 						method: "POST",
 						body: JSON.stringify({ version, versionId }),
+					});
+				},
+
+				transitionStage: async (
+					{ id, stage }: { id: string; stage: string },
+					options: LocaleOptions = {},
+				) => {
+					const queryString = qs.stringify(options, {
+						skipNulls: true,
+						arrayFormat: "brackets",
+					});
+					const path = `${apiBasePath}/${collectionName}/${id}/transition${queryString ? `?${queryString}` : ""}`;
+					return request(path, {
+						method: "POST",
+						body: JSON.stringify({ stage }),
 					});
 				},
 
@@ -946,7 +983,7 @@ export function createClient<
 						skipNulls: true,
 						arrayFormat: "brackets",
 					});
-					const path = `${cmsBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 					return request(path, {
 						method: "PATCH",
 						body: JSON.stringify({ where, data }),
@@ -961,7 +998,7 @@ export function createClient<
 						skipNulls: true,
 						arrayFormat: "brackets",
 					});
-					const path = `${cmsBasePath}/${collectionName}/delete-many${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/delete-many${queryString ? `?${queryString}` : ""}`;
 					return request(path, {
 						method: "POST",
 						body: JSON.stringify({ where }),
@@ -969,17 +1006,17 @@ export function createClient<
 				},
 
 				meta: async () => {
-					return request(`${cmsBasePath}/${collectionName}/meta`);
+					return request(`${apiBasePath}/${collectionName}/meta`);
 				},
 
 				schema: async () => {
-					return request(`${cmsBasePath}/${collectionName}/schema`);
+					return request(`${apiBasePath}/${collectionName}/schema`);
 				},
 
 				upload: (file: File, options?: UploadOptions): Promise<any> => {
 					return new Promise((resolve, reject) => {
 						const xhr = new XMLHttpRequest();
-						const url = `${config.baseURL}${cmsBasePath}/${collectionName}/upload`;
+						const url = `${config.baseURL}${apiBasePath}/${collectionName}/upload`;
 
 						// Named handlers for cleanup
 						const handleProgress = (event: ProgressEvent) => {
@@ -1109,7 +1146,7 @@ export function createClient<
 	/**
 	 * Globals API
 	 */
-	const globals = new Proxy({} as GlobalsAPI<TCMS>, {
+	const globals = new Proxy({} as GlobalsAPI<TApp>, {
 		get(_, globalName: string) {
 			const base = {
 				get: async (
@@ -1118,6 +1155,7 @@ export function createClient<
 						columns?: any;
 						locale?: string;
 						localeFallback?: boolean;
+						stage?: string;
 					} = {},
 				) => {
 					const queryString = qs.stringify(
@@ -1126,10 +1164,11 @@ export function createClient<
 							columns: options.columns,
 							locale: options.locale,
 							localeFallback: options.localeFallback,
+							stage: options.stage,
 						},
 						{ skipNulls: true, arrayFormat: "brackets" },
 					);
-					const path = `${cmsBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`;
 					return request(path);
 				},
 
@@ -1139,6 +1178,7 @@ export function createClient<
 						with?: any;
 						locale?: string;
 						localeFallback?: boolean;
+						stage?: string;
 					} = {},
 				) => {
 					const queryString = qs.stringify(
@@ -1146,11 +1186,12 @@ export function createClient<
 							with: options.with,
 							locale: options.locale,
 							localeFallback: options.localeFallback,
+							stage: options.stage,
 						},
 						{ skipNulls: true, arrayFormat: "brackets" },
 					);
 					return request(
-						`${cmsBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`,
+						`${apiBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "PATCH",
 							body: JSON.stringify(data),
@@ -1159,11 +1200,11 @@ export function createClient<
 				},
 
 				schema: async () => {
-					return request(`${cmsBasePath}/globals/${globalName}/schema`);
+					return request(`${apiBasePath}/globals/${globalName}/schema`);
 				},
 
 				meta: async () => {
-					return request(`${cmsBasePath}/globals/${globalName}/meta`);
+					return request(`${apiBasePath}/globals/${globalName}/meta`);
 				},
 
 				findVersions: async (
@@ -1173,6 +1214,7 @@ export function createClient<
 						offset?: number;
 						locale?: string;
 						localeFallback?: boolean;
+						stage?: string;
 					} = {},
 				) => {
 					const queryString = qs.stringify(
@@ -1182,16 +1224,45 @@ export function createClient<
 							offset: options.offset,
 							locale: options.locale,
 							localeFallback: options.localeFallback,
+							stage: options.stage,
 						},
 						{ skipNulls: true, arrayFormat: "brackets" },
 					);
-					const path = `${cmsBasePath}/globals/${globalName}/versions${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/globals/${globalName}/versions${queryString ? `?${queryString}` : ""}`;
 					return request(path);
 				},
 
 				revertToVersion: async (
 					params: { id?: string; version?: number; versionId?: string },
-					options: { locale?: string; localeFallback?: boolean } = {},
+					options: {
+						locale?: string;
+						localeFallback?: boolean;
+						stage?: string;
+					} = {},
+				) => {
+					const queryString = qs.stringify(
+						{
+							locale: options.locale,
+							localeFallback: options.localeFallback,
+							stage: options.stage,
+						},
+						{ skipNulls: true, arrayFormat: "brackets" },
+					);
+					return request(
+						`${apiBasePath}/globals/${globalName}/revert${queryString ? `?${queryString}` : ""}`,
+						{
+							method: "POST",
+							body: JSON.stringify(params),
+						},
+					);
+				},
+
+				transitionStage: async (
+					params: { stage: string },
+					options: {
+						locale?: string;
+						localeFallback?: boolean;
+					} = {},
 				) => {
 					const queryString = qs.stringify(
 						{
@@ -1201,7 +1272,7 @@ export function createClient<
 						{ skipNulls: true, arrayFormat: "brackets" },
 					);
 					return request(
-						`${cmsBasePath}/globals/${globalName}/revert${queryString ? `?${queryString}` : ""}`,
+						`${apiBasePath}/globals/${globalName}/transition${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "POST",
 							body: JSON.stringify(params),
@@ -1216,7 +1287,7 @@ export function createClient<
 
 	const createRpcProcedureProxy = (segments: string[]): any => {
 		const callable = async (input: any) => {
-			return request(`${cmsBasePath}/rpc/${segments.join("/")}`, {
+			return request(`${apiBasePath}/rpc/${segments.join("/")}`, {
 				method: "POST",
 				body: JSON.stringify(input),
 			});
@@ -1230,7 +1301,7 @@ export function createClient<
 			},
 			apply(_, __, args: unknown[]) {
 				const input = args[0];
-				return request(`${cmsBasePath}/rpc/${segments.join("/")}`, {
+				return request(`${apiBasePath}/rpc/${segments.join("/")}`, {
 					method: "POST",
 					body: JSON.stringify(input),
 				});
@@ -1250,21 +1321,21 @@ export function createClient<
 	 */
 	const search: SearchAPI = {
 		search: async (options: SearchOptions) => {
-			return request(`${cmsBasePath}/search`, {
+			return request(`${apiBasePath}/search`, {
 				method: "POST",
 				body: JSON.stringify(options),
 			});
 		},
 
 		reindex: async (collection: string) => {
-			return request(`${cmsBasePath}/search/reindex/${collection}`, {
+			return request(`${apiBasePath}/search/reindex/${collection}`, {
 				method: "POST",
 			});
 		},
 	};
 
 	const realtimeApi = createRealtimeAPI({
-		baseUrl: `${config.baseURL}${cmsBasePath}`,
+		baseUrl: `${config.baseURL}${apiBasePath}`,
 		withCredentials: true,
 		debounceMs: 50,
 	});
@@ -1286,7 +1357,7 @@ export function createClient<
 			}
 		},
 		getLocale: () => currentLocale,
-		getBasePath: () => cmsBasePath,
+		getBasePath: () => apiBasePath,
 	};
 }
 

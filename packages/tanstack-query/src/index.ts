@@ -39,6 +39,7 @@ export type QuestpieQueryOptionsConfig = {
 	keyPrefix?: QueryKey;
 	errorMap?: QuestpieQueryErrorMap;
 	locale?: string;
+	stage?: string;
 };
 
 // ============================================================================
@@ -137,6 +138,11 @@ type CollectionRevertToVersion<
 	TRPC extends Record<string, any>,
 	K extends CollectionKeys<TApp, TRPC>,
 > = QuestpieClient<TApp, TRPC>["collections"][K]["revertToVersion"];
+type CollectionTransitionStage<
+	TApp extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends CollectionKeys<TApp, TRPC>,
+> = QuestpieClient<TApp, TRPC>["collections"][K]["transitionStage"];
 
 // Global method type extractors
 type GlobalGet<
@@ -177,6 +183,17 @@ type GlobalRevertToVersion<
 }
 	? TRevert extends AnyAsyncFn
 		? TRevert
+		: never
+	: never;
+type GlobalTransitionStage<
+	TApp extends Questpie<any>,
+	TRPC extends Record<string, any>,
+	K extends GlobalKeys<TApp, TRPC>,
+> = QuestpieClient<TApp, TRPC>["globals"][K] extends {
+	transitionStage: infer TTransition;
+}
+	? TTransition extends AnyAsyncFn
+		? TTransition
 		: never
 	: never;
 
@@ -227,6 +244,10 @@ type CollectionQueryOptionsAPI<
 		FirstArg<CollectionRevertToVersion<TApp, TRPC, K>>,
 		QueryData<CollectionRevertToVersion<TApp, TRPC, K>>
 	>;
+	transitionStage: MutationBuilder<
+		FirstArg<CollectionTransitionStage<TApp, TRPC, K>>,
+		QueryData<CollectionTransitionStage<TApp, TRPC, K>>
+	>;
 	updateMany: MutationBuilder<
 		{ where: any; data: any },
 		QueryData<CollectionUpdate<TApp, TRPC, K>>
@@ -257,6 +278,13 @@ type GlobalQueryOptionsAPI<
 			options?: Parameters<GlobalRevertToVersion<TApp, TRPC, K>>[1];
 		},
 		QueryData<GlobalRevertToVersion<TApp, TRPC, K>>
+	>;
+	transitionStage: MutationBuilder<
+		{
+			params: Parameters<GlobalTransitionStage<TApp, TRPC, K>>[0];
+			options?: Parameters<GlobalTransitionStage<TApp, TRPC, K>>[1];
+		},
+		QueryData<GlobalTransitionStage<TApp, TRPC, K>>
 	>;
 };
 
@@ -356,9 +384,9 @@ const wrapMutationFn = <TVariables, TData>(
  * ```ts
  * import { createQuestpieQueryOptions } from "@questpie/tanstack-query"
  * import { createClient } from "questpie/client"
- * import type { AppCMS, AppRpc } from "@/cms"
+ * import type { App, AppRpc } from "@/app"
  *
- * const client = createClient<AppCMS, AppRpc>({ baseURL: "http://localhost:3000" })
+ * const client = createClient<App, AppRpc>({ baseURL: "http://localhost:3000" })
  * const cmsQueries = createQuestpieQueryOptions(client)
  *
  * // Use with useQuery
@@ -381,6 +409,7 @@ export function createQuestpieQueryOptions<
 	const keyPrefix = config.keyPrefix ?? ["questpie"];
 	const errorMap = config.errorMap ?? defaultErrorMap;
 	const locale = config.locale;
+	const stage = config.stage;
 
 	const collections = new Proxy(
 		{} as QuestpieQueryOptionsProxy<TApp, TRPC>["collections"],
@@ -398,6 +427,7 @@ export function createQuestpieQueryOptions<
 							...baseKey,
 							"find",
 							locale,
+							stage,
 							normalizeQueryKeyOptions(options),
 						]);
 
@@ -425,6 +455,7 @@ export function createQuestpieQueryOptions<
 							...baseKey,
 							"count",
 							locale,
+							stage,
 							normalizeQueryKeyOptions(options),
 						]);
 
@@ -457,45 +488,95 @@ export function createQuestpieQueryOptions<
 								...baseKey,
 								"findOne",
 								locale,
+								stage,
 								normalizeQueryKeyOptions(options),
 							]),
 							queryFn: wrapQueryFn(() => collection.findOne(options), errorMap),
 						}),
 					create: () =>
 						mutationOptions({
-							mutationKey: buildKey(keyPrefix, [...baseKey, "create", locale]),
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"create",
+								locale,
+								stage,
+							]),
 							mutationFn: wrapMutationFn(
 								(data: any) =>
-									collection.create(data, locale ? { locale } : undefined),
+									collection.create(
+										data,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
+									),
 								errorMap,
 							),
 						}),
 					update: () =>
 						mutationOptions({
-							mutationKey: buildKey(keyPrefix, [...baseKey, "update", locale]),
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"update",
+								locale,
+								stage,
+							]),
 							mutationFn: wrapMutationFn(
 								(variables: { id: string; data: any }) =>
-									collection.update(variables, locale ? { locale } : undefined),
+									collection.update(
+										variables,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
+									),
 								errorMap,
 							),
 						}),
 					delete: () =>
 						mutationOptions({
-							mutationKey: buildKey(keyPrefix, [...baseKey, "delete", locale]),
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"delete",
+								locale,
+								stage,
+							]),
 							mutationFn: wrapMutationFn(
 								(variables: { id: string }) =>
-									collection.delete(variables, locale ? { locale } : undefined),
+									collection.delete(
+										variables,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
+									),
 								errorMap,
 							),
 						}),
 					restore: () =>
 						mutationOptions({
-							mutationKey: buildKey(keyPrefix, [...baseKey, "restore", locale]),
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"restore",
+								locale,
+								stage,
+							]),
 							mutationFn: wrapMutationFn(
 								(variables: { id: string }) =>
 									collection.restore(
 										variables,
-										locale ? { locale } : undefined,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
 									),
 								errorMap,
 							),
@@ -510,13 +591,19 @@ export function createQuestpieQueryOptions<
 								...baseKey,
 								"findVersions",
 								locale,
+								stage,
 								normalizeQueryKeyOptions(params),
 							]),
 							queryFn: wrapQueryFn(
 								() =>
 									collection.findVersions(
 										params,
-										locale ? { locale } : undefined,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
 									),
 								errorMap,
 							),
@@ -527,6 +614,7 @@ export function createQuestpieQueryOptions<
 								...baseKey,
 								"revertToVersion",
 								locale,
+								stage,
 							]),
 							mutationFn: wrapMutationFn(
 								(variables: {
@@ -536,7 +624,34 @@ export function createQuestpieQueryOptions<
 								}) =>
 									collection.revertToVersion(
 										variables,
-										locale ? { locale } : undefined,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
+									),
+								errorMap,
+							),
+						}),
+					transitionStage: () =>
+						mutationOptions({
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"transitionStage",
+								locale,
+								stage,
+							]),
+							mutationFn: wrapMutationFn(
+								(variables: { id: string; stage: string }) =>
+									collection.transitionStage(
+										variables,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
 									),
 								errorMap,
 							),
@@ -547,12 +662,18 @@ export function createQuestpieQueryOptions<
 								...baseKey,
 								"updateMany",
 								locale,
+								stage,
 							]),
 							mutationFn: wrapMutationFn(
 								(variables: { where: any; data: any }) =>
 									collection.updateMany(
 										variables,
-										locale ? { locale } : undefined,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
 									),
 								errorMap,
 							),
@@ -563,12 +684,18 @@ export function createQuestpieQueryOptions<
 								...baseKey,
 								"deleteMany",
 								locale,
+								stage,
 							]),
 							mutationFn: wrapMutationFn(
 								(variables: { where: any }) =>
 									collection.deleteMany(
 										variables,
-										locale ? { locale } : undefined,
+										locale || stage
+											? {
+													...(locale ? { locale } : {}),
+													...(stage ? { stage } : {}),
+												}
+											: undefined,
 									),
 								errorMap,
 							),
@@ -594,6 +721,7 @@ export function createQuestpieQueryOptions<
 							...baseKey,
 							"get",
 							locale,
+							stage,
 							normalizeQueryKeyOptions(options),
 						]);
 
@@ -618,12 +746,18 @@ export function createQuestpieQueryOptions<
 					},
 					update: () =>
 						mutationOptions({
-							mutationKey: buildKey(keyPrefix, [...baseKey, "update", locale]),
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"update",
+								locale,
+								stage,
+							]),
 							mutationFn: wrapMutationFn(
 								(variables: { data: any; options?: any }) =>
 									global.update(variables.data, {
 										...variables.options,
 										...(locale ? { locale } : undefined),
+										...(stage ? { stage } : undefined),
 									}),
 								errorMap,
 							),
@@ -640,6 +774,7 @@ export function createQuestpieQueryOptions<
 								...baseKey,
 								"findVersions",
 								locale,
+								stage,
 								normalizeQueryKeyOptions(options),
 							]),
 							queryFn: wrapQueryFn(
@@ -647,6 +782,7 @@ export function createQuestpieQueryOptions<
 									global.findVersions({
 										...options,
 										...(locale ? { locale } : undefined),
+										...(stage ? { stage } : undefined),
 									}),
 								errorMap,
 							),
@@ -657,10 +793,29 @@ export function createQuestpieQueryOptions<
 								...baseKey,
 								"revertToVersion",
 								locale,
+								stage,
 							]),
 							mutationFn: wrapMutationFn(
 								(variables: { params: any; options?: any }) =>
 									global.revertToVersion(variables.params, {
+										...variables.options,
+										...(locale ? { locale } : undefined),
+										...(stage ? { stage } : undefined),
+									}),
+								errorMap,
+							),
+						}),
+					transitionStage: () =>
+						mutationOptions({
+							mutationKey: buildKey(keyPrefix, [
+								...baseKey,
+								"transitionStage",
+								locale,
+								stage,
+							]),
+							mutationFn: wrapMutationFn(
+								(variables: { params: any; options?: any }) =>
+									global.transitionStage(variables.params, {
 										...variables.options,
 										...(locale ? { locale } : undefined),
 									}),
