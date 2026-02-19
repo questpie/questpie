@@ -17,7 +17,6 @@ import { Route as ApiPreviewRouteImport } from './routes/api/preview'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as AdminLoginRouteImport } from './routes/admin/login'
 import { Route as AdminSplatRouteImport } from './routes/admin/$'
-import { Route as AppServicesRouteImport } from './routes/_app/services'
 import { Route as AppContactRouteImport } from './routes/_app/contact'
 import { Route as AppBookingRouteImport } from './routes/_app/booking'
 import { Route as AppSlugRouteImport } from './routes/_app/$slug'
@@ -63,11 +62,6 @@ const AdminSplatRoute = AdminSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => AdminRoute,
 } as any)
-const AppServicesRoute = AppServicesRouteImport.update({
-  id: '/services',
-  path: '/services',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppContactRoute = AppContactRouteImport.update({
   id: '/contact',
   path: '/contact',
@@ -99,7 +93,6 @@ export interface FileRoutesByFullPath {
   '/$slug': typeof AppSlugRoute
   '/booking': typeof AppBookingRoute
   '/contact': typeof AppContactRoute
-  '/services': typeof AppServicesRoute
   '/admin/$': typeof AdminSplatRoute
   '/admin/login': typeof AdminLoginRoute
   '/api/$': typeof ApiSplatRoute
@@ -113,7 +106,6 @@ export interface FileRoutesByTo {
   '/$slug': typeof AppSlugRoute
   '/booking': typeof AppBookingRoute
   '/contact': typeof AppContactRoute
-  '/services': typeof AppServicesRoute
   '/admin/$': typeof AdminSplatRoute
   '/admin/login': typeof AdminLoginRoute
   '/api/$': typeof ApiSplatRoute
@@ -130,7 +122,6 @@ export interface FileRoutesById {
   '/_app/$slug': typeof AppSlugRoute
   '/_app/booking': typeof AppBookingRoute
   '/_app/contact': typeof AppContactRoute
-  '/_app/services': typeof AppServicesRoute
   '/admin/$': typeof AdminSplatRoute
   '/admin/login': typeof AdminLoginRoute
   '/api/$': typeof ApiSplatRoute
@@ -147,7 +138,6 @@ export interface FileRouteTypes {
     | '/$slug'
     | '/booking'
     | '/contact'
-    | '/services'
     | '/admin/$'
     | '/admin/login'
     | '/api/$'
@@ -161,7 +151,6 @@ export interface FileRouteTypes {
     | '/$slug'
     | '/booking'
     | '/contact'
-    | '/services'
     | '/admin/$'
     | '/admin/login'
     | '/api/$'
@@ -177,7 +166,6 @@ export interface FileRouteTypes {
     | '/_app/$slug'
     | '/_app/booking'
     | '/_app/contact'
-    | '/_app/services'
     | '/admin/$'
     | '/admin/login'
     | '/api/$'
@@ -253,13 +241,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSplatRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_app/services': {
-      id: '/_app/services'
-      path: '/services'
-      fullPath: '/services'
-      preLoaderRoute: typeof AppServicesRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/contact': {
       id: '/_app/contact'
       path: '/contact'
@@ -302,7 +283,6 @@ interface AppRouteChildren {
   AppSlugRoute: typeof AppSlugRoute
   AppBookingRoute: typeof AppBookingRoute
   AppContactRoute: typeof AppContactRoute
-  AppServicesRoute: typeof AppServicesRoute
   AppIndexRoute: typeof AppIndexRoute
   AppBarbersSlugRoute: typeof AppBarbersSlugRoute
   AppBarbersIndexRoute: typeof AppBarbersIndexRoute
@@ -312,7 +292,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppSlugRoute: AppSlugRoute,
   AppBookingRoute: AppBookingRoute,
   AppContactRoute: AppContactRoute,
-  AppServicesRoute: AppServicesRoute,
   AppIndexRoute: AppIndexRoute,
   AppBarbersSlugRoute: AppBarbersSlugRoute,
   AppBarbersIndexRoute: AppBarbersIndexRoute,
