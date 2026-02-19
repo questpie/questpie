@@ -605,6 +605,31 @@ export default {
 	"audit.widget.recentActivity.title": "Recent Activity",
 	"audit.widget.recentActivity.empty": "No recent activity recorded.",
 
+	// History Sidebar
+	"history.title": "History",
+	"history.description": "Changes and activity for this record",
+	"history.tabActivity": "Activity",
+	"history.tabVersions": "Versions",
+	"history.empty": "No activity recorded",
+	"history.showChanges": { one: "Show changes ({{count}})", other: "Show changes ({{count}})" },
+	"history.hideChanges": "Hide changes",
+
+	// Workflow
+	"workflow.transition": "Transition",
+	"workflow.currentStage": "Current stage",
+	"workflow.transitionTo": "Transition to {{stage}}",
+	"workflow.transitionDescription":
+		'This will transition from "{{from}}" to "{{to}}".',
+	"workflow.scheduleLabel": "Schedule for later",
+	"workflow.scheduledAt": "Scheduled date & time",
+	"workflow.scheduledDescription":
+		"The transition will happen automatically at the scheduled time.",
+	"workflow.transitionSuccess": 'Transitioned to "{{stage}}" successfully',
+	"workflow.scheduledSuccess":
+		'Transition to "{{stage}}" scheduled for {{date}}',
+	"workflow.transitionFailed": "Failed to transition",
+	"workflow.noTransitions": "No transitions available from this stage",
+
 	// Document Locking
 	"lock.blockedTitle": "{{name}} is currently editing",
 	"lock.blockedDescription":

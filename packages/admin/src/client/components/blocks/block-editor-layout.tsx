@@ -9,7 +9,6 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
-import { useSidebarSearchParam } from "../../hooks/use-sidebar-search-param.js";
 import { RenderProfiler } from "../../lib/render-profiler.js";
 import { cn } from "../../lib/utils.js";
 import { Button } from "../ui/button.js";
@@ -20,6 +19,8 @@ import {
 	useBlockTree,
 } from "./block-editor-context.js";
 import { BlockLibrarySidebar } from "./block-library-sidebar.js";
+
+const SEARCH_PARAMS_EVENT = "questpie:searchparamschange";
 
 // ============================================================================
 // Types
@@ -43,35 +44,39 @@ export function BlockEditorLayout({
 	const actions = useBlockEditorActions();
 	const tree = useBlockTree();
 	const isLibraryOpen = useBlockLibraryOpen();
-	const [sidebarOpen, setSidebarOpen] = useSidebarSearchParam("block-library");
 
-	// Open sidebar with insert position at end of root
-	const handleOpenSidebar = () => {
-		if (!isLibraryOpen) {
-			actions.openLibrary({ parentId: null, index: tree.length });
+	// One-way sync: Zustand (source of truth) → URL (persistence mirror)
+	React.useEffect(() => {
+		const url = new URL(window.location.href);
+		if (isLibraryOpen) {
+			url.searchParams.set("sidebar", "block-library");
+		} else if (url.searchParams.get("sidebar") === "block-library") {
+			url.searchParams.delete("sidebar");
 		}
-		setSidebarOpen(true);
+		window.history.replaceState({}, "", url.toString());
+		window.dispatchEvent(new Event(SEARCH_PARAMS_EVENT));
+	}, [isLibraryOpen]);
+
+	// Initialize from URL on mount (for page refresh with ?sidebar=block-library)
+	const treeLengthRef = React.useRef(tree.length);
+	treeLengthRef.current = tree.length;
+	React.useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		if (params.get("sidebar") === "block-library") {
+			actions.openLibrary({
+				parentId: null,
+				index: treeLengthRef.current,
+			});
+		}
+	}, [actions]);
+
+	const handleOpenSidebar = () => {
+		actions.openLibrary({ parentId: null, index: tree.length });
 	};
 
-	// Handle sidebar close
 	const handleCloseSidebar = () => {
-		setSidebarOpen(false);
 		actions.closeLibrary();
 	};
-
-	// Sync sidebar state with context
-	React.useEffect(() => {
-		if (isLibraryOpen && !sidebarOpen) {
-			setSidebarOpen(true);
-		}
-	}, [isLibraryOpen, sidebarOpen, setSidebarOpen]);
-
-	// Open library state when URL requests this sidebar
-	React.useEffect(() => {
-		if (sidebarOpen && !isLibraryOpen) {
-			actions.openLibrary({ parentId: null, index: tree.length });
-		}
-	}, [sidebarOpen, isLibraryOpen, actions, tree.length]);
 
 	const hasBlocks = tree.length > 0;
 
@@ -111,10 +116,10 @@ export function BlockEditorLayout({
 			)}
 
 			{/* Block Library Sidebar */}
-			{(sidebarOpen || isLibraryOpen) && (
+			{isLibraryOpen && (
 				<RenderProfiler id="blocks.library" minDurationMs={8}>
 					<BlockLibrarySidebar
-						open={sidebarOpen}
+						open={isLibraryOpen}
 						onClose={handleCloseSidebar}
 					/>
 				</RenderProfiler>

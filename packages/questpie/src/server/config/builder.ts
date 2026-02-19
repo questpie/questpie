@@ -1,7 +1,10 @@
 import type { BetterAuthOptions } from "better-auth";
 import type { MailAdapter, QueueAdapter } from "#questpie/exports/index.js";
 import { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
-import type { EmptyCollectionState } from "#questpie/server/collection/builder/types.js";
+import type {
+	CollectionAccess,
+	EmptyCollectionState,
+} from "#questpie/server/collection/builder/types.js";
 import type {
 	BuilderCollectionsMap,
 	BuilderEmailTemplatesMap,
@@ -132,6 +135,7 @@ export class QuestpieBuilder<
 			translations: undefined,
 			contextResolver: undefined,
 			globalHooks: undefined,
+			defaultAccess: undefined,
 			"~messageKeys": undefined,
 		});
 	}
@@ -396,6 +400,63 @@ export class QuestpieBuilder<
 	}
 
 	/**
+	 * Set default access control for all collections and globals.
+	 * Applied when a collection/global doesn't define its own `.access()` rules.
+	 *
+	 * When composed via `.use()`, the consuming builder's `defaultAccess` takes precedence
+	 * (last wins), just like `.locale()`.
+	 *
+	 * **Resolution order for each CRUD operation:**
+	 * 1. Collection/global's own `.access()` rule for that operation
+	 * 2. `defaultAccess` from the builder chain (set here or via `.use()`)
+	 * 3. Framework fallback: require authenticated session (`!!session`)
+	 *
+	 * The `starterModule` sets this to require an authenticated session for all operations.
+	 * Override it to customize (e.g., public reads):
+	 *
+	 * @example
+	 * ```ts
+	 * // Require authentication for all operations (starterModule default)
+	 * .defaultAccess({
+	 *   read: ({ session }) => !!session,
+	 *   create: ({ session }) => !!session,
+	 *   update: ({ session }) => !!session,
+	 *   delete: ({ session }) => !!session,
+	 * })
+	 * ```
+	 *
+	 * @example
+	 * ```ts
+	 * // Public reads, authenticated writes
+	 * .defaultAccess({
+	 *   read: true,
+	 *   create: ({ session }) => !!session,
+	 *   update: ({ session }) => !!session,
+	 *   delete: ({ session }) => !!session,
+	 * })
+	 * ```
+	 *
+	 * @example
+	 * ```ts
+	 * // Admin-only by default
+	 * .defaultAccess({
+	 *   read: ({ session }) => (session?.user as any)?.role === "admin",
+	 *   create: ({ session }) => (session?.user as any)?.role === "admin",
+	 *   update: ({ session }) => (session?.user as any)?.role === "admin",
+	 *   delete: ({ session }) => (session?.user as any)?.role === "admin",
+	 * })
+	 * ```
+	 */
+	defaultAccess(
+		access: CollectionAccess,
+	): QuestpieBuilder<TState> {
+		return new QuestpieBuilder({
+			...this.state,
+			defaultAccess: access,
+		} as any);
+	}
+
+	/**
 	 * Configure custom context extension for all requests.
 	 *
 	 * The resolver function receives request, session, and db, and returns
@@ -602,6 +663,7 @@ export class QuestpieBuilder<
 			fields: BuilderFieldsMap;
 			auth: BetterAuthOptions | Record<never, never>;
 			locale?: any;
+			defaultAccess?: any;
 			migrations?: any;
 			seeds?: any;
 			translations?: any;
@@ -676,6 +738,7 @@ export class QuestpieBuilder<
 			auth: mergeAuthOptions(this.state.auth, otherState.auth),
 
 			locale: otherState.locale ?? this.state.locale,
+			defaultAccess: otherState.defaultAccess ?? this.state.defaultAccess,
 			migrations: [
 				...(this.state.migrations || []),
 				...(otherState.migrations || []),
@@ -932,7 +995,7 @@ export class QuestpieBuilder<
 			translations: this.state.translations,
 			contextResolver: this.state.contextResolver,
 			globalHooks: this.state.globalHooks,
-			defaultAccess: runtimeConfig.defaultAccess,
+			defaultAccess: this.state.defaultAccess,
 		};
 
 		return new Questpie(cmsConfig) as any;

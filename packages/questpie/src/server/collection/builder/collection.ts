@@ -45,7 +45,10 @@ import { createCollectionValidationSchemas } from "#questpie/server/collection/b
 import { CRUDGenerator } from "#questpie/server/collection/crud/index.js";
 import type { CRUD } from "#questpie/server/collection/crud/types.js";
 import type { FieldSelect } from "#questpie/server/fields/field-types.js";
-import { resolveWorkflowConfig } from "#questpie/server/workflow/config.js";
+import {
+	extractWorkflowFromVersioning,
+	resolveWorkflowConfig,
+} from "#questpie/server/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type { Prettify } from "#questpie/shared/type-utils.js";
 
@@ -616,16 +619,14 @@ export class Collection<TState extends CollectionBuilderState> {
 		this.state = state;
 		this.name = state.name;
 
-		const workflow = resolveWorkflowConfig(state.options.workflow);
-		if (workflow) {
+		// Auto-enable versioning when workflow is configured
+		const workflowRaw = extractWorkflowFromVersioning(state.options.versioning);
+		if (workflowRaw) {
+			// Workflow lives under versioning — ensure versioning is enabled
 			const versioning = state.options.versioning;
-			const versioningEnabled =
-				!!versioning &&
-				(typeof versioning !== "object" || versioning.enabled !== false);
-
-			if (!versioningEnabled) {
+			if (typeof versioning === "object" && versioning.enabled === false) {
 				throw new Error(
-					`Collection "${state.name}" enables workflow but versioning is disabled. Enable options.versioning to use workflow stages.`,
+					`Collection "${state.name}" has workflow configured but versioning.enabled is explicitly false.`,
 				);
 			}
 		}
@@ -988,7 +989,7 @@ export class Collection<TState extends CollectionBuilderState> {
 	> | null {
 		const versioning = this.state.options.versioning;
 		if (!versioning) return null;
-		if (typeof versioning === "object" && !versioning.enabled) return null;
+		if (typeof versioning === "object" && versioning.enabled === false) return null;
 
 		const tableName = `${this.state.name}_versions`;
 
@@ -1004,7 +1005,7 @@ export class Collection<TState extends CollectionBuilderState> {
 		}
 
 		const workflowEnabled = !!resolveWorkflowConfig(
-			this.state.options.workflow,
+			extractWorkflowFromVersioning(this.state.options.versioning),
 		);
 		if (workflowEnabled) {
 			if (this.state.options.timestamps !== false) {
@@ -1046,7 +1047,7 @@ export class Collection<TState extends CollectionBuilderState> {
 	> | null {
 		const versioning = this.state.options.versioning;
 		if (!versioning) return null;
-		if (typeof versioning === "object" && !versioning.enabled) return null;
+		if (typeof versioning === "object" && versioning.enabled === false) return null;
 		if (this.state.localized.length === 0) return null;
 
 		const tableName = `${this.state.name}_i18n_versions`;
@@ -1353,7 +1354,9 @@ export class Collection<TState extends CollectionBuilderState> {
 				parseLocalizedField(f as string),
 			),
 			relations: Object.keys(this.state.relations),
-			workflow: resolveWorkflowConfig(this.state.options.workflow),
+			workflow: resolveWorkflowConfig(
+				extractWorkflowFromVersioning(this.state.options.versioning),
+			),
 		};
 	}
 }

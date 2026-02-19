@@ -34,7 +34,6 @@ export const posts = qb
 ```ts
 .options({
   versioning: {
-    enabled: true,
     maxVersions: 100,  // Keep last 100 versions per record (default: 50)
   },
 })
@@ -42,26 +41,29 @@ export const posts = qb
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | `boolean` | `false` | Enable version tracking |
 | `maxVersions` | `number` | `50` | Maximum versions to keep per record. Oldest are pruned automatically. |
+| `workflow` | `boolean \| WorkflowOptions` | `undefined` | Enable publishing workflow. See [Workflow](#workflow--versioning). |
 
 ## Workflow + Versioning
 
-Versioning works best with staged publishing workflows.
+Workflow adds staged publishing on top of versioning. It lives under the `versioning` option because transitions create version snapshots — the two are fundamentally linked.
 
 ```ts
 .options({
-  versioning: true,
-  workflow: {
-    initialStage: "draft",
-    stages: {
-      draft: { transitions: ["review"] },
-      review: { transitions: ["draft", "published"] },
-      published: {},
+  versioning: {
+    workflow: {
+      initialStage: "draft",
+      stages: {
+        draft: { transitions: ["review"] },
+        review: { transitions: ["draft", "published"] },
+        published: {},
+      },
     },
   },
 })
 ```
+
+The shorthand `versioning: { workflow: true }` gives you default stages `["draft", "published"]` with `initialStage: "draft"`.
 
 With workflow enabled:
 
@@ -147,6 +149,7 @@ Use `beforeTransition` and `afterTransition` hooks to inject logic around stage 
     }
   },
 })
+```
 
 ## How It Works
 
@@ -160,6 +163,20 @@ When versioning is enabled:
 2. The version record contains a complete snapshot of the record at that point
 3. For localized collections, i18n data is also versioned in a separate i18n versions table
 4. Old versions are automatically pruned when `maxVersions` is exceeded
+
+### How Workflow Routes Queries
+
+When workflow is enabled, the **main table always represents the initial stage** (typically "draft"). Non-initial stages (like "published") are read from the versions table.
+
+```text
+find()                        → reads main table (= draft / initial stage)
+find({ stage: "published" })  → reads versions table (latest "published" snapshot per record)
+find({ stage: "draft" })      → reads main table (same as no stage)
+```
+
+This means your public-facing site queries `{ stage: "published" }` and always gets the last published snapshot, while the admin panel edits the main table (draft) directly.
+
+Under the hood, a stage query builds a subquery that finds the latest version number per record for the given stage, then INNER JOINs the versions table to that subquery. This is fully automatic — you just pass `stage` and the framework handles the rest.
 
 ## Version Record Structure
 
@@ -265,11 +282,24 @@ Record has 50 versions + new version = 51
 
 This happens inside the same transaction as the version creation.
 
+## Admin UI
+
+When workflow is enabled, the admin form view automatically shows:
+
+- **Stage badge** — Displays the current workflow stage in the form header
+- **Transition button** — Dropdown listing allowed target stages from the current stage
+- **Scheduling** — Optional "Schedule for later" date picker in the transition dialog
+- **History sidebar** — Transitions appear in the audit timeline (when `auditModule` is enabled) with stage change details
+
+No additional configuration is needed — the admin detects workflow from the schema introspection and renders the UI automatically.
+
 ## Common Mistakes
 
 - **Versioning high-frequency collections** — Collections with frequent writes (analytics, logs) can accumulate many version records. Set a low `maxVersions` or skip versioning entirely for these.
 - **Large `richText` or `blocks` fields** — Each version stores a complete snapshot. Large content fields multiply storage requirements. Consider `maxVersions` limits.
 - **Not checking `versionOperation`** — When browsing versions, filter by `versionOperation` to distinguish creates, updates, and deletes.
+- **Forgetting `stage` on public queries** — Without `stage: "published"`, `find()` reads the main table (draft). Your public API should always pass the target stage explicitly.
+- **Restricting transitions too tightly** — If a stage has no `transitions` array, all stages are reachable. An empty `transitions: []` means nothing can transition out of that stage.
 
 ## Related Pages
 

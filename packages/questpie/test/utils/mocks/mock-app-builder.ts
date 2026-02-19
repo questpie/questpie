@@ -99,7 +99,6 @@ export async function buildMockApp<TBuilder extends QuestpieBuilder<any>>(
     search: runtimeOverrides.search,
     realtime: runtimeOverrides.realtime,
     secret: runtimeOverrides.secret,
-    defaultAccess: runtimeOverrides.defaultAccess,
   } as QuestpieRuntimeConfig);
 
   // Attach mock adapters for easy access in tests

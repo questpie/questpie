@@ -489,8 +489,16 @@ async function executeBuiltinAction(
 					};
 				}
 				if (collectionCrud?.transitionStage) {
+					const scheduledAt = data?.scheduledAt as string | undefined;
+					const transitionParams: { id: string; stage: string; scheduledAt?: Date } = {
+						id: itemId,
+						stage,
+					};
+					if (scheduledAt) {
+						transitionParams.scheduledAt = new Date(scheduledAt);
+					}
 					await collectionCrud.transitionStage(
-						{ id: itemId, stage },
+						transitionParams,
 						crudContext,
 					);
 				} else {

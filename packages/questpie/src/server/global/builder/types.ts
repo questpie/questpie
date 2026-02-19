@@ -10,7 +10,6 @@ import type {
 	InferTableWithColumns,
 	RelationConfig,
 	RelationVariant,
-	WorkflowOptions,
 } from "#questpie/server/collection/builder/types.js";
 import type { BaseRequestContext } from "#questpie/server/config/context.js";
 // Note: any types are intentional for composition flexibility.
@@ -39,7 +38,18 @@ export interface GlobalOptions {
 	 */
 	timestamps?: boolean;
 	/**
-	 * Versioning configuration
+	 * Versioning configuration.
+	 *
+	 * - `true` — enable versioning with defaults
+	 * - `CollectionVersioningOptions` — configure maxVersions and/or workflow
+	 *
+	 * Workflow (publishing stages) is nested under versioning.
+	 *
+	 * @example
+	 * ```ts
+	 * .options({ versioning: true })
+	 * .options({ versioning: { workflow: true } })
+	 * ```
 	 */
 	versioning?: boolean | CollectionVersioningOptions;
 	/**
@@ -75,10 +85,6 @@ export interface GlobalOptions {
 	 * ```
 	 */
 	scoped?: GlobalScopeResolver;
-	/**
-	 * Publishing workflow configuration.
-	 */
-	workflow?: boolean | WorkflowOptions;
 }
 
 /**

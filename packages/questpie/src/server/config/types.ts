@@ -447,29 +447,21 @@ export interface QuestpieConfig {
 
 	/**
 	 * Default access control for all collections and globals.
-	 * Applied when collection/global doesn't define its own access rules.
+	 * Applied when a collection/global doesn't define its own `.access()` rules.
 	 *
-	 * @example
+	 * Set via `.defaultAccess()` on the builder (chainable, composable via `.use()`).
+	 * The `starterModule` sets this to require an authenticated session for all operations.
+	 *
+	 * **Resolution order for each CRUD operation:**
+	 * 1. Collection/global's own `.access()` rule for that operation
+	 * 2. This `defaultAccess` (from builder chain)
+	 * 3. Framework fallback: require authenticated session (`!!session`)
+	 *
+	 * To make a resource publicly accessible, explicitly set the rule to `true`:
 	 * ```ts
-	 * // Require authentication for all collections by default
-	 * questpie({
-	 *   defaultAccess: {
-	 *     read: ({ session }) => !!session,
-	 *     create: ({ session }) => !!session,
-	 *     update: ({ session }) => !!session,
-	 *     delete: ({ session }) => !!session,
-	 *   }
-	 * })
-	 *
-	 * // Admin-only by default
-	 * questpie({
-	 *   defaultAccess: {
-	 *     read: ({ session }) => (session?.user as any)?.role === "admin",
-	 *     create: ({ session }) => (session?.user as any)?.role === "admin",
-	 *     update: ({ session }) => (session?.user as any)?.role === "admin",
-	 *     delete: ({ session }) => (session?.user as any)?.role === "admin",
-	 *   }
-	 * })
+	 * .access({ read: true })  // on a specific collection
+	 * // or
+	 * .defaultAccess({ read: true })  // for all collections
 	 * ```
 	 */
 	defaultAccess?: CollectionAccess;

@@ -30,7 +30,10 @@ import type {
 	InferGlobalTableWithColumns,
 } from "#questpie/server/global/builder/types.js";
 import { createGlobalValidationSchema } from "#questpie/server/global/builder/validation-helpers.js";
-import { resolveWorkflowConfig } from "#questpie/server/workflow/config.js";
+import {
+	extractWorkflowFromVersioning,
+	resolveWorkflowConfig,
+} from "#questpie/server/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type { GlobalMeta } from "#questpie/shared/global-meta.js";
 import { GlobalCRUDGenerator } from "../crud/global-crud-generator.js";
@@ -180,16 +183,13 @@ export class Global<TState extends GlobalBuilderState> {
 		this.state = state;
 		this.name = state.name;
 
-		const workflow = resolveWorkflowConfig(state.options.workflow);
-		if (workflow) {
+		// Auto-enable versioning when workflow is configured
+		const workflowRaw = extractWorkflowFromVersioning(state.options.versioning);
+		if (workflowRaw) {
 			const versioning = state.options.versioning;
-			const versioningEnabled =
-				!!versioning &&
-				(typeof versioning !== "object" || versioning.enabled !== false);
-
-			if (!versioningEnabled) {
+			if (typeof versioning === "object" && versioning.enabled === false) {
 				throw new Error(
-					`Global "${state.name}" enables workflow but versioning is disabled. Enable options.versioning to use workflow stages.`,
+					`Global "${state.name}" has workflow configured but versioning.enabled is explicitly false.`,
 				);
 			}
 		}
@@ -342,7 +342,7 @@ export class Global<TState extends GlobalBuilderState> {
 	private generateVersionsTable(): PgTable | null {
 		const versioning = this.state.options.versioning;
 		if (!versioning) return null;
-		if (typeof versioning === "object" && !versioning.enabled) return null;
+		if (typeof versioning === "object" && versioning.enabled === false) return null;
 
 		const tableName = `${this.state.name}_versions`;
 		const isScoped = !!this.state.options.scoped;
@@ -391,7 +391,7 @@ export class Global<TState extends GlobalBuilderState> {
 	private generateI18nVersionsTable(): PgTable | null {
 		const versioning = this.state.options.versioning;
 		if (!versioning) return null;
-		if (typeof versioning === "object" && !versioning.enabled) return null;
+		if (typeof versioning === "object" && versioning.enabled === false) return null;
 		if (this.state.localized.length === 0) return null;
 
 		const tableName = `${this.state.name}_i18n_versions`;
@@ -498,7 +498,9 @@ export class Global<TState extends GlobalBuilderState> {
 			versioning: hasVersioning,
 			virtualFields: Object.keys(this.state.virtuals),
 			localizedFields: Array.from(this.state.localized),
-			workflow: resolveWorkflowConfig(this.state.options.workflow),
+			workflow: resolveWorkflowConfig(
+				extractWorkflowFromVersioning(this.state.options.versioning),
+			),
 		};
 	}
 }

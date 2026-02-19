@@ -17,8 +17,26 @@ import type {
 import type { GlobalBuilderState } from "../../builder/types/global-types";
 import { ConfirmationDialog } from "../../components/actions/confirmation-dialog";
 import { LocaleSwitcher } from "../../components/locale-switcher";
+import { DateTimeInput } from "../../components/primitives/date-input";
+import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { VersionHistorySidebar } from "../../components/version-history-sidebar";
+import { Checkbox } from "../../components/ui/checkbox";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "../../components/ui/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
+import { Label } from "../../components/ui/label";
+import { HistorySidebar } from "../../components/history-sidebar";
 import {
 	useGlobal,
 	useGlobalRevertVersion,
@@ -26,7 +44,9 @@ import {
 	useGlobalVersions,
 	useSidebarSearchParam,
 } from "../../hooks";
+import { useGlobalAuditHistory } from "../../hooks/use-audit-history";
 import { useGlobalFields } from "../../hooks/use-global-fields";
+import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useReactiveFields } from "../../hooks/use-reactive-fields";
 import { useGlobalServerValidation } from "../../hooks/use-server-validation";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
@@ -172,8 +192,80 @@ export default function GlobalFormView({
 	const { data: versionsData, isLoading: versionsLoading } = useGlobalVersions(
 		globalName,
 		{ id: globalData?.id, limit: 50 },
-		{ enabled: isHistoryOpen },
+		{ enabled: isHistoryOpen && !!globalSchema?.options?.versioning },
 	);
+
+	const { data: auditData, isLoading: auditLoading } =
+		useGlobalAuditHistory(
+			globalName,
+			{ limit: 50 },
+			{ enabled: isHistoryOpen },
+		);
+
+	// ========================================================================
+	// Workflow — stage badge, transition dropdown, scheduling
+	// ========================================================================
+
+	const workflowConfig = globalSchema?.options?.workflow as
+		| {
+				enabled: boolean;
+				initialStage: string;
+				stages: Array<{
+					name: string;
+					label?: string;
+					description?: string;
+					transitions?: string[];
+				}>;
+		  }
+		| undefined;
+	const workflowEnabled = !!workflowConfig?.enabled;
+
+	/** Lightweight versions query (limit: 1) to read the current stage. */
+	const { data: latestVersionData } = useGlobalVersions(
+		globalName,
+		{ id: globalData?.id, limit: 1 },
+		{ enabled: workflowEnabled && !!globalData?.id },
+	);
+
+	const currentStage =
+		(latestVersionData as any)?.[0]?.versionStage ??
+		workflowConfig?.initialStage ??
+		null;
+
+	const currentStageConfig = React.useMemo(
+		() =>
+			workflowConfig?.stages?.find((s) => s.name === currentStage) ?? null,
+		[workflowConfig?.stages, currentStage],
+	);
+
+	const currentStageLabel =
+		currentStageConfig?.label ?? currentStage ?? "";
+
+	/** Allowed transitions from the current stage. */
+	const allowedTransitions = React.useMemo(() => {
+		if (!workflowConfig?.stages || !currentStage) return [];
+		const stageNames = currentStageConfig?.transitions;
+		if (stageNames && stageNames.length > 0) {
+			return stageNames
+				.map((name) =>
+					workflowConfig.stages.find((s) => s.name === name),
+				)
+				.filter(Boolean) as typeof workflowConfig.stages;
+		}
+		return workflowConfig.stages.filter((s) => s.name !== currentStage);
+	}, [workflowConfig?.stages, currentStage, currentStageConfig?.transitions]);
+
+	const transitionMutation = useTransitionStage(globalName, {
+		mode: "global",
+	});
+
+	const [transitionTarget, setTransitionTarget] = React.useState<{
+		name: string;
+		label?: string;
+	} | null>(null);
+	const [transitionSchedule, setTransitionSchedule] = React.useState(false);
+	const [transitionScheduledAt, setTransitionScheduledAt] =
+		React.useState<Date | null>(null);
 
 	// Get validation resolver - uses server JSON Schema for validation
 	const { resolver } = useGlobalServerValidation(globalName);
@@ -182,6 +274,56 @@ export default function GlobalFormView({
 		defaultValues: (globalData ?? {}) as any,
 		resolver,
 	});
+
+	/** Execute the confirmed workflow transition (immediate or scheduled). */
+	const confirmTransition = React.useCallback(async () => {
+		if (!transitionTarget) return;
+
+		const params: { stage: string; scheduledAt?: Date } = {
+			stage: transitionTarget.name,
+		};
+		if (transitionSchedule && transitionScheduledAt) {
+			params.scheduledAt = transitionScheduledAt;
+		}
+
+		try {
+			const result = await transitionMutation.mutateAsync(params);
+			if (result && typeof result === "object") {
+				form.reset(result as any);
+			}
+
+			if (transitionSchedule && transitionScheduledAt) {
+				toast.success(
+					t("workflow.scheduledSuccess", {
+						stage: transitionTarget.label ?? transitionTarget.name,
+						date: transitionScheduledAt.toLocaleString(),
+					}),
+				);
+			} else {
+				toast.success(
+					t("workflow.transitionSuccess", {
+						stage: transitionTarget.label ?? transitionTarget.name,
+					}),
+				);
+			}
+		} catch (err) {
+			toast.error(t("workflow.transitionFailed"), {
+				description:
+					err instanceof Error ? err.message : t("error.unknown"),
+			});
+		} finally {
+			setTransitionTarget(null);
+			setTransitionSchedule(false);
+			setTransitionScheduledAt(null);
+		}
+	}, [
+		transitionTarget,
+		transitionSchedule,
+		transitionScheduledAt,
+		transitionMutation,
+		form,
+		t,
+	]);
 
 	// Reset form when data loads
 	React.useEffect(() => {
@@ -319,7 +461,7 @@ export default function GlobalFormView({
 				{/* Header - Title & Actions */}
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 					<div className="min-w-0 flex-1">
-						<div className="flex items-center gap-3">
+						<div className="flex items-center gap-3 flex-wrap">
 							<h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
 								{globalLabel}
 							</h1>
@@ -329,6 +471,14 @@ export default function GlobalFormView({
 									value={contentLocale}
 									onChange={setContentLocale}
 								/>
+							)}
+
+							{/* Workflow stage badge */}
+							{workflowEnabled && currentStage && (
+								<Badge variant="outline" className="gap-1.5">
+									<Icon icon="ph:git-branch" className="size-3" />
+									{currentStageLabel}
+								</Badge>
 							)}
 						</div>
 						{showMeta && globalData?.updatedAt && (
@@ -340,19 +490,52 @@ export default function GlobalFormView({
 
 					<div className="flex items-center gap-2 shrink-0">
 						{headerActions}
-						{globalSchema?.options?.versioning && (
-							<Button
-								type="button"
-								variant="outline"
-								size="icon"
-								className="size-9"
-								onClick={() => setIsHistoryOpen(true)}
-								title={t("version.history")}
-							>
-								<Icon icon="ph:clock-counter-clockwise" className="size-4" />
-								<span className="sr-only">{t("version.history")}</span>
-							</Button>
+
+						{/* Workflow transition dropdown */}
+						{workflowEnabled && allowedTransitions.length > 0 && (
+							<DropdownMenu>
+								<DropdownMenuTrigger
+									render={
+										<Button
+											type="button"
+											variant="outline"
+											className="gap-2"
+										/>
+									}
+								>
+									<Icon icon="ph:arrows-left-right" className="size-4" />
+									{t("workflow.transition")}
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="end">
+									{allowedTransitions.map((stage) => (
+										<DropdownMenuItem
+											key={stage.name}
+											onClick={() =>
+												setTransitionTarget({
+													name: stage.name,
+													label: stage.label,
+												})
+											}
+										>
+											<Icon icon="ph:arrow-right" className="mr-2 size-4" />
+											{stage.label || stage.name}
+										</DropdownMenuItem>
+									))}
+								</DropdownMenuContent>
+							</DropdownMenu>
 						)}
+
+						<Button
+							type="button"
+							variant="outline"
+							size="icon"
+							className="size-9"
+							onClick={() => setIsHistoryOpen(true)}
+							title={t("history.title")}
+						>
+							<Icon icon="ph:clock-counter-clockwise" className="size-4" />
+							<span className="sr-only">{t("history.title")}</span>
+						</Button>
 						<Button type="submit" disabled={isSubmitting} className="gap-2">
 							{isSubmitting ? (
 								<>
@@ -378,17 +561,18 @@ export default function GlobalFormView({
 				/>
 			</form>
 
-			<VersionHistorySidebar
+			<HistorySidebar
 				open={isHistoryOpen}
 				onOpenChange={setIsHistoryOpen}
-				title={t("version.history")}
-				description={t("version.globalHistoryDescription")}
+				auditEntries={auditData ?? []}
+				isLoadingAudit={auditLoading}
 				versions={(versionsData ?? []) as any[]}
-				isLoading={versionsLoading}
+				isLoadingVersions={versionsLoading}
 				isReverting={revertVersionMutation.isPending}
 				onRevert={async (version) => {
 					setPendingRevertVersion(version);
 				}}
+				showVersionsTab={!!globalSchema?.options?.versioning}
 			/>
 
 			<ConfirmationDialog
@@ -411,6 +595,98 @@ export default function GlobalFormView({
 				onConfirm={confirmRevertVersion}
 				loading={revertVersionMutation.isPending}
 			/>
+
+			{/* Workflow Transition Confirmation Dialog */}
+			<Dialog
+				open={!!transitionTarget}
+				onOpenChange={(open) => {
+					if (!open) {
+						setTransitionTarget(null);
+						setTransitionSchedule(false);
+						setTransitionScheduledAt(null);
+					}
+				}}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<Icon icon="ph:arrows-left-right" className="size-5" />
+							{t("workflow.transitionTo", {
+								stage: transitionTarget?.label ?? transitionTarget?.name ?? "",
+							})}
+						</DialogTitle>
+						<DialogDescription>
+							{t("workflow.transitionDescription", {
+								from: currentStageLabel,
+								to: transitionTarget?.label ?? transitionTarget?.name ?? "",
+							})}
+						</DialogDescription>
+					</DialogHeader>
+
+					{/* Optional scheduling */}
+					<div className="space-y-3 py-2">
+						<div className="flex items-center gap-2">
+							<Checkbox
+								checked={transitionSchedule}
+								onCheckedChange={(val) => {
+									setTransitionSchedule(!!val);
+									if (!val) setTransitionScheduledAt(null);
+								}}
+								id="global-transition-schedule"
+							/>
+							<Label htmlFor="global-transition-schedule" className="text-sm cursor-pointer">
+								{t("workflow.scheduleLabel")}
+							</Label>
+						</div>
+
+						{transitionSchedule && (
+							<div className="space-y-1.5 pl-6">
+								<Label className="text-xs text-muted-foreground">
+									{t("workflow.scheduledAt")}
+								</Label>
+								<DateTimeInput
+									value={transitionScheduledAt}
+									onChange={setTransitionScheduledAt}
+									minDate={new Date()}
+								/>
+								<p className="text-xs text-muted-foreground">
+									{t("workflow.scheduledDescription")}
+								</p>
+							</div>
+						)}
+					</div>
+
+					<DialogFooter>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => {
+								setTransitionTarget(null);
+								setTransitionSchedule(false);
+								setTransitionScheduledAt(null);
+							}}
+						>
+							{t("common.cancel")}
+						</Button>
+						<Button
+							type="button"
+							onClick={confirmTransition}
+							disabled={
+								transitionMutation.isPending ||
+								(transitionSchedule && !transitionScheduledAt)
+							}
+							className="gap-2"
+						>
+							{transitionMutation.isPending && (
+								<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
+							)}
+							{transitionSchedule
+								? t("workflow.scheduleLabel")
+								: t("workflow.transition")}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</FormProvider>
 	);
 }

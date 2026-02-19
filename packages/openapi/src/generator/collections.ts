@@ -348,7 +348,9 @@ export function generateCollectionPaths(
 		};
 
 		// POST /{collection}/{id}/transition (only for workflow-enabled collections)
-		if (state.options?.workflow) {
+		const versioningOpts = state.options?.versioning;
+		const hasWorkflow = versioningOpts && typeof versioningOpts === "object" && versioningOpts.workflow;
+		if (hasWorkflow) {
 			paths[`${prefix}/{id}/transition`] = {
 				post: {
 					operationId: `${name}_transition`,

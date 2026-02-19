@@ -1052,6 +1052,8 @@ export interface VersionRecord<TId = string> {
 	versionOperation: string;
 	versionUserId: string | null;
 	versionCreatedAt: Date;
+	/** Workflow stage at the time this version was created (only present when workflow is enabled). */
+	versionStage?: string | null;
 }
 
 export interface PaginatedResult<T> {

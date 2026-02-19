@@ -22,7 +22,10 @@ import type {
 	GlobalAccessRule,
 	GlobalBuilderState,
 } from "#questpie/server/global/builder/types.js";
-import { resolveWorkflowConfig } from "#questpie/server/workflow/config.js";
+import {
+	extractWorkflowFromVersioning,
+	resolveWorkflowConfig,
+} from "#questpie/server/workflow/config.js";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 // ============================================================================
@@ -327,7 +330,9 @@ export async function introspectGlobal(
 		options: {
 			timestamps: state.options?.timestamps !== false,
 			versioning: !!state.options?.versioning,
-			workflow: resolveWorkflowConfig(state.options?.workflow),
+			workflow: resolveWorkflowConfig(
+				extractWorkflowFromVersioning(state.options?.versioning),
+			),
 		},
 		validation: buildGlobalValidation(fieldDefinitions),
 		admin: adminConfig,
@@ -404,24 +409,14 @@ function extractAdminConfig(
 
 /**
  * Evaluate global-level access for current user.
+ * Falls back to app defaultAccess, then to requiring session (secure by default).
  */
 async function evaluateGlobalAccess(
 	state: GlobalBuilderState,
 	context: CRUDContext, app?: unknown,
 ): Promise<GlobalAccessInfo> {
 	const { access } = state;
-
-	// No access config = full access
-	if (!access || Object.keys(access).length === 0) {
-		return {
-			visible: true,
-			level: "full",
-			operations: {
-				read: { allowed: true },
-				update: { allowed: true },
-			},
-		};
-	}
+	const appDefaultAccess = (app as any)?.defaultAccess;
 
 	const accessContext: GlobalAccessContext = {
 		app: app,
@@ -431,8 +426,8 @@ async function evaluateGlobalAccess(
 	};
 
 	const operations = {
-		read: await evaluateAccessRule(access.read, accessContext),
-		update: await evaluateAccessRule(access.update, accessContext),
+		read: await evaluateAccessRule(access?.read ?? appDefaultAccess?.read, accessContext),
+		update: await evaluateAccessRule(access?.update ?? appDefaultAccess?.update, accessContext),
 	};
 
 	// Determine visibility and level
@@ -452,13 +447,18 @@ async function evaluateGlobalAccess(
 
 /**
  * Evaluate a single access rule.
+ * When no rule is defined, requires session (secure by default).
  */
 async function evaluateAccessRule(
 	rule: GlobalAccessRule | undefined,
 	context: GlobalAccessContext,
 ): Promise<GlobalAccessResult> {
-	// No rule = allowed
-	if (rule === undefined || rule === true) {
+	// No rule = require session (secure by default)
+	if (rule === undefined) {
+		return context.session ? { allowed: true } : { allowed: false };
+	}
+
+	if (rule === true) {
 		return { allowed: true };
 	}
 

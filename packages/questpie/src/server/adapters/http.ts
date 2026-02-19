@@ -248,6 +248,20 @@ export const createFetchHandler = (app: Questpie<any>,
 				);
 			}
 
+			if (globalAction === "audit") {
+				if (request.method === "GET") {
+					return routes.globals.audit(
+						request,
+						{ global: globalName },
+						context,
+					);
+				}
+				return errorResponse(
+					ApiError.badRequest("Method not allowed"),
+					request,
+				);
+			}
+
 			if (globalAction === "versions") {
 				if (request.method === "GET") {
 					return routes.globals.versions(
@@ -377,6 +391,19 @@ export const createFetchHandler = (app: Questpie<any>,
 		if (action === "restore") {
 			if (request.method === "POST") {
 				return routes.collections.restore(request, { collection, id }, context);
+			}
+
+			return errorResponse(ApiError.badRequest("Method not allowed"), request);
+		}
+
+		// Collection audit history
+		if (action === "audit") {
+			if (request.method === "GET") {
+				return routes.collections.audit(
+					request,
+					{ collection, id },
+					context,
+				);
 			}
 
 			return errorResponse(ApiError.badRequest("Method not allowed"), request);

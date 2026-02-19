@@ -1,8 +1,8 @@
 ---
-"questpie": patch
-"@questpie/admin": patch
-"@questpie/openapi": patch
-"@questpie/tanstack-query": patch
+"questpie": minor
+"@questpie/admin": minor
+"@questpie/openapi": minor
+"@questpie/tanstack-query": minor
 ---
 
 Remove deprecated collection/global scoped `.functions()` RPC from builders and runtime routes. RPC is now app-level only via `rpc().router(...)` on `/rpc/:path...`.
@@ -53,15 +53,28 @@ Panel state is now URL-driven for better shareability and navigation:
 
 Add integration test coverage for adapter versioning routes and extend package docs for the new endpoints and URL-synced panel behavior.
 
+Workflow configuration is nested under `versioning` in collection/global options — `.options({ versioning: { workflow: true } })`. This makes the dependency explicit in the type system since workflow uses the versions table for stage snapshots. `CollectionVersioningOptions.enabled` defaults to `true` when the object form is used, so `versioning: { workflow: true }` enables both.
+
 Add workflow stage transitions:
 - `transitionStage()` CRUD method for collections and globals — validates stage, enforces transition guards, creates version snapshot without data mutation
 - `access.transition` permission rule (falls back to `access.update` when not defined)
 - `beforeTransition` / `afterTransition` hooks with `fromStage` and `toStage` context
-- HTTP routes: `POST /:collection/:id/transition` and `POST /globals/:name/transition`
+- HTTP routes: `POST /:collection/:id/transition` and `POST /globals/:name/transition` — now accept optional `scheduledAt` (ISO date string) for scheduling future transitions
 - Client SDK `transitionStage()` proxy + TanStack Query `transitionStage` mutation builder
 - OpenAPI `POST` transition endpoints (generated only for workflow-enabled collections/globals)
 - Admin built-in `"transition"` action with workflow metadata exposed in config
 - Scheduled transitions via queue job (`scheduledAt` parameter — future dates enqueue, past dates execute immediately)
+
+Add audit logging for workflow transitions:
+- `afterTransition` hooks on both collection and global audit modules
+- Transitions appear in the audit timeline with action `"transition"`, recording `fromStage` and `toStage` in changes and metadata
+
+Add workflow admin UI in collection and global form views:
+- Stage badge in form header showing current workflow stage (reads `versionStage` from latest version)
+- Transition dropdown button listing allowed target stages from current stage's `transitions` config
+- Confirmation dialog with optional "Schedule for later" date/time picker
+- New `useTransitionStage` client hook for executing transitions via direct fetch
+- `findVersions()` now includes `versionStage` in the response (`VersionRecord` type updated)
 
 **Breaking: remove `RegisteredApp` type and `Register` interface** — The `Register` module augmentation pattern created unavoidable circular type dependencies (TS7022/TS2502) whenever `questpie.gen.ts` augmented `Register.app` with the full app type. All context types (`WidgetFetchContext`, `ServerActionContext`, `BlockPrefetchContext`, `BlocksPrefetchContext`) now use `app: any`. For typed access, use `typedApp<App>(ctx.app)` instead.
 
@@ -83,3 +96,13 @@ Add workflow stage transitions:
 **Fix `.admin()` / `.list()` / `.form()` crashing on standalone collections** — Component and view proxies now skip validation when no registry is available (standalone builders without `.components()` / `.listViews()` / `.editViews()`). Audit-log collection uses a new `adminCoreBuilder` with admin registries pre-configured, so it resolves `c.icon(...)`, `v.table(...)`, and `v.form(...)` correctly.
 
 **Breaking: rename `fetchFn` → `loader` on all dashboard widget types.** Server-side interfaces (`ServerStatsWidget`, `ServerTimelineWidget`, etc.) and client-side configs (`ValueWidgetConfig`, `ProgressWidgetConfig`, etc.). The serialized flag is renamed from `hasFetchFn` to `hasLoader`.
+
+**Secure-by-default access control** — The framework now requires an authenticated session when no access rules are defined. Previously, collections/globals without `.access()` and no `defaultAccess` were open to everyone (including unauthenticated requests).
+
+New `.defaultAccess()` chainable builder method sets app-wide default access rules. Resolution order: collection's own `.access()` → builder `defaultAccess` → framework fallback (`!!session`).
+
+The `starterModule` now includes `defaultAccess` requiring authentication for all CRUD operations. To make a collection public, explicitly set `.access({ read: true })` on the collection or override via `.defaultAccess({ read: true, ... })` after `.use(starterModule)`.
+
+`defaultAccess` moved from runtime config (`.build()`) to builder state (`.defaultAccess()`) — composable via `.use()` with last-wins semantics.
+
+Fixed introspection, admin-config sidebar filtering, and search routes to properly fall back to `defaultAccess` when collections don't define their own `.access()` rules.

@@ -209,6 +209,11 @@ export type AdapterRoutes = {
 			context?: AdapterContext,
 			input?: unknown,
 		) => Promise<Response>;
+		audit: (
+			request: Request,
+			params: { collection: string; id: string },
+			context?: AdapterContext,
+		) => Promise<Response>;
 	};
 	globals: {
 		get: (
@@ -253,6 +258,11 @@ export type AdapterRoutes = {
 		 * Used by admin UI to determine field behaviors.
 		 */
 		meta: (
+			request: Request,
+			params: { global: string },
+			context?: AdapterContext,
+		) => Promise<Response>;
+		audit: (
 			request: Request,
 			params: { global: string },
 			context?: AdapterContext,

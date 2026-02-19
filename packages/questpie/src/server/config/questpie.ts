@@ -73,7 +73,13 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 	/**
 	 * Default access control for all collections and globals.
-	 * Applied when collection/global doesn't define its own access rules.
+	 * Applied when a collection/global doesn't define its own `.access()` rules.
+	 *
+	 * Set via `.defaultAccess()` on the builder. The `starterModule` sets this to
+	 * require an authenticated session for all CRUD operations.
+	 *
+	 * Even without this, the framework falls back to requiring a session
+	 * (see `executeAccessRule` in access-control.ts).
 	 */
 	public readonly defaultAccess: TConfig["defaultAccess"];
 

@@ -56,6 +56,11 @@ export interface GlobalRoutes {
 		params: { global: string },
 		context?: AdapterContext,
 	) => Promise<Response>;
+	audit: (
+		request: Request,
+		params: { global: string },
+		context?: AdapterContext,
+	) => Promise<Response>;
 }
 
 export const createGlobalRoutes = <
@@ -190,16 +195,26 @@ export const createGlobalRoutes = <
 			}
 
 			try {
-				const payload = body as { stage: string };
+				const payload = body as { stage: string; scheduledAt?: string };
 				if (!payload.stage || typeof payload.stage !== "string") {
 					throw ApiError.badRequest("Missing required field: stage");
 				}
+
+				const opts: { stage: string; scheduledAt?: Date } = {
+					stage: payload.stage,
+				};
+
+				if (payload.scheduledAt) {
+					const date = new Date(payload.scheduledAt);
+					if (Number.isNaN(date.getTime())) {
+						throw ApiError.badRequest("Invalid scheduledAt date");
+					}
+					opts.scheduledAt = date;
+				}
+
 				const globalInstance = app.getGlobalConfig(params.global as any);
 				const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
-				const result = await crud.transitionStage(
-					{ stage: payload.stage },
-					resolved.appContext,
-				);
+				const result = await crud.transitionStage(opts, resolved.appContext);
 				return smartResponse(result, request);
 			} catch (error) {
 				return errorResponse(error, request, resolved.appContext.locale);
@@ -284,6 +299,51 @@ export const createGlobalRoutes = <
 			try {
 				const meta = globalInstance.getMeta();
 				return smartResponse(meta, request);
+			} catch (error) {
+				return errorResponse(error, request, resolved.appContext.locale);
+			}
+		},
+
+		audit: async (
+			request: Request,
+			params: { global: string },
+			context?: AdapterContext,
+		): Promise<Response> => {
+			const resolved = await resolveContext(app, request, config, context);
+
+			try {
+				const url = new URL(request.url);
+				const limitRaw = url.searchParams.get("limit");
+				const offsetRaw = url.searchParams.get("offset");
+				const limit =
+					limitRaw !== null && limitRaw !== "" ? Number(limitRaw) : 50;
+				const offset =
+					offsetRaw !== null && offsetRaw !== ""
+						? Number(offsetRaw)
+						: undefined;
+
+				const auditCrud = app.api.collections[
+					"adminAuditLog" as any
+				] as any;
+				if (!auditCrud) {
+					return smartResponse([], request);
+				}
+
+				const result = await auditCrud.find(
+					{
+						where: {
+							resource: { equals: params.global },
+							resourceType: { equals: "global" },
+						},
+						sort: { createdAt: "desc" },
+						...(Number.isFinite(limit) ? { limit: Math.floor(limit) } : {}),
+						...(Number.isFinite(offset) && offset !== undefined
+							? { offset: Math.floor(offset) }
+							: {}),
+					},
+					{ ...resolved.appContext, accessMode: "system" },
+				);
+				return smartResponse(result, request);
 			} catch (error) {
 				return errorResponse(error, request, resolved.appContext.locale);
 			}

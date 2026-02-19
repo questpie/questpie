@@ -1,4 +1,5 @@
 import type {
+	CollectionVersioningOptions,
 	WorkflowOptions,
 	WorkflowStageOptions,
 } from "#questpie/server/collection/builder/types.js";
@@ -17,6 +18,18 @@ export interface ResolvedWorkflowConfig {
 }
 
 const DEFAULT_STAGES = ["draft", "published"] as const;
+
+/**
+ * Extract workflow option from versioning config.
+ * Returns the workflow value (boolean | WorkflowOptions | undefined) from
+ * the versioning option, handling both `boolean` and object forms.
+ */
+export function extractWorkflowFromVersioning(
+	versioning: boolean | CollectionVersioningOptions | undefined,
+): boolean | WorkflowOptions | undefined {
+	if (!versioning || typeof versioning === "boolean") return undefined;
+	return versioning.workflow;
+}
 
 export function resolveWorkflowConfig(
 	workflow: boolean | WorkflowOptions | undefined,

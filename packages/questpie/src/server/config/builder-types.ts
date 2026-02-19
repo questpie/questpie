@@ -89,6 +89,22 @@ export interface QuestpieBuilderState<
 	globalHooks?: GlobalHooksState;
 
 	/**
+	 * Default access control for all collections and globals.
+	 * Applied when a collection/global doesn't define its own `.access()` rules.
+	 *
+	 * Set via `.defaultAccess()` on the builder. When composed via `.use()`,
+	 * the consuming builder's `defaultAccess` takes precedence (last wins).
+	 *
+	 * **Resolution order for each CRUD operation:**
+	 * 1. Collection/global's own `.access()` rule for that operation
+	 * 2. This `defaultAccess` (from builder chain / module)
+	 * 3. Framework fallback: require authenticated session (`!!session`)
+	 *
+	 * The `starterModule` sets this to require an authenticated session for all operations.
+	 */
+	defaultAccess?: CollectionAccess;
+
+	/**
 	 * Phantom type for tracking message keys through the builder chain.
 	 * Not used at runtime - purely for type inference.
 	 */
@@ -156,12 +172,6 @@ export interface QuestpieRuntimeConfig<TDbConfig extends DbConfig = DbConfig> {
 	kv?: KVConfig;
 
 	/**
-	 * Default access control for all collections and globals
-	 * Applied when collection/global doesn't define its own access rules
-	 */
-	defaultAccess?: CollectionAccess;
-
-	/**
 	 * Automatically run migrations on startup.
 	 * Use `await app.waitForInit()` to wait for completion.
 	 * @default false
@@ -210,6 +220,7 @@ export type EmptyNamedBuilderState<TName extends string> = QuestpieBuilderState<
 > & {
 	auth: {};
 	locale: undefined;
+	defaultAccess: undefined;
 	migrations: undefined;
 	seeds: undefined;
 	contextResolver: undefined;

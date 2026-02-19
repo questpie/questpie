@@ -17,9 +17,30 @@ import { coreBackendMessages } from "./messages.js";
  * Includes:
  * - Auth collections (users, sessions, accounts, verifications, apikeys)
  * - Assets collection with file upload support (.upload() enabled)
+ * - Default access control: requires authenticated session for all CRUD operations
  * - Scheduled realtime outbox cleanup job (when queue worker is running)
  * - Core auth options (Better Auth configuration)
  * - Core backend messages (error messages, validation messages, etc.)
+ *
+ * **Access Control:**
+ * The starter module sets `defaultAccess` to require an authenticated session
+ * for all operations (read, create, update, delete). This means collections and
+ * globals without explicit `.access()` rules will deny unauthenticated requests.
+ *
+ * To make a specific collection publicly readable, override on the collection:
+ * ```ts
+ * const posts = q.collection("posts")
+ *   .access({ read: true })  // Public reads, other ops inherit defaultAccess
+ *   .fields((f) => ({ ... }));
+ * ```
+ *
+ * To override the default for all collections, call `.defaultAccess()` after `.use()`:
+ * ```ts
+ * const app = q({ name: "my-app" })
+ *   .use(starterModule)
+ *   .defaultAccess({ read: true, ... })  // Overrides starterModule's default
+ *   .build({ ... });
+ * ```
  *
  * This module is meant to be used with .use() for projects that want
  * the standard experience with authentication and file uploads.
@@ -92,6 +113,12 @@ export const starterModule = starterBase
     account: accountsCollection,
     verification: verificationsCollection,
     apikey: apiKeysCollection,
+  })
+  .defaultAccess({
+    read: ({ session }) => !!session,
+    create: ({ session }) => !!session,
+    update: ({ session }) => !!session,
+    delete: ({ session }) => !!session,
   })
   .jobs({
     realtimeCleanup: realtimeCleanupJob,

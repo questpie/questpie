@@ -242,21 +242,92 @@ update: (ctx) => {
 
 ## Default Access
 
-Set app-wide defaults that apply to collections without explicit `.access()`:
+QUESTPIE is **secure by default**. When no access rules are defined, the system requires an authenticated session. This prevents accidentally exposing data to unauthenticated users.
 
-```ts
-const app = questpie(builder).build({
-  // ...
-  defaultAccess: {
-    read: ({ session }) => !!session?.user,
-    create: ({ session }) => !!session?.user,
-    update: ({ session }) => !!session?.user,
-    delete: ({ session }) => (session?.user as any)?.role === "admin",
-  },
-});
+### Resolution Order
+
+For each CRUD operation, access rules are resolved in this order:
+
+```text
+1. Collection/global's own .access() rule   → checked first
+2. App-level defaultAccess (from builder)   → fallback
+3. Framework default: !!session             → last resort (require auth)
 ```
 
-Collections with `.access()` override the defaults entirely.
+If a collection defines `.access({ read: true })` but omits `create`, then `read` uses the explicit rule (`true` = public) while `create` falls through to `defaultAccess` or the framework default.
+
+### Starter Module Defaults
+
+The `starterModule` sets `defaultAccess` to require authentication for all operations:
+
+```ts
+import { questpie, starterModule } from "@questpie/server";
+
+// starterModule includes:
+// .defaultAccess({
+//   read: ({ session }) => !!session,
+//   create: ({ session }) => !!session,
+//   update: ({ session }) => !!session,
+//   delete: ({ session }) => !!session,
+// })
+
+const app = questpie({ name: "my-app" })
+  .use(starterModule)
+  .collections({ posts, products })
+  .build({ ... });
+
+// posts and products now require authentication for ALL operations
+// unless they define their own .access() rules
+```
+
+### Custom Default Access
+
+Override the default with `.defaultAccess()` on the builder:
+
+```ts
+const app = questpie({ name: "my-app" })
+  .use(starterModule)
+  // Override: public reads, authenticated writes
+  .defaultAccess({
+    read: true,
+    create: ({ session }) => !!session,
+    update: ({ session }) => !!session,
+    delete: ({ session }) => (session?.user as any)?.role === "admin",
+  })
+  .collections({ posts, products })
+  .build({ ... });
+```
+
+When composed via `.use()`, the consuming builder's `defaultAccess` wins (last-wins strategy, same as `.locale()`).
+
+### Making a Collection Public
+
+To make a specific collection publicly accessible while keeping the default restrictive, set `.access()` on that collection:
+
+```ts
+const publicPosts = qb
+  .collection("posts")
+  .access({
+    read: true,  // Public reads
+    // create, update, delete fall through to defaultAccess (require auth)
+  })
+  .fields((f) => ({ ... }));
+```
+
+### Without Starter Module
+
+Even without `starterModule` or any `defaultAccess`, the framework falls back to requiring a session (`!!session`). This means you can never accidentally expose data by forgetting to set access rules.
+
+To explicitly make everything public (not recommended), set:
+
+```ts
+.defaultAccess({
+  read: true,
+  create: true,
+  update: true,
+  delete: true,
+})
+```
 
 ## System Mode vs User Mode
 
@@ -292,8 +363,8 @@ Access control runs before hooks:
 
 - **Relying on client-side checks only** — The admin UI can hide buttons, but server access rules are the real enforcement layer. Always define `.access()`.
 - **Forgetting `accessMode: "user"` in custom routes** — If you call CRUD directly from a custom API handler, pass `{ accessMode: "user" }` to enforce access. Without it, system mode bypasses all rules.
-- **Returning `undefined` instead of `false`** — Access functions must return `boolean` or `AccessWhere`. Returning `undefined` is treated as falsy but can cause type issues.
-- **Not setting `defaultAccess`** — Collections without `.access()` and no `defaultAccess` are open by default in system mode. Set sensible defaults.
+- **Returning `undefined` instead of `false`** — Access functions must return `boolean` or `AccessWhere`. Returning `undefined` is treated as "no rule" and falls through to the framework default (require session).
+- **Assuming public access** — The framework is secure by default. If you want unauthenticated access, you must explicitly set `read: true` on the collection or in `defaultAccess`.
 
 ## Related Pages
 

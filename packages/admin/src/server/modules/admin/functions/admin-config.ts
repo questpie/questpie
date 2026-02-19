@@ -66,16 +66,27 @@ function getApp(ctx: { app: unknown }): Questpie<any> {
 /**
  * Check if the current user has read access to a collection or global.
  * Returns true if accessible, false if denied.
- * Fail-open: returns true on errors to avoid hiding content due to rule bugs.
+ *
+ * Falls back to app `defaultAccess.read` when no explicit read rule is defined.
+ * If neither exists, requires session (secure by default).
+ *
+ * Fail-open on errors: returns true to avoid hiding content due to rule bugs.
  */
 async function hasReadAccess(
 	readRule: unknown,
 	ctx: { app: unknown; session?: any; db: any; locale?: string },
 ): Promise<boolean> {
-	if (readRule === undefined || readRule === true) return true;
-	if (readRule === false) return false;
+	// Fall back to app defaultAccess.read if no explicit rule
+	const effectiveRule = readRule ?? (ctx.app as Questpie<any>)?.defaultAccess?.read;
+
+	if (effectiveRule === true) return true;
+	if (effectiveRule === false) return false;
+
+	// No rule anywhere = require session (secure by default)
+	if (effectiveRule === undefined) return !!ctx.session;
+
 	try {
-		const result = await executeAccessRule(readRule as any, { app: ctx.app as any,
+		const result = await executeAccessRule(effectiveRule as any, { app: ctx.app as any,
 			db: ctx.db,
 			session: ctx.session,
 			locale: ctx.locale,
@@ -94,7 +105,10 @@ async function hasReadAccess(
  * Extract workflow metadata from a collection/global state.
  */
 function extractWorkflowMeta(state: any): WorkflowMeta | undefined {
-	const workflow = state?.options?.workflow;
+	// Workflow is nested under versioning
+	const versioning = state?.options?.versioning;
+	const workflow =
+		versioning && typeof versioning === "object" ? versioning.workflow : undefined;
 	if (!workflow) return undefined;
 
 	const opts = workflow === true ? {} : workflow;

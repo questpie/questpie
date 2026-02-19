@@ -99,6 +99,7 @@ import {
 import type { FieldDefinitionAccess } from "#questpie/server/fields/types.js";
 import {
 	type ResolvedWorkflowConfig,
+	extractWorkflowFromVersioning,
 	resolveWorkflowConfig,
 } from "#questpie/server/workflow/config.js";
 
@@ -136,7 +137,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		_getRawTitleExpression?: (context: any) => TitleExpressionSQL,
 		private app?: Questpie<any>,
 	) {
-		this.workflowConfig = resolveWorkflowConfig(this.state.options.workflow);
+		this.workflowConfig = resolveWorkflowConfig(
+			extractWorkflowFromVersioning(this.state.options.versioning),
+		);
 
 		if (this.workflowConfig && !this.versionsTable) {
 			throw new Error(
@@ -2677,9 +2680,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	/**
-	 * Enforce access control
-	 * Delegates to extracted executeAccessRule utility
-	 * Falls back to app defaultAccess if collection doesn't define its own rules
+	 * Enforce access control for a CRUD operation.
+	 *
+	 * Resolution order:
+	 * 1. Collection's own `.access()` rule for the operation
+	 * 2. App-level `defaultAccess` (from `.defaultAccess()` on the builder)
+	 * 3. Framework fallback in `executeAccessRule`: require session (`!!session`)
+	 *
+	 * System mode (`accessMode === "system"`) bypasses all access checks.
 	 */
 	private async enforceAccessControl(
 		operation: "read" | "create" | "update" | "delete",

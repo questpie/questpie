@@ -29,7 +29,10 @@ import type {
 	ReferentialAction,
 	RelationFieldMetadata,
 } from "#questpie/server/fields/types.js";
-import { resolveWorkflowConfig } from "#questpie/server/workflow/config.js";
+import {
+	extractWorkflowFromVersioning,
+	resolveWorkflowConfig,
+} from "#questpie/server/workflow/config.js";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 // ============================================================================
@@ -748,7 +751,9 @@ export async function introspectCollection(
 			timestamps: state.options?.timestamps !== false,
 			softDelete: state.options?.softDelete ?? false,
 			versioning: !!state.options?.versioning,
-			workflow: resolveWorkflowConfig(state.options?.workflow),
+			workflow: resolveWorkflowConfig(
+				extractWorkflowFromVersioning(state.options?.versioning),
+			),
 			singleton: undefined, // TODO(globals): Derive singleton flag from collection config
 		},
 		title: state.title
@@ -901,26 +906,14 @@ function mapInferredRelationType(
 
 /**
  * Evaluate collection-level access for current user.
+ * Falls back to app defaultAccess, then to requiring session (secure by default).
  */
 async function evaluateCollectionAccess(
 	state: CollectionBuilderState,
 	context: CRUDContext, app?: unknown,
 ): Promise<CollectionAccessInfo> {
 	const { access } = state;
-
-	// No access config = full access
-	if (!access || Object.keys(access).length === 0) {
-		return {
-			visible: true,
-			level: "full",
-			operations: {
-				create: { allowed: true },
-				read: { allowed: true },
-				update: { allowed: true },
-				delete: { allowed: true },
-			},
-		};
-	}
+	const appDefaultAccess = (app as any)?.defaultAccess;
 
 	const accessContext: AccessContext = {
 		app: app,
@@ -930,10 +923,10 @@ async function evaluateCollectionAccess(
 	};
 
 	const operations = {
-		create: await evaluateAccessRule(access.create, accessContext),
-		read: await evaluateAccessRule(access.read, accessContext),
-		update: await evaluateAccessRule(access.update, accessContext),
-		delete: await evaluateAccessRule(access.delete, accessContext),
+		create: await evaluateAccessRule(access?.create ?? appDefaultAccess?.create, accessContext),
+		read: await evaluateAccessRule(access?.read ?? appDefaultAccess?.read, accessContext),
+		update: await evaluateAccessRule(access?.update ?? appDefaultAccess?.update, accessContext),
+		delete: await evaluateAccessRule(access?.delete ?? appDefaultAccess?.delete, accessContext),
 	};
 
 	// Determine visibility and level
@@ -956,13 +949,18 @@ async function evaluateCollectionAccess(
 
 /**
  * Evaluate a single access rule.
+ * When no rule is defined, requires session (secure by default).
  */
 async function evaluateAccessRule(
 	rule: AccessRule | undefined,
 	context: AccessContext,
 ): Promise<AccessResult> {
-	// No rule = allowed
-	if (rule === undefined || rule === true) {
+	// No rule = require session (secure by default)
+	if (rule === undefined) {
+		return context.session ? { allowed: true } : { allowed: false };
+	}
+
+	if (rule === true) {
 		return { allowed: true };
 	}
 

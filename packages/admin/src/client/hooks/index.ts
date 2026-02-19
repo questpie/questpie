@@ -197,6 +197,13 @@ export {
 // Setup status hook
 export { type SetupStatus, useSetupStatus } from "./use-setup-status";
 export { useSidebarSearchParam } from "./use-sidebar-search-param";
+// Workflow transition hook
+export {
+	type TransitionStageParams,
+	type TransitionStageResult,
+	type UseTransitionStageOptions,
+	useTransitionStage,
+} from "./use-transition-stage";
 // Upload hook
 export {
 	type Asset,

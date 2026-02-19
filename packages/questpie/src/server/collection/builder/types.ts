@@ -26,11 +26,23 @@ import type { SearchableConfig } from "#questpie/server/integrated/search/index.
 export type TitleExpression = string;
 
 /**
- * Versioning configuration
+ * Versioning configuration.
+ *
+ * When `workflow` is set, versioning is automatically enabled — the `enabled`
+ * field defaults to `true` unless explicitly set to `false`.
  */
 export interface CollectionVersioningOptions {
-	enabled: boolean;
+	enabled?: boolean;
 	maxVersions?: number; // default: 50
+	/**
+	 * Publishing workflow configuration.
+	 * Workflow uses the versions table for stage snapshots, so it lives
+	 * under versioning to make the dependency explicit in the type system.
+	 *
+	 * - `true` — default stages: ["draft", "published"]
+	 * - `WorkflowOptions` — custom stages, transitions, initial stage
+	 */
+	workflow?: boolean | WorkflowOptions;
 }
 
 /**
@@ -105,13 +117,35 @@ export interface CollectionOptions {
 	 */
 	softDelete?: boolean;
 	/**
-	 * Versioning configuration
+	 * Versioning configuration.
+	 *
+	 * - `true` — enable versioning with defaults
+	 * - `CollectionVersioningOptions` — configure maxVersions and/or workflow
+	 *
+	 * Workflow (publishing stages) is nested under versioning because it
+	 * requires versioning — stage transitions create version snapshots.
+	 *
+	 * @example
+	 * ```ts
+	 * // Versioning only
+	 * .options({ versioning: true })
+	 *
+	 * // Versioning + default workflow (draft → published)
+	 * .options({ versioning: { workflow: true } })
+	 *
+	 * // Full config
+	 * .options({
+	 *   versioning: {
+	 *     maxVersions: 100,
+	 *     workflow: {
+	 *       stages: ["draft", "review", "published"],
+	 *       initialStage: "draft",
+	 *     },
+	 *   },
+	 * })
+	 * ```
 	 */
 	versioning?: boolean | CollectionVersioningOptions;
-	/**
-	 * Publishing workflow configuration.
-	 */
-	workflow?: boolean | WorkflowOptions;
 }
 
 /**

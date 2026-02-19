@@ -61,19 +61,18 @@ describe("default access control", () => {
 		.globals({
 			site_settings: siteSettings,
 			admin_settings: adminSettings,
+		})
+		.defaultAccess({
+			read: ({ session }) => !!session,
+			create: ({ session }) => !!session,
+			update: ({ session }) => !!session,
+			delete: ({ session }) => !!session,
 		});
 
 	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule, {
-			defaultAccess: {
-				read: ({ session }) => !!session,
-				create: ({ session }) => !!session,
-				update: ({ session }) => !!session,
-				delete: ({ session }) => !!session,
-			},
-		});
+		setup = await buildMockApp(testModule);
 		await runTestDbMigrations(setup.app);
 	});
 

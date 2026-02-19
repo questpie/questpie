@@ -31,10 +31,23 @@ export interface AccessRuleEvaluationContext {
 }
 
 /**
- * Execute an access rule and return boolean or AccessWhere
+ * Execute an access rule and return boolean or AccessWhere.
  *
- * @param rule - The access rule to execute
- * @param context - Evaluation context
+ * **Default behavior (no rule defined):**
+ * When no access rule is provided (`undefined`), the system defaults to
+ * requiring an authenticated session (`!!context.session`). This means:
+ * - Authenticated requests → allowed
+ * - Unauthenticated requests → denied
+ *
+ * This "secure by default" behavior is the last resort when:
+ * 1. The collection/global has no `.access()` rule for the operation, AND
+ * 2. No `defaultAccess` is configured via `.defaultAccess()` on the builder
+ *
+ * To make a resource publicly accessible, explicitly set the rule to `true`
+ * (e.g., `.access({ read: true })` or `.defaultAccess({ read: true })`).
+ *
+ * @param rule - The access rule to execute (boolean, function, or undefined)
+ * @param context - Evaluation context including session, db, app
  * @returns true (allow), false (deny), or AccessWhere (conditional access)
  */
 export async function executeAccessRule(
@@ -46,8 +59,9 @@ export async function executeAccessRule(
     | undefined,
   context: AccessRuleEvaluationContext,
 ): Promise<boolean | AccessWhere> {
-  // No rule = allow
-  if (rule === undefined) return true;
+  // No rule = require session (secure by default)
+  // To allow public access, explicitly set the rule to `true`
+  if (rule === undefined) return !!context.session;
 
   // Boolean rule
   if (typeof rule === "boolean") {

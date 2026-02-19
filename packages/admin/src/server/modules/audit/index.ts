@@ -71,9 +71,11 @@ export function createAuditModule(options?: AuditModuleOptions) {
 			collections: {
 				afterChange: collectionHooks.afterChange,
 				afterDelete: collectionHooks.afterDelete,
+				afterTransition: collectionHooks.afterTransition,
 			},
 			globals: {
 				afterChange: globalHooks.afterChange,
+				afterTransition: globalHooks.afterTransition,
 			},
 		});
 }

@@ -286,6 +286,10 @@ export function buildVersionsSelectObject(
 		versionOperation: versionsTbl.versionOperation,
 		versionUserId: versionsTbl.versionUserId,
 		versionCreatedAt: versionsTbl.versionCreatedAt,
+		// Include workflow stage so the admin UI can display the current stage
+		...(versionsTbl.versionStage
+			? { versionStage: versionsTbl.versionStage }
+			: {}),
 	};
 
 	const locale = context.locale;

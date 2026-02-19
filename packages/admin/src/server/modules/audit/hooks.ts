@@ -1,6 +1,8 @@
 import type {
 	GlobalCollectionHookContext,
+	GlobalCollectionTransitionHookContext,
 	GlobalGlobalHookContext,
+	GlobalGlobalTransitionHookContext,
 } from "questpie";
 
 /**
@@ -240,6 +242,65 @@ export function createCollectionAuditHooks() {
 				);
 			}
 		},
+
+		/**
+		 * Log workflow stage transitions for collections.
+		 * Records the from/to stage in both `changes` and `metadata`
+		 * so the History sidebar can display a clean stage diff.
+		 */
+		async afterTransition(ctx: GlobalCollectionTransitionHookContext) {
+			try {
+				const app = ctx.app as any;
+
+				// Skip collections with audit: false
+				if (isAuditDisabled(app, "collection", ctx.collection)) return;
+
+				const resourceLabel = extractLabel(ctx.data);
+				const userName =
+					ctx.session?.user?.name || ctx.session?.user?.email || null;
+				const resourceTypeLabel = getResourceTypeLabel(
+					app,
+					"collection",
+					ctx.collection,
+				);
+
+				await app.api.collections.adminAuditLog.create(
+					{
+						action: "transition",
+						resourceType: "collection",
+						resource: ctx.collection,
+						resourceId: ctx.data?.id ? String(ctx.data.id) : null,
+						resourceLabel,
+						userId: ctx.session?.user?.id ? String(ctx.session.user.id) : null,
+						userName,
+						locale: ctx.locale || null,
+						changes: {
+							stage: { from: ctx.fromStage, to: ctx.toStage },
+						},
+						metadata: {
+							fromStage: ctx.fromStage,
+							toStage: ctx.toStage,
+						},
+						title: generateTitle(
+							"transition",
+							"collection",
+							resourceTypeLabel,
+							resourceLabel,
+							userName,
+						),
+					},
+					{
+						accessMode: "system",
+						db: ctx.db,
+					},
+				);
+			} catch (err) {
+				console.error(
+					`[Audit] Failed to log transition for collection "${ctx.collection}":`,
+					err,
+				);
+			}
+		},
 	};
 }
 
@@ -291,6 +352,63 @@ export function createGlobalAuditHooks() {
 			} catch (err) {
 				console.error(
 					`[Audit] Failed to log update for global "${ctx.global}":`,
+					err,
+				);
+			}
+		},
+
+		/**
+		 * Log workflow stage transitions for globals.
+		 * Records the from/to stage in both `changes` and `metadata`.
+		 */
+		async afterTransition(ctx: GlobalGlobalTransitionHookContext) {
+			try {
+				const app = ctx.app as any;
+
+				// Skip globals with audit: false
+				if (isAuditDisabled(app, "global", ctx.global)) return;
+
+				const userName =
+					ctx.session?.user?.name || ctx.session?.user?.email || null;
+				const resourceTypeLabel = getResourceTypeLabel(
+					app,
+					"global",
+					ctx.global,
+				);
+
+				await app.api.collections.adminAuditLog.create(
+					{
+						action: "transition",
+						resourceType: "global",
+						resource: ctx.global,
+						resourceId: null,
+						resourceLabel: ctx.global,
+						userId: ctx.session?.user?.id ? String(ctx.session.user.id) : null,
+						userName,
+						locale: ctx.locale || null,
+						changes: {
+							stage: { from: ctx.fromStage, to: ctx.toStage },
+						},
+						metadata: {
+							fromStage: ctx.fromStage,
+							toStage: ctx.toStage,
+						},
+						title: generateTitle(
+							"transition",
+							"global",
+							resourceTypeLabel,
+							ctx.global,
+							userName,
+						),
+					},
+					{
+						accessMode: "system",
+						db: ctx.db,
+					},
+				);
+			} catch (err) {
+				console.error(
+					`[Audit] Failed to log transition for global "${ctx.global}":`,
 					err,
 				);
 			}

@@ -142,7 +142,7 @@ export function BlockLibrarySidebar({
 	};
 
 	return (
-		<Sheet open={open} onOpenChange={onClose}>
+		<Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
 			<SheetContent side="left" className="w-full sm:max-w-md flex flex-col">
 				<SheetHeader className="space-y-2">
 					<SheetTitle>Add Block</SheetTitle>

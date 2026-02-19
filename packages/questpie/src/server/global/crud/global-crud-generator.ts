@@ -59,6 +59,7 @@ import type {
 } from "#questpie/server/global/builder/types.js";
 import {
 	type ResolvedWorkflowConfig,
+	extractWorkflowFromVersioning,
 	resolveWorkflowConfig,
 } from "#questpie/server/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
@@ -86,7 +87,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		private getVirtualsForVersions?: (context: any) => any,
 		private app?: any,
 	) {
-		this.workflowConfig = resolveWorkflowConfig(this.state.options.workflow);
+		this.workflowConfig = resolveWorkflowConfig(
+			extractWorkflowFromVersioning(this.state.options.versioning),
+		);
 
 		if (this.workflowConfig && !this.versionsTable) {
 			throw new Error(
@@ -1451,6 +1454,10 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			versionOperation: versionsTable.versionOperation,
 			versionUserId: versionsTable.versionUserId,
 			versionCreatedAt: versionsTable.versionCreatedAt,
+			// Include workflow stage so the admin UI can display the current stage
+			...(versionsTable.versionStage
+				? { versionStage: versionsTable.versionStage }
+				: {}),
 		};
 		const defaultLocale = context?.defaultLocale || DEFAULT_LOCALE;
 
@@ -1575,10 +1582,15 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 	}
 
 	/**
-	 * Enforce access control
-	 * Delegates to extracted executeAccessRule utility
-	 * Falls back to app defaultAccess if global doesn't define its own rules
-	 * Note: Globals only return boolean (no AccessWhere support)
+	 * Enforce access control for a global operation.
+	 *
+	 * Resolution order:
+	 * 1. Global's own `.access()` rule for the operation
+	 * 2. App-level `defaultAccess` (from `.defaultAccess()` on the builder)
+	 * 3. Framework fallback in `executeAccessRule`: require session (`!!session`)
+	 *
+	 * System mode (`accessMode === "system"`) bypasses all access checks.
+	 * Note: Globals only return boolean (no AccessWhere support).
 	 */
 	private async enforceAccessControl(
 		operation: "read" | "update",
