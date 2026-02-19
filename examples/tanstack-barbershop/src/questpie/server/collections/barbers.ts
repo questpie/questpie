@@ -220,7 +220,7 @@ export const barbers = qb
 			return `/barbers/${slug}?preview=true`;
 		},
 	})
-	.list(({ v }) => v.table({}))
+	.list(({ v, f }) => v.table({}))
 	.form(({ v, f }) =>
 		v.form({
 			sidebar: {

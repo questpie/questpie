@@ -2,15 +2,15 @@
  * Admin Type Registry
  *
  * Module augmentation interface for type-safe admin access.
- * Users extend this interface to register their CMS and admin types.
+ * Users extend this interface to register their app and admin types.
  *
- * @deprecated Prefer using `createTypedHooks<AppCMS>()` instead of module augmentation.
+ * @deprecated Prefer using `createTypedHooks<App>()` instead of module augmentation.
  * The new factory pattern provides the same type safety without global augmentation.
  *
  * @example New recommended pattern:
  * ```ts
  * // In your admin hooks file:
- * import type { AppCMS } from './server/cms';
+ * import type { App } from "./server/app";
  * import { createTypedHooks } from '@questpie/admin/client';
  *
  * export const {
@@ -18,7 +18,7 @@
  *   useCollectionItem,
  *   useCollectionCreate,
  *   useGlobal,
- * } = createTypedHooks<AppCMS>();
+ * } = createTypedHooks<App>();
  * ```
  */
 
@@ -32,7 +32,7 @@ import type { AdminBuilder } from "./admin-builder";
 /**
  * Admin Type Registry for module augmentation.
  *
- * @deprecated Use `createTypedHooks<AppCMS>()` instead for new projects.
+ * @deprecated Use `createTypedHooks<App>()` instead for new projects.
  * Module augmentation is still supported for backwards compatibility.
  *
  * Legacy usage (still works but not recommended):
@@ -45,7 +45,7 @@ import type { AdminBuilder } from "./admin-builder";
  *
  * declare module "@questpie/admin" {
  *   interface AdminTypeRegistry {
- *     cms: AppCMS
+ *     app: App
  *     admin: typeof admin
  *   }
  * }
@@ -54,25 +54,25 @@ import type { AdminBuilder } from "./admin-builder";
  * New recommended pattern:
  * @example
  * ```ts
- * import type { AppCMS } from './server/cms';
+ * import type { App } from "./server/app";
  * import { createTypedHooks } from '@questpie/admin/client';
  *
  * export const {
  *   useCollectionList,
  *   useCollectionItem,
  *   useGlobal,
- * } = createTypedHooks<AppCMS>();
+ * } = createTypedHooks<App>();
  * ```
  */
 // biome-ignore lint/suspicious/noEmptyInterface: Augmentation target for user's types
 export interface AdminTypeRegistry {
   // NOTE: Module augmentation is deprecated.
-  // Use createTypedHooks<AppCMS>() from '@questpie/admin/client' instead.
+  // Use createTypedHooks<App>() from '@questpie/admin/client' instead.
   //
   // Legacy pattern (still works):
   // declare module "@questpie/admin" {
   //   interface AdminTypeRegistry {
-  //     cms: AppCMS
+  // app: App
   //     admin: typeof admin
   //   }
   // }
@@ -83,9 +83,9 @@ export interface AdminTypeRegistry {
 // ============================================================================
 
 /**
- * Extract the CMS type from AdminTypeRegistry if augmented, otherwise unknown.
+ * Extract the app type from AdminTypeRegistry if augmented, otherwise unknown.
  */
-export type RegisteredCMS = AdminTypeRegistry extends { cms: infer T }
+export type RegisteredCMS = AdminTypeRegistry extends { app: infer T }
   ? T extends Questpie<any>
     ? T
     : unknown
@@ -101,8 +101,8 @@ export type RegisteredAdmin = AdminTypeRegistry extends { admin: infer T }
   : unknown;
 
 /**
- * Extract collection names from registered CMS.
- * Falls back to string if CMS is not registered.
+ * Extract collection names from registered app.
+ * Falls back to string if app is not registered.
  */
 export type RegisteredCollectionNames =
   RegisteredCMS extends Questpie<infer TConfig>
@@ -110,8 +110,8 @@ export type RegisteredCollectionNames =
     : string;
 
 /**
- * Extract global names from registered CMS.
- * Falls back to string if CMS is not registered.
+ * Extract global names from registered app.
+ * Falls back to string if app is not registered.
  */
 export type RegisteredGlobalNames =
   RegisteredCMS extends Questpie<infer TConfig>
@@ -119,7 +119,7 @@ export type RegisteredGlobalNames =
     : string;
 
 /**
- * Check if the registry has been augmented with a CMS type.
+ * Check if the registry has been augmented with a app type.
  */
 export type IsRegistered = RegisteredCMS extends unknown
   ? RegisteredCMS extends Questpie<any>

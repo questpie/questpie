@@ -36,7 +36,6 @@
  * ```
  */
 
-import type { RegisteredApp } from "questpie";
 import type { BlocksDocument } from "../fields/blocks.js";
 import type {
 	AnyBlockDefinition,
@@ -45,11 +44,11 @@ import type {
 
 /**
  * Context for blocks prefetch processing.
- * Typed via Register.app when registered.
+ * Use `typedApp<App>(ctx.app)` for typed access.
  */
 export interface BlocksPrefetchContext {
-	/** CMS app instance — typed via Register.app */
-	app: RegisteredApp;
+	/** app instance — use `typedApp<App>(ctx.app)` for typed access */
+	app: any;
 	/** Database client */
 	db: unknown;
 	/** Current locale */

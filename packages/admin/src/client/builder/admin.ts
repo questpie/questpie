@@ -268,7 +268,7 @@ export class Admin<TState extends AdminBuilderState = AdminBuilderState> {
 // ============================================================================
 
 /**
- * Infer the CMS type from an Admin instance
+ * Infer the app type from an Admin instance
  */
 export type InferAdminCMS<TAdmin> =
 	TAdmin extends Admin<infer TState>

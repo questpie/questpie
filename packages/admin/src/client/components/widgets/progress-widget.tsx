@@ -33,7 +33,7 @@ export interface ProgressWidgetProps {
  *     type: "progress",
  *     id: "monthly-sales",
  *     title: "Monthly Sales Goal",
- *     fetchFn: async (client) => ({
+ *     loader: async (client) => ({
  *       current: 75000,
  *       target: 100000,
  *       label: "$75,000 / $100,000"
@@ -54,15 +54,15 @@ export default function ProgressWidget({ config }: ProgressWidgetProps) {
 		label?: string;
 		subtitle?: string;
 	};
-	const useServerData = !!config.hasFetchFn;
+	const useServerData = !!config.hasLoader;
 	const serverQuery = useServerWidgetData<ProgressData>(config.id, {
 		enabled: useServerData,
 		refreshInterval: config.refreshInterval,
 	});
 	const clientQuery = useQuery<ProgressData>({
 		queryKey: ["widget", "progress", config.id],
-		queryFn: () => config.fetchFn!(client),
-		enabled: !useServerData && !!config.fetchFn,
+		queryFn: () => config.loader!(client),
+		enabled: !useServerData && !!config.loader,
 		refetchInterval: config.refreshInterval,
 	});
 	const { data, isLoading, error, refetch } = useServerData

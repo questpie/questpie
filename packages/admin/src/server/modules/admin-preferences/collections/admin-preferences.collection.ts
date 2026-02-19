@@ -14,13 +14,13 @@ import { q } from "questpie";
  * ```ts
  * import { adminModule } from "@questpie/admin/server";
  *
- * const cms = q({ name: "my-app" })
+ * const app = q({ name: "my-app" })
  *   .use(adminModule)
  *   .collections({ ... })
  *   .build({ ... });
  *
  * // Access preferences
- * const prefs = await cms.api.collections.adminPreferences.findOne({
+ * const prefs = await app.api.collections.adminPreferences.findOne({
  *   where: { userId: currentUser.id, key: "viewState:posts" }
  * });
  * ```

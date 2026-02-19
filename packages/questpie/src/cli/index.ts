@@ -18,7 +18,7 @@ program
 	.description("Generate a new migration")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.option("-n, --name <name>", "Custom migration name")
@@ -49,7 +49,7 @@ program
 	.description("Run pending migrations")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.option("-t, --target <migration>", "Target specific migration ID")
@@ -74,7 +74,7 @@ program
 	.description("Rollback migrations")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.option("-b, --batch <number>", "Rollback specific batch number")
@@ -101,7 +101,7 @@ program
 	.description("Show migration status")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.action(async (options) => {
@@ -122,7 +122,7 @@ program
 	.description("Rollback all migrations")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.option("--dry-run", "Show what would be run without executing")
@@ -145,7 +145,7 @@ program
 	.description("Reset and run all migrations")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.option("--dry-run", "Show what would be run without executing")
@@ -168,7 +168,7 @@ program
 	.description("Push schema directly to database (dev only)")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.option("-f, --force", "Skip warning prompt")
@@ -192,7 +192,7 @@ program
 	.description("Run pending seeds")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.option(
@@ -224,7 +224,7 @@ program
 	.description("Generate a new seed file")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.requiredOption("-n, --name <name>", "Seed name (e.g., adminUser, demoData)")
@@ -250,7 +250,7 @@ program
 	.description("Undo executed seeds")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.option(
@@ -278,7 +278,7 @@ program
 	.description("Show seed status")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.action(async (options) => {
@@ -299,7 +299,7 @@ program
 	.description("Reset seed tracking (does NOT undo data)")
 	.option(
 		"-c, --config <path>",
-		"Path to CMS config file",
+		"Path to app config file",
 		"questpie.config.ts",
 	)
 	.option("--only <ids>", "Reset tracking for specific seeds (comma-separated)")

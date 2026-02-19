@@ -1,6 +1,6 @@
 import type { z } from "zod";
 // Note: any types are intentional for composition flexibility.
-// Users should use typedApp<AppCMS>(), typedDb<AppCMS>(), and typedSession<AppCMS>() for type-safe access.
+// Users should use typedApp<App>(), typedDb<App>(), and typedSession<App>() for type-safe access.
 
 export type FunctionType = "query" | "mutation";
 
@@ -30,19 +30,19 @@ export type FunctionAccess<TApp = any> =
  * Context for JSON function handlers.
  *
  * @template TInput - Input type (inferred from schema)
- * @template TApp - The CMS app type (defaults to any)
+ * @template TApp - The app app type (defaults to any)
  *
  * @example
  * ```ts
  * import { typedApp, typedSession } from "questpie";
- * import type { AppCMS } from "./cms";
+ * import type { App } from "./questpie";
  *
  * // Pattern 1: With outputSchema (recommended)
  * const getStats = q.fn({
  *   schema: z.object({ period: z.string() }),
  *   outputSchema: z.array(statsSchema),
  *   handler: async ({ input, session }) => {
- *     const sess = typedSession<AppCMS>(session);
+ *     const sess = typedSession<App>(session);
  *     if (!sess) throw new Error('Unauthorized');
  *     // Return type inferred from outputSchema
  *     return [...];
@@ -50,13 +50,13 @@ export type FunctionAccess<TApp = any> =
  * });
  *
  * // Pattern 2: With BaseCMS (for complex cases)
- * import type { InferBaseCMS } from "questpie";
- * type BaseCMS = InferBaseCMS<typeof baseInstance>;
+ * import type { InferBaseApp } from "questpie";
+ * type BaseCMS = InferBaseApp<typeof baseInstance>;
  *
  * const getOrders = q.fn({
  *   handler: async ({ app }) => {
- *     const cms = typedApp<BaseCMS>(app);
- *     return cms.api.collections.orders.find();
+ *     const app = typedApp<BaseCMS>(app);
+ *     return app.api.collections.orders.find();
  *   }
  * });
  * ```
@@ -64,11 +64,11 @@ export type FunctionAccess<TApp = any> =
 export interface FunctionHandlerArgs<TInput = any, TApp = any> {
 	/** Validated input data */
 	input: TInput;
-	/** CMS instance - use typedApp<AppCMS>(app) for type-safe access */
+	/** app instance - use typedApp<App>(app) for type-safe access */
 	app: TApp;
 	/**
 	 * Auth session (user + session) from Better Auth.
-	 * Use typedSession<AppCMS>(session) for type-safe access.
+	 * Use typedSession<App>(session) for type-safe access.
 	 * - undefined = session not resolved
 	 * - null = explicitly unauthenticated
 	 * - object = authenticated
@@ -78,7 +78,7 @@ export interface FunctionHandlerArgs<TInput = any, TApp = any> {
 	locale?: string;
 	/**
 	 * Database client (may be transaction).
-	 * Use typedDb<AppCMS>(db) for type-safe access.
+	 * Use typedDb<App>(db) for type-safe access.
 	 */
 	db: any;
 }
@@ -86,19 +86,19 @@ export interface FunctionHandlerArgs<TInput = any, TApp = any> {
 /**
  * Context for raw function handlers.
  *
- * @template TApp - The CMS app type (defaults to any)
+ * @template TApp - The app app type (defaults to any)
  *
  * @example
  * ```ts
  * import { typedApp } from "questpie";
- * import type { AppCMS } from "./cms";
+ * import type { App } from "./questpie";
  *
  * const webhook = q.fn({
  *   mode: 'raw',
  *   handler: async ({ request, app }) => {
- *     const cms = typedApp<AppCMS>(app);
+ *     const app = typedApp<App>(app);
  *     const body = await request.json();
- *     await cms.queue.processWebhook.publish(body);
+ *     await app.queue.processWebhook.publish(body);
  *     return new Response('OK', { status: 200 });
  *   }
  * })
@@ -107,11 +107,11 @@ export interface FunctionHandlerArgs<TInput = any, TApp = any> {
 export interface RawFunctionHandlerArgs<TApp = any> {
 	/** Raw request object */
 	request: Request;
-	/** CMS instance - use typedApp<AppCMS>(app) for type-safe access */
+	/** app instance - use typedApp<App>(app) for type-safe access */
 	app: TApp;
 	/**
 	 * Auth session (user + session) from Better Auth.
-	 * Use typedSession<AppCMS>(session) for type-safe access.
+	 * Use typedSession<App>(session) for type-safe access.
 	 * - undefined = session not resolved
 	 * - null = explicitly unauthenticated
 	 * - object = authenticated
@@ -121,7 +121,7 @@ export interface RawFunctionHandlerArgs<TApp = any> {
 	locale?: string;
 	/**
 	 * Database client (may be transaction).
-	 * Use typedDb<AppCMS>(db) for type-safe access.
+	 * Use typedDb<App>(db) for type-safe access.
 	 */
 	db: any;
 }
@@ -135,7 +135,7 @@ export interface RawFunctionHandlerArgs<TApp = any> {
  *
  * @template TInput - Input type (inferred from schema)
  * @template TOutput - Output type (inferred from outputSchema or handler return)
- * @template TApp - The CMS app type (defaults to any from module augmentation)
+ * @template TApp - The app app type (defaults to any from module augmentation)
  *
  * @example
  * ```ts
@@ -163,7 +163,7 @@ export type JsonFunctionDefinition<TInput = any, TOutput = any, TApp = any> = {
 /**
  * Raw function definition for direct request/response handling.
  *
- * @template TApp - The CMS app type (defaults to any from module augmentation)
+ * @template TApp - The app app type (defaults to any from module augmentation)
  *
  * @example
  * ```ts

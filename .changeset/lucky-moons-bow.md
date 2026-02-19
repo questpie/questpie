@@ -62,3 +62,24 @@ Add workflow stage transitions:
 - OpenAPI `POST` transition endpoints (generated only for workflow-enabled collections/globals)
 - Admin built-in `"transition"` action with workflow metadata exposed in config
 - Scheduled transitions via queue job (`scheduledAt` parameter — future dates enqueue, past dates execute immediately)
+
+**Breaking: remove `RegisteredApp` type and `Register` interface** — The `Register` module augmentation pattern created unavoidable circular type dependencies (TS7022/TS2502) whenever `questpie.gen.ts` augmented `Register.app` with the full app type. All context types (`WidgetFetchContext`, `ServerActionContext`, `BlockPrefetchContext`, `BlocksPrefetchContext`) now use `app: any`. For typed access, use `typedApp<App>(ctx.app)` instead.
+
+**Admin field meta augmentation** — The admin package now properly augments all questpie field meta interfaces (`TextFieldMeta`, `BooleanFieldMeta`, `SelectFieldMeta`, etc.) with `admin?: *FieldAdminMeta` via `declare module "questpie"`. Previously, using `meta: { admin: { ... } }` in field definitions caused TS2353 errors because no augmentation existed. Rich text and blocks field metas are augmented via `declare module "@questpie/admin/server"`.
+
+**Unify admin meta types with renderer implementations** — `ObjectFieldAdminMeta`, `ArrayFieldAdminMeta`, and `UploadFieldAdminMeta` now match the properties that admin renderers actually consume:
+- `ObjectFieldAdminMeta`: `wrapper`, `layout`, `columns`, `defaultCollapsed`
+- `ArrayFieldAdminMeta`: `orderable`, `mode`, `layout`, `columns`, `itemLabel`, `minItems`, `maxItems`
+- `UploadFieldAdminMeta`: adds `showPreview`, `editable`, `previewVariant`, `multiple`, `maxItems`, `orderable`, `layout`
+- `ServerChartWidget`: adds optional `field`, `dateField` is now optional
+- `ServerValueWidget`: adds optional `refreshInterval`
+
+**Audit module is now opt-in** — `auditModule` is no longer auto-included in `adminModule`. Users must explicitly `.use(auditModule)` to enable audit logging. Export `createAuditDashboardWidget()` for wiring audit into dashboard. The audit collection has full admin UI config (`.admin()`, `.list()`, `.form()`) with a read-only table view — use `{ type: "collection", collection: "adminAuditLog" }` in sidebar.
+
+**New `audit` option on admin config** — Set `audit: false` in `.admin()` to exclude a collection or global from audit logging. All internal admin collections already have this set.
+
+**Remove `bindCollectionToBuilder`** — Starter module collections (user, assets) now use `.admin()`, `.list()`, `.form()` directly. The `~questpieApp` rebinding was unnecessary since admin methods are monkey-patched on the prototype.
+
+**Fix `.admin()` / `.list()` / `.form()` crashing on standalone collections** — Component and view proxies now skip validation when no registry is available (standalone builders without `.components()` / `.listViews()` / `.editViews()`). Audit-log collection uses a new `adminCoreBuilder` with admin registries pre-configured, so it resolves `c.icon(...)`, `v.table(...)`, and `v.form(...)` correctly.
+
+**Breaking: rename `fetchFn` → `loader` on all dashboard widget types.** Server-side interfaces (`ServerStatsWidget`, `ServerTimelineWidget`, etc.) and client-side configs (`ValueWidgetConfig`, `ProgressWidgetConfig`, etc.). The serialized flag is renamed from `hasFetchFn` to `hasLoader`.

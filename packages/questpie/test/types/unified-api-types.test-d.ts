@@ -102,7 +102,7 @@ const testModule = q
 	.collections({ users, posts, comments, tags, media })
 	.globals({ site_settings: siteSettings });
 
-type CmsFromBuilder = typeof testModule.$inferCms;
+type CmsFromBuilder = typeof testModule.$inferApp;
 
 // ============================================================================
 // Table Shape Inference Tests

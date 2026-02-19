@@ -194,7 +194,7 @@ describe("collection-hooks", () => {
 			hookCallOrder = [];
 			const module = createBeforeAfterModule(hookCallOrder);
 			setup = await buildMockApp(module);
-			await runTestDbMigrations(setup.cms);
+			await runTestDbMigrations(setup.app);
 		});
 
 		afterEach(async () => {
@@ -202,7 +202,7 @@ describe("collection-hooks", () => {
 		});
 
 		it("executes hooks in correct order on create", async () => {
-			await setup.cms.api.collections.articles.create({
+			await setup.app.api.collections.articles.create({
 				title: "My First Article",
 			});
 
@@ -210,7 +210,7 @@ describe("collection-hooks", () => {
 		});
 
 		it("transforms data in beforeChange hook", async () => {
-			const result = await setup.cms.api.collections.articles.create({
+			const result = await setup.app.api.collections.articles.create({
 				title: "Hello World Article",
 			});
 
@@ -218,7 +218,7 @@ describe("collection-hooks", () => {
 		});
 
 		it("publishes job in afterChange hook", async () => {
-			const result = await setup.cms.api.collections.articles.create({
+			const result = await setup.app.api.collections.articles.create({
 				title: "Test",
 			});
 
@@ -227,12 +227,12 @@ describe("collection-hooks", () => {
 		});
 
 		it("executes hooks on update", async () => {
-			const created = await setup.cms.api.collections.articles.create({
+			const created = await setup.app.api.collections.articles.create({
 				title: "Original",
 			});
 
 			hookCallOrder.length = 0;
-			await setup.cms.api.collections.articles.update({
+			await setup.app.api.collections.articles.update({
 				where: { id: created!.id },
 				data: { title: "Updated" },
 			});
@@ -248,7 +248,7 @@ describe("collection-hooks", () => {
 
 		beforeEach(async () => {
 			setup = await buildMockApp(testModuleUpdate);
-			await runTestDbMigrations(setup.cms);
+			await runTestDbMigrations(setup.app);
 		});
 
 		afterEach(async () => {
@@ -256,13 +256,13 @@ describe("collection-hooks", () => {
 		});
 
 		it("provides original record in afterChange", async () => {
-			const created = await setup.cms.api.collections.articles.create({
+			const created = await setup.app.api.collections.articles.create({
 				title: "Test",
 				status: "draft",
 			});
 
 			// Update to published - hook should send email
-			await setup.cms.api.collections.articles.update({
+			await setup.app.api.collections.articles.update({
 				where: { id: created!.id },
 				data: { status: "published" },
 			});
@@ -279,7 +279,7 @@ describe("collection-hooks", () => {
 
 		beforeEach(async () => {
 			setup = await buildMockApp(testModuleDelete);
-			await runTestDbMigrations(setup.cms);
+			await runTestDbMigrations(setup.app);
 		});
 
 		afterEach(async () => {
@@ -287,16 +287,16 @@ describe("collection-hooks", () => {
 		});
 
 		it("executes beforeDelete and afterDelete", async () => {
-			const created = await setup.cms.api.collections.articles.create({
+			const created = await setup.app.api.collections.articles.create({
 				title: "To Delete",
 			});
 
-			await setup.cms.api.collections.articles.delete({
+			await setup.app.api.collections.articles.delete({
 				where: { id: created!.id },
 			});
 
 			// Verify deletion worked
-			const found = await setup.cms.api.collections.articles.findOne({
+			const found = await setup.app.api.collections.articles.findOne({
 				where: { id: created!.id },
 			});
 			expect(found).toBeNull();
@@ -308,7 +308,7 @@ describe("collection-hooks", () => {
 
 		beforeEach(async () => {
 			setup = await buildMockApp(testModuleError);
-			await runTestDbMigrations(setup.cms);
+			await runTestDbMigrations(setup.app);
 		});
 
 		afterEach(async () => {
@@ -317,14 +317,14 @@ describe("collection-hooks", () => {
 
 		it("throws error from beforeChange hook", async () => {
 			expect(
-				setup.cms.api.collections.articles.create({
+				setup.app.api.collections.articles.create({
 					title: "forbidden",
 				}),
 			).rejects.toThrow("Forbidden title");
 		});
 
 		it("allows valid records", async () => {
-			const result = await setup.cms.api.collections.articles.create({
+			const result = await setup.app.api.collections.articles.create({
 				title: "allowed",
 			});
 
@@ -342,7 +342,7 @@ describe("collection-hooks", () => {
 			enrichmentData = new Map();
 			const module = createEnrichmentModule(enrichmentData);
 			setup = await buildMockApp(module);
-			await runTestDbMigrations(setup.cms);
+			await runTestDbMigrations(setup.app);
 		});
 
 		afterEach(async () => {
@@ -350,7 +350,7 @@ describe("collection-hooks", () => {
 		});
 
 		it("shares data between beforeChange and afterChange", async () => {
-			const result = await setup.cms.api.collections.articles.create({
+			const result = await setup.app.api.collections.articles.create({
 				title: "Enriched Article",
 			});
 

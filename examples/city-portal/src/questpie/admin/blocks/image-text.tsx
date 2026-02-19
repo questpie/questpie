@@ -6,12 +6,12 @@ import {
 	type BlockComponentProps,
 	RichTextRenderer,
 } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 export function ImageTextRenderer({
 	values,
 	data,
-}: BlockComponentProps<AppCMS, "image-text">) {
+}: BlockComponentProps<App, "image-text">) {
 	const imageUrl = data?.image?.url || values.image;
 
 	const isImageLeft = values.imagePosition !== "right";

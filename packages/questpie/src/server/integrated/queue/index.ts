@@ -8,13 +8,13 @@
  *
  * - **Typesafe Jobs**: Define jobs with Zod schemas for compile-time type safety
  * - **Auto-validation**: Payloads are validated automatically using Zod schemas
- * - **Worker Support**: Easy worker setup with `cms.queue.listen()`
- * - **Serverless Support**: Tick mode with `cms.queue.runOnce()`
+ * - **Worker Support**: Easy worker setup with `app.queue.listen()`
+ * - **Serverless Support**: Tick mode with `app.queue.runOnce()`
  * - **Push Consumers**: Runtime-specific push consumer handlers
  * - **Workflows**: Chain multiple jobs together with the workflow builder
  * - **Scheduling**: Support for delayed jobs and cron scheduling
  * - **Retries**: Built-in retry logic with exponential backoff
- * - **Context Access**: Full access to CMS context (db, auth, storage, email, etc.)
+ * - **Context Access**: Full access to app context (db, auth, storage, email, etc.)
  *
  * ## Quick Start
  *
@@ -63,13 +63,13 @@
  * });
  * ```
  *
- * ### 2. Configure CMS
+ * ### 2. Configure QuestPie
  *
  * ```ts
  * import { Questpie, pgBossAdapter } from 'questpie';
  * import { sendEmailJob, processImageJob } from './jobs';
  *
- * const cms = new Questpie({
+ * const app = new Questpie({
  *   db: {
  *     connection: { /* ... *\/ }
  *   },
@@ -89,21 +89,21 @@
  * ```ts
  * // In your application code (hooks, API routes, etc.)
  * // Jobs are accessible by their registration key on the queue client
- * const cms = getAppFromContext();
- * await cms.queue.sendEmail.publish({
+ * const app = getAppFromContext();
+ * await app.queue.sendEmail.publish({
  *   to: 'user@example.com',
  *   subject: 'Welcome!',
  *   body: '<h1>Welcome to QUESTPIE!</h1>',
  * });
  *
  * // Delayed job
- * await cms.queue.processImage.publish(
+ * await app.queue.processImage.publish(
  *   { imageUrl: 'https://...', sizes: [100, 200, 400] },
  *   { startAfter: 60 } // Start after 60 seconds
  * );
  *
  * // Scheduled recurring job
- * await cms.queue.sendEmail.schedule(
+ * await app.queue.sendEmail.schedule(
  *   { to: 'admin@example.com', subject: 'Daily Report', body: '...' },
  *   '0 9 * * *' // Every day at 9am
  * );
@@ -117,7 +117,7 @@
  * import { Questpie, pgBossAdapter } from 'questpie';
  * import { sendEmailJob, processImageJob } from './jobs';
  *
- * const cms = new Questpie({
+ * const app = new Questpie({
  *   // Same config as your main app
  *   queue: {
  *     jobs: [sendEmailJob, processImageJob],
@@ -126,10 +126,10 @@
  * });
  *
  * // Start listening to all jobs
- * await cms.queue.listen();
+ * await app.queue.listen();
  *
  * // Graceful shutdown is enabled by default
- * // await cms.queue.listen({ shutdownTimeoutMs: 15000 });
+ * // await app.queue.listen({ shutdownTimeoutMs: 15000 });
  * ```
  *
  * ## Workflows
@@ -154,8 +154,8 @@
  *   })
  *   .build(orderSchema);
  *
- * // Use in CMS config
- * const cms = new Questpie({
+ * // Use in app config
+ * const app = new Questpie({
  *   queue: {
  *     jobs: [processOrderWorkflow],
  *     adapter: pgBossAdapter({ /* ... *\/ })
@@ -170,8 +170,8 @@
  * Ensure only one job with a given key exists:
  *
  * ```ts
- * const cms = getAppFromContext();
- * await cms.queue.processImage.publish(
+ * const app = getAppFromContext();
+ * await app.queue.processImage.publish(
  *   { imageUrl: url, sizes: [100, 200] },
  *   { singletonKey: url } // Only one job per URL
  * );
@@ -180,8 +180,8 @@
  * ### Priority Jobs
  *
  * ```ts
- * const cms = getAppFromContext();
- * await cms.queue.sendEmail.publish(
+ * const app = getAppFromContext();
+ * await app.queue.sendEmail.publish(
  *   { to: 'urgent@example.com', subject: 'Alert!', body: '...' },
  *   { priority: 10 } // Higher = more important
  * );
@@ -191,11 +191,11 @@
  *
  * ```ts
  * // Use Promise.all for parallel execution
- * const cms = getAppFromContext();
+ * const app = getAppFromContext();
  * const results = await Promise.all([
- *   cms.queue.processImage.publish({ imageUrl: url1, sizes: [100] }),
- *   cms.queue.processImage.publish({ imageUrl: url2, sizes: [100] }),
- *   cms.queue.processImage.publish({ imageUrl: url3, sizes: [100] }),
+ *   app.queue.processImage.publish({ imageUrl: url1, sizes: [100] }),
+ *   app.queue.processImage.publish({ imageUrl: url2, sizes: [100] }),
+ *   app.queue.processImage.publish({ imageUrl: url3, sizes: [100] }),
  * ]);
  * ```
  */

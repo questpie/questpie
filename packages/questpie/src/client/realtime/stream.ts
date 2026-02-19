@@ -67,11 +67,18 @@ export async function* sseSnapshotStream<TData>(options: {
 	// Queue for data waiting to be consumed
 	const queue: TData[] = [];
 
-	// Promise resolver for when new data arrives
+	// Promise resolver/rejecter for when new data arrives or connection fails
 	let resolveNext: (() => void) | null = null;
+	let rejectNext: ((error: Error) => void) | null = null;
 
 	// Track if the stream is closed
 	let closed = false;
+
+	// Error callback - rejects the waiting promise so the generator throws
+	// instead of waiting forever (prevents infinite loading on server errors)
+	const onError = (error: Error) => {
+		rejectNext?.(error);
+	};
 
 	// Subscribe to the topic via multiplexer
 	const unsubscribe = multiplexer.subscribe(
@@ -84,6 +91,7 @@ export async function* sseSnapshotStream<TData>(options: {
 		},
 		signal,
 		customId,
+		onError,
 	);
 
 	try {
@@ -93,13 +101,15 @@ export async function* sseSnapshotStream<TData>(options: {
 				yield queue.shift()!;
 			}
 
-			// Wait for more data
+			// Wait for more data or connection error
 			if (!closed && !signal?.aborted) {
-				await new Promise<void>((resolve) => {
+				await new Promise<void>((resolve, reject) => {
 					resolveNext = resolve;
+					rejectNext = reject;
 					signal?.addEventListener("abort", () => resolve(), { once: true });
 				});
 				resolveNext = null;
+				rejectNext = null;
 			}
 		}
 	} finally {
@@ -123,6 +133,7 @@ export function buildCollectionTopic(
 		limit?: number;
 		offset?: number;
 		orderBy?: Record<string, "asc" | "desc">;
+		locale?: string;
 	},
 ): TopicConfig {
 	return {
@@ -133,6 +144,7 @@ export function buildCollectionTopic(
 		...(options?.limit !== undefined && { limit: options.limit }),
 		...(options?.offset !== undefined && { offset: options.offset }),
 		...(options?.orderBy && { orderBy: options.orderBy }),
+		...(options?.locale && { locale: options.locale }),
 	};
 }
 
@@ -144,6 +156,7 @@ export function buildGlobalTopic(
 	options?: {
 		where?: Record<string, unknown>;
 		with?: Record<string, unknown>;
+		locale?: string;
 	},
 ): TopicConfig {
 	return {
@@ -151,6 +164,7 @@ export function buildGlobalTopic(
 		resource: globalName,
 		...(options?.where && { where: options.where }),
 		...(options?.with && { with: options.with }),
+		...(options?.locale && { locale: options.locale }),
 	};
 }
 

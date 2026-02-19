@@ -13,9 +13,9 @@
  * @example
  * ```typescript
  * // Parent operation sets context
- * await runWithContext({ app: cms, locale: "sk" }, async () => {
+ * await runWithContext({ app: app, locale: "sk" }, async () => {
  *   // Nested API call automatically inherits locale
- *   const posts = await cms.api.collections.posts.find();
+ *   const posts = await app.api.collections.posts.find();
  *   // posts are fetched with locale: "sk"
  * });
  * ```
@@ -41,14 +41,14 @@ export type NormalizedContext = Required<
 /**
  * Normalize context with defaults
  *
- * Automatically inherits locale and accessMode from AsyncLocalStorage
+ * Automatically inherits locale, accessMode, and stage from AsyncLocalStorage
  * if not explicitly provided. This enables implicit context propagation
  * in nested API calls (e.g., prefetch hooks calling collection.find()).
  *
  * @param context - Optional CRUD context
  * @returns Context with required fields populated with defaults
  *
- * @default accessMode: 'system' - CMS API is backend-only by default
+ * @default accessMode: 'system' - API is backend-only by default
  * @default locale: 'en' - Falls back to stored → defaultLocale → 'en'
  * @default defaultLocale: 'en'
  */
@@ -68,6 +68,7 @@ export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
 			context.defaultLocale ??
 			DEFAULT_LOCALE,
 		defaultLocale: context.defaultLocale ?? DEFAULT_LOCALE,
+		stage: context.stage ?? stored?.stage,
 	};
 }
 

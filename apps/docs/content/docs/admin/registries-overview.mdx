@@ -97,7 +97,7 @@ Built-in widget types: stats, chart, recentItems, quickActions, value, table, ti
 All registries are extended through the `qa()` builder:
 
 ```ts
-const admin = qa<AppCMS>()
+const admin = qa<App>()
   .use(coreAdminModule)      // Built-in registrations
   .fields({ point: ... })    // Add custom field
   .views({ kanban: ... })    // Add custom view

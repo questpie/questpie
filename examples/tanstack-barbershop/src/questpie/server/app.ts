@@ -31,9 +31,9 @@ import { sidebar } from "./sidebar";
 const DATABASE_URL =
 	process.env.DATABASE_URL || "postgres://localhost/barbershop";
 
-export const baseCms = qb
-	.use(sidebar)
+export const baseApp = qb
 	.use(dashboard)
+	.use(sidebar)
 	.collections({
 		barbers,
 		services,
@@ -74,14 +74,13 @@ export const baseCms = qb
 			requireEmailVerification: false,
 		},
 		baseURL: process.env.APP_URL || "http://localhost:3000",
-		basePath: "/api/cms/auth",
+		basePath: "/api/auth",
 		secret:
 			process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
 	});
 
-// Register blocks and build the CMS
-// @ts-expect-error - blocks method is added by adminModule patch
-export const cms = baseCms.blocks(blocks).build({
+// Register blocks and build the app
+export const app = baseApp.blocks(blocks).build({
 	app: {
 		url: process.env.APP_URL || "http://localhost:3000",
 	},
@@ -89,7 +88,7 @@ export const cms = baseCms.blocks(blocks).build({
 		url: DATABASE_URL,
 	},
 	storage: {
-		basePath: "/api/cms",
+		basePath: "/api",
 	},
 	secret: process.env.SECRET,
 	migrations,
@@ -120,5 +119,5 @@ export const appRpc = r.router({
 	createBooking,
 });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 export type AppRpc = typeof appRpc;

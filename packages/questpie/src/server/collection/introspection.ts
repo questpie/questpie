@@ -29,6 +29,7 @@ import type {
 	ReferentialAction,
 	RelationFieldMetadata,
 } from "#questpie/server/fields/types.js";
+import { resolveWorkflowConfig } from "#questpie/server/workflow/config.js";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 // ============================================================================
@@ -62,6 +63,16 @@ export interface CollectionSchema {
 		timestamps: boolean;
 		softDelete: boolean;
 		versioning: boolean;
+		workflow?: {
+			enabled: boolean;
+			initialStage: string;
+			stages: Array<{
+				name: string;
+				label?: string;
+				description?: string;
+				transitions?: string[];
+			}>;
+		};
 		singleton?: boolean;
 	};
 
@@ -615,8 +626,7 @@ function getUploadSystemFieldSchemas(): Record<string, FieldSchema> {
  */
 export async function introspectCollection(
 	collection: Collection<CollectionBuilderState>,
-	context: CRUDContext,
-	cms?: unknown,
+	context: CRUDContext, app?: unknown,
 ): Promise<CollectionSchema> {
 	const { state } = collection;
 	const fieldDefinitions = state.fieldDefinitions || {};
@@ -625,13 +635,13 @@ export async function introspectCollection(
 	);
 
 	// Evaluate collection-level access
-	const access = await evaluateCollectionAccess(state, context, cms);
+	const access = await evaluateCollectionAccess(state, context, app);
 
 	// Build field schemas
 	const fields: Record<string, FieldSchema> = {};
 	for (const [name, fieldDef] of Object.entries(fieldDefinitions)) {
 		const metadata = fieldDef.getMetadata();
-		const fieldAccess = await evaluateFieldAccess(fieldDef, context, cms);
+		const fieldAccess = await evaluateFieldAccess(fieldDef, context, app);
 
 		// Generate field-level JSON Schema if possible
 		let validation: unknown;
@@ -738,6 +748,7 @@ export async function introspectCollection(
 			timestamps: state.options?.timestamps !== false,
 			softDelete: state.options?.softDelete ?? false,
 			versioning: !!state.options?.versioning,
+			workflow: resolveWorkflowConfig(state.options?.workflow),
 			singleton: undefined, // TODO(globals): Derive singleton flag from collection config
 		},
 		title: state.title
@@ -893,8 +904,7 @@ function mapInferredRelationType(
  */
 async function evaluateCollectionAccess(
 	state: CollectionBuilderState,
-	context: CRUDContext,
-	cms?: unknown,
+	context: CRUDContext, app?: unknown,
 ): Promise<CollectionAccessInfo> {
 	const { access } = state;
 
@@ -913,7 +923,7 @@ async function evaluateCollectionAccess(
 	}
 
 	const accessContext: AccessContext = {
-		app: cms,
+		app: app,
 		session: context.session,
 		db: context.db,
 		locale: context.locale,
@@ -994,8 +1004,7 @@ async function evaluateAccessRule(
  */
 async function evaluateFieldAccess(
 	fieldDef: FieldDefinition<FieldDefinitionState>,
-	context: CRUDContext,
-	cms?: unknown,
+	context: CRUDContext, app?: unknown,
 ): Promise<FieldAccessInfo | undefined> {
 	const fieldAccess = fieldDef.state.config?.access;
 
@@ -1005,7 +1014,7 @@ async function evaluateFieldAccess(
 	}
 
 	const accessContext: AccessContext = {
-		app: cms,
+		app: app,
 		session: context.session,
 		db: context.db,
 		locale: context.locale,
@@ -1061,13 +1070,12 @@ async function evaluateFieldAccessRule(
  */
 export async function introspectCollections(
 	collections: Record<string, Collection<CollectionBuilderState>>,
-	context: CRUDContext,
-	cms?: unknown,
+	context: CRUDContext, app?: unknown,
 ): Promise<Record<string, CollectionSchema>> {
 	const schemas: Record<string, CollectionSchema> = {};
 
 	for (const [name, collection] of Object.entries(collections)) {
-		const schema = await introspectCollection(collection, context, cms);
+		const schema = await introspectCollection(collection, context, app);
 
 		// Only include visible collections
 		if (schema.access.visible) {

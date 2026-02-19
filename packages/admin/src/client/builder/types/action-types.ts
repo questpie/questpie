@@ -49,7 +49,7 @@ export interface ActionHelpers {
    */
   invalidateItem: (id: string, collection?: string) => Promise<void>;
   /**
-   * Invalidate all CMS queries
+   * Invalidate all queries
    */
   invalidateAll: () => Promise<void>;
   /**

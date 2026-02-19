@@ -1,8 +1,8 @@
 /**
  * Widget Data Functions
  *
- * Provides server-side data fetching for widgets that declare a fetchFn.
- * Called by the client when a widget has `hasFetchFn: true`.
+ * Provides server-side data fetching for widgets that declare a loader.
+ * Called by the client when a widget has `hasLoader: true`.
  */
 
 import { fn, type Questpie } from "questpie";
@@ -15,7 +15,7 @@ import type { ServerDashboardItem } from "../../../augmentation.js";
 
 /**
  * Find a widget by ID in the dashboard tree (searches raw server config
- * which still has fetchFn attached).
+ * which still has loader attached).
  */
 function findWidgetById(items: ServerDashboardItem[], id: string): any | null {
   for (const item of items) {
@@ -50,7 +50,7 @@ const fetchWidgetDataSchema = z.object({
  * Fetch data for a server-side widget by its ID.
  *
  * Looks up the widget in the dashboard config, evaluates its access rule,
- * and executes its fetchFn with server context.
+ * and executes its loader with server context.
  *
  * @example
  * ```ts
@@ -63,8 +63,8 @@ export const fetchWidgetData = fn({
   schema: fetchWidgetDataSchema,
   outputSchema: z.unknown(),
   handler: async (ctx) => {
-    const cms = ctx.app as Questpie<any>;
-    const state = (cms as any).state || {};
+    const app = ctx.app as Questpie<any>;
+    const state = (app as any).state || {};
     const dashboard = state.dashboard;
 
     if (!dashboard?.items) {
@@ -75,8 +75,8 @@ export const fetchWidgetData = fn({
     if (!widget) {
       throw new Error(`Widget "${ctx.input.widgetId}" not found`);
     }
-    if (!widget.fetchFn) {
-      throw new Error(`Widget "${ctx.input.widgetId}" has no fetchFn`);
+    if (!widget.loader) {
+      throw new Error(`Widget "${ctx.input.widgetId}" has no loader`);
     }
 
     // Evaluate per-widget access (if defined)
@@ -84,7 +84,7 @@ export const fetchWidgetData = fn({
       const accessResult =
         typeof widget.access === "function"
           ? await widget.access({
-              app: cms,
+              app: app,
               db: (ctx as any).db,
               session: (ctx as any).session,
               locale: (ctx as any).locale,
@@ -95,9 +95,9 @@ export const fetchWidgetData = fn({
       }
     }
 
-    // Execute fetchFn with server context
-    return widget.fetchFn({
-      app: cms,
+    // Execute loader with server context
+    return widget.loader({
+      app: app,
       db: (ctx as any).db,
       session: (ctx as any).session,
       locale: (ctx as any).locale,

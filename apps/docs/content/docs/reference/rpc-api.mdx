@@ -11,14 +11,14 @@ RPC (Remote Procedure Call) provides type-safe server functions callable from th
 
 ```ts
 import { rpc } from "questpie";
-import type { AppCMS } from "../cms";
+import type { App } from '../app';
 
-const r = rpc<AppCMS>();
+const r = rpc<App>();
 ```
 
-The type parameter connects the RPC builder to your CMS instance for typed `app` access in handlers.
+The type parameter connects the RPC builder to your app instance for typed `app` access in handlers.
 
-If you do not want to pass generic parameters to `rpc()`, you can still type handler context with [`getContext<AppCMS>()`](/docs/server/type-safe-contexts).
+If you do not want to pass generic parameters to `rpc()`, you can still type handler context with [`getContext<App>()`](/docs/server/type-safe-contexts).
 
 ## Defining Functions
 
@@ -76,20 +76,20 @@ Both function types receive a context object:
 {
   input: TInput;           // Validated input (JSON functions)
   request: Request;        // Raw HTTP request (raw functions)
-  app: Questpie;           // CMS instance
+  app: Questpie;           // app instance
   session: Session | null; // Authenticated user
   locale: string;          // Current locale
 }
 ```
 
-For strongly typed `app`, `db`, and `session`, use `rpc<AppCMS>()`, or cast inside the handler:
+For strongly typed `app`, `db`, and `session`, use `rpc<App>()`, or cast inside the handler:
 
 ```ts
 import { getContext } from "questpie";
-import type { AppCMS } from "../cms";
+import type { App } from '../app';
 
 handler: async (ctx) => {
-  const { app, db, session } = getContext<AppCMS>(ctx);
+  const { app, db, session } = getContext<App>(ctx);
   // app, db, session are now strongly typed
 }
 ```
@@ -128,8 +128,8 @@ Pass the router to the fetch handler:
 ```ts
 import { createFetchHandler } from "questpie";
 
-const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 ```
@@ -160,7 +160,7 @@ If `access` returns `false`, the function responds with `403 FORBIDDEN`.
 ```ts
 import { createClient } from "@questpie/tanstack-query";
 
-const client = createClient<typeof cms>({ baseUrl: "/api/cms" });
+const client = createClient<typeof app>({ baseUrl: "/api" });
 
 // Type-safe call
 const slots = await client.rpc.booking.getAvailableSlots({
@@ -172,7 +172,7 @@ const slots = await client.rpc.booking.getAvailableSlots({
 ### Via HTTP
 
 ```
-POST /api/cms/rpc/booking/getAvailableSlots
+POST /api/rpc/booking/getAvailableSlots
 Content-Type: application/json
 
 { "barberId": "b1", "date": "2024-03-15" }

@@ -95,7 +95,7 @@ export interface TranslationsProviderProps {
  */
 export function getAdminTranslationsQueryOptions(client: any, locale: string) {
   return {
-    queryKey: ["cms", "adminTranslations", locale] as const,
+    queryKey: ["questpie", "adminTranslations", locale] as const,
     queryFn: async () => {
       try {
         const result = await client.rpc.getAdminTranslations({ locale });
@@ -135,7 +135,7 @@ export function getAdminTranslationsQueryOptions(client: any, locale: string) {
  */
 export function getAdminLocalesQueryOptions(client: any) {
   return {
-    queryKey: ["cms", "adminLocales"] as const,
+    queryKey: ["questpie", "adminLocales"] as const,
     queryFn: async () => {
       try {
         const result = await client.rpc.getAdminLocales({});

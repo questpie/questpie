@@ -363,7 +363,7 @@ function assignWidgetIds(items: ServerDashboardItem[]): void {
 
 /**
  * Process dashboard items: evaluate access, strip non-serializable props,
- * mark hasFetchFn, and filter by collection access.
+ * mark hasLoader, and filter by collection access.
  */
 async function processDashboardItems(
 	items: ServerDashboardItem[],
@@ -430,15 +430,15 @@ async function processDashboardItems(
 				}
 				return true;
 			});
-			const { fetchFn, access, ...serializable } = widget;
+			const { loader, access, ...serializable } = widget;
 			result.push({ ...serializable, actions } as any);
 			continue;
 		}
 
-		// 4. Strip non-serializable props, mark hasFetchFn
-		const { fetchFn, access, filterFn, ...serializable } = widget;
-		if (fetchFn) {
-			serializable.hasFetchFn = true;
+		// 4. Strip non-serializable props, mark hasLoader
+		const { loader, access, filterFn, ...serializable } = widget;
+		if (loader) {
+			serializable.hasLoader = true;
 		}
 		result.push(serializable);
 	}

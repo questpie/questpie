@@ -4,7 +4,7 @@
  * Utilities for creating seed data.
  */
 
-import { cms } from "../src/questpie/server/cms";
+import { app } from "../src/questpie/server/app";
 
 // ============================================================================
 // Rich Text Helpers
@@ -64,7 +64,7 @@ export function richTextFormatted(
 // ============================================================================
 
 /**
- * Download and upload an image to the CMS
+ * Download and upload an image to the app
  */
 export async function uploadImage(url: string, name: string, ctx: any) {
 	const response = await fetch(url);
@@ -79,7 +79,7 @@ export async function uploadImage(url: string, name: string, ctx: any) {
 		type: contentType,
 	});
 
-	const asset = await cms.api.collections.assets.upload(file, ctx);
+	const asset = await app.api.collections.assets.upload(file, ctx);
 	return asset.id as string;
 }
 

@@ -21,8 +21,8 @@ export type HonoClientConfig = {
   fetch?: typeof fetch;
 
   /**
-   * Base path for CMS routes
-   * @default '/cms'
+   * Base path for routes
+   * @default '/'
    */
   basePath?: string;
 
@@ -38,20 +38,20 @@ export type HonoClientConfig = {
 };
 
 /**
- * Create a unified client that combines QUESTPIE CMS CRUD operations
+ * Create a unified client that combines QUESTPIE CRUD operations
  * with Hono's native RPC client for custom routes
  *
  * @example
  * ```ts
  * import { createClientFromHono } from '@questpie/hono/client'
  * import type { AppType } from './server'
- * import type { AppCMS } from './cms'
+ * import type { App } from './app'
  *
- * const client = createClientFromHono<AppType, AppCMS>({
+ * const client = createClientFromHono<AppType, App>({
  *   baseURL: 'http://localhost:3000'
  * })
  *
- * // Use CMS CRUD operations
+ * // Use CRUD operations
  * const posts = await client.collections.posts.find({ limit: 10 })
  *
  * // Use Hono RPC for custom routes
@@ -59,13 +59,13 @@ export type HonoClientConfig = {
  * ```
  */
 export function createClientFromHono<
-  TApp extends Hono<any, any, any>,
-  TCMS extends Questpie<any>,
+  THono extends Hono<any, any, any>,
+  TApp extends Questpie<any>,
 >(
   config: HonoClientConfig,
-): ReturnType<typeof hc<TApp>> & ReturnType<typeof createClient<TCMS>> {
-  // Create CMS client for CRUD operations
-  const cmsClient = createClient<TCMS>({
+): ReturnType<typeof hc<THono>> & ReturnType<typeof createClient<TApp>> {
+  // Create QuestPie client for CRUD operations
+  const qpClient = createClient<TApp>({
     baseURL: config.baseURL,
     fetch: config.fetch,
     basePath: config.basePath,
@@ -73,17 +73,17 @@ export function createClientFromHono<
   });
 
   // Create Hono RPC client for custom routes
-  const honoClient = hc<TApp>(config.baseURL, {
+  const honoClient = hc<THono>(config.baseURL, {
     fetch: config.fetch,
     headers: config.headers,
     ...config.honoOptions,
   });
 
   // Merge both clients
-  (honoClient as typeof honoClient & typeof cmsClient).collections =
-    cmsClient.collections;
-  (honoClient as typeof honoClient & typeof cmsClient).globals =
-    cmsClient.globals;
+  (honoClient as typeof honoClient & typeof qpClient).collections =
+    qpClient.collections;
+  (honoClient as typeof honoClient & typeof qpClient).globals =
+    qpClient.globals;
 
-  return honoClient as typeof honoClient & typeof cmsClient;
+  return honoClient as typeof honoClient & typeof qpClient;
 }

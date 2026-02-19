@@ -35,7 +35,7 @@ export const coreAuthOptions = auth({
 // 2. ✅ additionalFields (deep merge for user/session/account)
 //
 // Runtime behavior: All plugin methods work correctly
-// Type inference: Use `typeof cms.auth.$Infer` to get merged types
+// Type inference: Use `typeof app.auth.$Infer` to get merged types
 
 export const coreAuthCollections = {
   user: usersCollection,

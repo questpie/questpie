@@ -58,7 +58,7 @@ export interface ForgotPasswordPageProps {
  * @example
  * ```tsx
  * // In your admin config
- * const admin = qa<AppCMS>()
+ * const admin = qa<App>()
  *   .use(coreAdminModule)
  *   .pages({
  *     forgotPassword: page("forgot-password", { component: ForgotPasswordPage })

@@ -2,7 +2,7 @@ import { isDraftMode } from "@questpie/admin/shared";
 import { notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { cms, createServerContext } from "@/lib/server-helpers";
+import { app, createServerContext } from "@/lib/server-helpers";
 
 export const getBarber = createServerFn({ method: "GET" })
 	.inputValidator((data: { slug: string; locale?: string }) => data)
@@ -14,7 +14,7 @@ export const getBarber = createServerFn({ method: "GET" })
 
 		const ctx = await createServerContext(data.locale);
 
-		const barber = await cms.api.collections.barbers.findOne(
+		const barber = await app.api.collections.barbers.findOne(
 			{
 				where: draftMode
 					? { slug: data.slug }
@@ -56,7 +56,7 @@ export const getAllBarbers = createServerFn({ method: "GET" })
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext(data?.locale);
 
-		const result = await cms.api.collections.barbers.find(
+		const result = await app.api.collections.barbers.find(
 			{
 				where: { isActive: true },
 				with: { avatar: true },

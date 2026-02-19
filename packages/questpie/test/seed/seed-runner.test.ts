@@ -6,7 +6,7 @@ import { SeedRunner } from "../../src/server/seed/runner.js";
 import type { Seed } from "../../src/server/seed/types.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 
-// Minimal builder — seeds don't need collections, just a CMS instance with a DB
+// Minimal builder — seeds don't need collections, just a app instance with a DB
 const testModule = questpie({ name: "seed-test" }).fields(defaultFields);
 
 describe("SeedRunner", () => {
@@ -15,7 +15,7 @@ describe("SeedRunner", () => {
 
 	beforeEach(async () => {
 		setup = await buildMockApp(testModule);
-		runner = new SeedRunner(setup.cms, { silent: true });
+		runner = new SeedRunner(setup.app, { silent: true });
 	});
 
 	afterEach(async () => {
@@ -35,7 +35,7 @@ describe("SeedRunner", () => {
 	}
 
 	async function tableExists(name: string): Promise<boolean> {
-		const result: any = await setup.cms.db.execute(
+		const result: any = await setup.app.db.execute(
 			sql.raw(
 				`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '${name}'`,
 			),
@@ -440,7 +440,7 @@ describe("SeedRunner", () => {
 
 	// ── SeedContext ─────────────────────────────────────────────────────
 
-	it("provides cms, ctx, and log in SeedContext", async () => {
+	it("provides app, ctx, and log in SeedContext", async () => {
 		let receivedCms: any;
 		let receivedCtx: any;
 		let logCalled = false;
@@ -448,8 +448,8 @@ describe("SeedRunner", () => {
 		const seeds: Seed[] = [
 			makeSeed({
 				id: "ctx-test",
-				run: async ({ cms, ctx, log }) => {
-					receivedCms = cms;
+				run: async ({ app, ctx, log }) => {
+					receivedCms = app;
 					receivedCtx = ctx;
 					log("test message");
 					logCalled = true;
@@ -459,7 +459,7 @@ describe("SeedRunner", () => {
 
 		await runner.run(seeds);
 
-		expect(receivedCms).toBe(setup.cms);
+		expect(receivedCms).toBe(setup.app);
 		expect(receivedCtx).toBeDefined();
 		expect(receivedCtx.accessMode).toBe("system");
 		expect(logCalled).toBe(true);

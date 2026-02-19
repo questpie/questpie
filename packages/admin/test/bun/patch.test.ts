@@ -565,7 +565,7 @@ describe("adminModule - Composition", () => {
 	test("chained .use() from adminModule through intermediate builder", () => {
 		// This mimics the barbershop pattern:
 		// baseInstance = q(...).use(adminModule).sidebar(...).branding(...)
-		// cms = q(...).use(baseInstance).build(...)
+		// app = q(...).use(baseInstance).build(...)
 		const baseInstance = questpie({ name: "base" })
 			.use(adminModule)
 			.sidebar(({ s }: any) =>

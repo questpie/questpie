@@ -1,20 +1,20 @@
 {
-	"typescript.experimental.useTsgo": false,
+	"typescript.experimental.useTsgo": true,
 	"cSpell.words": [
 		"QCMS",
 		"questpie"
 	],
-	"oxc.fmt.configPath": ".oxfmtrc.json",
-	"oxc.typeAware": false,
 	"editor.codeActionsOnSave": {
-		"source.fixAll.oxc": "always"
+		"source.fixAll.biome": "always",
+		"source.organizeImports": "never",
+		"source.organizeImports.biome": "always"
 	},
 	"[javascript]": {
-		"editor.defaultFormatter": "oxc.oxc-vscode",
+		"editor.defaultFormatter": "biomejs.biome",
 		"editor.formatOnSave": true
 	},
 	"[javascriptreact]": {
-		"editor.defaultFormatter": "oxc.oxc-vscode",
+		"editor.defaultFormatter": "biomejs.biome",
 		"editor.formatOnSave": true
 	},
 	"[typescript]": {
@@ -22,7 +22,7 @@
 		"editor.formatOnSave": true
 	},
 	"[typescriptreact]": {
-		"editor.defaultFormatter": "oxc.oxc-vscode",
+		"editor.defaultFormatter": "biomejs.biome",
 		"editor.formatOnSave": true
 	}
 }

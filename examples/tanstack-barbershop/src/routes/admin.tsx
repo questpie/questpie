@@ -16,7 +16,7 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { authClient } from "~/lib/auth-client";
-import { client } from "~/lib/cms-client";
+import { client } from "~/lib/client";
 import { queryClient } from "~/lib/query-client";
 import { admin } from "~/questpie/admin/builder";
 

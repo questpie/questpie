@@ -35,7 +35,19 @@ export type BlockTreeProps = {
 // Component
 // ============================================================================
 
-export function BlockTree({
+function areBlockTreePropsEqual(
+	prev: BlockTreeProps,
+	next: BlockTreeProps,
+): boolean {
+	return (
+		prev.blocks === next.blocks &&
+		prev.level === next.level &&
+		prev.parentId === next.parentId &&
+		prev.className === next.className
+	);
+}
+
+export const BlockTree = React.memo(function BlockTree({
 	blocks,
 	level,
 	parentId,
@@ -71,4 +83,4 @@ export function BlockTree({
 			)}
 		</div>
 	);
-}
+}, areBlockTreePropsEqual);

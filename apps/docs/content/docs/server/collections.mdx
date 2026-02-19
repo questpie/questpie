@@ -9,7 +9,7 @@ Collections are the core building block of QUESTPIE. Each collection definition 
 
 ## Why Collections Exist
 
-A CMS needs structured data. Instead of manually creating database tables, writing API routes, building admin forms, and keeping them in sync, you define a collection once and everything derives from it. The collection definition is your single source of truth.
+an app needs structured data. Instead of manually creating database tables, writing API routes, building admin forms, and keeping them in sync, you define a collection once and everything derives from it. The collection definition is your single source of truth.
 
 ## Mental Model
 
@@ -341,7 +341,7 @@ When you call `.build()` on the top-level `q` builder, each collection generates
 
 - **Forgetting `required: true`** — Without it, the field is nullable in the database. If you want a non-null column, always add `required: true`.
 - **Using `input: false` instead of `input: "optional"`** — `input: false` means the field can never be set via the API. `input: "optional"` means it can be set but isn't required.
-- **Not exporting the collection** — The collection must be passed to `.collections({})` in your CMS builder. If it's not registered, it won't exist at runtime.
+- **Not exporting the collection** — The collection must be passed to `.collections({})` in your app builder. If it's not registered, it won't exist at runtime.
 
 ## Related Pages
 

@@ -46,20 +46,20 @@ export type MigrationContext = {
 };
 
 /**
- * Migration configuration in CMS config (runtime)
+ * Migration configuration in app config (runtime)
  *
  * Migrations are passed via .build({ migrations: [...] })
  * The directory option is deprecated - use CLI config instead.
  *
  * @example
  * ```ts
- * const cms = questpie({ name: 'my-app' })
+ * const app = questpie({ name: 'my-app' })
  *   .build({ ..., migrations }) // Import from ./src/migrations
  * ```
  */
 export type MigrationsConfig = {
 	/**
-	 * @deprecated Use CLI config (cms.config.ts) for directory settings
+	 * @deprecated Use CLI config (app.config.ts) for directory settings
 	 */
 	directory?: string;
 

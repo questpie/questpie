@@ -1,22 +1,22 @@
 /**
  * @questpie/openapi
  *
- * Auto-generate OpenAPI 3.1 spec from QUESTPIE CMS runtime metadata
+ * Auto-generate OpenAPI 3.1 spec from QUESTPIE runtime metadata
  * and serve interactive docs via Scalar UI.
  *
  * @example
  * ```ts
  * import { createFetchHandler } from 'questpie'
  * import { withOpenApi } from '@questpie/openapi'
- * import { cms, appRpc } from './cms'
+ * import { app, appRpc } from './app'
  *
- * // Wrap the CMS fetch handler — adds /openapi.json and /docs routes
+ * // Wrap the fetch handler — adds /openapi.json and /docs routes
  * const handler = withOpenApi(
- *   createFetchHandler(cms, { basePath: '/api/cms', rpc: appRpc }),
+ *   createFetchHandler(app, { basePath: '/api', rpc: appRpc }),
  *   {
- *     cms,
+ *     app,
  *     rpc: appRpc,
- *     basePath: '/api/cms',
+ *     basePath: '/api',
  *     info: { title: 'My API', version: '1.0.0' },
  *   }
  * )
@@ -41,14 +41,14 @@ export type {
 } from "./types.js";
 
 /**
- * Generate a complete OpenAPI 3.1 spec from a CMS instance and optional RPC router.
+ * Generate a complete OpenAPI 3.1 spec from a QuestPie instance and optional RPC router.
  */
 export function generateOpenApiSpec(
-	cms: Questpie<any>,
+	app: Questpie<any>,
 	rpc?: RpcRouterTree<any>,
 	config?: OpenApiConfig,
 ): OpenApiSpec {
-	return generate(cms, rpc, config);
+	return generate(app, rpc, config);
 }
 
 /**
@@ -74,26 +74,26 @@ export function createOpenApiHandlers(
 }
 
 /**
- * Wrap a CMS fetch handler to add OpenAPI spec and Scalar UI routes.
+ * Wrap a QuestPie fetch handler to add OpenAPI spec and Scalar UI routes.
  *
  * Intercepts requests to `{basePath}/{specPath}` and `{basePath}/{docsPath}`
- * before they reach the CMS handler. Everything else passes through unchanged.
+ * before they reach the handler. Everything else passes through unchanged.
  *
  * @example
  * ```ts
  * const handler = withOpenApi(
- *   createFetchHandler(cms, { basePath: '/api/cms', rpc: appRpc }),
+ *   createFetchHandler(app, { basePath: '/api', rpc: appRpc }),
  *   {
- *     cms,
+ *     app,
  *     rpc: appRpc,
- *     basePath: '/api/cms',
+ *     basePath: '/api',
  *     info: { title: 'My API', version: '1.0.0' },
  *     scalar: { theme: 'purple' },
  *   }
  * )
- * // GET /api/cms/openapi.json → spec JSON
- * // GET /api/cms/docs          → Scalar UI
- * // Everything else            → CMS handler
+ * // GET /api/openapi.json → spec JSON
+ * // GET /api/docs          → Scalar UI
+ * // Everything else        → handler
  * ```
  */
 export function withOpenApi(
@@ -107,7 +107,7 @@ export function withOpenApi(
 	context?: any,
 ) => Promise<Response | null> | Response | null {
 	const {
-		cms,
+		app,
 		rpc,
 		scalar,
 		specPath = "openapi.json",
@@ -115,12 +115,12 @@ export function withOpenApi(
 		...openApiConfig
 	} = config;
 
-	const spec = generate(cms, rpc, openApiConfig);
+	const spec = generate(app, rpc, openApiConfig);
 	const { specHandler, scalarHandler } = createOpenApiHandlers(spec, {
 		scalar,
 	});
 
-	const basePath = normalizeBasePath(openApiConfig.basePath ?? "/cms");
+	const basePath = normalizeBasePath(openApiConfig.basePath ?? "/");
 	const specRoute = `${basePath}/${specPath}`;
 	const docsRoute = `${basePath}/${docsPath}`;
 

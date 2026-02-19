@@ -286,8 +286,7 @@ export function ArrayCell({
 								.slice(0, 3);
 
 							return (
-								// biome-ignore lint/suspicious/noArrayIndexKey: stable array from backend
-								<div key={idx} className="py-1">
+								<div key={`${label}-${idx}`} className="py-1">
 									<div className="flex items-center gap-1.5 text-xs font-medium">
 										<span className="size-1 rounded-full bg-foreground/60" />
 										{label}
@@ -318,8 +317,7 @@ export function ArrayCell({
 
 						return (
 							<div
-								// biome-ignore lint/suspicious/noArrayIndexKey: stable array from backend
-								key={idx}
+								key={`item-${String(item).slice(0, 20)}-${idx}`}
 								className="flex items-center gap-1.5 text-xs py-0.5"
 							>
 								<span className="size-1 rounded-full bg-foreground/60" />

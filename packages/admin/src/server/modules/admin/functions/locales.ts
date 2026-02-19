@@ -1,7 +1,7 @@
 /**
  * Content Locales Functions
  *
- * Functions for retrieving available content locales from the CMS configuration.
+ * Functions for retrieving available content locales from the app configuration.
  * Used by the admin panel to populate locale switchers and validate locale selection.
  */
 
@@ -13,7 +13,7 @@ import { z } from "zod";
 // ============================================================================
 
 /**
- * Helper to get typed CMS app from handler context.
+ * Helper to get typed app from handler context.
  */
 function getApp(ctx: { app: unknown }): Questpie<any> {
   return ctx.app as Questpie<any>;
@@ -43,7 +43,7 @@ const getContentLocalesOutputSchema = z.object({
 // ============================================================================
 
 /**
- * Get available content locales from CMS configuration.
+ * Get available content locales from app configuration.
  *
  * Returns the list of available locales for content localization,
  * the default locale, and any fallback mappings.
@@ -66,8 +66,8 @@ export const getContentLocales = fn({
   schema: getContentLocalesSchema,
   outputSchema: getContentLocalesOutputSchema,
   handler: async (ctx) => {
-    const cms = getApp(ctx);
-    const localeConfig = cms.config.locale;
+    const app = getApp(ctx);
+    const localeConfig = app.config.locale;
 
     // If no locale config, return sensible defaults
     if (!localeConfig) {

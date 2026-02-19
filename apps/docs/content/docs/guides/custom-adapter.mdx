@@ -12,23 +12,23 @@ If your framework isn't covered by `@questpie/hono`, `@questpie/elysia`, or `@qu
 Every adapter does three things:
 
 1. Convert the framework's request object to a standard `Request`
-2. Call `createFetchHandler(cms, config)` with that request
+2. Call `createFetchHandler(app, config)` with that request
 3. Convert the standard `Response` back to the framework's response format
 
 ## Step 1: Create the Fetch Handler
 
 ```ts
 import { createFetchHandler } from "@questpie/questpie";
-import { cms } from "./cms";
+import { app } from './app';
 import { appRpc } from "./rpc";
 
-const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 ```
 
-The handler accepts a `Request` and returns `Promise<Response | null>`. It returns `null` when the URL doesn't match any CMS route, allowing fallthrough to other handlers.
+The handler accepts a `Request` and returns `Promise<Response | null>`. It returns `null` when the URL doesn't match any app route, allowing fallthrough to other handlers.
 
 ## Step 2: Integrate with Your Framework
 
@@ -39,7 +39,7 @@ import express from "express";
 
 const app = express();
 
-app.all("/api/cms/*", async (req, res) => {
+app.all("/api/*", async (req, res) => {
   // Convert Express request to standard Request
   const url = new URL(req.url, `${req.protocol}://${req.get("host")}`);
   const request = new Request(url, {
@@ -85,7 +85,7 @@ import Fastify from "fastify";
 
 const fastify = Fastify();
 
-fastify.all("/api/cms/*", async (request, reply) => {
+fastify.all("/api/*", async (request, reply) => {
   const url = new URL(request.url, `http://${request.hostname}`);
   const stdRequest = new Request(url, {
     method: request.method,
@@ -144,7 +144,7 @@ The realtime endpoint returns a `ReadableStream` response for Server-Sent Events
 2. Keep the connection open
 3. Forward chunks as they arrive
 
-If your framework doesn't support streaming responses, realtime features won't work — but all other CMS functionality will.
+If your framework doesn't support streaming responses, realtime features won't work — but all other app functionality will.
 
 ## Package Structure
 
@@ -164,10 +164,10 @@ my-adapter/
 ```ts
 // server.ts
 export function questpieMyFramework(
-  cms: Questpie,
+  app: Questpie,
   config?: { basePath?: string; rpc?: RpcRouter },
 ) {
-  const handler = createFetchHandler(cms, config);
+  const handler = createFetchHandler(app, config);
   // Return framework-specific middleware/handler
   return myFrameworkMiddleware(handler);
 }

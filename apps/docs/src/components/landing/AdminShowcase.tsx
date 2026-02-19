@@ -550,7 +550,7 @@ function DashboardMock() {
 					<div className="flex items-end gap-1 h-20">
 						{[40, 55, 35, 65, 80, 60, 75, 90, 70, 85, 95, 88].map((h, i) => (
 							<motion.div
-								key={`bar-${i}-${h}`}
+								key={`chart-bar-month-${i}`}
 								initial={{ height: 0 }}
 								animate={{ height: `${h}%` }}
 								transition={{ delay: i * 0.05, duration: 0.3 }}

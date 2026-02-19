@@ -29,8 +29,7 @@ import type { BlockContent, BlockNode } from "./types.js";
 /**
  * @deprecated No longer needed. Server auto-expands relation/upload fields.
  */
-export type BlockPrefetchContext<TCms = unknown> = {
-  cms: TCms;
+export type BlockPrefetchContext<TApp = unknown> = { app: TApp;
   locale: string;
   defaultLocale: string;
   request?: Request;
@@ -39,7 +38,7 @@ export type BlockPrefetchContext<TCms = unknown> = {
 /**
  * @deprecated No longer needed. Server auto-expands relation/upload fields.
  */
-export type BlockPrefetchParams<TCms = unknown> = BlockPrefetchContext<TCms> & {
+export type BlockPrefetchParams<TApp = unknown> = BlockPrefetchContext<TApp> & {
   id: string;
   values: Record<string, unknown>;
 };
@@ -53,10 +52,10 @@ export type BlockPrefetchResult = Record<string, unknown>;
  * @deprecated No longer needed. Server auto-expands relation/upload fields
  * and supports manual prefetch via `.blocks({ name: { block, prefetch } })`.
  */
-export async function prefetchBlockData<TCms = unknown>(
+export async function prefetchBlockData<TApp = unknown>(
   content: BlockContent | null | undefined,
   _blocks: Record<string, unknown>,
-  _context: BlockPrefetchContext<TCms>,
+  _context: BlockPrefetchContext<TApp>,
 ): Promise<BlockPrefetchResult> {
   console.warn(
     "[prefetchBlockData] Deprecated: Client-side block prefetch is no longer needed. " +
@@ -85,6 +84,6 @@ export class BlockPrefetchError extends Error {
 /**
  * @deprecated No longer needed. Server handles block data fetching.
  */
-export type TypedBlockPrefetch<TData, TCms = unknown> = (
-  params: BlockPrefetchParams<TCms>,
+export type TypedBlockPrefetch<TData, TApp = unknown> = (
+  params: BlockPrefetchParams<TApp>,
 ) => Promise<TData>;

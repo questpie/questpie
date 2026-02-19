@@ -10,7 +10,7 @@
  * - We include a simple built-in fallback for basic use cases
  *
  * CONCEPTS:
- * - **Content Locale**: Language of CMS content (posts, pages) - handled by CMS core
+ * - **Content Locale**: Language of app content (posts, pages) - handled by QuestPie core
  * - **UI Locale**: Language of admin interface (buttons, labels) - handled here
  *
  * @example

@@ -85,26 +85,26 @@ const siteSettings = qb.global("site_settings")
   }));
 ```
 
-### 4. Build CMS
+### 4. Build QuestPie
 
 ```ts
-export const cms = qb
+export const app = qb
   .collections({ posts })
   .globals({ siteSettings })
   .auth({
     emailAndPassword: { enabled: true },
     baseURL: process.env.APP_URL!,
-    basePath: "/api/cms/auth",
+    basePath: "/api/auth",
     secret: process.env.AUTH_SECRET!,
   })
   .build({
     app: { url: process.env.APP_URL! },
     db: { url: process.env.DATABASE_URL! },
-    storage: { basePath: "/api/cms" },
+    storage: { basePath: "/api" },
     migrations,
   });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 ```
 
 ### 5. Create Route Handler
@@ -112,8 +112,8 @@ export type AppCMS = typeof cms;
 ```ts
 import { createFetchHandler } from "questpie";
 
-const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 ```
@@ -256,7 +256,7 @@ Client usage:
 
 ```ts
 import { createClient } from "questpie/client";
-const client = createClient<AppCMS, AppRpc>({ baseURL: "...", basePath: "/api/cms" });
+const client = createClient<App, AppRpc>({ baseURL: "...", basePath: "/api" });
 
 const stats = await client.rpc.getStats({ period: "week" });
 ```
@@ -276,26 +276,26 @@ const sendWelcomeEmail = q.job({
 });
 
 // Register
-const cms = qb.jobs({ sendWelcomeEmail }).build({ ... });
+const app = qb.jobs({ sendWelcomeEmail }).build({ ... });
 
 // Dispatch
-await cms.queue.sendWelcomeEmail.publish({ userId: "123" });
+await app.queue.sendWelcomeEmail.publish({ userId: "123" });
 
 // Worker
-await cms.queue.listen();
+await app.queue.listen();
 ```
 
 ## CRUD API
 
 ```ts
 // Create
-const post = await cms.api.collections.posts.create({
+const post = await app.api.collections.posts.create({
   title: "Hello World",
   content: "...",
 });
 
 // Find many (paginated)
-const { docs, totalDocs } = await cms.api.collections.posts.find({
+const { docs, totalDocs } = await app.api.collections.posts.find({
   where: { published: { eq: true } },
   orderBy: { publishedAt: "desc" },
   limit: 10,
@@ -303,22 +303,22 @@ const { docs, totalDocs } = await cms.api.collections.posts.find({
 });
 
 // Find one
-const post = await cms.api.collections.posts.findOne({
+const post = await app.api.collections.posts.findOne({
   where: { slug: { eq: "hello-world" } },
 });
 
 // Update
-await cms.api.collections.posts.updateById({
+await app.api.collections.posts.updateById({
   id: post.id,
   data: { title: "Updated" },
 });
 
 // Delete
-await cms.api.collections.posts.deleteById({ id: post.id });
+await app.api.collections.posts.deleteById({ id: post.id });
 
 // Globals
-const settings = await cms.api.globals.siteSettings.get();
-await cms.api.globals.siteSettings.update({ data: { siteName: "New Name" } });
+const settings = await app.api.globals.siteSettings.get();
+await app.api.globals.siteSettings.update({ data: { siteName: "New Name" } });
 ```
 
 ## Reactive Fields
@@ -383,9 +383,9 @@ bun questpie seed:generate      # Generate a new seed file
 Config file (`questpie.config.ts`):
 
 ```ts
-import { cms } from "@/questpie/server/cms";
+import { app } from "@/questpie/server/app";
 export default {
-  app: cms,
+  app: app,
   cli: { migrations: { directory: "./src/migrations" } },
 };
 ```
@@ -394,9 +394,9 @@ export default {
 
 | Adapter | Package            | Server                                              |
 | ------- | ------------------ | --------------------------------------------------- |
-| Hono    | `@questpie/hono`   | `questpieHono(cms, { basePath, rpc })`              |
-| Elysia  | `@questpie/elysia` | `questpieElysia(cms, { basePath, rpc })`            |
-| Next.js | `@questpie/next`   | `questpieNextRouteHandlers(cms, { basePath, rpc })` |
+| Hono    | `@questpie/hono`   | `questpieHono(app, { basePath, rpc })`              |
+| Elysia  | `@questpie/elysia` | `questpieElysia(app, { basePath, rpc })`            |
+| Next.js | `@questpie/next`   | `questpieNextRouteHandlers(app, { basePath, rpc })` |
 
 Or use `createFetchHandler` directly with any framework that supports the Fetch API.
 

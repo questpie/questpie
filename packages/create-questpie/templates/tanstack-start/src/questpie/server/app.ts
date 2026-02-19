@@ -8,10 +8,10 @@ import { siteSettings } from "./globals/index.js";
 import { r } from "./rpc.js";
 import { configureSidebar } from "./sidebar.js";
 
-// ─── CMS Instance ───────────────────────────────────────────────────────────
-// The built CMS application. Standalone — does NOT depend on appRpc.
+// ─── App Instance ───────────────────────────────────────────────────────────
+// The built application. Standalone — does NOT depend on appRpc.
 
-export const cms = q({ name: "{{projectName}}" })
+export const app = q({ name: "{{projectName}}" })
 	.use(adminModule)
 	.collections({ posts })
 	.globals({ siteSettings })
@@ -24,13 +24,13 @@ export const cms = q({ name: "{{projectName}}" })
 			requireEmailVerification: false,
 		},
 		baseURL: env.APP_URL,
-		basePath: "/api/cms/auth",
+		basePath: "/api/auth",
 		secret: env.BETTER_AUTH_SECRET,
 	})
 	.build({
 		app: { url: env.APP_URL },
 		db: { url: env.DATABASE_URL },
-		storage: { basePath: "/api/cms" },
+		storage: { basePath: "/api" },
 		migrations,
 		email: {
 			adapter: new ConsoleAdapter({ logHtml: false }),
@@ -38,15 +38,15 @@ export const cms = q({ name: "{{projectName}}" })
 	});
 
 // ─── RPC Router ─────────────────────────────────────────────────────────────
-// Standalone router. Both cms and appRpc are passed to createFetchHandler()
-// in routes/api/cms/$.ts. Add your custom RPC functions here.
+// Standalone router. Both app and appRpc are passed to createFetchHandler()
+// in routes/api/$.ts. Add your custom RPC functions here.
 
 export const appRpc = r.router({
 	...adminRpc,
 });
 
 // ─── Type Exports ───────────────────────────────────────────────────────────
-// Used by: rpc.ts (AppCMS for typed handlers), client (AppCMS + AppRpc)
+// Used by: rpc.ts (App for typed handlers), client (App + AppRpc)
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 export type AppRpc = typeof appRpc;

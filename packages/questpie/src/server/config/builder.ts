@@ -11,7 +11,8 @@ import type {
 	QuestpieBuilderState,
 	QuestpieRuntimeConfig,
 } from "#questpie/server/config/builder-types.js";
-import { Questpie } from "#questpie/server/config/cms.js";
+import type { GlobalHooksInput } from "#questpie/server/config/global-hooks-types.js";
+import { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieBuilderExtensions } from "#questpie/server/config/extensions.js";
 import type {
 	ContextResolver,
@@ -61,14 +62,14 @@ type QuestpieFromState<TState extends QuestpieBuilderState> = Questpie<
 				auth: TState["auth"];
 				queue: { jobs: TState["jobs"]; adapter: QueueAdapter };
 				email: { templates: TState["emailTemplates"]; adapter: MailAdapter };
-				db: { url: string }; // lets enforce a bunsql type on inferred cms types from builder
+				db: { url: string }; // lets enforce a bunsql type on inferred app types from builder
 			}
 		>
 	>
 >;
 
 /**
- * Questpie Builder - Fluent API for building CMS instances
+ * Questpie Builder - Fluent API for building app instances
  *
  * Supports:
  * - Incremental configuration via builder pattern
@@ -79,7 +80,7 @@ type QuestpieFromState<TState extends QuestpieBuilderState> = Questpie<
  *
  * @example
  * ```ts
- * const cms = questpie({ name: 'my-app' })
+ * const app = questpie({ name: 'my-app' })
  *   .locale({ locales: ['en', 'sk'], defaultLocale: 'en' })
  *   .auth(betterAuthOptions)
  *   .collections({
@@ -110,7 +111,7 @@ export class QuestpieBuilder<
 	 * Note: Public for module composition purposes
 	 * No value at runtime - purely for type inference.
 	 */
-	public declare readonly $inferCms: QuestpieFromState<TState>;
+	public declare readonly $inferApp: QuestpieFromState<TState>;
 	/**
 	 * Type-only property for accessing state type in conditional types.
 	 * Used by CollectionBuilder to extract field types.
@@ -130,6 +131,7 @@ export class QuestpieBuilder<
 			migrations: undefined,
 			translations: undefined,
 			contextResolver: undefined,
+			globalHooks: undefined,
 			"~messageKeys": undefined,
 		});
 	}
@@ -451,11 +453,55 @@ export class QuestpieBuilder<
 	}
 
 	/**
+	 * Register global lifecycle hooks that fire for ALL collections and/or globals.
+	 * Use include/exclude to filter which entities the hooks apply to.
+	 * Multiple `.hooks()` calls are accumulated (not overridden).
+	 *
+	 * @example
+	 * ```ts
+	 * const app = questpie({ name: "my-app" })
+	 *   .hooks({
+	 *     collections: {
+	 *       exclude: ["audit_log"],
+	 *       afterChange: async ({ collection, data, operation, app }) => {
+	 *         console.log(`[${collection}] ${operation}:`, data.id);
+	 *       },
+	 *       afterDelete: async ({ collection, data, app }) => {
+	 *         console.log(`[${collection}] deleted:`, data.id);
+	 *       },
+	 *     },
+	 *     globals: {
+	 *       afterChange: async ({ global, data, app }) => {
+	 *         console.log(`[${global}] updated`);
+	 *       },
+	 *     },
+	 *   })
+	 *   .build({ ... });
+	 * ```
+	 */
+	hooks(input: GlobalHooksInput): QuestpieBuilder<TState> {
+		const existingHooks = this.state.globalHooks;
+		return new QuestpieBuilder({
+			...this.state,
+			globalHooks: {
+				collections: [
+					...(existingHooks?.collections || []),
+					...(input.collections ? [input.collections] : []),
+				],
+				globals: [
+					...(existingHooks?.globals || []),
+					...(input.globals ? [input.globals] : []),
+				],
+			},
+		} as any);
+	}
+
+	/**
 	 * Add translated messages for backend (simple API)
 	 *
 	 * Messages are merged with existing messages from modules.
 	 * Custom messages override defaults with same key.
-	 * Message keys are tracked in the type system for type-safe access via cms.t().
+	 * Message keys are tracked in the type system for type-safe access via app.t().
 	 *
 	 * @example
 	 * ```ts
@@ -470,11 +516,11 @@ export class QuestpieBuilder<
 	 *   },
 	 * } as const;
 	 *
-	 * const cms = q({ name: "app" })
+	 * const app = q({ name: "app" })
 	 *   .messages(messages)
 	 *   .build({ ... });
 	 *
-	 * // cms.t("booking.created") is type-safe!
+	 * // app.t("booking.created") is type-safe!
 	 * ```
 	 */
 	messages<TMessages extends MessagesShape>(
@@ -519,7 +565,7 @@ export class QuestpieBuilder<
 	 *     publishPost: publishPostJob,
 	 *   })
 	 *
-	 * const cms = questpie({ name: 'app' })
+	 * const app = questpie({ name: 'app' })
 	 *   .use(blogModule)
 	 *   .collections({
 	 *     products: productsCollection,
@@ -533,7 +579,7 @@ export class QuestpieBuilder<
 	 * const blogModule = questpie({ name: 'blog' })
 	 *   .collections({ posts: postsCollection })
 	 *
-	 * const cms = questpie({ name: 'app' })
+	 * const app = questpie({ name: 'app' })
 	 *   .use(blogModule)
 	 *   .collections({
 	 *     // Override posts collection with custom fields
@@ -559,6 +605,7 @@ export class QuestpieBuilder<
 			migrations?: any;
 			seeds?: any;
 			translations?: any;
+			globalHooks?: any;
 			"~messageKeys"?: any;
 		},
 	>(other: {
@@ -634,6 +681,19 @@ export class QuestpieBuilder<
 				...(otherState.migrations || []),
 			],
 			seeds: [...(this.state.seeds || []), ...(otherState.seeds || [])],
+			globalHooks:
+				this.state.globalHooks || otherState.globalHooks
+					? {
+							collections: [
+								...(this.state.globalHooks?.collections || []),
+								...(otherState.globalHooks?.collections || []),
+							],
+							globals: [
+								...(this.state.globalHooks?.globals || []),
+								...(otherState.globalHooks?.globals || []),
+							],
+						}
+					: undefined,
 			translations: mergeTranslationsConfig(
 				this.state.translations,
 				otherState.translations,
@@ -663,7 +723,7 @@ export class QuestpieBuilder<
 	 *     views: f.number({ min: 0 }),
 	 *   }));
 	 *
-	 * const cms = q
+	 * const app = q
 	 *   .collections({ posts })
 	 *   .build({ ... });
 	 * ```
@@ -712,7 +772,7 @@ export class QuestpieBuilder<
 	 *     maintenanceMode: f.boolean({ default: false }),
 	 *   }));
 	 *
-	 * const cms = q
+	 * const app = q
 	 *   .globals({ settings })
 	 *   .build({ ... });
 	 * ```
@@ -757,7 +817,7 @@ export class QuestpieBuilder<
 	 *   },
 	 * });
 	 *
-	 * const cms = q.jobs({ sendEmail: sendEmailJob }).build({ ... });
+	 * const app = q.jobs({ sendEmail: sendEmailJob }).build({ ... });
 	 * ```
 	 */
 	job<TName extends string, TPayload, TResult = void>(
@@ -806,7 +866,7 @@ export class QuestpieBuilder<
 	 *   subject: (ctx) => `Welcome, ${ctx.name}!`,
 	 * });
 	 *
-	 * const cms = q.emailTemplates({ welcome: welcomeEmail }).build({ ... });
+	 * const app = q.emailTemplates({ welcome: welcomeEmail }).build({ ... });
 	 * ```
 	 */
 	email<TName extends string, TContext>(
@@ -871,6 +931,7 @@ export class QuestpieBuilder<
 			autoSeed: runtimeConfig.autoSeed,
 			translations: this.state.translations,
 			contextResolver: this.state.contextResolver,
+			globalHooks: this.state.globalHooks,
 			defaultAccess: runtimeConfig.defaultAccess,
 		};
 
@@ -900,7 +961,7 @@ export interface QuestpieBuilder<TState extends QuestpieBuilderState>
  * @example
  * ```ts
  * // Minimal setup (no auth, no file uploads)
- * const cms = questpie({ name: 'my-app' })
+ * const app = questpie({ name: 'my-app' })
  *   .collections({ posts: postsCollection })
  *   .build({ db: { url: '...' } })
  * ```
@@ -910,7 +971,7 @@ export interface QuestpieBuilder<TState extends QuestpieBuilderState>
  * // With starter module (auth + file uploads)
  * import { questpie, starterModule } from "@questpie/server";
  *
- * const cms = questpie({ name: 'my-app' })
+ * const app = questpie({ name: 'my-app' })
  *   .use(starterModule)
  *   .collections({ posts: postsCollection })
  *   .build({
@@ -922,7 +983,7 @@ export interface QuestpieBuilder<TState extends QuestpieBuilderState>
  * @example
  * ```ts
  * // Custom upload collection without starter module
- * const cms = questpie({ name: 'my-app' })
+ * const app = questpie({ name: 'my-app' })
  *   .collections({
  *     media: collection("media")
  *       .fields({ alt: varchar("alt", { length: 500 }) })

@@ -14,7 +14,7 @@
  * import { q } from "questpie";
  * import { adminModule } from "@questpie/admin/server";
  *
- * const cms = q({ name: "my-app" })
+ * const app = q({ name: "my-app" })
  *   .use(adminModule)
  *   .collections({
  *     posts: q.collection("posts")
@@ -43,13 +43,9 @@ import type {
 	BuilderFieldsMap,
 	BuilderGlobalsMap,
 	BuilderJobsMap,
-	CollectionBuilderState,
 	FieldsOf,
-	GlobalBuilderState,
 	GlobalFieldsOf,
-	QuestpieBuilderState,
 	QuestpieStateOf,
-	RegisteredApp,
 } from "questpie";
 import type { I18nText } from "questpie/shared";
 import type {
@@ -186,6 +182,14 @@ export interface AdminCollectionConfig {
 	group?: string;
 	/** Order within group */
 	order?: number;
+	/**
+	 * Whether this collection should be included in audit logging.
+	 * Requires the audit module to be registered via `.use(auditModule)`.
+	 *
+	 * - `true` or `undefined` (default): audited when audit module is active
+	 * - `false`: never audited, even when audit module is active
+	 */
+	audit?: boolean;
 }
 
 /**
@@ -476,6 +480,11 @@ export interface AdminGlobalConfig {
 	group?: string;
 	/** Order within group */
 	order?: number;
+	/**
+	 * Whether this global should be included in audit logging.
+	 * @see AdminCollectionConfig.audit
+	 */
+	audit?: boolean;
 }
 
 // ============================================================================
@@ -483,11 +492,11 @@ export interface AdminGlobalConfig {
 // ============================================================================
 
 /**
- * Context available to widget fetchFn and access functions on the server.
- * When you register your app via `Register.app`, `ctx.app` is automatically typed.
+ * Context available to widget loader and access functions on the server.
+ * Use `typedApp<App>(ctx.app)` for typed access.
  */
 export type WidgetFetchContext = {
-	app: RegisteredApp;
+	app: any;
 	db: any;
 	session?: any;
 	locale?: string;
@@ -535,8 +544,8 @@ export interface ServerStatsWidget {
 	filter?: Record<string, unknown>;
 	/** Grid span (1-4) */
 	span?: number;
-	/** Optional server-side data fetcher (overrides collection count) */
-	fetchFn?: (ctx: WidgetFetchContext) => Promise<{ count: number }>;
+	/** Optional server-side data loader (overrides collection count) */
+	loader?: (ctx: WidgetFetchContext) => Promise<{ count: number }>;
 	/** Per-widget access rule */
 	access?: WidgetAccessRule;
 }
@@ -555,15 +564,17 @@ export interface ServerChartWidget {
 	/** Collection to query */
 	collection: string;
 	/** Date field for time series */
-	dateField: string;
+	dateField?: string;
+	/** Field to aggregate by (for pie charts, etc.) */
+	field?: string;
 	/** Time range */
 	timeRange?: "7d" | "30d" | "90d" | "1y";
 	/** Filter to apply */
 	filter?: Record<string, unknown>;
 	/** Grid span (1-4) */
 	span?: number;
-	/** Optional server-side data fetcher (overrides collection query) */
-	fetchFn?: (
+	/** Optional server-side data loader (overrides collection query) */
+	loader?: (
 		ctx: WidgetFetchContext,
 	) => Promise<Array<{ name: string; value: number }>>;
 	/** Per-widget access rule */
@@ -589,8 +600,8 @@ export interface ServerRecentItemsWidget {
 	filter?: Record<string, unknown>;
 	/** Grid span (1-4) */
 	span?: number;
-	/** Optional server-side data fetcher */
-	fetchFn?: (ctx: WidgetFetchContext) => Promise<unknown>;
+	/** Optional server-side data loader */
+	loader?: (ctx: WidgetFetchContext) => Promise<unknown>;
 	/** Per-widget access rule */
 	access?: WidgetAccessRule;
 }
@@ -642,8 +653,8 @@ export interface ServerCustomWidget {
 	props?: Record<string, unknown>;
 	/** Grid span (1-4) */
 	span?: number;
-	/** Optional server-side data fetcher */
-	fetchFn?: (ctx: WidgetFetchContext) => Promise<unknown>;
+	/** Optional server-side data loader */
+	loader?: (ctx: WidgetFetchContext) => Promise<unknown>;
 	/** Per-widget access rule */
 	access?: WidgetAccessRule;
 }
@@ -661,8 +672,10 @@ export interface ServerValueWidget {
 	icon?: ComponentReference;
 	/** Grid span (1-4) */
 	span?: number;
-	/** Server-side data fetcher (required) */
-	fetchFn: (ctx: WidgetFetchContext) => Promise<{
+	/** Auto-refresh interval in milliseconds */
+	refreshInterval?: number;
+	/** Server-side data loader (required) */
+	loader: (ctx: WidgetFetchContext) => Promise<{
 		value: number | string;
 		formatted?: string;
 		label?: I18nText | string;
@@ -699,8 +712,8 @@ export interface ServerTableWidget {
 	filter?: Record<string, unknown>;
 	/** Grid span (1-4) */
 	span?: number;
-	/** Optional server-side data fetcher */
-	fetchFn?: (ctx: WidgetFetchContext) => Promise<unknown>;
+	/** Optional server-side data loader */
+	loader?: (ctx: WidgetFetchContext) => Promise<unknown>;
 	/** Per-widget access rule */
 	access?: WidgetAccessRule;
 }
@@ -724,8 +737,8 @@ export interface ServerTimelineWidget {
 	emptyMessage?: I18nText;
 	/** Grid span (1-4) */
 	span?: number;
-	/** Server-side data fetcher (required) */
-	fetchFn: (ctx: WidgetFetchContext) => Promise<
+	/** Server-side data loader (required) */
+	loader: (ctx: WidgetFetchContext) => Promise<
 		Array<{
 			id: string;
 			title: string;
@@ -755,8 +768,8 @@ export interface ServerProgressWidget {
 	showPercentage?: boolean;
 	/** Grid span (1-4) */
 	span?: number;
-	/** Server-side data fetcher (required) */
-	fetchFn: (ctx: WidgetFetchContext) => Promise<{
+	/** Server-side data loader (required) */
+	loader: (ctx: WidgetFetchContext) => Promise<{
 		current: number;
 		target: number;
 		label?: string;
@@ -1062,8 +1075,8 @@ export interface ServerActionContext<TData = Record<string, unknown>> {
 	itemId?: string;
 	/** Item IDs (for bulk actions) */
 	itemIds?: string[];
-	/** CMS app instance — typed via Register.app */
-	app: RegisteredApp;
+	/** app instance — use `typedApp<App>(ctx.app)` for typed access */
+	app: any;
 	/** Database client */
 	db: unknown;
 	/** Current user session */
@@ -1224,7 +1237,7 @@ export interface ServerActionsConfig {
  * ```
  */
 export interface ActionsConfigContext<
-	TFields extends Record<string, unknown> = Record<string, unknown>,
+	_TFields extends Record<string, unknown> = Record<string, unknown>,
 	TComponentNames extends string = string,
 > {
 	/** Action builders */
@@ -1777,7 +1790,7 @@ declare module "questpie" {
 		 *
 		 * @example
 		 * ```ts
-		 * const cms = q({ name: "my-app" })
+		 * const app = q({ name: "my-app" })
 		 *   .use(adminModule)
 		 *   // Content can be in 10 languages
 		 *   .locale({
@@ -1810,7 +1823,7 @@ declare module "questpie" {
 		 *     subtitle: f.text(),
 		 *   }));
 		 *
-		 * const cms = qb
+		 * const app = qb
 		 *   .blocks({ hero: heroBlock })
 		 *   .build({ ... });
 		 * ```
@@ -1922,17 +1935,18 @@ declare module "questpie" {
 
 	// Extend QuestpieBuilderState to include admin-specific properties
 	interface QuestpieBuilderState<
-		TName extends string = string,
-		TCollections extends BuilderCollectionsMap = BuilderCollectionsMap,
-		TGlobals extends BuilderGlobalsMap = BuilderGlobalsMap,
-		TJobs extends BuilderJobsMap = BuilderJobsMap,
-		TEmailTemplates extends BuilderEmailTemplatesMap = BuilderEmailTemplatesMap,
-		TAuth extends BetterAuthOptions | Record<never, never> = Record<
+		_TName extends string = string,
+		_TCollections extends BuilderCollectionsMap = BuilderCollectionsMap,
+		_TGlobals extends BuilderGlobalsMap = BuilderGlobalsMap,
+		_TJobs extends BuilderJobsMap = BuilderJobsMap,
+		_TEmailTemplates extends
+			BuilderEmailTemplatesMap = BuilderEmailTemplatesMap,
+		_TAuth extends BetterAuthOptions | Record<never, never> = Record<
 			never,
 			never
 		>,
-		TMessageKeys extends string = never,
-		TBuilderFields extends BuilderFieldsMap = BuilderFieldsMap,
+		_TMessageKeys extends string = never,
+		_TBuilderFields extends BuilderFieldsMap = BuilderFieldsMap,
 	> {
 		listViews?: Record<string, ListViewDefinition>;
 		editViews?: Record<string, EditViewDefinition>;

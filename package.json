@@ -1,5 +1,5 @@
 {
-	"name": "questpie-cms",
+	"name": "questpie",
 	"private": true,
 	"scripts": {
 		"build": "turbo run build",

@@ -12,7 +12,7 @@ export interface OpenApiConfig {
   };
   /** Server definitions */
   servers?: Array<{ url: string; description?: string }>;
-  /** Base path for CMS routes (must match your adapter basePath) */
+  /** Base path for routes (must match your adapter basePath) */
   basePath?: string;
   /** Exclude specific collections or globals from the spec */
   exclude?: {
@@ -48,8 +48,8 @@ export interface ScalarConfig {
  * Configuration for withOpenApi() handler wrapper.
  */
 export interface WithOpenApiConfig extends OpenApiConfig {
-  /** CMS instance */
-  cms: Questpie<any>;
+  /** QuestPie instance */
+  app: Questpie<any>;
   /** RPC router tree (same one passed to createFetchHandler) */
   rpc?: RpcRouterTree<any>;
   /** Scalar UI options */

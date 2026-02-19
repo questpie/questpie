@@ -45,6 +45,7 @@ import { createCollectionValidationSchemas } from "#questpie/server/collection/b
 import { CRUDGenerator } from "#questpie/server/collection/crud/index.js";
 import type { CRUD } from "#questpie/server/collection/crud/types.js";
 import type { FieldSelect } from "#questpie/server/fields/field-types.js";
+import { resolveWorkflowConfig } from "#questpie/server/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type { Prettify } from "#questpie/shared/type-utils.js";
 
@@ -494,6 +495,8 @@ export class Collection<TState extends CollectionBuilderState> {
 			: text("id").notNull(),
 		versionNumber: integer("version_number").notNull(),
 		versionOperation: text("version_operation").notNull(), // 'create' | 'update' | 'delete'
+		versionStage: text("version_stage"),
+		versionFromStage: text("version_from_stage"),
 		versionUserId: text("version_user_id"), // Nullable if unknown
 		versionCreatedAt: timestamp("version_created_at", { mode: "date" })
 			.defaultNow()
@@ -612,6 +615,20 @@ export class Collection<TState extends CollectionBuilderState> {
 	) {
 		this.state = state;
 		this.name = state.name;
+
+		const workflow = resolveWorkflowConfig(state.options.workflow);
+		if (workflow) {
+			const versioning = state.options.versioning;
+			const versioningEnabled =
+				!!versioning &&
+				(typeof versioning !== "object" || versioning.enabled !== false);
+
+			if (!versioningEnabled) {
+				throw new Error(
+					`Collection "${state.name}" enables workflow but versioning is disabled. Enable options.versioning to use workflow stages.`,
+				);
+			}
+		}
 
 		// Build the main table
 		this.table = this.generateMainTable(indexesFn) as any;
@@ -986,6 +1003,19 @@ export class Collection<TState extends CollectionBuilderState> {
 			columns[fieldName as string] = column;
 		}
 
+		const workflowEnabled = !!resolveWorkflowConfig(
+			this.state.options.workflow,
+		);
+		if (workflowEnabled) {
+			if (this.state.options.timestamps !== false) {
+				Object.assign(columns, Collection.timestampsCols());
+			}
+
+			if (this.state.options.softDelete) {
+				Object.assign(columns, Collection.softDeleteCols());
+			}
+		}
+
 		/*
 		//  we don't want timestamps in versions table, they are represented by versionCreatedAt
 		//  also no point of soft delete in versions table
@@ -1000,6 +1030,7 @@ export class Collection<TState extends CollectionBuilderState> {
 
 		return pgTable(tableName, columns as any, (t) => [
 			index().on(t.id, t.versionNumber),
+			index().on(t.id, t.versionStage, t.versionNumber),
 			index().on(t.versionCreatedAt),
 		]) as any;
 	}
@@ -1240,8 +1271,7 @@ export class Collection<TState extends CollectionBuilderState> {
 	 * Generate CRUD operations (Drizzle RQB v2-like)
 	 */
 	generateCRUD(
-		db: any,
-		cms?: any,
+		db: any, app?: any,
 	): CRUD<
 		CollectionSelect<TState>,
 		CollectionInsert<TState>,
@@ -1262,7 +1292,7 @@ export class Collection<TState extends CollectionBuilderState> {
 			this.getVirtualsForVersionsWithAliases.bind(this),
 			this.getTitleExpressionForVersions.bind(this),
 			this.getRawTitleExpression.bind(this),
-			cms,
+			app,
 		);
 
 		return crud.generate() as CRUD<
@@ -1323,6 +1353,7 @@ export class Collection<TState extends CollectionBuilderState> {
 				parseLocalizedField(f as string),
 			),
 			relations: Object.keys(this.state.relations),
+			workflow: resolveWorkflowConfig(this.state.options.workflow),
 		};
 	}
 }

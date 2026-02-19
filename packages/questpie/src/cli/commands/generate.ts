@@ -189,7 +189,7 @@ async function generateMigrationInternal(
 		`  1. Review the migration file: ${migrationDir}/${fileBaseName}.ts`,
 	);
 	console.log(
-		`  2. Import migrations in your CMS config: .build({ migrations: [...] })`,
+		`  2. Import migrations in your app config: .build({ migrations: [...] })`,
 	);
 	console.log(`  3. Run migrations: bun questpie migrate:up`);
 }

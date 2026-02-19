@@ -20,7 +20,7 @@ import type { RequestContext } from "#questpie/server/config/context.js";
 import {
 	QuestpieAPI,
 	type QuestpieApi,
-} from "#questpie/server/config/integrated/cms-api.js";
+} from "#questpie/server/config/integrated/questpie-api.js";
 import { QuestpieMigrationsAPI } from "#questpie/server/config/integrated/migrations-api.js";
 import { QuestpieSeedsAPI } from "#questpie/server/config/integrated/seeds-api.js";
 import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
@@ -57,11 +57,12 @@ import type {
 	AnyGlobal,
 	AnyGlobalBuilder,
 } from "#questpie/shared/type-utils.js";
+import type { GlobalHooksState } from "./global-hooks-types.js";
 import type { GetMessageKeys, QuestpieConfig } from "./types.js";
 
 export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	static readonly __internal = {
-		storageDriverServiceName: "cmsDefault",
+		storageDriverServiceName: "appDefault",
 	};
 
 	private _collections: Record<string, Collection<AnyCollectionState>> = {};
@@ -77,23 +78,28 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public readonly defaultAccess: TConfig["defaultAccess"];
 
 	/**
+	 * Global lifecycle hooks that fire for ALL collections/globals.
+	 */
+	public readonly globalHooks: GlobalHooksState;
+
+	/**
 	 * Backend translator function for i18n
 	 * Translates error messages and system messages
 	 *
 	 * When using .messages() on the builder, the keys are type-safe:
 	 * ```ts
-	 * const cms = questpie({ name: "app" })
+	 * const app = questpie({ name: "app" })
 	 *   .use(starterModule) // Includes core messages
 	 *   .messages({ en: { "custom.key": "Value" } } as const)
 	 *   .build({ ... });
 	 *
-	 * cms.t("error.notFound"); // Type-safe from starterModule
-	 * cms.t("custom.key");     // Type-safe from .messages()
+	 * app.t("error.notFound"); // Type-safe from starterModule
+	 * app.t("custom.key");     // Type-safe from .messages()
 	 * ```
 	 *
 	 * @example
 	 * ```ts
-	 * cms.t("error.notFound", { resource: "User" }, "sk");
+	 * app.t("error.notFound", { resource: "User" }, "sk");
 	 * // => "Záznam nenájdený" (in Slovak)
 	 * ```
 	 */
@@ -132,6 +138,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	constructor(config: TConfig) {
 		this.config = config;
 		this.defaultAccess = config.defaultAccess;
+		this.globalHooks = config.globalHooks ?? { collections: [], globals: [] };
 
 		// Initialize translator
 		this.t = createTranslator(config.translations);
@@ -142,6 +149,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		if (config.globals) {
 			this.registerGlobals(config.globals);
 		}
+
+		// Inject global hooks into individual collection/global hooks
+		this.injectGlobalHooks();
 
 		// Validate all relations point to existing collections
 		this.validateRelations();
@@ -178,9 +188,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		// Initialize search adapter asynchronously
 		// This is done here but the actual initialization happens on first use
-		// or can be explicitly called via cms.search.initialize()
+		// or can be explicitly called via app.search.initialize()
 		this.search.initialize().catch((err: unknown) => {
-			this.logger.error("[CMS] Failed to initialize search adapter:", err);
+			this.logger.error("[QuestPie] Failed to initialize search adapter:", err);
 		});
 
 		// Initialize realtime service with auto-configured adapter
@@ -279,8 +289,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 *
 	 * @example
 	 * ```ts
-	 * const cms = q.build({ autoMigrate: true, autoSeed: "required" });
-	 * await cms.waitForInit(); // Wait for migrations + seeds
+	 * const app = q.build({ autoMigrate: true, autoSeed: "required" });
+	 * await app.waitForInit(); // Wait for migrations + seeds
 	 * // Now safe to serve requests
 	 * ```
 	 */
@@ -298,7 +308,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				await this.seeds.run(categories ? { category: categories } : {});
 			}
 		} catch (err) {
-			this.logger.error("[CMS] Auto-initialization failed:", err);
+			this.logger.error("[QuestPie] Auto-initialization failed:", err);
 			throw err;
 		}
 	}
@@ -332,6 +342,184 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			}
 			this._globals[key] = global;
 		}
+	}
+
+	/**
+	 * Inject global hooks directly into each collection's and global's own hooks.
+	 *
+	 * This merges hooks registered via `.hooks()` on modules (e.g. audit module)
+	 * into the individual entity's hook arrays so they execute via the standard
+	 * `executeHooks` path in the CRUD generators. No separate execution needed.
+	 *
+	 * - `before*` hooks propagate errors (can abort operations).
+	 * - `after*` hooks are wrapped with try/catch (errors logged, not propagated).
+	 * - Deduplicates entries that appear multiple times due to `.use()` composition.
+	 */
+	private injectGlobalHooks(): void {
+		const {
+			collections: rawCollectionEntries = [],
+			globals: rawGlobalEntries = [],
+		} = this.globalHooks;
+
+		// Deduplicate entries (same object ref can appear multiple times via .use() merges)
+		const collectionEntries = [...new Set(rawCollectionEntries)];
+		const globalEntries = [...new Set(rawGlobalEntries)];
+
+		// Helper: check if a hook entry matches a given entity name
+		const matchesFilter = (
+			entry: { include?: string[]; exclude?: string[] },
+			name: string,
+		): boolean => {
+			if (entry.include && !entry.include.includes(name)) return false;
+			if (entry.exclude && entry.exclude.includes(name)) return false;
+			return true;
+		};
+
+		// Helper: append a hook fn to an entity's hooks (supports array or single)
+		const appendHook = (
+			hooks: Record<string, any>,
+			hookName: string,
+			fn: (...args: any[]) => any,
+		) => {
+			const existing = hooks[hookName];
+			if (existing) {
+				const arr = Array.isArray(existing) ? existing : [existing];
+				hooks[hookName] = [...arr, fn];
+			} else {
+				hooks[hookName] = [fn];
+			}
+		};
+
+		// Inject global collection hooks
+		for (const [name, collection] of Object.entries(this._collections)) {
+			const state = collection.state as any;
+
+			for (const entry of collectionEntries) {
+				if (!matchesFilter(entry, name)) continue;
+
+				if (!state.hooks) state.hooks = {};
+
+				// Standard hooks: beforeChange, afterChange, beforeDelete, afterDelete
+				for (const hookName of [
+					"beforeChange",
+					"afterChange",
+					"beforeDelete",
+					"afterDelete",
+				] as const) {
+					const globalFn = entry[hookName];
+					if (!globalFn) continue;
+
+					const isAfter = hookName.startsWith("after");
+					const wrapped = isAfter
+						? async (ctx: any) => {
+								try {
+									await globalFn({ ...ctx, collection: name });
+								} catch (err) {
+									console.error(
+										`[QuestPie] Global collection hook "${hookName}" error for "${name}":`,
+										err,
+									);
+								}
+							}
+						: async (ctx: any) => {
+								await globalFn({ ...ctx, collection: name });
+							};
+
+					appendHook(state.hooks, hookName, wrapped);
+				}
+
+				// Transition hooks: beforeTransition, afterTransition
+				for (const hookName of [
+					"beforeTransition",
+					"afterTransition",
+				] as const) {
+					const globalFn = entry[hookName];
+					if (!globalFn) continue;
+
+					const isAfter = hookName === "afterTransition";
+					const wrapped = isAfter
+						? async (ctx: any) => {
+								try {
+									await globalFn({ ...ctx, collection: name });
+								} catch (err) {
+									console.error(
+										`[QuestPie] Global collection hook "${hookName}" error for "${name}":`,
+										err,
+									);
+								}
+							}
+						: async (ctx: any) => {
+								await globalFn({ ...ctx, collection: name });
+							};
+
+					appendHook(state.hooks, hookName, wrapped);
+				}
+			}
+
+		}
+
+		// Inject global global hooks
+		for (const [name, global] of Object.entries(this._globals)) {
+			const state = (global as any).state as any;
+
+			for (const entry of globalEntries) {
+				if (!matchesFilter(entry, name)) continue;
+
+				if (!state.hooks) state.hooks = {};
+
+				// Standard hooks: beforeChange, afterChange
+				for (const hookName of ["beforeChange", "afterChange"] as const) {
+					const globalFn = entry[hookName];
+					if (!globalFn) continue;
+
+					const isAfter = hookName === "afterChange";
+					const wrapped = isAfter
+						? async (ctx: any) => {
+								try {
+									await globalFn({ ...ctx, global: name });
+								} catch (err) {
+									console.error(
+										`[QuestPie] Global global hook "${hookName}" error for "${name}":`,
+										err,
+									);
+								}
+							}
+						: async (ctx: any) => {
+								await globalFn({ ...ctx, global: name });
+							};
+
+					appendHook(state.hooks, hookName, wrapped);
+				}
+
+				// Transition hooks: beforeTransition, afterTransition
+				for (const hookName of [
+					"beforeTransition",
+					"afterTransition",
+				] as const) {
+					const globalFn = entry[hookName];
+					if (!globalFn) continue;
+
+					const isAfter = hookName === "afterTransition";
+					const wrapped = isAfter
+						? async (ctx: any) => {
+								try {
+									await globalFn({ ...ctx, global: name });
+								} catch (err) {
+									console.error(
+										`[QuestPie] Global global hook "${hookName}" error for "${name}":`,
+										err,
+									);
+								}
+							}
+						: async (ctx: any) => {
+								await globalFn({ ...ctx, global: name });
+							};
+
+					appendHook(state.hooks, hookName, wrapped);
+				}
+			}
+		}
+
 	}
 
 	/**
@@ -459,8 +647,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	/**
 	 * Create request context
 	 * Returns minimal context with session, locale, accessMode
-	 * Services are accessed via cms.* not context.*
-	 * @default accessMode: 'system' - CMS API is backend-only by default
+	 * Services are accessed via app.* not context.*
+	 * @default accessMode: 'system' - API is backend-only by default
 	 */
 	public async createContext(
 		userCtx: {

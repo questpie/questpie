@@ -6,13 +6,13 @@
  */
 
 import type { BlockComponentProps } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 export function HeroRenderer({
 	values,
 	data,
 	children,
-}: BlockComponentProps<AppCMS, "hero">) {
+}: BlockComponentProps<App, "hero">) {
 	const bgImageUrl = data?.backgroundImage?.url || values.backgroundImage;
 
 	const heightClass = {

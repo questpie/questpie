@@ -1042,12 +1042,12 @@ export class PostgresSearchAdapter implements SearchAdapter {
   }
 
   async reindex(_collection: string): Promise<void> {
-    // TODO: Implement when we have access to CMS and collection records
+    // TODO: Implement when we have access to app and collection records
     // This would:
     // 1. Clear existing entries for collection
     // 2. Iterate all records
     // 3. Index each record
-    throw new Error("reindex() not yet implemented - requires CMS context");
+    throw new Error("reindex() not yet implemented - requires app context");
   }
 
   async clear(): Promise<void> {
@@ -1065,7 +1065,7 @@ export class PostgresSearchAdapter implements SearchAdapter {
 
   /**
    * Get Drizzle table schemas for migration generation.
-   * These tables will be included in cms.getSchema() for Drizzle migrations.
+   * These tables will be included in app.getSchema() for Drizzle migrations.
    */
   getTableSchemas(): Record<string, any> {
     return {

@@ -6,6 +6,7 @@
 
 "use client";
 
+import * as React from "react";
 import type { ComponentReference } from "#questpie/admin/server";
 import { ComponentRenderer } from "../../components/component-renderer";
 import { cn } from "../../lib/utils.js";
@@ -28,7 +29,12 @@ export type BlockTypeIconProps = {
 // Component
 // ============================================================================
 
-export function BlockTypeIcon({
+const DEFAULT_BLOCK_ICON_REFERENCE: ComponentReference = {
+	type: "icon",
+	props: { name: "ph:cube" },
+};
+
+export const BlockTypeIcon = React.memo(function BlockTypeIcon({
 	type,
 	className,
 	size = 16,
@@ -38,14 +44,14 @@ export function BlockTypeIcon({
 
 	// Use BlockIcon which provides default cube icon
 	return <BlockIcon icon={iconRef} className={className} size={size} />;
-}
+});
 
 /**
  * Standalone icon component that doesn't require context.
  * Useful for rendering icons outside the editor.
  * Shows a default cube icon if no icon is provided.
  */
-export function BlockIcon({
+export const BlockIcon = React.memo(function BlockIcon({
 	icon,
 	className,
 	size = 16,
@@ -54,21 +60,26 @@ export function BlockIcon({
 	className?: string;
 	size?: number;
 }) {
-	const reference = normalizeIconReference(icon);
+	const reference = React.useMemo(() => normalizeIconReference(icon), [icon]);
 
 	// Use default cube icon if no icon provided
-	const finalReference = reference ?? {
-		type: "icon",
-		props: { name: "ph:cube" },
-	};
+	const finalReference = reference ?? DEFAULT_BLOCK_ICON_REFERENCE;
+	const mergedClassName = React.useMemo(
+		() => cn("shrink-0", className),
+		[className],
+	);
+	const additionalProps = React.useMemo(
+		() => ({ className: mergedClassName, size }),
+		[mergedClassName, size],
+	);
 
 	return (
 		<ComponentRenderer
 			reference={finalReference}
-			additionalProps={{ className: cn("shrink-0", className), size }}
+			additionalProps={additionalProps}
 		/>
 	);
-}
+});
 
 // ============================================================================
 // Helpers

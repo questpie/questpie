@@ -66,7 +66,7 @@ export interface InvitePageProps {
  * @example
  * ```tsx
  * // In your admin config
- * const admin = qa<AppCMS>()
+ * const admin = qa<App>()
  *   .use(adminStarterModule)
  *   .pages({
  *     invite: page("invite", { component: InvitePage }).path("/invite"),

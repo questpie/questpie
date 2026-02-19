@@ -65,7 +65,7 @@ import Redis from "ioredis";
 
 ```ts
 const { data } = useQuery(
-  cms.collections.posts.find(
+  app.collections.posts.find(
     { where: { status: "published" } },
     { realtime: true },
   ),
@@ -75,11 +75,11 @@ const { data } = useQuery(
 
 ### SSE Endpoint
 
-The CMS exposes SSE endpoints for each collection and global:
+the app exposes SSE endpoints for each collection and global:
 
 ```
-GET /api/cms/realtime/collections/{name}?seq={lastSeq}
-GET /api/cms/realtime/globals/{name}?seq={lastSeq}
+GET /api/realtime/collections/{name}?seq={lastSeq}
+GET /api/realtime/globals/{name}?seq={lastSeq}
 ```
 
 The client sends the last sequence number and receives snapshot events when data changes.

@@ -22,8 +22,8 @@ export type ElysiaClientConfig = {
   fetch?: typeof fetch;
 
   /**
-   * Base path for CMS routes
-   * @default '/cms'
+   * Base path for routes
+   * @default '/'
    */
   basePath?: string;
 
@@ -34,20 +34,19 @@ export type ElysiaClientConfig = {
 };
 
 /**
- * Create a unified client that combines QUESTPIE CMS CRUD operations
+ * Create a unified client that combines QUESTPIE CRUD operations
  * with Elysia's native Eden Treaty client for custom routes
  *
  * @example
  * ```ts
  * import { createClientFromEden } from '@questpie/elysia/client'
- * import type { App } from './server'
- * import type { AppCMS } from './cms'
+ * import type { App } from './app'
  *
- * const client = createClientFromEden<App, AppCMS>({
+ * const client = createClientFromEden<App, App>({
  *   server: 'localhost:3000'
  * })
  *
- * // Use CMS CRUD operations
+ * // Use CRUD operations
  * const posts = await client.collections.posts.find({ limit: 10 })
  *
  * // Use Eden Treaty for custom routes (fully type-safe!)
@@ -56,15 +55,15 @@ export type ElysiaClientConfig = {
  */
 export function createClientFromEden<
   TApp extends Elysia<any, any, any, any, any, any, any> = any,
-  TCMS extends Questpie<any> = any,
->(config: ElysiaClientConfig): QuestpieClient<TCMS> & Treaty.Create<TApp> {
-  // Determine baseURL with protocol for CMS client
+  TQP extends Questpie<any> = any,
+>(config: ElysiaClientConfig): QuestpieClient<TQP> & Treaty.Create<TApp> {
+  // Determine baseURL with protocol for app client
   const baseURL = config.server.startsWith("http")
     ? config.server
     : `http://${config.server}`;
 
-  // Create CMS client for CRUD operations
-  const cmsClient = createClient<TCMS>({
+  // Create QuestPie client for CRUD operations
+  const qpClient = createClient<TQP>({
     baseURL,
     fetch: config.fetch,
     basePath: config.basePath,
@@ -80,7 +79,7 @@ export function createClientFromEden<
   // Merge both clients
   return {
     ...edenClient,
-    collections: cmsClient.collections,
-    globals: cmsClient.globals,
-  } as QuestpieClient<TCMS> & Treaty.Create<TApp>;
+    collections: qpClient.collections,
+    globals: qpClient.globals,
+  } as QuestpieClient<TQP> & Treaty.Create<TApp>;
 }

@@ -75,7 +75,7 @@ export async function generateSeedCommand(
 	console.log("\n✅ Seed generated successfully!");
 	console.log("\nNext steps:");
 	console.log(`  1. Edit the seed file: ${filePath}`);
-	console.log("  2. Import seeds in your CMS config: .build({ seeds: [...] })");
+	console.log("  2. Import seeds in your app config: .build({ seeds: [...] })");
 	console.log("  3. Run seeds: bun questpie seed");
 }
 
@@ -92,20 +92,20 @@ export const ${camelName}Seed: Seed = {
 	id: "${camelName}",
 	description: "TODO: describe what this seed does",
 	category: "${category}",
-	async run({ cms, ctx, log }) {
+	async run({ app, ctx, log }) {
 		// TODO: Add seed logic here
 		//
-		// Use CMS API for data operations:
-		//   await cms.api.collections.myCollection.create(ctx, { data: { ... } })
+		// Use API for data operations:
+		//   await app.api.collections.myCollection.create(ctx, { data: { ... } })
 		//
 		// For idempotent seeds, check if data exists first:
-		//   const existing = await cms.api.collections.myCollection.find(ctx, { where: { ... } })
+		//   const existing = await app.api.collections.myCollection.find(ctx, { where: { ... } })
 		//   if (existing.docs.length > 0) { log("Already seeded, skipping"); return }
 
 		log("Seed completed")
 	},
 	// Uncomment to enable undo:
-	// async undo({ cms, ctx, log }) {
+	// async undo({ app, ctx, log }) {
 	// 	log("Undoing seed...")
 	// },
 }

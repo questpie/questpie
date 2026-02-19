@@ -18,7 +18,7 @@ Organizations have their own design systems, brand colors, and UI conventions. T
 Replace how individual field types render in forms and table cells:
 
 ```ts
-const admin = qa<AppCMS>()
+const admin = qa<App>()
   .use(coreAdminModule)
   .fields({
     text: {
@@ -81,7 +81,7 @@ The admin's stylesheet is built on shadcn/ui conventions — see their [theming 
 Set admin branding on the server builder:
 
 ```ts
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)
   .branding({
     name: { en: "My Brand" },

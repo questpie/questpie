@@ -94,7 +94,7 @@ import { FormViewSkeleton } from "./view-skeletons";
 // Constants
 // ============================================================================
 
-/** Query key prefix for CMS queries (used for cache invalidation) */
+/** Query key prefix for app queries (used for cache invalidation) */
 const QUERY_KEY_PREFIX = ["questpie", "collections"] as const;
 
 // ============================================================================
@@ -599,12 +599,18 @@ export default function FormView({
 		legacyKey: "history",
 	});
 
-	// Create mode (or missing id) should never keep preview open
+	// Create mode (or missing id) should never keep preview open.
+	// Skip when inside LivePreviewMode (previewContext is set) — the inner FormView
+	// must not clear the ?preview param, otherwise it immediately closes the outer preview.
+	// Also wait for schema to load — prevents clearing ?preview on page refresh before
+	// we know if the collection supports preview.
 	React.useEffect(() => {
+		if (previewContext) return;
+		if (!schema) return;
 		if (!canUseLivePreview && isLivePreviewOpen) {
 			setIsLivePreviewOpen(false);
 		}
-	}, [canUseLivePreview, isLivePreviewOpen, setIsLivePreviewOpen]);
+	}, [canUseLivePreview, isLivePreviewOpen, setIsLivePreviewOpen, previewContext, schema]);
 
 	// Create mode should never keep history sidebar open
 	React.useEffect(() => {
@@ -1025,7 +1031,7 @@ export default function FormView({
 				});
 			},
 			invalidateAll: async () => {
-				// Invalidate all CMS queries
+				// Invalidate all queries
 				await queryClient.invalidateQueries({
 					queryKey: [...QUERY_KEY_PREFIX],
 				});
@@ -1184,7 +1190,7 @@ export default function FormView({
 						setActionLoading(true);
 						const apiPromise = async () => {
 							try {
-								// Build the URL using CMS API path
+								// Build the URL using API path
 								const url = `${storeBasePath}/${collection}/${endpoint}`;
 								const response = await fetch(url, {
 									method: handler.method || "POST",
@@ -1368,30 +1374,6 @@ export default function FormView({
 	// Generate preview URL via server RPC (url function runs server-side)
 	const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
 
-	const updatePreviewUrl = React.useCallback(
-		(record: Record<string, unknown>) => {
-			if (!client) {
-				setPreviewUrl(null);
-				return;
-			}
-
-			const rpc = (client as any).rpc;
-			void rpc
-				.getPreviewUrl({
-					collection,
-					record,
-					locale: contentLocale,
-				})
-				.then((result: { url?: string } | null | undefined) => {
-					setPreviewUrl(result?.url ?? null);
-				})
-				.catch(() => {
-					setPreviewUrl(null);
-				});
-		},
-		[client, collection, contentLocale],
-	);
-
 	React.useEffect(() => {
 		if (!isLivePreviewOpen || !canUseLivePreview || !client) {
 			setPreviewUrl(null);
@@ -1405,13 +1387,37 @@ export default function FormView({
 			return;
 		}
 
-		updatePreviewUrl(persistedRecord);
+		let cancelled = false;
+
+		const rpc = (client as any).rpc;
+		rpc
+			.getPreviewUrl({
+				collection,
+				record: persistedRecord,
+				locale: contentLocale,
+			})
+			.then((result: { url?: string } | null | undefined) => {
+				if (!cancelled) {
+					setPreviewUrl(result?.url ?? null);
+				}
+			})
+			.catch((error: unknown) => {
+				if (!cancelled) {
+					console.error("[FormView] Failed to get preview URL:", error);
+					setPreviewUrl(null);
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
 	}, [
 		isLivePreviewOpen,
 		canUseLivePreview,
 		client,
+		collection,
+		contentLocale,
 		transformedItem,
-		updatePreviewUrl,
 	]);
 
 	// Show skeleton until form data is ready (edit mode only)
@@ -1606,7 +1612,7 @@ export default function FormView({
 								)}
 
 								{/* Version history button */}
-								{isEditMode && id && (
+								{isEditMode && id && schema?.options?.versioning && (
 									<Button
 										type="button"
 										variant="outline"
@@ -1699,6 +1705,19 @@ export default function FormView({
 								)}
 							</div>
 						</div>
+
+						{/* Soft-deleted banner */}
+						{item?.deletedAt && (
+							<div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+								<Icon icon="ph:trash" className="size-4 shrink-0" />
+								<span>
+									{t("form.deletedBanner", {
+										date: formatDate(item.deletedAt),
+										defaultValue: `This record was deleted on ${formatDate(item.deletedAt)}. Use the Restore action to make it active again.`,
+									})}
+								</span>
+							</div>
+						)}
 
 						{/* Main Content - Form Fields */}
 						<FormFieldsContent
@@ -1803,7 +1822,7 @@ export default function FormView({
 			<div className="w-full">{formContent}</div>
 
 			{/* Live Preview Mode */}
-			{canUseLivePreview && previewUrl && (
+			{canUseLivePreview && isLivePreviewOpen && (
 				<LivePreviewMode
 					open={isLivePreviewOpen}
 					onClose={() => setIsLivePreviewOpen(false)}

@@ -35,7 +35,7 @@ import { builtInWidgets } from "./widgets";
  *   }))
  *
  * // Or compose into your own builder
- * const builder = qa<AppCMS>().use(coreAdminModule);
+ * const builder = qa<App>().use(coreAdminModule);
  * ```
  */
 export const coreAdminModule = AdminBuilder.empty()

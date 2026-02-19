@@ -69,7 +69,7 @@ const colorField = field<ColorFieldConfig, string>()({
 ```ts
 import { q } from "@questpie/questpie";
 
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .fields({ color: colorField })
   .collections({
     brands: q.collection("brands").fields((f) => ({
@@ -151,9 +151,9 @@ export function ColorFieldRenderer({
 // admin/index.ts
 import { qa, adminModule } from "@questpie/admin/client";
 import { ColorFieldRenderer } from "./fields/color-field";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>()
+export const admin = qa<App>()
   .use(adminModule)
   .fields({
     color: {

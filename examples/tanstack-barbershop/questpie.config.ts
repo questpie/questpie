@@ -7,7 +7,7 @@
  * @example
  * ```ts
  * export const config = {
- *   app: cms,
+ *   app: app,
  *   cli: {
  *     migrations: {
  *       directory: "./src/migrations",
@@ -17,10 +17,10 @@
  * ```
  */
 
-import { cms } from "@/questpie/server/cms";
+import { app } from "@/questpie/server/app";
 
 export const config = {
-  app: cms,
+  app: app,
   cli: {
     migrations: {
       directory: "./src/migrations",

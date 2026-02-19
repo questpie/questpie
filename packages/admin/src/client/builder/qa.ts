@@ -19,8 +19,8 @@ import { widget } from "./widget/widget";
  * const admin = qa().use(coreAdminModule);
  *
  * // With backend types for autocomplete
- * import type { AppCMS } from './server/cms';
- * const admin = qa<AppCMS>().use(coreAdminModule);
+ * import type { App } from "./server/app";
+ * const admin = qa<App>().use(coreAdminModule);
  * ```
  */
 function qaFactory<TApp = any>() {

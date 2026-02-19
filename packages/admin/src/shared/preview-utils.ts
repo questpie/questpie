@@ -28,7 +28,7 @@ export const DRAFT_MODE_COOKIE = "__draft_mode";
  * @example
  * ```ts
  * const isDraft = isDraftMode(request.headers.get("cookie"));
- * const page = await cms.pages.findOne({
+ * const page = await app.pages.findOne({
  *   where: isDraft ? { slug } : { slug, isPublished: true }
  * });
  * ```

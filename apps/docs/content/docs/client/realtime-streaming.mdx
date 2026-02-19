@@ -29,9 +29,9 @@ Enable realtime in the query options factory:
 ```ts
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
-const cms = createQuestpieQueryOptions(client, {
+const app = createQuestpieQueryOptions(client, {
   realtime: {
-    baseUrl: "/api/cms",       // Must match your adapter basePath
+    baseUrl: "/api",       // Must match your adapter basePath
     enabled: true,
     withCredentials: true,     // Send cookies for auth
   },
@@ -45,7 +45,7 @@ Enable realtime per query:
 ```ts
 // Collection query with realtime updates
 const { data } = useQuery(
-  cms.collections.posts.find(
+  app.collections.posts.find(
     { where: { status: "published" }, limit: 10 },
     { realtime: true },
   ),
@@ -54,7 +54,7 @@ const { data } = useQuery(
 
 // Global with realtime
 const { data: settings } = useQuery(
-  cms.globals.siteSettings.get(
+  app.globals.siteSettings.get(
     {},
     { realtime: true },
   ),
@@ -71,7 +71,7 @@ For custom integrations outside TanStack Query, use `sseSnapshotStream` directly
 import { sseSnapshotStream } from "@questpie/tanstack-query";
 
 const stream = sseSnapshotStream({
-  url: "/api/cms/realtime/collections/posts?where={\"status\":\"published\"}",
+  url: "/api/realtime/collections/posts?where={\"status\":\"published\"}",
   withCredentials: true,
   signal: abortController.signal,
 });
@@ -103,17 +103,17 @@ import {
 } from "@questpie/tanstack-query";
 
 const collectionUrl = buildCollectionRealtimeUrl(
-  { baseUrl: "/api/cms", enabled: true },
+  { baseUrl: "/api", enabled: true },
   "posts",
   { where: { status: "published" } },
 );
-// "/api/cms/realtime/collections/posts?where=..."
+// "/api/realtime/collections/posts?where=..."
 
 const globalUrl = buildGlobalRealtimeUrl(
-  { baseUrl: "/api/cms", enabled: true },
+  { baseUrl: "/api", enabled: true },
   "siteSettings",
 );
-// "/api/cms/realtime/globals/siteSettings"
+// "/api/realtime/globals/siteSettings"
 ```
 
 ## SSE Endpoints
@@ -128,7 +128,7 @@ Query parameters (like `where`, `limit`, `offset`) are forwarded to the server. 
 ## Common Mistakes
 
 - **Missing `realtime` config** — Without `realtime: { baseUrl, enabled: true }` in the query options factory, realtime queries silently fall back to standard fetch.
-- **Wrong `baseUrl`** — The realtime `baseUrl` must match your adapter's `basePath`. If your API is at `/api/cms`, the realtime base must be `/api/cms` too.
+- **Wrong `baseUrl`** — The realtime `baseUrl` must match your adapter's `basePath`. If your API is at `/api`, the realtime base must be `/api` too.
 - **Not using `{ realtime: true }` per query** — Realtime must be opted into per query. The global `enabled: true` just makes it available; each query still needs `{ realtime: true }`.
 - **Too many SSE connections** — Each realtime query opens an SSE connection. Be mindful of connection limits in production.
 

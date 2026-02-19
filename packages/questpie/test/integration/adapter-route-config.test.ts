@@ -70,7 +70,7 @@ describe("adapter route config", () => {
 		});
 
 		it("derives reindex access from collection update access by default", async () => {
-			const handler = createFetchHandler(setup.cms, {
+			const handler = createFetchHandler(setup.app, {
 				getSession: async () => ({
 					user: { id: "user-1", role: "editor" },
 					session: { id: "session-1" },
@@ -78,7 +78,7 @@ describe("adapter route config", () => {
 			});
 
 			const response = await handler(
-				new Request("http://localhost/cms/search/reindex/posts", {
+				new Request("http://localhost/search/reindex/posts", {
 					method: "POST",
 				}),
 			);
@@ -88,7 +88,7 @@ describe("adapter route config", () => {
 		});
 
 		it("uses custom reindexAccess override from adapter config", async () => {
-			const handler = createFetchHandler(setup.cms, {
+			const handler = createFetchHandler(setup.app, {
 				getSession: async () => ({
 					user: { id: "user-1", role: "editor" },
 					session: { id: "session-1" },
@@ -100,7 +100,7 @@ describe("adapter route config", () => {
 			});
 
 			const response = await handler(
-				new Request("http://localhost/cms/search/reindex/posts", {
+				new Request("http://localhost/search/reindex/posts", {
 					method: "POST",
 				}),
 			);
@@ -138,9 +138,9 @@ describe("adapter route config", () => {
 			const setup = await buildMockApp(module);
 
 			try {
-				const handler = createFetchHandler(setup.cms);
+				const handler = createFetchHandler(setup.app);
 				const response = await handler(
-					new Request("http://localhost/cms/storage/files/missing-file.png", {
+					new Request("http://localhost/storage/files/missing-file.png", {
 						method: "GET",
 					}),
 				);
@@ -156,9 +156,9 @@ describe("adapter route config", () => {
 			const setup = await buildMockApp(module);
 
 			try {
-				const handler = createFetchHandler(setup.cms);
+				const handler = createFetchHandler(setup.app);
 				const response = await handler(
-					new Request("http://localhost/cms/storage/files/missing-file.png", {
+					new Request("http://localhost/storage/files/missing-file.png", {
 						method: "GET",
 					}),
 				);
@@ -179,11 +179,11 @@ describe("adapter route config", () => {
 			const setup = await buildMockApp(module);
 
 			try {
-				const handler = createFetchHandler(setup.cms, {
+				const handler = createFetchHandler(setup.app, {
 					storage: { collection: "documents" },
 				});
 				const response = await handler(
-					new Request("http://localhost/cms/storage/files/missing-file.png", {
+					new Request("http://localhost/storage/files/missing-file.png", {
 						method: "GET",
 					}),
 				);

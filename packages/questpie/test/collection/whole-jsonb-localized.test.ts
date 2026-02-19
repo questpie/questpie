@@ -45,7 +45,7 @@ describe("whole JSONB localization", () => {
 
   beforeEach(async () => {
     setup = await buildMockApp(testModule);
-    await runTestDbMigrations(setup.cms);
+    await runTestDbMigrations(setup.app);
   });
 
   afterEach(async () => {
@@ -70,7 +70,7 @@ describe("whole JSONB localization", () => {
       ],
     };
 
-    const created = await setup.cms.api.collections.barbers.create(
+    const created = await setup.app.api.collections.barbers.create(
       {
         name: "John Doe",
         bio: bioEN,
@@ -82,7 +82,7 @@ describe("whole JSONB localization", () => {
     expect(created.bio).toEqual(bioEN);
 
     // Read back in EN
-    const found = await setup.cms.api.collections.barbers.findOne(
+    const found = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctx,
     );
@@ -117,7 +117,7 @@ describe("whole JSONB localization", () => {
     };
 
     // Create in EN
-    const created = await setup.cms.api.collections.barbers.create(
+    const created = await setup.app.api.collections.barbers.create(
       {
         name: "John",
         bio: bioEN,
@@ -126,7 +126,7 @@ describe("whole JSONB localization", () => {
     );
 
     // Update SK locale with different bio
-    await setup.cms.api.collections.barbers.updateById(
+    await setup.app.api.collections.barbers.updateById(
       {
         id: created.id,
         data: {
@@ -138,7 +138,7 @@ describe("whole JSONB localization", () => {
     );
 
     // Read in EN - should get EN bio
-    const enBarber = await setup.cms.api.collections.barbers.findOne(
+    const enBarber = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctxEN,
     );
@@ -147,7 +147,7 @@ describe("whole JSONB localization", () => {
     expect(enBarber?.bio).toEqual(bioEN);
 
     // Read in SK - should get SK bio
-    const skBarber = await setup.cms.api.collections.barbers.findOne(
+    const skBarber = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctxSK,
     );
@@ -171,7 +171,7 @@ describe("whole JSONB localization", () => {
     };
 
     // Create in EN
-    const created = await setup.cms.api.collections.barbers.create(
+    const created = await setup.app.api.collections.barbers.create(
       {
         name: "John",
         bio: bioEN,
@@ -180,7 +180,7 @@ describe("whole JSONB localization", () => {
     );
 
     // Read in DE (no translation) - should fallback to EN
-    const deBarber = await setup.cms.api.collections.barbers.findOne(
+    const deBarber = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctxDE,
     );
@@ -226,7 +226,7 @@ describe("whole JSONB localization", () => {
     };
 
     // Create in EN
-    const created = await setup.cms.api.collections.barbers.create(
+    const created = await setup.app.api.collections.barbers.create(
       {
         name: "Complex",
         bio: bioEN,
@@ -235,7 +235,7 @@ describe("whole JSONB localization", () => {
     );
 
     // Update SK with different structure (more paragraphs)
-    await setup.cms.api.collections.barbers.updateById(
+    await setup.app.api.collections.barbers.updateById(
       {
         id: created.id,
         data: {
@@ -247,14 +247,14 @@ describe("whole JSONB localization", () => {
     );
 
     // Verify EN has 2 paragraphs
-    const enBarber = await setup.cms.api.collections.barbers.findOne(
+    const enBarber = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctxEN,
     );
     expect((enBarber?.bio as any)?.content).toHaveLength(2);
 
     // Verify SK has 3 paragraphs
-    const skBarber = await setup.cms.api.collections.barbers.findOne(
+    const skBarber = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctxSK,
     );
@@ -265,7 +265,7 @@ describe("whole JSONB localization", () => {
     const ctx = createTestContext({ locale: "en" });
 
     // Create with null bio
-    const created = await setup.cms.api.collections.barbers.create(
+    const created = await setup.app.api.collections.barbers.create(
       {
         name: "No Bio",
         bio: null,
@@ -276,7 +276,7 @@ describe("whole JSONB localization", () => {
     expect(created.bio).toBeNull();
 
     // Read back
-    const found = await setup.cms.api.collections.barbers.findOne(
+    const found = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctx,
     );
@@ -320,7 +320,7 @@ describe("whole JSONB localization", () => {
     };
 
     // Create in EN
-    const created = await setup.cms.api.collections.barbers.create(
+    const created = await setup.app.api.collections.barbers.create(
       {
         name: "Multi",
         bio: bioEN,
@@ -329,7 +329,7 @@ describe("whole JSONB localization", () => {
     );
 
     // Add SK
-    await setup.cms.api.collections.barbers.updateById(
+    await setup.app.api.collections.barbers.updateById(
       {
         id: created.id,
         data: {
@@ -341,7 +341,7 @@ describe("whole JSONB localization", () => {
     );
 
     // Add DE
-    await setup.cms.api.collections.barbers.updateById(
+    await setup.app.api.collections.barbers.updateById(
       {
         id: created.id,
         data: {
@@ -353,19 +353,19 @@ describe("whole JSONB localization", () => {
     );
 
     // Verify all locales have their own versions
-    const enBarber = await setup.cms.api.collections.barbers.findOne(
+    const enBarber = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctxEN,
     );
     expect(enBarber?.bio).toEqual(bioEN);
 
-    const skBarber = await setup.cms.api.collections.barbers.findOne(
+    const skBarber = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctxSK,
     );
     expect(skBarber?.bio).toEqual(bioSK);
 
-    const deBarber = await setup.cms.api.collections.barbers.findOne(
+    const deBarber = await setup.app.api.collections.barbers.findOne(
       { where: { id: created.id } },
       ctxDE,
     );

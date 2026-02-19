@@ -5,7 +5,7 @@ export function NotFound() {
   return (
     <HomeLayout
       nav={{
-        title: "QUESTPIE CMS Docs",
+        title: "QUESTPIE Docs",
       }}
       className="text-center py-32 justify-center"
     >

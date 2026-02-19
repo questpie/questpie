@@ -3,9 +3,9 @@
  *
  * Main layout for the barbershop frontend.
  * Features:
- * - Fetches site settings from CMS
+ * - Fetches site settings from app
  * - Provides theme and locale context
- * - Renders Header and Footer with CMS data
+ * - Renders Header and Footer with app data
  * - Child routes rendered via <Outlet />
  */
 

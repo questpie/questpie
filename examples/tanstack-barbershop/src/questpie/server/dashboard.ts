@@ -39,7 +39,7 @@ export const dashboard = qb.dashboard(({ d, c, a }) =>
 			}),
 		],
 		columns: 4,
-		realtime: true,
+		realtime: false,
 		items: [
 			{
 				type: "section",
@@ -102,7 +102,7 @@ export const dashboard = qb.dashboard(({ d, c, a }) =>
 						span: 2,
 						// cardVariant: "featured",
 						refreshInterval: 1000 * 60 * 5,
-						fetchFn: async ({ app }: any) => {
+						loader: async ({ app }: any) => {
 							const now = new Date();
 							const currentStart = new Date(
 								now.getFullYear(),
@@ -181,7 +181,7 @@ export const dashboard = qb.dashboard(({ d, c, a }) =>
 						span: 1,
 						showPercentage: true,
 						label: { en: "Monthly Goal", sk: "Mesačný cieľ" },
-						fetchFn: async ({ app }: any) => {
+						loader: async ({ app }: any) => {
 							const now = new Date();
 							const currentStart = new Date(
 								now.getFullYear(),
@@ -246,7 +246,7 @@ export const dashboard = qb.dashboard(({ d, c, a }) =>
 						maxItems: 8,
 						showTimestamps: true,
 						timestampFormat: "relative",
-						fetchFn: async ({ app }: any) => {
+						loader: async ({ app }: any) => {
 							const res = await app.api.collections.appointments.find({
 								limit: 8,
 								orderBy: { updatedAt: "desc" },

@@ -9,7 +9,7 @@ Type-safe TanStack Query option builders for QUESTPIE — collections, globals, 
 - **Realtime Streaming** — `streamedQuery`-based options for SSE live updates on collections and globals
 - **Batch Operations** — `updateMany` and `deleteMany` mutation builders
 - **SSR Ready** — Prefetch data on the server, hydrate on the client
-- **Full Type Inference** — Types flow from your CMS schema through to query results
+- **Full Type Inference** — Types flow from your app schema through to query results
 
 ## Installation
 
@@ -24,14 +24,14 @@ bun add @questpie/tanstack-query questpie @tanstack/react-query
 ```ts
 import { createClient } from "questpie/client";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
-import type { AppCMS, AppRpc } from "@/questpie/server/cms";
+import type { App, AppRpc } from "@/questpie/server/app";
 
-const cmsClient = createClient<AppCMS, AppRpc>({
+const appClient = createClient<App, AppRpc>({
   baseURL: "http://localhost:3000",
-  basePath: "/api/cms",
+  basePath: "/api",
 });
 
-export const cmsQueries = createQuestpieQueryOptions(cmsClient);
+export const appQueries = createQuestpieQueryOptions(appClient);
 ```
 
 ### 2. Use in Components

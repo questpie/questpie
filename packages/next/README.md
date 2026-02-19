@@ -1,6 +1,6 @@
 # @questpie/next
 
-Next.js App Router adapter for QUESTPIE. Exports catch-all route handlers that mount CMS CRUD, auth, storage, RPC, and realtime routes.
+Next.js App Router adapter for QUESTPIE. Exports catch-all route handlers that mount CRUD, auth, storage, RPC, and realtime routes.
 
 ## Installation
 
@@ -13,12 +13,12 @@ bun add @questpie/next questpie
 ### 1. Route Handler
 
 ```ts
-// app/api/cms/[...path]/route.ts
+// app/api/[...path]/route.ts
 import { questpieNextRouteHandlers } from "@questpie/next";
-import { cms, appRpc } from "@/questpie/server/cms";
+import { app, appRpc } from "@/questpie/server/app";
 
-export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(cms, {
-  basePath: "/api/cms",
+export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 
@@ -28,13 +28,13 @@ export const dynamic = "force-dynamic";
 ### 2. Client
 
 ```ts
-// lib/cms-client.ts
+// lib/client.ts
 import { createClient } from "questpie/client";
-import type { AppCMS, AppRpc } from "@/questpie/server/cms";
+import type { App, AppRpc } from "@/questpie/server/app";
 
-export const cmsClient = createClient<AppCMS, AppRpc>({
+export const appClient = createClient<App, AppRpc>({
   baseURL: process.env.NEXT_PUBLIC_URL!,
-  basePath: "/api/cms",
+  basePath: "/api",
 });
 ```
 
@@ -42,10 +42,10 @@ export const cmsClient = createClient<AppCMS, AppRpc>({
 
 ```tsx
 // app/posts/page.tsx
-import { cmsClient } from "@/lib/cms-client";
+import { appClient } from "@/lib/client";
 
 export default async function PostsPage() {
-  const { docs } = await cmsClient.collections.posts.find({
+  const { docs } = await appClient.collections.posts.find({
     where: { published: { eq: true } },
     orderBy: { publishedAt: "desc" },
     limit: 10,
@@ -66,9 +66,9 @@ export default async function PostsPage() {
 
 import { useQuery } from "@tanstack/react-query";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
-import { cmsClient } from "@/lib/cms-client";
+import { appClient } from "@/lib/client";
 
-const cmsQueries = createQuestpieQueryOptions(cmsClient);
+const appQueries = createQuestpieQueryOptions(appClient);
 
 export function PostsList() {
   const { data } = useQuery(
@@ -88,11 +88,11 @@ export function PostsList() {
 ```ts
 "use server";
 
-import { cms } from "@/questpie/server/cms";
+import { app } from "@/questpie/server/app";
 import { revalidatePath } from "next/cache";
 
 export async function createPost(formData: FormData) {
-  const post = await cms.api.collections.posts.create({
+  const post = await app.api.collections.posts.create({
     title: formData.get("title") as string,
     content: formData.get("content") as string,
   });
@@ -107,22 +107,22 @@ The adapter creates catch-all handlers under your base path:
 
 | Method | Route                                    | Description          |
 | ------ | ---------------------------------------- | -------------------- |
-| GET    | `/api/cms/collections/:name`             | List items           |
-| POST   | `/api/cms/collections/:name`             | Create item          |
-| GET    | `/api/cms/collections/:name/:id`         | Get item             |
-| PATCH  | `/api/cms/collections/:name/:id`         | Update item          |
-| DELETE | `/api/cms/collections/:name/:id`         | Delete item          |
-| POST   | `/api/cms/collections/:name/:id/restore` | Restore soft-deleted |
-| GET    | `/api/cms/collections/:name/:id/versions` | List item versions   |
-| POST   | `/api/cms/collections/:name/:id/revert`   | Revert item version  |
-| GET    | `/api/cms/globals/:name`                 | Get global           |
-| PATCH  | `/api/cms/globals/:name`                 | Update global        |
-| GET    | `/api/cms/globals/:name/versions`         | List global versions |
-| POST   | `/api/cms/globals/:name/revert`           | Revert global version |
-| POST   | `/api/cms/collections/:name/upload`      | Upload file          |
-| ALL    | `/api/cms/auth/*`                        | Better Auth routes   |
-| POST   | `/api/cms/rpc/*`                         | RPC procedures       |
-| GET    | `/api/cms/collections/:name/subscribe`   | SSE realtime         |
+| GET    | `/api/collections/:name`             | List items           |
+| POST   | `/api/collections/:name`             | Create item          |
+| GET    | `/api/collections/:name/:id`         | Get item             |
+| PATCH  | `/api/collections/:name/:id`         | Update item          |
+| DELETE | `/api/collections/:name/:id`         | Delete item          |
+| POST   | `/api/collections/:name/:id/restore` | Restore soft-deleted |
+| GET    | `/api/collections/:name/:id/versions` | List item versions   |
+| POST   | `/api/collections/:name/:id/revert`   | Revert item version  |
+| GET    | `/api/globals/:name`                 | Get global           |
+| PATCH  | `/api/globals/:name`                 | Update global        |
+| GET    | `/api/globals/:name/versions`         | List global versions |
+| POST   | `/api/globals/:name/revert`           | Revert global version |
+| POST   | `/api/collections/:name/upload`      | Upload file          |
+| ALL    | `/api/auth/*`                        | Better Auth routes   |
+| POST   | `/api/rpc/*`                         | RPC procedures       |
+| GET    | `/api/collections/:name/subscribe`   | SSE realtime         |
 
 ## Environment Variables
 

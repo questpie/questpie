@@ -46,7 +46,7 @@ function formatValue(value: number | string): string {
  *   config={{
  *     type: "value",
  *     id: "total-revenue",
- *     fetchFn: async (client) => ({
+ *     loader: async (client) => ({
  *       value: 42,
  *       label: "Total",
  *       classNames: { root: "bg-blue-50" },
@@ -59,15 +59,15 @@ export default function ValueWidget({ config }: ValueWidgetProps) {
   const client = useAdminStore(selectClient);
   const resolveText = useResolveText();
 
-  const useServerData = !!config.hasFetchFn;
+  const useServerData = !!config.hasLoader;
   const serverQuery = useServerWidgetData<ValueWidgetResult>(config.id, {
     enabled: useServerData,
     refreshInterval: config.refreshInterval,
   });
   const clientQuery = useQuery<ValueWidgetResult>({
     queryKey: ["widget", "value", config.id],
-    queryFn: () => config.fetchFn!(client),
-    enabled: !useServerData && !!config.fetchFn,
+    queryFn: () => config.loader!(client),
+    enabled: !useServerData && !!config.loader,
     refetchInterval: config.refreshInterval,
   });
   const { data, isLoading, error, refetch, isFetching } = useServerData

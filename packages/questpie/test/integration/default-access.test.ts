@@ -51,7 +51,7 @@ const adminSettings = q
 	});
 
 describe("default access control", () => {
-	// Create CMS with defaultAccess requiring authentication
+	// Create app with defaultAccess requiring authentication
 	const testModule = q
 		.collections({
 			public_posts: publicPosts,
@@ -74,7 +74,7 @@ describe("default access control", () => {
 				delete: ({ session }) => !!session,
 			},
 		});
-		await runTestDbMigrations(setup.cms);
+		await runTestDbMigrations(setup.app);
 	});
 
 	afterEach(async () => {
@@ -86,7 +86,7 @@ describe("default access control", () => {
 			const noSessionCtx = createTestContext({ session: null });
 
 			await expect(
-				setup.cms.api.collections.public_posts.create(
+				setup.app.api.collections.public_posts.create(
 					{ title: "Test Post" },
 					noSessionCtx,
 				),
@@ -96,7 +96,7 @@ describe("default access control", () => {
 		it("should allow access when session exists (defaultAccess applied)", async () => {
 			const userCtx = createTestContext({ accessMode: "user", role: "user" });
 
-			const result = await setup.cms.api.collections.public_posts.create(
+			const result = await setup.app.api.collections.public_posts.create(
 				{ title: "Test Post" },
 				userCtx,
 			);
@@ -112,7 +112,7 @@ describe("default access control", () => {
 			const userCtx = createTestContext({ accessMode: "user", role: "user" });
 
 			await expect(
-				setup.cms.api.collections.admin_notes.create(
+				setup.app.api.collections.admin_notes.create(
 					{ content: "Secret note" },
 					userCtx,
 				),
@@ -123,7 +123,7 @@ describe("default access control", () => {
 			// Admin should be allowed (admin_notes explicit access allows admins)
 			const adminCtx = createTestContext({ accessMode: "user", role: "admin" });
 
-			const result = await setup.cms.api.collections.admin_notes.create(
+			const result = await setup.app.api.collections.admin_notes.create(
 				{ content: "Secret note" },
 				adminCtx,
 			);
@@ -137,7 +137,7 @@ describe("default access control", () => {
 		it("should bypass defaultAccess in system mode", async () => {
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			const result = await setup.cms.api.collections.public_posts.create(
+			const result = await setup.app.api.collections.public_posts.create(
 				{ title: "System Post" },
 				systemCtx,
 			);
@@ -153,14 +153,14 @@ describe("default access control", () => {
 			const noSessionCtx = createTestContext({ session: null });
 
 			// Create a post first with system access
-			const post = await setup.cms.api.collections.public_posts.create(
+			const post = await setup.app.api.collections.public_posts.create(
 				{ title: "Test Post" },
 				systemCtx,
 			);
 
 			// Try to read without session
 			await expect(
-				setup.cms.api.collections.public_posts.findOne(
+				setup.app.api.collections.public_posts.findOne(
 					{ where: { id: post.id } },
 					noSessionCtx,
 				),
@@ -172,14 +172,14 @@ describe("default access control", () => {
 			const noSessionCtx = createTestContext({ session: null });
 
 			// Create a post first with system access
-			const post = await setup.cms.api.collections.public_posts.create(
+			const post = await setup.app.api.collections.public_posts.create(
 				{ title: "Test Post" },
 				systemCtx,
 			);
 
 			// Try to update without session
 			await expect(
-				setup.cms.api.collections.public_posts.updateById(
+				setup.app.api.collections.public_posts.updateById(
 					{ id: post.id, data: { title: "Updated" } },
 					noSessionCtx,
 				),
@@ -191,14 +191,14 @@ describe("default access control", () => {
 			const noSessionCtx = createTestContext({ session: null });
 
 			// Create a post first with system access
-			const post = await setup.cms.api.collections.public_posts.create(
+			const post = await setup.app.api.collections.public_posts.create(
 				{ title: "Test Post" },
 				systemCtx,
 			);
 
 			// Try to delete without session
 			await expect(
-				setup.cms.api.collections.public_posts.deleteById(
+				setup.app.api.collections.public_posts.deleteById(
 					{ id: post.id },
 					noSessionCtx,
 				),
@@ -210,14 +210,14 @@ describe("default access control", () => {
 			const noSessionCtx = createTestContext({ session: null });
 
 			// Create a post first with system access
-			const post = await setup.cms.api.collections.public_posts.create(
+			const post = await setup.app.api.collections.public_posts.create(
 				{ title: "Test Post" },
 				systemCtx,
 			);
 
 			// Try to delete without session
 			await expect(
-				setup.cms.api.collections.public_posts.deleteById(
+				setup.app.api.collections.public_posts.deleteById(
 					{ id: post.id },
 					noSessionCtx,
 				),
@@ -228,34 +228,34 @@ describe("default access control", () => {
 			const userCtx = createTestContext({ accessMode: "user", role: "user" });
 
 			// Create
-			const post = await setup.cms.api.collections.public_posts.create(
+			const post = await setup.app.api.collections.public_posts.create(
 				{ title: "Test Post" },
 				userCtx,
 			);
 			expect(post.title).toBe("Test Post");
 
 			// Read
-			const found = await setup.cms.api.collections.public_posts.findOne(
+			const found = await setup.app.api.collections.public_posts.findOne(
 				{ where: { id: post.id } },
 				userCtx,
 			);
 			expect(found?.title).toBe("Test Post");
 
 			// Update
-			const updated = await setup.cms.api.collections.public_posts.updateById(
+			const updated = await setup.app.api.collections.public_posts.updateById(
 				{ id: post.id, data: { title: "Updated" } },
 				userCtx,
 			);
 			expect(updated.title).toBe("Updated");
 
 			// Delete
-			await setup.cms.api.collections.public_posts.deleteById(
+			await setup.app.api.collections.public_posts.deleteById(
 				{ id: post.id },
 				userCtx,
 			);
 
 			// Verify deleted
-			const deleted = await setup.cms.api.collections.public_posts.findOne(
+			const deleted = await setup.app.api.collections.public_posts.findOne(
 				{ where: { id: post.id } },
 				userCtx,
 			);
@@ -269,14 +269,14 @@ describe("default access control", () => {
 			const noSessionCtx = createTestContext({ session: null });
 
 			// Create with system access first
-			const post = await setup.cms.api.collections.partial_access_posts.create(
+			const post = await setup.app.api.collections.partial_access_posts.create(
 				{ title: "Public Post" },
 				systemCtx,
 			);
 
 			// Read should work without session (explicit public read access)
 			const found =
-				await setup.cms.api.collections.partial_access_posts.findOne(
+				await setup.app.api.collections.partial_access_posts.findOne(
 					{ where: { id: post.id } },
 					noSessionCtx,
 				);
@@ -284,7 +284,7 @@ describe("default access control", () => {
 
 			// Create should fail without session (fallback to defaultAccess)
 			await expect(
-				setup.cms.api.collections.partial_access_posts.create(
+				setup.app.api.collections.partial_access_posts.create(
 					{ title: "Another Post" },
 					noSessionCtx,
 				),
@@ -297,14 +297,14 @@ describe("default access control", () => {
 			const userCtx = createTestContext({ accessMode: "user", role: "user" });
 
 			// Create with system access
-			const post = await setup.cms.api.collections.partial_access_posts.create(
+			const post = await setup.app.api.collections.partial_access_posts.create(
 				{ title: "Test Post" },
 				systemCtx,
 			);
 
 			// Update should fail without session (defaultAccess requires session)
 			await expect(
-				setup.cms.api.collections.partial_access_posts.updateById(
+				setup.app.api.collections.partial_access_posts.updateById(
 					{ id: post.id, data: { title: "Updated" } },
 					noSessionCtx,
 				),
@@ -312,7 +312,7 @@ describe("default access control", () => {
 
 			// Delete should fail without session (defaultAccess requires session)
 			await expect(
-				setup.cms.api.collections.partial_access_posts.deleteById(
+				setup.app.api.collections.partial_access_posts.deleteById(
 					{ id: post.id },
 					noSessionCtx,
 				),
@@ -320,7 +320,7 @@ describe("default access control", () => {
 
 			// But should work with session
 			const updated =
-				await setup.cms.api.collections.partial_access_posts.updateById(
+				await setup.app.api.collections.partial_access_posts.updateById(
 					{ id: post.id, data: { title: "Updated" } },
 					userCtx,
 				);
@@ -334,14 +334,14 @@ describe("default access control", () => {
 			const noSessionCtx = createTestContext({ session: null });
 
 			// Initialize global first with system access
-			await setup.cms.api.globals.site_settings.update(
+			await setup.app.api.globals.site_settings.update(
 				{ siteName: "Test Site" },
 				systemCtx,
 			);
 
 			// Try to read without session (note: get(options, context) signature)
 			await expect(
-				setup.cms.api.globals.site_settings.get({}, noSessionCtx),
+				setup.app.api.globals.site_settings.get({}, noSessionCtx),
 			).rejects.toThrow();
 		});
 
@@ -350,12 +350,12 @@ describe("default access control", () => {
 			const userCtx = createTestContext({ accessMode: "user", role: "user" });
 
 			// Initialize global first with system access
-			await setup.cms.api.globals.site_settings.update(
+			await setup.app.api.globals.site_settings.update(
 				{ siteName: "Test Site" },
 				systemCtx,
 			);
 
-			const settings = await setup.cms.api.globals.site_settings.get(
+			const settings = await setup.app.api.globals.site_settings.get(
 				{},
 				userCtx,
 			);
@@ -368,14 +368,14 @@ describe("default access control", () => {
 			const noSessionCtx = createTestContext({ session: null });
 
 			// Initialize global first with system access
-			await setup.cms.api.globals.site_settings.update(
+			await setup.app.api.globals.site_settings.update(
 				{ siteName: "Test Site" },
 				systemCtx,
 			);
 
 			// Try to update without session
 			await expect(
-				setup.cms.api.globals.site_settings.update(
+				setup.app.api.globals.site_settings.update(
 					{ siteName: "New Name" },
 					noSessionCtx,
 				),
@@ -385,7 +385,7 @@ describe("default access control", () => {
 		it("should allow global update with valid session (defaultAccess applied)", async () => {
 			const userCtx = createTestContext({ accessMode: "user", role: "user" });
 
-			const settings = await setup.cms.api.globals.site_settings.update(
+			const settings = await setup.app.api.globals.site_settings.update(
 				{ siteName: "My Site" } as any,
 				userCtx,
 			);
@@ -398,18 +398,18 @@ describe("default access control", () => {
 			const adminCtx = createTestContext({ accessMode: "user", role: "admin" });
 
 			// Initialize global first with system access
-			await setup.cms.api.globals.admin_settings.update(
+			await setup.app.api.globals.admin_settings.update(
 				{ secretKey: "secret123" },
 				systemCtx,
 			);
 
 			// Regular user should be denied (admin_settings requires admin role)
 			await expect(
-				setup.cms.api.globals.admin_settings.get({}, userCtx),
+				setup.app.api.globals.admin_settings.get({}, userCtx),
 			).rejects.toThrow();
 
 			// Admin should be allowed
-			const settings = await setup.cms.api.globals.admin_settings.get(
+			const settings = await setup.app.api.globals.admin_settings.get(
 				{},
 				adminCtx,
 			);

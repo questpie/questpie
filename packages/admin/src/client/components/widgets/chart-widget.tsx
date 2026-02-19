@@ -54,8 +54,8 @@ export type ChartWidgetConfig = {
   aggregation?: "count" | "sum" | "average";
   /** Value field for sum/average aggregation */
   valueField?: string;
-  /** Server has a fetchFn for this widget */
-  hasFetchFn?: boolean;
+  /** Server has a loader for this widget */
+  hasLoader?: boolean;
   /** Refresh interval in ms */
   refreshInterval?: number;
 };
@@ -119,14 +119,14 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
     color = "var(--color-chart-1)",
     showGrid = true,
     realtime,
-    hasFetchFn,
+    hasLoader,
     refreshInterval,
   } = config;
 
-  // Server-side data fetching (when hasFetchFn is true)
+  // Server-side data fetching (when hasLoader is true)
   type ChartDataPoint = { name: string; value: number };
   const serverQuery = useServerWidgetData<ChartDataPoint[]>(config.id, {
-    enabled: !!hasFetchFn,
+    enabled: !!hasLoader,
     refreshInterval,
   });
 
@@ -140,12 +140,12 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
     { realtime },
   );
 
-  const { isLoading, error, refetch } = hasFetchFn
+  const { isLoading, error, refetch } = hasLoader
     ? serverQuery
     : collectionQuery;
 
   // API returns PaginatedResult with { docs, totalDocs, ... }
-  const collectionItems = hasFetchFn
+  const collectionItems = hasLoader
     ? []
     : Array.isArray((collectionQuery.data as any)?.docs)
       ? (collectionQuery.data as any).docs
@@ -157,7 +157,7 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
   // Process data for chart
   const chartData = React.useMemo(() => {
     // When using server data, it's already in the right format
-    if (hasFetchFn) {
+    if (hasLoader) {
       return (serverQuery.data as ChartDataPoint[] | undefined) ?? [];
     }
 
@@ -188,7 +188,7 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
     return Object.entries(grouped)
       .map(([name, value]) => ({ name, value: value as number }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [hasFetchFn, serverQuery.data, collectionItems, field, timeRange]);
+  }, [hasLoader, serverQuery.data, collectionItems, field, timeRange]);
 
   // Empty state content
   const emptyContent = (

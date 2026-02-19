@@ -7,10 +7,10 @@
  * ```ts
  * // middleware.ts
  * import { createNextAuthMiddleware } from "@questpie/admin/server/adapters/nextjs";
- * import { cms } from "./questpie/server/cms";
+ * import { app } from "./questpie/server/app";
  *
  * export default createNextAuthMiddleware({
- *   cms,
+ *   app,
  *   loginPath: "/admin/login",
  *   protectedPaths: ["/admin"],
  *   publicPaths: ["/admin/login", "/admin/forgot-password"],
@@ -30,9 +30,9 @@ import { getAdminSession, requireAdminAuth } from "../auth-helpers.js";
  */
 export interface NextAuthMiddlewareOptions {
   /**
-   * The CMS instance with auth configured
+   * The app instance with auth configured
    */
-  cms: Questpie<any>;
+  app: Questpie<any>;
 
   /**
    * Path to redirect to when not authenticated
@@ -84,10 +84,10 @@ function pathMatches(pathname: string, patterns: string[]): boolean {
  * ```ts
  * // middleware.ts
  * import { createNextAuthMiddleware } from "@questpie/admin/server/adapters/nextjs";
- * import { cms } from "./questpie/server/cms";
+ * import { app } from "./questpie/server/app";
  *
  * export default createNextAuthMiddleware({
- *   cms,
+ *   app,
  *   loginPath: "/admin/login",
  * });
  *
@@ -97,7 +97,7 @@ function pathMatches(pathname: string, patterns: string[]): boolean {
  * ```
  */
 export function createNextAuthMiddleware({
-  cms,
+  app,
   loginPath = "/admin/login",
   requiredRole = "admin",
   protectedPaths = ["/admin"],
@@ -133,7 +133,7 @@ export function createNextAuthMiddleware({
     // Check authentication
     const redirect = await requireAdminAuth({
       request,
-      cms,
+      app,
       loginPath,
       requiredRole,
       redirectParam,
@@ -161,13 +161,13 @@ export function createNextAuthMiddleware({
  * // app/admin/layout.tsx
  * import { getNextAdminSession } from "@questpie/admin/server/adapters/nextjs";
  * import { headers } from "next/headers";
- * import { cms } from "~/questpie/server/cms";
+ * import { app } from "~/questpie/server/app";
  *
  * export default async function AdminLayout({ children }) {
  *   const headersList = headers();
  *   const session = await getNextAdminSession({
  *     headers: headersList,
- *     cms,
+ *     app,
  *   });
  *
  *   if (!session) {
@@ -182,12 +182,12 @@ export function createNextAuthMiddleware({
  * ```ts
  * // app/api/admin/users/route.ts
  * import { getNextAdminSession } from "@questpie/admin/server/adapters/nextjs";
- * import { cms } from "~/questpie/server/cms";
+ * import { app } from "~/questpie/server/app";
  *
  * export async function GET(request: Request) {
  *   const session = await getNextAdminSession({
  *     headers: request.headers,
- *     cms,
+ *     app,
  *   });
  *
  *   if (!session || session.user.role !== "admin") {
@@ -200,12 +200,12 @@ export function createNextAuthMiddleware({
  */
 export async function getNextAdminSession({
   headers,
-  cms,
+  app,
 }: {
   headers: Headers;
-  cms: Questpie<any>;
+  app: Questpie<any>;
 }) {
   // Create a minimal request object for getAdminSession
   const request = new Request("http://localhost", { headers });
-  return getAdminSession({ request, cms });
+  return getAdminSession({ request, app });
 }

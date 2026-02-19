@@ -28,7 +28,7 @@ describe("Migration System - Programmatic", () => {
     pgClient = await createTestDb();
 
     // Create questpie instance with fields
-    const q = questpie({ name: "test-cms" }).fields(builtinFields);
+    const q = questpie({ name: "test-app" }).fields(builtinFields);
 
     // Define test collections using q.collection()
     const posts = q.collection("posts").fields((f) => ({
@@ -37,7 +37,7 @@ describe("Migration System - Programmatic", () => {
       published: f.boolean({ default: false }),
     }));
 
-    // Create CMS instance
+    // Create app instance
     const builder = q.collections({ posts });
 
     app = builder.build({
@@ -238,10 +238,10 @@ AND table_name IN ('posts', 'comments')
  * For integration testing of the full migration workflow, use the CLI commands.
  *
  * The new migration workflow:
- * 1. Define collections in your CMS
+ * 1. Define collections in your app
  * 2. Run `bun questpie migrate:generate` to create migration files
- * 3. Import migrations via `.migrations([...])` in your CMS builder
- * 4. Run `bun questpie migrate:up` or use `cms.migrations.up()` at runtime
+ * 3. Import migrations via `.migrations([...])` in your app builder
+ * 4. Run `bun questpie migrate:up` or use `app.migrations.up()` at runtime
  */
 describe("Migration System - DrizzleMigrationGenerator", () => {
   let pgClient: PGlite;
@@ -270,7 +270,7 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
     const { DrizzleMigrationGenerator } =
       await import("../../src/server/migration/generator.js");
 
-    const q = questpie({ name: "test-cms" }).fields(builtinFields);
+    const q = questpie({ name: "test-app" }).fields(builtinFields);
     const posts = q.collection("posts").fields((f) => ({
       title: f.text({ required: true, maxLength: 255 }),
       content: f.textarea(),
@@ -310,7 +310,7 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
     const { DrizzleMigrationGenerator } =
       await import("../../src/server/migration/generator.js");
 
-    const q = questpie({ name: "test-cms" }).fields(builtinFields);
+    const q = questpie({ name: "test-app" }).fields(builtinFields);
     const posts = q.collection("posts").fields((f) => ({
       title: f.text({ required: true, maxLength: 255 }),
     }));

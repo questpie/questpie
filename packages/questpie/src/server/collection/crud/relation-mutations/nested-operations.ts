@@ -11,7 +11,7 @@ import type {
   CRUD,
   CRUDContext,
 } from "#questpie/server/collection/crud/types.js";
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 import { ApiError } from "#questpie/server/errors/index.js";
 
 /**
@@ -24,8 +24,8 @@ export interface ProcessNestedRelationsOptions {
   nestedRelations: Record<string, any>;
   /** Collection state with relations config */
   relations: Record<string, RelationConfig>;
-  /** CMS instance for accessing related CRUDs */
-  cms: Questpie<any>;
+  /** app instance for accessing related CRUDs */
+  app: Questpie<any>;
   /** CRUD context */
   context: CRUDContext;
   /** Transaction client */
@@ -208,7 +208,7 @@ export function extractBelongsToConnectValues(
  * @param regularFields - Regular field values
  * @param nestedRelations - Nested relation operations
  * @param relations - Relation configurations
- * @param cms - CMS instance
+ * @param app - app instance
  * @param context - CRUD context
  * @param tx - Transaction client
  * @param resolveFieldKey - Function to resolve field keys
@@ -219,8 +219,7 @@ export function extractBelongsToConnectValues(
 export async function applyBelongsToRelations(
   regularFields: Record<string, any>,
   nestedRelations: Record<string, any>,
-  relations: Record<string, RelationConfig>,
-  cms: Questpie<any>,
+  relations: Record<string, RelationConfig>, app: Questpie<any>,
   context: CRUDContext,
   tx: any,
   resolveFieldKey: typeof ResolveFieldKeyFn,
@@ -266,7 +265,7 @@ export async function applyBelongsToRelations(
 
     const foreignKeyField = fieldKeys[0];
     const referenceKey = relation.references?.[0] || "id";
-    const relatedCrud = cms.api.collections[relation.collection];
+    const relatedCrud = app.api.collections[relation.collection];
 
     if (operations.connect) {
       if (Array.isArray(operations.connect)) {
@@ -605,7 +604,7 @@ export async function processNestedRelations(
     parentRecord,
     nestedRelations,
     relations,
-    cms,
+    app,
     context,
     tx,
     resolveFieldKey,
@@ -629,7 +628,7 @@ export async function processNestedRelations(
       const reverseRelationName = relation.relationName;
       if (!reverseRelationName) continue;
 
-      const relatedCrud = cms.api.collections[relation.collection];
+      const relatedCrud = app.api.collections[relation.collection];
       const reverseRelation =
         relatedCrud["~internalState"].relations?.[reverseRelationName];
       if (!reverseRelation?.fields || reverseRelation.fields.length === 0)
@@ -654,8 +653,8 @@ export async function processNestedRelations(
 
       if (!sourceField || !targetField) continue;
 
-      const junctionCrud = cms.api.collections[relation.through];
-      const relatedCrud = cms.api.collections[relation.collection];
+      const junctionCrud = app.api.collections[relation.through];
+      const relatedCrud = app.api.collections[relation.collection];
 
       await processManyToManyNestedOperations(
         parentRecord,

@@ -211,7 +211,7 @@ export function ObjectArrayField({
 			setIsOpen(false);
 			setActiveIndex(null);
 		} else if (index < activeIndex) {
-			setActiveIndex(activeIndex - 1);
+			setActiveIndex((prev) => (prev !== null ? prev - 1 : null));
 		}
 	};
 

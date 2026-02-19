@@ -5,7 +5,7 @@
  * Usage: bun run seed.ts [--force]
  */
 
-import { cms } from "./src/questpie/server/cms";
+import { app } from "./src/questpie/server/app";
 
 // ============================================================================
 // Helper: TipTap Rich Text
@@ -97,14 +97,14 @@ async function seed() {
 
 	console.log("🌱 Starting City Portal seed...\n");
 
-	const ctx = await cms.createContext({
+	const ctx = await app.createContext({
 		accessMode: "system",
 	});
 
 	// ========================================
 	// Idempotency check
 	// ========================================
-	const existing = await cms.api.collections.cities.find(
+	const existing = await app.api.collections.cities.find(
 		{ where: { slug: "london" }, limit: 1 },
 		ctx,
 	);
@@ -121,27 +121,27 @@ async function seed() {
 		const cleanupSteps: [string, () => Promise<unknown>][] = [
 			[
 				"submissions",
-				() => cms.api.collections.submissions.delete({ where: {} }, ctx),
+				() => app.api.collections.submissions.delete({ where: {} }, ctx),
 			],
 			[
 				"documents",
-				() => cms.api.collections.documents.delete({ where: {} }, ctx),
+				() => app.api.collections.documents.delete({ where: {} }, ctx),
 			],
 			[
 				"announcements",
-				() => cms.api.collections.announcements.delete({ where: {} }, ctx),
+				() => app.api.collections.announcements.delete({ where: {} }, ctx),
 			],
-			["news", () => cms.api.collections.news.delete({ where: {} }, ctx)],
+			["news", () => app.api.collections.news.delete({ where: {} }, ctx)],
 			[
 				"contacts",
-				() => cms.api.collections.contacts.delete({ where: {} }, ctx),
+				() => app.api.collections.contacts.delete({ where: {} }, ctx),
 			],
-			["pages", () => cms.api.collections.pages.delete({ where: {} }, ctx)],
+			["pages", () => app.api.collections.pages.delete({ where: {} }, ctx)],
 			[
 				"cityMembers",
-				() => cms.api.collections.cityMembers.delete({ where: {} }, ctx),
+				() => app.api.collections.cityMembers.delete({ where: {} }, ctx),
 			],
-			["cities", () => cms.api.collections.cities.delete({ where: {} }, ctx)],
+			["cities", () => app.api.collections.cities.delete({ where: {} }, ctx)],
 		];
 		for (const [name, fn] of cleanupSteps) {
 			try {
@@ -163,7 +163,7 @@ async function seed() {
 	const cityIds: Record<string, string> = {};
 
 	for (const city of britishCities) {
-		const result = await cms.api.collections.cities.create(
+		const result = await app.api.collections.cities.create(
 			{
 				name: city.name,
 				slug: city.slug,
@@ -188,12 +188,12 @@ async function seed() {
 
 	for (const city of britishCities) {
 		const cityId = cityIds[city.slug];
-		const cityCtx = await cms.createContext({
+		const cityCtx = await app.createContext({
 			accessMode: "system",
 			cityId,
 		});
 
-		await cms.api.globals.siteSettings.update(
+		await app.api.globals.siteSettings.update(
 			{
 				siteName: `${city.name} Council`,
 				tagline: city.tagline,
@@ -281,7 +281,7 @@ async function seed() {
 		for (let i = 0; i < departments.length; i++) {
 			const { dept, desc } = departments[i];
 
-			await cms.api.collections.contacts.create(
+			await app.api.collections.contacts.create(
 				{
 					city: cityId,
 					department: dept,
@@ -376,7 +376,7 @@ async function seed() {
 			const publishedAt = new Date();
 			publishedAt.setDate(publishedAt.getDate() - article.daysAgo);
 
-			await cms.api.collections.news.create(
+			await app.api.collections.news.create(
 				{
 					city: cityId,
 					title: article.title,
@@ -452,7 +452,7 @@ async function seed() {
 		const cityId = cityIds[city.slug];
 
 		for (const announcement of announcements) {
-			await cms.api.collections.announcements.create(
+			await app.api.collections.announcements.create(
 				{
 					city: cityId,
 					title: announcement.title,
@@ -485,7 +485,7 @@ async function seed() {
 		const cityId = cityIds[city.slug];
 
 		// Homepage
-		await cms.api.collections.pages.create(
+		await app.api.collections.pages.create(
 			{
 				city: cityId,
 				title: `Welcome to ${city.name}`,
@@ -533,7 +533,7 @@ async function seed() {
 		);
 
 		// About page
-		await cms.api.collections.pages.create(
+		await app.api.collections.pages.create(
 			{
 				city: cityId,
 				title: "About Us",
@@ -561,7 +561,7 @@ async function seed() {
 		);
 
 		// Services page
-		await cms.api.collections.pages.create(
+		await app.api.collections.pages.create(
 			{
 				city: cityId,
 				title: "Services",

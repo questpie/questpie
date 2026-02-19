@@ -1,6 +1,6 @@
 import { sql, typedApp } from "questpie";
+import type { App } from "@/questpie/server/app";
 import { qb } from "@/questpie/server/builder";
-import type { AppCMS } from "@/questpie/server/cms";
 
 export const appointments = qb
 	.collection("appointments")
@@ -49,11 +49,11 @@ export const appointments = qb
 		}),
 		displayTitle: f.text({
 			virtual: sql<string>`(
-				SELECT 
+				SELECT
 					COALESCE(
 						(SELECT name FROM "user" WHERE id = appointments.customer),
 						'Customer'
-					) || ' - ' || 
+					) || ' - ' ||
 					TO_CHAR(appointments."scheduledAt", 'YYYY-MM-DD HH24:MI')
 			)`,
 		}),
@@ -99,16 +99,16 @@ export const appointments = qb
 	)
 	.hooks({
 		afterChange: async ({ data, operation, original, app }) => {
-			const cms = typedApp<AppCMS>(app);
+			const typed = typedApp<App>(app);
 
 			if (operation === "create") {
-				await cms.queue.sendAppointmentConfirmation.publish({
+				await typed.queue.sendAppointmentConfirmation.publish({
 					appointmentId: data.id,
 					customerId: data.customer,
 				});
 			} else if (operation === "update" && original) {
 				if (data.status === "cancelled" && data.cancelledAt) {
-					await cms.queue.sendAppointmentCancellation.publish({
+					await typed.queue.sendAppointmentCancellation.publish({
 						appointmentId: data.id,
 						customerId: data.customer,
 					});

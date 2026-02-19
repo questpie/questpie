@@ -55,11 +55,11 @@ describe("Search Access Filtering", () => {
       search: adapter,
     });
 
-    await runTestDbMigrations(setup.cms);
-    await runSearchMigrations(setup.cms.db);
+    await runTestDbMigrations(setup.app);
+    await runSearchMigrations(setup.app.db);
 
     // Index some test data
-    await setup.cms.search.index({
+    await setup.app.search.index({
       collection: "posts",
       recordId: "post-1",
       locale: "en",
@@ -67,7 +67,7 @@ describe("Search Access Filtering", () => {
       content: "This is the first post",
     });
 
-    await setup.cms.search.index({
+    await setup.app.search.index({
       collection: "posts",
       recordId: "post-2",
       locale: "en",
@@ -75,7 +75,7 @@ describe("Search Access Filtering", () => {
       content: "This is the second post",
     });
 
-    await setup.cms.search.index({
+    await setup.app.search.index({
       collection: "posts",
       recordId: "post-3",
       locale: "en",
@@ -90,7 +90,7 @@ describe("Search Access Filtering", () => {
 
   describe("without accessFilters", () => {
     it("should return all matching results", async () => {
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Post",
         locale: "en",
       });
@@ -110,7 +110,7 @@ describe("Search Access Filtering", () => {
         },
       ];
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Post",
         locale: "en",
         accessFilters,
@@ -130,7 +130,7 @@ describe("Search Access Filtering", () => {
       ];
 
       // Empty query = browse mode
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "",
         locale: "en",
         accessFilters,
@@ -143,7 +143,7 @@ describe("Search Access Filtering", () => {
 
   describe("with accessWhere: true", () => {
     it("should return all results when full access is granted", async () => {
-      const collections = setup.cms.getCollections();
+      const collections = setup.app.getCollections();
 
       const accessFilters: CollectionAccessFilter[] = [
         {
@@ -156,7 +156,7 @@ describe("Search Access Filtering", () => {
       // Note: This will only work if records exist in the actual table
       // Since we only indexed (not created via CRUD), the JOIN won't match
       // This is expected behavior - access filtering requires records to exist
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Post",
         locale: "en",
         accessFilters,
@@ -178,7 +178,7 @@ describe("Search Access Filtering", () => {
         },
       ];
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Post",
         locale: "en",
         limit: 1,

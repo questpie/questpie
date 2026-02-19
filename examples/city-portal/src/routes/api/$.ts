@@ -1,36 +1,29 @@
 /**
- * CMS API Routes - Catch-all handler
+ * API Routes - Catch-all handler
  *
- * Handles all CMS endpoints:
- * - /api/cms/collections/*
- * - /api/cms/globals/*
- * - /api/cms/auth/*
- * - /api/cms/storage/*
- * - /api/cms/stream (SSE)
- * - /api/cms/openapi.json (OpenAPI spec)
- * - /api/cms/docs (Scalar UI)
+ * Handles all API endpoints for the City Portal.
  */
 
-import { createFileRoute } from "@tanstack/react-router";
 import { withOpenApi } from "@questpie/openapi";
+import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie";
-import { appRpc, cms } from "~/questpie/server/cms";
+import { appRpc,  app } from "@/questpie/server/app";
 
 const handler = withOpenApi(
-	createFetchHandler(cms, {
-		basePath: "/api/cms",
+	createFetchHandler(app, {
+		basePath: "/api",
 		rpc: appRpc,
 	}),
 	{
-		cms,
+		app,
 		rpc: appRpc,
-		basePath: "/api/cms",
+		basePath: "/api",
 		info: {
-			title: "Barbershop API",
+			title: "City Portal API",
 			version: "1.0.0",
-			description: "QUESTPIE CMS API for the Barbershop example",
+			description: "QUESTPIE API for the City Portal example",
 		},
-		scalar: { theme: "purple" },
+		scalar: { theme: "blue" },
 	},
 );
 
@@ -45,7 +38,7 @@ const handleCmsRequest = async (request: Request) => {
 	);
 };
 
-export const Route = createFileRoute("/api/cms/$")({
+export const Route = createFileRoute("/api/$")({
 	server: {
 		handlers: {
 			GET: ({ request }) => handleCmsRequest(request),

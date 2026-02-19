@@ -26,8 +26,8 @@ export type ApiErrorOptions = {
 };
 
 /**
- * Base CMS Error class
- * Provides type-safe, structured errors across the entire CMS
+ * Base QuestPie Error class
+ * Provides type-safe, structured errors across the entire app
  */
 export class ApiError extends Error {
   public readonly code: ApiErrorCode;

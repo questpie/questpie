@@ -48,7 +48,7 @@ export const posts = q.collection("posts").fields((f) => ({
 ### 3. Build runtime + RPC
 
 ```ts
-// src/questpie/server/cms.ts
+// src/questpie/server/app.ts
 import { q, rpc } from "questpie";
 import z from "zod";
 import { posts } from "./collections/posts";
@@ -62,25 +62,25 @@ export const healthcheck = r.fn({
 
 export const appRpc = r.router({ healthcheck });
 
-export const cms = q({ name: "my-app" })
+export const app = q({ name: "my-app" })
   .collections({ posts })
   .build({
     db: { url: process.env.DATABASE_URL! },
     app: { url: process.env.APP_URL || "http://localhost:3000" },
   });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 ```
 
 ### 4. Mount your API handler
 
 ```ts
-// src/routes/api/cms.ts
+// src/routes/api.ts
 import { createFetchHandler } from "questpie";
-import { appRpc, cms } from "@/questpie/server/cms";
+import { appRpc, app } from "@/questpie/server/app";
 
-export const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+export const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 ```
@@ -104,9 +104,9 @@ export const qb = q.use(adminModule);
 ```ts
 // src/questpie/admin/builder.ts
 import { adminModule, qa } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>().use(adminModule);
+export const admin = qa<App>().use(adminModule);
 ```
 
 When you need admin-specific view metadata, define those collections with `qb.collection(...)` and add `.admin()`, `.list()`, and `.form()`.

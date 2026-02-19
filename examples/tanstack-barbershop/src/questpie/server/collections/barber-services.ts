@@ -21,6 +21,7 @@ export const barberServices = qb
 	.admin(({ c }) => ({
 		label: { en: "Barber Services", sk: "Služby holičov" },
 		icon: c.icon("ph:link"),
+		hidden: true,
 	}))
 	.list(({ v }) => v.table({}))
 	.form(({ v, f }) =>

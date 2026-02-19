@@ -36,8 +36,8 @@ export interface ResolveHasManyOptions {
   resolveFieldKey: typeof ResolveFieldKeyFn;
   /** Function to build WHERE clauses */
   buildWhereClause: typeof BuildWhereClauseFn;
-  /** CMS instance for building where clauses */
-  cms?: any;
+  /** app instance for building where clauses */
+  app?: any;
 }
 
 /**
@@ -149,7 +149,7 @@ export async function resolveHasManyWithAggregation(
     db,
     resolveFieldKey,
     buildWhereClause,
-    cms,
+    app,
   } = options;
 
   if (rows.length === 0) return;
@@ -246,7 +246,7 @@ export async function resolveHasManyWithAggregation(
       i18nCurrentTable: relatedCrud["~internalI18nTable"],
       i18nFallbackTable: null,
       context,
-      cms,
+      app,
       useI18n: false,
       db,
     });

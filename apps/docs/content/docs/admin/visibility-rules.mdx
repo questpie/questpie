@@ -156,7 +156,7 @@ const documents = q.collection("documents")
 When no `.sidebar()` is configured, collections appear automatically:
 
 ```ts
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)
   .collections({
     posts,      // Visible (not hidden)
@@ -177,7 +177,7 @@ Collections are:
 With `.sidebar()`, you control exactly what appears:
 
 ```ts
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)
   .collections({ posts, pages, comments, sessions })
   .sidebar(({ s }) =>

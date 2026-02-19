@@ -7,11 +7,11 @@ import type { AccessMode, QuestpieContextExtension } from "./types.js";
 // ============================================================================
 
 /**
- * Infer the Session type from a CMS app instance.
+ * Infer the Session type from a app instance.
  *
  * @example
  * ```ts
- * type MySession = InferSessionFromApp<typeof cms>;
+ * type MySession = InferSessionFromApp<typeof app>;
  * ```
  */
 export type InferSessionFromApp<TApp> = TApp extends {
@@ -21,50 +21,50 @@ export type InferSessionFromApp<TApp> = TApp extends {
 	: { user: User; session: Session };
 
 /**
- * Infer the database type from a CMS app instance.
+ * Infer the database type from a app instance.
  *
  * @example
  * ```ts
- * type MyDb = InferDbFromApp<typeof cms>;
+ * type MyDb = InferDbFromApp<typeof app>;
  * ```
  */
 export type InferDbFromApp<TApp> = TApp extends { db: infer D } ? D : any;
 
 /**
- * Extract base CMS type without functions to avoid circular dependencies.
- * Useful when defining functions that need to reference the CMS instance.
+ * Extract base app type without functions to avoid circular dependencies.
+ * Useful when defining functions that need to reference the app instance.
  *
  * @example
  * ```ts
- * // In cms.ts - create base instance
+ * // In app.ts - create base instance
  * const baseInstance = q({ name: "app" })
  *   .collections({ posts })
  *   .jobs({ sendEmail })
  *   .build();
  *
- * export type BaseCMS = InferBaseCMS<typeof baseInstance>;
+ * export type BaseCMS = InferBaseApp<typeof baseInstance>;
  *
  * // In functions/index.ts
- * import type { BaseCMS } from "../cms";
+ * import type { BaseCMS } from "../app";
  *
  * export const getPosts = q.fn({
  *   handler: async ({ app }) => {
- *     const cms = typedApp<BaseCMS>(app);
- *     return cms.api.collections.posts.find(); // ✅ Typed
+ *     const app = typedApp<BaseCMS>(app);
+ *     return app.api.collections.posts.find(); // ✅ Typed
  *   }
  * });
  * ```
  */
-export type InferBaseCMS<T> = T extends { config: infer TConfig }
+export type InferBaseApp<T> = T extends { config: infer TConfig }
 	? { config: Omit<TConfig, "functions">; [key: string]: any }
 	: never;
 
 /**
- * Infer the app/CMS type from a CMS app instance.
+ * Infer the app/app type from a app instance.
  *
  * @example
  * ```ts
- * type MyApp = InferAppFromApp<typeof cms>;
+ * type MyApp = InferAppFromApp<typeof app>;
  * ```
  */
 export type InferAppFromApp<TApp> = TApp;
@@ -79,20 +79,20 @@ export type InferAppFromApp<TApp> = TApp;
 // ============================================================================
 
 /**
- * Add types to CMS app instance from hook/job/function context.
+ * Add types to app instance from hook/job/function context.
  * This is a compile-time only type cast - no runtime effect.
  *
  * @example
  * ```ts
  * import { typedApp } from "questpie";
- * import type { AppCMS } from "./cms";
+ * import type { App } from "./questpie";
  *
  * const posts = q.collection("posts").hooks({
  *   afterChange: async ({ app }) => {
- *     const cms = typedApp<AppCMS>(app);
+ *     const app = typedApp<App>(app);
  *     // ✅ Fully typed access
- *     await cms.api.collections.posts.find();
- *     await cms.queue.sendEmail.publish({ to: "user@example.com" });
+ *     await app.api.collections.posts.find();
+ *     await app.queue.sendEmail.publish({ to: "user@example.com" });
  *   }
  * });
  * ```
@@ -110,15 +110,15 @@ export function typedApp<TApp>(app: unknown): TApp {
  * @example
  * ```ts
  * import { typedApp, typedDb } from "questpie";
- * import type { AppCMS } from "./cms";
+ * import type { App } from "./questpie";
  *
  * const posts = q.collection("posts").hooks({
  *   afterChange: async ({ app, db }) => {
- *     const cms = typedApp<AppCMS>(app);
- *     const database = typedDb<AppCMS>(db);
+ *     const app = typedApp<App>(app);
+ *     const database = typedDb<App>(db);
  *
  *     // ✅ Fully typed Drizzle operations
- *     await database.select().from(cms.config.collections.posts.table);
+ *     await database.select().from(app.config.collections.posts.table);
  *   }
  * });
  * ```
@@ -136,11 +136,11 @@ export function typedDb<TApp>(db: unknown): InferDbFromApp<TApp> {
  * @example
  * ```ts
  * import { typedSession } from "questpie";
- * import type { AppCMS } from "./cms";
+ * import type { App } from "./questpie";
  *
  * const posts = q.collection("posts").hooks({
  *   afterChange: async ({ session }) => {
- *     const typedSess = typedSession<AppCMS>(session);
+ *     const typedSess = typedSession<App>(session);
  *
  *     if (!typedSess) {
  *       throw new Error("Unauthorized");
@@ -164,20 +164,20 @@ export function typedSession<TApp>(
  * This is a compile-time only type cast - no runtime effect.
  *
  * Use this in hooks and access control functions to get fully typed access to:
- * - `ctx.app` - your specific CMS instance with queues, email, etc.
+ * - `ctx.app` - your specific app instance with queues, email, etc.
  * - `ctx.session` - typed session from Better Auth
  * - `ctx.db` - typed Drizzle client with your schema
  *
- * @template TApp - Your CMS type (e.g., `typeof cms` or `AppCMS`)
+ * @template TApp - Your app type (e.g., `typeof app` or `App`)
  *
  * @example
  * ```ts
  * import { typedContext } from "questpie";
- * import type { AppCMS } from "./cms";
+ * import type { App } from "./questpie";
  *
  * .access({
  *   read: (ctx) => {
- *     const { session, app, db } = typedContext<AppCMS>(ctx);
+ *     const { session, app, db } = typedContext<App>(ctx);
  *
  *     // ✅ session.user is fully typed
  *     if (session?.user.role !== "admin") return false;
@@ -203,6 +203,7 @@ type TypedContextReturn<TApp, TCtx> = {
 	db: TCtx extends { db: unknown } ? InferDbFromApp<TApp> : never;
 	locale: TCtx extends { locale: infer L } ? L : string | undefined;
 	accessMode: TCtx extends { accessMode: infer A } ? A : string | undefined;
+	stage: TCtx extends { stage: infer S } ? S : string | undefined;
 };
 
 export function typedContext<
@@ -213,9 +214,10 @@ export function typedContext<
 		db?: unknown;
 		locale?: string;
 		accessMode?: string;
+		stage?: string;
 	},
 >(ctx: TCtx): TypedContextReturn<TApp, TCtx> {
-	return ctx as TypedContextReturn<TApp, TCtx>;
+	return ctx as unknown as TypedContextReturn<TApp, TCtx>;
 }
 
 // ============================================================================
@@ -229,12 +231,13 @@ export function typedContext<
  * Internal AsyncLocalStorage for request-scoped context.
  * Used when getContext() is called to retrieve implicit context.
  */
-const cmsContextStorage = new AsyncLocalStorage<{
+const appContextStorage = new AsyncLocalStorage<{
 	app: unknown;
 	session?: unknown | null;
 	db?: unknown;
 	locale?: string;
 	accessMode?: string;
+	stage?: string;
 }>();
 
 /**
@@ -246,6 +249,7 @@ export interface StoredContext {
 	db?: unknown;
 	locale?: string;
 	accessMode?: string;
+	stage?: string;
 }
 
 /**
@@ -268,7 +272,7 @@ export interface StoredContext {
  * ```
  */
 export function tryGetContext(): StoredContext | undefined {
-	return cmsContextStorage.getStore();
+	return appContextStorage.getStore();
 }
 
 /**
@@ -277,9 +281,9 @@ export function tryGetContext(): StoredContext | undefined {
  *
  * @example
  * ```ts
- * await runWithContext({ app: cms, session, db, locale: "sk" }, async () => {
+ * await runWithContext({ app: app, session, db, locale: "sk" }, async () => {
  *   // Inside here, getContext<TApp>() works without parameters
- *   const { session, locale } = getContext<AppCMS>();
+ *   const { session, locale } = getContext<App>();
  *   // locale === "sk"
  * });
  * ```
@@ -291,10 +295,11 @@ export function runWithContext<T>(
 		db?: unknown;
 		locale?: string;
 		accessMode?: string;
+		stage?: string;
 	},
 	fn: () => T | Promise<T>,
 ): Promise<T> {
-	return cmsContextStorage.run(ctx, fn) as Promise<T>;
+	return appContextStorage.run(ctx, fn) as Promise<T>;
 }
 
 /**
@@ -309,11 +314,11 @@ export function runWithContext<T>(
  * @example
  * ```ts
  * import { getContext } from "questpie";
- * import type { AppCMS } from "./cms";
+ * import type { App } from "./questpie";
  *
  * // In a reusable function called from hooks
  * async function logActivity(action: string) {
- *   const { db, session, locale } = getContext<AppCMS>();
+ *   const { db, session, locale } = getContext<App>();
  *
  *   await db.insert(activityLog).values({
  *     userId: session?.user.id,
@@ -338,8 +343,9 @@ export function getContext<TApp>(): {
 	db: InferDbFromApp<TApp>;
 	locale: string | undefined;
 	accessMode: string | undefined;
+	stage: string | undefined;
 } {
-	const stored = cmsContextStorage.getStore();
+	const stored = appContextStorage.getStore();
 	if (!stored) {
 		throw new Error(
 			"getContext() called outside request scope. " +
@@ -396,10 +402,17 @@ export interface BaseRequestContext {
 	localeFallback?: boolean;
 
 	/**
-	 * Access mode - defaults to 'system' since CMS API is backend-only.
+	 * Access mode - defaults to 'system' since API is backend-only.
 	 * Set to 'user' explicitly when handling user requests with access control.
 	 */
 	accessMode?: AccessMode;
+
+	/**
+	 * Workflow stage for stage-aware reads/writes.
+	 *
+	 * When omitted, operations use the workflow initial stage.
+	 */
+	stage?: string;
 
 	/**
 	 * Database client - may be transaction within hook/handler scope.

@@ -10,7 +10,7 @@ import { MockLogger } from "./logger.adapter";
 import { MockMailAdapter } from "./mailer.adapter";
 import { MockQueueAdapter } from "./queue.adapter";
 
-export type MockApp<TCms = any> = TCms & {
+export type MockApp<TApp = any> = TApp & {
   /**
    * Mock adapters for inspecting test state
    */
@@ -24,7 +24,7 @@ export type MockApp<TCms = any> = TCms & {
 };
 
 /**
- * Builds a fully type-safe mock CMS instance from a Questpie builder for testing
+ * Builds a fully type-safe mock app instance from a Questpie builder for testing
  *
  * @example
  * ```ts
@@ -41,22 +41,22 @@ export type MockApp<TCms = any> = TCms & {
  * // Create test database
  * const db = await createTestDb();
  *
- * // Build mock CMS
- * const cms = buildMockApp(testModule, {
+ * // Build mock app
+ * const app = buildMockApp(testModule, {
  *   db: { pglite: db },
  *   app: { url: 'http://localhost:3000' },
  *   secret: 'test-secret',
  * });
  *
- * await runTestDbMigrations(cms);
+ * await runTestDbMigrations(app);
  *
- * // Use CMS normally
- * await cms.api.collections.products.create({ ... }, context);
+ * // Use app normally
+ * await app.api.collections.products.create({ ... }, context);
  *
  * // Inspect mock state
- * expect(cms.mocks.logger.hasErrors()).toBe(false);
- * expect(cms.mocks.queue.getJobs()).toHaveLength(1);
- * expect(cms.mocks.mailer.getSentCount()).toBe(1);
+ * expect(app.mocks.logger.hasErrors()).toBe(false);
+ * expect(app.mocks.queue.getJobs()).toHaveLength(1);
+ * expect(app.mocks.mailer.getSentCount()).toBe(1);
  * ```
  */
 export async function buildMockApp<TBuilder extends QuestpieBuilder<any>>(
@@ -64,7 +64,7 @@ export async function buildMockApp<TBuilder extends QuestpieBuilder<any>>(
   runtimeOverrides: Partial<QuestpieRuntimeConfig> = {},
 ): Promise<{
   cleanup: () => Promise<void>;
-  cms: MockApp<TBuilder["$inferCms"]>;
+  app: MockApp<TBuilder["$inferApp"]>;
 }> {
   const mailerAdapter = new MockMailAdapter();
   const queueAdapter = new MockQueueAdapter();
@@ -75,8 +75,8 @@ export async function buildMockApp<TBuilder extends QuestpieBuilder<any>>(
   const testDb = usesCustomDb ? null : await createTestDb();
   const dbConfig = runtimeOverrides.db ?? { pglite: testDb };
 
-  // Build CMS using builder pattern
-  const cms = builder.build({
+  // Build app using builder pattern
+  const app = builder.build({
     app: runtimeOverrides.app ?? { url: "http://localhost:3000" },
     db: dbConfig,
     storage: runtimeOverrides.storage,
@@ -103,21 +103,21 @@ export async function buildMockApp<TBuilder extends QuestpieBuilder<any>>(
   } as QuestpieRuntimeConfig);
 
   // Attach mock adapters for easy access in tests
-  const mockCMS = cms as MockApp<TBuilder["$inferCms"]>;
-  mockCMS.mocks = {
+  const mockApp = app as MockApp<TBuilder["$inferApp"]>;
+  mockApp.mocks = {
     kv: kvAdapter,
     queue: queueAdapter,
     mailer: mailerAdapter,
     logger: logger,
-    fakes: cms.storage.fake(Questpie.__internal.storageDriverServiceName),
+    fakes: app.storage.fake(Questpie.__internal.storageDriverServiceName),
   };
 
   const cleanup = async () => {
     if (testDb) {
       await testDb.close();
     }
-    mockCMS.storage.restore(Questpie.__internal.storageDriverServiceName);
+    mockApp.storage.restore(Questpie.__internal.storageDriverServiceName);
   };
 
-  return { cleanup, cms: mockCMS };
+  return { cleanup, app: mockApp };
 }

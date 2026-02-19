@@ -9,7 +9,7 @@
  * import { q } from "questpie";
  * import { adminModule } from "@questpie/admin/server";
  *
- * const cms = q({ name: "my-cms" })
+ * const app = q({ name: "my-app" })
  *   .use(adminModule)  // Registers richText and blocks fields
  *   .collections({
  *     pages: q.collection("pages").fields((f) => ({

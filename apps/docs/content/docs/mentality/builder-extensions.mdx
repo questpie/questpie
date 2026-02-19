@@ -19,7 +19,7 @@ This is a core design choice in QUESTPIE.
 import { q } from "questpie";
 import { adminModule } from "@questpie/admin/server";
 
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)
   .collections({
     // your collections
@@ -40,9 +40,9 @@ const cms = q({ name: "app" })
 
 ```ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>()
+export const admin = qa<App>()
   .use(adminModule);
 ```
 

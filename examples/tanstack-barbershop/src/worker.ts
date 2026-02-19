@@ -5,13 +5,13 @@
  * Start with: bun run worker.ts
  */
 
-import { cms } from "@/questpie/server/cms";
+import { app } from "@/questpie/server/app";
 
 async function startWorker() {
   console.log("Starting job worker...");
 
   try {
-    await cms.queue.listen({
+    await app.queue.listen({
       teamSize: 5, // Concurrent jobs
       batchSize: 3, // Jobs to fetch at once
     });

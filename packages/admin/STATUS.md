@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-**@questpie/admin** je config-driven admin UI package pre Questpie CMS. Hlavná myšlienka:
+**@questpie/admin** je config-driven admin UI package pre Questpie QuestPie. Hlavná myšlienka:
 
 > **qa() builder + AdminLayoutProvider = kompletné admin UI**
 
@@ -23,7 +23,7 @@ const admin = qa()
 // 2. Mount in React
 <AdminLayoutProvider
   admin={Admin.from(admin)}
-  client={cmsClient}
+  client={appClient}
   queryClient={queryClient}
   LinkComponent={Link}
   basePath="/admin"
@@ -71,7 +71,7 @@ const adminInstance = Admin.from(admin);
 
 <AdminLayoutProvider
   admin={adminInstance}
-  client={cmsClient}
+  client={appClient}
   queryClient={queryClient}
   LinkComponent={Link}
   activeRoute={location.pathname}
@@ -496,9 +496,9 @@ Uloženie user preferences pre list views.
 // src/admin/builder.ts
 import { qa as originalQa } from "@questpie/admin/builder";
 import { coreAdminModule } from "@questpie/admin/builder/defaults";
-import type { AppCMS } from "./server/cms";
+import type { App } from "./server/app";
 
-export const qab = originalQa<AppCMS>().use(coreAdminModule).toNamespace();
+export const qab = originalQa<App>().use(coreAdminModule).toNamespace();
 
 // 2. Define collection config
 // src/admin/collections/posts.ts
@@ -530,7 +530,7 @@ export const admin = qa()
 // Module augmentation
 declare module "@questpie/admin/builder" {
   interface AdminTypeRegistry {
-    cms: AppCMS;
+    app: App;
     admin: typeof admin;
   }
 }
@@ -541,7 +541,7 @@ import { Admin } from "@questpie/admin/builder";
 import { AdminLayoutProvider } from "@questpie/admin/views/layout";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { admin } from "~/admin/admin";
-import { cmsClient } from "~/lib/cms-client";
+import { appClient } from "~/lib/client";
 import { queryClient } from "~/lib/query-client";
 import "@questpie/admin/styles/index.css";
 
@@ -553,7 +553,7 @@ function AdminLayout() {
   return (
     <AdminLayoutProvider
       admin={adminInstance}
-      client={cmsClient}
+      client={appClient}
       queryClient={queryClient}
       LinkComponent={Link}
       activeRoute={location.pathname}

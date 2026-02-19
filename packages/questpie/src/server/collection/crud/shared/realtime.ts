@@ -5,7 +5,7 @@
  */
 
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 import { normalizeContext } from "./context.js";
 
 /**
@@ -26,7 +26,7 @@ export interface AppendRealtimeChangeParams {
  * @param params - Change parameters
  * @param context - CRUD context
  * @param db - Database instance
- * @param cms - CMS instance
+ * @param app - app instance
  * @param resourceName - Name of the resource (collection or global)
  * @param resourceType - Type of resource ("collection" or "global")
  * @returns The created change record, or null if realtime is not enabled
@@ -34,16 +34,15 @@ export interface AppendRealtimeChangeParams {
 export async function appendRealtimeChange(
   params: AppendRealtimeChangeParams,
   context: CRUDContext,
-  db: any,
-  cms: Questpie<any> | undefined,
+  db: any, app: Questpie<any> | undefined,
   resourceName: string,
   resourceType: "collection" | "global" = "collection",
 ): Promise<unknown | null> {
-  if (!cms?.realtime) return null;
+  if (!app?.realtime) return null;
 
   const normalized = normalizeContext(context);
 
-  return cms.realtime.appendChange(
+  return app.realtime.appendChange(
     {
       resourceType,
       resource: resourceName,
@@ -60,12 +59,11 @@ export async function appendRealtimeChange(
  * Notify realtime subscribers of a change
  *
  * @param change - Change record returned from appendRealtimeChange
- * @param cms - CMS instance
+ * @param app - app instance
  */
 export async function notifyRealtimeChange(
-  change: unknown,
-  cms: Questpie<any> | undefined,
+  change: unknown, app: Questpie<any> | undefined,
 ): Promise<void> {
-  if (!change || !cms?.realtime) return;
-  await cms.realtime.notify(change as any);
+  if (!change || !app?.realtime) return;
+  await app.realtime.notify(change as any);
 }

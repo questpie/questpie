@@ -214,16 +214,16 @@ See [RPC](/docs/server/rpc) for patterns and endpoint wiring.
 
 ```ts
 // Read the global
-const settings = await cms.api.globals.siteSettings.get();
+const settings = await app.api.globals.siteSettings.get();
 console.log(settings.shopName); // "Barbershop"
 
 // Update the global
-await cms.api.globals.siteSettings.update({
+await app.api.globals.siteSettings.update({
   shopName: "New Barbershop Name",
 });
 
 // Read with locale
-const settingsSk = await cms.api.globals.siteSettings.get({
+const settingsSk = await app.api.globals.siteSettings.get({
   locale: "sk",
 });
 ```
@@ -233,7 +233,7 @@ const settingsSk = await cms.api.globals.siteSettings.get({
 Globals are registered the same way as collections:
 
 ```ts
-export const cms = q({ name: "my-app" })
+export const app = q({ name: "my-app" })
   .use(adminModule)
   .collections({ ... })
   .globals({ siteSettings })
@@ -263,7 +263,7 @@ Globals appear in the sidebar like collections:
 ## Common Mistakes
 
 - **Trying to create or delete globals** — Globals have exactly one record. They only support `get` and `update` operations.
-- **Forgetting to register** — The global must be passed to `.globals({})` in your CMS builder.
+- **Forgetting to register** — The global must be passed to `.globals({})` in your app builder.
 - **Over-nesting** — If your global has many unrelated sections, consider splitting into multiple globals (e.g., `siteSettings`, `seoSettings`, `bookingSettings`).
 
 ## Related Pages

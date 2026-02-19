@@ -77,12 +77,6 @@ export interface LinkComponentProps {
  */
 export interface AdminSidebarProps {
 	/**
-	 * Navigation groups to render.
-	 * If not provided, reads from AdminProvider context.
-	 */
-	navigation?: NavigationGroup[];
-
-	/**
 	 * Link component (router-specific)
 	 */
 	LinkComponent: React.ComponentType<LinkComponentProps>;
@@ -299,26 +293,19 @@ function useServerNavigation(): NavigationGroup[] | undefined {
 // ============================================================================
 
 function useSidebarProps(props: {
-	navigation?: NavigationGroup[];
 	brandName?: string;
 }): { navigation: NavigationGroup[]; brandName: string } {
-	// Select individual values to avoid object identity issues
 	const storeNavigation = useAdminStore((s) => s.navigation);
 	const storeBrandName = useAdminStore((s) => s.brandName);
 
-	// Try server-driven navigation
+	// Server-driven navigation is the primary source of truth.
+	// Everything (dashboard, collections, globals, links) should be
+	// configured via .sidebar() on the server builder.
+	// Falls back to store navigation (pages only) when server config isn't available yet.
 	const serverNavigation = useServerNavigation();
 
-	// If props provided, use them (props take priority)
-	if (props.navigation !== undefined && props.brandName !== undefined) {
-		return {
-			navigation: props.navigation,
-			brandName: props.brandName,
-		};
-	}
-
 	return {
-		navigation: props.navigation ?? serverNavigation ?? storeNavigation ?? [],
+		navigation: serverNavigation ?? storeNavigation ?? [],
 		brandName: props.brandName ?? storeBrandName ?? "Admin",
 	};
 }
@@ -339,28 +326,86 @@ function useSidebarProps(props: {
  * <RenderIcon icon={{ type: "icon", props: { name: "ph:users" } }} />
  * ```
  */
-function RenderIcon(props: {
-	icon: NavigationItem["icon"];
-	className?: string;
-}) {
-	const { icon, className } = props;
+function areIconValuesEqual(
+	a: NavigationItem["icon"],
+	b: NavigationItem["icon"],
+): boolean {
+	if (a === b) return true;
+	if (!a || !b) return false;
 
-	if (!icon) {
-		return null;
+	if (
+		typeof a === "object" &&
+		typeof b === "object" &&
+		"type" in a &&
+		"type" in b
+	) {
+		const aRef = a as { type?: string; props?: Record<string, unknown> };
+		const bRef = b as { type?: string; props?: Record<string, unknown> };
+
+		if (aRef.type !== bRef.type) {
+			return false;
+		}
+
+		const aProps = aRef.props ?? {};
+		const bProps = bRef.props ?? {};
+		const aKeys = Object.keys(aProps);
+		const bKeys = Object.keys(bProps);
+
+		if (aKeys.length !== bKeys.length) {
+			return false;
+		}
+
+		for (const key of aKeys) {
+			if (aProps[key] !== bProps[key]) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
-	if (typeof icon === "object" && icon !== null && "type" in icon) {
-		return (
-			<ComponentRenderer
-				reference={icon as any}
-				additionalProps={{ className: cn("size-4 shrink-0", className) }}
-			/>
-		);
-	}
-
-	const IconComp = icon as React.ComponentType<{ className?: string }>;
-	return <IconComp className={cn("size-4 shrink-0", className)} />;
+	return false;
 }
+
+const RenderIcon = React.memo(
+	function RenderIcon(props: {
+		icon: NavigationItem["icon"];
+		className?: string;
+	}) {
+		const { icon, className } = props;
+		const mergedClassName = React.useMemo(
+			() => cn("size-4 shrink-0", className),
+			[className],
+		);
+		const additionalProps = React.useMemo(
+			() => ({ className: mergedClassName }),
+			[mergedClassName],
+		);
+
+		if (!icon) {
+			return null;
+		}
+
+		if (typeof icon === "object" && icon !== null && "type" in icon) {
+			return (
+				<ComponentRenderer
+					reference={icon as any}
+					additionalProps={additionalProps}
+				/>
+			);
+		}
+
+		const IconComp = icon as React.ComponentType<{ className?: string }>;
+		return <IconComp className={mergedClassName} />;
+	},
+	(prev, next) => {
+		if (prev.className !== next.className) {
+			return false;
+		}
+
+		return areIconValuesEqual(prev.icon, next.icon);
+	},
+);
 
 function QuestpieSymbol({ className }: { className?: string }) {
 	return (
@@ -483,10 +528,9 @@ function NavItem({
 
 	const label = resolveText(item.label);
 
-	// Dashboard and external links should use exact matching
+	// External links and pages should use exact matching
 	// Collections and globals should use prefix matching
-	const shouldUseExact =
-		item.type === "dashboard" || item.type === "link" || item.type === "page";
+	const shouldUseExact = item.type === "link" || item.type === "page";
 
 	const linkActiveProps = useActiveProps
 		? {
@@ -622,9 +666,8 @@ function NavGroup({
 								}
 
 								// Handle navigation items
-								// Dashboard and links use exact matching, collections/globals use prefix
+								// Links and pages use exact matching, collections/globals use prefix
 								const shouldUseExact =
-									element.type === "dashboard" ||
 									element.type === "link" ||
 									element.type === "page";
 
@@ -886,16 +929,14 @@ function UserFooter() {
  * // Without AdminProvider (manual)
  * <SidebarProvider>
  *   <AdminSidebar
- *     navigation={buildNavigation(admin)}
  *     LinkComponent={Link}
  *     activeRoute="/admin/posts"
- *     brandName="My CMS"
+ *     brandName="My App"
  *   />
  * </SidebarProvider>
  * ```
  */
 export function AdminSidebar({
-	navigation: navigationProp,
 	LinkComponent,
 	activeRoute,
 	basePath = "/admin",
@@ -908,9 +949,8 @@ export function AdminSidebar({
 	beforeFooter,
 	useActiveProps = true,
 }: AdminSidebarProps): React.ReactElement {
-	// Resolve navigation and brandName from props or store
+	// Resolve navigation from server config, brandName from props or store
 	const { navigation, brandName } = useSidebarProps({
-		navigation: navigationProp,
 		brandName: brandNameProp,
 	});
 

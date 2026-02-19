@@ -69,8 +69,8 @@ export interface LivePreviewModeProps {
   allCollectionsConfig?: Record<string, any>;
   /** Component registry */
   registry?: ComponentRegistry;
-  /** Preview URL */
-  previewUrl: string;
+  /** Preview URL (null while loading) */
+  previewUrl: string | null;
   /** Callback after successful save */
   onSuccess?: (data: any) => void;
 }
@@ -223,12 +223,24 @@ function LivePreviewContent({
             </div>
           ) : (
             <div className="h-full">
-              <PreviewPane
-                ref={previewRef}
-                url={previewUrl}
-                onFieldClick={handlePreviewFieldClick}
-                onBlockClick={handlePreviewBlockClick}
-              />
+              {previewUrl ? (
+                <PreviewPane
+                  ref={previewRef}
+                  url={previewUrl}
+                  onFieldClick={handlePreviewFieldClick}
+                  onBlockClick={handlePreviewBlockClick}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center">
+                  <Icon
+                    icon="ph:spinner"
+                    className="h-6 w-6 animate-spin text-muted-foreground"
+                  />
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    Loading preview...
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -261,12 +273,24 @@ function LivePreviewContent({
 
           {/* Preview panel - fills remaining space */}
           <div className="flex-1 min-w-0 bg-muted/30">
-            <PreviewPane
-              ref={previewRef}
-              url={previewUrl}
-              onFieldClick={handlePreviewFieldClick}
-              onBlockClick={handlePreviewBlockClick}
-            />
+            {previewUrl ? (
+              <PreviewPane
+                ref={previewRef}
+                url={previewUrl}
+                onFieldClick={handlePreviewFieldClick}
+                onBlockClick={handlePreviewBlockClick}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <Icon
+                  icon="ph:spinner"
+                  className="h-6 w-6 animate-spin text-muted-foreground"
+                />
+                <span className="ml-2 text-sm text-muted-foreground">
+                  Loading preview...
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}

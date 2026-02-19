@@ -92,7 +92,7 @@ describe("Search Schema Integration", () => {
     it("should document that external adapters return undefined for getTableSchemas", () => {
       // This test documents the expected behavior for external adapters
       // External adapters (Meilisearch, Elasticsearch) don't implement getTableSchemas()
-      // which means cms.getSchema() won't include any search tables
+      // which means app.getSchema() won't include any search tables
 
       // Example of how an external adapter would be defined:
       const externalAdapterPattern = {
@@ -115,10 +115,10 @@ describe("Search Schema Integration", () => {
 const q = questpie({ name: "schema-test" }).fields(defaultFields);
 
 // ============================================================================
-// CMS Integration Tests
+// Integration Tests
 // ============================================================================
 
-describe("CMS getSchema() Integration", () => {
+describe("getSchema() Integration", () => {
   // Test collection
   const posts = q
     .collection("posts")
@@ -148,7 +148,7 @@ describe("CMS getSchema() Integration", () => {
     });
 
     it("should include search tables in getSchema()", () => {
-      const schema = setup.cms.getSchema();
+      const schema = setup.app.getSchema();
 
       // Collection tables should be present
       expect(schema.posts).toBeDefined();
@@ -162,7 +162,7 @@ describe("CMS getSchema() Integration", () => {
     });
 
     it("should return proper Drizzle table objects for search tables", () => {
-      const schema = setup.cms.getSchema();
+      const schema = setup.app.getSchema();
 
       // Verify search tables are proper Drizzle objects
       const searchTable = schema.questpie_search as any;
@@ -188,7 +188,7 @@ describe("CMS getSchema() Integration", () => {
     });
 
     it("should STILL include search tables (default PostgresSearchAdapter)", () => {
-      const schema = setup.cms.getSchema();
+      const schema = setup.app.getSchema();
 
       // Collection tables should be present
       expect(schema.posts).toBeDefined();

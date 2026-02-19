@@ -18,13 +18,13 @@ This guide walks through setting up file uploads in a QUESTPIE application — f
     default: {
       driver: "local",
       root: "./uploads",
-      urlPrefix: "/api/cms/files",
+      urlPrefix: "/api/files",
     },
   },
 })
 ```
 
-Files are stored in the `./uploads` directory and served via the CMS file endpoint.
+Files are stored in the `./uploads` directory and served via the app file endpoint.
 
 ### 2. Add Upload Fields
 
@@ -82,7 +82,7 @@ For private files, use signed URLs that expire:
 
 ```ts
 // In an RPC handler or hook
-const url = await cms.storage.disk().getSignedUrl("private/document.pdf", {
+const url = await app.storage.disk().getSignedUrl("private/document.pdf", {
   expiresIn: 3600, // 1 hour
 });
 ```
@@ -95,7 +95,7 @@ const url = await cms.storage.disk().getSignedUrl("private/document.pdf", {
 const formData = new FormData();
 formData.append("file", fileBlob, "photo.jpg");
 
-const response = await fetch("/api/cms/collections/barbers/upload", {
+const response = await fetch("/api/collections/barbers/upload", {
   method: "POST",
   body: formData,
 });
@@ -134,7 +134,7 @@ All adapters use the [flydrive](https://flydrive.dev/) library and share the sam
 - **No storage config** — Upload fields require a storage adapter. Without one, uploads fail at runtime.
 - **Local storage in production clusters** — Each server has its own filesystem. Use S3 or another shared storage for multi-server deployments.
 - **Missing CORS for direct uploads** — If uploading from a browser to S3 directly, configure CORS on the S3 bucket.
-- **Large file limits** — Check your reverse proxy (nginx, Cloudflare) upload size limits. They may be lower than your CMS `maxSize`.
+- **Large file limits** — Check your reverse proxy (nginx, Cloudflare) upload size limits. They may be lower than your app `maxSize`.
 
 ## Related Pages
 

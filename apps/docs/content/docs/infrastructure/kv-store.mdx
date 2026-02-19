@@ -9,7 +9,7 @@ QUESTPIE includes a key-value store for caching, rate limiting, and ephemeral st
 
 ## Why This Exists
 
-Many CMS operations benefit from short-lived caching — expensive query results, computed aggregates, rate limit counters, or temporary tokens. The KV service provides a simple `get`/`set` interface with optional TTL and tag-based invalidation, available everywhere as `cms.kv`.
+Many API operations benefit from short-lived caching — expensive query results, computed aggregates, rate limit counters, or temporary tokens. The KV service provides a simple `get`/`set` interface with optional TTL and tag-based invalidation, available everywhere as `app.kv`.
 
 ## Setup
 
@@ -44,22 +44,22 @@ import Redis from "ioredis";
 
 ```ts
 // Set a value
-await cms.kv.set("user:123:profile", { name: "Jane", role: "admin" });
+await app.kv.set("user:123:profile", { name: "Jane", role: "admin" });
 
 // Set with TTL (seconds)
-await cms.kv.set("rate:login:192.168.1.1", 1, 60); // expires in 60s
+await app.kv.set("rate:login:192.168.1.1", 1, 60); // expires in 60s
 
 // Get a typed value
-const profile = await cms.kv.get<{ name: string; role: string }>("user:123:profile");
+const profile = await app.kv.get<{ name: string; role: string }>("user:123:profile");
 
 // Check existence
-const exists = await cms.kv.has("user:123:profile");
+const exists = await app.kv.has("user:123:profile");
 
 // Delete
-await cms.kv.delete("user:123:profile");
+await app.kv.delete("user:123:profile");
 
 // Clear everything
-await cms.kv.clear();
+await app.kv.clear();
 ```
 
 ## Tag-Based Invalidation
@@ -92,7 +92,7 @@ await adapter.invalidateByTags(["posts", "homepage"]);
 
 ## Using KV in Hooks and RPC
 
-Access the KV service through the CMS instance:
+Access the KV service through the app instance:
 
 ```ts
 import { getApp } from "questpie";
@@ -100,23 +100,23 @@ import { getApp } from "questpie";
 // In a hook
 .hooks({
   afterChange: async ({ app, data }) => {
-    const cms = getApp(app);
+    const app = getApp(app);
     // Invalidate cached data when record changes
-    await cms.kv.delete(`settings-cache`);
+    await app.kv.delete(`settings-cache`);
   },
 })
 
 // In an RPC handler
 handler: async ({ app }) => {
-  const cms = getApp(app);
+  const app = getApp(app);
 
   // Check cache first
-  const cached = await cms.kv.get<number>("stats:total-posts");
+  const cached = await app.kv.get<number>("stats:total-posts");
   if (cached !== null) return { count: cached };
 
   // Compute and cache
-  const result = await cms.api.collections.posts.count({});
-  await cms.kv.set("stats:total-posts", result, 60);
+  const result = await app.api.collections.posts.count({});
+  await app.kv.set("stats:total-posts", result, 60);
   return { count: result };
 }
 ```

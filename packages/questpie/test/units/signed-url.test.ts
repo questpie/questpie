@@ -110,70 +110,70 @@ describe("signed-url", () => {
     test("builds URL without token for public files", () => {
       const url = buildStorageFileUrl(
         "http://localhost:3000",
-        "/cms",
+        "/",
         "test-file.jpg",
       );
 
-      expect(url).toBe("http://localhost:3000/cms/storage/files/test-file.jpg");
+      expect(url).toBe("http://localhost:3000/storage/files/test-file.jpg");
     });
 
     test("builds URL with token for private files", () => {
       const url = buildStorageFileUrl(
         "http://localhost:3000",
-        "/cms",
+        "/",
         "secret.pdf",
         "my-token-123",
       );
 
       expect(url).toBe(
-        "http://localhost:3000/cms/storage/files/secret.pdf?token=my-token-123",
+        "http://localhost:3000/storage/files/secret.pdf?token=my-token-123",
       );
     });
 
     test("encodes special characters in key", () => {
       const url = buildStorageFileUrl(
         "http://localhost:3000",
-        "/cms",
+        "/",
         "file with spaces.jpg",
       );
 
       expect(url).toBe(
-        "http://localhost:3000/cms/storage/files/file%20with%20spaces.jpg",
+        "http://localhost:3000/storage/files/file%20with%20spaces.jpg",
       );
     });
 
     test("handles keys with slashes (subdirectories)", () => {
       const url = buildStorageFileUrl(
         "http://localhost:3000",
-        "/cms",
+        "/",
         "uploads/2024/01/image.jpg",
       );
 
       expect(url).toBe(
-        "http://localhost:3000/cms/storage/files/uploads%2F2024%2F01%2Fimage.jpg",
+        "http://localhost:3000/storage/files/uploads%2F2024%2F01%2Fimage.jpg",
       );
     });
 
     test("works with different base paths", () => {
       const url = buildStorageFileUrl(
         "https://api.example.com",
-        "/api/cms",
+        "/api",
         "file.jpg",
       );
 
       expect(url).toBe(
-        "https://api.example.com/api/cms/storage/files/file.jpg",
+        "https://api.example.com/api/storage/files/file.jpg",
       );
     });
 
     test("works with trailing slash in base URL", () => {
       const url = buildStorageFileUrl(
         "http://localhost:3000/",
-        "/cms",
+        "/",
         "file.jpg",
       );
 
-      expect(url).toBe("http://localhost:3000/cms/storage/files/file.jpg");
+      expect(url).toBe("http://localhost:3000/storage/files/file.jpg");
     });
   });
 
@@ -188,7 +188,7 @@ describe("signed-url", () => {
       // Build URL
       const url = buildStorageFileUrl(
         "http://localhost:3000",
-        "/cms",
+        "/",
         key,
         token,
       );

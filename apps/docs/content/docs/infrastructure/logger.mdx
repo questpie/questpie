@@ -9,7 +9,7 @@ QUESTPIE includes a structured logger built on [Pino](https://getpino.io/). It p
 
 ## Why This Exists
 
-Structured logging is essential for debugging and monitoring. The logger service gives you consistent, leveled output across all CMS operations — CRUD, hooks, jobs, search indexing — with a pluggable adapter interface for custom transports.
+Structured logging is essential for debugging and monitoring. The logger service gives you consistent, leveled output across all API operations — CRUD, hooks, jobs, search indexing — with a pluggable adapter interface for custom transports.
 
 ## Setup
 
@@ -54,13 +54,13 @@ import { createWinstonAdapter } from "./my-winston-adapter";
 
 ## Usage
 
-The logger is available on the CMS instance as `cms.logger`:
+The logger is available on the app instance as `app.logger`:
 
 ```ts
-cms.logger.debug("Processing batch", { batchSize: 100 });
-cms.logger.info("Record created", { collection: "posts", id: record.id });
-cms.logger.warn("Slow query detected", { duration: 2500 });
-cms.logger.error("Failed to send email", error);
+app.logger.debug("Processing batch", { batchSize: 100 });
+app.logger.info("Record created", { collection: "posts", id: record.id });
+app.logger.warn("Slow query detected", { duration: 2500 });
+app.logger.error("Failed to send email", error);
 ```
 
 ### Child Loggers
@@ -68,7 +68,7 @@ cms.logger.error("Failed to send email", error);
 Create scoped loggers that automatically include context in every message:
 
 ```ts
-const jobLogger = cms.logger.child({ module: "queue", jobName: "sendEmail" });
+const jobLogger = app.logger.child({ module: "queue", jobName: "sendEmail" });
 
 jobLogger.info("Job started");       // { module: "queue", jobName: "sendEmail", msg: "Job started" }
 jobLogger.info("Job completed");     // { module: "queue", jobName: "sendEmail", msg: "Job completed" }
@@ -81,8 +81,8 @@ import { getApp } from "questpie";
 
 .hooks({
   afterChange: async ({ app, data, operation }) => {
-    const cms = getApp(app);
-    cms.logger.info("Record changed", {
+    const app = getApp(app);
+    app.logger.info("Record changed", {
       collection: "appointments",
       operation,
       id: data.id,
@@ -116,7 +116,7 @@ Implement this interface to integrate with Winston, Bunyan, or any logging libra
 
 ## Internal Usage
 
-The CMS uses the logger internally for:
+the app uses the logger internally for:
 
 - **Search initialization** — Logs errors if the search adapter fails to start
 - **Queue processing** — Passes the logger to the queue client for job execution logging
@@ -125,7 +125,7 @@ The CMS uses the logger internally for:
 ```ts
 // Internal: search adapter initialization
 this.search.initialize().catch((err) => {
-  this.logger.error("[CMS] Failed to initialize search adapter:", err);
+  this.logger.error("[app] Failed to initialize search adapter:", err);
 });
 ```
 
@@ -138,7 +138,7 @@ import { MockLogger } from "questpie/test-utils";
 
 const mockLogger = new MockLogger();
 
-const cms = questpie(builder).build({
+const app = questpie(builder).build({
   // ...
   logger: { adapter: mockLogger },
 });

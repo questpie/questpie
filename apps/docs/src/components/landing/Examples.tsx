@@ -50,7 +50,7 @@ export function Examples() {
 						</div>
 
 						<a
-							href="https://github.com/questpie/questpie-cms/tree/main/examples/tanstack-barbershop"
+							href="https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop"
 							target="_blank"
 							rel="noreferrer"
 							className="inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80"

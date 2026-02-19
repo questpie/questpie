@@ -77,7 +77,7 @@ export function CallToAction() {
 						Architecture Example
 					</Link>
 					<a
-						href="https://github.com/questpie/questpie-cms"
+						href="https://github.com/questpie/questpie"
 						target="_blank"
 						rel="noreferrer"
 						className="inline-flex h-11 items-center justify-center gap-2 px-7 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"

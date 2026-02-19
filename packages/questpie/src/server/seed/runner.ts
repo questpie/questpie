@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 import type {
 	ResetSeedsOptions,
 	RunSeedsOptions,
@@ -27,7 +27,7 @@ export class SeedRunner {
 	readonly silent: boolean;
 
 	constructor(
-		private readonly cms: Questpie<any>,
+		private readonly app: Questpie<any>,
 		options: SeedRunnerOptions = {},
 	) {
 		this.silent = options.silent ?? this.readSilentEnv();
@@ -53,7 +53,7 @@ export class SeedRunner {
 	 * Ensure the seeds tracking table exists.
 	 */
 	async ensureSeedsTable(): Promise<void> {
-		await this.cms.db.execute(
+		await this.app.db.execute(
 			sql`CREATE TABLE IF NOT EXISTS ${sql.identifier(this.tableName)} (
 				id TEXT PRIMARY KEY,
 				category TEXT NOT NULL,
@@ -109,7 +109,7 @@ export class SeedRunner {
 
 		this.log(`🌱 Running ${pending.length} seed(s)...`);
 
-		const ctx = await this.cms.createContext({ accessMode: "system" });
+		const ctx = await this.app.createContext({ accessMode: "system" });
 
 		for (const seed of pending) {
 			this.log(
@@ -118,7 +118,7 @@ export class SeedRunner {
 
 			try {
 				const seedCtx: SeedContext = {
-					cms: this.cms,
+					app: this.app,
 					ctx,
 					log: (msg: string) => this.log(`    ${msg}`),
 				};
@@ -127,11 +127,11 @@ export class SeedRunner {
 
 				// Record execution (upsert for force re-runs)
 				if (executedIds.has(seed.id)) {
-					await this.cms.db.execute(
+					await this.app.db.execute(
 						sql`UPDATE ${sql.identifier(this.tableName)} SET executed_at = CURRENT_TIMESTAMP WHERE id = ${seed.id}`,
 					);
 				} else {
-					await this.cms.db.execute(
+					await this.app.db.execute(
 						sql`INSERT INTO ${sql.identifier(this.tableName)} (id, category) VALUES (${seed.id}, ${seed.category})`,
 					);
 				}
@@ -156,15 +156,15 @@ export class SeedRunner {
 	): Promise<void> {
 		this.log(`🔍 Validating ${pending.length} seed(s) (dry-run)...`);
 
-		const ctx = await this.cms.createContext({ accessMode: "system" });
+		const ctx = await this.app.createContext({ accessMode: "system" });
 
 		// Use a sentinel error to force rollback
 		const ROLLBACK_SENTINEL = Symbol("validate-rollback");
 
 		try {
-			await (this.cms.db as any).transaction(async (tx: any) => {
-				// Create a temporary CMS-like context with tx db
-				// Note: We can't fully replace cms.db inside a transaction,
+			await (this.app.db as any).transaction(async (tx: any) => {
+				// Create a temporary app-like context with tx db
+				// Note: We can't fully replace app.db inside a transaction,
 				// so validate mode has limitations — it validates the seed function
 				// doesn't throw, but some side effects (storage, email) won't be rolled back.
 				const txCtx = { ...ctx, db: tx };
@@ -173,7 +173,7 @@ export class SeedRunner {
 					this.log(`  🔍 Validating seed: ${seed.id}`);
 
 					const seedCtx: SeedContext = {
-						cms: this.cms,
+						app: this.app,
 						ctx: txCtx,
 						log: (msg: string) => this.log(`    ${msg}`),
 					};
@@ -237,20 +237,20 @@ export class SeedRunner {
 
 		this.log(`🔄 Undoing ${toUndo.length} seed(s)...`);
 
-		const ctx = await this.cms.createContext({ accessMode: "system" });
+		const ctx = await this.app.createContext({ accessMode: "system" });
 
 		for (const seed of toUndo) {
 			this.log(`  🔄 Undoing seed: ${seed.id}`);
 			try {
 				const seedCtx: SeedContext = {
-					cms: this.cms,
+					app: this.app,
 					ctx,
 					log: (msg: string) => this.log(`    ${msg}`),
 				};
 
 				await seed.undo?.(seedCtx);
 
-				await this.cms.db.execute(
+				await this.app.db.execute(
 					sql`DELETE FROM ${sql.identifier(this.tableName)} WHERE id = ${seed.id}`,
 				);
 
@@ -273,12 +273,12 @@ export class SeedRunner {
 
 		if (options.only?.length) {
 			const ids = options.only;
-			await this.cms.db.execute(
+			await this.app.db.execute(
 				sql`DELETE FROM ${sql.identifier(this.tableName)} WHERE id IN (${sql.join(ids.map((id) => sql`${id}`))})`,
 			);
 			this.log(`✅ Seed tracking reset for: ${options.only.join(", ")}`);
 		} else {
-			await this.cms.db.execute(
+			await this.app.db.execute(
 				sql`DELETE FROM ${sql.identifier(this.tableName)}`,
 			);
 			this.log("✅ Seed tracking reset");
@@ -333,7 +333,7 @@ export class SeedRunner {
 	 * Get all executed seeds from the tracking table.
 	 */
 	private async getExecutedSeeds(): Promise<SeedRecord[]> {
-		const result: any = await this.cms.db.execute(
+		const result: any = await this.app.db.execute(
 			sql.raw(
 				`SELECT id, category, executed_at FROM ${this.tableName} ORDER BY executed_at ASC`,
 			),

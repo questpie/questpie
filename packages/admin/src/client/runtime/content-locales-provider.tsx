@@ -1,7 +1,7 @@
 /**
  * Content Locales Provider
  *
- * Fetches and provides content locales from the backend CMS configuration.
+ * Fetches and provides content locales from the backend app configuration.
  * Content locales are different from UI locales - they define which languages
  * are available for content translation.
  */
@@ -101,7 +101,7 @@ export function ContentLocalesProvider({
   const client = useAdminStore(selectClient);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["cms", "contentLocales"],
+    queryKey: ["questpie", "contentLocales"],
     queryFn: async () => {
       try {
         // Use type assertion since the client type may not include getContentLocales

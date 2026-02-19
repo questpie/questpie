@@ -9,7 +9,7 @@ QUESTPIE provides end-to-end type safety from server collection definitions to c
 
 ## Why This Exists
 
-Type-safe CMS APIs prevent entire categories of bugs — wrong field names, missing required fields, incorrect types. QUESTPIE's type inference means you get autocomplete and compile-time errors without writing separate type definitions.
+Type-safe APIs prevent entire categories of bugs — wrong field names, missing required fields, incorrect types. QUESTPIE's type inference means you get autocomplete and compile-time errors without writing separate type definitions.
 
 ## The Type Flow
 
@@ -17,8 +17,8 @@ Type-safe CMS APIs prevent entire categories of bugs — wrong field names, miss
 Server: .fields((f) => ({ title: f.text({ required: true }) }))
   ↓ TypeScript inference
 Server type: { title: string }  (non-optional because required)
-  ↓ typeof cms
-Client: createClient<typeof cms>
+  ↓ typeof app
+Client: createClient<typeof app>
   ↓ Generic propagation
 Client SDK: client.collections.posts.create({ title: string })  ← autocomplete
 ```
@@ -59,15 +59,15 @@ type SettingsUpdate = GlobalUpdate<typeof siteSettings>;
 
 ## Client-Side Types
 
-Pass the CMS type to the client factory:
+Pass the app type to the client factory:
 
 ```ts
 import { createClient } from "questpie/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-const client = createClient<AppCMS>({
+const client = createClient<App>({
   baseURL: "http://localhost:3000",
-  basePath: "/api/cms",
+  basePath: "/api",
 });
 
 // Full autocomplete for collection names
@@ -94,17 +94,17 @@ post.id                 // string
 The query options factory propagates types through TanStack Query:
 
 ```ts
-const cms = createQuestpieQueryOptions<AppCMS>(client);
+const app = createQuestpieQueryOptions<App>(client);
 
 // useQuery returns typed data
-const { data } = useQuery(cms.collections.posts.find({ limit: 10 }));
+const { data } = useQuery(app.collections.posts.find({ limit: 10 }));
 // data: { docs: PostSelect[]; totalDocs: number; ... } | undefined
 
-const { data: post } = useQuery(cms.collections.posts.findOne({ id: "..." }));
+const { data: post } = useQuery(app.collections.posts.findOne({ id: "..." }));
 // post: PostSelect | null | undefined
 
 // useMutation has typed variables
-const mutation = useMutation(cms.collections.posts.create());
+const mutation = useMutation(app.collections.posts.create());
 mutation.mutate({
   title: "Hello",     // ✓ typed
   invalid: true,      // ✗ type error
@@ -113,17 +113,17 @@ mutation.mutate({
 
 ## Adapter Client Types
 
-Framework adapters merge CMS types with framework route types:
+Framework adapters merge app types with framework route types:
 
 ```ts
-// Hono: CMS types + Hono RPC types
-const client = createClientFromHono<AppType, AppCMS>({ ... });
-client.collections.posts.find({ ... });  // CMS typed
+// Hono: app types + Hono RPC types
+const client = createClientFromHono<AppType, App>({ ... });
+client.collections.posts.find({ ... });  // app typed
 client.api.health.$get();                // Hono typed
 
-// Elysia: CMS types + Eden Treaty types
-const client = createClientFromEden<AppType, AppCMS>({ ... });
-client.collections.posts.find({ ... });  // CMS typed
+// Elysia: app types + Eden Treaty types
+const client = createClientFromEden<AppType, App>({ ... });
+client.collections.posts.find({ ... });  // app typed
 client.api.health.get();                 // Eden typed
 ```
 
@@ -145,14 +145,14 @@ const stats = await client.rpc.dashboard.getStats({ period: "week" });
 
 // TanStack Query
 const { data } = useQuery(
-  cms.rpc.dashboard.getStats.query({ period: "week" }),
+  app.rpc.dashboard.getStats.query({ period: "week" }),
 );
 // data: { total: number; change: number } | undefined
 ```
 
 ## Common Mistakes
 
-- **Not using `typeof cms`** — Pass the actual CMS type, not `any`. `createClient<any>()` compiles but gives no type safety.
+- **Not using `typeof app`** — Pass the actual app type, not `any`. `createClient<any>()` compiles but gives no type safety.
 - **Circular imports** — Use `import type` for server types in client code to avoid bundling server code in the client.
 - **Stale types after schema changes** — After changing field definitions, restart the TypeScript server to pick up the new types.
 

@@ -7,7 +7,7 @@
  * @example
  * ```ts
  * // In your admin setup file:
- * import type { AppCMS } from './server/cms';
+ * import type { App } from "./server/app";
  * import { createTypedHooks } from '@questpie/admin/client';
  *
  * export const {
@@ -19,7 +19,7 @@
  *   useCollectionCount,
  *   useGlobal,
  *   useGlobalUpdate,
- * } = createTypedHooks<AppCMS>();
+ * } = createTypedHooks<App>();
  * ```
  */
 
@@ -182,12 +182,12 @@ export interface TypedHooks<TApp extends Questpie<any>> {
 /**
  * Create type-safe hooks for collections and globals.
  *
- * This factory creates hooks that are typed to your specific CMS configuration,
+ * This factory creates hooks that are typed to your specific app configuration,
  * providing autocomplete for collection/global names without module augmentation.
  *
  * @example
  * ```ts
- * import type { AppCMS } from './server/cms';
+ * import type { App } from "./server/app";
  * import { createTypedHooks } from '@questpie/admin/client';
  *
  * // Create typed hooks
@@ -199,7 +199,7 @@ export interface TypedHooks<TApp extends Questpie<any>> {
  *   useCollectionDelete,
  *   useGlobal,
  *   useGlobalUpdate,
- * } = createTypedHooks<AppCMS>();
+ * } = createTypedHooks<App>();
  *
  * // Usage - collection names are autocompleted!
  * const { data } = useCollectionList("barbers");

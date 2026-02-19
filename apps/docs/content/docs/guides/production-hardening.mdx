@@ -10,7 +10,7 @@ This guide covers the checklist for deploying a QUESTPIE application to producti
 ## Database
 
 - **Use PostgreSQL** — PGlite is for development only. Use a managed PostgreSQL instance (AWS RDS, Supabase, Neon) for production.
-- **Run migrations** — Ensure all migrations run before the app starts. Use `cms.migrate()` in your startup script.
+- **Run migrations** — Ensure all migrations run before the app starts. Use `app.migrate()` in your startup script.
 - **Enable `pg_trgm`** — Required for fuzzy search. Add `CREATE EXTENSION IF NOT EXISTS pg_trgm` in your initial migration.
 - **Connection pooling** — Use PgBouncer or your provider's built-in pooler for high-traffic deployments.
 - **Backups** — Configure automated backups with your provider.
@@ -36,7 +36,7 @@ This guide covers the checklist for deploying a QUESTPIE application to producti
 
 ## Queue
 
-- **Run the worker** — Jobs require a running worker process: `cms.queue.listen()`.
+- **Run the worker** — Jobs require a running worker process: `app.queue.listen()`.
 - **Set retry configuration** — External API calls should have `retryLimit` and `retryBackoff`.
 - **Monitor job failures** — Check pg-boss's monitoring tables or add alerting on failed jobs.
 - **Consider separate worker process** — For heavy workloads, run the worker as a separate process from the web server.
@@ -48,7 +48,7 @@ This guide covers the checklist for deploying a QUESTPIE application to producti
 
 ## Search
 
-- **Reindex after migration** — After schema changes or bulk imports, run `cms.search.reindex("collectionName")`.
+- **Reindex after migration** — After schema changes or bulk imports, run `app.search.reindex("collectionName")`.
 - **Monitor index size** — Large collections with rich content can produce large search indexes.
 
 ## Logging
@@ -75,7 +75,7 @@ This guide covers the checklist for deploying a QUESTPIE application to producti
 
 ```text
 Web Server (Hono/Elysia/Next.js)
-  ├─ CMS routes
+  ├─ API routes
   ├─ Admin panel
   └─ Queue worker (in-process)
 ```
@@ -85,8 +85,8 @@ Simplest setup. The queue worker runs in the same process. Suitable for low-to-m
 ### Separate Worker
 
 ```text
-Web Server → CMS routes + Admin panel
-Queue Worker → cms.queue.listen()
+Web Server → API routes + Admin panel
+Queue Worker → app.queue.listen()
 ```
 
 Dedicate a process to job processing. The web server stays responsive under heavy job loads.
@@ -109,7 +109,7 @@ For horizontal scaling. Use Redis for KV cache and realtime streams. S3 for shar
 ## Common Mistakes
 
 - **PGlite in production** — PGlite is for development. It lacks concurrent access, replication, and durability guarantees.
-- **No queue worker running** — Jobs pile up in the queue but nothing processes them. Always start `cms.queue.listen()`.
+- **No queue worker running** — Jobs pile up in the queue but nothing processes them. Always start `app.queue.listen()`.
 - **Missing `pg_trgm` extension** — Search fails without it. Add it in your initial migration.
 
 ## Related Pages

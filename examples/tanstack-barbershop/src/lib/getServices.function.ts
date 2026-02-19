@@ -1,12 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
-import { cms, createServerContext } from "@/lib/server-helpers";
+import { app, createServerContext } from "@/lib/server-helpers";
 
 export const getAllServices = createServerFn({ method: "GET" })
 	.inputValidator((data: { locale?: string } | undefined) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext(data?.locale);
 
-		const result = await cms.api.collections.services.find(
+		const result = await app.api.collections.services.find(
 			{
 				where: { isActive: true },
 				orderBy: { price: "asc" },

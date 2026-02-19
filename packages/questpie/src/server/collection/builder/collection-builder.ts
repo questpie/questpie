@@ -566,7 +566,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *   .searchable({
 	 *     content: (record) => extractTextFromJson(record.content),
 	 *     metadata: (record) => ({ status: record.status }),
-	 *     embeddings: async (record, ctx) => await ctx.cms.embeddings.generate(text),
+	 *     embeddings: async (record, ctx) => await ctx.app.embeddings.generate(text),
 	 *   })
 	 * ```
 	 */

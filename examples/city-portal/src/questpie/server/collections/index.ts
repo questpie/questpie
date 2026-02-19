@@ -1,7 +1,7 @@
 /**
  * City Portal Collections Index
  *
- * Export all collections for use in the CMS configuration.
+ * Export all collections for use in the app configuration.
  */
 
 export { announcements } from "./announcements";

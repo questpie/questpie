@@ -40,8 +40,8 @@ export type StatsWidgetConfig = {
 		| string;
 	/** Color variant for the stat card */
 	variant?: "default" | "primary" | "success" | "warning" | "danger";
-	/** Server has a fetchFn for this widget */
-	hasFetchFn?: boolean;
+	/** Server has a loader for this widget */
+	hasLoader?: boolean;
 	/** Refresh interval in ms */
 	refreshInterval?: number;
 };
@@ -177,13 +177,13 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 		icon: Icon,
 		variant = "default",
 		realtime,
-		hasFetchFn,
+		hasLoader,
 		refreshInterval,
 	} = config;
 
-	// Server-side data fetching (when hasFetchFn is true)
+	// Server-side data fetching (when hasLoader is true)
 	const serverQuery = useServerWidgetData<{ count: number }>(config.id, {
-		enabled: !!hasFetchFn,
+		enabled: !!hasLoader,
 		refreshInterval,
 	});
 
@@ -227,9 +227,9 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 		isLoading,
 		error,
 		refetch,
-	} = hasFetchFn ? serverQuery : collectionQuery;
+	} = hasLoader ? serverQuery : collectionQuery;
 
-	const count = hasFetchFn
+	const count = hasLoader
 		? ((rawData as { count: number } | undefined)?.count ?? 0)
 		: ((rawData as number | undefined) ?? 0);
 

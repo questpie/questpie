@@ -8,7 +8,7 @@ const navItems = [
 	{ label: "Docs", href: "/docs/$", type: "internal" as const },
 	{
 		label: "Examples",
-		href: "https://github.com/questpie/questpie-cms/tree/main/examples",
+		href: "https://github.com/questpie/questpie/tree/main/examples",
 		type: "external" as const,
 	},
 	{
@@ -90,7 +90,7 @@ export function Navbar() {
 						)}
 
 						<a
-							href="https://github.com/questpie/questpie-cms"
+							href="https://github.com/questpie/questpie"
 							target="_blank"
 							rel="noreferrer"
 							className="text-muted-foreground transition-colors hover:text-foreground"
@@ -140,7 +140,7 @@ export function Navbar() {
 								Guides
 							</Link>
 							<a
-								href="https://github.com/questpie/questpie-cms/tree/main/examples"
+								href="https://github.com/questpie/questpie/tree/main/examples"
 								target="_blank"
 								rel="noreferrer"
 								className="py-1 text-sm font-medium text-muted-foreground"
@@ -153,7 +153,7 @@ export function Navbar() {
 								<div className="flex items-center gap-4">
 									<ThemeToggle />
 									<a
-										href="https://github.com/questpie/questpie-cms"
+										href="https://github.com/questpie/questpie"
 										target="_blank"
 										rel="noreferrer"
 										className="inline-flex items-center gap-2 text-sm text-muted-foreground"

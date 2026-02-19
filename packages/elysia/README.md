@@ -1,6 +1,6 @@
 # @questpie/elysia
 
-Elysia adapter for QUESTPIE. Mounts CMS CRUD, auth, storage, RPC, and realtime routes on an Elysia instance with end-to-end type safety via Eden Treaty.
+Elysia adapter for QUESTPIE. Mounts CRUD, auth, storage, RPC, and realtime routes on an Elysia instance with end-to-end type safety via Eden Treaty.
 
 ## Installation
 
@@ -13,10 +13,10 @@ bun add @questpie/elysia questpie elysia
 ```ts
 import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia";
-import { cms, appRpc } from "./cms";
+import { app, appRpc } from "./questpie";
 
 const app = new Elysia()
-  .use(questpieElysia(cms, { basePath: "/api/cms", rpc: appRpc }))
+  .use(questpieElysia(app, { basePath: "/api", rpc: appRpc }))
   .listen(3000);
 
 export type App = typeof app;
@@ -29,13 +29,13 @@ export type App = typeof app;
 ```ts
 import { createClientFromEden } from "@questpie/elysia/client";
 import type { App } from "./server";
-import type { AppCMS, AppRpc } from "./cms";
+import type { App, AppRpc } from "./questpie";
 
-const client = createClientFromEden<App, AppCMS, AppRpc>({
+const client = createClientFromEden<App, App, AppRpc>({
   server: "localhost:3000",
 });
 
-// CMS CRUD — fully typed
+// CRUD — fully typed
 const { docs } = await client.collections.posts.find({ limit: 10 });
 
 // RPC — fully typed
@@ -49,11 +49,11 @@ const result = await client.api.custom.route.get();
 
 ```ts
 import { createClient } from "questpie/client";
-import type { AppCMS, AppRpc } from "./cms";
+import type { App, AppRpc } from "./questpie";
 
-const client = createClient<AppCMS, AppRpc>({
+const client = createClient<App, AppRpc>({
   baseURL: "http://localhost:3000",
-  basePath: "/api/cms",
+  basePath: "/api",
 });
 ```
 
@@ -63,22 +63,22 @@ The adapter automatically creates:
 
 | Method | Route                                    | Description          |
 | ------ | ---------------------------------------- | -------------------- |
-| GET    | `/api/cms/collections/:name`             | List items           |
-| POST   | `/api/cms/collections/:name`             | Create item          |
-| GET    | `/api/cms/collections/:name/:id`         | Get item             |
-| PATCH  | `/api/cms/collections/:name/:id`         | Update item          |
-| DELETE | `/api/cms/collections/:name/:id`         | Delete item          |
-| POST   | `/api/cms/collections/:name/:id/restore` | Restore soft-deleted |
-| GET    | `/api/cms/collections/:name/:id/versions` | List item versions   |
-| POST   | `/api/cms/collections/:name/:id/revert`   | Revert item version  |
-| GET    | `/api/cms/globals/:name`                 | Get global           |
-| PATCH  | `/api/cms/globals/:name`                 | Update global        |
-| GET    | `/api/cms/globals/:name/versions`         | List global versions |
-| POST   | `/api/cms/globals/:name/revert`           | Revert global version |
-| POST   | `/api/cms/collections/:name/upload`      | Upload file          |
-| ALL    | `/api/cms/auth/*`                        | Better Auth routes   |
-| POST   | `/api/cms/rpc/*`                         | RPC procedures       |
-| GET    | `/api/cms/collections/:name/subscribe`   | SSE realtime         |
+| GET    | `/api/collections/:name`             | List items           |
+| POST   | `/api/collections/:name`             | Create item          |
+| GET    | `/api/collections/:name/:id`         | Get item             |
+| PATCH  | `/api/collections/:name/:id`         | Update item          |
+| DELETE | `/api/collections/:name/:id`         | Delete item          |
+| POST   | `/api/collections/:name/:id/restore` | Restore soft-deleted |
+| GET    | `/api/collections/:name/:id/versions` | List item versions   |
+| POST   | `/api/collections/:name/:id/revert`   | Revert item version  |
+| GET    | `/api/globals/:name`                 | Get global           |
+| PATCH  | `/api/globals/:name`                 | Update global        |
+| GET    | `/api/globals/:name/versions`         | List global versions |
+| POST   | `/api/globals/:name/revert`           | Revert global version |
+| POST   | `/api/collections/:name/upload`      | Upload file          |
+| ALL    | `/api/auth/*`                        | Better Auth routes   |
+| POST   | `/api/rpc/*`                         | RPC procedures       |
+| GET    | `/api/collections/:name/subscribe`   | SSE realtime         |
 
 ## Documentation
 

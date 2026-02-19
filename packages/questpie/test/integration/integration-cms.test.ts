@@ -36,11 +36,11 @@ const createTestModule = () => {
 		}))
 		.title(({ f }) => f.name)
 		.hooks({
-			afterChange: async ({ data, operation, app }) => {
+			afterChange: async ({ data, operation, app: appInstance }) => {
 				if (operation !== "create") return;
-				const cms = app as any;
+				const app = appInstance as any;
 				// Send welcome email when author is created
-				await cms.email?.send({
+				await app.email?.send({
 					to: data.email,
 					subject: "Welcome to our platform!",
 					text: `Hi ${data.name}, welcome!`,
@@ -89,32 +89,32 @@ const createTestModule = () => {
 						.replace(/[^a-z0-9-]/g, "");
 				}
 			},
-			afterChange: async ({ data, original, operation, app }) => {
-				const cms = app as any;
+			afterChange: async ({ data, original, operation, app: appInstance }) => {
+				const app = appInstance as any;
 				if (operation === "create") {
-					await cms.logger?.info("Article created", {
+					await app.logger?.info("Article created", {
 						id: data.id,
 						title: data.title,
 					});
 				} else if (operation === "update" && original) {
 					// Track publication
 					if (original.status !== "published" && data.status === "published") {
-						await cms.queue.articlePublished.publish({
+						await app.queue.articlePublished.publish({
 							articleId: data.id,
 							title: data.title,
 							authorId: (data as any).author, // FK column key is field name with unified API
 						});
 
-						await cms.logger?.info("Article published", {
+						await app.logger?.info("Article published", {
 							id: data.id,
 							title: data.title,
 						});
 					}
 				}
 			},
-			afterDelete: async ({ data, app }) => {
-				const cms = app as any;
-				await cms.queue.articleDeleted.publish({ articleId: data.id });
+			afterDelete: async ({ data, app: appInstance }) => {
+				const app = appInstance as any;
+				await app.queue.articleDeleted.publish({ articleId: data.id });
 			},
 		});
 
@@ -160,7 +160,7 @@ const createTestModule = () => {
 		});
 };
 
-describe("integration: full CMS workflow", () => {
+describe("integration: full app workflow", () => {
 	let setup: Awaited<
 		ReturnType<typeof buildMockApp<ReturnType<typeof createTestModule>>>
 	>;
@@ -169,7 +169,7 @@ describe("integration: full CMS workflow", () => {
 		// Define authors collection
 		const testModule = createTestModule();
 		setup = (await buildMockApp(testModule)) as any;
-		await runTestDbMigrations(setup.cms);
+		await runTestDbMigrations(setup.app);
 	});
 
 	afterEach(async () => {
@@ -180,7 +180,7 @@ describe("integration: full CMS workflow", () => {
 		const ctx = createTestContext();
 
 		// 1. Create an author
-		const authorsCrud = setup.cms.api.collections.authors;
+		const authorsCrud = setup.app.api.collections.authors;
 		const author = await authorsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -192,14 +192,14 @@ describe("integration: full CMS workflow", () => {
 		);
 
 		// Verify welcome email was sent
-		expect(setup.cms.mocks.mailer.getSentCount()).toBe(1);
-		const sentEmail = setup.cms.mocks.mailer.getSentMails();
+		expect(setup.app.mocks.mailer.getSentCount()).toBe(1);
+		const sentEmail = setup.app.mocks.mailer.getSentMails();
 		const lastSent = sentEmail[sentEmail.length - 1];
 		expect(lastSent?.to).toBe("jane@example.com");
 		expect(lastSent?.subject).toBe("Welcome to our platform!");
 
 		// 2. Create a draft article
-		const articlesCrud = setup.cms.api.collections.articles;
+		const articlesCrud = setup.app.api.collections.articles;
 		const article = await articlesCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -229,7 +229,7 @@ describe("integration: full CMS workflow", () => {
 		expect(article.slug).toBe("getting-started-with-typescript");
 
 		// Verify article creation was logged
-		expect(setup.cms.mocks.logger.wasLogged("info", "Article created")).toBe(
+		expect(setup.app.mocks.logger.wasLogged("info", "Article created")).toBe(
 			true,
 		);
 
@@ -263,13 +263,13 @@ describe("integration: full CMS workflow", () => {
 		);
 
 		// Verify publication job was queued
-		const jobs = setup.cms.mocks.queue.getJobs();
+		const jobs = setup.app.mocks.queue.getJobs();
 		expect(jobs.some((j) => j.name === "article:published")).toBe(true);
 		const publishJob = jobs.find((j) => j.name === "article:published");
 		expect(publishJob?.payload.articleId).toBe(article.id);
 
 		// Verify publication was logged
-		expect(setup.cms.mocks.logger.wasLogged("info", "Article published")).toBe(
+		expect(setup.app.mocks.logger.wasLogged("info", "Article published")).toBe(
 			true,
 		);
 
@@ -298,7 +298,7 @@ describe("integration: full CMS workflow", () => {
 		await articlesCrud.deleteById({ id: article.id }, ctx);
 
 		// Verify deletion job was queued
-		const jobsAfterDelete = setup.cms.mocks.queue.getJobs();
+		const jobsAfterDelete = setup.app.mocks.queue.getJobs();
 		expect(jobsAfterDelete.some((j) => j.name === "article:deleted")).toBe(
 			true,
 		);
@@ -315,7 +315,7 @@ describe("integration: full CMS workflow", () => {
 		const ctx = createTestContext();
 
 		// Create author and article
-		const author = await setup.cms.api.collections.authors.create(
+		const author = await setup.app.api.collections.authors.create(
 			{
 				id: crypto.randomUUID(),
 				name: "John Smith",
@@ -324,7 +324,7 @@ describe("integration: full CMS workflow", () => {
 			ctx,
 		);
 
-		const article = await setup.cms.api.collections.articles.create(
+		const article = await setup.app.api.collections.articles.create(
 			{
 				id: crypto.randomUUID(),
 				author: author.id,
@@ -335,7 +335,7 @@ describe("integration: full CMS workflow", () => {
 		);
 
 		// Create tags
-		const tagsCrud = setup.cms.api.collections.tags;
+		const tagsCrud = setup.app.api.collections.tags;
 		const tag1 = await tagsCrud.create(
 			{ id: crypto.randomUUID(), name: "Architecture" },
 			ctx,
@@ -346,7 +346,7 @@ describe("integration: full CMS workflow", () => {
 		);
 
 		// Link tags via junction table
-		const articleTagsCrud = setup.cms.api.collections.article_tags;
+		const articleTagsCrud = setup.app.api.collections.article_tags;
 		await articleTagsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -365,7 +365,7 @@ describe("integration: full CMS workflow", () => {
 		);
 
 		// Query article with tags
-		const fetchedArticle = await setup.cms.api.collections.articles.findOne(
+		const fetchedArticle = await setup.app.api.collections.articles.findOne(
 			{
 				where: { id: article.id },
 				with: { tags: true },
@@ -394,7 +394,7 @@ describe("integration: full CMS workflow", () => {
 		const ctx = createTestContext();
 
 		// Create author
-		const authorsCrud = setup.cms.api.collections.authors;
+		const authorsCrud = setup.app.api.collections.authors;
 		const author = await authorsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -405,7 +405,7 @@ describe("integration: full CMS workflow", () => {
 		);
 
 		// Create article with nested tag creation
-		const articlesCrud = setup.cms.api.collections.articles;
+		const articlesCrud = setup.app.api.collections.articles;
 		const article = await articlesCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -441,7 +441,7 @@ describe("integration: full CMS workflow", () => {
 		expect(articleWithTags?.tags.map((t: any) => t.name)).toContain("Frontend");
 
 		// Create another article with existing tags
-		const tagsCrud = setup.cms.api.collections.tags;
+		const tagsCrud = setup.app.api.collections.tags;
 		const reactTag = await tagsCrud.findOne({ where: { name: "React" } }, ctx);
 
 		expect(reactTag).not.toBeNull();
@@ -479,7 +479,7 @@ describe("integration: full CMS workflow", () => {
 		const ctx = createTestContext();
 
 		// Create multiple authors
-		const authorsCrud = setup.cms.api.collections.authors;
+		const authorsCrud = setup.app.api.collections.authors;
 		const author1 = await authorsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -498,7 +498,7 @@ describe("integration: full CMS workflow", () => {
 		);
 
 		// Create articles for different authors
-		const articlesCrud = setup.cms.api.collections.articles;
+		const articlesCrud = setup.app.api.collections.articles;
 		await articlesCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -563,7 +563,7 @@ describe("integration: full CMS workflow", () => {
 	});
 
 	it("handles access control with system and user modes", async () => {
-		const authorsCrud = setup.cms.api.collections.authors;
+		const authorsCrud = setup.app.api.collections.authors;
 
 		// Create author in system mode
 		const author = await authorsCrud.create(
@@ -590,7 +590,7 @@ describe("integration: full CMS workflow", () => {
 		const ctx = createTestContext();
 
 		// Create author and article
-		const authorsCrud = setup.cms.api.collections.authors;
+		const authorsCrud = setup.app.api.collections.authors;
 		const author = await authorsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -600,7 +600,7 @@ describe("integration: full CMS workflow", () => {
 			ctx,
 		);
 
-		const articlesCrud = setup.cms.api.collections.articles;
+		const articlesCrud = setup.app.api.collections.articles;
 		const article = await articlesCrud.create(
 			{
 				id: crypto.randomUUID(),

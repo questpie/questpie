@@ -16,7 +16,7 @@ const LazyDocsRouteContent = lazy(() =>
 
 const docsCompatRedirects = new Map<string, string>([
 	[
-		"getting-started/your-first-cms",
+		"getting-started/your-first-app",
 		"/docs/getting-started/first-platform-walkthrough",
 	],
 ]);

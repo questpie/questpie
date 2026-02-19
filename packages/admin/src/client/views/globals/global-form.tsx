@@ -86,16 +86,16 @@ export type GlobalFormProps<
 };
 
 /**
- * GlobalForm - Form wrapper for CMS globals
+ * GlobalForm - Form wrapper for app globals
  *
  * @example
  * ```tsx
  * import { GlobalForm } from '@questpie/admin/views/globals'
- * import type { cms } from './server/cms'
+ * import type { app } from "./server/app"
  *
  * function SiteSettingsForm() {
  *   return (
- *     <GlobalForm<typeof cms, 'siteSettings'>
+ *     <GlobalForm<typeof app, 'siteSettings'>
  *       global="siteSettings"
  *       title="Site Settings"
  *       description="Configure your site settings"

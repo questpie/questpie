@@ -2,7 +2,7 @@
 
 **Type-safe, modular backend framework for modern TypeScript applications**
 
-A batteries-optional CMS engine built with Drizzle ORM. Opt into authentication, storage, background jobs, email, and realtime as needed.
+A batteries-optional backend engine built with Drizzle ORM. Opt into authentication, storage, background jobs, email, and realtime as needed.
 
 ## Why QUESTPIE?
 
@@ -16,7 +16,7 @@ A batteries-optional CMS engine built with Drizzle ORM. Opt into authentication,
 
 | Package                                                 | Description                                           |
 | ------------------------------------------------------- | ----------------------------------------------------- |
-| [`questpie`](./packages/questpie)                       | Core CMS engine with collections, globals, and hooks  |
+| [`questpie`](./packages/questpie)                       | Core backend engine with collections, globals, and hooks  |
 | [`@questpie/admin`](./packages/admin)                   | Config-driven admin UI (React + Tailwind v4 + shadcn) |
 | [`@questpie/hono`](./packages/hono)                     | Hono framework adapter with unified client            |
 | [`@questpie/elysia`](./packages/elysia)                 | Elysia framework adapter with Eden Treaty support     |
@@ -64,7 +64,7 @@ export const posts = q
   .title(({ table }) => table.title);
 ```
 
-### Configure the CMS
+### Configure the app
 
 ```typescript
 // src/app.ts
@@ -114,14 +114,14 @@ export type AppServer = typeof server;
 **Next.js:**
 
 ```typescript
-// app/api/cms/[...path]/route.ts
+// app/api/[...path]/route.ts
 import { questpieNextRouteHandlers } from "@questpie/next";
 import { app } from "@/app";
 
 export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(
   app,
   {
-    basePath: "/api/cms",
+    basePath: "/api",
   },
 );
 
@@ -198,7 +198,7 @@ const app = q({ name: "my-app" })
     storage: { location: "./uploads" },
   });
 
-// Upload via API: POST /cms/assets/upload
+// Upload via API: POST /api/assets/upload
 // Or programmatically:
 const asset = await app.api.collections.assets.upload(file, context);
 ```
@@ -221,8 +221,8 @@ const media = q
     allowedTypes: ["image/*", "application/pdf"],
   });
 
-// Upload via API: POST /cms/media/upload
-// Serve files: GET /cms/media/files/:key
+// Upload via API: POST /api/media/upload
+// Serve files: GET /api/media/files/:key
 ```
 
 ### Authentication
@@ -347,7 +347,7 @@ function AdminLayout() {
   return (
     <AdminLayoutProvider
       admin={adminInstance}
-      client={cmsClient}
+      client={client}
       queryClient={queryClient}
       LinkComponent={Link}
       basePath="/admin"
@@ -373,8 +373,8 @@ bun questpie migrate:fresh     # Reset + run all migrations
 
 | Adapter | Package            | Client                                          |
 | ------- | ------------------ | ----------------------------------------------- |
-| Hono    | `@questpie/hono`   | `createClientFromHono` (CMS CRUD + Hono RPC)    |
-| Elysia  | `@questpie/elysia` | `createClientFromEden` (CMS CRUD + Eden Treaty) |
+| Hono    | `@questpie/hono`   | `createClientFromHono` (CRUD + Hono RPC)    |
+| Elysia  | `@questpie/elysia` | `createClientFromEden` (CRUD + Eden Treaty) |
 | Next.js | `@questpie/next`   | `createClient` from `questpie/client`           |
 
 ## Examples

@@ -59,13 +59,13 @@ Field constraints map directly to Zod rules:
 
 ```ts
 // Create: title is required
-await cms.api.collections.posts.create({
+await app.api.collections.posts.create({
   title: "My Post",  // required
   status: "draft",   // optional
 });
 
 // Update: everything is optional
-await cms.api.collections.posts.update({
+await app.api.collections.posts.update({
   where: { id: "..." },
   data: { status: "published" },  // only update status
 });
@@ -77,7 +77,7 @@ When validation fails, QUESTPIE throws an `ApiError` with status 400 and structu
 
 ```ts
 try {
-  await cms.api.collections.posts.create({
+  await app.api.collections.posts.create({
     // missing required "title" field
     status: "invalid-option",
   });
@@ -164,11 +164,11 @@ Relation fields are normalized before validation. This lets you pass either the 
 
 ```ts
 // Both of these work:
-await cms.api.collections.posts.create({
+await app.api.collections.posts.create({
   author: "user-123",      // relation field name
 });
 
-await cms.api.collections.posts.create({
+await app.api.collections.posts.create({
   authorId: "user-123",    // FK column name
 });
 ```
@@ -180,7 +180,7 @@ The preprocessor maps `author` → `authorId` before the Zod schema runs.
 When creating or updating records with nested relations, the schemas use `.passthrough()` to allow additional keys for nested operations:
 
 ```ts
-await cms.api.collections.barbers.create({
+await app.api.collections.barbers.create({
   name: "John",
   // Nested creation — passed through validation
   services: [

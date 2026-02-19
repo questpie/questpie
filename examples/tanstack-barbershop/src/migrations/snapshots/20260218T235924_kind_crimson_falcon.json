@@ -1,0 +1,28 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__title",
+      "value": {
+        "type": "varchar(1000)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-02-18T23:59:24.847Z",
+      "migrationId": "kindCrimsonFalcon20260218T235924"
+    }
+  ],
+  "metadata": {
+    "migrationId": "kindCrimsonFalcon20260218T235924",
+    "timestamp": "2026-02-18T23:59:24.884Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

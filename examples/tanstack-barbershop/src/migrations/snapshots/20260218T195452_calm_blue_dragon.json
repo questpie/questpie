@@ -1,0 +1,88 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_stage",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_stage",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-18T19:54:53.104Z",
+      "migrationId": "calmBlueDragon20260218T195452"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_from_stage",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "version_from_stage",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-18T19:54:53.104Z",
+      "migrationId": "calmBlueDragon20260218T195452"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__site_settings_versions__DOT__site_settings_versions_id_version_stage_version_number_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "version_stage",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "version_number",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "site_settings_versions_id_version_stage_version_number_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-02-18T19:54:53.104Z",
+      "migrationId": "calmBlueDragon20260218T195452"
+    }
+  ],
+  "metadata": {
+    "migrationId": "calmBlueDragon20260218T195452",
+    "timestamp": "2026-02-18T19:54:53.140Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

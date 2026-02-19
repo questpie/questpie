@@ -7,13 +7,13 @@ description: Typed rpc contracts for custom application workflows
 
 RPC is used for custom operations that do not fit plain CRUD.
 
-For end-to-end type safety, bind RPC to your CMS type:
+For end-to-end type safety, bind RPC to your app type:
 
 ```ts
 import { rpc } from "questpie";
-import type { AppCMS } from "./cms";
+import type { App } from './app';
 
-export const r = rpc<AppCMS>();
+export const r = rpc<App>();
 ```
 
 ## Pattern
@@ -28,9 +28,9 @@ export const r = rpc<AppCMS>();
 ```ts
 import { rpc } from "questpie";
 import z from "zod";
-import type { AppCMS } from "../cms";
+import type { App } from '../app';
 
-export const r = rpc<AppCMS>();
+export const r = rpc<App>();
 
 export const getRevenueStats = r.fn({
   schema: z.object({
@@ -55,14 +55,14 @@ export const appRpc = r.router({ getRevenueStats });
 
 ## Alternative: Typed fn Factory
 
-If you need typed functions outside `rpc()`, use `fn.typed<AppCMS>()`:
+If you need typed functions outside `rpc()`, use `fn.typed<App>()`:
 
 ```ts
 import { fn } from "questpie";
 import z from "zod";
-import type { AppCMS } from "../cms";
+import type { App } from '../app';
 
-const f = fn.typed<AppCMS>();
+const f = fn.typed<App>();
 
 export const recalculateStats = f({
   schema: z.object({ date: z.string() }),

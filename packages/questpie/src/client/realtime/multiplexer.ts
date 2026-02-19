@@ -24,6 +24,8 @@ export type TopicConfig = {
 	offset?: number;
 	/** Order by configuration */
 	orderBy?: Record<string, "asc" | "desc">;
+	/** Content locale */
+	locale?: string;
 };
 
 export type TopicInput = TopicConfig & {
@@ -32,6 +34,7 @@ export type TopicInput = TopicConfig & {
 };
 
 type Subscriber = (data: unknown) => void;
+type ErrorCallback = (error: Error) => void;
 
 type SSEEvent = {
 	type: string;
@@ -60,6 +63,7 @@ export function stableStringify(x: unknown): string {
 export class RealtimeMultiplexer {
 	private abortController: AbortController | null = null;
 	private subscribers = new Map<string, Set<Subscriber>>();
+	private errorCallbacks = new Set<ErrorCallback>();
 	private topics = new Map<string, TopicConfig>();
 	private customIds = new Map<string, string>();
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -82,6 +86,7 @@ export class RealtimeMultiplexer {
 		callback: Subscriber,
 		signal?: AbortSignal,
 		customId?: string,
+		onError?: ErrorCallback,
 	): () => void {
 		const topicHash = this.hashTopic(topic);
 		const topicId = customId ?? topicHash;
@@ -98,11 +103,18 @@ export class RealtimeMultiplexer {
 
 		this.subscribers.get(topicId)!.add(callback);
 
+		if (onError) {
+			this.errorCallbacks.add(onError);
+		}
+
 		const unsubscribe = () => {
 			const subs = this.subscribers.get(topicId);
 			if (!subs) return;
 
 			subs.delete(callback);
+			if (onError) {
+				this.errorCallbacks.delete(onError);
+			}
 
 			if (subs.size === 0) {
 				this.subscribers.delete(topicId);
@@ -199,6 +211,16 @@ export class RealtimeMultiplexer {
 			if (isAbort) {
 				// Let finally block handle reconnectPending cleanly
 				return;
+			}
+
+			// Notify subscribers of connection error so they can throw
+			// instead of waiting forever (prevents infinite loading)
+			const err =
+				error instanceof Error
+					? error
+					: new Error(String(error));
+			for (const cb of this.errorCallbacks) {
+				cb(err);
 			}
 
 			const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
@@ -318,6 +340,7 @@ export class RealtimeMultiplexer {
 			clearTimeout(this.reconnectTimer);
 		}
 		this.subscribers.clear();
+		this.errorCallbacks.clear();
 		this.topics.clear();
 		this.customIds.clear();
 	}

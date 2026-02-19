@@ -7,7 +7,7 @@
  * @example
  * ```ts
  * // Server: messages are stored here
- * // Client: fetches via client.functions.getAdminTranslations({ locale: "sk" })
+ * // Client: fetches via client.rpc.getAdminTranslations({ locale: "sk" })
  * ```
  */
 

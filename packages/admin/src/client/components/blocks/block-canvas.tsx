@@ -21,6 +21,7 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Icon } from "@iconify/react";
 import * as React from "react";
+import { RenderProfiler } from "../../lib/render-profiler.js";
 import {
 	useBlockEditorActions,
 	useBlockRegistry,
@@ -53,51 +54,60 @@ export function BlockCanvas() {
 	);
 
 	// Handle drag start - track active item for overlay
-	const handleDragStart = (event: DragStartEvent) => {
+	const handleDragStart = React.useCallback((event: DragStartEvent) => {
 		setActiveId(event.active.id as string);
-	};
+	}, []);
 
 	// Handle drag end - reorder within same parent only
-	const handleDragEnd = (event: DragEndEvent) => {
-		const { active, over } = event;
-		setActiveId(null);
+	const handleDragEnd = React.useCallback(
+		(event: DragEndEvent) => {
+			const { active, over } = event;
+			setActiveId(null);
 
-		if (!over || active.id === over.id) {
-			return;
-		}
+			if (!over || active.id === over.id) {
+				return;
+			}
 
-		const draggedId = active.id as string;
-		const overId = over.id as string;
+			const draggedId = active.id as string;
+			const overId = over.id as string;
 
-		// Find positions of both blocks
-		const activePosition = findBlockPosition(tree, draggedId);
-		const overPosition = findBlockPosition(tree, overId);
+			// Find positions of both blocks
+			const activePosition = findBlockPosition(tree, draggedId);
+			const overPosition = findBlockPosition(tree, overId);
 
-		if (!activePosition || !overPosition) {
-			return;
-		}
+			if (!activePosition || !overPosition) {
+				return;
+			}
 
-		// Only allow reordering within the same parent
-		if (activePosition.parentId !== overPosition.parentId) {
-			return;
-		}
+			// Only allow reordering within the same parent
+			if (activePosition.parentId !== overPosition.parentId) {
+				return;
+			}
 
-		actions.moveBlock(
-			draggedId,
-			activePosition.parentId,
-			activePosition.index,
-			overPosition.index,
-		);
-	};
+			actions.moveBlock(
+				draggedId,
+				activePosition.parentId,
+				activePosition.index,
+				overPosition.index,
+			);
+		},
+		[actions, tree],
+	);
 
 	// Handle drag cancel - reset state
-	const handleDragCancel = () => {
+	const handleDragCancel = React.useCallback(() => {
 		setActiveId(null);
-	};
+	}, []);
 
 	// Get active block for overlay
-	const activeBlock = activeId ? findBlockById(tree, activeId) : null;
-	const activeBlockSchema = activeBlock ? blocksByType[activeBlock.type] : null;
+	const activeBlock = React.useMemo(
+		() => (activeId ? findBlockById(tree, activeId) : null),
+		[activeId, tree],
+	);
+	const activeBlockSchema = React.useMemo(
+		() => (activeBlock ? blocksByType[activeBlock.type] : null),
+		[activeBlock, blocksByType],
+	);
 
 	return (
 		<DndContext
@@ -107,7 +117,9 @@ export function BlockCanvas() {
 			onDragEnd={handleDragEnd}
 			onDragCancel={handleDragCancel}
 		>
-			<BlockTree blocks={tree} level={0} parentId={null} />
+			<RenderProfiler id="blocks.tree" minDurationMs={8}>
+				<BlockTree blocks={tree} level={0} parentId={null} />
+			</RenderProfiler>
 
 			{/* Drag overlay - shows what's being dragged */}
 			<DragOverlay>

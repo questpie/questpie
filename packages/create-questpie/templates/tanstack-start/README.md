@@ -1,6 +1,6 @@
 # {{projectName}}
 
-A [QUESTPIE CMS](https://questpie.com) project built with TanStack Start.
+A [QUESTPIE](https://questpie.com) project built with TanStack Start.
 
 ## Getting Started
 
@@ -24,7 +24,7 @@ bun dev
 
 The admin panel will be available at [http://localhost:3000/admin](http://localhost:3000/admin).
 
-The API docs (Scalar UI) are at [http://localhost:3000/api/cms/docs](http://localhost:3000/api/cms/docs).
+The API docs (Scalar UI) are at [http://localhost:3000/api/docs](http://localhost:3000/api/docs).
 
 ## Project Structure
 
@@ -32,7 +32,7 @@ The API docs (Scalar UI) are at [http://localhost:3000/api/cms/docs](http://loca
 src/
   questpie/
     server/
-      app.ts                        # Main CMS configuration
+      app.ts                        # Main app configuration
       builder.ts                    # Server-side builder
       rpc.ts                        # RPC router
       collections/
@@ -45,10 +45,10 @@ src/
   routes/
     admin.tsx                       # Admin layout
     admin/                          # Admin routes
-    api/cms/$.ts                    # CMS API handler
+    api/$.ts                    # API handler
   lib/
     env.ts                          # Type-safe environment variables
-    cms-client.ts                   # CMS API client
+    client.ts                   # API client
     auth-client.ts                  # Auth client
     query-client.ts                 # React Query client
   migrations/                       # Database migrations

@@ -155,14 +155,10 @@ function createComponentProxy(builderState: Record<string, unknown>) {
 				return undefined;
 			}
 
-			if (registeredComponentSet.size === 0) {
-				throw new Error(
-					`No components registered. Register components via .components() ` +
-						`or use q.use(adminModule) defaults.`,
-				);
-			}
-
-			if (!registeredComponentSet.has(prop)) {
+			if (
+				registeredComponentSet.size > 0 &&
+				!registeredComponentSet.has(prop)
+			) {
 				throw new Error(
 					`Unknown component "${prop}". Register it via .components(). ` +
 						`Available components: ${[...registeredComponentSet].sort().join(", ")}`,
@@ -264,16 +260,8 @@ function createViewProxy(
 					return undefined;
 				}
 
-				const registerMethod = kind === "list" ? "listViews" : "editViews";
-
-				if (!hasRegistry) {
-					throw new Error(
-						`No ${kind} views registered. Register them via .${registerMethod}() ` +
-							`or use q.use(adminModule) defaults.`,
-					);
-				}
-
-				if (!registeredViewSet.has(prop)) {
+				if (hasRegistry && !registeredViewSet.has(prop)) {
+					const registerMethod = kind === "list" ? "listViews" : "editViews";
 					const available = [...registeredViewSet].sort().join(", ");
 					throw new Error(
 						`Unknown ${kind} view "${prop}". Register it via .${registerMethod}(). ` +
@@ -606,7 +594,7 @@ function patchQuestpieBuilder() {
 	 * ```ts
 	 * import { heroBlock, textBlock } from "./blocks";
 	 *
-	 * const cms = q({ name: "my-app" })
+	 * const app = q({ name: "my-app" })
 	 *   .use(adminModule)
 	 *   .blocks({
 	 *     // Simple block - relations auto-expanded
@@ -718,7 +706,7 @@ function patchQuestpieBuilder() {
 	 *     subtitle: f.text(),
 	 *   }));
 	 *
-	 * const cms = qb
+	 * const app = qb
 	 *   .blocks({ hero: heroBlock })
 	 *   .build({ ... });
 	 * ```
@@ -853,7 +841,7 @@ function patchQuestpieBuilder() {
 	 *
 	 * @example
 	 * ```ts
-	 * const cms = q({ name: "my-app" })
+	 * const app = q({ name: "my-app" })
 	 *   .use(adminModule)
 	 *   // Content can be in many languages
 	 *   .locale({
@@ -969,6 +957,16 @@ function patchQuestpieBuilder() {
 		}
 		(instance as any).state = adminState;
 
+		// DEBUG: Check sidebar state at build time
+		console.log(
+			"[DEBUG .build()] sidebar sections:",
+			adminState.sidebar?.sections?.map((s: any) => s.id),
+		);
+		console.log(
+			"[DEBUG .build()] sidebar from this.state:",
+			this.state.sidebar?.sections?.map((s: any) => s.id),
+		);
+
 		return instance;
 	};
 }
@@ -1022,7 +1020,7 @@ function injectBlockDefinitions(
 function injectBlocksPrefetchHooks(state: any): void {
 	const prefetchHook = createBlocksPrefetchHook();
 
-	const injectIfHasBlocksField = (entity: any, name: string) => {
+	const injectIfHasBlocksField = (entity: any, _name: string) => {
 		// Use fieldDefinitions which has the field type info (state.type, not state.config.type)
 		const fieldDefinitions = entity?.state?.fieldDefinitions;
 		if (!fieldDefinitions) {

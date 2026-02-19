@@ -1,5 +1,5 @@
 /**
- * Default locale fallback used across the CMS.
+ * Default locale fallback used across the app.
  */
 export const DEFAULT_LOCALE = "en" as const;
 

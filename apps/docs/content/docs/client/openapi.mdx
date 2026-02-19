@@ -1,6 +1,6 @@
 ---
 title: OpenAPI
-description: Generate OpenAPI 3.1 specs and interactive API docs from your CMS
+description: Generate OpenAPI 3.1 specs and interactive API docs from your app
 ---
 
 # OpenAPI
@@ -20,14 +20,14 @@ Wrap your existing fetch handler to add OpenAPI routes:
 ```ts
 import { createFetchHandler } from "questpie";
 import { withOpenApi } from "@questpie/openapi";
-import { cms, appRpc } from "./cms";
+import { app, appRpc } from './app';
 
 const handler = withOpenApi(
-  createFetchHandler(cms, { basePath: "/api/cms", rpc: appRpc }),
+  createFetchHandler(app, { basePath: "/api", rpc: appRpc }),
   {
-    cms,
+    app,
     rpc: appRpc,
-    basePath: "/api/cms",
+    basePath: "/api",
     info: {
       title: "Barbershop API",
       version: "1.0.0",
@@ -38,8 +38,8 @@ const handler = withOpenApi(
 );
 
 // Now available:
-// GET /api/cms/openapi.json  → OpenAPI spec
-// GET /api/cms/docs          → Scalar interactive docs
+// GET /api/openapi.json  → OpenAPI spec
+// GET /api/docs          → Scalar interactive docs
 ```
 
 ### Manual Setup
@@ -49,9 +49,9 @@ For more control, generate the spec and create handlers separately:
 ```ts
 import { generateOpenApiSpec, createOpenApiHandlers } from "@questpie/openapi";
 
-const spec = generateOpenApiSpec(cms, appRpc, {
+const spec = generateOpenApiSpec(app, appRpc, {
   info: { title: "My API", version: "1.0.0" },
-  basePath: "/api/cms",
+  basePath: "/api",
   servers: [
     { url: "https://api.example.com", description: "Production" },
     { url: "http://localhost:3000", description: "Development" },
@@ -69,7 +69,7 @@ const { specHandler, scalarHandler } = createOpenApiHandlers(spec, {
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `cms` | `Questpie` | — | CMS instance (required) |
+| `app` | `Questpie` | — | app instance (required) |
 | `rpc` | `RpcRouterTree` | — | RPC router for procedure docs |
 | `basePath` | `string` | — | API base path |
 | `info.title` | `string` | — | API title |

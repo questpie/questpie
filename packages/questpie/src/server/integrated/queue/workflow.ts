@@ -5,7 +5,7 @@ import type { JobDefinition, JobHandlerArgs } from "./types.js";
  * Arguments passed to workflow steps
  * Same structure as JobHandlerArgs for consistency
  * @template TInput - The step input type
- * @template TApp - The CMS app type
+ * @template TApp - The app app type
  */
 export type WorkflowStepArgs<TInput = any, TApp = any> = JobHandlerArgs<
   TInput,
@@ -16,7 +16,7 @@ export type WorkflowStepArgs<TInput = any, TApp = any> = JobHandlerArgs<
  * Workflow step - a job that can be chained with other jobs
  * @template TInput - The step input type
  * @template TOutput - The step output type
- * @template TApp - The CMS app type
+ * @template TApp - The app app type
  */
 export interface WorkflowStep<TInput = any, TOutput = any, TApp = any> {
   name: string;
@@ -29,7 +29,7 @@ export interface WorkflowStep<TInput = any, TOutput = any, TApp = any> {
  * @template TInput - The workflow initial input type
  * @template TCurrentOutput - The current step output type (evolves through chaining)
  * @template TName - The workflow name (literal string type)
- * @template TApp - The CMS app type (defaults to any)
+ * @template TApp - The app app type (defaults to any)
  *
  * @example
  * ```ts
@@ -147,9 +147,9 @@ export class WorkflowBuilder<
  *
  * @example With typed app (recommended for full type safety)
  * ```ts
- * import type { AppCMS } from './cms';
+ * import type { App } from './app';
  *
- * const processOrderWorkflow = workflow<AppCMS>()('process-order')
+ * const processOrderWorkflow = workflow<App>()('process-order')
  *   .step('notify', async ({ payload, app }) => {
  *     app.queue.sendEmail.publish(...); // fully typed!
  *     return payload;
@@ -167,7 +167,7 @@ export function workflow<TInput, TName extends string>(
  *
  * @example
  * ```ts
- * const processOrder = workflow<AppCMS>()('process-order');
+ * const processOrder = workflow<App>()('process-order');
  * ```
  */
 export function workflow<TApp = any>(): <TInput, TName extends string>(
@@ -177,7 +177,7 @@ export function workflow<TApp = any>(): <TInput, TName extends string>(
 export function workflow<TInputOrApp, TName extends string = string>(
   name?: TName,
 ): unknown {
-  // Overload 2: workflow<AppCMS>() returns a curried function
+  // Overload 2: workflow<App>() returns a curried function
   if (name === undefined) {
     return <TInput, TN extends string>(n: TN) =>
       new WorkflowBuilder<TInput, TInput, TN, TInputOrApp>(n);

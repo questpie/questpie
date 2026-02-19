@@ -12,8 +12,8 @@
  */
 
 import { Icon } from "@iconify/react";
-import type * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as React from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ComponentReference } from "#questpie/admin/server";
 import { resolveIconElement } from "../../components/component-renderer";
 import { Kbd } from "../../components/ui/kbd";
@@ -118,7 +118,7 @@ interface SearchGroupProps {
 	onHover: (index: number) => void;
 }
 
-function SearchGroup({
+const SearchGroup = React.memo(function SearchGroup({
 	title,
 	items,
 	selectedIndex,
@@ -180,7 +180,7 @@ function SearchGroup({
 			</div>
 		</div>
 	);
-}
+});
 
 // ============================================================================
 // Main Component
@@ -341,19 +341,16 @@ export function GlobalSearch({
 		groupedNavItems.globals.length +
 		groupedNavItems.actions.length;
 
-	// Reset selected index when query changes
-	useEffect(() => {
-		setSelectedIndex(0);
-	}, [query]);
-
-	// Reset state when dialog opens
-	useEffect(() => {
-		if (isOpen) {
-			setQuery("");
-			setSelectedIndex(0);
-			// Focus input after a small delay to ensure dialog is rendered
-			setTimeout(() => inputRef.current?.focus(), 50);
+	React.useEffect(() => {
+		if (!isOpen) {
+			return;
 		}
+
+		setQuery("");
+		setSelectedIndex(0);
+
+		const timer = setTimeout(() => inputRef.current?.focus(), 50);
+		return () => clearTimeout(timer);
 	}, [isOpen]);
 
 	// Handle selection
@@ -418,9 +415,11 @@ export function GlobalSearch({
 						className="flex h-14 w-full rounded-none bg-transparent py-3 text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
 						placeholder={t("globalSearch.placeholder")}
 						value={query}
-						onChange={(e) => setQuery(e.target.value)}
+						onChange={(e) => {
+							setQuery(e.target.value);
+							setSelectedIndex(0);
+						}}
 						onKeyDown={handleKeyDown}
-						autoFocus
 					/>
 					<div className="flex items-center gap-1 shrink-0">
 						{isSearching && (

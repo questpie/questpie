@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Github, Lock, Sparkles, Terminal } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
@@ -34,6 +34,7 @@ const script = [
 ];
 
 export function Hero() {
+	const shouldReduceMotion = useReducedMotion();
 	const [tableRows, setTableRows] = useState(rows);
 	const [pulsingRow, setPulsingRow] = useState<number | null>(null);
 
@@ -175,7 +176,7 @@ export function Hero() {
 								/>
 							</Link>
 							<a
-								href="https://github.com/questpie/questpie-cms"
+								href="https://github.com/questpie/questpie"
 								target="_blank"
 								rel="noreferrer"
 								className="group inline-flex h-12 items-center justify-center gap-2 border border-border bg-card/10 backdrop-blur-sm px-8 text-sm font-medium text-muted-foreground transition-all hover:text-foreground hover:border-primary/30 hover:bg-card/20"
@@ -296,8 +297,8 @@ export function Hero() {
 										<div className="flex items-center justify-end w-8">
 											{row.locked && (
 												<motion.span
-													initial={{ scale: 0 }}
-													animate={{ scale: 1 }}
+													initial={{ scale: 0.95, opacity: 0 }}
+													animate={{ scale: 1, opacity: 1 }}
 													className="inline-flex items-center gap-1"
 												>
 													<Lock className="h-3 w-3 text-muted-foreground" />

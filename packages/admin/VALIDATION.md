@@ -12,7 +12,7 @@ This document validates the implementation against all stated requirements.
 - [x] Single source of truth for all UI
 - [x] No manual route files needed
 - [x] Sidebar auto-generated from config.collections
-- [x] Forms auto-generated from CMS schema + config overrides
+- [x] Forms auto-generated from app schema + config overrides
 - [x] List views auto-generated from config
 
 **Evidence:**
@@ -29,13 +29,13 @@ This document validates the implementation against all stated requirements.
 Minimal usage:
 
 ```tsx
-<AdminApp client={cmsClient} router={{...}} />
+<AdminApp client={appClient} router={{...}} />
 ```
 
 With optional config:
 
 ```tsx
-<AdminApp client={cmsClient} config={adminConfig} router={{...}} />
+<AdminApp client={appClient} config={adminConfig} router={{...}} />
 ```
 
 **Evidence:**
@@ -651,7 +651,7 @@ fields: {
 
 8. **Saved Views** - UX improvement
 9. **Custom Dashboard** - Nice to have
-10. **Permissions UI** - Can use CMS access control directly
+10. **Permissions UI** - Can use QuestPie access control directly
 
 ## ✅ Core Requirements Validation
 

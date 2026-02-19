@@ -5,7 +5,7 @@
  * Usage: bun run seed.ts
  */
 
-import { cms } from "./src/questpie/server/cms";
+import { app } from "./src/questpie/server/app";
 
 // ============================================================================
 // Image URLs
@@ -131,7 +131,7 @@ async function uploadImage(url: string, name: string, ctx: any) {
 		type: contentType,
 	});
 
-	const asset = await cms.api.collections.assets.upload(file, ctx);
+	const asset = await app.api.collections.assets.upload(file, ctx);
 	return asset.id as string;
 }
 
@@ -145,11 +145,11 @@ async function seed() {
 	console.log("🌱 Seeding database...\n");
 
 	try {
-		const ctxEn = await cms.createContext({
+		const ctxEn = await app.createContext({
 			accessMode: "system",
 			locale: "en",
 		});
-		const ctxSk = await cms.createContext({
+		const ctxSk = await app.createContext({
 			accessMode: "system",
 			locale: "sk",
 		});
@@ -157,7 +157,7 @@ async function seed() {
 		// ========================================
 		// Idempotency check
 		// ========================================
-		const existing = await cms.api.collections.pages.find(
+		const existing = await app.api.collections.pages.find(
 			{ where: { slug: { eq: "home" } }, limit: 1 },
 			ctxEn,
 		);
@@ -174,26 +174,26 @@ async function seed() {
 		const cleanupSteps: [string, () => Promise<unknown>][] = [
 			[
 				"appointments",
-				() => cms.api.collections.appointments.delete({ where: {} }, ctxEn),
+				() => app.api.collections.appointments.delete({ where: {} }, ctxEn),
 			],
 			[
 				"barberServices",
-				() => cms.api.collections.barberServices.delete({ where: {} }, ctxEn),
+				() => app.api.collections.barberServices.delete({ where: {} }, ctxEn),
 			],
 			[
 				"reviews",
-				() => cms.api.collections.reviews.delete({ where: {} }, ctxEn),
+				() => app.api.collections.reviews.delete({ where: {} }, ctxEn),
 			],
 			[
 				"barbers",
-				() => cms.api.collections.barbers.delete({ where: {} }, ctxEn),
+				() => app.api.collections.barbers.delete({ where: {} }, ctxEn),
 			],
 			[
 				"services",
-				() => cms.api.collections.services.delete({ where: {} }, ctxEn),
+				() => app.api.collections.services.delete({ where: {} }, ctxEn),
 			],
-			["pages", () => cms.api.collections.pages.delete({ where: {} }, ctxEn)],
-			["assets", () => cms.api.collections.assets.delete({ where: {} }, ctxEn)],
+			["pages", () => app.api.collections.pages.delete({ where: {} }, ctxEn)],
+			["assets", () => app.api.collections.assets.delete({ where: {} }, ctxEn)],
 		];
 		for (const [name, fn] of cleanupSteps) {
 			try {
@@ -222,7 +222,7 @@ async function seed() {
 		// Site Settings (EN)
 		// ========================================
 		console.log("Updating site settings (EN)...");
-		await cms.api.globals.siteSettings.update(
+		await app.api.globals.siteSettings.update(
 			{
 				shopName: "Sharp Cuts",
 				tagline: "Precision grooming for the modern gentleman",
@@ -279,7 +279,7 @@ async function seed() {
 		// Site Settings (SK)
 		// ========================================
 		console.log("Updating site settings (SK)...");
-		await cms.api.globals.siteSettings.update(
+		await app.api.globals.siteSettings.update(
 			{
 				tagline: "Precízna starostlivosť pre moderného gentlemana",
 				navigation: [
@@ -311,7 +311,7 @@ async function seed() {
 		// Services (EN + SK)
 		// ========================================
 		console.log("Creating services...");
-		const haircut = await cms.api.collections.services.create(
+		const haircut = await app.api.collections.services.create(
 			{
 				name: "Classic Haircut",
 				description:
@@ -323,7 +323,7 @@ async function seed() {
 			},
 			ctxEn,
 		);
-		const fade = await cms.api.collections.services.create(
+		const fade = await app.api.collections.services.create(
 			{
 				name: "Skin Fade",
 				description:
@@ -335,7 +335,7 @@ async function seed() {
 			},
 			ctxEn,
 		);
-		const shave = await cms.api.collections.services.create(
+		const shave = await app.api.collections.services.create(
 			{
 				name: "Hot Towel Shave",
 				description:
@@ -347,7 +347,7 @@ async function seed() {
 			},
 			ctxEn,
 		);
-		const beardTrim = await cms.api.collections.services.create(
+		const beardTrim = await app.api.collections.services.create(
 			{
 				name: "Beard Sculpting",
 				description:
@@ -359,7 +359,7 @@ async function seed() {
 			},
 			ctxEn,
 		);
-		const kidscut = await cms.api.collections.services.create(
+		const kidscut = await app.api.collections.services.create(
 			{
 				name: "Junior Cut",
 				description:
@@ -371,7 +371,7 @@ async function seed() {
 			},
 			ctxEn,
 		);
-		const grooming = await cms.api.collections.services.create(
+		const grooming = await app.api.collections.services.create(
 			{
 				name: "Full Grooming Package",
 				description:
@@ -386,7 +386,7 @@ async function seed() {
 		console.log("  ✓ 6 services (EN)");
 
 		// SK translations
-		await cms.api.collections.services.update(
+		await app.api.collections.services.update(
 			{
 				where: { id: haircut.id },
 				data: {
@@ -397,7 +397,7 @@ async function seed() {
 			},
 			ctxSk,
 		);
-		await cms.api.collections.services.update(
+		await app.api.collections.services.update(
 			{
 				where: { id: fade.id },
 				data: {
@@ -408,7 +408,7 @@ async function seed() {
 			},
 			ctxSk,
 		);
-		await cms.api.collections.services.update(
+		await app.api.collections.services.update(
 			{
 				where: { id: shave.id },
 				data: {
@@ -419,7 +419,7 @@ async function seed() {
 			},
 			ctxSk,
 		);
-		await cms.api.collections.services.update(
+		await app.api.collections.services.update(
 			{
 				where: { id: beardTrim.id },
 				data: {
@@ -430,7 +430,7 @@ async function seed() {
 			},
 			ctxSk,
 		);
-		await cms.api.collections.services.update(
+		await app.api.collections.services.update(
 			{
 				where: { id: kidscut.id },
 				data: {
@@ -441,7 +441,7 @@ async function seed() {
 			},
 			ctxSk,
 		);
-		await cms.api.collections.services.update(
+		await app.api.collections.services.update(
 			{
 				where: { id: grooming.id },
 				data: {
@@ -458,7 +458,7 @@ async function seed() {
 		// Barbers (EN + SK)
 		// ========================================
 		console.log("Creating barbers...");
-		const barber1 = await cms.api.collections.barbers.create(
+		const barber1 = await app.api.collections.barbers.create(
 			{
 				name: "Lukáš Novák",
 				slug: "lukas-novak",
@@ -483,7 +483,7 @@ async function seed() {
 			},
 			ctxEn,
 		);
-		const barber2 = await cms.api.collections.barbers.create(
+		const barber2 = await app.api.collections.barbers.create(
 			{
 				name: "David Horváth",
 				slug: "david-horvath",
@@ -508,7 +508,7 @@ async function seed() {
 			},
 			ctxEn,
 		);
-		const barber3 = await cms.api.collections.barbers.create(
+		const barber3 = await app.api.collections.barbers.create(
 			{
 				name: "Martin Kráľ",
 				slug: "martin-kral",
@@ -533,7 +533,7 @@ async function seed() {
 			},
 			ctxEn,
 		);
-		const barber4 = await cms.api.collections.barbers.create(
+		const barber4 = await app.api.collections.barbers.create(
 			{
 				name: "Tomáš Sedlák",
 				slug: "tomas-sedlak",
@@ -561,7 +561,7 @@ async function seed() {
 		console.log("  ✓ 4 barbers (EN)");
 
 		// SK translations for barbers
-		await cms.api.collections.barbers.update(
+		await app.api.collections.barbers.update(
 			{
 				where: { id: barber1.id },
 				data: {
@@ -578,7 +578,7 @@ async function seed() {
 			},
 			ctxSk,
 		);
-		await cms.api.collections.barbers.update(
+		await app.api.collections.barbers.update(
 			{
 				where: { id: barber2.id },
 				data: {
@@ -591,7 +591,7 @@ async function seed() {
 			},
 			ctxSk,
 		);
-		await cms.api.collections.barbers.update(
+		await app.api.collections.barbers.update(
 			{
 				where: { id: barber3.id },
 				data: {
@@ -608,7 +608,7 @@ async function seed() {
 			},
 			ctxSk,
 		);
-		await cms.api.collections.barbers.update(
+		await app.api.collections.barbers.update(
 			{
 				where: { id: barber4.id },
 				data: {
@@ -639,7 +639,7 @@ async function seed() {
 		] as const;
 		for (const [barber, services] of links) {
 			for (const service of services) {
-				await cms.api.collections.barberServices.create(
+				await app.api.collections.barberServices.create(
 					{ barber: barber.id, service: service.id },
 					ctxEn,
 				);
@@ -752,9 +752,9 @@ async function seed() {
 
 		const reviewIds: string[] = [];
 		for (const r of reviewsData) {
-			const review = await cms.api.collections.reviews.create(r.en, ctxEn);
+			const review = await app.api.collections.reviews.create(r.en, ctxEn);
 			reviewIds.push(review.id);
-			await cms.api.collections.reviews.update(
+			await app.api.collections.reviews.update(
 				{ where: { id: review.id }, data: r.sk },
 				ctxSk,
 			);
@@ -768,7 +768,7 @@ async function seed() {
 
 		// ── HOME PAGE ──────────────────────────────────────────────────────────
 
-		const homePage = await cms.api.collections.pages.create(
+		const homePage = await app.api.collections.pages.create(
 			{
 				title: "Home",
 				slug: "home",
@@ -896,7 +896,7 @@ async function seed() {
 		);
 
 		// Home page SK
-		await cms.api.collections.pages.update(
+		await app.api.collections.pages.update(
 			{
 				where: { id: homePage.id },
 				data: {
@@ -1023,7 +1023,7 @@ async function seed() {
 
 		// ── SERVICES PAGE ──────────────────────────────────────────────────────
 
-		const servicesPage = await cms.api.collections.pages.create(
+		const servicesPage = await app.api.collections.pages.create(
 			{
 				title: "Services",
 				slug: "services",
@@ -1112,7 +1112,7 @@ async function seed() {
 		);
 
 		// Services page SK
-		await cms.api.collections.pages.update(
+		await app.api.collections.pages.update(
 			{
 				where: { id: servicesPage.id },
 				data: {
@@ -1202,7 +1202,7 @@ async function seed() {
 
 		// ── ABOUT PAGE ─────────────────────────────────────────────────────────
 
-		const aboutPage = await cms.api.collections.pages.create(
+		const aboutPage = await app.api.collections.pages.create(
 			{
 				title: "About Us",
 				slug: "about",
@@ -1328,7 +1328,7 @@ async function seed() {
 		);
 
 		// About page SK
-		await cms.api.collections.pages.update(
+		await app.api.collections.pages.update(
 			{
 				where: { id: aboutPage.id },
 				data: {
@@ -1446,7 +1446,7 @@ async function seed() {
 
 		// ── GALLERY PAGE ───────────────────────────────────────────────────────
 
-		const galleryPage = await cms.api.collections.pages.create(
+		const galleryPage = await app.api.collections.pages.create(
 			{
 				title: "Gallery",
 				slug: "gallery",
@@ -1529,7 +1529,7 @@ async function seed() {
 		);
 
 		// Gallery page SK
-		await cms.api.collections.pages.update(
+		await app.api.collections.pages.update(
 			{
 				where: { id: galleryPage.id },
 				data: {
@@ -1615,7 +1615,7 @@ async function seed() {
 
 		// ── CONTACT PAGE ───────────────────────────────────────────────────────
 
-		const contactPage = await cms.api.collections.pages.create(
+		const contactPage = await app.api.collections.pages.create(
 			{
 				title: "Contact",
 				slug: "contact",
@@ -1689,7 +1689,7 @@ async function seed() {
 		);
 
 		// Contact page SK
-		await cms.api.collections.pages.update(
+		await app.api.collections.pages.update(
 			{
 				where: { id: contactPage.id },
 				data: {
@@ -1766,7 +1766,7 @@ async function seed() {
 
 		// ── PRIVACY POLICY PAGE ─────────────────────────────────────────────────
 
-		const privacyPage = await cms.api.collections.pages.create(
+		const privacyPage = await app.api.collections.pages.create(
 			{
 				title: "Privacy Policy",
 				slug: "privacy",
@@ -1906,7 +1906,7 @@ async function seed() {
 		);
 
 		// Privacy page SK
-		await cms.api.collections.pages.update(
+		await app.api.collections.pages.update(
 			{
 				where: { id: privacyPage.id },
 				data: {

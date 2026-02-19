@@ -10,7 +10,7 @@ export const siteSettings = qb
 		}),
 		description: f.textarea({
 			label: "Site Description",
-			default: "A QUESTPIE CMS powered site",
+			default: "A QUESTPIE powered site",
 		}),
 	}))
 	.admin(({ c }) => ({

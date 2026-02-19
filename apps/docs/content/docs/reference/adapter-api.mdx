@@ -9,15 +9,15 @@ Adapters connect QUESTPIE to HTTP frameworks. The core provides a framework-agno
 
 ## Core API
 
-### `createFetchHandler(cms, config?)`
+### `createFetchHandler(app, config?)`
 
-Create the main HTTP handler for all CMS routes.
+Create the main HTTP handler for all API routes.
 
 ```ts
 import { createFetchHandler } from "@questpie/questpie";
 
-const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 
@@ -28,20 +28,20 @@ const handler = createFetchHandler(cms, {
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `cms` | `Questpie` | Yes | Built CMS instance |
-| `config.basePath` | `string` | No | URL prefix (default: `"/cms"`) |
+| `app` | `Questpie` | Yes | Built app instance |
+| `config.basePath` | `string` | No | URL prefix (default: `"/"`) |
 | `config.rpc` | `RpcRouter` | No | RPC router tree |
 
 **Returns:** `(request: Request, context?: AdapterContext) => Promise<Response | null>`
 
-Returns `null` if the URL doesn't match any CMS route, allowing fallthrough to other handlers.
+Returns `null` if the URL doesn't match any app route, allowing fallthrough to other handlers.
 
-### `createAdapterRoutes(cms, config?)`
+### `createAdapterRoutes(app, config?)`
 
 Lower-level API — creates individual route handlers instead of a single fetch handler. Useful for custom adapters that need per-route control.
 
 ```ts
-const routes = createAdapterRoutes(cms, { basePath: "/api/cms" });
+const routes = createAdapterRoutes(app, { basePath: "/api" });
 // routes.auth, routes.collections, routes.globals, routes.storage, etc.
 ```
 
@@ -136,7 +136,7 @@ Framework adapters construct this context from their native request objects.
 import { questpieHono } from "@questpie/hono";
 
 const app = new Hono();
-app.route("/api/cms", questpieHono(cms, { rpc: appRpc }));
+app.route("/api", questpieHono(app, { rpc: appRpc }));
 ```
 
 ### Elysia
@@ -145,7 +145,7 @@ app.route("/api/cms", questpieHono(cms, { rpc: appRpc }));
 import { questpieElysia } from "@questpie/elysia";
 
 const app = new Elysia()
-  .use(questpieElysia(cms, { rpc: appRpc, basePath: "/api/cms" }));
+  .use(questpieElysia(app, { rpc: appRpc, basePath: "/api" }));
 ```
 
 ### Next.js
@@ -153,8 +153,8 @@ const app = new Elysia()
 ```ts
 import { questpieNextRouteHandlers } from "@questpie/next";
 
-const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(cms, {
-  basePath: "/api/cms",
+const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 
@@ -168,8 +168,8 @@ For frameworks not covered by existing packages:
 ```ts
 import { createFetchHandler } from "@questpie/questpie";
 
-const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 

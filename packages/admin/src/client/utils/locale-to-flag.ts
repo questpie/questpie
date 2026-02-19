@@ -37,12 +37,12 @@
  * const flagUrl = getFlagUrl("en", 20, { en: "us" });
  * ```
  *
- * ### In CMS Configuration
+ * ### In QuestPie Configuration
  *
- * The best way to customize flag mapping is in your CMS locale config:
+ * The best way to customize flag mapping is in your app locale config:
  *
  * ```ts
- * // questpie/server/cms.ts
+ * // questpie/server/app.ts
  * q().locale({
  *   locales: [
  *     {

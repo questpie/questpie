@@ -9,7 +9,7 @@ The field builder is the center of QUESTPIE's architecture. Instead of declaring
 
 ## Why This Exists
 
-In traditional CMS development, you repeat field information across layers: database migration, API validation, admin form config, client types. QUESTPIE eliminates this by making the `.fields()` callback the single source of truth. Every layer reads from the same definition.
+In traditional app development, you repeat field information across layers: database migration, API validation, admin form config, client types. QUESTPIE eliminates this by making the `.fields()` callback the single source of truth. Every layer reads from the same definition.
 
 ## Mental Model
 
@@ -199,7 +199,7 @@ This means typos in field names are caught at compile time.
 
 ## Field Lifecycle
 
-When the CMS builds, each field definition goes through these steps:
+When the app builds, each field definition goes through these steps:
 
 1. **Column generation** — `toColumn(fieldName)` produces a Drizzle column (or `null` for virtual/relation fields)
 2. **Table assembly** — columns are assembled into a Drizzle table schema

@@ -9,7 +9,7 @@ import type {
 	FindOptions,
 	PaginatedResult,
 } from "#questpie/server/collection/crud/index.js";
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 import type {
 	GlobalCRUD,
@@ -114,13 +114,13 @@ export type QuestpieApi<TConfig extends QuestpieConfig = QuestpieConfig> =
 	QuestpieAPI<TConfig>;
 
 export class QuestpieAPI<TConfig extends QuestpieConfig = QuestpieConfig> {
-	constructor(private readonly cms: Questpie<TConfig>) {}
+	constructor(private readonly app: Questpie<TConfig>) {}
 
 	/**
 	 * Access collections CRUD operations
 	 * @example
-	 * await cms.api.collections.users.create({ email: '...' }, context)
-	 * await cms.api.collections.posts.find({ where: { status: 'published' } })
+	 * await app.api.collections.users.create({ email: '...' }, context)
+	 * await app.api.collections.posts.find({ where: { status: 'published' } })
 	 */
 	public get collections(): {
 		[K in keyof TConfig["collections"]]: CollectionAPI<
@@ -129,12 +129,12 @@ export class QuestpieAPI<TConfig extends QuestpieConfig = QuestpieConfig> {
 		>;
 	} {
 		const collectionsProxy = {};
-		const collectionsObj = this.cms.getCollections();
+		const collectionsObj = this.app.getCollections();
 
 		for (const [name, collection] of Object.entries(collectionsObj)) {
 			Object.defineProperty(collectionsProxy, name, {
 				get: () => {
-					return collection.generateCRUD(this.cms.db, this.cms) as any;
+					return collection.generateCRUD(this.app.db, this.app) as any;
 				},
 				enumerable: true,
 			});
@@ -155,12 +155,12 @@ export class QuestpieAPI<TConfig extends QuestpieConfig = QuestpieConfig> {
 		>;
 	} {
 		const globalsProxy = {};
-		const globalsObj = this.cms.getGlobals();
+		const globalsObj = this.app.getGlobals();
 
 		for (const [name, global] of Object.entries(globalsObj)) {
 			Object.defineProperty(globalsProxy, name, {
 				get: () => {
-					return global.generateCRUD(this.cms.db, this.cms) as any;
+					return global.generateCRUD(this.app.db, this.app) as any;
 				},
 				enumerable: true,
 			});

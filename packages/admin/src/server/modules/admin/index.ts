@@ -17,7 +17,7 @@
  * import { q } from "questpie";
  * import { adminModule } from "@questpie/admin/server";
  *
- * const cms = q({ name: "my-app" })
+ * const app = q({ name: "my-app" })
  *   .use(adminModule)
  *   .collections({
  *     posts: postsCollection,
@@ -29,7 +29,7 @@
  * ```
  */
 
-import { CollectionBuilder, q, rpc, starterModule } from "questpie";
+import { type QuestpieBuilder, q, rpc, starterModule } from "questpie";
 // Side-effect imports: apply runtime patches and type augmentation
 import "../../augmentation.js";
 import "../../patch.js";
@@ -122,22 +122,6 @@ export const adminRpc = r.router({
 	...reactiveFunctions,
 });
 
-function bindCollectionToBuilder<TCollection extends CollectionBuilder<any>>(
-	collection: TCollection,
-	builder: unknown,
-): TCollection {
-	const rebound = new CollectionBuilder({
-		...(collection.state as any),
-		"~questpieApp": builder,
-	} as any);
-
-	if ((collection as any)._indexesFn) {
-		(rebound as any)._indexesFn = (collection as any)._indexesFn;
-	}
-
-	return rebound as TCollection;
-}
-
 const adminBaseBuilder = q({ name: "questpie-admin" })
 	// Include all starterModule functionality (auth, assets)
 	.use(starterModule)
@@ -169,7 +153,7 @@ const adminBaseBuilder = q({ name: "questpie-admin" })
  * import { q } from "questpie";
  * import { adminModule } from "@questpie/admin/server";
  *
- * const cms = q({ name: "my-app" })
+ * const app = q({ name: "my-app" })
  *   .use(adminModule)
  *   .collections({
  *     posts: postsCollection,
@@ -185,7 +169,7 @@ const adminBaseBuilder = q({ name: "questpie-admin" })
  * import { q, collection, varchar } from "questpie";
  * import { adminModule } from "@questpie/admin/server";
  *
- * const cms = q({ name: "my-app" })
+ * const app = q({ name: "my-app" })
  *   .use(adminModule)
  *   .collections({
  *     // Override assets with additional fields
@@ -199,16 +183,13 @@ const adminBaseBuilder = q({ name: "questpie-admin" })
  *   .build({ ... });
  * ```
  */
-export const adminModule = adminBaseBuilder
+export const adminModule: QuestpieBuilder<any> = adminBaseBuilder
 	// Register admin-specific field types (richText, blocks)
 	.fields(adminFields)
 	// Add admin-specific collections with admin UI config
 	.collections({
 		// Override auth collections with admin UI config
-		user: bindCollectionToBuilder(
-			starterModule.state.collections.user,
-			adminBaseBuilder,
-		)
+		user: starterModule.state.collections.user
 			.admin(({ c }) => ({
 				label: { key: "defaults.users.label" },
 				icon: c.icon("ph:users"),
@@ -471,10 +452,7 @@ export const adminModule = adminBaseBuilder
 				],
 			})),
 
-		assets: bindCollectionToBuilder(
-			starterModule.state.collections.assets,
-			adminBaseBuilder,
-		)
+		assets: starterModule.state.collections.assets
 			.admin(({ c }) => ({
 				label: { key: "defaults.assets.label" },
 				icon: c.icon("ph:image"),
@@ -531,18 +509,31 @@ export const adminModule = adminBaseBuilder
 				}),
 			),
 
-		// Hide internal auth collections
-		session: starterModule.state.collections.session.admin({ hidden: true }),
-		account: starterModule.state.collections.account.admin({ hidden: true }),
+		// Hide internal auth collections (audit: false to skip audit logging)
+		session: starterModule.state.collections.session.admin({
+			hidden: true,
+			audit: false,
+		}),
+		account: starterModule.state.collections.account.admin({
+			hidden: true,
+			audit: false,
+		}),
 		verification: starterModule.state.collections.verification.admin({
 			hidden: true,
+			audit: false,
 		}),
-		apikey: starterModule.state.collections.apikey.admin({ hidden: true }),
+		apikey: starterModule.state.collections.apikey.admin({
+			hidden: true,
+			audit: false,
+		}),
 
 		// Admin-specific collections (hidden from sidebar)
-		adminSavedViews: savedViewsCollection.admin({ hidden: true }),
-		adminPreferences: adminPreferencesCollection.admin({ hidden: true }),
-		adminLocks: locksCollection.admin({ hidden: true }),
+		adminSavedViews: savedViewsCollection.admin({ hidden: true, audit: false }),
+		adminPreferences: adminPreferencesCollection.admin({
+			hidden: true,
+			audit: false,
+		}),
+		adminLocks: locksCollection.admin({ hidden: true, audit: false }),
 	})
 	// Default sidebar
 	.sidebar(({ s, c }) =>

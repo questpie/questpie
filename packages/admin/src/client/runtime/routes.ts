@@ -101,12 +101,10 @@ export function buildRoutes<TApp extends Questpie<any>>(
 	const path = (...segments: string[]) =>
 		[basePath, ...segments].filter(Boolean).join("/");
 
-	// Collection/global routes are now driven by server config.
-	// buildRoutes returns empty collections/globals; the sidebar uses server navigation.
 	const collections = {} as AdminRoutes<TApp>["collections"];
 	const globals = {} as AdminRoutes<TApp>["globals"];
 
-	// Build page routes (pages are still client-side)
+	// Build page routes (pages are client-side)
 	const pageConfigs = admin.getPages();
 	const pages: Record<string, PageRoutes> = {};
 
@@ -147,7 +145,7 @@ export type NavigationItem = {
 	icon?: IconComponent | ComponentReference;
 	group?: string;
 	order?: number;
-	type: "collection" | "global" | "page" | "dashboard" | "link";
+	type: "collection" | "global" | "page" | "link";
 };
 
 /**
@@ -177,16 +175,9 @@ export type NavigationGroup = {
 };
 
 /**
- * Build navigation structure from admin configuration
- *
- * @example
- * ```ts
- * import { buildNavigation } from "@questpie/admin/runtime";
- * import { appAdmin } from "./admin";
- *
- * const navigation = buildNavigation(appAdmin);
- * // Returns grouped navigation items for sidebar rendering
- * ```
+ * Build client-only page navigation from admin configuration.
+ * Sidebar is driven by server config; this only provides
+ * client-registered pages as a fallback lookup for useServerNavigation.
  */
 export function buildNavigation<TApp extends Questpie<any>>(
 	admin: Admin,
@@ -195,20 +186,6 @@ export function buildNavigation<TApp extends Questpie<any>>(
 	const routes = buildRoutes(admin, options);
 	const items: NavigationItem[] = [];
 
-	// Add dashboard
-	items.push({
-		id: "dashboard",
-		label: "Dashboard",
-		href: routes.dashboard(),
-		icon: undefined,
-		type: "dashboard",
-		order: -1000,
-	});
-
-	// Collection/global navigation is now driven by server config (useServerNavigation).
-	// Only pages are added here as they're client-only.
-
-	// Add pages
 	for (const [name, config] of Object.entries(admin.getPages())) {
 		if ((config as any).showInNav === false) continue;
 
@@ -223,7 +200,6 @@ export function buildNavigation<TApp extends Questpie<any>>(
 		});
 	}
 
-	// Return ungrouped items (server sidebar handles grouping)
 	return items.length > 0 ? [{ items }] : [];
 }
 

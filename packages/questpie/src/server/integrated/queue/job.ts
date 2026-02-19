@@ -3,10 +3,10 @@ import type { JobDefinition } from "./types.js";
 /**
  * Define a typesafe job.
  *
- * @example Basic usage (use typedApp<AppCMS>() for type safety)
+ * @example Basic usage (use typedApp<App>() for type safety)
  * ```ts
  * import { typedApp } from "questpie";
- * import type { AppCMS } from "./cms";
+ * import type { App } from "./questpie";
  *
  * const sendEmailJob = job({
  *   name: 'send-email',
@@ -16,8 +16,8 @@ import type { JobDefinition } from "./types.js";
  *     body: z.string(),
  *   }),
  *   handler: async ({ payload, app }) => {
- *     const cms = typedApp<AppCMS>(app);
- *     await cms.email.send({
+ *     const app = typedApp<App>(app);
+ *     await app.email.send({
  *       to: payload.to,
  *       subject: payload.subject,
  *       html: payload.body,
@@ -33,9 +33,9 @@ import type { JobDefinition } from "./types.js";
  *
  * @example With typed app (recommended for full type safety)
  * ```ts
- * import type { AppCMS } from './cms';
+ * import type { App } from './app';
  *
- * const sendEmailJob = job<AppCMS>()({
+ * const sendEmailJob = job<App>()({
  *   name: 'send-email',
  *   schema: z.object({ to: z.string() }),
  *   handler: async ({ payload, app }) => {
@@ -54,7 +54,7 @@ export function job<TName extends string, TPayload, TResult = void>(
  *
  * @example
  * ```ts
- * const sendEmailJob = job<AppCMS>()({ name: 'send-email', ... });
+ * const sendEmailJob = job<App>()({ name: 'send-email', ... });
  * ```
  */
 export function job<TApp = any>(): <
@@ -76,7 +76,7 @@ export function job<
 		TNameOrApp extends string ? TNameOrApp : string
 	>,
 ): unknown {
-	// Overload 2: job<AppCMS>() returns a curried function
+	// Overload 2: job<App>() returns a curried function
 	if (definition === undefined) {
 		return <TName extends string, TPayload, TResult = void>(
 			def: JobDefinition<TPayload, TResult, TName, TNameOrApp>,

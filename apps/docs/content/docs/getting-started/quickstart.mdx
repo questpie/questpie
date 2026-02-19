@@ -47,7 +47,7 @@ This single definition produces:
 Wire collections together, add RPC functions, and build the runtime instance:
 
 ```ts
-// src/questpie/server/cms.ts
+// src/questpie/server/app.ts
 import { q, rpc } from "questpie";
 import z from "zod";
 import { posts } from "./collections/posts";
@@ -61,14 +61,14 @@ export const healthcheck = r.fn({
 
 export const appRpc = r.router({ healthcheck });
 
-export const cms = q({ name: "quickstart" })
+export const app = q({ name: "quickstart" })
   .collections({ posts })
   .build({
     db: { url: process.env.DATABASE_URL! },
     app: { url: process.env.APP_URL || "http://localhost:3000" },
   });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 export type AppRpc = typeof appRpc;
 ```
 
@@ -77,12 +77,12 @@ export type AppRpc = typeof appRpc;
 Create a route handler that serves your runtime API:
 
 ```ts
-// src/routes/api/cms.ts (Hono example)
+// src/routes/api.ts (Hono example)
 import { questpieHono } from "@questpie/hono";
-import { cms, appRpc } from "@/questpie/server/cms";
+import { app, appRpc } from "@/questpie/server/app";
 
-export const cmsApp = questpieHono(cms, {
-  basePath: "/api/cms",
+export const cmsApp = questpieHono(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 ```
@@ -91,10 +91,10 @@ Or with the generic fetch handler (works with any Fetch-compatible framework):
 
 ```ts
 import { createFetchHandler } from "questpie";
-import { cms, appRpc } from "@/questpie/server/cms";
+import { app, appRpc } from "@/questpie/server/app";
 
-export const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+export const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 ```
@@ -105,15 +105,15 @@ Start your dev server and test these endpoints:
 
 ```bash
 # List posts (empty at first)
-curl http://localhost:3000/api/cms/collections/posts
+curl http://localhost:3000/api/collections/posts
 
 # Create a post
-curl -X POST http://localhost:3000/api/cms/collections/posts \
+curl -X POST http://localhost:3000/api/collections/posts \
   -H "Content-Type: application/json" \
   -d '{"title": "Hello World", "slug": "hello-world", "published": true}'
 
 # Call RPC function
-curl -X POST http://localhost:3000/api/cms/rpc/healthcheck \
+curl -X POST http://localhost:3000/api/rpc/healthcheck \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -139,9 +139,9 @@ export const qb = q.use(adminModule);
 ```ts
 // src/questpie/admin/builder.ts
 import { adminModule, qa } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>().use(adminModule);
+export const admin = qa<App>().use(adminModule);
 ```
 
 Collections defined with `qb.collection(...)` can now use `.admin()`, `.list()`, and `.form()`. Admin login also requires runtime auth configuration via `.auth({ ... })`.

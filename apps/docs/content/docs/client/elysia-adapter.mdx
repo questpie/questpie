@@ -5,18 +5,18 @@ description: Integrate QUESTPIE with Elysia for server and type-safe Eden client
 
 # Elysia Adapter
 
-The Elysia adapter mounts QUESTPIE as an Elysia plugin. The client factory creates a merged client with CMS CRUD and full Eden Treaty type safety for custom routes.
+The Elysia adapter mounts QUESTPIE as an Elysia plugin. The client factory creates a merged client with CRUD and full Eden Treaty type safety for custom routes.
 
 ## Server Setup
 
 ```ts
 import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia";
-import { cms, appRpc } from "./cms";
+import { app, appRpc } from './app';
 
 const app = new Elysia()
-  .use(questpieElysia(cms, {
-    basePath: "/api/cms",
+  .use(questpieElysia(app, {
+    basePath: "/api",
     rpc: appRpc,
   }))
   .get("/api/health", () => ({ ok: true }))
@@ -25,26 +25,26 @@ const app = new Elysia()
 export type AppType = typeof app;
 ```
 
-### `questpieElysia(cms, config)`
+### `questpieElysia(app, config)`
 
-Returns an Elysia plugin with all CMS routes mounted. Configuration is the same as `createFetchHandler` — see [Adapters Overview](/docs/client/adapters-overview).
+Returns an Elysia plugin with all API routes mounted. Configuration is the same as `createFetchHandler` — see [Adapters Overview](/docs/client/adapters-overview).
 
 ## Client Setup
 
 ```ts
 import { createClientFromEden } from "@questpie/elysia";
 import type { AppType } from "../server/app";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-const client = createClientFromEden<AppType, AppCMS>({
+const client = createClientFromEden<AppType, App>({
   server: "localhost:3000",  // No protocol for Eden
-  basePath: "/api/cms",
+  basePath: "/api",
 });
 
-// CMS collections
+// app collections
 const posts = await client.collections.posts.find({ limit: 10 });
 
-// CMS globals
+// app globals
 const settings = await client.globals.siteSettings.get();
 
 // Custom Elysia routes (fully typed via Eden Treaty)
@@ -54,20 +54,20 @@ const { data } = await client.api.health.get();
 ### `createClientFromEden<TApp, TCMS>(config)`
 
 Returns a merged client that combines:
-- **CMS client** — `client.collections.*`, `client.globals.*`, `client.rpc.*`
+- **API client** — `client.collections.*`, `client.globals.*`, `client.rpc.*`
 - **Eden Treaty client** — Full type-safe access to custom Elysia routes
 
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `server` | `string` | — | Server address (no protocol, e.g., `"localhost:3000"`) |
-| `basePath` | `string` | `"/cms"` | CMS route prefix |
+| `basePath` | `string` | `"/"` | app route prefix |
 | `fetch` | `typeof fetch` | — | Custom fetch implementation |
 | `headers` | `Record<string, string>` | — | Default headers |
 
 ## Common Mistakes
 
 - **Including protocol in `server`** — Eden Treaty uses `server` without `http://`. Pass `"localhost:3000"` not `"http://localhost:3000"`.
-- **Missing type parameters** — Pass both `AppType` (Elysia app type) and `AppCMS` (CMS type) for full type safety.
+- **Missing type parameters** — Pass both `AppType` (Elysia app type) and `App` (app type) for full type safety.
 
 ## Related Pages
 

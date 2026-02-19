@@ -2,12 +2,12 @@
  * Header Component
  *
  * Responsive header with:
- * - Logo/brand (from CMS)
- * - Desktop navigation (from CMS, localized)
+ * - Logo/brand (from app)
+ * - Desktop navigation (from app, localized)
  * - Theme toggle
  * - Locale switcher
  * - Mobile menu (Sheet)
- * - CTA button (from CMS)
+ * - CTA button (from app)
  */
 
 import { Check, Globe, List, Moon, Scissors, Sun } from "@phosphor-icons/react";

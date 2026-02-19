@@ -304,8 +304,13 @@ export interface RelationFieldAdminMeta extends BaseAdminMeta {
  * Object field admin options
  */
 export interface ObjectFieldAdminMeta extends BaseAdminMeta {
-	displayAs?: "card" | "section" | "inline";
-	collapsible?: boolean;
+	/** Visual wrapper mode */
+	wrapper?: "flat" | "collapsible";
+	/** Field arrangement mode */
+	layout?: "stack" | "inline" | "grid";
+	/** Number of columns (for grid layout) */
+	columns?: number;
+	/** Default collapsed state (for collapsible wrapper) */
 	defaultCollapsed?: boolean;
 }
 
@@ -313,12 +318,20 @@ export interface ObjectFieldAdminMeta extends BaseAdminMeta {
  * Array field admin options
  */
 export interface ArrayFieldAdminMeta extends BaseAdminMeta {
-	displayAs?: "list" | "table" | "cards";
-	collapsible?: boolean;
-	defaultCollapsed?: boolean;
-	addLabel?: string;
-	emptyMessage?: string;
+	/** Enable drag-and-drop reordering */
+	orderable?: boolean;
+	/** Minimum number of items */
+	minItems?: number;
+	/** Maximum number of items */
 	maxItems?: number;
+	/** Item editing mode */
+	mode?: "inline" | "modal" | "drawer";
+	/** Field arrangement mode for items */
+	layout?: "stack" | "inline" | "grid";
+	/** Number of columns (for grid layout) */
+	columns?: number;
+	/** Label for array items */
+	itemLabel?: string;
 }
 
 /**
@@ -333,8 +346,24 @@ export interface JsonFieldAdminMeta extends BaseAdminMeta {
  * Upload field admin options
  */
 export interface UploadFieldAdminMeta extends BaseAdminMeta {
-	accept?: string;
+	/** Accepted file types */
+	accept?: string | string[];
+	/** Dropzone placeholder text */
 	dropzoneText?: string;
+	/** Show file preview */
+	showPreview?: boolean;
+	/** Allow editing uploaded files */
+	editable?: boolean;
+	/** Preview display variant */
+	previewVariant?: "card" | "compact" | "thumbnail";
+	/** Allow multiple file uploads */
+	multiple?: boolean;
+	/** Maximum number of files */
+	maxItems?: number;
+	/** Enable drag-and-drop reordering */
+	orderable?: boolean;
+	/** Layout for multiple files */
+	layout?: "grid" | "list";
 }
 
 /**
@@ -421,7 +450,7 @@ export interface BaseWidgetAdminMeta {
  * ```ts
  * declare module "@questpie/admin" {
  *   interface WidgetTypeRegistry {
- *     myCustomWidget: { fetchFn: (client: any) => Promise<MyData> };
+ *     myCustomWidget: { loader: (client: any) => Promise<MyData> };
  *   }
  * }
  * ```
@@ -435,4 +464,66 @@ export interface WidgetTypeRegistry {
 	table: {};
 	timeline: {};
 	progress: {};
+}
+
+// ============================================================================
+// Field Meta Augmentation
+// ============================================================================
+// Add `admin` property to all questpie field meta interfaces.
+
+declare module "questpie" {
+	interface TextFieldMeta {
+		admin?: TextFieldAdminMeta;
+	}
+	interface EmailFieldMeta {
+		admin?: EmailFieldAdminMeta;
+	}
+	interface UrlFieldMeta {
+		admin?: UrlFieldAdminMeta;
+	}
+	interface TextareaFieldMeta {
+		admin?: TextareaFieldAdminMeta;
+	}
+	interface NumberFieldMeta {
+		admin?: NumberFieldAdminMeta;
+	}
+	interface BooleanFieldMeta {
+		admin?: BooleanFieldAdminMeta;
+	}
+	interface DateFieldMeta {
+		admin?: DateFieldAdminMeta;
+	}
+	interface DatetimeFieldMeta {
+		admin?: DateFieldAdminMeta;
+	}
+	interface TimeFieldMeta {
+		admin?: TimeFieldAdminMeta;
+	}
+	interface SelectFieldMeta {
+		admin?: SelectFieldAdminMeta;
+	}
+	interface RelationFieldMeta {
+		admin?: RelationFieldAdminMeta;
+	}
+	interface ObjectFieldMeta {
+		admin?: ObjectFieldAdminMeta;
+	}
+	interface ArrayFieldMeta {
+		admin?: ArrayFieldAdminMeta;
+	}
+	interface JsonFieldMeta {
+		admin?: JsonFieldAdminMeta;
+	}
+	interface UploadFieldMeta {
+		admin?: UploadFieldAdminMeta;
+	}
+}
+
+declare module "@questpie/admin/server" {
+	interface RichTextFieldMeta {
+		admin?: RichTextFieldAdminMeta;
+	}
+	interface BlocksFieldMeta {
+		admin?: BlocksFieldAdminMeta;
+	}
 }

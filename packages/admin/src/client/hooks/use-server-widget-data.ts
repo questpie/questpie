@@ -1,6 +1,6 @@
 /**
  * Hook for fetching widget data from server via fetchWidgetData RPC.
- * Used when a widget has hasFetchFn=true (server-side fetchFn).
+ * Used when a widget has hasLoader=true (server-side loader).
  */
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
@@ -17,7 +17,7 @@ import { selectClient, useAdminStore } from "../runtime";
  * ```tsx
  * const { data, isLoading } = useServerWidgetData<{ count: number }>(
  *   "my-widget",
- *   { enabled: config.hasFetchFn }
+ *   { enabled: config.hasLoader }
  * );
  * ```
  */

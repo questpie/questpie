@@ -181,8 +181,8 @@ describe("PostgresSearchAdapter Facets", () => {
       search: adapter,
     });
 
-    await runTestDbMigrations(setup.cms);
-    await runSearchMigrations(setup.cms.db);
+    await runTestDbMigrations(setup.app);
+    await runSearchMigrations(setup.app.db);
   });
 
   afterEach(async () => {
@@ -196,7 +196,7 @@ describe("PostgresSearchAdapter Facets", () => {
       await indexProduct(setup, "2", "Product B", { status: "published" });
       await indexProduct(setup, "3", "Product C", { status: "draft" });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Product",
         locale: "en",
         facets: [{ field: "status" }],
@@ -222,7 +222,7 @@ describe("PostgresSearchAdapter Facets", () => {
       await indexProduct(setup, "4", "Product D", { category: "cat-d" });
       await indexProduct(setup, "5", "Product E", { category: "cat-e" });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Product",
         locale: "en",
         facets: [{ field: "category", limit: 3 }],
@@ -237,7 +237,7 @@ describe("PostgresSearchAdapter Facets", () => {
       await indexProduct(setup, "3", "Product C", { status: "published" });
       await indexProduct(setup, "4", "Product D", { status: "draft" });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Product",
         locale: "en",
         facets: [{ field: "status", sortBy: "count" }],
@@ -253,7 +253,7 @@ describe("PostgresSearchAdapter Facets", () => {
       await indexProduct(setup, "2", "Product B", { category: "apple" });
       await indexProduct(setup, "3", "Product C", { category: "banana" });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Product",
         locale: "en",
         facets: [{ field: "category", sortBy: "alpha" }],
@@ -277,7 +277,7 @@ describe("PostgresSearchAdapter Facets", () => {
       });
       await indexProduct(setup, "3", "Angular App", { tags: ["angular"] });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "App",
         locale: "en",
         facets: [{ field: "tags" }],
@@ -301,7 +301,7 @@ describe("PostgresSearchAdapter Facets", () => {
       await indexProduct(setup, "3", "Expensive Product", { price: 150 });
       await indexProduct(setup, "4", "Premium Product", { price: 600 });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Product",
         locale: "en",
         facets: [{ field: "price" }],
@@ -328,7 +328,7 @@ describe("PostgresSearchAdapter Facets", () => {
       await indexProduct(setup, "2", "Product B", { price: 150 });
       await indexProduct(setup, "3", "Product C", { price: 600 });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Product",
         locale: "en",
         facets: [{ field: "price" }],
@@ -343,7 +343,7 @@ describe("PostgresSearchAdapter Facets", () => {
 
   describe("hierarchical facets", () => {
     it("should expand hierarchy into multiple facet values", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "articles",
         recordId: "1",
         locale: "en",
@@ -354,7 +354,7 @@ describe("PostgresSearchAdapter Facets", () => {
         ),
       });
 
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "articles",
         recordId: "2",
         locale: "en",
@@ -365,7 +365,7 @@ describe("PostgresSearchAdapter Facets", () => {
         ),
       });
 
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "articles",
         recordId: "3",
         locale: "en",
@@ -376,7 +376,7 @@ describe("PostgresSearchAdapter Facets", () => {
         ),
       });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Review",
         locale: "en",
         collections: ["articles"],
@@ -418,7 +418,7 @@ describe("PostgresSearchAdapter Facets", () => {
       });
 
       // Search for "TypeScript" - should only count TypeScript products
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "TypeScript",
         locale: "en",
         facets: [{ field: "status" }],
@@ -448,7 +448,7 @@ describe("PostgresSearchAdapter Facets", () => {
       });
 
       // Filter by status=published, count categories
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Product",
         locale: "en",
         filters: { status: "published" },
@@ -470,7 +470,7 @@ describe("PostgresSearchAdapter Facets", () => {
       await indexProduct(setup, "1", "Product A", { status: "published" });
       await indexProduct(setup, "2", "Product B", { status: "draft" });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "",
         locale: "en",
         facets: [{ field: "status" }],
@@ -531,7 +531,7 @@ async function indexProduct(
     },
   };
 
-  await setup.cms.search.index({
+  await setup.app.search.index({
     collection: "products",
     recordId: id,
     locale: "en",

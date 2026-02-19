@@ -21,11 +21,11 @@ const posts = qb.collection('posts')
 
 // Step 2: Auto-generated endpoints
 const endpointsCode = `// Auto-generated REST API
-GET    /api/cms/posts
-GET    /api/cms/posts/:id
-POST   /api/cms/posts
-PATCH  /api/cms/posts/:id
-DELETE /api/cms/posts/:id
+GET    /api/posts
+GET    /api/posts/:id
+POST   /api/posts
+PATCH  /api/posts/:id
+DELETE /api/posts/:id
 
 // Type-safe SDK
 const { docs } = await client.collections.posts.find({

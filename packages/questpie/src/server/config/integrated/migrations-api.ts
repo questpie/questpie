@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { toCamelCase } from "drizzle-orm/casing";
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 import {
   DrizzleMigrationGenerator,
@@ -19,16 +19,16 @@ import {
  * @example
  * ```ts
  * // Generate a new migration
- * await cms.migrations.generate({ name: "add_users_table" })
+ * await app.migrations.generate({ name: "add_users_table" })
  *
  * // Run all pending migrations
- * await cms.migrations.up()
+ * await app.migrations.up()
  *
  * // Rollback last batch
- * await cms.migrations.down()
+ * await app.migrations.down()
  *
  * // Get status
- * const status = await cms.migrations.status()
+ * const status = await app.migrations.status()
  * ```
  */
 export class QuestpieMigrationsAPI<
@@ -36,8 +36,8 @@ export class QuestpieMigrationsAPI<
 > {
   private readonly runner: MigrationRunner;
 
-  constructor(private readonly cms: Questpie<TConfig>) {
-    this.runner = new MigrationRunner(this.cms.db);
+  constructor(private readonly app: Questpie<TConfig>) {
+    this.runner = new MigrationRunner(this.app.db);
   }
 
   /**
@@ -48,7 +48,7 @@ export class QuestpieMigrationsAPI<
   ): Promise<GenerateMigrationResult> {
     const generator = new DrizzleMigrationGenerator();
     const migrationDir =
-      this.cms.config.migrations?.directory || "./migrations";
+      this.app.config.migrations?.directory || "./migrations";
 
     // Generate timestamp and name (YYYYMMDDHHmmss format - 14 digits)
     const timestamp = new Date()
@@ -65,7 +65,7 @@ export class QuestpieMigrationsAPI<
     return generator.generateMigration({
       migrationName: migrationVariableName,
       fileBaseName,
-      schema: this.cms.getSchema(),
+      schema: this.app.getSchema(),
       migrationDir,
     });
   }
@@ -92,7 +92,7 @@ export class QuestpieMigrationsAPI<
     }
 
     // 2. Run Drizzle migrations (creates tables)
-    const migrations = this.cms.config.migrations?.migrations || [];
+    const migrations = this.app.config.migrations?.migrations || [];
     await this.runner.runMigrationsUp(migrations, options);
 
     // 3. Run search adapter migrations (creates FTS/trigram indexes)
@@ -109,14 +109,14 @@ export class QuestpieMigrationsAPI<
    * @example
    * ```ts
    * // Run extensions only (useful for CI/CD)
-   * await cms.migrations.ensureExtensions();
+   * await app.migrations.ensureExtensions();
    * ```
    */
   async ensureExtensions(): Promise<{ applied: string[]; skipped: string[] }> {
     const applied: string[] = [];
     const skipped: string[] = [];
 
-    const adapter = this.cms.search?.getAdapter();
+    const adapter = this.app.search?.getAdapter();
     if (!adapter?.getExtensions) {
       return { applied, skipped };
     }
@@ -124,7 +124,7 @@ export class QuestpieMigrationsAPI<
     const extensions = adapter.getExtensions();
     for (const ext of extensions) {
       try {
-        await this.cms.db.execute(sql.raw(ext));
+        await this.app.db.execute(sql.raw(ext));
         applied.push(ext);
       } catch (error: any) {
         const msg = error?.message?.toLowerCase() || "";
@@ -150,7 +150,7 @@ export class QuestpieMigrationsAPI<
    * Rollback last batch of migrations
    */
   async down(): Promise<void> {
-    const migrations = this.cms.config.migrations?.migrations || [];
+    const migrations = this.app.config.migrations?.migrations || [];
     await this.runner.rollbackLastBatch(migrations);
   }
 
@@ -158,7 +158,7 @@ export class QuestpieMigrationsAPI<
    * Rollback to a specific migration
    */
   async downTo(migrationId: string): Promise<void> {
-    const migrations = this.cms.config.migrations?.migrations || [];
+    const migrations = this.app.config.migrations?.migrations || [];
     await this.runner.rollbackToMigration(migrations, migrationId);
   }
 
@@ -166,7 +166,7 @@ export class QuestpieMigrationsAPI<
    * Reset all migrations (rollback everything)
    */
   async reset(): Promise<void> {
-    const migrations = this.cms.config.migrations?.migrations || [];
+    const migrations = this.app.config.migrations?.migrations || [];
     await this.runner.reset(migrations);
   }
 
@@ -174,7 +174,7 @@ export class QuestpieMigrationsAPI<
    * Fresh migrations (reset + run all)
    */
   async fresh(): Promise<void> {
-    const migrations = this.cms.config.migrations?.migrations || [];
+    const migrations = this.app.config.migrations?.migrations || [];
     await this.runner.fresh(migrations);
   }
 
@@ -182,7 +182,7 @@ export class QuestpieMigrationsAPI<
    * Get migration status
    */
   async status(): Promise<MigrationStatus> {
-    const migrations = this.cms.config.migrations?.migrations || [];
+    const migrations = this.app.config.migrations?.migrations || [];
     return this.runner.status(migrations);
   }
 
@@ -195,11 +195,11 @@ export class QuestpieMigrationsAPI<
    * @example
    * ```ts
    * // Run search migrations
-   * await cms.migrations.search();
+   * await app.migrations.search();
    * ```
    */
   async search(): Promise<{ applied: string[]; skipped: string[] }> {
-    const adapter = this.cms.search.getAdapter();
+    const adapter = this.app.search.getAdapter();
     const migrations = adapter.getMigrations();
 
     const applied: string[] = [];
@@ -211,7 +211,7 @@ export class QuestpieMigrationsAPI<
         // which doesn't allow multiple commands in a prepared statement
         const statements = this.splitSqlStatements(migration.up);
         for (const statement of statements) {
-          await this.cms.db.execute(sql.raw(statement));
+          await this.app.db.execute(sql.raw(statement));
         }
         applied.push(migration.name);
       } catch (error: any) {
@@ -249,11 +249,11 @@ export class QuestpieMigrationsAPI<
    * @example
    * ```ts
    * // Rollback search migrations
-   * await cms.migrations.searchDown();
+   * await app.migrations.searchDown();
    * ```
    */
   async searchDown(): Promise<{ applied: string[] }> {
-    const adapter = this.cms.search.getAdapter();
+    const adapter = this.app.search.getAdapter();
     const migrations = adapter.getMigrations();
 
     const applied: string[] = [];
@@ -265,7 +265,7 @@ export class QuestpieMigrationsAPI<
         // Split SQL into individual statements to support PGLite
         const statements = this.splitSqlStatements(migration.down);
         for (const statement of statements) {
-          await this.cms.db.execute(sql.raw(statement));
+          await this.app.db.execute(sql.raw(statement));
         }
         applied.push(migration.name);
       } catch (error: any) {

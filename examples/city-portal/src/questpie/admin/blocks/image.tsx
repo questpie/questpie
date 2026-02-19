@@ -3,12 +3,12 @@
  */
 
 import type { BlockComponentProps } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 export function ImageRenderer({
 	values,
 	data,
-}: BlockComponentProps<AppCMS, "image">) {
+}: BlockComponentProps<App, "image">) {
 	const imageUrl = data?.image?.url || values.image;
 
 	const widthClass = {

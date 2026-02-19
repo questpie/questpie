@@ -103,11 +103,11 @@ export interface BaseWidgetConfig {
   className?: string;
 
   /**
-   * Indicates server has a fetchFn for this widget (set by getAdminConfig).
-   * When true, the widget fetches data via the fetchWidgetData RPC endpoint
-   * instead of calling a client-side fetchFn.
+   * Indicates server has a loader for this widget (set by getAdminConfig).
+   * When true, the widget loads data via the fetchWidgetData RPC endpoint
+   * instead of calling a client-side loader.
    */
-  hasFetchFn?: boolean;
+  hasLoader?: boolean;
 }
 
 // ============================================================================
@@ -274,7 +274,7 @@ export interface ValueWidgetTrend {
 }
 
 /**
- * Result returned by fetchFn
+ * Result returned by loader
  */
 export interface ValueWidgetResult {
   /** Main value to display */
@@ -305,7 +305,7 @@ export interface ValueWidgetResult {
  * ```tsx
  * {
  *   type: "value",
- *   fetchFn: async (client) => {
+ *   loader: async (client) => {
  *     const count = await client.collections.appointments.count({
  *       where: { status: "pending" }
  *     });
@@ -328,9 +328,9 @@ export interface ValueWidgetConfig extends BaseWidgetConfig {
   /**
    * Async function to fetch and transform data.
    * Receives the Questpie client and returns widget display data.
-   * Optional when hasFetchFn is true (server provides the data).
+   * Optional when hasLoader is true (server provides the data).
    */
-  fetchFn?: (client: any) => Promise<ValueWidgetResult>;
+  loader?: (client: any) => Promise<ValueWidgetResult>;
 
   /**
    * Refresh interval in milliseconds
@@ -465,7 +465,7 @@ export interface TimelineItem {
  *   type: "timeline",
  *   id: "recent-activity",
  *   title: "Recent Activity",
- *   fetchFn: async (client) => {
+ *   loader: async (client) => {
  *     const activities = await client.collections.activities.findMany({
  *       limit: 10,
  *       orderBy: { createdAt: "desc" }
@@ -483,8 +483,8 @@ export interface TimelineItem {
  */
 export interface TimelineWidgetConfig extends BaseWidgetConfig {
   type: "timeline";
-  /** Async function to fetch timeline items. Optional when hasFetchFn is true. */
-  fetchFn?: (client: any) => Promise<TimelineItem[]>;
+  /** Async function to fetch timeline items. Optional when hasLoader is true. */
+  loader?: (client: any) => Promise<TimelineItem[]>;
   /** Max items to show */
   maxItems?: number;
   /** Show timestamps */
@@ -508,7 +508,7 @@ export interface TimelineWidgetConfig extends BaseWidgetConfig {
  *   type: "progress",
  *   id: "monthly-sales",
  *   title: "Monthly Sales Goal",
- *   fetchFn: async (client) => ({
+ *   loader: async (client) => ({
  *     current: 75000,
  *     target: 100000,
  *     label: "$75,000 / $100,000"
@@ -518,8 +518,8 @@ export interface TimelineWidgetConfig extends BaseWidgetConfig {
  */
 export interface ProgressWidgetConfig extends BaseWidgetConfig {
   type: "progress";
-  /** Async function to fetch progress data. Optional when hasFetchFn is true. */
-  fetchFn?: (client: any) => Promise<{
+  /** Async function to fetch progress data. Optional when hasLoader is true. */
+  loader?: (client: any) => Promise<{
     current: number;
     target: number;
     label?: string;

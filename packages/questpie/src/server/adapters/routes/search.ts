@@ -10,7 +10,7 @@
  */
 
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
-import type { Questpie } from "../../config/cms.js";
+import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
 import type {
@@ -25,8 +25,7 @@ import { handleError, smartResponse } from "../utils/response.js";
 
 export const createSearchRoutes = <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(
-	cms: Questpie<TConfig>,
+>(app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig> = {},
 ) => {
 	const errorResponse = (
@@ -34,7 +33,7 @@ export const createSearchRoutes = <
 		request: Request,
 		locale?: string,
 	): Response => {
-		return handleError(error, { request, cms, locale });
+		return handleError(error, { request, app, locale });
 	};
 
 	const canReindexCollection = async (params: {
@@ -55,7 +54,7 @@ export const createSearchRoutes = <
 			try {
 				return await customAccess({
 					request: params.request,
-					cms,
+					app,
 					session: params.session,
 					db: params.db,
 					locale: params.locale,
@@ -70,7 +69,7 @@ export const createSearchRoutes = <
 		// If update access is denied, reindex is denied.
 		const updateAccessRule = (params.collection as any)?.state?.access?.update;
 		const updateAccessResult = await executeAccessRule(updateAccessRule, {
-			cms,
+			app,
 			db: params.db,
 			session: params.session,
 			locale: params.locale,
@@ -82,7 +81,7 @@ export const createSearchRoutes = <
 	return {
 		/**
 		 * Search across collections
-		 * POST /cms/search
+		 * POST /search
 		 *
 		 * Features:
 		 * - Respects collection-level access controls via SQL JOINs
@@ -113,14 +112,14 @@ export const createSearchRoutes = <
 			_params: Record<string, never>,
 			context?: AdapterContext,
 		): Promise<Response> => {
-			const resolved = await resolveContext(cms, request, config, context);
+			const resolved = await resolveContext(app, request, config, context);
 
 			// Check if search service is available
-			if (!cms.search) {
+			if (!app.search) {
 				return errorResponse(
 					ApiError.notFound("Search", "Search service not configured"),
 					request,
-					resolved.cmsContext.locale,
+					resolved.appContext.locale,
 				);
 			}
 
@@ -129,13 +128,13 @@ export const createSearchRoutes = <
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),
 					request,
-					resolved.cmsContext.locale,
+					resolved.appContext.locale,
 				);
 			}
 
 			try {
 				// Build access filters for each collection
-				const allCollections = cms.getCollections();
+				const allCollections = app.getCollections();
 				const requestedCollections: string[] =
 					body.collections ?? Object.keys(allCollections);
 				const accessFilters: CollectionAccessFilter[] = [];
@@ -149,10 +148,10 @@ export const createSearchRoutes = <
 					// Check read access for this collection
 					const accessRule = (collection as any).state?.access?.read;
 					const accessWhere = await executeAccessRule(accessRule, {
-						cms,
-						db: resolved.cmsContext.db ?? cms.db,
-						session: resolved.cmsContext.session,
-						locale: resolved.cmsContext.locale,
+						app,
+						db: resolved.appContext.db ?? app.db,
+						session: resolved.appContext.session,
+						locale: resolved.appContext.locale,
 					});
 
 					// Skip collections with no access
@@ -181,10 +180,10 @@ export const createSearchRoutes = <
 				}
 
 				// Execute search with access filtering
-				const searchResults = await cms.search.search({
+				const searchResults = await app.search.search({
 					query: body.query || "",
 					collections: accessibleCollections,
-					locale: body.locale ?? resolved.cmsContext.locale,
+					locale: body.locale ?? resolved.appContext.locale,
 					limit: body.limit ?? 10,
 					offset: body.offset ?? 0,
 					filters: body.filters,
@@ -229,9 +228,9 @@ export const createSearchRoutes = <
 				// Populate full records via CRUD (this runs hooks!)
 				const populatedDocs: any[] = [];
 				const crudContext = {
-					session: resolved.cmsContext.session,
-					locale: resolved.cmsContext.locale,
-					db: resolved.cmsContext.db ?? cms.db,
+					session: resolved.appContext.session,
+					locale: resolved.appContext.locale,
+					db: resolved.appContext.db ?? app.db,
 				};
 
 				for (const [collectionName, ids] of idsByCollection) {
@@ -241,8 +240,8 @@ export const createSearchRoutes = <
 
 					// Generate CRUD for this collection
 					const crud = (collection as any).generateCRUD?.(
-						resolved.cmsContext.db ?? cms.db,
-						cms,
+						resolved.appContext.db ?? app.db,
+						app,
 					);
 					if (!crud) continue;
 
@@ -290,13 +289,13 @@ export const createSearchRoutes = <
 					request,
 				);
 			} catch (error) {
-				return errorResponse(error, request, resolved.cmsContext.locale);
+				return errorResponse(error, request, resolved.appContext.locale);
 			}
 		},
 
 		/**
 		 * Reindex a collection
-		 * POST /cms/search/reindex/:collection
+		 * POST /search/reindex/:collection
 		 *
 		 * PROTECTED: Requires authentication and reindex access policy.
 		 * This is a potentially expensive operation that rebuilds the search index.
@@ -306,44 +305,44 @@ export const createSearchRoutes = <
 			params: { collection: string },
 			context?: AdapterContext,
 		): Promise<Response> => {
-			const resolved = await resolveContext(cms, request, config, context);
+			const resolved = await resolveContext(app, request, config, context);
 
 			// SECURITY: Require authentication
-			if (!resolved.cmsContext.session) {
+			if (!resolved.appContext.session) {
 				return errorResponse(
 					ApiError.unauthorized("Authentication required"),
 					request,
-					resolved.cmsContext.locale,
+					resolved.appContext.locale,
 				);
 			}
 
 			// Check if search service is available
-			if (!cms.search) {
+			if (!app.search) {
 				return errorResponse(
 					ApiError.notFound("Search", "Search service not configured"),
 					request,
-					resolved.cmsContext.locale,
+					resolved.appContext.locale,
 				);
 			}
 
 			// Check if collection exists
-			const collection = cms.getCollections()[params.collection as any];
+			const collection = app.getCollections()[params.collection as any];
 			if (!collection) {
 				return errorResponse(
 					ApiError.notFound("Collection", params.collection),
 					request,
-					resolved.cmsContext.locale,
+					resolved.appContext.locale,
 				);
 			}
 
-			const db = resolved.cmsContext.db ?? cms.db;
+			const db = resolved.appContext.db ?? app.db;
 			const hasReindexAccess = await canReindexCollection({
 				request,
 				collectionName: params.collection,
 				collection,
-				session: resolved.cmsContext.session,
+				session: resolved.appContext.session,
 				db,
-				locale: resolved.cmsContext.locale,
+				locale: resolved.appContext.locale,
 			});
 
 			if (!hasReindexAccess) {
@@ -354,18 +353,18 @@ export const createSearchRoutes = <
 						reason: "Reindex access denied by policy",
 					}),
 					request,
-					resolved.cmsContext.locale,
+					resolved.appContext.locale,
 				);
 			}
 
 			try {
-				await cms.search.reindex(params.collection);
+				await app.search.reindex(params.collection);
 				return smartResponse(
 					{ success: true, collection: params.collection },
 					request,
 				);
 			} catch (error) {
-				return errorResponse(error, request, resolved.cmsContext.locale);
+				return errorResponse(error, request, resolved.appContext.locale);
 			}
 		},
 	};

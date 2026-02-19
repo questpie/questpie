@@ -24,6 +24,9 @@ import type * as React from "react";
 import { BlockScopeProvider } from "../preview/block-scope-context.js";
 import type { BlockContent, BlockNode } from "./types";
 
+// Module-level constant for empty object to avoid recreating on each render
+const EMPTY_DATA: Record<string, unknown> = {};
+
 /**
  * Block renderer function type.
  * Consumers provide their own renderers mapped by block type.
@@ -64,11 +67,12 @@ export type BlockRendererProps = {
 export function BlockRenderer({
 	content,
 	renderers,
-	data = {},
+	data,
 	selectedBlockId,
 	onBlockClick,
 	className,
 }: BlockRendererProps) {
+	const resolvedData = data ?? EMPTY_DATA;
 	/**
 	 * Recursively render a block node.
 	 */
@@ -85,7 +89,9 @@ export function BlockRenderer({
 		}
 
 		const values = content._values[node.id] || {};
-		const blockData = data[node.id] as Record<string, unknown> | undefined;
+		const blockData = resolvedData[node.id] as
+			| Record<string, unknown>
+			| undefined;
 		const isSelected = selectedBlockId === node.id;
 
 		// Render children for layout blocks

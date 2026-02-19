@@ -5,9 +5,9 @@
  */
 
 import type { BlockComponentProps } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
-export function CTARenderer({ values }: BlockComponentProps<AppCMS, "cta">) {
+export function CTARenderer({ values }: BlockComponentProps<App, "cta">) {
 	const variantStyles = {
 		highlight: {
 			section: "bg-primary text-primary-foreground",

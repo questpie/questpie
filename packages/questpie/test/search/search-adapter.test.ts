@@ -71,10 +71,10 @@ describe("PostgresSearchAdapter", () => {
       search: adapter,
     });
 
-    await runTestDbMigrations(setup.cms);
+    await runTestDbMigrations(setup.app);
 
     // Run search adapter migrations manually for test DB
-    await runSearchMigrations(setup.cms.db);
+    await runSearchMigrations(setup.app.db);
   });
 
   afterEach(async () => {
@@ -163,9 +163,9 @@ describe("PostgresSearchAdapter", () => {
     });
   });
 
-  describe("cms.getSchema() integration", () => {
-    it("should include search tables in cms.getSchema()", () => {
-      const schema = setup.cms.getSchema();
+  describe("app.getSchema() integration", () => {
+    it("should include search tables in app.getSchema()", () => {
+      const schema = setup.app.getSchema();
 
       // Should include search tables from adapter
       expect(schema.questpie_search).toBeDefined();
@@ -173,7 +173,7 @@ describe("PostgresSearchAdapter", () => {
     });
 
     it("should include collection tables alongside search tables", () => {
-      const schema = setup.cms.getSchema();
+      const schema = setup.app.getSchema();
 
       // Collection tables
       expect(schema.posts).toBeDefined();
@@ -188,10 +188,10 @@ describe("PostgresSearchAdapter", () => {
     });
   });
 
-  describe("cms.migrations.ensureExtensions()", () => {
+  describe("app.migrations.ensureExtensions()", () => {
     it("should run extensions without error", async () => {
       // ensureExtensions is idempotent - can be called multiple times
-      const result = await setup.cms.migrations.ensureExtensions();
+      const result = await setup.app.migrations.ensureExtensions();
 
       // Should have either applied or skipped the extension
       expect(result.applied.length + result.skipped.length).toBeGreaterThan(0);
@@ -199,8 +199,8 @@ describe("PostgresSearchAdapter", () => {
 
     it("should handle already existing extensions gracefully", async () => {
       // Run twice - second time should skip
-      await setup.cms.migrations.ensureExtensions();
-      const result = await setup.cms.migrations.ensureExtensions();
+      await setup.app.migrations.ensureExtensions();
+      const result = await setup.app.migrations.ensureExtensions();
 
       // Should be skipped (already exists) or applied (no error)
       expect(result.applied.length + result.skipped.length).toBeGreaterThan(0);
@@ -209,7 +209,7 @@ describe("PostgresSearchAdapter", () => {
 
   describe("index and search", () => {
     it("should index a record", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
@@ -219,7 +219,7 @@ describe("PostgresSearchAdapter", () => {
       });
 
       // Search should find it
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Hello",
         locale: "en",
       });
@@ -232,7 +232,7 @@ describe("PostgresSearchAdapter", () => {
 
     it("should search with FTS", async () => {
       // Index multiple records
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
@@ -240,7 +240,7 @@ describe("PostgresSearchAdapter", () => {
         content: "TypeScript is a typed superset of JavaScript",
       });
 
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-2",
         locale: "en",
@@ -248,7 +248,7 @@ describe("PostgresSearchAdapter", () => {
         content: "JavaScript is the language of the web",
       });
 
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-3",
         locale: "en",
@@ -257,7 +257,7 @@ describe("PostgresSearchAdapter", () => {
       });
 
       // Search for TypeScript
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "TypeScript",
         locale: "en",
       });
@@ -267,7 +267,7 @@ describe("PostgresSearchAdapter", () => {
     });
 
     it("should search across content field", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
@@ -275,7 +275,7 @@ describe("PostgresSearchAdapter", () => {
         content: "This post is about database optimization techniques",
       });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "database optimization",
         locale: "en",
       });
@@ -285,7 +285,7 @@ describe("PostgresSearchAdapter", () => {
     });
 
     it("should filter by collection", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
@@ -293,7 +293,7 @@ describe("PostgresSearchAdapter", () => {
         content: "Widgets are great",
       });
 
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "products",
         recordId: "product-1",
         locale: "en",
@@ -302,7 +302,7 @@ describe("PostgresSearchAdapter", () => {
       });
 
       // Search only in posts
-      const postsResponse = await setup.cms.search.search({
+      const postsResponse = await setup.app.search.search({
         query: "Widget",
         collections: ["posts"],
         locale: "en",
@@ -312,7 +312,7 @@ describe("PostgresSearchAdapter", () => {
       expect(postsResponse.results[0].collection).toBe("posts");
 
       // Search only in products
-      const productsResponse = await setup.cms.search.search({
+      const productsResponse = await setup.app.search.search({
         query: "Widget",
         collections: ["products"],
         locale: "en",
@@ -323,34 +323,34 @@ describe("PostgresSearchAdapter", () => {
     });
 
     it("should filter by locale", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
         title: "Hello World",
       });
 
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "sk",
         title: "Ahoj Svet",
       });
 
-      const enResponse = await setup.cms.search.search({
+      const enResponse = await setup.app.search.search({
         query: "Hello",
         locale: "en",
       });
       expect(enResponse.results.length).toBe(1);
 
-      const skResponse = await setup.cms.search.search({
+      const skResponse = await setup.app.search.search({
         query: "Ahoj",
         locale: "sk",
       });
       expect(skResponse.results.length).toBe(1);
 
       // Should not find Slovak content in English locale
-      const noResponse = await setup.cms.search.search({
+      const noResponse = await setup.app.search.search({
         query: "Ahoj",
         locale: "en",
       });
@@ -358,7 +358,7 @@ describe("PostgresSearchAdapter", () => {
     });
 
     it("should filter by metadata", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
@@ -366,7 +366,7 @@ describe("PostgresSearchAdapter", () => {
         metadata: { status: "published" },
       });
 
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-2",
         locale: "en",
@@ -374,7 +374,7 @@ describe("PostgresSearchAdapter", () => {
         metadata: { status: "draft" },
       });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Post",
         locale: "en",
         filters: { status: "published" },
@@ -385,7 +385,7 @@ describe("PostgresSearchAdapter", () => {
     });
 
     it("should return highlights", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
@@ -393,7 +393,7 @@ describe("PostgresSearchAdapter", () => {
         content: "Learn TypeScript step by step with examples",
       });
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "TypeScript",
         locale: "en",
         highlights: true,
@@ -407,7 +407,7 @@ describe("PostgresSearchAdapter", () => {
     it("should respect limit and offset", async () => {
       // Index 5 posts
       for (let i = 1; i <= 5; i++) {
-        await setup.cms.search.index({
+        await setup.app.search.index({
           collection: "posts",
           recordId: `post-${i}`,
           locale: "en",
@@ -415,7 +415,7 @@ describe("PostgresSearchAdapter", () => {
         });
       }
 
-      const page1 = await setup.cms.search.search({
+      const page1 = await setup.app.search.search({
         query: "Post",
         locale: "en",
         limit: 2,
@@ -423,7 +423,7 @@ describe("PostgresSearchAdapter", () => {
       });
       expect(page1.results.length).toBe(2);
 
-      const page2 = await setup.cms.search.search({
+      const page2 = await setup.app.search.search({
         query: "Post",
         locale: "en",
         limit: 2,
@@ -431,7 +431,7 @@ describe("PostgresSearchAdapter", () => {
       });
       expect(page2.results.length).toBe(2);
 
-      const page3 = await setup.cms.search.search({
+      const page3 = await setup.app.search.search({
         query: "Post",
         locale: "en",
         limit: 2,
@@ -443,7 +443,7 @@ describe("PostgresSearchAdapter", () => {
     it("should return total count", async () => {
       // Index 5 posts
       for (let i = 1; i <= 5; i++) {
-        await setup.cms.search.index({
+        await setup.app.search.index({
           collection: "posts",
           recordId: `post-${i}`,
           locale: "en",
@@ -451,7 +451,7 @@ describe("PostgresSearchAdapter", () => {
         });
       }
 
-      const response = await setup.cms.search.search({
+      const response = await setup.app.search.search({
         query: "Post",
         locale: "en",
         limit: 2,
@@ -464,7 +464,7 @@ describe("PostgresSearchAdapter", () => {
 
   describe("remove", () => {
     it("should remove a record from index", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
@@ -472,21 +472,21 @@ describe("PostgresSearchAdapter", () => {
       });
 
       // Verify it exists
-      let response = await setup.cms.search.search({
+      let response = await setup.app.search.search({
         query: "Hello",
         locale: "en",
       });
       expect(response.results.length).toBe(1);
 
       // Remove it
-      await setup.cms.search.remove({
+      await setup.app.search.remove({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
       });
 
       // Verify it's gone
-      response = await setup.cms.search.search({
+      response = await setup.app.search.search({
         query: "Hello",
         locale: "en",
       });
@@ -494,14 +494,14 @@ describe("PostgresSearchAdapter", () => {
     });
 
     it("should remove all locales when locale not specified", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
         title: "Hello World",
       });
 
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "sk",
@@ -509,19 +509,19 @@ describe("PostgresSearchAdapter", () => {
       });
 
       // Remove without locale
-      await setup.cms.search.remove({
+      await setup.app.search.remove({
         collection: "posts",
         recordId: "post-1",
       });
 
       // Both should be gone
-      const enResponse = await setup.cms.search.search({
+      const enResponse = await setup.app.search.search({
         query: "Hello",
         locale: "en",
       });
       expect(enResponse.results.length).toBe(0);
 
-      const skResponse = await setup.cms.search.search({
+      const skResponse = await setup.app.search.search({
         query: "Ahoj",
         locale: "sk",
       });
@@ -531,29 +531,29 @@ describe("PostgresSearchAdapter", () => {
 
   describe("clear", () => {
     it("should clear all indexed data", async () => {
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
         title: "Post 1",
       });
 
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "products",
         recordId: "product-1",
         locale: "en",
         title: "Product 1",
       });
 
-      await setup.cms.search.clear();
+      await setup.app.search.clear();
 
-      const postsResponse = await setup.cms.search.search({
+      const postsResponse = await setup.app.search.search({
         query: "Post",
         locale: "en",
       });
       expect(postsResponse.results.length).toBe(0);
 
-      const productsResponse = await setup.cms.search.search({
+      const productsResponse = await setup.app.search.search({
         query: "Product",
         locale: "en",
       });
@@ -564,7 +564,7 @@ describe("PostgresSearchAdapter", () => {
   describe("upsert behavior", () => {
     it("should update existing index entry on re-index", async () => {
       // Index original
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
@@ -573,7 +573,7 @@ describe("PostgresSearchAdapter", () => {
       });
 
       // Re-index with new data
-      await setup.cms.search.index({
+      await setup.app.search.index({
         collection: "posts",
         recordId: "post-1",
         locale: "en",
@@ -582,14 +582,14 @@ describe("PostgresSearchAdapter", () => {
       });
 
       // Search for original should not find
-      const originalResponse = await setup.cms.search.search({
+      const originalResponse = await setup.app.search.search({
         query: "Original",
         locale: "en",
       });
       expect(originalResponse.results.length).toBe(0);
 
       // Search for updated should find
-      const updatedResponse = await setup.cms.search.search({
+      const updatedResponse = await setup.app.search.search({
         query: "Updated",
         locale: "en",
       });

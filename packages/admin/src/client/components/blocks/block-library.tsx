@@ -10,6 +10,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import type { BlockCategoryConfig, BlockSchema } from "#questpie/admin/server";
+import { RenderProfiler } from "../../lib/render-profiler.js";
 import { cn } from "../../lib/utils.js";
 import { Button } from "../ui/button.js";
 import { Input } from "../ui/input.js";
@@ -162,54 +163,56 @@ export function BlockLibraryContent({
 			</div>
 
 			{/* Block list by category */}
-			<div className="max-h-64 overflow-auto px-3 pb-3">
-				{categories.length === 0 ? (
-					<div className="text-center text-sm text-muted-foreground py-4">
-						No blocks found
-					</div>
-				) : (
-					<div className="space-y-4">
-						{categories.map((category) => (
-							<div key={category.key}>
-								<div className="mb-1.5 flex items-center gap-1.5">
-									{category.config.icon && (
-										<Icon
-											icon={category.config.icon.props.name as string}
-											className="h-3.5 w-3.5 text-muted-foreground"
-										/>
-									)}
-									<h4 className="text-xs font-medium uppercase text-muted-foreground">
-										{getCategoryDisplayLabel(category.config)}
-									</h4>
-								</div>
-								<div className="grid grid-cols-2 gap-1.5">
-									{category.blocks.map((block) => (
-										<button
-											type="button"
-											key={block.name}
-											className={cn(
-												"flex items-center gap-2 rounded-md border p-2 text-left",
-												"transition-colors hover:border-primary hover:bg-accent",
-												"focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-											)}
-											onClick={() => onSelect(block.name)}
-										>
-											<BlockIcon
-												icon={block.admin?.icon}
-												size={16}
-												className="text-muted-foreground flex-shrink-0"
+			<RenderProfiler id="blocks.library.content" minDurationMs={8}>
+				<div className="max-h-64 overflow-auto px-3 pb-3">
+					{categories.length === 0 ? (
+						<div className="text-center text-sm text-muted-foreground py-4">
+							No blocks found
+						</div>
+					) : (
+						<div className="space-y-4">
+							{categories.map((category) => (
+								<div key={category.key}>
+									<div className="mb-1.5 flex items-center gap-1.5">
+										{category.config.icon && (
+											<Icon
+												icon={category.config.icon.props.name as string}
+												className="h-3.5 w-3.5 text-muted-foreground"
 											/>
-											<span className="text-xs truncate">
-												{getBlockDisplayLabel(block)}
-											</span>
-										</button>
-									))}
+										)}
+										<h4 className="text-xs font-medium uppercase text-muted-foreground">
+											{getCategoryDisplayLabel(category.config)}
+										</h4>
+									</div>
+									<div className="grid grid-cols-2 gap-1.5">
+										{category.blocks.map((block) => (
+											<button
+												type="button"
+												key={block.name}
+												className={cn(
+													"flex items-center gap-2 rounded-md border p-2 text-left",
+													"transition-colors hover:border-primary hover:bg-accent",
+													"focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+												)}
+												onClick={() => onSelect(block.name)}
+											>
+												<BlockIcon
+													icon={block.admin?.icon}
+													size={16}
+													className="text-muted-foreground flex-shrink-0"
+												/>
+												<span className="text-xs truncate">
+													{getBlockDisplayLabel(block)}
+												</span>
+											</button>
+										))}
+									</div>
 								</div>
-							</div>
-						))}
-					</div>
-				)}
-			</div>
+							))}
+						</div>
+					)}
+				</div>
+			</RenderProfiler>
 		</div>
 	);
 }

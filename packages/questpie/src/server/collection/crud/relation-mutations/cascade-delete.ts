@@ -11,7 +11,7 @@ import type {
   CRUD,
   CRUDContext,
 } from "#questpie/server/collection/crud/types.js";
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 
 /**
  * Options for cascade delete operations
@@ -21,8 +21,8 @@ export interface CascadeDeleteOptions {
   record: Record<string, any>;
   /** Collection state with relations config */
   relations: Record<string, RelationConfig>;
-  /** CMS instance for accessing related CRUDs */
-  cms: Questpie<any>;
+  /** app instance for accessing related CRUDs */
+  app: Questpie<any>;
   /** CRUD context */
   context: CRUDContext;
   /** Function to resolve field keys */
@@ -40,7 +40,7 @@ export interface CascadeDeleteOptions {
 export async function handleCascadeDelete(
   options: CascadeDeleteOptions,
 ): Promise<void> {
-  const { record, relations, cms, context, resolveFieldKey } = options;
+  const { record, relations, app, context, resolveFieldKey } = options;
 
   // Phase 1: Check for RESTRICT violations before any mutations
   for (const [relationName, relation] of Object.entries(relations)) {
@@ -51,7 +51,7 @@ export async function handleCascadeDelete(
           record,
           relation,
           relationName,
-          cms,
+          app,
           context,
           resolveFieldKey,
         );
@@ -75,7 +75,7 @@ export async function handleCascadeDelete(
       await cascadeDeleteHasMany(
         record,
         relation,
-        cms,
+        app,
         context,
         resolveFieldKey,
       );
@@ -86,7 +86,7 @@ export async function handleCascadeDelete(
       relation.through &&
       relation.onDelete === "cascade"
     ) {
-      await cascadeDeleteManyToMany(record, relation, cms, context);
+      await cascadeDeleteManyToMany(record, relation, app, context);
     }
   }
 }
@@ -97,15 +97,14 @@ export async function handleCascadeDelete(
 async function checkRestrictViolation(
   record: Record<string, any>,
   relation: RelationConfig,
-  relationName: string,
-  cms: Questpie<any>,
+  relationName: string, app: Questpie<any>,
   context: CRUDContext,
   resolveFieldKey: typeof ResolveFieldKeyFn,
 ): Promise<void> {
   const reverseRelationName = relation.relationName;
   if (!reverseRelationName) return;
 
-  const relatedCrud = cms.api.collections[relation.collection];
+  const relatedCrud = app.api.collections[relation.collection];
   if (!relatedCrud) return;
 
   const reverseRelation =
@@ -141,15 +140,14 @@ async function checkRestrictViolation(
  */
 async function cascadeDeleteHasMany(
   record: Record<string, any>,
-  relation: RelationConfig,
-  cms: Questpie<any>,
+  relation: RelationConfig, app: Questpie<any>,
   context: CRUDContext,
   resolveFieldKey: typeof ResolveFieldKeyFn,
 ): Promise<void> {
   const reverseRelationName = relation.relationName;
   if (!reverseRelationName) return;
 
-  const relatedCrud = cms.api.collections[relation.collection];
+  const relatedCrud = app.api.collections[relation.collection];
   const reverseRelation =
     relatedCrud["~internalState"].relations?.[reverseRelationName];
   if (!reverseRelation?.fields || reverseRelation.fields.length === 0) return;
@@ -198,8 +196,7 @@ async function cascadeDeleteHasMany(
  */
 async function cascadeDeleteManyToMany(
   record: Record<string, any>,
-  relation: RelationConfig,
-  cms: Questpie<any>,
+  relation: RelationConfig, app: Questpie<any>,
   context: CRUDContext,
 ): Promise<void> {
   const sourceField = relation.sourceField;
@@ -207,7 +204,7 @@ async function cascadeDeleteManyToMany(
 
   if (!sourceField || !relation.through) return;
 
-  const junctionCrud = cms.api.collections[relation.through];
+  const junctionCrud = app.api.collections[relation.through];
 
   const { docs: junctionRecords } = await junctionCrud.find(
     {

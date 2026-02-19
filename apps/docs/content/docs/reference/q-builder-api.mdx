@@ -12,7 +12,7 @@ description: Core server builder — all chainable methods, entity factories, an
 ```ts
 import { q } from "questpie";
 
-const cms = q({ name: "my-app" });
+const app = q({ name: "my-app" });
 ```
 
 The `name` parameter identifies your application in logs and database prefixes.
@@ -164,7 +164,7 @@ Use `.locale()` for content language; use `.adminLocale()` for admin UI language
 
 ### `.messages(messages, options?)`
 
-Add backend translation messages. These power `cms.t()` for type-safe translations.
+Add backend translation messages. These power `app.t()` for type-safe translations.
 
 ```ts
 .messages({
@@ -298,24 +298,24 @@ const welcome = q.email({
 
 ## Type-Safe Handler Contexts
 
-After build, export `AppCMS` once and reuse it in hooks/access/RPC/jobs:
+After build, export `App` once and reuse it in hooks/access/RPC/jobs:
 
 ```ts
-export const cms = q({ name: "app" })
+export const app = q({ name: "app" })
   .collections({ posts })
   .build({ app: { url: process.env.APP_URL! }, db: { url: process.env.DATABASE_URL! } });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 ```
 
 Then in handlers:
 
 ```ts
 import { getContext } from "questpie";
-import type { AppCMS } from "../cms";
+import type { App } from '../app';
 
 afterChange: async (ctx) => {
-  const { app, db, session } = getContext<AppCMS>(ctx);
+  const { app, db, session } = getContext<App>(ctx);
 }
 ```
 
@@ -323,10 +323,10 @@ afterChange: async (ctx) => {
 
 ### `.build(runtimeConfig)`
 
-Finalize the builder into a runnable CMS instance.
+Finalize the builder into a runnable app instance.
 
 ```ts
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)
   .collections({ posts, users })
   .globals({ siteSettings })
@@ -357,23 +357,23 @@ const cms = q({ name: "app" })
 | `logger` | No | Logger config (`level`, `pretty`, optional adapter) |
 | `realtime` | No | Realtime adapter (default: none) |
 
-**Returns:** `Questpie<TConfig>` — the runtime CMS instance with typed access to all APIs.
+**Returns:** `Questpie<TConfig>` — the runtime app instance with typed access to all APIs.
 
 ## Runtime Instance
 
-After `.build()`, the CMS instance exposes:
+After `.build()`, the app instance exposes:
 
 ```ts
-cms.api.collections.posts.find(...)    // CRUD
-cms.api.globals.siteSettings.get()     // Globals
-cms.queue.sendConfirmation.publish(...) // Jobs
-cms.email.sendTemplate(...)            // Email
-cms.storage.disk()                     // Storage
-cms.search.search(...)                 // Search
-cms.kv.get(...)                        // KV
-cms.logger.info(...)                   // Logger
-cms.t("greeting", { name: "World" })   // i18n
-cms.migrate()                          // Run migrations
+app.api.collections.posts.find(...)    // CRUD
+app.api.globals.siteSettings.get()     // Globals
+app.queue.sendConfirmation.publish(...) // Jobs
+app.email.sendTemplate(...)            // Email
+app.storage.disk()                     // Storage
+app.search.search(...)                 // Search
+app.kv.get(...)                        // KV
+app.logger.info(...)                   // Logger
+app.t("greeting", { name: "World" })   // i18n
+app.migrate()                          // Run migrations
 ```
 
 ## Related Pages

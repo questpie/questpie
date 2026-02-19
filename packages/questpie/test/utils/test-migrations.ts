@@ -108,7 +108,7 @@ export async function setupTestMigrations(
     collectionsMap,
   );
   const dbConfig = db && ("bun" in db || "pglite" in db) ? db : { pglite: db };
-  const { cms: app } = await buildMockApp(testModule, { db: dbConfig });
+  const { app: app } = await buildMockApp(testModule, { db: dbConfig });
 
   // Generate migrations for each collection
   const collectionMigrations: Migration[] = [];

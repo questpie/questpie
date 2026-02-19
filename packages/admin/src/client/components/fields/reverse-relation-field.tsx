@@ -53,6 +53,86 @@ export interface ReverseRelationFieldProps
 		ReverseRelationFieldConfig {}
 
 // ============================================================================
+// Create Button (extracted to module scope for stable identity)
+// ============================================================================
+
+function CreateButton({
+	variant = "text",
+	allowCreate,
+	currentId,
+	t,
+	actionLabel,
+	resolvedCreateLabel,
+	openInSheet,
+	handleCreateClick,
+	disabled,
+	createUrl,
+}: {
+	variant?: "text" | "icon";
+	allowCreate: boolean;
+	currentId: string | undefined;
+	t: (key: string, params?: Record<string, unknown>) => string;
+	actionLabel: string;
+	resolvedCreateLabel: string | undefined;
+	openInSheet: boolean;
+	handleCreateClick: () => void;
+	disabled?: boolean;
+	createUrl: string | null | undefined;
+}) {
+	if (!allowCreate || !currentId) return null;
+
+	const defaultLabel = t("relation.addItem", {
+		name: actionLabel,
+	});
+	const buttonLabel = resolvedCreateLabel || defaultLabel;
+	const buttonIcon = <Icon icon="ph:plus" className="size-4" />;
+	const buttonContent =
+		variant === "icon" ? null : (
+			<>
+				<Icon icon="ph:plus" className="size-4 mr-1" />
+				{buttonLabel}
+			</>
+		);
+
+	if (openInSheet) {
+		return (
+			<Button
+				type="button"
+				variant="outline"
+				size={variant === "icon" ? "icon" : "sm"}
+				onClick={handleCreateClick}
+				disabled={disabled}
+				title={buttonLabel}
+				aria-label={buttonLabel}
+			>
+				{variant === "icon" ? buttonIcon : buttonContent}
+			</Button>
+		);
+	}
+
+	if (createUrl) {
+		return (
+			<Button
+				variant="outline"
+				size={variant === "icon" ? "icon" : "sm"}
+				nativeButton={false}
+				disabled={disabled}
+				title={buttonLabel}
+				aria-label={buttonLabel}
+				render={
+					// biome-ignore lint/a11y/useAnchorContent: base-ui renders children into the anchor
+					<a href={createUrl} aria-label={buttonLabel} />
+				}
+			>
+				{variant === "icon" ? buttonIcon : buttonContent}
+			</Button>
+		);
+	}
+
+	return null;
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -461,68 +541,17 @@ export function ReverseRelationField({
 		);
 	}
 
-	// Create button component
-	const CreateButton = ({
-		variant = "text",
-	}: {
-		variant?: "text" | "icon";
-	}) => {
-		if (!allowCreate || !currentId) return null;
-
-		const defaultLabel = t("relation.addItem", {
-			name: actionLabel,
-		});
-		const buttonLabel = resolvedCreateLabel || defaultLabel;
-		const buttonIcon = <Icon icon="ph:plus" className="size-4" />;
-		const buttonContent =
-			variant === "icon" ? null : (
-				<>
-					<Icon icon="ph:plus" className="size-4 mr-1" />
-					{buttonLabel}
-				</>
-			);
-
-		// Open in sheet mode
-		if (openInSheet) {
-			return (
-				<Button
-					type="button"
-					variant="outline"
-					size={variant === "icon" ? "icon" : "sm"}
-					onClick={handleCreateClick}
-					disabled={disabled}
-					title={buttonLabel}
-					aria-label={buttonLabel}
-				>
-					{variant === "icon" ? buttonIcon : buttonContent}
-				</Button>
-			);
-		}
-
-		// Navigate to create page
-		if (createUrl) {
-			return (
-				<Button
-					variant="outline"
-					size={variant === "icon" ? "icon" : "sm"}
-					nativeButton={false}
-					disabled={disabled}
-					title={buttonLabel}
-					aria-label={buttonLabel}
-					render={
-						// biome-ignore lint/a11y/useAnchorContent: base-ui renders children into the anchor
-						<a href={createUrl} aria-label={buttonLabel} />
-					}
-				>
-					{variant === "icon" ? buttonIcon : buttonContent}
-				</Button>
-			);
-		}
-
-		return null;
+	const createButtonProps = {
+		allowCreate,
+		currentId,
+		t,
+		actionLabel,
+		resolvedCreateLabel,
+		openInSheet,
+		handleCreateClick,
+		disabled,
+		createUrl,
 	};
-
-	// Sheet JSX for create/edit (rendered inline to avoid component identity issues)
 
 	return (
 		<div className="space-y-2">
@@ -538,7 +567,7 @@ export function ReverseRelationField({
 								Showing {items.length} of {totalCount}
 							</span>
 						)}
-						{showCreateInHeader && <CreateButton variant="text" />}
+						{showCreateInHeader && <CreateButton variant="text" {...createButtonProps} />}
 					</div>
 				</div>
 			)}
@@ -578,7 +607,7 @@ export function ReverseRelationField({
 						</div>
 					)}
 					{showCreateControls && !showCreateInHeader && (
-						<CreateButton variant="icon" />
+						<CreateButton variant="icon" {...createButtonProps} />
 					)}
 				</div>
 			)}
@@ -608,7 +637,7 @@ export function ReverseRelationField({
 				allowCreate &&
 				!showAssignmentControls && (
 					<div className="mt-3 text-center">
-						<CreateButton variant="text" />
+						<CreateButton variant="text" {...createButtonProps} />
 					</div>
 				)}
 

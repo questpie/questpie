@@ -6,10 +6,10 @@
  * @example
  * ```ts
  * import { createTanStackAuthGuard } from "@questpie/admin/server/adapters/tanstack";
- * import { cms } from "~/questpie/server/cms";
+ * import { app } from "~/questpie/server/app";
  *
  * export const Route = createFileRoute("/admin")({
- *   beforeLoad: createTanStackAuthGuard({ cms, loginPath: "/admin/login" }),
+ *   beforeLoad: createTanStackAuthGuard({ app, loginPath: "/admin/login" }),
  * });
  * ```
  */
@@ -22,9 +22,9 @@ import { requireAdminAuth } from "../auth-helpers.js";
  */
 export interface TanStackAuthGuardOptions {
   /**
-   * The CMS instance with auth configured
+   * The app instance with auth configured
    */
-  cms: Questpie<any>;
+  app: Questpie<any>;
 
   /**
    * Path to redirect to when not authenticated
@@ -66,11 +66,11 @@ export interface BeforeLoadContext {
  * ```ts
  * import { createFileRoute } from "@tanstack/react-router";
  * import { createTanStackAuthGuard } from "@questpie/admin/server/adapters/tanstack";
- * import { cms } from "~/questpie/server/cms";
+ * import { app } from "~/questpie/server/app";
  *
  * export const Route = createFileRoute("/admin")({
  *   beforeLoad: createTanStackAuthGuard({
- *     cms,
+ *     app,
  *     loginPath: "/admin/login",
  *     requiredRole: "admin",
  *   }),
@@ -83,7 +83,7 @@ export interface BeforeLoadContext {
  * export const Route = createFileRoute("/admin")({
  *   beforeLoad: async (ctx) => {
  *     // Run auth guard
- *     await createTanStackAuthGuard({ cms })(ctx);
+ *     await createTanStackAuthGuard({ app })(ctx);
  *
  *     // Add additional context
  *     return { user: ctx.context.user };
@@ -92,7 +92,7 @@ export interface BeforeLoadContext {
  * ```
  */
 export function createTanStackAuthGuard({
-  cms,
+  app,
   loginPath = "/admin/login",
   requiredRole = "admin",
   redirectParam = "redirect",
@@ -110,7 +110,7 @@ export function createTanStackAuthGuard({
 
     const redirect = await requireAdminAuth({
       request,
-      cms,
+      app,
       loginPath,
       requiredRole,
       redirectParam,
@@ -133,7 +133,7 @@ export function createTanStackAuthGuard({
  * import { createTanStackSessionLoader } from "@questpie/admin/server/adapters/tanstack";
  *
  * export const Route = createFileRoute("/admin")({
- *   loader: createTanStackSessionLoader({ cms }),
+ *   loader: createTanStackSessionLoader({ app }),
  *   component: AdminLayout,
  * });
  *
@@ -143,16 +143,16 @@ export function createTanStackAuthGuard({
  * }
  * ```
  */
-export function createTanStackSessionLoader({ cms }: { cms: Questpie<any> }) {
+export function createTanStackSessionLoader({ app }: { app: Questpie<any> }) {
   return async function loader({ context }: BeforeLoadContext) {
     const request = context.request;
 
-    if (!request || !cms.auth) {
+    if (!request || !app.auth) {
       return { session: null };
     }
 
     try {
-      const session = await cms.auth.api.getSession({
+      const session = await app.auth.api.getSession({
         headers: request.headers,
       });
 

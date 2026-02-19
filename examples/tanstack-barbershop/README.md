@@ -1,10 +1,10 @@
 # 💈 TanStack Barbershop Example
 
-A complete barbershop booking system built with **QUESTPIE CMS** + **TanStack Start** + **@questpie/admin**.
+A complete barbershop booking system built with **QUESTPIE** + **TanStack Start** + **@questpie/admin**.
 
 ## 🎯 What This Demonstrates
 
-### QUESTPIE CMS Features
+### QUESTPIE Features
 
 - ✅ **Collections with Relations** - Barbers, Services, Appointments, Reviews
 - ✅ **Better Auth Integration** - Email/password authentication
@@ -23,7 +23,7 @@ A complete barbershop booking system built with **QUESTPIE CMS** + **TanStack St
 ### TanStack Start Integration
 
 - ✅ **File-based routing** - Simple, intuitive structure
-- ✅ **API routes** - `/api/cms/*` catch-all handler
+- ✅ **API routes** - `/api/*` catch-all handler
 - ✅ **Server functions** - Type-safe client/server communication
 - ✅ **SSR ready** - Server-side rendering support
 
@@ -77,35 +77,35 @@ bun run dev
 ```
 src/
 ├── server/
-│   └── cms.ts              # CMS configuration (collections, jobs, auth)
+│   └── app.ts              # app configuration (collections, jobs, auth)
 ├── migrations/
 │   ├── index.ts            # Migrations barrel export
 │   └── *.ts                # Generated migration files
 ├── configs/
 │   └── admin.ts            # ⭐ Admin UI config (everything auto-generated!)
 ├── lib/
-│   └── cms-client.ts       # Type-safe CMS client
+│   └── client.ts       # Type-safe client
 ├── routes/
 │   ├── api/
-│   │   └── cms/
-│   │       └── $.ts        # CMS API catch-all handler
+│   │   └── app/
+│   │       └── $.ts        # API catch-all handler
 │   ├── admin.tsx           # Admin layout (uses AdminLayout from package)
 │   └── admin/
 │       └── $.tsx           # Catch-all (uses AdminRouter from package)
 └── components/             # Custom components (optional overrides)
-cms.config.ts               # CLI configuration for migrations
+app.config.ts               # CLI configuration for migrations
 ```
 
 ### Key Files
 
-**`cms.config.ts`** - CLI configuration for migrations:
+**`app.config.ts`** - CLI configuration for migrations:
 
 ```typescript
-import { defineConfig } from "@questpie/cms/cli";
-import { cms } from "./src/server/cms";
+import { defineConfig } from "@questpie/cli";
+import { app } from "./src/server/app";
 
 export default defineConfig({
-  qcms: cms,
+  qcms: app,
   cli: {
     migrations: {
       directory: "./src/migrations",
@@ -114,12 +114,12 @@ export default defineConfig({
 });
 ```
 
-**`src/server/cms.ts`** - CMS instance with migrations:
+**`src/server/app.ts`** - app instance with migrations:
 
 ```typescript
 import { migrations } from "../migrations";
 
-export const cms = defineQCMS({ name: "barbershop" })
+export const app = defineQCMS({ name: "barbershop" })
   .collections({ ... })
   .migrations(migrations)  // Load migrations
   .build({ ... });
@@ -128,7 +128,7 @@ export const cms = defineQCMS({ name: "barbershop" })
 **`src/configs/admin.ts`** - Single source of truth for admin UI:
 
 ```typescript
-export const adminConfig = defineAdminConfig<AppCMS>()({
+export const adminConfig = defineAdminConfig<App>()({
   app: {
     brand: { name: "Barbershop Admin" },
   },
@@ -145,7 +145,7 @@ Everything else is **automatically generated** from this config!
 
 ## 🛠️ CLI Commands
 
-QUESTPIE CMS includes a powerful CLI for database migrations:
+QUESTPIE includes a powerful CLI for database migrations:
 
 ```bash
 # Generate a new migration (after schema changes)
@@ -175,7 +175,7 @@ bun qcms push
 1. **Make schema changes** in your collection definitions
 2. **Generate migration**: `bun qcms migrate:generate`
 3. **Review** the generated migration file in `src/migrations/`
-4. **Import** migrations in `src/server/cms.ts` via `.migrations(migrations)`
+4. **Import** migrations in `src/server/app.ts` via `.migrations(migrations)`
 5. **Run migration**: `bun qcms migrate:up`
 
 ## 🗄️ Database Schema
@@ -228,7 +228,7 @@ The entire admin UI is generated from `src/configs/admin.ts`:
 **Minimal config example:**
 
 ```typescript
-export const adminConfig = defineAdminConfig<AppCMS>()({
+export const adminConfig = defineAdminConfig<App>()({
   collections: {
     barbers: {
       label: "Barbers", // That's it! Rest is auto-generated
@@ -294,15 +294,15 @@ Uses Better Auth with email/password:
 
 ```bash
 # Register
-POST /api/cms/auth/sign-up
+POST /api/auth/sign-up
 { "email": "user@example.com", "password": "secure123" }
 
 # Login
-POST /api/cms/auth/sign-in
+POST /api/auth/sign-in
 { "email": "user@example.com", "password": "secure123" }
 
 # Get session
-GET /api/cms/auth/get-session
+GET /api/auth/get-session
 ```
 
 ## 📧 Background Jobs
@@ -310,7 +310,7 @@ GET /api/cms/auth/get-session
 Queue jobs are automatically set up with pg-boss (uses Postgres - no Redis needed!):
 
 ```typescript
-// Jobs defined in cms.ts
+// Jobs defined in app.ts
 -send -
   appointment -
   confirmation -
@@ -323,7 +323,7 @@ Queue jobs are automatically set up with pg-boss (uses Postgres - no Redis neede
 
 // Triggered via hooks
 afterCreate: async ({ data }) => {
-  await cms.queue.sendAppointmentConfirmation.publish({
+  await app.queue.sendAppointmentConfirmation.publish({
     appointmentId: data.id,
   });
 };
@@ -386,7 +386,7 @@ See `.env.example` for all available options.
 
 ## 📚 Learn More
 
-- [QUESTPIE CMS Documentation](../../packages/core/docs/)
+- [QUESTPIE Documentation](../../packages/core/docs/)
 - [@questpie/admin Package](../../packages/admin/README.md)
 - [TanStack Start Docs](https://tanstack.com/start)
 - [Better Auth Docs](https://www.better-auth.com/)

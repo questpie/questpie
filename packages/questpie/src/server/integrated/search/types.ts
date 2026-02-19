@@ -114,7 +114,7 @@ export type SearchableConfig = {
   /**
    * Generate embeddings for semantic search (optional)
    * Only used if adapter supports embeddings
-   * @example embeddings: async (record, ctx) => await ctx.cms.embeddings.generate(text)
+   * @example embeddings: async (record, ctx) => await ctx.app.embeddings.generate(text)
    */
   embeddings?: (record: any, context: SearchableContext) => Promise<number[]>;
 
@@ -146,8 +146,7 @@ export type SearchableConfig = {
   manual?: boolean;
 };
 
-export type SearchableContext = {
-  cms: any;
+export type SearchableContext = { app: any;
   locale: string;
   defaultLocale: string;
 };
@@ -417,7 +416,7 @@ export type SearchResult = {
  *
  * @example
  * ```ts
- * const response = await cms.search.search({
+ * const response = await app.search.search({
  *   query: "typescript",
  *   facets: [{ field: "status" }, { field: "category" }]
  * });
@@ -431,7 +430,7 @@ export type SearchResult = {
  * // ]
  *
  * // Browse mode (facets only, no query):
- * const browse = await cms.search.search({
+ * const browse = await app.search.search({
  *   query: "",
  *   limit: 0,
  *   facets: [{ field: "status" }]
@@ -643,7 +642,7 @@ export type AdapterCapabilities = {
  * Search Adapter interface
  *
  * Adapters fully own their indexing strategy, storage, and queries.
- * CMS uses this interface via cms.search.* high-level API.
+ * QuestPie uses this interface via app.search.* high-level API.
  *
  * @example
  * ```ts
@@ -678,7 +677,7 @@ export interface SearchAdapter {
 
   /**
    * Initialize adapter (check extensions, setup runtime state)
-   * Called once when CMS initializes.
+   * Called once when QuestPie initializes.
    * Should NOT create tables/indexes - use getMigrations() for that.
    */
   initialize(ctx: AdapterInitContext): Promise<void>;
@@ -708,7 +707,7 @@ export interface SearchAdapter {
 
   /**
    * Reindex entire collection
-   * Adapter may need CMS reference to fetch records - handled via initialize()
+   * Adapter may need app reference to fetch records - handled via initialize()
    */
   reindex(collection: string): Promise<void>;
 
@@ -726,7 +725,7 @@ export interface SearchAdapter {
 
   /**
    * Get Drizzle table schemas for migration generation.
-   * If this returns tables, they will be included in cms.getSchema()
+   * If this returns tables, they will be included in app.getSchema()
    * for Drizzle migration generation.
    *
    * Local adapters (Postgres, PgVector) return their tables.
@@ -797,18 +796,18 @@ export interface EmbeddingProvider {
 }
 
 // ============================================================================
-// Search Service interface (high-level CMS API)
+// Search Service interface (high-level API)
 // ============================================================================
 
 /**
  * Search Service interface
  *
- * High-level API exposed via cms.search.*
+ * High-level API exposed via app.search.*
  * Delegates to underlying SearchAdapter.
  */
 export interface SearchService {
   /**
-   * Initialize the search service (called by CMS on startup)
+   * Initialize the search service (called by QuestPie on startup)
    */
   initialize(): Promise<void>;
 

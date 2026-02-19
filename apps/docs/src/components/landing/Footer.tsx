@@ -39,7 +39,7 @@ export function Footer() {
 							</li>
 							<li>
 								<a
-									href="https://github.com/questpie/questpie-cms/releases"
+									href="https://github.com/questpie/questpie/releases"
 									target="_blank"
 									rel="noreferrer"
 									className="transition-colors hover:text-primary"
@@ -101,7 +101,7 @@ export function Footer() {
 						<ul className="space-y-2 text-sm text-muted-foreground">
 							<li>
 								<a
-									href="https://github.com/questpie/questpie-cms"
+									href="https://github.com/questpie/questpie"
 									target="_blank"
 									rel="noreferrer"
 									className="transition-colors hover:text-primary"
@@ -111,7 +111,7 @@ export function Footer() {
 							</li>
 							<li>
 								<a
-									href="https://github.com/questpie/questpie-cms/issues"
+									href="https://github.com/questpie/questpie/issues"
 									target="_blank"
 									rel="noreferrer"
 									className="transition-colors hover:text-primary"
@@ -121,7 +121,7 @@ export function Footer() {
 							</li>
 							<li>
 								<a
-									href="https://github.com/questpie/questpie-cms/pulls"
+									href="https://github.com/questpie/questpie/pulls"
 									target="_blank"
 									rel="noreferrer"
 									className="transition-colors hover:text-primary"
@@ -174,7 +174,7 @@ export function Footer() {
 						framework.
 					</p>
 					<a
-						href="https://github.com/questpie/questpie-cms"
+						href="https://github.com/questpie/questpie"
 						target="_blank"
 						rel="noreferrer"
 						className="text-muted-foreground transition-colors hover:text-foreground"

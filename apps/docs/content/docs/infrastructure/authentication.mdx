@@ -18,17 +18,17 @@ Instead of building auth from scratch, QUESTPIE integrates Better Auth with pre-
   emailAndPassword: { enabled: true },     ← login method
   socialProviders: { google: {...} },       ← OAuth
   baseURL: "http://localhost:3000",         ← redirect URLs
-  basePath: "/api/cms/auth",               ← auth API path
+  basePath: "/api/auth",               ← auth API path
   secret: "...",                           ← token signing
 })
 ```
 
-Auth runs as part of the CMS fetch handler. The admin panel uses it for login/signup, and your frontend can use it for user authentication.
+Auth runs as part of the app fetch handler. The admin panel uses it for login/signup, and your frontend can use it for user authentication.
 
 ## Basic Setup
 
 ```ts
-export const cms = q({ name: "my-app" })
+export const app = q({ name: "my-app" })
   .use(adminModule)
   .collections({ ... })
   .auth({
@@ -37,7 +37,7 @@ export const cms = q({ name: "my-app" })
       requireEmailVerification: false,  // true in production
     },
     baseURL: process.env.APP_URL || "http://localhost:3000",
-    basePath: "/api/cms/auth",
+    basePath: "/api/auth",
     secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
   })
   .build({ ... });
@@ -85,7 +85,7 @@ Add social login by configuring providers:
     },
   },
   baseURL: process.env.APP_URL!,
-  basePath: "/api/cms/auth",
+  basePath: "/api/auth",
   secret: process.env.BETTER_AUTH_SECRET!,
 })
 ```
@@ -154,7 +154,7 @@ These are managed by Better Auth and accessible via `app.auth`.
     requireEmailVerification: false,
   },
   baseURL: process.env.APP_URL || "http://localhost:3000",
-  basePath: "/api/cms/auth",
+  basePath: "/api/auth",
   secret: process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
 })
 ```
@@ -169,7 +169,7 @@ import { auth } from "questpie";
 .auth(auth({
   emailAndPassword: { enabled: true },
   baseURL: process.env.APP_URL!,
-  basePath: "/api/cms/auth",
+  basePath: "/api/auth",
   secret: process.env.BETTER_AUTH_SECRET!,
   plugins: [
     // additional Better Auth plugins
@@ -181,7 +181,7 @@ import { auth } from "questpie";
 ## Common Mistakes
 
 - **Using a weak secret in production** — The `secret` is used for signing tokens and sessions. Use a strong, random string in production.
-- **Forgetting `basePath`** — The auth endpoints need to match your CMS mount path. If your CMS is at `/api/cms`, use `/api/cms/auth`.
+- **Forgetting `basePath`** — The auth endpoints need to match your app mount path. If your app is at `/api`, use `/api/auth`.
 - **Not setting `requireEmailVerification`** — In production, set this to `true` to prevent spam signups.
 - **Missing `baseURL`** — OAuth redirects and email links need the full URL. Always set `baseURL` to your app's public URL.
 

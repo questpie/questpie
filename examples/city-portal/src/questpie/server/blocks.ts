@@ -10,7 +10,7 @@ import type {
 } from "@questpie/admin/server";
 import { typedApp, type Where } from "questpie";
 import { qb } from "./builder";
-import type { BaseCMS } from "@/questpie/server/cms";
+import type { BaseApp } from "@/questpie/server/app";
 import type {
 	announcements,
 	documents,
@@ -156,15 +156,15 @@ export const announcementBannerBlock = qb
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const cms = typedApp<BaseCMS>(ctx.app);
-		let where: Where<typeof announcements, BaseCMS> = {};
+		const app = typedApp<BaseApp>(ctx.app);
+		let where: Where<typeof announcements, BaseApp> = {};
 		if (!values.showExpired) {
 			where = {
 				validTo: { gte: new Date().toISOString() },
 			};
 		}
 
-		const res = await cms.api.collections.announcements.find({
+		const res = await app.api.collections.announcements.find({
 			limit: values.count || 3,
 			where,
 			orderBy: { isPinned: "desc", validFrom: "desc" },
@@ -454,15 +454,15 @@ export const latestNewsBlock = qb
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const cms = typedApp<BaseCMS>(ctx.app);
-		let where: Where<typeof news, BaseCMS> = {};
+		const app = typedApp<BaseApp>(ctx.app);
+		let where: Where<typeof news, BaseApp> = {};
 		if (values.category && values.category !== "all") {
 			where = {
 				category: values.category,
 			};
 		}
 
-		const res = await cms.api.collections.news.find({
+		const res = await app.api.collections.news.find({
 			limit: values.count || 3,
 			where,
 			orderBy: values.showFeatured
@@ -495,7 +495,7 @@ export const contactsListBlock = qb
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const cms = typedApp<BaseCMS>(ctx.app);
+		const app = typedApp<BaseApp>(ctx.app);
 		const findOptions: any = {
 			orderBy: { order: "asc" },
 		};
@@ -506,7 +506,7 @@ export const contactsListBlock = qb
 			findOptions.where = { id: { in: ids } };
 		}
 
-		const res = await cms.api.collections.contacts.find(findOptions);
+		const res = await app.api.collections.contacts.find(findOptions);
 		return { contacts: res.docs };
 	});
 
@@ -544,13 +544,13 @@ export const documentsListBlock = qb
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const cms = typedApp<BaseCMS>(ctx.app);
-		let where: Where<typeof documents, BaseCMS> = { isPublished: true };
+		const app = typedApp<BaseApp>(ctx.app);
+		let where: Where<typeof documents, BaseApp> = { isPublished: true };
 		if (values.category && values.category !== "all") {
 			where = { ...where, category: values.category };
 		}
 
-		const res = await cms.api.collections.documents.find({
+		const res = await app.api.collections.documents.find({
 			limit: values.limit || 10,
 			where,
 			orderBy: { publishedDate: "desc" },

@@ -13,7 +13,7 @@ Use `.actions(({ a, c, f }) => ...)` on a collection:
 
 ```ts
 import { getContext } from "questpie";
-import type { AppCMS } from "../cms";
+import type { App } from '../app';
 
 const posts = q
   .collection("posts")
@@ -35,7 +35,7 @@ const posts = q
           },
         },
         handler: async (ctx) => {
-          const { app, session } = getContext<AppCMS>(ctx);
+          const { app, session } = getContext<App>(ctx);
           if (!session?.user) {
             return { type: "error", toast: { message: "Unauthorized" } };
           }
@@ -65,7 +65,7 @@ Handlers return one of these server result shapes:
 
 Action handler context is `ServerActionContext` (`data`, `itemId`, `itemIds`, `app`, `db`, `session`, `locale`).
 
-Use `getContext<AppCMS>(ctx)` as the standard cast point for typed app/db/session.
+Use `getContext<App>(ctx)` as the standard cast point for typed app/db/session.
 
 ## Common Mistakes
 

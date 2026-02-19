@@ -1,7 +1,7 @@
 /**
  * Setup Status Hook
  *
- * Hook to check if the CMS setup is required (no users exist).
+ * Hook to check if the app setup is required (no users exist).
  * Useful for redirecting to setup page on first visit.
  */
 
@@ -14,7 +14,7 @@ export interface SetupStatus {
 }
 
 /**
- * Check if CMS setup is required.
+ * Check if setup is required.
  *
  * Returns `required: true` if no users exist in the system,
  * meaning the setup page should be shown to create the first admin.

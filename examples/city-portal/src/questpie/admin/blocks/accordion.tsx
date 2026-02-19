@@ -4,7 +4,7 @@
 
 import type { BlockComponentProps } from "@questpie/admin/client";
 import { useState } from "react";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 type AccordionItem = {
 	title: string;
@@ -13,7 +13,7 @@ type AccordionItem = {
 
 export function AccordionRenderer({
 	values,
-}: BlockComponentProps<AppCMS, "accordion">) {
+}: BlockComponentProps<App, "accordion">) {
 	const [openItems, setOpenItems] = useState<Set<number>>(new Set());
 	const items = (values.items as AccordionItem[] | null) || [];
 

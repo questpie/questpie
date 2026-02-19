@@ -53,7 +53,7 @@ export type LoginFormProps = {
  *
  * @example
  * ```tsx
- * const authClient = createAdminAuthClient<typeof cms>({ baseURL: '...' })
+ * const authClient = createAdminAuthClient<typeof app>({ baseURL: '...' })
  *
  * function LoginPage() {
  *   const [error, setError] = useState<string | null>(null)

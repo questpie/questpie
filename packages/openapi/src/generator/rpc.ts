@@ -59,7 +59,7 @@ export function generateRpcPaths(
 
   if (!rpc) return { paths, schemas, tags };
 
-  const basePath = config.basePath ?? "/cms";
+  const basePath = config.basePath ?? "/";
   const entries = flattenRpcTree(rpc);
 
   // Group by top-level key for tags

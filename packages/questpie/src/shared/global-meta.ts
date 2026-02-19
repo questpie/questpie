@@ -25,6 +25,19 @@ export interface GlobalFieldMeta {
 	virtual: boolean;
 }
 
+export interface GlobalWorkflowStageMeta {
+	name: string;
+	label?: string;
+	description?: string;
+	transitions?: string[];
+}
+
+export interface GlobalWorkflowMeta {
+	enabled: boolean;
+	initialStage: string;
+	stages: GlobalWorkflowStageMeta[];
+}
+
 /**
  * Global metadata response from /meta endpoint
  */
@@ -58,4 +71,9 @@ export interface GlobalMeta {
 	 * Names of localized fields
 	 */
 	localizedFields: string[];
+
+	/**
+	 * Workflow configuration metadata
+	 */
+	workflow?: GlobalWorkflowMeta;
 }

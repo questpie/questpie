@@ -14,9 +14,9 @@ import { fn, type Questpie } from "questpie";
 import { z } from "zod";
 import type { AdminLocaleConfig } from "../../../augmentation.js";
 import {
-  type AdminMessages,
-  getAdminMessagesForLocale,
-  getSupportedAdminLocales,
+	type AdminMessages,
+	getAdminMessagesForLocale,
+	getSupportedAdminLocales,
 } from "../../../i18n/index.js";
 
 // ============================================================================
@@ -24,19 +24,18 @@ import {
 // ============================================================================
 
 /**
- * Helper to get typed CMS app from handler context.
+ * Helper to get typed app from handler context.
  */
 function getApp(ctx: { app: unknown }): Questpie<any> {
-  return ctx.app as Questpie<any>;
+	return ctx.app as Questpie<any>;
 }
 
 /**
- * Get admin locale config from CMS state.
+ * Get admin locale config from app state.
  */
-function getAdminLocaleConfig(
-  cms: Questpie<any>,
+function getAdminLocaleConfig(app: Questpie<any>,
 ): AdminLocaleConfig | undefined {
-  return (cms as any).state?.adminLocale;
+	return (app as any).state?.adminLocale;
 }
 
 // ============================================================================
@@ -44,31 +43,31 @@ function getAdminLocaleConfig(
 // ============================================================================
 
 const getAdminTranslationsSchema = z.object({
-  /** Requested locale code */
-  locale: z.string(),
+	/** Requested locale code */
+	locale: z.string(),
 });
 
 const messageValueSchema = z.union([
-  z.string(),
-  z.object({ one: z.string(), other: z.string() }),
+	z.string(),
+	z.object({ one: z.string(), other: z.string() }),
 ]);
 
 const getAdminTranslationsOutputSchema = z.object({
-  /** Actual locale returned (may differ from requested if not supported) */
-  locale: z.string(),
-  /** Messages for the locale */
-  messages: z.record(z.string(), messageValueSchema),
-  /** Fallback locale */
-  fallbackLocale: z.string(),
+	/** Actual locale returned (may differ from requested if not supported) */
+	locale: z.string(),
+	/** Messages for the locale */
+	messages: z.record(z.string(), messageValueSchema),
+	/** Fallback locale */
+	fallbackLocale: z.string(),
 });
 
 const getAdminLocalesSchema = z.object({}).optional();
 
 const getAdminLocalesOutputSchema = z.object({
-  /** Available UI locales */
-  locales: z.array(z.string()),
-  /** Default UI locale */
-  defaultLocale: z.string(),
+	/** Available UI locales */
+	locales: z.array(z.string()),
+	/** Default UI locale */
+	defaultLocale: z.string(),
 });
 
 // ============================================================================
@@ -87,7 +86,7 @@ const getAdminLocalesOutputSchema = z.object({
  * @example
  * ```ts
  * // Client fetches translations
- * const { messages, locale, fallbackLocale } = await client.functions.getAdminTranslations({
+ * const { messages, locale, fallbackLocale } = await client.rpc.getAdminTranslations({
  *   locale: "sk",
  * });
  *
@@ -95,55 +94,53 @@ const getAdminLocalesOutputSchema = z.object({
  * ```
  */
 export const getAdminTranslations = fn({
-  type: "query",
-  schema: getAdminTranslationsSchema,
-  outputSchema: getAdminTranslationsOutputSchema,
-  handler: async (ctx) => {
-    const cms = getApp(ctx);
-    const input = ctx.input as z.infer<typeof getAdminTranslationsSchema>;
-    const requestedLocale = input.locale;
+	type: "query",
+	schema: getAdminTranslationsSchema,
+	outputSchema: getAdminTranslationsOutputSchema,
+	handler: async (ctx) => {
+		const app = getApp(ctx);
+		const input = ctx.input as z.infer<typeof getAdminTranslationsSchema>;
+		const requestedLocale = input.locale;
 
-    // Get admin locale config (set via .adminLocale())
-    const adminLocaleConfig = getAdminLocaleConfig(cms);
-    const supportedLocales =
-      adminLocaleConfig?.locales ?? getSupportedAdminLocales();
-    const defaultLocale = adminLocaleConfig?.defaultLocale ?? "en";
+		// Get admin locale config (set via .adminLocale())
+		const adminLocaleConfig = getAdminLocaleConfig(app);
+		const supportedLocales =
+			adminLocaleConfig?.locales ?? getSupportedAdminLocales();
+		const defaultLocale = adminLocaleConfig?.defaultLocale ?? "en";
 
-    // Resolve locale - fall back to default if not supported
-    const locale = supportedLocales.includes(requestedLocale)
-      ? requestedLocale
-      : defaultLocale;
+		// Resolve locale - fall back to default if not supported
+		const locale = supportedLocales.includes(requestedLocale)
+			? requestedLocale
+			: defaultLocale;
 
-    // Get built-in admin messages for this locale
-    const builtInMessages = getAdminMessagesForLocale(locale);
+		// Get built-in admin messages for this locale
+		const builtInMessages = getAdminMessagesForLocale(locale);
 
-    // Get fallback messages (English by default) so missing keys still resolve
-    const fallbackMessages =
-      locale !== defaultLocale
-        ? getAdminMessagesForLocale(defaultLocale)
-        : {};
+		// Get fallback messages (English by default) so missing keys still resolve
+		const fallbackMessages =
+			locale !== defaultLocale ? getAdminMessagesForLocale(defaultLocale) : {};
 
-    // Get custom messages from .messages() on QuestpieBuilder
-    const customFallbackMessages =
-      locale !== defaultLocale
-        ? (cms.config.translations?.messages?.[defaultLocale] ?? {})
-        : {};
-    const customMessages = cms.config.translations?.messages?.[locale] ?? {};
+		// Get custom messages from .messages() on QuestpieBuilder
+		const customFallbackMessages =
+			locale !== defaultLocale
+				? (app.config.translations?.messages?.[defaultLocale] ?? {})
+				: {};
+		const customMessages = app.config.translations?.messages?.[locale] ?? {};
 
-    // Merge: fallback → built-in → custom (later overrides earlier)
-    const messages: AdminMessages = {
-      ...fallbackMessages,
-      ...customFallbackMessages,
-      ...builtInMessages,
-      ...customMessages,
-    };
+		// Merge: fallback → built-in → custom (later overrides earlier)
+		const messages: AdminMessages = {
+			...fallbackMessages,
+			...customFallbackMessages,
+			...builtInMessages,
+			...customMessages,
+		};
 
-    return {
-      locale,
-      messages,
-      fallbackLocale: defaultLocale,
-    };
-  },
+		return {
+			locale,
+			messages,
+			fallbackLocale: defaultLocale,
+		};
+	},
 });
 
 /**
@@ -154,24 +151,24 @@ export const getAdminTranslations = fn({
  *
  * @example
  * ```ts
- * const { locales, defaultLocale } = await client.functions.getAdminLocales({});
+ * const { locales, defaultLocale } = await client.rpc.getAdminLocales({});
  * // locales: ["en", "sk"]
  * // defaultLocale: "en"
  * ```
  */
 export const getAdminLocales = fn({
-  type: "query",
-  schema: getAdminLocalesSchema,
-  outputSchema: getAdminLocalesOutputSchema,
-  handler: async (ctx) => {
-    const cms = getApp(ctx);
-    const adminLocaleConfig = getAdminLocaleConfig(cms);
+	type: "query",
+	schema: getAdminLocalesSchema,
+	outputSchema: getAdminLocalesOutputSchema,
+	handler: async (ctx) => {
+		const app = getApp(ctx);
+		const adminLocaleConfig = getAdminLocaleConfig(app);
 
-    return {
-      locales: adminLocaleConfig?.locales ?? getSupportedAdminLocales(),
-      defaultLocale: adminLocaleConfig?.defaultLocale ?? "en",
-    };
-  },
+		return {
+			locales: adminLocaleConfig?.locales ?? getSupportedAdminLocales(),
+			defaultLocale: adminLocaleConfig?.defaultLocale ?? "en",
+		};
+	},
 });
 
 // ============================================================================
@@ -182,6 +179,6 @@ export const getAdminLocales = fn({
  * Bundle of translation-related functions.
  */
 export const translationFunctions = {
-  getAdminTranslations,
-  getAdminLocales,
+	getAdminTranslations,
+	getAdminLocales,
 } as const;

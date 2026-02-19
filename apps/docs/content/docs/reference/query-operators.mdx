@@ -243,13 +243,13 @@ Notes:
 In HTTP requests, the `where` clause is passed as JSON:
 
 ```
-GET /api/cms/collections/posts?where={"status":"published","title":{"contains":"guide"}}
+GET /api/collections/posts?where={"status":"published","title":{"contains":"guide"}}
 ```
 
 For complex queries:
 
 ```
-GET /api/cms/collections/posts?where={"OR":[{"status":"published"},{"featured":true}]}
+GET /api/collections/posts?where={"OR":[{"status":"published"},{"featured":true}]}
 ```
 
 ## Related Pages

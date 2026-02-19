@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This is a [QUESTPIE CMS](https://questpie.com) project scaffolded with `create-questpie`.
+This is a [QUESTPIE](https://questpie.com) project scaffolded with `create-questpie`.
 
 ## Quick Reference
 
@@ -30,7 +30,7 @@ src/questpie/
     collections/    ← One file per collection (*.collection.ts)
     globals/        ← One file per global (*.global.ts)
   admin/            ← HOW: UI rendering concerns
-    admin.ts        ← Client builder: qa<AppCMS>().use(adminModule)
+    admin.ts        ← Client builder: qa<App>().use(adminModule)
     builder.ts      ← Client-side builder instance
 ```
 
@@ -39,7 +39,7 @@ src/questpie/
 - **`src/questpie/server/app.ts`** — The composition root. Register collections, globals, sidebar, dashboard, auth, and call `.build()`.
 - **`src/lib/env.ts`** — Type-safe env variables via `@t3-oss/env-core`. Add new env vars here with Zod schemas.
 - **`questpie.config.ts`** — CLI config (migration directory, app reference).
-- **`src/routes/api/cms/$.ts`** — CMS API catch-all handler. Serves REST + OpenAPI docs at `/api/cms/docs`.
+- **`src/routes/api/$.ts`** — API catch-all handler. Serves REST + OpenAPI docs at `/api/docs`.
 
 ## Environment Variables
 
@@ -73,7 +73,7 @@ Optional (with defaults):
 
 ### Add an RPC function (end-to-end type-safe)
 
-`rpc.ts` uses `rpc<AppCMS>()` — a type-only import from `app.ts` (erased at runtime, no circular dependency). This gives you fully typed `app` in all handlers.
+`rpc.ts` uses `rpc<App>()` — a type-only import from `app.ts` (erased at runtime, no circular dependency). This gives you fully typed `app` in all handlers.
 
 1. Create `src/questpie/server/functions/my-function.ts`:
    ```ts
@@ -84,7 +84,7 @@ Optional (with defaults):
      schema: z.object({ id: z.string() }),
      handler: async ({ input, app }) => {
        // input: { id: string } — typed from Zod schema
-       // app: AppCMS — fully typed, autocomplete works
+       // app: App — fully typed, autocomplete works
        return { name: "result" };
      },
    });
@@ -102,4 +102,4 @@ See AGENTS.md for detailed RPC type flow, access control, and TanStack Query int
 
 - **QUESTPIE Docs**: https://questpie.com/docs
 - **Getting Started**: https://questpie.com/docs/getting-started
-- **API Reference (local)**: http://localhost:3000/api/cms/docs (Scalar UI, available when dev server is running)
+- **API Reference (local)**: http://localhost:3000/api/docs (Scalar UI, available when dev server is running)

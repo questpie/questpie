@@ -16,7 +16,7 @@ export function generateSearchPaths(config: OpenApiConfig): {
     return { paths: {}, tags: [] };
   }
 
-  const basePath = config.basePath ?? "/cms";
+  const basePath = config.basePath ?? "/";
   const tag = "Search";
   const paths: Record<string, Record<string, PathOperation>> = {};
 

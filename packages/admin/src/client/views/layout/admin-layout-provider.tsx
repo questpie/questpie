@@ -149,7 +149,7 @@ export interface AdminLayoutProviderProps<
    * @example
    * ```tsx
    * // Server configures locales and messages
-   * const cms = q()
+   * const app = q()
    *   .use(adminModule)
    *   .adminLocale({ locales: ["en", "sk"], defaultLocale: "en" })
    *   .messages({ sk: { "common.save": "Ulozit" } })

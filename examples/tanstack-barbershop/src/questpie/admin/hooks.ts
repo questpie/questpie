@@ -16,9 +16,9 @@
  */
 
 import { createTypedHooks } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-// Create typed hooks for this app's CMS
+// Create typed hooks for this app's
 export const {
   useCollectionList,
   useCollectionCount,
@@ -28,4 +28,4 @@ export const {
   useCollectionDelete,
   useGlobal,
   useGlobalUpdate,
-} = createTypedHooks<AppCMS>();
+} = createTypedHooks<App>();

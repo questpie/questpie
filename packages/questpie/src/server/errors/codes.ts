@@ -1,5 +1,5 @@
 /**
- * CMS Error Codes
+ * Error Codes
  * Inspired by tRPC error handling
  */
 export const CMS_ERROR_CODES = {
@@ -15,7 +15,7 @@ export const CMS_ERROR_CODES = {
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR", // 500 - Unspecified
   NOT_IMPLEMENTED: "NOT_IMPLEMENTED", // 501 - Feature not enabled
 
-  // CMS-specific codes
+  // App-specific codes
   HOOK_ERROR: "HOOK_ERROR", // 500 - Hook execution failed
   VALIDATION_ERROR: "VALIDATION_ERROR", // 400 - Field validation failed
 } as const;

@@ -4,8 +4,8 @@
  * Type definitions for the HTTP adapter.
  */
 
-import type { Questpie } from "../config/questpie.js";
 import type { RequestContext } from "../config/context.js";
+import type { Questpie } from "../config/questpie.js";
 import type { AccessMode, QuestpieConfig } from "../config/types.js";
 import type { RpcRouterTree } from "../rpc/types.js";
 
@@ -65,7 +65,8 @@ export type AdapterConfig<TConfig extends QuestpieConfig = QuestpieConfig> = {
 	 * containing both user and session data.
 	 */
 	getSession?: (
-		request: Request, app: Questpie<TConfig>,
+		request: Request,
+		app: Questpie<TConfig>,
 	) => Promise<{ user: any; session: any } | null>;
 };
 
@@ -185,6 +186,12 @@ export type AdapterRoutes = {
 			context?: AdapterContext,
 			input?: unknown,
 		) => Promise<Response>;
+		transition: (
+			request: Request,
+			params: { collection: string; id: string },
+			context?: AdapterContext,
+			input?: unknown,
+		) => Promise<Response>;
 		restore: (
 			request: Request,
 			params: { collection: string; id: string },
@@ -230,6 +237,12 @@ export type AdapterRoutes = {
 			context?: AdapterContext,
 		) => Promise<Response>;
 		revert: (
+			request: Request,
+			params: { global: string },
+			context?: AdapterContext,
+			input?: unknown,
+		) => Promise<Response>;
+		transition: (
 			request: Request,
 			params: { global: string },
 			context?: AdapterContext,

@@ -19,7 +19,7 @@ import { z } from "zod";
 // ============================================================================
 
 /**
- * Get typed CMS app from context.
+ * Get typed app from context.
  */
 function getApp(ctx: { app: unknown }): Questpie<any> {
 	return ctx.app as Questpie<any>;
@@ -70,8 +70,8 @@ function buildOptionsContext(
 /**
  * Get collection builder by name.
  */
-function getCollection(cms: Questpie<any>, collectionName: string) {
-	const collections = cms.getCollections();
+function getCollection(app: Questpie<any>, collectionName: string) {
+	const collections = app.getCollections();
 	const collection = collections[collectionName];
 	if (!collection) {
 		throw new Error(`Collection '${collectionName}' not found`);
@@ -83,8 +83,8 @@ function getCollection(cms: Questpie<any>, collectionName: string) {
 /**
  * Get global builder by name.
  */
-function getGlobal(cms: Questpie<any>, globalName: string) {
-	const globals = cms.getGlobals();
+function getGlobal(app: Questpie<any>, globalName: string) {
+	const globals = app.getGlobals();
 	const global = globals[globalName];
 	if (!global) {
 		throw new Error(`Global '${globalName}' not found`);
@@ -96,27 +96,25 @@ function getGlobal(cms: Questpie<any>, globalName: string) {
 /**
  * Get entity (collection or global) builder by name and type.
  */
-function getEntity(
-	cms: Questpie<any>,
+function getEntity(app: Questpie<any>,
 	entityName: string,
 	type: "collection" | "global",
 ) {
 	if (type === "global") {
-		return getGlobal(cms, entityName);
+		return getGlobal(app, entityName);
 	}
-	return getCollection(cms, entityName);
+	return getCollection(app, entityName);
 }
 
 /**
  * Get field definition from collection or global.
  */
-function getFieldDefinition(
-	cms: Questpie<any>,
+function getFieldDefinition(app: Questpie<any>,
 	entityName: string,
 	fieldPath: string,
 	type: "collection" | "global" = "collection",
 ) {
-	const entity = getEntity(cms, entityName, type);
+	const entity = getEntity(app, entityName, type);
 
 	const fieldDefinitions = entity.state.fieldDefinitions || {};
 
@@ -347,14 +345,13 @@ function findReactiveFieldEntry(
 /**
  * Get reactive handler from collection/global form config.
  */
-function getReactiveHandler(
-	cms: Questpie<any>,
+function getReactiveHandler(app: Questpie<any>,
 	entityName: string,
 	fieldPath: string,
 	handlerType: "hidden" | "readOnly" | "disabled" | "compute",
 	type: "collection" | "global" = "collection",
 ): ((ctx: ReactiveContext) => any) | null {
-	const entity = getEntity(cms, entityName, type);
+	const entity = getEntity(app, entityName, type);
 	const formConfig = (entity.state as any).adminForm;
 
 	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
@@ -525,7 +522,7 @@ export const batchReactive = fn({
 	outputSchema: batchReactiveOutputSchema,
 
 	handler: async (ctx) => {
-		const cms = getApp(ctx);
+		const app = getApp(ctx);
 		const { collection: entityName, type: entityType, requests } = ctx.input;
 
 		// Build server context (req is not available in function handlers)
@@ -544,11 +541,11 @@ export const batchReactive = fn({
 
 			try {
 				// Get field definition
-				getFieldDefinition(cms, entityName, field, entityType);
+				getFieldDefinition(app, entityName, field, entityType);
 
 				// Get reactive handler
 				const handler = getReactiveHandler(
-					cms,
+					app,
 					entityName,
 					field,
 					type,
@@ -608,7 +605,7 @@ export const fieldOptions = fn({
 	outputSchema: optionsOutputSchema,
 
 	handler: async (ctx) => {
-		const cms = getApp(ctx);
+		const app = getApp(ctx);
 		const {
 			collection: entityName,
 			type: entityType,
@@ -630,7 +627,7 @@ export const fieldOptions = fn({
 
 		try {
 			// Get field definition
-			const fieldDef = getFieldDefinition(cms, entityName, field, entityType);
+			const fieldDef = getFieldDefinition(app, entityName, field, entityType);
 
 			// Get options handler
 			const handler = getOptionsHandler(fieldDef);

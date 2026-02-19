@@ -4,7 +4,7 @@
 	"type": "module",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/questpie/questpie-cms.git",
+		"url": "https://github.com/questpie/questpie.git",
 		"directory": "packages/openapi"
 	},
 	"files": [
@@ -26,13 +26,19 @@
 		"questpie": "^2.0.0"
 	},
 	"exports": {
-		".": "./src/server.ts",
+		".": {
+			"types": "./dist/server.d.mts",
+			"default": "./src/server.ts"
+		},
 		"./package.json": "./package.json"
 	},
 	"publishConfig": {
 		"access": "public",
 		"exports": {
-			".": "./dist/server.mjs",
+			".": {
+				"types": "./dist/server.d.mts",
+				"default": "./dist/server.mjs"
+			},
 			"./package.json": "./package.json"
 		}
 	},

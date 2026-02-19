@@ -41,6 +41,7 @@ export default {
 	"common.open": "Open",
 	"common.retry": "Retry",
 	"common.submit": "Submit",
+	"common.deleted": "Deleted",
 
 	// Navigation
 	"nav.dashboard": "Dashboard",
@@ -127,6 +128,8 @@ export default {
 	"form.id": "ID",
 	"form.created": "Created",
 	"form.updated": "Updated",
+	"form.deletedBanner":
+		"This record was deleted on {{date}}. Use the Restore action to make it active again.",
 	"form.lastUpdated": "Last updated",
 	"form.required": "This field is required",
 	"form.invalid": "Invalid value",
@@ -592,6 +595,15 @@ export default {
 	"collectionSearch.placeholder": "Search records...",
 	"collectionSearch.noResults": "No matching records found",
 	"collectionSearch.searching": "Searching...",
+
+	// Audit Log
+	"audit.collection.label": "Audit Log",
+	"audit.collection.description": "Browse all recorded changes and user activity",
+	"audit.sections.event": "Event Details",
+	"audit.sections.user": "User",
+	"audit.sections.changes": "Changes",
+	"audit.widget.recentActivity.title": "Recent Activity",
+	"audit.widget.recentActivity.empty": "No recent activity recorded.",
 
 	// Document Locking
 	"lock.blockedTitle": "{{name}} is currently editing",

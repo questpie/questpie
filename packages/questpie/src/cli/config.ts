@@ -1,4 +1,4 @@
-import type { Questpie } from "../server/config/cms.js";
+import type { Questpie } from "../server/config/questpie.js";
 
 /**
  * CLI-specific configuration options
@@ -77,13 +77,13 @@ export interface QuestpieCliConfig {
  * ```
  */
 export interface QuestpieConfigFile<
-	TCMS extends Questpie<any> = Questpie<any>,
+	TApp extends Questpie<any> = Questpie<any>,
 > {
 	/**
 	 * The Questpie instance
 	 * Must have migrations loaded via `.migrations([...])` for migrate:up to work
 	 */
-	app: TCMS;
+	app: TApp;
 
 	/**
 	 * CLI-specific configuration
@@ -111,9 +111,9 @@ export interface QuestpieConfigFile<
  * });
  * ```
  */
-export function config<TCMS extends Questpie<any>>(
-	config: QuestpieConfigFile<TCMS>,
-): QuestpieConfigFile<TCMS> {
+export function config<TApp extends Questpie<any>>(
+	config: QuestpieConfigFile<TApp>,
+): QuestpieConfigFile<TApp> {
 	return config;
 }
 

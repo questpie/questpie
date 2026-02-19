@@ -1,7 +1,7 @@
-import { cms } from "@/questpie/server/app";
+import { app } from "@/questpie/server/app";
 
 export const config = {
-  app: cms,
+  app: app,
   cli: {
     migrations: {
       directory: "./src/migrations",

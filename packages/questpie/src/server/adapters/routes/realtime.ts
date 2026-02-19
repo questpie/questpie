@@ -5,7 +5,7 @@
  * Accepts multiple topics via POST and streams updates for all of them.
  */
 
-import type { Questpie } from "../../config/cms.js";
+import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
@@ -33,6 +33,8 @@ type TopicInput = {
 	offset?: number;
 	/** Order by */
 	orderBy?: Record<string, "asc" | "desc">;
+	/** Content locale override */
+	locale?: string;
 };
 
 type ValidatedTopic = TopicInput & {
@@ -52,8 +54,7 @@ type TopicState = {
 
 export const createRealtimeRoutes = <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(
-	cms: Questpie<TConfig>,
+>(app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig> = {},
 ) => {
 	const errorResponse = (
@@ -61,7 +62,7 @@ export const createRealtimeRoutes = <
 		request: Request,
 		locale?: string,
 	): Response => {
-		return handleError(error, { request, cms, locale });
+		return handleError(error, { request, app, locale });
 	};
 
 	return {
@@ -90,12 +91,12 @@ export const createRealtimeRoutes = <
 			}
 
 			// Check if realtime is available
-			if (!cms.realtime) {
+			if (!app.realtime) {
 				return errorResponse(ApiError.notImplemented("Realtime"), request);
 			}
 
 			// Resolve context (auth, locale, etc.)
-			const resolved = await resolveContext(cms, request, config, context);
+			const resolved = await resolveContext(app, request, config, context);
 
 			// Parse request body
 			let body: { topics?: TopicInput[] };
@@ -105,7 +106,7 @@ export const createRealtimeRoutes = <
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),
 					request,
-					resolved.cmsContext.locale,
+					resolved.appContext.locale,
 				);
 			}
 
@@ -116,7 +117,7 @@ export const createRealtimeRoutes = <
 				return errorResponse(
 					ApiError.badRequest("Topics array is required and must not be empty"),
 					request,
-					resolved.cmsContext.locale,
+					resolved.appContext.locale,
 				);
 			}
 
@@ -142,7 +143,7 @@ export const createRealtimeRoutes = <
 				}
 
 				if (topic.resourceType === "collection") {
-					const crud = cms.api.collections[topic.resource as any];
+					const crud = app.api.collections[topic.resource as any];
 					if (!crud) {
 						topicErrors.push({
 							id: topic.id,
@@ -153,8 +154,8 @@ export const createRealtimeRoutes = <
 					validatedTopics.push({ ...topic, type: "collection", crud });
 				} else if (topic.resourceType === "global") {
 					try {
-						const globalConfig = cms.getGlobalConfig(topic.resource as any);
-						const crud = globalConfig.generateCRUD(resolved.cmsContext.db, cms);
+						const globalConfig = app.getGlobalConfig(topic.resource as any);
+						const crud = globalConfig.generateCRUD(resolved.appContext.db, app);
 						validatedTopics.push({ ...topic, type: "global", crud });
 					} catch {
 						topicErrors.push({
@@ -177,7 +178,7 @@ export const createRealtimeRoutes = <
 						`No valid topics provided. Errors: ${topicErrors.map((e) => `${e.id}: ${e.message}`).join("; ")}`,
 					),
 					request,
-					resolved.cmsContext.locale,
+					resolved.appContext.locale,
 				);
 			}
 
@@ -229,6 +230,12 @@ export const createRealtimeRoutes = <
 
 						state.refreshInFlight = true;
 
+						// Use topic-specific locale if provided, otherwise fall back to request locale
+						const topicContext =
+							topic.locale && topic.locale !== resolved.appContext.locale
+								? { ...resolved.appContext, locale: topic.locale }
+								: resolved.appContext;
+
 						try {
 							do {
 								state.refreshQueued = false;
@@ -242,16 +249,18 @@ export const createRealtimeRoutes = <
 											limit: topic.limit,
 											offset: topic.offset,
 											orderBy: topic.orderBy,
+											locale: topic.locale,
 										},
-										resolved.cmsContext,
+										topicContext,
 									);
 								} else {
 									data = await topic.crud.get(
 										{
 											where: topic.where,
 											with: topic.with,
+											locale: topic.locale,
 										},
-										resolved.cmsContext,
+										topicContext,
 									);
 								}
 
@@ -275,7 +284,7 @@ export const createRealtimeRoutes = <
 							lastSeq: 0,
 						});
 
-						const unsub = cms.realtime!.subscribe(
+						const unsub = app.realtime!.subscribe(
 							(event) => {
 								void refresh(topic.id, event.seq);
 							},
@@ -323,7 +332,7 @@ export const createRealtimeRoutes = <
 					// Send initial snapshots
 					void (async () => {
 						try {
-							const latestSeq = (await cms.realtime?.getLatestSeq()) ?? 0;
+							const latestSeq = (await app.realtime?.getLatestSeq()) ?? 0;
 
 							// Initialize all topic states with latest seq
 							for (const topic of validatedTopics) {

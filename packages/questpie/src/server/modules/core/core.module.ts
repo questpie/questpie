@@ -10,7 +10,7 @@ import { QuestpieBuilder } from "#questpie/server/config/builder.js";
 import { coreAuthOptions } from "#questpie/server/integrated/auth/index.js";
 
 export const createCoreModule = () =>
-  QuestpieBuilder.empty("cms-core")
+  QuestpieBuilder.empty("core")
     .collections({
       assets: assetsCollection,
       user: usersCollection,

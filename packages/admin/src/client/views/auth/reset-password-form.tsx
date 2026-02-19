@@ -46,7 +46,7 @@ export type ResetPasswordFormProps = {
  *
  * @example
  * ```tsx
- * const authClient = createAdminAuthClient<typeof cms>({ baseURL: '...' })
+ * const authClient = createAdminAuthClient<typeof app>({ baseURL: '...' })
  *
  * function ResetPasswordPage() {
  *   const token = useSearchParams().get('token')

@@ -33,16 +33,16 @@ interface RequestContext {
 | `defaultLocale` | `"en"` | Fallback locale |
 | `localeFallback` | `true` | Fall back to default locale for missing translations |
 | `accessMode` | `"system"` | `"system"` bypasses access control; `"user"` enforces it |
-| `db` | CMS database | Database client (may be overridden with a transaction) |
+| `db` | app database | Database client (may be overridden with a transaction) |
 
 ### Passing Context to CRUD
 
 ```ts
 // System mode (default) — no access control
-const posts = await cms.api.collections.posts.find({});
+const posts = await app.api.collections.posts.find({});
 
 // User mode — enforces access rules
-const posts = await cms.api.collections.posts.find(
+const posts = await app.api.collections.posts.find(
   { where: { status: "published" } },
   {
     accessMode: "user",
@@ -54,7 +54,7 @@ const posts = await cms.api.collections.posts.find(
 
 ### Context Normalization
 
-The CMS normalizes context with defaults:
+the app normalizes context with defaults:
 
 ```ts
 // Input context
@@ -74,15 +74,15 @@ These add TypeScript types without any runtime effect. Use them to get type-safe
 
 ```ts
 import { typedApp, typedDb, typedSession, typedContext } from "questpie";
-import type { AppCMS } from "../cms";
+import type { App } from '../app';
 
 .hooks({
   afterChange: async ({ app, db, session }) => {
-    const cms = typedApp<AppCMS>(app);
-    const typedDatabase = typedDb<AppCMS>(db);
-    const typedSess = typedSession<AppCMS>(session);
+    const app = typedApp<App>(app);
+    const typedDatabase = typedDb<App>(db);
+    const typedSess = typedSession<App>(session);
 
-    await cms.kv.set("cache:key", "value");
+    await app.kv.set("cache:key", "value");
     await typedDatabase.execute(sql`SELECT 1`);
   },
 })
@@ -90,7 +90,7 @@ import type { AppCMS } from "../cms";
 // Or type everything at once
 .access({
   read: (ctx) => {
-    const { app, db, session } = typedContext<AppCMS>(ctx);
+    const { app, db, session } = typedContext<App>(ctx);
     return !!session?.user;
   },
 })
@@ -104,7 +104,7 @@ These actually retrieve context from AsyncLocalStorage at runtime:
 import { getContext, tryGetContext, runWithContext } from "questpie";
 
 // Get context (throws if not in scope)
-const { db, session, locale } = getContext<AppCMS>();
+const { db, session, locale } = getContext<App>();
 
 // Safe access (returns undefined if not in scope)
 const ctx = tryGetContext();
@@ -113,7 +113,7 @@ if (ctx?.locale) {
 }
 
 // Run code within a context scope
-await runWithContext({ app: cms, session, db, locale: "sk" }, async () => {
+await runWithContext({ app: app, session, db, locale: "sk" }, async () => {
   // Inside here, getContext() works
 });
 ```
@@ -124,15 +124,15 @@ Context automatically propagates through nested API calls via AsyncLocalStorage.
 
 ```ts
 // Outer call sets locale
-await cms.api.collections.pages.find({}, { locale: "sk" });
+await app.api.collections.pages.find({}, { locale: "sk" });
 
 // Inside hooks or nested calls, locale is inherited automatically
 .hooks({
   afterRead: async ({ app }) => {
-    const cms = typedApp<AppCMS>(app);
+    const app = typedApp<App>(app);
     
     // This automatically uses locale: "sk" from parent context
-    const related = await cms.api.collections.posts.find({
+    const related = await app.api.collections.posts.find({
       where: { featured: true },
     });
     // No need to pass { locale: "sk" } - it's inherited!
@@ -147,15 +147,15 @@ This is especially useful for:
 
 ### createContext
 
-Create a context for programmatic CMS operations:
+Create a context for programmatic API operations:
 
 ```ts
-const ctx = await cms.createContext({
+const ctx = await app.createContext({
   accessMode: "system",
   locale: "en",
 });
 
-const result = await cms.api.collections.posts.find({}, ctx);
+const result = await app.api.collections.posts.find({}, ctx);
 ```
 
 ## Transactions
@@ -178,18 +178,18 @@ Use `withTransaction` for multi-step operations that must be atomic:
 import { withTransaction, typedApp } from "questpie";
 
 handler: async ({ input, app }) => {
-  const cms = typedApp<AppCMS>(app);
+  const app = typedApp<App>(app);
 
-  return withTransaction(cms.db, async (tx) => {
+  return withTransaction(app.db, async (tx) => {
     // Create order — uses the transaction
-    const order = await cms.api.collections.orders.create(
+    const order = await app.api.collections.orders.create(
       { cartId: input.cartId, status: "pending" },
       { db: tx },
     );
 
     // Deduct inventory — same transaction
     for (const item of order.items) {
-      await cms.api.collections.products.updateById(
+      await app.api.collections.products.updateById(
         { id: item.productId, data: { stock: sql`stock - ${item.qty}` } },
         { db: tx },
       );
@@ -207,7 +207,7 @@ Nested `withTransaction` calls reuse the parent transaction — no savepoints. T
 
 ```ts
 withTransaction(db, async (tx) => {
-  await cms.api.collections.posts.create(data, { db: tx });
+  await app.api.collections.posts.create(data, { db: tx });
   // The create operation's internal hooks run with the same tx
   // If the hook calls another CRUD operation, it also uses tx
 });
@@ -233,15 +233,15 @@ import { onAfterCommit, typedApp } from "questpie";
 
 .hooks({
   afterChange: async ({ data, app }) => {
-    const cms = typedApp<AppCMS>(app);
+    const app = typedApp<App>(app);
 
     // This runs INSIDE the transaction — data is consistent
-    await cms.kv.delete(`cache:${data.id}`);
+    await app.kv.delete(`cache:${data.id}`);
 
     // This runs AFTER the transaction commits
     onAfterCommit(async () => {
       // Safe to send external notifications now
-      await cms.queue.sendNotification.publish({
+      await app.queue.sendNotification.publish({
         recordId: data.id,
       });
 
@@ -308,11 +308,11 @@ const processBooking = rpc.fn({
     customerEmail: z.string(),
   }),
   handler: async ({ input, app }) => {
-    const cms = typedApp<AppCMS>(app);
+    const app = typedApp<App>(app);
 
-    return withTransaction(cms.db, async (tx) => {
+    return withTransaction(app.db, async (tx) => {
       // 1. Verify barber availability
-      const existing = await cms.api.collections.appointments.find(
+      const existing = await app.api.collections.appointments.find(
         {
           where: {
             barberId: input.barberId,
@@ -328,7 +328,7 @@ const processBooking = rpc.fn({
       }
 
       // 2. Create appointment
-      const appointment = await cms.api.collections.appointments.create(
+      const appointment = await app.api.collections.appointments.create(
         {
           barberId: input.barberId,
           serviceId: input.serviceId,
@@ -340,7 +340,7 @@ const processBooking = rpc.fn({
 
       // 3. Queue notifications AFTER commit
       onAfterCommit(async () => {
-        await cms.queue.sendAppointmentConfirmation.publish({
+        await app.queue.sendAppointmentConfirmation.publish({
           appointmentId: appointment.id,
           customerEmail: input.customerEmail,
         });

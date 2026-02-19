@@ -10,9 +10,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import type { ComponentRegistry } from "../../builder";
 import type { FieldDefinition } from "../../builder/field/field";
 import { useAdminConfig } from "../../hooks/use-admin-config";
-import { useCollectionMeta } from "../../hooks/use-collection-meta";
 import { useFieldHooks } from "../../hooks/use-field-hooks";
-import { useGlobalMeta } from "../../hooks/use-global-meta";
 import { useResolveText } from "../../i18n/hooks";
 import { useScopedLocale } from "../../runtime";
 import {
@@ -35,7 +33,7 @@ export interface FieldRendererProps {
 	fieldName: string;
 	fieldDef?: FieldDefinition;
 	collection: string;
-	/** Entity type - determines which meta hook to use */
+	/** Entity type used for contextual behavior */
 	mode?: "collection" | "global";
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
@@ -119,6 +117,27 @@ function collectFieldOptionDependencies(
 	}
 
 	return [...deps];
+}
+
+function computeDynamicDependencyPaths({
+	fieldOptions,
+	form,
+	fieldPrefix,
+}: {
+	fieldOptions: Record<string, any>;
+	form: any;
+	fieldPrefix?: string;
+}): string[] {
+	const scopedValues =
+		((fieldPrefix ? form.getValues(fieldPrefix) : form.getValues()) as
+			| Record<string, any>
+			| undefined) ?? {};
+
+	const trackedDeps = collectFieldOptionDependencies(
+		fieldOptions,
+		scopedValues,
+	);
+	return scopeDependencies(trackedDeps, fieldPrefix);
 }
 
 /**
@@ -252,19 +271,20 @@ export function FieldRenderer({
 
 	const [dynamicDependencyPaths, setDynamicDependencyPaths] = React.useState<
 		string[]
-	>([]);
+	>(() =>
+		computeDynamicDependencyPaths({
+			fieldOptions,
+			form,
+			fieldPrefix,
+		}),
+	);
 
 	React.useEffect(() => {
-		const scopedValues =
-			((fieldPrefix ? form.getValues(fieldPrefix) : form.getValues()) as
-				| Record<string, any>
-				| undefined) ?? {};
-
-		const trackedDeps = collectFieldOptionDependencies(
+		const scopedDeps = computeDynamicDependencyPaths({
 			fieldOptions,
-			scopedValues,
-		);
-		const scopedDeps = scopeDependencies(trackedDeps, fieldPrefix);
+			form,
+			fieldPrefix,
+		});
 
 		setDynamicDependencyPaths((prev) => {
 			if (
@@ -302,19 +322,6 @@ export function FieldRenderer({
 		return (form.getValues(fieldPrefix) ?? {}) as Record<string, any>;
 	}, [form, fieldPrefix, watchedDependencyValues]);
 
-	// Fetch entity metadata for inferring localized fields
-	// Use prop if provided, otherwise fetch from backend based on mode
-	const { data: fetchedCollectionMeta } = useCollectionMeta(collection, {
-		enabled: !entityMetaProp && mode === "collection",
-	});
-	const { data: fetchedGlobalMeta } = useGlobalMeta(collection, {
-		enabled: !entityMetaProp && mode === "global",
-	});
-
-	const entityMeta =
-		entityMetaProp ??
-		(mode === "global" ? fetchedGlobalMeta : fetchedCollectionMeta);
-
 	const context = getFieldContext({
 		fieldName,
 		fieldDef,
@@ -322,7 +329,7 @@ export function FieldRenderer({
 		form,
 		fieldPrefix,
 		locale,
-		entityMeta,
+		entityMeta: entityMetaProp,
 		formValues, // Pass pre-watched values to avoid calling form.watch() internally
 	});
 

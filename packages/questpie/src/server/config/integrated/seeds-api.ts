@@ -1,4 +1,4 @@
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 import {
 	type ResetSeedsOptions,
@@ -15,29 +15,29 @@ import {
  * @example
  * ```ts
  * // Run all pending seeds
- * await cms.seeds.run()
+ * await app.seeds.run()
  *
  * // Run only required seeds
- * await cms.seeds.run({ category: "required" })
+ * await app.seeds.run({ category: "required" })
  *
  * // Run specific seed
- * await cms.seeds.run({ only: ["adminUser"] })
+ * await app.seeds.run({ only: ["adminUser"] })
  *
  * // Force re-run
- * await cms.seeds.run({ force: true })
+ * await app.seeds.run({ force: true })
  *
  * // Validate (dry-run)
- * await cms.seeds.run({ validate: true })
+ * await app.seeds.run({ validate: true })
  *
  * // Get status
- * const status = await cms.seeds.status()
+ * const status = await app.seeds.status()
  *
  * // Undo dev seeds
- * await cms.seeds.undo({ category: "dev" })
+ * await app.seeds.undo({ category: "dev" })
  *
  * // Reset tracking
- * await cms.seeds.reset()
- * await cms.seeds.reset({ only: ["pages"] })
+ * await app.seeds.reset()
+ * await app.seeds.reset({ only: ["pages"] })
  * ```
  */
 export class QuestpieSeedsAPI<
@@ -45,13 +45,13 @@ export class QuestpieSeedsAPI<
 > {
 	private readonly runner: SeedRunner;
 
-	constructor(private readonly cms: Questpie<TConfig>) {
-		this.runner = new SeedRunner(cms);
+	constructor(private readonly app: Questpie<TConfig>) {
+		this.runner = new SeedRunner(app);
 	}
 
 	/** Run pending seeds */
 	async run(options: RunSeedsOptions = {}): Promise<void> {
-		const seeds = this.cms.config.seeds?.seeds || [];
+		const seeds = this.app.config.seeds?.seeds || [];
 		await this.runner.run(seeds, options);
 	}
 
@@ -62,7 +62,7 @@ export class QuestpieSeedsAPI<
 			only?: string[];
 		} = {},
 	): Promise<void> {
-		const seeds = this.cms.config.seeds?.seeds || [];
+		const seeds = this.app.config.seeds?.seeds || [];
 		await this.runner.undo(seeds, options);
 	}
 
@@ -73,7 +73,7 @@ export class QuestpieSeedsAPI<
 
 	/** Get seed status */
 	async status(): Promise<SeedStatus> {
-		const seeds = this.cms.config.seeds?.seeds || [];
+		const seeds = this.app.config.seeds?.seeds || [];
 		return this.runner.status(seeds);
 	}
 }

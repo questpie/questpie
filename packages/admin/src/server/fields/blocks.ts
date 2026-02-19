@@ -99,7 +99,7 @@ export interface BlocksFieldConfig extends BaseFieldConfig {
 	/**
 	 * Allowed block types.
 	 * If specified, only these block types can be added.
-	 * Block types must be registered via `.blocks()` on the CMS builder.
+	 * Block types must be registered via `.blocks()` on the app builder.
 	 */
 	allowedBlocks?: string[];
 

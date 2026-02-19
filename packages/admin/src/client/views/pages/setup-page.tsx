@@ -61,7 +61,7 @@ export interface SetupPageProps {
  * @example
  * ```tsx
  * // In your admin config
- * const admin = qa<AppCMS>()
+ * const admin = qa<App>()
  *   .use(coreAdminModule)
  *   .pages({
  *     setup: page("setup", { component: SetupPage }).path("/setup"),

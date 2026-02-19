@@ -39,7 +39,7 @@ export type ForgotPasswordFormProps = {
  *
  * @example
  * ```tsx
- * const authClient = createAdminAuthClient<typeof cms>({ baseURL: '...' })
+ * const authClient = createAdminAuthClient<typeof app>({ baseURL: '...' })
  *
  * function ForgotPasswordPage() {
  *   const [error, setError] = useState<string | null>(null)

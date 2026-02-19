@@ -39,12 +39,12 @@ const testModule = questpie({ name: "upload-test" }).collections({
 
 describe("collection upload URL generation", () => {
   let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
-  let cms: typeof testModule.$inferCms;
+  let app: typeof testModule.$inferApp;
 
   beforeEach(async () => {
     setup = await buildMockApp(testModule);
-    cms = setup.cms;
-    await runTestDbMigrations(cms);
+    app = setup.app;
+    await runTestDbMigrations(app);
   });
 
   afterEach(async () => {
@@ -54,7 +54,7 @@ describe("collection upload URL generation", () => {
   describe("afterRead hook URL generation", () => {
     it("generates URL for assets when fetching directly", async () => {
       const ctx = createTestContext();
-      const assetsCrud = cms.api.collections.assets;
+      const assetsCrud = app.api.collections.assets;
 
       // Create an asset with a key (simulating an uploaded file)
       const asset = await assetsCrud.create(
@@ -86,7 +86,7 @@ describe("collection upload URL generation", () => {
 
     it("generates URL for assets in find (multiple records)", async () => {
       const ctx = createTestContext();
-      const assetsCrud = cms.api.collections.assets;
+      const assetsCrud = app.api.collections.assets;
 
       // Create multiple assets
       await assetsCrud.create(
@@ -126,8 +126,8 @@ describe("collection upload URL generation", () => {
 
     it("generates URL for assets when expanding relations", async () => {
       const ctx = createTestContext();
-      const assetsCrud = cms.api.collections.assets;
-      const servicesCrud = cms.api.collections.services;
+      const assetsCrud = app.api.collections.assets;
+      const servicesCrud = app.api.collections.services;
 
       // Create an asset
       const asset = await assetsCrud.create(
@@ -169,7 +169,7 @@ describe("collection upload URL generation", () => {
 
     it("URL generation handles both public and private visibility", async () => {
       const ctx = createTestContext();
-      const assetsCrud = cms.api.collections.assets;
+      const assetsCrud = app.api.collections.assets;
 
       // Create a public asset
       const publicAsset = await assetsCrud.create(

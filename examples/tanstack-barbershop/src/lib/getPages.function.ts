@@ -2,7 +2,7 @@ import { isDraftMode } from "@questpie/admin/shared";
 import { notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { cms, getRequestLocale } from "@/lib/server-helpers";
+import { app, getRequestLocale } from "@/lib/server-helpers";
 
 export type PageLoaderData = Awaited<ReturnType<typeof getPage>>;
 
@@ -15,13 +15,13 @@ export const getPage = createServerFn({ method: "GET" })
 		const isDraft = isDraftMode(cookieHeader);
 		const locale = getRequestLocale();
 
-		// Use direct CMS API for proper afterRead hooks (including blocks prefetch)
-		const ctx = await cms.createContext({
+		// Use direct app API for proper afterRead hooks (including blocks prefetch)
+		const ctx = await app.createContext({
 			accessMode: "system",
 			locale,
 		});
 
-		const page = await cms.api.collections.pages.findOne(
+		const page = await app.api.collections.pages.findOne(
 			{
 				where: isDraft
 					? { slug: data.slug }

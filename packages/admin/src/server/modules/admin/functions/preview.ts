@@ -306,17 +306,17 @@ export const getPreviewUrl = fn({
 	type: "query",
 	schema: getPreviewUrlSchema,
 	outputSchema: getPreviewUrlOutputSchema,
-	handler: async ({ input, app, session }) => {
+	handler: async ({ input, app: appInstance, session }) => {
 		// Require authenticated admin session
 		if (!session) {
 			return { url: null, error: "Unauthorized: Admin session required" };
 		}
 
 		const { collection: collectionName, record, locale } = input;
-		const cms = app as Questpie<any>;
+		const app = appInstance as Questpie<any>;
 
-		// Get collection from CMS
-		const collections = cms.getCollections();
+		// Get collection from app
+		const collections = app.getCollections();
 		const collection = collections[collectionName];
 
 		if (!collection) {

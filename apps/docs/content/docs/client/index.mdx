@@ -36,20 +36,20 @@ Server Runtime (collections, globals, fields, RPC)
 import { createClient } from "questpie/client";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import type { AppCMS, AppRpc } from "@/questpie/server/cms";
+import type { App, AppRpc } from "@/questpie/server/app";
 
-const client = createClient<AppCMS, AppRpc>({
+const client = createClient<App, AppRpc>({
   baseURL: "http://localhost:3000",
-  basePath: "/api/cms",
+  basePath: "/api",
 });
 
-const cms = createQuestpieQueryOptions(client, {
-  keyPrefix: "cms",
+const app = createQuestpieQueryOptions(client, {
+  keyPrefix: "questpie",
 });
 
 // Typed query
 const { data } = useQuery(
-  cms.collections.posts.find({
+  app.collections.posts.find({
     where: { published: true },
     limit: 10,
   }),
@@ -57,11 +57,11 @@ const { data } = useQuery(
 // data is typed: { docs: Post[], totalDocs: number, ... }
 
 // Typed mutation
-const createPost = useMutation(cms.collections.posts.create());
+const createPost = useMutation(app.collections.posts.create());
 
 // Typed RPC
 const { data: stats } = useQuery(
-  cms.rpc.getOverviewStats.query({}),
+  app.rpc.getOverviewStats.query({}),
 );
 ```
 

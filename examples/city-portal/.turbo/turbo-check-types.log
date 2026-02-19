@@ -1,12 +1,5 @@
 $ tsc --noEmit
-src/lib/cms-functions.ts(21,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
-src/lib/cms-functions.ts(38,35): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
-src/lib/cms-functions.ts(58,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
-src/lib/cms-functions.ts(97,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
-src/lib/cms-functions.ts(132,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
-src/lib/cms-functions.ts(154,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
-src/lib/cms-functions.ts(187,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
-src/lib/cms-functions.ts(203,33): error TS2339: Property 'api' does not exist on type 'QuestpieClient<QuestpieFromState<{ name: "questpie"; fields: TypeMerge<UnsetProperty<TypeMerge<UnsetProperty<{ number: { readonly type: "number"; readonly _value: number; readonly toColumn: (name: string, config: NumberFieldConfig) => any; readonly toZodSchema: (config: NumberFieldConfig) => ZodNumber | ZodOptional<...'.
+src/components/layout/Header.tsx(84,8): error TS2322: Type '`/${string}`' is not assignable to type '"/" | "." | "/admin" | "/api/preview" | "/api/$" | "/admin/$" | ".." | "/$citySlug/announcements" | "/$citySlug/contact" | "/$citySlug/documents" | "/$citySlug" | "/$citySlug/news/$slug" | "/$citySlug/pages/$slug" | "/$citySlug/news"'.
 src/migrations/index.ts(2,10): error TS2305: Module '"./20260211T164057_bright_yellow_tiger.js"' has no exported member 'brightYellowTiger'.
 src/questpie/admin/blocks/accordion.tsx(18,24): error TS2339: Property 'items' does not exist on type 'never'.
 src/questpie/admin/blocks/accordion.tsx(22,32): error TS2339: Property 'allowMultipleOpen' does not exist on type 'never'.
@@ -104,14 +97,52 @@ src/questpie/admin/blocks/video.tsx(40,22): error TS2339: Property 'title' does 
 src/questpie/admin/blocks/video.tsx(48,15): error TS2339: Property 'url' does not exist on type 'never'.
 src/questpie/admin/blocks/video.tsx(52,13): error TS2339: Property 'caption' does not exist on type 'never'.
 src/questpie/admin/blocks/video.tsx(54,15): error TS2339: Property 'caption' does not exist on type 'never'.
-src/questpie/server/blocks.ts(540,21): error TS18046: 'ctx.app' is of type 'unknown'.
 src/questpie/server/collections/news.ts(104,27): error TS18048: 'prev' is possibly 'undefined'.
 src/questpie/server/collections/pages.ts(95,27): error TS18048: 'prev' is possibly 'undefined'.
 src/questpie/server/globals/site-settings.ts(291,24): error TS2339: Property 'cityId' does not exist on type 'BaseRequestContext'.
-src/routes/admin/$.tsx(61,4): error TS2322: Type '{ children: Element; admin: AdminBuilder<{ blocks: {}; fields: { number: FieldBuilder<{ name: "number"; "~options": NumberFieldConfig & Partial<Pick<BaseFieldConfigProps, "description" | ... 2 more ... | "placeholder"> & Pick<...>> & FieldStateOptions & FieldHookOptions; component: ({ name, label, description, place...' is not assignable to type 'IntrinsicAttributes & AdminLayoutProps'.
+src/routes/_app/$citySlug.documents.tsx(60,7): error TS2322: Type '`/${string}/documents`' is not assignable to type '"/" | "." | "/admin" | "/api/preview" | "/api/$" | "/admin/$" | ".." | "/$citySlug/announcements" | "/$citySlug/contact" | "/$citySlug/documents" | "/$citySlug" | "/$citySlug/news/$slug" | "/$citySlug/pages/$slug" | "/$citySlug/news"'.
+src/routes/_app/$citySlug.documents.tsx(61,17): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/_app/$citySlug.news.$slug.tsx(18,2): error TS2322: Type '({ loaderData }: AssetFnContextOptions<"/_app/$citySlug/news/$slug", "/$citySlug/news/$slug", Route<Register, RootRoute<Register, undefined, {}, AnyContext, AnyContext, ... 6 more ..., undefined>, ... 15 more ..., undefined>, ... 6 more ..., {}>) => { ...; }' is not assignable to type '(ctx: AssetFnContextOptions<"/_app/$citySlug/news/$slug", "/$citySlug/news/$slug", Route<Register, RootRoute<Register, undefined, {}, AnyContext, AnyContext, ... 6 more ..., undefined>, ... 15 more ..., undefined>, ... 6 more ..., {}>) => Awaitable<...>'.
+  Type '{ title: string; }' is not assignable to type 'Awaitable<{ links?: (DetailedHTMLProps<LinkHTMLAttributes<HTMLLinkElement>, HTMLLinkElement> | undefined)[] | undefined; scripts?: (DetailedHTMLProps<...> | undefined)[] | undefined; meta?: (DetailedHTMLProps<...> | undefined)[] | undefined; styles?: (DetailedHTMLProps<...> | undefined)[] | undefined; }>'.
+src/routes/_app/$citySlug.news.$slug.tsx(31,10): error TS2339: Property 'article' does not exist on type 'undefined'.
+src/routes/_app/$citySlug.news.$slug.tsx(38,5): error TS2322: Type '`/${string}/news`' is not assignable to type '"/" | "." | "/admin" | "/api/preview" | "/api/$" | "/admin/$" | ".." | "/$citySlug/announcements" | "/$citySlug/contact" | "/$citySlug/documents" | "/$citySlug" | "/$citySlug/news/$slug" | "/$citySlug/pages/$slug" | "/$citySlug/news"'.
+src/routes/_app/$citySlug.news.index.tsx(58,7): error TS2322: Type '`/${string}/news`' is not assignable to type '"/" | "." | "/admin" | "/api/preview" | "/api/$" | "/admin/$" | ".." | "/$citySlug/announcements" | "/$citySlug/contact" | "/$citySlug/documents" | "/$citySlug" | "/$citySlug/news/$slug" | "/$citySlug/pages/$slug" | "/$citySlug/news"'.
+src/routes/_app/$citySlug.news.index.tsx(59,17): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/_app/$citySlug.news.index.tsx(83,8): error TS2322: Type '`/${string}/news/${any}`' is not assignable to type '"/" | "." | "/admin" | "/api/preview" | "/api/$" | "/admin/$" | ".." | "/$citySlug/announcements" | "/$citySlug/contact" | "/$citySlug/documents" | "/$citySlug" | "/$citySlug/news/$slug" | "/$citySlug/pages/$slug" | "/$citySlug/news"'.
+src/routes/_app/$citySlug.tsx(73,8): error TS2322: Type '{ id: string; key: string; size: number; createdAt: Date; updatedAt: Date; filename: string; mimeType: string; visibility: "public" | "private"; alt: string | null; _title: string; url: string; width?: number | ... 1 more ... | undefined; height?: number | ... 1 more ... | undefined; caption?: string | ... 1 more .....' is not assignable to type 'string | undefined'.
+  Type '{ id: string; key: string; size: number; createdAt: Date; updatedAt: Date; filename: string; mimeType: string; visibility: "public" | "private"; alt: string | null; _title: string; url: string; width?: number | ... 1 more ... | undefined; height?: number | ... 1 more ... | undefined; caption?: string | ... 1 more .....' is not assignable to type 'string'.
+src/routes/_app/$citySlug.tsx(74,8): error TS2322: Type '({ readonly label: string; readonly href: string; readonly isExternal: boolean | null; } | null)[]' is not assignable to type 'NavItem[]'.
+  Type '{ readonly label: string; readonly href: string; readonly isExternal: boolean | null; } | null' is not assignable to type 'NavItem'.
+    Type 'null' is not assignable to type 'NavItem'.
+src/routes/_app/$citySlug.tsx(75,8): error TS2322: Type 'boolean | null | undefined' is not assignable to type 'boolean | undefined'.
+  Type 'null' is not assignable to type 'boolean | undefined'.
+src/routes/_app/$citySlug.tsx(76,8): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/routes/_app/$citySlug.tsx(77,8): error TS2322: Type 'string | null | undefined' is not assignable to type '"info" | "warning" | "emergency" | undefined'.
+  Type 'null' is not assignable to type '"info" | "warning" | "emergency" | undefined'.
+src/routes/_app/$citySlug.tsx(86,8): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/routes/_app/$citySlug.tsx(87,8): error TS2322: Type '({ readonly label: string; readonly href: string; readonly isExternal: boolean | null; } | null)[]' is not assignable to type 'FooterLink[]'.
+  Type '{ readonly label: string; readonly href: string; readonly isExternal: boolean | null; } | null' is not assignable to type 'FooterLink'.
+    Type 'null' is not assignable to type 'FooterLink'.
+src/routes/_app/$citySlug.tsx(88,8): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/routes/_app/$citySlug.tsx(89,8): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/routes/_app/$citySlug.tsx(90,8): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/routes/_app/$citySlug.tsx(91,8): error TS2322: Type '({ readonly platform: string; readonly url: string; } | null)[]' is not assignable to type 'SocialLink[]'.
+  Type '{ readonly platform: string; readonly url: string; } | null' is not assignable to type 'SocialLink'.
+    Type 'null' is not assignable to type 'SocialLink'.
+src/routes/_app/$citySlug.tsx(92,8): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/routes/admin/$.tsx(61,4): error TS2322: Type '{ children: Element; admin: AdminBuilder<{ blocks: {}; locale: { default: string; supported: string[]; }; translations: {}; fields: { number: FieldBuilder<{ name: "number"; "~options": NumberFieldConfig & Partial<...> & FieldStateOptions & FieldHookOptions; component: ({ name, label, description, placeholder, requir...' is not assignable to type 'IntrinsicAttributes & AdminLayoutProps'.
   Property 'admin' does not exist on type 'IntrinsicAttributes & AdminLayoutProps'.
-src/routes/admin/index.tsx(54,4): error TS2322: Type '{ children: Element; admin: AdminBuilder<{ blocks: {}; fields: { number: FieldBuilder<{ name: "number"; "~options": NumberFieldConfig & Partial<Pick<BaseFieldConfigProps, "description" | ... 2 more ... | "placeholder"> & Pick<...>> & FieldStateOptions & FieldHookOptions; component: ({ name, label, description, place...' is not assignable to type 'IntrinsicAttributes & AdminLayoutProps'.
+src/routes/admin/index.tsx(54,4): error TS2322: Type '{ children: Element; admin: AdminBuilder<{ blocks: {}; locale: { default: string; supported: string[]; }; translations: {}; fields: { number: FieldBuilder<{ name: "number"; "~options": NumberFieldConfig & Partial<...> & FieldStateOptions & FieldHookOptions; component: ({ name, label, description, placeholder, requir...' is not assignable to type 'IntrinsicAttributes & AdminLayoutProps'.
   Property 'admin' does not exist on type 'IntrinsicAttributes & AdminLayoutProps'.
+src/routes/index.tsx(85,11): error TS2322: Type '`/${any}`' is not assignable to type '"/" | "." | "/admin" | "/api/preview" | "/api/$" | "/admin/$" | ".." | "/$citySlug/announcements" | "/$citySlug/contact" | "/$citySlug/documents" | "/$citySlug" | "/$citySlug/news/$slug" | "/$citySlug/pages/$slug" | "/$citySlug/news"'.
 ../../packages/admin/src/client/builder/types/action-registry.ts(8,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/client/builder/types/action-types.ts(12,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/client/builder/types/collection-types.ts(5,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
@@ -119,27 +150,71 @@ src/routes/admin/index.tsx(54,4): error TS2322: Type '{ children: Element; admin
 ../../packages/admin/src/client/builder/types/global-types.ts(5,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/client/builder/types/ui-config.ts(7,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/client/builder/types/widget-types.ts(8,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
-../../packages/admin/src/client/components/blocks/block-editor-context.tsx(10,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
-../../packages/admin/src/client/components/blocks/block-editor-provider.tsx(10,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
-../../packages/admin/src/client/components/blocks/block-form.tsx(221,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
-../../packages/admin/src/client/components/blocks/block-item-menu.tsx(302,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
-../../packages/admin/src/client/components/blocks/block-item.tsx(195,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
-../../packages/admin/src/client/components/blocks/block-library.tsx(12,55): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
-../../packages/admin/src/client/components/blocks/block-type-icon.tsx(9,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-canvas.tsx(151,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-editor-context.tsx(12,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-editor-provider.tsx(12,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-fields-renderer.tsx(11,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-item-menu.tsx(312,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-item.tsx(258,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-library-sidebar.tsx(12,55): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/blocks/block-type-icon.tsx(10,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/client/components/component-renderer.tsx(19,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/client/components/fields/blocks-field/blocks-field.tsx(12,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/fields/relation-picker.tsx(256,14): error TS2304: Cannot find name 'renderOption'.
+../../packages/admin/src/client/components/fields/relation-picker.tsx(257,17): error TS2304: Cannot find name 'renderOption'.
+../../packages/admin/src/client/components/fields/relation-picker.tsx(274,4): error TS2304: Cannot find name 'renderOption'.
 ../../packages/admin/src/client/components/fields/relation/displays/types.ts(6,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/components/primitives/select-multi.tsx(292,49): error TS2345: Argument of type 'string' is not assignable to parameter of type 'TValue'.
+  'string' is assignable to the constraint of type 'TValue', but 'TValue' could be instantiated with a different subtype of constraint 'string'.
+../../packages/admin/src/client/components/primitives/select-single.tsx(141,35): error TS2345: Argument of type 'string' is not assignable to parameter of type 'TValue'.
+  'string' is assignable to the constraint of type 'TValue', but 'TValue' could be instantiated with a different subtype of constraint 'string'.
+../../packages/admin/src/client/components/primitives/select-single.tsx(155,28): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: SelectOption<string>, index: number, array: SelectOption<string>[]) => value is SelectOption<string>, thisArg?: any): SelectOption<...>[]', gave the following error.
+    Argument of type '(opt: SelectOption<TValue>) => boolean' is not assignable to parameter of type '(value: SelectOption<string>, index: number, array: SelectOption<string>[]) => value is SelectOption<string>'.
+      Types of parameters 'opt' and 'value' are incompatible.
+        Type 'SelectOption<string>' is not assignable to type 'SelectOption<TValue>'.
+          Type 'string' is not assignable to type 'TValue'.
+            'string' is assignable to the constraint of type 'TValue', but 'TValue' could be instantiated with a different subtype of constraint 'string'.
+  Overload 2 of 2, '(predicate: (value: SelectOption<string>, index: number, array: SelectOption<string>[]) => unknown, thisArg?: any): SelectOption<string>[]', gave the following error.
+    Argument of type '(opt: SelectOption<TValue>) => boolean' is not assignable to parameter of type '(value: SelectOption<string>, index: number, array: SelectOption<string>[]) => unknown'.
+      Types of parameters 'opt' and 'value' are incompatible.
+        Type 'SelectOption<string>' is not assignable to type 'SelectOption<TValue>'.
+          Type 'string' is not assignable to type 'TValue'.
+            'string' is assignable to the constraint of type 'TValue', but 'TValue' could be instantiated with a different subtype of constraint 'string'.
+../../packages/admin/src/client/components/primitives/select-single.tsx(164,5): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: SelectOption<string>, index: number, obj: SelectOption<string>[]) => value is SelectOption<string>, thisArg?: any): SelectOption<...> | undefined', gave the following error.
+    Argument of type '(opt: SelectOption<TValue>) => boolean' is not assignable to parameter of type '(value: SelectOption<string>, index: number, obj: SelectOption<string>[]) => value is SelectOption<string>'.
+      Types of parameters 'opt' and 'value' are incompatible.
+        Type 'SelectOption<string>' is not assignable to type 'SelectOption<TValue>'.
+          Type 'string' is not assignable to type 'TValue'.
+            'string' is assignable to the constraint of type 'TValue', but 'TValue' could be instantiated with a different subtype of constraint 'string'.
+  Overload 2 of 2, '(predicate: (value: SelectOption<string>, index: number, obj: SelectOption<string>[]) => unknown, thisArg?: any): SelectOption<string> | undefined', gave the following error.
+    Argument of type '(opt: SelectOption<TValue>) => boolean' is not assignable to parameter of type '(value: SelectOption<string>, index: number, obj: SelectOption<string>[]) => unknown'.
+      Types of parameters 'opt' and 'value' are incompatible.
+        Type 'SelectOption<string>' is not assignable to type 'SelectOption<TValue>'.
+          Type 'string' is not assignable to type 'TValue'.
+            'string' is assignable to the constraint of type 'TValue', but 'TValue' could be instantiated with a different subtype of constraint 'string'.
 ../../packages/admin/src/client/components/ui/alert.tsx(4,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
 ../../packages/admin/src/client/components/ui/command.tsx(6,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
 ../../packages/admin/src/client/components/ui/command.tsx(13,8): error TS2307: Cannot find module '#questpie/admin/client/components/ui/dialog' or its corresponding type declarations.
 ../../packages/admin/src/client/components/ui/command.tsx(17,8): error TS2307: Cannot find module '#questpie/admin/client/components/ui/input-group' or its corresponding type declarations.
 ../../packages/admin/src/client/components/ui/context-menu.tsx(4,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
 ../../packages/admin/src/client/components/ui/drawer.tsx(6,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
-../../packages/admin/src/client/components/ui/resizable.tsx(10,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
 ../../packages/admin/src/client/components/ui/responsive-dialog.tsx(5,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
 ../../packages/admin/src/client/components/ui/responsive-dialog.tsx(6,29): error TS2307: Cannot find module '#questpie/admin/client/hooks/use-media-query' or its corresponding type declarations.
 ../../packages/admin/src/client/components/widgets/stats-widget.tsx(10,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/client/runtime/routes.ts(8,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/client/types/admin-config.ts(5,8): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/client/views/collection/cells/complex-cells.tsx(12,34): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
+../../packages/admin/src/client/views/common/global-search.tsx(17,41): error TS2307: Cannot find module '#questpie/admin/server' or its corresponding type declarations.
 ../../packages/admin/src/components/rich-text/rich-text-renderer.tsx(3,20): error TS2307: Cannot find module '#questpie/admin/client/lib/utils' or its corresponding type declarations.
+../../packages/admin/src/components/rich-text/rich-text-renderer.tsx(177,45): error TS2339: Property 'slice' does not exist on type 'never'.
+../../packages/admin/src/server/block/prefetch.ts(320,3): error TS2322: Type 'Record<string, Record<string, unknown>>' is not assignable to type 'Record<string, Record<string, {}>>'.
+  'string' index signatures are incompatible.
+    Type 'Record<string, unknown>' is not assignable to type 'Record<string, {}>'.
+      'string' index signatures are incompatible.
+        Type 'unknown' is not assignable to type '{}'.
+../../packages/questpie/src/server/adapters/http.ts(281,28): error TS2339: Property 'transition' does not exist on type '{ get: (request: Request, params: { global: string; }, context?: AdapterContext | undefined) => Promise<Response>; schema: (request: Request, params: { ...; }, context?: AdapterContext | undefined) => Promise<...>; update: (request: Request, params: { ...; }, context?: AdapterContext | undefined, input?: unknown) =>...'.
+../../packages/questpie/src/server/adapters/http.ts(410,31): error TS2339: Property 'transition' does not exist on type '{ find: (request: Request, params: { collection: string; }, context?: AdapterContext | undefined) => Promise<Response>; count: (request: Request, params: { ...; }, context?: AdapterContext | undefined) => Promise<...>; ... 10 more ...; deleteMany: (request: Request, params: { ...; }, context?: AdapterContext | undef...'.
+../../packages/questpie/src/server/config/questpie.ts(6,21): error TS2307: Cannot find module 'bun' or its corresponding type declarations.
+../../packages/questpie/src/server/migration/types.ts(1,36): error TS2307: Cannot find module 'bun' or its corresponding type declarations.

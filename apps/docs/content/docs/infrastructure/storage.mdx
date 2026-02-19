@@ -20,7 +20,7 @@ With no storage configuration, files are stored locally at `./uploads`:
   app: { url: "http://localhost:3000" },
   db: { url: process.env.DATABASE_URL },
   storage: {
-    basePath: "/api/cms",  // URL prefix for file access
+    basePath: "/api",  // URL prefix for file access
   },
   secret: process.env.SECRET,  // used for signed URL tokens
 })
@@ -30,7 +30,7 @@ With no storage configuration, files are stored locally at `./uploads`:
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `storage.basePath` | `string` | `"/cms"` | URL path prefix for file endpoints |
+| `storage.basePath` | `string` | `"/"` | URL path prefix for file endpoints |
 | `storage.location` | `string` | `"./uploads"` | Local filesystem path |
 | `storage.driver` | `DriverContract` | `FSDriver` | Custom storage driver |
 | `storage.signedUrlExpiration` | `number` | `3600` | Signed URL TTL in seconds |
@@ -89,7 +89,7 @@ const s3Client = new S3Client({
 ## Common Mistakes
 
 - **Missing `secret`** — Without a secret, signed URLs can't be generated for private files. Always set this in production.
-- **Wrong `basePath`** — The storage `basePath` must match your CMS mount path so file URLs resolve correctly.
+- **Wrong `basePath`** — The storage `basePath` must match your app mount path so file URLs resolve correctly.
 - **Not creating the uploads directory** — The default `FSDriver` expects `./uploads` to exist. Create it or configure a different `location`.
 
 ## Related Pages

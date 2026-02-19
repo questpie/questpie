@@ -21,7 +21,7 @@ Adds admin capabilities to your `q` builder: sidebar config, dashboard widgets, 
 import { q } from "questpie";
 import { adminModule } from "@questpie/admin/server";
 
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)
   .collections({ posts, barbers, services })
   .sidebar(({ s }) =>
@@ -57,9 +57,9 @@ Builds the admin rendering layer: registries for fields, views, components, widg
 
 ```ts
 import { qa, coreAdminModule } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>()
+export const admin = qa<App>()
   .use(coreAdminModule);
 ```
 

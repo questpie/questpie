@@ -244,6 +244,8 @@ export function AssetPreview({
 
 		const content = (
 			<div
+				role={onClick && !disabled ? "button" : "img"}
+				tabIndex={onClick && !disabled ? 0 : undefined}
 				className={cn(
 					"group relative aspect-square overflow-hidden rounded-lg border",
 					"bg-muted/30 border-border/60",
@@ -254,6 +256,16 @@ export function AssetPreview({
 				onClick={
 					onClick && !disabled && asset.id
 						? () => onClick(asset.id!)
+						: undefined
+				}
+				onKeyDown={
+					onClick && !disabled && asset.id
+						? (e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									onClick(asset.id!);
+								}
+							}
 						: undefined
 				}
 			>
@@ -363,6 +375,8 @@ export function AssetPreview({
 
 		return (
 			<div
+				role={onClick && !disabled ? "button" : "img"}
+				tabIndex={onClick && !disabled ? 0 : undefined}
 				className={cn(
 					"group flex items-center gap-2 rounded-md border p-2",
 					"bg-muted/30 border-border/60",
@@ -373,6 +387,16 @@ export function AssetPreview({
 				onClick={
 					onClick && !disabled && asset.id
 						? () => onClick(asset.id!)
+						: undefined
+				}
+				onKeyDown={
+					onClick && !disabled && asset.id
+						? (e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									onClick(asset.id!);
+								}
+							}
 						: undefined
 				}
 			>
@@ -491,6 +515,8 @@ export function AssetPreview({
 
 	return (
 		<div
+			role={onClick && !disabled ? "button" : "img"}
+			tabIndex={onClick && !disabled ? 0 : undefined}
 			className={cn(
 				"group relative overflow-hidden rounded-lg border",
 				"bg-muted/30 border-border/60",
@@ -500,6 +526,16 @@ export function AssetPreview({
 			)}
 			onClick={
 				onClick && !disabled && asset.id ? () => onClick(asset.id!) : undefined
+			}
+			onKeyDown={
+				onClick && !disabled && asset.id
+					? (e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								onClick(asset.id!);
+							}
+						}
+					: undefined
 			}
 		>
 			{/* Drag handle */}

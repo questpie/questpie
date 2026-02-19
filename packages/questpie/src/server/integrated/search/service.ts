@@ -2,7 +2,7 @@
  * Search Service
  *
  * High-level search API wrapper that delegates to the configured SearchAdapter.
- * This is exposed via cms.search.* and provides a unified interface regardless
+ * This is exposed via app.search.* and provides a unified interface regardless
  * of the underlying search implementation.
  */
 
@@ -38,7 +38,7 @@ export class SearchServiceWrapper implements SearchService {
   ) {}
 
   /**
-   * Initialize the adapter (called by CMS on startup)
+   * Initialize the adapter (called by QuestPie on startup)
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
@@ -123,7 +123,7 @@ export class SearchServiceWrapper implements SearchService {
   private ensureInitialized(): void {
     if (!this.initialized) {
       throw new Error(
-        "SearchService not initialized. Call initialize() first or ensure CMS is properly started.",
+        "SearchService not initialized. Call initialize() first or ensure QuestPie is properly started.",
       );
     }
   }

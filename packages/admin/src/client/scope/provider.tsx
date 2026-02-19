@@ -152,7 +152,7 @@ export function useScopeSafe(): ScopeContextValue | null {
  *   const scopedFetch = useScopedFetch();
  *
  *   const client = useMemo(() =>
- *     createClient<typeof cms>({
+ *     createClient<typeof app>({
  *       baseURL: '/api',
  *       fetch: scopedFetch,
  *     }),

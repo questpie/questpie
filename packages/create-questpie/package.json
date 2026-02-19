@@ -2,7 +2,7 @@
 	"name": "create-questpie",
 	"version": "1.0.0",
 	"type": "module",
-	"description": "Create a new QUESTPIE CMS project",
+	"description": "Create a new QuestPie project",
 	"bin": {
 		"create-questpie": "./dist/index.mjs"
 	},
@@ -27,7 +27,7 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/questpie/questpie-cms.git",
+		"url": "https://github.com/questpie/questpie.git",
 		"directory": "packages/create-questpie"
 	},
 	"publishConfig": {
@@ -35,7 +35,7 @@
 	},
 	"keywords": [
 		"questpie",
-		"cms",
+		"framework",
 		"create",
 		"scaffold",
 		"template"

@@ -9,12 +9,12 @@ description: Client registry builder methods for fields, views, components, widg
 
 ```ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>().use(adminModule);
+export const admin = qa<App>().use(adminModule);
 ```
 
-The `AppCMS` type parameter gives autocomplete against your server schema.
+The `App` type parameter gives autocomplete against your server schema.
 
 ## Scope
 
@@ -43,7 +43,7 @@ Compose another admin builder's registrations. The core `adminModule` provides a
 ```ts
 import { adminModule } from "@questpie/admin/client";
 
-qa<AppCMS>().use(adminModule)
+qa<App>().use(adminModule)
 ```
 
 You must `.use(adminModule)` to get the default field renderers, table view, form view, and dashboard widgets. Without it, the admin panel has no renderers.
@@ -165,12 +165,12 @@ Register custom pages accessible via the admin router.
 
 ## Type Safety
 
-The `AppCMS` type parameter connects the admin builder to your server schema:
+The `App` type parameter connects the admin builder to your server schema:
 
 ```ts
-type AppCMS = typeof cms;
+type App = typeof app;
 
-const admin = qa<AppCMS>()
+const admin = qa<App>()
   .use(adminModule);
 
 // admin now knows about all collections, globals, and their fields

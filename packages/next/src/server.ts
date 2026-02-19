@@ -17,13 +17,13 @@ const notFoundResponse = () =>
   });
 
 /**
- * Create a Next.js-compatible handler for QUESTPIE CMS routes.
+ * Create a Next.js-compatible handler for QUESTPIE routes.
  */
 export const questpieNext = (
-  cms: Questpie<any>,
+  app: Questpie<any>,
   config: NextAdapterConfig = {},
 ): NextHandler => {
-  const handler = createFetchHandler(cms, config);
+  const handler = createFetchHandler(app, config);
 
   return async (request) => {
     const response = await handler(request);
@@ -35,10 +35,10 @@ export const questpieNext = (
  * Convenience helpers for Next.js route handlers.
  */
 export const questpieNextRouteHandlers = (
-  cms: Questpie<any>,
+  app: Questpie<any>,
   config: NextAdapterConfig = {},
 ): Record<string, NextHandler> => {
-  const handler = questpieNext(cms, config);
+  const handler = questpieNext(app, config);
 
   return {
     GET: handler,

@@ -44,7 +44,7 @@ Runtime-only:
 ```ts
 import { q } from "questpie";
 
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .collections({ ... })
   .build({ db: { url: process.env.DATABASE_URL } });
 ```
@@ -55,7 +55,7 @@ Runtime + optional admin:
 import { q } from "questpie";
 import { adminModule } from "@questpie/admin/server";
 
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)       // adds .admin(), .list(), .form(), .sidebar(), etc.
   .collections({ ... })
   .build({ db: { url: process.env.DATABASE_URL } });
@@ -98,6 +98,6 @@ const cms = q({ name: "app" })
 ## Canonical References
 
 - `examples/tanstack-barbershop/src/questpie/server/builder.ts`
-- `examples/tanstack-barbershop/src/questpie/server/cms.ts`
+- `examples/tanstack-barbershop/src/questpie/server/app.ts`
 - `examples/tanstack-barbershop/src/questpie/server/collections/`
 - `examples/tanstack-barbershop/src/questpie/server/globals/`

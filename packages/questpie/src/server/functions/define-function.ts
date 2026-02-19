@@ -28,13 +28,13 @@ export function fn(definition: FunctionDefinition): FunctionDefinition {
  *
  * @example
  * ```ts
- * import type { AppCMS } from './cms';
+ * import type { App } from './app';
  *
- * // ctx.app is fully typed as AppCMS
- * const getStats = fn<AppCMS>()({
+ * // ctx.app is fully typed as App
+ * const getStats = fn<App>()({
  *   schema: z.object({ period: z.string() }),
  *   handler: async ({ input, app }) => {
- *     // app is typed as AppCMS
+ *     // app is typed as App
  *     return app.api.collections.orders.find({ ... });
  *   }
  * });

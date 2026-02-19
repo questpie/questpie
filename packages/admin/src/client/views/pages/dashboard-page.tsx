@@ -40,7 +40,7 @@ export interface DashboardPageProps {
  * @example
  * ```tsx
  * // In your admin config
- * const admin = qa<AppCMS>()
+ * const admin = qa<App>()
  *   .use(coreAdminModule)
  *   .dashboard({
  *     title: "Welcome",

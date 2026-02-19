@@ -3,7 +3,7 @@
  */
 
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { cms } from "@/questpie/server/cms";
+import { app } from "@/questpie/server/app";
 
 /**
  * Extract locale from cookie header
@@ -27,14 +27,14 @@ export function getRequestLocale(overrideLocale?: string): "en" | "sk" {
 }
 
 /**
- * Create CMS context for server-side data fetching
+ * Create app context for server-side data fetching
  */
 export async function createServerContext(locale?: string) {
 	const resolvedLocale = getRequestLocale(locale);
-	return cms.createContext({
+	return app.createContext({
 		accessMode: "system",
 		locale: resolvedLocale,
 	});
 }
 
-export { cms };
+export { app };

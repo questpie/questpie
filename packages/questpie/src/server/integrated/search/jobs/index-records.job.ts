@@ -7,7 +7,7 @@
  * @example
  * ```ts
  * // Dispatch batch indexing
- * await cms.queue['index-records'].publish({
+ * await app.queue['index-records'].publish({
  *   items: [
  *     { collection: 'posts', recordId: '123' },
  *     { collection: 'posts', recordId: '456' },
@@ -18,7 +18,7 @@
 
 import { z } from "zod";
 import { job } from "#questpie/server/integrated/queue/job.js";
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 
 /**
  * Schema for index records job payload
@@ -80,18 +80,18 @@ export const indexRecordsJob = job({
     retryDelay: 30,
     retryBackoff: true,
   },
-  handler: async ({ payload, app }) => {
-    const cms = app as Questpie<any>;
+  handler: async ({ payload, app: appInstance }) => {
+    const app = appInstance as Questpie<any>;
 
-    if (!cms?.search) {
+    if (!app?.search) {
       console.warn("[index-records] Search service not configured, skipping");
       return;
     }
 
     // Get configured locales (or default to 'en')
-    const locales = await cms.getLocales();
+    const locales = await app.getLocales();
     const localeCodes = locales.map((l) => l.code);
-    const _defaultLocale = cms.config.locale?.defaultLocale || "en";
+    const _defaultLocale = app.config.locale?.defaultLocale || "en";
 
     // Batch all index operations
     const indexOperations: Array<{
@@ -105,7 +105,7 @@ export const indexRecordsJob = job({
 
     for (const { collection, recordId } of payload.items) {
       // Get collection config
-      const collectionConfig = cms.getCollections()[collection];
+      const collectionConfig = app.getCollections()[collection];
       if (!collectionConfig) {
         console.warn(
           `[index-records] Collection '${collection}' not found, skipping`,
@@ -124,7 +124,7 @@ export const indexRecordsJob = job({
       for (const locale of localeCodes) {
         try {
           // Fetch localized version of the record
-          const record = await cms.api.collections[collection].findOne({
+          const record = await app.api.collections[collection].findOne({
             where: { id: recordId },
             locale,
             localeFallback: false,
@@ -177,7 +177,7 @@ export const indexRecordsJob = job({
 
     // Batch insert to search index
     if (indexOperations.length > 0) {
-      await cms.search.indexBatch(indexOperations);
+      await app.search.indexBatch(indexOperations);
     }
   },
 });

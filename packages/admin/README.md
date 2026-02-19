@@ -32,10 +32,10 @@ export const qb = q.use(adminModule);
 All admin configuration is defined server-side using the builder chain:
 
 ```ts
-// questpie/server/cms.ts
+// questpie/server/app.ts
 import { qb } from "./builder";
 
-export const cms = qb
+export const app = qb
   .collections({ posts, pages })
   .globals({ siteSettings })
   .branding({ name: { en: "My Admin Panel" } })
@@ -68,7 +68,7 @@ export const cms = qb
   )
   .build({ ... });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 ```
 
 ### Collection Admin Config
@@ -193,9 +193,9 @@ The client creates a typed admin builder and mounts the admin UI in React:
 ```ts
 // questpie/admin/builder.ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>().use(adminModule);
+export const admin = qa<App>().use(adminModule);
 ```
 
 ### 2. Typed Hooks
@@ -203,7 +203,7 @@ export const admin = qa<AppCMS>().use(adminModule);
 ```ts
 // questpie/admin/hooks.ts
 import { createTypedHooks } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
 export const {
   useCollectionList,
@@ -213,7 +213,7 @@ export const {
   useCollectionDelete,
   useGlobal,
   useGlobalUpdate,
-} = createTypedHooks<AppCMS>();
+} = createTypedHooks<App>();
 ```
 
 ### 3. Mount in React
@@ -222,14 +222,14 @@ export const {
 // routes/admin.tsx
 import { AdminRouter } from "@questpie/admin/client";
 import { admin } from "~/questpie/admin/builder";
-import { cmsClient } from "~/lib/cms-client";
+import { appClient } from "~/lib/client";
 import { queryClient } from "~/lib/query-client";
 
 export default function AdminRoute() {
   return (
     <AdminRouter
       admin={admin}
-      client={cmsClient}
+      client={client}
       queryClient={queryClient}
       basePath="/admin"
     />

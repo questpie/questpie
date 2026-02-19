@@ -167,7 +167,7 @@ export class RealtimeService {
 
   /**
    * Set context for resolving dependencies from WITH config.
-   * Called by CMS to provide collection/global resolution functions.
+   * Called by QuestPie to provide collection/global resolution functions.
    */
   setSubscriptionContext(context: RealtimeSubscriptionContext): void {
     this.subscriptionContext = context;

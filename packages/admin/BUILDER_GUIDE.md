@@ -110,9 +110,9 @@ const admin = qa()
   .pages({ ... });
 
 // Option 2: Create typed builder with namespace (recommended)
-import type { AppCMS } from "./server/cms";
+import type { App } from "./server/app";
 
-const qab = qa<AppCMS>()
+const qab = qa<App>()
   .use(coreAdminModule)
   .toNamespace();
 
@@ -222,7 +222,7 @@ Configure UI for backend collections:
 
 ```typescript
 // Using typed namespace (recommended)
-const qab = qa<AppCMS>().use(coreAdminModule).toNamespace();
+const qab = qa<App>().use(coreAdminModule).toNamespace();
 
 const postsAdmin = qab
   .collection("posts")
@@ -335,7 +335,7 @@ For server-side builder (`q().use(adminModule)`), dashboard config callback also
 import { adminModule } from "@questpie/admin/server";
 import { q } from "questpie";
 
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)
   .dashboard(({ d, c, a }) =>
     d.dashboard({
@@ -374,7 +374,7 @@ Sidebar is configured on the server builder:
 import { adminModule } from "@questpie/admin/server";
 import { q } from "questpie";
 
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)
   .sidebar(({ s, c }) =>
     s.sidebar({
@@ -860,7 +860,7 @@ export function SplitView({ collection, id, fields }: EditViewComponentProps) {
 ## Best Practices
 
 1. **Start from core module** - Don't reinvent built-in fields/views
-2. **Use typed namespace** - `qa<AppCMS>().use(module).toNamespace()` for best DX
+2. **Use typed namespace** - `qa<App>().use(module).toNamespace()` for best DX
 3. **Use type-safe navigation** - AdminLink over manual URLs
 4. **Leverage field registry** - Reuse field definitions across collections
 5. **Keep views simple** - Complex logic belongs in hooks

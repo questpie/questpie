@@ -1,7 +1,7 @@
 /**
  * useUpload Hook
  *
- * Handles file uploads to the CMS with progress tracking.
+ * Handles file uploads to the app with progress tracking.
  * Uses the QuestpieClient's upload method which uses XMLHttpRequest for progress.
  *
  * @example
@@ -131,7 +131,7 @@ export interface UseUploadReturn {
 // ============================================================================
 
 /**
- * Hook for uploading files to the CMS
+ * Hook for uploading files to the app
  *
  * Uses the QuestpieClient's built-in upload method which provides
  * progress tracking via XMLHttpRequest.

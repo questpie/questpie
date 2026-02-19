@@ -20,13 +20,13 @@ const DATABASE_URL =
 	process.env.DATABASE_URL || "postgres://localhost/cityportal";
 
 /**
- * CMS Base Builder
+ * App Base Builder
  *
- * Contains the full CMS configuration (collections, globals, auth, etc.)
- * EXCEPT blocks. This allows blocks to import BaseCMS for typed ctx.app
+ * Contains the full app configuration (collections, globals, auth, etc.)
+ * EXCEPT blocks. This allows blocks to import BaseApp for typed ctx.app
  * access in prefetch functions without circular type dependencies.
  */
-export const cmsBase = qb
+export const appBase = qb
 	.use(sidebar)
 	.use(dashboard)
 	.collections({
@@ -64,21 +64,21 @@ export const cmsBase = qb
 			requireEmailVerification: false,
 		},
 		baseURL: process.env.APP_URL || "http://localhost:3001",
-		basePath: "/api/cms/auth",
+		basePath: "/api/auth",
 		secret:
 			process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
 	});
 
 /**
- * Inferred CMS type WITHOUT blocks.
+ * Inferred app type WITHOUT blocks.
  * Use this in block prefetch functions for typed ctx.app access.
  */
-export type BaseCMS = (typeof cmsBase)["$inferCms"];
+export type BaseApp = (typeof appBase)["$inferApp"];
 
 /**
- * Full CMS instance with blocks registered.
+ * Full app instance with blocks registered.
  */
-export const cms = cmsBase.blocks(blocks).build({
+export const app = appBase.blocks(blocks).build({
 	app: {
 		url: process.env.APP_URL || "http://localhost:3001",
 	},
@@ -86,7 +86,7 @@ export const cms = cmsBase.blocks(blocks).build({
 		url: DATABASE_URL,
 	},
 	storage: {
-		basePath: "/api/cms",
+		basePath: "/api",
 	},
 	secret: process.env.SECRET,
 	email: {
@@ -112,5 +112,5 @@ export const appRpc = {
 	...adminRpc,
 };
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 export type AppRpc = typeof appRpc;

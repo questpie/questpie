@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { q, typedApp } from "questpie";
 import { z } from "zod";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 export const sendAppointmentConfirmation = q.job({
 	name: "send-appointment-confirmation",
@@ -10,17 +10,17 @@ export const sendAppointmentConfirmation = q.job({
 		customerId: z.string(),
 	}),
 	handler: async ({ payload, app }) => {
-		const cms = typedApp<AppCMS>(app);
+		const typed = typedApp<App>(app);
 
-		const userTable = cms.config.collections.user.table;
-		const customer = await cms.db
+		const userTable = typed.config.collections.user.table;
+		const customer = await typed.db
 			.select({ email: userTable.email, name: userTable.name })
 			.from(userTable)
 			.where(eq(userTable.id as any, payload.customerId) as any)
 			.limit(1)
 			.then((res) => res[0]);
 
-		await cms.email.send({
+		await typed.email.send({
 			to: (customer?.email || "") as string,
 			subject: "Appointment Confirmation",
 			text: `Dear ${customer?.name || "Customer"},\n\nYour appointment (ID: ${payload.appointmentId}) has been confirmed.\n\nThank you!`,

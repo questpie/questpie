@@ -33,6 +33,9 @@ import {
 	RelationItemsDisplay,
 } from "./relation";
 
+// Module-level constant for empty array to avoid recreating on each render
+const EMPTY_VALUE: string[] = [];
+
 export interface RelationPickerProps<_T extends Questpie<any>> {
 	/**
 	 * Field name
@@ -143,7 +146,7 @@ export interface RelationPickerProps<_T extends Questpie<any>> {
 
 export function RelationPicker<T extends Questpie<any>>({
 	name,
-	value = [],
+	value,
 	onChange,
 	targetCollection,
 	label,
@@ -164,6 +167,7 @@ export function RelationPicker<T extends Questpie<any>>({
 	renderItem,
 	renderOption,
 }: RelationPickerProps<T>) {
+	const resolvedValue = value ?? EMPTY_VALUE;
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const resolvedLabel = label ? resolveText(label) : undefined;
@@ -195,11 +199,11 @@ export function RelationPicker<T extends Questpie<any>>({
 
 	// Normalize value to array (handles prefill with single string ID)
 	const selectedIds = React.useMemo(() => {
-		if (!value) return [];
-		if (Array.isArray(value)) return value;
+		if (!resolvedValue) return [];
+		if (Array.isArray(resolvedValue)) return resolvedValue;
 		// Single string ID (from prefill) - convert to array
-		return [value];
-	}, [value]);
+		return [resolvedValue];
+	}, [resolvedValue]);
 	const client = useAdminStore(selectClient);
 
 	// Keep track of fetched items for display

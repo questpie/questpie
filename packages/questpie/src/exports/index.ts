@@ -80,7 +80,7 @@ const q = Object.assign(callableQ, {
 
   /**
    * Define CLI configuration (questpie.config.ts)
-   * @example export default q.config({ app: cms, cli: { migrations: { directory: "./migrations" } } })
+   * @example export default q.config({ app: app, cli: { migrations: { directory: "./migrations" } } })
    */
   config,
 

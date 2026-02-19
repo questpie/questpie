@@ -93,8 +93,7 @@ export function RelationCell({
 							<span className="inline-flex items-center gap-1 max-w-[250px] overflow-hidden">
 								{visibleItems.map((item, idx) => (
 									<RelationChip
-										// biome-ignore lint/suspicious/noArrayIndexKey: stable array from backend
-										key={idx}
+										key={`${item.id ?? item._id ?? String(item)}-${idx}`}
 										item={item}
 										targetCollection={targetCollection}
 										onClick={handleChipClick}
@@ -258,8 +257,7 @@ export function ReverseRelationCell({
 					<span className="inline-flex flex-wrap items-center gap-1">
 						{value.map((item, idx) => (
 							<RelationChip
-								// biome-ignore lint/suspicious/noArrayIndexKey: stable array from backend
-								key={idx}
+								key={`${item.id ?? item._id ?? String(item)}-${idx}`}
 								item={item}
 								targetCollection={sourceCollection}
 								onClick={handleChipClick}

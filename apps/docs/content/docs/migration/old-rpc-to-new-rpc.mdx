@@ -26,7 +26,7 @@ export const appRpc = r.router({ getStats });
 Mount:
 
 ```ts
-createFetchHandler(cms, { basePath: "/api/cms", rpc: appRpc });
+createFetchHandler(app, { basePath: "/api", rpc: appRpc });
 ```
 
 ## Migration checklist

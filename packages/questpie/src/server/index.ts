@@ -46,11 +46,12 @@ export {
 } from "./collection/crud/shared/transaction.js";
 export * from "./config/builder.js";
 export * from "./config/builder-types.js";
-export * from "./config/cms.js";
+export * from "./config/global-hooks-types.js";
+export * from "./config/questpie.js";
 // Re-export type safety helpers (typedApp, typedDb, typedSession, getContext, etc. exported via context.js)
 export type {
 	InferAppFromApp,
-	InferBaseCMS,
+	InferBaseApp,
 	InferDbFromApp,
 	InferSessionFromApp,
 } from "./config/context.js";

@@ -17,7 +17,7 @@ QUESTPIE is designed so packages can extend builders cleanly.
 import { q } from "questpie";
 import { adminModule } from "@questpie/admin/server";
 
-const cms = q({ name: "my-app" })
+const app = q({ name: "my-app" })
   .use(adminModule)
   .collections({
     // your collections
@@ -39,7 +39,7 @@ What the admin module adds:
 ```ts
 const base = q({ name: "base" }).use(adminModule);
 
-export const cms = q({ name: "product" })
+export const app = q({ name: "product" })
   .use(base)
   .collections({
     /* ... */

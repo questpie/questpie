@@ -12,7 +12,7 @@ apps/docs/
 │   ├── getting-started/
 │   │   ├── index.mdx                  # Quick start
 │   │   ├── installation.mdx
-│   │   ├── your-first-cms.mdx
+│   │   ├── your-first-app.mdx
 │   │   └── folder-structure.mdx
 │   │
 │   ├── core-concepts/
@@ -276,7 +276,7 @@ admin/patterns/
 ### Getting Started
 
 - Installation
-- First CMS in 5 minutes
+- First QuestPie in 5 minutes
 - Folder structure explanation
 - Next steps
 

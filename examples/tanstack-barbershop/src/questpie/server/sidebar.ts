@@ -2,7 +2,6 @@ import { qb } from "@/questpie/server/builder";
 
 export const sidebar = qb.sidebar(({ s, c }) =>
 	s.sidebar({
-
 		sections: [
 			s.section({
 				id: "overview",
@@ -36,10 +35,7 @@ export const sidebar = qb.sidebar(({ s, c }) =>
 			s.section({
 				id: "team",
 				title: { en: "Team", sk: "Tím" },
-				items: [
-					{ type: "collection", collection: "barbers" },
-					{ type: "collection", collection: "barberServices" },
-				],
+				items: [{ type: "collection", collection: "barbers" }],
 			}),
 			s.section({
 				id: "external",
@@ -54,5 +50,14 @@ export const sidebar = qb.sidebar(({ s, c }) =>
 					},
 				],
 			}),
+			s.section({
+				id: "administration",
+				title: { en: "Administration", sk: "Administrácia" },
+				items: [
+					{ type: "collection", collection: "user" },
+					{ type: "collection", collection: "adminAuditLog" },
+				],
+			}),
 		],
-	}))
+	}),
+);

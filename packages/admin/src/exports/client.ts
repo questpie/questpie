@@ -296,7 +296,7 @@ export {
 
 // ============================================================================
 // TYPE HELPERS
-// Type utilities for working with the CMS
+// Type utilities for working with the app
 // ============================================================================
 
 import type { CollectionInfer, Questpie } from "questpie";

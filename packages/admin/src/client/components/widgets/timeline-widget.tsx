@@ -84,7 +84,7 @@ function formatTimestamp(
  *     type: "timeline",
  *     id: "recent-activity",
  *     title: "Recent Activity",
- *     fetchFn: async (client) => {
+ *     loader: async (client) => {
  *       const activities = await client.collections.activities.findMany({
  *         limit: 10,
  *         orderBy: { createdAt: "desc" }
@@ -114,15 +114,15 @@ export default function TimelineWidget({
 		emptyMessage,
 	} = config;
 
-	const useServerData = !!config.hasFetchFn;
+	const useServerData = !!config.hasLoader;
 	const serverQuery = useServerWidgetData<TimelineItem[]>(config.id, {
 		enabled: useServerData,
 		refreshInterval: config.refreshInterval,
 	});
 	const clientQuery = useQuery<TimelineItem[]>({
 		queryKey: ["widget", "timeline", config.id],
-		queryFn: () => config.fetchFn!(client),
-		enabled: !useServerData && !!config.fetchFn,
+		queryFn: () => config.loader!(client),
+		enabled: !useServerData && !!config.loader,
 		refetchInterval: config.refreshInterval,
 	});
 	const { data, isLoading, error, refetch } = useServerData

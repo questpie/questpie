@@ -22,6 +22,7 @@ import type {
 	GlobalAccessRule,
 	GlobalBuilderState,
 } from "#questpie/server/global/builder/types.js";
+import { resolveWorkflowConfig } from "#questpie/server/workflow/config.js";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 // ============================================================================
@@ -54,6 +55,16 @@ export interface GlobalSchema {
 	options: {
 		timestamps: boolean;
 		versioning: boolean;
+		workflow?: {
+			enabled: boolean;
+			initialStage: string;
+			stages: Array<{
+				name: string;
+				label?: string;
+				description?: string;
+				transitions?: string[];
+			}>;
+		};
 	};
 
 	/**
@@ -270,20 +281,19 @@ export interface AdminFormViewSchema {
  */
 export async function introspectGlobal(
 	global: Global<GlobalBuilderState>,
-	context: CRUDContext,
-	cms?: unknown,
+	context: CRUDContext, app?: unknown,
 ): Promise<GlobalSchema> {
 	const { state } = global;
 	const fieldDefinitions = state.fieldDefinitions || {};
 
 	// Evaluate global-level access
-	const access = await evaluateGlobalAccess(state, context, cms);
+	const access = await evaluateGlobalAccess(state, context, app);
 
 	// Build field schemas
 	const fields: Record<string, GlobalFieldSchema> = {};
 	for (const [name, fieldDef] of Object.entries(fieldDefinitions)) {
 		const metadata = fieldDef.getMetadata();
-		const fieldAccess = await evaluateGlobalFieldAccess(fieldDef, context, cms);
+		const fieldAccess = await evaluateGlobalFieldAccess(fieldDef, context, app);
 
 		// Generate field-level JSON Schema if possible
 		let validation: unknown;
@@ -317,6 +327,7 @@ export async function introspectGlobal(
 		options: {
 			timestamps: state.options?.timestamps !== false,
 			versioning: !!state.options?.versioning,
+			workflow: resolveWorkflowConfig(state.options?.workflow),
 		},
 		validation: buildGlobalValidation(fieldDefinitions),
 		admin: adminConfig,
@@ -396,8 +407,7 @@ function extractAdminConfig(
  */
 async function evaluateGlobalAccess(
 	state: GlobalBuilderState,
-	context: CRUDContext,
-	cms?: unknown,
+	context: CRUDContext, app?: unknown,
 ): Promise<GlobalAccessInfo> {
 	const { access } = state;
 
@@ -414,7 +424,7 @@ async function evaluateGlobalAccess(
 	}
 
 	const accessContext: GlobalAccessContext = {
-		app: cms,
+		app: app,
 		session: context.session,
 		db: context.db,
 		locale: context.locale,
@@ -478,8 +488,7 @@ async function evaluateAccessRule(
  */
 async function evaluateGlobalFieldAccess(
 	fieldDef: FieldDefinition<FieldDefinitionState>,
-	context: CRUDContext,
-	cms?: unknown,
+	context: CRUDContext, app?: unknown,
 ): Promise<GlobalFieldAccessInfo | undefined> {
 	const fieldAccess = fieldDef.state.config?.access as
 		| FieldDefinitionAccess
@@ -544,13 +553,12 @@ async function evaluateGlobalFieldAccess(
  */
 export async function introspectGlobals(
 	globals: Record<string, Global<GlobalBuilderState>>,
-	context: CRUDContext,
-	cms?: unknown,
+	context: CRUDContext, app?: unknown,
 ): Promise<Record<string, GlobalSchema>> {
 	const schemas: Record<string, GlobalSchema> = {};
 
 	for (const [name, global] of Object.entries(globals)) {
-		const schema = await introspectGlobal(global, context, cms);
+		const schema = await introspectGlobal(global, context, app);
 
 		// Only include visible globals
 		if (schema.access.visible) {

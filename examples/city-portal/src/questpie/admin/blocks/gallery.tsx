@@ -3,7 +3,7 @@
  */
 
 import type { BlockComponentProps } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 type GalleryImage = {
 	id: string;
@@ -13,7 +13,7 @@ type GalleryImage = {
 export function GalleryRenderer({
 	values,
 	data,
-}: BlockComponentProps<AppCMS, "gallery">) {
+}: BlockComponentProps<App, "gallery">) {
 	const imageUrls = (data as Record<string, any>)?.imageUrls || {};
 	const images = (values.images as GalleryImage[] | null) || [];
 

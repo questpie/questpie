@@ -104,7 +104,7 @@ describe("q.global() with field types", () => {
 });
 
 describe("Full integration", () => {
-  test("should build CMS with q.collection() and q.global()", () => {
+  test("should build app with q.collection() and q.global()", () => {
     const q = questpie({ name: "integration-app" }).fields(defaultFields);
 
     const posts = q.collection("posts").fields((f) => ({

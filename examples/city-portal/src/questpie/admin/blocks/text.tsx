@@ -8,9 +8,9 @@ import {
 	type BlockComponentProps,
 	RichTextRenderer,
 } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
-export function TextRenderer({ values }: BlockComponentProps<AppCMS, "text">) {
+export function TextRenderer({ values }: BlockComponentProps<App, "text">) {
 	const maxWidthClass = {
 		narrow: "max-w-xl",
 		medium: "max-w-3xl",

@@ -56,12 +56,12 @@ const testModule = questpie({ name: "upload-through-test" }).collections({
 
 describe("upload + through (many-to-many)", () => {
   let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
-  let cms: typeof testModule.$inferCms;
+  let app: typeof testModule.$inferApp;
 
   beforeEach(async () => {
     setup = await buildMockApp(testModule);
-    cms = setup.cms;
-    await runTestDbMigrations(cms);
+    app = setup.app;
+    await runTestDbMigrations(app);
   });
 
   afterEach(async () => {
@@ -70,7 +70,7 @@ describe("upload + through (many-to-many)", () => {
 
   describe("metadata inference", () => {
     it("should infer manyToMany relation type for upload with through", async () => {
-      const postsCrud = cms.api.collections.posts;
+      const postsCrud = app.api.collections.posts;
       const state = postsCrud["~internalState"];
       const relations = state.relations;
 
@@ -83,7 +83,7 @@ describe("upload + through (many-to-many)", () => {
     });
 
     it("should not create a column for upload with through", async () => {
-      const postsCrud = cms.api.collections.posts;
+      const postsCrud = app.api.collections.posts;
       const table = postsCrud["~internalRelatedTable"];
 
       // gallery should not be a column (it's a many-to-many via junction)
@@ -94,8 +94,8 @@ describe("upload + through (many-to-many)", () => {
   describe("CRUD operations", () => {
     it("should create post with gallery via set", async () => {
       const ctx = createTestContext();
-      const assetsCrud = cms.api.collections.assets;
-      const postsCrud = cms.api.collections.posts;
+      const assetsCrud = app.api.collections.assets;
+      const postsCrud = app.api.collections.posts;
 
       // Create assets
       const asset1 = await assetsCrud.create(
@@ -132,7 +132,7 @@ describe("upload + through (many-to-many)", () => {
       );
 
       // Verify junction records were created
-      const junctionCrud = cms.api.collections.post_assets;
+      const junctionCrud = app.api.collections.post_assets;
       const junctions = await junctionCrud.find(
         { where: { post: { eq: post.id } } },
         ctx,
@@ -145,8 +145,8 @@ describe("upload + through (many-to-many)", () => {
 
     it("should expand gallery with with clause", async () => {
       const ctx = createTestContext();
-      const assetsCrud = cms.api.collections.assets;
-      const postsCrud = cms.api.collections.posts;
+      const assetsCrud = app.api.collections.assets;
+      const postsCrud = app.api.collections.posts;
 
       // Create assets
       const asset1 = await assetsCrud.create(
@@ -184,8 +184,8 @@ describe("upload + through (many-to-many)", () => {
 
     it("should update gallery via set", async () => {
       const ctx = createTestContext();
-      const assetsCrud = cms.api.collections.assets;
-      const postsCrud = cms.api.collections.posts;
+      const assetsCrud = app.api.collections.assets;
+      const postsCrud = app.api.collections.posts;
 
       // Create assets
       const asset1 = await assetsCrud.create(
@@ -243,7 +243,7 @@ describe("upload + through (many-to-many)", () => {
       );
 
       // Verify new junction state
-      const junctionCrud = cms.api.collections.post_assets;
+      const junctionCrud = app.api.collections.post_assets;
       const junctions = await junctionCrud.find(
         { where: { post: { eq: post.id } } },
         ctx,

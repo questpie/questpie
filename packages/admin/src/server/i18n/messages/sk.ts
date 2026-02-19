@@ -41,6 +41,7 @@ export default {
 	"common.open": "Otvoriť",
 	"common.retry": "Skúsiť znova",
 	"common.submit": "Odoslať",
+	"common.deleted": "Vymazaný",
 
 	// Navigation
 	"nav.dashboard": "Prehľad",
@@ -135,6 +136,8 @@ export default {
 	"form.id": "ID",
 	"form.created": "Vytvorené",
 	"form.updated": "Aktualizované",
+	"form.deletedBanner":
+		"Tento záznam bol vymazaný {{date}}. Použite akciu Obnoviť na jeho opätovné aktivovanie.",
 	"form.lastUpdated": "Naposledy aktualizované",
 	"form.required": "Toto pole je povinné",
 	"form.invalid": "Neplatná hodnota",
@@ -609,4 +612,13 @@ export default {
 		few: "pred {{count}}h",
 		other: "pred {{count}}h",
 	},
+
+	// Audit Log
+	"audit.collection.label": "Audit log",
+	"audit.collection.description": "Prehľad všetkých zaznamenaných zmien a aktivity používateľov",
+	"audit.sections.event": "Detail udalosti",
+	"audit.sections.user": "Používateľ",
+	"audit.sections.changes": "Zmeny",
+	"audit.widget.recentActivity.title": "Posledná aktivita",
+	"audit.widget.recentActivity.empty": "Žiadna nedávna aktivita nebola zaznamenaná.",
 } as const;

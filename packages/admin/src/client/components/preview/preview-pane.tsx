@@ -72,6 +72,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
     const client = useAdminStore(selectClient);
     const iframeRef = React.useRef<HTMLIFrameElement>(null);
     const [isReady, setIsReady] = React.useState(false);
+    const isReadyRef = React.useRef(false);
     const [isLoading, setIsLoading] = React.useState(true);
     const [isRefreshing, setIsRefreshing] = React.useState(false);
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
@@ -79,36 +80,42 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 
     // Mint preview token when URL changes
     React.useEffect(() => {
-      const mintToken = async () => {
-        if (!url) {
-          setPreviewUrl(null);
-          return;
-        }
+      if (!url) {
+        setPreviewUrl(null);
+        return;
+      }
 
-        setIsLoading(true);
-        setTokenError(null);
+      let cancelled = false;
 
-        try {
-          // Use type assertion since the client type may not include mintPreviewToken
-          // depending on which modules are used
-          const result = await (client as any).rpc.mintPreviewToken({
-            path: url,
-            ttlMs: 60 * 60 * 1000, // 1 hour
-          });
-          setPreviewUrl(`/api/preview?token=${result.token}`);
-        } catch (error) {
-          console.error("Failed to mint preview token:", error);
-          setTokenError(
-            error instanceof Error
-              ? error.message
-              : "Failed to generate preview token",
-          );
-          setPreviewUrl(null);
-          setIsLoading(false);
-        }
+      setIsLoading(true);
+      setTokenError(null);
+
+      (client as any).rpc
+        .mintPreviewToken({
+          path: url,
+          ttlMs: 60 * 60 * 1000, // 1 hour
+        })
+        .then((result: { token: string }) => {
+          if (!cancelled) {
+            setPreviewUrl(`/api/preview?token=${result.token}`);
+          }
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            console.error("Failed to mint preview token:", error);
+            setTokenError(
+              error instanceof Error
+                ? error.message
+                : "Failed to generate preview token",
+            );
+            setPreviewUrl(null);
+            setIsLoading(false);
+          }
+        });
+
+      return () => {
+        cancelled = true;
       };
-
-      mintToken();
     }, [url, client]);
 
     // Validate origin for security
@@ -181,6 +188,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 
         switch (event.data.type) {
           case "PREVIEW_READY":
+            isReadyRef.current = true;
             setIsReady(true);
             setIsLoading(false);
             break;
@@ -214,14 +222,14 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
     }, [isReady, selectedBlockId, sendToPreview]);
 
     // Handle iframe load
-    const handleLoad = () => {
+    const handleLoad = React.useCallback(() => {
       // Preview should signal PREVIEW_READY, but set a fallback timeout
       setTimeout(() => {
-        if (!isReady) {
+        if (!isReadyRef.current) {
           setIsLoading(false);
         }
       }, 3000);
-    };
+    }, []);
 
     return (
       <div className={cn("relative h-full w-full", className)}>

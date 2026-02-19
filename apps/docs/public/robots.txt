@@ -1,4 +1,4 @@
-# QUESTPIE CMS Documentation
+# QUESTPIE Documentation
 # https://questpie.com
 
 User-agent: *

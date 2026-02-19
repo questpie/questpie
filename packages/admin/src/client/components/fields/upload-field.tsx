@@ -524,22 +524,24 @@ function MultipleUploadInner({
 		let cancelled = false;
 
 		(async () => {
-			for (const id of missingIds) {
-				if (cancelled) return;
-				try {
-					const response = await (client as any).collections[
-						collection
-					].findOne({ where: { id } });
-					if (!cancelled && response) {
-						setFetchedAssets((prev) =>
-							new Map(prev).set(id, response as Asset),
-						);
-					}
-				} catch (fetchError) {
-					if (!cancelled) {
-						console.error("Failed to fetch asset:", fetchError);
-						toast.error("Failed to load asset");
-					}
+			try {
+				const response = await (client as any).collections[collection].find({
+					where: { id: { in: missingIds } },
+					limit: missingIds.length,
+				});
+				if (!cancelled && response?.docs) {
+					setFetchedAssets((prev) => {
+						const next = new Map(prev);
+						for (const asset of response.docs) {
+							next.set(asset.id, asset as Asset);
+						}
+						return next;
+					});
+				}
+			} catch (fetchError) {
+				if (!cancelled) {
+					console.error("Failed to fetch assets:", fetchError);
+					toast.error("Failed to load assets");
 				}
 			}
 		})();

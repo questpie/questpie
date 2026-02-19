@@ -5,7 +5,7 @@ description: Type-safe query options, mutations, and RPC calls for React
 
 # TanStack Query
 
-`@questpie/tanstack-query` provides a typed proxy that creates TanStack Query options from your CMS schema. Collections, globals, and RPC functions all get type-safe `useQuery` and `useMutation` wrappers — no manual type definitions needed.
+`@questpie/tanstack-query` provides a typed proxy that creates TanStack Query options from your app schema. Collections, globals, and RPC functions all get type-safe `useQuery` and `useMutation` wrappers — no manual type definitions needed.
 
 ## Why This Exists
 
@@ -22,13 +22,13 @@ bun add @questpie/tanstack-query @tanstack/react-query
 ```ts
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
-// Create typed query options from your CMS client
-const cms = createQuestpieQueryOptions(client, {
-  keyPrefix: "cms",           // prefix for all query keys
+// Create typed query options from your API client
+const app = createQuestpieQueryOptions(client, {
+  keyPrefix: "questpie",           // prefix for all query keys
   locale: "en",               // default locale
   realtime: {                 // optional: SSE streaming
     enabled: true,
-    baseUrl: "/api/cms",
+    baseUrl: "/api",
     credentials: "include",
   },
 });
@@ -43,12 +43,12 @@ import { useQuery } from "@tanstack/react-query";
 
 // List all posts
 const { data } = useQuery(
-  cms.collections.posts.find(),
+  app.collections.posts.find(),
 );
 
 // With filtering, sorting, pagination
 const { data } = useQuery(
-  cms.collections.posts.find({
+  app.collections.posts.find({
     where: { status: "published" },
     orderBy: { createdAt: "desc" },
     limit: 10,
@@ -64,7 +64,7 @@ const { data } = useQuery(
 
 ```ts
 const { data } = useQuery(
-  cms.collections.posts.findOne(postId),
+  app.collections.posts.findOne(postId),
 );
 // data type: Post
 ```
@@ -73,7 +73,7 @@ const { data } = useQuery(
 
 ```ts
 const { data } = useQuery(
-  cms.collections.posts.count({
+  app.collections.posts.count({
     where: { status: "published" },
   }),
 );
@@ -86,7 +86,7 @@ Enable SSE streaming for live updates:
 
 ```ts
 const { data } = useQuery(
-  cms.collections.posts.find(
+  app.collections.posts.find(
     { where: { status: "published" } },
     { realtime: true },  // enable SSE
   ),
@@ -106,9 +106,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 const queryClient = useQueryClient();
 
 const createPost = useMutation({
-  ...cms.collections.posts.create(),
+  ...app.collections.posts.create(),
   onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: cms.collections.posts.find().queryKey });
+    queryClient.invalidateQueries({ queryKey: app.collections.posts.find().queryKey });
   },
 });
 
@@ -124,7 +124,7 @@ createPost.mutate({
 
 ```ts
 const updatePost = useMutation({
-  ...cms.collections.posts.update(postId),
+  ...app.collections.posts.update(postId),
 });
 
 updatePost.mutate({
@@ -136,7 +136,7 @@ updatePost.mutate({
 
 ```ts
 const deletePost = useMutation({
-  ...cms.collections.posts.delete(postId),
+  ...app.collections.posts.delete(postId),
 });
 
 deletePost.mutate();
@@ -146,7 +146,7 @@ deletePost.mutate();
 
 ```ts
 const restorePost = useMutation({
-  ...cms.collections.posts.restore(postId),
+  ...app.collections.posts.restore(postId),
 });
 ```
 
@@ -155,7 +155,7 @@ const restorePost = useMutation({
 ```ts
 // Update multiple records
 const updateMany = useMutation({
-  ...cms.collections.posts.updateMany(),
+  ...app.collections.posts.updateMany(),
 });
 
 updateMany.mutate({
@@ -165,7 +165,7 @@ updateMany.mutate({
 
 // Delete multiple records
 const deleteMany = useMutation({
-  ...cms.collections.posts.deleteMany(),
+  ...app.collections.posts.deleteMany(),
 });
 
 deleteMany.mutate({
@@ -178,12 +178,12 @@ deleteMany.mutate({
 ```ts
 // Read global
 const { data: settings } = useQuery(
-  cms.globals.siteSettings.get(),
+  app.globals.siteSettings.get(),
 );
 
 // Update global
 const updateSettings = useMutation({
-  ...cms.globals.siteSettings.update(),
+  ...app.globals.siteSettings.update(),
 });
 
 updateSettings.mutate({
@@ -198,12 +198,12 @@ RPC functions are available through the `rpc` proxy. Depending on whether they r
 ```ts
 // RPC as query (read operation)
 const { data } = useQuery(
-  cms.rpc.getActiveBarbers.query({}),
+  app.rpc.getActiveBarbers.query({}),
 );
 
 // RPC as mutation (write operation)
 const createBooking = useMutation(
-  cms.rpc.createBooking.mutation(),
+  app.rpc.createBooking.mutation(),
 );
 
 createBooking.mutate({
@@ -220,17 +220,17 @@ Every proxy method generates typed query keys for cache management:
 
 ```ts
 // Get the query key without executing
-const key = cms.collections.posts.find().queryKey;
-// ["cms", "collections", "posts", "find", { ... }]
+const key = app.collections.posts.find().queryKey;
+// ["questpie", "collections", "posts", "find", { ... }]
 
 // Invalidate all post queries
 queryClient.invalidateQueries({
-  queryKey: ["cms", "collections", "posts"],
+  queryKey: ["questpie", "collections", "posts"],
 });
 
 // Invalidate specific RPC
 queryClient.invalidateQueries({
-  queryKey: cms.rpc.getActiveBarbers.key(),
+  queryKey: app.rpc.getActiveBarbers.key(),
 });
 ```
 
@@ -241,7 +241,7 @@ For endpoints not covered by the proxy:
 ```ts
 // Custom query
 const { data } = useQuery(
-  cms.custom.query({
+  app.custom.query({
     queryKey: ["custom", "stats"],
     queryFn: async () => {
       const res = await fetch("/api/custom/stats");
@@ -252,7 +252,7 @@ const { data } = useQuery(
 
 // Custom mutation
 const customAction = useMutation(
-  cms.custom.mutation({
+  app.custom.mutation({
     mutationFn: async (input) => {
       const res = await fetch("/api/custom/action", {
         method: "POST",
@@ -269,8 +269,8 @@ const customAction = useMutation(
 Configure error transformation:
 
 ```ts
-const cms = createQuestpieQueryOptions(client, {
-  keyPrefix: "cms",
+const app = createQuestpieQueryOptions(client, {
+  keyPrefix: "questpie",
   errorMap: (error) => {
     // Transform API errors for your app
     if (error.code === "UNAUTHORIZED") {

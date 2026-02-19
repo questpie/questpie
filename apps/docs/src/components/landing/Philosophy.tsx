@@ -22,10 +22,10 @@ export const posts = q.collection('posts')
 
 const clientCode = `// admin/admin.ts
 import { qa, adminModule } from '@questpie/admin/client'
-import type { AppCMS } from '../server/cms'
+import type { App } from "../server/app"
 
 // That's it. The client just renders.
-export const admin = qa<AppCMS>()
+export const admin = qa<App>()
   .use(adminModule)`;
 
 export function Philosophy() {

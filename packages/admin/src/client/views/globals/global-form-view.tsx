@@ -145,7 +145,7 @@ export default function GlobalFormView({
 	const resolveText = useResolveText();
 
 	const { data: globalData, isLoading: dataLoading } = useGlobal(globalName);
-	const { fields: schemaFields } = useGlobalFields(globalName);
+	const { fields: schemaFields, schema: globalSchema } = useGlobalFields(globalName);
 
 	const { locale: contentLocale, setLocale: setContentLocale } =
 		useScopedLocale();
@@ -340,17 +340,19 @@ export default function GlobalFormView({
 
 					<div className="flex items-center gap-2 shrink-0">
 						{headerActions}
-						<Button
-							type="button"
-							variant="outline"
-							size="icon"
-							className="size-9"
-							onClick={() => setIsHistoryOpen(true)}
-							title={t("version.history")}
-						>
-							<Icon icon="ph:clock-counter-clockwise" className="size-4" />
-							<span className="sr-only">{t("version.history")}</span>
-						</Button>
+						{globalSchema?.options?.versioning && (
+							<Button
+								type="button"
+								variant="outline"
+								size="icon"
+								className="size-9"
+								onClick={() => setIsHistoryOpen(true)}
+								title={t("version.history")}
+							>
+								<Icon icon="ph:clock-counter-clockwise" className="size-4" />
+								<span className="sr-only">{t("version.history")}</span>
+							</Button>
+						)}
 						<Button type="submit" disabled={isSubmitting} className="gap-2">
 							{isSubmitting ? (
 								<>

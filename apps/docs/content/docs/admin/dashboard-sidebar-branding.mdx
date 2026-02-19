@@ -12,7 +12,7 @@ The dashboard, sidebar, and branding are configured on the server builder (`q`) 
 The sidebar is defined on the server with `.sidebar()`:
 
 ```ts
-const cms = q({ name: "barbershop" })
+const app = q({ name: "barbershop" })
   .use(adminModule)
   .collections({ barbers, services, appointments, reviews, pages })
   .globals({ siteSettings })
@@ -212,7 +212,7 @@ d.tabs({
 Branding is configured on the server via `.branding()`:
 
 ```ts
-const cms = q({ name: "barbershop" })
+const app = q({ name: "barbershop" })
   .use(adminModule)
   .branding({
     name: { en: "Barbershop Admin", sk: "Barbershop Admin" },
@@ -261,6 +261,123 @@ Use `useServerTranslations` in `AdminLayoutProvider` so the client fetches local
   {children}
 </AdminLayoutProvider>
 ```
+
+## Server-side Widget Loaders
+
+Widgets that need server-side data (DB queries, computed metrics) use a `loader` function. The loader runs on the server and its result is sent to the client via the `fetchWidgetData` RPC endpoint.
+
+```ts
+.dashboard(({ d }) =>
+  d.dashboard({
+    items: [
+      d.value({
+        id: "monthly-revenue",
+        label: "Revenue",
+        loader: async ({ app, db }) => {
+          const result = await app.api.collections.orders.find({
+            limit: 0,
+            accessMode: "system",
+            db,
+          });
+          return { value: result.totalDocs, label: "Total Orders" };
+        },
+      }),
+      d.timeline({
+        id: "recent-activity",
+        label: "Recent Activity",
+        loader: async ({ app, db }) => {
+          // query and return TimelineItem[]
+        },
+      }),
+    ],
+  }),
+)
+```
+
+Available in the loader context: `app` (typed QuestPie instance), `db`, `session`, `locale`.
+
+Widget types that support `loader`: `stats`, `chart`, `recentItems`, `custom`, `value`, `table`, `timeline`, `progress`.
+
+## Audit Module
+
+The audit module is **opt-in** — add `.use(auditModule)` to enable automatic audit logging for all collection and global mutations.
+
+```ts
+import { adminModule, auditModule, createAuditDashboardWidget } from "@questpie/admin/server";
+
+const app = q({ name: "my-app" })
+  .use(adminModule)
+  .use(auditModule)  // opt-in: registers collection + global hooks + cleanup job
+  .sidebar(({ s, c }) =>
+    s.sidebar({
+      sections: [
+        s.section({
+          id: "admin",
+          title: "Administration",
+          items: [
+            { type: "collection", collection: "user" },
+            { type: "collection", collection: "adminAuditLog" },
+          ],
+        }),
+      ],
+    }),
+  )
+  .dashboard(({ d }) =>
+    d.dashboard({
+      items: [
+        createAuditDashboardWidget({ maxItems: 10 }),  // timeline widget
+      ],
+    }),
+  )
+  .build({ ... });
+```
+
+### Per-collection opt-out
+
+Collections with `audit: false` in `.admin()` are automatically skipped by the audit hooks. All internal admin collections already have this set. To disable auditing for your own collection:
+
+```ts
+const tempData = q.collection("temp_data")
+  .fields(...)
+  .admin({ audit: false });
+```
+
+### Custom configuration
+
+Use `createAuditModule()` for fine-grained control:
+
+```ts
+import { createAuditModule } from "@questpie/admin/server";
+
+const audit = createAuditModule({
+  retentionDays: 30,  // cleanup after 30 days (default: 90)
+});
+```
+
+To customize the audit collection's access rules, merge your own access config:
+
+```ts
+import { auditLogCollection } from "@questpie/admin/server";
+
+const app = q({ name: "my-app" })
+  .use(adminModule)
+  .use(auditModule)
+  .collections({
+    adminAuditLog: auditLogCollection.access({
+      read: ({ session }) => session?.user?.role === "admin",
+    }),
+  })
+  .build({ ... });
+```
+
+### Exports
+
+| Export | Description |
+|---|---|
+| `auditModule` | Default audit module instance |
+| `createAuditModule(options?)` | Factory with custom config |
+| `createAuditDashboardWidget(options?)` | Dashboard timeline widget factory |
+| `auditLogCollection` | Raw collection builder (for merging/overriding) |
 
 ## Common Mistakes
 

@@ -432,9 +432,9 @@ export interface GlobalBuilder<TState extends GlobalBuilderState>
  *
  * @example With typed app (recommended for full type safety)
  * ```ts
- * import type { AppCMS } from './cms';
+ * import type { App } from './app';
  *
- * const settings = global<AppCMS>()("settings")
+ * const settings = global<App>()("settings")
  *   .fields({ ... })
  *   .hooks({
  *     afterUpdate: ({ app }) => {

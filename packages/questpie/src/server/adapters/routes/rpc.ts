@@ -4,7 +4,7 @@
  * Remote procedure call route handlers.
  */
 
-import type { Questpie } from "../../config/cms.js";
+import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
 import { executeJsonFunction } from "../../functions/execute.js";
@@ -86,8 +86,7 @@ const resolveRpcProcedure = (
 	return isFunctionDefinition(current) ? current : undefined;
 };
 
-const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(
-	cms: Questpie<TConfig>,
+const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig>,
 	definition: FunctionDefinition,
 	request: Request,
@@ -98,20 +97,20 @@ const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(
 		request: Request,
 		locale?: string,
 	): Response => {
-		return handleError(error, { request, cms, locale });
+		return handleError(error, { request, app, locale });
 	};
 
 	if (request.method !== "POST") {
 		return errorResponse(ApiError.badRequest("Method not allowed"), request);
 	}
 
-	const resolved = await resolveContext(cms, request, config, context);
+	const resolved = await resolveContext(app, request, config, context);
 
 	const hasAccess = await evaluateFunctionAccess(definition, {
-		app: cms,
-		session: resolved.cmsContext.session,
-		db: resolved.cmsContext.db ?? cms.db,
-		locale: resolved.cmsContext.locale,
+		app: app,
+		session: resolved.appContext.session,
+		db: resolved.appContext.db ?? app.db,
+		locale: resolved.appContext.locale,
 		request,
 	});
 
@@ -123,7 +122,7 @@ const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(
 				reason: "Access denied",
 			}),
 			request,
-			resolved.cmsContext.locale,
+			resolved.appContext.locale,
 		);
 	}
 
@@ -131,13 +130,13 @@ const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(
 		try {
 			return await definition.handler({
 				request,
-				app: cms as any,
-				session: resolved.cmsContext.session,
-				locale: resolved.cmsContext.locale,
-				db: resolved.cmsContext.db ?? cms.db,
+				app: app as any,
+				session: resolved.appContext.session,
+				locale: resolved.appContext.locale,
+				db: resolved.appContext.db ?? app.db,
 			});
 		} catch (error) {
-			return errorResponse(error, request, resolved.cmsContext.locale);
+			return errorResponse(error, request, resolved.appContext.locale);
 		}
 	}
 
@@ -147,31 +146,30 @@ const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(
 		return errorResponse(
 			ApiError.badRequest("Invalid JSON body"),
 			request,
-			resolved.cmsContext.locale,
+			resolved.appContext.locale,
 		);
 	}
 
 	try {
 		const result = await executeJsonFunction(
-			cms,
+			app,
 			definition,
 			body,
-			resolved.cmsContext,
+			resolved.appContext,
 		);
 		return smartResponse(result, request);
 	} catch (error) {
-		return errorResponse(error, request, resolved.cmsContext.locale);
+		return errorResponse(error, request, resolved.appContext.locale);
 	}
 };
 
 export const createRpcRoutes = <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(
-	cms: Questpie<TConfig>,
+>(app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig> = {},
 ) => {
 	const errorResponse = (error: unknown, request: Request): Response => {
-		return handleError(error, { request, cms });
+		return handleError(error, { request, app });
 	};
 
 	return {
@@ -192,7 +190,7 @@ export const createRpcRoutes = <
 				);
 			}
 
-			return executeFunction(cms, config, definition, request, context);
+			return executeFunction(app, config, definition, request, context);
 		},
 	};
 };

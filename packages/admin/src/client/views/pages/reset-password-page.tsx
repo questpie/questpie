@@ -66,7 +66,7 @@ export interface ResetPasswordPageProps {
  * @example
  * ```tsx
  * // In your admin config
- * const admin = qa<AppCMS>()
+ * const admin = qa<App>()
  *   .use(coreAdminModule)
  *   .pages({
  *     resetPassword: page("reset-password", { component: ResetPasswordPage })

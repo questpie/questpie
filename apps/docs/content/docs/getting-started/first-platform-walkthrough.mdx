@@ -275,7 +275,7 @@ Key patterns here:
 ## Step 5: Compose Everything
 
 ```ts
-// src/questpie/server/cms.ts
+// src/questpie/server/app.ts
 import { q, rpc } from "questpie";
 import { adminModule } from "@questpie/admin/server";
 import z from "zod";
@@ -300,7 +300,7 @@ export const getActiveBarbers = r.fn({
 
 export const appRpc = r.router({ getActiveBarbers });
 
-export const cms = q({ name: "my-first-platform" })
+export const app = q({ name: "my-first-platform" })
   .use(adminModule)
   .collections({ barbers, services, barberServices })
   .sidebar(({ s, c }) =>
@@ -333,7 +333,7 @@ export const cms = q({ name: "my-first-platform" })
   .auth({
     emailAndPassword: { enabled: true },
     baseURL: process.env.APP_URL || "http://localhost:3000",
-    basePath: "/api/cms/auth",
+    basePath: "/api/auth",
     secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
   })
   .build({
@@ -341,7 +341,7 @@ export const cms = q({ name: "my-first-platform" })
     app: { url: process.env.APP_URL || "http://localhost:3000" },
   });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 export type AppRpc = typeof appRpc;
 ```
 
@@ -350,21 +350,21 @@ export type AppRpc = typeof appRpc;
 ```ts
 // src/questpie/admin/admin.ts
 import { adminModule, qa } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>()
+export const admin = qa<App>()
   .use(adminModule);
 ```
 
 ## Step 7: Mount API
 
 ```ts
-// src/routes/api/cms.ts
+// src/routes/api.ts
 import { createFetchHandler } from "questpie";
-import { cms, appRpc } from "@/questpie/server/cms";
+import { app, appRpc } from "@/questpie/server/app";
 
-export const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+export const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 ```

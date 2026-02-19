@@ -1,5 +1,5 @@
 /**
- * Collection views - CRUD for CMS collections
+ * Collection views - CRUD for app collections
  */
 
 export type { AutoFormFieldsProps } from "./auto-form-fields";

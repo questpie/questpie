@@ -34,7 +34,7 @@ import {
 // Constants
 // ============================================================================
 
-/** Query key prefix for CMS queries (must match use-collection.ts) */
+/** Query key prefix for app queries (must match use-collection.ts) */
 const QUERY_KEY_PREFIX = ["questpie", "collections"] as const;
 
 // ============================================================================
@@ -162,7 +162,7 @@ export function useActionHelpers({
         });
       },
       invalidateAll: async () => {
-        // Invalidate all CMS queries
+        // Invalidate all queries
         await queryClient.invalidateQueries({
           queryKey: [...QUERY_KEY_PREFIX],
         });

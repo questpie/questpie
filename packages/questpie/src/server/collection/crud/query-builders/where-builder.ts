@@ -16,7 +16,7 @@ import type {
 	CRUDContext,
 	Where,
 } from "#questpie/server/collection/crud/types.js";
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 
 /**
  * Options for building WHERE clause
@@ -32,8 +32,8 @@ export interface BuildWhereClauseOptions {
 	i18nFallbackTable: PgTable | null;
 	/** CRUD context */
 	context?: CRUDContext;
-	/** CMS instance for relation resolution */
-	cms?: Questpie<any>;
+	/** app instance for relation resolution */
+	app?: Questpie<any>;
 	/** Whether to use i18n tables for localized fields */
 	useI18n?: boolean;
 	/** Database instance for subqueries */
@@ -127,7 +127,7 @@ export function buildWhereClause(
 		i18nCurrentTable,
 		i18nFallbackTable,
 		context,
-		cms,
+		app,
 		useI18n = false,
 	} = options;
 
@@ -143,7 +143,7 @@ export function buildWhereClause(
 						i18nCurrentTable,
 						i18nFallbackTable,
 						context,
-						cms,
+						app,
 						useI18n,
 						db: options.db,
 					}),
@@ -161,7 +161,7 @@ export function buildWhereClause(
 						i18nCurrentTable,
 						i18nFallbackTable,
 						context,
-						cms,
+						app,
 						useI18n,
 						db: options.db,
 					}),
@@ -177,7 +177,7 @@ export function buildWhereClause(
 				i18nCurrentTable,
 				i18nFallbackTable,
 				context,
-				cms,
+				app,
 				useI18n,
 				db: options.db,
 			});
@@ -262,7 +262,7 @@ export function buildWhereClause(
 					parentTable: table,
 					parentState: state,
 					context,
-					cms,
+					app,
 					db: options.db,
 				});
 				if (relationClause) {
@@ -397,8 +397,8 @@ interface BuildRelationWhereOptions {
 	parentState: CollectionBuilderState;
 	/** CRUD context */
 	context?: CRUDContext;
-	/** CMS instance for relation resolution */
-	cms?: Questpie<any>;
+	/** app instance for relation resolution */
+	app?: Questpie<any>;
 	/** Database instance */
 	db?: any;
 }
@@ -416,9 +416,9 @@ export function buildRelationWhereClause(
 	relationValue: any,
 	options: BuildRelationWhereOptions,
 ): SQL | undefined {
-	const { cms, parentTable, context } = options;
+	const { app, parentTable, context } = options;
 
-	if (!cms) return undefined;
+	if (!app) return undefined;
 
 	const normalizedValue = relationValue === true ? {} : relationValue;
 	if (
@@ -531,17 +531,17 @@ export function buildBelongsToExistsClause(
 	relationWhere: Where | undefined,
 	options: BuildRelationWhereOptions,
 ): SQL | undefined {
-	const { cms, parentTable, parentState, context } = options;
+	const { app, parentTable, parentState, context } = options;
 
 	// Support both `field: string` (singular) and `fields: PgColumn[]` (array) formats
 	const hasFieldConfig =
 		(relation.fields && relation.fields.length > 0) || (relation as any).field;
 
-	if (!cms || !hasFieldConfig || !relation.references) {
+	if (!app || !hasFieldConfig || !relation.references) {
 		return undefined;
 	}
 
-	const relatedCrud = cms.api.collections[relation.collection];
+	const relatedCrud = app.api.collections[relation.collection];
 	const relatedTable = relatedCrud["~internalRelatedTable"];
 	const relatedState = relatedCrud["~internalState"];
 
@@ -598,7 +598,7 @@ export function buildBelongsToExistsClause(
 			i18nCurrentTable: relatedCrud["~internalI18nTable"],
 			i18nFallbackTable: null,
 			context,
-			cms,
+			app,
 			useI18n: false,
 			db: options.db,
 		});
@@ -626,11 +626,11 @@ export function buildHasManyExistsClause(
 	relationWhere: Where | undefined,
 	options: BuildRelationWhereOptions,
 ): SQL | undefined {
-	const { cms, parentTable, context } = options;
+	const { app, parentTable, context } = options;
 
-	if (!cms || relation.fields) return undefined;
+	if (!app || relation.fields) return undefined;
 
-	const relatedCrud = cms.api.collections[relation.collection];
+	const relatedCrud = app.api.collections[relation.collection];
 	const relatedTable = relatedCrud["~internalRelatedTable"];
 	const relatedState = relatedCrud["~internalState"];
 	const reverseRelationName = relation.relationName;
@@ -672,7 +672,7 @@ export function buildHasManyExistsClause(
 			i18nCurrentTable: relatedCrud["~internalI18nTable"],
 			i18nFallbackTable: null,
 			context,
-			cms,
+			app,
 			useI18n: false,
 			db: options.db,
 		});
@@ -700,12 +700,12 @@ export function buildManyToManyExistsClause(
 	relationWhere: Where | undefined,
 	options: BuildRelationWhereOptions,
 ): SQL | undefined {
-	const { cms, parentTable, context } = options;
+	const { app, parentTable, context } = options;
 
-	if (!cms || !relation.through) return undefined;
+	if (!app || !relation.through) return undefined;
 
-	const relatedCrud = cms.api.collections[relation.collection];
-	const junctionCrud = cms.api.collections[relation.through];
+	const relatedCrud = app.api.collections[relation.collection];
+	const junctionCrud = app.api.collections[relation.through];
 	const relatedTable = relatedCrud["~internalRelatedTable"];
 	const junctionTable = junctionCrud["~internalRelatedTable"];
 	const relatedState = relatedCrud["~internalState"];
@@ -744,7 +744,7 @@ export function buildManyToManyExistsClause(
 			i18nCurrentTable: relatedCrud["~internalI18nTable"],
 			i18nFallbackTable: null,
 			context,
-			cms,
+			app,
 			useI18n: false,
 			db: options.db,
 		});

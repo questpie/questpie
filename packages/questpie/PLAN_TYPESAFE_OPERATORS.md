@@ -280,7 +280,7 @@ bun run check-types  # all 6 packages
 ## How to Run Checks
 
 ```bash
-cd /Users/drepkovsky/questpie/repos/questpie-cms
+cd /Users/drepkovsky/questpie/repos/questpie-app
 bun run check-types          # type check all 6 packages
 cd packages/questpie && bunx tsc --noEmit  # just core package
 ```

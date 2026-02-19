@@ -5,7 +5,7 @@
  */
 
 import type { BlockComponentProps } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 // ============================================================================
 // COLUMNS
@@ -14,7 +14,7 @@ import type { AppCMS } from "@/questpie/server/cms";
 export function ColumnsRenderer({
 	values,
 	children,
-}: BlockComponentProps<AppCMS, "columns">) {
+}: BlockComponentProps<App, "columns">) {
 	const columnsClass = {
 		"2": "md:grid-cols-2",
 		"3": "md:grid-cols-2 lg:grid-cols-3",
@@ -51,7 +51,7 @@ export function ColumnsRenderer({
 
 export function SpacerRenderer({
 	values,
-}: BlockComponentProps<AppCMS, "spacer">) {
+}: BlockComponentProps<App, "spacer">) {
 	const sizeClass = {
 		small: "h-8 md:h-12",
 		medium: "h-12 md:h-20",
@@ -68,7 +68,7 @@ export function SpacerRenderer({
 
 export function DividerRenderer({
 	values,
-}: BlockComponentProps<AppCMS, "divider">) {
+}: BlockComponentProps<App, "divider">) {
 	const widthClass = {
 		full: "w-full",
 		medium: "w-1/2 mx-auto",

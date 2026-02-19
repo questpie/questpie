@@ -32,14 +32,14 @@ export const assetsCollection = q
 	})
 	.hooks({
 		afterDelete: async ({ data, app }) => {
-			const cms = app as any;
+			const questpie = app as any;
 			const record = data as any;
-			if (!cms?.storage || !record?.key) return;
+			if (!questpie?.storage || !record?.key) return;
 
 			try {
-				await cms.storage.use().delete(record.key);
+				await questpie.storage.use().delete(record.key);
 			} catch (error) {
-				cms.logger?.warn?.("Failed to delete asset file from storage", {
+				questpie.logger?.warn?.("Failed to delete asset file from storage", {
 					key: record.key,
 					error: error instanceof Error ? error.message : String(error),
 				});

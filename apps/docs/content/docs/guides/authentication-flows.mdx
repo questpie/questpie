@@ -19,7 +19,7 @@ This guide walks through setting up authentication in a QUESTPIE application —
 ```ts
 import { adminModule } from "@questpie/admin/server";
 
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(adminModule)
   .auth({
     emailAndPassword: { enabled: true },
@@ -36,10 +36,10 @@ The admin panel automatically shows a login form when `emailAndPassword` is enab
 
 ### 3. Creating the First User
 
-Use the CMS API to create an initial admin user:
+Use the API to create an initial admin user:
 
 ```ts
-await cms.auth.api.signUpEmail({
+await app.auth.api.signUpEmail({
   body: {
     email: "admin@example.com",
     password: "secure-password",
@@ -97,7 +97,7 @@ For machine-to-machine access (scripts, CI/CD, external integrations):
 Generate API keys via the admin panel or API. Pass them in requests via the `Authorization` header:
 
 ```ts
-const response = await fetch("/api/cms/collections/posts", {
+const response = await fetch("/api/collections/posts", {
   headers: { Authorization: `Bearer ${apiKey}` },
 });
 ```
@@ -164,7 +164,7 @@ Sessions are managed by Better Auth and stored in the database. The adapter auto
 
 - **No initial user** — After first deployment, create an admin user via the API or a seed script. The admin panel shows a login form but needs at least one user to exist.
 - **Hardcoded roles** — Use the session's role field dynamically. Don't hardcode specific user IDs in access rules.
-- **Missing OAuth redirect URLs** — Configure callback URLs in your OAuth provider to match your app URL (e.g., `https://yourapp.com/api/cms/auth/callback/google`).
+- **Missing OAuth redirect URLs** — Configure callback URLs in your OAuth provider to match your app URL (e.g., `https://yourapp.com/api/auth/callback/google`).
 
 ## Related Pages
 

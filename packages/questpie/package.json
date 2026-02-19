@@ -4,7 +4,7 @@
 	"type": "module",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/questpie/questpie-cms.git",
+		"url": "https://github.com/questpie/questpie.git",
 		"directory": "packages/questpie"
 	},
 	"bin": {
@@ -80,10 +80,22 @@
 	"publishConfig": {
 		"access": "public",
 		"exports": {
-			".": "./dist/index.mjs",
-			"./cli": "./dist/cli.mjs",
-			"./client": "./dist/client.mjs",
-			"./shared": "./dist/shared.mjs",
+			".": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			},
+			"./cli": {
+				"types": "./dist/cli.d.mts",
+				"default": "./dist/cli.mjs"
+			},
+			"./client": {
+				"types": "./dist/client.d.mts",
+				"default": "./dist/client.mjs"
+			},
+			"./shared": {
+				"types": "./dist/shared.d.mts",
+				"default": "./dist/shared.mjs"
+			},
 			"./*": "./*"
 		}
 	},
@@ -91,10 +103,22 @@
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
 	"exports": {
-		".": "./src/exports/index.ts",
-		"./cli": "./src/exports/cli.ts",
-		"./client": "./src/exports/client.ts",
-		"./shared": "./src/exports/shared.ts",
+		".": {
+			"types": "./dist/index.d.mts",
+			"default": "./src/exports/index.ts"
+		},
+		"./cli": {
+			"types": "./dist/cli.d.mts",
+			"default": "./src/exports/cli.ts"
+		},
+		"./client": {
+			"types": "./dist/client.d.mts",
+			"default": "./src/exports/client.ts"
+		},
+		"./shared": {
+			"types": "./dist/shared.d.mts",
+			"default": "./src/exports/shared.ts"
+		},
 		"./*": "./*"
 	}
 }

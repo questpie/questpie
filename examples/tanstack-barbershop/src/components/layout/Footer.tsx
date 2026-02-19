@@ -2,11 +2,11 @@
  * Footer Component
  *
  * Displays:
- * - Shop name and tagline (from CMS)
- * - Footer links (from CMS, localized)
- * - Business hours (from CMS)
- * - Contact info (from CMS)
- * - Social links (from CMS)
+ * - Shop name and tagline (from app)
+ * - Footer links (from app, localized)
+ * - Business hours (from app)
+ * - Contact info (from app)
+ * - Social links (from app)
  * - Copyright
  */
 

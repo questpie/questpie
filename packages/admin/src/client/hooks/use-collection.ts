@@ -21,7 +21,7 @@ type CollectionRealtimeOptions = {
 // ============================================================================
 
 /**
- * Resolved CMS type (Questpie<any> if not registered)
+ * Resolved app type (Questpie<any> if not registered)
  */
 type ResolvedCMS =
 	RegisteredCMS extends Questpie<any> ? RegisteredCMS : Questpie<any>;

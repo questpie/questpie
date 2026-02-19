@@ -3,7 +3,7 @@
  */
 
 import type { BlockComponentProps } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 function getEmbedUrl(url: string): string | null {
 	// YouTube
@@ -21,7 +21,7 @@ function getEmbedUrl(url: string): string | null {
 
 export function VideoRenderer({
 	values,
-}: BlockComponentProps<AppCMS, "video">) {
+}: BlockComponentProps<App, "video">) {
 	const embedUrl = values.url ? getEmbedUrl(values.url) : null;
 
 	return (

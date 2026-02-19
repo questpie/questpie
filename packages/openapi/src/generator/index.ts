@@ -12,10 +12,10 @@ import { baseComponentSchemas } from "./schemas.js";
 import { generateSearchPaths } from "./search.js";
 
 /**
- * Generate a complete OpenAPI 3.1 spec from a Questpie CMS instance and optional RPC router.
+ * Generate a complete OpenAPI 3.1 spec from a Questpie app instance and optional RPC router.
  */
 export function generateOpenApiSpec(
-	cms: Questpie<any>,
+	app: Questpie<any>,
 	rpc?: RpcRouterTree<any>,
 	config: OpenApiConfig = {},
 ): OpenApiSpec {
@@ -24,13 +24,13 @@ export function generateOpenApiSpec(
 	const allTags: OpenApiSpec["tags"] = [];
 
 	// Collections
-	const collections = generateCollectionPaths(cms, config);
+	const collections = generateCollectionPaths(app, config);
 	Object.assign(allPaths, collections.paths);
 	Object.assign(allSchemas, collections.schemas);
 	allTags.push(...collections.tags);
 
 	// Globals
-	const globals = generateGlobalPaths(cms, config);
+	const globals = generateGlobalPaths(app, config);
 	Object.assign(allPaths, globals.paths);
 	Object.assign(allSchemas, globals.schemas);
 	allTags.push(...globals.tags);
@@ -54,7 +54,7 @@ export function generateOpenApiSpec(
 	return {
 		openapi: "3.1.0",
 		info: {
-			title: config.info?.title ?? "QUESTPIE CMS API",
+			title: config.info?.title ?? "QUESTPIE API",
 			version: config.info?.version ?? "1.0.0",
 			description: config.info?.description,
 		},

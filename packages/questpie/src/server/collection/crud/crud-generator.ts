@@ -1560,6 +1560,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					db,
 				}),
 			);
+
 		}
 
 		let changeEvent: any = null;
@@ -1665,6 +1666,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db: tx,
 						}),
 					);
+
 				}
 
 				// Realtime change
@@ -2069,6 +2071,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						db,
 					}),
 				);
+
 			}
 
 			await this.notifyRealtimeChange(changeEvent);

@@ -9,8 +9,8 @@ import {
  * Context stored in Elysia decorator
  */
 export type QuestpieContext = {
-  cms: Questpie<any>;
-  cmsContext: Awaited<ReturnType<Questpie<any>["createContext"]>>;
+  app: Questpie<any>;
+  appContext: Awaited<ReturnType<Questpie<any>["createContext"]>>;
   user: any;
 };
 
@@ -19,36 +19,36 @@ export type QuestpieContext = {
  */
 export type ElysiaAdapterConfig = {
   /**
-   * Base path for CMS routes
-   * Use '/cms' for server-only apps or '/api/cms' for fullstack apps.
-   * @default '/cms'
+   * Base path for QUESTPIE routes
+   * Use '/' for server-only apps or '/api' for fullstack apps.
+   * @default '/'
    */
   basePath?: string;
   rpc?: RpcRouterTree<any>;
 };
 
 /**
- * Create Elysia app with QUESTPIE CMS integration
+ * Create Elysia app with QUESTPIE integration
  *
  * @example
  * ```ts
  * import { Elysia } from 'elysia'
  * import { questpieElysia } from '@questpie/elysia'
- * import { cms } from './cms'
+ * import { app } from './app'
  *
- * const app = new Elysia()
- *   .use(questpieElysia(cms))
+ * const server = new Elysia()
+ *   .use(questpieElysia(app))
  *
- * export default app
- * export type App = typeof app
+ * export default server
+ * export type App = typeof server
  * ```
  *
  * @example
  * ```ts
  * // With custom config
- * const app = new Elysia()
- *   .use(questpieElysia(cms, {
- *     basePath: '/cms-api',
+ * const server = new Elysia()
+ *   .use(questpieElysia(app, {
+ *     basePath: '/api',
  *     cors: {
  *       origin: 'https://example.com',
  *       credentials: true
@@ -65,23 +65,23 @@ export type ElysiaAdapterConfig = {
  * const client = treaty<App>('localhost:3000')
  *
  * // Fully type-safe!
- * const posts = await client.cms.posts.get()
- * const post = await client.cms.posts({ id: '123' }).get()
- * const newPost = await client.cms.posts.post({ title: 'Hello' })
+ * const posts = await client.api.posts.get()
+ * const post = await client.api.posts({ id: '123' }).get()
+ * const newPost = await client.api.posts.post({ title: 'Hello' })
  * ```
  */
 export function questpieElysia(
-  cms: Questpie<any>,
+  app: Questpie<any>,
   config: ElysiaAdapterConfig = {},
 ) {
-  const basePath = config.basePath || "/cms";
-  const handler = createFetchHandler(cms, {
+  const basePath = config.basePath || "/";
+  const handler = createFetchHandler(app, {
     basePath,
     accessMode: "user",
     rpc: config.rpc,
   });
 
-  const app = new Elysia({ prefix: basePath, name: "questpie-cms" }).all(
+  const server = new Elysia({ prefix: basePath, name: "questpie" }).all(
     "/*",
     async ({ request }) => {
       const response = await handler(request);
@@ -95,5 +95,5 @@ export function questpieElysia(
     },
   );
 
-  return app;
+  return server;
 }

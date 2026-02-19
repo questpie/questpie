@@ -45,7 +45,19 @@ export type BlockItemProps = {
 // Component
 // ============================================================================
 
-export function BlockItem({
+function areBlockItemPropsEqual(
+	prev: BlockItemProps,
+	next: BlockItemProps,
+): boolean {
+	return (
+		prev.block === next.block &&
+		prev.level === next.level &&
+		prev.index === next.index &&
+		prev.parentId === next.parentId
+	);
+}
+
+export const BlockItem = React.memo(function BlockItem({
 	block,
 	level,
 	index: _index,
@@ -237,7 +249,7 @@ export function BlockItem({
 			)}
 		</div>
 	);
-}
+}, areBlockItemPropsEqual);
 
 // ============================================================================
 // Helpers

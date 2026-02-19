@@ -250,14 +250,14 @@ export interface StorageBaseConfig {
 
 	/**
 	 * Base path for serving storage files.
-	 * @default "/cms"
+	 * @default "/"
 	 */
 	basePath?: string;
 }
 
 /**
  * Local filesystem storage configuration.
- * CMS creates FSDriver and serves files at `/cms/storage/files/:key`.
+ * QuestPie creates FSDriver and serves files at `/storage/files/:key`.
  */
 export interface StorageLocalConfig extends StorageBaseConfig {
 	/**
@@ -265,7 +265,7 @@ export interface StorageLocalConfig extends StorageBaseConfig {
 	 * Can be relative (to cwd) or absolute path.
 	 *
 	 * @example "./uploads"
-	 * @example "/var/data/cms-uploads"
+	 * @example "/var/data/app-uploads"
 	 * @default "./uploads"
 	 */
 	location?: string;
@@ -343,7 +343,7 @@ export interface QuestpieConfig {
 	/**
 	 * Authentication configuration (Better Auth)
 	 * Add any new plugins on overrides. Db
-	 * part cannot be overridden here, as it is internally handled by the CMS instance.
+	 * part cannot be overridden here, as it is internally handled by the app instance.
 	 * ```
 	 */
 	auth?: BetterAuthOptions;
@@ -425,14 +425,14 @@ export interface QuestpieConfig {
 
 	/**
 	 * Automatically run migrations on startup.
-	 * Use `await cms.waitForInit()` to wait for completion.
+	 * Use `await app.waitForInit()` to wait for completion.
 	 * @default false
 	 */
 	autoMigrate?: boolean;
 
 	/**
 	 * Automatically run seeds on startup (after migrations if autoMigrate is also enabled).
-	 * Use `await cms.waitForInit()` to wait for completion.
+	 * Use `await app.waitForInit()` to wait for completion.
 	 *
 	 * - `false`: Never auto-seed (default)
 	 * - `"required"`: Only required seeds
@@ -485,6 +485,12 @@ export interface QuestpieConfig {
 	 * Defined via `.context()` on the builder.
 	 */
 	contextResolver?: ContextResolver;
+
+	/**
+	 * Global lifecycle hooks that fire for ALL collections/globals.
+	 * Registered via `.hooks()` on the builder.
+	 */
+	globalHooks?: import("./global-hooks-types.js").GlobalHooksState;
 
 	/**
 	 * Phantom type for tracking message keys.

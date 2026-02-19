@@ -31,6 +31,14 @@ import { useAdminStore } from "../../runtime/provider";
 import { DashboardGrid } from "../dashboard/dashboard-grid";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+// Module-level constants for empty objects to avoid recreating on each render
+const EMPTY_COLLECTION_COMPONENTS: Record<string, any> = {};
+const EMPTY_GLOBAL_COMPONENTS: Record<string, any> = {};
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -392,7 +400,52 @@ function RouterSkeleton() {
 	);
 }
 
-function RegistryViewRenderer({
+function shallowEqualComponentProps(
+	a: Record<string, unknown>,
+	b: Record<string, unknown>,
+): boolean {
+	if (a === b) {
+		return true;
+	}
+
+	const aKeys = Object.keys(a);
+	const bKeys = Object.keys(b);
+
+	if (aKeys.length !== bKeys.length) {
+		return false;
+	}
+
+	for (const key of aKeys) {
+		if (a[key] !== b[key]) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+function areRegistryViewRendererPropsEqual(
+	prev: {
+		loader?: MaybeLazyComponent;
+		componentProps: Record<string, unknown>;
+		viewKind: "list" | "edit";
+		viewId: string;
+	},
+	next: {
+		loader?: MaybeLazyComponent;
+		componentProps: Record<string, unknown>;
+		viewKind: "list" | "edit";
+		viewId: string;
+	},
+): boolean {
+	if (prev.loader !== next.loader) return false;
+	if (prev.viewKind !== next.viewKind) return false;
+	if (prev.viewId !== next.viewId) return false;
+
+	return shallowEqualComponentProps(prev.componentProps, next.componentProps);
+}
+
+const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 	loader,
 	componentProps,
 	viewKind,
@@ -472,7 +525,7 @@ function RegistryViewRenderer({
 			<Component {...componentProps} />
 		</React.Suspense>
 	);
-}
+}, areRegistryViewRendererPropsEqual);
 
 // ============================================================================
 // Sub-components
@@ -708,12 +761,15 @@ function AdminRouterInner({
 	DashboardComponent: DashboardComponentProp,
 	dashboardConfig: dashboardConfigProp,
 	defaultViews: defaultViewsProp,
-	collectionComponents = {},
-	globalComponents = {},
-	renderFormFields,
+	collectionComponents,
+	globalComponents,
+	renderFormFields: _renderFormFields,
 	registry,
 	NotFoundComponent,
-}: AdminRouterProps): React.ReactElement {
+}: AdminRouterProps) {
+	const resolvedCollectionComponents =
+		collectionComponents ?? EMPTY_COLLECTION_COMPONENTS;
+	const resolvedGlobalComponents = globalComponents ?? EMPTY_GLOBAL_COMPONENTS;
 	// Get search params (from prop or window.location)
 	const searchParams = React.useMemo(() => {
 		if (searchParamsProp) return searchParamsProp;
@@ -748,7 +804,10 @@ function AdminRouterInner({
 		defaultViews: defaultViewsProp,
 	});
 
-	const route = matchRoute(segments, collections, globals, pages);
+	const route = React.useMemo(
+		() => matchRoute(segments, collections, globals, pages),
+		[segments, collections, globals, pages],
+	);
 
 	const activeCollectionName =
 		route.type === "collection-list" ||
@@ -818,7 +877,7 @@ function AdminRouterInner({
 			);
 		}
 
-		const custom = collectionComponents[name];
+		const custom = resolvedCollectionComponents[name];
 		const viewNameFromSchema = (activeCollectionSchema as any)?.admin?.list
 			?.view;
 		const viewNameFromConfig = getConfiguredViewName((config as any)?.list);
@@ -881,7 +940,7 @@ function AdminRouterInner({
 			);
 		}
 
-		const custom = collectionComponents[name];
+		const custom = resolvedCollectionComponents[name];
 		const formDefaults = defaultViews?.collectionForm;
 		const viewNameFromSchema = (activeCollectionSchema as any)?.admin?.form
 			?.view;
@@ -951,7 +1010,7 @@ function AdminRouterInner({
 			);
 		}
 
-		const custom = globalComponents[name];
+		const custom = resolvedGlobalComponents[name];
 		const viewNameFromSchema = (activeGlobalSchema as any)?.admin?.form?.view;
 		const viewNameFromConfig = getConfiguredViewName((config as any)?.form);
 		// For globals, only use editViews registry if a custom view is explicitly specified

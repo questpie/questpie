@@ -98,7 +98,7 @@ export interface UseAdminRoutesResult<TApp extends Questpie<any>> {
  * @example
  * ```tsx
  * function MyComponent() {
- *   const { toDashboard, toCollection, toCollectionEdit } = useAdminRoutes<AppCMS>()
+ *   const { toDashboard, toCollection, toCollectionEdit } = useAdminRoutes<App>()
  *
  *   return (
  *     <div>
@@ -114,7 +114,7 @@ export interface UseAdminRoutesResult<TApp extends Questpie<any>> {
  * ```tsx
  * // Get URLs without navigating
  * function LinkList() {
- *   const { collectionUrl, globalUrl, pageUrl } = useAdminRoutes<AppCMS>()
+ *   const { collectionUrl, globalUrl, pageUrl } = useAdminRoutes<App>()
  *
  *   return (
  *     <nav>

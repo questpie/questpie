@@ -1017,8 +1017,8 @@ function TableViewInner({
 					</div>
 					<div className="flex items-center gap-2 shrink-0">
 						{headerActions}
-						{(actions.header.primary?.length ||
-							actions.header.secondary?.length) && (
+						{(actions.header.primary?.length > 0 ||
+							actions.header.secondary?.length > 0) && (
 							<HeaderActions
 								actions={actions.header}
 								collection={collection}
@@ -1148,14 +1148,16 @@ function TableViewInner({
 							))}
 						</TableHeader>
 						<TableBody>
-							{table.getRowModel().rows?.length ? (
-								table.getRowModel().rows.map((row) => (
+							{table.getRowModel().rows.map((row) => {
+									const isRowDeleted = !!(row.original as any)?.deletedAt;
+									return (
 									<TableRow
 										key={row.id}
 										data-state={row.getIsSelected() && "selected"}
 										className={cn(
 											"group",
 											isHighlighted(row.id) && "animate-realtime-pulse",
+											isRowDeleted && "opacity-50",
 										)}
 									>
 										{row.getVisibleCells().map((cell, cellIndex) => {
@@ -1192,7 +1194,16 @@ function TableViewInner({
 																	cell.getContext(),
 																)}
 															</button>
-															{isDocLocked(row.id) &&
+															{isRowDeleted && (
+																<span className="inline-flex items-center gap-1 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">
+																	<Icon
+																		icon="ph:trash"
+																		className="size-3"
+																	/>
+																	{t("common.deleted")}
+																</span>
+															)}
+														{isDocLocked(row.id) &&
 																(() => {
 																	const lock = getLock(row.id);
 																	const user = lock ? getLockUser(lock) : null;
@@ -1234,26 +1245,24 @@ function TableViewInner({
 											);
 										})}
 									</TableRow>
-								))
-							) : (
-								<TableRow>
-									<TableCell colSpan={visibleColumnDefs.length} className="p-0">
-										{emptyState || (
-											<EmptyState
-												title="NO_RESULTS"
-												description={
-													isSearching
-														? t("collectionSearch.noResults")
-														: "No items found in this collection"
-												}
-												height="h-48"
-											/>
-										)}
-									</TableCell>
-								</TableRow>
-							)}
+									);
+								})}
 						</TableBody>
 					</Table>
+					{/* Empty state rendered outside table to avoid colSpan/border-separate width issues */}
+					{!table.getRowModel().rows.length && (
+						emptyState || (
+							<EmptyState
+								title="NO_RESULTS"
+								description={
+									isSearching
+										? t("collectionSearch.noResults")
+										: "No items found in this collection"
+								}
+								height="h-48"
+							/>
+						)
+					)}
 				</div>
 
 				{/* Footer - Pagination */}

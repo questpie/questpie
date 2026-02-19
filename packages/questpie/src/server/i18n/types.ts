@@ -92,12 +92,12 @@ export type TypedTranslateFn<TCustomKeys extends string = never> = (
  *   en: { "myModule.error": "Error occurred" },
  * } as const;
  *
- * const cms = questpie({ name: "app" })
+ * const app = questpie({ name: "app" })
  *   .use(starterModule) // Includes core messages
  *   .messages(messages) // Add custom messages
  *   .build({ ... });
  *
- * cms.t("myModule.error"); // Type-safe!
+ * app.t("myModule.error"); // Type-safe!
  * ```
  *
  * For legacy support, you can still extend this interface:
@@ -124,7 +124,7 @@ export interface BackendMessageRegistry {
  * providing autocomplete for keys registered via module augmentation.
  *
  * For type-safe message keys, use the .messages() pattern on the builder
- * which infers keys at the instance level (cms.t()).
+ * which infers keys at the instance level (app.t()).
  */
 export type BackendMessageKey = keyof BackendMessageRegistry | (string & {});
 

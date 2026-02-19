@@ -108,7 +108,7 @@ const heroBlock = qb.block("hero")
 {
   "backgroundImage": {
     "id": "uuid-here",
-    "url": "http://your-site.com/api/cms/storage/files/...",
+    "url": "http://your-site.com/api/storage/files/...",
     "filename": "hero.jpg",
     "mimeType": "image/jpeg"
   }
@@ -200,12 +200,12 @@ export function TeamRenderer({ values, data }: BlockProps<"team">) {
 When blocks use functional `.prefetch()` handlers that need typed access to `ctx.app` (e.g., `ctx.app.api.collections.posts.find(...)`), you can run into a circular dependency:
 
 - `app.ts` imports `blocks.ts` to register blocks via `.blocks(blocks)`
-- `blocks.ts` wants to import `AppCMS` from `app.ts` to get typed `ctx.app` in prefetch
+- `blocks.ts` wants to import `App` from `app.ts` to get typed `ctx.app` in prefetch
 - **Circular import!**
 
 ### The BaseCMS Pattern (Current Workaround)
 
-Split your CMS setup into a "base" (everything except blocks) and the final build:
+Split your app setup into a "base" (everything except blocks) and the final build:
 
 ```typescript
 // app.ts
@@ -218,12 +218,12 @@ export const baseCms = qb
   .auth({ ... });
 
 // Step 2: Export the base type for blocks to import
-export type BaseCMS = (typeof baseCms)["$inferCms"];
+export type BaseCMS = (typeof baseCms)["$inferApp"];
 
 // Step 3: Add blocks and build
-export const cms = baseCms.blocks(blocks).build({ ... });
+export const app = baseCms.blocks(blocks).build({ ... });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 ```
 
 ```typescript
@@ -238,9 +238,9 @@ const latestPostsBlock = qb
     count: f.number({ label: "Count", default: 3 }),
   }))
   .prefetch(async ({ values, ctx }) => {
-    // Cast the untyped ctx.app to your typed CMS API
-    const cms = typedApp<BaseCMS>(ctx.app);
-    const res = await cms.api.collections.posts.find({
+    // Cast the untyped ctx.app to your typed API
+    const app = typedApp<BaseCMS>(ctx.app);
+    const res = await app.api.collections.posts.find({
       limit: values.count || 3,
       where: { published: true } satisfies Where<typeof posts, BaseCMS>,
       orderBy: { createdAt: "desc" },
@@ -251,7 +251,7 @@ const latestPostsBlock = qb
 
 **Why this works:**
 - `BaseCMS` is derived from `baseCms` which does NOT import `blocks.ts` — no circular dependency
-- `BaseCMS` has all the same collections, globals, and APIs as the final `AppCMS` — blocks just aren't part of the type
+- `BaseCMS` has all the same collections, globals, and APIs as the final `App` — blocks just aren't part of the type
 - `typedApp<BaseCMS>(ctx.app)` safely casts the runtime app instance to the typed API
 
 **When you DON'T need this pattern:**

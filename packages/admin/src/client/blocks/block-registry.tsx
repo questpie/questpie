@@ -7,14 +7,14 @@
  * Key design principles:
  * 1. Server defines WHAT (block schema, prefetch) - see @questpie/admin/server
  * 2. Client defines HOW (React components for rendering)
- * 3. Types are inferred from server CMS type - no duplication
+ * 3. Types are inferred from server app type - no duplication
  *
  * @example
  * ```ts
  * import { createBlockRegistry } from "@questpie/admin/client";
- * import type { AppCMS } from "@/server/cms";
+ * import type { App } from "@/server/app";
  *
- * export const blockRenderers = createBlockRegistry<AppCMS>()
+ * export const blockRenderers = createBlockRegistry<App>()
  *   .register("hero", {
  *     // Props are inferred from server block schema!
  *     // values: { title: string, subtitle?: string, alignment: "left" | "center" | "right", ... }
@@ -42,10 +42,10 @@ import type * as React from "react";
 // ============================================================================
 
 /**
- * Extract blocks from CMS type.
+ * Extract blocks from app type.
  * Handles the state.blocks structure from QuestpieBuilder.
  */
-export type ExtractServerBlocks<TCMS> = TCMS extends {
+export type ExtractServerBlocks<TApp> = TApp extends {
   state: { blocks: infer B };
 }
   ? B extends Record<string, any>
@@ -54,9 +54,9 @@ export type ExtractServerBlocks<TCMS> = TCMS extends {
   : Record<string, never>;
 
 /**
- * Get block names from CMS type.
+ * Get block names from app type.
  */
-export type ServerBlockNames<TCMS> = keyof ExtractServerBlocks<TCMS>;
+export type ServerBlockNames<TApp> = keyof ExtractServerBlocks<TApp>;
 
 /**
  * Extract field values type from a server block definition.
@@ -83,20 +83,20 @@ export type ExtractBlockPrefetchData<TBlock> = TBlock extends {
     : undefined;
 
 /**
- * Block values type for a specific block name in a CMS.
+ * Block values type for a specific block name in an app.
  */
 export type BlockValues<
-  TCMS,
-  TBlockName extends keyof ExtractServerBlocks<TCMS>,
-> = ExtractBlockFieldValues<ExtractServerBlocks<TCMS>[TBlockName]>;
+  TApp,
+  TBlockName extends keyof ExtractServerBlocks<TApp>,
+> = ExtractBlockFieldValues<ExtractServerBlocks<TApp>[TBlockName]>;
 
 /**
- * Block prefetch data type for a specific block name in a CMS.
+ * Block prefetch data type for a specific block name in an app.
  */
 export type BlockPrefetchData<
-  TCMS,
-  TBlockName extends keyof ExtractServerBlocks<TCMS>,
-> = ExtractBlockPrefetchData<ExtractServerBlocks<TCMS>[TBlockName]>;
+  TApp,
+  TBlockName extends keyof ExtractServerBlocks<TApp>,
+> = ExtractBlockPrefetchData<ExtractServerBlocks<TApp>[TBlockName]>;
 
 // ============================================================================
 // Block Renderer Types
@@ -151,7 +151,7 @@ export interface BlockRendererDefinition<
  * Tracks which blocks have been registered for type checking.
  */
 export interface BlockRegistry<
-  TCMS,
+  TApp,
   TRegistered extends Record<string, BlockRendererDefinition<any, any>> =
     Record<string, never>,
 > {
@@ -169,18 +169,18 @@ export interface BlockRegistry<
    * })
    * ```
    */
-  register<TBlockName extends ServerBlockNames<TCMS> & string>(
+  register<TBlockName extends ServerBlockNames<TApp> & string>(
     blockName: TBlockName,
     definition: BlockRendererDefinition<
-      BlockValues<TCMS, TBlockName>,
-      BlockPrefetchData<TCMS, TBlockName>
+      BlockValues<TApp, TBlockName>,
+      BlockPrefetchData<TApp, TBlockName>
     >,
   ): BlockRegistry<
-    TCMS,
+    TApp,
     TRegistered & {
       [K in TBlockName]: BlockRendererDefinition<
-        BlockValues<TCMS, TBlockName>,
-        BlockPrefetchData<TCMS, TBlockName>
+        BlockValues<TApp, TBlockName>,
+        BlockPrefetchData<TApp, TBlockName>
       >;
     }
   >;
@@ -223,23 +223,23 @@ export interface BlockRegistry<
  * Internal class implementing BlockRegistry.
  */
 class BlockRegistryImpl<
-  TCMS,
+  TApp,
   TRegistered extends Record<string, BlockRendererDefinition<any, any>>,
-> implements BlockRegistry<TCMS, TRegistered> {
+> implements BlockRegistry<TApp, TRegistered> {
   constructor(public readonly renderers: TRegistered = {} as TRegistered) {}
 
-  register<TBlockName extends ServerBlockNames<TCMS> & string>(
+  register<TBlockName extends ServerBlockNames<TApp> & string>(
     blockName: TBlockName,
     definition: BlockRendererDefinition<
-      BlockValues<TCMS, TBlockName>,
-      BlockPrefetchData<TCMS, TBlockName>
+      BlockValues<TApp, TBlockName>,
+      BlockPrefetchData<TApp, TBlockName>
     >,
   ): BlockRegistry<
-    TCMS,
+    TApp,
     TRegistered & {
       [K in TBlockName]: BlockRendererDefinition<
-        BlockValues<TCMS, TBlockName>,
-        BlockPrefetchData<TCMS, TBlockName>
+        BlockValues<TApp, TBlockName>,
+        BlockPrefetchData<TApp, TBlockName>
       >;
     }
   > {
@@ -287,18 +287,18 @@ class BlockRegistryImpl<
 /**
  * Create a new type-safe block renderer registry.
  *
- * The registry infers block value types from the server CMS type,
+ * The registry infers block value types from the server app type,
  * ensuring type safety without duplicating schema definitions.
  *
- * @template TCMS - Server CMS type (e.g., `typeof cms` or `AppCMS`)
+ * @template TApp - Server app type (e.g., `typeof app` or `App`)
  *
  * @example
  * ```ts
  * import { createBlockRegistry } from "@questpie/admin/client";
- * import type { AppCMS } from "@/server/cms";
+ * import type { App } from "@/server/app";
  *
  * // Create typed registry
- * export const blockRenderers = createBlockRegistry<AppCMS>()
+ * export const blockRenderers = createBlockRegistry<App>()
  *   .register("hero", {
  *     // values is typed: { title: string, subtitle?: string, ... }
  *     // data is typed from prefetch return type
@@ -327,11 +327,11 @@ class BlockRegistryImpl<
  * }
  * ```
  */
-export function createBlockRegistry<TCMS>(): BlockRegistry<
-  TCMS,
+export function createBlockRegistry<TApp>(): BlockRegistry<
+  TApp,
   Record<string, never>
 > {
-  return new BlockRegistryImpl<TCMS, Record<string, never>>();
+  return new BlockRegistryImpl<TApp, Record<string, never>>();
 }
 
 // ============================================================================
@@ -344,41 +344,41 @@ export function createBlockRegistry<TCMS>(): BlockRegistry<
  *
  * @example
  * ```ts
- * type HeroProps = BlockComponentProps<AppCMS, "hero">;
+ * type HeroProps = BlockComponentProps<App, "hero">;
  * // { id: string; values: HeroValues; data: HeroData; children?: ReactNode; ... }
  * ```
  */
 export type BlockComponentProps<
-  TCMS,
-  TBlockName extends ServerBlockNames<TCMS>,
+  TApp,
+  TBlockName extends ServerBlockNames<TApp>,
 > = BlockRendererProps<
-  BlockValues<TCMS, TBlockName>,
-  BlockPrefetchData<TCMS, TBlockName>
+  BlockValues<TApp, TBlockName>,
+  BlockPrefetchData<TApp, TBlockName>
 >;
 
 /**
- * Helper type to get all possible block value types from CMS.
+ * Helper type to get all possible block value types from app.
  * Useful for union types or discriminated unions.
  *
  * @example
  * ```ts
- * type AnyBlockValues = AllBlockValues<AppCMS>;
+ * type AnyBlockValues = AllBlockValues<App>;
  * // { hero: HeroValues; text: TextValues; columns: ColumnsValues; ... }
  * ```
  */
-export type AllBlockValues<TCMS> = {
-  [K in ServerBlockNames<TCMS> & string]: BlockValues<TCMS, K>;
+export type AllBlockValues<TApp> = {
+  [K in ServerBlockNames<TApp> & string]: BlockValues<TApp, K>;
 };
 
 /**
- * Helper type to get all possible block data types from CMS.
+ * Helper type to get all possible block data types from app.
  *
  * @example
  * ```ts
- * type AnyBlockData = AllBlockData<AppCMS>;
+ * type AnyBlockData = AllBlockData<App>;
  * // { hero: HeroData; featuredPosts: { posts: Post[] }; ... }
  * ```
  */
-export type AllBlockData<TCMS> = {
-  [K in ServerBlockNames<TCMS> & string]: BlockPrefetchData<TCMS, K>;
+export type AllBlockData<TApp> = {
+  [K in ServerBlockNames<TApp> & string]: BlockPrefetchData<TApp, K>;
 };

@@ -5,23 +5,23 @@ description: Integrate QUESTPIE with Next.js App Router route handlers
 
 # Next.js Adapter
 
-The Next.js adapter generates route handlers for the App Router's catch-all route pattern. All CMS endpoints are handled by a single `[...slug]` route.
+The Next.js adapter generates route handlers for the App Router's catch-all route pattern. All API endpoints are handled by a single `[...slug]` route.
 
 ## Server Setup
 
 ```ts
-// app/api/cms/[...slug]/route.ts
+// app/api/[...slug]/route.ts
 import { questpieNextRouteHandlers } from "@questpie/next";
-import { cms, appRpc } from "@/questpie/cms";
+import { app, appRpc } from "@/questpie/app";
 
 export const { GET, POST, PATCH, DELETE, PUT, OPTIONS, HEAD } =
-  questpieNextRouteHandlers(cms, {
-    basePath: "/api/cms",
+  questpieNextRouteHandlers(app, {
+    basePath: "/api",
     rpc: appRpc,
   });
 ```
 
-### `questpieNextRouteHandlers(cms, config)`
+### `questpieNextRouteHandlers(app, config)`
 
 Returns an object with HTTP method handlers (`GET`, `POST`, `PATCH`, `DELETE`, `PUT`, `OPTIONS`, `HEAD`) suitable for Next.js route handler exports.
 
@@ -32,8 +32,8 @@ For more control, use `questpieNext` which returns a single request handler:
 ```ts
 import { questpieNext } from "@questpie/next";
 
-const handler = questpieNext(cms, {
-  basePath: "/api/cms",
+const handler = questpieNext(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 
@@ -54,11 +54,11 @@ Next.js doesn't have a framework-specific typed client. Use the core `createClie
 
 ```ts
 import { createClient } from "questpie/client";
-import type { AppCMS } from "@/questpie/cms";
+import type { App } from "@/questpie/app";
 
-const client = createClient<AppCMS>({
+const client = createClient<App>({
   baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-  basePath: "/api/cms",
+  basePath: "/api",
 });
 
 // Collections
@@ -73,10 +73,10 @@ const settings = await client.globals.siteSettings.get();
 ```ts
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
-const cms = createQuestpieQueryOptions(client);
+const app = createQuestpieQueryOptions(client);
 
 // In a component
-const { data } = useQuery(cms.collections.posts.find({ limit: 10 }));
+const { data } = useQuery(app.collections.posts.find({ limit: 10 }));
 ```
 
 ## Configuration
@@ -88,17 +88,17 @@ The adapter configuration is the same as `createFetchHandler` — see [Adapters 
 ```
 app/
   api/
-    cms/
+    app/
       [...slug]/
-        route.ts    ← All CMS routes handled here
+        route.ts    ← All API routes handled here
   questpie/
-    cms.ts          ← CMS builder and config
+    app.ts          ← app builder and config
     client.ts       ← Client instance
 ```
 
 ## Common Mistakes
 
-- **Wrong route path** — The catch-all route must be at `app/api/cms/[...slug]/route.ts` (matching the `basePath`). If `basePath` is `/api/cms`, the file must be at that path.
+- **Wrong route path** — The catch-all route must be at `app/api/[...slug]/route.ts` (matching the `basePath`). If `basePath` is `/api`, the file must be at that path.
 - **Missing method exports** — Export all HTTP methods. If you only export `GET` and `POST`, PATCH and DELETE requests will 405.
 - **Server-side vs client-side** — The `createClient` call should use a full URL. For server components, use the server's internal URL; for client components, use the public URL.
 

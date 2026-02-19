@@ -4,23 +4,22 @@
  * Authentication route handler.
  */
 
-import type { Questpie } from "../../config/cms.js";
+import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
 import { handleError } from "../utils/response.js";
 
 export const createAuthRoute = <
   TConfig extends QuestpieConfig = QuestpieConfig,
->(
-  cms: Questpie<TConfig>,
+>(app: Questpie<TConfig>,
 ) => {
   return async (request: Request): Promise<Response> => {
-    if (!cms.auth) {
+    if (!app.auth) {
       return handleError(ApiError.notImplemented("Authentication"), {
         request,
-        cms,
+        app,
       });
     }
-    return cms.auth.handler(request);
+    return app.auth.handler(request);
   };
 };

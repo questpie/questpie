@@ -12,7 +12,7 @@ Extension packages add capabilities to QUESTPIE through the `.use()` composition
 The `.use()` method merges another builder's state into the current builder:
 
 ```ts
-const cms = q({ name: "app" })
+const app = q({ name: "app" })
   .use(moduleA)    // adds moduleA's collections, fields, jobs, etc.
   .use(moduleB)    // adds moduleB's state on top
   .build({ ... });
@@ -98,7 +98,7 @@ import { q } from "@questpie/questpie";
 import { adminModule } from "@questpie/admin/server";
 import { ecommerceModule } from "@my-org/ecommerce-plugin/server";
 
-export const cms = q({ name: "store" })
+export const app = q({ name: "store" })
   .use(adminModule)
   .use(ecommerceModule)
   .collections({
@@ -117,7 +117,7 @@ export const cms = q({ name: "store" })
 import { qa, adminModule } from "@questpie/admin/client";
 import { ecommerceAdminModule } from "@my-org/ecommerce-plugin/client";
 
-export const admin = qa<typeof cms>()
+export const admin = qa<typeof app>()
   .use(adminModule)
   .use(ecommerceAdminModule);
 ```
@@ -139,7 +139,7 @@ export const myModule = q({ name: "my-module" })
 
 // Bad — hardcoded import that bypasses composition
 import { myCollection } from "./collections";
-cms.api.collections.myCollection.find(); // breaks if renamed
+app.api.collections.myCollection.find(); // breaks if renamed
 ```
 
 ### Export Types
@@ -220,7 +220,7 @@ Use `peerDependencies` for QUESTPIE packages — consumers provide their own ver
 ## Common Mistakes
 
 - **Importing React in server module** — server modules must be framework-agnostic
-- **Building the CMS inside the module** — modules export builder state, the app calls `.build()`
+- **Building the app inside the module** — modules export builder state, the app calls `.build()`
 - **Not using peerDependencies** — bundling QUESTPIE in your package creates version conflicts
 
 ## Related Pages

@@ -3,7 +3,7 @@
  *
  * Admin configuration for the city-portal app.
  *
- * Sidebar, dashboard, branding, and admin locales are configured on the SERVER (cms.ts).
+ * Sidebar, dashboard, branding, and admin locales are configured on the SERVER (app.ts).
  * The client only carries registries (fields, views, components, widgets).
  *
  * Translations are configured on the server via:

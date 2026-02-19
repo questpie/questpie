@@ -256,7 +256,7 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 	 *
 	 * @example
 	 * ```ts
-	 * const builder = qa<AppCMS>().use(adminModule);
+	 * const builder = qa<App>().use(adminModule);
 	 *
 	 * const analyticsPage = builder.page("analytics", {
 	 *   component: AnalyticsPage,
@@ -281,7 +281,7 @@ export class AdminBuilder<TState extends AdminBuilderState> {
 	 *
 	 * @example
 	 * ```ts
-	 * const builder = qa<AppCMS>().use(adminModule);
+	 * const builder = qa<App>().use(adminModule);
 	 *
 	 * const statsWidget = builder.widget("stats", {
 	 *   component: StatsWidget,

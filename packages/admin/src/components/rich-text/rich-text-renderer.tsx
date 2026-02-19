@@ -109,38 +109,40 @@ function renderNode(
 		// Apply marks (bold, italic, etc.)
 		if (node.marks) {
 			for (const mark of node.marks) {
+				// Generate stable key based on mark type and text content
+				const markKey = `${mark.type}-${node.text?.slice(0, 20) ?? ""}-${index}`;
 				switch (mark.type) {
 					case "bold":
 						textNode = (
-							<strong key={index} className={styles.bold}>
+							<strong key={markKey} className={styles.bold}>
 								{textNode}
 							</strong>
 						);
 						break;
 					case "italic":
 						textNode = (
-							<em key={index} className={styles.italic}>
+							<em key={markKey} className={styles.italic}>
 								{textNode}
 							</em>
 						);
 						break;
 					case "code":
 						textNode = (
-							<code key={index} className={styles.code}>
+							<code key={markKey} className={styles.code}>
 								{textNode}
 							</code>
 						);
 						break;
 					case "strike":
 						textNode = (
-							<s key={index} className={styles.strike}>
+							<s key={markKey} className={styles.strike}>
 								{textNode}
 							</s>
 						);
 						break;
 					case "underline":
 						textNode = (
-							<u key={index} className={styles.underline}>
+							<u key={markKey} className={styles.underline}>
 								{textNode}
 							</u>
 						);
@@ -153,7 +155,7 @@ function renderNode(
 							(target === "_blank" ? "noopener noreferrer" : undefined);
 						textNode = (
 							<a
-								key={index}
+								key={markKey}
 								href={href}
 								target={target}
 								rel={rel}
@@ -171,6 +173,9 @@ function renderNode(
 		return textNode;
 	}
 
+	// Generate stable key for block nodes based on type, content, and index
+	const nodeKey = `${node.type}-${node.text?.slice(0, 20) ?? ""}-${index}`;
+
 	// Block nodes
 	const children = node.content?.map((child, i) =>
 		renderNode(child, i, styles),
@@ -178,7 +183,7 @@ function renderNode(
 
 	switch (node.type) {
 		case "doc":
-			return <div key={index}>{children}</div>;
+			return <div key={nodeKey}>{children}</div>;
 
 		case "paragraph": {
 			const paragraphAlign = node.attrs?.textAlign as
@@ -189,7 +194,7 @@ function renderNode(
 				| undefined;
 			return (
 				<p
-					key={index}
+					key={nodeKey}
 					className={styles.paragraph}
 					style={paragraphAlign ? { textAlign: paragraphAlign } : undefined}
 				>
@@ -215,7 +220,7 @@ function renderNode(
 			const HeadingTag = `h${level}` as HeadingTagName;
 			return (
 				<HeadingTag
-					key={index}
+					key={nodeKey}
 					className={headingClass}
 					style={headingAlign ? { textAlign: headingAlign } : undefined}
 				>
@@ -226,44 +231,44 @@ function renderNode(
 
 		case "blockquote":
 			return (
-				<blockquote key={index} className={styles.blockquote}>
+				<blockquote key={nodeKey} className={styles.blockquote}>
 					{children}
 				</blockquote>
 			);
 
 		case "codeBlock":
 			return (
-				<pre key={index} className={styles.codeBlock}>
+				<pre key={nodeKey} className={styles.codeBlock}>
 					<code>{children}</code>
 				</pre>
 			);
 
 		case "bulletList":
 			return (
-				<ul key={index} className={styles.bulletList}>
+				<ul key={nodeKey} className={styles.bulletList}>
 					{children}
 				</ul>
 			);
 
 		case "orderedList":
 			return (
-				<ol key={index} className={styles.orderedList}>
+				<ol key={nodeKey} className={styles.orderedList}>
 					{children}
 				</ol>
 			);
 
 		case "listItem":
 			return (
-				<li key={index} className={styles.listItem}>
+				<li key={nodeKey} className={styles.listItem}>
 					{children}
 				</li>
 			);
 
 		case "hardBreak":
-			return <br key={index} />;
+			return <br key={nodeKey} />;
 
 		case "horizontalRule":
-			return <hr key={index} className={styles.horizontalRule} />;
+			return <hr key={nodeKey} className={styles.horizontalRule} />;
 
 		case "image": {
 			const src = node.attrs?.src as string | undefined;

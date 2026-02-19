@@ -116,7 +116,7 @@ export function createQueueClient<
   const getContextOrThrow = async () => {
     if (!runtimeOptions.createContext) {
       throw new Error(
-        "QUESTPIE Queue: createContext is not configured. Queue consumer methods must be called from a built CMS instance.",
+        "QUESTPIE Queue: createContext is not configured. Queue consumer methods must be called from a built app instance.",
       );
     }
     return runtimeOptions.createContext();
@@ -125,7 +125,7 @@ export function createQueueClient<
   const getAppOrThrow = () => {
     if (!runtimeOptions.getApp) {
       throw new Error(
-        "QUESTPIE Queue: app resolver is not configured. Queue consumer methods must be called from a built CMS instance.",
+        "QUESTPIE Queue: app resolver is not configured. Queue consumer methods must be called from a built app instance.",
       );
     }
     return runtimeOptions.getApp();

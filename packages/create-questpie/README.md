@@ -45,16 +45,16 @@ my-app/
 │   ├── questpie/
 │   │   ├── server/
 │   │   │   ├── builder.ts        # q.use(adminModule) setup
-│   │   │   ├── cms.ts            # CMS assembly + build
+│   │   │   ├── app.ts            # QuestPie assembly + build
 │   │   │   ├── collections/      # Collection definitions
 │   │   │   └── globals/          # Global definitions
 │   │   └── admin/
 │   │       └── admin.ts          # Client admin builder
 │   ├── lib/
-│   │   ├── cms-client.ts         # Typed CMS client
+│   │   ├── client.ts         # Typed client
 │   │   └── query-client.ts       # TanStack Query client
 │   ├── routes/
-│   │   ├── api/cms.ts            # CMS route handler
+│   │   ├── api/app.ts            # QuestPie route handler
 │   │   └── admin/                # Admin panel routes
 │   └── migrations/               # Drizzle migrations
 ├── questpie.config.ts            # CLI config

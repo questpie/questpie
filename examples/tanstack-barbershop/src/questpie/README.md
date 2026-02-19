@@ -1,13 +1,13 @@
 # QUESTPIE Configuration
 
-This directory contains the QUESTPIE CMS configuration for the Barbershop example.
+This directory contains the QUESTPIE app configuration for the Barbershop example.
 
 ## Structure
 
 ```
 questpie/
-  server/              # Backend CMS (q builder)
-    cms.ts             # Main CMS instance + module augmentation
+  server/              # Backend QuestPie (q builder)
+    app.ts             # Main app instance + module augmentation
     collections/       # Collection definitions
       barbers.ts
       services.ts
@@ -31,18 +31,18 @@ questpie/
 
 Both server and admin use module augmentation for type-safe access throughout the app.
 
-### Server (`/server/cms.ts`)
+### Server (`/server/app.ts`)
 
 ```typescript
 import { q } from "questpie";
 import { adminModule } from "@questpie/admin/server";
 
-export const cms = q({ name: "barbershop" })
+export const app = q({ name: "barbershop" })
   .use(adminModule)
   .collections({ barbers, services, appointments, reviews })
   .build({ ... });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 
 // Module augmentation for type-safe hooks, functions, jobs
 declare module "questpie" {
@@ -56,14 +56,14 @@ declare module "questpie" {
 
 ```typescript
 import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>().use(adminModule);
+export const admin = qa<App>().use(adminModule);
 
 // Module augmentation for type-safe hooks
 declare module "@questpie/admin/client" {
   interface AdminTypeRegistry {
-    cms: AppCMS;
+    app: App;
     admin: typeof admin;
   }
 }
@@ -75,8 +75,8 @@ declare module "@questpie/admin/client" {
 
 ```typescript
 // Every hook needed explicit type parameters
-const { data } = useCollectionList<AppCMS, "barbers">("barbers");
-const { client } = useAdminContext<AppCMS>();
+const { data } = useCollectionList<App, "barbers">("barbers");
+const { client } = useAdminContext<App>();
 ```
 
 ### After (module augmentation)
@@ -92,7 +92,7 @@ const { client } = useAdminContext();
 
 **Server (`/server`):**
 
-- Backend headless CMS using `q()` builder
+- Backend application framework using `q()` builder
 - Drizzle schema definitions
 - Validation schemas (Zod)
 - Hooks, jobs, auth, etc.
@@ -158,11 +158,11 @@ export const barbersAdmin = qa
 
 ```typescript
 // builder.ts - Single source for typed qa namespace
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 import { qa as originalQa, adminModule } from "@questpie/admin/client";
 
-// Pre-configured qa with CMS types and admin module
-export const qa = originalQa<AppCMS>().use(adminModule).toNamespace();
+// Pre-configured qa with app types and admin module
+export const qa = originalQa<App>().use(adminModule).toNamespace();
 ```
 
 ## API Features
@@ -180,7 +180,7 @@ const admin = qa().collections({ ... });
 
 ```typescript
 // Create a builder with module - this is the recommended pattern
-const builder = qa<AppCMS>().use(adminModule);
+const builder = qa<App>().use(adminModule);
 const barbers = builder.collection("barbers").fields(({ r }) => ({ ... }));
 ```
 
@@ -216,7 +216,7 @@ const barbers = builder.collection("barbers").fields(({ r }) => ({ ... }));
 // routes/admin.tsx
 import { AdminLayoutProvider } from "@questpie/admin/client";
 import { admin } from "~/questpie/admin/builder";
-import { client } from "~/lib/cms-client";
+import { client } from "~/lib/client";
 
 function AdminLayout() {
   return (
@@ -257,7 +257,7 @@ function BarbersList() {
 
 QUESTPIE supports full i18n for both backend messages and admin UI.
 
-### Backend Messages (`/server/cms.ts`)
+### Backend Messages (`/server/app.ts`)
 
 Add custom translated messages for API responses and validation:
 
@@ -273,7 +273,7 @@ const backendMessages = {
   },
 } as const;
 
-export const cms = q({ name: "barbershop" })
+export const app = q({ name: "barbershop" })
   .use(adminModule)
   // Configure content locales
   .locale({
@@ -288,7 +288,7 @@ export const cms = q({ name: "barbershop" })
   .build({ ... });
 
 // Use in handlers:
-// cms.t("appointment.created", { date: "2024-01-20" }, "sk")
+// app.t("appointment.created", { date: "2024-01-20" }, "sk")
 // => "Rezervácia vytvorená na 2024-01-20"
 ```
 
@@ -297,8 +297,8 @@ export const cms = q({ name: "barbershop" })
 Admin UI translations are configured server-side via `.adminLocale()` and fetched by the client:
 
 ```typescript
-// server/cms.ts
-export const cms = q({ name: "barbershop" })
+// server/app.ts
+export const app = q({ name: "barbershop" })
   .use(adminModule)
   .adminLocale({
     default: "en",
@@ -340,7 +340,7 @@ function WelcomeBanner() {
 QUESTPIE separates two types of locales:
 
 - **UI Locale** (`uiLocale`) - Admin interface language
-- **Content Locale** (`contentLocale`) - CMS content language (for `_i18n` tables)
+- **Content Locale** (`contentLocale`) - QuestPie content language (for `_i18n` tables)
 
 ```typescript
 import { useAdminStore, selectUiLocale, selectContentLocale } from "@questpie/admin/client";

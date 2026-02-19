@@ -1,6 +1,6 @@
 # @questpie/openapi
 
-Auto-generate an OpenAPI 3.1 spec from a QUESTPIE CMS instance and serve interactive API docs via Scalar UI.
+Auto-generate an OpenAPI 3.1 spec from a QUESTPIE app instance and serve interactive API docs via Scalar UI.
 
 ## Installation
 
@@ -15,22 +15,22 @@ Wrap your fetch handler with `withOpenApi` to add `/openapi.json` and `/docs` ro
 ```ts
 import { createFetchHandler } from "questpie";
 import { withOpenApi } from "@questpie/openapi";
-import { cms, appRpc } from "./cms";
+import { app, appRpc } from "./questpie";
 
 const handler = withOpenApi(
-  createFetchHandler(cms, { basePath: "/api/cms", rpc: appRpc }),
+  createFetchHandler(app, { basePath: "/api", rpc: appRpc }),
   {
-    cms,
+    app,
     rpc: appRpc,
-    basePath: "/api/cms",
+    basePath: "/api",
     info: { title: "My API", version: "1.0.0" },
     scalar: { theme: "purple" },
   },
 );
 
-// GET /api/cms/openapi.json → OpenAPI spec
-// GET /api/cms/docs         → Scalar UI
-// Everything else           → CMS routes
+// GET /api/openapi.json → OpenAPI spec
+// GET /api/docs         → Scalar UI
+// Everything else           → routes
 ```
 
 ## What Gets Documented
@@ -52,8 +52,8 @@ Generate the spec without mounting routes:
 ```ts
 import { generateOpenApiSpec } from "@questpie/openapi";
 
-const spec = generateOpenApiSpec(cms, appRpc, {
-  basePath: "/api/cms",
+const spec = generateOpenApiSpec(app, appRpc, {
+  basePath: "/api",
   info: { title: "My API", version: "1.0.0" },
 });
 ```

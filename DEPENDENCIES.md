@@ -1,4 +1,4 @@
-# QUESTPIE CMS - Critical Dependencies
+# QUESTPIE - Critical Dependencies
 
 **IMPORTANT**: When creating new examples or packages, ALWAYS use these exact versions to ensure compatibility.
 
@@ -55,8 +55,8 @@ grep -r "\"zod\":" packages/*/package.json examples/*/package.json
 # Check drizzle-orm version
 grep -r "\"drizzle-orm\":" packages/*/package.json examples/*/package.json
 
-# Check all critical deps in CMS package
-cat packages/cms/package.json | grep -E "\"(zod|drizzle-orm|better-auth|pg|pg-boss)\":"
+# Check all critical deps in QuestPie package
+cat packages/package.json | grep -E "\"(zod|drizzle-orm|better-auth|pg|pg-boss)\":"
 ```
 
 ## When Adding New Examples/Packages
@@ -81,7 +81,7 @@ Always use `workspace:*` for internal packages:
 ```json
 {
   "dependencies": {
-    "@questpie/cms": "workspace:*",
+    "questpie": "workspace:*",
     "@questpie/admin": "workspace:*",
     "@questpie/tanstack-query": "workspace:*"
   }

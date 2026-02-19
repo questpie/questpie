@@ -1,7 +1,7 @@
 /**
  * Pages Collection (Scoped)
  *
- * CMS pages with hierarchical structure and block content.
+ * app pages with hierarchical structure and block content.
  */
 
 import { uniqueIndex } from "drizzle-orm/pg-core";

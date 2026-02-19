@@ -14,7 +14,7 @@ src/
   questpie/
     server/
       builder.ts              ← shared qb with admin module
-      cms.ts                  ← compose everything + build()
+      app.ts                  ← compose everything + build()
       rpc.ts                  ← rpc() root instance
       collections/
         index.ts              ← barrel export
@@ -44,7 +44,7 @@ src/
 
   routes/
     api/
-      cms.ts                  ← mount platform fetch handler
+      app.ts                  ← mount platform fetch handler
     admin.tsx                 ← admin panel route
 
   migrations/
@@ -81,17 +81,17 @@ If you have custom modules, compose them here:
 export const qb = q.use(adminModule).use(myCustomModule);
 ```
 
-### `server/cms.ts`
+### `server/app.ts`
 
 The composition root. This file:
 1. Registers all collections and globals
 2. Configures sidebar, dashboard, branding
 3. Sets up auth, locale, jobs, messages
 4. Calls `.build()` with runtime config
-5. Exports `AppCMS` type for the client
+5. Exports `App` type for the client
 
 ```ts
-export const cms = q({ name: "my-app" })
+export const app = q({ name: "my-app" })
   .use(baseInstance)  // or .use(adminModule) + individual configs
   .collections({ ... })
   .globals({ ... })
@@ -99,7 +99,7 @@ export const cms = q({ name: "my-app" })
   .dashboard(...)
   .build({ db: { url: ... }, app: { url: ... } });
 
-export type AppCMS = typeof cms;
+export type App = typeof app;
 ```
 
 ### `server/rpc.ts`
@@ -148,22 +148,22 @@ The client-side builder. It only handles registries and rendering concerns:
 
 ```ts
 import { adminModule, qa } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>()
+export const admin = qa<App>()
   .use(adminModule);
 ```
 
-### `routes/api/cms.ts`
+### `routes/api.ts`
 
 Thin route handler. No business logic here:
 
 ```ts
 import { createFetchHandler } from "questpie";
-import { cms, appRpc } from "@/questpie/server/cms";
+import { app, appRpc } from "@/questpie/server/app";
 
-export const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+export const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 ```
@@ -227,7 +227,7 @@ export const blogModule = q({ name: "blog" })
 Then compose in your main builder:
 
 ```ts
-export const cms = q({ name: "my-app" })
+export const app = q({ name: "my-app" })
   .use(adminModule)
   .use(blogModule)
   .build({ ... });

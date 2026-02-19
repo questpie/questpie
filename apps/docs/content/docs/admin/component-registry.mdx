@@ -63,7 +63,7 @@ interface ComponentReference {
 Register custom components for server-driven UI:
 
 ```ts
-const admin = qa<AppCMS>()
+const admin = qa<App>()
   .use(coreAdminModule)
   .components({
     statusDot: StatusDotComponent,

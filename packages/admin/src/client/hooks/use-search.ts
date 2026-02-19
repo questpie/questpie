@@ -1,7 +1,7 @@
 /**
  * Search Hook
  *
- * React hook for FTS-powered search using the CMS Search API.
+ * React hook for FTS-powered search using the app Search API.
  * Returns full records with search metadata (score, highlights, indexed title).
  */
 
@@ -299,7 +299,7 @@ export interface UseGlobalSearchOptions {
 /**
  * Hook for FTS-powered search across ALL collections
  *
- * Used by the global search (Cmd+K) to find records across the entire CMS.
+ * Used by the global search (Cmd+K) to find records across the entire app.
  *
  * @example
  * ```tsx

@@ -30,6 +30,7 @@ import type {
 	InferGlobalTableWithColumns,
 } from "#questpie/server/global/builder/types.js";
 import { createGlobalValidationSchema } from "#questpie/server/global/builder/validation-helpers.js";
+import { resolveWorkflowConfig } from "#questpie/server/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type { GlobalMeta } from "#questpie/shared/global-meta.js";
 import { GlobalCRUDGenerator } from "../crud/global-crud-generator.js";
@@ -179,6 +180,20 @@ export class Global<TState extends GlobalBuilderState> {
 		this.state = state;
 		this.name = state.name;
 
+		const workflow = resolveWorkflowConfig(state.options.workflow);
+		if (workflow) {
+			const versioning = state.options.versioning;
+			const versioningEnabled =
+				!!versioning &&
+				(typeof versioning !== "object" || versioning.enabled !== false);
+
+			if (!versioningEnabled) {
+				throw new Error(
+					`Global "${state.name}" enables workflow but versioning is disabled. Enable options.versioning to use workflow stages.`,
+				);
+			}
+		}
+
 		this.table = this.generateMainTable() as any;
 		this.i18nTable = this.generateI18nTable() as any;
 		this.versionsTable = this.generateVersionsTable();
@@ -233,8 +248,7 @@ export class Global<TState extends GlobalBuilderState> {
 	 * Generate CRUD operations
 	 */
 	generateCRUD(
-		db: any,
-		cms?: any,
+		db: any, app?: any,
 	): GlobalCRUD<
 		InferGlobalSelect<
 			any,
@@ -255,7 +269,7 @@ export class Global<TState extends GlobalBuilderState> {
 			db,
 			this.getVirtuals.bind(this),
 			this.getVirtualsForVersions.bind(this),
-			cms,
+			app,
 		);
 		return crud.generate() as any;
 	}
@@ -343,6 +357,8 @@ export class Global<TState extends GlobalBuilderState> {
 			id: cloneColumnType(parentIdColumn, "id").notNull(),
 			versionNumber: integer("version_number").notNull(),
 			versionOperation: text("version_operation").notNull(),
+			versionStage: text("version_stage"),
+			versionFromStage: text("version_from_stage"),
 			versionUserId: text("version_user_id"),
 			versionCreatedAt: timestamp("version_created_at", { mode: "date" })
 				.defaultNow()
@@ -367,6 +383,7 @@ export class Global<TState extends GlobalBuilderState> {
 
 		return pgTable(tableName, columns as any, (t) => ({
 			recordVersionIdx: index().on(t.id, t.versionNumber),
+			recordStageVersionIdx: index().on(t.id, t.versionStage, t.versionNumber),
 			versionCreatedAtIdx: index().on(t.versionCreatedAt),
 		}));
 	}
@@ -481,6 +498,7 @@ export class Global<TState extends GlobalBuilderState> {
 			versioning: hasVersioning,
 			virtualFields: Object.keys(this.state.virtuals),
 			localizedFields: Array.from(this.state.localized),
+			workflow: resolveWorkflowConfig(this.state.options.workflow),
 		};
 	}
 }

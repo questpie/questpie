@@ -58,12 +58,12 @@ const testModule = q
 
 describe("global many-to-many relations", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
-	let cms: typeof testModule.$inferCms;
+	let app: typeof testModule.$inferApp;
 
 	beforeEach(async () => {
 		setup = await buildMockApp(testModule);
-		cms = setup.cms;
-		await runTestDbMigrations(cms);
+		app = setup.app;
+		await runTestDbMigrations(app);
 	});
 
 	afterEach(async () => {
@@ -74,7 +74,7 @@ describe("global many-to-many relations", () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
 		// Create some assets
-		const asset1 = await cms.api.collections.assets.create(
+		const asset1 = await app.api.collections.assets.create(
 			{
 				id: crypto.randomUUID(),
 				filename: "image1.jpg",
@@ -82,7 +82,7 @@ describe("global many-to-many relations", () => {
 			},
 			ctx,
 		);
-		const asset2 = await cms.api.collections.assets.create(
+		const asset2 = await app.api.collections.assets.create(
 			{
 				id: crypto.randomUUID(),
 				filename: "image2.jpg",
@@ -92,7 +92,7 @@ describe("global many-to-many relations", () => {
 		);
 
 		// Initialize the global (this will auto-create a record)
-		const settings = await cms.api.globals.candle_settings.update(
+		const settings = await app.api.globals.candle_settings.update(
 			{
 				pageTitle: "Test Title",
 			},
@@ -101,7 +101,7 @@ describe("global many-to-many relations", () => {
 
 		// Manually create junction records (since global CRUD doesn't support many-to-many mutations yet)
 		const settingsId = (settings as any).id;
-		await (cms as any).api.collections.candle_settings_images.create(
+		await (app as any).api.collections.candle_settings_images.create(
 			{
 				id: crypto.randomUUID(),
 				candleSettings: settingsId, // FK column key is field name with unified API
@@ -110,7 +110,7 @@ describe("global many-to-many relations", () => {
 			},
 			ctx,
 		);
-		await (cms as any).api.collections.candle_settings_images.create(
+		await (app as any).api.collections.candle_settings_images.create(
 			{
 				id: crypto.randomUUID(),
 				candleSettings: settingsId,
@@ -121,7 +121,7 @@ describe("global many-to-many relations", () => {
 		);
 
 		// Now query the global WITH the relation
-		const settingsWithImages = await cms.api.globals.candle_settings.get(
+		const settingsWithImages = await app.api.globals.candle_settings.get(
 			{ with: { images: true } },
 			ctx,
 		);
@@ -144,7 +144,7 @@ describe("global many-to-many relations", () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
 		// Create assets
-		const asset1 = await cms.api.collections.assets.create(
+		const asset1 = await app.api.collections.assets.create(
 			{
 				id: crypto.randomUUID(),
 				filename: "special.jpg",
@@ -154,7 +154,7 @@ describe("global many-to-many relations", () => {
 		);
 
 		// Initialize global
-		const settings = await cms.api.globals.candle_settings.update(
+		const settings = await app.api.globals.candle_settings.update(
 			{
 				pageTitle: "Special Title",
 			},
@@ -162,7 +162,7 @@ describe("global many-to-many relations", () => {
 		);
 
 		// Create junction record
-		await (cms as any).api.collections.candle_settings_images.create(
+		await (app as any).api.collections.candle_settings_images.create(
 			{
 				id: crypto.randomUUID(),
 				candleSettings: (settings as any).id,
@@ -174,7 +174,7 @@ describe("global many-to-many relations", () => {
 
 		// Try to query global - globals have only one record so filtering doesn't make much sense,
 		// but we should at least be able to get it with the relation
-		const settingsWithImages = await cms.api.globals.candle_settings.get(
+		const settingsWithImages = await app.api.globals.candle_settings.get(
 			{
 				with: {
 					images: {
@@ -197,7 +197,7 @@ describe("global many-to-many relations", () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
 			// Create assets first
-			const asset1 = await cms.api.collections.assets.create(
+			const asset1 = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "connected1.jpg",
@@ -205,7 +205,7 @@ describe("global many-to-many relations", () => {
 				},
 				ctx,
 			);
-			const asset2 = await cms.api.collections.assets.create(
+			const asset2 = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "connected2.jpg",
@@ -215,7 +215,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Update global with connect operation
-			await cms.api.globals.candle_settings.update(
+			await app.api.globals.candle_settings.update(
 				{
 					pageTitle: "With Connected Images",
 					images: {
@@ -226,7 +226,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Verify by querying
-			const settingsWithImages = await cms.api.globals.candle_settings.get(
+			const settingsWithImages = await app.api.globals.candle_settings.get(
 				{ with: { images: true } },
 				ctx,
 			);
@@ -242,7 +242,7 @@ describe("global many-to-many relations", () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
 			// Update global with create operation
-			await cms.api.globals.candle_settings.update(
+			await app.api.globals.candle_settings.update(
 				{
 					pageTitle: "With Created Images",
 					images: {
@@ -256,7 +256,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Verify by querying
-			const settingsWithImages = await cms.api.globals.candle_settings.get(
+			const settingsWithImages = await app.api.globals.candle_settings.get(
 				{ with: { images: true } },
 				ctx,
 			);
@@ -272,7 +272,7 @@ describe("global many-to-many relations", () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
 			// Create one existing asset
-			const existingAsset = await cms.api.collections.assets.create(
+			const existingAsset = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "existing.jpg",
@@ -282,7 +282,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Update global with connectOrCreate (one existing, one new)
-			await cms.api.globals.candle_settings.update(
+			await app.api.globals.candle_settings.update(
 				{
 					pageTitle: "With ConnectOrCreate",
 					images: {
@@ -302,7 +302,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Verify by querying
-			const settingsWithImages = await cms.api.globals.candle_settings.get(
+			const settingsWithImages = await app.api.globals.candle_settings.get(
 				{ with: { images: true } },
 				ctx,
 			);
@@ -314,7 +314,7 @@ describe("global many-to-many relations", () => {
 			expect(filenames).toEqual(["existing.jpg", "new-asset.jpg"]);
 
 			// Verify only 2 assets exist in total (not 3)
-			const allAssets = await cms.api.collections.assets.find({}, ctx);
+			const allAssets = await app.api.collections.assets.find({}, ctx);
 			expect(allAssets.docs).toHaveLength(2);
 		});
 
@@ -322,7 +322,7 @@ describe("global many-to-many relations", () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
 			// Create assets
-			const asset1 = await cms.api.collections.assets.create(
+			const asset1 = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "plain1.jpg",
@@ -330,7 +330,7 @@ describe("global many-to-many relations", () => {
 				},
 				ctx,
 			);
-			const asset2 = await cms.api.collections.assets.create(
+			const asset2 = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "plain2.jpg",
@@ -340,7 +340,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Update global with plain array of IDs
-			await cms.api.globals.candle_settings.update(
+			await app.api.globals.candle_settings.update(
 				{
 					pageTitle: "With Plain IDs",
 					images: [asset1.id, asset2.id],
@@ -349,7 +349,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Verify by querying
-			const settingsWithImages = await cms.api.globals.candle_settings.get(
+			const settingsWithImages = await app.api.globals.candle_settings.get(
 				{ with: { images: true } },
 				ctx,
 			);
@@ -365,7 +365,7 @@ describe("global many-to-many relations", () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
 			// Create initial assets
-			const asset1 = await cms.api.collections.assets.create(
+			const asset1 = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "old1.jpg",
@@ -373,7 +373,7 @@ describe("global many-to-many relations", () => {
 				},
 				ctx,
 			);
-			const asset2 = await cms.api.collections.assets.create(
+			const asset2 = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "old2.jpg",
@@ -381,7 +381,7 @@ describe("global many-to-many relations", () => {
 				},
 				ctx,
 			);
-			const asset3 = await cms.api.collections.assets.create(
+			const asset3 = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "new1.jpg",
@@ -391,7 +391,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// First connect two assets
-			await cms.api.globals.candle_settings.update(
+			await app.api.globals.candle_settings.update(
 				{
 					pageTitle: "With Old Images",
 					images: { connect: [{ id: asset1.id }, { id: asset2.id }] },
@@ -400,7 +400,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Then replace with set operation
-			await cms.api.globals.candle_settings.update(
+			await app.api.globals.candle_settings.update(
 				{
 					pageTitle: "With New Images",
 					images: { set: [{ id: asset3.id }] } as any,
@@ -409,7 +409,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Verify only new asset is connected
-			const settingsWithImages = await cms.api.globals.candle_settings.get(
+			const settingsWithImages = await app.api.globals.candle_settings.get(
 				{ with: { images: true } },
 				ctx,
 			);
@@ -424,7 +424,7 @@ describe("global many-to-many relations", () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
 			// Create asset
-			const asset = await cms.api.collections.assets.create(
+			const asset = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "ordered.jpg",
@@ -434,7 +434,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Initialize global and connect asset
-			const settings = await cms.api.globals.candle_settings.update(
+			const settings = await app.api.globals.candle_settings.update(
 				{
 					pageTitle: "With Ordered Images",
 					images: { connect: [{ id: asset.id }] },
@@ -443,7 +443,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Manually update junction with order
-			await (cms as any).api.collections.candle_settings_images.update(
+			await (app as any).api.collections.candle_settings_images.update(
 				{
 					where: {
 						AND: [
@@ -458,7 +458,7 @@ describe("global many-to-many relations", () => {
 
 			// Verify extra field is preserved
 			const junctionRecords = await (
-				cms as any
+				app as any
 			).api.collections.candle_settings_images.find(
 				{ where: { candleSettings: (settings as any).id } },
 				ctx,
@@ -472,7 +472,7 @@ describe("global many-to-many relations", () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
 			// Create assets
-			const asset1 = await cms.api.collections.assets.create(
+			const asset1 = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "remove1.jpg",
@@ -480,7 +480,7 @@ describe("global many-to-many relations", () => {
 				},
 				ctx,
 			);
-			const asset2 = await cms.api.collections.assets.create(
+			const asset2 = await app.api.collections.assets.create(
 				{
 					id: crypto.randomUUID(),
 					filename: "remove2.jpg",
@@ -490,7 +490,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Initialize global with assets
-			await cms.api.globals.candle_settings.update(
+			await app.api.globals.candle_settings.update(
 				{
 					pageTitle: "With Images To Remove",
 					images: { connect: [{ id: asset1.id }, { id: asset2.id }] },
@@ -499,14 +499,14 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Verify images are connected
-			let settings = await cms.api.globals.candle_settings.get(
+			let settings = await app.api.globals.candle_settings.get(
 				{ with: { images: true } },
 				ctx,
 			);
 			expect(settings?.images).toHaveLength(2);
 
 			// Remove all with empty set
-			await cms.api.globals.candle_settings.update(
+			await app.api.globals.candle_settings.update(
 				{
 					pageTitle: "Without Images",
 					images: { set: [] } as any,
@@ -515,7 +515,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Verify no images remain
-			settings = await cms.api.globals.candle_settings.get(
+			settings = await app.api.globals.candle_settings.get(
 				{ with: { images: true } },
 				ctx,
 			);

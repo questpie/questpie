@@ -132,7 +132,7 @@ function CitiesLanding() {
 					{/* Footer */}
 					<footer className="border-t bg-muted/30">
 						<div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
-							<p>City Portal — Powered by QUESTPIE CMS</p>
+							<p>City Portal — Powered by QUESTPIE</p>
 						</div>
 					</footer>
 				</div>

@@ -100,7 +100,7 @@ describe("storage-driver", () => {
 
       const url = await driver.getUrl("test-file.jpg");
 
-      expect(url).toBe("http://localhost:3000/cms/storage/files/test-file.jpg");
+      expect(url).toBe("http://localhost:3000/storage/files/test-file.jpg");
     });
 
     test("FSDriver generates signed URLs with token", async () => {
@@ -113,7 +113,7 @@ describe("storage-driver", () => {
       const signedUrl = await driver.getSignedUrl("secret.pdf");
 
       expect(signedUrl).toContain(
-        "http://localhost:3000/cms/storage/files/secret.pdf",
+        "http://localhost:3000/storage/files/secret.pdf",
       );
       expect(signedUrl).toContain("?token=");
     });

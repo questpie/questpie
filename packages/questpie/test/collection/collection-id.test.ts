@@ -17,7 +17,7 @@ describe("collection IDs (field builder)", () => {
 
     beforeEach(async () => {
       setup = await buildMockApp(testModule);
-      await runTestDbMigrations(setup.cms);
+      await runTestDbMigrations(setup.app);
     });
 
     afterEach(async () => {
@@ -25,7 +25,7 @@ describe("collection IDs (field builder)", () => {
     });
 
     it("generates a uuid-like string id when omitted", async () => {
-      const created = await setup.cms.api.collections.posts.create(
+      const created = await setup.app.api.collections.posts.create(
         { title: "Test Post" },
         createTestContext(),
       );
@@ -38,7 +38,7 @@ describe("collection IDs (field builder)", () => {
 
     it("allows providing a custom string id", async () => {
       const id = crypto.randomUUID();
-      const created = await setup.cms.api.collections.posts.create(
+      const created = await setup.app.api.collections.posts.create(
         { id, title: "Test Post" },
         createTestContext(),
       );
@@ -62,7 +62,7 @@ describe("collection IDs (field builder)", () => {
 
     beforeEach(async () => {
       setup = await buildMockApp(testModule);
-      await runTestDbMigrations(setup.cms);
+      await runTestDbMigrations(setup.app);
     });
 
     afterEach(async () => {
@@ -72,25 +72,25 @@ describe("collection IDs (field builder)", () => {
     it("stores translations per locale and falls back", async () => {
       const ctx = createTestContext();
 
-      const created = await setup.cms.api.collections.posts.create(
+      const created = await setup.app.api.collections.posts.create(
         { sku: "SKU-001", title: "English Title" },
         ctx,
       );
 
-      await setup.cms.api.collections.posts.updateById(
+      await setup.app.api.collections.posts.updateById(
         { id: created.id, data: { title: "Slovensky Nazov" } },
         createTestContext({ locale: "sk" }),
       );
 
-      const en = await setup.cms.api.collections.posts.findOne(
+      const en = await setup.app.api.collections.posts.findOne(
         { where: { id: created.id } },
         createTestContext({ locale: "en" }),
       );
-      const sk = await setup.cms.api.collections.posts.findOne(
+      const sk = await setup.app.api.collections.posts.findOne(
         { where: { id: created.id } },
         createTestContext({ locale: "sk" }),
       );
-      const de = await setup.cms.api.collections.posts.findOne(
+      const de = await setup.app.api.collections.posts.findOne(
         { where: { id: created.id } },
         createTestContext({ locale: "de" }),
       );
@@ -117,7 +117,7 @@ describe("collection IDs (field builder)", () => {
 
     beforeEach(async () => {
       setup = await buildMockApp(testModule);
-      await runTestDbMigrations(setup.cms);
+      await runTestDbMigrations(setup.app);
     });
 
     afterEach(async () => {
@@ -127,17 +127,17 @@ describe("collection IDs (field builder)", () => {
     it("records versions with string id", async () => {
       const ctx = createTestContext();
 
-      const created = await setup.cms.api.collections.posts.create(
+      const created = await setup.app.api.collections.posts.create(
         { title: "Original" },
         ctx,
       );
 
-      await setup.cms.api.collections.posts.updateById(
+      await setup.app.api.collections.posts.updateById(
         { id: created.id, data: { title: "Updated" } },
         ctx,
       );
 
-      const versions = await setup.cms.api.collections.posts.findVersions(
+      const versions = await setup.app.api.collections.posts.findVersions(
         { id: created.id },
         ctx,
       );
@@ -165,7 +165,7 @@ describe("collection IDs (field builder)", () => {
 
     beforeEach(async () => {
       setup = await buildMockApp(testModule);
-      await runTestDbMigrations(setup.cms);
+      await runTestDbMigrations(setup.app);
     });
 
     afterEach(async () => {
@@ -175,26 +175,26 @@ describe("collection IDs (field builder)", () => {
     it("supports localized updates and versions together", async () => {
       const ctx = createTestContext();
 
-      const created = await setup.cms.api.collections.posts.create(
+      const created = await setup.app.api.collections.posts.create(
         { sku: "SKU-001", title: "English Title" },
         ctx,
       );
 
-      await setup.cms.api.collections.posts.updateById(
+      await setup.app.api.collections.posts.updateById(
         { id: created.id, data: { title: "Slovensky Nazov" } },
         createTestContext({ locale: "sk" }),
       );
 
-      await setup.cms.api.collections.posts.updateById(
+      await setup.app.api.collections.posts.updateById(
         { id: created.id, data: { sku: "SKU-002" } },
         ctx,
       );
 
-      const en = await setup.cms.api.collections.posts.findOne(
+      const en = await setup.app.api.collections.posts.findOne(
         { where: { id: created.id } },
         createTestContext({ locale: "en" }),
       );
-      const sk = await setup.cms.api.collections.posts.findOne(
+      const sk = await setup.app.api.collections.posts.findOne(
         { where: { id: created.id } },
         createTestContext({ locale: "sk" }),
       );
@@ -202,7 +202,7 @@ describe("collection IDs (field builder)", () => {
       expect(en?.title).toBe("English Title");
       expect(sk?.title).toBe("Slovensky Nazov");
 
-      const versions = await setup.cms.api.collections.posts.findVersions(
+      const versions = await setup.app.api.collections.posts.findVersions(
         { id: created.id },
         ctx,
       );

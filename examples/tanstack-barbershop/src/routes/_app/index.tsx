@@ -1,11 +1,11 @@
 /**
  * Homepage Route
  *
- * Renders the page with slug "home" from the CMS.
+ * Renders the page with slug "home" from the app.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { PageRenderer } from "@/components/cms/PageRenderer";
+import { PageRenderer } from "@/components/pages/PageRenderer";
 import { getPage, type PageLoaderData } from "@/lib/getPages.function";
 
 export const Route = createFileRoute("/_app/")({

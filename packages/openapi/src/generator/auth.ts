@@ -17,7 +17,7 @@ export function generateAuthPaths(config: OpenApiConfig): {
     return { paths: {}, tags: [] };
   }
 
-  const basePath = config.basePath ?? "/cms";
+  const basePath = config.basePath ?? "/";
   const tag = "Auth";
   const paths: Record<string, Record<string, PathOperation>> = {};
 

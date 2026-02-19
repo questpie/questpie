@@ -1,0 +1,161 @@
+---
+title: Soft Delete
+description: Mark records as deleted instead of removing them, with restore support
+---
+
+# Soft Delete
+
+When soft delete is enabled on a collection, delete operations set a `deletedAt` timestamp instead of permanently removing the record. Soft-deleted records are automatically filtered out of queries but can be restored at any time.
+
+## Why This Exists
+
+Permanent deletion is irreversible. Soft delete gives you a safety net — deleted records can be recovered, audited, or permanently purged later. It's especially useful for user-facing content where accidental deletion is common.
+
+## Enabling Soft Delete
+
+Add `softDelete: true` to the collection's `.options()`:
+
+```ts
+export const posts = qb
+  .collection("posts")
+  .fields((f) => ({
+    title: f.text({ required: true }),
+    content: f.richText({}),
+  }))
+  .options({
+    timestamps: true,
+    softDelete: true,
+  });
+```
+
+This adds a nullable `deletedAt` timestamp column to the collection's table. No migration changes are needed beyond regenerating your schema.
+
+## How It Works
+
+```text
+delete(id)  →  SET deletedAt = NOW()   (record stays in DB)
+find()      →  WHERE deletedAt IS NULL  (soft-deleted records hidden)
+restore(id) →  SET deletedAt = NULL     (record visible again)
+```
+
+### Delete Behavior
+
+When you call `delete` or `deleteById` on a soft-delete collection, the record is **not** removed from the database. Instead, `deletedAt` is set to the current timestamp:
+
+```ts
+// This sets deletedAt = NOW() instead of deleting the row
+await app.api.collections.posts.delete({
+  where: { id: "post-123" },
+});
+```
+
+All lifecycle hooks (`beforeDelete`, `afterDelete`) still fire normally. If versioning is enabled, a version record with `versionOperation: "delete"` is created.
+
+### Query Filtering
+
+Soft-deleted records are automatically excluded from all queries by default:
+
+```ts
+// Returns only records where deletedAt IS NULL
+const result = await app.api.collections.posts.find({
+  where: { status: "published" },
+});
+```
+
+This applies to `find`, `findOne`, and `count` operations.
+
+### Including Deleted Records
+
+To include soft-deleted records in a query, pass `includeDeleted: true`:
+
+```ts
+// Returns ALL records, including soft-deleted ones
+const result = await app.api.collections.posts.find({
+  includeDeleted: true,
+});
+
+// You can check the deletedAt field to distinguish
+result.docs.forEach((doc) => {
+  if (doc.deletedAt) {
+    console.log(`${doc.title} was deleted at ${doc.deletedAt}`);
+  }
+});
+```
+
+### Restoring Records
+
+Use `restoreById` to un-delete a soft-deleted record:
+
+```ts
+const restored = await app.api.collections.posts.restoreById({
+  id: "post-123",
+});
+```
+
+Restore:
+1. Loads the record (bypasses soft-delete filter)
+2. Checks `update` access control
+3. Sets `deletedAt` to `null` via the update pipeline
+4. Runs `beforeChange` and `afterChange` hooks
+5. Creates a version record (if versioning is enabled)
+
+If the record is not currently deleted, `restoreById` returns it unchanged.
+
+### HTTP Endpoints
+
+When soft delete is enabled, an additional REST endpoint is generated:
+
+```
+POST /questpie/posts/{id}/restore
+```
+
+The standard `DELETE /questpie/posts/{id}` endpoint performs a soft delete instead of a hard delete.
+
+## Combining with Versioning
+
+Soft delete and versioning complement each other well:
+
+```ts
+.options({
+  softDelete: true,
+  versioning: true,
+})
+```
+
+With both enabled:
+- Delete creates a version with `versionOperation: "delete"` before soft-deleting
+- Restore creates a version with `versionOperation: "update"` (via the update pipeline)
+- Version history captures the full lifecycle including delete and restore events
+
+## Relation Behavior
+
+When resolving relations, soft-deleted records in related collections are also filtered by default. A `belongsTo` relation pointing to a soft-deleted record will resolve to `null` unless the query uses `includeDeleted: true`.
+
+Cascade deletes on related records follow the relation's cascade configuration — if the parent is soft-deleted, cascaded children may be hard-deleted depending on their own soft-delete setting.
+
+## Admin UI
+
+The admin panel has built-in support for soft delete:
+
+- **Show Deleted toggle** — The filter sheet includes a "Show Deleted" switch when the collection has soft delete enabled. This persists per user per collection.
+- **Restore action** — A "Restore" button appears on individual soft-deleted records in the form view.
+- **Bulk restore** — Select multiple soft-deleted records in the table view and use the "Restore Selected" bulk action.
+
+## Limitations
+
+- **Globals** — Soft delete is not available for globals (they are singletons).
+- **No scheduled purge** — There is no built-in automatic permanent deletion of old soft-deleted records. Use a custom job if you need retention policies.
+- **Access control** — Restore uses the `update` access rule. There is no separate `restore` permission.
+
+## Common Mistakes
+
+- **Forgetting `includeDeleted` in admin queries** — If you build custom admin views that should show deleted records, remember to pass `includeDeleted: true`.
+- **Assuming cascade soft-deletes** — Soft delete only applies to the collection it's configured on. Related records are not automatically soft-deleted unless they also have `softDelete: true` and you handle it in hooks.
+- **Not combining with versioning** — Without versioning, you have no audit trail of when records were deleted and restored. Consider enabling both.
+
+## Related Pages
+
+- [Collections](/docs/server/collections) — Collection `.options()` configuration
+- [Versioning](/docs/server/versioning) — Version history and revert
+- [CRUD API](/docs/reference/crud-api) — `restoreById` method reference
+- [Filters & Saved Views](/docs/admin/filter-and-saved-views) — "Show Deleted" toggle in admin

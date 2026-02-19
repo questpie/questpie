@@ -9,7 +9,7 @@ QUESTPIE includes a complete set of infrastructure services out of the box. Each
 
 ## Why This Exists
 
-Most CMS projects need auth, file storage, email, background jobs, and search — but wiring them together is tedious. QUESTPIE integrates these services directly into the CMS builder, so they're available through `app.auth`, `app.storage`, `app.email`, `app.queue`, `app.search`, `app.kv`, and `app.logger` with zero extra configuration.
+Most app projects need auth, file storage, email, background jobs, and search — but wiring them together is tedious. QUESTPIE integrates these services directly into the app builder, so they're available through `app.auth`, `app.storage`, `app.email`, `app.queue`, `app.search`, `app.kv`, and `app.logger` with zero extra configuration.
 
 ## Mental Model
 
@@ -29,7 +29,7 @@ Most CMS projects need auth, file storage, email, background jobs, and search �
 Each service has:
 - **A default** that works with PostgreSQL (or in-memory for development)
 - **An adapter interface** for production backends (Redis, S3, SMTP, etc.)
-- **Type-safe access** through the CMS instance (`app.email.send(...)`)
+- **Type-safe access** through the app instance (`app.email.send(...)`)
 
 ## Services Overview
 
@@ -50,12 +50,12 @@ Each service has:
 Here's how the Barbershop example configures infrastructure:
 
 ```ts
-export const cms = q({ name: "barbershop" })
+export const app = q({ name: "barbershop" })
   .use(baseInstance)
   .build({
     app: { url: process.env.APP_URL || "http://localhost:3000" },
     db: { url: process.env.DATABASE_URL },
-    storage: { basePath: "/api/cms" },
+    storage: { basePath: "/api" },
     secret: process.env.SECRET,
     email: {
       adapter: process.env.MAIL_ADAPTER === "console"

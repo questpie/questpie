@@ -1,7 +1,7 @@
 /**
  * PageRenderer Component
  *
- * Renders CMS page content with blocks and preview support.
+ * Renders page content with blocks and preview support.
  * Used by homepage and dynamic page routes.
  */
 

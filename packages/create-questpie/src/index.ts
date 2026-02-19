@@ -7,7 +7,7 @@ import { getTemplate } from "./templates.js";
 
 const program = new Command()
 	.name("create-questpie")
-	.description("Create a new QUESTPIE CMS project")
+	.description("Create a new QUESTPIE project")
 	.version("0.1.0")
 	.argument("[project-name]", "Name of the project")
 	.option("-t, --template <name>", "Template to use (default: tanstack-start)")

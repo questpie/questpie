@@ -1,4 +1,4 @@
-// Centralized Type Utilities for QUESTPIE CMS
+// Centralized Type Utilities for QUESTPIE
 // This file consolidates all type inference helpers used by both server and client
 
 import type {

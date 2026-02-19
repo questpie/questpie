@@ -47,7 +47,7 @@ export interface IconifyIconProps {
  * <IconifyIcon name="mdi:home" className="text-blue-500" />
  * ```
  */
-export function IconifyIcon({
+export const IconifyIcon = React.memo(function IconifyIcon({
 	name,
 	size,
 	className,
@@ -62,7 +62,7 @@ export function IconifyIcon({
 			color={color}
 		/>
 	);
-}
+});
 
 // ============================================================================
 // Badge Component
@@ -142,6 +142,47 @@ export interface ComponentRendererProps {
 	additionalProps?: Record<string, unknown>;
 }
 
+function shallowEqualRecord(
+	a: Record<string, unknown> | undefined,
+	b: Record<string, unknown> | undefined,
+): boolean {
+	if (a === b) return true;
+	if (!a || !b) return false;
+
+	const aKeys = Object.keys(a);
+	const bKeys = Object.keys(b);
+
+	if (aKeys.length !== bKeys.length) return false;
+
+	for (const key of aKeys) {
+		if (a[key] !== b[key]) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+function areRendererPropsEqual(
+	prev: ComponentRendererProps,
+	next: ComponentRendererProps,
+): boolean {
+	if (prev.registry !== next.registry) return false;
+	if (prev.fallback !== next.fallback) return false;
+	if (!shallowEqualRecord(prev.additionalProps, next.additionalProps)) {
+		return false;
+	}
+
+	if (prev.reference === next.reference) return true;
+	if (!prev.reference || !next.reference) return false;
+	if (prev.reference.type !== next.reference.type) return false;
+
+	return shallowEqualRecord(
+		prev.reference.props as Record<string, unknown> | undefined,
+		next.reference.props as Record<string, unknown> | undefined,
+	);
+}
+
 type RegistryRendererProps = {
 	reference: ComponentReference;
 	registry?: ComponentRendererRegistry;
@@ -198,7 +239,7 @@ function RegistryComponentRenderer({
  * />
  * ```
  */
-export function ComponentRenderer({
+export const ComponentRenderer = React.memo(function ComponentRenderer({
 	reference,
 	registry,
 	fallback = null,
@@ -226,7 +267,7 @@ export function ComponentRenderer({
 			additionalProps={additionalProps}
 		/>
 	);
-}
+}, areRendererPropsEqual);
 
 // ============================================================================
 // Utility Functions

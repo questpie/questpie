@@ -15,7 +15,7 @@ import { z } from "zod";
 // ============================================================================
 
 /**
- * Helper to get typed CMS app from handler context.
+ * Helper to get typed app from handler context.
  * Used internally for better IDE support without affecting the public API.
  */
 function getApp(ctx: { app: unknown }): Questpie<any> {

@@ -212,7 +212,7 @@ This is particularly useful for page content where accidental changes need to be
 Both `title` and `content` are marked `.localized()`, so each locale gets its own translated version. The admin panel shows a locale switcher, and the frontend passes `locale` when querying:
 
 ```ts
-const page = await cms.api.collections.pages.findOne({
+const page = await app.api.collections.pages.findOne({
   where: { slug: "about" },
 }, { locale: "de" });
 ```

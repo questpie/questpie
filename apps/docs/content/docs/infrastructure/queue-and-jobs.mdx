@@ -33,9 +33,9 @@ Jobs are defined with `job()` and registered in the builder:
 ```ts
 import { job } from "questpie";
 import { z } from "zod";
-import type { AppCMS } from "../cms";
+import type { App } from '../app';
 
-export const sendAppointmentConfirmation = job<AppCMS>()({
+export const sendAppointmentConfirmation = job<App>()({
   name: "sendAppointmentConfirmation",
   schema: z.object({
     appointmentId: z.string(),
@@ -134,9 +134,9 @@ Chain multiple jobs together with the workflow builder:
 ```ts
 import { workflow } from "questpie";
 import { z } from "zod";
-import type { AppCMS } from "../cms";
+import type { App } from '../app';
 
-const bookingWorkflow = workflow<AppCMS>()<{
+const bookingWorkflow = workflow<App>()<{
   barberId: string;
   serviceId: string;
   date: string;
@@ -164,13 +164,13 @@ Jobs need a worker process to consume them:
 
 ```ts
 // worker.ts
-import { cms } from "./cms";
+import { app } from './app';
 
 // Long-running worker (recommended for servers)
-await cms.queue.listen();
+await app.queue.listen();
 
 // Single-tick mode (for serverless)
-await cms.queue.runOnce();
+await app.queue.runOnce();
 ```
 
 ## Adapters
@@ -191,16 +191,16 @@ For Cloudflare Workers deployments (push-based consumer model).
 
 ## Common Mistakes
 
-- **Not running a worker** — Jobs are published to the queue but won't run without a worker process. Start one with `cms.queue.listen()`.
+- **Not running a worker** — Jobs are published to the queue but won't run without a worker process. Start one with `app.queue.listen()`.
 - **Synchronous email in hooks** — Move email sending to jobs so API responses stay fast.
 - **No retry configuration** — External service calls (email, APIs) should have `retryLimit` and `retryBackoff` for resilience.
 - **Using legacy `queue.publish(name, payload)`** — Use typed job methods: `app.queue.jobName.publish(payload)`.
 
 ## Type Safety Notes
 
-- `job<AppCMS>()({...})` gives typed `app` in job handlers.
-- `workflow<AppCMS>()(...)` gives typed `app` in each workflow step.
-- In untyped contexts, use `getApp<AppCMS>(app)` or `getContext<AppCMS>(ctx)`.
+- `job<App>()({...})` gives typed `app` in job handlers.
+- `workflow<App>()(...)` gives typed `app` in each workflow step.
+- In untyped contexts, use `getApp<App>(app)` or `getContext<App>(ctx)`.
 
 ## Related Pages
 

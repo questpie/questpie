@@ -24,7 +24,7 @@ import type { Column, SQL } from "drizzle-orm";
 import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
 import { normalizeContext } from "#questpie/server/collection/crud/shared/index.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 
 /** Title expression for SQL queries - resolved column or SQL expression */
 type TitleExpressionSQL = SQL | Column | null;
@@ -105,24 +105,24 @@ const DEBOUNCE_DELAY_MS = 100;
  * Check if async indexing is available
  * Returns true if queue has the index-records job configured
  */
-function isAsyncIndexingAvailable(cms: Questpie<any>): boolean {
-  if (!cms.queue) return false;
+function isAsyncIndexingAvailable(app: Questpie<any>): boolean {
+  if (!app.queue) return false;
 
   // Check if index-records job exists on the queue client
-  return typeof (cms.queue as any)["index-records"]?.publish === "function";
+  return typeof (app.queue as any)["index-records"]?.publish === "function";
 }
 
 /**
  * Flush pending index items to the queue
  */
-async function flushPendingItems(cms: Questpie<any>): Promise<void> {
+async function flushPendingItems(app: Questpie<any>): Promise<void> {
   if (pendingIndexItems.size === 0) return;
 
   const items = Array.from(pendingIndexItems.values());
   pendingIndexItems.clear();
 
   try {
-    await (cms.queue as any)["index-records"].publish({ items });
+    await (app.queue as any)["index-records"].publish({ items });
   } catch (error) {
     console.error("[Search] Failed to dispatch index-records job:", error);
     // Items are lost - could implement retry logic here if needed
@@ -132,8 +132,7 @@ async function flushPendingItems(cms: Questpie<any>): Promise<void> {
 /**
  * Schedule an item for async indexing with debouncing
  */
-function scheduleAsyncIndex(
-  cms: Questpie<any>,
+function scheduleAsyncIndex(app: Questpie<any>,
   collection: string,
   recordId: string,
 ): void {
@@ -148,7 +147,7 @@ function scheduleAsyncIndex(
   // Schedule new flush
   flushTimeout = setTimeout(() => {
     flushTimeout = null;
-    flushPendingItems(cms).catch((err) => {
+    flushPendingItems(app).catch((err) => {
       console.error("[Search] Error in debounced flush:", err);
     });
   }, DEBOUNCE_DELAY_MS);
@@ -164,8 +163,7 @@ function scheduleAsyncIndex(
 async function indexRecordSync(
   record: any,
   locale: string,
-  state: CollectionBuilderState,
-  cms: Questpie<any>,
+  state: CollectionBuilderState, app: Questpie<any>,
   defaultLocale: string,
 ): Promise<void> {
   // Extract title: use _title field or fallback to id
@@ -201,7 +199,7 @@ async function indexRecordSync(
     state.searchable.embeddings
   ) {
     const searchableContext = {
-      cms,
+      app,
       locale,
       defaultLocale,
     };
@@ -209,7 +207,7 @@ async function indexRecordSync(
   }
 
   // Index to search
-  await cms.search.index({
+  await app.search.index({
     collection: state.name,
     recordId: record.id,
     locale,
@@ -226,18 +224,17 @@ async function indexRecordSync(
  */
 async function indexAllLocalesSync(
   record: any,
-  state: CollectionBuilderState,
-  cms: Questpie<any>,
+  state: CollectionBuilderState, app: Questpie<any>,
   defaultLocale: string,
 ): Promise<void> {
-  const locales = await cms.getLocales();
+  const locales = await app.getLocales();
 
   for (const localeObj of locales) {
     const locale = localeObj.code;
 
     try {
       // Fetch localized version of the record
-      const crud = cms.api.collections[state.name];
+      const crud = app.api.collections[state.name];
       if (!crud) continue;
 
       const localizedRecord = await crud.findOne({
@@ -249,7 +246,7 @@ async function indexAllLocalesSync(
 
       if (!localizedRecord) continue;
 
-      await indexRecordSync(localizedRecord, locale, state, cms, defaultLocale);
+      await indexRecordSync(localizedRecord, locale, state, app, defaultLocale);
     } catch (error) {
       console.warn(
         `[Search] Failed to index ${state.name}:${record.id} for locale ${locale}:`,
@@ -267,8 +264,8 @@ async function indexAllLocalesSync(
  * Options for search indexing
  */
 export interface IndexToSearchOptions {
-  /** CMS instance */
-  cms: Questpie<any>;
+  /** app instance */
+  app: Questpie<any>;
   /** Collection builder state */
   state: CollectionBuilderState;
   /** Function to get title expression */
@@ -293,10 +290,10 @@ export async function indexToSearch(
   context: CRUDContext,
   options: IndexToSearchOptions,
 ): Promise<void> {
-  const { cms, state } = options;
+  const { app, state } = options;
 
-  // Skip if no CMS instance or no search service
-  if (!cms?.search) return;
+  // Skip if no app instance or no search service
+  if (!app?.search) return;
 
   // Skip if search is explicitly disabled
   if (isSearchDisabled(state)) return;
@@ -304,12 +301,12 @@ export async function indexToSearch(
   const normalized = normalizeContext(context);
 
   // Check if async indexing is available
-  if (isAsyncIndexingAvailable(cms)) {
+  if (isAsyncIndexingAvailable(app)) {
     // Use debounced async indexing (indexes all locales in background)
-    scheduleAsyncIndex(cms, state.name, record.id);
+    scheduleAsyncIndex(app, state.name, record.id);
   } else {
     // Fallback: synchronous indexing for all locales
-    await indexAllLocalesSync(record, state, cms, normalized.defaultLocale);
+    await indexAllLocalesSync(record, state, app, normalized.defaultLocale);
   }
 }
 
@@ -317,8 +314,8 @@ export async function indexToSearch(
  * Options for search removal
  */
 export interface RemoveFromSearchOptions {
-  /** CMS instance */
-  cms: Questpie<any>;
+  /** app instance */
+  app: Questpie<any>;
   /** Collection builder state */
   state: CollectionBuilderState;
 }
@@ -339,16 +336,16 @@ export async function removeFromSearch(
   _context: CRUDContext,
   options: RemoveFromSearchOptions,
 ): Promise<void> {
-  const { cms, state } = options;
+  const { app, state } = options;
 
-  // Skip if no CMS instance or no search service
-  if (!cms?.search) return;
+  // Skip if no app instance or no search service
+  if (!app?.search) return;
 
   // Skip if search is explicitly disabled
   if (isSearchDisabled(state)) return;
 
   // Remove from search index (all locales - don't pass locale to remove all)
-  await cms.search.remove({
+  await app.search.remove({
     collection: state.name,
     recordId,
     // Note: Not passing locale removes ALL locales for this record
@@ -359,12 +356,11 @@ export async function removeFromSearch(
  * Force flush any pending index items immediately
  * Useful for tests or graceful shutdown
  */
-export async function flushPendingSearchIndexes(
-  cms: Questpie<any>,
+export async function flushPendingSearchIndexes(app: Questpie<any>,
 ): Promise<void> {
   if (flushTimeout) {
     clearTimeout(flushTimeout);
     flushTimeout = null;
   }
-  await flushPendingItems(cms);
+  await flushPendingItems(app);
 }

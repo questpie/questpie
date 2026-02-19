@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as ApiPreviewRouteImport } from './routes/api/preview'
+import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as AdminLoginRouteImport } from './routes/admin/login'
 import { Route as AdminSplatRouteImport } from './routes/admin/$'
 import { Route as AppServicesRouteImport } from './routes/_app/services'
@@ -21,7 +22,6 @@ import { Route as AppContactRouteImport } from './routes/_app/contact'
 import { Route as AppBookingRouteImport } from './routes/_app/booking'
 import { Route as AppSlugRouteImport } from './routes/_app/$slug'
 import { Route as AppBarbersIndexRouteImport } from './routes/_app/barbers.index'
-import { Route as ApiCmsSplatRouteImport } from './routes/api/cms/$'
 import { Route as AppBarbersSlugRouteImport } from './routes/_app/barbers.$slug'
 
 const AdminRoute = AdminRouteImport.update({
@@ -46,6 +46,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const ApiPreviewRoute = ApiPreviewRouteImport.update({
   id: '/api/preview',
   path: '/api/preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSplatRoute = ApiSplatRouteImport.update({
+  id: '/api/$',
+  path: '/api/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLoginRoute = AdminLoginRouteImport.update({
@@ -83,11 +88,6 @@ const AppBarbersIndexRoute = AppBarbersIndexRouteImport.update({
   path: '/barbers/',
   getParentRoute: () => AppRoute,
 } as any)
-const ApiCmsSplatRoute = ApiCmsSplatRouteImport.update({
-  id: '/api/cms/$',
-  path: '/api/cms/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AppBarbersSlugRoute = AppBarbersSlugRouteImport.update({
   id: '/barbers/$slug',
   path: '/barbers/$slug',
@@ -102,11 +102,11 @@ export interface FileRoutesByFullPath {
   '/services': typeof AppServicesRoute
   '/admin/$': typeof AdminSplatRoute
   '/admin/login': typeof AdminLoginRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/preview': typeof ApiPreviewRoute
   '/': typeof AppIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/barbers/$slug': typeof AppBarbersSlugRoute
-  '/api/cms/$': typeof ApiCmsSplatRoute
   '/barbers': typeof AppBarbersIndexRoute
 }
 export interface FileRoutesByTo {
@@ -116,11 +116,11 @@ export interface FileRoutesByTo {
   '/services': typeof AppServicesRoute
   '/admin/$': typeof AdminSplatRoute
   '/admin/login': typeof AdminLoginRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/preview': typeof ApiPreviewRoute
   '/': typeof AppIndexRoute
   '/admin': typeof AdminIndexRoute
   '/barbers/$slug': typeof AppBarbersSlugRoute
-  '/api/cms/$': typeof ApiCmsSplatRoute
   '/barbers': typeof AppBarbersIndexRoute
 }
 export interface FileRoutesById {
@@ -133,11 +133,11 @@ export interface FileRoutesById {
   '/_app/services': typeof AppServicesRoute
   '/admin/$': typeof AdminSplatRoute
   '/admin/login': typeof AdminLoginRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/preview': typeof ApiPreviewRoute
   '/_app/': typeof AppIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/_app/barbers/$slug': typeof AppBarbersSlugRoute
-  '/api/cms/$': typeof ApiCmsSplatRoute
   '/_app/barbers/': typeof AppBarbersIndexRoute
 }
 export interface FileRouteTypes {
@@ -150,11 +150,11 @@ export interface FileRouteTypes {
     | '/services'
     | '/admin/$'
     | '/admin/login'
+    | '/api/$'
     | '/api/preview'
     | '/'
     | '/admin/'
     | '/barbers/$slug'
-    | '/api/cms/$'
     | '/barbers'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -164,11 +164,11 @@ export interface FileRouteTypes {
     | '/services'
     | '/admin/$'
     | '/admin/login'
+    | '/api/$'
     | '/api/preview'
     | '/'
     | '/admin'
     | '/barbers/$slug'
-    | '/api/cms/$'
     | '/barbers'
   id:
     | '__root__'
@@ -180,19 +180,19 @@ export interface FileRouteTypes {
     | '/_app/services'
     | '/admin/$'
     | '/admin/login'
+    | '/api/$'
     | '/api/preview'
     | '/_app/'
     | '/admin/'
     | '/_app/barbers/$slug'
-    | '/api/cms/$'
     | '/_app/barbers/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AdminRoute: typeof AdminRouteWithChildren
+  ApiSplatRoute: typeof ApiSplatRoute
   ApiPreviewRoute: typeof ApiPreviewRoute
-  ApiCmsSplatRoute: typeof ApiCmsSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -230,6 +230,13 @@ declare module '@tanstack/react-router' {
       path: '/api/preview'
       fullPath: '/api/preview'
       preLoaderRoute: typeof ApiPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$': {
+      id: '/api/$'
+      path: '/api/$'
+      fullPath: '/api/$'
+      preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/login': {
@@ -281,13 +288,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBarbersIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/api/cms/$': {
-      id: '/api/cms/$'
-      path: '/api/cms/$'
-      fullPath: '/api/cms/$'
-      preLoaderRoute: typeof ApiCmsSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_app/barbers/$slug': {
       id: '/_app/barbers/$slug'
       path: '/barbers/$slug'
@@ -337,8 +337,8 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AdminRoute: AdminRouteWithChildren,
+  ApiSplatRoute: ApiSplatRoute,
   ApiPreviewRoute: ApiPreviewRoute,
-  ApiCmsSplatRoute: ApiCmsSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

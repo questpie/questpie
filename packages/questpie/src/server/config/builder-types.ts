@@ -8,6 +8,7 @@ import type {
 	LocaleConfig,
 	StorageConfig,
 } from "#questpie/server/config/types.js";
+import type { GlobalHooksState } from "#questpie/server/config/global-hooks-types.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
 import type { KVConfig } from "#questpie/server/integrated/kv/index.js";
 import type { LoggerConfig } from "#questpie/server/integrated/logger/index.js";
@@ -80,6 +81,12 @@ export interface QuestpieBuilderState<
 	 * Called on each request to add custom properties (e.g., tenantId, propertyId).
 	 */
 	contextResolver?: ContextResolver;
+
+	/**
+	 * Global lifecycle hooks that fire for ALL collections/globals.
+	 * Registered via `.hooks()` on the builder.
+	 */
+	globalHooks?: GlobalHooksState;
 
 	/**
 	 * Phantom type for tracking message keys through the builder chain.
@@ -156,14 +163,14 @@ export interface QuestpieRuntimeConfig<TDbConfig extends DbConfig = DbConfig> {
 
 	/**
 	 * Automatically run migrations on startup.
-	 * Use `await cms.waitForInit()` to wait for completion.
+	 * Use `await app.waitForInit()` to wait for completion.
 	 * @default false
 	 */
 	autoMigrate?: boolean;
 
 	/**
 	 * Automatically run seeds on startup (after migrations if autoMigrate is also enabled).
-	 * Use `await cms.waitForInit()` to wait for completion.
+	 * Use `await app.waitForInit()` to wait for completion.
 	 *
 	 * - `false`: Never auto-seed (default)
 	 * - `"required"`: Only required seeds
@@ -206,6 +213,7 @@ export type EmptyNamedBuilderState<TName extends string> = QuestpieBuilderState<
 	migrations: undefined;
 	seeds: undefined;
 	contextResolver: undefined;
+	globalHooks: undefined;
 	"~messageKeys": never;
 	fields: {};
 };

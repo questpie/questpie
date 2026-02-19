@@ -2,7 +2,7 @@
  * Block Builder
  *
  * Defines block types for the visual block editor.
- * Blocks are registered on the CMS builder and can be used in blocks fields.
+ * Blocks are registered on the app builder and can be used in blocks fields.
  *
  * Each block has:
  * - Admin metadata (label, description, icon, category) via .admin()
@@ -37,7 +37,6 @@ import type {
 	FieldDefinition,
 	FieldDefinitionState,
 	FieldSchema,
-	RegisteredApp,
 } from "questpie";
 import type { AdminBlockConfig, AdminConfigContext } from "../augmentation.js";
 
@@ -49,21 +48,13 @@ import type { AdminBlockConfig, AdminConfigContext } from "../augmentation.js";
  * Block prefetch context.
  * Provided to prefetch functions to fetch related data.
  *
- * When you register your app via `Register.app`, `ctx.app` is automatically typed.
- * For module-scoped typing, use `getApp<T>(ctx.app)`.
+ * Use `typedApp<App>(ctx.app)` for typed access.
  *
  * @example
  * ```ts
- * // questpie.gen.ts - register your app for automatic typing
- * declare module "questpie" {
- *   interface Register {
- *     app: typeof import("./cms").baseCms.$inferCms;
- *   }
- * }
- *
- * // blocks.ts - ctx.app is now typed
  * .prefetch(async ({ values, ctx }) => {
- *   const res = await ctx.app.api.collections.posts.find({ limit: 5 });
+ *   const app = typedApp<App>(ctx.app);
+ *   const res = await app.api.collections.posts.find({ limit: 5 });
  *   return { posts: res.docs };
  * })
  * ```
@@ -73,8 +64,8 @@ export interface BlockPrefetchContext {
 	blockId: string;
 	/** Block type name */
 	blockType: string;
-	/** CMS app instance — typed via Register.app */
-	app: RegisteredApp;
+	/** app instance — use `typedApp<App>(ctx.app)` for typed access */
+	app: any;
 	/** Current locale */
 	locale?: string;
 	/** Database client */
@@ -367,7 +358,7 @@ export class BlockBuilder<
 		TFieldMap,
 		TData
 	> {
-		// Store the factory for later resolution when CMS is built
+		// Store the factory for later resolution when app is built
 		// The actual field definitions are created when block is registered
 		return new BlockBuilder({
 			...this._state,
@@ -545,8 +536,8 @@ export class BlockBuilder<
  *     subtitle: f.text(),
  *   }));
  *
- * // Register blocks on CMS
- * const cms = q({ name: "my-app" })
+ * // Register blocks on QuestPie
+ * const app = q({ name: "my-app" })
  *   .use(adminModule)
  *   .blocks({ hero: heroBlock })
  *   .build({ ... });

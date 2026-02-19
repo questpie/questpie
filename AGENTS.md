@@ -6,7 +6,7 @@ Source-of-truth guidance for AI agents working in this monorepo.
 
 - **Monorepo**: Turborepo with **Bun** as the only package manager (`packageManager: bun@1.3.0`).
 - **Language**: TypeScript + ESM across all packages.
-- **Product**: QUESTPIE — headless CMS framework (core engine + adapters + config-driven admin UI).
+- **Product**: QUESTPIE — application framework (core engine + adapters + config-driven admin UI).
 
 ## Workspace Layout
 
@@ -28,7 +28,7 @@ Source-of-truth guidance for AI agents working in this monorepo.
 `packages/questpie/src/` is split into:
 
 - `server/` — Collections, globals, fields, RPC, adapters, integrated services (auth, storage, queue, mailer, realtime), migration.
-- `client/` — Client-side CMS client, typed hooks.
+- `client/` — Client-side client, typed hooks.
 - `shared/` — Shared types and utilities used by both sides.
 - `exports/` — Public entry points (`index.ts`, `client.ts`, `shared.ts`, `cli.ts`).
 - `cli/` — CLI commands (`questpie migrate`, `questpie migrate:create`).
@@ -55,8 +55,8 @@ import { q } from "questpie";
 import { adminModule } from "@questpie/admin/server";
 export const qb = q.use(adminModule);
 
-// cms.ts
-export const cms = qb
+// app.ts
+export const app = qb
   .collections({ posts, pages })
   .globals({ siteSettings })
   .auth({ ... })
@@ -83,7 +83,7 @@ Built-in field types: `text`, `number`, `boolean`, `date`, `dateTime`, `select`,
 
 ### Standalone RPC
 
-End-to-end type-safe server functions, independent from the CMS instance:
+End-to-end type-safe server functions, independent from the app instance:
 
 ```ts
 // rpc.ts
@@ -96,7 +96,7 @@ export const myFn = r.fn({
   handler: async ({ input, app }) => { ... },
 });
 
-// cms.ts
+// app.ts
 export const appRpc = r.router({ ...adminRpc, myFn });
 ```
 
@@ -219,14 +219,14 @@ base-ui uses `render` prop, NOT `asChild`:
 
 ## Blocks & Circular Dependencies
 
-When blocks use functional `.prefetch()` that needs typed `ctx.app`, a circular dependency arises (`app.ts` → `blocks.ts` → `AppCMS` from `app.ts`). The workaround is the **BaseCMS pattern**:
+When blocks use functional `.prefetch()` that needs typed `ctx.app`, a circular dependency arises (`app.ts` → `blocks.ts` → `App` from `app.ts`). The workaround is the **BaseCMS pattern**:
 
 ```ts
 // app.ts
-export const baseCms = qb.collections({ ... }).globals({ ... }).auth({ ... });
-export type BaseCMS = (typeof baseCms)["$inferCms"]; // ← blocks import THIS
-export const cms = baseCms.blocks(blocks).build({ ... });
-export type AppCMS = typeof cms;
+export const baseApp = qb.collections({ ... }).globals({ ... }).auth({ ... });
+export type BaseCMS = (typeof baseApp)["$inferCms"]; // ← blocks import THIS
+export const app = baseApp.blocks(blocks).build({ ... });
+export type App = typeof app;
 ```
 
 ```ts
@@ -235,8 +235,8 @@ import { typedApp } from "questpie";
 import type { BaseCMS } from "./app";
 
 .prefetch(async ({ values, ctx }) => {
-  const cms = typedApp<BaseCMS>(ctx.app);
-  return { posts: (await cms.api.collections.posts.find({ ... })).docs };
+  const app = typedApp<BaseCMS>(ctx.app);
+  return { posts: (await app.api.collections.posts.find({ ... })).docs };
 });
 ```
 

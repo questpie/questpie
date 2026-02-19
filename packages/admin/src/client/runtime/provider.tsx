@@ -38,7 +38,7 @@ import {
 
 /** Cookie for UI locale (admin interface language) */
 const UI_LOCALE_COOKIE = "questpie_ui_locale";
-/** Cookie for content locale (CMS content language) */
+/** Cookie for content locale (content language) */
 const CONTENT_LOCALE_COOKIE = "questpie_content_locale";
 /** Cookie max age (1 year) */
 const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
@@ -87,7 +87,7 @@ function setContentLocaleCookie(locale: string): void {
 export interface AdminState {
 	// Core values (from props)
 	admin: Admin;
-	client: QuestpieClient<(typeof adminModule)["$inferCms"]>;
+	client: QuestpieClient<(typeof adminModule)["$inferApp"]>;
 	authClient: any | null;
 	basePath: string;
 	navigate: (path: string) => void;
@@ -95,7 +95,7 @@ export interface AdminState {
 		enabled: boolean;
 	};
 
-	// Content locale state (CMS content language)
+	// Content locale state (content language)
 	// Note: UI locale is managed by I18n adapter, not the store
 	contentLocale: string;
 	setContentLocale: (locale: string) => void;
@@ -145,7 +145,7 @@ function createAdminStore({
 		navigate,
 		realtime,
 
-		// Content Locale (CMS content language)
+		// Content Locale (content language)
 		// Note: UI locale is managed by I18n adapter, not the store
 		contentLocale: initialContentLocale,
 		setContentLocale: (newLocale: string) => {
@@ -220,7 +220,7 @@ export interface AdminProviderProps {
 	initialUiLocale?: string;
 
 	/**
-	 * Initial content locale (CMS content language)
+	 * Initial content locale (content language)
 	 * If not provided, reads from cookie or uses default from admin config
 	 */
 	initialContentLocale?: string;
@@ -247,7 +247,7 @@ export interface AdminProviderProps {
 	 * @example
 	 * ```tsx
 	 * // Server configures locales and messages
-	 * const cms = q()
+	 * const app = q()
 	 *   .use(adminModule)
 	 *   .adminLocale({ locales: ["en", "sk"], defaultLocale: "en" })
 	 *   .messages({ sk: { "common.save": "Ulozit" } })
@@ -420,7 +420,7 @@ export function AdminProvider({
 		? (initialUiLocale ?? getServerUiLocaleFromCookie() ?? defaultLocale)
 		: (initialUiLocale ?? getUiLocaleFromCookie() ?? defaultLocale);
 
-	// Resolve content locale (CMS content language)
+	// Resolve content locale (content language)
 	const resolvedContentLocale =
 		initialContentLocale ?? getContentLocaleFromCookie() ?? defaultLocale;
 
@@ -630,7 +630,7 @@ export const selectNavigate = (s: AdminState) => s.navigate;
 /** Select realtime config */
 export const selectRealtime = (s: AdminState) => s.realtime;
 
-/** Select current content locale (CMS content language) */
+/** Select current content locale (content language) */
 export const selectContentLocale = (s: AdminState) => s.contentLocale;
 
 /** Select setContentLocale function */

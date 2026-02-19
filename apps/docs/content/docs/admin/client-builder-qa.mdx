@@ -29,9 +29,9 @@ Those live on the server `q()` builder via `@questpie/admin/server`.
 
 ```ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-export const admin = qa<AppCMS>().use(adminModule);
+export const admin = qa<App>().use(adminModule);
 ```
 
 `adminModule` provides built-in field/view/widget/component registries.
@@ -43,7 +43,7 @@ export const admin = qa<AppCMS>().use(adminModule);
 Compose another admin builder module:
 
 ```ts
-const admin = qa<AppCMS>()
+const admin = qa<App>()
   .use(adminModule)
   .use(myCustomModule);
 ```

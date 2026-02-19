@@ -25,7 +25,7 @@ export function getAdminPreferenceQueryKey(
  * Query options factory for admin preference.
  * Can be used with TanStack Query's prefetching or with useSuspenseQuery.
  *
- * @param client - CMS client instance
+ * @param client - client instance
  * @param userId - User ID (required for query to work)
  * @param key - Preference key
  *
@@ -135,7 +135,7 @@ export function useSetAdminPreference<T = unknown>(key: string) {
 				| undefined;
 			if (!collections?.adminPreferences) {
 				throw new Error(
-					"adminPreferences collection not available. Make sure to use adminModule in your CMS setup.",
+					"adminPreferences collection not available. Make sure to use adminModule in your app setup.",
 				);
 			}
 
@@ -197,7 +197,7 @@ export function useDeleteAdminPreference(key: string) {
 				| undefined;
 			if (!collections?.adminPreferences) {
 				throw new Error(
-					"adminPreferences collection not available. Make sure to use adminModule in your CMS setup.",
+					"adminPreferences collection not available. Make sure to use adminModule in your app setup.",
 				);
 			}
 

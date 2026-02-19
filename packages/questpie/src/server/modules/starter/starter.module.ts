@@ -12,7 +12,7 @@ import { coreAuthOptions } from "#questpie/server/integrated/auth/index.js";
 import { coreBackendMessages } from "./messages.js";
 
 /**
- * Starter module - opt-in "batteries included" module for common CMS setups.
+ * Starter module - opt-in "batteries included" module for common app setups.
  *
  * Includes:
  * - Auth collections (users, sessions, accounts, verifications, apikeys)
@@ -22,13 +22,13 @@ import { coreBackendMessages } from "./messages.js";
  * - Core backend messages (error messages, validation messages, etc.)
  *
  * This module is meant to be used with .use() for projects that want
- * the standard CMS experience with authentication and file uploads.
+ * the standard experience with authentication and file uploads.
  *
  * @example
  * ```ts
  * import { questpie, starterModule } from "@questpie/server";
  *
- * const cms = questpie({ name: "my-app" })
+ * const app = questpie({ name: "my-app" })
  *   .use(starterModule)
  *   .collections({
  *     posts: postsCollection,
@@ -39,15 +39,15 @@ import { coreBackendMessages } from "./messages.js";
  *   });
  *
  * // Upload files to assets collection
- * const asset = await cms.api.collections.assets.upload(file, context);
+ * const asset = await app.api.collections.assets.upload(file, context);
  * console.log(asset.url); // Typed URL
  *
  * // Use typed translations
- * cms.t("error.notFound"); // Type-safe!
+ * app.t("error.notFound"); // Type-safe!
  *
  * // HTTP Routes available:
- * // POST /cms/assets/upload
- * // GET /cms/assets/files/:key
+ * // POST /assets/upload
+ * // GET /assets/files/:key
  * ```
  *
  * @example
@@ -55,11 +55,11 @@ import { coreBackendMessages } from "./messages.js";
  * // Extend assets collection with custom fields
  * import { questpie, starterModule, collection } from "@questpie/server";
  *
- * const cms = questpie({ name: "my-app" })
+ * const app = questpie({ name: "my-app" })
  *   .use(starterModule)
  *   .collections({
  *     // Override assets with additional fields
- *     assets: starterModule.$inferCms.api.collections.assets.merge(
+ *     assets: starterModule.$inferApp.api.collections.assets.merge(
  *       collection("assets").fields({
  *         folder: varchar("folder", { length: 255 }),
  *         tags: varchar("tags", { length: 1000 }),

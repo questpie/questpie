@@ -3,15 +3,15 @@
  *
  * Better Auth handles all auth state management internally.
  * This module provides type-safe client creation helpers with
- * full type inference from your CMS auth configuration.
+ * full type inference from your app auth configuration.
  *
  * @example
  * ```tsx
  * // In your app, create the auth client once:
  * import { createAdminAuthClient } from '@questpie/admin/hooks'
- * import type { cms } from './server/cms'
+ * import type { app } from "./server/app"
  *
- * export const authClient = createAdminAuthClient<typeof cms>({
+ * export const authClient = createAdminAuthClient<typeof app>({
  *   baseURL: 'http://localhost:3000'
  * })
  *
@@ -46,14 +46,14 @@ type ExtractAuthOptions<T extends Questpie<any>> =
  */
 export type AdminAuthClientOptions = {
   /**
-   * Base URL of the CMS API
+   * Base URL of the app API
    * @example 'http://localhost:3000'
    */
   baseURL: string;
 
   /**
    * Base path for auth routes
-   * @default '/cms/auth'
+   * @default '/auth'
    */
   basePath?: string;
 
@@ -81,9 +81,9 @@ type InternalClientOptions<T extends Questpie<any>> = {
 /**
  * Create a type-safe Better Auth client for the admin UI
  *
- * The returned client includes full type inference from your CMS auth configuration:
+ * The returned client includes full type inference from your app auth configuration:
  * - `useSession()` - React hook for session state (typed based on your user/session schema)
- * - `signIn` methods (email, social providers configured in CMS)
+ * - `signIn` methods (email, social providers configured in QuestPie)
  * - `signOut` - Sign out the current user
  * - `signUp` - Register new users
  * - Plugin-specific hooks (e.g., `useListAccounts` for admin plugin)
@@ -91,14 +91,14 @@ type InternalClientOptions<T extends Questpie<any>> = {
  * @example
  * ```tsx
  * import { createAdminAuthClient } from '@questpie/admin/hooks'
- * import type { cms } from './server/cms'
+ * import type { app } from "./server/app"
  *
- * // Create client with type inference from your CMS
- * export const authClient = createAdminAuthClient<typeof cms>({
+ * // Create client with type inference from your app
+ * export const authClient = createAdminAuthClient<typeof app>({
  *   baseURL: 'http://localhost:3000'
  * })
  *
- * // Session data is fully typed based on your CMS auth config
+ * // Session data is fully typed based on your app auth config
  * function App() {
  *   const { data: session, isPending } = authClient.useSession()
  *
@@ -113,7 +113,7 @@ type InternalClientOptions<T extends Questpie<any>> = {
 export function createAdminAuthClient<T extends Questpie<any>>(
   options: AdminAuthClientOptions,
 ): ReturnType<typeof createAuthClient<InternalClientOptions<T>>> {
-  const basePath = options.basePath ?? "/cms/auth";
+  const basePath = options.basePath ?? "/auth";
 
   return createAuthClient<InternalClientOptions<T>>({
     baseURL: `${options.baseURL}${basePath}`,
@@ -125,14 +125,14 @@ export function createAdminAuthClient<T extends Questpie<any>>(
 }
 
 /**
- * Type helper to extract auth client type from CMS instance
+ * Type helper to extract auth client type from app instance
  *
  * @example
  * ```tsx
  * import type { AdminAuthClient } from '@questpie/admin/hooks'
- * import type { cms } from './server/cms'
+ * import type { app } from "./server/app"
  *
- * type MyAuthClient = AdminAuthClient<typeof cms>
+ * type MyAuthClient = AdminAuthClient<typeof app>
  * ```
  */
 export type AdminAuthClient<T extends Questpie<any>> = ReturnType<
@@ -145,9 +145,9 @@ export type AdminAuthClient<T extends Questpie<any>> = ReturnType<
  * @example
  * ```tsx
  * import type { AdminSession } from '@questpie/admin/hooks'
- * import type { cms } from './server/cms'
+ * import type { app } from "./server/app"
  *
- * type MySession = AdminSession<typeof cms>
+ * type MySession = AdminSession<typeof app>
  * // Includes: { user: { id, email, name, role, ... }, session: { ... } }
  * ```
  */
@@ -155,14 +155,14 @@ export type AdminSession<T extends Questpie<any>> =
   AdminAuthClient<T>["$Infer"]["Session"];
 
 /**
- * Type helper to extract user type from CMS auth configuration
+ * Type helper to extract user type from app auth configuration
  *
  * @example
  * ```tsx
  * import type { AdminUser } from '@questpie/admin/hooks'
- * import type { cms } from './server/cms'
+ * import type { app } from "./server/app"
  *
- * type MyUser = AdminUser<typeof cms>
+ * type MyUser = AdminUser<typeof app>
  * ```
  */
 export type AdminUser<T extends Questpie<any>> = AdminSession<T>["user"];

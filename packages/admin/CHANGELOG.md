@@ -251,7 +251,7 @@
   ```typescript
   .access({
     read: (ctx) => {
-      const { session, app, db } = getContext<AppCMS>(ctx);
+      const { session, app, db } = getContext<App>(ctx);
       return session?.user.role === "admin";
     }
   })
@@ -261,7 +261,7 @@
 
   ```typescript
   async function logActivity() {
-    const { db, session } = getContext<AppCMS>(); // From storage
+    const { db, session } = getContext<App>(); // From storage
   }
 
   await runWithContext({ app: cms, session, db }, async () => {

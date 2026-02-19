@@ -5,12 +5,7 @@
  * Used in table view to show lock indicators and in form view to manage locks.
  */
 
-import {
-	type UseMutationOptions,
-	useMutation,
-	useQuery,
-	useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { useCurrentUser } from "./use-current-user";
 import { useQuestpieQueryOptions } from "./use-questpie-query-options";

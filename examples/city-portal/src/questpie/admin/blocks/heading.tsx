@@ -3,11 +3,11 @@
  */
 
 import type { BlockComponentProps } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 export function HeadingRenderer({
 	values,
-}: BlockComponentProps<AppCMS, "heading">) {
+}: BlockComponentProps<App, "heading">) {
 	const Tag = values.level || "h2";
 
 	const sizeClass = {

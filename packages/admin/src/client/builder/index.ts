@@ -240,7 +240,7 @@ export type CollectionItem<
  *
  * @example
  * ```ts
- * type AppointmentFields = CollectionFieldKeys<AppCMS, "appointments">;
+ * type AppointmentFields = CollectionFieldKeys<App, "appointments">;
  * // = "customerId" | "barberId" | "serviceId" | "status" | ...
  * ```
  */

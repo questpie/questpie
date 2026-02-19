@@ -12,7 +12,7 @@
  *   beforeLoad: async ({ context }) => {
  *     const redirect = await requireAdminAuth({
  *       request: context.request,
- *       cms,
+ *       app,
  *       loginPath: "/admin/login",
  *     });
  *     if (redirect) throw redirect;
@@ -52,9 +52,9 @@ export interface RequireAdminAuthOptions {
   request: Request;
 
   /**
-   * The CMS instance with auth configured
+   * The app instance with auth configured
    */
-  cms: Questpie<any>;
+  app: Questpie<any>;
 
   /**
    * Path to redirect to when not authenticated
@@ -85,9 +85,9 @@ export interface GetAdminSessionOptions {
   request: Request;
 
   /**
-   * The CMS instance with auth configured
+   * The app instance with auth configured
    */
-  cms: Questpie<any>;
+  app: Questpie<any>;
 }
 
 /**
@@ -102,7 +102,7 @@ export interface GetAdminSessionOptions {
  *   beforeLoad: async ({ context }) => {
  *     const redirect = await requireAdminAuth({
  *       request: context.request,
- *       cms,
+ *       app,
  *       loginPath: "/admin/login",
  *     });
  *     if (redirect) throw redirect;
@@ -115,7 +115,7 @@ export interface GetAdminSessionOptions {
  * export async function middleware(request: NextRequest) {
  *   const redirect = await requireAdminAuth({
  *     request,
- *     cms,
+ *     app,
  *     loginPath: "/admin/login",
  *   });
  *   if (redirect) return redirect;
@@ -125,20 +125,20 @@ export interface GetAdminSessionOptions {
  */
 export async function requireAdminAuth({
   request,
-  cms,
+  app,
   loginPath = "/admin/login",
   requiredRole = "admin",
   redirectParam = "redirect",
 }: RequireAdminAuthOptions): Promise<Response | null> {
   // Check if auth is configured
-  if (!cms.auth) {
-    console.warn("requireAdminAuth: Auth not configured on CMS instance");
+  if (!app.auth) {
+    console.warn("requireAdminAuth: Auth not configured on app instance");
     return null;
   }
 
   try {
     // Get session from Better Auth
-    const session = await cms.auth.api.getSession({
+    const session = await app.auth.api.getSession({
       headers: request.headers,
     });
 
@@ -178,7 +178,7 @@ export async function requireAdminAuth({
  *
  * @example
  * ```ts
- * const session = await getAdminSession({ request, cms });
+ * const session = await getAdminSession({ request, app });
  * if (!session) {
  *   return redirect("/admin/login");
  * }
@@ -187,15 +187,15 @@ export async function requireAdminAuth({
  */
 export async function getAdminSession({
   request,
-  cms,
+  app,
 }: GetAdminSessionOptions): Promise<AuthSession | null> {
   // Check if auth is configured
-  if (!cms.auth) {
+  if (!app.auth) {
     return null;
   }
 
   try {
-    const session = await cms.auth.api.getSession({
+    const session = await app.auth.api.getSession({
       headers: request.headers,
     });
 
@@ -215,7 +215,7 @@ export async function getAdminSession({
  *
  * @example
  * ```ts
- * const isAdmin = await isAdminUser({ request, cms });
+ * const isAdmin = await isAdminUser({ request, app });
  * if (!isAdmin) {
  *   return json({ error: "Unauthorized" }, { status: 403 });
  * }
@@ -223,10 +223,10 @@ export async function getAdminSession({
  */
 export async function isAdminUser({
   request,
-  cms,
+  app,
   requiredRole = "admin",
 }: GetAdminSessionOptions & { requiredRole?: string }): Promise<boolean> {
-  const session = await getAdminSession({ request, cms });
+  const session = await getAdminSession({ request, app });
   // Cast to any to access role - it's added by Better Auth admin plugin
   return (session?.user as any)?.role === requiredRole;
 }

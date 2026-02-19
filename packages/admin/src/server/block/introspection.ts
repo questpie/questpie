@@ -105,7 +105,7 @@ export function introspectBlock(blockDef: AnyBlockDefinition): BlockSchema {
  * import { introspectBlocks } from "@questpie/admin/server";
  *
  * // In an API route
- * const blocks = introspectBlocks(cms.state.blocks);
+ * const blocks = introspectBlocks(app.state.blocks);
  * return Response.json({ blocks });
  * ```
  */

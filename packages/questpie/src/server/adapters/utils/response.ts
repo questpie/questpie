@@ -6,7 +6,7 @@
 
 import superjson from "superjson";
 import { ZodError } from "zod";
-import type { Questpie } from "../../config/cms.js";
+import type { Questpie } from "../../config/questpie.js";
 import { ApiError, parseDatabaseError } from "../../errors/index.js";
 
 export const jsonHeaders = {
@@ -73,21 +73,21 @@ export const isDevelopment = () => {
 export type HandleErrorOptions = {
   request?: Request;
   isDev?: boolean;
-  cms?: Questpie<any>;
+  app?: Questpie<any>;
   locale?: string;
 };
 
 /**
  * Handle errors and convert to HTTP Response
  * Supports ApiError, ZodError, and generic Error
- * Optionally translates error messages when cms and locale are provided
+ * Optionally translates error messages when app and locale are provided
  */
 export const handleError = (
   error: unknown,
   options: HandleErrorOptions = {},
 ): Response => {
-  const { request, isDev = isDevelopment(), cms, locale } = options;
-  const translator = cms?.t;
+  const { request, isDev = isDevelopment(), app, locale } = options;
+  const translator = app?.t;
 
   // If it's our ApiError, use it directly
   if (error instanceof ApiError) {

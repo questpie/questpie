@@ -21,12 +21,12 @@ export function baseOptions(): BaseLayoutProps {
       },
       {
         text: "Examples",
-        url: "https://github.com/questpie/questpie-cms/tree/main/examples",
+        url: "https://github.com/questpie/questpie/tree/main/examples",
         external: true,
       },
       {
         text: "GitHub",
-        url: "https://github.com/questpie/questpie-cms",
+        url: "https://github.com/questpie/questpie",
         external: true,
       },
     ],

@@ -4,7 +4,7 @@
  * File upload and serving route handlers.
  */
 
-import type { Questpie } from "../../config/cms.js";
+import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig, StorageVisibility } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
 import { verifySignedUrlToken } from "../../integrated/storage/signed-url.js";
@@ -15,8 +15,7 @@ import { handleError, smartResponse } from "../utils/response.js";
 
 export const createStorageRoutes = <
   TConfig extends QuestpieConfig = QuestpieConfig,
->(
-  cms: Questpie<TConfig>,
+>(app: Questpie<TConfig>,
   config: AdapterConfig<TConfig> = {},
 ) => {
   const errorResponse = (
@@ -24,7 +23,7 @@ export const createStorageRoutes = <
     request: Request,
     locale?: string,
   ): Response => {
-    return handleError(error, { request, cms, locale });
+    return handleError(error, { request, app, locale });
   };
 
   return {
@@ -46,7 +45,7 @@ export const createStorageRoutes = <
       // Check if collection exists and has upload configured
       let collectionConfig: any;
       try {
-        collectionConfig = cms.getCollectionConfig(collection as any);
+        collectionConfig = app.getCollectionConfig(collection as any);
       } catch {
         return errorResponse(
           ApiError.notFound("Collection", collection),
@@ -64,34 +63,34 @@ export const createStorageRoutes = <
         );
       }
 
-      const resolved = await resolveContext(cms, request, config, context);
+      const resolved = await resolveContext(app, request, config, context);
       const uploadFile = await resolveUploadFile(request, file);
 
       if (!uploadFile) {
         return errorResponse(
           ApiError.badRequest("No file uploaded. Send 'file' in form-data."),
           request,
-          resolved.cmsContext.locale,
+          resolved.appContext.locale,
         );
       }
 
       try {
         // Use the collection's upload method which handles validation and storage
-        const crud = cms.api.collections[collection as any] as any;
+        const crud = app.api.collections[collection as any] as any;
         if (!crud?.upload) {
           return errorResponse(
             ApiError.badRequest(
               `Collection "${collection}" upload method not available`,
             ),
             request,
-            resolved.cmsContext.locale,
+            resolved.appContext.locale,
           );
         }
 
-        const result = await crud.upload(uploadFile, resolved.cmsContext);
+        const result = await crud.upload(uploadFile, resolved.appContext);
         return smartResponse(result, request);
       } catch (error) {
-        return errorResponse(error, request, resolved.cmsContext.locale);
+        return errorResponse(error, request, resolved.appContext.locale);
       }
     },
 
@@ -112,7 +111,7 @@ export const createStorageRoutes = <
       // Check if collection exists and has upload configured
       let collectionConfig: any;
       try {
-        collectionConfig = cms.getCollectionConfig(collection as any);
+        collectionConfig = app.getCollectionConfig(collection as any);
       } catch {
         return errorResponse(
           ApiError.notFound("Collection", collection),
@@ -134,20 +133,20 @@ export const createStorageRoutes = <
       const token = url.searchParams.get("token");
 
       // Check if file exists
-      const exists = await cms.storage.use().exists(key);
+      const exists = await app.storage.use().exists(key);
       if (!exists) {
         return errorResponse(ApiError.notFound("File", key), request);
       }
 
       // Get record metadata to check visibility
-      const crud = cms.api.collections[collection as any];
+      const crud = app.api.collections[collection as any];
       const record = await crud.findOne({
         where: { key } as any,
       });
 
       const visibility: StorageVisibility =
         (record as any)?.visibility ||
-        cms.config.storage?.defaultVisibility ||
+        app.config.storage?.defaultVisibility ||
         "public";
 
       // For private files, verify the signed token
@@ -159,11 +158,11 @@ export const createStorageRoutes = <
           );
         }
 
-        const secret = cms.config.secret;
+        const secret = app.config.secret;
         if (!secret) {
           return errorResponse(
             ApiError.internal(
-              "Storage secret not configured. Set 'secret' in your CMS config to serve private files.",
+              "Storage secret not configured. Set 'secret' in your app config to serve private files.",
             ),
             request,
           );
@@ -186,8 +185,8 @@ export const createStorageRoutes = <
       }
 
       try {
-        const fileBuffer = await cms.storage.use().getBytes(key);
-        const metadata = await cms.storage.use().getMetaData(key);
+        const fileBuffer = await app.storage.use().getBytes(key);
+        const metadata = await app.storage.use().getMetaData(key);
 
         const contentType =
           metadata.contentType ||

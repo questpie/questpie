@@ -5,47 +5,47 @@ description: Integrate QUESTPIE with Hono for server and type-safe client
 
 # Hono Adapter
 
-The Hono adapter mounts QUESTPIE as Hono middleware, giving you CMS routes alongside your custom Hono routes. The client factory creates a merged client with both CMS CRUD and Hono RPC type safety.
+The Hono adapter mounts QUESTPIE as Hono middleware, giving you API routes alongside your custom Hono routes. The client factory creates a merged client with both CRUD and Hono RPC type safety.
 
 ## Server Setup
 
 ```ts
 import { Hono } from "hono";
 import { questpieHono } from "@questpie/hono";
-import { cms, appRpc } from "./cms";
+import { app, appRpc } from './app';
 
 const app = new Hono();
 
-// Mount CMS routes at /api/cms
-const cmsApp = questpieHono(cms, {
-  basePath: "/api/cms",
+// Mount API routes at /api
+const cmsApp = questpieHono(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 
-app.route("/api/cms", cmsApp);
+app.route("/api", cmsApp);
 
-// Your custom routes alongside CMS
+// Your custom routes alongside app
 app.get("/api/health", (c) => c.json({ ok: true }));
 
 export default app;
 ```
 
-### `questpieHono(cms, config)`
+### `questpieHono(app, config)`
 
-Returns a Hono app with all CMS routes mounted. Configuration is the same as `createFetchHandler` — see [Adapters Overview](/docs/client/adapters-overview).
+Returns a Hono app with all API routes mounted. Configuration is the same as `createFetchHandler` — see [Adapters Overview](/docs/client/adapters-overview).
 
 ### Middleware
 
-Use `questpieMiddleware` to add CMS context to all routes without mounting the full CMS router:
+Use `questpieMiddleware` to add app context to all routes without mounting the full app router:
 
 ```ts
 import { questpieMiddleware } from "@questpie/hono";
 
-app.use("/api/*", questpieMiddleware(cms));
+app.use("/api/*", questpieMiddleware(app));
 
-// Access CMS in any route handler
+// Access app in any route handler
 app.get("/api/custom", (c) => {
-  const { cms, cmsContext, user } = c.var;
+  const { app, appContext, user } = c.var;
   // ...
 });
 ```
@@ -55,17 +55,17 @@ app.get("/api/custom", (c) => {
 ```ts
 import { createClientFromHono } from "@questpie/hono";
 import type { AppType } from "../server/app";
-import type { AppCMS } from "../server/cms";
+import type { App } from "../server/app";
 
-const client = createClientFromHono<AppType, AppCMS>({
+const client = createClientFromHono<AppType, App>({
   baseURL: "http://localhost:3000",
-  basePath: "/api/cms",
+  basePath: "/api",
 });
 
-// CMS collections
+// app collections
 const posts = await client.collections.posts.find({ limit: 10 });
 
-// CMS globals
+// app globals
 const settings = await client.globals.siteSettings.get();
 
 // Custom Hono routes (fully typed via hc)
@@ -75,20 +75,20 @@ const health = await client.api.health.$get();
 ### `createClientFromHono<TApp, TCMS>(config)`
 
 Returns a merged client that combines:
-- **CMS client** — `client.collections.*`, `client.globals.*`, `client.rpc.*`
+- **API client** — `client.collections.*`, `client.globals.*`, `client.rpc.*`
 - **Hono RPC client** — Full type-safe access to custom Hono routes via `hc`
 
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `baseURL` | `string` | — | Server URL |
-| `basePath` | `string` | `"/cms"` | CMS route prefix |
+| `basePath` | `string` | `"/"` | app route prefix |
 | `fetch` | `typeof fetch` | — | Custom fetch implementation |
 | `headers` | `Record<string, string>` | — | Default headers |
 
 ## Common Mistakes
 
 - **Mismatched `basePath`** — Server and client must use the same base path.
-- **Missing type parameters** — Pass both `AppType` (Hono app type) and `AppCMS` (CMS type) for full type safety.
+- **Missing type parameters** — Pass both `AppType` (Hono app type) and `App` (app type) for full type safety.
 
 ## Related Pages
 

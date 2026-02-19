@@ -5,7 +5,7 @@
  */
 
 import type { BlockComponentProps } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
 // ============================================================================
 // LATEST NEWS
@@ -14,7 +14,7 @@ import type { AppCMS } from "@/questpie/server/cms";
 export function LatestNewsRenderer({
 	values,
 	data,
-}: BlockComponentProps<AppCMS, "latest-news">) {
+}: BlockComponentProps<App, "latest-news">) {
 	const news = data?.news || [];
 
 	return (
@@ -81,7 +81,7 @@ export function LatestNewsRenderer({
 export function ContactsListRenderer({
 	values,
 	data,
-}: BlockComponentProps<AppCMS, "contacts-list">) {
+}: BlockComponentProps<App, "contacts-list">) {
 	const contacts = data?.contacts || [];
 
 	return (
@@ -156,7 +156,7 @@ export function ContactsListRenderer({
 export function DocumentsListRenderer({
 	values,
 	data,
-}: BlockComponentProps<AppCMS, "documents-list">) {
+}: BlockComponentProps<App, "documents-list">) {
 	const documents = data?.documents || [];
 
 	return (
@@ -217,7 +217,7 @@ export function DocumentsListRenderer({
 
 export function AnnouncementBannerRenderer({
 	data,
-}: BlockComponentProps<AppCMS, "announcement-banner">) {
+}: BlockComponentProps<App, "announcement-banner">) {
 	const announcements = data?.announcements || [];
 
 	if (announcements.length === 0) return null;

@@ -19,8 +19,8 @@ HTTP Request → Framework Router → Adapter → createFetchHandler → QUESTPI
 
 All adapters share the same core:
 
-1. **`createFetchHandler(cms, config)`** — The universal request handler
-2. **`createAdapterRoutes(cms, config)`** — Granular route handlers for each endpoint
+1. **`createFetchHandler(app, config)`** — The universal request handler
+2. **`createAdapterRoutes(app, config)`** — Granular route handlers for each endpoint
 3. **Framework wrapper** — Maps framework routing to the core handlers
 
 ## Core Fetch Handler
@@ -30,8 +30,8 @@ Every adapter is built on `createFetchHandler`:
 ```ts
 import { createFetchHandler } from "questpie";
 
-const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 
@@ -42,11 +42,11 @@ const handler = createFetchHandler(cms, {
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `basePath` | `string` | `"/cms"` | URL prefix for all CMS routes |
+| `basePath` | `string` | `"/"` | URL prefix for all API routes |
 | `rpc` | `RpcRouterTree` | — | RPC router for custom procedures |
 | `accessMode` | `string` | `"user"` | Default access mode for requests |
-| `getLocale` | `(req, cms) => string` | — | Extract locale from request |
-| `getSession` | `(req, cms) => Session` | — | Extract session from request |
+| `getLocale` | `(req, app) => string` | — | Extract locale from request |
+| `getSession` | `(req, app) => Session` | — | Extract session from request |
 | `extendContext` | `(params) => object` | — | Add custom context to requests |
 
 ## Available Routes
@@ -120,13 +120,13 @@ For frameworks not listed above, use `createFetchHandler` directly:
 ```ts
 import { createFetchHandler } from "questpie";
 
-const handler = createFetchHandler(cms, {
-  basePath: "/api/cms",
+const handler = createFetchHandler(app, {
+  basePath: "/api",
   rpc: appRpc,
 });
 
 // Express example
-app.all("/api/cms/*", async (req, res) => {
+app.all("/api/*", async (req, res) => {
   const response = await handler(toWebRequest(req));
   if (response) {
     sendWebResponse(res, response);
@@ -138,7 +138,7 @@ app.all("/api/cms/*", async (req, res) => {
 
 ## Common Mistakes
 
-- **Wrong `basePath`** — The client and server must use the same base path. If the server uses `/api/cms`, the client must too.
+- **Wrong `basePath`** — The client and server must use the same base path. If the server uses `/api`, the client must too.
 - **Missing RPC registration** — If you define RPC procedures but don't pass them to the adapter config, they won't be routable.
 - **Not handling `null` response** — `createFetchHandler` returns `null` for unmatched routes. Handle this in your framework.
 

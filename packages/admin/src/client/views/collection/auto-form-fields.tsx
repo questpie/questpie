@@ -40,7 +40,9 @@ import {
 	TabsTrigger,
 } from "../../components/ui/tabs";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
+import { useCollectionMeta } from "../../hooks/use-collection-meta";
 import { useGlobalFields } from "../../hooks/use-global-fields";
+import { useGlobalMeta } from "../../hooks/use-global-meta";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../utils";
 import {
@@ -75,9 +77,9 @@ export interface AutoFormFieldsProps<
 	K extends string = string,
 > {
 	/**
-	 * CMS instance (for schema introspection) - optional
+	 * app instance (for schema introspection) - optional
 	 */
-	cms?: T;
+	app?: T;
 
 	/**
 	 * Collection or global name
@@ -276,6 +278,7 @@ interface FieldLayoutRendererProps {
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
 	excludedFields?: Set<string>;
+	entityMeta?: { localizedFields?: string[] };
 	formValues: any;
 	resolveText: (
 		text: any,
@@ -296,6 +299,7 @@ function renderFields({
 	fieldPrefix,
 	allCollectionsConfig,
 	excludedFields,
+	entityMeta,
 	columns = 1,
 	gap,
 	className,
@@ -308,6 +312,7 @@ function renderFields({
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
 	excludedFields?: Set<string>;
+	entityMeta?: { localizedFields?: string[] };
 	columns?: number;
 	gap?: number;
 	className?: string;
@@ -343,6 +348,7 @@ function renderFields({
 				registry={registry}
 				fieldPrefix={fieldPrefix}
 				allCollectionsConfig={allCollectionsConfig}
+				entityMeta={entityMeta}
 				className={cn(item.className, spanClass)}
 				renderEmbeddedFields={({
 					embeddedCollection,
@@ -421,6 +427,7 @@ function renderFieldLayoutItems({
 	fieldPrefix,
 	allCollectionsConfig,
 	excludedFields,
+	entityMeta,
 	formValues,
 	resolveText,
 }: FieldLayoutRendererProps): React.ReactNode {
@@ -447,6 +454,7 @@ function renderFieldLayoutItems({
 					registry={registry}
 					fieldPrefix={fieldPrefix}
 					allCollectionsConfig={allCollectionsConfig}
+					entityMeta={entityMeta}
 					className={
 						typeof item === "object" && "className" in item
 							? item.className
@@ -486,6 +494,7 @@ function renderFieldLayoutItems({
 								fieldPrefix,
 								allCollectionsConfig,
 								excludedFields,
+								entityMeta,
 								formValues,
 								resolveText,
 							})}
@@ -505,6 +514,7 @@ function renderFieldLayoutItems({
 								fieldPrefix,
 								allCollectionsConfig,
 								excludedFields,
+								entityMeta,
 								formValues,
 								resolveText,
 							})}
@@ -542,6 +552,7 @@ function renderSection({
 	fieldPrefix,
 	allCollectionsConfig,
 	excludedFields,
+	entityMeta,
 	formValues,
 	resolveText,
 }: {
@@ -554,6 +565,7 @@ function renderSection({
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
 	excludedFields?: Set<string>;
+	entityMeta?: { localizedFields?: string[] };
 	formValues: any;
 	resolveText: (
 		text: any,
@@ -583,6 +595,7 @@ function renderSection({
 				fieldPrefix,
 				allCollectionsConfig,
 				excludedFields,
+				entityMeta,
 				columns,
 				gap,
 				className: section.className,
@@ -610,6 +623,7 @@ function renderSection({
 								registry={registry}
 								fieldPrefix={fieldPrefix}
 								allCollectionsConfig={allCollectionsConfig}
+								entityMeta={entityMeta}
 								className={
 									typeof item === "object" && "className" in item
 										? item.className
@@ -647,6 +661,7 @@ function renderSection({
 			fieldPrefix,
 			allCollectionsConfig,
 			excludedFields,
+			entityMeta,
 			formValues,
 			resolveText,
 		});
@@ -723,6 +738,7 @@ function renderTabs({
 	fieldPrefix,
 	allCollectionsConfig,
 	excludedFields,
+	entityMeta,
 	formValues,
 	resolveText,
 }: {
@@ -734,6 +750,7 @@ function renderTabs({
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
 	excludedFields?: Set<string>;
+	entityMeta?: { localizedFields?: string[] };
 	formValues: any;
 	resolveText: (
 		text: any,
@@ -770,6 +787,7 @@ function renderTabs({
 						fieldPrefix,
 						allCollectionsConfig,
 						excludedFields,
+						entityMeta,
 						formValues,
 						resolveText,
 					})}
@@ -790,6 +808,7 @@ function renderSidebar({
 	registry,
 	fieldPrefix,
 	allCollectionsConfig,
+	entityMeta,
 	formValues,
 	resolveText,
 }: {
@@ -800,6 +819,7 @@ function renderSidebar({
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
 	allCollectionsConfig?: Record<string, CollectionConfig>;
+	entityMeta?: { localizedFields?: string[] };
 	formValues: any;
 	resolveText: (
 		text: any,
@@ -815,6 +835,7 @@ function renderSidebar({
 		registry,
 		fieldPrefix,
 		allCollectionsConfig,
+		entityMeta,
 		formValues,
 		resolveText,
 	});
@@ -871,8 +892,7 @@ function extractFieldNamesFromFieldItems(
  * Supports recursive tabs/sections nesting and auto-generates
  * field list when no form config is defined.
  */
-export function AutoFormFields<T extends Questpie<any>, K extends string>({
-	cms: _cms,
+export function AutoFormFields<T extends Questpie<any>, K extends string>({ app: _cms,
 	collection,
 	mode = "collection",
 	config,
@@ -892,6 +912,12 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 	const globalResult = useGlobalFields(mode === "global" ? collection : "", {
 		schemaQueryOptions: { enabled: mode === "global" },
 	});
+	const { data: collectionMeta } = useCollectionMeta(collection as any, {
+		enabled: mode === "collection",
+	});
+	const { data: globalMeta } = useGlobalMeta(collection as any, {
+		enabled: mode === "global",
+	});
 
 	const resolvedFields =
 		mode === "global"
@@ -899,6 +925,7 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 			: collectionResult.fields;
 	const schema =
 		mode === "global" ? (globalResult.schema as any) : collectionResult.schema;
+	const entityMeta = mode === "global" ? globalMeta : collectionMeta;
 	const form = useFormContext() as any;
 	const resolveText = useResolveText();
 
@@ -987,6 +1014,7 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 				fieldPrefix,
 				allCollectionsConfig,
 				excludedFields: sidebarFieldNames,
+				entityMeta,
 				formValues,
 				resolveText,
 			});
@@ -1003,6 +1031,7 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 				registry,
 				fieldPrefix,
 				allCollectionsConfig,
+				entityMeta,
 			});
 		}
 
@@ -1023,6 +1052,7 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({
 			registry,
 			fieldPrefix,
 			allCollectionsConfig,
+			entityMeta,
 			formValues,
 			resolveText,
 		});

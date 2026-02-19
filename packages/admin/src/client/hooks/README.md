@@ -15,7 +15,7 @@ function App() {
   return (
     <AdminLayoutProvider
       admin={Admin.from(admin)}
-      client={cmsClient}
+      client={client}
       queryClient={queryClient}
       LinkComponent={Link}
       basePath="/admin"
@@ -246,7 +246,7 @@ function MyComponent() {
 Available selectors:
 
 - `selectAdmin` - Admin builder instance
-- `selectClient` - CMS client
+- `selectClient` - client
 - `selectBasePath` - Base path for admin routes
 - `selectBrandName` - Brand name from config
 - `selectLocale` - Current locale
@@ -357,15 +357,15 @@ const href = getAdminLinkHref(
 
 ## Type Safety with Module Augmentation
 
-For full type inference, register your CMS types:
+For full type inference, register your app types:
 
 ```typescript
 // admin.ts
-import type { AppCMS } from "./server/cms";
+import type { App } from "./server/app";
 
 declare module "@questpie/admin/builder" {
   interface AdminTypeRegistry {
-    cms: AppCMS;
+    app: App;
     admin: typeof admin;
   }
 }

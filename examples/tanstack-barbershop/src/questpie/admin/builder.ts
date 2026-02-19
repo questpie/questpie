@@ -1,7 +1,7 @@
 /**
  * Barbershop Admin Builder
  *
- * Centralized admin builder with type-safe access to backend CMS collections.
+ * Centralized admin builder with type-safe access to backend app collections.
  *
  * Usage:
  * ```ts
@@ -15,6 +15,6 @@
  */
 
 import { adminModule, qa } from "@questpie/admin/client";
-import type { AppCMS } from "@/questpie/server/cms";
+import type { App } from "@/questpie/server/app";
 
-export const admin = qa<AppCMS>().use(adminModule);
+export const admin = qa<App>().use(adminModule);

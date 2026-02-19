@@ -8,7 +8,7 @@
  * ```ts
  * import { adminModule } from "@questpie/admin/server";
  *
- * const cms = q({ name: "my-app" })
+ * const app = q({ name: "my-app" })
  *   .use(adminModule)
  *   .build({ ... });
  * ```
@@ -151,6 +151,15 @@ export {
 	type TipTapDocument,
 	type TipTapNode,
 } from "./fields/index.js";
+// Audit module - automatic audit logging for all mutations
+export {
+	type AuditDashboardWidgetOptions,
+	type AuditModuleOptions,
+	auditLogCollection,
+	auditModule,
+	createAuditDashboardWidget,
+	createAuditModule,
+} from "./modules/audit/index.js";
 // Main admin module - the complete backend for admin panel
 export {
 	// Action functions

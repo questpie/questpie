@@ -30,7 +30,7 @@ import { useAuthClientSafe } from "./use-auth";
 
 /**
  * Basic user type from Better Auth session
- * Extended by the actual CMS user schema
+ * Extended by the actual user schema
  */
 export interface BasicUser {
   id: string;

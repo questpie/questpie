@@ -22,7 +22,7 @@ const presets: Preset[] = [
 		label: "Field renderer registry",
 		kicker: "Custom field UX",
 		file: "admin/field-registry.ts",
-		code: `export const admin = qa<AppCMS>()
+		code: `export const admin = qa<App>()
   .use(adminModule)
   .fields({
     point: PointFieldRenderer,
@@ -46,7 +46,7 @@ const presets: Preset[] = [
 		label: "List/edit view registry",
 		kicker: "Workflow views",
 		file: "admin/view-registry.ts",
-		code: `export const admin = qa<AppCMS>()
+		code: `export const admin = qa<App>()
   .use(adminModule)
   .views({
     kanban: listView("kanban", { component: AppointmentsKanban }),
@@ -70,7 +70,7 @@ const presets: Preset[] = [
 		label: "Component references",
 		kicker: "Brand + tokens",
 		file: "admin/components.ts",
-		code: `export const admin = qa<AppCMS>()
+		code: `export const admin = qa<App>()
   .use(adminModule)
   .components({
     icon: AppIcon,
@@ -92,7 +92,7 @@ const presets: Preset[] = [
 		label: "Realtime operator mode",
 		kicker: "Live admin",
 		file: "admin/live-workflows.ts",
-		code: `export const admin = qa<AppCMS>()
+		code: `export const admin = qa<App>()
   .use(adminModule)
   .views({
     table: listView("table", {

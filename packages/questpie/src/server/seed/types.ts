@@ -1,4 +1,4 @@
-import type { Questpie } from "#questpie/server/config/cms.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { RequestContext } from "#questpie/server/config/context.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 
@@ -12,11 +12,11 @@ export type SeedCategory = "required" | "dev" | "test";
 
 /**
  * Context passed to seed run/undo functions.
- * Provides full CMS access — unlike migrations which only get raw DB.
+ * Provides full app access — unlike migrations which only get raw DB.
  */
 export type SeedContext<TConfig extends QuestpieConfig = QuestpieConfig> = {
-	/** Full CMS instance — access db, api, auth, storage, queue, etc. */
-	cms: Questpie<TConfig>;
+	/** Full app instance — access db, api, auth, storage, queue, etc. */
+	app: Questpie<TConfig>;
 	/** Pre-created system context for the default locale */
 	ctx: RequestContext;
 	/** Logger for seed output */
@@ -27,7 +27,7 @@ export type SeedContext<TConfig extends QuestpieConfig = QuestpieConfig> = {
  * Seed definition — a unit of seed data.
  *
  * Seeds are different from migrations:
- * - They get full CMS context (not just raw DB)
+ * - They get full app context (not just raw DB)
  * - They have categories for selective execution
  * - They can optionally have an undo function
  * - They should be idempotent by default

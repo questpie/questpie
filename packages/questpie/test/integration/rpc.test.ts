@@ -62,10 +62,10 @@ describe("rpc functions", () => {
 	});
 
 	it("executes root RPC via adapter routes", async () => {
-		const handler = createFetchHandler(setup.cms, { rpc: appRpc });
+		const handler = createFetchHandler(setup.app, { rpc: appRpc });
 
 		const rootResponse = await handler(
-			new Request("http://localhost/cms/rpc/ping", {
+			new Request("http://localhost/rpc/ping", {
 				method: "POST",
 				body: JSON.stringify({ message: "hello" }),
 			}),
@@ -75,9 +75,9 @@ describe("rpc functions", () => {
 	});
 
 	it("handles raw functions without JSON parsing", async () => {
-		const handler = createFetchHandler(setup.cms, { rpc: appRpc });
+		const handler = createFetchHandler(setup.app, { rpc: appRpc });
 		const response = await handler(
-			new Request("http://localhost/cms/rpc/webhook", {
+			new Request("http://localhost/rpc/webhook", {
 				method: "POST",
 				body: "raw-payload",
 			}),
@@ -87,9 +87,9 @@ describe("rpc functions", () => {
 	});
 
 	it("returns 400 on invalid JSON input", async () => {
-		const handler = createFetchHandler(setup.cms, { rpc: appRpc });
+		const handler = createFetchHandler(setup.app, { rpc: appRpc });
 		const response = await handler(
-			new Request("http://localhost/cms/rpc/ping", {
+			new Request("http://localhost/rpc/ping", {
 				method: "POST",
 				body: "{invalid",
 			}),
