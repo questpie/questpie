@@ -5,10 +5,7 @@
  * New code should import directly from "@questpie/admin/runtime".
  */
 
-// Provider and store (re-exported from runtime for backward compatibility)
-export { // Selectors
-	selectAdmin, // Utilities
-	useShallow } from "../runtime";
+// Provider and store - import from "@questpie/admin/runtime" directly
 // Typed hooks factory (recommended for new projects)
 // Action hooks
 // Admin config hook

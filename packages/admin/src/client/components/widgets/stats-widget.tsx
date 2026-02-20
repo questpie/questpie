@@ -15,7 +15,7 @@ import type {
 import { useCollectionCount } from "../../hooks/use-collection";
 import { useServerWidgetData } from "../../hooks/use-server-widget-data";
 import { useResolveText } from "../../i18n/hooks";
-import { cn, formatCollectionName } from "../../lib/utils";
+import { cn, formatLabel } from "../../lib/utils";
 import { WidgetCard } from "../../views/dashboard/widget-card";
 import { StatsWidgetSkeleton } from "./widget-skeletons";
 
@@ -235,7 +235,7 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 
 	const displayLabel = label
 		? resolveText(label)
-		: formatCollectionName(collection);
+		: formatLabel(collection);
 
 	return (
 		<WidgetCard

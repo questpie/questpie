@@ -7,7 +7,7 @@
 
 import { useCollectionList } from "../../hooks/use-collection";
 import { useResolveText } from "../../i18n/hooks";
-import { formatCollectionName } from "../../lib/utils";
+import { formatLabel } from "../../lib/utils";
 import { WidgetCard } from "../../views/dashboard/widget-card";
 import { RecentItemsWidgetSkeleton } from "./widget-skeletons";
 
@@ -74,7 +74,7 @@ export default function RecentItemsWidget({ config }: RecentItemsWidgetProps) {
   const items = Array.isArray(data?.docs) ? data.docs : [];
   const displayLabel = label
     ? resolveText(label)
-    : `Recent ${formatCollectionName(collection)}`;
+    : `Recent ${formatLabel(collection)}`;
 
   // Determine title field - prefer _title computed field from backend
   const getTitleValue = (item: any): string => {

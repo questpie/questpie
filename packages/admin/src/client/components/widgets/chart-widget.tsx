@@ -30,7 +30,7 @@ import type {
 import { useCollectionList } from "../../hooks/use-collection";
 import { useServerWidgetData } from "../../hooks/use-server-widget-data";
 import { useResolveText } from "../../i18n/hooks";
-import { formatCollectionName } from "../../lib/utils";
+import { formatLabel } from "../../lib/utils";
 import { WidgetCard } from "../../views/dashboard/widget-card";
 import { ChartWidgetSkeleton } from "./widget-skeletons";
 
@@ -152,7 +152,7 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
       : [];
   const displayLabel = label
     ? resolveText(label)
-    : `${formatCollectionName(collection)} by ${field}`;
+    : `${formatLabel(collection)} by ${field}`;
 
   // Process data for chart
   const chartData = React.useMemo(() => {

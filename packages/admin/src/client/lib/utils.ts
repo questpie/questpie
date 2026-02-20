@@ -21,8 +21,3 @@ export function formatLabel(str: string): string {
     .replace(/^./, (s) => s.toUpperCase())
     .trim();
 }
-
-/**
- * @deprecated Use `formatLabel` instead
- */
-export const formatCollectionName = formatLabel;

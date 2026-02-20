@@ -10,7 +10,7 @@ import type * as React from "react";
 import type { QuickActionsWidgetConfig } from "../../builder/types/widget-types";
 import { resolveIconElement } from "../../components/component-renderer";
 import { useResolveText } from "../../i18n/hooks";
-import { cn, formatCollectionName } from "../../lib/utils";
+import { cn, formatLabel } from "../../lib/utils";
 import { WidgetCard } from "../../views/dashboard/widget-card";
 
 /**
@@ -44,7 +44,7 @@ export default function QuickActionsWidget({
       const [collection, actionType] = action.split(".");
       return {
         id: `${action}-${index}`,
-        label: `${actionType === "create" ? "New" : actionType} ${formatCollectionName(collection)}`,
+        label: `${actionType === "create" ? "New" : actionType} ${formatLabel(collection)}`,
         href: `${basePath}/collections/${collection}/${actionType === "create" ? "create" : ""}`,
         icon: undefined,
         variant: "default" as const,
