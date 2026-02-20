@@ -462,6 +462,10 @@ export class RealtimeService {
     await this.startPromise;
   }
 
+  async destroy(): Promise<void> {
+    await this.stop();
+  }
+
   private async stop(): Promise<void> {
     if (!this.started && !this.startPromise) return;
 

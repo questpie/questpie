@@ -140,6 +140,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public db: DrizzleClientFromQuestpieConfig<TConfig>;
 
 	private _initPromise: Promise<void> | null = null;
+	private _sqlClient?: SQL;
 
 	constructor(config: TConfig) {
 		this.config = config;
@@ -166,6 +167,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		if ("url" in config.db) {
 			// Postgres via Bun SQL
 			const bunSqlClient = new SQL({ url: config.db.url });
+			this._sqlClient = bunSqlClient;
 			this.db = drizzleBun({
 				client: bunSqlClient,
 				schema: this.getSchema(),
@@ -286,6 +288,18 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		if (config.autoMigrate || config.autoSeed) {
 			this._initPromise = this._autoInit();
 		}
+
+		// In development, track this instance in globalThis so that HMR module
+		// re-evaluations automatically close the previous instance's connection
+		// pools instead of leaking them (postgres "too many clients" in dev).
+		if (process.env.NODE_ENV !== "production") {
+			const hmrKey = `__questpie_hmr_${config.app.url}`;
+			const existing = (globalThis as Record<string, unknown>)[hmrKey];
+			if (existing && typeof (existing as Questpie).destroy === "function") {
+				(existing as Questpie).destroy().catch(() => {});
+			}
+			(globalThis as Record<string, unknown>)[hmrKey] = this;
+		}
 	}
 
 	/**
@@ -302,6 +316,35 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 */
 	async waitForInit(): Promise<void> {
 		if (this._initPromise) await this._initPromise;
+	}
+
+	/**
+	 * Gracefully closes all database connections and background services.
+	 *
+	 * Call this during server shutdown or HMR teardown to prevent connection leaks.
+	 *
+	 * @example HMR-safe singleton pattern (TanStack Start / Nitro):
+	 * ```ts
+	 * // app.ts
+	 * declare global { var __app: typeof app | undefined }
+	 *
+	 * globalThis.__app ??= baseApp.build({ db: { url: DATABASE_URL }, ... })
+	 * export const app = globalThis.__app
+	 *
+	 * if (import.meta.hot) {
+	 *   import.meta.hot.dispose(async () => {
+	 *     await globalThis.__app?.destroy()
+	 *     globalThis.__app = undefined
+	 *   })
+	 * }
+	 * ```
+	 */
+	async destroy(): Promise<void> {
+		await Promise.allSettled([
+			this._sqlClient?.close({ timeout: 5 }),
+			this.realtime?.destroy(),
+			this.queue?.stop?.(),
+		]);
 	}
 
 	private async _autoInit(): Promise<void> {
