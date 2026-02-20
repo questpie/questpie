@@ -180,5 +180,4 @@ function DefaultLogo({ brandName }: { brandName: string }) {
   );
 }
 
-export default ResetPasswordPage;
 

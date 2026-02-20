@@ -989,18 +989,15 @@ export function AutoFormFields<T extends Questpie<any>, K extends string>({ app:
 
 	// Custom render function provided
 	if (renderField) {
-		return (
-			<div className="space-y-4">
-				{allFieldNames.map((fieldName) => {
-					const fullFieldName = getFullFieldName(fieldName, fieldPrefix);
-					return (
-						<React.Fragment key={fullFieldName}>
-							{renderField(fullFieldName, fields[fieldName])}
-						</React.Fragment>
-					);
-				})}
-			</div>
-		);
+		const renderedFields = allFieldNames.map((fieldName) => {
+			const fullFieldName = getFullFieldName(fieldName, fieldPrefix);
+			return (
+				<React.Fragment key={fullFieldName}>
+					{renderField(fullFieldName, fields[fieldName])}
+				</React.Fragment>
+			);
+		});
+		return <div className="space-y-4">{renderedFields}</div>;
 	}
 
 	// Compute main content inline instead of using a render function

@@ -150,5 +150,4 @@ function DefaultLogo({ brandName }: { brandName: string }) {
   );
 }
 
-export default InvitePage;
 

@@ -144,5 +144,4 @@ function DefaultLogo({ brandName }: { brandName: string }) {
   );
 }
 
-export default ForgotPasswordPage;
 

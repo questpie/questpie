@@ -177,5 +177,4 @@ function DefaultLogo({ brandName }: { brandName: string }) {
   );
 }
 
-export default LoginPage;
 
