@@ -764,7 +764,7 @@ export default function FormView({
 		}
 		// Unrestricted — all stages except the current one
 		return workflowConfig.stages.filter((s) => s.name !== currentStage);
-	}, [workflowConfig?.stages, currentStage, currentStageConfig?.transitions]);
+	}, [workflowConfig, currentStage, currentStageConfig]);
 
 	// Transition mutation
 	const transitionMutation = useTransitionStage(collection);
@@ -794,67 +794,77 @@ export default function FormView({
 	/**
 	 * Execute the confirmed workflow transition (immediate or scheduled).
 	 */
-	const confirmTransition = React.useCallback(async () => {
+	const confirmTransition = () => {
 		if (!transitionTarget || !id) return;
 
 		const params: { id: string; stage: string; scheduledAt?: Date } = {
 			id,
 			stage: transitionTarget.name,
 		};
-		if (transitionSchedule && transitionScheduledAt) {
-			params.scheduledAt = transitionScheduledAt;
+		if (transitionSchedule) {
+			if (transitionScheduledAt) {
+				params.scheduledAt = transitionScheduledAt;
+			}
 		}
 
 		const stageLabel = transitionTarget.label
 			? transitionTarget.label
 			: transitionTarget.name;
 
-		try {
-			const result = await transitionMutation.mutateAsync(params);
-			if (result && typeof result === "object" && "id" in result) {
-				form.reset(result as any);
-			}
+		const resetTransitionState = () => {
+			setTransitionTarget(null);
+			setTransitionSchedule(false);
+			setTransitionScheduledAt(null);
+		};
 
-			if (transitionSchedule && transitionScheduledAt) {
-				toast.success(
-					t("workflow.scheduledSuccess", {
-						stage: stageLabel,
-						date: transitionScheduledAt.toLocaleString(),
-					}),
-				);
-			} else {
-				toast.success(
-					t("workflow.transitionSuccess", {
-						stage: stageLabel,
-					}),
-				);
-			}
-			setTransitionTarget(null);
-			setTransitionSchedule(false);
-			setTransitionScheduledAt(null);
-		} catch (err) {
-			let description: string;
-			if (err instanceof Error) {
-				description = err.message;
-			} else {
-				description = t("error.unknown");
-			}
-			toast.error(t("workflow.transitionFailed"), {
-				description,
-			});
-			setTransitionTarget(null);
-			setTransitionSchedule(false);
-			setTransitionScheduledAt(null);
-		}
-	}, [
-		transitionTarget,
-		id,
-		transitionSchedule,
-		transitionScheduledAt,
-		transitionMutation,
-		form,
-		t,
-	]);
+		transitionMutation.mutateAsync(params).then(
+			(result) => {
+				if (result) {
+					if (typeof result === "object") {
+						if ("id" in result) {
+							form.reset(result as any);
+						}
+					}
+				}
+
+				if (transitionSchedule) {
+					if (transitionScheduledAt) {
+						toast.success(
+							t("workflow.scheduledSuccess", {
+								stage: stageLabel,
+								date: transitionScheduledAt.toLocaleString(),
+							}),
+						);
+					} else {
+						toast.success(
+							t("workflow.transitionSuccess", {
+								stage: stageLabel,
+							}),
+						);
+					}
+				} else {
+					toast.success(
+						t("workflow.transitionSuccess", {
+							stage: stageLabel,
+						}),
+					);
+				}
+				resetTransitionState();
+			},
+			(err) => {
+				let description: string;
+				if (err instanceof Error) {
+					description = err.message;
+				} else {
+					description = t("error.unknown");
+				}
+				toast.error(t("workflow.transitionFailed"), {
+					description,
+				});
+				resetTransitionState();
+			},
+		);
+	};
 
 	// Autosave state
 	const [isSaving, setIsSaving] = React.useState(false);
@@ -1149,85 +1159,73 @@ export default function FormView({
 	);
 
 	// Action helpers
-	const actionHelpers: ActionHelpers = React.useMemo(
-		() => ({
-			navigate: storeNavigate,
-			toast: {
-				success: toast.success,
-				error: toast.error,
-				info: toast.info,
-				warning: toast.warning,
-			},
-			t,
-			invalidateCollection: async (targetCollection?: string) => {
-				const col = targetCollection || collection;
-				// Invalidate list and count queries for the collection
-				await queryClient.invalidateQueries({
-					queryKey: queryOpts.key(["collections", col, "find", contentLocale]),
-				});
-				await queryClient.invalidateQueries({
-					queryKey: queryOpts.key(["collections", col, "count", contentLocale]),
-				});
-			},
-			invalidateItem: async (itemId: string, targetCollection?: string) => {
-				const col = targetCollection || collection;
-				// Invalidate findOne query for specific item
-				await queryClient.invalidateQueries({
-					queryKey: queryOpts.key([
-						"collections",
-						col,
-						"findOne",
-						contentLocale,
-						{ id: itemId },
-					]),
-				});
-				// Also invalidate list queries since item data changed
-				await queryClient.invalidateQueries({
-					queryKey: queryOpts.key(["collections", col, "find", contentLocale]),
-				});
-			},
-			invalidateAll: async () => {
-				// Invalidate all queries
-				await queryClient.invalidateQueries({
-					queryKey: [...QUERY_KEY_PREFIX],
-				});
-			},
-			refresh: () => {
-				// Invalidate current collection queries (better than page reload)
-				queryClient.invalidateQueries({
-					queryKey: queryOpts.key([
-						"collections",
-						collection,
-						"find",
-						contentLocale,
-					]),
-				});
-				queryClient.invalidateQueries({
-					queryKey: queryOpts.key([
-						"collections",
-						collection,
-						"count",
-						contentLocale,
-					]),
-				});
-			},
-			closeDialog: () => {
-				setDialogAction(null);
-				setConfirmAction(null);
-			},
-			basePath: storeBasePath || basePath,
-		}),
-		[
-			storeNavigate,
-			storeBasePath,
-			basePath,
-			queryClient,
-			queryOpts,
-			collection,
-			contentLocale,
-			t,
-		],
-	);
+	const actionHelpers: ActionHelpers = {
+		navigate: storeNavigate,
+		toast: {
+			success: toast.success,
+			error: toast.error,
+			info: toast.info,
+			warning: toast.warning,
+		},
+		t,
+		invalidateCollection: async (targetCollection?: string) => {
+			const col = targetCollection || collection;
+			// Invalidate list and count queries for the collection
+			await queryClient.invalidateQueries({
+				queryKey: queryOpts.key(["collections", col, "find", contentLocale]),
+			});
+			await queryClient.invalidateQueries({
+				queryKey: queryOpts.key(["collections", col, "count", contentLocale]),
+			});
+		},
+		invalidateItem: async (itemId: string, targetCollection?: string) => {
+			const col = targetCollection || collection;
+			// Invalidate findOne query for specific item
+			await queryClient.invalidateQueries({
+				queryKey: queryOpts.key([
+					"collections",
+					col,
+					"findOne",
+					contentLocale,
+					{ id: itemId },
+				]),
+			});
+			// Also invalidate list queries since item data changed
+			await queryClient.invalidateQueries({
+				queryKey: queryOpts.key(["collections", col, "find", contentLocale]),
+			});
+		},
+		invalidateAll: async () => {
+			// Invalidate all queries
+			await queryClient.invalidateQueries({
+				queryKey: [...QUERY_KEY_PREFIX],
+			});
+		},
+		refresh: () => {
+			// Invalidate current collection queries (better than page reload)
+			queryClient.invalidateQueries({
+				queryKey: queryOpts.key([
+					"collections",
+					collection,
+					"find",
+					contentLocale,
+				]),
+			});
+			queryClient.invalidateQueries({
+				queryKey: queryOpts.key([
+					"collections",
+					collection,
+					"count",
+					contentLocale,
+				]),
+			});
+		},
+		closeDialog: () => {
+			setDialogAction(null);
+			setConfirmAction(null);
+		},
+		basePath: storeBasePath || basePath,
+	};
 
 	// Action context for visibility/disabled checks
 	const actionContext: ActionContext = React.useMemo(
@@ -1274,8 +1272,7 @@ export default function FormView({
 	);
 
 	// Execute action
-	const executeAction = React.useCallback(
-		async (action: ActionDefinition) => {
+	const executeAction = async (action: ActionDefinition) => {
 			const { handler } = action;
 			const actionLabel = resolveText(action.label, action.id);
 
@@ -1414,28 +1411,13 @@ export default function FormView({
 				}
 			}
 			setConfirmAction(null);
-		},
-		[
-			transformedItem,
-			id,
-			actionContext,
-			storeNavigate,
-			storeBasePath,
-			deleteMutation,
-			restoreMutation,
-			collection,
-			basePath,
-			navigate,
-			t,
-			resolveText,
-		],
-	);
+	};
 
-	const handleRevertVersion = React.useCallback((version: any) => {
+	const handleRevertVersion = (version: any) => {
 		setPendingRevertVersion(version);
-	}, []);
+	};
 
-	const confirmRevertVersion = React.useCallback(async () => {
+	const confirmRevertVersion = async () => {
 		if (!pendingRevertVersion || !id) return;
 
 		const payload: { id: string; version?: number; versionId?: string } = {
@@ -1454,39 +1436,29 @@ export default function FormView({
 		}
 		toast.success(t("version.revertSuccess"));
 		setPendingRevertVersion(null);
-	}, [
-		pendingRevertVersion,
-		id,
-		revertVersionMutation,
-		form,
-		previewContext,
-		t,
-	]);
+	};
 
 	// Handle action click
-	const handleActionClick = React.useCallback(
-		(action: ActionDefinition) => {
-			if (action.confirmation) {
-				setConfirmAction(action);
-			} else if (
-				action.handler.type === "dialog" ||
-				action.handler.type === "form"
-			) {
-				setDialogAction(action);
-			} else {
-				// Execute immediately
-				executeAction(action);
-			}
-		},
-		[executeAction],
-	);
+	const handleActionClick = (action: ActionDefinition) => {
+		if (action.confirmation) {
+			setConfirmAction(action);
+		} else if (
+			action.handler.type === "dialog" ||
+			action.handler.type === "form"
+		) {
+			setDialogAction(action);
+		} else {
+			// Execute immediately
+			executeAction(action);
+		}
+	};
 
 	// Handle confirmation
-	const handleConfirm = React.useCallback(async () => {
+	const handleConfirm = async () => {
 		if (confirmAction) {
 			await executeAction(confirmAction);
 		}
-	}, [confirmAction, executeAction]);
+	};
 
 	// Format date helper
 	const formatDate = (date: string | Date) => {
