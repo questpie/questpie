@@ -218,26 +218,27 @@ export function AssetThumbnail({
 		const handleClick = onClick && assetId ? () => onClick(assetId) : undefined;
 
 		if (isImageType) {
+			const interactiveProps = handleClick
+				? {
+						role: "button" as const,
+						tabIndex: 0 as const,
+						onClick: handleClick,
+						onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								handleClick();
+							}
+						},
+					}
+				: {};
 			return (
 				<div
-					role={handleClick ? "button" : "img"}
-					tabIndex={handleClick ? 0 : undefined}
 					className={cn(
 						"flex items-center justify-center",
 						onClick && "cursor-pointer hover:opacity-80",
 						className,
 					)}
-					onClick={handleClick}
-					onKeyDown={
-						handleClick
-							? (e) => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault();
-										handleClick();
-									}
-								}
-							: undefined
-					}
+					{...interactiveProps}
 				>
 					<img
 						src={url}
@@ -249,32 +250,35 @@ export function AssetThumbnail({
 		}
 
 		// Show icon for non-images
-		return (
-			<div
-				role={handleClick ? "button" : "img"}
-				tabIndex={handleClick ? 0 : undefined}
-				className={cn(
-					"flex items-center justify-center",
-					onClick && "cursor-pointer hover:opacity-80",
-					className,
-				)}
-				onClick={handleClick}
-				onKeyDown={
-					handleClick
-						? (e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault();
-									handleClick();
-								}
+		{
+			const interactiveProps = handleClick
+				? {
+						role: "button" as const,
+						tabIndex: 0 as const,
+						onClick: handleClick,
+						onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								handleClick();
 							}
-						: undefined
-				}
-			>
-				<div className="size-10 rounded border bg-muted flex items-center justify-center">
-					<Icon icon={fileIcon} className="size-5 text-muted-foreground" />
+						},
+					}
+				: {};
+			return (
+				<div
+					className={cn(
+						"flex items-center justify-center",
+						onClick && "cursor-pointer hover:opacity-80",
+						className,
+					)}
+					{...interactiveProps}
+				>
+					<div className="size-10 rounded border bg-muted flex items-center justify-center">
+						<Icon icon={fileIcon} className="size-5 text-muted-foreground" />
+					</div>
 				</div>
-			</div>
-		);
+			);
+		}
 	}
 
 	// ========== LG SIZE (400px) - Full preview with controls ==========

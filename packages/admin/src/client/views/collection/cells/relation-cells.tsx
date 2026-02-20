@@ -91,18 +91,21 @@ export function RelationCell({
 					<TooltipTrigger
 						render={
 							<span className="inline-flex items-center gap-1 max-w-[250px] overflow-hidden">
-								{visibleItems.map((item, idx) => (
-									<RelationChip
-										key={`${item.id ?? item._id ?? String(item)}-${idx}`}
-										item={item}
-										targetCollection={targetCollection}
-										onClick={handleChipClick}
-										className="shrink-0"
-										showAvatar={showAvatar}
-										avatarField={avatarField}
-										labelField={labelField}
-									/>
-								))}
+								{visibleItems.map((item) => {
+									const itemId = getRelationItemId(item);
+									return (
+										<RelationChip
+											key={itemId ?? String(item)}
+											item={item}
+											targetCollection={targetCollection}
+											onClick={handleChipClick}
+											className="shrink-0"
+											showAvatar={showAvatar}
+											avatarField={avatarField}
+											labelField={labelField}
+										/>
+									);
+								})}
 								{remainingCount > 0 && (
 									<Badge
 										variant="secondary"
@@ -255,14 +258,17 @@ function ReverseRelationCell({
 			return (
 				<>
 					<span className="inline-flex flex-wrap items-center gap-1">
-						{value.map((item, idx) => (
-							<RelationChip
-								key={`${item.id ?? item._id ?? String(item)}-${idx}`}
-								item={item}
-								targetCollection={sourceCollection}
-								onClick={handleChipClick}
-							/>
-						))}
+						{value.map((item) => {
+							const itemId = getRelationItemId(item);
+							return (
+								<RelationChip
+									key={itemId ?? String(item)}
+									item={item}
+									targetCollection={sourceCollection}
+									onClick={handleChipClick}
+								/>
+							);
+						})}
 					</span>
 					{/* Detail sheet */}
 					{sheetCollection && sheetItemId && (

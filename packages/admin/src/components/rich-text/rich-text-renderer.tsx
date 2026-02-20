@@ -275,7 +275,7 @@ function renderNode(
 			if (!src) return null;
 			return (
 				<img
-					key={index}
+					key={nodeKey}
 					src={src}
 					alt={(node.attrs?.alt as string | undefined) || ""}
 					title={node.attrs?.title as string | undefined}
@@ -287,7 +287,7 @@ function renderNode(
 
 		case "table":
 			return (
-				<div key={index} className={styles.tableWrapper}>
+				<div key={nodeKey} className={styles.tableWrapper}>
 					<table className={styles.table}>
 						<tbody>{children}</tbody>
 					</table>
@@ -296,7 +296,7 @@ function renderNode(
 
 		case "tableRow":
 			return (
-				<tr key={index} className={styles.tableRow}>
+				<tr key={nodeKey} className={styles.tableRow}>
 					{children}
 				</tr>
 			);
@@ -304,7 +304,7 @@ function renderNode(
 		case "tableCell":
 			return (
 				<td
-					key={index}
+					key={nodeKey}
 					className={styles.tableCell}
 					colSpan={node.attrs?.colspan as number | undefined}
 					rowSpan={node.attrs?.rowspan as number | undefined}
@@ -316,7 +316,7 @@ function renderNode(
 		case "tableHeader":
 			return (
 				<th
-					key={index}
+					key={nodeKey}
 					className={styles.tableHeader}
 					colSpan={node.attrs?.colspan as number | undefined}
 					rowSpan={node.attrs?.rowspan as number | undefined}
@@ -327,7 +327,7 @@ function renderNode(
 
 		default:
 			// Unknown node type - render children if available
-			return children ? <div key={index}>{children}</div> : null;
+			return children ? <div key={nodeKey}>{children}</div> : null;
 	}
 }
 

@@ -242,10 +242,22 @@ export function AssetPreview({
 			);
 		}
 
+		const isInteractive = onClick && !disabled && asset.id;
+		const interactiveProps = isInteractive
+			? {
+					role: "button" as const,
+					tabIndex: 0 as const,
+					onClick: () => onClick(asset.id!),
+					onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							onClick(asset.id!);
+						}
+					},
+				}
+			: {};
 		const content = (
 			<div
-				role={onClick && !disabled ? "button" : "img"}
-				tabIndex={onClick && !disabled ? 0 : undefined}
 				className={cn(
 					"group relative aspect-square overflow-hidden rounded-lg border",
 					"bg-muted/30 border-border/60",
@@ -253,21 +265,7 @@ export function AssetPreview({
 					onClick && !disabled && "cursor-pointer hover:border-border",
 					className,
 				)}
-				onClick={
-					onClick && !disabled && asset.id
-						? () => onClick(asset.id!)
-						: undefined
-				}
-				onKeyDown={
-					onClick && !disabled && asset.id
-						? (e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault();
-									onClick(asset.id!);
-								}
-							}
-						: undefined
-				}
+				{...interactiveProps}
 			>
 				{/* Thumbnail or icon */}
 				{thumbnailUrl && !imageError ? (
@@ -373,10 +371,22 @@ export function AssetPreview({
 			);
 		}
 
+		const isCompactInteractive = onClick && !disabled && asset.id;
+		const compactInteractiveProps = isCompactInteractive
+			? {
+					role: "button" as const,
+					tabIndex: 0 as const,
+					onClick: () => onClick(asset.id!),
+					onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							onClick(asset.id!);
+						}
+					},
+				}
+			: {};
 		return (
 			<div
-				role={onClick && !disabled ? "button" : "img"}
-				tabIndex={onClick && !disabled ? 0 : undefined}
 				className={cn(
 					"group flex items-center gap-2 rounded-md border p-2",
 					"bg-muted/30 border-border/60",
@@ -384,21 +394,7 @@ export function AssetPreview({
 					onClick && !disabled && "cursor-pointer hover:border-border",
 					className,
 				)}
-				onClick={
-					onClick && !disabled && asset.id
-						? () => onClick(asset.id!)
-						: undefined
-				}
-				onKeyDown={
-					onClick && !disabled && asset.id
-						? (e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault();
-									onClick(asset.id!);
-								}
-							}
-						: undefined
-				}
+				{...compactInteractiveProps}
 			>
 				{/* Drag handle */}
 				{showDragHandle && (
@@ -513,10 +509,22 @@ export function AssetPreview({
 		);
 	}
 
+	const isCardInteractive = onClick && !disabled && asset.id;
+	const cardInteractiveProps = isCardInteractive
+		? {
+				role: "button" as const,
+				tabIndex: 0 as const,
+				onClick: () => onClick(asset.id!),
+				onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						onClick(asset.id!);
+					}
+				},
+			}
+		: {};
 	return (
 		<div
-			role={onClick && !disabled ? "button" : "img"}
-			tabIndex={onClick && !disabled ? 0 : undefined}
 			className={cn(
 				"group relative overflow-hidden rounded-lg border",
 				"bg-muted/30 border-border/60",
@@ -524,19 +532,7 @@ export function AssetPreview({
 				onClick && !disabled && "cursor-pointer hover:border-border",
 				className,
 			)}
-			onClick={
-				onClick && !disabled && asset.id ? () => onClick(asset.id!) : undefined
-			}
-			onKeyDown={
-				onClick && !disabled && asset.id
-					? (e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								onClick(asset.id!);
-							}
-						}
-					: undefined
-			}
+			{...cardInteractiveProps}
 		>
 			{/* Drag handle */}
 			{showDragHandle && (

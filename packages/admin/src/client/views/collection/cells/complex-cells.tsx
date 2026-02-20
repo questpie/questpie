@@ -285,8 +285,11 @@ export function ArrayCell({
 								)
 								.slice(0, 3);
 
+							const itemId =
+								obj.id ?? obj._id ?? `${label}-${JSON.stringify(obj).slice(0, 50)}`;
+
 							return (
-								<div key={`${label}-${idx}`} className="py-1">
+								<div key={String(itemId)} className="py-1">
 									<div className="flex items-center gap-1.5 text-xs font-medium">
 										<span className="size-1 rounded-full bg-foreground/60" />
 										{label}
@@ -317,7 +320,7 @@ export function ArrayCell({
 
 						return (
 							<div
-								key={`item-${String(item).slice(0, 20)}-${idx}`}
+								key={`item-${String(item)}`}
 								className="flex items-center gap-1.5 text-xs py-0.5"
 							>
 								<span className="size-1 rounded-full bg-foreground/60" />
