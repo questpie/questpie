@@ -73,7 +73,6 @@ export function ForgotPasswordPage({
   loginPath,
   resetPasswordRedirectUrl,
 }: ForgotPasswordPageProps) {
-  "use no memo";
   const authClient = useAuthClient();
   const navigate = useAdminStore(selectNavigate);
   const basePath = useAdminStore(selectBasePath);
@@ -84,24 +83,37 @@ export function ForgotPasswordPage({
   const handleSubmit = async (values: ForgotPasswordFormValues) => {
     setError(null);
 
-    try {
-      const redirectUrl =
-        resetPasswordRedirectUrl ??
-        `${typeof window !== "undefined" ? window.location.origin : ""}${basePath}/reset-password`;
+    let redirectUrl: string;
+    if (resetPasswordRedirectUrl !== undefined) {
+      redirectUrl = resetPasswordRedirectUrl;
+    } else {
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : "";
+      redirectUrl = `${origin}${basePath}/reset-password`;
+    }
 
+    try {
       const result = await authClient.forgetPassword({
         email: values.email,
         redirectTo: redirectUrl,
       });
 
       if (result.error) {
-        setError(result.error.message || "Failed to send reset email");
+        if (result.error.message) {
+          setError(result.error.message);
+        } else {
+          setError("Failed to send reset email");
+        }
         return;
       }
 
       // Success is handled by the form (shows success message)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An error occurred");
+      }
     }
   };
 
@@ -131,4 +143,6 @@ function DefaultLogo({ brandName }: { brandName: string }) {
     </div>
   );
 }
+
+export default ForgotPasswordPage;
 

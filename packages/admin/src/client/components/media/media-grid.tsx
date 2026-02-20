@@ -107,7 +107,7 @@ function isImage(mimeType?: string): boolean {
 // ============================================================================
 
 function MediaGridSkeleton({ columns = 4 }: { columns?: 2 | 3 | 4 | 5 }) {
-	"use no memo";
+
 	const count = columns * 3; // Show 3 rows
 	const skeletonKeys = React.useMemo(
 		() => Array.from({ length: count }, () => crypto.randomUUID()),
@@ -241,7 +241,7 @@ export function MediaGrid({
 	columns = 4,
 	className,
 }: MediaGridProps) {
-	"use no memo";
+
 	// Handle toggle selection
 	const handleToggle = (assetId: string) => {
 		if (!onSelectionChange) return;

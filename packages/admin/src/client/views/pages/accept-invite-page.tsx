@@ -94,7 +94,6 @@ export function AcceptInvitePage({
   loginPath,
   minPasswordLength = 8,
 }: AcceptInvitePageProps) {
-  "use no memo";
   const authClient = useAuthClient();
   const navigate = useAdminStore(selectNavigate);
   const basePath = useAdminStore(selectBasePath);
@@ -114,9 +113,13 @@ export function AcceptInvitePage({
         });
 
         if (result.error || !result.data) {
+          let message = "Invalid or expired invitation";
+          if (result.error && result.error.message) {
+            message = result.error.message;
+          }
           setInvitation({
             status: "invalid",
-            message: result.error?.message || "Invalid or expired invitation",
+            message,
           });
           return;
         }
@@ -140,6 +143,8 @@ export function AcceptInvitePage({
   const handleSubmit = async (values: AcceptInviteFormValues) => {
     setError(null);
 
+    const successRedirect = redirectTo !== undefined ? redirectTo : basePath;
+
     try {
       const result = await authClient.admin.acceptInvitation({
         token,
@@ -148,14 +153,22 @@ export function AcceptInvitePage({
       });
 
       if (result.error) {
-        setError(result.error.message || "Failed to create account");
+        if (result.error.message) {
+          setError(result.error.message);
+        } else {
+          setError("Failed to create account");
+        }
         return;
       }
 
       // Redirect on success
-      navigate(redirectTo ?? basePath);
+      navigate(successRedirect);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An error occurred");
+      }
     }
   };
 
@@ -231,4 +244,6 @@ function DefaultLogo({ brandName }: { brandName: string }) {
     </div>
   );
 }
+
+export default AcceptInvitePage;
 

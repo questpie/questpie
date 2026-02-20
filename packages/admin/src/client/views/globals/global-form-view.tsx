@@ -164,7 +164,7 @@ export default function GlobalFormView({
 	onSuccess,
 	onError,
 }: GlobalFormViewProps) {
-	"use no memo";
+
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 
@@ -290,6 +290,10 @@ export default function GlobalFormView({
 			params.scheduledAt = transitionScheduledAt;
 		}
 
+		const stageLabel = transitionTarget.label
+			? transitionTarget.label
+			: transitionTarget.name;
+
 		try {
 			const result = await transitionMutation.mutateAsync(params);
 			if (result && typeof result === "object") {
@@ -299,21 +303,26 @@ export default function GlobalFormView({
 			if (transitionSchedule && transitionScheduledAt) {
 				toast.success(
 					t("workflow.scheduledSuccess", {
-						stage: transitionTarget.label ?? transitionTarget.name,
+						stage: stageLabel,
 						date: transitionScheduledAt.toLocaleString(),
 					}),
 				);
 			} else {
 				toast.success(
 					t("workflow.transitionSuccess", {
-						stage: transitionTarget.label ?? transitionTarget.name,
+						stage: stageLabel,
 					}),
 				);
 			}
 		} catch (err) {
+			let description: string;
+			if (err instanceof Error) {
+				description = err.message;
+			} else {
+				description = t("error.unknown");
+			}
 			toast.error(t("workflow.transitionFailed"), {
-				description:
-					err instanceof Error ? err.message : t("error.unknown"),
+				description,
 			});
 		} finally {
 			setTransitionTarget(null);

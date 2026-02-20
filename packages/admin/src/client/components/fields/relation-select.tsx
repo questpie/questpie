@@ -166,17 +166,32 @@ export function RelationSelect<T extends Questpie<any>>({
 				const response = await (client as any).collections[
 					targetCollection
 				].find(options);
-				const docs = response?.docs || [];
+				let docs: any[];
+				if (response && response.docs) {
+					docs = response.docs;
+				} else {
+					docs = [];
+				}
 
-				return docs.map((item: any) => ({
-					value: item.id,
-					label: renderOption
-						? String(renderOption(item))
-						: item._title || item.id || "",
-					icon: resolveIconElement(collectionIconRef, {
-						className: "size-3.5 text-muted-foreground",
-					}),
-				}));
+				return docs.map((item: any) => {
+					let label: string;
+					if (renderOption) {
+						label = String(renderOption(item));
+					} else if (item._title) {
+						label = item._title;
+					} else if (item.id) {
+						label = item.id;
+					} else {
+						label = "";
+					}
+					return {
+						value: item.id,
+						label,
+						icon: resolveIconElement(collectionIconRef, {
+							className: "size-3.5 text-muted-foreground",
+						}),
+					};
+				});
 			} catch (error) {
 				console.error("Failed to load relation options:", error);
 				toast.error("Failed to load options");

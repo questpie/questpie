@@ -76,7 +76,6 @@ export function SetupPage({
   loginPath,
   showLoginLink = true,
 }: SetupPageProps) {
-  "use no memo";
   const client = useAdminStore(selectClient);
   const navigate = useAdminStore(selectNavigate);
   const basePath = useAdminStore(selectBasePath);
@@ -87,6 +86,9 @@ export function SetupPage({
   const handleSubmit = async (values: SetupFormValues) => {
     setError(null);
 
+    const successRedirect =
+      redirectTo !== undefined ? redirectTo : `${basePath}/login`;
+
     try {
       const result = await (client as any).rpc.createFirstAdmin({
         email: values.email,
@@ -95,14 +97,22 @@ export function SetupPage({
       });
 
       if (!result.success) {
-        setError(result.error ?? "Failed to create admin account");
+        if (result.error) {
+          setError(result.error);
+        } else {
+          setError("Failed to create admin account");
+        }
         return;
       }
 
       // Redirect to login on success
-      navigate(redirectTo ?? `${basePath}/login`);
+      navigate(successRedirect);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An error occurred");
+      }
     }
   };
 
@@ -142,4 +152,6 @@ function DefaultLogo({ brandName }: { brandName: string }) {
     </div>
   );
 }
+
+export default SetupPage;
 

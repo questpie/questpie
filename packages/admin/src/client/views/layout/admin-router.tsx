@@ -490,18 +490,25 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 				const result = await loader();
 				if (!mounted) return;
 
-				const Component = (result.default ||
-					result) as React.ComponentType<any>;
+				let Component: React.ComponentType<any>;
+				if (result.default) {
+					Component = result.default;
+				} else {
+					Component = result as unknown as React.ComponentType<any>;
+				}
 				setState({ Component, loading: false, error: null });
 			} catch (error) {
 				if (!mounted) return;
+				let resolvedError: Error;
+				if (error instanceof Error) {
+					resolvedError = error;
+				} else {
+					resolvedError = new Error("Failed to load view component");
+				}
 				setState({
 					Component: null,
 					loading: false,
-					error:
-						error instanceof Error
-							? error
-							: new Error("Failed to load view component"),
+					error: resolvedError,
 				});
 			}
 		})();
@@ -537,7 +544,7 @@ function DefaultDashboard({
 }: {
 	config?: DefaultViewsConfig["dashboard"];
 }) {
-	"use no memo";
+
 	const date = new Date().toLocaleDateString("en-US", {
 		weekday: "long",
 		year: "numeric",
@@ -640,7 +647,6 @@ function RestrictedAccess({
 }
 
 function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
-	"use no memo";
 	const [Component, setComponent] = React.useState<React.ComponentType | null>(
 		null,
 	);
@@ -654,10 +660,17 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 			try {
 				if (typeof config.component === "function") {
 					const result = (config.component as () => any)();
-					if (result?.then) {
+					const isThenable = result != null && typeof result.then === "function";
+					if (isThenable) {
 						const mod = await result;
 						if (mounted) {
-							setComponent(() => mod.default || mod);
+							let resolved: React.ComponentType;
+							if (mod.default) {
+								resolved = mod.default;
+							} else {
+								resolved = mod;
+							}
+							setComponent(() => resolved);
 						}
 					} else {
 						if (mounted) {
@@ -671,7 +684,13 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 				}
 			} catch (err) {
 				if (mounted) {
-					setError(err instanceof Error ? err : new Error("Failed to load"));
+					let resolvedError: Error;
+					if (err instanceof Error) {
+						resolvedError = err;
+					} else {
+						resolvedError = new Error("Failed to load");
+					}
+					setError(resolvedError);
 				}
 			} finally {
 				if (mounted) {

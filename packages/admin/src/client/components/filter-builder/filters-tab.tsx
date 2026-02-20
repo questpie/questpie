@@ -453,11 +453,26 @@ export function FiltersTab({
           search,
           locale: contentLocale,
         });
-        const docs = response?.docs ?? [];
-        return docs.map((item: any) => ({
-          value: String(item.id),
-          label: item._title || item.id || "",
-        }));
+        let docs: any[];
+        if (response && response.docs) {
+          docs = response.docs;
+        } else {
+          docs = [];
+        }
+        return docs.map((item: any) => {
+          let label: string;
+          if (item._title) {
+            label = item._title;
+          } else if (item.id) {
+            label = item.id;
+          } else {
+            label = "";
+          }
+          return {
+            value: String(item.id),
+            label,
+          };
+        });
       } catch (_error) {
         return [];
       }

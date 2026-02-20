@@ -312,14 +312,24 @@ function SingleUploadInner({
 		});
 
 		try {
-			onUploadStart?.();
+			if (onUploadStart) {
+				onUploadStart();
+			}
 			const uploadedAsset = await upload(file, { to: collection });
 			field.onChange(uploadedAsset.id);
-			onUploadComplete?.(uploadedAsset);
+			if (onUploadComplete) {
+				onUploadComplete(uploadedAsset);
+			}
 		} catch (err) {
-			const uploadErr =
-				err instanceof Error ? err : new Error(t("upload.error"));
-			onUploadError?.(uploadErr);
+			let uploadErr: Error;
+			if (err instanceof Error) {
+				uploadErr = err;
+			} else {
+				uploadErr = new Error(t("upload.error"));
+			}
+			if (onUploadError) {
+				onUploadError(uploadErr);
+			}
 			toast.error(uploadErr.message);
 		}
 	};
@@ -588,7 +598,9 @@ function MultipleUploadInner({
 		setPendingUploads(pending);
 
 		try {
-			onUploadStart?.();
+			if (onUploadStart) {
+				onUploadStart();
+			}
 			const uploadedAssets = await uploadMany(sanitizedFiles, {
 				to: collection,
 			});
@@ -599,11 +611,19 @@ function MultipleUploadInner({
 				setFetchedAssets((prev) => new Map(prev).set(asset.id, asset));
 			}
 
-			onUploadComplete?.(uploadedAssets);
+			if (onUploadComplete) {
+				onUploadComplete(uploadedAssets);
+			}
 		} catch (err) {
-			const uploadError =
-				err instanceof Error ? err : new Error(t("upload.error"));
-			onUploadError?.(uploadError);
+			let uploadError: Error;
+			if (err instanceof Error) {
+				uploadError = err;
+			} else {
+				uploadError = new Error(t("upload.error"));
+			}
+			if (onUploadError) {
+				onUploadError(uploadError);
+			}
 			toast.error(uploadError.message);
 		} finally {
 			setPendingUploads([]);

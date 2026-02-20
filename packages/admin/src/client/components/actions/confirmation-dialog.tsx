@@ -57,7 +57,6 @@ export function ConfirmationDialog({
   onConfirm,
   loading = false,
 }: ConfirmationDialogProps): React.ReactElement {
-  "use no memo";
   const [isProcessing, setIsProcessing] = React.useState(false);
 
   const handleConfirm = async () => {

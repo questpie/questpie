@@ -82,7 +82,6 @@ export function ResetPasswordPage({
   minPasswordLength = 8,
   getToken,
 }: ResetPasswordPageProps) {
-  "use no memo";
   const authClient = useAuthClient();
   const navigate = useAdminStore(selectNavigate);
   const basePath = useAdminStore(selectBasePath);
@@ -114,13 +113,21 @@ export function ResetPasswordPage({
       });
 
       if (result.error) {
-        setError(result.error.message || "Failed to reset password");
+        if (result.error.message) {
+          setError(result.error.message);
+        } else {
+          setError("Failed to reset password");
+        }
         return;
       }
 
       // Success is handled by the form (shows success message)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An error occurred");
+      }
     }
   };
 
@@ -172,4 +179,6 @@ function DefaultLogo({ brandName }: { brandName: string }) {
     </div>
   );
 }
+
+export default ResetPasswordPage;
 

@@ -208,7 +208,6 @@ function CustomDialogContent<TItem>({
   ctx: ActionContext<TItem>;
   onClose: () => void;
 }) {
-  "use no memo";
   const handler = action.handler as DialogHandler<TItem>;
   const [Component, setComponent] =
     React.useState<React.ComponentType<any> | null>(null);
@@ -230,15 +229,18 @@ function CustomDialogContent<TItem>({
             // It's a lazy component, resolve it
             const resolved = await lazyComp._payload();
             if (mounted) {
-              setComponent(() => resolved.default || resolved);
+              const comp2 = resolved.default ? resolved.default : resolved;
+              setComponent(() => comp2);
             }
           } else {
             // It's a direct component function or import
             const result = (comp as () => any)();
-            if (result?.then) {
+            const hasThen = result != null && result.then;
+            if (hasThen) {
               const mod = await result;
               if (mounted) {
-                setComponent(() => mod.default || mod);
+                const comp2 = mod.default ? mod.default : mod;
+                setComponent(() => comp2);
               }
             } else {
               // Direct component
@@ -255,7 +257,11 @@ function CustomDialogContent<TItem>({
         }
       } catch (err) {
         if (mounted) {
-          setError(err instanceof Error ? err : new Error("Failed to load"));
+          if (err instanceof Error) {
+            setError(err);
+          } else {
+            setError(new Error("Failed to load"));
+          }
         }
       } finally {
         if (mounted) {

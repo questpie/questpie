@@ -93,7 +93,6 @@ export function LoginPage({
   showForgotPassword = true,
   showSignUp = false,
 }: LoginPageProps) {
-  "use no memo";
   const authClient = useAuthClient();
   const navigate = useAdminStore(selectNavigate);
   const basePath = useAdminStore(selectBasePath);
@@ -106,13 +105,15 @@ export function LoginPage({
 
   // Redirect to setup page if no users exist
   React.useEffect(() => {
-    if (!isCheckingSetup && setupStatus?.required) {
+    if (!isCheckingSetup && setupStatus && setupStatus.required) {
       navigate(`${basePath}/setup`);
     }
   }, [isCheckingSetup, setupStatus, navigate, basePath]);
 
   const handleSubmit = async (values: LoginFormValues) => {
     setError(null);
+
+    const successRedirect = redirectTo !== undefined ? redirectTo : basePath;
 
     try {
       const result = await authClient.signIn.email({
@@ -121,14 +122,22 @@ export function LoginPage({
       });
 
       if (result.error) {
-        setError(result.error.message || "Invalid credentials");
+        if (result.error.message) {
+          setError(result.error.message);
+        } else {
+          setError("Invalid credentials");
+        }
         return;
       }
 
       // Redirect on success
-      navigate(redirectTo ?? basePath);
+      navigate(successRedirect);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An error occurred");
+      }
     }
   };
 
@@ -167,4 +176,6 @@ function DefaultLogo({ brandName }: { brandName: string }) {
     </div>
   );
 }
+
+export default LoginPage;
 

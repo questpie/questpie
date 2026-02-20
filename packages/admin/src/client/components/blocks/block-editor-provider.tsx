@@ -248,6 +248,13 @@ export function BlockEditorProvider({
 				},
 			};
 
+			let initialAllowedBlocks: string[] | null;
+			if (allowedBlocks != null) {
+				initialAllowedBlocks = allowedBlocks;
+			} else {
+				initialAllowedBlocks = null;
+			}
+
 			return {
 				content: value,
 				selectedBlockId: null,
@@ -255,7 +262,7 @@ export function BlockEditorProvider({
 				isLibraryOpen: false,
 				insertPosition: null,
 				blocks,
-				allowedBlocks: allowedBlocks ?? null,
+				allowedBlocks: initialAllowedBlocks,
 				locale,
 				actions,
 			};
@@ -263,9 +270,13 @@ export function BlockEditorProvider({
 	);
 
 	React.useEffect(() => {
-		const store = store;
 		const state = store.getState();
-		const nextAllowedBlocks = allowedBlocks ?? null;
+		let nextAllowedBlocks: string[] | null;
+		if (allowedBlocks != null) {
+			nextAllowedBlocks = allowedBlocks;
+		} else {
+			nextAllowedBlocks = null;
+		}
 
 		const patch: Partial<BlockEditorStore> = {};
 
@@ -288,7 +299,7 @@ export function BlockEditorProvider({
 		if (Object.keys(patch).length > 0) {
 			store.setState(patch);
 		}
-	}, [value, blocks, allowedBlocks, locale]);
+	}, [value, blocks, allowedBlocks, locale, store]);
 
 	return (
 		<BlockEditorContextProvider value={store}>

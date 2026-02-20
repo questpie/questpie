@@ -80,6 +80,7 @@ export function AuthGuard({
   requiredRole = "admin",
   disabled = false,
 }: AuthGuardProps): React.ReactElement {
+  "use no memo";
   const authClient = useAuthClient();
   const basePath = useAdminStore(selectBasePath);
   const navigate = useAdminStore(selectNavigate);

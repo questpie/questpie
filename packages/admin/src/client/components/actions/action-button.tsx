@@ -66,7 +66,6 @@ export function ActionButton<TItem = any>({
   iconOnly = false,
   onOpenDialog,
 }: ActionButtonProps<TItem>): React.ReactElement | null {
-  "use no memo";
   const resolveText = useResolveText();
   const authClient = useAdminStore(selectAuthClient);
   const queryClient = useQueryClient();
@@ -134,17 +133,16 @@ export function ActionButton<TItem = any>({
 
       case "api": {
         setIsLoading(true);
+        // Pre-compute conditional values before try block
+        const itemAny = item as any;
+        const itemId = itemAny != null ? String(itemAny.id) : "";
+        const method = handler.method ? handler.method : "POST";
+        const endpoint = handler.endpoint.replace("{id}", itemId);
         try {
-          // Build endpoint - replace {id} placeholder
-          const endpoint = handler.endpoint.replace(
-            "{id}",
-            String((item as any)?.id || ""),
-          );
-
           // This would need actual API implementation
           // For now, we'll show a placeholder
           helpers.toast.info(
-            `API call: ${handler.method || "POST"} ${endpoint}`,
+            `API call: ${method} ${endpoint}`,
           );
           helpers.refresh();
         } catch (error) {

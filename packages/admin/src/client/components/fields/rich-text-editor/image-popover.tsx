@@ -91,39 +91,53 @@ export function ImagePopover({
 					url = await onImageUpload(file);
 				} else {
 					if (!collection) {
-						throw new Error(
-							availableUploadCollections.length > 1
-								? `Multiple upload collections are available (${availableUploadCollections.join(", ")}). Configure rich-text imageCollection to choose one.`
-								: "No upload collection is configured for rich-text image uploads.",
-						);
+						let errorMessage: string;
+						if (availableUploadCollections.length > 1) {
+							errorMessage = `Multiple upload collections are available (${availableUploadCollections.join(", ")}). Configure rich-text imageCollection to choose one.`;
+						} else {
+							errorMessage =
+								"No upload collection is configured for rich-text image uploads.";
+						}
+						throw new Error(errorMessage);
 					}
 
 					const sanitizedName = sanitizeFilename(file.name);
-					const uploadFile =
-						sanitizedName === file.name
-							? file
-							: new File([file], sanitizedName, { type: file.type });
+					let uploadFile: File;
+					if (sanitizedName === file.name) {
+						uploadFile = file;
+					} else {
+						uploadFile = new File([file], sanitizedName, {
+							type: file.type,
+						});
+					}
 					const uploadedAsset = (await upload(uploadFile, {
 						to: collection,
 					})) as Asset;
-					url = uploadedAsset?.url;
+					if (uploadedAsset && uploadedAsset.url) {
+						url = uploadedAsset.url;
+					}
 					if (!url) {
 						throw new Error(t("upload.error"));
 					}
 				}
 				if (url) {
+					const altValue = imageAlt ? imageAlt : undefined;
 					editor
 						.chain()
 						.focus()
-						.setImage({ src: url, alt: imageAlt || undefined })
+						.setImage({ src: url, alt: altValue })
 						.run();
 					setImageUrl("");
 					setImageAlt("");
 					onOpenChange(false);
 				}
 			} catch (err) {
-				const uploadError =
-					err instanceof Error ? err : new Error(t("upload.error"));
+				let uploadError: Error;
+				if (err instanceof Error) {
+					uploadError = err;
+				} else {
+					uploadError = new Error(t("upload.error"));
+				}
 				toast.error(uploadError.message);
 			} finally {
 				setUploadingImage(false);

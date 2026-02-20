@@ -123,13 +123,14 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
       (origin: string): boolean => {
         if (!allowedOrigins || allowedOrigins.length === 0) {
           // If no origins specified, allow same origin and preview URL origin
+          if (origin === window.location.origin) {
+            return true;
+          }
           try {
             const previewOrigin = new URL(url).origin;
-            return (
-              origin === window.location.origin || origin === previewOrigin
-            );
+            return origin === previewOrigin;
           } catch {
-            return origin === window.location.origin;
+            return false;
           }
         }
         return allowedOrigins.includes(origin);

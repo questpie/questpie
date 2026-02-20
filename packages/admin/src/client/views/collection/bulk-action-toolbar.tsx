@@ -102,7 +102,6 @@ export function BulkActionToolbar<TItem = any>({
 	onClearFilters,
 	onOpenFilters,
 }: BulkActionToolbarProps<TItem>): React.ReactElement | null {
-	"use no memo";
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const authClient = useAdminStore(selectAuthClient);
@@ -166,8 +165,15 @@ export function BulkActionToolbar<TItem = any>({
 		// Handle built-in deleteMany action
 		if (action.id === "deleteMany" && onBulkDelete) {
 			setIsLoading(true);
+			const ids = selectedItems
+				.map((item: any) => {
+					if (item != null) {
+						return item.id;
+					}
+					return undefined;
+				})
+				.filter(Boolean);
 			try {
-				const ids = selectedItems.map((item: any) => item?.id).filter(Boolean);
 				await onBulkDelete(ids);
 				table.resetRowSelection();
 			} catch (_error) {
@@ -181,8 +187,15 @@ export function BulkActionToolbar<TItem = any>({
 		// Handle built-in restoreMany action
 		if (action.id === "restoreMany" && onBulkRestore) {
 			setIsLoading(true);
+			const ids = selectedItems
+				.map((item: any) => {
+					if (item != null) {
+						return item.id;
+					}
+					return undefined;
+				})
+				.filter(Boolean);
 			try {
-				const ids = selectedItems.map((item: any) => item?.id).filter(Boolean);
 				await onBulkRestore(ids);
 				table.resetRowSelection();
 			} catch (_error) {
@@ -196,13 +209,19 @@ export function BulkActionToolbar<TItem = any>({
 		switch (handler.type) {
 			case "api": {
 				setIsLoading(true);
+				// Pre-compute conditional values before try block
+				const ids = selectedItems
+					.map((item: any) => {
+						if (item != null) {
+							return item.id;
+						}
+						return undefined;
+					})
+					.filter(Boolean);
+				const method = handler.method ? handler.method : "POST";
 				try {
-					// For bulk API calls, would need to send all IDs
-					const ids = selectedItems
-						.map((item: any) => item?.id)
-						.filter(Boolean);
 					helpers.toast.info(
-						`Bulk API call: ${handler.method || "POST"} ${handler.endpoint} (${ids.length} items)`,
+						`Bulk API call: ${method} ${handler.endpoint} (${ids.length} items)`,
 					);
 					helpers.refresh();
 					table.resetRowSelection();

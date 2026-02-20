@@ -85,7 +85,6 @@ export function InvitePage({
   showMessage = true,
   onSuccess,
 }: InvitePageProps) {
-  "use no memo";
   const authClient = useAuthClient();
   const brandName = useAdminStore(selectBrandName);
 
@@ -104,14 +103,24 @@ export function InvitePage({
       });
 
       if (result.error) {
-        setError(result.error.message || "Failed to send invitation");
+        if (result.error.message) {
+          setError(result.error.message);
+        } else {
+          setError("Failed to send invitation");
+        }
         return;
       }
 
       setSuccess(`Invitation sent to ${values.email}`);
-      onSuccess?.(values.email);
+      if (onSuccess) {
+        onSuccess(values.email);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An error occurred");
+      }
     }
   };
 
@@ -140,4 +149,6 @@ function DefaultLogo({ brandName }: { brandName: string }) {
     </div>
   );
 }
+
+export default InvitePage;
 

@@ -334,7 +334,8 @@ export function RelationPicker<T extends Questpie<any>>({
 					const response = await (client as any).collections[
 						targetCollection
 					].findOne({ where: { id } });
-					if (!cancelled && response) {
+					if (cancelled) continue;
+					if (response) {
 						// Immutable update - spread prev and add new entry
 						setFetchedItems((prev) => new Map([...prev, [id, response]]));
 					}

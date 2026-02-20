@@ -554,7 +554,7 @@ export default function FormView({
 	onSuccess,
 	onError,
 }: FormViewProps): React.ReactElement {
-	"use no memo";
+
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const isEditMode = !!id;
@@ -805,6 +805,10 @@ export default function FormView({
 			params.scheduledAt = transitionScheduledAt;
 		}
 
+		const stageLabel = transitionTarget.label
+			? transitionTarget.label
+			: transitionTarget.name;
+
 		try {
 			const result = await transitionMutation.mutateAsync(params);
 			if (result && typeof result === "object" && "id" in result) {
@@ -814,21 +818,26 @@ export default function FormView({
 			if (transitionSchedule && transitionScheduledAt) {
 				toast.success(
 					t("workflow.scheduledSuccess", {
-						stage: transitionTarget.label ?? transitionTarget.name,
+						stage: stageLabel,
 						date: transitionScheduledAt.toLocaleString(),
 					}),
 				);
 			} else {
 				toast.success(
 					t("workflow.transitionSuccess", {
-						stage: transitionTarget.label ?? transitionTarget.name,
+						stage: stageLabel,
 					}),
 				);
 			}
 		} catch (err) {
+			let description: string;
+			if (err instanceof Error) {
+				description = err.message;
+			} else {
+				description = t("error.unknown");
+			}
 			toast.error(t("workflow.transitionFailed"), {
-				description:
-					err instanceof Error ? err.message : t("error.unknown"),
+				description,
 			});
 		} finally {
 			setTransitionTarget(null);
@@ -1326,26 +1335,43 @@ export default function FormView({
 					} else {
 						// For other API operations, make a fetch request
 						// (This is a fallback - most actions should use custom handlers)
-						const endpoint = handler.endpoint.replace(
-							"{id}",
-							String(transformedItem?.id || id),
-						);
+						let itemId_: string;
+						if (transformedItem && transformedItem.id) {
+							itemId_ = String(transformedItem.id);
+						} else {
+							itemId_ = String(id);
+						}
+						const endpoint = handler.endpoint.replace("{id}", itemId_);
+						const method = handler.method ? handler.method : "POST";
+						let body: string | undefined;
+						if (handler.body) {
+							body = JSON.stringify(handler.body(actionContext));
+						}
 						setActionLoading(true);
 						const apiPromise = async () => {
 							try {
 								// Build the URL using API path
 								const url = `${storeBasePath}/${collection}/${endpoint}`;
 								const response = await fetch(url, {
-									method: handler.method || "POST",
+									method,
 									headers: { "Content-Type": "application/json" },
-									body: handler.body
-										? JSON.stringify(handler.body(actionContext))
-										: undefined,
+									body,
 								});
 
 								if (!response.ok) {
-									const error = await response.json().catch(() => ({}));
-									throw new Error(error.message || t("toast.actionFailed"));
+									let errorBody: Record<string, unknown> = {};
+									try {
+										errorBody = await response.json();
+									} catch (_parseErr) {
+										// ignore parse errors
+									}
+									let errorMessage: string;
+									if (errorBody.message && typeof errorBody.message === "string") {
+										errorMessage = errorBody.message;
+									} else {
+										errorMessage = t("toast.actionFailed");
+									}
+									throw new Error(errorMessage);
 								}
 								return response.json();
 							} finally {
