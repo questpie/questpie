@@ -957,16 +957,6 @@ function patchQuestpieBuilder() {
 		}
 		(instance as any).state = adminState;
 
-		// DEBUG: Check sidebar state at build time
-		console.log(
-			"[DEBUG .build()] sidebar sections:",
-			adminState.sidebar?.sections?.map((s: any) => s.id),
-		);
-		console.log(
-			"[DEBUG .build()] sidebar from this.state:",
-			this.state.sidebar?.sections?.map((s: any) => s.id),
-		);
-
 		return instance;
 	};
 }

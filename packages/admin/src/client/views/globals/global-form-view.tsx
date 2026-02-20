@@ -6,6 +6,7 @@
  */
 
 import { Icon } from "@iconify/react";
+import type { GlobalSchema } from "questpie";
 import { QuestpieClientError } from "questpie/client";
 import * as React from "react";
 import { FormProvider, useForm } from "react-hook-form";
@@ -58,17 +59,19 @@ import { AutoFormFields } from "../collection/auto-form-fields";
 // ============================================================================
 
 /**
- * Extract reactive configs from global schema fields.
+ * Extract reactive configs from global schema.
  * Used to determine which fields have server-side reactive behaviors.
  */
-function extractReactiveConfigs(schema: any): Record<string, any> {
+function extractReactiveConfigs(
+	schema: GlobalSchema | undefined,
+): Record<string, any> {
 	if (!schema?.fields) return {};
 
 	const configs: Record<string, any> = {};
 
 	for (const [fieldName, fieldDef] of Object.entries(schema.fields)) {
-		if ((fieldDef as any).reactive) {
-			configs[fieldName] = (fieldDef as any).reactive;
+		if (fieldDef.reactive) {
+			configs[fieldName] = fieldDef.reactive;
 		}
 	}
 
@@ -334,8 +337,8 @@ export default function GlobalFormView({
 
 	// Extract reactive configs from schema for server-side reactive handlers
 	const reactiveConfigs = React.useMemo(
-		() => extractReactiveConfigs(schemaFields),
-		[schemaFields],
+		() => extractReactiveConfigs(globalSchema),
+		[globalSchema],
 	);
 
 	// Use reactive fields hook for server-side compute/hidden/readOnly/disabled

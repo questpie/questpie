@@ -1101,7 +1101,7 @@ type ReactiveFormFieldKey = "hidden" | "readOnly" | "disabled" | "compute";
  * @param formReactive - Reactive config extracted from form layout for this field
  * @returns Serialized reactive config or undefined if no reactive behavior
  */
-function extractFieldReactiveConfig(
+export function extractFieldReactiveConfig(
 	fieldDef: FieldDefinition<FieldDefinitionState>,
 	formReactive?: FieldReactiveSchema,
 ): FieldReactiveSchema | undefined {
@@ -1121,7 +1121,7 @@ function extractFieldReactiveConfig(
  * Extract reactive config map from form view configuration.
  * Supports fields in root layout, sections, tabs, and sidebar.
  */
-function extractFormReactiveConfigs(
+export function extractFormReactiveConfigs(
 	formConfig: unknown,
 ): Record<string, FieldReactiveSchema> {
 	const result: Record<string, FieldReactiveSchema> = {};

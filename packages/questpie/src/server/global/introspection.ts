@@ -8,6 +8,11 @@
 import { z } from "zod";
 import { buildFieldBasedSchema } from "#questpie/server/collection/builder/field-schema-builder.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
+import {
+	type FieldReactiveSchema,
+	extractFieldReactiveConfig,
+	extractFormReactiveConfigs,
+} from "#questpie/server/collection/introspection.js";
 import type {
 	FieldDefinition,
 	FieldDefinitionAccess,
@@ -111,6 +116,13 @@ export interface GlobalFieldSchema {
 	 * JSON Schema for this specific field.
 	 */
 	validation?: unknown;
+
+	/**
+	 * Reactive field configuration.
+	 * Contains serialized reactive configs for client-side watching.
+	 * Only present if field has reactive behaviors defined.
+	 */
+	reactive?: FieldReactiveSchema;
 }
 
 /**
@@ -288,6 +300,9 @@ export async function introspectGlobal(
 ): Promise<GlobalSchema> {
 	const { state } = global;
 	const fieldDefinitions = state.fieldDefinitions || {};
+	const formReactiveByField = extractFormReactiveConfigs(
+		(state as any).adminForm,
+	);
 
 	// Evaluate global-level access
 	const access = await evaluateGlobalAccess(state, context, app);
@@ -307,12 +322,19 @@ export async function introspectGlobal(
 			// Field doesn't support JSON Schema generation
 		}
 
+		// Extract reactive configuration from form config + dynamic field options
+		const reactive = extractFieldReactiveConfig(
+			fieldDef,
+			formReactiveByField[name],
+		);
+
 		fields[name] = {
 			name,
 			metadata,
 			location: fieldDef.state.location,
 			access: fieldAccess,
 			validation,
+			...(reactive && { reactive }),
 		};
 	}
 
