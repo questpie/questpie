@@ -102,19 +102,19 @@ export function Composability() {
 					viewport={{ once: true, margin: "-80px" }}
 					transition={{ duration: 0.8, delay: 0.2 }}
 				>
-					{/* Flow / Nodes area */}
+					{/* Flow / Nodes area — padding matches node center to line endpoints */}
 					<div
-						className="relative flex w-full h-[120px] items-center justify-between px-8 md:px-16 mb-8"
+						className="relative flex w-full items-center justify-between px-6 sm:px-10 md:px-16 mb-4"
 						onMouseEnter={() => setIsAutoPlaying(false)}
 						onMouseLeave={() => setIsAutoPlaying(true)}
 						role="group"
 						aria-label="Layer pipeline"
 					>
-						{/* Background connecting line */}
-						<div className="absolute inset-x-8 md:inset-x-16 top-1/2 h-[1px] -translate-y-1/2 bg-border/40" />
+						{/* Background connecting line — from center of first to center of last node */}
+						<div className="absolute inset-x-[calc(1.5rem+1.5rem)] sm:inset-x-[calc(2.5rem+1.75rem)] md:inset-x-[calc(4rem+1.75rem)] top-6 md:top-7 h-[1px] bg-border/40" />
 
 						{/* Active glowing connection lines */}
-						<div className="absolute inset-x-8 md:inset-x-16 top-1/2 flex h-[1px] -translate-y-1/2 items-center z-0">
+						<div className="absolute inset-x-[calc(1.5rem+1.5rem)] sm:inset-x-[calc(2.5rem+1.75rem)] md:inset-x-[calc(4rem+1.75rem)] top-6 md:top-7 flex h-[1px] items-center z-0">
 							{/* Segment 1: Core -> Adapters */}
 							<motion.div
 								className="h-full bg-primary/70"
@@ -141,17 +141,10 @@ export function Composability() {
 							/>
 						</div>
 
-						{/* Traveling light pulses */}
-						<div className="absolute inset-x-8 md:inset-x-16 top-1/2 flex h-[1px] -translate-y-1/2 items-center z-10 pointer-events-none">
+						{/* Traveling light pulse */}
+						<div className="absolute inset-x-[calc(1.5rem+1.5rem)] sm:inset-x-[calc(2.5rem+1.75rem)] md:inset-x-[calc(4rem+1.75rem)] top-6 md:top-7 flex h-[1px] items-center z-10 pointer-events-none">
 							<motion.div
-								className="absolute top-1/2 h-[2px] w-12 -translate-y-1/2 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_20px_4px_rgba(183,0,255,0.7)] hidden md:block"
-								initial={{ left: "0%" }}
-								animate={{ left: `${activeLayer * 33.333}%` }}
-								transition={{ type: "spring", stiffness: 120, damping: 20 }}
-							/>
-
-							<motion.div
-								className="absolute top-1/2 h-[2px] w-8 -translate-y-1/2 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_15px_3px_rgba(183,0,255,0.7)] md:hidden"
+								className="absolute top-1/2 h-[2px] w-10 md:w-12 -translate-y-1/2 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_20px_4px_rgba(183,0,255,0.7)]"
 								initial={{ left: "0%" }}
 								animate={{ left: `${activeLayer * 33.333}%` }}
 								transition={{ type: "spring", stiffness: 120, damping: 20 }}
@@ -180,13 +173,13 @@ export function Composability() {
 									}}
 								>
 									{/* Interactive hit area */}
-									<div className="absolute inset-[-40px]" />
+									<div className="absolute inset-[-24px] md:inset-[-40px]" />
 
 									<motion.div
 										className={cn(
-											"relative flex h-12 w-12 md:h-14 md:w-14 items-center justify-center border border-border backdrop-blur-sm backdrop-blur-md transition-all duration-300",
+											"relative flex h-12 w-12 md:h-14 md:w-14 items-center justify-center border border-border backdrop-blur-sm transition-all duration-300",
 											isHovered
-												? "border-primary bg-primary/20 backdrop-blur-md shadow-[0_0_30px_-5px_rgba(183,0,255,0.5)] scale-110"
+												? "border-primary bg-primary/20 shadow-[0_0_30px_-5px_rgba(183,0,255,0.5)] scale-110"
 												: isPassed
 													? "border-primary/50 bg-primary/5 hover:border-primary/80"
 													: "border-border bg-card/20 hover:border-primary/40",
@@ -205,15 +198,14 @@ export function Composability() {
 									</motion.div>
 
 									<motion.div
-										className="mt-3 flex flex-col items-center text-center absolute top-14 md:top-16 w-24 md:w-32"
+										className="mt-3 flex flex-col items-center text-center w-16 sm:w-24 md:w-32"
 										animate={{
 											opacity: isHovered ? 1 : isPassed ? 0.7 : 0.4,
-											y: isHovered ? 0 : 0,
 										}}
 									>
 										<span
 											className={cn(
-												"font-mono text-xs md:text-sm font-bold uppercase transition-colors duration-300",
+												"font-mono text-[10px] md:text-sm font-bold uppercase transition-colors duration-300",
 												isHovered ? "text-primary" : "text-foreground",
 											)}
 										>
@@ -221,7 +213,7 @@ export function Composability() {
 										</span>
 										<span
 											className={cn(
-												"mt-1.5 font-mono text-[9px] md:text-[10px] rounded-sm px-2 py-1 transition-colors duration-300 border",
+												"mt-1 font-mono text-[8px] md:text-[10px] rounded-sm px-1.5 py-0.5 transition-colors duration-300 border",
 												isHovered
 													? "bg-primary/10 text-primary border-primary/30"
 													: "bg-muted/30 text-muted-foreground border-transparent",
@@ -236,7 +228,7 @@ export function Composability() {
 					</div>
 
 					{/* Description Area below pipeline */}
-					<div className="h-[120px] md:h-[100px] w-full max-w-xl px-4 mt-4 md:mt-6 flex items-center justify-center">
+					<div className="w-full max-w-xl px-4 mt-8 sm:mt-6 md:mt-4">
 						<AnimatePresence mode="wait">
 							<motion.div
 								key={activeLayer}
@@ -246,7 +238,7 @@ export function Composability() {
 								transition={{ duration: 0.3 }}
 								className="w-full rounded-none border border-border bg-card/20 p-5 md:p-6 backdrop-blur-md transition-colors hover:border-primary/30"
 							>
-								<div className="flex flex-col md:flex-row md:items-center gap-4">
+								<div className="flex flex-row items-center gap-4">
 									<div className="flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center border border-primary/20 bg-primary/10 text-primary transition-colors">
 										{(() => {
 											const Icon = layers[activeLayer].icon;
@@ -254,7 +246,7 @@ export function Composability() {
 										})()}
 									</div>
 									<div>
-										<h4 className="text-base md:text-lg font-semibold text-foreground mb-1.5">
+										<h4 className="text-sm md:text-lg font-semibold text-foreground mb-1">
 											{layers[activeLayer].label} Layer
 										</h4>
 										<p className="text-xs md:text-sm text-muted-foreground leading-relaxed">

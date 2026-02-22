@@ -8,7 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimDotGrid } from "@/components/landing/BrandVisuals";
 import { cn } from "@/lib/utils";
 
@@ -88,8 +88,22 @@ export function RealtimeDemo() {
 	const [eventFeed, setEventFeed] = useState<FeedEvent[]>([]);
 	const [eventCounter, setEventCounter] = useState(0);
 	const [stats, setStats] = useState({ published: 3, draft: 2, total: 5 });
+	const [isVisible, setIsVisible] = useState(false);
+	const sectionRef = useRef<HTMLElement>(null);
 
 	useEffect(() => {
+		const el = sectionRef.current;
+		if (!el) return;
+		const observer = new IntersectionObserver(
+			([entry]) => setIsVisible(entry.isIntersecting),
+			{ threshold: 0.1 },
+		);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
+
+	useEffect(() => {
+		if (!isVisible) return;
 		const controller = new AbortController();
 		const { signal } = controller;
 
@@ -220,10 +234,13 @@ export function RealtimeDemo() {
 
 		run();
 		return () => controller.abort();
-	}, []);
+	}, [isVisible]);
 
 	return (
-		<section className="relative border-t border-border/40 py-20 overflow-hidden">
+		<section
+			ref={sectionRef}
+			className="relative border-t border-border/40 py-20 overflow-hidden"
+		>
 			{/* Brand dot grid — data streaming motif */}
 			<AnimDotGrid className="absolute inset-0 w-full h-full pointer-events-none opacity-60" />
 			<div className="mx-auto w-full max-w-7xl px-4 relative z-10">
