@@ -86,7 +86,8 @@ const resolveRpcProcedure = (
 	return isFunctionDefinition(current) ? current : undefined;
 };
 
-const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(app: Questpie<TConfig>,
+const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(
+	app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig>,
 	definition: FunctionDefinition,
 	request: Request,
@@ -165,7 +166,8 @@ const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(
 
 export const createRpcRoutes = <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig> = {},
 ) => {
 	const errorResponse = (error: unknown, request: Request): Response => {

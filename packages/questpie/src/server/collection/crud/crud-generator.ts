@@ -88,8 +88,8 @@ import type {
 	With,
 } from "#questpie/server/collection/crud/types.js";
 import { createVersionRecord } from "#questpie/server/collection/crud/versioning/index.js";
-import type { Questpie } from "#questpie/server/config/questpie.js";
 import { runWithContext } from "#questpie/server/config/context.js";
+import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { StorageVisibility } from "#questpie/server/config/types.js";
 import { ApiError, parseDatabaseError } from "#questpie/server/errors/index.js";
 import {
@@ -98,8 +98,8 @@ import {
 } from "#questpie/server/fields/runtime.js";
 import type { FieldDefinitionAccess } from "#questpie/server/fields/types.js";
 import {
-	type ResolvedWorkflowConfig,
 	extractWorkflowFromVersioning,
+	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
 } from "#questpie/server/workflow/config.js";
 
@@ -1563,7 +1563,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					db,
 				}),
 			);
-
 		}
 
 		let changeEvent: any = null;
@@ -1669,7 +1668,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db: tx,
 						}),
 					);
-
 				}
 
 				// Realtime change
@@ -2074,7 +2072,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						db,
 					}),
 				);
-
 			}
 
 			await this.notifyRealtimeChange(changeEvent);
@@ -2428,10 +2425,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 * creates a version snapshot at the target stage, and broadcasts realtime.
 	 */
 	private createTransitionStage() {
-		return async (
-			params: TransitionStageParams,
-			context: CRUDContext = {},
-		) => {
+		return async (params: TransitionStageParams, context: CRUDContext = {}) => {
 			if (!this.workflowConfig) {
 				throw ApiError.badRequest(
 					`Workflow is not enabled for collection "${this.state.name}"`,
@@ -2507,8 +2501,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					throw ApiError.forbidden({
 						operation: "update",
 						resource: this.state.name,
-						reason:
-							"User does not have permission to transition this record",
+						reason: "User does not have permission to transition this record",
 					});
 				}
 				if (typeof canTransition === "object") {
@@ -2520,8 +2513,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						throw ApiError.forbidden({
 							operation: "update",
 							resource: this.state.name,
-							reason:
-								"Record does not match access control conditions",
+							reason: "Record does not match access control conditions",
 						});
 					}
 				}

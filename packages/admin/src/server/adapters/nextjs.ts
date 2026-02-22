@@ -29,52 +29,52 @@ import { getAdminSession, requireAdminAuth } from "../auth-helpers.js";
  * Options for Next.js auth middleware
  */
 export interface NextAuthMiddlewareOptions {
-  /**
-   * The app instance with auth configured
-   */
-  app: Questpie<any>;
+	/**
+	 * The app instance with auth configured
+	 */
+	app: Questpie<any>;
 
-  /**
-   * Path to redirect to when not authenticated
-   * @default "/admin/login"
-   */
-  loginPath?: string;
+	/**
+	 * Path to redirect to when not authenticated
+	 * @default "/admin/login"
+	 */
+	loginPath?: string;
 
-  /**
-   * Required role for access
-   * @default "admin"
-   */
-  requiredRole?: string;
+	/**
+	 * Required role for access
+	 * @default "admin"
+	 */
+	requiredRole?: string;
 
-  /**
-   * Paths that require authentication (uses startsWith matching)
-   * @default ["/admin"]
-   */
-  protectedPaths?: string[];
+	/**
+	 * Paths that require authentication (uses startsWith matching)
+	 * @default ["/admin"]
+	 */
+	protectedPaths?: string[];
 
-  /**
-   * Paths within protectedPaths that should be publicly accessible
-   * @default ["/admin/login", "/admin/forgot-password", "/admin/reset-password", "/admin/accept-invite"]
-   */
-  publicPaths?: string[];
+	/**
+	 * Paths within protectedPaths that should be publicly accessible
+	 * @default ["/admin/login", "/admin/forgot-password", "/admin/reset-password", "/admin/accept-invite"]
+	 */
+	publicPaths?: string[];
 
-  /**
-   * Query parameter name for redirect URL
-   * @default "redirect"
-   */
-  redirectParam?: string;
+	/**
+	 * Query parameter name for redirect URL
+	 * @default "redirect"
+	 */
+	redirectParam?: string;
 }
 
 /**
  * Check if a path matches any of the given patterns
  */
 function pathMatches(pathname: string, patterns: string[]): boolean {
-  return patterns.some(
-    (pattern) =>
-      pathname === pattern ||
-      pathname.startsWith(`${pattern}/`) ||
-      pathname.startsWith(pattern),
-  );
+	return patterns.some(
+		(pattern) =>
+			pathname === pattern ||
+			pathname.startsWith(`${pattern}/`) ||
+			pathname.startsWith(pattern),
+	);
 }
 
 /**
@@ -97,60 +97,60 @@ function pathMatches(pathname: string, patterns: string[]): boolean {
  * ```
  */
 export function createNextAuthMiddleware({
-  app,
-  loginPath = "/admin/login",
-  requiredRole = "admin",
-  protectedPaths = ["/admin"],
-  publicPaths = [
-    "/admin/login",
-    "/admin/forgot-password",
-    "/admin/reset-password",
-    "/admin/accept-invite",
-  ],
-  redirectParam = "redirect",
+	app,
+	loginPath = "/admin/login",
+	requiredRole = "admin",
+	protectedPaths = ["/admin"],
+	publicPaths = [
+		"/admin/login",
+		"/admin/forgot-password",
+		"/admin/reset-password",
+		"/admin/accept-invite",
+	],
+	redirectParam = "redirect",
 }: NextAuthMiddlewareOptions) {
-  return async function middleware(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    const pathname = url.pathname;
+	return async function middleware(request: Request): Promise<Response> {
+		const url = new URL(request.url);
+		const pathname = url.pathname;
 
-    // Check if this is a protected path
-    const isProtected = pathMatches(pathname, protectedPaths);
-    const isPublic = pathMatches(pathname, publicPaths);
+		// Check if this is a protected path
+		const isProtected = pathMatches(pathname, protectedPaths);
+		const isPublic = pathMatches(pathname, publicPaths);
 
-    // If not protected or is public, continue
-    if (!isProtected || isPublic) {
-      // Return a "continue" response
-      // In Next.js middleware, returning undefined or NextResponse.next() continues
-      // Since we're using standard Response, we'll return a special header
-      return new Response(null, {
-        status: 200,
-        headers: {
-          "x-middleware-next": "1",
-        },
-      });
-    }
+		// If not protected or is public, continue
+		if (!isProtected || isPublic) {
+			// Return a "continue" response
+			// In Next.js middleware, returning undefined or NextResponse.next() continues
+			// Since we're using standard Response, we'll return a special header
+			return new Response(null, {
+				status: 200,
+				headers: {
+					"x-middleware-next": "1",
+				},
+			});
+		}
 
-    // Check authentication
-    const redirect = await requireAdminAuth({
-      request,
-      app,
-      loginPath,
-      requiredRole,
-      redirectParam,
-    });
+		// Check authentication
+		const redirect = await requireAdminAuth({
+			request,
+			app,
+			loginPath,
+			requiredRole,
+			redirectParam,
+		});
 
-    if (redirect) {
-      return redirect;
-    }
+		if (redirect) {
+			return redirect;
+		}
 
-    // Authenticated - continue
-    return new Response(null, {
-      status: 200,
-      headers: {
-        "x-middleware-next": "1",
-      },
-    });
-  };
+		// Authenticated - continue
+		return new Response(null, {
+			status: 200,
+			headers: {
+				"x-middleware-next": "1",
+			},
+		});
+	};
 }
 
 /**
@@ -199,13 +199,13 @@ export function createNextAuthMiddleware({
  * ```
  */
 export async function getNextAdminSession({
-  headers,
-  app,
+	headers,
+	app,
 }: {
-  headers: Headers;
-  app: Questpie<any>;
+	headers: Headers;
+	app: Questpie<any>;
 }) {
-  // Create a minimal request object for getAdminSession
-  const request = new Request("http://localhost", { headers });
-  return getAdminSession({ request, app });
+	// Create a minimal request object for getAdminSession
+	const request = new Request("http://localhost", { headers });
+	return getAdminSession({ request, app });
 }

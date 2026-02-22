@@ -17,6 +17,7 @@ import type {
 } from "../../builder/types/field-types";
 import type { GlobalBuilderState } from "../../builder/types/global-types";
 import { ConfirmationDialog } from "../../components/actions/confirmation-dialog";
+import { HistorySidebar } from "../../components/history-sidebar";
 import { LocaleSwitcher } from "../../components/locale-switcher";
 import { DateTimeInput } from "../../components/primitives/date-input";
 import { Badge } from "../../components/ui/badge";
@@ -37,7 +38,6 @@ import {
 	DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
 import { Label } from "../../components/ui/label";
-import { HistorySidebar } from "../../components/history-sidebar";
 import {
 	useGlobal,
 	useGlobalRevertVersion,
@@ -47,9 +47,9 @@ import {
 } from "../../hooks";
 import { useGlobalAuditHistory } from "../../hooks/use-audit-history";
 import { useGlobalFields } from "../../hooks/use-global-fields";
-import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useReactiveFields } from "../../hooks/use-reactive-fields";
 import { useGlobalServerValidation } from "../../hooks/use-server-validation";
+import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { useSafeContentLocales, useScopedLocale } from "../../runtime";
 import { AutoFormFields } from "../collection/auto-form-fields";
@@ -164,12 +164,12 @@ export default function GlobalFormView({
 	onSuccess,
 	onError,
 }: GlobalFormViewProps) {
-
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 
 	const { data: globalData, isLoading: dataLoading } = useGlobal(globalName);
-	const { fields: schemaFields, schema: globalSchema } = useGlobalFields(globalName);
+	const { fields: schemaFields, schema: globalSchema } =
+		useGlobalFields(globalName);
 
 	const { locale: contentLocale, setLocale: setContentLocale } =
 		useScopedLocale();
@@ -199,12 +199,11 @@ export default function GlobalFormView({
 		{ enabled: isHistoryOpen && !!globalSchema?.options?.versioning },
 	);
 
-	const { data: auditData, isLoading: auditLoading } =
-		useGlobalAuditHistory(
-			globalName,
-			{ limit: 50 },
-			{ enabled: isHistoryOpen },
-		);
+	const { data: auditData, isLoading: auditLoading } = useGlobalAuditHistory(
+		globalName,
+		{ limit: 50 },
+		{ enabled: isHistoryOpen },
+	);
 
 	// ========================================================================
 	// Workflow — stage badge, transition dropdown, scheduling
@@ -237,13 +236,11 @@ export default function GlobalFormView({
 		null;
 
 	const currentStageConfig = React.useMemo(
-		() =>
-			workflowConfig?.stages?.find((s) => s.name === currentStage) ?? null,
+		() => workflowConfig?.stages?.find((s) => s.name === currentStage) ?? null,
 		[workflowConfig?.stages, currentStage],
 	);
 
-	const currentStageLabel =
-		currentStageConfig?.label ?? currentStage ?? "";
+	const currentStageLabel = currentStageConfig?.label ?? currentStage ?? "";
 
 	/** Allowed transitions from the current stage. */
 	const allowedTransitions = React.useMemo(() => {
@@ -251,9 +248,7 @@ export default function GlobalFormView({
 		const stageNames = currentStageConfig?.transitions;
 		if (stageNames && stageNames.length > 0) {
 			return stageNames
-				.map((name) =>
-					workflowConfig.stages.find((s) => s.name === name),
-				)
+				.map((name) => workflowConfig.stages.find((s) => s.name === name))
 				.filter(Boolean) as typeof workflowConfig.stages;
 		}
 		return workflowConfig.stages.filter((s) => s.name !== currentStage);
@@ -527,11 +522,7 @@ export default function GlobalFormView({
 							<DropdownMenu>
 								<DropdownMenuTrigger
 									render={
-										<Button
-											type="button"
-											variant="outline"
-											className="gap-2"
-										/>
+										<Button type="button" variant="outline" className="gap-2" />
 									}
 								>
 									<Icon icon="ph:arrows-left-right" className="size-4" />
@@ -665,7 +656,10 @@ export default function GlobalFormView({
 								}}
 								id="global-transition-schedule"
 							/>
-							<Label htmlFor="global-transition-schedule" className="text-sm cursor-pointer">
+							<Label
+								htmlFor="global-transition-schedule"
+								className="text-sm cursor-pointer"
+							>
 								{t("workflow.scheduleLabel")}
 							</Label>
 						</div>

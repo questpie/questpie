@@ -1,11 +1,11 @@
 import { Icon } from "@iconify/react";
-import * as React from "react";
+import type * as React from "react";
 import { cn } from "../../lib/utils";
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
+	InputGroup,
+	InputGroupAddon,
+	InputGroupButton,
+	InputGroupInput,
 } from "./input-group";
 import { Kbd } from "./kbd";
 
@@ -13,29 +13,26 @@ import { Kbd } from "./kbd";
 // Types
 // ============================================================================
 
-interface SearchInputProps extends Omit<
-  React.ComponentProps<"input">,
-  "type"
-> {
-  /**
-   * Keyboard shortcut to display (e.g., "⌘K")
-   */
-  shortcut?: string;
+interface SearchInputProps extends Omit<React.ComponentProps<"input">, "type"> {
+	/**
+	 * Keyboard shortcut to display (e.g., "⌘K")
+	 */
+	shortcut?: string;
 
-  /**
-   * Callback when clear button is clicked
-   */
-  onClear?: () => void;
+	/**
+	 * Callback when clear button is clicked
+	 */
+	onClear?: () => void;
 
-  /**
-   * Show loading spinner instead of search icon
-   */
-  isLoading?: boolean;
+	/**
+	 * Show loading spinner instead of search icon
+	 */
+	isLoading?: boolean;
 
-  /**
-   * Additional className for the container
-   */
-  containerClassName?: string;
+	/**
+	 * Additional className for the container
+	 */
+	containerClassName?: string;
 }
 
 // ============================================================================
@@ -67,55 +64,55 @@ interface SearchInputProps extends Omit<
  * ```
  */
 export function SearchInput({
-  shortcut,
-  onClear,
-  isLoading = false,
-  containerClassName,
-  className,
-  value,
-  ...props
+	shortcut,
+	onClear,
+	isLoading = false,
+	containerClassName,
+	className,
+	value,
+	...props
 }: SearchInputProps): React.ReactElement {
-  const hasValue = value !== undefined && value !== "";
-  const showClearButton = hasValue && onClear;
-  const showShortcut = shortcut && !hasValue;
+	const hasValue = value !== undefined && value !== "";
+	const showClearButton = hasValue && onClear;
+	const showShortcut = shortcut && !hasValue;
 
-  return (
-    <InputGroup className={cn("bg-transparent", containerClassName)}>
-      <InputGroupAddon align="inline-start">
-        {isLoading ? (
-          <Icon
-            icon="ph:spinner-gap"
-            className="size-4 animate-spin text-muted-foreground"
-          />
-        ) : (
-          <Icon
-            icon="ph:magnifying-glass"
-            className="size-4 text-muted-foreground"
-          />
-        )}
-      </InputGroupAddon>
+	return (
+		<InputGroup className={cn("bg-transparent", containerClassName)}>
+			<InputGroupAddon align="inline-start">
+				{isLoading ? (
+					<Icon
+						icon="ph:spinner-gap"
+						className="size-4 animate-spin text-muted-foreground"
+					/>
+				) : (
+					<Icon
+						icon="ph:magnifying-glass"
+						className="size-4 text-muted-foreground"
+					/>
+				)}
+			</InputGroupAddon>
 
-      <InputGroupInput
-        placeholder="Search..."
-        value={value}
-        className={className}
-        {...props}
-      />
+			<InputGroupInput
+				placeholder="Search..."
+				value={value}
+				className={className}
+				{...props}
+			/>
 
-      {(showClearButton || showShortcut) && (
-        <InputGroupAddon align="inline-end">
-          {showClearButton && (
-            <InputGroupButton
-              onClick={onClear}
-              size="icon-xs"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Icon icon="ph:x" className="size-3" />
-            </InputGroupButton>
-          )}
-          {showShortcut && <Kbd>{shortcut}</Kbd>}
-        </InputGroupAddon>
-      )}
-    </InputGroup>
-  );
+			{(showClearButton || showShortcut) && (
+				<InputGroupAddon align="inline-end">
+					{showClearButton && (
+						<InputGroupButton
+							onClick={onClear}
+							size="icon-xs"
+							className="text-muted-foreground hover:text-foreground"
+						>
+							<Icon icon="ph:x" className="size-3" />
+						</InputGroupButton>
+					)}
+					{showShortcut && <Kbd>{shortcut}</Kbd>}
+				</InputGroupAddon>
+			)}
+		</InputGroup>
+	);
 }

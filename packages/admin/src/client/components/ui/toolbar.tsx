@@ -1,4 +1,4 @@
-import * as React from "react";
+import type * as React from "react";
 import { cn } from "../../lib/utils";
 
 // ============================================================================
@@ -6,10 +6,10 @@ import { cn } from "../../lib/utils";
 // ============================================================================
 
 interface ToolbarProps extends React.ComponentProps<"div"> {
-  /**
-   * Children elements
-   */
-  children: React.ReactNode;
+	/**
+	 * Children elements
+	 */
+	children: React.ReactNode;
 }
 
 /**
@@ -29,23 +29,23 @@ interface ToolbarProps extends React.ComponentProps<"div"> {
  * ```
  */
 export function Toolbar({
-  children,
-  className,
-  ...props
+	children,
+	className,
+	...props
 }: ToolbarProps): React.ReactElement {
-  return (
-    <div
-      data-slot="toolbar"
-      className={cn(
-        "bg-card/10 backdrop-blur-sm border border-border/40",
-        "p-1 flex items-center gap-2",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </div>
-  );
+	return (
+		<div
+			data-slot="toolbar"
+			className={cn(
+				"bg-card/10 backdrop-blur-sm border border-border/40",
+				"p-1 flex items-center gap-2",
+				className,
+			)}
+			{...props}
+		>
+			{children}
+		</div>
+	);
 }
 
 // ============================================================================
@@ -53,29 +53,29 @@ export function Toolbar({
 // ============================================================================
 
 interface ToolbarSectionProps extends React.ComponentProps<"div"> {
-  /**
-   * Children elements
-   */
-  children: React.ReactNode;
+	/**
+	 * Children elements
+	 */
+	children: React.ReactNode;
 }
 
 /**
  * ToolbarSection - Group of related toolbar elements
  */
 export function ToolbarSection({
-  children,
-  className,
-  ...props
+	children,
+	className,
+	...props
 }: ToolbarSectionProps): React.ReactElement {
-  return (
-    <div
-      data-slot="toolbar-section"
-      className={cn("flex items-center gap-1", className)}
-      {...props}
-    >
-      {children}
-    </div>
-  );
+	return (
+		<div
+			data-slot="toolbar-section"
+			className={cn("flex items-center gap-1", className)}
+			{...props}
+		>
+			{children}
+		</div>
+	);
 }
 
 // ============================================================================
@@ -88,16 +88,16 @@ interface ToolbarSeparatorProps extends React.ComponentProps<"div"> {}
  * ToolbarSeparator - Vertical separator between toolbar sections
  */
 export function ToolbarSeparator({
-  className,
-  ...props
+	className,
+	...props
 }: ToolbarSeparatorProps): React.ReactElement {
-  return (
-    <div
-      data-slot="toolbar-separator"
-      className={cn("h-4 w-px bg-border/40", className)}
-      {...props}
-    />
-  );
+	return (
+		<div
+			data-slot="toolbar-separator"
+			className={cn("h-4 w-px bg-border/40", className)}
+			{...props}
+		/>
+	);
 }
 
 // ============================================================================
@@ -105,27 +105,27 @@ export function ToolbarSeparator({
 // ============================================================================
 
 interface ToolbarGroupProps extends React.ComponentProps<"div"> {
-  /**
-   * Children elements
-   */
-  children: React.ReactNode;
+	/**
+	 * Children elements
+	 */
+	children: React.ReactNode;
 }
 
 /**
  * ToolbarGroup - Tightly grouped toolbar buttons (no gap)
  */
 function ToolbarGroup({
-  children,
-  className,
-  ...props
+	children,
+	className,
+	...props
 }: ToolbarGroupProps): React.ReactElement {
-  return (
-    <div
-      data-slot="toolbar-group"
-      className={cn("flex items-center", className)}
-      {...props}
-    >
-      {children}
-    </div>
-  );
+	return (
+		<div
+			data-slot="toolbar-group"
+			className={cn("flex items-center", className)}
+			{...props}
+		>
+			{children}
+		</div>
+	);
 }

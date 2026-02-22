@@ -19,7 +19,7 @@ import { z } from "zod";
  * Used internally for better IDE support without affecting the public API.
  */
 function getApp(ctx: { app: unknown }): Questpie<any> {
-  return ctx.app as Questpie<any>;
+	return ctx.app as Questpie<any>;
 }
 
 // ============================================================================
@@ -29,25 +29,25 @@ function getApp(ctx: { app: unknown }): Questpie<any> {
 const isSetupRequiredSchema = z.object({});
 
 const isSetupRequiredOutputSchema = z.object({
-  required: z.boolean(),
+	required: z.boolean(),
 });
 
 const createFirstAdminSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  name: z.string().min(2, "Name must be at least 2 characters"),
+	email: z.string().email("Invalid email address"),
+	password: z.string().min(8, "Password must be at least 8 characters"),
+	name: z.string().min(2, "Name must be at least 2 characters"),
 });
 
 const createFirstAdminOutputSchema = z.object({
-  success: z.boolean(),
-  user: z
-    .object({
-      id: z.string(),
-      email: z.string(),
-      name: z.string(),
-    })
-    .optional(),
-  error: z.string().optional(),
+	success: z.boolean(),
+	user: z
+		.object({
+			id: z.string(),
+			email: z.string(),
+			name: z.string(),
+		})
+		.optional(),
+	error: z.string().optional(),
 });
 
 // ============================================================================
@@ -66,17 +66,17 @@ const createFirstAdminOutputSchema = z.object({
  * ```
  */
 export const isSetupRequired = fn({
-  type: "query",
-  schema: isSetupRequiredSchema,
-  outputSchema: isSetupRequiredOutputSchema,
-  handler: async (ctx) => {
-    const app = getApp(ctx);
-    const userCollection = app.getCollectionConfig("user");
-    const result = await app.db
-      .select({ count: sql`count(*)::int` as any })
-      .from(userCollection.table);
-    return { required: (result[0] as { count: number }).count === 0 };
-  },
+	type: "query",
+	schema: isSetupRequiredSchema,
+	outputSchema: isSetupRequiredOutputSchema,
+	handler: async (ctx) => {
+		const app = getApp(ctx);
+		const userCollection = app.getCollectionConfig("user");
+		const result = await app.db
+			.select({ count: sql`count(*)::int` as any })
+			.from(userCollection.table);
+		return { required: (result[0] as { count: number }).count === 0 };
+	},
 });
 
 /**
@@ -102,72 +102,72 @@ export const isSetupRequired = fn({
  * ```
  */
 export const createFirstAdmin = fn({
-  type: "mutation",
-  schema: createFirstAdminSchema,
-  outputSchema: createFirstAdminOutputSchema,
-  handler: async (ctx) => {
-    const app = getApp(ctx);
-    const input = ctx.input as z.infer<typeof createFirstAdminSchema>;
-    const userCollection = app.getCollectionConfig("user");
+	type: "mutation",
+	schema: createFirstAdminSchema,
+	outputSchema: createFirstAdminOutputSchema,
+	handler: async (ctx) => {
+		const app = getApp(ctx);
+		const input = ctx.input as z.infer<typeof createFirstAdminSchema>;
+		const userCollection = app.getCollectionConfig("user");
 
-    // Check if setup already completed (any users exist)
-    const checkResult = await app.db
-      .select({ count: sql`count(*)::int` as any })
-      .from(userCollection.table);
+		// Check if setup already completed (any users exist)
+		const checkResult = await app.db
+			.select({ count: sql`count(*)::int` as any })
+			.from(userCollection.table);
 
-    if ((checkResult[0] as { count: number }).count > 0) {
-      return {
-        success: false,
-        error: "Setup already completed - users exist in the system",
-      };
-    }
+		if ((checkResult[0] as { count: number }).count > 0) {
+			return {
+				success: false,
+				error: "Setup already completed - users exist in the system",
+			};
+		}
 
-    try {
-      // Create user via Better Auth signUp
-      const signUpResult = await app.auth.api.signUpEmail({
-        body: {
-          email: input.email,
-          password: input.password,
-          name: input.name,
-        },
-      });
+		try {
+			// Create user via Better Auth signUp
+			const signUpResult = await app.auth.api.signUpEmail({
+				body: {
+					email: input.email,
+					password: input.password,
+					name: input.name,
+				},
+			});
 
-      if (!signUpResult.user) {
-        return {
-          success: false,
-          error: "Failed to create user account",
-        };
-      }
+			if (!signUpResult.user) {
+				return {
+					success: false,
+					error: "Failed to create user account",
+				};
+			}
 
-      // Update role to admin and verify email (first user is always admin)
-      // TODO: we can also use our builder pattern for admin functions for proper typesafety here !
-      // Note: Type assertion needed due to drizzle-orm duplicate dependency resolution
-      await (app.db as any)
-        .update(userCollection.table)
-        .set({
-          role: "admin",
-          emailVerified: true,
-        })
-        .where(eq(userCollection.table.id as any, signUpResult.user.id));
+			// Update role to admin and verify email (first user is always admin)
+			// TODO: we can also use our builder pattern for admin functions for proper typesafety here !
+			// Note: Type assertion needed due to drizzle-orm duplicate dependency resolution
+			await (app.db as any)
+				.update(userCollection.table)
+				.set({
+					role: "admin",
+					emailVerified: true,
+				})
+				.where(eq(userCollection.table.id as any, signUpResult.user.id));
 
-      return {
-        success: true,
-        user: {
-          id: signUpResult.user.id,
-          email: signUpResult.user.email,
-          name: signUpResult.user.name,
-        },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred",
-      };
-    }
-  },
+			return {
+				success: true,
+				user: {
+					id: signUpResult.user.id,
+					email: signUpResult.user.email,
+					name: signUpResult.user.name,
+				},
+			};
+		} catch (error) {
+			return {
+				success: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "An unexpected error occurred",
+			};
+		}
+	},
 });
 
 // ============================================================================
@@ -178,6 +178,6 @@ export const createFirstAdmin = fn({
  * Bundle of setup-related functions.
  */
 export const setupFunctions = {
-  isSetupRequired,
-  createFirstAdmin,
+	isSetupRequired,
+	createFirstAdmin,
 } as const;

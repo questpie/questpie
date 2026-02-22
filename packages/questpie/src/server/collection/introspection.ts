@@ -629,7 +629,8 @@ function getUploadSystemFieldSchemas(): Record<string, FieldSchema> {
  */
 export async function introspectCollection(
 	collection: Collection<CollectionBuilderState>,
-	context: CRUDContext, app?: unknown,
+	context: CRUDContext,
+	app?: unknown,
 ): Promise<CollectionSchema> {
 	const { state } = collection;
 	const fieldDefinitions = state.fieldDefinitions || {};
@@ -992,7 +993,8 @@ function mapInferredRelationType(
  */
 async function evaluateCollectionAccess(
 	state: CollectionBuilderState,
-	context: CRUDContext, app?: unknown,
+	context: CRUDContext,
+	app?: unknown,
 ): Promise<CollectionAccessInfo> {
 	const { access } = state;
 	const appDefaultAccess = (app as any)?.defaultAccess;
@@ -1005,10 +1007,22 @@ async function evaluateCollectionAccess(
 	};
 
 	const operations = {
-		create: await evaluateAccessRule(access?.create ?? appDefaultAccess?.create, accessContext),
-		read: await evaluateAccessRule(access?.read ?? appDefaultAccess?.read, accessContext),
-		update: await evaluateAccessRule(access?.update ?? appDefaultAccess?.update, accessContext),
-		delete: await evaluateAccessRule(access?.delete ?? appDefaultAccess?.delete, accessContext),
+		create: await evaluateAccessRule(
+			access?.create ?? appDefaultAccess?.create,
+			accessContext,
+		),
+		read: await evaluateAccessRule(
+			access?.read ?? appDefaultAccess?.read,
+			accessContext,
+		),
+		update: await evaluateAccessRule(
+			access?.update ?? appDefaultAccess?.update,
+			accessContext,
+		),
+		delete: await evaluateAccessRule(
+			access?.delete ?? appDefaultAccess?.delete,
+			accessContext,
+		),
 	};
 
 	// Determine visibility and level
@@ -1084,7 +1098,8 @@ async function evaluateAccessRule(
  */
 async function evaluateFieldAccess(
 	fieldDef: FieldDefinition<FieldDefinitionState>,
-	context: CRUDContext, app?: unknown,
+	context: CRUDContext,
+	app?: unknown,
 ): Promise<FieldAccessInfo | undefined> {
 	const fieldAccess = fieldDef.state.config?.access;
 
@@ -1150,7 +1165,8 @@ async function evaluateFieldAccessRule(
  */
 export async function introspectCollections(
 	collections: Record<string, Collection<CollectionBuilderState>>,
-	context: CRUDContext, app?: unknown,
+	context: CRUDContext,
+	app?: unknown,
 ): Promise<Record<string, CollectionSchema>> {
 	const schemas: Record<string, CollectionSchema> = {};
 

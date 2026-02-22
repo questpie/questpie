@@ -6,9 +6,9 @@
  */
 
 export {
-  indexToSearch,
-  removeFromSearch,
-  flushPendingSearchIndexes,
-  type IndexToSearchOptions,
-  type RemoveFromSearchOptions,
+	flushPendingSearchIndexes,
+	type IndexToSearchOptions,
+	indexToSearch,
+	type RemoveFromSearchOptions,
+	removeFromSearch,
 } from "./search.js";

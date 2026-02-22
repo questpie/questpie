@@ -118,9 +118,7 @@ export function useTransitionStage(
 
 			if (!response.ok) {
 				const error = await response.json().catch(() => ({}));
-				throw new Error(
-					error.message ?? error.error ?? "Transition failed",
-				);
+				throw new Error(error.message ?? error.error ?? "Transition failed");
 			}
 
 			return response.json();

@@ -40,9 +40,7 @@ import {
  * await app.seeds.reset({ only: ["pages"] })
  * ```
  */
-export class QuestpieSeedsAPI<
-	TConfig extends QuestpieConfig = QuestpieConfig,
-> {
+export class QuestpieSeedsAPI<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private readonly runner: SeedRunner;
 
 	constructor(private readonly app: Questpie<TConfig>) {
@@ -57,10 +55,7 @@ export class QuestpieSeedsAPI<
 
 	/** Undo executed seeds */
 	async undo(
-		options: {
-			category?: RunSeedsOptions["category"];
-			only?: string[];
-		} = {},
+		options: { category?: RunSeedsOptions["category"]; only?: string[] } = {},
 	): Promise<void> {
 		const seeds = this.app.config.seeds?.seeds || [];
 		await this.runner.undo(seeds, options);

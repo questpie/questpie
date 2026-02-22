@@ -29,18 +29,19 @@ import type { BlockContent, BlockNode } from "./types.js";
 /**
  * @deprecated No longer needed. Server auto-expands relation/upload fields.
  */
-export type BlockPrefetchContext<TApp = unknown> = { app: TApp;
-  locale: string;
-  defaultLocale: string;
-  request?: Request;
+export type BlockPrefetchContext<TApp = unknown> = {
+	app: TApp;
+	locale: string;
+	defaultLocale: string;
+	request?: Request;
 };
 
 /**
  * @deprecated No longer needed. Server auto-expands relation/upload fields.
  */
 export type BlockPrefetchParams<TApp = unknown> = BlockPrefetchContext<TApp> & {
-  id: string;
-  values: Record<string, unknown>;
+	id: string;
+	values: Record<string, unknown>;
 };
 
 /**
@@ -53,37 +54,37 @@ export type BlockPrefetchResult = Record<string, unknown>;
  * and supports manual prefetch via `.blocks({ name: { block, prefetch } })`.
  */
 export async function prefetchBlockData<TApp = unknown>(
-  content: BlockContent | null | undefined,
-  _blocks: Record<string, unknown>,
-  _context: BlockPrefetchContext<TApp>,
+	content: BlockContent | null | undefined,
+	_blocks: Record<string, unknown>,
+	_context: BlockPrefetchContext<TApp>,
 ): Promise<BlockPrefetchResult> {
-  console.warn(
-    "[prefetchBlockData] Deprecated: Client-side block prefetch is no longer needed. " +
-      "Block data is now automatically fetched by the server afterRead hook. " +
-      "Remove this call — data is available via the `data` prop in block renderers.",
-  );
-  return {};
+	console.warn(
+		"[prefetchBlockData] Deprecated: Client-side block prefetch is no longer needed. " +
+			"Block data is now automatically fetched by the server afterRead hook. " +
+			"Remove this call — data is available via the `data` prop in block renderers.",
+	);
+	return {};
 }
 
 /**
  * @deprecated No longer needed. Server handles block data fetching.
  */
 export class BlockPrefetchError extends Error {
-  constructor(
-    public readonly blockId: string,
-    public readonly blockType: string,
-    public readonly cause: unknown,
-  ) {
-    const message =
-      cause instanceof Error ? cause.message : "Unknown prefetch error";
-    super(`Block prefetch failed for "${blockType}" (${blockId}): ${message}`);
-    this.name = "BlockPrefetchError";
-  }
+	constructor(
+		public readonly blockId: string,
+		public readonly blockType: string,
+		public readonly cause: unknown,
+	) {
+		const message =
+			cause instanceof Error ? cause.message : "Unknown prefetch error";
+		super(`Block prefetch failed for "${blockType}" (${blockId}): ${message}`);
+		this.name = "BlockPrefetchError";
+	}
 }
 
 /**
  * @deprecated No longer needed. Server handles block data fetching.
  */
 export type TypedBlockPrefetch<TData, TApp = unknown> = (
-  params: BlockPrefetchParams<TApp>,
+	params: BlockPrefetchParams<TApp>,
 ) => Promise<TData>;

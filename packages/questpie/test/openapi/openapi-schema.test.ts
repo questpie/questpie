@@ -197,11 +197,9 @@ describe("OpenAPI schema generation", () => {
 					},
 				});
 
-			const pages = q
-				.collection("pages")
-				.fields((f) => ({
-					title: f.text({ required: true }),
-				}));
+			const pages = q.collection("pages").fields((f) => ({
+				title: f.text({ required: true }),
+			}));
 
 			const mockCms = {
 				getCollections: () => ({ posts, pages }),
@@ -298,11 +296,9 @@ describe("OpenAPI schema generation", () => {
 					},
 				});
 
-			const nav = q
-				.global("nav")
-				.fields((f) => ({
-					items: f.array({ of: f.text() }),
-				}));
+			const nav = q.global("nav").fields((f) => ({
+				items: f.array({ of: f.text() }),
+			}));
 
 			const mockCms = {
 				getCollections: () => ({}),
@@ -315,8 +311,7 @@ describe("OpenAPI schema generation", () => {
 			});
 
 			// Workflow-enabled global should have transition endpoint
-			const transitionOp =
-				spec.paths?.["//globals/settings/transition"]?.post;
+			const transitionOp = spec.paths?.["//globals/settings/transition"]?.post;
 			expect(transitionOp).toBeDefined();
 			expect(transitionOp?.operationId).toBe("global_settings_transition");
 

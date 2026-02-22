@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "better-auth";
 import type { CollectionAccess } from "#questpie/server/collection/builder/types.js";
+import type { GlobalHooksState } from "#questpie/server/config/global-hooks-types.js";
 import type {
 	AnyCollectionOrBuilder,
 	AnyGlobalOrBuilder,
@@ -8,7 +9,6 @@ import type {
 	LocaleConfig,
 	StorageConfig,
 } from "#questpie/server/config/types.js";
-import type { GlobalHooksState } from "#questpie/server/config/global-hooks-types.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
 import type { KVConfig } from "#questpie/server/integrated/kv/index.js";
 import type { LoggerConfig } from "#questpie/server/integrated/logger/index.js";

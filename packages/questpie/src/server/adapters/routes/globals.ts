@@ -65,7 +65,8 @@ export interface GlobalRoutes {
 
 export const createGlobalRoutes = <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig> = {},
 ): GlobalRoutes => {
 	const errorResponse = (
@@ -322,9 +323,7 @@ export const createGlobalRoutes = <
 						? Number(offsetRaw)
 						: undefined;
 
-				const auditCrud = app.api.collections[
-					"adminAuditLog" as any
-				] as any;
+				const auditCrud = app.api.collections["adminAuditLog" as any] as any;
 				if (!auditCrud) {
 					return smartResponse([], request);
 				}

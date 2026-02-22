@@ -73,9 +73,7 @@ function DocumentsListing() {
 			{/* Documents List */}
 			{documents.length === 0 ? (
 				<div className="text-center py-16">
-					<p className="text-muted-foreground text-lg">
-						No documents found.
-					</p>
+					<p className="text-muted-foreground text-lg">No documents found.</p>
 				</div>
 			) : (
 				<div className="border rounded-lg divide-y max-w-4xl">

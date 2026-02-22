@@ -34,7 +34,7 @@ type BlockInsertButtonProps = {
 // Component
 // ============================================================================
 
-export function 	BlockInsertButton({
+export function BlockInsertButton({
 	position,
 	compact = false,
 	variant = "default",
@@ -91,7 +91,6 @@ export function 	BlockInsertButton({
 				)}
 				onClick={handleOpen}
 			>
-
 				{/* Add button */}
 				<div className="flex items-center justify-center w-5 h-5 rounded-full border border-border bg-background text-muted-foreground group-hover:border-foreground group-hover:text-foreground transition-all relative z-10">
 					<Icon icon="ph:plus" className="w-3 h-3" />

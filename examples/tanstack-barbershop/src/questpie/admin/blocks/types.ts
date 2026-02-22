@@ -27,6 +27,6 @@ type Blocks = typeof blocks;
  * and `data` type from `.prefetch()` configuration.
  */
 export type BlockProps<TBlockName extends keyof Blocks> = BlockRendererProps<
-  InferBlockValues<Blocks[TBlockName]["state"]>,
-  InferBlockData<Blocks[TBlockName]>
+	InferBlockValues<Blocks[TBlockName]["state"]>,
+	InferBlockData<Blocks[TBlockName]>
 >;

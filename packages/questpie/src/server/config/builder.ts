@@ -14,9 +14,9 @@ import type {
 	QuestpieBuilderState,
 	QuestpieRuntimeConfig,
 } from "#questpie/server/config/builder-types.js";
+import type { QuestpieBuilderExtensions } from "#questpie/server/config/extensions.js";
 import type { GlobalHooksInput } from "#questpie/server/config/global-hooks-types.js";
 import { Questpie } from "#questpie/server/config/questpie.js";
-import type { QuestpieBuilderExtensions } from "#questpie/server/config/extensions.js";
 import type {
 	ContextResolver,
 	ContextResolverParams,
@@ -447,9 +447,7 @@ export class QuestpieBuilder<
 	 * })
 	 * ```
 	 */
-	defaultAccess(
-		access: CollectionAccess,
-	): QuestpieBuilder<TState> {
+	defaultAccess(access: CollectionAccess): QuestpieBuilder<TState> {
 		return new QuestpieBuilder({
 			...this.state,
 			defaultAccess: access,

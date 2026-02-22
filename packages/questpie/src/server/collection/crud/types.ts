@@ -106,7 +106,11 @@ type AppCollections<TApp> = TApp extends { collections: infer TCollections }
 	? TCollections extends Record<string, AnyCollectionOrBuilder>
 		? TCollections
 		: Record<string, AnyCollectionOrBuilder>
-	: Record<string, AnyCollectionOrBuilder>;
+	: TApp extends { config: { collections: infer TCollections } }
+		? TCollections extends Record<string, AnyCollectionOrBuilder>
+			? TCollections
+			: Record<string, AnyCollectionOrBuilder>
+		: Record<string, AnyCollectionOrBuilder>;
 
 type CollectionStateFor<TCollection> = CollectionState<TCollection>;
 
@@ -733,6 +737,11 @@ export interface FindManyOptionsBase<TFields = any, TRelations = any> {
 	offset?: number;
 	extras?: Extras;
 	/**
+	 * Full-text search against the _title expression.
+	 * Performs case-insensitive ILIKE matching.
+	 */
+	search?: string;
+	/**
 	 * Override locale for this request.
 	 */
 	locale?: string;
@@ -776,6 +785,11 @@ export interface FindOneOptionsBase<TFields = any, TRelations = any> {
 	orderBy?: OrderBy<TFields>;
 	extras?: Extras;
 	/**
+	 * Full-text search against the _title expression.
+	 * Performs case-insensitive ILIKE matching.
+	 */
+	search?: string;
+	/**
 	 * Override locale for this request.
 	 */
 	locale?: string;
@@ -815,7 +829,7 @@ export interface NestedRelationCreate<TInsert = any> {
 }
 
 export interface NestedRelationConnectOrCreate<TInsert = any> {
-	where: { id: string }; // Check if exists
+	where: { id: string } | Partial<TInsert>; // Check if exists by ID or any unique field(s)
 	create: TInsert; // Create if doesn't exist
 }
 
@@ -828,6 +842,7 @@ export type NestedRelationMutation<TInsert = any> = {
 	connectOrCreate?:
 		| NestedRelationConnectOrCreate<TInsert>
 		| NestedRelationConnectOrCreate<TInsert>[]; // Create if doesn't exist
+	set?: string[] | { id: string }[]; // Replace all related records (M:N set operation)
 };
 
 type RelationKeys<TRelations> = [TRelations] extends [never]
@@ -945,12 +960,34 @@ type EnforceRelationForMissingFk<TInsert, TRelations, TInput> = [
 				: {};
 
 /**
- * Create input with optional nested relations
+ * For FK fields that overlap with relation names (belongsTo),
+ * widen the type to accept either the raw FK value or a nested mutation.
  */
-export type CreateInputBase<
-	TInsert = any,
-	TRelations = any,
-> = OptionalizeRelationForeignKeys<TInsert, TRelations> &
+type WidenFkFieldsForMutations<TInsert, TRelations> = {
+	[K in RelationForeignKeys<TInsert, TRelations>]?: K extends keyof TInsert
+		? K extends keyof RelationMutations<TRelations>
+			?
+					| TInsert[K]
+					| (RelationMutations<TRelations> & Record<string, unknown>)[K]
+			: TInsert[K]
+		: never;
+};
+
+/**
+ * Create input with optional nested relations
+ *
+ * For belongsTo fields (FK on this table), accepts either:
+ * - The raw FK string: `author: "some-id"`
+ * - A nested mutation:  `author: { connect: { id: "some-id" } }`
+ *
+ * For hasMany/M:N fields (no FK on this table), accepts mutations only:
+ * - `tags: { connect: [...], create: [...], set: [...] }`
+ */
+export type CreateInputBase<TInsert = any, TRelations = any> = Omit<
+	OptionalizeRelationForeignKeys<TInsert, TRelations>,
+	RelationForeignKeys<TInsert, TRelations>
+> &
+	WidenFkFieldsForMutations<TInsert, TRelations> &
 	Omit<RelationMutations<TRelations>, keyof TInsert>;
 
 export type CreateInputWithRelations<
@@ -968,10 +1005,22 @@ export type CreateInput<TInsert = any, TRelations = any> = CreateInputBase<
 >;
 
 /**
+ * For update fields that overlap with relation names,
+ * widen the type to accept either the raw value or a nested mutation.
+ * Fields NOT overlapping with relations are passed through as-is.
+ */
+type WidenUpdateFieldsForMutations<TUpdate, TRelations> = {
+	[K in keyof TUpdate]?: K extends keyof RelationMutations<TRelations>
+		? TUpdate[K] | (RelationMutations<TRelations> & Record<string, unknown>)[K]
+		: TUpdate[K];
+};
+
+/**
  * Update input with optional nested relation mutations
  */
 export type UpdateInput<TUpdate = any, TRelations = any> = Prettify<
-	Partial<TUpdate> & RelationMutations<TRelations>
+	WidenUpdateFieldsForMutations<TUpdate, TRelations> &
+		Omit<RelationMutations<TRelations>, keyof TUpdate>
 >;
 
 /**

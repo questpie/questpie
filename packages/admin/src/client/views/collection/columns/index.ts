@@ -8,6 +8,9 @@
 export { buildColumns } from "./build-columns.js";
 
 // Default column computation
-export { computeDefaultColumns, getAllAvailableFields } from "./column-defaults";
+export {
+	computeDefaultColumns,
+	getAllAvailableFields,
+} from "./column-defaults";
 
 // Types

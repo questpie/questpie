@@ -1,10 +1,13 @@
+import { ArrowRight, GithubLogo, Terminal } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Github, Terminal } from "lucide-react";
 import { motion } from "motion/react";
+import { AnimFloatingPies } from "@/components/landing/BrandVisuals";
 
 export function CallToAction() {
 	return (
-		<section className="relative border-t border-border/40 py-24">
+		<section className="relative py-24 overflow-hidden">
+			{/* Brand floating pies — ambient background */}
+			<AnimFloatingPies className="absolute inset-0 w-full h-full pointer-events-none opacity-80" />
 			{/* Extra ambient glow for CTA */}
 			<div className="hidden dark:block absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] pointer-events-none bg-[radial-gradient(ellipse,_oklch(0.5984_0.3015_310.74_/_0.08)_0%,_transparent_60%)]" />
 
@@ -22,7 +25,12 @@ export function CallToAction() {
 						<img
 							src="/symbol/Q-symbol-white-pink.svg"
 							alt="QUESTPIE"
-							className="relative h-10 w-auto"
+							className="relative h-10 w-auto hidden dark:block"
+						/>
+						<img
+							src="/symbol/Q-symbol-dark-pink.svg"
+							alt="QUESTPIE"
+							className="relative h-10 w-auto dark:hidden"
 						/>
 					</div>
 					<span className="inline-flex items-center gap-2 border border-primary/20 bg-primary/[0.05] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.22em] text-primary">
@@ -32,13 +40,13 @@ export function CallToAction() {
 				</motion.div>
 
 				<motion.h2
-					className="text-3xl font-bold tracking-[-0.02em] text-balance md:text-4xl"
+					className="font-mono text-3xl font-bold tracking-[-0.02em] text-balance md:text-4xl"
 					initial={{ opacity: 0, y: 20 }}
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.6, delay: 0.15 }}
 				>
-					Start with one backend. Ship fast.
+					Start with one backend, ship fast
 				</motion.h2>
 
 				<motion.p
@@ -65,7 +73,10 @@ export function CallToAction() {
 						className="group inline-flex h-11 items-center justify-center bg-primary px-7 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
 					>
 						Start with Quickstart
-						<ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+						<ArrowRight
+							className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5"
+							aria-hidden="true"
+						/>
 					</Link>
 					<Link
 						to="/docs/$"
@@ -82,7 +93,7 @@ export function CallToAction() {
 						rel="noreferrer"
 						className="inline-flex h-11 items-center justify-center gap-2 px-7 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
 					>
-						<Github className="h-4 w-4" />
+						<GithubLogo className="h-4 w-4" aria-hidden="true" />
 						GitHub
 					</a>
 				</motion.div>
@@ -95,7 +106,7 @@ export function CallToAction() {
 					viewport={{ once: true }}
 					transition={{ duration: 0.5, delay: 0.3 }}
 				>
-					<Terminal className="h-4 w-4 text-primary" />
+					<Terminal className="h-4 w-4 text-primary" aria-hidden="true" />
 					<div className="text-left leading-tight">
 						<div>
 							<span className="text-primary">$</span> bun i questpie

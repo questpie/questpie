@@ -94,9 +94,7 @@ export const BlockEditorContextProvider = BlockEditorContext.Provider;
 /**
  * Selector hook for block editor store.
  */
-function useBlockEditorStore<T>(
-	selector: (state: BlockEditorStore) => T,
-): T {
+function useBlockEditorStore<T>(selector: (state: BlockEditorStore) => T): T {
 	const store = React.useContext(BlockEditorContext);
 	if (!store) {
 		throw new Error("useBlockEditor must be used within BlockEditorProvider");

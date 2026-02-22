@@ -14,361 +14,361 @@ import { runTestDbMigrations } from "../utils/test-db";
  * Use case: TipTap editor where each locale has its own complete document structure.
  */
 type TipTapContent = {
-  type: "doc";
-  content: Array<{
-    type: string;
-    content?: Array<{
-      type: string;
-      text?: string;
-    }>;
-  }>;
+	type: "doc";
+	content: Array<{
+		type: string;
+		content?: Array<{
+			type: string;
+			text?: string;
+		}>;
+	}>;
 };
 
 const q = questpie({ name: "whole-jsonb-test" }).fields(defaultFields);
 
 const barbers = q
-  .collection("barbers")
-  .fields((f) => ({
-    name: f.text({ required: true, maxLength: 255, localized: true }),
-    bio: f.json({ localized: true }),
-  }))
-  .options({
-    timestamps: true,
-  });
+	.collection("barbers")
+	.fields((f) => ({
+		name: f.text({ required: true, maxLength: 255, localized: true }),
+		bio: f.json({ localized: true }),
+	}))
+	.options({
+		timestamps: true,
+	});
 
 const testModule = questpie({ name: "whole-jsonb-test" }).collections({
-  barbers,
+	barbers,
 });
 
 describe("whole JSONB localization", () => {
-  let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
 
-  beforeEach(async () => {
-    setup = await buildMockApp(testModule);
-    await runTestDbMigrations(setup.app);
-  });
+	beforeEach(async () => {
+		setup = await buildMockApp(testModule);
+		await runTestDbMigrations(setup.app);
+	});
 
-  afterEach(async () => {
-    await setup.cleanup();
-  });
+	afterEach(async () => {
+		await setup.cleanup();
+	});
 
-  it("creates barber with whole JSONB bio in default locale", async () => {
-    const ctx = createTestContext({ locale: "en" });
+	it("creates barber with whole JSONB bio in default locale", async () => {
+		const ctx = createTestContext({ locale: "en" });
 
-    const bioEN: TipTapContent = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [
-            {
-              type: "text",
-              text: "Hello, I'm a barber with 10 years of experience.",
-            },
-          ],
-        },
-      ],
-    };
+		const bioEN: TipTapContent = {
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [
+						{
+							type: "text",
+							text: "Hello, I'm a barber with 10 years of experience.",
+						},
+					],
+				},
+			],
+		};
 
-    const created = await setup.app.api.collections.barbers.create(
-      {
-        name: "John Doe",
-        bio: bioEN,
-      },
-      ctx,
-    );
+		const created = await setup.app.api.collections.barbers.create(
+			{
+				name: "John Doe",
+				bio: bioEN,
+			},
+			ctx,
+		);
 
-    expect(created.name).toBe("John Doe");
-    expect(created.bio).toEqual(bioEN);
+		expect(created.name).toBe("John Doe");
+		expect(created.bio).toEqual(bioEN);
 
-    // Read back in EN
-    const found = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctx,
-    );
+		// Read back in EN
+		const found = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctx,
+		);
 
-    expect(found).not.toBeNull();
-    expect(found?.name).toBe("John Doe");
-    expect(found?.bio).toEqual(bioEN);
-  });
+		expect(found).not.toBeNull();
+		expect(found?.name).toBe("John Doe");
+		expect(found?.bio).toEqual(bioEN);
+	});
 
-  it("updates barber with different locale bio (whole replacement)", async () => {
-    const ctxEN = createTestContext({ locale: "en" });
-    const ctxSK = createTestContext({ locale: "sk" });
+	it("updates barber with different locale bio (whole replacement)", async () => {
+		const ctxEN = createTestContext({ locale: "en" });
+		const ctxSK = createTestContext({ locale: "sk" });
 
-    const bioEN: TipTapContent = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "English bio" }],
-        },
-      ],
-    };
+		const bioEN: TipTapContent = {
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "English bio" }],
+				},
+			],
+		};
 
-    const bioSK: TipTapContent = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "Slovenský životopis" }],
-        },
-      ],
-    };
+		const bioSK: TipTapContent = {
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "Slovenský životopis" }],
+				},
+			],
+		};
 
-    // Create in EN
-    const created = await setup.app.api.collections.barbers.create(
-      {
-        name: "John",
-        bio: bioEN,
-      },
-      ctxEN,
-    );
+		// Create in EN
+		const created = await setup.app.api.collections.barbers.create(
+			{
+				name: "John",
+				bio: bioEN,
+			},
+			ctxEN,
+		);
 
-    // Update SK locale with different bio
-    await setup.app.api.collections.barbers.updateById(
-      {
-        id: created.id,
-        data: {
-          name: "Ján",
-          bio: bioSK,
-        },
-      },
-      ctxSK,
-    );
+		// Update SK locale with different bio
+		await setup.app.api.collections.barbers.updateById(
+			{
+				id: created.id,
+				data: {
+					name: "Ján",
+					bio: bioSK,
+				},
+			},
+			ctxSK,
+		);
 
-    // Read in EN - should get EN bio
-    const enBarber = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctxEN,
-    );
+		// Read in EN - should get EN bio
+		const enBarber = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctxEN,
+		);
 
-    expect(enBarber?.name).toBe("John");
-    expect(enBarber?.bio).toEqual(bioEN);
+		expect(enBarber?.name).toBe("John");
+		expect(enBarber?.bio).toEqual(bioEN);
 
-    // Read in SK - should get SK bio
-    const skBarber = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctxSK,
-    );
+		// Read in SK - should get SK bio
+		const skBarber = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctxSK,
+		);
 
-    expect(skBarber?.name).toBe("Ján");
-    expect(skBarber?.bio).toEqual(bioSK);
-  });
+		expect(skBarber?.name).toBe("Ján");
+		expect(skBarber?.bio).toEqual(bioSK);
+	});
 
-  it("falls back to default locale when translation is missing", async () => {
-    const ctxEN = createTestContext({ locale: "en" });
-    const ctxDE = createTestContext({ locale: "de" });
+	it("falls back to default locale when translation is missing", async () => {
+		const ctxEN = createTestContext({ locale: "en" });
+		const ctxDE = createTestContext({ locale: "de" });
 
-    const bioEN: TipTapContent = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "English bio" }],
-        },
-      ],
-    };
+		const bioEN: TipTapContent = {
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "English bio" }],
+				},
+			],
+		};
 
-    // Create in EN
-    const created = await setup.app.api.collections.barbers.create(
-      {
-        name: "John",
-        bio: bioEN,
-      },
-      ctxEN,
-    );
+		// Create in EN
+		const created = await setup.app.api.collections.barbers.create(
+			{
+				name: "John",
+				bio: bioEN,
+			},
+			ctxEN,
+		);
 
-    // Read in DE (no translation) - should fallback to EN
-    const deBarber = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctxDE,
-    );
+		// Read in DE (no translation) - should fallback to EN
+		const deBarber = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctxDE,
+		);
 
-    expect(deBarber?.name).toBe("John"); // fallback to EN
-    expect(deBarber?.bio).toEqual(bioEN); // fallback to EN
-  });
+		expect(deBarber?.name).toBe("John"); // fallback to EN
+		expect(deBarber?.bio).toEqual(bioEN); // fallback to EN
+	});
 
-  it("handles complex TipTap structures per locale", async () => {
-    const ctxEN = createTestContext({ locale: "en" });
-    const ctxSK = createTestContext({ locale: "sk" });
+	it("handles complex TipTap structures per locale", async () => {
+		const ctxEN = createTestContext({ locale: "en" });
+		const ctxSK = createTestContext({ locale: "sk" });
 
-    const bioEN: TipTapContent = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "Paragraph 1 EN" }],
-        },
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "Paragraph 2 EN" }],
-        },
-      ],
-    };
+		const bioEN: TipTapContent = {
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "Paragraph 1 EN" }],
+				},
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "Paragraph 2 EN" }],
+				},
+			],
+		};
 
-    const bioSK: TipTapContent = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "Odsek 1 SK" }],
-        },
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "Odsek 2 SK" }],
-        },
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "Odsek 3 SK - extra" }],
-        },
-      ],
-    };
+		const bioSK: TipTapContent = {
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "Odsek 1 SK" }],
+				},
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "Odsek 2 SK" }],
+				},
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "Odsek 3 SK - extra" }],
+				},
+			],
+		};
 
-    // Create in EN
-    const created = await setup.app.api.collections.barbers.create(
-      {
-        name: "Complex",
-        bio: bioEN,
-      },
-      ctxEN,
-    );
+		// Create in EN
+		const created = await setup.app.api.collections.barbers.create(
+			{
+				name: "Complex",
+				bio: bioEN,
+			},
+			ctxEN,
+		);
 
-    // Update SK with different structure (more paragraphs)
-    await setup.app.api.collections.barbers.updateById(
-      {
-        id: created.id,
-        data: {
-          name: "Komplexný",
-          bio: bioSK,
-        },
-      },
-      ctxSK,
-    );
+		// Update SK with different structure (more paragraphs)
+		await setup.app.api.collections.barbers.updateById(
+			{
+				id: created.id,
+				data: {
+					name: "Komplexný",
+					bio: bioSK,
+				},
+			},
+			ctxSK,
+		);
 
-    // Verify EN has 2 paragraphs
-    const enBarber = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctxEN,
-    );
-    expect((enBarber?.bio as any)?.content).toHaveLength(2);
+		// Verify EN has 2 paragraphs
+		const enBarber = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctxEN,
+		);
+		expect((enBarber?.bio as any)?.content).toHaveLength(2);
 
-    // Verify SK has 3 paragraphs
-    const skBarber = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctxSK,
-    );
-    expect((skBarber?.bio as any)?.content).toHaveLength(3);
-  });
+		// Verify SK has 3 paragraphs
+		const skBarber = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctxSK,
+		);
+		expect((skBarber?.bio as any)?.content).toHaveLength(3);
+	});
 
-  it("handles null bio values", async () => {
-    const ctx = createTestContext({ locale: "en" });
+	it("handles null bio values", async () => {
+		const ctx = createTestContext({ locale: "en" });
 
-    // Create with null bio
-    const created = await setup.app.api.collections.barbers.create(
-      {
-        name: "No Bio",
-        bio: null,
-      },
-      ctx,
-    );
+		// Create with null bio
+		const created = await setup.app.api.collections.barbers.create(
+			{
+				name: "No Bio",
+				bio: null,
+			},
+			ctx,
+		);
 
-    expect(created.bio).toBeNull();
+		expect(created.bio).toBeNull();
 
-    // Read back
-    const found = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctx,
-    );
+		// Read back
+		const found = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctx,
+		);
 
-    expect(found?.bio).toBeNull();
-  });
+		expect(found?.bio).toBeNull();
+	});
 
-  it("updates only specific locale without affecting others", async () => {
-    const ctxEN = createTestContext({ locale: "en" });
-    const ctxSK = createTestContext({ locale: "sk" });
-    const ctxDE = createTestContext({ locale: "de" });
+	it("updates only specific locale without affecting others", async () => {
+		const ctxEN = createTestContext({ locale: "en" });
+		const ctxSK = createTestContext({ locale: "sk" });
+		const ctxDE = createTestContext({ locale: "de" });
 
-    const bioEN: TipTapContent = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "EN version" }],
-        },
-      ],
-    };
+		const bioEN: TipTapContent = {
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "EN version" }],
+				},
+			],
+		};
 
-    const bioSK: TipTapContent = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "SK version" }],
-        },
-      ],
-    };
+		const bioSK: TipTapContent = {
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "SK version" }],
+				},
+			],
+		};
 
-    const bioDE: TipTapContent = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "DE version" }],
-        },
-      ],
-    };
+		const bioDE: TipTapContent = {
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "DE version" }],
+				},
+			],
+		};
 
-    // Create in EN
-    const created = await setup.app.api.collections.barbers.create(
-      {
-        name: "Multi",
-        bio: bioEN,
-      },
-      ctxEN,
-    );
+		// Create in EN
+		const created = await setup.app.api.collections.barbers.create(
+			{
+				name: "Multi",
+				bio: bioEN,
+			},
+			ctxEN,
+		);
 
-    // Add SK
-    await setup.app.api.collections.barbers.updateById(
-      {
-        id: created.id,
-        data: {
-          name: "Multi SK",
-          bio: bioSK,
-        },
-      },
-      ctxSK,
-    );
+		// Add SK
+		await setup.app.api.collections.barbers.updateById(
+			{
+				id: created.id,
+				data: {
+					name: "Multi SK",
+					bio: bioSK,
+				},
+			},
+			ctxSK,
+		);
 
-    // Add DE
-    await setup.app.api.collections.barbers.updateById(
-      {
-        id: created.id,
-        data: {
-          name: "Multi DE",
-          bio: bioDE,
-        },
-      },
-      ctxDE,
-    );
+		// Add DE
+		await setup.app.api.collections.barbers.updateById(
+			{
+				id: created.id,
+				data: {
+					name: "Multi DE",
+					bio: bioDE,
+				},
+			},
+			ctxDE,
+		);
 
-    // Verify all locales have their own versions
-    const enBarber = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctxEN,
-    );
-    expect(enBarber?.bio).toEqual(bioEN);
+		// Verify all locales have their own versions
+		const enBarber = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctxEN,
+		);
+		expect(enBarber?.bio).toEqual(bioEN);
 
-    const skBarber = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctxSK,
-    );
-    expect(skBarber?.bio).toEqual(bioSK);
+		const skBarber = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctxSK,
+		);
+		expect(skBarber?.bio).toEqual(bioSK);
 
-    const deBarber = await setup.app.api.collections.barbers.findOne(
-      { where: { id: created.id } },
-      ctxDE,
-    );
-    expect(deBarber?.bio).toEqual(bioDE);
-  });
+		const deBarber = await setup.app.api.collections.barbers.findOne(
+			{ where: { id: created.id } },
+			ctxDE,
+		);
+		expect(deBarber?.bio).toEqual(bioDE);
+	});
 });

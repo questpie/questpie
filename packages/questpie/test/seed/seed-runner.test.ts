@@ -24,9 +24,7 @@ describe("SeedRunner", () => {
 
 	// ── Helpers ──────────────────────────────────────────────────────────
 
-	function makeSeed(
-		overrides: Partial<Seed> & { id: string },
-	): Seed {
+	function makeSeed(overrides: Partial<Seed> & { id: string }): Seed {
 		return {
 			category: "dev",
 			run: async () => {},
@@ -354,10 +352,7 @@ describe("SeedRunner", () => {
 	// ── Reset ───────────────────────────────────────────────────────────
 
 	it("resets all seed tracking", async () => {
-		const seeds: Seed[] = [
-			makeSeed({ id: "a" }),
-			makeSeed({ id: "b" }),
-		];
+		const seeds: Seed[] = [makeSeed({ id: "a" }), makeSeed({ id: "b" })];
 
 		await runner.run(seeds);
 		const before = await runner.status(seeds);

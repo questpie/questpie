@@ -5,6 +5,7 @@ import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import coldarkCold from "react-syntax-highlighter/dist/esm/styles/prism/coldark-cold";
 import coldarkDark from "react-syntax-highlighter/dist/esm/styles/prism/coldark-dark";
+import { AnimModuleGrid } from "@/components/landing/BrandVisuals";
 import { cn } from "@/lib/utils";
 
 SyntaxHighlighter.registerLanguage("typescript", typescript);
@@ -88,115 +89,6 @@ const snippets: Record<TabId, { code: string; filename: string }> = {
 const AUTO_INTERVAL = 5000;
 const PAUSE_AFTER_CLICK = 10000;
 
-// Subtle floating particles component
-function ParticlesBackground() {
-	const canvasRef = useRef<HTMLCanvasElement>(null);
-
-	useEffect(() => {
-		const canvas = canvasRef.current;
-		if (!canvas) return;
-
-		const ctx = canvas.getContext("2d");
-		if (!ctx) return;
-
-		let animationId: number;
-		let particles: Array<{
-			x: number;
-			y: number;
-			vx: number;
-			vy: number;
-			size: number;
-			opacity: number;
-		}> = [];
-
-		const resize = () => {
-			const rect = canvas.getBoundingClientRect();
-			canvas.width = rect.width * window.devicePixelRatio;
-			canvas.height = rect.height * window.devicePixelRatio;
-			ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-		};
-
-		const initParticles = () => {
-			particles = [];
-			const count = 25;
-			const rect = canvas.getBoundingClientRect();
-			for (let i = 0; i < count; i++) {
-				particles.push({
-					x: Math.random() * rect.width,
-					y: Math.random() * rect.height,
-					vx: (Math.random() - 0.5) * 0.3,
-					vy: (Math.random() - 0.5) * 0.3,
-					size: Math.random() * 2 + 1,
-					opacity: Math.random() * 0.25 + 0.1,
-				});
-			}
-		};
-
-		const draw = () => {
-			const rect = canvas.getBoundingClientRect();
-			ctx.clearRect(0, 0, rect.width, rect.height);
-
-			// Draw connections
-			ctx.strokeStyle = "hsl(var(--primary) / 0.08)";
-			ctx.lineWidth = 0.5;
-			for (let i = 0; i < particles.length; i++) {
-				for (let j = i + 1; j < particles.length; j++) {
-					const dx = particles[i].x - particles[j].x;
-					const dy = particles[i].y - particles[j].y;
-					const dist = Math.sqrt(dx * dx + dy * dy);
-					if (dist < 100) {
-						ctx.beginPath();
-						ctx.moveTo(particles[i].x, particles[i].y);
-						ctx.lineTo(particles[j].x, particles[j].y);
-						ctx.globalAlpha = (1 - dist / 100) * 0.3;
-						ctx.stroke();
-					}
-				}
-			}
-
-			// Draw particles
-			for (const p of particles) {
-				ctx.beginPath();
-				ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-				ctx.fillStyle = `hsl(var(--primary) / ${p.opacity})`;
-				ctx.globalAlpha = 1;
-				ctx.fill();
-
-				// Update position
-				p.x += p.vx;
-				p.y += p.vy;
-
-				// Bounce off edges
-				if (p.x < 0 || p.x > rect.width) p.vx *= -1;
-				if (p.y < 0 || p.y > rect.height) p.vy *= -1;
-			}
-
-			animationId = requestAnimationFrame(draw);
-		};
-
-		resize();
-		initParticles();
-		draw();
-
-		window.addEventListener("resize", () => {
-			resize();
-			initParticles();
-		});
-
-		return () => {
-			cancelAnimationFrame(animationId);
-			window.removeEventListener("resize", resize);
-		};
-	}, []);
-
-	return (
-		<canvas
-			ref={canvasRef}
-			className="absolute inset-0 pointer-events-none opacity-60"
-		/>
-	);
-}
-
 export function AdminShowcase() {
 	const [active, setActive] = useState<TabId>("dashboard");
 	const pauseUntilRef = useRef(0);
@@ -218,7 +110,7 @@ export function AdminShowcase() {
 	}, []);
 
 	return (
-		<section className="relative border-t border-border/40 py-20 overflow-hidden">
+		<section className="relative py-20 overflow-hidden">
 			{/* Dark mode glow */}
 			<div className="hidden dark:block absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[800px] pointer-events-none bg-[radial-gradient(ellipse,_oklch(0.5984_0.3015_310.74_/_0.05)_0%,_transparent_70%)]" />
 
@@ -231,10 +123,10 @@ export function AdminShowcase() {
 					viewport={{ once: true, margin: "-80px" }}
 					transition={{ duration: 0.6 }}
 				>
-					<h2 className="font-mono text-sm uppercase tracking-[0.2em] text-primary">
+					<h2 className="font-mono text-sm uppercase tracking-[0.2em] text-primary text-balance">
 						Admin UI
 					</h2>
-					<h3 className="text-3xl font-bold tracking-[-0.02em] text-balance md:text-4xl">
+					<h3 className="font-mono text-3xl font-bold tracking-[-0.02em] text-balance md:text-4xl">
 						Ship admin without building a second app
 					</h3>
 					<p className="text-muted-foreground text-balance">
@@ -252,8 +144,8 @@ export function AdminShowcase() {
 								{snippets[active].filename}
 							</span>
 							<div className="flex gap-1">
-								<div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
-								<div className="h-1.5 w-1.5 rounded-full bg-primary/20" />
+								<div className="h-1.5 w-1.5 bg-primary/40" />
+								<div className="h-1.5 w-1.5 bg-primary/20" />
 							</div>
 						</div>
 						<div className="flex-1 p-3 overflow-hidden">
@@ -307,16 +199,16 @@ export function AdminShowcase() {
 
 					{/* Column 2: Admin Preview */}
 					<div className="relative border border-border bg-card/20 backdrop-blur-sm overflow-hidden">
-						<ParticlesBackground />
+						<AnimModuleGrid className="absolute inset-0 w-full h-full pointer-events-none opacity-30" />
 
 						{/* Browser chrome */}
 						<div className="relative flex items-center gap-2 border-b border-border px-4 py-2.5 bg-background/50">
 							<div className="flex gap-1.5">
-								<div className="h-2.5 w-2.5 rounded-full bg-red-400/80" />
-								<div className="h-2.5 w-2.5 rounded-full bg-yellow-400/80" />
-								<div className="h-2.5 w-2.5 rounded-full bg-green-400/80" />
+								<div className="h-2.5 w-2.5 bg-red-400/80" />
+								<div className="h-2.5 w-2.5 bg-yellow-400/80" />
+								<div className="h-2.5 w-2.5 bg-green-400/80" />
 							</div>
-							<div className="ml-2 flex-1 border border-border/50 bg-background/60 rounded px-3 py-1">
+							<div className="ml-2 flex-1 border border-border/50 bg-background/60 px-3 py-1">
 								<span className="font-mono text-[10px] text-muted-foreground">
 									localhost:3000/admin
 								</span>
@@ -355,14 +247,14 @@ export function AdminShowcase() {
 								className={cn(
 									"text-left border p-4 transition-all cursor-pointer group min-h-[80px]",
 									active === tab.id
-										? "border-primary bg-primary/[0.08] border-l-[3px] border-l-primary shadow-[0_0_20px_rgba(var(--primary)/0.1)]"
+										? "border-primary bg-primary/[0.08] border-l-[3px] border-l-primary"
 										: "border-border bg-card/20 backdrop-blur-sm hover:border-primary/30 hover:bg-card/40",
 								)}
 							>
 								<div className="flex items-center gap-2">
 									<div
 										className={cn(
-											"h-2 w-2 rounded-full transition-colors",
+											"h-2 w-2 transition-colors",
 											active === tab.id
 												? "bg-primary"
 												: "bg-muted-foreground/30",
@@ -550,7 +442,7 @@ function DashboardMock() {
 					<div className="flex items-end gap-1 h-20">
 						{[40, 55, 35, 65, 80, 60, 75, 90, 70, 85, 95, 88].map((h, i) => (
 							<motion.div
-								key={`chart-bar-month-${i}`}
+								key={`chart-${h}`}
 								initial={{ height: 0 }}
 								animate={{ height: `${h}%` }}
 								transition={{ delay: i * 0.05, duration: 0.3 }}
@@ -619,7 +511,7 @@ function TableMock() {
 	return (
 		<div className="space-y-3">
 			<div className="flex items-center gap-2">
-				<div className="flex-1 border border-border bg-background/60 backdrop-blur-sm px-3 py-1.5 rounded-sm">
+				<div className="flex-1 border border-border bg-background/60 backdrop-blur-sm px-3 py-1.5">
 					<span className="text-xs text-muted-foreground">Search posts...</span>
 				</div>
 				<div className="flex gap-1.5">
@@ -658,7 +550,7 @@ function TableMock() {
 						<span className="text-xs text-muted-foreground">{row.author}</span>
 						<span
 							className={cn(
-								"inline-flex w-fit items-center px-1.5 py-0.5 text-[9px] font-medium rounded-sm",
+								"inline-flex w-fit items-center px-1.5 py-0.5 text-[9px] font-medium",
 								row.status === "published"
 									? "bg-primary/10 text-primary border border-primary/20"
 									: "bg-muted text-muted-foreground border border-border",
@@ -738,7 +630,7 @@ function FormMock() {
 						Author
 					</div>
 					<div className="flex items-center gap-2 border border-border bg-background/60 backdrop-blur-sm px-3 py-2 hover:border-primary/20 transition-colors">
-						<div className="h-4 w-4 bg-primary/20 rounded-full" />
+						<div className="h-4 w-4 bg-primary/20" />
 						<span className="text-xs text-foreground">Alex K.</span>
 					</div>
 				</div>
@@ -748,7 +640,7 @@ function FormMock() {
 					</div>
 					<div className="border border-border bg-background/60 backdrop-blur-sm px-3 py-2 hover:border-primary/20 transition-colors">
 						<span className="inline-flex items-center gap-1 text-xs">
-							<span className="h-1.5 w-1.5 bg-primary rounded-full" />
+							<span className="h-1.5 w-1.5 bg-primary" />
 							Published
 						</span>
 					</div>
@@ -789,7 +681,7 @@ function SidebarMock() {
 		<div className="grid gap-4 md:grid-cols-[0.8fr_1.2fr]">
 			<div className="border border-border bg-background/60 backdrop-blur-sm p-3 hover:border-primary/20 transition-colors">
 				<div className="mb-3 flex items-center gap-2">
-					<div className="h-4 w-4 bg-primary rounded-sm" />
+					<div className="h-4 w-4 bg-primary" />
 					<span className="text-xs font-bold">My App</span>
 				</div>
 				<div className="space-y-3">
@@ -804,7 +696,7 @@ function SidebarMock() {
 										key={item.name}
 										initial={{ opacity: 0, x: -5 }}
 										animate={{ opacity: 1, x: 0 }}
-										transition={{ delay: si * 0.1 + ii * 0.05 }}
+										transition={{ duration: 0.4, delay: si * 0.25 + ii * 0.12 }}
 										className={cn(
 											"flex items-center justify-between px-2 py-1.5 cursor-pointer transition-colors",
 											"active" in item && item.active
@@ -823,7 +715,7 @@ function SidebarMock() {
 											{item.name}
 										</span>
 										{"count" in item && (
-											<span className="text-[9px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+											<span className="text-[9px] text-muted-foreground bg-muted/50 px-1.5 py-0.5">
 												{item.count}
 											</span>
 										)}
@@ -841,7 +733,7 @@ function SidebarMock() {
 					</p>
 					<p className="text-sm text-muted-foreground">
 						Sidebar sections, grouping, and item counts — all from{" "}
-						<code className="text-xs text-foreground bg-muted/50 px-1 py-0.5 rounded">
+						<code className="text-xs text-foreground bg-muted/50 px-1 py-0.5">
 							.sidebar()
 						</code>{" "}
 						in your builder config.

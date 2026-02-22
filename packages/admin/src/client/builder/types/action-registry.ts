@@ -292,9 +292,7 @@ export function createActionRegistryProxy<
 /**
  * Get default header actions for a collection
  */
-function getDefaultHeaderActions<
-	TItem = any,
->(): HeaderActionsConfig<TItem> {
+function getDefaultHeaderActions<TItem = any>(): HeaderActionsConfig<TItem> {
 	return {
 		primary: [createCreateAction<TItem>()],
 		secondary: [],
@@ -304,9 +302,7 @@ function getDefaultHeaderActions<
 /**
  * Get default bulk actions for a collection
  */
-function getDefaultBulkActions<
-	TItem = any,
->(): ActionDefinition<TItem>[] {
+function getDefaultBulkActions<TItem = any>(): ActionDefinition<TItem>[] {
 	return [
 		createDeleteManyAction<TItem>(),
 		createRestoreManyAction<TItem>(),

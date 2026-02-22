@@ -21,52 +21,50 @@ import * as React from "react";
  * Parse prefill parameters from a URLSearchParams object
  */
 export function parsePrefillParams(
-  searchParams: URLSearchParams,
+	searchParams: URLSearchParams,
 ): Record<string, unknown> {
-  const prefill: Record<string, unknown> = {};
+	const prefill: Record<string, unknown> = {};
 
-  for (const [key, value] of searchParams.entries()) {
-    if (key.startsWith("prefill.")) {
-      const fieldName = key.slice("prefill.".length);
-      if (fieldName) {
-        // Try to parse JSON for complex values (arrays, objects)
-        try {
-          // Check if value looks like JSON
-          if (
-            value.startsWith("[") ||
-            value.startsWith("{") ||
-            value === "true" ||
-            value === "false" ||
-            value === "null" ||
-            !isNaN(Number(value))
-          ) {
-            prefill[fieldName] = JSON.parse(value);
-          } else {
-            prefill[fieldName] = value;
-          }
-        } catch {
-          // If parsing fails, use as string
-          prefill[fieldName] = value;
-        }
-      }
-    }
-  }
+	for (const [key, value] of searchParams.entries()) {
+		if (key.startsWith("prefill.")) {
+			const fieldName = key.slice("prefill.".length);
+			if (fieldName) {
+				// Try to parse JSON for complex values (arrays, objects)
+				try {
+					// Check if value looks like JSON
+					if (
+						value.startsWith("[") ||
+						value.startsWith("{") ||
+						value === "true" ||
+						value === "false" ||
+						value === "null" ||
+						!isNaN(Number(value))
+					) {
+						prefill[fieldName] = JSON.parse(value);
+					} else {
+						prefill[fieldName] = value;
+					}
+				} catch {
+					// If parsing fails, use as string
+					prefill[fieldName] = value;
+				}
+			}
+		}
+	}
 
-  return prefill;
+	return prefill;
 }
 
 /**
  * Parse prefill parameters from URL string
  */
-function parsePrefillParamsFromUrl(
-  url: string,
-): Record<string, unknown> {
-  try {
-    const urlObj = new URL(url, "http://localhost");
-    return parsePrefillParams(urlObj.searchParams);
-  } catch {
-    return {};
-  }
+function parsePrefillParamsFromUrl(url: string): Record<string, unknown> {
+	try {
+		const urlObj = new URL(url, "http://localhost");
+		return parsePrefillParams(urlObj.searchParams);
+	} catch {
+		return {};
+	}
 }
 
 /**
@@ -75,26 +73,26 @@ function parsePrefillParamsFromUrl(
  * @returns Object with field names as keys and prefill values
  */
 function usePrefillParams(): Record<string, unknown> {
-  const [prefill, setPrefill] = React.useState<Record<string, unknown>>({});
+	const [prefill, setPrefill] = React.useState<Record<string, unknown>>({});
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
+	React.useEffect(() => {
+		if (typeof window === "undefined") return;
 
-    // Parse initial URL
-    const searchParams = new URLSearchParams(window.location.search);
-    setPrefill(parsePrefillParams(searchParams));
+		// Parse initial URL
+		const searchParams = new URLSearchParams(window.location.search);
+		setPrefill(parsePrefillParams(searchParams));
 
-    // Listen for URL changes (for SPA navigation)
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      setPrefill(parsePrefillParams(params));
-    };
+		// Listen for URL changes (for SPA navigation)
+		const handlePopState = () => {
+			const params = new URLSearchParams(window.location.search);
+			setPrefill(parsePrefillParams(params));
+		};
 
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+		window.addEventListener("popstate", handlePopState);
+		return () => window.removeEventListener("popstate", handlePopState);
+	}, []);
 
-  return prefill;
+	return prefill;
 }
 
 /**
@@ -114,20 +112,19 @@ function usePrefillParams(): Record<string, unknown> {
  * ```
  */
 export function buildPrefillUrl(
-  baseUrl: string,
-  prefillData: Record<string, unknown>,
+	baseUrl: string,
+	prefillData: Record<string, unknown>,
 ): string {
-  const url = new URL(baseUrl, "http://localhost");
+	const url = new URL(baseUrl, "http://localhost");
 
-  for (const [key, value] of Object.entries(prefillData)) {
-    if (value !== undefined && value !== null) {
-      const stringValue =
-        typeof value === "object" ? JSON.stringify(value) : String(value);
-      url.searchParams.set(`prefill.${key}`, stringValue);
-    }
-  }
+	for (const [key, value] of Object.entries(prefillData)) {
+		if (value !== undefined && value !== null) {
+			const stringValue =
+				typeof value === "object" ? JSON.stringify(value) : String(value);
+			url.searchParams.set(`prefill.${key}`, stringValue);
+		}
+	}
 
-  // Return path + search (without origin for relative URLs)
-  return url.pathname + url.search;
+	// Return path + search (without origin for relative URLs)
+	return url.pathname + url.search;
 }
-

@@ -1,5 +1,5 @@
+import { GithubLogo } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Github } from "lucide-react";
 
 export function Footer() {
 	return (
@@ -177,9 +177,10 @@ export function Footer() {
 						href="https://github.com/questpie/questpie"
 						target="_blank"
 						rel="noreferrer"
+						aria-label="QUESTPIE on GitHub"
 						className="text-muted-foreground transition-colors hover:text-foreground"
 					>
-						<Github className="h-4 w-4" />
+						<GithubLogo className="h-4 w-4" aria-hidden="true" />
 					</a>
 				</div>
 			</div>

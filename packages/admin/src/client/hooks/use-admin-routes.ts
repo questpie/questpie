@@ -8,17 +8,17 @@
 import type { Questpie } from "questpie";
 import * as React from "react";
 import {
-  selectAdmin,
-  selectBasePath,
-  selectNavigate,
-  useAdminStore,
+	selectAdmin,
+	selectBasePath,
+	selectNavigate,
+	useAdminStore,
 } from "../runtime";
 import {
-  type AdminRoutes,
-  type CollectionNames,
-  createAdminRoutes,
-  createNavigator,
-  type GlobalNames,
+	type AdminRoutes,
+	type CollectionNames,
+	createAdminRoutes,
+	createNavigator,
+	type GlobalNames,
 } from "../utils/routes";
 
 // ============================================================================
@@ -26,66 +26,66 @@ import {
 // ============================================================================
 
 interface UseAdminRoutesOptions {
-  /** Override the base path (default: from context or "/admin") */
-  basePath?: string;
+	/** Override the base path (default: from context or "/admin") */
+	basePath?: string;
 }
 
 interface UseAdminRoutesResult<TApp extends Questpie<any>> {
-  /** Routes builder */
-  routes: AdminRoutes<TApp>;
+	/** Routes builder */
+	routes: AdminRoutes<TApp>;
 
-  /** Navigate to dashboard */
-  toDashboard: () => void;
+	/** Navigate to dashboard */
+	toDashboard: () => void;
 
-  /** Navigate to collection list */
-  toCollection: <K extends CollectionNames<TApp>>(collection: K) => void;
+	/** Navigate to collection list */
+	toCollection: <K extends CollectionNames<TApp>>(collection: K) => void;
 
-  /** Navigate to collection create */
-  toCollectionCreate: <K extends CollectionNames<TApp>>(collection: K) => void;
+	/** Navigate to collection create */
+	toCollectionCreate: <K extends CollectionNames<TApp>>(collection: K) => void;
 
-  /** Navigate to collection edit */
-  toCollectionEdit: <K extends CollectionNames<TApp>>(
-    collection: K,
-    id: string,
-  ) => void;
+	/** Navigate to collection edit */
+	toCollectionEdit: <K extends CollectionNames<TApp>>(
+		collection: K,
+		id: string,
+	) => void;
 
-  /** Navigate to global edit */
-  toGlobal: <K extends GlobalNames<TApp>>(global: K) => void;
+	/** Navigate to global edit */
+	toGlobal: <K extends GlobalNames<TApp>>(global: K) => void;
 
-  /** Navigate to custom page */
-  toPage: (pageId: string) => void;
+	/** Navigate to custom page */
+	toPage: (pageId: string) => void;
 
-  /** Get dashboard URL */
-  dashboardUrl: () => string;
+	/** Get dashboard URL */
+	dashboardUrl: () => string;
 
-  /** Get collection list URL */
-  collectionUrl: <K extends CollectionNames<TApp>>(collection: K) => string;
+	/** Get collection list URL */
+	collectionUrl: <K extends CollectionNames<TApp>>(collection: K) => string;
 
-  /** Get collection create URL */
-  collectionCreateUrl: <K extends CollectionNames<TApp>>(
-    collection: K,
-  ) => string;
+	/** Get collection create URL */
+	collectionCreateUrl: <K extends CollectionNames<TApp>>(
+		collection: K,
+	) => string;
 
-  /** Get collection edit URL */
-  collectionEditUrl: <K extends CollectionNames<TApp>>(
-    collection: K,
-    id: string,
-  ) => string;
+	/** Get collection edit URL */
+	collectionEditUrl: <K extends CollectionNames<TApp>>(
+		collection: K,
+		id: string,
+	) => string;
 
-  /** Get global edit URL */
-  globalUrl: <K extends GlobalNames<TApp>>(global: K) => string;
+	/** Get global edit URL */
+	globalUrl: <K extends GlobalNames<TApp>>(global: K) => string;
 
-  /** Get custom page URL */
-  pageUrl: (pageId: string) => string | null;
+	/** Get custom page URL */
+	pageUrl: (pageId: string) => string | null;
 
-  /** Get all page URLs */
-  allPageUrls: () => Record<string, string>;
+	/** Get all page URLs */
+	allPageUrls: () => Record<string, string>;
 
-  /** Parse current pathname */
-  parse: AdminRoutes<TApp>["parse"];
+	/** Parse current pathname */
+	parse: AdminRoutes<TApp>["parse"];
 
-  /** Check if pathname matches */
-  matches: AdminRoutes<TApp>["matches"];
+	/** Check if pathname matches */
+	matches: AdminRoutes<TApp>["matches"];
 }
 
 // ============================================================================
@@ -128,53 +128,53 @@ interface UseAdminRoutesResult<TApp extends Questpie<any>> {
  * ```
  */
 export function useAdminRoutes<TApp extends Questpie<any>>(
-  options: UseAdminRoutesOptions = {},
+	options: UseAdminRoutesOptions = {},
 ): UseAdminRoutesResult<TApp> {
-  const admin = useAdminStore(selectAdmin);
-  const storeBasePath = useAdminStore(selectBasePath);
-  const storeNavigate = useAdminStore(selectNavigate);
+	const admin = useAdminStore(selectAdmin);
+	const storeBasePath = useAdminStore(selectBasePath);
+	const storeNavigate = useAdminStore(selectNavigate);
 
-  const basePath = options.basePath ?? storeBasePath;
+	const basePath = options.basePath ?? storeBasePath;
 
-  // Create routes builder (memoized)
-  const routes = React.useMemo(
-    () => createAdminRoutes<TApp>(admin, { basePath }),
-    [admin, basePath],
-  );
+	// Create routes builder (memoized)
+	const routes = React.useMemo(
+		() => createAdminRoutes<TApp>(admin, { basePath }),
+		[admin, basePath],
+	);
 
-  // Get navigate function from store
-  const navigate = storeNavigate;
+	// Get navigate function from store
+	const navigate = storeNavigate;
 
-  // Create navigator (memoized)
-  const nav = React.useMemo(
-    () => createNavigator(routes, navigate),
-    [routes, navigate],
-  );
+	// Create navigator (memoized)
+	const nav = React.useMemo(
+		() => createNavigator(routes, navigate),
+		[routes, navigate],
+	);
 
-  return {
-    routes,
+	return {
+		routes,
 
-    // Navigation functions
-    toDashboard: nav.dashboard,
-    toCollection: nav.collection,
-    toCollectionCreate: nav.collectionCreate,
-    toCollectionEdit: nav.collectionEdit,
-    toGlobal: nav.global,
-    toPage: nav.page,
+		// Navigation functions
+		toDashboard: nav.dashboard,
+		toCollection: nav.collection,
+		toCollectionCreate: nav.collectionCreate,
+		toCollectionEdit: nav.collectionEdit,
+		toGlobal: nav.global,
+		toPage: nav.page,
 
-    // URL getters
-    dashboardUrl: routes.dashboard,
-    collectionUrl: routes.collections.list,
-    collectionCreateUrl: routes.collections.create,
-    collectionEditUrl: routes.collections.edit,
-    globalUrl: routes.globals.edit,
-    pageUrl: routes.pages.byId,
-    allPageUrls: routes.pages.all,
+		// URL getters
+		dashboardUrl: routes.dashboard,
+		collectionUrl: routes.collections.list,
+		collectionCreateUrl: routes.collections.create,
+		collectionEditUrl: routes.collections.edit,
+		globalUrl: routes.globals.edit,
+		pageUrl: routes.pages.byId,
+		allPageUrls: routes.pages.all,
 
-    // Parsing & matching
-    parse: routes.parse,
-    matches: routes.matches,
-  };
+		// Parsing & matching
+		parse: routes.parse,
+		matches: routes.matches,
+	};
 }
 
 // ============================================================================
@@ -201,23 +201,23 @@ export function useAdminRoutes<TApp extends Questpie<any>>(
  * ```
  */
 function useAdminRoutesStandalone<TApp extends Questpie<any>>(options: {
-  admin: import("../builder/admin").Admin;
-  basePath?: string;
-  navigate: (path: string) => void;
+	admin: import("../builder/admin").Admin;
+	basePath?: string;
+	navigate: (path: string) => void;
 }) {
-  const { admin, basePath = "/admin", navigate } = options;
+	const { admin, basePath = "/admin", navigate } = options;
 
-  const routes = React.useMemo(
-    () => createAdminRoutes<TApp>(admin, { basePath }),
-    [admin, basePath],
-  );
+	const routes = React.useMemo(
+		() => createAdminRoutes<TApp>(admin, { basePath }),
+		[admin, basePath],
+	);
 
-  const go = React.useMemo(
-    () => createNavigator(routes, navigate),
-    [routes, navigate],
-  );
+	const go = React.useMemo(
+		() => createNavigator(routes, navigate),
+		[routes, navigate],
+	);
 
-  return { routes, go };
+	return { routes, go };
 }
 
 // ============================================================================
@@ -228,18 +228,18 @@ function useAdminRoutesStandalone<TApp extends Questpie<any>>(options: {
  * Props for admin link components
  */
 export interface AdminLinkProps<TApp extends Questpie<any>> {
-  /** Link to dashboard */
-  to?: "dashboard";
-  /** Link to collection */
-  collection?: CollectionNames<TApp>;
-  /** Collection action */
-  action?: "list" | "create" | "edit";
-  /** Item ID for edit action */
-  id?: string;
-  /** Link to global */
-  global?: GlobalNames<TApp>;
-  /** Link to custom page by ID */
-  pageId?: string;
+	/** Link to dashboard */
+	to?: "dashboard";
+	/** Link to collection */
+	collection?: CollectionNames<TApp>;
+	/** Collection action */
+	action?: "list" | "create" | "edit";
+	/** Item ID for edit action */
+	id?: string;
+	/** Link to global */
+	global?: GlobalNames<TApp>;
+	/** Link to custom page by ID */
+	pageId?: string;
 }
 
 /**
@@ -257,32 +257,31 @@ export interface AdminLinkProps<TApp extends Questpie<any>> {
  * ```
  */
 export function getAdminLinkHref<TApp extends Questpie<any>>(
-  routes: AdminRoutes<TApp>,
-  props: AdminLinkProps<TApp>,
+	routes: AdminRoutes<TApp>,
+	props: AdminLinkProps<TApp>,
 ): string {
-  if (props.to === "dashboard") {
-    return routes.dashboard();
-  }
+	if (props.to === "dashboard") {
+		return routes.dashboard();
+	}
 
-  if (props.collection) {
-    const action = props.action ?? "list";
-    if (action === "create") {
-      return routes.collections.create(props.collection);
-    }
-    if (action === "edit" && props.id) {
-      return routes.collections.edit(props.collection, props.id);
-    }
-    return routes.collections.list(props.collection);
-  }
+	if (props.collection) {
+		const action = props.action ?? "list";
+		if (action === "create") {
+			return routes.collections.create(props.collection);
+		}
+		if (action === "edit" && props.id) {
+			return routes.collections.edit(props.collection, props.id);
+		}
+		return routes.collections.list(props.collection);
+	}
 
-  if (props.global) {
-    return routes.globals.edit(props.global);
-  }
+	if (props.global) {
+		return routes.globals.edit(props.global);
+	}
 
-  if (props.pageId) {
-    return routes.pages.byId(props.pageId) ?? routes.dashboard();
-  }
+	if (props.pageId) {
+		return routes.pages.byId(props.pageId) ?? routes.dashboard();
+	}
 
-  return routes.dashboard();
+	return routes.dashboard();
 }
-

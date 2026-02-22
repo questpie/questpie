@@ -5,13 +5,13 @@
  */
 
 export {
-	resolveWorkflowConfig,
 	type ResolvedWorkflowConfig,
 	type ResolvedWorkflowStage,
+	resolveWorkflowConfig,
 } from "./config.js";
 
 export {
+	type ScheduledTransitionPayload,
 	scheduledTransitionJob,
 	scheduledTransitionSchema,
-	type ScheduledTransitionPayload,
 } from "./scheduled-transition.job.js";

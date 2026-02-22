@@ -17,13 +17,12 @@ import type {
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
 import type { RequestContext } from "#questpie/server/config/context.js";
+import { QuestpieMigrationsAPI } from "#questpie/server/config/integrated/migrations-api.js";
 import {
 	QuestpieAPI,
 	type QuestpieApi,
 } from "#questpie/server/config/integrated/questpie-api.js";
-import { QuestpieMigrationsAPI } from "#questpie/server/config/integrated/migrations-api.js";
 import { QuestpieSeedsAPI } from "#questpie/server/config/integrated/seeds-api.js";
-import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
 import type {
 	AccessMode,
 	DrizzleClientFromQuestpieConfig,
@@ -51,6 +50,7 @@ import {
 	type SearchServiceWrapper,
 } from "#questpie/server/integrated/search/index.js";
 import { createDiskDriver } from "#questpie/server/integrated/storage/create-driver.js";
+import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type {
 	AnyCollectionOrBuilder,
@@ -504,7 +504,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 					appendHook(state.hooks, hookName, wrapped);
 				}
 			}
-
 		}
 
 		// Inject global global hooks
@@ -568,7 +567,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				}
 			}
 		}
-
 	}
 
 	/**

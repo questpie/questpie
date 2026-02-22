@@ -212,9 +212,8 @@ export function Grainient({
 				const w = Math.max(1, Math.floor(rect.width));
 				const h = Math.max(1, Math.floor(rect.height));
 				renderer.setSize(w, h);
-				const res = (
-					program.uniforms.iResolution as { value: Float32Array }
-				).value;
+				const res = (program.uniforms.iResolution as { value: Float32Array })
+					.value;
 				res[0] = gl.drawingBufferWidth;
 				res[1] = gl.drawingBufferHeight;
 			};
@@ -226,8 +225,7 @@ export function Grainient({
 			const t0 = performance.now();
 			const loop = (t: number) => {
 				if (disposed) return;
-				(program.uniforms.iTime as { value: number }).value =
-					(t - t0) * 0.001;
+				(program.uniforms.iTime as { value: number }).value = (t - t0) * 0.001;
 				renderer.render({ scene: mesh });
 				raf = requestAnimationFrame(loop);
 			};

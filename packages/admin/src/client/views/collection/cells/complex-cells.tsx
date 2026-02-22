@@ -286,7 +286,9 @@ export function ArrayCell({
 								.slice(0, 3);
 
 							const itemId =
-								obj.id ?? obj._id ?? `${label}-${JSON.stringify(obj).slice(0, 50)}`;
+								obj.id ??
+								obj._id ??
+								`${label}-${JSON.stringify(obj).slice(0, 50)}`;
 
 							return (
 								<div key={String(itemId)} className="py-1">

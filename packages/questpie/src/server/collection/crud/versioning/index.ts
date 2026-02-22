@@ -5,6 +5,6 @@
  */
 
 export {
-  createVersionRecord,
-  type CreateVersionOptions,
+	type CreateVersionOptions,
+	createVersionRecord,
 } from "./create-version.js";

@@ -1542,9 +1542,7 @@ interface FormViewConfigContext<
  * builder.listView("table"); // now has type support
  * ```
  */
-interface QuestpieBuilderAdminMethods<
-	TComponentNames extends string = string,
-> {
+interface QuestpieBuilderAdminMethods<TComponentNames extends string = string> {
 	/** Create a list view definition */
 	listView<TName extends string>(
 		name: TName,

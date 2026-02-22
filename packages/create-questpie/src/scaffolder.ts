@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { cp, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { cp, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import type { ProjectOptions } from "./prompts.js";

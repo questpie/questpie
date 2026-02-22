@@ -7,6 +7,9 @@ Allow: /
 # Sitemaps
 Sitemap: https://questpie.com/sitemap.xml
 
+# Feeds
+# RSS: https://questpie.com/rss.xml
+
 # Crawl-delay for politeness
 Crawl-delay: 1
 

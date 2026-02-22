@@ -109,8 +109,7 @@ function CitiesLanding() {
 
 										{city.population && (
 											<p className="text-sm text-muted-foreground">
-												Population:{" "}
-												{city.population.toLocaleString()}
+												Population: {city.population.toLocaleString()}
 											</p>
 										)}
 

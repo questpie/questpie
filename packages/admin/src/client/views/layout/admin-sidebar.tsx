@@ -298,9 +298,10 @@ function useServerNavigation(): NavigationGroup[] | undefined {
 // Internal Hook - Resolve props from store
 // ============================================================================
 
-function useSidebarProps(props: {
-	brandName?: string;
-}): { navigation: NavigationGroup[]; brandName: string } {
+function useSidebarProps(props: { brandName?: string }): {
+	navigation: NavigationGroup[];
+	brandName: string;
+} {
 	const storeNavigation = useAdminStore((s) => s.navigation);
 	const storeBrandName = useAdminStore((s) => s.brandName);
 
@@ -530,7 +531,9 @@ function NavItem({
 
 	if (renderNavItem) {
 		const NavItemRenderer = renderNavItem;
-		return <NavItemRenderer item={item} isActive={isActive} collapsed={collapsed} />;
+		return (
+			<NavItemRenderer item={item} isActive={isActive} collapsed={collapsed} />
+		);
 	}
 
 	const label = resolveText(item.label);
@@ -612,8 +615,9 @@ type CollapsedSectionsMap = Record<string, boolean>;
 function useSidebarCollapsedSections() {
 	const user = useCurrentUser();
 	const queryClient = useQueryClient();
-	const { data: stored, isLoading } =
-		useAdminPreference<CollapsedSectionsMap>(SIDEBAR_COLLAPSED_SECTIONS_KEY);
+	const { data: stored, isLoading } = useAdminPreference<CollapsedSectionsMap>(
+		SIDEBAR_COLLAPSED_SECTIONS_KEY,
+	);
 	const { mutate: persist } = useSetAdminPreference<CollapsedSectionsMap>(
 		SIDEBAR_COLLAPSED_SECTIONS_KEY,
 	);
@@ -687,8 +691,7 @@ function NavGroup({
 				<SidebarGroupLabel
 					className={cn(
 						"gap-2 px-3 mt-2",
-						group.collapsible &&
-							"cursor-pointer hover:text-sidebar-foreground",
+						group.collapsible && "cursor-pointer hover:text-sidebar-foreground",
 						depth > 0 && "pl-6",
 					)}
 					onClick={
@@ -731,8 +734,7 @@ function NavGroup({
 								// Handle navigation items
 								// Links and pages use exact matching, collections/globals use prefix
 								const shouldUseExact =
-									element.type === "link" ||
-									element.type === "page";
+									element.type === "link" || element.type === "page";
 
 								return (
 									<NavItem
@@ -1023,8 +1025,7 @@ export function AdminSidebar({
 	const collapsed = state === "collapsed";
 
 	// Persisted sidebar section collapse state
-	const { isSectionCollapsed, toggleSection } =
-		useSidebarCollapsedSections();
+	const { isSectionCollapsed, toggleSection } = useSidebarCollapsedSections();
 
 	// Close sidebar on mobile when navigating
 	const handleBrandClick = React.useCallback(() => {

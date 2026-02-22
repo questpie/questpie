@@ -15,8 +15,8 @@ import {
 } from "@tanstack/react-router";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
-import { getCityBySlug, getSiteSettings } from "@/lib/server-functions";
 import { queryClient } from "@/lib/query-client";
+import { getCityBySlug, getSiteSettings } from "@/lib/server-functions";
 import stylesCss from "@/styles.css?url";
 
 export const Route = createFileRoute("/_app/$citySlug")({

@@ -17,9 +17,9 @@
  */
 
 import { z } from "zod";
-import { job } from "#questpie/server/integrated/queue/job.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import { ApiError } from "#questpie/server/errors/base.js";
+import { job } from "#questpie/server/integrated/queue/job.js";
 
 /**
  * Schema for scheduled transition job payload

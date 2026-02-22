@@ -248,7 +248,8 @@ export class Global<TState extends GlobalBuilderState> {
 	 * Generate CRUD operations
 	 */
 	generateCRUD(
-		db: any, app?: any,
+		db: any,
+		app?: any,
 	): GlobalCRUD<
 		InferGlobalSelect<
 			any,
@@ -342,7 +343,8 @@ export class Global<TState extends GlobalBuilderState> {
 	private generateVersionsTable(): PgTable | null {
 		const versioning = this.state.options.versioning;
 		if (!versioning) return null;
-		if (typeof versioning === "object" && versioning.enabled === false) return null;
+		if (typeof versioning === "object" && versioning.enabled === false)
+			return null;
 
 		const tableName = `${this.state.name}_versions`;
 		const isScoped = !!this.state.options.scoped;
@@ -391,7 +393,8 @@ export class Global<TState extends GlobalBuilderState> {
 	private generateI18nVersionsTable(): PgTable | null {
 		const versioning = this.state.options.versioning;
 		if (!versioning) return null;
-		if (typeof versioning === "object" && versioning.enabled === false) return null;
+		if (typeof versioning === "object" && versioning.enabled === false)
+			return null;
 		if (this.state.localized.length === 0) return null;
 
 		const tableName = `${this.state.name}_i18n_versions`;

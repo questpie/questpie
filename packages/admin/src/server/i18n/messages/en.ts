@@ -598,7 +598,8 @@ export default {
 
 	// Audit Log
 	"audit.collection.label": "Audit Log",
-	"audit.collection.description": "Browse all recorded changes and user activity",
+	"audit.collection.description":
+		"Browse all recorded changes and user activity",
 	"audit.sections.event": "Event Details",
 	"audit.sections.user": "User",
 	"audit.sections.changes": "Changes",
@@ -611,7 +612,10 @@ export default {
 	"history.tabActivity": "Activity",
 	"history.tabVersions": "Versions",
 	"history.empty": "No activity recorded",
-	"history.showChanges": { one: "Show changes ({{count}})", other: "Show changes ({{count}})" },
+	"history.showChanges": {
+		one: "Show changes ({{count}})",
+		other: "Show changes ({{count}})",
+	},
 	"history.hideChanges": "Hide changes",
 
 	// Workflow

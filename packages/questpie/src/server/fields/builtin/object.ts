@@ -209,10 +209,7 @@ function resolveFields(
  * });
  * ```
  */
-export const objectField = field<
-	ObjectFieldConfig,
-	Record<string, unknown>
->()({
+export const objectField = field<ObjectFieldConfig, Record<string, unknown>>()({
 	type: "object" as const,
 	_value: undefined as unknown as Record<string, unknown>,
 	toColumn(name: string, config: ObjectFieldConfig) {

@@ -5,8 +5,8 @@
  * Returns full records with search metadata (score, highlights, indexed title).
  */
 
-import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { selectClient, useAdminStore, useScopedLocale } from "../runtime";
 
 // ============================================================================
@@ -23,19 +23,19 @@ import { selectClient, useAdminStore, useScopedLocale } from "../runtime";
  * ```
  */
 export function useDebouncedValue<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+	const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setDebouncedValue(value);
+		}, delay);
 
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [value, delay]);
+		return () => {
+			clearTimeout(timer);
+		};
+	}, [value, delay]);
 
-  return debouncedValue;
+	return debouncedValue;
 }
 
 // ============================================================================
@@ -46,115 +46,115 @@ export function useDebouncedValue<T>(value: T, delay: number): T {
  * Facet definition for search queries
  */
 interface SearchFacetDefinition {
-  field: string;
-  limit?: number;
-  sortBy?: "count" | "alpha";
+	field: string;
+	limit?: number;
+	sortBy?: "count" | "alpha";
 }
 
 /**
  * Search options for the hook
  */
 interface UseSearchOptions {
-  /**
-   * Collection to search in (required)
-   */
-  collection: string;
+	/**
+	 * Collection to search in (required)
+	 */
+	collection: string;
 
-  /**
-   * Search query string
-   */
-  query: string;
+	/**
+	 * Search query string
+	 */
+	query: string;
 
-  /**
-   * Additional metadata filters
-   */
-  filters?: Record<string, string | string[]>;
+	/**
+	 * Additional metadata filters
+	 */
+	filters?: Record<string, string | string[]>;
 
-  /**
-   * Result limit (default: 50)
-   */
-  limit?: number;
+	/**
+	 * Result limit (default: 50)
+	 */
+	limit?: number;
 
-  /**
-   * Result offset (default: 0)
-   */
-  offset?: number;
+	/**
+	 * Result offset (default: 0)
+	 */
+	offset?: number;
 
-  /**
-   * Include highlights (default: true)
-   */
-  highlights?: boolean;
+	/**
+	 * Include highlights (default: true)
+	 */
+	highlights?: boolean;
 
-  /**
-   * Facets to retrieve
-   */
-  facets?: SearchFacetDefinition[];
+	/**
+	 * Facets to retrieve
+	 */
+	facets?: SearchFacetDefinition[];
 
-  /**
-   * Whether the query is enabled (default: true if query is non-empty)
-   */
-  enabled?: boolean;
+	/**
+	 * Whether the query is enabled (default: true if query is non-empty)
+	 */
+	enabled?: boolean;
 }
 
 /**
  * Search metadata attached to each result
  */
 interface SearchMeta {
-  /** Relevance score from search */
-  score: number;
-  /** Highlighted snippets with <mark> tags */
-  highlights?: {
-    title?: string;
-    content?: string;
-  };
-  /** Title as stored in search index */
-  indexedTitle: string;
-  /** Content preview from search index */
-  indexedContent?: string;
+	/** Relevance score from search */
+	score: number;
+	/** Highlighted snippets with <mark> tags */
+	highlights?: {
+		title?: string;
+		content?: string;
+	};
+	/** Title as stored in search index */
+	indexedTitle: string;
+	/** Content preview from search index */
+	indexedContent?: string;
 }
 
 /**
  * Populated search result - full record with search metadata
  */
 interface PopulatedSearchResult<T = Record<string, any>> {
-  /** Full record data (spread at top level) */
-  [key: string]: any;
-  /** Collection name */
-  _collection: string;
-  /** Search metadata */
-  _search: SearchMeta;
+	/** Full record data (spread at top level) */
+	[key: string]: any;
+	/** Collection name */
+	_collection: string;
+	/** Search metadata */
+	_search: SearchMeta;
 }
 
 /**
  * Facet value with count
  */
 interface SearchFacetValue {
-  value: string;
-  count: number;
+	value: string;
+	count: number;
 }
 
 /**
  * Facet result
  */
 interface SearchFacetResult {
-  field: string;
-  values: SearchFacetValue[];
-  stats?: {
-    min: number;
-    max: number;
-  };
+	field: string;
+	values: SearchFacetValue[];
+	stats?: {
+		min: number;
+		max: number;
+	};
 }
 
 /**
  * Search response with populated records
  */
 interface SearchResponse<T = Record<string, any>> {
-  /** Full records with search metadata */
-  docs: PopulatedSearchResult<T>[];
-  /** Total count (accurate after access filtering) */
-  total: number;
-  /** Facet results (if requested) */
-  facets?: SearchFacetResult[];
+	/** Full records with search metadata */
+	docs: PopulatedSearchResult<T>[];
+	/** Total count (accurate after access filtering) */
+	total: number;
+	/** Facet results (if requested) */
+	facets?: SearchFacetResult[];
 }
 
 // ============================================================================
@@ -190,62 +190,62 @@ interface SearchResponse<T = Record<string, any>> {
  * ```
  */
 export function useSearch<T = Record<string, any>>(
-  options: UseSearchOptions,
-  queryOptions?: Omit<
-    UseQueryOptions<SearchResponse<T>>,
-    "queryKey" | "queryFn"
-  >,
+	options: UseSearchOptions,
+	queryOptions?: Omit<
+		UseQueryOptions<SearchResponse<T>>,
+		"queryKey" | "queryFn"
+	>,
 ) {
-  const client = useAdminStore(selectClient);
-  const { locale: contentLocale } = useScopedLocale();
+	const client = useAdminStore(selectClient);
+	const { locale: contentLocale } = useScopedLocale();
 
-  const {
-    collection,
-    query,
-    filters,
-    limit = 50,
-    offset = 0,
-    highlights = true,
-    facets,
-    enabled,
-  } = options;
+	const {
+		collection,
+		query,
+		filters,
+		limit = 50,
+		offset = 0,
+		highlights = true,
+		facets,
+		enabled,
+	} = options;
 
-  // Determine if search should be enabled
-  // By default, enabled when query has content (after trimming)
-  const isEnabled = enabled ?? query?.trim().length > 0;
+	// Determine if search should be enabled
+	// By default, enabled when query has content (after trimming)
+	const isEnabled = enabled ?? query?.trim().length > 0;
 
-  return useQuery<SearchResponse<T>>({
-    queryKey: [
-      "questpie",
-      "search",
-      collection,
-      query,
-      filters,
-      limit,
-      offset,
-      contentLocale,
-    ],
-    queryFn: async () => {
-      // Use the client's search API
-      const response = await (client as any).search.search({
-        query,
-        collections: [collection],
-        locale: contentLocale,
-        limit,
-        offset,
-        filters,
-        highlights,
-        facets,
-      });
-      return response;
-    },
-    enabled: isEnabled,
-    // Keep previous data while fetching new results for smoother UX
-    placeholderData: (prev) => prev,
-    // Stale time for search results (30 seconds)
-    staleTime: 30 * 1000,
-    ...queryOptions,
-  });
+	return useQuery<SearchResponse<T>>({
+		queryKey: [
+			"questpie",
+			"search",
+			collection,
+			query,
+			filters,
+			limit,
+			offset,
+			contentLocale,
+		],
+		queryFn: async () => {
+			// Use the client's search API
+			const response = await (client as any).search.search({
+				query,
+				collections: [collection],
+				locale: contentLocale,
+				limit,
+				offset,
+				filters,
+				highlights,
+				facets,
+			});
+			return response;
+		},
+		enabled: isEnabled,
+		// Keep previous data while fetching new results for smoother UX
+		placeholderData: (prev) => prev,
+		// Stale time for search results (30 seconds)
+		staleTime: 30 * 1000,
+		...queryOptions,
+	});
 }
 
 /**
@@ -258,13 +258,13 @@ export function useSearch<T = Record<string, any>>(
  * ```
  */
 function useReindex() {
-  const client = useAdminStore(selectClient);
+	const client = useAdminStore(selectClient);
 
-  return {
-    reindex: async (collection: string) => {
-      return (client as any).search.reindex(collection);
-    },
-  };
+	return {
+		reindex: async (collection: string) => {
+			return (client as any).search.reindex(collection);
+		},
+	};
 }
 
 // ============================================================================
@@ -275,25 +275,25 @@ function useReindex() {
  * Search options for global search (across all collections)
  */
 interface UseGlobalSearchOptions {
-  /**
-   * Search query string
-   */
-  query: string;
+	/**
+	 * Search query string
+	 */
+	query: string;
 
-  /**
-   * Result limit (default: 10)
-   */
-  limit?: number;
+	/**
+	 * Result limit (default: 10)
+	 */
+	limit?: number;
 
-  /**
-   * Include highlights (default: true)
-   */
-  highlights?: boolean;
+	/**
+	 * Include highlights (default: true)
+	 */
+	highlights?: boolean;
 
-  /**
-   * Whether the query is enabled (default: true if query length >= 2)
-   */
-  enabled?: boolean;
+	/**
+	 * Whether the query is enabled (default: true if query length >= 2)
+	 */
+	enabled?: boolean;
 }
 
 /**
@@ -318,38 +318,38 @@ interface UseGlobalSearchOptions {
  * ```
  */
 export function useGlobalSearch<T = Record<string, any>>(
-  options: UseGlobalSearchOptions,
-  queryOptions?: Omit<
-    UseQueryOptions<SearchResponse<T>>,
-    "queryKey" | "queryFn"
-  >,
+	options: UseGlobalSearchOptions,
+	queryOptions?: Omit<
+		UseQueryOptions<SearchResponse<T>>,
+		"queryKey" | "queryFn"
+	>,
 ) {
-  const client = useAdminStore(selectClient);
-  const { locale: contentLocale } = useScopedLocale();
+	const client = useAdminStore(selectClient);
+	const { locale: contentLocale } = useScopedLocale();
 
-  const { query, limit = 10, highlights = true, enabled } = options;
+	const { query, limit = 10, highlights = true, enabled } = options;
 
-  // Require at least 2 characters by default
-  const isEnabled = enabled ?? query?.trim().length >= 2;
+	// Require at least 2 characters by default
+	const isEnabled = enabled ?? query?.trim().length >= 2;
 
-  return useQuery<SearchResponse<T>>({
-    queryKey: ["questpie", "global-search", query, limit, contentLocale],
-    queryFn: async () => {
-      // Search across ALL collections (no collections filter)
-      const response = await (client as any).search.search({
-        query,
-        // collections: undefined - search all
-        locale: contentLocale,
-        limit,
-        highlights,
-      });
-      return response;
-    },
-    enabled: isEnabled,
-    // Keep previous data while fetching for smoother UX
-    placeholderData: (prev) => prev,
-    // Short stale time for global search
-    staleTime: 10 * 1000,
-    ...queryOptions,
-  });
+	return useQuery<SearchResponse<T>>({
+		queryKey: ["questpie", "global-search", query, limit, contentLocale],
+		queryFn: async () => {
+			// Search across ALL collections (no collections filter)
+			const response = await (client as any).search.search({
+				query,
+				// collections: undefined - search all
+				locale: contentLocale,
+				limit,
+				highlights,
+			});
+			return response;
+		},
+		enabled: isEnabled,
+		// Keep previous data while fetching for smoother UX
+		placeholderData: (prev) => prev,
+		// Short stale time for global search
+		staleTime: 10 * 1000,
+		...queryOptions,
+	});
 }

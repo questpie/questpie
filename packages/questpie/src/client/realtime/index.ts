@@ -7,6 +7,6 @@ export {
 	buildCollectionTopic,
 	buildGlobalTopic,
 	createRealtimeAPI,
-	sseSnapshotStream,
 	type RealtimeAPI,
+	sseSnapshotStream,
 } from "./stream.js";

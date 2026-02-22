@@ -35,47 +35,47 @@ import type { Questpie } from "questpie";
  * Extract auth options type from Questpie instance
  */
 type ExtractAuthOptions<T extends Questpie<any>> =
-  T extends Questpie<infer TConfig>
-    ? TConfig["auth"] extends BetterAuthOptions
-      ? TConfig["auth"]
-      : BetterAuthOptions
-    : BetterAuthOptions;
+	T extends Questpie<infer TConfig>
+		? TConfig["auth"] extends BetterAuthOptions
+			? TConfig["auth"]
+			: BetterAuthOptions
+		: BetterAuthOptions;
 
 /**
  * Options for creating admin auth client
  */
 type AdminAuthClientOptions = {
-  /**
-   * Base URL of the app API
-   * @example 'http://localhost:3000'
-   */
-  baseURL: string;
+	/**
+	 * Base URL of the app API
+	 * @example 'http://localhost:3000'
+	 */
+	baseURL: string;
 
-  /**
-   * Base path for auth routes
-   * @default '/auth'
-   */
-  basePath?: string;
+	/**
+	 * Base path for auth routes
+	 * @default '/auth'
+	 */
+	basePath?: string;
 
-  /**
-   * Custom fetch implementation
-   */
-  fetchOptions?: {
-    credentials?: RequestCredentials;
-    headers?: Record<string, string>;
-  };
+	/**
+	 * Custom fetch implementation
+	 */
+	fetchOptions?: {
+		credentials?: RequestCredentials;
+		headers?: Record<string, string>;
+	};
 };
 
 /**
  * Internal client options type that includes $InferAuth
  */
 type InternalClientOptions<T extends Questpie<any>> = {
-  baseURL: string;
-  fetchOptions?: {
-    credentials?: RequestCredentials;
-    headers?: Record<string, string>;
-  };
-  $InferAuth: ExtractAuthOptions<T>;
+	baseURL: string;
+	fetchOptions?: {
+		credentials?: RequestCredentials;
+		headers?: Record<string, string>;
+	};
+	$InferAuth: ExtractAuthOptions<T>;
 };
 
 /**
@@ -111,17 +111,17 @@ type InternalClientOptions<T extends Questpie<any>> = {
  * ```
  */
 export function createAdminAuthClient<T extends Questpie<any>>(
-  options: AdminAuthClientOptions,
+	options: AdminAuthClientOptions,
 ): ReturnType<typeof createAuthClient<InternalClientOptions<T>>> {
-  const basePath = options.basePath ?? "/auth";
+	const basePath = options.basePath ?? "/auth";
 
-  return createAuthClient<InternalClientOptions<T>>({
-    baseURL: `${options.baseURL}${basePath}`,
-    fetchOptions: {
-      credentials: options.fetchOptions?.credentials ?? "include",
-      headers: options.fetchOptions?.headers,
-    },
-  } as InternalClientOptions<T>);
+	return createAuthClient<InternalClientOptions<T>>({
+		baseURL: `${options.baseURL}${basePath}`,
+		fetchOptions: {
+			credentials: options.fetchOptions?.credentials ?? "include",
+			headers: options.fetchOptions?.headers,
+		},
+	} as InternalClientOptions<T>);
 }
 
 /**
@@ -136,7 +136,7 @@ export function createAdminAuthClient<T extends Questpie<any>>(
  * ```
  */
 type AdminAuthClient<T extends Questpie<any>> = ReturnType<
-  typeof createAdminAuthClient<T>
+	typeof createAdminAuthClient<T>
 >;
 
 /**
@@ -152,7 +152,7 @@ type AdminAuthClient<T extends Questpie<any>> = ReturnType<
  * ```
  */
 type AdminSession<T extends Questpie<any>> =
-  AdminAuthClient<T>["$Infer"]["Session"];
+	AdminAuthClient<T>["$Infer"]["Session"];
 
 /**
  * Type helper to extract user type from app auth configuration
@@ -192,14 +192,14 @@ import { selectAuthClient, useAdminStore } from "../runtime/provider";
  * ```
  */
 export function useAuthClient<T = any>(): T {
-  const authClient = useAdminStore(selectAuthClient);
-  if (!authClient) {
-    throw new Error(
-      "useAuthClient: authClient is not provided. " +
-        "Make sure to pass authClient to AdminProvider.",
-    );
-  }
-  return authClient as T;
+	const authClient = useAdminStore(selectAuthClient);
+	if (!authClient) {
+		throw new Error(
+			"useAuthClient: authClient is not provided. " +
+				"Make sure to pass authClient to AdminProvider.",
+		);
+	}
+	return authClient as T;
 }
 
 /**
@@ -215,5 +215,5 @@ export function useAuthClient<T = any>(): T {
  * ```
  */
 export function useAuthClientSafe<T = any>(): T | null {
-  return useAdminStore(selectAuthClient) as T | null;
+	return useAdminStore(selectAuthClient) as T | null;
 }

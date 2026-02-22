@@ -8,326 +8,327 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as AppRouteImport } from './routes/_app'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as ApiPreviewRouteImport } from './routes/api/preview'
-import { Route as ApiSplatRouteImport } from './routes/api/$'
-import { Route as AdminLoginRouteImport } from './routes/admin/login'
-import { Route as AdminSplatRouteImport } from './routes/admin/$'
-import { Route as AppContactRouteImport } from './routes/_app/contact'
-import { Route as AppBookingRouteImport } from './routes/_app/booking'
-import { Route as AppSlugRouteImport } from './routes/_app/$slug'
-import { Route as AppBarbersIndexRouteImport } from './routes/_app/barbers.index'
-import { Route as AppBarbersSlugRouteImport } from './routes/_app/barbers.$slug'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as AppRouteImport } from "./routes/_app";
+import { Route as AppSlugRouteImport } from "./routes/_app/$slug";
+import { Route as AppBarbersSlugRouteImport } from "./routes/_app/barbers.$slug";
+import { Route as AppBarbersIndexRouteImport } from "./routes/_app/barbers.index";
+import { Route as AppBookingRouteImport } from "./routes/_app/booking";
+import { Route as AppContactRouteImport } from "./routes/_app/contact";
+import { Route as AppIndexRouteImport } from "./routes/_app/index";
+import { Route as AdminRouteImport } from "./routes/admin";
+import { Route as AdminSplatRouteImport } from "./routes/admin/$";
+import { Route as AdminIndexRouteImport } from "./routes/admin/index";
+import { Route as AdminLoginRouteImport } from "./routes/admin/login";
+import { Route as ApiSplatRouteImport } from "./routes/api/$";
+import { Route as ApiPreviewRouteImport } from "./routes/api/preview";
 
 const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/admin",
+	path: "/admin",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const AppRoute = AppRouteImport.update({
-  id: '/_app',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/_app",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AdminRoute,
-} as any)
+	id: "/",
+	path: "/",
+	getParentRoute: () => AdminRoute,
+} as any);
 const AppIndexRoute = AppIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppRoute,
-} as any)
+	id: "/",
+	path: "/",
+	getParentRoute: () => AppRoute,
+} as any);
 const ApiPreviewRoute = ApiPreviewRouteImport.update({
-  id: '/api/preview',
-  path: '/api/preview',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/api/preview",
+	path: "/api/preview",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const ApiSplatRoute = ApiSplatRouteImport.update({
-  id: '/api/$',
-  path: '/api/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/api/$",
+	path: "/api/$",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const AdminLoginRoute = AdminLoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => AdminRoute,
-} as any)
+	id: "/login",
+	path: "/login",
+	getParentRoute: () => AdminRoute,
+} as any);
 const AdminSplatRoute = AdminSplatRouteImport.update({
-  id: '/$',
-  path: '/$',
-  getParentRoute: () => AdminRoute,
-} as any)
+	id: "/$",
+	path: "/$",
+	getParentRoute: () => AdminRoute,
+} as any);
 const AppContactRoute = AppContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
-  getParentRoute: () => AppRoute,
-} as any)
+	id: "/contact",
+	path: "/contact",
+	getParentRoute: () => AppRoute,
+} as any);
 const AppBookingRoute = AppBookingRouteImport.update({
-  id: '/booking',
-  path: '/booking',
-  getParentRoute: () => AppRoute,
-} as any)
+	id: "/booking",
+	path: "/booking",
+	getParentRoute: () => AppRoute,
+} as any);
 const AppSlugRoute = AppSlugRouteImport.update({
-  id: '/$slug',
-  path: '/$slug',
-  getParentRoute: () => AppRoute,
-} as any)
+	id: "/$slug",
+	path: "/$slug",
+	getParentRoute: () => AppRoute,
+} as any);
 const AppBarbersIndexRoute = AppBarbersIndexRouteImport.update({
-  id: '/barbers/',
-  path: '/barbers/',
-  getParentRoute: () => AppRoute,
-} as any)
+	id: "/barbers/",
+	path: "/barbers/",
+	getParentRoute: () => AppRoute,
+} as any);
 const AppBarbersSlugRoute = AppBarbersSlugRouteImport.update({
-  id: '/barbers/$slug',
-  path: '/barbers/$slug',
-  getParentRoute: () => AppRoute,
-} as any)
+	id: "/barbers/$slug",
+	path: "/barbers/$slug",
+	getParentRoute: () => AppRoute,
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/admin': typeof AdminRouteWithChildren
-  '/$slug': typeof AppSlugRoute
-  '/booking': typeof AppBookingRoute
-  '/contact': typeof AppContactRoute
-  '/admin/$': typeof AdminSplatRoute
-  '/admin/login': typeof AdminLoginRoute
-  '/api/$': typeof ApiSplatRoute
-  '/api/preview': typeof ApiPreviewRoute
-  '/': typeof AppIndexRoute
-  '/admin/': typeof AdminIndexRoute
-  '/barbers/$slug': typeof AppBarbersSlugRoute
-  '/barbers': typeof AppBarbersIndexRoute
+	"/admin": typeof AdminRouteWithChildren;
+	"/$slug": typeof AppSlugRoute;
+	"/booking": typeof AppBookingRoute;
+	"/contact": typeof AppContactRoute;
+	"/admin/$": typeof AdminSplatRoute;
+	"/admin/login": typeof AdminLoginRoute;
+	"/api/$": typeof ApiSplatRoute;
+	"/api/preview": typeof ApiPreviewRoute;
+	"/": typeof AppIndexRoute;
+	"/admin/": typeof AdminIndexRoute;
+	"/barbers/$slug": typeof AppBarbersSlugRoute;
+	"/barbers": typeof AppBarbersIndexRoute;
 }
 export interface FileRoutesByTo {
-  '/$slug': typeof AppSlugRoute
-  '/booking': typeof AppBookingRoute
-  '/contact': typeof AppContactRoute
-  '/admin/$': typeof AdminSplatRoute
-  '/admin/login': typeof AdminLoginRoute
-  '/api/$': typeof ApiSplatRoute
-  '/api/preview': typeof ApiPreviewRoute
-  '/': typeof AppIndexRoute
-  '/admin': typeof AdminIndexRoute
-  '/barbers/$slug': typeof AppBarbersSlugRoute
-  '/barbers': typeof AppBarbersIndexRoute
+	"/$slug": typeof AppSlugRoute;
+	"/booking": typeof AppBookingRoute;
+	"/contact": typeof AppContactRoute;
+	"/admin/$": typeof AdminSplatRoute;
+	"/admin/login": typeof AdminLoginRoute;
+	"/api/$": typeof ApiSplatRoute;
+	"/api/preview": typeof ApiPreviewRoute;
+	"/": typeof AppIndexRoute;
+	"/admin": typeof AdminIndexRoute;
+	"/barbers/$slug": typeof AppBarbersSlugRoute;
+	"/barbers": typeof AppBarbersIndexRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/_app': typeof AppRouteWithChildren
-  '/admin': typeof AdminRouteWithChildren
-  '/_app/$slug': typeof AppSlugRoute
-  '/_app/booking': typeof AppBookingRoute
-  '/_app/contact': typeof AppContactRoute
-  '/admin/$': typeof AdminSplatRoute
-  '/admin/login': typeof AdminLoginRoute
-  '/api/$': typeof ApiSplatRoute
-  '/api/preview': typeof ApiPreviewRoute
-  '/_app/': typeof AppIndexRoute
-  '/admin/': typeof AdminIndexRoute
-  '/_app/barbers/$slug': typeof AppBarbersSlugRoute
-  '/_app/barbers/': typeof AppBarbersIndexRoute
+	__root__: typeof rootRouteImport;
+	"/_app": typeof AppRouteWithChildren;
+	"/admin": typeof AdminRouteWithChildren;
+	"/_app/$slug": typeof AppSlugRoute;
+	"/_app/booking": typeof AppBookingRoute;
+	"/_app/contact": typeof AppContactRoute;
+	"/admin/$": typeof AdminSplatRoute;
+	"/admin/login": typeof AdminLoginRoute;
+	"/api/$": typeof ApiSplatRoute;
+	"/api/preview": typeof ApiPreviewRoute;
+	"/_app/": typeof AppIndexRoute;
+	"/admin/": typeof AdminIndexRoute;
+	"/_app/barbers/$slug": typeof AppBarbersSlugRoute;
+	"/_app/barbers/": typeof AppBarbersIndexRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/admin'
-    | '/$slug'
-    | '/booking'
-    | '/contact'
-    | '/admin/$'
-    | '/admin/login'
-    | '/api/$'
-    | '/api/preview'
-    | '/'
-    | '/admin/'
-    | '/barbers/$slug'
-    | '/barbers'
-  fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/$slug'
-    | '/booking'
-    | '/contact'
-    | '/admin/$'
-    | '/admin/login'
-    | '/api/$'
-    | '/api/preview'
-    | '/'
-    | '/admin'
-    | '/barbers/$slug'
-    | '/barbers'
-  id:
-    | '__root__'
-    | '/_app'
-    | '/admin'
-    | '/_app/$slug'
-    | '/_app/booking'
-    | '/_app/contact'
-    | '/admin/$'
-    | '/admin/login'
-    | '/api/$'
-    | '/api/preview'
-    | '/_app/'
-    | '/admin/'
-    | '/_app/barbers/$slug'
-    | '/_app/barbers/'
-  fileRoutesById: FileRoutesById
+	fileRoutesByFullPath: FileRoutesByFullPath;
+	fullPaths:
+		| "/admin"
+		| "/$slug"
+		| "/booking"
+		| "/contact"
+		| "/admin/$"
+		| "/admin/login"
+		| "/api/$"
+		| "/api/preview"
+		| "/"
+		| "/admin/"
+		| "/barbers/$slug"
+		| "/barbers";
+	fileRoutesByTo: FileRoutesByTo;
+	to:
+		| "/$slug"
+		| "/booking"
+		| "/contact"
+		| "/admin/$"
+		| "/admin/login"
+		| "/api/$"
+		| "/api/preview"
+		| "/"
+		| "/admin"
+		| "/barbers/$slug"
+		| "/barbers";
+	id:
+		| "__root__"
+		| "/_app"
+		| "/admin"
+		| "/_app/$slug"
+		| "/_app/booking"
+		| "/_app/contact"
+		| "/admin/$"
+		| "/admin/login"
+		| "/api/$"
+		| "/api/preview"
+		| "/_app/"
+		| "/admin/"
+		| "/_app/barbers/$slug"
+		| "/_app/barbers/";
+	fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  AppRoute: typeof AppRouteWithChildren
-  AdminRoute: typeof AdminRouteWithChildren
-  ApiSplatRoute: typeof ApiSplatRoute
-  ApiPreviewRoute: typeof ApiPreviewRoute
+	AppRoute: typeof AppRouteWithChildren;
+	AdminRoute: typeof AdminRouteWithChildren;
+	ApiSplatRoute: typeof ApiSplatRoute;
+	ApiPreviewRoute: typeof ApiPreviewRoute;
 }
 
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_app': {
-      id: '/_app'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof AppRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/': {
-      id: '/admin/'
-      path: '/'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/_app/': {
-      id: '/_app/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AppIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/api/preview': {
-      id: '/api/preview'
-      path: '/api/preview'
-      fullPath: '/api/preview'
-      preLoaderRoute: typeof ApiPreviewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/$': {
-      id: '/api/$'
-      path: '/api/$'
-      fullPath: '/api/$'
-      preLoaderRoute: typeof ApiSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/login': {
-      id: '/admin/login'
-      path: '/login'
-      fullPath: '/admin/login'
-      preLoaderRoute: typeof AdminLoginRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/$': {
-      id: '/admin/$'
-      path: '/$'
-      fullPath: '/admin/$'
-      preLoaderRoute: typeof AdminSplatRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/_app/contact': {
-      id: '/_app/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof AppContactRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/booking': {
-      id: '/_app/booking'
-      path: '/booking'
-      fullPath: '/booking'
-      preLoaderRoute: typeof AppBookingRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/$slug': {
-      id: '/_app/$slug'
-      path: '/$slug'
-      fullPath: '/$slug'
-      preLoaderRoute: typeof AppSlugRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/barbers/': {
-      id: '/_app/barbers/'
-      path: '/barbers'
-      fullPath: '/barbers'
-      preLoaderRoute: typeof AppBarbersIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/barbers/$slug': {
-      id: '/_app/barbers/$slug'
-      path: '/barbers/$slug'
-      fullPath: '/barbers/$slug'
-      preLoaderRoute: typeof AppBarbersSlugRouteImport
-      parentRoute: typeof AppRoute
-    }
-  }
+declare module "@tanstack/react-router" {
+	interface FileRoutesByPath {
+		"/admin": {
+			id: "/admin";
+			path: "/admin";
+			fullPath: "/admin";
+			preLoaderRoute: typeof AdminRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/_app": {
+			id: "/_app";
+			path: "";
+			fullPath: "";
+			preLoaderRoute: typeof AppRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/admin/": {
+			id: "/admin/";
+			path: "/";
+			fullPath: "/admin/";
+			preLoaderRoute: typeof AdminIndexRouteImport;
+			parentRoute: typeof AdminRoute;
+		};
+		"/_app/": {
+			id: "/_app/";
+			path: "/";
+			fullPath: "/";
+			preLoaderRoute: typeof AppIndexRouteImport;
+			parentRoute: typeof AppRoute;
+		};
+		"/api/preview": {
+			id: "/api/preview";
+			path: "/api/preview";
+			fullPath: "/api/preview";
+			preLoaderRoute: typeof ApiPreviewRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/api/$": {
+			id: "/api/$";
+			path: "/api/$";
+			fullPath: "/api/$";
+			preLoaderRoute: typeof ApiSplatRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/admin/login": {
+			id: "/admin/login";
+			path: "/login";
+			fullPath: "/admin/login";
+			preLoaderRoute: typeof AdminLoginRouteImport;
+			parentRoute: typeof AdminRoute;
+		};
+		"/admin/$": {
+			id: "/admin/$";
+			path: "/$";
+			fullPath: "/admin/$";
+			preLoaderRoute: typeof AdminSplatRouteImport;
+			parentRoute: typeof AdminRoute;
+		};
+		"/_app/contact": {
+			id: "/_app/contact";
+			path: "/contact";
+			fullPath: "/contact";
+			preLoaderRoute: typeof AppContactRouteImport;
+			parentRoute: typeof AppRoute;
+		};
+		"/_app/booking": {
+			id: "/_app/booking";
+			path: "/booking";
+			fullPath: "/booking";
+			preLoaderRoute: typeof AppBookingRouteImport;
+			parentRoute: typeof AppRoute;
+		};
+		"/_app/$slug": {
+			id: "/_app/$slug";
+			path: "/$slug";
+			fullPath: "/$slug";
+			preLoaderRoute: typeof AppSlugRouteImport;
+			parentRoute: typeof AppRoute;
+		};
+		"/_app/barbers/": {
+			id: "/_app/barbers/";
+			path: "/barbers";
+			fullPath: "/barbers";
+			preLoaderRoute: typeof AppBarbersIndexRouteImport;
+			parentRoute: typeof AppRoute;
+		};
+		"/_app/barbers/$slug": {
+			id: "/_app/barbers/$slug";
+			path: "/barbers/$slug";
+			fullPath: "/barbers/$slug";
+			preLoaderRoute: typeof AppBarbersSlugRouteImport;
+			parentRoute: typeof AppRoute;
+		};
+	}
 }
 
 interface AppRouteChildren {
-  AppSlugRoute: typeof AppSlugRoute
-  AppBookingRoute: typeof AppBookingRoute
-  AppContactRoute: typeof AppContactRoute
-  AppIndexRoute: typeof AppIndexRoute
-  AppBarbersSlugRoute: typeof AppBarbersSlugRoute
-  AppBarbersIndexRoute: typeof AppBarbersIndexRoute
+	AppSlugRoute: typeof AppSlugRoute;
+	AppBookingRoute: typeof AppBookingRoute;
+	AppContactRoute: typeof AppContactRoute;
+	AppIndexRoute: typeof AppIndexRoute;
+	AppBarbersSlugRoute: typeof AppBarbersSlugRoute;
+	AppBarbersIndexRoute: typeof AppBarbersIndexRoute;
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppSlugRoute: AppSlugRoute,
-  AppBookingRoute: AppBookingRoute,
-  AppContactRoute: AppContactRoute,
-  AppIndexRoute: AppIndexRoute,
-  AppBarbersSlugRoute: AppBarbersSlugRoute,
-  AppBarbersIndexRoute: AppBarbersIndexRoute,
-}
+	AppSlugRoute: AppSlugRoute,
+	AppBookingRoute: AppBookingRoute,
+	AppContactRoute: AppContactRoute,
+	AppIndexRoute: AppIndexRoute,
+	AppBarbersSlugRoute: AppBarbersSlugRoute,
+	AppBarbersIndexRoute: AppBarbersIndexRoute,
+};
 
-const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);
 
 interface AdminRouteChildren {
-  AdminSplatRoute: typeof AdminSplatRoute
-  AdminLoginRoute: typeof AdminLoginRoute
-  AdminIndexRoute: typeof AdminIndexRoute
+	AdminSplatRoute: typeof AdminSplatRoute;
+	AdminLoginRoute: typeof AdminLoginRoute;
+	AdminIndexRoute: typeof AdminIndexRoute;
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
-  AdminSplatRoute: AdminSplatRoute,
-  AdminLoginRoute: AdminLoginRoute,
-  AdminIndexRoute: AdminIndexRoute,
-}
+	AdminSplatRoute: AdminSplatRoute,
+	AdminLoginRoute: AdminLoginRoute,
+	AdminIndexRoute: AdminIndexRoute,
+};
 
-const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren);
 
 const rootRouteChildren: RootRouteChildren = {
-  AppRoute: AppRouteWithChildren,
-  AdminRoute: AdminRouteWithChildren,
-  ApiSplatRoute: ApiSplatRoute,
-  ApiPreviewRoute: ApiPreviewRoute,
-}
+	AppRoute: AppRouteWithChildren,
+	AdminRoute: AdminRouteWithChildren,
+	ApiSplatRoute: ApiSplatRoute,
+	ApiPreviewRoute: ApiPreviewRoute,
+};
 export const routeTree = rootRouteImport
-  ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+	._addFileChildren(rootRouteChildren)
+	._addFileTypes<FileRouteTypes>();
 
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
+import type { createStart } from "@tanstack/react-start";
+import type { getRouter } from "./router.tsx";
+
+declare module "@tanstack/react-start" {
+	interface Register {
+		ssr: true;
+		router: Awaited<ReturnType<typeof getRouter>>;
+	}
 }

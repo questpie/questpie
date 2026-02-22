@@ -315,4 +315,3 @@ export function WidgetCard({
 		</Card>
 	);
 }
-

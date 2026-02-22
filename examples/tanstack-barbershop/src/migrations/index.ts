@@ -7,10 +7,10 @@ import { calmBlueDragon20260218T195452 } from "./20260218T195452_calm_blue_drago
 import { fancyBluePanda20260218T223923 } from "./20260218T223923_fancy_blue_panda.js";
 import { kindCrimsonFalcon20260218T235924 } from "./20260218T235924_kind_crimson_falcon.js";
 export const migrations: Migration[] = [
-  gentleAzureEagle20260206T174642,
-  fancyGreenTiger20260206T180920,
-  calmBluePhoenix20260211T100836,
-  calmBlueDragon20260218T195452,
-  fancyBluePanda20260218T223923,
-  kindCrimsonFalcon20260218T235924,
+	gentleAzureEagle20260206T174642,
+	fancyGreenTiger20260206T180920,
+	calmBluePhoenix20260211T100836,
+	calmBlueDragon20260218T195452,
+	fancyBluePanda20260218T223923,
+	kindCrimsonFalcon20260218T235924,
 ];

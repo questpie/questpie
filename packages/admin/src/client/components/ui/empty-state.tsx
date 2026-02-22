@@ -1,4 +1,4 @@
-import * as React from "react";
+import type * as React from "react";
 import { cn } from "../../lib/utils";
 
 // ============================================================================
@@ -6,37 +6,37 @@ import { cn } from "../../lib/utils";
 // ============================================================================
 
 interface EmptyStateProps {
-  /**
-   * Title text (displayed in mono uppercase)
-   * @example "NO_DATA_FOUND"
-   */
-  title: string;
+	/**
+	 * Title text (displayed in mono uppercase)
+	 * @example "NO_DATA_FOUND"
+	 */
+	title: string;
 
-  /**
-   * Description text
-   */
-  description?: string;
+	/**
+	 * Description text
+	 */
+	description?: string;
 
-  /**
-   * Optional icon component
-   */
-  icon?: React.ComponentType<{ className?: string }>;
+	/**
+	 * Optional icon component
+	 */
+	icon?: React.ComponentType<{ className?: string }>;
 
-  /**
-   * Optional action button/element
-   */
-  action?: React.ReactNode;
+	/**
+	 * Optional action button/element
+	 */
+	action?: React.ReactNode;
 
-  /**
-   * Height of the empty state container
-   * @default "h-64"
-   */
-  height?: string;
+	/**
+	 * Height of the empty state container
+	 * @default "h-64"
+	 */
+	height?: string;
 
-  /**
-   * Additional className
-   */
-  className?: string;
+	/**
+	 * Additional className
+	 */
+	className?: string;
 }
 
 // ============================================================================
@@ -61,49 +61,49 @@ interface EmptyStateProps {
  * ```
  */
 export function EmptyState({
-  title,
-  description,
-  icon: Icon,
-  action,
-  height = "h-64",
-  className,
+	title,
+	description,
+	icon: Icon,
+	action,
+	height = "h-64",
+	className,
 }: EmptyStateProps): React.ReactElement {
-  return (
-    <div
-      data-slot="empty-state"
-      className={cn(
-        "relative flex flex-col items-center justify-center",
-        "border border-dashed border-border/40 bg-card/5",
-        height,
-        className,
-      )}
-    >
-      <div className="text-center">
-        {/* Glow dot or icon */}
-        {Icon ? (
-          <Icon className="mx-auto mb-4 size-8 text-muted-foreground/50" />
-        ) : (
-          <div
-            className="mx-auto mb-4 size-2 bg-primary/50"
-            style={{
-              boxShadow: "0 0 20px oklch(55% 0.3 300 / 0.25)",
-            }}
-          />
-        )}
+	return (
+		<div
+			data-slot="empty-state"
+			className={cn(
+				"relative flex flex-col items-center justify-center",
+				"border border-dashed border-border/40 bg-card/5",
+				height,
+				className,
+			)}
+		>
+			<div className="text-center">
+				{/* Glow dot or icon */}
+				{Icon ? (
+					<Icon className="mx-auto mb-4 size-8 text-muted-foreground/50" />
+				) : (
+					<div
+						className="mx-auto mb-4 size-2 bg-primary/50"
+						style={{
+							boxShadow: "0 0 20px oklch(55% 0.3 300 / 0.25)",
+						}}
+					/>
+				)}
 
-        {/* Title */}
-        <p className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
-          {title}
-        </p>
+				{/* Title */}
+				<p className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
+					{title}
+				</p>
 
-        {/* Description */}
-        {description && (
-          <p className="mt-2 text-xs text-muted-foreground/60">{description}</p>
-        )}
+				{/* Description */}
+				{description && (
+					<p className="mt-2 text-xs text-muted-foreground/60">{description}</p>
+				)}
 
-        {/* Action */}
-        {action && <div className="mt-4">{action}</div>}
-      </div>
-    </div>
-  );
+				{/* Action */}
+				{action && <div className="mt-4">{action}</div>}
+			</div>
+		</div>
+	);
 }

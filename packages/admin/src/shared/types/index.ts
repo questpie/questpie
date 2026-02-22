@@ -5,8 +5,8 @@
  */
 
 export type {
-  FilterOperator,
-  FilterRule,
-  SortConfig,
-  ViewConfiguration,
+	FilterOperator,
+	FilterRule,
+	SortConfig,
+	ViewConfiguration,
 } from "./saved-views.types.js";

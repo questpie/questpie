@@ -42,7 +42,7 @@ function useAuditFetcher(path: string) {
 
 			const data = await response.json();
 			// Response could be { docs: [...] } or just an array
-			return Array.isArray(data) ? data : data?.docs ?? data ?? [];
+			return Array.isArray(data) ? data : (data?.docs ?? data ?? []);
 		},
 		[basePath, path],
 	);

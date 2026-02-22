@@ -30,13 +30,16 @@ import { ActionButton } from "../../components/actions/action-button";
 import { ActionDialog } from "../../components/actions/action-dialog";
 import { ConfirmationDialog } from "../../components/actions/confirmation-dialog";
 import { resolveIconElement } from "../../components/component-renderer";
+import { HistorySidebar } from "../../components/history-sidebar";
 import { LocaleSwitcher } from "../../components/locale-switcher";
 import {
 	LivePreviewMode,
 	useLivePreviewContext,
 } from "../../components/preview/live-preview-mode";
+import { DateTimeInput } from "../../components/primitives/date-input";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -52,16 +55,14 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
-import { Checkbox } from "../../components/ui/checkbox";
 import { Label } from "../../components/ui/label";
-import { DateTimeInput } from "../../components/primitives/date-input";
-import { HistorySidebar } from "../../components/history-sidebar";
 import {
 	useCollectionValidation,
 	usePreferServerValidation,
 	useSearchParamToggle,
 	useSidebarSearchParam,
 } from "../../hooks";
+import { useCollectionAuditHistory } from "../../hooks/use-audit-history";
 import {
 	useCollectionCreate,
 	useCollectionDelete,
@@ -71,12 +72,11 @@ import {
 	useCollectionUpdate,
 	useCollectionVersions,
 } from "../../hooks/use-collection";
-import { useCollectionAuditHistory } from "../../hooks/use-audit-history";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
-import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { getLockUser, useLock } from "../../hooks/use-locks";
 import { useReactiveFields } from "../../hooks/use-reactive-fields";
 import { useServerActions } from "../../hooks/use-server-actions";
+import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { RenderProfiler } from "../../lib/render-profiler.js";
 import {
@@ -554,7 +554,6 @@ export default function FormView({
 	onSuccess,
 	onError,
 }: FormViewProps): React.ReactElement {
-
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const isEditMode = !!id;
@@ -616,7 +615,13 @@ export default function FormView({
 		if (!canUseLivePreview && isLivePreviewOpen) {
 			setIsLivePreviewOpen(false);
 		}
-	}, [canUseLivePreview, isLivePreviewOpen, setIsLivePreviewOpen, previewContext, schema]);
+	}, [
+		canUseLivePreview,
+		isLivePreviewOpen,
+		setIsLivePreviewOpen,
+		previewContext,
+		schema,
+	]);
 
 	// Create mode should never keep history sidebar open
 	React.useEffect(() => {
@@ -692,7 +697,10 @@ export default function FormView({
 			collection as any,
 			id ?? "",
 			{ limit: 50 },
-			{ enabled: isEditMode && !!id && isHistoryOpen && !!schema?.options?.versioning },
+			{
+				enabled:
+					isEditMode && !!id && isHistoryOpen && !!schema?.options?.versioning,
+			},
 		);
 
 	const { data: auditData, isLoading: auditLoading } =
@@ -739,13 +747,11 @@ export default function FormView({
 		null;
 
 	const currentStageConfig = React.useMemo(
-		() =>
-			workflowConfig?.stages?.find((s) => s.name === currentStage) ?? null,
+		() => workflowConfig?.stages?.find((s) => s.name === currentStage) ?? null,
 		[workflowConfig?.stages, currentStage],
 	);
 
-	const currentStageLabel =
-		currentStageConfig?.label ?? currentStage ?? "";
+	const currentStageLabel = currentStageConfig?.label ?? currentStage ?? "";
 
 	/**
 	 * Allowed transitions from the current stage.
@@ -757,9 +763,7 @@ export default function FormView({
 		const stageNames = currentStageConfig?.transitions;
 		if (stageNames && stageNames.length > 0) {
 			return stageNames
-				.map((name) =>
-					workflowConfig.stages.find((s) => s.name === name),
-				)
+				.map((name) => workflowConfig.stages.find((s) => s.name === name))
 				.filter(Boolean) as typeof workflowConfig.stages;
 		}
 		// Unrestricted — all stages except the current one
@@ -1273,144 +1277,144 @@ export default function FormView({
 
 	// Execute action
 	const executeAction = async (action: ActionDefinition) => {
-			const { handler } = action;
-			const actionLabel = resolveText(action.label, action.id);
+		const { handler } = action;
+		const actionLabel = resolveText(action.label, action.id);
 
-			switch (handler.type) {
-				case "navigate": {
-					const path =
-						typeof handler.path === "function"
-							? handler.path(transformedItem)
-							: handler.path;
-					storeNavigate(path);
-					break;
-				}
-				case "api": {
-					if (
-						handler.method === "POST" &&
-						handler.endpoint === "{id}/restore"
-					) {
-						const itemId = transformedItem?.id || id;
-						if (!itemId) {
-							toast.error(t("collection.restoreError"));
-							break;
-						}
-
-						setActionLoading(true);
-						toast.promise(
-							restoreMutation.mutateAsync({ id: itemId }).finally(() => {
-								setActionLoading(false);
-							}),
-							{
-								loading: t("collection.restoring"),
-								success: t("collection.restoreSuccess"),
-								error: (err) => err.message || t("collection.restoreError"),
-							},
-						);
+		switch (handler.type) {
+			case "navigate": {
+				const path =
+					typeof handler.path === "function"
+						? handler.path(transformedItem)
+						: handler.path;
+				storeNavigate(path);
+				break;
+			}
+			case "api": {
+				if (handler.method === "POST" && handler.endpoint === "{id}/restore") {
+					const itemId = transformedItem?.id || id;
+					if (!itemId) {
+						toast.error(t("collection.restoreError"));
 						break;
 					}
 
-					// For DELETE operations, use the deleteMutation hook
-					if (handler.method === "DELETE") {
-						const itemId = transformedItem?.id || id;
-						if (!itemId) {
-							toast.error(t("toast.deleteFailed"));
-							break;
-						}
+					setActionLoading(true);
+					toast.promise(
+						restoreMutation.mutateAsync({ id: itemId }).finally(() => {
+							setActionLoading(false);
+						}),
+						{
+							loading: t("collection.restoring"),
+							success: t("collection.restoreSuccess"),
+							error: (err) => err.message || t("collection.restoreError"),
+						},
+					);
+					break;
+				}
 
-						setActionLoading(true);
-						toast.promise(
-							deleteMutation.mutateAsync(itemId).finally(() => {
-								setActionLoading(false);
-							}),
-							{
-								loading: t("toast.deleting"),
-								success: () => {
-									// Navigate back to list on delete
-									navigate(`${basePath}/collections/${collection}`);
-									return t("toast.deleteSuccess");
-								},
-								error: (err) => err.message || t("toast.deleteFailed"),
+				// For DELETE operations, use the deleteMutation hook
+				if (handler.method === "DELETE") {
+					const itemId = transformedItem?.id || id;
+					if (!itemId) {
+						toast.error(t("toast.deleteFailed"));
+						break;
+					}
+
+					setActionLoading(true);
+					toast.promise(
+						deleteMutation.mutateAsync(itemId).finally(() => {
+							setActionLoading(false);
+						}),
+						{
+							loading: t("toast.deleting"),
+							success: () => {
+								// Navigate back to list on delete
+								navigate(`${basePath}/collections/${collection}`);
+								return t("toast.deleteSuccess");
 							},
-						);
+							error: (err) => err.message || t("toast.deleteFailed"),
+						},
+					);
+				} else {
+					// For other API operations, make a fetch request
+					// (This is a fallback - most actions should use custom handlers)
+					let itemId_: string;
+					if (transformedItem && transformedItem.id) {
+						itemId_ = String(transformedItem.id);
 					} else {
-						// For other API operations, make a fetch request
-						// (This is a fallback - most actions should use custom handlers)
-						let itemId_: string;
-						if (transformedItem && transformedItem.id) {
-							itemId_ = String(transformedItem.id);
-						} else {
-							itemId_ = String(id);
-						}
-						const endpoint = handler.endpoint.replace("{id}", itemId_);
-						const method = handler.method ? handler.method : "POST";
-						let body: string | undefined;
-						if (handler.body) {
-							body = JSON.stringify(handler.body(actionContext));
-						}
-						setActionLoading(true);
-						const apiPromise = async () => {
-								// Build the URL using API path
-								const url = `${storeBasePath}/${collection}/${endpoint}`;
-								const response = await fetch(url, {
-									method,
-									headers: { "Content-Type": "application/json" },
-									body,
-								});
+						itemId_ = String(id);
+					}
+					const endpoint = handler.endpoint.replace("{id}", itemId_);
+					const method = handler.method ? handler.method : "POST";
+					let body: string | undefined;
+					if (handler.body) {
+						body = JSON.stringify(handler.body(actionContext));
+					}
+					setActionLoading(true);
+					const apiPromise = async () => {
+						// Build the URL using API path
+						const url = `${storeBasePath}/${collection}/${endpoint}`;
+						const response = await fetch(url, {
+							method,
+							headers: { "Content-Type": "application/json" },
+							body,
+						});
 
-								if (!response.ok) {
-									let errorBody: Record<string, unknown> = {};
-									try {
-										errorBody = await response.json();
-									} catch (_parseErr) {
-										// ignore parse errors
-									}
-									let errorMessage: string;
-									if (errorBody.message) {
-										if (typeof errorBody.message === "string") {
-											errorMessage = errorBody.message;
-										} else {
-											errorMessage = t("toast.actionFailed");
-										}
-									} else {
-										errorMessage = t("toast.actionFailed");
-									}
-									throw new Error(errorMessage);
+						if (!response.ok) {
+							let errorBody: Record<string, unknown> = {};
+							try {
+								errorBody = await response.json();
+							} catch (_parseErr) {
+								// ignore parse errors
+							}
+							let errorMessage: string;
+							if (errorBody.message) {
+								if (typeof errorBody.message === "string") {
+									errorMessage = errorBody.message;
+								} else {
+									errorMessage = t("toast.actionFailed");
 								}
-								return response.json();
-						};
+							} else {
+								errorMessage = t("toast.actionFailed");
+							}
+							throw new Error(errorMessage);
+						}
+						return response.json();
+					};
 
-						const p = apiPromise();
-						p.then(() => setActionLoading(false), () => setActionLoading(false));
-						toast.promise(p, {
+					const p = apiPromise();
+					p.then(
+						() => setActionLoading(false),
+						() => setActionLoading(false),
+					);
+					toast.promise(p, {
+						loading: `${actionLabel}...`,
+						success: t("toast.actionSuccess"),
+						error: (err: any) => {
+							if (err.message) return err.message;
+							return t("toast.actionFailed");
+						},
+					});
+				}
+				break;
+			}
+			case "custom": {
+				const customPromise = handler.fn(actionContext);
+				// Only use toast.promise if it returns a promise
+				if (customPromise instanceof Promise) {
+					setActionLoading(true);
+					toast.promise(
+						customPromise.finally(() => setActionLoading(false)),
+						{
 							loading: `${actionLabel}...`,
 							success: t("toast.actionSuccess"),
-							error: (err: any) => {
-								if (err.message) return err.message;
-								return t("toast.actionFailed");
-							},
-						});
-					}
-					break;
+							error: (err) => err.message || t("toast.actionFailed"),
+						},
+					);
 				}
-				case "custom": {
-					const customPromise = handler.fn(actionContext);
-					// Only use toast.promise if it returns a promise
-					if (customPromise instanceof Promise) {
-						setActionLoading(true);
-						toast.promise(
-							customPromise.finally(() => setActionLoading(false)),
-							{
-								loading: `${actionLabel}...`,
-								success: t("toast.actionSuccess"),
-								error: (err) => err.message || t("toast.actionFailed"),
-							},
-						);
-					}
-					break;
-				}
+				break;
 			}
-			setConfirmAction(null);
+		}
+		setConfirmAction(null);
 	};
 
 	const handleRevertVersion = (version: any) => {
@@ -1788,38 +1792,44 @@ export default function FormView({
 								)}
 
 								{/* Workflow transition dropdown */}
-								{workflowEnabled && isEditMode && id && allowedTransitions.length > 0 && (
-									<DropdownMenu>
-										<DropdownMenuTrigger
-											render={
-												<Button
-													type="button"
-													variant="outline"
-													className="gap-2"
-												/>
-											}
-										>
-											<Icon icon="ph:arrows-left-right" className="size-4" />
-											{t("workflow.transition")}
-										</DropdownMenuTrigger>
-										<DropdownMenuContent align="end">
-											{allowedTransitions.map((stage) => (
-												<DropdownMenuItem
-													key={stage.name}
-													onClick={() =>
-														setTransitionTarget({
-															name: stage.name,
-															label: stage.label,
-														})
-													}
-												>
-													<Icon icon="ph:arrow-right" className="mr-2 size-4" />
-													{stage.label || stage.name}
-												</DropdownMenuItem>
-											))}
-										</DropdownMenuContent>
-									</DropdownMenu>
-								)}
+								{workflowEnabled &&
+									isEditMode &&
+									id &&
+									allowedTransitions.length > 0 && (
+										<DropdownMenu>
+											<DropdownMenuTrigger
+												render={
+													<Button
+														type="button"
+														variant="outline"
+														className="gap-2"
+													/>
+												}
+											>
+												<Icon icon="ph:arrows-left-right" className="size-4" />
+												{t("workflow.transition")}
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end">
+												{allowedTransitions.map((stage) => (
+													<DropdownMenuItem
+														key={stage.name}
+														onClick={() =>
+															setTransitionTarget({
+																name: stage.name,
+																label: stage.label,
+															})
+														}
+													>
+														<Icon
+															icon="ph:arrow-right"
+															className="mr-2 size-4"
+														/>
+														{stage.label || stage.name}
+													</DropdownMenuItem>
+												))}
+											</DropdownMenuContent>
+										</DropdownMenu>
+									)}
 
 								{/* Primary form actions as buttons */}
 								{visiblePrimaryActions.map((action) => (
@@ -2046,7 +2056,10 @@ export default function FormView({
 								}}
 								id="transition-schedule"
 							/>
-							<Label htmlFor="transition-schedule" className="text-sm cursor-pointer">
+							<Label
+								htmlFor="transition-schedule"
+								className="text-sm cursor-pointer"
+							>
 								{t("workflow.scheduleLabel")}
 							</Label>
 						</div>

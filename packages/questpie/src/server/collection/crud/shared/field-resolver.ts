@@ -19,29 +19,29 @@ import type { CollectionBuilderState } from "#questpie/server/collection/builder
  * @returns The field key or undefined if not found
  */
 export function resolveFieldKey(
-  state: CollectionBuilderState,
-  column: any,
-  table?: PgTable,
+	state: CollectionBuilderState,
+	column: any,
+	table?: PgTable,
 ): string | undefined {
-  if (typeof column === "string") return column;
+	if (typeof column === "string") return column;
 
-  // Get column name - supports both built columns (.name) and builders (.config.name)
-  const columnName = column?.name ?? column?.config?.name;
-  if (!columnName) return undefined;
+	// Get column name - supports both built columns (.name) and builders (.config.name)
+	const columnName = column?.name ?? column?.config?.name;
+	if (!columnName) return undefined;
 
-  // Search in state fields
-  for (const [key, value] of Object.entries(state.fields)) {
-    const fieldName = (value as any)?.name ?? (value as any)?.config?.name;
-    if (fieldName === columnName) return key;
-  }
+	// Search in state fields
+	for (const [key, value] of Object.entries(state.fields)) {
+		const fieldName = (value as any)?.name ?? (value as any)?.config?.name;
+		if (fieldName === columnName) return key;
+	}
 
-  // Search in table columns
-  if (table) {
-    for (const [key, value] of Object.entries(table)) {
-      const fieldName = (value as any)?.name ?? (value as any)?.config?.name;
-      if (fieldName === columnName) return key;
-    }
-  }
+	// Search in table columns
+	if (table) {
+		for (const [key, value] of Object.entries(table)) {
+			const fieldName = (value as any)?.name ?? (value as any)?.config?.name;
+			if (fieldName === columnName) return key;
+		}
+	}
 
-  return undefined;
+	return undefined;
 }

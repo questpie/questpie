@@ -195,7 +195,9 @@ function ContactPage() {
 // ============================================================================
 
 function ContactForm({ citySlug }: { citySlug: string }) {
-	const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
+	const [status, setStatus] = useState<
+		"idle" | "submitting" | "success" | "error"
+	>("idle");
 	const [errorMessage, setErrorMessage] = useState("");
 
 	const handleSubmit = useCallback(
@@ -290,10 +292,7 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 			<form onSubmit={handleSubmit} className="space-y-5">
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
 					<div>
-						<label
-							htmlFor="name"
-							className="block text-sm font-medium mb-1.5"
-						>
+						<label htmlFor="name" className="block text-sm font-medium mb-1.5">
 							Name <span className="text-red-500">*</span>
 						</label>
 						<input
@@ -305,10 +304,7 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 						/>
 					</div>
 					<div>
-						<label
-							htmlFor="email"
-							className="block text-sm font-medium mb-1.5"
-						>
+						<label htmlFor="email" className="block text-sm font-medium mb-1.5">
 							Email <span className="text-red-500">*</span>
 						</label>
 						<input
@@ -323,10 +319,7 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
 					<div>
-						<label
-							htmlFor="phone"
-							className="block text-sm font-medium mb-1.5"
-						>
+						<label htmlFor="phone" className="block text-sm font-medium mb-1.5">
 							Phone
 						</label>
 						<input
@@ -359,10 +352,7 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 				</div>
 
 				<div>
-					<label
-						htmlFor="subject"
-						className="block text-sm font-medium mb-1.5"
-					>
+					<label htmlFor="subject" className="block text-sm font-medium mb-1.5">
 						Subject <span className="text-red-500">*</span>
 					</label>
 					<input
@@ -375,10 +365,7 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 				</div>
 
 				<div>
-					<label
-						htmlFor="message"
-						className="block text-sm font-medium mb-1.5"
-					>
+					<label htmlFor="message" className="block text-sm font-medium mb-1.5">
 						Message <span className="text-red-500">*</span>
 					</label>
 					<textarea

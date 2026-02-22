@@ -33,10 +33,10 @@ export type GlobalStateOf<T> = T extends { state: infer S } ? S : never;
  * not when the builder type is constructed. This prevents type explosion.
  */
 export type GlobalFieldsOf<T> =
-  GlobalStateOf<T> extends {
-    fieldDefinitions?: infer F;
-  }
-    ? F extends Record<string, any>
-      ? F
-      : Record<string, any>
-    : Record<string, any>;
+	GlobalStateOf<T> extends {
+		fieldDefinitions?: infer F;
+	}
+		? F extends Record<string, any>
+			? F
+			: Record<string, any>
+		: Record<string, any>;

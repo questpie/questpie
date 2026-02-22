@@ -251,10 +251,7 @@ function useDeleteAdminPreference(key: string) {
  * </Suspense>
  * ```
  */
-function useSuspenseAdminPreference<T = unknown>(
-	key: string,
-	userId: string,
-) {
+function useSuspenseAdminPreference<T = unknown>(key: string, userId: string) {
 	const client = useAdminStore((s) => s.client);
 
 	return useSuspenseQuery<T | null>({

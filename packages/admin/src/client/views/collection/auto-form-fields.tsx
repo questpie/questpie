@@ -894,7 +894,8 @@ function extractFieldNamesFromFieldItems(
  * Supports recursive tabs/sections nesting and auto-generates
  * field list when no form config is defined.
  */
-export function AutoFormFields<T extends Questpie<any>, K extends string>({ app: _cms,
+export function AutoFormFields<T extends Questpie<any>, K extends string>({
+	app: _cms,
 	collection,
 	mode = "collection",
 	config,

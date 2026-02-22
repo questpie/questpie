@@ -6,7 +6,6 @@
  */
 
 import { and, eq, inArray, not, or, type SQL, sql } from "drizzle-orm";
-import { ApiError } from "#questpie/server/errors/base.js";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type {
 	CollectionBuilderState,
@@ -18,6 +17,7 @@ import type {
 	Where,
 } from "#questpie/server/collection/crud/types.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { ApiError } from "#questpie/server/errors/base.js";
 
 /**
  * Options for building WHERE clause

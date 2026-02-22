@@ -430,15 +430,15 @@ export function ObjectArrayField({
 									</div>
 									{mode === "inline" && (
 										<div className="p-3">
-										<ObjectArrayItemFields
-											fieldEntries={fieldEntries}
-											layout={layout}
-											columns={columns}
-											name={name}
-											index={index}
-											disabled={disabled}
-										/>
-									</div>
+											<ObjectArrayItemFields
+												fieldEntries={fieldEntries}
+												layout={layout}
+												columns={columns}
+												name={name}
+												index={index}
+												disabled={disabled}
+											/>
+										</div>
 									)}
 								</div>
 							);

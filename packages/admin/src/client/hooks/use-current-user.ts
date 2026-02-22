@@ -33,23 +33,23 @@ import { useAuthClientSafe } from "./use-auth";
  * Extended by the actual user schema
  */
 interface BasicUser {
-  id: string;
-  email: string;
-  name?: string | null;
-  image?: string | null;
-  role?: string | null;
-  emailVerified?: boolean;
-  banned?: boolean;
-  banReason?: string | null;
+	id: string;
+	email: string;
+	name?: string | null;
+	image?: string | null;
+	role?: string | null;
+	emailVerified?: boolean;
+	banned?: boolean;
+	banReason?: string | null;
 }
 
 /**
  * Session state returned by useSession hooks
  */
 interface SessionState<TUser = BasicUser> {
-  user: TUser | null;
-  isPending: boolean;
-  error: Error | null;
+	user: TUser | null;
+	isPending: boolean;
+	error: Error | null;
 }
 
 // ============================================================================
@@ -72,14 +72,14 @@ interface SessionState<TUser = BasicUser> {
  * ```
  */
 export function useCurrentUser<TUser = BasicUser>(): TUser | null {
-  const authClient = useAuthClientSafe();
+	const authClient = useAuthClientSafe();
 
-  if (!authClient) {
-    return null;
-  }
+	if (!authClient) {
+		return null;
+	}
 
-  const { data: session } = authClient.useSession();
-  return (session?.user as TUser) ?? null;
+	const { data: session } = authClient.useSession();
+	return (session?.user as TUser) ?? null;
 }
 
 /**
@@ -97,23 +97,23 @@ export function useCurrentUser<TUser = BasicUser>(): TUser | null {
  * ```
  */
 export function useSessionState<TUser = BasicUser>(): SessionState<TUser> {
-  const authClient = useAuthClientSafe();
+	const authClient = useAuthClientSafe();
 
-  if (!authClient) {
-    return {
-      user: null,
-      isPending: false,
-      error: null,
-    };
-  }
+	if (!authClient) {
+		return {
+			user: null,
+			isPending: false,
+			error: null,
+		};
+	}
 
-  const { data: session, isPending, error } = authClient.useSession();
+	const { data: session, isPending, error } = authClient.useSession();
 
-  return {
-    user: (session?.user as TUser) ?? null,
-    isPending,
-    error: error ?? null,
-  };
+	return {
+		user: (session?.user as TUser) ?? null,
+		isPending,
+		error: error ?? null,
+	};
 }
 
 /**
@@ -129,14 +129,14 @@ export function useSessionState<TUser = BasicUser>(): SessionState<TUser> {
  * ```
  */
 function useIsAuthenticated(): boolean {
-  const authClient = useAuthClientSafe();
+	const authClient = useAuthClientSafe();
 
-  if (!authClient) {
-    return false;
-  }
+	if (!authClient) {
+		return false;
+	}
 
-  const { data: session, isPending } = authClient.useSession();
-  return !isPending && session?.user != null;
+	const { data: session, isPending } = authClient.useSession();
+	return !isPending && session?.user != null;
 }
 
 /**
@@ -149,8 +149,8 @@ function useIsAuthenticated(): boolean {
  * ```
  */
 function useIsAdmin(): boolean {
-  const user = useCurrentUser();
-  return user?.role === "admin";
+	const user = useCurrentUser();
+	return user?.role === "admin";
 }
 
 /**
@@ -162,8 +162,8 @@ function useIsAdmin(): boolean {
  * ```
  */
 function useHasRole(role: string): boolean {
-  const user = useCurrentUser();
-  return user?.role === role;
+	const user = useCurrentUser();
+	return user?.role === role;
 }
 
 /**
@@ -175,6 +175,6 @@ function useHasRole(role: string): boolean {
  * ```
  */
 function useHasAnyRole(roles: string[]): boolean {
-  const user = useCurrentUser();
-  return user?.role != null && roles.includes(user.role);
+	const user = useCurrentUser();
+	return user?.role != null && roles.includes(user.role);
 }

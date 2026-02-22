@@ -1,30 +1,30 @@
 import { Elysia } from "elysia";
 import {
-  createFetchHandler,
-  type Questpie,
-  type RpcRouterTree,
+	createFetchHandler,
+	type Questpie,
+	type RpcRouterTree,
 } from "questpie";
 
 /**
  * Context stored in Elysia decorator
  */
 export type QuestpieContext = {
-  app: Questpie<any>;
-  appContext: Awaited<ReturnType<Questpie<any>["createContext"]>>;
-  user: any;
+	app: Questpie<any>;
+	appContext: Awaited<ReturnType<Questpie<any>["createContext"]>>;
+	user: any;
 };
 
 /**
  * Elysia adapter configuration
  */
 export type ElysiaAdapterConfig = {
-  /**
-   * Base path for QUESTPIE routes
-   * Use '/' for server-only apps or '/api' for fullstack apps.
-   * @default '/'
-   */
-  basePath?: string;
-  rpc?: RpcRouterTree<any>;
+	/**
+	 * Base path for QUESTPIE routes
+	 * Use '/' for server-only apps or '/api' for fullstack apps.
+	 * @default '/'
+	 */
+	basePath?: string;
+	rpc?: RpcRouterTree<any>;
 };
 
 /**
@@ -71,29 +71,29 @@ export type ElysiaAdapterConfig = {
  * ```
  */
 export function questpieElysia(
-  app: Questpie<any>,
-  config: ElysiaAdapterConfig = {},
+	app: Questpie<any>,
+	config: ElysiaAdapterConfig = {},
 ) {
-  const basePath = config.basePath || "/";
-  const handler = createFetchHandler(app, {
-    basePath,
-    accessMode: "user",
-    rpc: config.rpc,
-  });
+	const basePath = config.basePath || "/";
+	const handler = createFetchHandler(app, {
+		basePath,
+		accessMode: "user",
+		rpc: config.rpc,
+	});
 
-  const server = new Elysia({ prefix: basePath, name: "questpie" }).all(
-    "/*",
-    async ({ request }) => {
-      const response = await handler(request);
-      return (
-        response ??
-        new Response(JSON.stringify({ error: "Not found" }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        })
-      );
-    },
-  );
+	const server = new Elysia({ prefix: basePath, name: "questpie" }).all(
+		"/*",
+		async ({ request }) => {
+			const response = await handler(request);
+			return (
+				response ??
+				new Response(JSON.stringify({ error: "Not found" }), {
+					status: 404,
+					headers: { "Content-Type": "application/json" },
+				})
+			);
+		},
+	);
 
-  return server;
+	return server;
 }

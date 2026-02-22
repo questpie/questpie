@@ -155,4 +155,3 @@ export function BlockRenderer({
 
 	return <div className={className}>{content._tree.map(renderBlock)}</div>;
 }
-

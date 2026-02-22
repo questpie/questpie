@@ -58,8 +58,8 @@ import type {
 	GlobalTransitionHookContext,
 } from "#questpie/server/global/builder/types.js";
 import {
-	type ResolvedWorkflowConfig,
 	extractWorkflowFromVersioning,
+	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
 } from "#questpie/server/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
@@ -1264,8 +1264,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					throw ApiError.forbidden({
 						operation: "update",
 						resource: this.state.name,
-						reason:
-							"User does not have permission to transition this global",
+						reason: "User does not have permission to transition this global",
 					});
 				}
 			}

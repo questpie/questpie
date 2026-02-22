@@ -196,25 +196,20 @@ function ActivityTimeline({
 							<div
 								className={`size-2.5 rounded-full mt-1.5 shrink-0 ${config.color}`}
 							/>
-							{!isLast && (
-								<div className="w-px flex-1 bg-border min-h-4" />
-							)}
+							{!isLast && <div className="w-px flex-1 bg-border min-h-4" />}
 						</div>
 
 						{/* Content */}
 						<div className="pb-4 min-w-0 flex-1">
 							<div className="flex items-start justify-between gap-2">
-								<p className="text-sm leading-snug">
-									{entry.title}
-								</p>
+								<p className="text-sm leading-snug">{entry.title}</p>
 								<span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
 									{formatRelativeTime(date)}
 								</span>
 							</div>
-							{entry.changes &&
-								Object.keys(entry.changes).length > 0 && (
-									<ChangeDiff changes={entry.changes} />
-								)}
+							{entry.changes && Object.keys(entry.changes).length > 0 && (
+								<ChangeDiff changes={entry.changes} />
+							)}
 						</div>
 					</div>
 				);
@@ -365,7 +360,10 @@ export function HistorySidebar({
 				</SheetHeader>
 
 				{showVersionsTab ? (
-					<Tabs defaultValue="activity" className="flex-1 flex flex-col min-h-0">
+					<Tabs
+						defaultValue="activity"
+						className="flex-1 flex flex-col min-h-0"
+					>
 						<div className="px-6 pt-3">
 							<TabsList variant="line">
 								<TabsTrigger value="activity">

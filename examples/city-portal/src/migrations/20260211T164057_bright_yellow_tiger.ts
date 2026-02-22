@@ -1,8 +1,8 @@
-import type { Migration, OperationSnapshot } from "questpie"
-import { sql } from "drizzle-orm"
-import snapshotJson from "./snapshots/20260211T164057_bright_yellow_tiger.json"
+import { sql } from "drizzle-orm";
+import type { Migration, OperationSnapshot } from "questpie";
+import snapshotJson from "./snapshots/20260211T164057_bright_yellow_tiger.json";
 
-const snapshot = snapshotJson as OperationSnapshot
+const snapshot = snapshotJson as OperationSnapshot;
 
 export const brightYellowTiger20260211T164057: Migration = {
 	id: "brightYellowTiger20260211T164057",
@@ -20,7 +20,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"visibility" varchar(20) DEFAULT 'public' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "user" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"name" varchar(255) NOT NULL,
@@ -33,7 +33,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"banExpires" timestamp(3) with time zone,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "session" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"userId" varchar(255) NOT NULL,
@@ -44,7 +44,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"impersonatedBy" varchar(255),
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "account" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"userId" varchar(255) NOT NULL,
@@ -59,7 +59,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"password" varchar(255),
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "verification" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"identifier" varchar(255) NOT NULL,
@@ -67,7 +67,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"expiresAt" timestamp(3) with time zone NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "apikey" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"name" varchar(255),
@@ -90,7 +90,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"metadata" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "admin_saved_views" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"userId" varchar(255) NOT NULL,
@@ -100,7 +100,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"isDefault" boolean DEFAULT false,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "admin_preferences" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"userId" varchar(255) NOT NULL,
@@ -108,7 +108,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"value" jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "admin_locks" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"resourceType" varchar(50) NOT NULL,
@@ -119,7 +119,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"expiresAt" date NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "cities" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"name" varchar(255) NOT NULL,
@@ -133,7 +133,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"isActive" boolean DEFAULT true,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "cityMembers" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"user" varchar(36) NOT NULL,
@@ -141,7 +141,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"role" varchar(50) DEFAULT 'editor' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "pages" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"city" varchar(36) NOT NULL,
@@ -158,7 +158,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"metaDescription" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "news" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"city" varchar(36) NOT NULL,
@@ -174,7 +174,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"isFeatured" boolean DEFAULT false,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "announcements" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"city" varchar(36) NOT NULL,
@@ -188,7 +188,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"referenceNumber" varchar(100),
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "documents" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"city" varchar(36) NOT NULL,
@@ -201,7 +201,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"isPublished" boolean DEFAULT true,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "contacts" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"city" varchar(36) NOT NULL,
@@ -216,7 +216,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"order" integer DEFAULT 0,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "submissions" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"city" varchar(36) NOT NULL,
@@ -230,7 +230,7 @@ export const brightYellowTiger20260211T164057: Migration = {
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "site_settings" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"scope_id" text,
@@ -263,7 +263,7 @@ Saturday - Sunday: Closed',
 	"alertLink" varchar(255),
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "site_settings_versions" (
 	"version_id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"id" text NOT NULL,
@@ -301,7 +301,7 @@ Saturday - Sunday: Closed',
 	"alertLink" varchar(255),
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "questpie_realtime_log" (
 	"seq" bigserial PRIMARY KEY,
 	"resource_type" text NOT NULL,
@@ -311,7 +311,7 @@ Saturday - Sunday: Closed',
 	"locale" text,
 	"payload" jsonb DEFAULT '{}',
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "questpie_search" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"collection_name" text NOT NULL,
@@ -324,7 +324,7 @@ Saturday - Sunday: Closed',
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "uq_search_entry" UNIQUE("collection_name","record_id","locale")
-);`)
+);`);
 		await db.execute(sql`CREATE TABLE "questpie_search_facets" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid(),
 	"search_id" text NOT NULL,
@@ -334,49 +334,85 @@ Saturday - Sunday: Closed',
 	"facet_value" text NOT NULL,
 	"numeric_value" numeric,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);`)
-		await db.execute(sql`CREATE UNIQUE INDEX "admin_preferences_user_key_idx" ON "admin_preferences" ("userId","key");`)
-		await db.execute(sql`CREATE UNIQUE INDEX "cities_slug_unique" ON "cities" ("slug");`)
-		await db.execute(sql`CREATE UNIQUE INDEX "city_members_unique" ON "cityMembers" ("user","city");`)
-		await db.execute(sql`CREATE UNIQUE INDEX "pages_city_slug_unique" ON "pages" ("city","slug");`)
-		await db.execute(sql`CREATE UNIQUE INDEX "news_city_slug_unique" ON "news" ("city","slug");`)
-		await db.execute(sql`CREATE UNIQUE INDEX "site_settings_scope_idx" ON "site_settings" ("scope_id");`)
-		await db.execute(sql`CREATE INDEX "site_settings_versions_id_version_number_index" ON "site_settings_versions" ("id","version_number");`)
-		await db.execute(sql`CREATE INDEX "site_settings_versions_version_created_at_index" ON "site_settings_versions" ("version_created_at");`)
-		await db.execute(sql`CREATE INDEX "idx_realtime_log_seq" ON "questpie_realtime_log" ("seq");`)
-		await db.execute(sql`CREATE INDEX "idx_realtime_log_resource" ON "questpie_realtime_log" ("resource_type","resource");`)
-		await db.execute(sql`CREATE INDEX "idx_realtime_log_created_at" ON "questpie_realtime_log" ("created_at");`)
-		await db.execute(sql`CREATE INDEX "idx_search_fts" ON "questpie_search" USING gin ("fts_vector");`)
-		await db.execute(sql`CREATE INDEX "idx_search_trigram" ON "questpie_search" USING gin ("title" gin_trgm_ops);`)
-		await db.execute(sql`CREATE INDEX "idx_search_collection_locale" ON "questpie_search" ("collection_name","locale");`)
-		await db.execute(sql`CREATE INDEX "idx_search_record_id" ON "questpie_search" ("record_id");`)
-		await db.execute(sql`CREATE INDEX "idx_facets_agg" ON "questpie_search_facets" ("collection_name","locale","facet_name","facet_value");`)
-		await db.execute(sql`CREATE INDEX "idx_facets_search_id" ON "questpie_search_facets" ("search_id");`)
-		await db.execute(sql`CREATE INDEX "idx_facets_collection" ON "questpie_search_facets" ("collection_name");`)
+);`);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "admin_preferences_user_key_idx" ON "admin_preferences" ("userId","key");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "cities_slug_unique" ON "cities" ("slug");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "city_members_unique" ON "cityMembers" ("user","city");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "pages_city_slug_unique" ON "pages" ("city","slug");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "news_city_slug_unique" ON "news" ("city","slug");`,
+		);
+		await db.execute(
+			sql`CREATE UNIQUE INDEX "site_settings_scope_idx" ON "site_settings" ("scope_id");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "site_settings_versions_id_version_number_index" ON "site_settings_versions" ("id","version_number");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "site_settings_versions_version_created_at_index" ON "site_settings_versions" ("version_created_at");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_realtime_log_seq" ON "questpie_realtime_log" ("seq");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_realtime_log_resource" ON "questpie_realtime_log" ("resource_type","resource");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_realtime_log_created_at" ON "questpie_realtime_log" ("created_at");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_search_fts" ON "questpie_search" USING gin ("fts_vector");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_search_trigram" ON "questpie_search" USING gin ("title" gin_trgm_ops);`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_search_collection_locale" ON "questpie_search" ("collection_name","locale");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_search_record_id" ON "questpie_search" ("record_id");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_facets_agg" ON "questpie_search_facets" ("collection_name","locale","facet_name","facet_value");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_facets_search_id" ON "questpie_search_facets" ("search_id");`,
+		);
+		await db.execute(
+			sql`CREATE INDEX "idx_facets_collection" ON "questpie_search_facets" ("collection_name");`,
+		);
 	},
 	async down({ db }) {
-		await db.execute(sql`DROP TABLE "assets";`)
-		await db.execute(sql`DROP TABLE "user";`)
-		await db.execute(sql`DROP TABLE "session";`)
-		await db.execute(sql`DROP TABLE "account";`)
-		await db.execute(sql`DROP TABLE "verification";`)
-		await db.execute(sql`DROP TABLE "apikey";`)
-		await db.execute(sql`DROP TABLE "admin_saved_views";`)
-		await db.execute(sql`DROP TABLE "admin_preferences";`)
-		await db.execute(sql`DROP TABLE "admin_locks";`)
-		await db.execute(sql`DROP TABLE "cities";`)
-		await db.execute(sql`DROP TABLE "cityMembers";`)
-		await db.execute(sql`DROP TABLE "pages";`)
-		await db.execute(sql`DROP TABLE "news";`)
-		await db.execute(sql`DROP TABLE "announcements";`)
-		await db.execute(sql`DROP TABLE "documents";`)
-		await db.execute(sql`DROP TABLE "contacts";`)
-		await db.execute(sql`DROP TABLE "submissions";`)
-		await db.execute(sql`DROP TABLE "site_settings";`)
-		await db.execute(sql`DROP TABLE "site_settings_versions";`)
-		await db.execute(sql`DROP TABLE "questpie_realtime_log";`)
-		await db.execute(sql`DROP TABLE "questpie_search";`)
-		await db.execute(sql`DROP TABLE "questpie_search_facets";`)
+		await db.execute(sql`DROP TABLE "assets";`);
+		await db.execute(sql`DROP TABLE "user";`);
+		await db.execute(sql`DROP TABLE "session";`);
+		await db.execute(sql`DROP TABLE "account";`);
+		await db.execute(sql`DROP TABLE "verification";`);
+		await db.execute(sql`DROP TABLE "apikey";`);
+		await db.execute(sql`DROP TABLE "admin_saved_views";`);
+		await db.execute(sql`DROP TABLE "admin_preferences";`);
+		await db.execute(sql`DROP TABLE "admin_locks";`);
+		await db.execute(sql`DROP TABLE "cities";`);
+		await db.execute(sql`DROP TABLE "cityMembers";`);
+		await db.execute(sql`DROP TABLE "pages";`);
+		await db.execute(sql`DROP TABLE "news";`);
+		await db.execute(sql`DROP TABLE "announcements";`);
+		await db.execute(sql`DROP TABLE "documents";`);
+		await db.execute(sql`DROP TABLE "contacts";`);
+		await db.execute(sql`DROP TABLE "submissions";`);
+		await db.execute(sql`DROP TABLE "site_settings";`);
+		await db.execute(sql`DROP TABLE "site_settings_versions";`);
+		await db.execute(sql`DROP TABLE "questpie_realtime_log";`);
+		await db.execute(sql`DROP TABLE "questpie_search";`);
+		await db.execute(sql`DROP TABLE "questpie_search_facets";`);
 	},
 	snapshot,
-}
+};

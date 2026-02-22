@@ -5,8 +5,8 @@
  * These types and helpers are used for questpie.config.ts configuration files
  */
 export type {
-  QuestpieConfigFile,
-  QuestpieCliConfig,
+	QuestpieCliConfig,
+	QuestpieConfigFile,
 } from "#questpie/cli/config.js";
 export { config } from "#questpie/cli/config.js";
 

@@ -15,7 +15,8 @@ import { getQueryParams, parseBoolean } from "./request.js";
 
 export const resolveSession = async <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	request: Request,
 	config: AdapterConfig<TConfig>,
 ): Promise<{ user: any; session: any } | null> => {
@@ -40,7 +41,8 @@ export const resolveSession = async <
 
 export const resolveLocale = async <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	request: Request,
 	config: AdapterConfig<TConfig>,
 	queryLocale?: string,
@@ -59,7 +61,8 @@ export const resolveLocale = async <
 
 export const createAdapterContext = async <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	request: Request,
 	config: AdapterConfig<TConfig> = {},
 ): Promise<AdapterContext> => {
@@ -120,7 +123,8 @@ export const createAdapterContext = async <
 
 export const resolveContext = async <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	request: Request,
 	config: AdapterConfig<TConfig>,
 	context?: AdapterContext,

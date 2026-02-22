@@ -102,8 +102,7 @@ describe("tanstack query workflow stage config", () => {
 		});
 
 		// Global transitionStage mutation
-		const globalMutation =
-			queryOptions.globals.siteSettings.transitionStage();
+		const globalMutation = queryOptions.globals.siteSettings.transitionStage();
 		expect(globalMutation.mutationKey).toContain("transitionStage");
 		await globalMutation.mutationFn?.({
 			params: { stage: "published" },

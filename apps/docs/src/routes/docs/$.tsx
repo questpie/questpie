@@ -1,18 +1,15 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { lazy, Suspense } from "react";
+import { DocsRouteContent } from "@/components/docs/DocsRouteContent";
 import {
+	buildBreadcrumbs,
+	generateBreadcrumbJsonLd,
 	generateDocsJsonLd,
 	generateLinks,
 	generateMeta,
+	sectionLabels,
 	siteConfig,
 } from "@/lib/seo";
-
-const LazyDocsRouteContent = lazy(() =>
-	import("@/components/docs/DocsRouteContent").then((module) => ({
-		default: module.DocsRouteContent,
-	})),
-);
 
 const docsCompatRedirects = new Map<string, string>([
 	[
@@ -36,7 +33,10 @@ export const Route = createFileRoute("/docs/$")({
 	head: ({ loaderData }) => {
 		if (!loaderData) return {};
 
-		const { title, description, url, dateModified } = loaderData;
+		const { title, description, url, dateModified, slugs } = loaderData;
+		const breadcrumbs = buildBreadcrumbs(slugs, title);
+		const section =
+			slugs.length > 0 ? (sectionLabels[slugs[0]] ?? slugs[0]) : undefined;
 
 		return {
 			links: generateLinks({
@@ -49,6 +49,7 @@ export const Route = createFileRoute("/docs/$")({
 				description,
 				url,
 				type: "article",
+				section,
 			}),
 			scripts: [
 				{
@@ -61,6 +62,10 @@ export const Route = createFileRoute("/docs/$")({
 							dateModified,
 						}),
 					),
+				},
+				{
+					type: "application/ld+json",
+					children: JSON.stringify(generateBreadcrumbJsonLd(breadcrumbs)),
 				},
 			],
 		};
@@ -94,6 +99,7 @@ const serverLoader = createServerFn({ method: "GET" })
 			title,
 			description,
 			dateModified,
+			slugs,
 			pageTree: await source.serializePageTree(source.getPageTree()),
 		};
 	});
@@ -101,15 +107,5 @@ const serverLoader = createServerFn({ method: "GET" })
 function Page() {
 	const data = Route.useLoaderData();
 
-	return (
-		<Suspense
-			fallback={
-				<div className="mx-auto w-full max-w-7xl px-4 py-10 text-sm text-muted-foreground">
-					Loading documentation...
-				</div>
-			}
-		>
-			<LazyDocsRouteContent data={data} />
-		</Suspense>
-	);
+	return <DocsRouteContent data={data} />;
 }

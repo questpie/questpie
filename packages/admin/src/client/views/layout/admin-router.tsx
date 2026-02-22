@@ -15,11 +15,11 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
-import type { DashboardConfig } from "../../builder/types/ui-config.js";
-import type { ComponentRegistry } from "../../builder/types/field-types.js";
-import type { DefaultViewsConfig } from "../../builder/types/views.js";
-import type { MaybeLazyComponent } from "../../builder/types/common.js";
 import type { PageDefinition } from "../../builder/page/page.js";
+import type { MaybeLazyComponent } from "../../builder/types/common.js";
+import type { ComponentRegistry } from "../../builder/types/field-types.js";
+import type { DashboardConfig } from "../../builder/types/ui-config.js";
+import type { DefaultViewsConfig } from "../../builder/types/views.js";
 import { Card } from "../../components/ui/card.js";
 import { Skeleton } from "../../components/ui/skeleton.js";
 import { useSuspenseAdminConfig } from "../../hooks/use-admin-config";
@@ -544,7 +544,6 @@ function DefaultDashboard({
 }: {
 	config?: DefaultViewsConfig["dashboard"];
 }) {
-
 	const date = new Date().toLocaleDateString("en-US", {
 		weekday: "long",
 		year: "numeric",
@@ -661,11 +660,11 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 				if (typeof config.component === "function") {
 					const result = (config.component as () => any)();
 					let isThenable = false;
-				if (result != null) {
-					if (typeof result.then === "function") {
-						isThenable = true;
+					if (result != null) {
+						if (typeof result.then === "function") {
+							isThenable = true;
+						}
 					}
-				}
 					if (isThenable) {
 						const mod = await result;
 						if (mounted) {

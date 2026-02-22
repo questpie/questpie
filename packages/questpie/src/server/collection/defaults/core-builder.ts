@@ -14,4 +14,4 @@ import { defaultFields } from "#questpie/server/fields/builtin/defaults.js";
  * Use this to define auth/assets collections with the field builder pattern.
  */
 export const coreBuilder =
-  QuestpieBuilder.empty("questpie-core").fields(defaultFields);
+	QuestpieBuilder.empty("questpie-core").fields(defaultFields);

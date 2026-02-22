@@ -364,17 +364,15 @@ export type FieldDefinitionsWithSystem<
 type GlobalAutoInsertedFields<
 	TUserFields extends Record<string, any>,
 	TOptions extends { timestamps?: boolean },
-> = ("id" extends keyof TUserFields
-	? {}
-	: { readonly id: IdField }) &
+> = ("id" extends keyof TUserFields ? {} : { readonly id: IdField }) &
 	(TOptions extends { timestamps: false }
 		? {}
 		: ("createdAt" extends keyof TUserFields
 				? {}
 				: { readonly createdAt: TimestampField }) &
-			("updatedAt" extends keyof TUserFields
-				? {}
-				: { readonly updatedAt: TimestampField }));
+				("updatedAt" extends keyof TUserFields
+					? {}
+					: { readonly updatedAt: TimestampField }));
 
 /**
  * Merges user-defined global field definitions with auto-inserted system fields.

@@ -54,7 +54,8 @@ type TopicState = {
 
 export const createRealtimeRoutes = <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig> = {},
 ) => {
 	const errorResponse = (

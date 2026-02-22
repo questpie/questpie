@@ -19,9 +19,7 @@ function getEmbedUrl(url: string): string | null {
 	return null;
 }
 
-export function VideoRenderer({
-	values,
-}: BlockComponentProps<App, "video">) {
+export function VideoRenderer({ values }: BlockComponentProps<App, "video">) {
 	const embedUrl = values.url ? getEmbedUrl(values.url) : null;
 
 	return (

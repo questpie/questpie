@@ -231,10 +231,7 @@ describe("audit routes", () => {
 			const ctx = createTestContext();
 
 			// Initialize global
-			await setup.app.api.globals.settings.update(
-				{ siteName: "My Site" },
-				ctx,
-			);
+			await setup.app.api.globals.settings.update({ siteName: "My Site" }, ctx);
 
 			// Insert mock audit log entries for the global
 			await setup.app.api.collections.adminAuditLog.create(
@@ -267,14 +264,12 @@ describe("audit routes", () => {
 			const settings = q.global("settings").fields((f) => ({
 				siteName: f.text({ required: true }),
 			}));
-			const noAuditModule = q
-				.globals({ settings })
-				.defaultAccess({
-					read: true,
-					create: true,
-					update: true,
-					delete: true,
-				});
+			const noAuditModule = q.globals({ settings }).defaultAccess({
+				read: true,
+				create: true,
+				update: true,
+				delete: true,
+			});
 
 			const noAuditSetup = await buildMockApp(noAuditModule);
 			await runTestDbMigrations(noAuditSetup.app);
@@ -314,9 +309,7 @@ describe("audit routes", () => {
 			}
 
 			const response = await handler(
-				new Request(
-					"http://localhost/globals/settings/audit?limit=1&offset=0",
-				),
+				new Request("http://localhost/globals/settings/audit?limit=1&offset=0"),
 			);
 
 			expect(response?.status).toBe(200);

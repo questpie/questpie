@@ -1,7 +1,7 @@
 import type {
-  JobDefinition,
-  QueueClient,
-  QueueListenRuntimeOptions,
+	JobDefinition,
+	QueueClient,
+	QueueListenRuntimeOptions,
 } from "./types.js";
 
 /**
@@ -15,19 +15,19 @@ export type WorkerOptions = QueueListenRuntimeOptions;
  * Breaking change: worker startup is now delegated to `queueClient.listen()`.
  */
 export async function startJobWorker<
-  TJobs extends Record<string, JobDefinition<any, any>>,
+	TJobs extends Record<string, JobDefinition<any, any>>,
 >(queueClient: QueueClient<TJobs>, options?: WorkerOptions): Promise<void> {
-  await queueClient.listen(options);
+	await queueClient.listen(options);
 }
 
 /**
  * Process one bounded queue batch (serverless tick mode).
  */
 export async function runJobWorkerOnce<
-  TJobs extends Record<string, JobDefinition<any, any>>,
+	TJobs extends Record<string, JobDefinition<any, any>>,
 >(
-  queueClient: QueueClient<TJobs>,
-  options?: { batchSize?: number; jobs?: string[] },
+	queueClient: QueueClient<TJobs>,
+	options?: { batchSize?: number; jobs?: string[] },
 ): Promise<{ processed: number }> {
-  return queueClient.runOnce(options);
+	return queueClient.runOnce(options);
 }

@@ -215,10 +215,7 @@ export class RealtimeMultiplexer {
 
 			// Notify subscribers of connection error so they can throw
 			// instead of waiting forever (prevents infinite loading)
-			const err =
-				error instanceof Error
-					? error
-					: new Error(String(error));
+			const err = error instanceof Error ? error : new Error(String(error));
 			for (const cb of this.errorCallbacks) {
 				cb(err);
 			}

@@ -200,7 +200,10 @@ export function generateGlobalPaths(
 
 		// POST /globals/{name}/transition (only for workflow-enabled globals)
 		const versioningOpts = state.options?.versioning;
-		const hasWorkflow = versioningOpts && typeof versioningOpts === "object" && versioningOpts.workflow;
+		const hasWorkflow =
+			versioningOpts &&
+			typeof versioningOpts === "object" &&
+			versioningOpts.workflow;
 		if (hasWorkflow) {
 			paths[`${prefix}/transition`] = {
 				post: {

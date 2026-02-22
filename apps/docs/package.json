@@ -12,7 +12,7 @@
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",
-		"@fontsource-variable/dm-sans": "^5.2.8",
+		"@fontsource-variable/geist": "^5.2.8",
 		"@fontsource-variable/jetbrains-mono": "^5.2.8",
 		"@phosphor-icons/react": "^2.1.10",
 		"@tanstack/react-router": "1.136.18",

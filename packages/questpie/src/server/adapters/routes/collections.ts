@@ -16,7 +16,8 @@ import { handleError, smartResponse } from "../utils/response.js";
 
 export const createCollectionRoutes = <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig> = {},
 ) => {
 	const errorResponse = (
@@ -475,9 +476,7 @@ export const createCollectionRoutes = <
 						? Number(offsetRaw)
 						: undefined;
 
-				const auditCrud = app.api.collections[
-					"adminAuditLog" as any
-				] as any;
+				const auditCrud = app.api.collections["adminAuditLog" as any] as any;
 				if (!auditCrud) {
 					return smartResponse([], request);
 				}

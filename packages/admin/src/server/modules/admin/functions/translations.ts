@@ -33,7 +33,8 @@ function getApp(ctx: { app: unknown }): Questpie<any> {
 /**
  * Get admin locale config from app state.
  */
-function getAdminLocaleConfig(app: Questpie<any>,
+function getAdminLocaleConfig(
+	app: Questpie<any>,
 ): AdminLocaleConfig | undefined {
 	return (app as any).state?.adminLocale;
 }

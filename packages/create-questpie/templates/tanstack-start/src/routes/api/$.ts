@@ -1,7 +1,7 @@
 import { withOpenApi } from "@questpie/openapi";
 import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie";
-import { appRpc, app } from "@/questpie/server/app.js";
+import { app, appRpc } from "@/questpie/server/app.js";
 
 const handler = withOpenApi(
 	createFetchHandler(app, {

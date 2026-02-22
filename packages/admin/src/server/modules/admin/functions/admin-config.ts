@@ -77,7 +77,8 @@ async function hasReadAccess(
 	ctx: { app: unknown; session?: any; db: any; locale?: string },
 ): Promise<boolean> {
 	// Fall back to app defaultAccess.read if no explicit rule
-	const effectiveRule = readRule ?? (ctx.app as Questpie<any>)?.defaultAccess?.read;
+	const effectiveRule =
+		readRule ?? (ctx.app as Questpie<any>)?.defaultAccess?.read;
 
 	if (effectiveRule === true) return true;
 	if (effectiveRule === false) return false;
@@ -86,7 +87,8 @@ async function hasReadAccess(
 	if (effectiveRule === undefined) return !!ctx.session;
 
 	try {
-		const result = await executeAccessRule(effectiveRule as any, { app: ctx.app as any,
+		const result = await executeAccessRule(effectiveRule as any, {
+			app: ctx.app as any,
 			db: ctx.db,
 			session: ctx.session,
 			locale: ctx.locale,
@@ -108,7 +110,9 @@ function extractWorkflowMeta(state: any): WorkflowMeta | undefined {
 	// Workflow is nested under versioning
 	const versioning = state?.options?.versioning;
 	const workflow =
-		versioning && typeof versioning === "object" ? versioning.workflow : undefined;
+		versioning && typeof versioning === "object"
+			? versioning.workflow
+			: undefined;
 	if (!workflow) return undefined;
 
 	const opts = workflow === true ? {} : workflow;
@@ -120,12 +124,14 @@ function extractWorkflowMeta(state: any): WorkflowMeta | undefined {
 	} else if (Array.isArray(rawStages)) {
 		stages = rawStages.map((name: string) => ({ name }));
 	} else {
-		stages = Object.entries(rawStages).map(([name, options]: [string, any]) => ({
-			name,
-			label: options?.label,
-			description: options?.description,
-			transitions: options?.transitions,
-		}));
+		stages = Object.entries(rawStages).map(
+			([name, options]: [string, any]) => ({
+				name,
+				label: options?.label,
+				description: options?.description,
+				transitions: options?.transitions,
+			}),
+		);
 	}
 
 	return {
@@ -138,7 +144,8 @@ function extractWorkflowMeta(state: any): WorkflowMeta | undefined {
 /**
  * Extract admin metadata from all registered collections.
  */
-function extractCollectionsMeta(app: Questpie<any>,
+function extractCollectionsMeta(
+	app: Questpie<any>,
 ): Record<string, AdminConfigItemMeta> {
 	const result: Record<string, AdminConfigItemMeta> = {};
 	const collections = app.getCollections();
@@ -168,7 +175,8 @@ function extractCollectionsMeta(app: Questpie<any>,
 /**
  * Extract admin metadata from all registered globals.
  */
-function extractGlobalsMeta(app: Questpie<any>,
+function extractGlobalsMeta(
+	app: Questpie<any>,
 ): Record<string, AdminConfigItemMeta> {
 	const result: Record<string, AdminConfigItemMeta> = {};
 	const globals = app.getGlobals();
@@ -422,7 +430,8 @@ async function processDashboardItems(
 		if (widget.access !== undefined) {
 			const widgetAccessResult =
 				typeof widget.access === "function"
-					? await widget.access({ app: accessCtx.app,
+					? await widget.access({
+							app: accessCtx.app,
 							db: accessCtx.db,
 							session: accessCtx.session,
 							locale: accessCtx.locale,

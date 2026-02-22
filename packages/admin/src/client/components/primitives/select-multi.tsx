@@ -94,7 +94,6 @@ export function SelectMulti<TValue extends string = string>({
 	drawerTitle = "Select options",
 	maxVisibleChips = 3,
 }: SelectMultiProps<TValue>) {
-
 	const resolvedValue = value ?? (EMPTY_VALUE as TValue[]);
 	const resolvedStaticOptions = staticOptions ?? EMPTY_OPTIONS;
 	const resolveText = useResolveText();

@@ -5,9 +5,7 @@ import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-const q = questpie({ name: "test-global-versioning-wf" }).fields(
-	defaultFields,
-);
+const q = questpie({ name: "test-global-versioning-wf" }).fields(defaultFields);
 
 // Workflow shorthand
 const shorthand_config = q
@@ -73,10 +71,7 @@ describe("global versioning + workflow", () => {
 				ctx,
 			);
 
-			const result = await setup.app.api.globals.shorthand_config.get(
-				{},
-				ctx,
-			);
+			const result = await setup.app.api.globals.shorthand_config.get({}, ctx);
 			expect(result?.siteName).toBe("Shorthand Site");
 		});
 
@@ -135,11 +130,10 @@ describe("global versioning + workflow", () => {
 				ctx,
 			);
 
-			const versions =
-				await setup.app.api.globals.workflow_config.findVersions(
-					{},
-					ctx,
-				);
+			const versions = await setup.app.api.globals.workflow_config.findVersions(
+				{},
+				ctx,
+			);
 
 			expect(versions.length).toBeGreaterThanOrEqual(1);
 
@@ -162,11 +156,10 @@ describe("global versioning + workflow", () => {
 				ctx,
 			);
 
-			const versions =
-				await setup.app.api.globals.workflow_config.findVersions(
-					{},
-					ctx,
-				);
+			const versions = await setup.app.api.globals.workflow_config.findVersions(
+				{},
+				ctx,
+			);
 
 			// The latest version should have versionStage "published"
 			const latestVersion = versions[versions.length - 1] as any;
@@ -181,11 +174,10 @@ describe("global versioning + workflow", () => {
 				ctx,
 			);
 
-			const versions =
-				await setup.app.api.globals.plain_versioned.findVersions(
-					{},
-					ctx,
-				);
+			const versions = await setup.app.api.globals.plain_versioned.findVersions(
+				{},
+				ctx,
+			);
 
 			expect(versions.length).toBeGreaterThanOrEqual(1);
 			expect((versions[0] as any).versionStage).toBeNull();
@@ -214,10 +206,7 @@ describe("global versioning + workflow", () => {
 			);
 
 			// Draft should show v2
-			const draft = await setup.app.api.globals.workflow_config.get(
-				{},
-				ctx,
-			);
+			const draft = await setup.app.api.globals.workflow_config.get({}, ctx);
 			expect(draft?.siteName).toBe("Draft v2");
 
 			// Published should still show v1

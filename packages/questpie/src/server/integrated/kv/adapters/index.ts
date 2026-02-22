@@ -1,2 +1,2 @@
-export * from "./memory.js";
 export * from "./ioredis.js";
+export * from "./memory.js";

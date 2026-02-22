@@ -19,8 +19,18 @@ export const Route = createRootRoute({
 				{ charSet: "utf-8" },
 				{ name: "viewport", content: "width=device-width, initial-scale=1" },
 				{ name: "format-detection", content: "telephone=no" },
+				{ name: "color-scheme", content: "light dark" },
+				{ name: "theme-color", content: "#B700FF" },
 			],
-			links: [...generateLinks({ cssUrl: appCss, includeCanonical: false })],
+			links: [
+				...generateLinks({ cssUrl: appCss, includeCanonical: false }),
+				{
+					rel: "alternate",
+					type: "application/rss+xml",
+					title: "QUESTPIE Documentation RSS",
+					href: "/rss.xml",
+				},
+			],
 			scripts: [
 				...(umamiUrl && umamiWebsiteId
 					? [

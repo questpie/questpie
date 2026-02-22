@@ -5,17 +5,17 @@
  */
 
 export {
-  resolveBelongsToRelation,
-  type ResolveBelongsToOptions,
+	type ResolveBelongsToOptions,
+	resolveBelongsToRelation,
 } from "./belongs-to.js";
 
 export {
-  resolveHasManyRelation,
-  resolveHasManyWithAggregation,
-  type ResolveHasManyOptions,
+	type ResolveHasManyOptions,
+	resolveHasManyRelation,
+	resolveHasManyWithAggregation,
 } from "./has-many.js";
 
 export {
-  resolveManyToManyRelation,
-  type ResolveManyToManyOptions,
+	type ResolveManyToManyOptions,
+	resolveManyToManyRelation,
 } from "./many-to-many.js";

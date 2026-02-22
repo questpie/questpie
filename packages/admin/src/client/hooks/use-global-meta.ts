@@ -111,9 +111,7 @@ function getGlobalMetaQueryOptions(global: string, client: any) {
  * </Suspense>
  * ```
  */
-function useSuspenseGlobalMeta<K extends ResolvedGlobalNames>(
-	global: K,
-) {
+function useSuspenseGlobalMeta<K extends ResolvedGlobalNames>(global: K) {
 	const client = useAdminStore(selectClient);
 
 	return useSuspenseQuery<GlobalMeta>(

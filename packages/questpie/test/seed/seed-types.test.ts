@@ -2,11 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { resolveAutoSeedCategories } from "../../src/server/seed/types.js";
 
 describe("resolveAutoSeedCategories", () => {
-	it('returns undefined for true (run all)', () => {
+	it("returns undefined for true (run all)", () => {
 		expect(resolveAutoSeedCategories(true)).toBeUndefined();
 	});
 
-	it('returns undefined for false (run none)', () => {
+	it("returns undefined for false (run none)", () => {
 		expect(resolveAutoSeedCategories(false)).toBeUndefined();
 	});
 
@@ -23,9 +23,6 @@ describe("resolveAutoSeedCategories", () => {
 	});
 
 	it("passes through arrays unchanged", () => {
-		expect(resolveAutoSeedCategories(["dev", "test"])).toEqual([
-			"dev",
-			"test",
-		]);
+		expect(resolveAutoSeedCategories(["dev", "test"])).toEqual(["dev", "test"]);
 	});
 });

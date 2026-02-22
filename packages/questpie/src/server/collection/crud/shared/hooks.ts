@@ -17,33 +17,33 @@ import { normalizeContext } from "./context.js";
  * @param ctx - Hook context to pass to each hook
  */
 export async function executeHooks(
-  hooks: any | any[] | undefined,
-  ctx: HookContext<any, any, any>,
+	hooks: any | any[] | undefined,
+	ctx: HookContext<any, any, any>,
 ): Promise<void> {
-  if (!hooks) return;
+	if (!hooks) return;
 
-  const hookArray = Array.isArray(hooks) ? hooks : [hooks];
-  for (const hook of hookArray) {
-    await hook(ctx);
-  }
+	const hookArray = Array.isArray(hooks) ? hooks : [hooks];
+	for (const hook of hookArray) {
+		await hook(ctx);
+	}
 }
 
 /**
  * Parameters for creating a hook context
  */
 export interface CreateHookContextParams {
-  /** Data being operated on */
-  data: any;
-  /** Original data (for update operations) */
-  original?: any;
-  /** Operation type */
-  operation: "create" | "update" | "delete" | "read";
-  /** CRUD context */
-  context: CRUDContext;
-  /** Database instance */
-  db: any;
-  /** app instance */
-  app?: Questpie<any>;
+	/** Data being operated on */
+	data: any;
+	/** Original data (for update operations) */
+	original?: any;
+	/** Operation type */
+	operation: "create" | "update" | "delete" | "read";
+	/** CRUD context */
+	context: CRUDContext;
+	/** Database instance */
+	db: any;
+	/** app instance */
+	app?: Questpie<any>;
 }
 
 /**
@@ -53,18 +53,18 @@ export interface CreateHookContextParams {
  * @returns HookContext object
  */
 export function createHookContext(
-  params: CreateHookContextParams,
+	params: CreateHookContextParams,
 ): HookContext<any, any, any> {
-  const normalized = normalizeContext(params.context);
+	const normalized = normalizeContext(params.context);
 
-  return {
-    data: params.data,
-    original: params.original,
-    app: params.app as any, // app instance
-    session: normalized.session,
-    locale: normalized.locale,
-    accessMode: normalized.accessMode,
-    operation: params.operation,
-    db: params.db,
-  };
+	return {
+		data: params.data,
+		original: params.original,
+		app: params.app as any, // app instance
+		session: normalized.session,
+		locale: normalized.locale,
+		accessMode: normalized.accessMode,
+		operation: params.operation,
+		db: params.db,
+	};
 }

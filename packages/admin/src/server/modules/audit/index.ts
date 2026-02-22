@@ -5,11 +5,8 @@ import type {
 	WidgetFetchContext,
 } from "../../augmentation.js";
 import { auditLogCollection } from "./collections/audit-log.collection.js";
+import { createCollectionAuditHooks, createGlobalAuditHooks } from "./hooks.js";
 import { auditCleanupJob } from "./jobs/audit-cleanup.job.js";
-import {
-	createCollectionAuditHooks,
-	createGlobalAuditHooks,
-} from "./hooks.js";
 
 export { auditLogCollection } from "./collections/audit-log.collection.js";
 /**

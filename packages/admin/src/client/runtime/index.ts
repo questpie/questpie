@@ -17,7 +17,7 @@ export {
 	type AdminState,
 	type AdminStore,
 	// Convenience selectors
-  selectAdmin,
+	selectAdmin,
 	selectAuthClient,
 	selectBasePath,
 	selectBrandName,
@@ -28,7 +28,7 @@ export {
 	selectRealtime,
 	selectSetContentLocale,
 	// Store hooks
-  useAdminStore,
+	useAdminStore,
 } from "./provider";
 // Routes
 // Server-Side Translations

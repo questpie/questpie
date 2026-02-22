@@ -75,11 +75,10 @@ describe("global transitionStage", () => {
 			ctx,
 		);
 
-		const result =
-			await setup.app.api.globals.site_settings.transitionStage(
-				{ stage: "published" },
-				ctx,
-			);
+		const result = await setup.app.api.globals.site_settings.transitionStage(
+			{ stage: "published" },
+			ctx,
+		);
 
 		expect(result).not.toBeNull();
 		expect(result.siteName).toBe("My Site");
@@ -139,9 +138,7 @@ describe("global transitionStage", () => {
 				{ stage: "published" },
 				ctx,
 			),
-		).rejects.toThrow(
-			'Transition from "draft" to "published" is not allowed',
-		);
+		).rejects.toThrow('Transition from "draft" to "published" is not allowed');
 
 		// draft -> review should succeed
 		await setup.app.api.globals.guarded_settings.transitionStage(
@@ -161,9 +158,7 @@ describe("global transitionStage", () => {
 				{ stage: "draft" },
 				ctx,
 			),
-		).rejects.toThrow(
-			'Transition from "published" to "draft" is not allowed',
-		);
+		).rejects.toThrow('Transition from "published" to "draft" is not allowed');
 	});
 
 	it("does not mutate record data during transition", async () => {
@@ -180,10 +175,7 @@ describe("global transitionStage", () => {
 		);
 
 		// Draft stage should still have the original data
-		const draftRow = await setup.app.api.globals.site_settings.get(
-			{},
-			ctx,
-		);
+		const draftRow = await setup.app.api.globals.site_settings.get({}, ctx);
 		expect(draftRow?.siteName).toBe("Original Name");
 	});
 });

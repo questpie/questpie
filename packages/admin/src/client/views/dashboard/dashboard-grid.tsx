@@ -734,4 +734,3 @@ export function DashboardGrid({
 		</div>
 	);
 }
-

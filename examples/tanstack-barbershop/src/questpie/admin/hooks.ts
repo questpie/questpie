@@ -20,12 +20,12 @@ import type { App } from "../server/app";
 
 // Create typed hooks for this app's
 export const {
-  useCollectionList,
-  useCollectionCount,
-  useCollectionItem,
-  useCollectionCreate,
-  useCollectionUpdate,
-  useCollectionDelete,
-  useGlobal,
-  useGlobalUpdate,
+	useCollectionList,
+	useCollectionCount,
+	useCollectionItem,
+	useCollectionCreate,
+	useCollectionUpdate,
+	useCollectionDelete,
+	useGlobal,
+	useGlobalUpdate,
 } = createTypedHooks<App>();

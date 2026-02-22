@@ -332,30 +332,30 @@ describe("collection CRUD", () => {
 
 		// Search for "Alpha" - should match title "Alpha Product"
 		const alphaResults = await setup.app.api.collections.products.find(
-			{ search: "Alpha" } as any,
+			{ search: "Alpha" },
 			ctx,
 		);
 		expect(alphaResults.docs.length).toBe(1);
-		expect((alphaResults.docs[0] as any)._title).toContain("Alpha");
+		expect(alphaResults.docs[0]._title).toContain("Alpha");
 
 		// Search for "Beta" - should match title "Beta Product"
 		const betaResults = await setup.app.api.collections.products.find(
-			{ search: "Beta" } as any,
+			{ search: "Beta" },
 			ctx,
 		);
 		expect(betaResults.docs.length).toBe(1);
-		expect((betaResults.docs[0] as any)._title).toContain("Beta");
+		expect(betaResults.docs[0]._title).toContain("Beta");
 
 		// Search for "Product" - should match all 3 products
 		const allResults = await setup.app.api.collections.products.find(
-			{ search: "Product" } as any,
+			{ search: "Product" },
 			ctx,
 		);
 		expect(allResults.docs.length).toBe(3);
 
 		// Search for "XYZ" - should return no results
 		const noResults = await setup.app.api.collections.products.find(
-			{ search: "XYZ" } as any,
+			{ search: "XYZ" },
 			ctx,
 		);
 		expect(noResults.docs.length).toBe(0);

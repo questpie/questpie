@@ -2,7 +2,7 @@
  * Type-safe check for nullish values (null or undefined)
  */
 export function isNullish(value: unknown): value is null | undefined {
-  return value === null || value === undefined;
+	return value === null || value === undefined;
 }
 
 /**
@@ -10,36 +10,36 @@ export function isNullish(value: unknown): value is null | undefined {
  * @returns Array with unique items based on the key returned by getKey function. The first occurrence is kept.
  */
 export function dedupeBy<T, K>(array: T[], getKey: (item: T) => K): T[] {
-  const seen = new Set<K>();
-  const result: T[] = [];
+	const seen = new Set<K>();
+	const result: T[] = [];
 
-  for (const item of array) {
-    const key = getKey(item);
-    if (!seen.has(key)) {
-      seen.add(key);
-      result.push(item);
-    }
-  }
+	for (const item of array) {
+		const key = getKey(item);
+		if (!seen.has(key)) {
+			seen.add(key);
+			result.push(item);
+		}
+	}
 
-  return result;
+	return result;
 }
 
 /**
  * Check if a value is a plain object (not an array, Date, RegExp, etc.)
  */
 export function isPlainObject(
-  value: unknown,
+	value: unknown,
 ): value is Record<string, unknown> {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  if (Array.isArray(value)) {
-    return false;
-  }
+	if (typeof value !== "object" || value === null) {
+		return false;
+	}
+	if (Array.isArray(value)) {
+		return false;
+	}
 
-  // Check if it's a plain object (not an array, Date, RegExp, etc.)
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
+	// Check if it's a plain object (not an array, Date, RegExp, etc.)
+	const proto = Object.getPrototypeOf(value);
+	return proto === Object.prototype || proto === null;
 }
 
 /**
@@ -65,50 +65,50 @@ export function isPlainObject(
  * ```
  */
 export function deepMerge<T extends Record<string, any> = Record<string, any>>(
-  target: T,
-  ...sources: Array<Record<string, any> | null | undefined>
+	target: T,
+	...sources: Array<Record<string, any> | null | undefined>
 ): any {
-  // Return a copy of target if no sources provided
-  if (sources.length === 0) {
-    return structuredClone(target);
-  }
+	// Return a copy of target if no sources provided
+	if (sources.length === 0) {
+		return structuredClone(target);
+	}
 
-  // Start with a clone of the target
-  const result: any = structuredClone(target);
+	// Start with a clone of the target
+	const result: any = structuredClone(target);
 
-  for (const source of sources) {
-    // Skip nullish sources
-    if (isNullish(source)) {
-      continue;
-    }
+	for (const source of sources) {
+		// Skip nullish sources
+		if (isNullish(source)) {
+			continue;
+		}
 
-    // Merge each key from source into result
-    for (const key in source) {
-      // biome-ignore lint/suspicious/noPrototypeBuiltins: ES2021 compatibility
-      if (!Object.prototype.hasOwnProperty.call(source, key)) {
-        continue;
-      }
+		// Merge each key from source into result
+		for (const key in source) {
+			// biome-ignore lint/suspicious/noPrototypeBuiltins: ES2021 compatibility
+			if (!Object.prototype.hasOwnProperty.call(source, key)) {
+				continue;
+			}
 
-      const sourceValue = source[key];
-      const targetValue = result[key];
+			const sourceValue = source[key];
+			const targetValue = result[key];
 
-      // If source value is nullish, skip it
-      if (isNullish(sourceValue)) {
-        continue;
-      }
+			// If source value is nullish, skip it
+			if (isNullish(sourceValue)) {
+				continue;
+			}
 
-      // If both are plain objects, merge recursively
-      if (isPlainObject(targetValue) && isPlainObject(sourceValue)) {
-        result[key] = deepMerge(
-          targetValue as Record<string, any>,
-          sourceValue as Record<string, any>,
-        );
-      } else {
-        // Otherwise, source value replaces target value (including arrays)
-        result[key] = structuredClone(sourceValue);
-      }
-    }
-  }
+			// If both are plain objects, merge recursively
+			if (isPlainObject(targetValue) && isPlainObject(sourceValue)) {
+				result[key] = deepMerge(
+					targetValue as Record<string, any>,
+					sourceValue as Record<string, any>,
+				);
+			} else {
+				// Otherwise, source value replaces target value (including arrays)
+				result[key] = structuredClone(sourceValue);
+			}
+		}
+	}
 
-  return result;
+	return result;
 }

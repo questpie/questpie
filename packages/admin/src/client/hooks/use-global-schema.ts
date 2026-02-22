@@ -17,29 +17,29 @@ import { selectClient, useAdminStore } from "../runtime";
  * Resolved global names (string if not registered)
  */
 type ResolvedGlobalNames =
-  RegisteredCMS extends Questpie<any> ? RegisteredGlobalNames : string;
+	RegisteredCMS extends Questpie<any> ? RegisteredGlobalNames : string;
 
 // ==========================================================================
 // Hook
 // ==========================================================================
 
 export function useGlobalSchema<K extends ResolvedGlobalNames>(
-  global: K,
-  queryOptions?: Omit<UseQueryOptions<GlobalSchema>, "queryKey" | "queryFn">,
+	global: K,
+	queryOptions?: Omit<UseQueryOptions<GlobalSchema>, "queryKey" | "queryFn">,
 ) {
-  const client = useAdminStore(selectClient);
+	const client = useAdminStore(selectClient);
 
-  return useQuery<GlobalSchema>({
-    queryKey: getGlobalSchemaQueryKey(global),
-    queryFn: async () => {
-      return (client as any).globals[global].schema();
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    ...queryOptions,
-  });
+	return useQuery<GlobalSchema>({
+		queryKey: getGlobalSchemaQueryKey(global),
+		queryFn: async () => {
+			return (client as any).globals[global].schema();
+		},
+		staleTime: 5 * 60 * 1000,
+		gcTime: 30 * 60 * 1000,
+		...queryOptions,
+	});
 }
 
 function getGlobalSchemaQueryKey(global: string) {
-  return ["questpie", "globals", global, "schema"] as const;
+	return ["questpie", "globals", global, "schema"] as const;
 }

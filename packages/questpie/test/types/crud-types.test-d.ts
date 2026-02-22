@@ -8,13 +8,13 @@
  */
 
 import type {
-  Columns,
-  FindManyOptions,
-  FindOneOptions,
-  NestedRelationMutation,
-  OrderBy,
-  Where,
-  WhereOperators,
+	Columns,
+	FindManyOptions,
+	FindOneOptions,
+	NestedRelationMutation,
+	OrderBy,
+	Where,
+	WhereOperators,
 } from "#questpie/server/collection/crud/types.js";
 import { questpie } from "#questpie/server/config/builder.js";
 import { builtinFields } from "#questpie/server/fields/builtin/defaults.js";
@@ -28,21 +28,21 @@ const q = questpie({ name: "test" }).fields(builtinFields);
 
 // Simple collection for basic tests
 const postsCollection = q.collection("posts").fields((f) => ({
-  title: f.text({ required: true, maxLength: 255 }),
-  content: f.textarea(),
-  views: f.number({ default: 0 }),
-  author: f.relation({
-    to: "users",
-    required: true,
-    relationName: "author",
-  }),
-  publishedAt: f.datetime(),
-  comments: f.relation({
-    to: "comments",
-    hasMany: true,
-    foreignKey: "postId",
-    relationName: "post",
-  }),
+	title: f.text({ required: true, maxLength: 255 }),
+	content: f.textarea(),
+	views: f.number({ default: 0 }),
+	author: f.relation({
+		to: "users",
+		required: true,
+		relationName: "author",
+	}),
+	publishedAt: f.datetime(),
+	comments: f.relation({
+		to: "comments",
+		hasMany: true,
+		foreignKey: "postId",
+		relationName: "post",
+	}),
 }));
 
 type PostSelect = typeof postsCollection.$infer.select;
@@ -107,22 +107,22 @@ const _where5: PostWhere = { publishedAt: { gte: new Date() } };
 
 // Logical operators
 const _whereAnd: PostWhere = {
-  AND: [{ title: "Hello" }, { views: { gt: 10 } }],
+	AND: [{ title: "Hello" }, { views: { gt: 10 } }],
 };
 
 const _whereOr: PostWhere = {
-  OR: [{ title: "Hello" }, { title: "World" }],
+	OR: [{ title: "Hello" }, { title: "World" }],
 };
 
 const _whereNot: PostWhere = {
-  NOT: { title: "Excluded" },
+	NOT: { title: "Excluded" },
 };
 
 // Combined conditions
 const _whereCombined: PostWhere = {
-  title: { like: "%hello%" },
-  views: { gt: 100, lt: 1000 },
-  AND: [{ author: { eq: "user-1" } }],
+	title: { like: "%hello%" },
+	views: { gt: 100, lt: 1000 },
+	AND: [{ author: { eq: "user-1" } }],
 };
 
 // ============================================================================
@@ -133,13 +133,13 @@ type PostColumns = Columns<PostSelect>;
 
 // Selecting specific columns
 const _columns: PostColumns = {
-  title: true,
-  content: true,
+	title: true,
+	content: true,
 };
 
 // Excluding columns
 const _columnsExclude: PostColumns = {
-  content: false, // Exclude content
+	content: false, // Exclude content
 };
 
 // Valid keys
@@ -158,13 +158,13 @@ type PostOrderBy = OrderBy<PostSelect>;
 
 // Object syntax for ordering
 const _orderBy: PostOrderBy = {
-  createdAt: "desc",
-  title: "asc",
+	createdAt: "desc",
+	title: "asc",
 };
 
 // Type check: only 'asc' | 'desc' allowed
 type Direction = NonNullable<
-  PostOrderBy extends Record<string, infer D> ? D : never
+	PostOrderBy extends Record<string, infer D> ? D : never
 >;
 type _validDirection = Expect<Extends<Direction, "asc" | "desc">>;
 
@@ -176,22 +176,22 @@ type PostFindOptions = FindManyOptions<PostSelect, {}>;
 
 // Combine all query options
 const _options: PostFindOptions = {
-  where: { title: { like: "%hello%" } },
-  columns: { title: true, content: true },
-  orderBy: { createdAt: "desc" },
-  limit: 10,
-  offset: 0,
+	where: { title: { like: "%hello%" } },
+	columns: { title: true, content: true },
+	orderBy: { createdAt: "desc" },
+	limit: 10,
+	offset: 0,
 };
 
 // Locale options
 const _optionsLocale: PostFindOptions = {
-  locale: "en",
-  localeFallback: true,
+	locale: "en",
+	localeFallback: true,
 };
 
 // Include deleted (soft delete)
 const _optionsDeleted: PostFindOptions = {
-  includeDeleted: true,
+	includeDeleted: true,
 };
 
 // ============================================================================
@@ -217,48 +217,48 @@ type AuthorMutation = NestedRelationMutation<{ name: string }>;
 
 // Single connect
 const _mutation1: AuthorMutation = {
-  connect: { id: "user-123" },
+	connect: { id: "user-123" },
 };
 
 // Array connect
 const _mutation2: AuthorMutation = {
-  connect: [{ id: "user-1" }, { id: "user-2" }],
+	connect: [{ id: "user-1" }, { id: "user-2" }],
 };
 
 // Create operation
 type AuthorMutationCreate = NestedRelationMutation<{
-  name: string;
-  email: string;
+	name: string;
+	email: string;
 }>;
 
 const _mutationCreate1: AuthorMutationCreate = {
-  create: { name: "John", email: "john@example.com" },
+	create: { name: "John", email: "john@example.com" },
 };
 
 const _mutationCreate2: AuthorMutationCreate = {
-  create: [
-    { name: "John", email: "john@example.com" },
-    { name: "Jane", email: "jane@example.com" },
-  ],
+	create: [
+		{ name: "John", email: "john@example.com" },
+		{ name: "Jane", email: "jane@example.com" },
+	],
 };
 
 // ConnectOrCreate operation
 const _mutationConnectOrCreate: AuthorMutationCreate = {
-  connectOrCreate: {
-    where: { id: "user-123" },
-    create: { name: "John", email: "john@example.com" },
-  },
+	connectOrCreate: {
+		where: { id: "user-123" },
+		create: { name: "John", email: "john@example.com" },
+	},
 };
 
 // All fields are optional (can be undefined)
 type _connectCanBeUndefined = Expect<
-  Extends<undefined, AuthorMutation["connect"]>
+	Extends<undefined, AuthorMutation["connect"]>
 >;
 type _createCanBeUndefined = Expect<
-  Extends<undefined, AuthorMutation["create"]>
+	Extends<undefined, AuthorMutation["create"]>
 >;
 type _connectOrCreateCanBeUndefined = Expect<
-  Extends<undefined, AuthorMutation["connectOrCreate"]>
+	Extends<undefined, AuthorMutation["connectOrCreate"]>
 >;
 
 // ============================================================================
@@ -267,46 +267,46 @@ type _connectOrCreateCanBeUndefined = Expect<
 
 // Deeply nested where conditions
 const _complexWhere: PostWhere = {
-  AND: [
-    {
-      OR: [{ title: { like: "%hello%" } }, { title: { like: "%world%" } }],
-    },
-    {
-      views: { gt: 100 },
-      publishedAt: { isNotNull: true },
-    },
-  ],
-  NOT: {
-    author: { eq: "excluded-author" },
-  },
+	AND: [
+		{
+			OR: [{ title: { like: "%hello%" } }, { title: { like: "%world%" } }],
+		},
+		{
+			views: { gt: 100 },
+			publishedAt: { isNotNull: true },
+		},
+	],
+	NOT: {
+		author: { eq: "excluded-author" },
+	},
 };
 
 // Full query with all options
 const _fullQuery: PostFindOptions = {
-  where: {
-    AND: [
-      { title: { ilike: "%search%" } },
-      { views: { gte: 10 } },
-      {
-        OR: [{ publishedAt: { isNotNull: true } }, { author: { eq: "admin" } }],
-      },
-    ],
-  },
-  columns: {
-    id: true,
-    title: true,
-    views: true,
-    publishedAt: true,
-  },
-  orderBy: {
-    views: "desc",
-    createdAt: "desc",
-  },
-  limit: 20,
-  offset: 0,
-  locale: "en",
-  localeFallback: true,
-  includeDeleted: false,
+	where: {
+		AND: [
+			{ title: { ilike: "%search%" } },
+			{ views: { gte: 10 } },
+			{
+				OR: [{ publishedAt: { isNotNull: true } }, { author: { eq: "admin" } }],
+			},
+		],
+	},
+	columns: {
+		id: true,
+		title: true,
+		views: true,
+		publishedAt: true,
+	},
+	orderBy: {
+		views: "desc",
+		createdAt: "desc",
+	},
+	limit: 20,
+	offset: 0,
+	locale: "en",
+	localeFallback: true,
+	includeDeleted: false,
 };
 
 // ============================================================================
@@ -315,11 +315,11 @@ const _fullQuery: PostFindOptions = {
 
 // Nullable fields should allow null checks
 const _whereNullable: PostWhere = {
-  content: { isNull: true },
+	content: { isNull: true },
 };
 
 const _whereDateNullable: PostWhere = {
-  publishedAt: { isNull: false },
+	publishedAt: { isNull: false },
 };
 
 // Empty where clause
@@ -327,7 +327,7 @@ const _emptyWhere: PostWhere = {};
 
 // Mixing direct values and operators
 const _mixedWhere: PostWhere = {
-  title: "Exact Match", // Direct value
-  views: { gt: 100 }, // Operator
-  author: { eq: "user-123" }, // Relation field uses operators
+	title: "Exact Match", // Direct value
+	views: { gt: 100 }, // Operator
+	author: { eq: "user-123" }, // Relation field uses operators
 };

@@ -11,6 +11,6 @@ import { Badge, IconifyIcon } from "../../components/component-renderer";
  * Built-in components registry
  */
 export const builtInComponents = {
-  icon: IconifyIcon,
-  badge: Badge,
+	icon: IconifyIcon,
+	badge: Badge,
 } as const;

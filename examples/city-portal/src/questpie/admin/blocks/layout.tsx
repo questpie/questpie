@@ -49,9 +49,7 @@ export function ColumnsRenderer({
 // SPACER
 // ============================================================================
 
-export function SpacerRenderer({
-	values,
-}: BlockComponentProps<App, "spacer">) {
+export function SpacerRenderer({ values }: BlockComponentProps<App, "spacer">) {
 	const sizeClass = {
 		small: "h-8 md:h-12",
 		medium: "h-12 md:h-20",

@@ -13,12 +13,12 @@ import type * as React from "react";
  * Represents a single block instance with its position and children.
  */
 export type BlockNode = {
-  /** Unique block instance ID (UUID) */
-  id: string;
-  /** Block type name (e.g., "hero", "columns", "text") */
-  type: string;
-  /** Child blocks (for layout blocks that accept children) */
-  children: BlockNode[];
+	/** Unique block instance ID (UUID) */
+	id: string;
+	/** Block type name (e.g., "hero", "columns", "text") */
+	type: string;
+	/** Child blocks (for layout blocks that accept children) */
+	children: BlockNode[];
 };
 
 /**
@@ -30,12 +30,12 @@ export type BlockNode = {
  * - Manual prefetch data from `.blocks()` registration
  */
 export type BlockContent = {
-  /** Block tree with hierarchy and order */
-  _tree: BlockNode[];
-  /** Block values indexed by block ID */
-  _values: Record<string, Record<string, unknown>>;
-  /** Prefetched data from server (populated by afterRead hook) */
-  _data?: Record<string, Record<string, unknown>>;
+	/** Block tree with hierarchy and order */
+	_tree: BlockNode[];
+	/** Block values indexed by block ID */
+	_values: Record<string, Record<string, unknown>>;
+	/** Prefetched data from server (populated by afterRead hook) */
+	_data?: Record<string, Record<string, unknown>>;
 };
 
 /**
@@ -43,12 +43,12 @@ export type BlockContent = {
  * Categories help users find blocks quickly when adding new content.
  */
 export type BlockCategory =
-  | "layout" // Columns, Grid, Container, Section
-  | "content" // Text, Heading, List, Quote
-  | "media" // Image, Video, Gallery, Audio
-  | "sections" // Hero, Features, Testimonials, CTA
-  | "interactive" // Form, Accordion, Tabs, Carousel
-  | (string & {}); // Custom categories
+	| "layout" // Columns, Grid, Container, Section
+	| "content" // Text, Heading, List, Quote
+	| "media" // Image, Video, Gallery, Audio
+	| "sections" // Hero, Features, Testimonials, CTA
+	| "interactive" // Form, Accordion, Tabs, Carousel
+	| (string & {}); // Custom categories
 
 /**
  * Props passed to block renderer components.
@@ -58,41 +58,40 @@ export type BlockCategory =
  * @template TData - Prefetch data type (inferred from `.prefetch()`)
  */
 export type BlockRendererProps<
-  TValues = Record<string, unknown>,
-  TData = Record<string, unknown>,
+	TValues = Record<string, unknown>,
+	TData = Record<string, unknown>,
 > = {
-  /** Block instance ID */
-  id: string;
-  /** Block field values (merged with i18n for current locale) */
-  values: TValues;
-  /** Data from server prefetch (populated via afterRead hook into _data[blockId]) */
-  data?: TData;
-  /** Rendered child blocks (for layout blocks) */
-  children?: React.ReactNode;
-  /** Whether this block is currently selected in the editor */
-  isSelected?: boolean;
-  /** Whether rendering in preview mode */
-  isPreview?: boolean;
+	/** Block instance ID */
+	id: string;
+	/** Block field values (merged with i18n for current locale) */
+	values: TValues;
+	/** Data from server prefetch (populated via afterRead hook into _data[blockId]) */
+	data?: TData;
+	/** Rendered child blocks (for layout blocks) */
+	children?: React.ReactNode;
+	/** Whether this block is currently selected in the editor */
+	isSelected?: boolean;
+	/** Whether rendering in preview mode */
+	isPreview?: boolean;
 };
 
 /**
  * Empty block content for initialization.
  */
 export const EMPTY_BLOCK_CONTENT: BlockContent = {
-  _tree: [],
-  _values: {},
+	_tree: [],
+	_values: {},
 };
 
 /**
  * Check if a value is a valid BlockContent structure.
  */
 export function isBlockContent(value: unknown): value is BlockContent {
-  if (value == null || typeof value !== "object") return false;
-  const obj = value as Record<string, unknown>;
-  return (
-    Array.isArray(obj._tree) &&
-    typeof obj._values === "object" &&
-    obj._values !== null
-  );
+	if (value == null || typeof value !== "object") return false;
+	const obj = value as Record<string, unknown>;
+	return (
+		Array.isArray(obj._tree) &&
+		typeof obj._values === "object" &&
+		obj._values !== null
+	);
 }
-

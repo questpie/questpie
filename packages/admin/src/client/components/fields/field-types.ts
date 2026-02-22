@@ -5,9 +5,7 @@ import type { I18nText } from "../../i18n/types.js";
 /**
  * Dynamic I18n text resolver (supports functions based on form values)
  */
-type DynamicI18nText =
-	| I18nText
-	| ((values: Record<string, any>) => I18nText);
+type DynamicI18nText = I18nText | ((values: Record<string, any>) => I18nText);
 
 import type {
 	SelectOption as PrimitiveSelectOption,

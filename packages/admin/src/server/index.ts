@@ -119,14 +119,14 @@ export {
 	type BlockDefinition,
 	type BlockPrefetchContext,
 	type BlockPrefetchFn,
-	type BlockSchema,
 	type BlockPrefetchWith,
 	type BlockPrefetchWithOptions,
+	type BlockSchema,
 	type BlocksPrefetchContext,
-	type ExpandWithResult,
-	type ExpandedRecord,
 	block,
 	createBlocksPrefetchHook,
+	type ExpandedRecord,
+	type ExpandWithResult,
 	getBlocksByCategory,
 	type InferBlockData,
 	type InferBlockValues,
@@ -151,15 +151,6 @@ export {
 	type TipTapDocument,
 	type TipTapNode,
 } from "./fields/index.js";
-// Audit module - automatic audit logging for all mutations
-export {
-	type AuditDashboardWidgetOptions,
-	type AuditModuleOptions,
-	auditLogCollection,
-	auditModule,
-	createAuditDashboardWidget,
-	createAuditModule,
-} from "./modules/audit/index.js";
 // Main admin module - the complete backend for admin panel
 export {
 	// Action functions
@@ -195,6 +186,15 @@ export {
 	verifyPreviewTokenDirect,
 	widgetDataFunctions,
 } from "./modules/admin/index.js";
+// Audit module - automatic audit logging for all mutations
+export {
+	type AuditDashboardWidgetOptions,
+	type AuditModuleOptions,
+	auditLogCollection,
+	auditModule,
+	createAuditDashboardWidget,
+	createAuditModule,
+} from "./modules/audit/index.js";
 // Runtime patching (applied automatically when this module is imported)
 export {
 	applyAdminPatches,

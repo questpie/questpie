@@ -7,10 +7,10 @@
 
 // Re-export everything from shared
 export {
-  createZodErrorMap,
-  i18nParams,
-  type ZodErrorMapFn,
-  type ZodIssue,
+	createZodErrorMap,
+	i18nParams,
+	type ZodErrorMapFn,
+	type ZodIssue,
 } from "#questpie/shared/i18n/index.js";
 
 // Re-export types that backend uses

@@ -1,9 +1,6 @@
 {
 	"typescript.experimental.useTsgo": true,
-	"cSpell.words": [
-		"QCMS",
-		"questpie"
-	],
+	"cSpell.words": ["QCMS", "questpie"],
 	"editor.codeActionsOnSave": {
 		"source.fixAll.biome": "always",
 		"source.organizeImports": "never",

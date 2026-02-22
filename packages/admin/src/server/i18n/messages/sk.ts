@@ -615,10 +615,12 @@ export default {
 
 	// Audit Log
 	"audit.collection.label": "Audit log",
-	"audit.collection.description": "Prehľad všetkých zaznamenaných zmien a aktivity používateľov",
+	"audit.collection.description":
+		"Prehľad všetkých zaznamenaných zmien a aktivity používateľov",
 	"audit.sections.event": "Detail udalosti",
 	"audit.sections.user": "Používateľ",
 	"audit.sections.changes": "Zmeny",
 	"audit.widget.recentActivity.title": "Posledná aktivita",
-	"audit.widget.recentActivity.empty": "Žiadna nedávna aktivita nebola zaznamenaná.",
+	"audit.widget.recentActivity.empty":
+		"Žiadna nedávna aktivita nebola zaznamenaná.",
 } as const;

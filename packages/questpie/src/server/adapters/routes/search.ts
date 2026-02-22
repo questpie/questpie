@@ -25,7 +25,8 @@ import { handleError, smartResponse } from "../utils/response.js";
 
 export const createSearchRoutes = <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig> = {},
 ) => {
 	const errorResponse = (
@@ -67,7 +68,9 @@ export const createSearchRoutes = <
 
 		// Default policy: derive from collection update access rule.
 		// If update access is denied, reindex is denied.
-		const updateAccessRule = (params.collection as any)?.state?.access?.update ?? app.defaultAccess?.update;
+		const updateAccessRule =
+			(params.collection as any)?.state?.access?.update ??
+			app.defaultAccess?.update;
 		const updateAccessResult = await executeAccessRule(updateAccessRule, {
 			app,
 			db: params.db,
@@ -146,7 +149,8 @@ export const createSearchRoutes = <
 					if (!collection) continue;
 
 					// Check read access for this collection (falls back to defaultAccess)
-					const accessRule = (collection as any).state?.access?.read ?? app.defaultAccess?.read;
+					const accessRule =
+						(collection as any).state?.access?.read ?? app.defaultAccess?.read;
 					const accessWhere = await executeAccessRule(accessRule, {
 						app,
 						db: resolved.appContext.db ?? app.db,

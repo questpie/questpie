@@ -1150,8 +1150,8 @@ function TableViewInner({
 						</TableHeader>
 						<TableBody>
 							{table.getRowModel().rows.map((row) => {
-									const isRowDeleted = !!(row.original as any)?.deletedAt;
-									return (
+								const isRowDeleted = !!(row.original as any)?.deletedAt;
+								return (
 									<TableRow
 										key={row.id}
 										data-state={row.getIsSelected() && "selected"}
@@ -1197,14 +1197,11 @@ function TableViewInner({
 															</button>
 															{isRowDeleted && (
 																<span className="inline-flex items-center gap-1 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">
-																	<Icon
-																		icon="ph:trash"
-																		className="size-3"
-																	/>
+																	<Icon icon="ph:trash" className="size-3" />
 																	{t("common.deleted")}
 																</span>
 															)}
-														{isDocLocked(row.id) &&
+															{isDocLocked(row.id) &&
 																(() => {
 																	const lock = getLock(row.id);
 																	const user = lock ? getLockUser(lock) : null;
@@ -1246,13 +1243,13 @@ function TableViewInner({
 											);
 										})}
 									</TableRow>
-									);
-								})}
+								);
+							})}
 						</TableBody>
 					</Table>
 					{/* Empty state rendered outside table to avoid colSpan/border-separate width issues */}
-					{!table.getRowModel().rows.length && (
-						emptyState || (
+					{!table.getRowModel().rows.length &&
+						(emptyState || (
 							<EmptyState
 								title="NO_RESULTS"
 								description={
@@ -1262,8 +1259,7 @@ function TableViewInner({
 								}
 								height="h-48"
 							/>
-						)
-					)}
+						))}
 				</div>
 
 				{/* Footer - Pagination */}

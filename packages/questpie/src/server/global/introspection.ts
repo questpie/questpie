@@ -9,9 +9,9 @@ import { z } from "zod";
 import { buildFieldBasedSchema } from "#questpie/server/collection/builder/field-schema-builder.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import {
-	type FieldReactiveSchema,
 	extractFieldReactiveConfig,
 	extractFormReactiveConfigs,
+	type FieldReactiveSchema,
 } from "#questpie/server/collection/introspection.js";
 import type {
 	FieldDefinition,
@@ -296,7 +296,8 @@ export interface AdminFormViewSchema {
  */
 export async function introspectGlobal(
 	global: Global<GlobalBuilderState>,
-	context: CRUDContext, app?: unknown,
+	context: CRUDContext,
+	app?: unknown,
 ): Promise<GlobalSchema> {
 	const { state } = global;
 	const fieldDefinitions = state.fieldDefinitions || {};
@@ -435,7 +436,8 @@ function extractAdminConfig(
  */
 async function evaluateGlobalAccess(
 	state: GlobalBuilderState,
-	context: CRUDContext, app?: unknown,
+	context: CRUDContext,
+	app?: unknown,
 ): Promise<GlobalAccessInfo> {
 	const { access } = state;
 	const appDefaultAccess = (app as any)?.defaultAccess;
@@ -448,8 +450,14 @@ async function evaluateGlobalAccess(
 	};
 
 	const operations = {
-		read: await evaluateAccessRule(access?.read ?? appDefaultAccess?.read, accessContext),
-		update: await evaluateAccessRule(access?.update ?? appDefaultAccess?.update, accessContext),
+		read: await evaluateAccessRule(
+			access?.read ?? appDefaultAccess?.read,
+			accessContext,
+		),
+		update: await evaluateAccessRule(
+			access?.update ?? appDefaultAccess?.update,
+			accessContext,
+		),
 	};
 
 	// Determine visibility and level
@@ -510,7 +518,8 @@ async function evaluateAccessRule(
  */
 async function evaluateGlobalFieldAccess(
 	fieldDef: FieldDefinition<FieldDefinitionState>,
-	context: CRUDContext, app?: unknown,
+	context: CRUDContext,
+	app?: unknown,
 ): Promise<GlobalFieldAccessInfo | undefined> {
 	const fieldAccess = fieldDef.state.config?.access as
 		| FieldDefinitionAccess
@@ -575,7 +584,8 @@ async function evaluateGlobalFieldAccess(
  */
 export async function introspectGlobals(
 	globals: Record<string, Global<GlobalBuilderState>>,
-	context: CRUDContext, app?: unknown,
+	context: CRUDContext,
+	app?: unknown,
 ): Promise<Record<string, GlobalSchema>> {
 	const schemas: Record<string, GlobalSchema> = {};
 

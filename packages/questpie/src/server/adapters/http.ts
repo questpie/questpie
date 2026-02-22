@@ -35,7 +35,8 @@ import {
 import type { AdapterConfig, AdapterContext, AdapterRoutes } from "./types.js";
 import { handleError, normalizeBasePath } from "./utils/index.js";
 
-function resolveStorageAliasCollection(app: Questpie<any>,
+function resolveStorageAliasCollection(
+	app: Questpie<any>,
 	config: AdapterConfig,
 ): { collection?: string; error?: string } {
 	const configuredCollection = config.storage?.collection;
@@ -73,7 +74,8 @@ function resolveStorageAliasCollection(app: Questpie<any>,
  */
 export const createAdapterRoutes = <
 	TConfig extends QuestpieConfig = QuestpieConfig,
->(app: Questpie<TConfig>,
+>(
+	app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig> = {},
 ): AdapterRoutes => {
 	const authRoute = createAuthRoute(app);
@@ -99,7 +101,8 @@ export const createAdapterRoutes = <
 /**
  * Create the main fetch handler with URL routing
  */
-export const createFetchHandler = (app: Questpie<any>,
+export const createFetchHandler = (
+	app: Questpie<any>,
 	config: AdapterConfig = {},
 ) => {
 	const routes = createAdapterRoutes(app, config);
@@ -250,11 +253,7 @@ export const createFetchHandler = (app: Questpie<any>,
 
 			if (globalAction === "audit") {
 				if (request.method === "GET") {
-					return routes.globals.audit(
-						request,
-						{ global: globalName },
-						context,
-					);
+					return routes.globals.audit(request, { global: globalName }, context);
 				}
 				return errorResponse(
 					ApiError.badRequest("Method not allowed"),
@@ -399,11 +398,7 @@ export const createFetchHandler = (app: Questpie<any>,
 		// Collection audit history
 		if (action === "audit") {
 			if (request.method === "GET") {
-				return routes.collections.audit(
-					request,
-					{ collection, id },
-					context,
-				);
+				return routes.collections.audit(request, { collection, id }, context);
 			}
 
 			return errorResponse(ApiError.badRequest("Method not allowed"), request);

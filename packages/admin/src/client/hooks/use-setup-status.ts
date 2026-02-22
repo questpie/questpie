@@ -9,8 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { selectClient, useAdminStore } from "../runtime/provider";
 
 export interface SetupStatus {
-  /** Whether setup is required (no users exist) */
-  required: boolean;
+	/** Whether setup is required (no users exist) */
+	required: boolean;
 }
 
 /**
@@ -35,20 +35,20 @@ export interface SetupStatus {
  * ```
  */
 export function useSetupStatus() {
-  const client = useAdminStore(selectClient);
+	const client = useAdminStore(selectClient);
 
-  return useQuery<SetupStatus>({
-    queryKey: ["questpie", "setup-status"],
-    queryFn: async () => {
-      try {
-        const result = await (client as any).rpc.isSetupRequired({});
-        return { required: result.required };
-      } catch {
-        // If the function doesn't exist, setup is not required
-        return { required: false };
-      }
-    },
-    staleTime: 1000 * 60, // Cache for 1 minute
-    retry: false,
-  });
+	return useQuery<SetupStatus>({
+		queryKey: ["questpie", "setup-status"],
+		queryFn: async () => {
+			try {
+				const result = await (client as any).rpc.isSetupRequired({});
+				return { required: result.required };
+			} catch {
+				// If the function doesn't exist, setup is not required
+				return { required: false };
+			}
+		},
+		staleTime: 1000 * 60, // Cache for 1 minute
+		retry: false,
+	});
 }

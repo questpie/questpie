@@ -18,9 +18,7 @@ export const Route = createFileRoute("/_app/$citySlug/news/$slug")({
 	head: ({ loaderData }) => {
 		const article = loaderData?.article;
 		return {
-			title: article
-				? `${article.title} - News`
-				: "Article Not Found",
+			title: article ? `${article.title} - News` : "Article Not Found",
 		};
 	},
 

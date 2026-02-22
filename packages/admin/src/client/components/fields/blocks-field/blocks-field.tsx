@@ -142,4 +142,3 @@ function BlocksField({
 		</FieldWrapper>
 	);
 }
-

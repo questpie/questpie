@@ -5,8 +5,8 @@
  * for localized validation error messages.
  */
 
-import { useMemo } from "react";
 import { createZodErrorMap, type ZodErrorMapFn } from "questpie/shared";
+import { useMemo } from "react";
 import { useSafeI18n } from "../i18n/hooks";
 
 /**
@@ -34,29 +34,29 @@ import { useSafeI18n } from "../i18n/hooks";
  * ```
  */
 export function useValidationErrorMap(): ZodErrorMapFn {
-  const i18n = useSafeI18n();
+	const i18n = useSafeI18n();
 
-  return useMemo(() => {
-    // Create translate function that uses admin i18n
-    const translate = (
-      key: string,
-      params?: Record<string, unknown>,
-    ): string => {
-      if (i18n) {
-        return i18n.t(key, params);
-      }
+	return useMemo(() => {
+		// Create translate function that uses admin i18n
+		const translate = (
+			key: string,
+			params?: Record<string, unknown>,
+		): string => {
+			if (i18n) {
+				return i18n.t(key, params);
+			}
 
-      // Fallback: return key with interpolated params
-      if (!params) return key;
+			// Fallback: return key with interpolated params
+			if (!params) return key;
 
-      return key.replace(/\{\{(\w+)\}\}/g, (_, paramKey) => {
-        const value = params[paramKey];
-        return value !== undefined ? String(value) : `{{${paramKey}}}`;
-      });
-    };
+			return key.replace(/\{\{(\w+)\}\}/g, (_, paramKey) => {
+				const value = params[paramKey];
+				return value !== undefined ? String(value) : `{{${paramKey}}}`;
+			});
+		};
 
-    return createZodErrorMap(translate);
-  }, [i18n]);
+		return createZodErrorMap(translate);
+	}, [i18n]);
 }
 
 /**
@@ -66,7 +66,7 @@ export function useValidationErrorMap(): ZodErrorMapFn {
  * @returns Zod error map function
  */
 function createAdminZodErrorMap(
-  t: (key: string, params?: Record<string, unknown>) => string,
+	t: (key: string, params?: Record<string, unknown>) => string,
 ): ZodErrorMapFn {
-  return createZodErrorMap(t);
+	return createZodErrorMap(t);
 }

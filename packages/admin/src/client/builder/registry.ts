@@ -66,16 +66,16 @@ import type { AdminBuilder } from "./admin-builder";
  */
 // biome-ignore lint/suspicious/noEmptyInterface: Augmentation target for user's types
 export interface AdminTypeRegistry {
-  // NOTE: Module augmentation is deprecated.
-  // Use createTypedHooks<App>() from '@questpie/admin/client' instead.
-  //
-  // Legacy pattern (still works):
-  // declare module "@questpie/admin" {
-  //   interface AdminTypeRegistry {
-  // app: App
-  //     admin: typeof admin
-  //   }
-  // }
+	// NOTE: Module augmentation is deprecated.
+	// Use createTypedHooks<App>() from '@questpie/admin/client' instead.
+	//
+	// Legacy pattern (still works):
+	// declare module "@questpie/admin" {
+	//   interface AdminTypeRegistry {
+	// app: App
+	//     admin: typeof admin
+	//   }
+	// }
 }
 
 // ============================================================================
@@ -86,43 +86,43 @@ export interface AdminTypeRegistry {
  * Extract the app type from AdminTypeRegistry if augmented, otherwise unknown.
  */
 export type RegisteredCMS = AdminTypeRegistry extends { app: infer T }
-  ? T extends Questpie<any>
-    ? T
-    : unknown
-  : unknown;
+	? T extends Questpie<any>
+		? T
+		: unknown
+	: unknown;
 
 /**
  * Extract the Admin config type from AdminTypeRegistry if augmented, otherwise unknown.
  */
 export type RegisteredAdmin = AdminTypeRegistry extends { admin: infer T }
-  ? T extends AdminBuilder<any>
-    ? T
-    : unknown
-  : unknown;
+	? T extends AdminBuilder<any>
+		? T
+		: unknown
+	: unknown;
 
 /**
  * Extract collection names from registered app.
  * Falls back to string if app is not registered.
  */
 export type RegisteredCollectionNames =
-  RegisteredCMS extends Questpie<infer TConfig>
-    ? keyof TConfig["collections"] & string
-    : string;
+	RegisteredCMS extends Questpie<infer TConfig>
+		? keyof TConfig["collections"] & string
+		: string;
 
 /**
  * Extract global names from registered app.
  * Falls back to string if app is not registered.
  */
 export type RegisteredGlobalNames =
-  RegisteredCMS extends Questpie<infer TConfig>
-    ? keyof TConfig["globals"] & string
-    : string;
+	RegisteredCMS extends Questpie<infer TConfig>
+		? keyof TConfig["globals"] & string
+		: string;
 
 /**
  * Check if the registry has been augmented with a app type.
  */
 export type IsRegistered = RegisteredCMS extends unknown
-  ? RegisteredCMS extends Questpie<any>
-    ? true
-    : false
-  : false;
+	? RegisteredCMS extends Questpie<any>
+		? true
+		: false
+	: false;

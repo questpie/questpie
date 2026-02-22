@@ -233,9 +233,7 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 		? ((rawData as { count: number } | undefined)?.count ?? 0)
 		: ((rawData as number | undefined) ?? 0);
 
-	const displayLabel = label
-		? resolveText(label)
-		: formatLabel(collection);
+	const displayLabel = label ? resolveText(label) : formatLabel(collection);
 
 	return (
 		<WidgetCard

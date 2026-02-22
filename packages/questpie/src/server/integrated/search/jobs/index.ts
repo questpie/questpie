@@ -5,7 +5,7 @@
  */
 
 export {
-  indexRecordsJob,
-  indexRecordsSchema,
-  type IndexRecordsPayload,
+	type IndexRecordsPayload,
+	indexRecordsJob,
+	indexRecordsSchema,
 } from "./index-records.job.js";

@@ -56,12 +56,12 @@ export * from "./builtin/index.js";
 export {
 	type BuildFieldState,
 	createFieldDefinition,
-	field,
 	type ExtractConfigFromFieldDef,
 	type ExtractOpsFromFieldDef,
 	type ExtractTypeFromFieldDef,
 	type ExtractValueFromFieldDef,
 	type FieldDef,
+	field,
 } from "./field.js";
 // Reactive field system
 export {

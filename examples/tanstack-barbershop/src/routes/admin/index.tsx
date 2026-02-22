@@ -8,17 +8,17 @@ import { AdminRouter } from "@questpie/admin/client";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 function AdminDashboard() {
-  const navigate = useNavigate();
+	const navigate = useNavigate();
 
-  return (
-    <AdminRouter
-      segments={[]}
-      navigate={(path) => navigate({ to: path })}
-      basePath="/admin"
-    />
-  );
+	return (
+		<AdminRouter
+			segments={[]}
+			navigate={(path) => navigate({ to: path })}
+			basePath="/admin"
+		/>
+	);
 }
 
 export const Route = createFileRoute("/admin/")({
-  component: AdminDashboard,
+	component: AdminDashboard,
 });

@@ -1,10 +1,10 @@
 import { admin, apiKey, bearer } from "better-auth/plugins";
 import {
-  accountsCollection,
-  apiKeysCollection,
-  sessionsCollection,
-  usersCollection,
-  verificationsCollection,
+	accountsCollection,
+	apiKeysCollection,
+	sessionsCollection,
+	usersCollection,
+	verificationsCollection,
 } from "#questpie/server/collection/defaults/auth.js";
 
 // Re-export from merge.ts for backwards compatibility
@@ -16,16 +16,16 @@ import { auth } from "./merge.js";
  * Core auth options with Better Auth plugins
  */
 export const coreAuthOptions = auth({
-  baseURL: process.env.BETTER_AUTH_URL,
-  secret: process.env.BETTER_AUTH_SECRET,
-  advanced: {
-    useSecureCookies: process.env.NODE_ENV === "production",
-  },
-  plugins: [admin(), apiKey(), bearer()],
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: true,
-  },
+	baseURL: process.env.BETTER_AUTH_URL,
+	secret: process.env.BETTER_AUTH_SECRET,
+	advanced: {
+		useSecureCookies: process.env.NODE_ENV === "production",
+	},
+	plugins: [admin(), apiKey(), bearer()],
+	emailAndPassword: {
+		enabled: true,
+		requireEmailVerification: true,
+	},
 });
 
 // Type inference validation:
@@ -38,9 +38,9 @@ export const coreAuthOptions = auth({
 // Type inference: Use `typeof app.auth.$Infer` to get merged types
 
 export const coreAuthCollections = {
-  user: usersCollection,
-  session: sessionsCollection,
-  account: accountsCollection,
-  verification: verificationsCollection,
-  apikey: apiKeysCollection,
+	user: usersCollection,
+	session: sessionsCollection,
+	account: accountsCollection,
+	verification: verificationsCollection,
+	apikey: apiKeysCollection,
 };

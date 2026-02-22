@@ -135,11 +135,7 @@ export function ImagePopover({
 					} else {
 						altValue = undefined;
 					}
-					editor
-						.chain()
-						.focus()
-						.setImage({ src: url, alt: altValue })
-						.run();
+					editor.chain().focus().setImage({ src: url, alt: altValue }).run();
 					setImageUrl("");
 					setImageAlt("");
 					onOpenChange(false);

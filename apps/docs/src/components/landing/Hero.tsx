@@ -1,9 +1,16 @@
+import {
+	ArrowRight,
+	GithubLogo,
+	Lock,
+	Sparkle,
+	Terminal,
+} from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Github, Lock, Sparkles, Terminal } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
+import { AnimHeroArcs } from "@/components/landing/BrandVisuals";
 import { cn } from "@/lib/utils";
 
 SyntaxHighlighter.registerLanguage("typescript", typescript);
@@ -76,24 +83,29 @@ export function Hero() {
 	}, []);
 
 	return (
-		<section className="relative min-h-[85vh] lg:min-h-[95vh] flex items-center overflow-hidden">
+		<section className="relative min-h-[85vh] lg:min-h-0 lg:flex-1 flex items-center overflow-hidden">
+			{/* Brand arc motif — pinned to bottom-right corner, dark mode only */}
+			<AnimHeroArcs className="absolute bottom-0 right-0 w-[60%] max-w-[800px] pointer-events-none" />
+
 			{/* Dark mode ambient glow */}
 			<div className="hidden dark:block absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[600px] pointer-events-none bg-[radial-gradient(ellipse,_oklch(0.5984_0.3015_310.74_/_0.08)_0%,_transparent_60%)]" />
 
 			{/* Horizontal beam sweep on load - dark mode only */}
-			<motion.div
-				className="hidden dark:block absolute top-1/3 left-0 h-px w-full pointer-events-none"
-				style={{
-					background:
-						"linear-gradient(90deg, transparent 0%, oklch(0.5984 0.3015 310.74 / 0.5) 50%, transparent 100%)",
-				}}
-				initial={{ opacity: 0, scaleX: 0 }}
-				animate={{ opacity: [0, 1, 0], scaleX: [0, 1, 1] }}
-				transition={{ duration: 2, delay: 0.5, ease: "easeOut" }}
-			/>
+			{!shouldReduceMotion && (
+				<motion.div
+					className="hidden dark:block absolute top-1/3 left-0 h-px w-full pointer-events-none"
+					style={{
+						background:
+							"linear-gradient(90deg, transparent 0%, oklch(0.5984 0.3015 310.74 / 0.5) 50%, transparent 100%)",
+					}}
+					initial={{ opacity: 0, scaleX: 0 }}
+					animate={{ opacity: [0, 1, 0], scaleX: [0, 1, 1] }}
+					transition={{ duration: 2, delay: 0.5, ease: "easeOut" }}
+				/>
+			)}
 
 			<div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-24 lg:py-32">
-				<div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:gap-20 items-center">
+				<div className="grid gap-12 lg:grid-cols-[1.2fr_1fr] lg:gap-12 items-center">
 					{/* Left — text content */}
 					<div className="relative">
 						<motion.div
@@ -101,21 +113,21 @@ export function Hero() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5 }}
 						>
-							<span className="inline-flex items-center gap-2 border border-primary/20 bg-primary/[0.05] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-primary rounded-sm">
-								<Sparkles className="h-3 w-3" />
+							<span className="inline-flex items-center gap-2 border border-primary/20 bg-primary/[0.05] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-primary">
+								<Sparkle className="h-3 w-3" aria-hidden="true" />
 								Open Source
 							</span>
 						</motion.div>
 
 						<motion.h1
-							className="mt-6 max-w-[12ch] text-4xl font-bold leading-[1.08] tracking-[-0.03em] text-balance text-foreground md:text-5xl lg:text-6xl"
+							className="mt-6 font-mono text-4xl font-bold leading-[1.08] tracking-[-0.02em] text-balance text-foreground md:text-5xl lg:text-6xl"
 							initial={{ opacity: 0, y: 16 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.08 }}
 						>
-							One backend.{" "}
+							One backend,{" "}
 							<span className="relative inline-block">
-								<span className="text-primary">Ship everywhere</span>
+								<span className="text-primary">ship everywhere</span>
 								<motion.span
 									className="absolute -bottom-1 left-0 h-[2px] bg-primary/30"
 									initial={{ width: 0 }}
@@ -164,7 +176,7 @@ export function Hero() {
 							<Link
 								to="/docs/$"
 								params={{ _splat: "getting-started/quickstart" }}
-								className="group relative inline-flex h-12 items-center justify-center overflow-hidden bg-primary px-8 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-[0_0_30px_rgba(var(--primary)/0.3)]"
+								className="group relative inline-flex h-12 items-center justify-center overflow-hidden bg-primary px-8 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
 							>
 								<span className="relative z-10">Get Started</span>
 								<ArrowRight className="relative z-10 ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -181,7 +193,10 @@ export function Hero() {
 								rel="noreferrer"
 								className="group inline-flex h-12 items-center justify-center gap-2 border border-border bg-card/10 backdrop-blur-sm px-8 text-sm font-medium text-muted-foreground transition-all hover:text-foreground hover:border-primary/30 hover:bg-card/20"
 							>
-								<Github className="h-4 w-4 transition-transform group-hover:scale-110" />
+								<GithubLogo
+									className="h-4 w-4 transition-transform group-hover:scale-110"
+									aria-hidden="true"
+								/>
 								GitHub
 							</a>
 						</motion.div>
@@ -195,7 +210,7 @@ export function Hero() {
 								navigator.clipboard.writeText("bun i questpie");
 							}}
 						>
-							<Terminal className="h-4 w-4 text-primary" />
+							<Terminal className="h-4 w-4 text-primary" aria-hidden="true" />
 							<span>
 								<span className="text-primary">$</span> bun i questpie
 							</span>
@@ -216,20 +231,20 @@ export function Hero() {
 						transition={{ duration: 0.7, delay: 0.3 }}
 					>
 						{/* Main admin card */}
-						<div className="relative border border-border bg-card/10 backdrop-blur-sm overflow-hidden rounded-sm shadow-2xl">
+						<div className="relative border border-border bg-card/10 backdrop-blur-sm overflow-hidden">
 							{/* Browser chrome */}
 							<div className="relative flex items-center gap-2 border-b border-border px-4 py-3 bg-background/50">
 								<div className="flex gap-1.5">
-									<div className="h-3 w-3 rounded-full bg-red-400/80" />
-									<div className="h-3 w-3 rounded-full bg-yellow-400/80" />
-									<div className="h-3 w-3 rounded-full bg-green-400/80" />
+									<div className="h-3 w-3 bg-red-400/80" />
+									<div className="h-3 w-3 bg-yellow-400/80" />
+									<div className="h-3 w-3 bg-green-400/80" />
 								</div>
-								<div className="ml-2 flex-1 border border-border/50 bg-background/60 rounded px-3 py-1">
+								<div className="ml-2 flex-1 border border-border/50 bg-background/60 px-3 py-1">
 									<span className="font-mono text-[10px] text-muted-foreground">
 										localhost:3000/admin/posts
 									</span>
 								</div>
-								<span className="inline-flex items-center gap-1.5 border border-primary/20 bg-primary/[0.05] px-2 py-0.5 rounded-sm">
+								<span className="inline-flex items-center gap-1.5 border border-primary/20 bg-primary/[0.05] px-2 py-0.5">
 									<span className="relative flex h-1.5 w-1.5">
 										<span className="absolute inline-flex h-full w-full animate-ping bg-primary opacity-75" />
 										<span className="relative inline-flex h-1.5 w-1.5 bg-primary" />
@@ -301,7 +316,10 @@ export function Hero() {
 													animate={{ scale: 1, opacity: 1 }}
 													className="inline-flex items-center gap-1"
 												>
-													<Lock className="h-3 w-3 text-muted-foreground" />
+													<Lock
+														className="h-3 w-3 text-muted-foreground"
+														aria-hidden="true"
+													/>
 													<span className="inline-flex h-4 w-4 items-center justify-center bg-primary/10 text-[7px] font-mono text-primary rounded-sm">
 														{row.lockedBy}
 													</span>

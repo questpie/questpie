@@ -13,12 +13,12 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 export type { BuiltinFields } from "./builtin/defaults.js";
 
 import {
-  type BuildFieldState,
-  createFieldDefinition,
-  type ExtractConfigFromFieldDef,
-  type ExtractOpsFromFieldDef,
-  type ExtractTypeFromFieldDef,
-  type ExtractValueFromFieldDef,
+	type BuildFieldState,
+	createFieldDefinition,
+	type ExtractConfigFromFieldDef,
+	type ExtractOpsFromFieldDef,
+	type ExtractTypeFromFieldDef,
+	type ExtractValueFromFieldDef,
 } from "./field.js";
 import type { FieldDefinition, FieldDefinitionState } from "./types.js";
 
@@ -55,21 +55,21 @@ export type DefaultFieldTypeMap = BuiltinFields;
  * ```
  */
 export type FieldBuilderProxy<TMap = BuiltinFields> = {
-  [K in keyof TMap]: <
-    const TUserConfig extends ExtractConfigFromFieldDef<TMap[K]>,
-  >(
-    config?: TUserConfig,
-  ) => FieldDefinition<
-    BuildFieldState<
-      ExtractTypeFromFieldDef<TMap[K]>,
-      TUserConfig extends undefined
-        ? ExtractConfigFromFieldDef<TMap[K]>
-        : TUserConfig,
-      ExtractValueFromFieldDef<TMap[K]>,
-      AnyPgColumn,
-      ExtractOpsFromFieldDef<TMap[K]>
-    >
-  >;
+	[K in keyof TMap]: <
+		const TUserConfig extends ExtractConfigFromFieldDef<TMap[K]>,
+	>(
+		config?: TUserConfig,
+	) => FieldDefinition<
+		BuildFieldState<
+			ExtractTypeFromFieldDef<TMap[K]>,
+			TUserConfig extends undefined
+				? ExtractConfigFromFieldDef<TMap[K]>
+				: TUserConfig,
+			ExtractValueFromFieldDef<TMap[K]>,
+			AnyPgColumn,
+			ExtractOpsFromFieldDef<TMap[K]>
+		>
+	>;
 };
 
 // ============================================================================
@@ -96,38 +96,38 @@ export type FieldBuilderProxy<TMap = BuiltinFields> = {
  * ```
  */
 export function createFieldBuilder<TFields extends Record<string, any>>(
-  fieldDefs: TFields,
+	fieldDefs: TFields,
 ): FieldBuilderProxy<TFields> {
-  return new Proxy({} as FieldBuilderProxy<TFields>, {
-    get(_target, prop: string) {
-      const fieldDef = fieldDefs[prop];
-      if (!fieldDef) {
-        throw new Error(
-          `Unknown field type: "${prop}". ` +
-            `Available types: ${Object.keys(fieldDefs).join(", ")}`,
-        );
-      }
-      // Return a factory function that wraps the plain field def
-      return (config?: any) => createFieldDefinition(fieldDef, config);
-    },
-    has(_target, prop: string) {
-      return prop in fieldDefs;
-    },
-    ownKeys() {
-      return Object.keys(fieldDefs);
-    },
-    getOwnPropertyDescriptor(_target, prop: string) {
-      if (prop in fieldDefs) {
-        return {
-          configurable: true,
-          enumerable: true,
-          value: (config?: any) =>
-            createFieldDefinition(fieldDefs[prop], config),
-        };
-      }
-      return undefined;
-    },
-  });
+	return new Proxy({} as FieldBuilderProxy<TFields>, {
+		get(_target, prop: string) {
+			const fieldDef = fieldDefs[prop];
+			if (!fieldDef) {
+				throw new Error(
+					`Unknown field type: "${prop}". ` +
+						`Available types: ${Object.keys(fieldDefs).join(", ")}`,
+				);
+			}
+			// Return a factory function that wraps the plain field def
+			return (config?: any) => createFieldDefinition(fieldDef, config);
+		},
+		has(_target, prop: string) {
+			return prop in fieldDefs;
+		},
+		ownKeys() {
+			return Object.keys(fieldDefs);
+		},
+		getOwnPropertyDescriptor(_target, prop: string) {
+			if (prop in fieldDefs) {
+				return {
+					configurable: true,
+					enumerable: true,
+					value: (config?: any) =>
+						createFieldDefinition(fieldDefs[prop], config),
+				};
+			}
+			return undefined;
+		},
+	});
 }
 
 /**
@@ -147,72 +147,72 @@ export const createFieldBuilderFromDefs = createFieldBuilder;
  * @returns Object with both field definitions and extracted columns
  */
 export function extractFieldDefinitions<
-  TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
+	TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
 >(
-  fields: TFields,
+	fields: TFields,
 ): {
-  definitions: TFields;
-  columns: Record<string, unknown>;
+	definitions: TFields;
+	columns: Record<string, unknown>;
 } {
-  const columns: Record<string, unknown> = {};
+	const columns: Record<string, unknown> = {};
 
-  for (const [name, fieldDef] of Object.entries(fields)) {
-    const column = fieldDef.toColumn(name);
-    if (column !== null) {
-      if (Array.isArray(column)) {
-        // Multiple columns (e.g., polymorphic relation with type + id)
-        for (const col of column) {
-          const colName = (col as { name?: string }).name ?? name;
-          columns[colName] = col;
-        }
-      } else {
-        columns[name] = column;
-      }
-    }
-  }
+	for (const [name, fieldDef] of Object.entries(fields)) {
+		const column = fieldDef.toColumn(name);
+		if (column !== null) {
+			if (Array.isArray(column)) {
+				// Multiple columns (e.g., polymorphic relation with type + id)
+				for (const col of column) {
+					const colName = (col as { name?: string }).name ?? name;
+					columns[colName] = col;
+				}
+			} else {
+				columns[name] = column;
+			}
+		}
+	}
 
-  return {
-    definitions: fields,
-    columns,
-  };
+	return {
+		definitions: fields,
+		columns,
+	};
 }
 
 /**
  * Type helper to infer field types from a fields factory function.
  */
 export type InferFieldsFromFactory<
-  TFactory extends (
-    f: FieldBuilderProxy,
-  ) => Record<string, FieldDefinition<FieldDefinitionState>>,
+	TFactory extends (
+		f: FieldBuilderProxy,
+	) => Record<string, FieldDefinition<FieldDefinitionState>>,
 > = ReturnType<TFactory>;
 
 /**
  * Type helper to extract value types from field definitions.
  */
 export type FieldValues<
-  TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
+	TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
 > = {
-  [K in keyof TFields]: TFields[K]["$types"]["value"];
+	[K in keyof TFields]: TFields[K]["$types"]["value"];
 };
 
 /**
  * Type helper to extract input types from field definitions.
  */
 export type FieldInputs<
-  TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
+	TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
 > = {
-  [K in keyof TFields as TFields[K]["$types"]["input"] extends never
-    ? never
-    : K]: TFields[K]["$types"]["input"];
+	[K in keyof TFields as TFields[K]["$types"]["input"] extends never
+		? never
+		: K]: TFields[K]["$types"]["input"];
 };
 
 /**
  * Type helper to extract output types from field definitions.
  */
 export type FieldOutputs<
-  TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
+	TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
 > = {
-  [K in keyof TFields as TFields[K]["$types"]["output"] extends never
-    ? never
-    : K]: TFields[K]["$types"]["output"];
+	[K in keyof TFields as TFields[K]["$types"]["output"] extends never
+		? never
+		: K]: TFields[K]["$types"]["output"];
 };

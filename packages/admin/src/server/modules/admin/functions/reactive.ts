@@ -96,7 +96,8 @@ function getGlobal(app: Questpie<any>, globalName: string) {
 /**
  * Get entity (collection or global) builder by name and type.
  */
-function getEntity(app: Questpie<any>,
+function getEntity(
+	app: Questpie<any>,
 	entityName: string,
 	type: "collection" | "global",
 ) {
@@ -109,7 +110,8 @@ function getEntity(app: Questpie<any>,
 /**
  * Get field definition from collection or global.
  */
-function getFieldDefinition(app: Questpie<any>,
+function getFieldDefinition(
+	app: Questpie<any>,
 	entityName: string,
 	fieldPath: string,
 	type: "collection" | "global" = "collection",
@@ -345,7 +347,8 @@ function findReactiveFieldEntry(
 /**
  * Get reactive handler from collection/global form config.
  */
-function getReactiveHandler(app: Questpie<any>,
+function getReactiveHandler(
+	app: Questpie<any>,
 	entityName: string,
 	fieldPath: string,
 	handlerType: "hidden" | "readOnly" | "disabled" | "compute",

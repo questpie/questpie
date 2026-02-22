@@ -21,39 +21,39 @@ import { requireAdminAuth } from "../auth-helpers.js";
  * Options for TanStack auth guard
  */
 export interface TanStackAuthGuardOptions {
-  /**
-   * The app instance with auth configured
-   */
-  app: Questpie<any>;
+	/**
+	 * The app instance with auth configured
+	 */
+	app: Questpie<any>;
 
-  /**
-   * Path to redirect to when not authenticated
-   * @default "/admin/login"
-   */
-  loginPath?: string;
+	/**
+	 * Path to redirect to when not authenticated
+	 * @default "/admin/login"
+	 */
+	loginPath?: string;
 
-  /**
-   * Required role for access
-   * @default "admin"
-   */
-  requiredRole?: string;
+	/**
+	 * Required role for access
+	 * @default "admin"
+	 */
+	requiredRole?: string;
 
-  /**
-   * Query parameter name for redirect URL
-   * @default "redirect"
-   */
-  redirectParam?: string;
+	/**
+	 * Query parameter name for redirect URL
+	 * @default "redirect"
+	 */
+	redirectParam?: string;
 }
 
 /**
  * Context passed to TanStack Router beforeLoad
  */
 export interface BeforeLoadContext {
-  context: {
-    request: Request;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
+	context: {
+		request: Request;
+		[key: string]: unknown;
+	};
+	[key: string]: unknown;
 }
 
 /**
@@ -92,35 +92,35 @@ export interface BeforeLoadContext {
  * ```
  */
 export function createTanStackAuthGuard({
-  app,
-  loginPath = "/admin/login",
-  requiredRole = "admin",
-  redirectParam = "redirect",
+	app,
+	loginPath = "/admin/login",
+	requiredRole = "admin",
+	redirectParam = "redirect",
 }: TanStackAuthGuardOptions) {
-  return async function beforeLoad({ context }: BeforeLoadContext) {
-    const request = context.request;
+	return async function beforeLoad({ context }: BeforeLoadContext) {
+		const request = context.request;
 
-    if (!request) {
-      console.warn(
-        "createTanStackAuthGuard: No request in context. " +
-          "Make sure you're using TanStack Start with SSR enabled.",
-      );
-      return;
-    }
+		if (!request) {
+			console.warn(
+				"createTanStackAuthGuard: No request in context. " +
+					"Make sure you're using TanStack Start with SSR enabled.",
+			);
+			return;
+		}
 
-    const redirect = await requireAdminAuth({
-      request,
-      app,
-      loginPath,
-      requiredRole,
-      redirectParam,
-    });
+		const redirect = await requireAdminAuth({
+			request,
+			app,
+			loginPath,
+			requiredRole,
+			redirectParam,
+		});
 
-    if (redirect) {
-      // TanStack Router expects thrown Response for redirects
-      throw redirect;
-    }
-  };
+		if (redirect) {
+			// TanStack Router expects thrown Response for redirects
+			throw redirect;
+		}
+	};
 }
 
 /**
@@ -144,21 +144,21 @@ export function createTanStackAuthGuard({
  * ```
  */
 export function createTanStackSessionLoader({ app }: { app: Questpie<any> }) {
-  return async function loader({ context }: BeforeLoadContext) {
-    const request = context.request;
+	return async function loader({ context }: BeforeLoadContext) {
+		const request = context.request;
 
-    if (!request || !app.auth) {
-      return { session: null };
-    }
+		if (!request || !app.auth) {
+			return { session: null };
+		}
 
-    try {
-      const session = await app.auth.api.getSession({
-        headers: request.headers,
-      });
+		try {
+			const session = await app.auth.api.getSession({
+				headers: request.headers,
+			});
 
-      return { session: session ?? null };
-    } catch {
-      return { session: null };
-    }
-  };
+			return { session: session ?? null };
+		} catch {
+			return { session: null };
+		}
+	};
 }

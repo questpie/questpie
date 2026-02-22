@@ -1,6 +1,6 @@
 {
-  "scripts": {
-    "setup": "bun i",
-    "run": "cd examples/tanstack-barbershop && bun dev"
-  }
+	"scripts": {
+		"setup": "bun i",
+		"run": "cd examples/tanstack-barbershop && bun dev"
+	}
 }

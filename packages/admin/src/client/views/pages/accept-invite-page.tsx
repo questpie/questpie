@@ -5,70 +5,70 @@
  * Uses Better Auth's admin plugin for invitation acceptance.
  */
 
+import { Icon } from "@iconify/react";
 import * as React from "react";
-import { useAuthClient } from "../../hooks/use-auth";
-import {
-  selectBasePath,
-  selectBrandName,
-  selectNavigate,
-  useAdminStore,
-} from "../../runtime/provider";
-import { AuthLayout } from "../auth/auth-layout";
-import {
-  AcceptInviteForm,
-  type AcceptInviteFormValues,
-} from "../auth/accept-invite-form";
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import { Spinner } from "../../components/ui/spinner";
-import { Icon } from "@iconify/react";
+import { useAuthClient } from "../../hooks/use-auth";
+import {
+	selectBasePath,
+	selectBrandName,
+	selectNavigate,
+	useAdminStore,
+} from "../../runtime/provider";
+import {
+	AcceptInviteForm,
+	type AcceptInviteFormValues,
+} from "../auth/accept-invite-form";
+import { AuthLayout } from "../auth/auth-layout";
 
 interface AcceptInvitePageProps {
-  /**
-   * Invitation token from URL
-   */
-  token: string;
+	/**
+	 * Invitation token from URL
+	 */
+	token: string;
 
-  /**
-   * Title shown on the page
-   * @default "Complete Registration"
-   */
-  title?: string;
+	/**
+	 * Title shown on the page
+	 * @default "Complete Registration"
+	 */
+	title?: string;
 
-  /**
-   * Description shown below the title
-   * @default "Create your account to get started"
-   */
-  description?: string;
+	/**
+	 * Description shown below the title
+	 * @default "Create your account to get started"
+	 */
+	description?: string;
 
-  /**
-   * Logo component to show above the form
-   */
-  logo?: React.ReactNode;
+	/**
+	 * Logo component to show above the form
+	 */
+	logo?: React.ReactNode;
 
-  /**
-   * Path to redirect after successful registration
-   * @default basePath (e.g., "/admin")
-   */
-  redirectTo?: string;
+	/**
+	 * Path to redirect after successful registration
+	 * @default basePath (e.g., "/admin")
+	 */
+	redirectTo?: string;
 
-  /**
-   * Path to login page (for invalid/expired tokens)
-   * @default "{basePath}/login"
-   */
-  loginPath?: string;
+	/**
+	 * Path to login page (for invalid/expired tokens)
+	 * @default "{basePath}/login"
+	 */
+	loginPath?: string;
 
-  /**
-   * Minimum password length
-   * @default 8
-   */
-  minPasswordLength?: number;
+	/**
+	 * Minimum password length
+	 * @default 8
+	 */
+	minPasswordLength?: number;
 }
 
 type InvitationState =
-  | { status: "loading" }
-  | { status: "valid"; email: string; role?: string }
-  | { status: "invalid"; message: string };
+	| { status: "loading" }
+	| { status: "valid"; email: string; role?: string }
+	| { status: "invalid"; message: string };
 
 /**
  * Accept invite page component.
@@ -86,172 +86,170 @@ type InvitationState =
  * ```
  */
 export function AcceptInvitePage({
-  token,
-  title = "Complete Registration",
-  description = "Create your account to get started",
-  logo,
-  redirectTo,
-  loginPath,
-  minPasswordLength = 8,
+	token,
+	title = "Complete Registration",
+	description = "Create your account to get started",
+	logo,
+	redirectTo,
+	loginPath,
+	minPasswordLength = 8,
 }: AcceptInvitePageProps) {
-  const authClient = useAuthClient();
-  const navigate = useAdminStore(selectNavigate);
-  const basePath = useAdminStore(selectBasePath);
-  const brandName = useAdminStore(selectBrandName);
+	const authClient = useAuthClient();
+	const navigate = useAdminStore(selectNavigate);
+	const basePath = useAdminStore(selectBasePath);
+	const brandName = useAdminStore(selectBrandName);
 
-  const [invitation, setInvitation] = React.useState<InvitationState>({
-    status: "loading",
-  });
-  const [error, setError] = React.useState<string | null>(null);
+	const [invitation, setInvitation] = React.useState<InvitationState>({
+		status: "loading",
+	});
+	const [error, setError] = React.useState<string | null>(null);
 
-  // Validate token on mount
-  React.useEffect(() => {
-    const validateToken = async () => {
-      try {
-        const result = await authClient.admin.getInvitation({
-          query: { token },
-        });
+	// Validate token on mount
+	React.useEffect(() => {
+		const validateToken = async () => {
+			try {
+				const result = await authClient.admin.getInvitation({
+					query: { token },
+				});
 
-        if (result.error) {
-          let message = "Invalid or expired invitation";
-          if (result.error) {
-            if (result.error.message) {
-              message = result.error.message;
-            }
-          }
-          setInvitation({
-            status: "invalid",
-            message,
-          });
-          return;
-        }
-        if (!result.data) {
-          setInvitation({
-            status: "invalid",
-            message: "Invalid or expired invitation",
-          });
-          return;
-        }
+				if (result.error) {
+					let message = "Invalid or expired invitation";
+					if (result.error) {
+						if (result.error.message) {
+							message = result.error.message;
+						}
+					}
+					setInvitation({
+						status: "invalid",
+						message,
+					});
+					return;
+				}
+				if (!result.data) {
+					setInvitation({
+						status: "invalid",
+						message: "Invalid or expired invitation",
+					});
+					return;
+				}
 
-        setInvitation({
-          status: "valid",
-          email: result.data.email,
-          role: result.data.role,
-        });
-      } catch (err) {
-        setInvitation({
-          status: "invalid",
-          message: "Invalid or expired invitation",
-        });
-      }
-    };
+				setInvitation({
+					status: "valid",
+					email: result.data.email,
+					role: result.data.role,
+				});
+			} catch (err) {
+				setInvitation({
+					status: "invalid",
+					message: "Invalid or expired invitation",
+				});
+			}
+		};
 
-    validateToken();
-  }, [token, authClient]);
+		validateToken();
+	}, [token, authClient]);
 
-  const handleSubmit = async (values: AcceptInviteFormValues) => {
-    setError(null);
+	const handleSubmit = async (values: AcceptInviteFormValues) => {
+		setError(null);
 
-    const successRedirect = redirectTo !== undefined ? redirectTo : basePath;
+		const successRedirect = redirectTo !== undefined ? redirectTo : basePath;
 
-    try {
-      const result = await authClient.admin.acceptInvitation({
-        token,
-        name: values.name,
-        password: values.password,
-      });
+		try {
+			const result = await authClient.admin.acceptInvitation({
+				token,
+				name: values.name,
+				password: values.password,
+			});
 
-      if (result.error) {
-        if (result.error.message) {
-          setError(result.error.message);
-        } else {
-          setError("Failed to create account");
-        }
-        return;
-      }
+			if (result.error) {
+				if (result.error.message) {
+					setError(result.error.message);
+				} else {
+					setError("Failed to create account");
+				}
+				return;
+			}
 
-      // Redirect on success
-      navigate(successRedirect);
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An error occurred");
-      }
-    }
-  };
+			// Redirect on success
+			navigate(successRedirect);
+		} catch (err) {
+			if (err instanceof Error) {
+				setError(err.message);
+			} else {
+				setError("An error occurred");
+			}
+		}
+	};
 
-  const handleGoToLogin = () => {
-    navigate(loginPath ?? `${basePath}/login`);
-  };
+	const handleGoToLogin = () => {
+		navigate(loginPath ?? `${basePath}/login`);
+	};
 
-  // Loading state
-  if (invitation.status === "loading") {
-    return (
-      <AuthLayout
-        title="Validating Invitation"
-        description="Please wait..."
-        logo={logo ?? <DefaultLogo brandName={brandName} />}
-      >
-        <div className="flex justify-center py-8">
-          <Spinner className="size-8" />
-        </div>
-      </AuthLayout>
-    );
-  }
+	// Loading state
+	if (invitation.status === "loading") {
+		return (
+			<AuthLayout
+				title="Validating Invitation"
+				description="Please wait..."
+				logo={logo ?? <DefaultLogo brandName={brandName} />}
+			>
+				<div className="flex justify-center py-8">
+					<Spinner className="size-8" />
+				</div>
+			</AuthLayout>
+		);
+	}
 
-  // Invalid token state
-  if (invitation.status === "invalid") {
-    return (
-      <AuthLayout
-        title="Invalid Invitation"
-        description="This invitation link is no longer valid"
-        logo={logo ?? <DefaultLogo brandName={brandName} />}
-      >
-        <div className="space-y-4">
-          <Alert variant="destructive">
-            <Icon icon="ph:warning-circle" />
-            <AlertDescription>{invitation.message}</AlertDescription>
-          </Alert>
-          <p className="text-muted-foreground text-center text-sm">
-            The invitation may have expired or already been used. Please contact
-            your administrator for a new invitation.
-          </p>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleGoToLogin}
-          >
-            Go to Login
-          </Button>
-        </div>
-      </AuthLayout>
-    );
-  }
+	// Invalid token state
+	if (invitation.status === "invalid") {
+		return (
+			<AuthLayout
+				title="Invalid Invitation"
+				description="This invitation link is no longer valid"
+				logo={logo ?? <DefaultLogo brandName={brandName} />}
+			>
+				<div className="space-y-4">
+					<Alert variant="destructive">
+						<Icon icon="ph:warning-circle" />
+						<AlertDescription>{invitation.message}</AlertDescription>
+					</Alert>
+					<p className="text-muted-foreground text-center text-sm">
+						The invitation may have expired or already been used. Please contact
+						your administrator for a new invitation.
+					</p>
+					<Button
+						variant="outline"
+						className="w-full"
+						onClick={handleGoToLogin}
+					>
+						Go to Login
+					</Button>
+				</div>
+			</AuthLayout>
+		);
+	}
 
-  // Valid token - show registration form
-  return (
-    <AuthLayout
-      title={title}
-      description={description}
-      logo={logo ?? <DefaultLogo brandName={brandName} />}
-    >
-      <AcceptInviteForm
-        onSubmit={handleSubmit}
-        email={invitation.email}
-        error={error}
-        minPasswordLength={minPasswordLength}
-      />
-    </AuthLayout>
-  );
+	// Valid token - show registration form
+	return (
+		<AuthLayout
+			title={title}
+			description={description}
+			logo={logo ?? <DefaultLogo brandName={brandName} />}
+		>
+			<AcceptInviteForm
+				onSubmit={handleSubmit}
+				email={invitation.email}
+				error={error}
+				minPasswordLength={minPasswordLength}
+			/>
+		</AuthLayout>
+	);
 }
 
 function DefaultLogo({ brandName }: { brandName: string }) {
-  return (
-    <div className="text-center">
-      <h1 className="text-xl font-bold">{brandName}</h1>
-    </div>
-  );
+	return (
+		<div className="text-center">
+			<h1 className="text-xl font-bold">{brandName}</h1>
+		</div>
+	);
 }
-
-

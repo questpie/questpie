@@ -45,18 +45,10 @@ export interface GlobalCollectionHookEntry {
 	/** Exclude these collection slugs. Applied after include. */
 	exclude?: string[];
 
-	beforeChange?: (
-		ctx: GlobalCollectionHookContext,
-	) => Promise<void> | void;
-	afterChange?: (
-		ctx: GlobalCollectionHookContext,
-	) => Promise<void> | void;
-	beforeDelete?: (
-		ctx: GlobalCollectionHookContext,
-	) => Promise<void> | void;
-	afterDelete?: (
-		ctx: GlobalCollectionHookContext,
-	) => Promise<void> | void;
+	beforeChange?: (ctx: GlobalCollectionHookContext) => Promise<void> | void;
+	afterChange?: (ctx: GlobalCollectionHookContext) => Promise<void> | void;
+	beforeDelete?: (ctx: GlobalCollectionHookContext) => Promise<void> | void;
+	afterDelete?: (ctx: GlobalCollectionHookContext) => Promise<void> | void;
 	beforeTransition?: (
 		ctx: GlobalCollectionTransitionHookContext,
 	) => Promise<void> | void;
@@ -109,12 +101,8 @@ export interface GlobalGlobalHookEntry {
 	/** Exclude these global slugs. Applied after include. */
 	exclude?: string[];
 
-	beforeChange?: (
-		ctx: GlobalGlobalHookContext,
-	) => Promise<void> | void;
-	afterChange?: (
-		ctx: GlobalGlobalHookContext,
-	) => Promise<void> | void;
+	beforeChange?: (ctx: GlobalGlobalHookContext) => Promise<void> | void;
+	afterChange?: (ctx: GlobalGlobalHookContext) => Promise<void> | void;
 	beforeTransition?: (
 		ctx: GlobalGlobalTransitionHookContext,
 	) => Promise<void> | void;
