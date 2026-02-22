@@ -1,5 +1,12 @@
 # @questpie/next
 
+## 2.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`f2afc6c`](https://github.com/questpie/questpie/commit/f2afc6c6e83e6ffa72fd464306949a9b00c291a5)]:
+  - questpie@2.1.0
+
 ## 2.0.0
 
 ### Major Changes
