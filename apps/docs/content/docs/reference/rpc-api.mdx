@@ -1,33 +1,23 @@
 ---
-title: RPC API
-description: Typed RPC procedures — fn(), router(), handler context, and client invocation
+title: Functions API
+description: Standalone fn() definitions — typed server functions with Zod validation, access control, and file-based routing
 ---
 
-# RPC API
+# Functions API
 
-RPC (Remote Procedure Call) provides type-safe server functions callable from the client SDK. Functions are defined with Zod schemas for input validation and support both JSON and raw HTTP modes.
-
-## Creating an RPC Builder
-
-```ts
-import { rpc } from "questpie";
-import type { App } from '../app';
-
-const r = rpc<App>();
-```
-
-The type parameter connects the RPC builder to your app instance for typed `app` access in handlers.
-
-If you do not want to pass generic parameters to `rpc()`, you can still type handler context with [`getContext<App>()`](/docs/server/type-safe-contexts).
+Functions provide type-safe server procedures callable from the client SDK. They are defined with `fn()` from `"questpie"`, validated with Zod schemas, and support both JSON and raw HTTP modes.
 
 ## Defining Functions
 
-### `r.fn(definition)` — JSON Function
+### `fn(definition)` — JSON Function
 
 Validated input/output with automatic Zod schema enforcement.
 
 ```ts
-const getAvailableSlots = r.fn({
+import { fn } from "questpie";
+import { z } from "zod";
+
+export default fn({
   schema: z.object({
     barberId: z.string(),
     date: z.string(),
@@ -52,14 +42,18 @@ const getAvailableSlots = r.fn({
 | `access` | `(ctx) => boolean \| Promise<boolean>` | No | Access control |
 | `outputSchema` | `ZodType` | No | Zod schema for output validation |
 
-### `r.fn(definition)` — Raw Function
+### `fn(definition)` — Raw Function
 
 Direct access to `Request` and `Response` for streaming, file downloads, or custom protocols.
 
 ```ts
-const exportCsv = r.fn({
+import { fn } from "questpie";
+import { z } from "zod";
+
+export default fn({
+  schema: z.object({ format: z.enum(["csv", "json"]) }),
   raw: true,
-  handler: async ({ request, app }) => {
+  handler: async ({ input, app }) => {
     const csv = await generateCsv(app);
     return new Response(csv, {
       headers: { "Content-Type": "text/csv" },
@@ -82,7 +76,7 @@ Both function types receive a context object:
 }
 ```
 
-For strongly typed `app`, `db`, and `session`, use `rpc<App>()`, or cast inside the handler:
+For strongly typed `app`, `db`, and `session`, cast inside the handler:
 
 ```ts
 import { getContext } from "questpie";
@@ -94,43 +88,32 @@ handler: async (ctx) => {
 }
 ```
 
-## Defining Routers
+## File-Based Routing
 
-### `r.router(tree)`
+Functions live in a `functions/` directory. Nested folders create nested routes automatically — no manual router composition needed.
 
-Group functions into a tree structure. Routers can nest indefinitely.
-
-```ts
-const appRpc = r.router({
-  booking: r.router({
-    getAvailableSlots,
-    createBooking,
-    cancelBooking,
-  }),
-  reports: r.router({
-    generateMonthly: generateMonthlyReport,
-    exportCsv,
-  }),
-});
+```
+functions/
+  booking/
+    getAvailableSlots.ts   → POST /api/functions/booking/getAvailableSlots
+    createBooking.ts       → POST /api/functions/booking/createBooking
+    cancelBooking.ts       → POST /api/functions/booking/cancelBooking
+  reports/
+    generateMonthly.ts     → POST /api/functions/reports/generateMonthly
+    exportCsv.ts           → POST /api/functions/reports/exportCsv
 ```
 
-This creates the following RPC paths:
-- `booking/getAvailableSlots`
-- `booking/createBooking`
-- `booking/cancelBooking`
-- `reports/generateMonthly`
-- `reports/exportCsv`
+Each file exports a default `fn()` definition. The file path determines the RPC route — no `router()` calls required.
 
-## Mounting RPC
+## Mounting Functions
 
-Pass the router to the fetch handler:
+Functions are discovered automatically from the `functions/` directory. No `rpc` option is needed in the fetch handler config:
 
 ```ts
 import { createFetchHandler } from "questpie";
 
 const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 ```
 
@@ -139,7 +122,7 @@ const handler = createFetchHandler(app, {
 Functions support an `access` callback:
 
 ```ts
-r.fn({
+fn({
   schema: z.object({ id: z.string() }),
   access: ({ session }) => {
     if (!session) return false;
@@ -163,7 +146,7 @@ import { createClient } from "@questpie/tanstack-query";
 const client = createClient<typeof app>({ baseUrl: "/api" });
 
 // Type-safe call
-const slots = await client.rpc.booking.getAvailableSlots({
+const slots = await client.functions.booking.getAvailableSlots({
   barberId: "b1",
   date: "2024-03-15",
 });
@@ -172,7 +155,7 @@ const slots = await client.rpc.booking.getAvailableSlots({
 ### Via HTTP
 
 ```
-POST /api/rpc/booking/getAvailableSlots
+POST /api/functions/booking/getAvailableSlots
 Content-Type: application/json
 
 { "barberId": "b1", "date": "2024-03-15" }
@@ -195,6 +178,6 @@ Response:
 
 - [RPC](/docs/server/rpc) — Conceptual guide with patterns
 - [Type-Safe Contexts](/docs/server/type-safe-contexts) — Typed `app`, `db`, and `session` patterns
-- [q Builder API](/docs/reference/q-builder-api) — `q.fn()` factory
+- [q Builder API](/docs/reference/q-builder-api) — Builder factory methods
 - [Adapter API](/docs/reference/adapter-api) — Mounting the handler
 - [Error Codes](/docs/reference/error-codes) — Error responses

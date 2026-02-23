@@ -20,13 +20,12 @@ Wrap your existing fetch handler to add OpenAPI routes:
 ```ts
 import { createFetchHandler } from "questpie";
 import { withOpenApi } from "@questpie/openapi";
-import { app, appRpc } from './app';
+import { app } from './app';
 
 const handler = withOpenApi(
-  createFetchHandler(app, { basePath: "/api", rpc: appRpc }),
+  createFetchHandler(app, { basePath: "/api" }),
   {
     app,
-    rpc: appRpc,
     basePath: "/api",
     info: {
       title: "Barbershop API",
@@ -49,7 +48,7 @@ For more control, generate the spec and create handlers separately:
 ```ts
 import { generateOpenApiSpec, createOpenApiHandlers } from "@questpie/openapi";
 
-const spec = generateOpenApiSpec(app, appRpc, {
+const spec = generateOpenApiSpec(app, {
   info: { title: "My API", version: "1.0.0" },
   basePath: "/api",
   servers: [
@@ -70,7 +69,6 @@ const { specHandler, scalarHandler } = createOpenApiHandlers(spec, {
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `app` | `Questpie` | — | app instance (required) |
-| `rpc` | `RpcRouterTree` | — | RPC router for procedure docs |
 | `basePath` | `string` | — | API base path |
 | `info.title` | `string` | — | API title |
 | `info.version` | `string` | — | API version |
@@ -99,7 +97,7 @@ The OpenAPI spec includes:
 
 - **Collection CRUD** — All find, create, update, delete endpoints with typed request/response schemas
 - **Global endpoints** — Get and update for each global
-- **RPC procedures** — Input/output schemas from Zod definitions
+- **Functions** — Input/output schemas from Zod definitions
 - **Search** — Search endpoint with query parameters
 - **Realtime** — SSE endpoints
 - **File operations** — Upload and serve endpoints
@@ -110,11 +108,11 @@ Schemas are derived from your field definitions — field types, constraints, en
 ## Common Mistakes
 
 - **Missing `@questpie/openapi` package** — Install it separately: `bun add @questpie/openapi`.
-- **Not passing `rpc`** — Without the RPC router, custom procedures won't appear in the spec.
+- **Missing functions directory** — Without `fn()` definitions in your `functions/` directory, custom procedures won't appear in the spec.
 - **Wrong `basePath`** — The spec's paths must match your actual route structure.
 
 ## Related Pages
 
 - [Adapters Overview](/docs/client/adapters-overview) — HTTP routing
 - [Client Overview](/docs/client) — Client SDK overview
-- [RPC](/docs/server/rpc) — Custom RPC procedures
+- [Functions](/docs/server/rpc) — Custom server functions

@@ -2,9 +2,7 @@
 export * from "#questpie/server/index.js";
 
 import { config as cliConfig } from "#questpie/cli/config.js";
-// Standalone functions (backwards compat - prefer using q.collection(), q.job(), etc.)
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
-// Import for q namespace
 import {
 	createCallableBuilder,
 	questpie,
@@ -24,7 +22,6 @@ import {
 	starter,
 	starterModule,
 } from "#questpie/server/modules/starter/index.js";
-import { rpc } from "#questpie/server/rpc/factory.js";
 
 // Create the base builder with default fields
 const baseBuilder = questpie({ name: "questpie" }).fields(defaultFields);
@@ -33,56 +30,26 @@ const baseBuilder = questpie({ name: "questpie" }).fields(defaultFields);
 const callableQ = createCallableBuilder(baseBuilder);
 
 /**
- * QUESTPIE - The main namespace for building your application
+ * QUESTPIE - Internal builder namespace.
  *
  * `q` is a pre-configured callable QuestpieBuilder with all default fields registered.
- * It can be used in two ways:
+ * It is used internally by admin module and module construction code.
  *
- * 1. **As a builder directly** - use `q.collection()`, `q.global()`, etc.
- * 2. **As a function** - call `q({ name: "my-app" })` to create a new builder
+ * For new projects, use the standalone factories:
+ * - `collection("name")` — define a collection
+ * - `global("name")` — define a global
+ * - `fn({...})` — define a function
+ * - `job({...})` — define a job
+ * - `config({...})` — define app config
+ * - `module({...})` — define a module
+ * - `createApp(config)` — build the app
  *
- * @example
- * ```ts
- * import { q } from "questpie"
- *
- * // Define collections with type-safe fields
- * const posts = q.collection("posts").fields(({ f }) => ({
- *   title: f.text({ required: true }),
- *   content: f.textarea(),
- *   publishedAt: f.datetime(),
- * }))
- *
- * // Define globals
- * const settings = q.global("settings").fields(({ f }) => ({
- *   siteName: f.text({ required: true }),
- *   maintenanceMode: f.boolean({ default: false }),
- * }))
- *
- * // Define jobs
- * const sendEmail = q.job({
- *   name: "send-email",
- *   schema: z.object({ to: z.string().email() }),
- *   handler: async ({ payload, app }) => { ... }
- * })
- *
- * // Create new app builder (callable usage)
- * export const app = q({ name: "my-app" })
- *   .use(q.starter)
- *   .collections({ posts })
- *   .globals({ settings })
- *   .jobs({ sendEmail })
- *   .build({
- *     app: { url: "http://localhost:3000" },
- *     db: { url: DATABASE_URL },
- *     storage: { driver: s3Driver(...) },
- *   })
- * ```
+ * @internal Used by `@questpie/admin` module construction
  */
 const q = Object.assign(callableQ, {
 	/**
 	 * Starter module - opt-in "batteries included" module
-	 * Includes auth collections and assets with file upload support
-	 * @example q({ name: "app" }).use(q.starter).build({...})
+	 * @internal Used by admin module construction
 	 */
 	starter: starterModule,
 
@@ -91,11 +58,6 @@ const q = Object.assign(callableQ, {
 	 * @example export default q.config({ app: app, cli: { migrations: { directory: "./migrations" } } })
 	 */
 	config: cliConfig,
-
-	/**
-	 * Create standalone RPC contract builder.
-	 */
-	rpc,
 });
 
 export { q };
@@ -111,6 +73,5 @@ export {
 	global,
 	job,
 	module,
-	rpc,
 	starter,
 };

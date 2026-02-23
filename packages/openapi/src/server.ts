@@ -8,14 +8,13 @@
  * ```ts
  * import { createFetchHandler } from 'questpie'
  * import { withOpenApi } from '@questpie/openapi'
- * import { app, appRpc } from './app'
+ * import { app } from './app'
  *
  * // Wrap the fetch handler — adds /openapi.json and /docs routes
  * const handler = withOpenApi(
- *   createFetchHandler(app, { basePath: '/api', rpc: appRpc }),
+ *   createFetchHandler(app, { basePath: '/api' }),
  *   {
  *     app,
- *     rpc: appRpc,
  *     basePath: '/api',
  *     info: { title: 'My API', version: '1.0.0' },
  *   }
@@ -23,7 +22,7 @@
  * ```
  */
 
-import type { Questpie, RpcRouterTree } from "questpie";
+import type { FunctionsTree, Questpie } from "questpie";
 import { generateOpenApiSpec as generate } from "./generator/index.js";
 import { serveScalarUI } from "./scalar.js";
 import type {
@@ -41,14 +40,16 @@ export type {
 } from "./types.js";
 
 /**
- * Generate a complete OpenAPI 3.1 spec from a QuestPie instance and optional RPC router.
+ * Generate a complete OpenAPI 3.1 spec from a QuestPie instance.
+ * Functions are read from `app.functions` automatically if not provided.
  */
 export function generateOpenApiSpec(
 	app: Questpie<any>,
-	rpc?: RpcRouterTree<any>,
+	functions?: FunctionsTree<any>,
 	config?: OpenApiConfig,
 ): OpenApiSpec {
-	return generate(app, rpc, config);
+	const fns = functions ?? (app as any).functions;
+	return generate(app, fns, config);
 }
 
 /**
@@ -79,13 +80,14 @@ export function createOpenApiHandlers(
  * Intercepts requests to `{basePath}/{specPath}` and `{basePath}/{docsPath}`
  * before they reach the handler. Everything else passes through unchanged.
  *
+ * Functions are read from `app.functions` automatically.
+ *
  * @example
  * ```ts
  * const handler = withOpenApi(
- *   createFetchHandler(app, { basePath: '/api', rpc: appRpc }),
+ *   createFetchHandler(app, { basePath: '/api' }),
  *   {
  *     app,
- *     rpc: appRpc,
  *     basePath: '/api',
  *     info: { title: 'My API', version: '1.0.0' },
  *     scalar: { theme: 'purple' },
@@ -108,14 +110,15 @@ export function withOpenApi(
 ) => Promise<Response | null> | Response | null {
 	const {
 		app,
-		rpc,
+		functions,
 		scalar,
 		specPath = "openapi.json",
 		docsPath = "docs",
 		...openApiConfig
 	} = config;
 
-	const spec = generate(app, rpc, openApiConfig);
+	const fns = functions ?? (app as any).functions;
+	const spec = generate(app, fns, openApiConfig);
 	const { specHandler, scalarHandler } = createOpenApiHandlers(spec, {
 		scalar,
 	});

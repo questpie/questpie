@@ -1,16 +1,14 @@
 import { withOpenApi } from "@questpie/openapi";
 import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie";
-import { app, appRpc } from "@/questpie/server/app.js";
+import { app } from "@/questpie/server/app.js";
 
 const handler = withOpenApi(
 	createFetchHandler(app, {
 		basePath: "/api",
-		rpc: appRpc,
 	}),
 	{
 		app,
-		rpc: appRpc,
 		basePath: "/api",
 		info: {
 			title: "{{projectName}} API",

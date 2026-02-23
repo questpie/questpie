@@ -95,12 +95,12 @@ Hide cancellation fields unless the appointment is cancelled:
 
 When a user changes `status` to "cancelled", the cancellation fields appear dynamically. This works in real-time — no page reload needed.
 
-## Step 3: RPC Functions
+## Step 3: Server Functions
 
 ### Slot Availability
 
 ```ts
-const getAvailableSlots = q.fn({
+const getAvailableSlots = fn({
   schema: z.object({
     barberId: z.string(),
     date: z.string(),
@@ -149,7 +149,7 @@ const getAvailableSlots = q.fn({
 ### Create Booking
 
 ```ts
-const createBooking = q.fn({
+const createBooking = fn({
   schema: z.object({
     barberId: z.string(),
     serviceId: z.string(),
@@ -197,7 +197,7 @@ const createBooking = q.fn({
 ### Confirmation Email
 
 ```ts
-const sendConfirmation = q.job({
+const sendConfirmation = job({
   name: "sendConfirmation",
   schema: z.object({
     appointmentId: z.string(),
@@ -259,19 +259,16 @@ export const app = q({ name: "barbershop" })
     db: { url: process.env.DATABASE_URL! },
   });
 
-export const appRpc = rpc<typeof app>().router({
-  booking: rpc<typeof app>().router({
-    getAvailableSlots,
-    createBooking,
-  }),
-});
+// Functions live in the functions/ directory — no router needed.
+// functions/booking/getAvailableSlots.ts exports the fn() above
+// functions/booking/createBooking.ts exports the fn() above
 ```
 
 ## Patterns Used
 
 - **Relations** — barber ↔ services (manyToMany), appointment → barber/service (belongsTo)
 - **Reactive fields** — cancellation fields hidden until status changes
-- **RPC** — slot availability and booking creation as typed functions
+- **Functions** — slot availability and booking creation as typed `fn()` definitions
 - **Jobs** — email notifications processed asynchronously
 - **Hooks** — automatic cancellation timestamp
 

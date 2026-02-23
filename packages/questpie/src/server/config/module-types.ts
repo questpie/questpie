@@ -9,6 +9,7 @@ import type {
 	LocaleConfig,
 	StorageConfig,
 } from "#questpie/server/config/types.js";
+import type { FunctionsTree } from "#questpie/server/functions/types.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
 import type { KVConfig } from "#questpie/server/integrated/kv/index.js";
 import type { LoggerConfig } from "#questpie/server/integrated/logger/index.js";
@@ -20,7 +21,6 @@ import type {
 import type { RealtimeConfig } from "#questpie/server/integrated/realtime/index.js";
 import type { SearchAdapter } from "#questpie/server/integrated/search/index.js";
 import type { Migration } from "#questpie/server/migration/types.js";
-import type { RpcRouterTree } from "#questpie/server/rpc/types.js";
 import type { Seed, SeedCategory } from "#questpie/server/seed/types.js";
 
 // ============================================================================
@@ -54,7 +54,7 @@ export interface ModuleDefinition {
 	jobs?: Record<string, JobDefinition<any, any>>;
 
 	/** RPC function definitions this module contributes. */
-	functions?: RpcRouterTree<any>;
+	functions?: FunctionsTree<any>;
 
 	/** Custom field types this module contributes (extends the `f` proxy). */
 	fields?: Record<string, any>;
@@ -196,7 +196,7 @@ export interface AppEntities {
 	jobs?: Record<string, JobDefinition<any, any>>;
 
 	/** Functions discovered from `functions/` directory. */
-	functions?: RpcRouterTree<any>;
+	functions?: FunctionsTree<any>;
 
 	/** Auth config from `auth.ts`. Deep-merged on top of module auth. */
 	auth?: BetterAuthOptions | Record<string, any>;

@@ -151,7 +151,7 @@ Structured object. Maps to `jsonb` with nested field definitions.
 
 ```ts
 f.object({
-  fields: (f) => ({
+  fields: () => ({
     street: f.text().notNull(),
     city: f.text().notNull(),
     zip: f.text(),
@@ -159,7 +159,7 @@ f.object({
 })
 ```
 
-Config: `{ fields: (f) => Record<string, FieldBuilder> }`
+Config: `{ fields: () => Record<string, FieldBuilder> }`
 
 #### `f.array(config?)`
 

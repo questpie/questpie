@@ -1,92 +1,83 @@
 ---
-title: RPC
-description: Typed rpc contracts for custom application workflows
+title: Functions
+description: Typed server functions for custom application workflows
 ---
 
-# RPC
+# Functions
 
-RPC is used for custom operations that do not fit plain CRUD.
-
-For end-to-end type safety, bind RPC to your app type:
-
-```ts
-import { rpc } from "questpie";
-import type { App } from './app';
-
-export const r = rpc<App>();
-```
+Functions are used for custom operations that do not fit plain CRUD.
 
 ## Pattern
 
-1. create root `const r = rpc()`
-2. define procedures with `r.fn({ schema, handler })`
-3. compose with `r.router({...})`
-4. mount via `createFetchHandler(..., { rpc: appRpc })`
+1. Create a file in your `functions/` directory
+2. Export a default `fn({ schema, handler })` 
+3. Functions are automatically composed via codegen and available on `app.functions`
+
+Nested folders create nested routes:
+- `functions/search.ts` → `app.functions.search`
+- `functions/admin/stats.ts` → `app.functions.admin.stats`
 
 ## Example
 
 ```ts
-import { rpc } from "questpie";
-import z from "zod";
-import type { App } from '../app';
+// functions/get-revenue-stats.ts
+import { fn } from "questpie";
+import { z } from "zod";
 
-export const r = rpc<App>();
-
-export const getRevenueStats = r.fn({
+export default fn({
   schema: z.object({
-    startDate: z.string().datetime(),
-    endDate: z.string().datetime(),
+    period: z.enum(["day", "week", "month"]),
   }),
-  handler: async ({ input, app }) => {
+  handler: async ({ input, app, session }) => {
     const appointments = await app.api.collections.appointments.find({
       where: {
         scheduledAt: {
-          gte: new Date(input.startDate),
-          lte: new Date(input.endDate),
+          gte: new Date(input.period),
         },
       },
     });
     return { appointmentCount: appointments.docs.length };
   },
+  access: ({ session }) => !!session,
 });
-
-export const appRpc = r.router({ getRevenueStats });
 ```
 
-## Alternative: Typed fn Factory
+## Route Handler
 
-If you need typed functions outside `rpc()`, use `fn.typed<App>()`:
+The route handler no longer needs a separate `rpc` option — functions are included automatically:
 
 ```ts
-import { fn } from "questpie";
-import z from "zod";
-import type { App } from '../app';
+const handler = createFetchHandler(app, { basePath: "/api" });
+```
 
-const f = fn.typed<App>();
+## Client Usage
 
-export const recalculateStats = f({
-  schema: z.object({ date: z.string() }),
+```ts
+const stats = await client.functions.getRevenueStats({
+  period: "month",
+});
+```
+
+## Access Control
+
+Functions support an `access` callback to restrict who can call them:
+
+```ts
+export default fn({
+  schema: z.object({ id: z.string() }),
   handler: async ({ input, app }) => {
-    return app.api.collections.analytics.find({ where: { date: input.date } });
+    return app.api.collections.posts.findOne({ where: { id: input.id } });
   },
+  access: ({ session }) => session?.user.role === "admin",
 });
 ```
 
-## Client usage
+## When to Use Functions
 
-```ts
-const stats = await client.rpc.getRevenueStats({
-  startDate: "2026-01-01T00:00:00.000Z",
-  endDate: "2026-01-31T23:59:59.999Z",
-});
-```
-
-## When to use RPC
-
-- booking orchestration
-- analytics aggregation
-- external API workflows
-- multi-step domain logic
+- Booking orchestration
+- Analytics aggregation
+- External API workflows
+- Multi-step domain logic
 
 ## Related
 

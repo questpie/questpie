@@ -12,7 +12,7 @@ QUESTPIE starts with a runtime contract. Define schema, behavior, access, and en
 ```text
 Runtime (q)
   → fields, collections, globals         — data contract
-  → hooks, access, rpc, jobs             — behavior
+  → hooks, access, functions, jobs        — behavior
   → HTTP handler + adapters              — API surface
 
 Optional interface (@questpie/admin)
@@ -27,17 +27,17 @@ Keep this split clear: runtime defines **WHAT** exists, interfaces define **HOW*
 ### 1. Install baseline packages
 
 ```bash
-bun add questpie zod  # zod is used below for RPC schema
+bun add questpie zod  # zod is used below for fn() schema
 bun add @questpie/hono hono  # or @questpie/elysia, @questpie/next
 ```
 
 ### 2. Define a collection
 
 ```ts
-import { q } from "questpie";
+import { collection } from "questpie";
 
 // src/questpie/server/collections/posts.ts
-export const posts = q.collection("posts").fields(({ f }) => ({
+export const posts = collection("posts").fields(({ f }) => ({
   title: f.text({ required: true }),
   slug: f.text({ required: true, input: "optional" }),
   content: f.richText(),
@@ -45,24 +45,14 @@ export const posts = q.collection("posts").fields(({ f }) => ({
 }));
 ```
 
-### 3. Build runtime + RPC
+### 3. Build runtime + functions
 
 ```ts
 // src/questpie/server/app.ts
-import { q, rpc } from "questpie";
-import z from "zod";
+import { createApp } from "questpie";
 import { posts } from "./collections/posts";
 
-const r = rpc();
-
-export const healthcheck = r.fn({
-  schema: z.object({}),
-  handler: async () => ({ ok: true }),
-});
-
-export const appRpc = r.router({ healthcheck });
-
-export const app = q({ name: "my-app" })
+export const app = createApp({ name: "my-app" })
   .collections({ posts })
   .build({
     db: { url: process.env.DATABASE_URL! },
@@ -72,16 +62,26 @@ export const app = q({ name: "my-app" })
 export type App = typeof app;
 ```
 
+```ts
+// src/questpie/server/functions/healthcheck.ts
+import { fn } from "questpie";
+import z from "zod";
+
+export default fn({
+  schema: z.object({}),
+  handler: async () => ({ ok: true }),
+});
+```
+
 ### 4. Mount your API handler
 
 ```ts
 // src/routes/api.ts
 import { createFetchHandler } from "questpie";
-import { appRpc, app } from "@/questpie/server/app";
+import { app } from "@/questpie/server/app";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 ```
 

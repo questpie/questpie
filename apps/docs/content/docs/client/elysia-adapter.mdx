@@ -12,12 +12,11 @@ The Elysia adapter mounts QUESTPIE as an Elysia plugin. The client factory creat
 ```ts
 import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia";
-import { app, appRpc } from './app';
+import { app } from './app';
 
 const app = new Elysia()
   .use(questpieElysia(app, {
     basePath: "/api",
-    rpc: appRpc,
   }))
   .get("/api/health", () => ({ ok: true }))
   .listen(3000);

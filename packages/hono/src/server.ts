@@ -6,7 +6,6 @@ import {
 	createFetchHandler,
 	type Questpie,
 	type RequestContext,
-	type RpcRouterTree,
 } from "questpie";
 
 /**
@@ -29,7 +28,6 @@ export type HonoAdapterConfig = {
 	 * @default '/'
 	 */
 	basePath?: string;
-	rpc?: RpcRouterTree<any>;
 };
 
 export function questpieMiddleware<TQuestpie extends Questpie<any>>(
@@ -85,7 +83,6 @@ export function questpieHono<TQuestpie extends Questpie<any>>(
 	const handler = createFetchHandler(app, {
 		basePath,
 		accessMode: "user",
-		rpc: config.rpc,
 	});
 
 	const resolveContext = (

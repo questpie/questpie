@@ -7,6 +7,7 @@ export type {
 	FunctionAccessRule,
 	FunctionDefinition,
 	FunctionsMap,
+	FunctionsTree,
 	FunctionType,
 	InferFunctionInput,
 	InferFunctionOutput,

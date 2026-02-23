@@ -210,3 +210,21 @@ export type ExtractJsonFunctions<T extends FunctionsMap> = {
 		? K
 		: never]: T[K];
 };
+
+/**
+ * Recursive tree of function definitions.
+ * Supports nested namespaces for organized function routing.
+ *
+ * @example
+ * ```ts
+ * const functions: FunctionsTree = {
+ *   getStats: { schema: ..., handler: ... },
+ *   admin: {
+ *     getUsers: { schema: ..., handler: ... },
+ *   },
+ * };
+ * ```
+ */
+export type FunctionsTree<TApp = any> = {
+	[key: string]: FunctionDefinition<any, any, TApp> | FunctionsTree<TApp>;
+};

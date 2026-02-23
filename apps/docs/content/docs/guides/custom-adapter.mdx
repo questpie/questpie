@@ -20,11 +20,9 @@ Every adapter does three things:
 ```ts
 import { createFetchHandler } from "@questpie/questpie";
 import { app } from './app';
-import { appRpc } from "./rpc";
 
 const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 ```
 
@@ -165,7 +163,7 @@ my-adapter/
 // server.ts
 export function questpieMyFramework(
   app: Questpie,
-  config?: { basePath?: string; rpc?: RpcRouter },
+  config?: { basePath?: string },
 ) {
   const handler = createFetchHandler(app, config);
   // Return framework-specific middleware/handler

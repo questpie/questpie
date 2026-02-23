@@ -54,6 +54,7 @@ import type { BetterAuthOptions } from "better-auth";
 import type { drizzle as drizzleBun } from "drizzle-orm/bun-sql";
 import type { drizzle as drizzlePgLite } from "drizzle-orm/pglite";
 import type { DriverContract } from "flydrive/types";
+import type { FunctionsTree } from "../functions/types.js";
 import type { MailerConfig } from "../integrated/mailer/index.js";
 import type { QueueConfig as BaseQueueConfig } from "../integrated/queue/types.js";
 import type { RealtimeConfig } from "../integrated/realtime/index.js";
@@ -62,7 +63,6 @@ import type {
 	SearchConfig,
 } from "../integrated/search/index.js";
 import type { Migration } from "../migration/types.js";
-import type { RpcRouterTree } from "../rpc/types.js";
 import type { Seed, SeedCategory, SeedsConfig } from "../seed/types.js";
 
 export type DrizzleSchemaFromCollections<
@@ -365,11 +365,10 @@ export interface QuestpieConfig {
 	queue?: BaseQueueConfig;
 
 	/**
-	 * RPC functions registered on the app instance.
+	 * Functions registered on the app instance.
 	 * Automatically routed by `createFetchHandler` at `/api/rpc/*`.
-	 * When set, no separate `rpc` option is needed in the adapter config.
 	 */
-	functions?: RpcRouterTree<any>;
+	functions?: FunctionsTree<any>;
 
 	/**
 	 * Search adapter for full-text search

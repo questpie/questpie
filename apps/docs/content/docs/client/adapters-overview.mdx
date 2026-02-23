@@ -32,7 +32,6 @@ import { createFetchHandler } from "questpie";
 
 const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 
 // handler: (request: Request) => Promise<Response | null>
@@ -43,7 +42,6 @@ const handler = createFetchHandler(app, {
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `basePath` | `string` | `"/"` | URL prefix for all API routes |
-| `rpc` | `RpcRouterTree` | — | RPC router for custom procedures |
 | `accessMode` | `string` | `"user"` | Default access mode for requests |
 | `getLocale` | `(req, app) => string` | — | Extract locale from request |
 | `getSession` | `(req, app) => Session` | — | Extract session from request |
@@ -76,11 +74,11 @@ The adapter exposes these HTTP endpoints:
 | PATCH | `/globals/:name` | Update |
 | GET | `/globals/:name/schema` | Introspection (admin) |
 
-### RPC
+### Functions
 
 | Method | Path | Operation |
 |---|---|---|
-| POST | `/rpc/:path...` | Root RPC procedure |
+| POST | `/functions/:path...` | Call server function |
 
 ### Realtime
 
@@ -122,7 +120,6 @@ import { createFetchHandler } from "questpie";
 
 const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 
 // Express example
@@ -139,7 +136,7 @@ app.all("/api/*", async (req, res) => {
 ## Common Mistakes
 
 - **Wrong `basePath`** — The client and server must use the same base path. If the server uses `/api`, the client must too.
-- **Missing RPC registration** — If you define RPC procedures but don't pass them to the adapter config, they won't be routable.
+- **Missing functions directory** — Functions are discovered from the `functions/` directory automatically. Ensure your `fn()` definitions are in the right path.
 - **Not handling `null` response** — `createFetchHandler` returns `null` for unmatched routes. Handle this in your framework.
 
 ## Related Pages

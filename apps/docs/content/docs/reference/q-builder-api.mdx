@@ -69,7 +69,7 @@ Register background job definitions.
 })
 ```
 
-**Parameter:** `Record<string, JobDefinition>` — map of job names to definitions created with `q.job()`.
+**Parameter:** `Record<string, JobDefinition>` — map of job names to definitions created with `job()`.
 
 ### `.emailTemplates(map)`
 
@@ -237,12 +237,14 @@ const settings = q.global("siteSettings")
 
 **Returns:** `GlobalBuilder`
 
-### `q.job(definition)`
+### `job(definition)`
 
-Define a background job.
+Define a background job. Import `job` from `"questpie"`.
 
 ```ts
-const sendConfirmation = q.job({
+import { job } from "questpie";
+
+const sendConfirmation = job({
   name: "sendConfirmation",
   schema: z.object({
     appointmentId: z.string(),
@@ -260,12 +262,14 @@ const sendConfirmation = q.job({
 
 **Returns:** `JobDefinition<TPayload, TResult, TName>`
 
-### `q.fn(definition)`
+### `fn(definition)`
 
-Define an RPC function.
+Define a server function. Import `fn` from `"questpie"`.
 
 ```ts
-const getAvailableSlots = q.fn({
+import { fn } from "questpie";
+
+const getAvailableSlots = fn({
   schema: z.object({ barberId: z.string(), date: z.string() }),
   handler: async ({ input, app }) => {
     // ...

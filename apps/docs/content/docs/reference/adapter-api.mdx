@@ -18,7 +18,6 @@ import { createFetchHandler } from "@questpie/questpie";
 
 const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 
 // handler: (request: Request, context?: AdapterContext) => Promise<Response | null>
@@ -30,7 +29,6 @@ const handler = createFetchHandler(app, {
 |---|---|---|---|
 | `app` | `Questpie` | Yes | Built app instance |
 | `config.basePath` | `string` | No | URL prefix (default: `"/"`) |
-| `config.rpc` | `RpcRouter` | No | RPC router tree |
 
 **Returns:** `(request: Request, context?: AdapterContext) => Promise<Response | null>`
 
@@ -80,11 +78,11 @@ All routes are relative to the configured `basePath`.
 | `POST` | `/globals/:name/versions/:versionId/revert` | Revert to version |
 | `POST` | `/globals/:name/functions/:fnName` | Call global function |
 
-### RPC
+### Functions
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/rpc/:path+` | Call RPC function |
+| `POST` | `/functions/:path+` | Call server function |
 
 ### Storage
 
@@ -136,7 +134,7 @@ Framework adapters construct this context from their native request objects.
 import { questpieHono } from "@questpie/hono";
 
 const app = new Hono();
-app.route("/api", questpieHono(app, { rpc: appRpc }));
+app.route("/api", questpieHono(app));
 ```
 
 ### Elysia
@@ -145,7 +143,7 @@ app.route("/api", questpieHono(app, { rpc: appRpc }));
 import { questpieElysia } from "@questpie/elysia";
 
 const app = new Elysia()
-  .use(questpieElysia(app, { rpc: appRpc, basePath: "/api" }));
+  .use(questpieElysia(app, { basePath: "/api" }));
 ```
 
 ### Next.js
@@ -155,7 +153,6 @@ import { questpieNextRouteHandlers } from "@questpie/next";
 
 const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 
 export { GET, POST, PATCH, DELETE };
@@ -170,7 +167,6 @@ import { createFetchHandler } from "@questpie/questpie";
 
 const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 
 // In your framework's request handler:

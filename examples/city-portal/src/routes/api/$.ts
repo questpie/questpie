@@ -15,7 +15,6 @@ const handler = withOpenApi(
 	}),
 	{
 		app,
-		rpc: app.functions,
 		basePath: "/api",
 		info: {
 			title: "City Portal API",

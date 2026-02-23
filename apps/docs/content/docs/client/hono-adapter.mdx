@@ -12,14 +12,13 @@ The Hono adapter mounts QUESTPIE as Hono middleware, giving you API routes along
 ```ts
 import { Hono } from "hono";
 import { questpieHono } from "@questpie/hono";
-import { app, appRpc } from './app';
+import { app } from './app';
 
 const app = new Hono();
 
 // Mount API routes at /api
 const cmsApp = questpieHono(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 
 app.route("/api", cmsApp);

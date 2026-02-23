@@ -1,4 +1,4 @@
-import type { Questpie, RpcRouterTree } from "questpie";
+import type { FunctionsTree, Questpie } from "questpie";
 
 /**
  * Configuration for OpenAPI spec generation.
@@ -50,8 +50,8 @@ export interface ScalarConfig {
 export interface WithOpenApiConfig extends OpenApiConfig {
 	/** QuestPie instance */
 	app: Questpie<any>;
-	/** RPC router tree (same one passed to createFetchHandler) */
-	rpc?: RpcRouterTree<any>;
+	/** Functions tree — if omitted, reads from `app.functions` automatically. */
+	functions?: FunctionsTree<any>;
 	/** Scalar UI options */
 	scalar?: ScalarConfig;
 	/** Path for the JSON spec (relative to basePath, default: "openapi.json") */

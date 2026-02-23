@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { z } from "zod";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { fn, questpie, rpc } from "../../src/server/index.js";
+import { fn, questpie } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 
 const createModule = () => {
@@ -39,21 +39,22 @@ const createModule = () => {
 		title: f.textarea({ required: true }),
 	}));
 
-	const builder = q.collections({ posts }).globals({ settings });
-	const appRpc = rpc().router({ ping, webhook });
+	// Register functions on the builder (not via rpc() factory)
+	const builder = q
+		.collections({ posts })
+		.globals({ settings })
+		.functions({ ping, webhook });
 
-	return { builder, appRpc };
+	return { builder };
 };
 
 describe("rpc functions", () => {
 	let setup: Awaited<
 		ReturnType<typeof buildMockApp<ReturnType<typeof createModule>["builder"]>>
 	>;
-	let appRpc: ReturnType<typeof createModule>["appRpc"];
 
 	beforeEach(async () => {
 		const module = createModule();
-		appRpc = module.appRpc;
 		setup = await buildMockApp(module.builder);
 	});
 
@@ -62,7 +63,7 @@ describe("rpc functions", () => {
 	});
 
 	it("executes root RPC via adapter routes", async () => {
-		const handler = createFetchHandler(setup.app, { rpc: appRpc });
+		const handler = createFetchHandler(setup.app);
 
 		const rootResponse = await handler(
 			new Request("http://localhost/rpc/ping", {
@@ -75,7 +76,7 @@ describe("rpc functions", () => {
 	});
 
 	it("handles raw functions without JSON parsing", async () => {
-		const handler = createFetchHandler(setup.app, { rpc: appRpc });
+		const handler = createFetchHandler(setup.app);
 		const response = await handler(
 			new Request("http://localhost/rpc/webhook", {
 				method: "POST",
@@ -87,7 +88,7 @@ describe("rpc functions", () => {
 	});
 
 	it("returns 400 on invalid JSON input", async () => {
-		const handler = createFetchHandler(setup.app, { rpc: appRpc });
+		const handler = createFetchHandler(setup.app);
 		const response = await handler(
 			new Request("http://localhost/rpc/ping", {
 				method: "POST",
@@ -100,8 +101,6 @@ describe("rpc functions", () => {
 });
 
 describe("rpc nested routers", () => {
-	const r = rpc();
-
 	const echo = fn({
 		schema: z.object({ text: z.string() }),
 		handler: async ({ input }) => ({ echo: input.text }),
@@ -122,20 +121,21 @@ describe("rpc nested routers", () => {
 		handler: async () => ({ reached: true }),
 	});
 
-	const nestedRpc = r.router({
+	// Plain nested object (no rpc().router())
+	const nestedFunctions = {
 		echo,
-		math: r.router({
+		math: {
 			add,
 			multiply,
-		}),
-		deeply: r.router({
-			nested: r.router({
-				path: r.router({
+		},
+		deeply: {
+			nested: {
+				path: {
 					leaf: deepLeaf,
-				}),
-			}),
-		}),
-	});
+				},
+			},
+		},
+	};
 
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
@@ -144,7 +144,9 @@ describe("rpc nested routers", () => {
 		const posts = q.collection("posts").fields(({ f }) => ({
 			title: f.textarea({ required: true }),
 		}));
-		setup = await buildMockApp(q.collections({ posts }));
+		setup = await buildMockApp(
+			q.collections({ posts }).functions(nestedFunctions),
+		);
 	});
 
 	afterEach(async () => {
@@ -152,7 +154,7 @@ describe("rpc nested routers", () => {
 	});
 
 	it("resolves flat procedures in nested router", async () => {
-		const handler = createFetchHandler(setup.app, { rpc: nestedRpc });
+		const handler = createFetchHandler(setup.app);
 
 		const response = await handler(
 			new Request("http://localhost/rpc/echo", {
@@ -166,7 +168,7 @@ describe("rpc nested routers", () => {
 	});
 
 	it("resolves one-level nested procedures", async () => {
-		const handler = createFetchHandler(setup.app, { rpc: nestedRpc });
+		const handler = createFetchHandler(setup.app);
 
 		const addResponse = await handler(
 			new Request("http://localhost/rpc/math/add", {
@@ -188,7 +190,7 @@ describe("rpc nested routers", () => {
 	});
 
 	it("resolves deeply nested procedures (3+ levels)", async () => {
-		const handler = createFetchHandler(setup.app, { rpc: nestedRpc });
+		const handler = createFetchHandler(setup.app);
 
 		const response = await handler(
 			new Request("http://localhost/rpc/deeply/nested/path/leaf", {
@@ -202,7 +204,7 @@ describe("rpc nested routers", () => {
 	});
 
 	it("returns 404 for nonexistent nested path", async () => {
-		const handler = createFetchHandler(setup.app, { rpc: nestedRpc });
+		const handler = createFetchHandler(setup.app);
 
 		const response = await handler(
 			new Request("http://localhost/rpc/math/nonexistent", {
@@ -215,7 +217,7 @@ describe("rpc nested routers", () => {
 	});
 
 	it("returns 404 for partial path (router node, not procedure)", async () => {
-		const handler = createFetchHandler(setup.app, { rpc: nestedRpc });
+		const handler = createFetchHandler(setup.app);
 
 		const response = await handler(
 			new Request("http://localhost/rpc/math", {
@@ -228,7 +230,7 @@ describe("rpc nested routers", () => {
 	});
 
 	it("returns 404 for path beyond a leaf procedure", async () => {
-		const handler = createFetchHandler(setup.app, { rpc: nestedRpc });
+		const handler = createFetchHandler(setup.app);
 
 		const response = await handler(
 			new Request("http://localhost/rpc/echo/extra", {

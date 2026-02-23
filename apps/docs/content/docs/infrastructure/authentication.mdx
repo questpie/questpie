@@ -111,8 +111,8 @@ Auth sessions are available in hooks, access rules, and RPC handlers:
   },
 })
 
-// In RPC handlers
-export const getMyProfile = r.fn({
+// In function handlers
+export const getMyProfile = fn({
   schema: z.object({}),
   handler: async ({ session }) => {
     if (!session) throw ApiError.unauthorized();

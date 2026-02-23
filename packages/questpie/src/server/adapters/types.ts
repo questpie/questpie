@@ -7,7 +7,6 @@
 import type { RequestContext } from "../config/context.js";
 import type { Questpie } from "../config/questpie.js";
 import type { AccessMode, QuestpieConfig } from "../config/types.js";
-import type { RpcRouterTree } from "../rpc/types.js";
 
 export type ReindexAccessContext<
 	TConfig extends QuestpieConfig = QuestpieConfig,
@@ -27,7 +26,6 @@ export type ReindexAccessRule<TConfig extends QuestpieConfig = QuestpieConfig> =
 export type AdapterConfig<TConfig extends QuestpieConfig = QuestpieConfig> = {
 	basePath?: string;
 	accessMode?: AccessMode;
-	rpc?: RpcRouterTree<any>;
 	/**
 	 * Search route options.
 	 */

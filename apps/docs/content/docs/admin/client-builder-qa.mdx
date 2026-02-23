@@ -23,7 +23,7 @@ description: Compose client registries for admin rendering
 - branding (`.branding()`)
 - admin UI locales (`.adminLocale()`)
 
-Those live on the server `q()` builder via `@questpie/admin/server`.
+Those live on the server builder (`q()`) via `@questpie/admin/server`.
 
 ## Setup
 
@@ -113,7 +113,7 @@ You can use helper factories directly:
 ## Common Mistakes
 
 - Forgetting `.use(adminModule)` and ending up with empty registries.
-- Putting branding/locale on `qa()` instead of configuring them on server `q()`.
+- Putting branding/locale on `qa()` instead of configuring them on the server builder (`q()`).
 - Duplicating schema or access logic on the client.
 
 ## Related Pages

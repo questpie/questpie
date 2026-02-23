@@ -381,8 +381,8 @@ const app = q({ name: "my-app" })
 
 ## Common Mistakes
 
-- **Configuring branding on `qa()`** — Branding belongs on server `q().branding()`.
-- **Configuring admin UI locale on `qa()`** — Use `q().adminLocale()` and `useServerTranslations`.
+- **Configuring branding on `qa()`** — Branding belongs on the server builder (`.branding()`).
+- **Configuring admin UI locale on `qa()`** — Use the server builder's `.adminLocale()` and `useServerTranslations`.
 - **Widget `span` exceeding columns** — If `span: 3` but `columns: 2`, the widget overflows. Keep `span` at most equal to `columns`.
 - **Missing collection in sidebar** — If a collection exists but isn't in the sidebar, it's still accessible via URL but not discoverable. Always include active collections in the sidebar.
 

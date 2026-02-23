@@ -1,7 +1,6 @@
-import { qb } from "@/questpie/server/builder.js";
+import { global } from "questpie";
 
-export const siteSettings = qb
-	.global("site_settings")
+export const siteSettings = global("site_settings")
 	.fields(({ f }) => ({
 		siteName: f.text({
 			label: "Site Name",

@@ -22,7 +22,6 @@ const handler = withOpenApi(
 	}),
 	{
 		app,
-		rpc: app.functions,
 		basePath: "/api",
 		info: {
 			title: "Barbershop API",

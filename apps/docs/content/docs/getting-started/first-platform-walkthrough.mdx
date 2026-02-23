@@ -5,7 +5,7 @@ description: Build a complete server-first backend with multiple collections, re
 
 # First Platform Walkthrough
 
-This walkthrough goes beyond the quickstart. You'll build a schema-first backend with multiple collections, relations between them, a custom sidebar, reactive fields, and a typed RPC function — the same patterns used in the Barbershop reference project.
+This walkthrough goes beyond the quickstart. You'll build a schema-first backend with multiple collections, relations between them, a custom sidebar, reactive fields, and a typed function — the same patterns used in the Barbershop reference project.
 
 ## What You'll Build
 
@@ -13,7 +13,7 @@ This walkthrough goes beyond the quickstart. You'll build a schema-first backend
 - A `barbers` collection with profile info and a many-to-many relation to services
 - A `barberServices` junction collection for the many-to-many link
 - Server-defined sidebar, admin config, and form layouts
-- A typed RPC function
+- A typed function
 - Client admin configuration
 
 ## Step 1: Server Builder
@@ -276,31 +276,13 @@ Key patterns here:
 
 ```ts
 // src/questpie/server/app.ts
-import { q, rpc } from "questpie";
+import { createApp } from "questpie";
 import { adminModule } from "@questpie/admin/server";
-import z from "zod";
 import { barbers } from "./collections/barbers";
 import { barberServices } from "./collections/barber-services";
 import { services } from "./collections/services";
 
-const r = rpc();
-
-export const getActiveBarbers = r.fn({
-  schema: z.object({}),
-  handler: async ({ app }) => {
-    const result = await app.api.collections.barbers.find({
-      where: { isActive: true },
-    });
-    return {
-      barbers: result.docs,
-      total: result.totalDocs,
-    };
-  },
-});
-
-export const appRpc = r.router({ getActiveBarbers });
-
-export const app = q({ name: "my-first-platform" })
+export const app = createApp({ name: "my-first-platform" })
   .use(adminModule)
   .collections({ barbers, services, barberServices })
   .sidebar(({ s, c }) =>
@@ -342,7 +324,25 @@ export const app = q({ name: "my-first-platform" })
   });
 
 export type App = typeof app;
-export type AppRpc = typeof appRpc;
+```
+
+```ts
+// src/questpie/server/functions/get-active-barbers.ts
+import { fn } from "questpie";
+import z from "zod";
+
+export default fn({
+  schema: z.object({}),
+  handler: async ({ app }) => {
+    const result = await app.api.collections.barbers.find({
+      where: { isActive: true },
+    });
+    return {
+      barbers: result.docs,
+      total: result.totalDocs,
+    };
+  },
+});
 ```
 
 ## Step 6: Admin Client
@@ -361,11 +361,10 @@ export const admin = qa<App>()
 ```ts
 // src/routes/api.ts
 import { createFetchHandler } from "questpie";
-import { app, appRpc } from "@/questpie/server/app";
+import { app } from "@/questpie/server/app";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 ```
 
@@ -377,7 +376,7 @@ export const handler = createFetchHandler(app, {
 - **Custom sidebar** with organized sections
 - **Server-side hooks** for data processing
 - **Database indexes** for unique constraints
-- **Typed RPC** for custom business logic
+- **Typed functions** for custom business logic
 - **Admin panel** that renders everything automatically from the server blueprint
 
 ## Common Mistakes

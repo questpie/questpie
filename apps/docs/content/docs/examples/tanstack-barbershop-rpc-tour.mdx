@@ -1,17 +1,15 @@
 ---
-title: TanStack Barbershop RPC Tour
-description: Typed rpc procedures for booking and analytics workflows
+title: TanStack Barbershop Functions Tour
+description: Typed server functions for booking and analytics workflows
 ---
 
-# TanStack Barbershop RPC Tour
+# TanStack Barbershop Functions Tour
 
-## Root rpc
+## Function Definitions
 
-- `examples/tanstack-barbershop/src/questpie/server/rpc.ts`
+Functions are defined using standalone `fn()` from `"questpie"` — no `rpc()` builder needed.
 
-Defines root `r = rpc()`.
-
-## Procedure definitions
+## Function files
 
 - `examples/tanstack-barbershop/src/questpie/server/functions/booking.ts`
 - `examples/tanstack-barbershop/src/questpie/server/functions/index.ts`
@@ -23,8 +21,8 @@ Patterns shown:
 - booking slot computation logic
 - analytics-style aggregation
 
-## Router composition in app
+## Automatic routing
 
 - `examples/tanstack-barbershop/src/questpie/server/app.ts`
 
-`appRpc` merges admin rpc + app rpc procedures.
+Functions are discovered automatically from the `functions/` directory — no manual router composition needed.

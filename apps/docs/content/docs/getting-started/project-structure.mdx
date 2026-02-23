@@ -15,7 +15,6 @@ src/
     server/
       builder.ts              ← shared qb with admin module
       app.ts                  ← compose everything + build()
-      rpc.ts                  ← rpc() root instance
       collections/
         index.ts              ← barrel export
         barbers.ts            ← collection definitions
@@ -27,7 +26,7 @@ src/
         site-settings.ts      ← global definitions
       functions/
         index.ts
-        booking.ts            ← RPC function implementations
+        booking.ts            ← function implementations
       jobs/
         index.ts
         email-notifications.ts ← background job definitions
@@ -58,7 +57,7 @@ The layout enforces the WHAT vs HOW split:
 
 | Directory | Responsibility | Defines |
 |---|---|---|
-| `questpie/server/` | **WHAT** — contracts and behavior | Schema, access, hooks, RPC, jobs |
+| `questpie/server/` | **WHAT** — contracts and behavior | Schema, access, hooks, functions, jobs |
 | `questpie/admin/` | **HOW** — rendering concerns | Branding, locale, custom renderers |
 | `routes/` | **Mounting** — HTTP wiring | Route handlers, no business logic |
 
@@ -102,24 +101,16 @@ export const app = q({ name: "my-app" })
 export type App = typeof app;
 ```
 
-### `server/rpc.ts`
-
-Keep the `rpc()` root separate. Functions import it to define typed procedures:
-
-```ts
-import { rpc } from "questpie";
-export const r = rpc();
-```
-
 ### `server/functions/`
 
-Each file exports RPC functions. They import `r` from `rpc.ts`:
+Each file exports a function defined with `fn()`. Functions are automatically discovered by convention:
 
 ```ts
-import { r } from "../rpc";
+// server/functions/get-active-barbers.ts
+import { fn } from "questpie";
 import z from "zod";
 
-export const getActiveBarbers = r.fn({
+export default fn({
   schema: z.object({}),
   handler: async ({ app }) => {
     return app.api.collections.barbers.find({ where: { isActive: true } });
@@ -160,11 +151,10 @@ Thin route handler. No business logic here:
 
 ```ts
 import { createFetchHandler } from "questpie";
-import { app, appRpc } from "@/questpie/server/app";
+import { app } from "@/questpie/server/app";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 ```
 
@@ -237,7 +227,7 @@ export const app = q({ name: "my-app" })
 
 - **Putting schema rules in client code** — Field validation, access control, and hooks belong on the server. The client should only define how things render.
 - **Splitting a collection across files** — Keep the entire `.collection().fields().admin().list().form()` chain in one file. It's the single source of truth for that entity.
-- **Business logic in route handlers** — Route files should only mount handlers. Business logic goes in RPC functions, hooks, or jobs.
+- **Business logic in route handlers** — Route files should only mount handlers. Business logic goes in functions, hooks, or jobs.
 - **Hardcoding view components** — Use the registry pattern for custom views. Hardcoded component references break the introspection contract.
 
 ## Related Pages

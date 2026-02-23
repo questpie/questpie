@@ -227,23 +227,23 @@ feat: implement codegen CLI, migrate barbershop to generated entrypoint
 
 ### Deletions in packages/questpie
 
-- [ ] **Delete** `QuestpieBuilder` class, `q()` factory, `.use()`, `.build()` methods
-- [ ] **Delete** `q.job()` factory
-- [ ] **Delete** `rpc()`, `r.fn()`, `r.router()` — entire RPC module
-- [ ] **Delete** `(f) =>` positional overload in `.fields()` — only `({ f }) =>` remains
+- [~] **Delete** `QuestpieBuilder` class, `q()` factory, `.use()`, `.build()` methods — **partially done**: `q` marked `@internal`, `rpc` removed from `q` namespace; full deletion blocked by `packages/admin` dependency (20+ usages in `patch.ts`, `augmentation.ts`, `core-builder.ts`)
+- [x] **Delete** `q.job()` factory — removed from `q` namespace (standalone `job()` remains)
+- [x] **Delete** `rpc()`, `r.fn()`, `r.router()` — entire RPC module deleted (`server/rpc/`)
+- [x] **Delete** `(f) =>` positional overload in `.fields()` — only `({ f }) =>` remains (done in Phase 1)
   > RFC §1.1 (Context Object Convention)
-- [ ] **Delete** `createFetchHandler` `rpc` option — functions are always on `app`
+- [x] **Delete** `createFetchHandler` `rpc` option — functions are always on `app`
   > RFC §7.5 (Route Handler)
 
 ### Cleanup across all packages
 
-- [ ] Remove all internal usages of deleted APIs in `packages/questpie` and `packages/admin`
-- [ ] Update `create-questpie` templates to use file convention exclusively
+- [x] Remove all internal usages of deleted APIs in `packages/questpie` and `packages/admin`
+- [x] Update `create-questpie` templates to use file convention exclusively
   > RFC §2 (File Convention)
-- [ ] Update `apps/docs` documentation
-- [ ] Update `AGENTS.md` with new conventions
+- [x] Update `apps/docs` documentation
+- [x] Update `AGENTS.md` with new conventions
   > RFC §17 (AI/Agentic Discoverability)
-- [ ] Run full test suite: `bun test` in `packages/questpie`
+- [x] Run full test suite: `bun test` in `packages/questpie` — 778 pass, 0 fail
 - [ ] Run barbershop example end-to-end
 
 ### Commit

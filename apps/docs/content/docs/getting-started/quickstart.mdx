@@ -5,7 +5,7 @@ description: Build a working QUESTPIE runtime in 5 minutes
 
 # Quickstart
 
-This is the shortest path to a working QUESTPIE runtime: one collection, a REST API, and a typed RPC function. Admin is an optional extension you can add after the baseline works.
+This is the shortest path to a working QUESTPIE runtime: one collection, a REST API, and a typed function. Admin is an optional extension you can add after the baseline works.
 
 If you prefer to start with the admin interface immediately, see [First Platform Walkthrough](/docs/getting-started/first-platform-walkthrough).
 
@@ -18,7 +18,7 @@ If you prefer to start with the admin interface immediately, see [First Platform
 ## Step 1: Install Runtime Baseline
 
 ```bash
-bun add questpie zod  # zod is used below for RPC schema
+bun add questpie zod  # zod is used below for fn() schema
 bun add @questpie/hono hono  # or @questpie/elysia, @questpie/next
 ```
 
@@ -28,9 +28,9 @@ Collections are the core building block. Each collection becomes a database tabl
 
 ```ts
 // src/questpie/server/collections/posts.ts
-import { q } from "questpie";
+import { collection } from "questpie";
 
-export const posts = q.collection("posts").fields(({ f }) => ({
+export const posts = collection("posts").fields(({ f }) => ({
   title: f.text({ required: true }),
   slug: f.text({ required: true, input: "optional" }),
   content: f.richText(),
@@ -44,24 +44,14 @@ This single definition produces:
 
 ## Step 3: Compose the Runtime
 
-Wire collections together, add RPC functions, and build the runtime instance:
+Wire collections together, add functions, and build the runtime instance:
 
 ```ts
 // src/questpie/server/app.ts
-import { q, rpc } from "questpie";
-import z from "zod";
+import { createApp } from "questpie";
 import { posts } from "./collections/posts";
 
-const r = rpc();
-
-export const healthcheck = r.fn({
-  schema: z.object({}),
-  handler: async () => ({ ok: true, timestamp: new Date().toISOString() }),
-});
-
-export const appRpc = r.router({ healthcheck });
-
-export const app = q({ name: "quickstart" })
+export const app = createApp({ name: "quickstart" })
   .collections({ posts })
   .build({
     db: { url: process.env.DATABASE_URL! },
@@ -69,7 +59,17 @@ export const app = q({ name: "quickstart" })
   });
 
 export type App = typeof app;
-export type AppRpc = typeof appRpc;
+```
+
+```ts
+// src/questpie/server/functions/healthcheck.ts
+import { fn } from "questpie";
+import z from "zod";
+
+export default fn({
+  schema: z.object({}),
+  handler: async () => ({ ok: true, timestamp: new Date().toISOString() }),
+});
 ```
 
 ## Step 4: Mount the API
@@ -79,11 +79,10 @@ Create a route handler that serves your runtime API:
 ```ts
 // src/routes/api.ts (Hono example)
 import { questpieHono } from "@questpie/hono";
-import { app, appRpc } from "@/questpie/server/app";
+import { app } from "@/questpie/server/app";
 
 export const cmsApp = questpieHono(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 ```
 
@@ -91,11 +90,10 @@ Or with the generic fetch handler (works with any Fetch-compatible framework):
 
 ```ts
 import { createFetchHandler } from "questpie";
-import { app, appRpc } from "@/questpie/server/app";
+import { app } from "@/questpie/server/app";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 ```
 
@@ -112,13 +110,13 @@ curl -X POST http://localhost:3000/api/collections/posts \
   -H "Content-Type: application/json" \
   -d '{"title": "Hello World", "slug": "hello-world", "published": true}'
 
-# Call RPC function
-curl -X POST http://localhost:3000/api/rpc/healthcheck \
+# Call a function
+curl -X POST http://localhost:3000/api/functions/healthcheck \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
 
-At this point you have a working runtime contract: DB-backed CRUD + typed RPC over HTTP.
+At this point you have a working runtime contract: DB-backed CRUD + typed functions over HTTP.
 
 ## Optional: Add the Admin Interface
 
@@ -149,7 +147,7 @@ Collections defined with `qb.collection(...)` can now use `.admin()`, `.list()`,
 ## What This Proves
 
 1. **Runtime comes first** — field definitions drive database behavior and API contracts.
-2. **RPC is typed end-to-end** — Zod validates input and TypeScript infers return types.
+2. **Functions are typed end-to-end** — Zod validates input and TypeScript infers return types.
 3. **Adapters are thin transport layers** — Hono/Elysia/Next only mount the runtime.
 4. **Admin is additive** — you can attach it later without redefining schema.
 

@@ -2,7 +2,7 @@
  * RPC tree -> OpenAPI paths generator.
  */
 
-import type { RpcRouterTree } from "questpie";
+import type { FunctionsTree } from "questpie";
 import type { OpenApiConfig, PathOperation } from "../types.js";
 import { jsonRequestBody, jsonResponse, zodToJsonSchema } from "./schemas.js";
 
@@ -16,7 +16,7 @@ interface FlatRpcEntry {
  * Flatten an RPC router tree into a list of { path, definition }.
  */
 function flattenRpcTree(
-	tree: RpcRouterTree,
+	tree: FunctionsTree,
 	prefix: string[] = [],
 ): FlatRpcEntry[] {
 	const entries: FlatRpcEntry[] = [];
@@ -35,7 +35,7 @@ function flattenRpcTree(
 				definition: value,
 			});
 		} else if (value && typeof value === "object") {
-			entries.push(...flattenRpcTree(value as RpcRouterTree, segments));
+			entries.push(...flattenRpcTree(value as FunctionsTree, segments));
 		}
 	}
 
@@ -46,7 +46,7 @@ function flattenRpcTree(
  * Generate OpenAPI paths for all RPC functions in the router tree.
  */
 export function generateRpcPaths(
-	rpc: RpcRouterTree | undefined,
+	rpc: FunctionsTree | undefined,
 	config: OpenApiConfig,
 ): {
 	paths: Record<string, Record<string, PathOperation>>;

@@ -29,7 +29,7 @@
  * ```
  */
 
-import { q, rpc, starterModule } from "questpie";
+import { q, starterModule } from "questpie";
 // Side-effect imports: apply runtime patches and type augmentation
 import "../../augmentation.js";
 import "../../patch.js";
@@ -95,9 +95,11 @@ export {
 	widgetDataFunctions,
 } from "./functions/widget-data.js";
 
-const r = rpc();
-
-export const adminRpc = r.router({
+/**
+ * Admin RPC functions — plain object of all admin function definitions.
+ * Register these on your app via `.functions({ ...adminRpc })` or via `config()`.
+ */
+export const adminRpc = {
 	...setupFunctions,
 	...localeFunctions,
 	...previewFunctions,
@@ -106,7 +108,7 @@ export const adminRpc = r.router({
 	...translationFunctions,
 	...widgetDataFunctions,
 	...reactiveFunctions,
-});
+};
 
 const adminBaseBuilder = q({ name: "questpie-admin" })
 	// Include all starterModule functionality (auth, assets)

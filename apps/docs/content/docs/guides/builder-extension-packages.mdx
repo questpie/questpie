@@ -30,7 +30,7 @@ Exports a builder with collections, fields, jobs, and any server-side state.
 
 ```ts
 // packages/my-plugin/src/server.ts
-import { q } from "@questpie/questpie";
+import { q, job } from "@questpie/questpie";
 
 // Define custom field types
 const currencyField = field<CurrencyFieldConfig, number>()({
@@ -48,7 +48,7 @@ const products = q.collection("products")
   .options({ timestamps: true });
 
 // Define jobs
-const syncInventory = q.job({
+const syncInventory = job({
   name: "syncInventory",
   schema: z.object({ productId: z.string() }),
   handler: async ({ payload, app }) => {

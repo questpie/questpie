@@ -1,6 +1,6 @@
 ---
 title: Type-Safe Contexts
-description: One pattern for strongly typed app, db, and session across hooks, access, RPC, jobs, workflows, and admin handlers
+description: One pattern for strongly typed app, db, and session across hooks, access, functions, jobs, workflows, and admin handlers
 ---
 
 # Type-Safe Contexts
@@ -56,7 +56,7 @@ const { app, db, session } = typedContext<App>(ctx);
 | Collection hooks | `({ app, db, session, data, operation })` | `typedApp<App>()`, `typedDb<App>()` |
 | Collection access | `({ app, db, session, data, input })` | `typedContext<App>(ctx)` |
 | Global hooks/access | same as collection variants | `typedContext<App>(ctx)` |
-| RPC `r.fn` / `q.fn` | `({ input, app, db, session })` | `rpc<App>()` or `typedApp<App>()` |
+| Functions `fn()` | `({ input, app, db, session })` | `typedApp<App>()` |
 | Jobs | `({ payload, app, db, session })` | `job<App>()` or `typedApp<App>()` |
 | Workflows | `step(name, async ({ payload, app }))` | `workflow<App>()` |
 | Admin action handlers | `({ data, itemId, itemIds, app, db, session })` | `typedContext<App>(ctx)` |
@@ -169,34 +169,28 @@ function maybeLogUser() {
 }
 ```
 
-## RPC
+## Functions
 
-Use typed RPC builder when you want `ctx.app` strongly typed in handlers:
+Functions use `fn()` from `questpie`. Each function lives in its own file under `functions/`, and functions are automatically composed via codegen:
 
 ```ts
-import { rpc } from "questpie";
-import z from "zod";
-import type { App } from '../app';
+// functions/booking/create.ts
+import { fn } from "questpie";
+import { z } from "zod";
 
-const r = rpc<App>();
-
-export const appRpc = r.router({
-  booking: r.router({
-    create: r.fn({
-      schema: z.object({ barber: z.string(), service: z.string() }),
-      handler: async ({ input, app }) => {
-        // app is already typed as App
-        return app.api.collections.appointments.create({
-          barber: input.barber,
-          service: input.service,
-        });
-      },
-    }),
-  }),
+export default fn({
+  schema: z.object({ barber: z.string(), service: z.string() }),
+  handler: async ({ input, app }) => {
+    // app is typed via codegen
+    return app.api.collections.appointments.create({
+      barber: input.barber,
+      service: input.service,
+    });
+  },
 });
 ```
 
-If you are outside `rpc()` and defining standalone functions, use `fn.typed<App>()`.
+For standalone typed helpers outside of `fn()`, use `typedApp<App>()`.
 
 ## Jobs and Workflows
 
@@ -279,6 +273,6 @@ const dashboardCount = async (ctx: WidgetFetchContext) => {
 - [Context & Transactions](/docs/server/context-and-transactions)
 - [Hooks & Lifecycle](/docs/server/hooks-and-lifecycle)
 - [Access Control](/docs/server/access-control)
-- [RPC](/docs/server/rpc)
+- [Functions](/docs/server/rpc)
 - [Queue & Jobs](/docs/infrastructure/queue-and-jobs)
 - [Actions System](/docs/admin/actions-system)

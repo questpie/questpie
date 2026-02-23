@@ -12,12 +12,11 @@ The Next.js adapter generates route handlers for the App Router's catch-all rout
 ```ts
 // app/api/[...slug]/route.ts
 import { questpieNextRouteHandlers } from "@questpie/next";
-import { app, appRpc } from "@/questpie/app";
+import { app } from "@/questpie/app";
 
 export const { GET, POST, PATCH, DELETE, PUT, OPTIONS, HEAD } =
   questpieNextRouteHandlers(app, {
     basePath: "/api",
-    rpc: appRpc,
   });
 ```
 
@@ -34,7 +33,6 @@ import { questpieNext } from "@questpie/next";
 
 const handler = questpieNext(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 
 export async function GET(request: Request) {

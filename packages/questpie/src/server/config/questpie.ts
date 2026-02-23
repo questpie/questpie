@@ -57,7 +57,7 @@ import type {
 	AnyGlobal,
 	AnyGlobalBuilder,
 } from "#questpie/shared/type-utils.js";
-import type { RpcRouterTree } from "../rpc/types.js";
+import type { FunctionsTree } from "../functions/types.js";
 import type { GlobalHooksState } from "./global-hooks-types.js";
 import type { GetMessageKeys, QuestpieConfig } from "./types.js";
 
@@ -133,7 +133,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public logger: LoggerService;
 	public search: SearchService;
 	public realtime: RealtimeService;
-	public functions!: RpcRouterTree<any>;
+	public functions!: FunctionsTree<any>;
 
 	public migrations: QuestpieMigrationsAPI<TConfig>;
 	public seeds: QuestpieSeedsAPI<TConfig>;

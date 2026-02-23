@@ -2,7 +2,7 @@
  * OpenAPI spec generation orchestrator.
  */
 
-import type { Questpie, RpcRouterTree } from "questpie";
+import type { FunctionsTree, Questpie } from "questpie";
 import type { OpenApiConfig, OpenApiSpec } from "../types.js";
 import { generateAuthPaths } from "./auth.js";
 import { generateCollectionPaths } from "./collections.js";
@@ -16,7 +16,7 @@ import { generateSearchPaths } from "./search.js";
  */
 export function generateOpenApiSpec(
 	app: Questpie<any>,
-	rpc?: RpcRouterTree<any>,
+	functions?: FunctionsTree<any>,
 	config: OpenApiConfig = {},
 ): OpenApiSpec {
 	const allPaths: OpenApiSpec["paths"] = {};
@@ -35,8 +35,8 @@ export function generateOpenApiSpec(
 	Object.assign(allSchemas, globals.schemas);
 	allTags.push(...globals.tags);
 
-	// RPC
-	const rpcResult = generateRpcPaths(rpc, config);
+	// Functions (RPC)
+	const rpcResult = generateRpcPaths(functions, config);
 	Object.assign(allPaths, rpcResult.paths);
 	Object.assign(allSchemas, rpcResult.schemas);
 	allTags.push(...rpcResult.tags);

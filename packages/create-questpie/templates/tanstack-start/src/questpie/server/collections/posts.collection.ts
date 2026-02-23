@@ -1,7 +1,6 @@
-import { qb } from "@/questpie/server/builder.js";
+import { collection } from "questpie";
 
-export const posts = qb
-	.collection("posts")
+export const posts = collection("posts")
 	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",

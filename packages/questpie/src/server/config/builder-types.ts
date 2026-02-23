@@ -9,6 +9,7 @@ import type {
 	LocaleConfig,
 	StorageConfig,
 } from "#questpie/server/config/types.js";
+import type { FunctionsTree } from "#questpie/server/functions/types.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
 import type { KVConfig } from "#questpie/server/integrated/kv/index.js";
 import type { LoggerConfig } from "#questpie/server/integrated/logger/index.js";
@@ -23,7 +24,6 @@ import type {
 import type { RealtimeConfig } from "#questpie/server/integrated/realtime/index.js";
 import type { SearchAdapter } from "#questpie/server/integrated/search/index.js";
 import type { Migration } from "#questpie/server/migration/types.js";
-import type { RpcRouterTree } from "#questpie/server/rpc/types.js";
 import type { Seed, SeedCategory } from "#questpie/server/seed/types.js";
 
 export type BuilderCollectionsMap = Record<string, AnyCollectionOrBuilder>;
@@ -33,7 +33,7 @@ export type BuilderEmailTemplatesMap = Record<
 	string,
 	EmailTemplateDefinition<any, any>
 >;
-export type BuilderFunctionsMap = RpcRouterTree<any>;
+export type BuilderFunctionsMap = FunctionsTree<any>;
 export type BuilderFieldsMap = Record<string, any>; // Field factory functions
 export type BuilderMapValues<TMap extends Record<PropertyKey, any>> =
 	TMap[keyof TMap];

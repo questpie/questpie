@@ -12,8 +12,8 @@ import type {
 	FunctionAccess,
 	FunctionAccessRule,
 	FunctionDefinition,
+	FunctionsTree,
 } from "../../functions/types.js";
-import type { RpcRouterTree } from "../../rpc/types.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { parseRpcBody } from "../utils/request.js";
@@ -70,7 +70,7 @@ const evaluateFunctionAccess = async (
 };
 
 const resolveRpcProcedure = (
-	router: RpcRouterTree,
+	router: FunctionsTree,
 	path: string[],
 ): FunctionDefinition | undefined => {
 	let current: unknown = router;
@@ -180,8 +180,8 @@ export const createRpcRoutes = <
 			params: { path: string[] },
 			context?: AdapterContext,
 		): Promise<Response> => {
-			// Use explicit rpc config, or fall back to app.functions
-			const rpcTree = config.rpc ?? (app as any).functions;
+			// Functions are always on app.functions (RFC §7.5)
+			const rpcTree = (app as any).functions;
 			if (!rpcTree || Object.keys(rpcTree).length === 0) {
 				return errorResponse(ApiError.notFound("RPC router"), request);
 			}
