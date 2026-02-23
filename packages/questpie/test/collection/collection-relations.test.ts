@@ -128,17 +128,19 @@ const comments = collection("comments").fields(({ f }) => ({
 
 // Products with restricted delete
 // NOTE: Collection name must match the key used in .collections({}) for relation lookups to work
-const restrictedCategories = collection("restrictedCategories").fields(({ f }) => ({
-	name: f.text({ required: true }),
-	// HasMany - RESTRICT delete when products exist
-	products: f.relation({
-		to: "restrictedProducts", // Must match the key in .collections({})
-		hasMany: true,
-		foreignKey: "category", // FK column on products table
-		onDelete: "restrict", // Application-level RESTRICT when category is deleted
-		relationName: "category",
+const restrictedCategories = collection("restrictedCategories").fields(
+	({ f }) => ({
+		name: f.text({ required: true }),
+		// HasMany - RESTRICT delete when products exist
+		products: f.relation({
+			to: "restrictedProducts", // Must match the key in .collections({})
+			hasMany: true,
+			foreignKey: "category", // FK column on products table
+			onDelete: "restrict", // Application-level RESTRICT when category is deleted
+			relationName: "category",
+		}),
 	}),
-}));
+);
 
 const restrictedProducts = collection("restrictedProducts").fields(({ f }) => ({
 	name: f.text({ required: true }),

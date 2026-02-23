@@ -4,9 +4,10 @@
  * Content blocks for building city council pages.
  */
 
-import type {
-	AdminConfigContext,
-	BlockCategoryConfig,
+import {
+	type AdminConfigContext,
+	type BlockCategoryConfig,
+	block,
 } from "@questpie/admin/server";
 import { typedApp, type Where } from "questpie";
 import type { BaseApp } from "@/questpie/server/app";
@@ -15,7 +16,6 @@ import type {
 	documents,
 	news,
 } from "@/questpie/server/collections";
-import { qb } from "./builder";
 
 // ============================================================================
 // Category Helpers
@@ -49,8 +49,7 @@ const dynamic = (c: AdminConfigContext["c"]): BlockCategoryConfig => ({
 // Section Blocks
 // ============================================================================
 
-export const heroBlock = qb
-	.block("hero")
+export const heroBlock = block("hero")
 	.admin(({ c }) => ({
 		label: "Hero Section",
 		icon: c.icon("ph:image"),
@@ -104,8 +103,7 @@ export const heroBlock = qb
 		}),
 	}));
 
-export const ctaBlock = qb
-	.block("cta")
+export const ctaBlock = block("cta")
 	.admin(({ c }) => ({
 		label: "Call to Action",
 		icon: c.icon("ph:megaphone"),
@@ -137,8 +135,7 @@ export const ctaBlock = qb
 		}),
 	}));
 
-export const announcementBannerBlock = qb
-	.block("announcement-banner")
+export const announcementBannerBlock = block("announcement-banner")
 	.admin(({ c }) => ({
 		label: "Announcement Banner",
 		icon: c.icon("ph:bell"),
@@ -176,8 +173,7 @@ export const announcementBannerBlock = qb
 // Content Blocks
 // ============================================================================
 
-export const textBlock = qb
-	.block("text")
+export const textBlock = block("text")
 	.admin(({ c }) => ({
 		label: "Text Block",
 		icon: c.icon("ph:text-t"),
@@ -211,8 +207,7 @@ export const textBlock = qb
 		}),
 	}));
 
-export const headingBlock = qb
-	.block("heading")
+export const headingBlock = block("heading")
 	.admin(({ c }) => ({
 		label: "Heading",
 		icon: c.icon("ph:text-h-one"),
@@ -245,8 +240,7 @@ export const headingBlock = qb
 		}),
 	}));
 
-export const imageBlock = qb
-	.block("image")
+export const imageBlock = block("image")
 	.admin(({ c }) => ({
 		label: "Image",
 		icon: c.icon("ph:image"),
@@ -287,8 +281,7 @@ export const imageBlock = qb
 		}),
 	}));
 
-export const galleryBlock = qb
-	.block("gallery")
+export const galleryBlock = block("gallery")
 	.admin(({ c }) => ({
 		label: "Gallery",
 		icon: c.icon("ph:images"),
@@ -327,8 +320,7 @@ export const galleryBlock = qb
 		}),
 	}));
 
-export const imageTextBlock = qb
-	.block("image-text")
+export const imageTextBlock = block("image-text")
 	.admin(({ c }) => ({
 		label: "Image + Text",
 		icon: c.icon("ph:layout"),
@@ -362,8 +354,7 @@ export const imageTextBlock = qb
 		}),
 	}));
 
-export const videoBlock = qb
-	.block("video")
+export const videoBlock = block("video")
 	.admin(({ c }) => ({
 		label: "Video Embed",
 		icon: c.icon("ph:video"),
@@ -384,8 +375,7 @@ export const videoBlock = qb
 		}),
 	}));
 
-export const accordionBlock = qb
-	.block("accordion")
+export const accordionBlock = block("accordion")
 	.admin(({ c }) => ({
 		label: "Accordion / FAQ",
 		icon: c.icon("ph:list-dashes"),
@@ -410,8 +400,7 @@ export const accordionBlock = qb
 // Dynamic Blocks
 // ============================================================================
 
-export const latestNewsBlock = qb
-	.block("latest-news")
+export const latestNewsBlock = block("latest-news")
 	.admin(({ c }) => ({
 		label: "Latest News",
 		icon: c.icon("ph:newspaper"),
@@ -472,8 +461,7 @@ export const latestNewsBlock = qb
 		return { news: res.docs };
 	});
 
-export const contactsListBlock = qb
-	.block("contacts-list")
+export const contactsListBlock = block("contacts-list")
 	.admin(({ c }) => ({
 		label: "Contacts List",
 		icon: c.icon("ph:address-book"),
@@ -510,8 +498,7 @@ export const contactsListBlock = qb
 		return { contacts: res.docs };
 	});
 
-export const documentsListBlock = qb
-	.block("documents-list")
+export const documentsListBlock = block("documents-list")
 	.admin(({ c }) => ({
 		label: "Documents List",
 		icon: c.icon("ph:file-text"),
@@ -562,8 +549,7 @@ export const documentsListBlock = qb
 // Layout Blocks
 // ============================================================================
 
-export const columnsBlock = qb
-	.block("columns")
+export const columnsBlock = block("columns")
 	.admin(({ c }) => ({
 		label: "Columns",
 		icon: c.icon("ph:columns"),
@@ -602,8 +588,7 @@ export const columnsBlock = qb
 		}),
 	}));
 
-export const spacerBlock = qb
-	.block("spacer")
+export const spacerBlock = block("spacer")
 	.admin(({ c }) => ({
 		label: "Spacer",
 		icon: c.icon("ph:arrows-out-vertical"),
@@ -623,8 +608,7 @@ export const spacerBlock = qb
 		}),
 	}));
 
-export const dividerBlock = qb
-	.block("divider")
+export const dividerBlock = block("divider")
 	.admin(({ c }) => ({
 		label: "Divider",
 		icon: c.icon("ph:minus"),

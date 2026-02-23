@@ -12,15 +12,15 @@ Blocks are the building units for page builders and rich content areas. Each blo
 Blocks are defined using the block builder on the server:
 
 ```typescript
-import { adminModule } from "@questpie/admin/server";
+import { block } from "@questpie/admin/server";
 
-const heroBlock = adminModule.block("hero")
+const heroBlock = block("hero")
   .fields(({ f }) => ({
     heading: f.text({ required: true }),
     subheading: f.text(),
     image: f.upload("media"),
     cta: f.object({
-      fields: (f) => ({
+      fields: ({ f }) => ({
         label: f.text({ required: true }),
         url: f.url({ required: true }),
       }),
@@ -38,7 +38,9 @@ const heroBlock = adminModule.block("hero")
 Add blocks to a collection field using `richText` or a dedicated blocks field:
 
 ```typescript
-const pages = qb.collection("pages")
+import { collection } from "questpie";
+
+const pages = collection("pages")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({
@@ -94,7 +96,7 @@ Blocks can fetch additional data on the server before being sent to the client. 
 Use `{ with: { fieldName: true } }` to automatically expand relation/upload fields on the block. This approach **batches** requests - if multiple blocks need the same collection, only one query is made.
 
 ```typescript
-const heroBlock = qb.block("hero")
+const heroBlock = block("hero")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     backgroundImage: f.upload(), // Stored as UUID
@@ -129,7 +131,7 @@ const heroBlock = qb.block("hero")
 Use an async function when you need to fetch data that isn't a direct field on the block:
 
 ```typescript
-const teamBlock = qb.block("team")
+const teamBlock = block("team")
   .fields(({ f }) => ({
     title: f.text(),
     limit: f.number({ defaultValue: 4 }),
@@ -228,12 +230,12 @@ export type App = typeof app;
 
 ```typescript
 // blocks.ts
+import { block } from "@questpie/admin/server";
 import { typedApp, type Where } from "questpie";
 import type { BaseCMS } from "./app"; // ← type-only import, no circular dependency
 import type { posts } from "./collections";
 
-const latestPostsBlock = qb
-  .block("latest-posts")
+const latestPostsBlock = block("latest-posts")
   .fields(({ f }) => ({
     count: f.number({ label: "Count", default: 3 }),
   }))

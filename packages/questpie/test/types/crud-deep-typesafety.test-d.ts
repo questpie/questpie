@@ -130,18 +130,20 @@ const articleComments = q.collection("article_comments").fields(({ f }) => ({
 	}),
 }));
 
-const articleCategories = q.collection("article_categories").fields(({ f }) => ({
-	article: f.relation({
-		to: "articles",
-		required: true,
-		onDelete: "cascade",
-	}),
-	category: f.relation({
-		to: "categories",
-		required: true,
-		onDelete: "cascade",
-	}),
-}));
+const articleCategories = q
+	.collection("article_categories")
+	.fields(({ f }) => ({
+		article: f.relation({
+			to: "articles",
+			required: true,
+			onDelete: "cascade",
+		}),
+		category: f.relation({
+			to: "categories",
+			required: true,
+			onDelete: "cascade",
+		}),
+	}));
 
 const media = q
 	.collection("media")

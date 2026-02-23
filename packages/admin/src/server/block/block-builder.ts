@@ -340,6 +340,10 @@ export class BlockBuilder<
 	 * Define fields for the block.
 	 * Uses the same field builder as collections.
 	 *
+	 * Uses destructured context object syntax: `({ f }) =>` (not positional `(f) =>`).
+	 * This is consistent with collection/global `.fields()` and allows future
+	 * extension of the context without breaking changes.
+	 *
 	 * @example
 	 * ```ts
 	 * block("hero").fields(({ f }) => ({
@@ -352,7 +356,7 @@ export class BlockBuilder<
 	fields<
 		TNewFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
 	>(
-		factory: (f: FieldBuilderProxy<TFieldMap>) => TNewFields,
+		factory: (ctx: { f: FieldBuilderProxy<TFieldMap> }) => TNewFields,
 	): BlockBuilder<
 		Omit<TState, "fields"> & { fields: TNewFields },
 		TFieldMap,

@@ -63,17 +63,17 @@ feat: add standalone collection()/global() factories, update fields callback sig
 
 ### packages/admin changes
 
-- [ ] Export `block()` factory function from `@questpie/admin`
+- [x] Export `block()` factory function from `@questpie/admin`
   > RFC §11.1 (File Convention)
-- [ ] Change `.fields()` callback from `(f) =>` to `({ f }) =>`
+- [x] Change `.fields()` callback from `(f) =>` to `({ f }) =>`
   > RFC §1.1
 
 ### Barbershop migration
 
-- [ ] Split `blocks.ts` (784 lines, 16 blocks) → `blocks/*.ts` (1 file per block)
+- [x] Split `blocks.ts` (784 lines, 16 blocks) → `blocks/*.ts` (1 file per block)
   > RFC §2.1 (By-Type Layout), §11.1
-- [ ] Each block: `qb.block("hero")` → `block("hero")` from `@questpie/admin`
-- [ ] Update `.fields()` callbacks to `({ f }) =>`
+- [x] Each block: `qb.block("hero")` → `block("hero")` from `@questpie/admin`
+- [x] Update `.fields()` callbacks to `({ f }) =>`
 
 ### Commit
 

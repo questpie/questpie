@@ -1,0 +1,21 @@
+import { block } from "@questpie/admin/server";
+import { content } from "./_categories";
+
+export const hoursBlock = block("hours")
+	.admin(({ c }) => ({
+		label: { en: "Business Hours", sk: "Otváracie hodiny" },
+		icon: c.icon("ph:clock"),
+		category: content(c),
+		order: 3,
+	}))
+	.fields(({ f }) => ({
+		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
+		showClosed: f.boolean({
+			label: { en: "Show Closed Days", sk: "Zobraziť zatvorené dni" },
+			defaultValue: true,
+		}),
+	}))
+	.prefetch(async ({ ctx }) => {
+		const settings = await ctx.app.api.globals.siteSettings.get({});
+		return { businessHours: settings?.businessHours };
+	});

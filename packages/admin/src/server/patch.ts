@@ -632,7 +632,8 @@ function patchQuestpieBuilder() {
 					const fieldProxy = createFieldBuilder(this.state.fields);
 
 					// Execute the fields factory to get field definitions
-					const fields = state._fieldsFactory(fieldProxy);
+					// Pass as destructured context object: ({ f }) => consistent with collection/global .fields()
+					const fields = state._fieldsFactory({ f: fieldProxy });
 					state.fields = fields;
 					delete state._fieldsFactory;
 				}

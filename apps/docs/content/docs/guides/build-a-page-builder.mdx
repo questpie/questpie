@@ -12,9 +12,9 @@ This guide shows how to build a page builder with drag-and-drop blocks, live pre
 Blocks are the building units. Each block defines its own fields and admin appearance.
 
 ```ts
-import { adminModule } from "@questpie/admin/server";
+import { block } from "@questpie/admin/server";
 
-const heroBlock = adminModule.block("hero")
+const heroBlock = block("hero")
   .fields(({ f }) => ({
     heading: f.text({ required: true }),
     subheading: f.text(),
@@ -28,7 +28,7 @@ const heroBlock = adminModule.block("hero")
     description: "Full-width hero with heading and CTA",
   });
 
-const textBlock = adminModule.block("text")
+const textBlock = block("text")
   .fields(({ f }) => ({
     body: f.richText({ required: true }),
   }))
@@ -37,7 +37,7 @@ const textBlock = adminModule.block("text")
     icon: "ph:text-aa",
   });
 
-const imageBlock = adminModule.block("image")
+const imageBlock = block("image")
   .fields(({ f }) => ({
     image: f.upload({ required: true }),
     alt: f.text(),
@@ -48,7 +48,7 @@ const imageBlock = adminModule.block("image")
     icon: "ph:image",
   });
 
-const columnsBlock = adminModule.block("columns")
+const columnsBlock = block("columns")
   .fields(({ f }) => ({
     columns: f.number({ min: 2, max: 4, required: true }).default(2),
     items: f.array({
