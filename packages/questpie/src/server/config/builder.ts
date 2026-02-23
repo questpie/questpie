@@ -9,6 +9,7 @@ import type {
 	BuilderCollectionsMap,
 	BuilderEmailTemplatesMap,
 	BuilderFieldsMap,
+	BuilderFunctionsMap,
 	BuilderGlobalsMap,
 	BuilderJobsMap,
 	QuestpieBuilderState,
@@ -127,6 +128,7 @@ export class QuestpieBuilder<
 			jobs: {},
 			emailTemplates: {},
 			fields: {},
+			functions: undefined,
 			auth: {},
 			locale: undefined,
 			migrations: undefined,
@@ -240,6 +242,31 @@ export class QuestpieBuilder<
 			jobs: {
 				...this.state.jobs,
 				...jobs,
+			},
+		} as any);
+	}
+
+	/**
+	 * Register RPC functions on the app instance.
+	 *
+	 * Functions registered here are accessible via `app.functions` and
+	 * automatically routed by `createFetchHandler` at `/api/rpc/*`.
+	 *
+	 * @example
+	 * ```ts
+	 * .functions({
+	 *   ...adminRpc,
+	 *   getActiveBarbers,
+	 *   getRevenueStats,
+	 * })
+	 * ```
+	 */
+	functions(functions: BuilderFunctionsMap): QuestpieBuilder<TState> {
+		return new QuestpieBuilder({
+			...this.state,
+			functions: {
+				...(this.state.functions || {}),
+				...functions,
 			},
 		} as any);
 	}
@@ -646,6 +673,7 @@ export class QuestpieBuilder<
 			jobs: BuilderJobsMap;
 			emailTemplates: BuilderEmailTemplatesMap;
 			fields: BuilderFieldsMap;
+			functions?: BuilderFunctionsMap;
 			auth: BetterAuthOptions | Record<never, never>;
 			locale?: any;
 			defaultAccess?: any;
@@ -701,6 +729,13 @@ export class QuestpieBuilder<
 				...this.state.fields,
 				...otherState.fields,
 			},
+			functions:
+				this.state.functions || otherState.functions
+					? {
+							...(this.state.functions || {}),
+							...(otherState.functions || {}),
+						}
+					: undefined,
 			auth: mergeAuthOptions(this.state.auth, otherState.auth),
 
 			locale: otherState.locale ?? this.state.locale,
@@ -946,6 +981,7 @@ export class QuestpieBuilder<
 							adapter: runtimeConfig.queue.adapter,
 						}
 					: undefined,
+			functions: this.state.functions,
 			search: runtimeConfig.search,
 			realtime: runtimeConfig.realtime,
 			logger: runtimeConfig.logger,

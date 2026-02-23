@@ -23,6 +23,7 @@ import type {
 import type { RealtimeConfig } from "#questpie/server/integrated/realtime/index.js";
 import type { SearchAdapter } from "#questpie/server/integrated/search/index.js";
 import type { Migration } from "#questpie/server/migration/types.js";
+import type { RpcRouterTree } from "#questpie/server/rpc/types.js";
 import type { Seed, SeedCategory } from "#questpie/server/seed/types.js";
 
 export type BuilderCollectionsMap = Record<string, AnyCollectionOrBuilder>;
@@ -32,6 +33,7 @@ export type BuilderEmailTemplatesMap = Record<
 	string,
 	EmailTemplateDefinition<any, any>
 >;
+export type BuilderFunctionsMap = RpcRouterTree<any>;
 export type BuilderFieldsMap = Record<string, any>; // Field factory functions
 export type BuilderMapValues<TMap extends Record<PropertyKey, any>> =
 	TMap[keyof TMap];
@@ -75,6 +77,12 @@ export interface QuestpieBuilderState<
 
 	// I18n translations for backend messages
 	translations?: TranslationsConfig;
+
+	/**
+	 * Registered function definitions for the RPC system.
+	 * Functions are accessible via `app.functions` and routed by `createFetchHandler`.
+	 */
+	functions?: BuilderFunctionsMap;
 
 	/**
 	 * Context resolver for extending request context.

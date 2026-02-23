@@ -1,0 +1,45 @@
+import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { fn } from "questpie";
+import z from "zod";
+
+export default fn({
+	schema: z.object({
+		startDate: z.string().datetime(),
+		endDate: z.string().datetime(),
+		completedOnly: z.boolean().optional().default(true),
+	}),
+	handler: async ({ input, app }) => {
+		const { startDate, endDate, completedOnly } = input;
+
+		const appointmentsTable = app.config.collections.appointments.table;
+		const servicesTable = app.config.collections.services.table;
+
+		const conditions = [
+			gte(appointmentsTable.scheduledAt as any, new Date(startDate)),
+			lte(appointmentsTable.scheduledAt as any, new Date(endDate)),
+		];
+
+		if (completedOnly) {
+			conditions.push(eq(appointmentsTable.status as any, "completed"));
+		}
+
+		const result = await app.db
+			.select({
+				totalRevenue: sql<number>`COALESCE(SUM(${servicesTable.price}), 0)`,
+				appointmentCount: sql<number>`COUNT(*)`,
+				avgRevenue: sql<number>`COALESCE(AVG(${servicesTable.price}), 0)`,
+			} as any)
+			.from(appointmentsTable)
+			.innerJoin(
+				servicesTable,
+				eq(appointmentsTable.service as any, servicesTable.id) as any,
+			)
+			.where(and(...conditions) as any);
+
+		return {
+			totalRevenue: Number(result[0]?.totalRevenue ?? 0),
+			appointmentCount: Number(result[0]?.appointmentCount ?? 0),
+			avgRevenue: Number(result[0]?.avgRevenue ?? 0),
+		};
+	},
+});

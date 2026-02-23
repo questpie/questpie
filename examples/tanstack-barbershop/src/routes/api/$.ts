@@ -14,16 +14,15 @@
 import { withOpenApi } from "@questpie/openapi";
 import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie";
-import { app, appRpc } from "~/questpie/server/app";
+import { app } from "~/questpie/server/app";
 
 const handler = withOpenApi(
 	createFetchHandler(app, {
 		basePath: "/api",
-		rpc: appRpc,
 	}),
 	{
 		app,
-		rpc: appRpc,
+		rpc: app.functions,
 		basePath: "/api",
 		info: {
 			title: "Barbershop API",

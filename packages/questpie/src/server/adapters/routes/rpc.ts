@@ -180,11 +180,13 @@ export const createRpcRoutes = <
 			params: { path: string[] },
 			context?: AdapterContext,
 		): Promise<Response> => {
-			if (!config.rpc) {
+			// Use explicit rpc config, or fall back to app.functions
+			const rpcTree = config.rpc ?? (app as any).functions;
+			if (!rpcTree || Object.keys(rpcTree).length === 0) {
 				return errorResponse(ApiError.notFound("RPC router"), request);
 			}
 
-			const definition = resolveRpcProcedure(config.rpc, params.path);
+			const definition = resolveRpcProcedure(rpcTree, params.path);
 			if (!definition) {
 				return errorResponse(
 					ApiError.notFound("RPC procedure", params.path.join(".")),

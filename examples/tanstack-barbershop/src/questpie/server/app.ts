@@ -25,7 +25,6 @@ import {
 	sendAppointmentConfirmation,
 	sendAppointmentReminder,
 } from "./jobs";
-import { r } from "./rpc";
 import { sidebar } from "./sidebar";
 
 const DATABASE_URL =
@@ -50,6 +49,13 @@ export const baseApp = qb
 		sendAppointmentConfirmation,
 		sendAppointmentCancellation,
 		sendAppointmentReminder,
+	})
+	.functions({
+		...adminRpc,
+		getActiveBarbers,
+		getRevenueStats,
+		getAvailableTimeSlots,
+		createBooking,
 	})
 	.locale({
 		locales: [
@@ -104,13 +110,5 @@ export const app = baseApp.blocks(blocks).build({
 	queue: { adapter: pgBossAdapter({ connectionString: DATABASE_URL }) },
 });
 
-export const appRpc = r.router({
-	...adminRpc,
-	getActiveBarbers,
-	getRevenueStats,
-	getAvailableTimeSlots,
-	createBooking,
-});
-
 export type App = typeof app;
-export type AppRpc = typeof appRpc;
+export type AppRpc = App["functions"];

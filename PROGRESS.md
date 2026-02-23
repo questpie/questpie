@@ -90,34 +90,34 @@ feat: add standalone block() factory, split barbershop blocks to individual file
 
 ### packages/questpie changes
 
-- [ ] Define and export `JobDefinition` interface
+- [x] Define and export `JobDefinition` interface
   > RFC §8.2 (Job Definition Shape)
-- [ ] Define and export `FunctionDefinition` interface
+- [x] Define and export `FunctionDefinition` interface
   > RFC §7.3 (Function Definition Shape)
-- [ ] `createApp()` accepts plain objects for jobs/functions
-- [ ] Keep `q.job()` and `r.fn()` as temporary wrappers that return plain objects (removed in Phase 6)
-- [ ] Functions become part of `app.functions` — accessible via `createFetchHandler(app)`
+- [x] `createApp()` accepts plain objects for jobs/functions
+- [x] Keep `q.job()` and `r.fn()` as temporary wrappers that return plain objects (removed in Phase 6)
+- [x] Functions become part of `app.functions` — accessible via `createFetchHandler(app)`
   > RFC §7.5 (Route Handler)
 
 ### Barbershop migration
 
-- [ ] Split `jobs/index.ts` (3 jobs) → individual files:
+- [x] Split `jobs/index.ts` (3 jobs) → individual files:
   - `jobs/send-appointment-confirmation.ts`
   - `jobs/send-appointment-cancellation.ts`
   - `jobs/send-appointment-reminder.ts`
   > RFC §8.1 (File Convention)
-- [ ] Each job: `q.job({ name, schema, handler })` → `export default { schema, handler }`
+- [x] Each job: `q.job({ name, schema, handler })` → `export default job({ ... })`
   > RFC §8.2
-- [ ] Split `functions/index.ts` + `functions/booking.ts` → individual files:
+- [x] Split `functions/index.ts` + `functions/booking.ts` → individual files:
   - `functions/get-active-barbers.ts`
   - `functions/get-revenue-stats.ts`
   - `functions/get-available-time-slots.ts`
   - `functions/create-booking.ts`
   > RFC §7.1 (File Convention — Nested Folders = Nested Routes)
-- [ ] Each function: `r.fn({ schema, handler })` → `export default { schema, handler }`
+- [x] Each function: `r.fn({ schema, handler })` → `export default fn({ ... })`
   > RFC §7.2
-- [ ] Delete `rpc.ts`
-- [ ] Remove `typedApp<App>(app)` — `app` is directly typed in context
+- [x] Delete `rpc.ts`
+- [x] Remove `typedApp<App>(app)` — `app` is directly typed in context
   > RFC §1.2 (App Access — Always From Context)
 
 ### Commit

@@ -58,6 +58,9 @@ export const appBase = qb
 		locales: ["en"],
 		defaultLocale: "en",
 	})
+	.functions({
+		...adminRpc,
+	})
 	.auth({
 		emailAndPassword: {
 			enabled: true,
@@ -108,9 +111,4 @@ export const app = appBase.blocks(blocks).build({
 	},
 });
 
-export const appRpc = {
-	...adminRpc,
-};
-
 export type App = typeof app;
-export type AppRpc = typeof appRpc;

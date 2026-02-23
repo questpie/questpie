@@ -62,6 +62,7 @@ import type {
 	SearchConfig,
 } from "../integrated/search/index.js";
 import type { Migration } from "../migration/types.js";
+import type { RpcRouterTree } from "../rpc/types.js";
 import type { Seed, SeedCategory, SeedsConfig } from "../seed/types.js";
 
 export type DrizzleSchemaFromCollections<
@@ -362,6 +363,13 @@ export interface QuestpieConfig {
 	 * Queue configuration (pg-boss)
 	 */
 	queue?: BaseQueueConfig;
+
+	/**
+	 * RPC functions registered on the app instance.
+	 * Automatically routed by `createFetchHandler` at `/api/rpc/*`.
+	 * When set, no separate `rpc` option is needed in the adapter config.
+	 */
+	functions?: RpcRouterTree<any>;
 
 	/**
 	 * Search adapter for full-text search
