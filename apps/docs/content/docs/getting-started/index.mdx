@@ -45,21 +45,16 @@ export const posts = collection("posts").fields(({ f }) => ({
 }));
 ```
 
-### 3. Build runtime + functions
+### 3. Configure the runtime
 
 ```ts
-// src/questpie/server/app.ts
-import { createApp } from "questpie";
-import { posts } from "./collections/posts";
+// src/questpie/questpie.config.ts
+import { config } from "questpie";
 
-export const app = createApp({ name: "my-app" })
-  .collections({ posts })
-  .build({
-    db: { url: process.env.DATABASE_URL! },
-    app: { url: process.env.APP_URL || "http://localhost:3000" },
-  });
-
-export type App = typeof app;
+export default config({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL || "http://localhost:3000" },
+});
 ```
 
 ```ts
@@ -78,7 +73,7 @@ export default fn({
 ```ts
 // src/routes/api.ts
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/app";
+import { app } from "@/questpie/.generated";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",
@@ -94,22 +89,26 @@ bun add @questpie/admin
 ```
 
 ```ts
-// src/questpie/server/builder.ts
-import { adminModule } from "@questpie/admin/server";
-import { q } from "questpie";
+// src/questpie/questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-export const qb = q.use(adminModule);
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL || "http://localhost:3000" },
+});
 ```
 
 ```ts
 // src/questpie/admin/builder.ts
 import { adminModule, qa } from "@questpie/admin/client";
-import type { App } from "../server/app";
+import type { App } from "../server/.generated";
 
 export const admin = qa<App>().use(adminModule);
 ```
 
-When you need admin-specific view metadata, define those collections with `qb.collection(...)` and add `.admin()`, `.list()`, and `.form()`.
+When you need admin-specific view metadata, define those collections with `collection(...)` and add `.admin()`, `.list()`, and `.form()`.
 
 ## Common Mistakes
 

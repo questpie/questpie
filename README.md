@@ -61,41 +61,36 @@ bun add @questpie/admin @questpie/tanstack-query @tanstack/react-query
 ### Define Your First Collection
 
 ```typescript
-// src/collections/posts.ts
-import { q } from "questpie";
-import { varchar, text, boolean, timestamp } from "drizzle-orm/pg-core";
+// src/questpie/server/collections/posts.ts
+import { collection } from "questpie";
 
-export const posts = q
-  .collection("posts")
-  .fields({
-    title: varchar("title", { length: 255 }).notNull(),
-    slug: varchar("slug", { length: 100 }).notNull().unique(),
-    content: text("content"),
-    isPublished: boolean("is_published").default(false).notNull(),
-    publishedAt: timestamp("published_at", { mode: "date" }),
-  })
-  .title(({ table }) => table.title);
+export const posts = collection("posts")
+  .fields(({ f }) => ({
+    title: f.text({ label: "Title", required: true }),
+    slug: f.slug({ label: "Slug", from: "title" }),
+    content: f.richText({ label: "Content" }),
+    isPublished: f.boolean({ label: "Published", default: false }),
+    publishedAt: f.dateTime({ label: "Published At" }),
+  }))
+  .title(({ f }) => f.title);
 ```
 
-### Configure the app
+### Configure the App
 
 ```typescript
-// src/app.ts
-import { q, starterModule } from "questpie";
-import { posts } from "./collections/posts";
+// src/questpie/server/questpie.config.ts
+import { admin } from "@questpie/admin/server";
+import { config } from "questpie";
 
-export const app = q({ name: "my-app" })
-  // Include starter module for auth collections and file uploads
-  .use(starterModule)
-  // Add your collections
-  .collections({ posts })
-  // Build with runtime config
-  .build({
-    db: { url: process.env.DATABASE_URL! },
-  });
-
-export type App = typeof app;
+export default config({
+  modules: [admin()],
+  app: { url: process.env.APP_URL! },
+  db: { url: process.env.DATABASE_URL! },
+  secret: process.env.AUTH_SECRET!,
+});
 ```
+
+Collections, globals, functions, and jobs are auto-discovered via **file convention**. Run `bunx questpie generate` to produce a `.generated/index.ts` with your fully-typed `App` and runtime `app` instance.
 
 ### Connect to Your Framework
 
@@ -104,7 +99,7 @@ export type App = typeof app;
 ```typescript
 import { Hono } from "hono";
 import { questpieHono } from "@questpie/hono";
-import { app } from "./app";
+import { app } from "./questpie/server/.generated";
 
 const server = new Hono();
 server.route("/api", questpieHono(app));
@@ -117,7 +112,7 @@ export default { port: 3000, fetch: server.fetch };
 ```typescript
 import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia";
-import { app } from "./app";
+import { app } from "./questpie/server/.generated";
 
 const server = new Elysia().use(questpieElysia(app)).listen(3000);
 
@@ -129,7 +124,7 @@ export type AppServer = typeof server;
 ```typescript
 // app/api/[...path]/route.ts
 import { questpieNextRouteHandlers } from "@questpie/next";
-import { app } from "@/app";
+import { app } from "@/questpie/server/.generated";
 
 export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(
   app,
@@ -148,22 +143,30 @@ bun questpie migrate:generate  # Generate migrations from schema
 bun questpie migrate:up        # Apply pending migrations
 ```
 
-## The starterModule
+## Modules
 
-The `starterModule` provides common functionality out of the box:
+The `admin()` module includes the starter module (auth collections, assets, file uploads) plus the full admin UI:
 
 ```typescript
-import { q, starterModule } from "questpie";
+import { admin, audit } from "@questpie/admin/server";
+import { config } from "questpie";
 
-const app = q({ name: "my-app" })
-  .use(starterModule)  // Includes:
-  // - Auth collections (users, sessions, accounts, verifications, apikeys)
-  // - Assets collection with file upload support
-  // - Core auth options (Better Auth)
-  .build({ ... });
+export default config({
+  modules: [
+    admin({ sidebar, dashboard, branding }),
+    audit(), // optional audit logging
+  ],
+  app: { url: process.env.APP_URL! },
+  db: { url: process.env.DATABASE_URL! },
+  secret: process.env.AUTH_SECRET!,
+});
 ```
 
-If you don't need auth or file uploads, simply omit `.use(starterModule)` for a minimal setup.
+The `admin()` module automatically provides:
+- Auth collections (users, sessions, accounts, verifications, apikeys)
+- Assets collection with file upload support
+- Admin UI functions, views, and components
+- Better Auth integration
 
 ## Core Concepts
 
@@ -201,15 +204,14 @@ await app.api.collections.posts.deleteById({ id: post.id });
 
 ### File Uploads
 
-```typescript
-import { q, starterModule } from "questpie";
+File uploads work automatically when the `admin()` module is included (it provides the `assets` collection). Configure storage in your config:
 
-const app = q({ name: "my-app" })
-  .use(starterModule)
-  .build({
-    db: { url: process.env.DATABASE_URL! },
-    storage: { location: "./uploads" },
-  });
+```typescript
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  storage: { basePath: "/api" },
+});
 
 // Upload via API: POST /api/assets/upload
 // Or programmatically:
@@ -219,15 +221,14 @@ const asset = await app.api.collections.assets.upload(file, context);
 ### Custom Upload Collections
 
 ```typescript
-import { q } from "questpie";
-import { varchar } from "drizzle-orm/pg-core";
+// src/questpie/server/collections/media.ts
+import { collection } from "questpie";
 
-const media = q
-  .collection("media")
-  .fields({
-    alt: varchar("alt", { length: 500 }),
-    folder: varchar("folder", { length: 255 }),
-  })
+export const media = collection("media")
+  .fields(({ f }) => ({
+    alt: f.text({ label: "Alt Text" }),
+    folder: f.text({ label: "Folder" }),
+  }))
   .upload({
     visibility: "public",
     maxSize: 10_000_000, // 10MB
@@ -240,48 +241,53 @@ const media = q
 
 ### Authentication
 
+Auth is configured via a standalone `auth.ts` file using the file convention:
+
 ```typescript
-import { q, starterModule } from "questpie";
-import { organization, twoFactor } from "better-auth/plugins";
+// src/questpie/server/auth.ts
+import type { AuthConfig } from "questpie";
 
-const app = q({ name: "my-app" })
-  .use(starterModule)  // Required for auth collections
-  .auth({
-    emailAndPassword: { enabled: true },
-    plugins: [organization(), twoFactor()],
-  })
-  .build({ ... });
+export default {
+  emailAndPassword: { enabled: true, requireEmailVerification: false },
+  baseURL: process.env.APP_URL,
+  basePath: "/api/auth",
+  secret: process.env.AUTH_SECRET,
+} satisfies AuthConfig;
+```
 
+```typescript
 // TypeScript knows available methods
 await app.auth.api.signIn.email({ email, password });
-await app.auth.api.createOrganization({ name: "Acme" });
 ```
 
 ### Background Jobs
 
 ```typescript
-import { q, starterModule, pgBossAdapter } from "questpie";
+// src/questpie/server/jobs/send-email.ts
 import { z } from "zod";
 
-const sendEmail = q.job({
-  name: "send-email",
+export default {
   schema: z.object({ userId: z.string() }),
   handler: async ({ data }) => {
     console.log(`Sending email to ${data.userId}`);
   },
+};
+```
+
+Configure the queue adapter in your config:
+
+```typescript
+import { pgBossAdapter, config } from "questpie";
+
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  queue: {
+    adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL! }),
+  },
 });
 
-const app = q({ name: "my-app" })
-  .use(starterModule)
-  .jobs({ sendEmail })
-  .build({
-    db: { url: process.env.DATABASE_URL! },
-    queue: {
-      adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL! }),
-    },
-  });
-
-// Publish job
+// Publish job (via the generated app instance)
 await app.queue.sendEmail.publish({ userId: "123" });
 ```
 
@@ -291,38 +297,44 @@ Create reusable modules:
 
 ```typescript
 // blog-module.ts
-import { q } from "questpie";
+import { module, collection } from "questpie";
 
-export const blogModule = q({ name: "blog" })
-  .collections({
-    posts: q.collection("posts").fields({ ... }),
-    categories: q.collection("categories").fields({ ... }),
-  });
+export const blogModule = module({
+  name: "blog",
+  collections: {
+    posts: collection("posts").fields(({ f }) => ({
+      title: f.text({ label: "Title", required: true }),
+    })),
+    categories: collection("categories").fields(({ f }) => ({
+      name: f.text({ label: "Name", required: true }),
+    })),
+  },
+});
 
-// app.ts
-import { q, starterModule } from "questpie";
+// questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 import { blogModule } from "./blog-module";
 
-const app = q({ name: "my-app" })
-  .use(starterModule)
-  .use(blogModule)
-  .build({ ... });
+export default config({
+  modules: [admin(), blogModule],
+});
 ```
 
 ## Admin UI
 
-The `@questpie/admin` package provides a config-driven admin interface using the `qa()` builder pattern:
+The `@questpie/admin` package provides a config-driven admin interface using the `qa()` client builder:
 
 ```typescript
-// src/admin/builder.ts
+// src/questpie/admin/builder.ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { App } from "./server/app";
+import type { App } from "../server/.generated";
 
 export const qab = qa<App>().use(adminModule).toNamespace();
 ```
 
 ```typescript
-// src/admin/collections/posts.ts
+// src/questpie/admin/collections/posts.ts
 import { qab } from "../builder";
 
 export const postsAdmin = qab

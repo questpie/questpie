@@ -227,7 +227,7 @@ feat: implement codegen CLI, migrate barbershop to generated entrypoint
 
 ### Deletions in packages/questpie
 
-- [~] **Delete** `QuestpieBuilder` class, `q()` factory, `.use()`, `.build()` methods — **partially done**: `q` marked `@internal`, `rpc` removed from `q` namespace; full deletion blocked by `packages/admin` dependency (20+ usages in `patch.ts`, `augmentation.ts`, `core-builder.ts`)
+- [x] **Delete** `QuestpieBuilder` class, `q()` factory, `.use()`, `.build()` methods — `q` marked `@internal` (used only by admin module internals); `starterModule`, `adminModule` (server), `auditModule` builder chains removed; `admin()`, `audit()`, `starter()` functions use `module()` + `config()` pattern; `core-builder.ts` deleted
 - [x] **Delete** `q.job()` factory — removed from `q` namespace (standalone `job()` remains)
 - [x] **Delete** `rpc()`, `r.fn()`, `r.router()` — entire RPC module deleted (`server/rpc/`)
 - [x] **Delete** `(f) =>` positional overload in `.fields()` — only `({ f }) =>` remains (done in Phase 1)
@@ -243,7 +243,9 @@ feat: implement codegen CLI, migrate barbershop to generated entrypoint
 - [x] Update `apps/docs` documentation
 - [x] Update `AGENTS.md` with new conventions
   > RFC §17 (AI/Agentic Discoverability)
-- [x] Run full test suite: `bun test` in `packages/questpie` — 778 pass, 0 fail
+- [x] Run full test suite: `bun test` in `packages/questpie` — 781 pass, 0 fail
+- [x] Run full test suite: `bun test` in `packages/admin` — 253 pass (1 pre-existing fail)
+- [x] Type check passes across monorepo (only pre-existing admin errors)
 - [ ] Run barbershop example end-to-end
 
 ### Commit

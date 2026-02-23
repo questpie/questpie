@@ -44,21 +44,22 @@ my-app/
 ├── src/
 │   ├── questpie/
 │   │   ├── server/
-│   │   │   ├── builder.ts        # q.use(adminModule) setup
-│   │   │   ├── app.ts            # QuestPie assembly + build
-│   │   │   ├── collections/      # Collection definitions
-│   │   │   └── globals/          # Global definitions
+│   │   │   ├── questpie.config.ts # config({ modules: [admin()], ... })
+│   │   │   ├── auth.ts            # Auth config (satisfies AuthConfig)
+│   │   │   ├── .generated/        # Codegen output (app + App type)
+│   │   │   ├── collections/       # Collection definitions (auto-discovered)
+│   │   │   └── globals/           # Global definitions (auto-discovered)
 │   │   └── admin/
-│   │       └── admin.ts          # Client admin builder
+│   │       └── builder.ts         # Client admin builder
 │   ├── lib/
-│   │   ├── client.ts         # Typed client
-│   │   └── query-client.ts       # TanStack Query client
+│   │   ├── client.ts              # Typed client
+│   │   └── query-client.ts        # TanStack Query client
 │   ├── routes/
-│   │   ├── api/app.ts            # QuestPie route handler
-│   │   └── admin/                # Admin panel routes
-│   └── migrations/               # Drizzle migrations
-├── questpie.config.ts            # CLI config
-├── AGENTS.md                     # AI agent guidance
+│   │   ├── api/$.ts               # QuestPie route handler
+│   │   └── admin/                 # Admin panel routes
+│   └── migrations/                # Drizzle migrations
+├── questpie.config.ts             # CLI config
+├── AGENTS.md                      # AI agent guidance
 ├── package.json
 └── vite.config.ts
 ```

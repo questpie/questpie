@@ -47,7 +47,7 @@ The Admin Builder provides a type-safe, declarative API for configuring the admi
            └─► Pages, Widgets, Custom fields/views
 ```
 
-**Server-side config** (branding, sidebar, dashboard, locales) is configured via `q().use(adminModule)` from `@questpie/admin/server`.
+**Server-side config** (branding, sidebar, dashboard, locales) is configured via `config({ modules: [admin({ ... })] })` using `admin` from `@questpie/admin/server`.
 
 ---
 
@@ -60,7 +60,7 @@ Every builder has a readonly `state` property that contains the configuration:
 ```typescript
 const admin = qa().use(coreAdminModule);
 
-// State is the config - no .build() needed!
+// State is the config - used directly!
 console.log(admin.state.fields); // { text: FieldBuilder<...>, ... }
 ```
 
@@ -110,7 +110,7 @@ const admin = qa()
   .pages({ ... });
 
 // Option 2: Create typed builder with namespace (recommended)
-import type { App } from "./server/app";
+import type { App } from "./server/.generated";
 
 const qab = qa<App>()
   .use(coreAdminModule)
@@ -121,7 +121,7 @@ const postsAdmin = qab.collection("posts")
   .fields(({ r }) => ({ ... }));
 ```
 
-**Note:** Branding, sidebar, dashboard, and locales are configured server-side via `q().use(adminModule)` from `@questpie/admin/server`.
+**Note:** Branding, sidebar, dashboard, and locales are configured server-side via `admin()` from `@questpie/admin/server` passed to `config({ modules: [admin({ ... })] })`.
 
 ### AdminBuilder Methods
 
@@ -136,11 +136,11 @@ const postsAdmin = qab.collection("posts")
 | `.defaultViews(config)` | Set default views configuration                      |
 | `.toNamespace()`        | Create scoped qa-like namespace                      |
 
-**Server-side methods** (via `q().use(adminModule)` from `@questpie/admin/server`):
-- `.branding(config)` - Set branding (name, logo, colors)
-- `.sidebar(config)` - Set sidebar navigation  
-- `.dashboard(config)` - Set dashboard widgets
-- `.adminLocale(config)` - Set admin UI locale settings
+**Server-side options** (via `admin()` from `@questpie/admin/server`):
+- `branding` - Set branding (name, logo, colors)
+- `sidebar` - Set sidebar navigation  
+- `dashboard` - Set dashboard widgets
+- `adminLocale` - Set admin UI locale settings
 
 ### Field Registration
 
@@ -325,20 +325,21 @@ const admin = qa()
   });
 ```
 
-**Dashboard configuration** is done server-side via `q().use(adminModule)` from `@questpie/admin/server`.
+**Dashboard configuration** is done server-side via `admin({ dashboard })` from `@questpie/admin/server`.
 
 ### Server Dashboard Actions (`a` proxy)
 
-For server-side builder (`q().use(adminModule)`), dashboard config callback also exposes `a` for header actions.
+The `admin({ dashboard })` config callback exposes `a` for header actions.
 
 ```typescript
-import { adminModule } from "@questpie/admin/server";
-import { q } from "questpie";
+import { admin } from "@questpie/admin/server";
+import { config } from "questpie";
 
-const app = q({ name: "app" })
-  .use(adminModule)
-  .dashboard(({ d, c, a }) =>
-    d.dashboard({
+export default config({
+  modules: [
+    admin({
+      dashboard: ({ d, c, a }) =>
+        d.dashboard({
       title: { en: "Dashboard" },
       actions: [
         a.create({
@@ -355,9 +356,11 @@ const app = q({ name: "app" })
           icon: c.icon("ph:gear-six"),
         }),
       ],
-      items: [],
+        items: [],
+      }),
     }),
-  );
+  ],
+});
 ```
 
 Action helpers:
@@ -368,16 +371,17 @@ Action helpers:
 
 ### Sidebar Configuration (Server-side)
 
-Sidebar is configured on the server builder:
+Sidebar is configured via `admin({ sidebar })`:
 
 ```typescript
-import { adminModule } from "@questpie/admin/server";
-import { q } from "questpie";
+import { admin } from "@questpie/admin/server";
+import { config } from "questpie";
 
-const app = q({ name: "app" })
-  .use(adminModule)
-  .sidebar(({ s, c }) =>
-    s.sidebar({
+export default config({
+  modules: [
+    admin({
+      sidebar: ({ s, c }) =>
+        s.sidebar({
       sections: [
         {
           id: "main",
@@ -405,7 +409,9 @@ const app = q({ name: "app" })
         },
       ],
     }),
-  );
+    }),
+  ],
+});
 ```
 
 ---
@@ -866,7 +872,7 @@ export function SplitView({ collection, id, fields }: EditViewComponentProps) {
 5. **Keep views simple** - Complex logic belongs in hooks
 6. **IconComponent not strings** - Use actual React components for icons
 7. **Validation on backend** - Admin automatically uses backend schemas
-8. **Builder state is config** - No `.build()` needed
+8. **Builder state is config** - Used directly, no extra build step
 
 ---
 

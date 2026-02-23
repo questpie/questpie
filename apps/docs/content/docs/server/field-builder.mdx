@@ -29,8 +29,7 @@ In traditional app development, you repeat field information across layers: data
 ## Basic Usage
 
 ```ts
-export const pages = qb
-  .collection("pages")
+export const pages = collection("pages")
   .fields(({ f }) => ({
     title: f.text({
       label: { en: "Title", sk: "Názov" },
@@ -213,7 +212,7 @@ When the app builds, each field definition goes through these steps:
 Field definitions propagate types through the entire stack:
 
 ```ts
-const posts = qb.collection("posts").fields(({ f }) => ({
+const posts = collection("posts").fields(({ f }) => ({
   title: f.text({ required: true }),        // string (non-null)
   description: f.textarea({}),               // string | null
   rating: f.number({ min: 1, max: 5 }),     // number | null

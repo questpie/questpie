@@ -9,22 +9,19 @@ QUESTPIE is designed so packages can extend builders cleanly.
 
 ## Core principle
 
-`q` starts minimal. Modules extend behavior through `.use(...)`.
+`config()` starts minimal. Modules extend behavior through the `modules` array.
 
 ## Example: `@questpie/admin/server`
 
 ```ts
-import { q } from "questpie";
-import { adminModule } from "@questpie/admin/server";
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-const app = q({ name: "my-app" })
-  .use(adminModule)
-  .collections({
-    // your collections
-  })
-  .build({
-    db: { url: process.env.DATABASE_URL },
-  });
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 What the admin module adds:
@@ -37,19 +34,15 @@ What the admin module adds:
 ## Composition pattern
 
 ```ts
-const base = q({ name: "base" }).use(adminModule);
+import { config, module } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-export const app = q({ name: "product" })
-  .use(base)
-  .collections({
-    /* ... */
-  })
-  .globals({
-    /* ... */
-  })
-  .build({
-    /* ... */
-  });
+// Compose multiple modules
+export default config({
+  modules: [admin(), myCustomModule()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 ## Extension design goals
@@ -62,6 +55,6 @@ export const app = q({ name: "product" })
 
 If you are creating your own extension package, follow the same pattern:
 
-1. define a reusable builder module
+1. define a reusable module using the `module()` factory
 2. register fields/views/components through builder state
-3. expose typed composition through `.use(yourModule)`
+3. expose typed composition through the `modules` array in `config()`

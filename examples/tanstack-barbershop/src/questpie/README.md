@@ -6,17 +6,18 @@ This directory contains the QUESTPIE app configuration for the Barbershop exampl
 
 ```
 questpie/
-  server/              # Backend QuestPie (q builder)
-    app.ts             # Main app instance + module augmentation
-    collections/       # Collection definitions
-      barbers.ts
-      services.ts
-      appointments.ts
-      reviews.ts
-    jobs/              # Background jobs
-      index.ts
-    functions/         # RPC functions
-      index.ts
+  questpie.config.ts   # Main config (replaces server/app.ts)
+  collections/         # Collection definitions (standalone factories)
+    barbers.collection.ts
+    services.collection.ts
+    appointments.collection.ts
+    reviews.collection.ts
+  jobs/                # Background jobs
+    index.ts
+  functions/           # Standalone functions (auto-discovered)
+    index.ts
+  .generated/          # Auto-generated app instance (codegen)
+    index.ts
 
   admin/               # Admin UI (qa builder)
     builder.ts         # Main admin builder with module augmentation
@@ -31,32 +32,30 @@ questpie/
 
 Both server and admin use module augmentation for type-safe access throughout the app.
 
-### Server (`/server/app.ts`)
+### Server (`questpie.config.ts` + `.generated/index.ts`)
 
 ```typescript
-import { q } from "questpie";
-import { adminModule } from "@questpie/admin/server";
+// questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-export const app = q({ name: "barbershop" })
-  .use(adminModule)
-  .collections({ barbers, services, appointments, reviews })
-  .build({ ... });
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 
-export type App = typeof app;
-
-// Module augmentation for type-safe hooks, functions, jobs
-declare module "questpie" {
-  interface QuestpieContext {
-    app: typeof baseInstance.$inferCms;
-  }
-}
+// Collections are auto-discovered from collections/*.collection.ts
+// The codegen generates .generated/index.ts with the typed app instance:
+//   import { app } from "~/questpie/.generated";
+//   export type App = typeof app;
 ```
 
 ### Admin (`/admin/builder.ts`)
 
 ```typescript
 import { qa, adminModule } from "@questpie/admin/client";
-import type { App } from "../server/app";
+import type { App } from "../.generated";
 
 export const admin = qa<App>().use(adminModule);
 
@@ -92,11 +91,11 @@ const { client } = useAdminContext();
 
 **Server (`/server`):**
 
-- Backend application framework using `q()` builder
+- Backend application framework using standalone factories + `config()`
 - Drizzle schema definitions
 - Validation schemas (Zod)
 - Hooks, jobs, auth, etc.
-- Example: `q.collection("barbers").fields({ ... })`
+- Example: `collection("barbers").fields(({ f }) => ({ ... }))`
 
 **Admin (`/admin`):**
 
@@ -110,16 +109,15 @@ const { client } = useAdminContext();
 ### Server Collection (Backend)
 
 ```typescript
-// server/collections/barbers.ts
-import { q } from "questpie";
-import { varchar, text, boolean } from "drizzle-orm/pg-core";
+// collections/barbers.collection.ts
+import { collection } from "questpie";
 
-export const barbers = q.collection("barbers").fields({
-  name: varchar("name", { length: 255 }).notNull(),
-  email: varchar("email", { length: 255 }).notNull(),
-  bio: text("bio"),
-  isActive: boolean("is_active").default(true),
-});
+export default collection("barbers").fields(({ f }) => ({
+  name: f.text({ label: "Name", required: true }),
+  email: f.email({ label: "Email", required: true }),
+  bio: f.textarea({ label: "Bio" }),
+  isActive: f.boolean({ label: "Active", default: true }),
+}));
 ```
 
 ### Admin Collection (UI)
@@ -158,7 +156,7 @@ export const barbersAdmin = qa
 
 ```typescript
 // builder.ts - Single source for typed qa namespace
-import type { App } from "@/questpie/server/app";
+import type { App } from "@/questpie/.generated";
 import { qa as originalQa, adminModule } from "@questpie/admin/client";
 
 // Pre-configured qa with app types and admin module
@@ -167,13 +165,21 @@ export const qa = originalQa<App>().use(adminModule).toNamespace();
 
 ## API Features
 
-### 1. No `.build()` Method
+### 1. `config()` Replaces `.build()`
 
-Builder state IS the final config:
+Server configuration uses the top-level `config()` factory. Collections, functions, and jobs are auto-discovered by codegen from file conventions — no need to manually wire them:
 
 ```typescript
-const admin = qa().collections({ ... });
-// Use admin directly - admin.state contains config
+// questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
+
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
+// Codegen generates .generated/index.ts with the typed app instance
 ```
 
 ### 2. Scoped Helpers with Builder Pattern
@@ -257,7 +263,7 @@ function BarbersList() {
 
 QUESTPIE supports full i18n for both backend messages and admin UI.
 
-### Backend Messages (`/server/app.ts`)
+### Backend Messages (`questpie.config.ts`)
 
 Add custom translated messages for API responses and validation:
 
@@ -273,19 +279,21 @@ const backendMessages = {
   },
 } as const;
 
-export const app = q({ name: "barbershop" })
-  .use(adminModule)
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
   // Configure content locales
-  .locale({
+  locale: {
     locales: [
       { code: "en", label: "English", fallback: true },
       { code: "sk", label: "Slovenčina" },
     ],
     defaultLocale: "en",
-  })
+  },
   // Add custom messages
-  .messages(backendMessages)
-  .build({ ... });
+  messages: backendMessages,
+});
 
 // Use in handlers:
 // app.t("appointment.created", { date: "2024-01-20" }, "sk")
@@ -297,14 +305,19 @@ export const app = q({ name: "barbershop" })
 Admin UI translations are configured server-side via `.adminLocale()` and fetched by the client:
 
 ```typescript
-// server/app.ts
-export const app = q({ name: "barbershop" })
-  .use(adminModule)
-  .adminLocale({
+// questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
+
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+  adminLocale: {
     default: "en",
     supported: ["en", "sk"],
-  })
-  .build({ ... });
+  },
+});
 ```
 
 The client automatically fetches these translations via RPC (`useServerTranslations` prop on `AdminLayoutProvider`).

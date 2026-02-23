@@ -13,84 +13,70 @@ interface WorkflowStep {
 }
 
 export const workflowSteps: WorkflowStep[] = [
-	// 1. Define collections with Drizzle
+	// 1. Define collections
 	{
 		id: 1,
 		file: "collections.ts",
 		action: "Define collections",
 		mode: "full",
-		code: `import { q } from 'questpie'
-import { varchar, timestamp, boolean } from 'drizzle-orm/pg-core'
+		code: `import { collection } from 'questpie'
 
-export const barbers = q.collection('barbers')
-  .fields({
-    name: varchar('name', { length: 255 }).notNull(),
-    email: varchar('email', { length: 255 }).notNull().unique(),
-    isActive: boolean('is_active').default(true).notNull()
-  })
+export const barbers = collection('barbers')
+  .fields(({ f }) => ({
+    name: f.text({ label: 'Name', required: true }),
+    email: f.email({ label: 'Email', required: true }),
+    isActive: f.boolean({ label: 'Active', default: true }),
+  }))
 
-export const appointments = q.collection('appointments')
-  .fields({
-    barberId: varchar('barber_id', { length: 255 }).notNull(),
-    customerName: varchar('customer_name', { length: 255 }).notNull(),
-    scheduledAt: timestamp('scheduled_at').notNull(),
-    status: varchar('status', { length: 50 }).default('pending')
-  })`,
+export const appointments = collection('appointments')
+  .fields(({ f }) => ({
+    barberId: f.relation({ to: 'barbers', required: true }),
+    customerName: f.text({ label: 'Customer', required: true }),
+    scheduledAt: f.dateTime({ label: 'Scheduled At', required: true }),
+    status: f.select({ label: 'Status', options: ['pending', 'confirmed', 'completed'], default: 'pending' }),
+  }))`,
 	},
 
-	// 2. Create app instance
+	// 2. Create config
 	{
 		id: 2,
-		file: "app.ts",
-		action: "Create app instance",
+		file: "questpie.config.ts",
+		action: "Create config",
 		mode: "full",
-		code: `import { q } from 'questpie'
-import { barbers, appointments } from './collections'
+		code: `import { config } from 'questpie'
+import { admin } from '@questpie/admin/server'
 
-export const app = q({ name: 'barbershop' })
-  .collections({
-    barbers,
-    appointments
-  })`,
-	},
-
-	// 3. Add a background job
-	{
-		id: 3,
-		file: "jobs.ts",
-		action: "Add background job",
-		mode: "full",
-		code: `import { q } from 'questpie'
-import { z } from 'zod'
-
-export const sendReminder = q.job({
-  name: 'send-reminder',
-  schema: z.object({
-    appointmentId: z.string(),
-    email: z.string().email()
-  }),
-  handler: async (payload) => {
-    // Send reminder email
-    console.log(\`Reminder sent to \${payload.email}\`)
-  }
+export default config({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+  modules: [admin()],
 })`,
 	},
 
-	// 4. Register job in app
+	// 3. Add a function
 	{
-		id: 4,
-		file: "app.ts",
-		action: "Register job",
-		mode: "patch",
-		patches: [
-			{ line: 2, code: "import { sendReminder } from './jobs'" },
-			{ line: -1, code: "  .jobs({ 'send-reminder': sendReminder })" },
-		],
+		id: 3,
+		file: "functions/send-reminder.ts",
+		action: "Add a function",
+		mode: "full",
+		code: `import { fn } from 'questpie'
+import { z } from 'zod'
+
+export default fn({
+  schema: z.object({
+    appointmentId: z.string(),
+    email: z.string().email(),
+  }),
+  handler: async ({ input, app }) => {
+    // Send reminder email
+    console.log(\`Reminder sent to \${input.email}\`)
+  },
+})`,
 	},
 
-	// 5. Add hooks to collection
+	// 4. Add lifecycle hooks
 	{
-		id: 5,
+		id: 4,
 		file: "collections.ts",
 		action: "Add lifecycle hooks",
 		mode: "patch",
@@ -98,13 +84,12 @@ export const sendReminder = q.job({
 			{
 				line: -1,
 				code: `  .hooks({
-    afterChange: async ({ data, operation }) => {
+    afterChange: async ({ data, operation, app }) => {
       if (operation !== 'create') return
-      const app = getAppFromContext()
-      // Queue reminder 1 hour before appointment
-      await app.queue.sendReminder.publish({
+      // Call the send-reminder function
+      await app.api.fn.sendReminder({
         appointmentId: data.id,
-        email: data.customerEmail
+        email: data.customerEmail,
       })
     }
   })`,
@@ -112,65 +97,45 @@ export const sendReminder = q.job({
 		],
 	},
 
-	// 6. Build with config
+	// 5. Create fetch handler
+	{
+		id: 5,
+		file: "routes/api.ts",
+		action: "Create fetch handler",
+		mode: "full",
+		code: `import { app } from '~/questpie/.generated'
+import { createFetchHandler } from 'questpie'
+
+const handler = createFetchHandler(app, {
+  basePath: '/api',
+})
+
+export default handler`,
+	},
+
+	// 6. Type-safe client
 	{
 		id: 6,
-		file: "app.ts",
-		action: "Build with config",
-		mode: "patch",
-		patches: [
-			{
-				line: -1,
-				code: `  .build({
-    db: { url: process.env.DATABASE_URL },
-    queue: { adapter: pgBossAdapter() }
-  })`,
-			},
-		],
-	},
-
-	// 7. Mount to Hono
-	{
-		id: 7,
-		file: "server.ts",
-		action: "Mount to Hono",
-		mode: "full",
-		code: `import { Hono } from 'hono'
-import { questpieHono } from '@questpie/hono'
-import { app as questpieApp } from './app'
-
-const server = new Hono()
-  .route('/api', questpieHono(questpieApp))
-
-export default {
-  port: 3000,
-  fetch: server.fetch
-}`,
-	},
-
-	// 8. Type-safe client
-	{
-		id: 8,
 		file: "client.ts",
 		action: "Use type-safe client",
 		mode: "full",
 		code: `import { createClient } from 'questpie/client'
-import type { app } from './app'
+import type { App } from '~/questpie/.generated'
 
-const client = createClient<typeof app>({
-  baseURL: 'http://localhost:3000'
+const client = createClient<App>({
+  baseURL: 'http://localhost:3000',
 })
 
 // Fully typed
 const { docs } = await client.collections.barbers.find({
-  where: { isActive: true }
+  where: { isActive: true },
 })
 
 // Create appointment
 await client.collections.appointments.create({
   barberId: docs[0].id,
   customerName: 'John Doe',
-  scheduledAt: new Date()
+  scheduledAt: new Date(),
 })`,
 	},
 ];

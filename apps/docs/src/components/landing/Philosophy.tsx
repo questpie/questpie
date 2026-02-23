@@ -1,14 +1,14 @@
 import { CodeWindow } from "./CodeWindow";
 
-const serverCode = `// server/collections/posts.ts
-import { q, text, boolean } from 'questpie'
+const serverCode = `// collections/posts.collection.ts
+import { collection } from 'questpie'
 
-export const posts = q.collection('posts')
-  .fields({
-    title: text('title').notNull(),
-    content: text('content'),
-    published: boolean('published').default(false),
-  })
+export default collection('posts')
+  .fields(({ f }) => ({
+    title: f.text({ label: 'Title', required: true }),
+    content: f.richText({ label: 'Content' }),
+    published: f.boolean({ label: 'Published', default: false }),
+  }))
   .admin(({ c }) => ({
     label: 'Posts',
     icon: c.icon('ph:article'),
@@ -56,13 +56,13 @@ export function Philosophy() {
 					<div className="space-y-3">
 						<div className="flex items-center gap-2">
 							<span className="font-mono text-xs text-primary font-medium">
-								Server — q() builder
+								Server — collection() builder
 							</span>
 							<span className="text-sm text-muted-foreground">
 								— Schema + Admin + Access
 							</span>
 						</div>
-						<CodeWindow title="server/collections/posts.ts">
+						<CodeWindow title="collections/posts.collection.ts">
 							{serverCode}
 						</CodeWindow>
 					</div>
@@ -89,7 +89,7 @@ export function Philosophy() {
 						},
 						{
 							title: "Composable modules",
-							desc: "Auth, storage, jobs — each is a .use() plugin. Add what you need, skip what you don't.",
+							desc: "Auth, storage, jobs — each is a module. Add what you need, skip what you don't.",
 						},
 						{
 							title: "Headless by default",

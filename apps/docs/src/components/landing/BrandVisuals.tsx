@@ -514,9 +514,9 @@ export function AnimOrbitArcs({ className }: { className?: string }) {
  */
 export function AnimLayerStack({ className }: { className?: string }) {
 	const layers = [
-		{ label: "Core", sub: "q()", size: 220 },
-		{ label: "Adapters", sub: ".build()", size: 170 },
-		{ label: "Modules", sub: ".use()", size: 120 },
+		{ label: "Core", sub: "config()", size: 220 },
+		{ label: "Adapters", sub: "createApp()", size: 170 },
+		{ label: "Modules", sub: "modules", size: 120 },
 		{ label: "Client", sub: "qa()", size: 70 },
 	];
 	const ox = 60;
@@ -655,7 +655,7 @@ export function AnimSchemaFlow({ className }: { className?: string }) {
 					fontSize: 9,
 				}}
 			>
-				q().collection()
+				collection()
 			</text>
 			{outs.map((o, i) => {
 				const p = `M 120 100 L 200 100 Q 240 100 240 ${o.y < 100 ? o.y + 40 : o.y - 40} L 240 ${o.y} L 420 ${o.y}`;

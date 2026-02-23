@@ -36,10 +36,9 @@ CollectionBuilder chain:
 From the Barbershop example — a services collection:
 
 ```ts
-import { qb } from "../builder";
+import { collection } from "questpie";
 
-export const services = qb
-  .collection("services")
+export const services = collection("services")
   .fields(({ f }) => ({
     name: f.text({
       label: { en: "Name", sk: "Názov" },
@@ -315,20 +314,19 @@ Enables live preview in the admin form:
 Combines two collection builders:
 
 ```ts
-const withSeo = qb.collection("temp").fields(({ f }) => ({
+const withSeo = collection("temp").fields(({ f }) => ({
   metaTitle: f.text({ maxLength: 255 }),
   metaDescription: f.textarea({}),
 }));
 
-const pages = qb
-  .collection("pages")
+const pages = collection("pages")
   .fields(({ f }) => ({ title: f.text({ required: true }) }))
   .merge(withSeo);
 ```
 
 ## What the Builder Produces
 
-When you call `.build()` on the top-level `q` builder, each collection generates:
+When the app is built from your `config()`, each collection generates:
 
 1. **Drizzle table schema** — PostgreSQL table with typed columns
 2. **I18n table** — separate table for localized fields (if any)

@@ -61,7 +61,7 @@ bun add @questpie/admin
 
 Usage notes:
 
-- Server side: import `adminModule` from `@questpie/admin/server` and register it with `q.use(adminModule)`.
+- Server side: import `admin` from `@questpie/admin/server` and register it in `config({ modules: [admin()] })`.
 - Client side: import `qa` and `adminModule` from `@questpie/admin/client` to configure registries and rendering.
 - Runtime-only path: skip this package and keep only your server runtime + API handlers.
 - Admin login requires auth to be configured on the runtime (`.auth({ ... })`).
@@ -112,19 +112,21 @@ BETTER_AUTH_SECRET=replace-me-in-production
 Create a simple test file to confirm the baseline runtime resolves:
 
 ```ts
-import { q } from "questpie";
+import { collection, config } from "questpie";
 
 // If this compiles, you're ready
-const builder = q({ name: "test" });
+const posts = collection("posts").fields(({ f }) => ({
+  title: f.text({ required: true }),
+}));
 ```
 
 If you're using the admin interface, also verify these imports resolve:
 
 ```ts
-import { adminModule } from "@questpie/admin/server";
+import { admin } from "@questpie/admin/server";
 import { qa } from "@questpie/admin/client";
 
-void adminModule;
+void admin;
 void qa;
 ```
 

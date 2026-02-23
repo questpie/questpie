@@ -1,216 +1,169 @@
 ---
-title: q Builder API
-description: Core server builder — all chainable methods, entity factories, and build configuration
+title: Config & Standalone Factories API
+description: Core server configuration and standalone entity factories
 ---
 
-# q Builder API
+# Config & Standalone Factories API
 
-`q()` creates the top-level server builder. All schema definitions, modules, and runtime configuration flow through this builder. It is immutable — every method returns a new builder instance with updated state.
+QUESTPIE uses `config()` to define the top-level application configuration and standalone factories (`collection()`, `global()`, `fn()`, `job()`, `email()`) to define entities. With file convention and codegen, entities are auto-discovered from the filesystem.
 
-## Creating a Builder
-
-```ts
-import { q } from "questpie";
-
-const app = q({ name: "my-app" });
-```
-
-The `name` parameter identifies your application in logs and database prefixes.
-
-## Chainable Configuration Methods
-
-### `.collections(map)`
-
-Register collections as a named map. Keys become the collection slugs and API paths.
+## Creating a Config
 
 ```ts
-.collections({
-  posts: postsCollection,
-  users: usersCollection,
-})
+// questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
+
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
-**Parameter:** `Record<string, CollectionBuilder>` — map of collection names to collection builders.
+The `config()` function accepts all runtime configuration and module composition in a single call.
 
-### `.globals(map)`
+## Config Options
 
-Register globals as a named map.
+The `config()` function accepts a single options object:
 
 ```ts
-.globals({
-  siteSettings: siteSettingsGlobal,
-  navigation: navigationGlobal,
-})
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
+
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+  storage: { driver: s3Driver(...) },
+  email: { adapter: smtpAdapter(...) },
+  queue: { adapter: pgBossAdapter(...) },
+  search: createPostgresSearchAdapter(),
+  kv: { adapter: memoryKVAdapter() },
+  logger: { level: "info" },
+  realtime: { adapter: pgNotifyAdapter },
+  auth: {
+    emailAndPassword: { enabled: true },
+    socialProviders: {
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      },
+    },
+  },
+  locale: {
+    locales: [
+      { code: "en", label: "English" },
+      { code: "de", label: "Deutsch" },
+      { code: "sk", label: "Slovenčina" },
+    ],
+    defaultLocale: "en",
+  },
+  messages: {
+    en: { greeting: "Hello {{name}}" },
+    de: { greeting: "Hallo {{name}}" },
+  },
+});
 ```
 
-**Parameter:** `Record<string, GlobalBuilder>` — map of global names to global builders.
+### `modules`
 
-### `.fields(map)`
-
-Register custom field type definitions. These become available on the `f` proxy in `.fields(({ f }) => ...)`.
+Array of modules to compose into the application. Modules add collections, globals, fields, jobs, and admin capabilities.
 
 ```ts
-.fields({
-  color: colorFieldDefinition,
-  geoPoint: geoPointFieldDefinition,
-})
+import { admin } from "@questpie/admin/server";
+import { audit } from "@questpie/admin/server";
+
+config({
+  modules: [admin(), audit()],
+  // ...
+});
 ```
 
-**Parameter:** `Record<string, FieldDefinition>` — map of field type names to definitions.
-
-### `.jobs(map)`
-
-Register background job definitions.
-
-```ts
-.jobs({
-  sendConfirmation: sendConfirmationJob,
-  generateReport: generateReportJob,
-})
-```
-
-**Parameter:** `Record<string, JobDefinition>` — map of job names to definitions created with `job()`.
-
-### `.emailTemplates(map)`
-
-Register email template definitions.
-
-```ts
-.emailTemplates({
-  welcome: welcomeTemplate,
-  passwordReset: passwordResetTemplate,
-})
-```
-
-**Parameter:** `Record<string, EmailTemplateDefinition>` — map of template names to definitions created with `q.email()`.
-
-### `.auth(config)`
+### `auth`
 
 Configure authentication via Better Auth.
 
 ```ts
-.auth({
-  emailAndPassword: { enabled: true },
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+config({
+  auth: {
+    emailAndPassword: { enabled: true },
+    socialProviders: {
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      },
     },
   },
-})
+  // ...
+});
 ```
 
-Also accepts a function for merging with existing auth config:
+**Type:** `BetterAuthOptions`
+
+### `locale`
+
+Configure content localization.
 
 ```ts
-.auth((existing) => ({
-  ...existing,
-  emailAndPassword: { enabled: true },
-}))
-```
-
-**Parameter:** `BetterAuthOptions | ((current) => BetterAuthOptions)`
-
-### `.locale(config)`
-
-Configure localization.
-
-```ts
-.locale({
-  locales: [
-    { code: "en", label: "English" },
-    { code: "de", label: "Deutsch" },
-    { code: "sk", label: "Slovenčina" },
-  ],
-  defaultLocale: "en",
-})
-```
-
-**Parameter:** `{ locales: string[]; defaultLocale: string }`
-
-### `.branding(config)` _(with `@questpie/admin/server`)_
-
-Configure admin branding on the server builder.
-
-```ts
-import { adminModule } from "@questpie/admin/server";
-
-q({ name: "app" })
-  .use(adminModule)
-  .branding({
-    name: { en: "My Admin" },
-    logo: "/logo.svg",
-  })
-```
-
-This method is added by the admin server module. It is not part of bare `q()`.
-
-### `.adminLocale(config)` _(with `@questpie/admin/server`)_
-
-Configure admin UI locales (interface language), separately from content locales.
-
-```ts
-import { adminModule } from "@questpie/admin/server";
-
-q({ name: "app" })
-  .use(adminModule)
-  .adminLocale({
-    locales: ["en", "sk"],
+config({
+  locale: {
+    locales: [
+      { code: "en", label: "English" },
+      { code: "de", label: "Deutsch" },
+    ],
     defaultLocale: "en",
-  })
+  },
+  // ...
+});
 ```
 
-Use `.locale()` for content language; use `.adminLocale()` for admin UI language.
+**Type:** `{ locales: { code: string; label?: string }[]; defaultLocale: string }`
 
-### `.messages(messages, options?)`
+### `messages`
 
-Add backend translation messages. These power `app.t()` for type-safe translations.
+Backend translation messages for `app.t()`.
 
 ```ts
-.messages({
-  en: { greeting: "Hello {{name}}" },
-  de: { greeting: "Hallo {{name}}" },
-}, { fallbackLocale: "en" })
+config({
+  messages: {
+    en: { greeting: "Hello {{name}}" },
+    de: { greeting: "Hallo {{name}}" },
+  },
+  // ...
+});
 ```
 
-**Parameter:** `Record<string, Record<string, string>>`, options: `{ fallbackLocale?: string }`
+**Type:** `Record<string, Record<string, string>>`
 
-### `.migrations(migrations)`
+### `migrations`
 
-Add database migrations.
+Database migrations array.
 
 ```ts
 import { migrations } from "./migrations";
 
-.migrations(migrations)
+config({
+  migrations,
+  // ...
+});
 ```
 
-**Parameter:** `Migration[]` — array of migration objects.
+**Type:** `Migration[]`
 
-### `.use(module)`
+## Standalone Entity Factories
 
-Compose another builder's state into this one. This is the core extension mechanism — packages like `@questpie/admin` expose a module builder that you `.use()`.
+With file convention, each entity is defined in its own file using standalone factories. Codegen discovers these files and generates the `app` instance.
 
-```ts
-import { adminModule } from "@questpie/admin/server";
+### `collection(name)`
 
-q({ name: "app" })
-  .use(adminModule)
-  .collections({ ... })
-```
-
-When two builders define the same key, the last `.use()` wins. Fields, collections, globals, jobs, and email templates are merged by name.
-
-**Parameter:** `{ readonly state: BuilderState }` — any builder or module.
-
-## Entity Factory Methods
-
-### `q.collection(name)`
-
-Create a new `CollectionBuilder`.
+Create a new `CollectionBuilder`. Import from `"questpie"`.
 
 ```ts
-const posts = q.collection("posts")
+// collections/posts.collection.ts
+import { collection } from "questpie";
+
+export default collection("posts")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     status: f.select({
@@ -223,12 +176,15 @@ const posts = q.collection("posts")
 
 **Returns:** `CollectionBuilder`
 
-### `q.global(name)`
+### `global(name)`
 
-Create a new `GlobalBuilder`.
+Create a new `GlobalBuilder`. Import from `"questpie"`.
 
 ```ts
-const settings = q.global("siteSettings")
+// globals/site-settings.global.ts
+import { global } from "questpie";
+
+export default global("siteSettings")
   .fields(({ f }) => ({
     siteName: f.text({ required: true }),
     logo: f.upload(),
@@ -239,7 +195,7 @@ const settings = q.global("siteSettings")
 
 ### `job(definition)`
 
-Define a background job. Import `job` from `"questpie"`.
+Define a background job. Import from `"questpie"`.
 
 ```ts
 import { job } from "questpie";
@@ -264,12 +220,13 @@ const sendConfirmation = job({
 
 ### `fn(definition)`
 
-Define a server function. Import `fn` from `"questpie"`.
+Define a server function. Import from `"questpie"`.
 
 ```ts
+// functions/get-available-slots.ts
 import { fn } from "questpie";
 
-const getAvailableSlots = fn({
+export default fn({
   schema: z.object({ barberId: z.string(), date: z.string() }),
   handler: async ({ input, app }) => {
     // ...
@@ -282,14 +239,18 @@ Supports two modes:
 - **JSON function** — `schema` + `handler`, input/output validated
 - **Raw function** — `handler` only, receives raw `Request`, returns `Response`
 
+Functions are auto-discovered by codegen and available at `/api/fn/<name>`.
+
 **Returns:** `FunctionDefinition`
 
-### `q.email(definition)`
+### `email(definition)`
 
-Define an email template.
+Define an email template. Import from `"questpie"`.
 
 ```ts
-const welcome = q.email({
+import { email } from "questpie";
+
+const welcome = email({
   name: "welcome",
   subject: "Welcome to {{siteName}}",
   render: ({ context }) => (
@@ -302,57 +263,33 @@ const welcome = q.email({
 
 ## Type-Safe Handler Contexts
 
-After build, export `App` once and reuse it in hooks/access/RPC/jobs:
+With codegen, the `app` instance and `App` type are generated in `.generated/index.ts`:
 
 ```ts
-export const app = q({ name: "app" })
-  .collections({ posts })
-  .build({ app: { url: process.env.APP_URL! }, db: { url: process.env.DATABASE_URL! } });
-
-export type App = typeof app;
+// Import from codegen output
+import type { App } from "~/questpie/.generated";
 ```
 
 Then in handlers:
 
 ```ts
-import { getContext } from "questpie";
-import type { App } from '../app';
+import { getContext, typedApp } from "questpie";
+import type { App } from "~/questpie/.generated";
 
 afterChange: async (ctx) => {
   const { app, db, session } = getContext<App>(ctx);
 }
 ```
 
-## Build
+## Config Runtime Options
 
-### `.build(runtimeConfig)`
-
-Finalize the builder into a runnable app instance.
-
-```ts
-const app = q({ name: "app" })
-  .use(adminModule)
-  .collections({ posts, users })
-  .globals({ siteSettings })
-  .build({
-    app: { url: process.env.APP_URL! },
-    db: { url: process.env.DATABASE_URL! },
-    storage: { driver: s3Driver(...) },
-    email: { adapter: smtpAdapter(...) },
-    queue: { adapter: pgBossAdapter(...) },
-    search: createPostgresSearchAdapter(),
-    kv: { adapter: memoryKVAdapter() },
-    logger: { level: "info" },
-    realtime: { adapter: pgNotifyAdapter },
-  });
-```
-
-**Parameter:** `QuestpieRuntimeConfig` with:
+The `config()` function accepts all runtime configuration:
 
 | Field | Required | Description |
 |---|---|---|
 | `app.url` | Yes | Public URL of the application |
 | `db.url` | Yes | PostgreSQL connection string |
+| `modules` | No | Array of modules (e.g., `[admin(), audit()]`) |
 | `storage` | No | Storage config (`driver` for custom storage) |
 | `email` | No | Email adapter (default: console) |
 | `queue` | No | Queue adapter (default: pg-boss) |
@@ -360,12 +297,14 @@ const app = q({ name: "app" })
 | `kv` | No | KV adapter (default: in-memory) |
 | `logger` | No | Logger config (`level`, `pretty`, optional adapter) |
 | `realtime` | No | Realtime adapter (default: none) |
-
-**Returns:** `Questpie<TConfig>` — the runtime app instance with typed access to all APIs.
+| `auth` | No | Better Auth configuration |
+| `locale` | No | Content localization config |
+| `messages` | No | Translation messages |
+| `migrations` | No | Migration array |
 
 ## Runtime Instance
 
-After `.build()`, the app instance exposes:
+After codegen, the `app` instance exposes:
 
 ```ts
 app.api.collections.posts.find(...)    // CRUD

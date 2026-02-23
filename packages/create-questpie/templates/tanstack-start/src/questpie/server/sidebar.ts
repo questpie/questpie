@@ -1,9 +1,3 @@
-import type { qb } from "./builder.js";
-
-type SidebarBuilder = Parameters<
-	Parameters<ReturnType<typeof qb.collection>["sidebar"]>[0]
->[0];
-
 export function configureSidebar({ s, c }: any) {
 	return s.sidebar({
 		sections: [

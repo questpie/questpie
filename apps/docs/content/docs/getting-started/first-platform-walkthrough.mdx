@@ -16,15 +16,9 @@ This walkthrough goes beyond the quickstart. You'll build a schema-first backend
 - A typed function
 - Client admin configuration
 
-## Step 1: Server Builder
+## Step 1: Define Collections
 
-```ts
-// src/questpie/server/builder.ts
-import { adminModule } from "@questpie/admin/server";
-import { q } from "questpie";
-
-export const qb = q.use(adminModule);
-```
+Collections are defined using the standalone `collection()` factory. Each file exports a single collection.
 
 ## Step 2: Services Collection
 
@@ -32,10 +26,9 @@ Start with a simple collection for the services your business offers:
 
 ```ts
 // src/questpie/server/collections/services.ts
-import { qb } from "../builder";
+import { collection } from "questpie";
 
-export const services = qb
-  .collection("services")
+export const services = collection("services")
   .fields(({ f }) => ({
     name: f.text({
       label: { en: "Name" },
@@ -103,10 +96,9 @@ For many-to-many relations, you need a junction collection:
 
 ```ts
 // src/questpie/server/collections/barber-services.ts
-import { qb } from "../builder";
+import { collection } from "questpie";
 
-export const barberServices = qb
-  .collection("barberServices")
+export const barberServices = collection("barberServices")
   .fields(({ f }) => ({
     barber: f.relation({
       to: "barbers",
@@ -139,11 +131,10 @@ Now the barbers collection, which uses a many-to-many relation through the junct
 
 ```ts
 // src/questpie/server/collections/barbers.ts
+import { collection } from "questpie";
 import { uniqueIndex } from "drizzle-orm/pg-core";
-import { qb } from "../builder";
 
-export const barbers = qb
-  .collection("barbers")
+export const barbers = collection("barbers")
   .fields(({ f }) => ({
     name: f.text({
       label: { en: "Full Name" },
@@ -272,20 +263,25 @@ Key patterns here:
 - **`indexes`** enforces unique slugs and emails at the database level
 - **Many-to-many relation** uses `through`, `sourceField`, and `targetField`
 
-## Step 5: Compose Everything
+## Step 5: Configure Everything
 
 ```ts
-// src/questpie/server/app.ts
-import { createApp } from "questpie";
-import { adminModule } from "@questpie/admin/server";
-import { barbers } from "./collections/barbers";
-import { barberServices } from "./collections/barber-services";
-import { services } from "./collections/services";
+// src/questpie/questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-export const app = createApp({ name: "my-first-platform" })
-  .use(adminModule)
-  .collections({ barbers, services, barberServices })
-  .sidebar(({ s, c }) =>
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL || "http://localhost:3000" },
+  auth: {
+    emailAndPassword: { enabled: true },
+    baseURL: process.env.APP_URL || "http://localhost:3000",
+    basePath: "/api/auth",
+    secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
+  },
+  branding: { name: { en: "My Platform" } },
+  sidebar: ({ s, c }) =>
     s.sidebar({
       sections: [
         s.section({
@@ -310,20 +306,7 @@ export const app = createApp({ name: "my-first-platform" })
         }),
       ],
     }),
-  )
-  .branding({ name: { en: "My Platform" } })
-  .auth({
-    emailAndPassword: { enabled: true },
-    baseURL: process.env.APP_URL || "http://localhost:3000",
-    basePath: "/api/auth",
-    secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
-  })
-  .build({
-    db: { url: process.env.DATABASE_URL! },
-    app: { url: process.env.APP_URL || "http://localhost:3000" },
-  });
-
-export type App = typeof app;
+});
 ```
 
 ```ts
@@ -350,7 +333,7 @@ export default fn({
 ```ts
 // src/questpie/admin/admin.ts
 import { adminModule, qa } from "@questpie/admin/client";
-import type { App } from "../server/app";
+import type { App } from "../server/.generated";
 
 export const admin = qa<App>()
   .use(adminModule);
@@ -361,7 +344,7 @@ export const admin = qa<App>()
 ```ts
 // src/routes/api.ts
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/app";
+import { app } from "@/questpie/.generated";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",

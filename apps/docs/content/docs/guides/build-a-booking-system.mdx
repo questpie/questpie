@@ -24,7 +24,7 @@ appointments ── references barber + service + customer data
 ### Services
 
 ```ts
-const services = q.collection("services")
+const services = collection("services")
   .fields(({ f }) => ({
     name: f.text({ required: true }),
     description: f.textarea(),
@@ -39,7 +39,7 @@ const services = q.collection("services")
 ### Barbers
 
 ```ts
-const barbers = q.collection("barbers")
+const barbers = collection("barbers")
   .fields(({ f }) => ({
     name: f.text({ required: true }),
     email: f.email({ required: true }),
@@ -55,7 +55,7 @@ const barbers = q.collection("barbers")
 ### Appointments
 
 ```ts
-const appointments = q.collection("appointments")
+const appointments = collection("appointments")
   .fields(({ f }) => ({
     barber: f.relation({ to: "barbers", required: true }),
     service: f.relation({ to: "services", required: true }),
@@ -250,14 +250,16 @@ Automatically record cancellation time and send notification:
 ## Step 5: Assemble the app
 
 ```ts
-export const app = q({ name: "barbershop" })
-  .use(adminModule)
-  .collections({ services, barbers, appointments })
-  .jobs({ sendConfirmation, sendCancellation })
-  .build({
-    app: { url: process.env.APP_URL! },
-    db: { url: process.env.DATABASE_URL! },
-  });
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
+
+export default config({
+  modules: [admin()],
+  collections: { services, barbers, appointments },
+  jobs: { sendConfirmation, sendCancellation },
+  app: { url: process.env.APP_URL! },
+  db: { url: process.env.DATABASE_URL! },
+});
 
 // Functions live in the functions/ directory — no router needed.
 // functions/booking/getAvailableSlots.ts exports the fn() above

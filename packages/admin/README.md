@@ -19,64 +19,58 @@ bun add @questpie/admin questpie @questpie/tanstack-query @tanstack/react-query
 
 ## Server Setup
 
-The admin module plugs into the QUESTPIE builder on the server:
+The admin module is configured via `config()` in your `questpie.config.ts`:
 
 ```ts
-// questpie/server/builder.ts
-import { q } from "questpie";
-import { adminModule } from "@questpie/admin/server";
+// questpie/server/questpie.config.ts
+import { admin } from "@questpie/admin/server";
+import { config } from "questpie";
 
-export const qb = q.use(adminModule);
-```
-
-All admin configuration is defined server-side using the builder chain:
-
-```ts
-// questpie/server/app.ts
-import { qb } from "./builder";
-
-export const app = qb
-  .collections({ posts, pages })
-  .globals({ siteSettings })
-  .branding({ name: { en: "My Admin Panel" } })
-  .sidebar(({ s, c }) =>
-    s.sidebar({
-      sections: [
-        s.section({
-          id: "content",
-          title: { en: "Content" },
-          items: [
-            { type: "link", label: "Dashboard", href: "/admin", icon: c.icon("ph:house") },
-            { type: "collection", collection: "posts" },
-            { type: "collection", collection: "pages" },
-            { type: "divider" },
-            { type: "global", global: "siteSettings" },
+export default config({
+  modules: [
+    admin({
+      branding: { name: { en: "My Admin Panel" } },
+      sidebar: ({ s, c }) =>
+        s.sidebar({
+          sections: [
+            s.section({
+              id: "content",
+              title: { en: "Content" },
+              items: [
+                { type: "link", label: "Dashboard", href: "/admin", icon: c.icon("ph:house") },
+                { type: "collection", collection: "posts" },
+                { type: "collection", collection: "pages" },
+                { type: "divider" },
+                { type: "global", global: "siteSettings" },
+              ],
+            }),
           ],
         }),
-      ],
+      dashboard: ({ d, c, a }) =>
+        d.dashboard({
+          title: { en: "Dashboard" },
+          actions: [
+            a.create({ collection: "posts", label: { en: "New Post" }, icon: c.icon("ph:plus") }),
+            a.global({ global: "siteSettings", label: { en: "Settings" }, icon: c.icon("ph:gear-six") }),
+          ],
+          items: [],
+        }),
     }),
-  )
-  .dashboard(({ d, c, a }) =>
-    d.dashboard({
-      title: { en: "Dashboard" },
-      actions: [
-        a.create({ collection: "posts", label: { en: "New Post" }, icon: c.icon("ph:plus") }),
-        a.global({ global: "siteSettings", label: { en: "Settings" }, icon: c.icon("ph:gear-six") }),
-      ],
-      items: [],
-    }),
-  )
-  .build({ ... });
-
-export type App = typeof app;
+  ],
+  app: { url: process.env.APP_URL! },
+  db: { url: process.env.DATABASE_URL! },
+  secret: process.env.AUTH_SECRET!,
+});
 ```
+
+Collections, globals, functions, and jobs are auto-discovered via file convention. Codegen produces a `.generated/index.ts` with the fully-typed `App` and runtime `app` instance.
 
 ### Collection Admin Config
 
 Admin metadata, list views, and form views are defined on the collection itself:
 
 ```ts
-const posts = qb.collection("posts")
+const posts = collection("posts")
   .fields(({ f }) => ({
     title: f.text({ label: "Title", required: true }),
     content: f.richText({ label: "Content" }),
@@ -193,7 +187,7 @@ The client creates a typed admin builder and mounts the admin UI in React:
 ```ts
 // questpie/admin/builder.ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { App } from "../server/app";
+import type { App } from "../server/.generated";
 
 export const admin = qa<App>().use(adminModule);
 ```
@@ -203,7 +197,7 @@ export const admin = qa<App>().use(adminModule);
 ```ts
 // questpie/admin/hooks.ts
 import { createTypedHooks } from "@questpie/admin/client";
-import type { App } from "../server/app";
+import type { App } from "../server/.generated";
 
 export const {
   useCollectionList,
@@ -253,8 +247,7 @@ Import admin styles and scan the admin package:
 The admin includes a full drag-and-drop block editor. Blocks are defined server-side:
 
 ```ts
-const heroBlock = qb
-  .block("hero")
+const heroBlock = block("hero")
   .admin(({ c }) => ({
     label: { en: "Hero Section" },
     icon: c.icon("ph:image"),
@@ -330,8 +323,8 @@ Legacy params (`history`, `viewOptions`, and `sidebar=preview`) are still read f
 // Client (React components, builder, hooks)
 import { qa, adminModule, AdminRouter, createTypedHooks, BlockRenderer, createBlockRegistry } from "@questpie/admin/client";
 
-// Server (admin module for QUESTPIE builder)
-import { adminModule, adminRpc } from "@questpie/admin/server";
+// Server (admin module for QUESTPIE config)
+import { admin, audit, adminRpc } from "@questpie/admin/server";
 
 // Styles
 import "@questpie/admin/styles/index.css";

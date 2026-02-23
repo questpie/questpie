@@ -67,14 +67,18 @@ const { app, db, session } = typedContext<App>(ctx);
 Export your app type once:
 
 ```ts
-// src/questpie/server/app.ts
-export const app = q({ name: "my-app" })
-  .collections({ /* ... */ })
-  .globals({ /* ... */ })
-  .jobs({ /* ... */ })
-  .build({ /* ... */ });
+// questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-export type App = typeof app;
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
+
+// App type is exported from the codegen output:
+// import type { App } from "~/questpie/.generated";
 ```
 
 Then import `App` in server-only files where callbacks run.
@@ -85,7 +89,7 @@ Then import `App` in server-only files where callbacks run.
 import { typedContext } from "questpie";
 import type { App } from '../app';
 
-q.collection("appointments")
+collection("appointments")
   .hooks({
     afterChange: async (ctx) => {
       const { app, session } = typedContext<App>(ctx);
@@ -126,7 +130,7 @@ async function logActivity(action: string) {
 }
 
 // Usage in hook — works because CRUD runs within runWithContext
-const posts = q.collection("posts").hooks({
+const posts = collection("posts").hooks({
   afterChange: async () => {
     await logActivity("post_updated"); // ✅ Context available automatically
   },

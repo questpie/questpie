@@ -17,17 +17,17 @@ This guide walks through setting up authentication in a QUESTPIE application —
 ### 1. Enable the Auth Plugin
 
 ```ts
-import { adminModule } from "@questpie/admin/server";
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-const app = q({ name: "app" })
-  .use(adminModule)
-  .auth({
+export default config({
+  modules: [admin()],
+  auth: {
     emailAndPassword: { enabled: true },
-  })
-  .build({
-    db: { url: process.env.DATABASE_URL },
-    app: { url: process.env.APP_URL },
-  });
+  },
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 ### 2. Admin Login
@@ -116,8 +116,7 @@ Store roles on the user model (Better Auth extends the user table):
 ### 2. Use Roles in Access Rules
 
 ```ts
-export const posts = qb
-  .collection("posts")
+export const posts = collection("posts")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     status: f.select({ options: ["draft", "published"] }),

@@ -16,8 +16,7 @@ Content management often requires an audit trail — who changed what, when, and
 Add `versioning: true` to the collection's `.options()`:
 
 ```ts
-export const posts = qb
-  .collection("posts")
+export const posts = collection("posts")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({}),
@@ -289,7 +288,7 @@ When workflow is enabled, the admin form view automatically shows:
 - **Stage badge** — Displays the current workflow stage in the form header
 - **Transition button** — Dropdown listing allowed target stages from the current stage
 - **Scheduling** — Optional "Schedule for later" date picker in the transition dialog
-- **History sidebar** — Transitions appear in the audit timeline (when `auditModule` is enabled) with stage change details
+- **History sidebar** — Transitions appear in the audit timeline (when `audit()` module is enabled) with stage change details
 
 No additional configuration is needed — the admin detects workflow from the schema introspection and renders the UI automatically.
 
@@ -300,8 +299,7 @@ No additional configuration is needed — the admin detects workflow from the sc
 The simplest workflow: posts start as drafts, editors publish when ready.
 
 ```ts
-const posts = qb
-  .collection("posts")
+const posts = collection("posts")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({}),
@@ -340,8 +338,7 @@ A three-stage workflow where authors submit drafts for review, reviewers approve
 ```ts
 import { ApiError } from "questpie/server/errors";
 
-const articles = qb
-  .collection("articles")
+const articles = collection("articles")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({}),
@@ -455,8 +452,7 @@ Content-Type: application/json
 Workflow works on globals too — useful for site-wide configuration that needs approval before going live.
 
 ```ts
-const siteConfig = qb
-  .global("site_config")
+const siteConfig = global("site_config")
   .fields(({ f }) => ({
     siteName: f.text({ required: true }),
     maintenanceMode: f.boolean({ default: false }),

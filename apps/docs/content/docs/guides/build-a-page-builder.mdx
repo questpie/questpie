@@ -68,7 +68,7 @@ const columnsBlock = block("columns")
 ## Step 2: Create the Pages Collection
 
 ```ts
-const pages = q.collection("pages")
+const pages = collection("pages")
   .fields(({ f }) => ({
     title: f.text({ required: true, localized: true }),
     slug: f.text({ required: true }),

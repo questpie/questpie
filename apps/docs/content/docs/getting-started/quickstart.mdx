@@ -42,23 +42,18 @@ This single definition produces:
 - A `posts` PostgreSQL table with `id`, `title`, `slug`, `content`, `published`, `createdAt`, `updatedAt`
 - CRUD API endpoints: `GET/POST /collections/posts`, `GET/PATCH/DELETE /collections/posts/:id`
 
-## Step 3: Compose the Runtime
+## Step 3: Configure the Runtime
 
-Wire collections together, add functions, and build the runtime instance:
+Create a config file and define functions:
 
 ```ts
-// src/questpie/server/app.ts
-import { createApp } from "questpie";
-import { posts } from "./collections/posts";
+// src/questpie/questpie.config.ts
+import { config } from "questpie";
 
-export const app = createApp({ name: "quickstart" })
-  .collections({ posts })
-  .build({
-    db: { url: process.env.DATABASE_URL! },
-    app: { url: process.env.APP_URL || "http://localhost:3000" },
-  });
-
-export type App = typeof app;
+export default config({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL || "http://localhost:3000" },
+});
 ```
 
 ```ts
@@ -79,7 +74,7 @@ Create a route handler that serves your runtime API:
 ```ts
 // src/routes/api.ts (Hono example)
 import { questpieHono } from "@questpie/hono";
-import { app } from "@/questpie/server/app";
+import { app } from "@/questpie/.generated";
 
 export const cmsApp = questpieHono(app, {
   basePath: "/api",
@@ -90,7 +85,7 @@ Or with the generic fetch handler (works with any Fetch-compatible framework):
 
 ```ts
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/app";
+import { app } from "@/questpie/.generated";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",
@@ -127,22 +122,26 @@ bun add @questpie/admin
 ```
 
 ```ts
-// src/questpie/server/builder.ts
-import { adminModule } from "@questpie/admin/server";
-import { q } from "questpie";
+// src/questpie/questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-export const qb = q.use(adminModule);
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL || "http://localhost:3000" },
+});
 ```
 
 ```ts
 // src/questpie/admin/builder.ts
 import { adminModule, qa } from "@questpie/admin/client";
-import type { App } from "../server/app";
+import type { App } from "../server/.generated";
 
 export const admin = qa<App>().use(adminModule);
 ```
 
-Collections defined with `qb.collection(...)` can now use `.admin()`, `.list()`, and `.form()`. Admin login also requires runtime auth configuration via `.auth({ ... })`.
+Collections defined with `collection(...)` can now use `.admin()`, `.list()`, and `.form()`. Admin login also requires runtime auth configuration via `.auth({ ... })`.
 
 ## What This Proves
 
@@ -155,7 +154,7 @@ Collections defined with `qb.collection(...)` can now use `.admin()`, `.list()`,
 
 - **Treating admin as baseline** — Start with runtime dependencies and one adapter.
 - **Forgetting `input: "optional"` for derived fields** — Use it for values that can be auto-generated (like slugs).
-- **Not building** — The `.build()` call is what creates the runtime instance. Without it, you have a builder, not a running backend.
+- **Forgetting the config file** — The `questpie.config.ts` is what creates the runtime instance. Without it, codegen cannot discover your collections and functions.
 
 ## Next Steps
 

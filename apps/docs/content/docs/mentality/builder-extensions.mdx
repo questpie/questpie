@@ -16,20 +16,20 @@ This is a core design choice in QUESTPIE.
 ## Real example: core + admin
 
 ```ts
-import { q } from "questpie";
-import { adminModule } from "@questpie/admin/server";
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-const app = q({ name: "app" })
-  .use(adminModule)
-  .collections({
+export default config({
+  modules: [admin()],
+  collections: {
     // your collections
-  })
-  .build({
-    db: { url: process.env.DATABASE_URL },
-  });
+  },
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
-`@questpie/admin/server` extends the server builder with admin-capable behavior, for example:
+`@questpie/admin/server` extends the server with admin-capable behavior via the `admin()` module, for example:
 
 - admin field types (`richText`, `blocks`, ...)
 - server admin methods (`.admin()`, `.list()`, `.form()`, `.dashboard()`, `.sidebar()`)

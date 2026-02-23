@@ -30,8 +30,7 @@ Two access modes control enforcement:
 Define operation-level rules with `.access()`:
 
 ```ts
-export const appointments = qb
-  .collection("appointments")
+export const appointments = collection("appointments")
   .fields(({ f }) => ({
     customer: f.text({ required: true }),
     scheduledAt: f.datetime({ required: true }),
@@ -117,8 +116,7 @@ This is useful when editors should be able to modify content but only certain ro
 Globals support `read`, `update`, and `transition` operations (no create/delete since globals are singletons):
 
 ```ts
-export const siteSettings = qb
-  .global("siteSettings")
+export const siteSettings = global("siteSettings")
   .fields(({ f }) => ({
     siteName: f.text({ required: true }),
     logo: f.upload({}),
@@ -137,8 +135,7 @@ Global access rules return `boolean` only — no row-level filtering (there's on
 Define field-specific rules in the collection's `.access()` method:
 
 ```ts
-export const employees = qb
-  .collection("employees")
+export const employees = collection("employees")
   .fields(({ f }) => ({
     name: f.text({ required: true }),
     email: f.text({ required: true }),
@@ -256,25 +253,27 @@ For each CRUD operation, access rules are resolved in this order:
 
 If a collection defines `.access({ read: true })` but omits `create`, then `read` uses the explicit rule (`true` = public) while `create` falls through to `defaultAccess` or the framework default.
 
-### Starter Module Defaults
+### Admin Module Defaults
 
-The `starterModule` sets `defaultAccess` to require authentication for all operations:
+The `admin()` module sets `defaultAccess` to require authentication for all operations:
 
 ```ts
-import { questpie, starterModule } from "@questpie/server";
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-// starterModule includes:
-// .defaultAccess({
+// admin() includes:
+// defaultAccess: {
 //   read: ({ session }) => !!session,
 //   create: ({ session }) => !!session,
 //   update: ({ session }) => !!session,
 //   delete: ({ session }) => !!session,
-// })
+// }
 
-const app = questpie({ name: "my-app" })
-  .use(starterModule)
-  .collections({ posts, products })
-  .build({ ... });
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 
 // posts and products now require authentication for ALL operations
 // unless they define their own .access() rules
@@ -282,31 +281,34 @@ const app = questpie({ name: "my-app" })
 
 ### Custom Default Access
 
-Override the default with `.defaultAccess()` on the builder:
+Override the default via `defaultAccess` in your config:
 
 ```ts
-const app = questpie({ name: "my-app" })
-  .use(starterModule)
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
+
+export default config({
+  modules: [admin()],
   // Override: public reads, authenticated writes
-  .defaultAccess({
+  defaultAccess: {
     read: true,
     create: ({ session }) => !!session,
     update: ({ session }) => !!session,
     delete: ({ session }) => (session?.user as any)?.role === "admin",
-  })
-  .collections({ posts, products })
-  .build({ ... });
+  },
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
-When composed via `.use()`, the consuming builder's `defaultAccess` wins (last-wins strategy, same as `.locale()`).
+When multiple modules provide `defaultAccess`, the config-level setting wins (last-wins strategy).
 
 ### Making a Collection Public
 
 To make a specific collection publicly accessible while keeping the default restrictive, set `.access()` on that collection:
 
 ```ts
-const publicPosts = qb
-  .collection("posts")
+const publicPosts = collection("posts")
   .access({
     read: true,  // Public reads
     // create, update, delete fall through to defaultAccess (require auth)
@@ -314,9 +316,9 @@ const publicPosts = qb
   .fields(({ f }) => ({ ... }));
 ```
 
-### Without Starter Module
+### Without Admin Module
 
-Even without `starterModule` or any `defaultAccess`, the framework falls back to requiring a session (`!!session`). This means you can never accidentally expose data by forgetting to set access rules.
+Even without `admin()` or any `defaultAccess`, the framework falls back to requiring a session (`!!session`). This means you can never accidentally expose data by forgetting to set access rules.
 
 To explicitly make everything public (not recommended), set:
 

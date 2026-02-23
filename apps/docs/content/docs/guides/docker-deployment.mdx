@@ -39,18 +39,23 @@ A typical production-ready QUESTPIE project has two runtime processes:
 
 ## Automatic Migrations & Seeds
 
-QUESTPIE supports running migrations and seeds automatically on app startup. Configure this in your `.build()` call:
+QUESTPIE supports running migrations and seeds automatically on app startup. Configure this in your `config()` call:
 
-```ts title="src/questpie/server/app.ts"
-import { migrations } from "../../migrations";
-import { seeds } from "../../seeds";
+```ts title="questpie.config.ts"
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
+import { migrations } from "./migrations";
+import { seeds } from "./seeds";
 
-export const app = baseApp.blocks(blocks).build({
+export default config({
+  modules: [admin()],
   // ... other config
   migrations,
   seeds,
   autoMigrate: true,         // Run pending migrations on startup
   autoSeed: "required",      // Run "required" category seeds on startup
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
 });
 ```
 

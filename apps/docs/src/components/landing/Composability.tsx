@@ -9,20 +9,20 @@ const layers = [
 	{
 		icon: Box,
 		label: "Core",
-		api: "q()",
+		api: "config()",
 		description: "Collections, globals, fields, jobs, auth — all type-safe.",
 	},
 	{
 		icon: Plug,
 		label: "Adapters",
-		api: ".build()",
+		api: "createApp()",
 		description:
 			"Storage, queue, email, search, realtime — swap providers, keep your schema.",
 	},
 	{
 		icon: Layers,
 		label: "Modules",
-		api: ".use()",
+		api: "modules",
 		description:
 			"Compose builders together. Admin module ships the full panel.",
 	},

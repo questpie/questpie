@@ -10,14 +10,13 @@ The server layer is the heart of QUESTPIE. It defines **WHAT** your runtime does
 ## Mental Model
 
 ```text
-q (Builder)
-  ├── .collections({ ... })     → database tables + CRUD API
-  ├── .globals({ ... })         → singleton records
-  ├── .auth()                   → authentication
-  ├── .locale()                 → i18n configuration
-  ├── .jobs()                   → background processing
-  ├── .messages()               → typed translations
-  └── .build(runtimeConfig)     → Questpie instance
+config (Configuration)
+  ├── collections/              → database tables + CRUD API (file convention)
+  ├── globals/                  → singleton records (file convention)
+  ├── functions/                → typed RPC (file convention)
+  ├── modules: [admin(), ...]   → extension modules
+  ├── db: { url }               → database connection
+  └── app: { url }              → application URL
 
 Optional via @questpie/admin/server
   ├── .sidebar() .dashboard()   → admin navigation and dashboard blueprint
@@ -42,23 +41,25 @@ CollectionBuilder
 Runtime-only:
 
 ```ts
-import { q } from "questpie";
+import { config } from "questpie";
 
-const app = q({ name: "app" })
-  .collections({ ... })
-  .build({ db: { url: process.env.DATABASE_URL } });
+export default config({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 Runtime + optional admin:
 
 ```ts
-import { q } from "questpie";
-import { adminModule } from "@questpie/admin/server";
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-const app = q({ name: "app" })
-  .use(adminModule)       // adds .admin(), .list(), .form(), .sidebar(), etc.
-  .collections({ ... })
-  .build({ db: { url: process.env.DATABASE_URL } });
+export default config({
+  modules: [admin()],    // adds .admin(), .list(), .form(), .sidebar(), etc.
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 ## Core Concepts

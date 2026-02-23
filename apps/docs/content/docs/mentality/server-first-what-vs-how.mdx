@@ -11,7 +11,7 @@ In QUESTPIE, the server owns contracts and behavior. The client owns rendering.
 
 | Layer                               | Owns     | Examples                                                                                        |
 | ----------------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
-| Server (`q`, `adminModule` server)  | **WHAT** | fields, validation, access, `.admin()`, `.list()`, `.form()`, `.dashboard()`, `.sidebar()`, rpc |
+| Server (`config`, `admin()` server) | **WHAT** | fields, validation, access, `.admin()`, `.list()`, `.form()`, `.dashboard()`, `.sidebar()`, functions |
 | Client (`qa`, `adminModule` client) | **HOW**  | field renderers, view renderers, component rendering, widget/page registries                    |
 
 ## Why this is better than dual config
@@ -24,8 +24,7 @@ In QUESTPIE, the server owns contracts and behavior. The client owns rendering.
 
 ```ts
 // Server decides WHAT the admin should render
-export const pages = qb
-  .collection("pages")
+export const pages = collection("pages")
   .fields(({ f }) => ({
     title: f.text({ label: { en: "Title" }, required: true }),
     content: f.blocks({ label: { en: "Content" } }),

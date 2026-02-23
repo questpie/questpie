@@ -1,6 +1,6 @@
 # questpie
 
-Server-first TypeScript backend framework with a proxy-based field builder, collections, globals, standalone RPC, background jobs, and a generated REST API.
+Server-first TypeScript backend framework with a proxy-based field builder, collections, globals, standalone functions, background jobs, and a generated REST API.
 
 > **Active Development** — QUESTPIE is a bootstrapped, community-driven framework under active development. The API may still change between releases, but we follow semantic versioning. Full stability is targeted for v3.
 
@@ -9,10 +9,10 @@ Server-first TypeScript backend framework with a proxy-based field builder, coll
 - **Field Builder** — Proxy-based `f` factory: `f.text()`, `f.relation()`, `f.upload()`, `f.blocks()` — produces Drizzle columns, Zod schemas, typed operators, and admin metadata from a single definition
 - **Custom Fields & Operators** — `field<TConfig, TValue>()` and `operator<TValue>()` factories for fully custom field types
 - **Collections & Globals** — Fluent builder chain with hooks, access control, indexes, relations, localization
-- **Standalone RPC** — End-to-end type-safe server functions via `rpc()`, routed at `/rpc/<path>`
+- **Standalone Functions** — End-to-end type-safe server functions via `fn()`, auto-discovered by file convention
 - **Reactive Fields** — Server-evaluated `hidden`, `readOnly`, `disabled`, `compute`, and dynamic `options`
 - **Introspection** — Serializable field metadata, relation info, reactive config for admin consumption
-- **Background Jobs** — `q.job()` with Zod schema validation, pg-boss or Cloudflare Queues adapters
+- **Background Jobs** — `job()` with Zod schema validation, pg-boss or Cloudflare Queues adapters
 - **Authentication** — Better Auth integration with plugins (admin, organization, 2FA, API keys)
 - **Storage** — Flydrive-based (S3, R2, GCS, local) with streaming uploads and typed upload collections
 - **Realtime** — PostgreSQL NOTIFY/LISTEN + Redis Streams with SSE delivery
@@ -29,19 +29,13 @@ bun add questpie drizzle-orm@beta zod
 
 ## Quick Start
 
-### 1. Create Builder
+### 1. Define Collections
 
 ```ts
-import { q } from "questpie";
-import { adminModule } from "@questpie/admin/server";
+// src/questpie/server/collections/posts.ts
+import { collection } from "questpie";
 
-export const qb = q.use(adminModule);
-```
-
-### 2. Define Collections
-
-```ts
-const posts = qb.collection("posts")
+export const posts = collection("posts")
   .fields(({ f }) => ({
     title: f.text({ label: "Title", required: true, maxLength: 255 }),
     content: f.richText({ label: "Content", localized: true }),
@@ -70,10 +64,13 @@ const posts = qb.collection("posts")
   });
 ```
 
-### 3. Define Globals
+### 2. Define Globals
 
 ```ts
-const siteSettings = qb.global("site_settings")
+// src/questpie/server/globals/site-settings.ts
+import { global } from "questpie";
+
+export const siteSettings = global("site_settings")
   .fields(({ f }) => ({
     siteName: f.text({ label: "Site Name", required: true }),
     description: f.textarea({ label: "Description" }),
@@ -85,37 +82,46 @@ const siteSettings = qb.global("site_settings")
   }));
 ```
 
-### 4. Build QuestPie
+### 3. Configure the App
 
 ```ts
-export const app = qb
-  .collections({ posts })
-  .globals({ siteSettings })
-  .auth({
-    emailAndPassword: { enabled: true },
-    baseURL: process.env.APP_URL!,
-    basePath: "/api/auth",
-    secret: process.env.AUTH_SECRET!,
-  })
-  .build({
-    app: { url: process.env.APP_URL! },
-    db: { url: process.env.DATABASE_URL! },
-    storage: { basePath: "/api" },
-    migrations,
-  });
+// src/questpie/server/questpie.config.ts
+import { admin } from "@questpie/admin/server";
+import { config } from "questpie";
 
-export type App = typeof app;
+export default config({
+  modules: [admin()],
+  app: { url: process.env.APP_URL! },
+  db: { url: process.env.DATABASE_URL! },
+  secret: process.env.AUTH_SECRET!,
+  storage: { basePath: "/api" },
+});
 ```
 
-### 5. Create Route Handler
+### 4. Auth Config
 
 ```ts
+// src/questpie/server/auth.ts
+import type { AuthConfig } from "questpie";
+
+export default {
+  emailAndPassword: { enabled: true },
+  baseURL: process.env.APP_URL!,
+  basePath: "/api/auth",
+  secret: process.env.AUTH_SECRET!,
+} satisfies AuthConfig;
+```
+
+### 5. Generate & Mount
+
+Run codegen to produce the typed app instance, then mount:
+
+```ts
+// Route handler
+import { app } from "~/questpie/server/.generated";
 import { createFetchHandler } from "questpie";
 
-const handler = createFetchHandler(app, {
-  basePath: "/api",
-  rpc: appRpc,
-});
+const handler = createFetchHandler(app, { basePath: "/api" });
 ```
 
 ### 6. Run Migrations
@@ -130,7 +136,7 @@ bun questpie migrate
 Fields are defined via the `f` proxy inside `.fields()`. Each field produces a Drizzle column, Zod validation, typed query operators, and serializable metadata:
 
 ```ts
-qb.collection("products").fields(({ f }) => ({
+collection("products").fields(({ f }) => ({
   name: f.text({ required: true, maxLength: 255 }),
   price: f.number({ required: true }),
   description: f.richText({ localized: true }),
@@ -221,23 +227,19 @@ const slugField = field<SlugConfig, string>()({
   }),
 });
 
-// Register on builder
-const qb = q.fields({ slug: slugField });
-
-// Use in collections
+// Use in collections (custom fields are registered via modules or config)
 .fields(({ f }) => ({ slug: f.slug({ required: true }) }))
 ```
 
-## Standalone RPC
+## Standalone Functions
 
-Type-safe server functions independent from CRUD:
+Type-safe server functions via file convention:
 
 ```ts
-import { rpc } from "questpie";
+// src/questpie/server/functions/get-stats.ts
+import { fn } from "questpie";
 
-const r = rpc();
-
-export const getStats = r.fn({
+export default fn({
   schema: z.object({ period: z.enum(["day", "week", "month"]) }),
   handler: async ({ input, app }) => {
     const count = await app.api.collections.posts.count({
@@ -246,39 +248,25 @@ export const getStats = r.fn({
     return { posts: count };
   },
 });
-
-// Register as router
-export const appRpc = r.router({ ...adminRpc, getStats });
-export type AppRpc = typeof appRpc;
 ```
 
-Client usage:
-
-```ts
-import { createClient } from "questpie/client";
-const client = createClient<App, AppRpc>({ baseURL: "...", basePath: "/api" });
-
-const stats = await client.rpc.getStats({ period: "week" });
-```
+Functions are auto-discovered by codegen and available at `/api/fn/<name>`.
 
 ## Background Jobs
 
 ```ts
-import { q } from "questpie";
+// src/questpie/server/jobs/send-welcome-email.ts
+import { z } from "zod";
 
-const sendWelcomeEmail = q.job({
-  name: "send-welcome-email",
+export default {
   schema: z.object({ userId: z.string() }),
   handler: async ({ payload, app }) => {
     const user = await app.api.collections.users.findById({ id: payload.userId });
     await app.email.send({ to: user.email, subject: "Welcome!", text: "..." });
   },
-});
+};
 
-// Register
-const app = qb.jobs({ sendWelcomeEmail }).build({ ... });
-
-// Dispatch
+// Dispatch (via the generated app instance)
 await app.queue.sendWelcomeEmail.publish({ userId: "123" });
 
 // Worker
@@ -380,23 +368,30 @@ bun questpie seed               # Run pending seeds
 bun questpie seed:generate      # Generate a new seed file
 ```
 
-Config file (`questpie.config.ts`):
+Config file (`questpie.config.ts` at project root):
 
 ```ts
-import { app } from "@/questpie/server/app";
-export default {
-  app: app,
+import { app } from "./src/questpie/server/.generated";
+export default { app };
+```
+
+CLI config (migrations directory etc.) is set inside `config()`:
+
+```ts
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
   cli: { migrations: { directory: "./src/migrations" } },
-};
+});
 ```
 
 ## Framework Adapters
 
-| Adapter | Package            | Server                                              |
-| ------- | ------------------ | --------------------------------------------------- |
-| Hono    | `@questpie/hono`   | `questpieHono(app, { basePath, rpc })`              |
-| Elysia  | `@questpie/elysia` | `questpieElysia(app, { basePath, rpc })`            |
-| Next.js | `@questpie/next`   | `questpieNextRouteHandlers(app, { basePath, rpc })` |
+| Adapter | Package            | Server                                           |
+| ------- | ------------------ | ------------------------------------------------ |
+| Hono    | `@questpie/hono`   | `questpieHono(app, { basePath })`                |
+| Elysia  | `@questpie/elysia` | `questpieElysia(app, { basePath })`              |
+| Next.js | `@questpie/next`   | `questpieNextRouteHandlers(app, { basePath })`   |
 
 Or use `createFetchHandler` directly with any framework that supports the Fetch API.
 

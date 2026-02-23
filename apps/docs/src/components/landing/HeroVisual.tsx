@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 SyntaxHighlighter.registerLanguage("typescript", typescript);
 
 // Step 1: Define your collection schema
-const schemaCode = `// server/collections/posts.ts
-const posts = qb.collection('posts')
+const schemaCode = `// collections/posts.collection.ts
+const posts = collection('posts')
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText(),

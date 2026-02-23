@@ -27,10 +27,9 @@ GlobalBuilder chain:
 ## Basic Example
 
 ```ts
-import { qb } from "../builder";
+import { global } from "questpie";
 
-export const siteSettings = qb
-  .global("siteSettings")
+export const siteSettings = global("siteSettings")
   .fields(({ f }) => ({
     shopName: f.text({
       label: { en: "Shop Name", sk: "Názov obchodu" },
@@ -89,8 +88,7 @@ export const siteSettings = qb
 The Barbershop example has a comprehensive site settings global with nested objects and arrays:
 
 ```ts
-export const siteSettings = qb
-  .global("siteSettings")
+export const siteSettings = global("siteSettings")
   .fields(({ f }) => ({
     // Branding
     shopName: f.text({ label: { en: "Shop Name" }, required: true, localized: true }),
@@ -233,12 +231,18 @@ const settingsSk = await app.api.globals.siteSettings.get({
 Globals are registered the same way as collections:
 
 ```ts
-export const app = q({ name: "my-app" })
-  .use(adminModule)
-  .collections({ ... })
-  .globals({ siteSettings })
-  .build({ ... });
+// questpie.config.ts
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
+
+export default config({
+  modules: [admin()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
+
+Globals are auto-discovered from the `globals/` directory via codegen.
 
 ## Sidebar Integration
 

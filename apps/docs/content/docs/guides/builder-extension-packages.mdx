@@ -1,21 +1,25 @@
 ---
 title: Builder Extension Packages
-description: Create reusable modules that extend q and qa with collections, fields, and admin features
+description: Create reusable modules that extend QUESTPIE with collections, fields, and admin features
 ---
 
 # Builder Extension Packages
 
-Extension packages add capabilities to QUESTPIE through the `.use()` composition pattern. This is how `@questpie/admin` works — it's just a module that adds admin-related collections, fields, and UI registrations.
+Extension packages add capabilities to QUESTPIE through the module composition pattern. This is how `@questpie/admin` works — it's just a module that adds admin-related collections, fields, and UI registrations.
 
-## How .use() Works
+## How Modules Work
 
-The `.use()` method merges another builder's state into the current builder:
+Modules are composed via the `config()` call:
 
 ```ts
-const app = q({ name: "app" })
-  .use(moduleA)    // adds moduleA's collections, fields, jobs, etc.
-  .use(moduleB)    // adds moduleB's state on top
-  .build({ ... });
+import { config } from "questpie";
+import { admin } from "@questpie/admin/server";
+
+export default config({
+  modules: [admin(), moduleA(), moduleB()],
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 State is merged by name — if two modules define the same collection, the last one wins. Fields, jobs, email templates, and auth config are all merged the same way.
@@ -30,7 +34,7 @@ Exports a builder with collections, fields, jobs, and any server-side state.
 
 ```ts
 // packages/my-plugin/src/server.ts
-import { q, job } from "@questpie/questpie";
+import { collection, job, module } from "questpie";
 
 // Define custom field types
 const currencyField = field<CurrencyFieldConfig, number>()({
@@ -39,7 +43,7 @@ const currencyField = field<CurrencyFieldConfig, number>()({
 });
 
 // Define collections
-const products = q.collection("products")
+const products = collection("products")
   .fields(({ f }) => ({
     name: f.text({ required: true }),
     price: f.currency({ currency: "USD", required: true }),
@@ -57,7 +61,7 @@ const syncInventory = job({
 });
 
 // Export the module
-export const ecommerceModule = q({ name: "ecommerce" })
+export const ecommerceModule = module({ name: "ecommerce" })
   .fields({ currency: currencyField })
   .collections({ products })
   .jobs({ syncInventory });
@@ -94,26 +98,27 @@ export const ecommerceAdminModule = qa()
 
 ```ts
 // App server
-import { q } from "@questpie/questpie";
-import { adminModule } from "@questpie/admin/server";
+import { collection, config } from "questpie";
+import { admin } from "@questpie/admin/server";
 import { ecommerceModule } from "@my-org/ecommerce-plugin/server";
 
-export const app = q({ name: "store" })
-  .use(adminModule)
-  .use(ecommerceModule)
-  .collections({
+export default config({
+  modules: [admin(), ecommerceModule],
+  collections: {
     // You can add more collections alongside the plugin's
     categories: categoriesCollection,
     // Or extend the plugin's collection
     products: ecommerceModule.state.collections.products.merge(
-      q.collection("products").fields(({ f }) => ({
+      collection("products").fields(({ f }) => ({
         featured: f.boolean().default(false),
       })),
     ),
-  })
-  .build({ ... });
+  },
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 
-// App client
+// App client — client-side patterns stay as-is
 import { qa, adminModule } from "@questpie/admin/client";
 import { ecommerceAdminModule } from "@my-org/ecommerce-plugin/client";
 
@@ -134,7 +139,7 @@ Use the builder pattern instead of importing modules directly in your handler:
 
 ```ts
 // Good — discoverable via builder state
-export const myModule = q({ name: "my-module" })
+export const myModule = module({ name: "my-module" })
   .collections({ myCollection });
 
 // Bad — hardcoded import that bypasses composition
@@ -158,7 +163,7 @@ If your module provides collections that users might extend, document the merge 
 ```ts
 // User extends your collection with extra fields
 const customProducts = ecommerceModule.state.collections.products.merge(
-  q.collection("products")
+  collection("products")
     .fields(({ f }) => ({ customField: f.text() }))
     .hooks({ afterChange: myCustomHook }),
 );
@@ -220,7 +225,7 @@ Use `peerDependencies` for QUESTPIE packages — consumers provide their own ver
 ## Common Mistakes
 
 - **Importing React in server module** — server modules must be framework-agnostic
-- **Building the app inside the module** — modules export builder state, the app calls `.build()`
+- **Building the app inside the module** — modules export builder state, the app uses `config()`
 - **Not using peerDependencies** — bundling QUESTPIE in your package creates version conflicts
 
 ## Related Pages

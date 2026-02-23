@@ -67,18 +67,22 @@ const colorField = field<ColorFieldConfig, string>()({
 ## Step 2: Register on the Server Builder
 
 ```ts
-import { q } from "@questpie/questpie";
+import { collection, config } from "questpie";
+import { admin } from "@questpie/admin/server";
 
-const app = q({ name: "app" })
-  .fields({ color: colorField })
-  .collections({
-    brands: q.collection("brands").fields(({ f }) => ({
-      name: f.text().notNull(),
-      primaryColor: f.color({ swatches: ["#FF5733", "#33FF57", "#3357FF"] }).notNull(),
-      secondaryColor: f.color(),
-    })),
-  })
-  .build({ ... });
+const brands = collection("brands").fields(({ f }) => ({
+  name: f.text().notNull(),
+  primaryColor: f.color({ swatches: ["#FF5733", "#33FF57", "#3357FF"] }).notNull(),
+  secondaryColor: f.color(),
+}));
+
+export default config({
+  modules: [admin()],
+  fields: { color: colorField },
+  collections: { brands },
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 Now `f.color()` is available in any collection or global definition.

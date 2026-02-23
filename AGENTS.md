@@ -100,7 +100,7 @@ import { q } from "questpie";
 Fields are defined via a proxy-based `f` factory inside `.fields()`:
 
 ```ts
-const posts = qb.collection("posts").fields(({ f }) => ({
+const posts = collection("posts").fields(({ f }) => ({
   title: f.text({ label: "Title", required: true }),
   content: f.richText({ label: "Content" }),
   published: f.boolean({ label: "Published", default: false }),
@@ -113,26 +113,24 @@ Built-in field types: `text`, `number`, `boolean`, `date`, `dateTime`, `select`,
 **Custom fields** via `field<TConfig, TValue>()` factory — see `packages/questpie/src/server/fields/field.ts`.
 **Custom operators** via `operator<TValue>()` — see `packages/questpie/src/server/fields/common-operators.ts`.
 
-### Standalone RPC
+### Standalone Functions
 
-End-to-end type-safe server functions, independent from the app instance:
+Type-safe server functions via file convention:
 
 ```ts
-// rpc.ts
-import { rpc } from "questpie";
-export const r = rpc();
+// functions/get-stats.ts
+import { fn } from "questpie";
 
-// functions/my-fn.ts
-export const myFn = r.fn({
-  schema: z.object({ id: z.string() }),
-  handler: async ({ input, app }) => { ... },
+export default fn({
+  schema: z.object({ period: z.enum(["day", "week", "month"]) }),
+  handler: async ({ input, app }) => {
+    const count = await app.api.collections.posts.count({});
+    return { posts: count };
+  },
 });
-
-// app.ts
-export const appRpc = r.router({ ...adminRpc, myFn });
 ```
 
-> **Note:** The `rpc()` factory is removed as of Phase 6. Use standalone `fn()` + file convention instead. See the "Standalone Factories" section above.
+Functions are auto-discovered by codegen and available at `/api/fn/<name>`.
 
 ### Introspection & Component References
 
@@ -149,7 +147,7 @@ Server emits serializable references that the client resolves via registries:
 - **Views**: resolve from `state.listViews` / `state.editViews`.
 - **Components**: resolve `c.*` from `state.components`.
 - **Entities**: collections/globals/jobs/queues flow from builder state, not literal names.
-- Defaults are provided by module registration (`q.use(adminModule)` / `qa.use(adminModule)`), not hardcoded.
+- Defaults are provided by module registration (`config({ modules: [admin()] })` on server / `qa.use(adminModule)` on client), not hardcoded.
 - Client resolves server-emitted `{ type, props }` references using its own registry — never assume server-only types.
 - When extending builders, prefer lazy type extraction (`FieldsOf<this>`, `QuestpieStateOf<this>`) over giant mapped types.
 
