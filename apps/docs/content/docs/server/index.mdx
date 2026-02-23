@@ -24,7 +24,7 @@ Optional via @questpie/admin/server
   └── collection .admin/.list/.form methods
 
 CollectionBuilder
-  ├── .fields((f) => ...)       → field definitions → DB columns
+  ├── .fields(({ f }) => ...)       → field definitions → DB columns
   ├── .title()                  → display title strategy
   ├── .hooks()                  → lifecycle callbacks
   ├── .access()                 → operation-level security
@@ -81,7 +81,7 @@ const app = q({ name: "app" })
 
 - [Collections](/docs/server/collections) — CollectionBuilder API with all methods
 - [Globals](/docs/server/globals) — GlobalBuilder for singleton records
-- [Field Builder](/docs/server/field-builder) — The `.fields((f) => ...)` lifecycle
+- [Field Builder](/docs/server/field-builder) — The `.fields(({ f }) => ...)` lifecycle
 - [Field Types](/docs/server/field-types) — Complete catalog of built-in field types
 - [Relations](/docs/server/relations) — belongsTo, hasMany, manyToMany, polymorphic
 - [Reactive Fields](/docs/server/reactive-fields) — hidden, readOnly, disabled, compute, dynamic options

@@ -20,7 +20,7 @@ const q = questpie({ name: "facets-test" }).fields(defaultFields);
 
 const products = q
 	.collection("products")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({ required: true, maxLength: 255 }),
 		description: f.textarea(),
 		status: f.text({ maxLength: 50, default: "draft" }),
@@ -56,7 +56,7 @@ const products = q
 
 const articles = q
 	.collection("articles")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true, maxLength: 255 }),
 		content: f.textarea(),
 		categoryPath: f.text({ maxLength: 255 }),

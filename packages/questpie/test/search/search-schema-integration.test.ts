@@ -122,7 +122,7 @@ describe("getSchema() Integration", () => {
 	// Test collection
 	const posts = q
 		.collection("posts")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 			content: f.textarea(),
 		}))

@@ -2,7 +2,7 @@ import { qb } from "@/questpie/server/builder.js";
 
 export const siteSettings = qb
 	.global("site_settings")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		siteName: f.text({
 			label: "Site Name",
 			required: true,

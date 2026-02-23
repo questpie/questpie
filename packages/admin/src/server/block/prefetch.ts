@@ -454,7 +454,7 @@ export async function processDocumentBlocksPrefetch<
  * import { createBlocksPrefetchHook } from "@questpie/admin/server";
  *
  * const pages = q.collection("pages")
- *   .fields((f) => ({
+ *   .fields(({ f }) => ({
  *     title: f.text({ required: true }),
  *     content: f.blocks({ allowedBlocks: ["hero", "text"] }),
  *   }))

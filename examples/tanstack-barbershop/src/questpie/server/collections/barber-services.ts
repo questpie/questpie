@@ -1,10 +1,9 @@
-import { qb } from "@/questpie/server/builder";
+import { collection } from "questpie";
 import { barbers } from "@/questpie/server/collections/barbers";
 import { services } from "@/questpie/server/collections/services";
 
-export const barberServices = qb
-	.collection("barber_services")
-	.fields((f) => ({
+export const barberServices = collection("barber_services")
+	.fields(({ f }) => ({
 		barber: f.relation({
 			to: () => barbers,
 			required: true,

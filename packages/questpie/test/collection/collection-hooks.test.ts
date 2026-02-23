@@ -41,7 +41,7 @@ const createBeforeAfterModule = (hookCallOrder: string[]) =>
 		.collections({
 			articles: q
 				.collection("articles")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					title: f.textarea({ required: true }),
 					slug: f.text({ maxLength: 255 }),
 					status: f.text({ maxLength: 50 }),
@@ -75,7 +75,7 @@ const testModuleBeforeAfter = createBeforeAfterModule([]);
 const testModuleUpdate = q.collections({
 	articles: q
 		.collection("articles")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			title: f.textarea({ required: true }),
 			status: f.text({ maxLength: 50 }),
 			viewCount: f.text(),
@@ -111,7 +111,7 @@ const testModuleDelete = q
 	.collections({
 		articles: q
 			.collection("articles")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 			}))
 			.hooks({
@@ -136,7 +136,7 @@ const testModuleDelete = q
 const testModuleError = q.collections({
 	articles: q
 		.collection("articles")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			title: f.textarea({ required: true }),
 			status: f.text({ maxLength: 50 }),
 		}))
@@ -154,7 +154,7 @@ const createEnrichmentModule = (enrichmentData: Map<string, any>) =>
 		.collections({
 			articles: q
 				.collection("articles")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					title: f.textarea({ required: true }),
 				}))
 				.hooks({

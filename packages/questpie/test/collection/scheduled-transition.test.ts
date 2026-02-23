@@ -10,7 +10,7 @@ const q = questpie({ name: "test-scheduled-transition" }).fields(defaultFields);
 
 const workflow_posts = q
 	.collection("workflow_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({
@@ -24,7 +24,7 @@ const workflow_posts = q
 
 const workflow_settings = q
 	.global("workflow_settings")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		siteName: f.text({ required: true }),
 	}))
 	.options({

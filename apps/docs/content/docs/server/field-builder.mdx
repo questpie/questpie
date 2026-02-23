@@ -14,7 +14,7 @@ In traditional app development, you repeat field information across layers: data
 ## Mental Model
 
 ```text
-.fields((f) => ({
+.fields(({ f }) => ({
   title: f.text({ ... }),    ← semantic field definition
 }))
        │
@@ -31,7 +31,7 @@ In traditional app development, you repeat field information across layers: data
 ```ts
 export const pages = qb
   .collection("pages")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({
       label: { en: "Title", sk: "Názov" },
       required: true,
@@ -59,7 +59,7 @@ The `f` proxy gives you type-safe access to all registered field types. The core
 
 ## The Field Proxy (`f`)
 
-Inside `.fields((f) => ...)`, `f` is a proxy object where each property is a field factory function:
+Inside `.fields(({ f }) => ...)`, `f` is a proxy object where each property is a field factory function:
 
 ```ts
 f.text(config)       // → FieldDefinition<TextState>
@@ -177,7 +177,7 @@ displayTitle: f.text({
 Inside `.list()` and `.form()`, the `f` proxy is strongly typed to the fields you defined:
 
 ```ts
-.fields((f) => ({
+.fields(({ f }) => ({
   title: f.text({ ... }),
   slug: f.text({ ... }),
   content: f.richText({ ... }),
@@ -213,7 +213,7 @@ When the app builds, each field definition goes through these steps:
 Field definitions propagate types through the entire stack:
 
 ```ts
-const posts = qb.collection("posts").fields((f) => ({
+const posts = qb.collection("posts").fields(({ f }) => ({
   title: f.text({ required: true }),        // string (non-null)
   description: f.textarea({}),               // string | null
   rating: f.number({ min: 1, max: 5 }),     // number | null

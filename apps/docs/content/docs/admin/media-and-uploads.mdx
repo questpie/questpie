@@ -14,7 +14,7 @@ Use `f.upload()` on a collection to add a file field:
 ```ts
 export const barbers = qb
   .collection("barbers")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({ required: true }),
     avatar: f.upload({}),           // Single file
     gallery: f.upload({ multiple: true }),  // Multiple files

@@ -36,7 +36,7 @@ Add `.searchable()` to collections that should be indexed:
 ```ts
 export const posts = qb
   .collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({}),
     category: f.select({ options: [...] }),

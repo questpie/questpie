@@ -8,7 +8,7 @@ describe("OpenAPI schema generation", () => {
 		it("generates proper JSON schema for collection fields", () => {
 			const q = questpie({ name: "test-openapi" }).fields(defaultFields);
 
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.text({ required: true, maxLength: 255 }),
 				content: f.textarea(),
 				viewCount: f.number({ default: 0 }),
@@ -59,7 +59,7 @@ describe("OpenAPI schema generation", () => {
 		it("generates document schema with id and timestamps", () => {
 			const q = questpie({ name: "test-openapi-doc" }).fields(defaultFields);
 
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.text({ required: true }),
 			}));
 
@@ -92,11 +92,11 @@ describe("OpenAPI schema generation", () => {
 				defaultFields,
 			);
 
-			const authors = q.collection("authors").fields((f) => ({
+			const authors = q.collection("authors").fields(({ f }) => ({
 				name: f.text({ required: true }),
 			}));
 
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.text({ required: true }),
 				author: f.relation({ to: "authors" }),
 			}));
@@ -123,7 +123,7 @@ describe("OpenAPI schema generation", () => {
 				defaultFields,
 			);
 
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.text({ required: true, maxLength: 100 }),
 				content: f.textarea(),
 				views: f.number(),
@@ -159,7 +159,7 @@ describe("OpenAPI schema generation", () => {
 
 			const posts = q
 				.collection("posts")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					title: f.text({ required: true }),
 				}))
 				.options({ versioning: true });
@@ -185,7 +185,7 @@ describe("OpenAPI schema generation", () => {
 
 			const posts = q
 				.collection("posts")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					title: f.text({ required: true }),
 				}))
 				.options({
@@ -197,7 +197,7 @@ describe("OpenAPI schema generation", () => {
 					},
 				});
 
-			const pages = q.collection("pages").fields((f) => ({
+			const pages = q.collection("pages").fields(({ f }) => ({
 				title: f.text({ required: true }),
 			}));
 
@@ -227,7 +227,7 @@ describe("OpenAPI schema generation", () => {
 				defaultFields,
 			);
 
-			const settings = q.global("settings").fields((f) => ({
+			const settings = q.global("settings").fields(({ f }) => ({
 				siteName: f.text({ required: true, maxLength: 100 }),
 				siteDescription: f.textarea(),
 				maintenanceMode: f.boolean({ default: false }),
@@ -258,7 +258,7 @@ describe("OpenAPI schema generation", () => {
 
 			const settings = q
 				.global("settings")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					siteName: f.text({ required: true }),
 				}))
 				.options({ versioning: true });
@@ -284,7 +284,7 @@ describe("OpenAPI schema generation", () => {
 
 			const settings = q
 				.global("settings")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					siteName: f.text({ required: true }),
 				}))
 				.options({
@@ -296,7 +296,7 @@ describe("OpenAPI schema generation", () => {
 					},
 				});
 
-			const nav = q.global("nav").fields((f) => ({
+			const nav = q.global("nav").fields(({ f }) => ({
 				items: f.array({ of: f.text() }),
 			}));
 

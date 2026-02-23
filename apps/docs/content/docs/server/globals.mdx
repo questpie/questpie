@@ -31,7 +31,7 @@ import { qb } from "../builder";
 
 export const siteSettings = qb
   .global("siteSettings")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     shopName: f.text({
       label: { en: "Shop Name", sk: "Názov obchodu" },
       required: true,
@@ -91,7 +91,7 @@ The Barbershop example has a comprehensive site settings global with nested obje
 ```ts
 export const siteSettings = qb
   .global("siteSettings")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     // Branding
     shopName: f.text({ label: { en: "Shop Name" }, required: true, localized: true }),
     tagline: f.text({ label: { en: "Tagline" }, localized: true }),
@@ -140,7 +140,7 @@ export const siteSettings = qb
 
 ## Builder Methods
 
-### `.fields((f) => ({ ... }))`
+### `.fields(({ f }) => ({ ... }))`
 
 Same field builder as collections. See [Field Builder](/docs/server/field-builder).
 

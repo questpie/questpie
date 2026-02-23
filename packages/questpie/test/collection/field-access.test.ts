@@ -9,7 +9,7 @@ const q = questpie({ name: "test-module" }).fields(defaultFields);
 
 const users = q
 	.collection("users")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		email: f.text({ required: true, maxLength: 255 }),
 		name: f.textarea({ required: true }),
 		ssn: f.text({ maxLength: 20 }), // Restricted field - defined in .access()
@@ -38,7 +38,7 @@ const users = q
 
 const publicPosts = q
 	.collection("public_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 		content: f.textarea({ required: true }),
 		draft: f.textarea(), // No access rules

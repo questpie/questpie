@@ -8,7 +8,7 @@ const steps = [
 			"Define collections with typed fields, relations, and validation. One definition generates the database schema, REST API, and admin forms.",
 		file: "server/collections/appointments.ts",
 		code: `const appointments = qb.collection("appointments")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     customer: f.text({ required: true }),
     barber: f.relation({ to: "barbers" }),
     service: f.relation({ to: "services" }),

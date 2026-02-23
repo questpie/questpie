@@ -9,7 +9,7 @@ const q = questpie({ name: "test-global-transition" }).fields(defaultFields);
 
 const site_settings = q
 	.global("site_settings")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		siteName: f.text({ required: true }),
 	}))
 	.options({
@@ -23,7 +23,7 @@ const site_settings = q
 
 const guarded_settings = q
 	.global("guarded_settings")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		siteName: f.text({ required: true }),
 	}))
 	.options({
@@ -41,7 +41,7 @@ const guarded_settings = q
 
 const no_workflow_global = q
 	.global("no_workflow_global")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		siteName: f.text({ required: true }),
 	}))
 	.options({

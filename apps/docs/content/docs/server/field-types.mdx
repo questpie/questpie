@@ -412,7 +412,7 @@ const slugField = field<{ maxLength?: number }, string>()({
 const qb = q.fields({ slug: slugField });
 
 // Use in collections
-.fields((f) => ({
+.fields(({ f }) => ({
   slug: f.slug({ maxLength: 100 }),
 }))
 ```

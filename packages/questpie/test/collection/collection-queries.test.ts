@@ -10,7 +10,7 @@ const q = questpie({ name: "test-module" }).fields(defaultFields);
 const testModule = q.collections({
 	posts: q
 		.collection("posts")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			title: f.textarea({ required: true }),
 			slug: f.text({ required: true, maxLength: 255 }),
 			status: f.text({ maxLength: 50 }),

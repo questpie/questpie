@@ -8,7 +8,7 @@ import { runTestDbMigrations } from "../utils/test-db";
 describe("collection IDs (field builder)", () => {
 	describe("default id", () => {
 		const q = questpie({ name: "test-default-id" }).fields(defaultFields);
-		const posts = q.collection("posts").fields((f) => ({
+		const posts = q.collection("posts").fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 		}));
 		const testModule = q.collections({ posts });
@@ -51,7 +51,7 @@ describe("collection IDs (field builder)", () => {
 		const q = questpie({ name: "test-i18n-default-id" }).fields(defaultFields);
 		const posts = q
 			.collection("posts")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				sku: f.text({ required: true, maxLength: 50 }),
 				title: f.text({ required: true, localized: true, maxLength: 255 }),
 			}))
@@ -107,7 +107,7 @@ describe("collection IDs (field builder)", () => {
 		);
 		const posts = q
 			.collection("posts")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.text({ required: true, maxLength: 255 }),
 			}))
 			.options({ versioning: true });
@@ -154,7 +154,7 @@ describe("collection IDs (field builder)", () => {
 		);
 		const posts = q
 			.collection("posts")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				sku: f.text({ required: true, maxLength: 50 }),
 				title: f.text({ required: true, localized: true, maxLength: 255 }),
 			}))

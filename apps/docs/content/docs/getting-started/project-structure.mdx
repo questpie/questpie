@@ -186,7 +186,7 @@ function dayScheduleFields(f: FieldBuilder) {
 
 export const barbers = qb
   .collection("barbers")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({ ... }),
     workingHours: f.object({
       fields: () => ({

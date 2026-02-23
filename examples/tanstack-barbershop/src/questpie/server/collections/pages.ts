@@ -1,10 +1,9 @@
 import { uniqueIndex } from "drizzle-orm/pg-core";
-import { qb } from "@/questpie/server/builder";
+import { collection } from "questpie";
 import { slugify } from "@/questpie/server/utils";
 
-export const pages = qb
-	.collection("pages")
-	.fields((f) => ({
+export const pages = collection("pages")
+	.fields(({ f }) => ({
 		title: f.text({
 			label: { en: "Title", sk: "Názov" },
 			required: true,

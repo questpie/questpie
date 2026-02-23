@@ -9,7 +9,7 @@
  *
  * const heroBlock = block("hero")
  *   .label({ en: "Hero Section" })
- *   .fields((f) => ({
+ *   .fields(({ f }) => ({
  *     title: f.text({ required: true }),
  *   }));
  * ```

@@ -59,7 +59,7 @@ export interface QuestpieBuilderState<
 
 	/**
 	 * Registered field types for the Field Builder system.
-	 * Used when defining collections with `.fields((f) => ({ ... }))`.
+	 * Used when defining collections with `.fields(({ f }) => ({ ... }))`.
 	 */
 	fields: TBuilderFields;
 

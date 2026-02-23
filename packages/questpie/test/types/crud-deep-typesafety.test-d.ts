@@ -54,7 +54,7 @@ const q = questpie({ name: "deep-test" }).fields(defaultFields);
 
 const authors = q
 	.collection("authors")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({ required: true, maxLength: 100 }),
 		email: f.text({ required: true }),
 		bio: f.textarea({ localized: true }),
@@ -62,7 +62,7 @@ const authors = q
 	}))
 	.options({ timestamps: true });
 
-const categories = q.collection("categories").fields((f) => ({
+const categories = q.collection("categories").fields(({ f }) => ({
 	name: f.text({ required: true, maxLength: 100 }),
 	slug: f.text({ required: true }),
 	description: f.textarea(),
@@ -70,7 +70,7 @@ const categories = q.collection("categories").fields((f) => ({
 
 const articles = q
 	.collection("articles")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true, maxLength: 255 }),
 		content: f.textarea({ localized: true }),
 		slug: f.text({ required: true }),
@@ -116,7 +116,7 @@ const articles = q
 	}))
 	.options({ softDelete: true, versioning: true });
 
-const articleComments = q.collection("article_comments").fields((f) => ({
+const articleComments = q.collection("article_comments").fields(({ f }) => ({
 	content: f.textarea({ required: true }),
 	article: f.relation({
 		to: "articles",
@@ -130,7 +130,7 @@ const articleComments = q.collection("article_comments").fields((f) => ({
 	}),
 }));
 
-const articleCategories = q.collection("article_categories").fields((f) => ({
+const articleCategories = q.collection("article_categories").fields(({ f }) => ({
 	article: f.relation({
 		to: "articles",
 		required: true,
@@ -145,7 +145,7 @@ const articleCategories = q.collection("article_categories").fields((f) => ({
 
 const media = q
 	.collection("media")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		alt: f.text({ maxLength: 255 }),
 		caption: f.textarea({ localized: true }),
 	}))

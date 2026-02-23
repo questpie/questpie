@@ -27,7 +27,7 @@ The most common relation — a foreign key to another collection:
 
 ```ts
 // appointments collection
-.fields((f) => ({
+.fields(({ f }) => ({
   customer: f.relation({
     to: "user",
     required: true,
@@ -99,7 +99,7 @@ For many-to-many relationships, you need a junction collection and `through` ref
 // barber-services.ts — the junction
 export const barberServices = qb
   .collection("barberServices")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     barber: f.relation({
       to: "barbers",
       required: true,
@@ -208,7 +208,7 @@ Key excerpts:
 // Junction (barber-services.ts)
 export const barberServices = qb
   .collection("barberServices")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     barber: f.relation({ to: "barbers", required: true, onDelete: "cascade" }),
     service: f.relation({ to: "services", required: true, onDelete: "cascade" }),
   }));
@@ -216,7 +216,7 @@ export const barberServices = qb
 // Appointments with multiple belongsTo
 export const appointments = qb
   .collection("appointments")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     customer: f.relation({ to: "user", required: true }),
     barber: f.relation({ to: "barbers", required: true }),
     service: f.relation({ to: "services", required: true }),

@@ -1,8 +1,7 @@
-import { qb } from "@/questpie/server/builder";
+import { collection } from "questpie";
 
-export const reviews = qb
-	.collection("reviews")
-	.fields((f) => ({
+export const reviews = collection("reviews")
+	.fields(({ f }) => ({
 		// Customer relation - when set, use customer's name and email
 		customer: f.relation({
 			to: "user",

@@ -98,7 +98,7 @@ To add a custom field type:
 
 ```ts
 // On the server, use a json field with a custom admin type
-.fields((f) => ({
+.fields(({ f }) => ({
   location: f.json({
     admin: { fieldType: "mapPoint" },
   }),

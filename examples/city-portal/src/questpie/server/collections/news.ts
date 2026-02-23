@@ -10,7 +10,7 @@ import { slugify } from "@/questpie/server/utils";
 
 export const news = qb
 	.collection("news")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		city: f.relation({
 			label: "City",
 			to: "cities",

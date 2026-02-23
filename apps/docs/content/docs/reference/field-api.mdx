@@ -5,12 +5,12 @@ description: Field builder proxy, built-in types, modifiers, and custom field de
 
 # Field API
 
-Fields are defined inside `.fields((f) => ...)` using the `f` proxy. Each method on `f` returns a chainable `FieldBuilder` that configures the field's database column, validation, operators, and metadata.
+Fields are defined inside `.fields(({ f }) => ...)` using the `f` proxy. Each method on `f` returns a chainable `FieldBuilder` that configures the field's database column, validation, operators, and metadata.
 
 ## Field Builder Proxy
 
 ```ts
-.fields((f) => ({
+.fields(({ f }) => ({
   title: f.text().notNull(),
   body: f.richText().localized(),
   price: f.number({ min: 0 }).notNull().default(0),

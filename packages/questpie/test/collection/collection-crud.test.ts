@@ -10,7 +10,7 @@ const q = questpie({ name: "test-module" }).fields(defaultFields);
 
 const products = q
 	.collection("products")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		sku: f.text({ required: true, maxLength: 50 }),
 		name: f.text({ required: true, localized: true }),
 		description: f.text({ localized: true }),
@@ -25,7 +25,7 @@ const products = q
 // Collection without .title() - should fallback _title to id
 const simple_items = q
 	.collection("simple_items")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({ required: true }),
 		description: f.text(),
 	}))
@@ -35,7 +35,7 @@ const simple_items = q
 
 const locked_products = q
 	.collection("locked_products")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		sku: f.text({ required: true, maxLength: 50 }),
 		name: f.text({ required: true, localized: true }),
 	}))
@@ -51,7 +51,7 @@ const locked_products = q
 
 const workflow_posts = q
 	.collection("workflow_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({
@@ -65,7 +65,7 @@ const workflow_posts = q
 
 const guarded_workflow_posts = q
 	.collection("guarded_workflow_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({

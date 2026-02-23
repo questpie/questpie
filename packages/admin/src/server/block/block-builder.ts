@@ -23,7 +23,7 @@
  *       icon: c.icon("ph:layout"),
  *     },
  *   }))
- *   .fields((f) => ({
+ *   .fields(({ f }) => ({
  *     title: f.text({ required: true }),
  *     subtitle: f.text(),
  *     backgroundImage: f.upload({ accept: "image/*" }),
@@ -342,7 +342,7 @@ export class BlockBuilder<
 	 *
 	 * @example
 	 * ```ts
-	 * block("hero").fields((f) => ({
+	 * block("hero").fields(({ f }) => ({
 	 *   title: f.text({ required: true }),
 	 *   subtitle: f.text(),
 	 *   image: f.upload({ accept: "image/*" }),
@@ -531,7 +531,7 @@ export class BlockBuilder<
  *       label: { en: "Layout" },
  *     },
  *   }))
- *   .fields((f) => ({
+ *   .fields(({ f }) => ({
  *     title: f.text({ required: true }),
  *     subtitle: f.text(),
  *   }));

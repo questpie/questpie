@@ -4,7 +4,7 @@ import { coreBuilder as q } from "./core-builder.js";
 export const usersCollection = q
 	.collection("user")
 	.options({ timestamps: true })
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({ required: true, maxLength: 255 }),
 		email: f.email({ required: true, maxLength: 255, unique: true }),
 		emailVerified: f.boolean({ required: true }),
@@ -20,7 +20,7 @@ export const usersCollection = q
 export const sessionsCollection = q
 	.collection("session")
 	.options({ timestamps: true })
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		userId: f.text({ required: true, maxLength: 255 }),
 		token: f.text({ required: true, maxLength: 255, unique: true }),
 		expiresAt: f.datetime({ required: true }),
@@ -34,7 +34,7 @@ export const sessionsCollection = q
 export const accountsCollection = q
 	.collection("account")
 	.options({ timestamps: true })
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		userId: f.text({ required: true, maxLength: 255 }),
 		accountId: f.text({ required: true, maxLength: 255 }),
 		providerId: f.text({ required: true, maxLength: 255 }),
@@ -52,7 +52,7 @@ export const accountsCollection = q
 export const verificationsCollection = q
 	.collection("verification")
 	.options({ timestamps: true })
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		identifier: f.text({ required: true, maxLength: 255 }),
 		value: f.text({ required: true, maxLength: 255 }),
 		expiresAt: f.datetime({ required: true }),
@@ -63,7 +63,7 @@ export const verificationsCollection = q
 export const apiKeysCollection = q
 	.collection("apikey")
 	.options({ timestamps: true })
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({ maxLength: 255 }),
 		start: f.text({ maxLength: 255 }),
 		prefix: f.text({ maxLength: 255 }),

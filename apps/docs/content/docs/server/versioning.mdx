@@ -18,7 +18,7 @@ Add `versioning: true` to the collection's `.options()`:
 ```ts
 export const posts = qb
   .collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({}),
     status: f.select({ options: ["draft", "published", "archived"] }),
@@ -302,7 +302,7 @@ The simplest workflow: posts start as drafts, editors publish when ready.
 ```ts
 const posts = qb
   .collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({}),
     author: f.relation({ to: "users", required: true }),
@@ -342,7 +342,7 @@ import { ApiError } from "questpie/server/errors";
 
 const articles = qb
   .collection("articles")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({}),
     author: f.relation({ to: "users", required: true }),
@@ -457,7 +457,7 @@ Workflow works on globals too — useful for site-wide configuration that needs 
 ```ts
 const siteConfig = qb
   .global("site_config")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     siteName: f.text({ required: true }),
     maintenanceMode: f.boolean({ default: false }),
     announcement: f.textarea(),

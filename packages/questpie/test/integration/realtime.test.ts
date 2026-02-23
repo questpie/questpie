@@ -196,7 +196,7 @@ describe("realtime", () => {
 		it("logs realtime changes for create/update/delete", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true, localized: true }),
 				slug: f.textarea({ required: true }),
 			}));
@@ -247,7 +247,7 @@ describe("realtime", () => {
 		it("logs bulk update/delete operations", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				slug: f.textarea({ required: true }),
 			}));
@@ -291,7 +291,7 @@ describe("realtime", () => {
 		it("includes payload in realtime events", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 			}));
@@ -334,7 +334,7 @@ describe("realtime", () => {
 		it("only notifies subscribers with matching WHERE filter", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const messages = q.collection("messages").fields((f) => ({
+			const messages = q.collection("messages").fields(({ f }) => ({
 				chatId: f.textarea({ required: true }),
 				content: f.textarea({ required: true }),
 			}));
@@ -402,7 +402,7 @@ describe("realtime", () => {
 		it("handles complex WHERE filters with multiple fields", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				status: f.textarea({ required: true }),
 				authorId: f.textarea({ required: true }),
 				title: f.textarea({ required: true }),
@@ -463,7 +463,7 @@ describe("realtime", () => {
 		it("refreshes create events for complex OR filters", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 				authorId: f.textarea({ required: true }),
@@ -503,7 +503,7 @@ describe("realtime", () => {
 		it("conservatively refreshes create for complex filters", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 			}));
@@ -542,7 +542,7 @@ describe("realtime", () => {
 		it("filters by boolean fields", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const tasks = q.collection("tasks").fields((f) => ({
+			const tasks = q.collection("tasks").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				completed: f.boolean({ required: true, default: false }),
 			}));
@@ -588,7 +588,7 @@ describe("realtime", () => {
 		it("filters by numeric fields", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const products = q.collection("products").fields((f) => ({
+			const products = q.collection("products").fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				categoryId: f.number({ required: true }),
 			}));
@@ -634,10 +634,10 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const posts = q
 				.collection("posts")
-				.fields((f) => ({ title: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ title: f.textarea({ required: true }) }));
 			const comments = q
 				.collection("comments")
-				.fields((f) => ({ content: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ content: f.textarea({ required: true }) }));
 
 			const testModule = q.collections({
 				posts,
@@ -674,7 +674,7 @@ describe("realtime", () => {
 		it("re-sends snapshot when record leaves filter on update", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 			}));
@@ -720,7 +720,7 @@ describe("realtime", () => {
 		it("re-sends snapshot for filtered subscriber on delete", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 			}));
@@ -771,9 +771,9 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const users = q
 				.collection("users")
-				.fields((f) => ({ name: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const messages = q.collection("messages").fields((f) => ({
+			const messages = q.collection("messages").fields(({ f }) => ({
 				chatId: f.textarea({ required: true }),
 				content: f.textarea({ required: true }),
 				user: f.relation({
@@ -847,9 +847,9 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const users = q
 				.collection("users")
-				.fields((f) => ({ name: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const posts = q.collection("posts").fields((f) => ({
+			const posts = q.collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				user: f.relation({
 					to: "users",
@@ -858,7 +858,7 @@ describe("realtime", () => {
 				}),
 			}));
 
-			const comments = q.collection("comments").fields((f) => ({
+			const comments = q.collection("comments").fields(({ f }) => ({
 				content: f.textarea({ required: true }),
 				post: f.relation({
 					to: "posts",
@@ -942,9 +942,9 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const categories = q
 				.collection("categories")
-				.fields((f) => ({ name: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const products = q.collection("products").fields((f) => ({
+			const products = q.collection("products").fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				category: f.relation({
 					to: "categories",
@@ -1009,7 +1009,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const settings = q
 				.global("settings")
-				.fields((f) => ({ title: f.textarea() }));
+				.fields(({ f }) => ({ title: f.textarea() }));
 
 			const testModule = q
 				.globals({
@@ -1056,9 +1056,9 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const categories = q
 				.collection("categories")
-				.fields((f) => ({ name: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const settings = q.global("settings").fields((f) => ({
+			const settings = q.global("settings").fields(({ f }) => ({
 				siteName: f.textarea(),
 				defaultCategory: f.relation({
 					to: "categories",
@@ -1136,7 +1136,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const items = q
 				.collection("items")
-				.fields((f) => ({ name: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
 			const testModule = q.collections({ items });
 
@@ -1167,7 +1167,7 @@ describe("realtime", () => {
 		it("handles multiple subscribers with different filters", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const orders = q.collection("orders").fields((f) => ({
+			const orders = q.collection("orders").fields(({ f }) => ({
 				status: f.textarea({ required: true }),
 				customerId: f.textarea({ required: true }),
 				total: f.number({ required: true }),
@@ -1240,7 +1240,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const items = q
 				.collection("items")
-				.fields((f) => ({ name: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
 			const testModule = q.collections({
 				items,
@@ -1275,7 +1275,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const logs = q
 				.collection("logs")
-				.fields((f) => ({ message: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ message: f.textarea({ required: true }) }));
 
 			const testModule = q.collections({
 				logs,
@@ -1305,7 +1305,7 @@ describe("realtime", () => {
 		it("scales filtered routing across many subscribers", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const messages = q.collection("messages").fields((f) => ({
+			const messages = q.collection("messages").fields(({ f }) => ({
 				roomId: f.textarea({ required: true }),
 				content: f.textarea({ required: true }),
 			}));
@@ -1364,7 +1364,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const items = q
 				.collection("items")
-				.fields((f) => ({ name: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
 			const testModule = q.collections({ items });
 
@@ -1403,7 +1403,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const items = q
 				.collection("items")
-				.fields((f) => ({ name: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
 			const testModule = q.collections({ items });
 
@@ -1463,7 +1463,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const secrets = q
 				.collection("secrets")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					content: f.textarea({ required: true }),
 					level: f.textarea({ required: true }),
 				}))
@@ -1520,7 +1520,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const secrets = q
 				.collection("secrets")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					content: f.textarea({ required: true }),
 					level: f.textarea({ required: true }),
 				}))
@@ -1569,7 +1569,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const documents = q
 				.collection("documents")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					title: f.textarea({ required: true }),
 					content: f.textarea({ required: true }),
 					internalNotes: f.textarea({ required: true }),
@@ -1630,7 +1630,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const config = q
 				.global("config")
-				.fields((f) => ({
+				.fields(({ f }) => ({
 					apiKey: f.textarea({ required: true }),
 					publicName: f.textarea({ required: true }),
 				}))
@@ -1695,7 +1695,7 @@ describe("realtime", () => {
 		it("should stream multiple snapshots on rapid updates", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const counters = q.collection("counters").fields((f) => ({
+			const counters = q.collection("counters").fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				value: f.number({ required: true, default: 0 }),
 			}));
@@ -1781,7 +1781,7 @@ describe("realtime", () => {
 			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
 			const items = q
 				.collection("items")
-				.fields((f) => ({ name: f.textarea({ required: true }) }));
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
 			const testModule = q
 				.collections({

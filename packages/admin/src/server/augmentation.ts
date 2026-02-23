@@ -18,7 +18,7 @@
  *   .use(adminModule)
  *   .collections({
  *     posts: q.collection("posts")
- *       .fields((f) => ({
+ *       .fields(({ f }) => ({
  *         title: f.text({ required: true }),
  *       }))
  *       // These methods are added by adminModule at runtime:
@@ -1835,7 +1835,7 @@ declare module "questpie" {
 		 * const heroBlock = qb.block("hero")
 		 *   .label({ en: "Hero Section" })
 		 *   .icon("ph:image")
-		 *   .fields((f) => ({
+		 *   .fields(({ f }) => ({
 		 *     title: f.text({ required: true }),  // typed from builder's field registry
 		 *     subtitle: f.text(),
 		 *   }));

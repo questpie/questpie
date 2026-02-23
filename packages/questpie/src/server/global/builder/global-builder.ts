@@ -1,8 +1,8 @@
 import type { SQL } from "drizzle-orm";
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import {
-	createFieldBuilder,
-	type FieldBuilderProxy,
+	createFieldsCallbackContext,
+	type FieldsCallbackContext,
 } from "#questpie/server/fields/builder.js";
 import {
 	type BuiltinFields,
@@ -72,20 +72,11 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	}
 
 	/**
-	 * Define fields using Field Builder (recommended)
-	 *
-	 * When using `q.global()`, field types are inferred from `q.fields()`.
-	 * When using standalone `global()`, falls back to DefaultFieldTypeMap.
+	 * Define fields using Field Builder.
 	 *
 	 * @example
 	 * ```ts
-	 * // With q.global() - field types from q.fields(defaultFields)
-	 * q.global("settings").fields((f) => ({
-	 *   siteName: f.text({ required: true }),  // ✅ autocomplete
-	 * }))
-	 *
-	 * // Standalone - uses default registry
-	 * global("settings").fields((f) => ({
+	 * global("settings").fields(({ f }) => ({
 	 *   siteName: f.text({ required: true }),
 	 * }))
 	 * ```
@@ -96,7 +87,9 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			FieldDefinition<FieldDefinitionState>
 		>,
 	>(
-		factory: (f: FieldBuilderProxy<ExtractFieldTypes<TState>>) => TNewFields,
+		factory: (
+			ctx: FieldsCallbackContext<ExtractFieldTypes<TState>>,
+		) => TNewFields,
 	): GlobalBuilder<
 		Override<
 			TState,
@@ -127,7 +120,9 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 
 	// Implementation
 	fields<TNewFields extends Record<string, any>>(
-		fieldsOrFactory: TNewFields | ((f: FieldBuilderProxy<any>) => TNewFields),
+		fieldsOrFactory:
+			| TNewFields
+			| ((ctx: FieldsCallbackContext<any>) => TNewFields),
 	): GlobalBuilder<any> {
 		let columns: Record<string, any>;
 		let virtuals: Record<string, SQL> = {};
@@ -144,9 +139,9 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			// Field Builder pattern - use field defs from ~questpieApp, or fall back to builtinFields
 			const questpieFields =
 				(this.state as any)["~questpieApp"]?.state?.fields ?? builtinFields;
-			const builderProxy = createFieldBuilder(questpieFields);
+			const contextProxy = createFieldsCallbackContext(questpieFields);
 
-			const fieldDefs = fieldsOrFactory(builderProxy);
+			const fieldDefs = fieldsOrFactory(contextProxy);
 			fieldDefinitions = fieldDefs;
 
 			// Extract Drizzle columns from field definitions

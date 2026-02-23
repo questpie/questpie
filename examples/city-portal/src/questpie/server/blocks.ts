@@ -57,7 +57,7 @@ export const heroBlock = qb
 		category: sections(c),
 		order: 1,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",
 			required: true,
@@ -112,7 +112,7 @@ export const ctaBlock = qb
 		category: sections(c),
 		order: 2,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",
 			required: true,
@@ -145,7 +145,7 @@ export const announcementBannerBlock = qb
 		category: sections(c),
 		order: 3,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		count: f.number({
 			label: "Number to Show",
 			default: 3,
@@ -184,7 +184,7 @@ export const textBlock = qb
 		category: content(c),
 		order: 1,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		content: f.richText({
 			label: "Content",
 			required: true,
@@ -219,7 +219,7 @@ export const headingBlock = qb
 		category: content(c),
 		order: 2,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		text: f.text({
 			label: "Text",
 			required: true,
@@ -253,7 +253,7 @@ export const imageBlock = qb
 		category: content(c),
 		order: 3,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		image: f.upload({
 			label: "Image",
 			accept: ["image/*"],
@@ -295,7 +295,7 @@ export const galleryBlock = qb
 		category: content(c),
 		order: 4,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",
 		}),
@@ -335,7 +335,7 @@ export const imageTextBlock = qb
 		category: content(c),
 		order: 5,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		image: f.upload({
 			label: "Image",
 			accept: ["image/*"],
@@ -370,7 +370,7 @@ export const videoBlock = qb
 		category: content(c),
 		order: 6,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",
 		}),
@@ -392,7 +392,7 @@ export const accordionBlock = qb
 		category: content(c),
 		order: 7,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",
 		}),
@@ -418,7 +418,7 @@ export const latestNewsBlock = qb
 		category: dynamic(c),
 		order: 1,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",
 			default: "Latest News",
@@ -480,7 +480,7 @@ export const contactsListBlock = qb
 		category: dynamic(c),
 		order: 2,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",
 			default: "Contact Us",
@@ -518,7 +518,7 @@ export const documentsListBlock = qb
 		category: dynamic(c),
 		order: 3,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",
 			default: "Documents",
@@ -571,7 +571,7 @@ export const columnsBlock = qb
 		order: 1,
 	}))
 	.allowChildren()
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		columns: f.select({
 			label: "Columns",
 			options: [
@@ -610,7 +610,7 @@ export const spacerBlock = qb
 		category: layout(c),
 		order: 2,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		size: f.select({
 			label: "Size",
 			options: [
@@ -631,7 +631,7 @@ export const dividerBlock = qb
 		category: layout(c),
 		order: 3,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		style: f.select({
 			label: "Style",
 			options: [

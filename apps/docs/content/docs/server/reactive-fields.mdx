@@ -24,7 +24,7 @@ import { slugify } from "./utils";
 
 export const pages = qb
   .collection("pages")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     slug: f.text({ required: true, input: "optional" }),
     status: f.select({ options: ["draft", "published", "cancelled"] }),

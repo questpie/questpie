@@ -20,7 +20,7 @@
   });
 
   // After
-  q.collection("posts").fields((f) => ({
+  q.collection("posts").fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.textarea({ localized: true }),
     publishedAt: f.datetime(),
@@ -54,7 +54,7 @@
   // Register:
   const app = q({ name: "app" }).fields({ slug: slugField });
   // Use:
-  collection("pages").fields((f) => ({ slug: f.slug({ required: true }) }));
+  collection("pages").fields(({ f }) => ({ slug: f.slug({ required: true }) }));
   ```
 
   **Custom operators** — the `operator<TValue>()` helper creates typed filter functions from `(column, value, ctx) => SQL`. Each field's `getOperators` returns context-aware operator sets for both column and JSONB access. Operators are automatically used by the query builder and exposed via the client SDK's `where` parameter.

@@ -10,7 +10,7 @@ const q = questpie({ name: "test-module" }).fields(defaultFields);
 
 const errorTest = q
 	.collection("error_test")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 		status: f.text({ required: true, maxLength: 50 }),
 	}))

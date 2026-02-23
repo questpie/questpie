@@ -31,7 +31,7 @@ import { coreBackendMessages } from "./messages.js";
  * ```ts
  * const posts = q.collection("posts")
  *   .access({ read: true })  // Public reads, other ops inherit defaultAccess
- *   .fields((f) => ({ ... }));
+ *   .fields(({ f }) => ({ ... }));
  * ```
  *
  * To override the default for all collections, call `.defaultAccess()` after `.use()`:

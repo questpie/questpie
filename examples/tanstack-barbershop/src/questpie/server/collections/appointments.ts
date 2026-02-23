@@ -1,10 +1,8 @@
-import { sql, typedApp } from "questpie";
+import { collection, sql, typedApp } from "questpie";
 import type { App } from "@/questpie/server/app";
-import { qb } from "@/questpie/server/builder";
 
-export const appointments = qb
-	.collection("appointments")
-	.fields((f) => ({
+export const appointments = collection("appointments")
+	.fields(({ f }) => ({
 		customer: f.relation({
 			to: "user",
 			required: true,

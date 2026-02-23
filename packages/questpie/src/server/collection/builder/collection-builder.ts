@@ -27,8 +27,8 @@ import {
 } from "#questpie/server/collection/builder/validation-helpers.js";
 import type { StorageVisibility } from "#questpie/server/config/types.js";
 import {
-	createFieldBuilder,
-	type FieldBuilderProxy,
+	createFieldsCallbackContext,
+	type FieldsCallbackContext,
 } from "#questpie/server/fields/builder.js";
 import {
 	type BuiltinFields,
@@ -103,7 +103,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *
 	 * @example
 	 * ```ts
-	 * collection("posts").fields((f) => ({
+	 * collection("posts").fields(({ f }) => ({
 	 *   title: f.text({ required: true }),
 	 *   content: f.text({ localized: true }),
 	 *   views: f.number({ default: 0 }),
@@ -116,7 +116,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			FieldDefinition<FieldDefinitionState>
 		>,
 	>(
-		factory: (f: FieldBuilderProxy<ExtractFieldTypes<TState>>) => TNewFields,
+		factory: (
+			ctx: FieldsCallbackContext<ExtractFieldTypes<TState>>,
+		) => TNewFields,
 	): CollectionBuilder<
 		Override<
 			TState,
@@ -129,7 +131,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	>;
 	/**
 	 * Legacy overload: Define fields using raw Drizzle columns.
-	 * @deprecated Use the field builder pattern instead: `.fields((f) => ({ ... }))`
+	 * @deprecated Use the field builder pattern instead: `.fields(({ f }) => ({ ... }))`
 	 *
 	 * This overload is kept for backwards compatibility with tests that need
 	 * raw Drizzle column features like `.references()` for FK constraints.
@@ -148,22 +150,22 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	>;
 	fields<TNewFields>(
 		factoryOrColumns:
-			| ((f: FieldBuilderProxy<ExtractFieldTypes<TState>>) => TNewFields)
+			| ((ctx: FieldsCallbackContext<ExtractFieldTypes<TState>>) => TNewFields)
 			| TNewFields,
 	): CollectionBuilder<any> {
 		// Check if argument is a function (new pattern) or object (legacy pattern)
 		if (typeof factoryOrColumns === "function") {
 			// New field builder pattern
 			const factory = factoryOrColumns as (
-				f: FieldBuilderProxy<ExtractFieldTypes<TState>>,
+				ctx: FieldsCallbackContext<ExtractFieldTypes<TState>>,
 			) => Record<string, FieldDefinition<FieldDefinitionState>>;
 
 			// Use field defs from ~questpieApp, or fall back to builtinFields for standalone collection()
 			const questpieFields =
 				this.state["~questpieApp"]?.state?.fields ?? builtinFields;
-			const builderProxy = createFieldBuilder(questpieFields);
+			const contextProxy = createFieldsCallbackContext(questpieFields);
 
-			const fieldDefs = factory(builderProxy);
+			const fieldDefs = factory(contextProxy);
 
 			// Extract Drizzle columns and localized field names from field definitions
 			// Phase 1: Create all columns first
@@ -379,7 +381,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * @example
 	 * ```ts
 	 * collection("posts")
-	 *   .fields((f) => ({ ... }))
+	 *   .fields(({ f }) => ({ ... }))
 	 *   .indexes(({ table }) => [
 	 *     uniqueIndex().on(table.slug),
 	 *     index().on(table.createdAt),
@@ -409,7 +411,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * @example
 	 * ```ts
 	 * collection("posts")
-	 *   .fields((f) => ({ title: f.text({ required: true }) }))
+	 *   .fields(({ f }) => ({ title: f.text({ required: true }) }))
 	 *   .title(({ f }) => f.title)
 	 * ```
 	 */
@@ -443,7 +445,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * @example
 	 * ```ts
 	 * collection("posts")
-	 *   .fields((f) => ({ ... }))
+	 *   .fields(({ f }) => ({ ... }))
 	 *   .options({
 	 *     timestamps: true,
 	 *     softDelete: true,
@@ -473,7 +475,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * @example
 	 * ```ts
 	 * collection("posts")
-	 *   .fields((f) => ({ ... }))
+	 *   .fields(({ f }) => ({ ... }))
 	 *   .hooks({
 	 *     beforeChange: async ({ data, operation }) => {
 	 *       if (operation === "create") {
@@ -526,7 +528,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * @example
 	 * ```ts
 	 * collection("posts")
-	 *   .fields((f) => ({ ... }))
+	 *   .fields(({ f }) => ({ ... }))
 	 *   .access({
 	 *     read: true,
 	 *     create: ({ user }) => user?.role === "admin",
@@ -558,7 +560,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * @example
 	 * ```ts
 	 * collection("posts")
-	 *   .fields((f) => ({ ... }))
+	 *   .fields(({ f }) => ({ ... }))
 	 *   .searchable({
 	 *     content: (record) => extractTextFromJson(record.content),
 	 *     metadata: (record) => ({ status: record.status }),
@@ -589,7 +591,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * @example
 	 * ```ts
 	 * collection("posts")
-	 *   .fields((f) => ({ ... }))
+	 *   .fields(({ f }) => ({ ... }))
 	 *   .validation({
 	 *     exclude: { id: true, createdAt: true, updatedAt: true },
 	 *     refine: {
@@ -657,7 +659,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * @example
 	 * ```ts
 	 * collection("media")
-	 *   .fields((f) => ({
+	 *   .fields(({ f }) => ({
 	 *     alt: f.text(),
 	 *     folder: f.text(),
 	 *   }))
@@ -957,7 +959,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
  *
  * // Now available on all CollectionBuilder instances:
  * collection("posts")
- *   .fields((f) => ({ title: f.text() }))
+ *   .fields(({ f }) => ({ title: f.text() }))
  *   .admin({ label: "Posts" })
  *   .list(({ f }) => ({ columns: [f.title] }))
  * ```
@@ -970,7 +972,7 @@ export interface CollectionBuilder<TState extends CollectionBuilderState>
  *
  * @example
  * ```ts
- * const posts = collection("posts").fields((f) => ({
+ * const posts = collection("posts").fields(({ f }) => ({
  *   title: f.text({ required: true }),
  *   content: f.text({ localized: true }),
  * }));

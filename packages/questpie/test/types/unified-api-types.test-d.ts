@@ -28,7 +28,7 @@ import type {
 const q = questpie({ name: "type-test" }).fields(defaultFields);
 
 // Users collection
-const users = q.collection("users").fields((f) => ({
+const users = q.collection("users").fields(({ f }) => ({
 	name: f.text({ required: true, maxLength: 100 }),
 	email: f.text({ required: true }),
 	bio: f.textarea({ localized: true }),
@@ -37,7 +37,7 @@ const users = q.collection("users").fields((f) => ({
 // Posts collection with relations
 const posts = q
 	.collection("posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true, maxLength: 255 }),
 		content: f.textarea({ localized: true }),
 		slug: f.text({ required: true }),
@@ -58,7 +58,7 @@ const posts = q
 	.options({ softDelete: true, versioning: true });
 
 // Comments collection
-const comments = q.collection("comments").fields((f) => ({
+const comments = q.collection("comments").fields(({ f }) => ({
 	content: f.textarea({ required: true }),
 	post: f.relation({
 		to: "posts",
@@ -73,7 +73,7 @@ const comments = q.collection("comments").fields((f) => ({
 }));
 
 // Tags collection for many-to-many
-const tags = q.collection("tags").fields((f) => ({
+const tags = q.collection("tags").fields(({ f }) => ({
 	name: f.text({ required: true, maxLength: 50 }),
 	slug: f.text({ required: true }),
 }));
@@ -81,7 +81,7 @@ const tags = q.collection("tags").fields((f) => ({
 // Media collection with upload
 const media = q
 	.collection("media")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		alt: f.text({ maxLength: 255 }),
 		caption: f.textarea({ localized: true }),
 	}))
@@ -90,7 +90,7 @@ const media = q
 // Site settings global
 const siteSettings = q
 	.global("site_settings")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		siteName: f.text({ required: true, maxLength: 100 }),
 		tagline: f.textarea({ localized: true }),
 		featuredPost: f.relation({ to: "posts", relationName: "featured" }),

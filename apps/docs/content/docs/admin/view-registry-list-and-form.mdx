@@ -27,7 +27,7 @@ The server specifies view type and configuration via `.list()` and `.form()`:
 ```ts
 export const posts = qb
   .collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     status: f.select({ options: ["draft", "published"] }),
     author: f.relation({ collection: "users" }),

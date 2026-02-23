@@ -30,7 +30,7 @@ const q = questpie({ name: "search-access-test" }).fields(defaultFields);
 
 const posts = q
 	.collection("posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true, maxLength: 255 }),
 		content: f.textarea(),
 	}))

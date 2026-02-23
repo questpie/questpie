@@ -17,7 +17,7 @@ import type { App } from '../app';
 
 const posts = q
   .collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     status: f.select({ options: ["draft", "published", "archived"] }),
   }))

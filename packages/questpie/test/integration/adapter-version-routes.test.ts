@@ -12,7 +12,7 @@ const createModule = () => {
 
 	const posts = q
 		.collection("posts")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			title: f.text({ required: true }),
 		}))
 		.options({
@@ -31,7 +31,7 @@ const createModule = () => {
 
 	const settings = q
 		.global("settings")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			siteName: f.text({ required: true }),
 		}))
 		.options({

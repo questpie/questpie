@@ -11,7 +11,7 @@ import { runTestDbMigrations } from "../utils/test-db";
 // Assets collection with .upload() for URL generation testing
 const assets = collection("assets")
 	.options({ timestamps: true })
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		alt: f.text({ maxLength: 500 }),
 		caption: f.textarea(),
 	}))
@@ -20,7 +20,7 @@ const assets = collection("assets")
 	});
 
 // Services collection that references assets (using f.relation())
-const services = collection("services").fields((f) => ({
+const services = collection("services").fields(({ f }) => ({
 	name: f.text({ required: true, maxLength: 255 }),
 	image: f.relation({
 		to: "assets",

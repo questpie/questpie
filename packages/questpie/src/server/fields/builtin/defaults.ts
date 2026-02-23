@@ -33,7 +33,7 @@ import { urlField } from "./url.js";
  *
  * // Now use q to define collections:
  * const posts = q.collection("posts")
- *   .fields((f) => ({
+ *   .fields(({ f }) => ({
  *     title: f.text({ required: true }),
  *     content: f.textarea({ required: true }),
  *     publishedAt: f.datetime(),

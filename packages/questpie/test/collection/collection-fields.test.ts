@@ -11,7 +11,7 @@ const q = questpie({ name: "test-module" }).fields(defaultFields);
 const testModule = q.collections({
 	content: q
 		.collection("content")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 			description: f.textarea(),
 			richContent: f.json(),

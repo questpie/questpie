@@ -11,7 +11,7 @@ SyntaxHighlighter.registerLanguage("typescript", typescript);
 // Step 1: Define your collection schema
 const schemaCode = `// server/collections/posts.ts
 const posts = qb.collection('posts')
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText(),
     status: f.select({

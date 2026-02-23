@@ -14,7 +14,7 @@ import { adminCoreBuilder as q } from "../../../core-builder.js";
  */
 export const auditLogCollection = q
 	.collection("admin_audit_log")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		/** Action performed: create, update, delete, transition, custom */
 		action: f.text({ required: true, maxLength: 50, label: "Action" }),
 

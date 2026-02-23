@@ -11,7 +11,7 @@ import { runTestDbMigrations } from "../utils/test-db";
 // Assets collection with .upload() for URL generation testing
 const assets = collection("assets")
 	.options({ timestamps: true })
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		alt: f.text({ maxLength: 500 }),
 		caption: f.textarea(),
 	}))
@@ -20,7 +20,7 @@ const assets = collection("assets")
 	});
 
 // Junction collection for many-to-many uploads
-const postAssets = collection("post_assets").fields((f) => ({
+const postAssets = collection("post_assets").fields(({ f }) => ({
 	post: f.relation({
 		to: "posts",
 		required: true,
@@ -33,7 +33,7 @@ const postAssets = collection("post_assets").fields((f) => ({
 }));
 
 // Posts collection with upload + through (gallery)
-const posts = collection("posts").fields((f) => ({
+const posts = collection("posts").fields(({ f }) => ({
 	title: f.text({ required: true }),
 	// Gallery via many-to-many upload
 	gallery: f.upload({

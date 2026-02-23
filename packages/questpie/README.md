@@ -42,7 +42,7 @@ export const qb = q.use(adminModule);
 
 ```ts
 const posts = qb.collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ label: "Title", required: true, maxLength: 255 }),
     content: f.richText({ label: "Content", localized: true }),
     published: f.boolean({ label: "Published", default: false }),
@@ -74,7 +74,7 @@ const posts = qb.collection("posts")
 
 ```ts
 const siteSettings = qb.global("site_settings")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     siteName: f.text({ label: "Site Name", required: true }),
     description: f.textarea({ label: "Description" }),
     logo: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
@@ -130,7 +130,7 @@ bun questpie migrate
 Fields are defined via the `f` proxy inside `.fields()`. Each field produces a Drizzle column, Zod validation, typed query operators, and serializable metadata:
 
 ```ts
-qb.collection("products").fields((f) => ({
+qb.collection("products").fields(({ f }) => ({
   name: f.text({ required: true, maxLength: 255 }),
   price: f.number({ required: true }),
   description: f.richText({ localized: true }),
@@ -225,7 +225,7 @@ const slugField = field<SlugConfig, string>()({
 const qb = q.fields({ slug: slugField });
 
 // Use in collections
-.fields((f) => ({ slug: f.slug({ required: true }) }))
+.fields(({ f }) => ({ slug: f.slug({ required: true }) }))
 ```
 
 ## Standalone RPC

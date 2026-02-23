@@ -27,7 +27,7 @@ import { q } from "questpie";
  */
 export const adminPreferencesCollection = q
 	.collection("admin_preferences")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		// User who owns this preference
 		userId: f.text({ required: true, maxLength: 255, label: "User ID" }),
 

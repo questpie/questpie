@@ -9,7 +9,7 @@ import { qb } from "@/questpie/server/builder";
 
 export const cities = qb
 	.collection("cities")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({
 			label: "City Name",
 			required: true,

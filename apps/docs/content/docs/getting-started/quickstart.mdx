@@ -30,7 +30,7 @@ Collections are the core building block. Each collection becomes a database tabl
 // src/questpie/server/collections/posts.ts
 import { q } from "questpie";
 
-export const posts = q.collection("posts").fields((f) => ({
+export const posts = q.collection("posts").fields(({ f }) => ({
   title: f.text({ required: true }),
   slug: f.text({ required: true, input: "optional" }),
   content: f.richText(),

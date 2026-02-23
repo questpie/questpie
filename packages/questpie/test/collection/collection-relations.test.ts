@@ -17,7 +17,7 @@ import { runTestDbMigrations } from "../utils/test-db";
 // ==============================================================================
 
 // Users collection (referenced by profiles)
-const users = collection("users").fields((f) => ({
+const users = collection("users").fields(({ f }) => ({
 	email: f.text({ required: true, maxLength: 255 }),
 	name: f.text({ required: true }),
 }));
@@ -29,14 +29,14 @@ const users = collection("users").fields((f) => ({
 // Assets collection (for testing upload and string field format)
 const testAssets = collection("test_assets")
 	.options({ timestamps: true })
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		filename: f.text({ required: true, maxLength: 255 }),
 		mimeType: f.text({ maxLength: 100 }),
 		key: f.text({ maxLength: 500 }),
 	}));
 
 // Services collection using relation field with string target
-const services = collection("services").fields((f) => ({
+const services = collection("services").fields(({ f }) => ({
 	name: f.text({ required: true, maxLength: 255 }),
 	image: f.relation({
 		to: "test_assets",
@@ -44,7 +44,7 @@ const services = collection("services").fields((f) => ({
 }));
 
 // Profiles collection (one-to-one with users via belongsTo)
-const profiles = collection("profiles").fields((f) => ({
+const profiles = collection("profiles").fields(({ f }) => ({
 	user: f.relation({
 		to: "users",
 		required: true,
@@ -56,7 +56,7 @@ const profiles = collection("profiles").fields((f) => ({
 }));
 
 // Authors with posts (one-to-many with cascade delete)
-const authors = collection("authors").fields((f) => ({
+const authors = collection("authors").fields(({ f }) => ({
 	name: f.text({ required: true }),
 	// HasMany relations - using string literals for circular refs
 	posts: f.relation({
@@ -76,7 +76,7 @@ const authors = collection("authors").fields((f) => ({
 }));
 
 // Posts with cascade/set null scenarios
-const posts = collection("posts").fields((f) => ({
+const posts = collection("posts").fields(({ f }) => ({
 	title: f.text({ required: true }),
 	views: f.number({ default: 0 }),
 	// BelongsTo relations
@@ -102,7 +102,7 @@ const posts = collection("posts").fields((f) => ({
 }));
 
 // Comments for deep nesting tests (posts -> comments -> replies)
-const comments = collection("comments").fields((f) => ({
+const comments = collection("comments").fields(({ f }) => ({
 	content: f.text({ required: true }),
 	// BelongsTo post
 	post: f.relation({
@@ -128,7 +128,7 @@ const comments = collection("comments").fields((f) => ({
 
 // Products with restricted delete
 // NOTE: Collection name must match the key used in .collections({}) for relation lookups to work
-const restrictedCategories = collection("restrictedCategories").fields((f) => ({
+const restrictedCategories = collection("restrictedCategories").fields(({ f }) => ({
 	name: f.text({ required: true }),
 	// HasMany - RESTRICT delete when products exist
 	products: f.relation({
@@ -140,7 +140,7 @@ const restrictedCategories = collection("restrictedCategories").fields((f) => ({
 	}),
 }));
 
-const restrictedProducts = collection("restrictedProducts").fields((f) => ({
+const restrictedProducts = collection("restrictedProducts").fields(({ f }) => ({
 	name: f.text({ required: true }),
 	// BelongsTo with restrict
 	category: f.relation({
@@ -152,7 +152,7 @@ const restrictedProducts = collection("restrictedProducts").fields((f) => ({
 }));
 
 // Many-to-many with extra fields in junction table
-const articles = collection("articles").fields((f) => ({
+const articles = collection("articles").fields(({ f }) => ({
 	title: f.text({ required: true }),
 	// ManyToMany
 	tags: f.relation({
@@ -164,7 +164,7 @@ const articles = collection("articles").fields((f) => ({
 	}),
 }));
 
-const articleTags = collection("articleTags").fields((f) => ({
+const articleTags = collection("articleTags").fields(({ f }) => ({
 	name: f.text({ required: true }),
 	// ManyToMany reverse
 	articles: f.relation({
@@ -177,7 +177,7 @@ const articleTags = collection("articleTags").fields((f) => ({
 }));
 
 // Junction table - still uses belongsTo for FK columns
-const articleTagJunction = collection("articleTagJunction").fields((f) => ({
+const articleTagJunction = collection("articleTagJunction").fields(({ f }) => ({
 	article: f.relation({
 		to: "articles",
 		required: true,
@@ -193,7 +193,7 @@ const articleTagJunction = collection("articleTagJunction").fields((f) => ({
 }));
 
 // Additional collections for filtering and quantifiers tests
-const categories = collection("categories").fields((f) => ({
+const categories = collection("categories").fields(({ f }) => ({
 	name: f.text({ required: true }),
 	// HasMany
 	products: f.relation({
@@ -212,7 +212,7 @@ const categories = collection("categories").fields((f) => ({
 	}),
 }));
 
-const products = collection("products").fields((f) => ({
+const products = collection("products").fields(({ f }) => ({
 	name: f.text({ required: true }),
 	// BelongsTo
 	category: f.relation({
@@ -230,7 +230,7 @@ const products = collection("products").fields((f) => ({
 	}),
 }));
 
-const tags = collection("tags").fields((f) => ({
+const tags = collection("tags").fields(({ f }) => ({
 	name: f.text({ required: true }),
 	// ManyToMany relations
 	products: f.relation({
@@ -250,7 +250,7 @@ const tags = collection("tags").fields((f) => ({
 }));
 
 // Junction tables
-const categoryTags = collection("categoryTags").fields((f) => ({
+const categoryTags = collection("categoryTags").fields(({ f }) => ({
 	category: f.relation({
 		to: "categories",
 		required: true,
@@ -261,7 +261,7 @@ const categoryTags = collection("categoryTags").fields((f) => ({
 	}),
 }));
 
-const productTags = collection("productTags").fields((f) => ({
+const productTags = collection("productTags").fields(({ f }) => ({
 	product: f.relation({
 		to: "products",
 		required: true,

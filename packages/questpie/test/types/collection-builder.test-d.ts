@@ -34,7 +34,7 @@ import type {
 
 const q = questpie({ name: "test" }).fields(builtinFields);
 
-const postsCollection = q.collection("posts").fields((f) => ({
+const postsCollection = q.collection("posts").fields(({ f }) => ({
 	title: f.text({ required: true, maxLength: 255 }),
 	content: f.textarea(),
 	views: f.number({ default: 0 }),
@@ -99,7 +99,7 @@ type _updateViewsOptional = Expect<Extends<"views", UpdateOptional>>;
 
 const withSoftDelete = q
 	.collection("posts")
-	.fields((f) => ({ title: f.textarea() }))
+	.fields(({ f }) => ({ title: f.textarea() }))
 	.options({ softDelete: true });
 
 type SoftDeleteSelect = typeof withSoftDelete.$infer.select;
@@ -107,7 +107,7 @@ type _hasDeletedAt = Expect<Equal<HasKey<SoftDeleteSelect, "deletedAt">, true>>;
 
 const withoutTimestamps = q
 	.collection("posts")
-	.fields((f) => ({ title: f.textarea() }))
+	.fields(({ f }) => ({ title: f.textarea() }))
 	.options({ timestamps: false });
 
 type NoTimestampsSelect = typeof withoutTimestamps.$infer.select;
@@ -119,7 +119,7 @@ type _noCreatedAt = Expect<
 // f.relation() - relation config inference
 // ============================================================================
 
-const withRelations = q.collection("posts").fields((f) => ({
+const withRelations = q.collection("posts").fields(({ f }) => ({
 	title: f.textarea(),
 	author: f.relation({
 		to: "users",
@@ -150,7 +150,7 @@ type _authorIsRelationConfig = Expect<
 
 const withTitle = q
 	.collection("posts")
-	.fields((f) => ({ name: f.textarea(), slug: f.textarea() }))
+	.fields(({ f }) => ({ name: f.textarea(), slug: f.textarea() }))
 	.title(({ f }) => f.name);
 
 type TitleState =
@@ -166,7 +166,7 @@ type _titleIsLiteral = Expect<IsLiteral<TitleField>>;
 
 const withUpload = q
 	.collection("media")
-	.fields((f) => ({ alt: f.textarea() }))
+	.fields(({ f }) => ({ alt: f.textarea() }))
 	.upload({ visibility: "public" });
 
 type UploadSelect = typeof withUpload.$infer.select;
@@ -186,9 +186,9 @@ type _uploadUrlIsString = Expect<Equal<UploadSelect["url"], string>>;
 // .merge() - type combination
 // ============================================================================
 
-const base = q.collection("posts").fields((f) => ({ title: f.textarea() }));
+const base = q.collection("posts").fields(({ f }) => ({ title: f.textarea() }));
 const extended = base.merge(
-	q.collection("posts").fields((f) => ({
+	q.collection("posts").fields(({ f }) => ({
 		featured: f.boolean(),
 	})),
 );
@@ -216,7 +216,7 @@ type _inferHasUpdate = Expect<Equal<HasKey<Infer, "update">, true>>;
 
 const fullCollection = q
 	.collection("articles")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true, maxLength: 255 }),
 		content: f.textarea(),
 		views: f.number({ default: 0 }),
@@ -246,7 +246,7 @@ type _fullHasDeletedAt = Expect<Equal<HasKey<FullSelect, "deletedAt">, true>>;
 // Object field — nested type inference
 // ============================================================================
 
-const withObjectField = q.collection("barbers").fields((f) => ({
+const withObjectField = q.collection("barbers").fields(({ f }) => ({
 	workingHours: f.object({
 		fields: () => ({
 			monday: f.object({
@@ -282,7 +282,7 @@ type _mondayStartIsNullable = Expect<
 // Array field — typed element inference
 // ============================================================================
 
-const withArrayField = q.collection("posts2").fields((f) => ({
+const withArrayField = q.collection("posts2").fields(({ f }) => ({
 	tags: f.array({ of: f.text({ required: true }), required: true }),
 	links: f.array({
 		of: f.object({
@@ -314,12 +314,12 @@ type _linksHasUrl = Expect<Equal<HasKey<LinksElement, "url">, true>>;
 // ============================================================================
 
 // Build a multi-collection scenario with f.relation()
-const usersCollection = q.collection("users").fields((f) => ({
+const usersCollection = q.collection("users").fields(({ f }) => ({
 	name: f.text({ required: true }),
 	email: f.text({ required: true }),
 }));
 
-const commentsCollection = q.collection("comments").fields((f) => ({
+const commentsCollection = q.collection("comments").fields(({ f }) => ({
 	body: f.textarea({ required: true }),
 	postId: f.relation({
 		to: "posts",
@@ -328,7 +328,7 @@ const commentsCollection = q.collection("comments").fields((f) => ({
 	}),
 }));
 
-const postsWithRelations = q.collection("posts").fields((f) => ({
+const postsWithRelations = q.collection("posts").fields(({ f }) => ({
 	title: f.text({ required: true }),
 	author: f.relation({
 		to: "users",

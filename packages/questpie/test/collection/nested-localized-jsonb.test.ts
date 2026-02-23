@@ -23,7 +23,7 @@ const q = questpie({ name: "nested-i18n-test" }).fields(defaultFields);
 
 const pages = q
 	.collection("pages")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		slug: f.text({ required: true, maxLength: 100 }),
 		// A localized field is needed to create the i18n table with _localized column
 		// for storing nested $i18n marker values

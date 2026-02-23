@@ -46,7 +46,7 @@ describe("adapter route config", () => {
 
 		const posts = q
 			.collection("posts")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.text({ required: true }),
 			}))
 			.access({
@@ -121,14 +121,14 @@ describe("adapter route config", () => {
 
 		const media = q
 			.collection("media")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				alt: f.text(),
 			}))
 			.upload({ visibility: "public" });
 
 		const documents = q
 			.collection("documents")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.text({ required: true }),
 			}))
 			.upload({ visibility: "public" });

@@ -32,7 +32,7 @@ const q = questpie({ name: "mixed-modes-test" }).fields(defaultFields);
 
 const products = q
 	.collection("products")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({ required: true, maxLength: 255, localized: true }), // flat localized
 		description: f.json({ localized: true }), // whole-mode JSONB
 		// nested-mode JSONB - uses object field with localized nested fields

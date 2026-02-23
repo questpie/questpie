@@ -31,7 +31,7 @@ describe("Migration System - Programmatic", () => {
 		const q = questpie({ name: "test-app" }).fields(builtinFields);
 
 		// Define test collections using q.collection()
-		const posts = q.collection("posts").fields((f) => ({
+		const posts = q.collection("posts").fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 			content: f.textarea(),
 			published: f.boolean({ default: false }),
@@ -272,7 +272,7 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 		);
 
 		const q = questpie({ name: "test-app" }).fields(builtinFields);
-		const posts = q.collection("posts").fields((f) => ({
+		const posts = q.collection("posts").fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 			content: f.textarea(),
 		}));
@@ -313,7 +313,7 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 		);
 
 		const q = questpie({ name: "test-app" }).fields(builtinFields);
-		const posts = q.collection("posts").fields((f) => ({
+		const posts = q.collection("posts").fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 		}));
 

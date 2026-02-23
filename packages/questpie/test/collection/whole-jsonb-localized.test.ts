@@ -28,7 +28,7 @@ const q = questpie({ name: "whole-jsonb-test" }).fields(defaultFields);
 
 const barbers = q
 	.collection("barbers")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({ required: true, maxLength: 255, localized: true }),
 		bio: f.json({ localized: true }),
 	}))

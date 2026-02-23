@@ -1,4 +1,4 @@
-import { qb } from "@/questpie/server/builder";
+import { global } from "questpie";
 import type { WorkingHours } from "../collections/barbers";
 
 export type NavItem = {
@@ -26,9 +26,8 @@ export type BookingSettings = {
 	cancellationDeadlineHours: number;
 };
 
-export const siteSettings = qb
-	.global("site_settings")
-	.fields((f) => ({
+export const siteSettings = global("site_settings")
+	.fields(({ f }) => ({
 		shopName: f.text({
 			label: { en: "Shop Name", sk: "Názov obchodu" },
 			required: true,

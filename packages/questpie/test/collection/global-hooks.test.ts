@@ -20,10 +20,10 @@ describe("global hooks injection", () => {
 			const q = createBuilder();
 			return q
 				.collections({
-					articles: q.collection("articles").fields((f) => ({
+					articles: q.collection("articles").fields(({ f }) => ({
 						title: f.textarea({ required: true }),
 					})),
-					pages: q.collection("pages").fields((f) => ({
+					pages: q.collection("pages").fields(({ f }) => ({
 						title: f.textarea({ required: true }),
 					})),
 				})
@@ -137,13 +137,13 @@ describe("global hooks injection", () => {
 			const q = createBuilder();
 			return q
 				.collections({
-					articles: q.collection("articles").fields((f) => ({
+					articles: q.collection("articles").fields(({ f }) => ({
 						title: f.textarea({ required: true }),
 					})),
-					pages: q.collection("pages").fields((f) => ({
+					pages: q.collection("pages").fields(({ f }) => ({
 						title: f.textarea({ required: true }),
 					})),
-					logs: q.collection("logs").fields((f) => ({
+					logs: q.collection("logs").fields(({ f }) => ({
 						message: f.textarea({ required: true }),
 					})),
 				})
@@ -233,7 +233,7 @@ describe("global hooks injection", () => {
 			const moduleB = createModuleB(hookCalls, q);
 			const module = q
 				.collections({
-					articles: q.collection("articles").fields((f) => ({
+					articles: q.collection("articles").fields(({ f }) => ({
 						title: f.textarea({ required: true }),
 					})),
 				})
@@ -266,10 +266,10 @@ describe("global hooks injection", () => {
 			const q = createBuilder();
 			return q
 				.collections({
-					articles: q.collection("articles").fields((f) => ({
+					articles: q.collection("articles").fields(({ f }) => ({
 						title: f.textarea({ required: true }),
 					})),
-					auditLog: q.collection("audit_log").fields((f) => ({
+					auditLog: q.collection("audit_log").fields(({ f }) => ({
 						action: f.text({ required: true }),
 						resource: f.text({ required: true }),
 						resourceId: f.text(),
@@ -330,7 +330,7 @@ describe("global hooks injection", () => {
 			const q = createBuilder();
 			return q
 				.collections({
-					articles: q.collection("articles").fields((f) => ({
+					articles: q.collection("articles").fields(({ f }) => ({
 						title: f.textarea({ required: true }),
 						slug: f.text(),
 					})),

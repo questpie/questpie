@@ -38,7 +38,7 @@ export const heroBlock = qb
 		category: sections(c),
 		order: 1,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: { en: "Title", sk: "Nadpis" },
 			localized: true,
@@ -90,7 +90,7 @@ export const servicesBlock = qb
 		category: sections(c),
 		order: 2,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		subtitle: f.textarea({
 			label: { en: "Subtitle", sk: "Podnadpis" },
@@ -179,7 +179,7 @@ export const teamBlock = qb
 		category: sections(c),
 		order: 3,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		subtitle: f.textarea({
 			label: { en: "Subtitle", sk: "Podnadpis" },
@@ -265,7 +265,7 @@ export const reviewsBlock = qb
 		category: sections(c),
 		order: 4,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		subtitle: f.textarea({
 			label: { en: "Subtitle", sk: "Podnadpis" },
@@ -315,7 +315,7 @@ export const ctaBlock = qb
 		category: sections(c),
 		order: 5,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: { en: "Title", sk: "Nadpis" },
 			localized: true,
@@ -358,7 +358,7 @@ export const bookingCtaBlock = qb
 		category: sections(c),
 		order: 6,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		description: f.textarea({
 			label: { en: "Description", sk: "Popis" },
@@ -405,7 +405,7 @@ export const textBlock = qb
 		category: content(c),
 		order: 1,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		content: f.richText({
 			label: { en: "Content", sk: "Obsah" },
 			localized: true,
@@ -450,7 +450,7 @@ export const headingBlock = qb
 		category: content(c),
 		order: 2,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		text: f.text({
 			label: { en: "Text", sk: "Text" },
 			localized: true,
@@ -495,7 +495,7 @@ export const hoursBlock = qb
 		category: content(c),
 		order: 3,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		showClosed: f.boolean({
 			label: { en: "Show Closed Days", sk: "Zobraziť zatvorené dni" },
@@ -515,7 +515,7 @@ export const contactInfoBlock = qb
 		category: content(c),
 		order: 4,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		showMap: f.boolean({
 			label: { en: "Show Map", sk: "Zobraziť mapu" },
@@ -544,7 +544,7 @@ export const galleryBlock = qb
 		category: content(c),
 		order: 5,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		images: f.upload({
 			label: { en: "Images", sk: "Obrázky" },
@@ -592,7 +592,7 @@ export const imageTextBlock = qb
 		category: content(c),
 		order: 6,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		image: f.upload({ label: { en: "Image", sk: "Obrázok" } }),
 		imagePosition: f.select({
 			label: { en: "Image Position", sk: "Pozícia obrázka" },
@@ -636,7 +636,7 @@ export const statsBlock = qb
 		category: content(c),
 		order: 7,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ label: { en: "Title", sk: "Nadpis" }, localized: true }),
 		stats: f.array({
 			of: f.object({
@@ -680,7 +680,7 @@ export const columnsBlock = qb
 		order: 1,
 	}))
 	.allowChildren()
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		columns: f.select({
 			label: { en: "Columns", sk: "Počet stĺpcov" },
 			options: [
@@ -719,7 +719,7 @@ export const spacerBlock = qb
 		category: layout(c),
 		order: 2,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		size: f.select({
 			label: { en: "Size", sk: "Veľkosť" },
 			options: [
@@ -740,7 +740,7 @@ export const dividerBlock = qb
 		category: layout(c),
 		order: 3,
 	}))
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		style: f.select({
 			label: { en: "Style", sk: "Štýl" },
 			options: [

@@ -10,7 +10,7 @@ const q = questpie({ name: "test-versioning-workflow" }).fields(defaultFields);
 // Workflow shorthand: versioning: { workflow: true } → draft/published
 const shorthand_posts = q
 	.collection("shorthand_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({
@@ -22,7 +22,7 @@ const shorthand_posts = q
 // Full workflow config with stages
 const workflow_posts = q
 	.collection("workflow_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({
@@ -37,7 +37,7 @@ const workflow_posts = q
 // Plain versioning (no workflow) for comparison
 const plain_versioned = q
 	.collection("plain_versioned")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({

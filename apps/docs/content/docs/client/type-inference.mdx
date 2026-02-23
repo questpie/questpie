@@ -14,7 +14,7 @@ Type-safe APIs prevent entire categories of bugs — wrong field names, missing 
 ## The Type Flow
 
 ```text
-Server: .fields((f) => ({ title: f.text({ required: true }) }))
+Server: .fields(({ f }) => ({ title: f.text({ required: true }) }))
   ↓ TypeScript inference
 Server type: { title: string }  (non-optional because required)
   ↓ typeof app
@@ -30,7 +30,7 @@ Collection builders produce inferred types:
 ```ts
 const posts = qb
   .collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),      // string (non-optional)
     description: f.text({}),                 // string | undefined
     rating: f.number({ min: 0, max: 5 }),   // number | undefined

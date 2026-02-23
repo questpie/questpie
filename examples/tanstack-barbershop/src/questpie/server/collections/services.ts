@@ -1,8 +1,7 @@
-import { qb } from "@/questpie/server/builder";
+import { collection } from "questpie";
 
-export const services = qb
-	.collection("services")
-	.fields((f) => ({
+export const services = collection("services")
+	.fields(({ f }) => ({
 		name: f.text({
 			label: { en: "Name", sk: "Názov" },
 			required: true,

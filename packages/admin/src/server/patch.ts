@@ -701,7 +701,7 @@ function patchQuestpieBuilder() {
 	 * const heroBlock = qb.block("hero")
 	 *   .label({ en: "Hero Section" })
 	 *   .icon("ph:image")
-	 *   .fields((f) => ({
+	 *   .fields(({ f }) => ({
 	 *     title: f.text({ required: true }),  // ✅ typed from builder's field registry
 	 *     subtitle: f.text(),
 	 *   }));

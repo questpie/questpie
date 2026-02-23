@@ -32,7 +32,7 @@ Define operation-level rules with `.access()`:
 ```ts
 export const appointments = qb
   .collection("appointments")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     customer: f.text({ required: true }),
     scheduledAt: f.datetime({ required: true }),
     status: f.select({ options: ["pending", "confirmed", "cancelled"] }),
@@ -119,7 +119,7 @@ Globals support `read`, `update`, and `transition` operations (no create/delete 
 ```ts
 export const siteSettings = qb
   .global("siteSettings")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     siteName: f.text({ required: true }),
     logo: f.upload({}),
     maintenanceMode: f.boolean({ defaultValue: false }),
@@ -139,7 +139,7 @@ Define field-specific rules in the collection's `.access()` method:
 ```ts
 export const employees = qb
   .collection("employees")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({ required: true }),
     email: f.text({ required: true }),
     ssn: f.text({ maxLength: 20 }),
@@ -311,7 +311,7 @@ const publicPosts = qb
     read: true,  // Public reads
     // create, update, delete fall through to defaultAccess (require auth)
   })
-  .fields((f) => ({ ... }));
+  .fields(({ f }) => ({ ... }));
 ```
 
 ### Without Starter Module

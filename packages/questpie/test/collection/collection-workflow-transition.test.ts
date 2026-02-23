@@ -9,7 +9,7 @@ const q = questpie({ name: "test-transition" }).fields(defaultFields);
 
 const workflow_posts = q
 	.collection("workflow_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({
@@ -23,7 +23,7 @@ const workflow_posts = q
 
 const guarded_posts = q
 	.collection("guarded_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({
@@ -41,7 +41,7 @@ const guarded_posts = q
 
 const no_workflow = q
 	.collection("no_workflow")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({
@@ -51,7 +51,7 @@ const no_workflow = q
 // Collection with transition-specific access: only admins can transition
 const transition_access_posts = q
 	.collection("transition_access_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({
@@ -75,7 +75,7 @@ const hookCalls: {
 
 const hooked_posts = q
 	.collection("hooked_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({
@@ -103,7 +103,7 @@ const hooked_posts = q
 
 const blocking_hooks_posts = q
 	.collection("blocking_hooks_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
 	.options({

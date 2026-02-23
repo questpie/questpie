@@ -22,7 +22,7 @@ const q = questpie({ name: "search-test" }).fields(defaultFields);
 
 const posts = q
 	.collection("posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({ required: true, maxLength: 255 }),
 		content: f.textarea(),
 		status: f.text({ maxLength: 50, default: "draft" }),
@@ -36,7 +36,7 @@ const posts = q
 
 const products = q
 	.collection("products")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({ required: true, maxLength: 255 }),
 		description: f.textarea(),
 		sku: f.text({ required: true, maxLength: 50 }),

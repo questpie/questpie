@@ -47,7 +47,7 @@ Register globals as a named map.
 
 ### `.fields(map)`
 
-Register custom field type definitions. These become available on the `f` proxy in `.fields((f) => ...)`.
+Register custom field type definitions. These become available on the `f` proxy in `.fields(({ f }) => ...)`.
 
 ```ts
 .fields({
@@ -211,7 +211,7 @@ Create a new `CollectionBuilder`.
 
 ```ts
 const posts = q.collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     status: f.select({
       options: ["draft", "published"],
@@ -229,7 +229,7 @@ Create a new `GlobalBuilder`.
 
 ```ts
 const settings = q.global("siteSettings")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     siteName: f.text({ required: true }),
     logo: f.upload(),
   }));

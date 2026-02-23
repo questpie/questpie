@@ -17,7 +17,7 @@ Your collection/global definitions should be the canonical source for:
 ```ts
 export const appointments = qb
   .collection("appointments")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     status: f.select({
       label: { en: "Status" },
       options: [

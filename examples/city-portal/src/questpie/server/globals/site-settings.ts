@@ -26,7 +26,7 @@ export type SocialLink = {
 
 export const siteSettings = qb
 	.global("site_settings")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		// Branding
 		siteName: f.text({
 			label: "Site Name",

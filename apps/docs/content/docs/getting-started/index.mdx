@@ -37,7 +37,7 @@ bun add @questpie/hono hono  # or @questpie/elysia, @questpie/next
 import { q } from "questpie";
 
 // src/questpie/server/collections/posts.ts
-export const posts = q.collection("posts").fields((f) => ({
+export const posts = q.collection("posts").fields(({ f }) => ({
   title: f.text({ required: true }),
   slug: f.text({ required: true, input: "optional" }),
   content: f.richText(),

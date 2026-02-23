@@ -32,7 +32,7 @@ The runtime contract comes first. Admin, SDKs, and OpenAPI all consume the same 
 Fields are defined on the runtime using the `f` field builder. Each field maps to database behavior, API validation, and query typing. If admin is installed, those same fields also drive form rendering.
 
 ```ts
-q.collection("posts").fields((f) => ({
+q.collection("posts").fields(({ f }) => ({
   title: f.text({ required: true, maxLength: 255 }),
   body: f.richText({ localized: true }),
   cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),

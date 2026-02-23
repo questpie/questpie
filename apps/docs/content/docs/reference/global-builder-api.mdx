@@ -9,7 +9,7 @@ description: Global-level methods — singleton fields, hooks, access, versionin
 
 ```ts
 const siteSettings = q.global("siteSettings")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     siteName: f.text({ required: true }),
     logo: f.upload(),
     description: f.textarea(),
@@ -30,7 +30,7 @@ All methods are chainable and return a new builder instance.
 Define the global's fields using the field builder proxy.
 
 ```ts
-.fields((f) => ({
+.fields(({ f }) => ({
   siteName: f.text({ required: true }),
   logo: f.upload(),
   footerText: f.richText(),

@@ -40,7 +40,7 @@ const currencyField = field<CurrencyFieldConfig, number>()({
 
 // Define collections
 const products = q.collection("products")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({ required: true }),
     price: f.currency({ currency: "USD", required: true }),
     sku: f.text({ required: true }),
@@ -106,7 +106,7 @@ export const app = q({ name: "store" })
     categories: categoriesCollection,
     // Or extend the plugin's collection
     products: ecommerceModule.state.collections.products.merge(
-      q.collection("products").fields((f) => ({
+      q.collection("products").fields(({ f }) => ({
         featured: f.boolean().default(false),
       })),
     ),
@@ -159,7 +159,7 @@ If your module provides collections that users might extend, document the merge 
 // User extends your collection with extra fields
 const customProducts = ecommerceModule.state.collections.products.merge(
   q.collection("products")
-    .fields((f) => ({ customField: f.text() }))
+    .fields(({ f }) => ({ customField: f.text() }))
     .hooks({ afterChange: myCustomHook }),
 );
 ```

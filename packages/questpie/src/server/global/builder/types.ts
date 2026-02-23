@@ -67,7 +67,7 @@ export interface GlobalOptions {
 	 *   .options({
 	 *     scoped: (ctx) => ctx.tenantId  // From context extension
 	 *   })
-	 *   .fields((f) => ({
+	 *   .fields(({ f }) => ({
 	 *     welcomeMessage: f.text(),
 	 *     theme: f.select({ options: ['light', 'dark'] })
 	 *   }))
@@ -78,7 +78,7 @@ export interface GlobalOptions {
 	 *   .options({
 	 *     scoped: (ctx) => ctx.propertyId
 	 *   })
-	 *   .fields((f) => ({
+	 *   .fields(({ f }) => ({
 	 *     checkInTime: f.text({ default: '14:00' }),
 	 *     checkOutTime: f.text({ default: '11:00' })
 	 *   }))
@@ -311,7 +311,7 @@ export interface GlobalBuilderState {
 	 */
 	"~questpieApp"?: any;
 	/**
-	 * Phantom type for field types available in .fields((f) => ...).
+	 * Phantom type for field types available in .fields(({ f }) => ...).
 	 * Extracted from ~questpieApp at compile time for type inference.
 	 */
 	"~fieldTypes"?: Record<string, any>;
@@ -332,7 +332,7 @@ type ExtractFieldTypesFromApp<TQuestpieApp> = TQuestpieApp extends {
  *
  * @param TName - Global name
  * @param TQuestpieApp - Reference to QuestpieBuilder instance
- * @param TFieldTypes - Field types available in .fields((f) => ...)
+ * @param TFieldTypes - Field types available in .fields(({ f }) => ...)
  */
 export type EmptyGlobalState<
 	TName extends string,

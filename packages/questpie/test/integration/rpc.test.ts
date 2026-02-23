@@ -31,11 +31,11 @@ const createModule = () => {
 		},
 	});
 
-	const posts = q.collection("posts").fields((f) => ({
+	const posts = q.collection("posts").fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 	}));
 
-	const settings = q.global("settings").fields((f) => ({
+	const settings = q.global("settings").fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 	}));
 
@@ -141,7 +141,7 @@ describe("rpc nested routers", () => {
 
 	beforeEach(async () => {
 		const q = questpie({ name: "nested-rpc-test" }).fields(defaultFields);
-		const posts = q.collection("posts").fields((f) => ({
+		const posts = q.collection("posts").fields(({ f }) => ({
 			title: f.textarea({ required: true }),
 		}));
 		setup = await buildMockApp(q.collections({ posts }));

@@ -68,7 +68,7 @@ export const app = qb
 Fields are defined via a proxy-based `f` factory inside `.fields()`:
 
 ```ts
-const posts = qb.collection("posts").fields((f) => ({
+const posts = qb.collection("posts").fields(({ f }) => ({
   title: f.text({ label: "Title", required: true }),
   content: f.richText({ label: "Content" }),
   published: f.boolean({ label: "Published", default: false }),

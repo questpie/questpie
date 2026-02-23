@@ -77,7 +77,7 @@ Admin metadata, list views, and form views are defined on the collection itself:
 
 ```ts
 const posts = qb.collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ label: "Title", required: true }),
     content: f.richText({ label: "Content" }),
     status: f.select({ label: "Status", options: ["draft", "published"] }),
@@ -260,7 +260,7 @@ const heroBlock = qb
     icon: c.icon("ph:image"),
     category: { label: "Sections", icon: c.icon("ph:layout") },
   }))
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     subtitle: f.textarea(),
     backgroundImage: f.upload({ to: "assets", mimeTypes: ["image/*"] }),

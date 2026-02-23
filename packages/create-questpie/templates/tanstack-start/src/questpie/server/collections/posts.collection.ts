@@ -2,7 +2,7 @@ import { qb } from "@/questpie/server/builder.js";
 
 export const posts = qb
 	.collection("posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.text({
 			label: "Title",
 			required: true,

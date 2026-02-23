@@ -9,7 +9,7 @@ description: All collection-level methods — fields, hooks, access, options, se
 
 ```ts
 const posts = q.collection("posts")
-  .fields((f) => ({ ... }))
+  .fields(({ f }) => ({ ... }))
   .title(({ f }) => f.title)
   .hooks({ ... })
   .access({ ... })
@@ -25,7 +25,7 @@ All methods are chainable and return a new builder instance.
 Define the collection's fields using the field builder proxy.
 
 ```ts
-.fields((f) => ({
+.fields(({ f }) => ({
   title: f.text({ required: true }),
   slug: f.text({ required: true }),
   body: f.richText(),
@@ -283,7 +283,7 @@ Merge another collection builder into this one. Fields, hooks, access rules, and
 
 ```ts
 const extendedPosts = postsCollection.merge(
-  q.collection("posts").fields((f) => ({
+  q.collection("posts").fields(({ f }) => ({
     featured: f.boolean().default(false),
   })),
 );
@@ -297,7 +297,7 @@ In app code, prefer this pattern:
 
 ```ts
 const posts = q.collection("posts")
-  .fields((f) => ({ ... }))
+  .fields(({ f }) => ({ ... }))
   .hooks({ ... });
 
 export const app = q({ name: "app" })

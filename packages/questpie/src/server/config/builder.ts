@@ -278,7 +278,7 @@ export class QuestpieBuilder<
 
 	/**
 	 * Register field types for the Field Builder system.
-	 * Fields are available when defining collections with `.fields((f) => ({ ... }))`.
+	 * Fields are available when defining collections with `.fields(({ f }) => ({ ... }))`.
 	 *
 	 * @example
 	 * ```ts
@@ -292,7 +292,7 @@ export class QuestpieBuilder<
 	 *
 	 * // Now available in collections:
 	 * const posts = collection("posts")
-	 *   .fields((f) => ({
+	 *   .fields(({ f }) => ({
 	 *     title: f.text({ required: true }),
 	 *     views: f.number({ min: 0 }),
 	 *   }));
@@ -747,7 +747,7 @@ export class QuestpieBuilder<
 	 *
 	 * // Use q.collection() for type-safe field access:
 	 * const posts = q.collection("posts")
-	 *   .fields((f) => ({
+	 *   .fields(({ f }) => ({
 	 *     title: f.text({ required: true }),  // ✅ autocomplete from defaultFields
 	 *     views: f.number({ min: 0 }),
 	 *   }));
@@ -796,7 +796,7 @@ export class QuestpieBuilder<
 	 *
 	 * // Use q.global() for type-safe field access:
 	 * const settings = q.global("settings")
-	 *   .fields((f) => ({
+	 *   .fields(({ f }) => ({
 	 *     siteName: f.text({ required: true }),  // ✅ autocomplete from defaultFields
 	 *     maintenanceMode: f.boolean({ default: false }),
 	 *   }));
@@ -1051,7 +1051,7 @@ export type CallableQuestpieBuilder<TState extends QuestpieBuilderState> =
  * );
  *
  * // Use as builder directly
- * const posts = q.collection("posts").fields((f) => ({
+ * const posts = q.collection("posts").fields(({ f }) => ({
  *   title: f.text({ required: true }),
  * }));
  *

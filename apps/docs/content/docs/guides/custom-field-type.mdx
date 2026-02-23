@@ -72,7 +72,7 @@ import { q } from "@questpie/questpie";
 const app = q({ name: "app" })
   .fields({ color: colorField })
   .collections({
-    brands: q.collection("brands").fields((f) => ({
+    brands: q.collection("brands").fields(({ f }) => ({
       name: f.text().notNull(),
       primaryColor: f.color({ swatches: ["#FF5733", "#33FF57", "#3357FF"] }).notNull(),
       secondaryColor: f.color(),

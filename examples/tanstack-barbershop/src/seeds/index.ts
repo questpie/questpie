@@ -1,9 +1,4 @@
-import type { Seed } from "questpie"
-
-import { siteSettingsSeed } from "./site-settings.seed.js"
-
-import { demoDataSeed } from "./demo-data.seed.js"
-export const seeds: Seed[] = [
-	siteSettingsSeed,
-	demoDataSeed,
-]
+import type { Seed } from "questpie";
+import { demoDataSeed } from "./demo-data.seed.js";
+import { siteSettingsSeed } from "./site-settings.seed.js";
+export const seeds: Seed[] = [siteSettingsSeed, demoDataSeed];

@@ -36,7 +36,7 @@ import { qb } from "../builder";
 
 export const services = qb
   .collection("services")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({
       label: { en: "Name" },
       required: true,
@@ -107,7 +107,7 @@ import { qb } from "../builder";
 
 export const barberServices = qb
   .collection("barberServices")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     barber: f.relation({
       to: "barbers",
       required: true,
@@ -144,7 +144,7 @@ import { qb } from "../builder";
 
 export const barbers = qb
   .collection("barbers")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({
       label: { en: "Full Name" },
       required: true,

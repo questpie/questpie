@@ -25,7 +25,7 @@ appointments ── references barber + service + customer data
 
 ```ts
 const services = q.collection("services")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({ required: true }),
     description: f.textarea(),
     duration: f.number({ min: 15, required: true }),  // minutes
@@ -40,7 +40,7 @@ const services = q.collection("services")
 
 ```ts
 const barbers = q.collection("barbers")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({ required: true }),
     email: f.email({ required: true }),
     phone: f.text(),
@@ -56,7 +56,7 @@ const barbers = q.collection("barbers")
 
 ```ts
 const appointments = q.collection("appointments")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     barber: f.relation({ to: "barbers", required: true }),
     service: f.relation({ to: "services", required: true }),
     customerName: f.text({ required: true }),

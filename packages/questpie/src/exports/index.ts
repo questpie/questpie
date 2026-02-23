@@ -38,14 +38,14 @@ const callableQ = createCallableBuilder(baseBuilder);
  * import { q } from "questpie"
  *
  * // Define collections with type-safe fields
- * const posts = q.collection("posts").fields((f) => ({
+ * const posts = q.collection("posts").fields(({ f }) => ({
  *   title: f.text({ required: true }),
  *   content: f.textarea(),
  *   publishedAt: f.datetime(),
  * }))
  *
  * // Define globals
- * const settings = q.global("settings").fields((f) => ({
+ * const settings = q.global("settings").fields(({ f }) => ({
  *   siteName: f.text({ required: true }),
  *   maintenanceMode: f.boolean({ default: false }),
  * }))

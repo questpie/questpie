@@ -17,7 +17,7 @@ export const assetsCollection = q
 	.options({
 		timestamps: true,
 	})
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		// Image dimensions (optional)
 		width: f.number(),
 		height: f.number(),

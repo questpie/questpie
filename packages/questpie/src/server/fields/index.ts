@@ -12,7 +12,7 @@
  * import { field, createFieldBuilder, builtinFields } from "questpie/server/fields";
  *
  * // Using built-in fields
- * const posts = collection("posts").fields((f) => ({
+ * const posts = collection("posts").fields(({ f }) => ({
  *   title: f.text({ required: true, maxLength: 255 }),
  *   content: f.textarea({ required: true }),
  *   status: f.select({
@@ -41,12 +41,14 @@ export {
 	createFieldBuilder,
 	/** @deprecated Use `createFieldBuilder` instead */
 	createFieldBuilderFromDefs,
+	createFieldsCallbackContext,
 	/** @deprecated Use `BuiltinFields` instead */
 	type DefaultFieldTypeMap,
 	extractFieldDefinitions,
 	type FieldBuilderProxy,
 	type FieldInputs,
 	type FieldOutputs,
+	type FieldsCallbackContext,
 	type FieldValues,
 	type InferFieldsFromFactory,
 } from "./builder.js";

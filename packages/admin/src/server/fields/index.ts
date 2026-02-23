@@ -12,7 +12,7 @@
  * const app = q({ name: "my-app" })
  *   .use(adminModule)  // Registers richText and blocks fields
  *   .collections({
- *     pages: q.collection("pages").fields((f) => ({
+ *     pages: q.collection("pages").fields(({ f }) => ({
  *       title: f.text({ required: true }),
  *       content: f.richText({ features: ["bold", "italic", "link"] }),
  *       sections: f.blocks({ allowedBlocks: ["hero", "text"] }),

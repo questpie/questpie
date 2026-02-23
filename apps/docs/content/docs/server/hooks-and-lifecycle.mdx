@@ -52,7 +52,7 @@ Use `.hooks()` on a collection builder:
 ```ts
 export const barbers = qb
   .collection("barbers")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({ required: true }),
     slug: f.text({}),
     bio: f.richText({}),
@@ -306,7 +306,7 @@ afterChange: async ({ data, app }) => {
 ```ts
 export const appointments = qb
   .collection("appointments")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     customer: f.text({ required: true }),
     scheduledAt: f.datetime({ required: true }),
     status: f.select({

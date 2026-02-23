@@ -15,7 +15,7 @@ const q = questpie({ name: "unit-test" }).fields(defaultFields);
 
 describe("extractNestedLocalizationSchema", () => {
 	it("returns null for non-localized object field", () => {
-		const collection = q.collection("test").fields((f) => ({
+		const collection = q.collection("test").fields(({ f }) => ({
 			profile: f.object({
 				fields: {
 					name: f.text({ required: true }),
@@ -30,7 +30,7 @@ describe("extractNestedLocalizationSchema", () => {
 	});
 
 	it("extracts schema for object with localized nested field", () => {
-		const collection = q.collection("test").fields((f) => ({
+		const collection = q.collection("test").fields(({ f }) => ({
 			profile: f.object({
 				fields: {
 					name: f.text({ required: true }),
@@ -45,7 +45,7 @@ describe("extractNestedLocalizationSchema", () => {
 	});
 
 	it("extracts schema for deeply nested localized fields", () => {
-		const collection = q.collection("test").fields((f) => ({
+		const collection = q.collection("test").fields(({ f }) => ({
 			workingHours: f.object({
 				fields: {
 					monday: f.object({
@@ -73,7 +73,7 @@ describe("extractNestedLocalizationSchema", () => {
 	});
 
 	it("extracts schema for array with localized item fields", () => {
-		const collection = q.collection("test").fields((f) => ({
+		const collection = q.collection("test").fields(({ f }) => ({
 			links: f.array({
 				of: f.object({
 					fields: {
@@ -92,7 +92,7 @@ describe("extractNestedLocalizationSchema", () => {
 	});
 
 	it("returns null for array without localized fields", () => {
-		const collection = q.collection("test").fields((f) => ({
+		const collection = q.collection("test").fields(({ f }) => ({
 			links: f.array({
 				of: f.object({
 					fields: {
@@ -109,7 +109,7 @@ describe("extractNestedLocalizationSchema", () => {
 	});
 
 	it("extracts schema for mixed nested structure", () => {
-		const collection = q.collection("test").fields((f) => ({
+		const collection = q.collection("test").fields(({ f }) => ({
 			content: f.object({
 				fields: {
 					title: f.text({ localized: true }),
@@ -143,7 +143,7 @@ describe("extractNestedLocalizationSchema", () => {
 
 describe("extractNestedLocalizationSchemas", () => {
 	it("extracts schemas for all JSONB fields in collection", () => {
-		const collection = q.collection("test").fields((f) => ({
+		const collection = q.collection("test").fields(({ f }) => ({
 			name: f.text({ required: true }),
 			bio: f.text({ localized: true }), // Top-level localized - not nested
 			metadata: f.object({
@@ -174,7 +174,7 @@ describe("extractNestedLocalizationSchemas", () => {
 	});
 
 	it("returns empty object for collection without nested localized fields", () => {
-		const collection = q.collection("simple").fields((f) => ({
+		const collection = q.collection("simple").fields(({ f }) => ({
 			name: f.text({ required: true }),
 			title: f.text({ localized: true }), // Top-level only
 		}));

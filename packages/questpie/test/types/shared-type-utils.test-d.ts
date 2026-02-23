@@ -38,12 +38,12 @@ import type {
 
 const q = questpie({ name: "test" }).fields(builtinFields);
 
-const usersCollection = q.collection("users").fields((f) => ({
+const usersCollection = q.collection("users").fields(({ f }) => ({
 	name: f.textarea({ required: true }),
 	email: f.email({ required: true, maxLength: 255 }),
 }));
 
-const postsCollection = q.collection("posts").fields((f) => ({
+const postsCollection = q.collection("posts").fields(({ f }) => ({
 	title: f.text({ required: true, maxLength: 255 }),
 	content: f.textarea(),
 	author: f.relation({
@@ -59,7 +59,7 @@ const postsCollection = q.collection("posts").fields((f) => ({
 	}),
 }));
 
-const commentsCollection = q.collection("comments").fields((f) => ({
+const commentsCollection = q.collection("comments").fields(({ f }) => ({
 	text: f.textarea({ required: true }),
 	post: f.relation({
 		to: "posts",
@@ -68,7 +68,7 @@ const commentsCollection = q.collection("comments").fields((f) => ({
 	}),
 }));
 
-const settingsGlobal = q.global("settings").fields((f) => ({
+const settingsGlobal = q.global("settings").fields(({ f }) => ({
 	siteName: f.text({ required: true, maxLength: 255 }),
 	maintenanceMode: f.textarea(),
 }));

@@ -125,7 +125,7 @@ import { qb } from "@/questpie/server/builder";
 
 export const posts = qb
   .collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ label: "Title", required: true }),
     slug: f.slug({ label: "Slug", from: "title" }),
     content: f.richText({ label: "Content" }),
@@ -175,7 +175,7 @@ import { qb } from "@/questpie/server/builder";
 
 export const siteSettings = qb
   .global("site_settings")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     siteName: f.text({ label: "Site Name", required: true }),
     description: f.textarea({ label: "Description" }),
     logo: f.upload({ label: "Logo" }),
@@ -312,7 +312,7 @@ const heroBlock = qb
     icon: c.icon("ph:image"),
     category: { label: "Sections", icon: c.icon("ph:layout"), order: 1 },
   }))
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ label: "Title", required: true }),
     subtitle: f.textarea({ label: "Subtitle" }),
     backgroundImage: f.upload({ label: "Background Image" }),
@@ -334,7 +334,7 @@ const teamBlock = qb
     icon: c.icon("ph:users"),
     category: { label: "Sections", icon: c.icon("ph:layout"), order: 1 },
   }))
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ label: "Title" }),
     limit: f.number({ label: "Number to Show", default: 4 }),
   }))
@@ -404,7 +404,7 @@ import type { BaseCMS } from "./app";
 
 const latestPostsBlock = qb
   .block("latest-posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     count: f.number({ label: "Number of Posts", default: 3 }),
   }))
   .prefetch(async ({ values, ctx }) => {

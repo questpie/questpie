@@ -8,7 +8,7 @@ import { runTestDbMigrations } from "../utils/test-db";
 const q = questpie({ name: "test-module" }).fields(defaultFields);
 
 // Assets collection (target of many-to-many)
-const assets = q.collection("assets").fields((f) => ({
+const assets = q.collection("assets").fields(({ f }) => ({
 	filename: f.text({ required: true, maxLength: 255 }),
 	mimeType: f.text({ maxLength: 100 }),
 }));
@@ -16,7 +16,7 @@ const assets = q.collection("assets").fields((f) => ({
 // Junction table for candle settings images
 const candleSettingsImages = q
 	.collection("candle_settings_images")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		candleSettings: f.relation({
 			to: "candle_settings",
 			required: true,
@@ -31,7 +31,7 @@ const candleSettingsImages = q
 	}));
 
 // Candle settings global with many-to-many relation
-const candleSettings = q.global("candle_settings").fields((f) => ({
+const candleSettings = q.global("candle_settings").fields(({ f }) => ({
 	pageTitle: f.text({
 		required: true,
 		maxLength: 255,

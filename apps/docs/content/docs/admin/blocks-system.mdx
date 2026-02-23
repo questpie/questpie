@@ -15,7 +15,7 @@ Blocks are defined using the block builder on the server:
 import { adminModule } from "@questpie/admin/server";
 
 const heroBlock = adminModule.block("hero")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     heading: f.text({ required: true }),
     subheading: f.text(),
     image: f.upload("media"),
@@ -39,7 +39,7 @@ Add blocks to a collection field using `richText` or a dedicated blocks field:
 
 ```typescript
 const pages = qb.collection("pages")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({
       blocks: [heroBlock, paragraphBlock, imageBlock, ctaBlock],
@@ -95,7 +95,7 @@ Use `{ with: { fieldName: true } }` to automatically expand relation/upload fiel
 
 ```typescript
 const heroBlock = qb.block("hero")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     backgroundImage: f.upload(), // Stored as UUID
   }))
@@ -130,7 +130,7 @@ Use an async function when you need to fetch data that isn't a direct field on t
 
 ```typescript
 const teamBlock = qb.block("team")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text(),
     limit: f.number({ defaultValue: 4 }),
   }))
@@ -234,7 +234,7 @@ import type { posts } from "./collections";
 
 const latestPostsBlock = qb
   .block("latest-posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     count: f.number({ label: "Count", default: 3 }),
   }))
   .prefetch(async ({ values, ctx }) => {

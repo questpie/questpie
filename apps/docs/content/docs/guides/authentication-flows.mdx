@@ -118,7 +118,7 @@ Store roles on the user model (Better Auth extends the user table):
 ```ts
 export const posts = qb
   .collection("posts")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true }),
     status: f.select({ options: ["draft", "published"] }),
   }))
@@ -141,7 +141,7 @@ export const posts = qb
 ### 3. Field-Level Restrictions
 
 ```ts
-.fields((f) => ({
+.fields(({ f }) => ({
   title: f.text({ required: true }),
   internalNotes: f.textarea({
     access: {

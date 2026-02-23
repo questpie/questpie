@@ -35,7 +35,7 @@ export type {
  */
 export const savedViewsCollection = q
 	.collection("admin_saved_views")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		// User who owns this saved view
 		userId: f.text({ required: true, maxLength: 255, label: "User ID" }),
 

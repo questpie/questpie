@@ -10,7 +10,7 @@ const q = questpie({ name: "test-global-versioning-wf" }).fields(defaultFields);
 // Workflow shorthand
 const shorthand_config = q
 	.global("shorthand_config")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		siteName: f.text({ required: true }),
 	}))
 	.options({
@@ -22,7 +22,7 @@ const shorthand_config = q
 // Full workflow config
 const workflow_config = q
 	.global("workflow_config")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		siteName: f.text({ required: true }),
 	}))
 	.options({
@@ -37,7 +37,7 @@ const workflow_config = q
 // Plain versioning
 const plain_versioned = q
 	.global("plain_versioned")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		siteName: f.text({ required: true }),
 	}))
 	.options({

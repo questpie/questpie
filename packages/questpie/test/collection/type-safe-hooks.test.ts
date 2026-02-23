@@ -8,7 +8,7 @@ describe("Type-Safe Hooks", () => {
 	test("hooks should have proper type inference", () => {
 		const users = q
 			.collection("users")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				email: f.text({ required: true, maxLength: 255 }),
 				bio: f.textarea(),
@@ -85,7 +85,7 @@ describe("Type-Safe Hooks", () => {
 	test("original field availability across all hooks", () => {
 		const users = q
 			.collection("users")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				email: f.text({ required: true, maxLength: 255 }),
 				bio: f.textarea(),
@@ -206,7 +206,7 @@ describe("Type-Safe Hooks", () => {
 	test("beforeOperation hook has correct types", () => {
 		const posts = q
 			.collection("posts")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 			}))
 			.hooks({
@@ -246,7 +246,7 @@ describe("Type-Safe Hooks", () => {
 	test("hooks with localized fields", () => {
 		const posts = q
 			.collection("posts")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.text({ required: true, localized: true }),
 				slug: f.text({ required: true }),
 				description: f.textarea({ localized: true }),
@@ -287,7 +287,7 @@ describe("Type-Safe Hooks", () => {
 	test("hooks with localized fields maintain correct types across lifecycle", () => {
 		const articles = q
 			.collection("articles")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.textarea({ required: true, localized: true }),
 				body: f.textarea({ localized: true }),
 				category: f.text({ required: true }),
@@ -347,7 +347,7 @@ describe("Type-Safe Hooks", () => {
 	test("hooks should not allow return values", () => {
 		const articles = q
 			.collection("articles")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 			}))
 			.hooks({

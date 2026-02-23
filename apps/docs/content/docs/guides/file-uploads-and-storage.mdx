@@ -31,7 +31,7 @@ Files are stored in the `./uploads` directory and served via the app file endpoi
 ```ts
 export const barbers = qb
   .collection("barbers")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     name: f.text({ required: true }),
     avatar: f.upload({}),                    // Single image
     gallery: f.upload({ multiple: true }),   // Multiple images

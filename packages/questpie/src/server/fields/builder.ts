@@ -73,6 +73,35 @@ export type FieldBuilderProxy<TMap = BuiltinFields> = {
 };
 
 // ============================================================================
+// Fields Callback Context
+// ============================================================================
+
+/**
+ * Context object passed to the `.fields()` callback.
+ * Always use destructured syntax: `({ f }) => ...`
+ *
+ * @example
+ * ```ts
+ * collection("posts").fields(({ f }) => ({
+ *   title: f.text({ required: true }),
+ *   content: f.textarea(),
+ * }))
+ * ```
+ */
+export type FieldsCallbackContext<TFieldTypes = BuiltinFields> = {
+	f: FieldBuilderProxy<TFieldTypes>;
+};
+
+/**
+ * Create a fields callback context object `{ f }` from field definitions.
+ */
+export function createFieldsCallbackContext<
+	TFields extends Record<string, any>,
+>(fieldDefs: TFields): FieldsCallbackContext<TFields> {
+	return { f: createFieldBuilder(fieldDefs) };
+}
+
+// ============================================================================
 // Field Builder Creation
 // ============================================================================
 

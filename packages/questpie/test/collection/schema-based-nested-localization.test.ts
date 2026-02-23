@@ -41,7 +41,7 @@ const q = questpie({ name: "schema-based-i18n-test" }).fields(defaultFields);
 // Collection with nested localized fields in object
 const barbers = q
 	.collection("barbers")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		name: f.text({ required: true, maxLength: 100 }),
 		// Top-level localized field (needed to create i18n table)
 		bio: f.text({ localized: true }),

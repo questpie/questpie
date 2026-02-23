@@ -1,5 +1,5 @@
 import { uniqueIndex } from "drizzle-orm/pg-core";
-import { qb } from "@/questpie/server/builder";
+import { collection } from "questpie";
 import { slugify } from "@/questpie/server/utils";
 
 export type DaySchedule = {
@@ -23,9 +23,8 @@ export type SocialLink = {
 	url: string;
 };
 
-export const barbers = qb
-	.collection("barbers")
-	.fields((f) => {
+export const barbers = collection("barbers")
+	.fields(({ f }) => {
 		const daySchedule = () => ({
 			isOpen: f.boolean({
 				label: { en: "Open", sk: "Otvorené" },

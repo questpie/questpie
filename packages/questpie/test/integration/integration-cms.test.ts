@@ -29,7 +29,7 @@ const createTestModule = () => {
 
 	const authors = q
 		.collection("authors")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			name: f.textarea({ required: true }),
 			email: f.text({ required: true, maxLength: 255 }),
 			bio: f.textarea(),
@@ -51,7 +51,7 @@ const createTestModule = () => {
 	// Define articles collection with relations
 	const articles = q
 		.collection("articles")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			author: f.relation({
 				to: "authors",
 				required: true,
@@ -121,7 +121,7 @@ const createTestModule = () => {
 	// Define tags collection
 	const tags = q
 		.collection("tags")
-		.fields((f) => ({
+		.fields(({ f }) => ({
 			name: f.textarea({ required: true }),
 			articles: f.relation({
 				to: "articles",
@@ -134,7 +134,7 @@ const createTestModule = () => {
 		.title(({ f }) => f.name);
 
 	// Define junction table
-	const articleTags = q.collection("article_tags").fields((f) => ({
+	const articleTags = q.collection("article_tags").fields(({ f }) => ({
 		article: f.relation({
 			to: "articles",
 			required: true,

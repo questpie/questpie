@@ -8,14 +8,14 @@ import { runTestDbMigrations } from "../utils/test-db.js";
 const q = questpie({ name: "test-module" }).fields(defaultFields);
 
 // Collection WITHOUT explicit access - should inherit defaultAccess
-const publicPosts = q.collection("public_posts").fields((f) => ({
+const publicPosts = q.collection("public_posts").fields(({ f }) => ({
 	title: f.textarea({ required: true }),
 }));
 
 // Collection WITH explicit access - should override defaultAccess
 const adminNotes = q
 	.collection("admin_notes")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		content: f.textarea({ required: true }),
 	}))
 	.access({
@@ -26,7 +26,7 @@ const adminNotes = q
 // Collection with PARTIAL access - only read defined, others should fallback to defaultAccess
 const partialAccessPosts = q
 	.collection("partial_access_posts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 	}))
 	.access({
@@ -35,14 +35,14 @@ const partialAccessPosts = q
 	});
 
 // Global WITHOUT explicit access - should inherit defaultAccess
-const siteSettings = q.global("site_settings").fields((f) => ({
+const siteSettings = q.global("site_settings").fields(({ f }) => ({
 	siteName: f.textarea({ required: true }),
 }));
 
 // Global WITH explicit access - should override defaultAccess
 const adminSettings = q
 	.global("admin_settings")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		secretKey: f.textarea({ required: true }),
 	}))
 	.access({

@@ -27,7 +27,7 @@ import type { Equal, Expect, Extends, HasKey } from "./type-test-utils.js";
 const q = questpie({ name: "test" }).fields(builtinFields);
 
 // Simple collection for basic tests
-const postsCollection = q.collection("posts").fields((f) => ({
+const postsCollection = q.collection("posts").fields(({ f }) => ({
 	title: f.text({ required: true, maxLength: 255 }),
 	content: f.textarea(),
 	views: f.number({ default: 0 }),

@@ -1109,7 +1109,7 @@ export interface CollectionBuilderState {
 	 */
 	"~questpieApp"?: any;
 	/**
-	 * Phantom type for field types available in .fields((f) => ...).
+	 * Phantom type for field types available in .fields(({ f }) => ...).
 	 * Extracted from ~questpieApp at compile time for type inference.
 	 * This is set directly rather than computed to avoid complex type inference.
 	 */
@@ -1144,7 +1144,7 @@ export type ExtractAccess<TState extends CollectionBuilderState> =
  *
  * @param TName - Collection name
  * @param TQuestpieApp - Reference to QuestpieBuilder instance (for accessing app config)
- * @param TFieldTypes - Field types available in .fields((f) => ...), passed directly to avoid type extraction issues
+ * @param TFieldTypes - Field types available in .fields(({ f }) => ...), passed directly to avoid type extraction issues
  */
 export type EmptyCollectionState<
 	TName extends string,

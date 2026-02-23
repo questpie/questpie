@@ -28,7 +28,7 @@ Input data → Relation field preprocessing → Zod schema validation → before
 Field constraints map directly to Zod rules:
 
 ```ts
-.fields((f) => ({
+.fields(({ f }) => ({
   // z.string().min(1) — required makes it non-optional
   title: f.text({ required: true }),
 

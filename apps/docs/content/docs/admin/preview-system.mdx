@@ -45,7 +45,7 @@ import { qb } from "@/questpie/server/builder";
 
 export const pages = qb
   .collection("pages")
-  .fields((f) => ({
+  .fields(({ f }) => ({
     title: f.text({ required: true, localized: true }),
     slug: f.text({ required: true }),
     content: f.blocks({ localized: true }),

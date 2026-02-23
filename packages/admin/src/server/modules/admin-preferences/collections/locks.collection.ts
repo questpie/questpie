@@ -37,7 +37,7 @@ import { q } from "questpie";
  */
 export const locksCollection = q
 	.collection("admin_locks")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		// Resource type: "collection" or "global"
 		resourceType: f.select({
 			required: true,

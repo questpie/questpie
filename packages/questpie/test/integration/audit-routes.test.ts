@@ -16,16 +16,16 @@ import { runTestDbMigrations } from "../utils/test-db";
 const createModule = () => {
 	const q = questpie({ name: "audit-routes-test" }).fields(defaultFields);
 
-	const posts = q.collection("posts").fields((f) => ({
+	const posts = q.collection("posts").fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}));
 
-	const settings = q.global("settings").fields((f) => ({
+	const settings = q.global("settings").fields(({ f }) => ({
 		siteName: f.text({ required: true }),
 	}));
 
 	// Mock audit log collection matching the schema the audit route expects
-	const adminAuditLog = q.collection("adminAuditLog").fields((f) => ({
+	const adminAuditLog = q.collection("adminAuditLog").fields(({ f }) => ({
 		action: f.text({ required: true }),
 		resourceType: f.text({ required: true }),
 		resource: f.text({ required: true }),
@@ -261,7 +261,7 @@ describe("audit routes", () => {
 		it("returns empty array when no audit log collection exists", async () => {
 			// Set up an app without adminAuditLog collection
 			const q = questpie({ name: "no-audit-test" }).fields(defaultFields);
-			const settings = q.global("settings").fields((f) => ({
+			const settings = q.global("settings").fields(({ f }) => ({
 				siteName: f.text({ required: true }),
 			}));
 			const noAuditModule = q.globals({ settings }).defaultAccess({

@@ -11,7 +11,7 @@ const testModule = q
 	.collections({
 		posts: q
 			.collection("posts")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 			}))
 			.options({
@@ -21,7 +21,7 @@ const testModule = q
 	.globals({
 		site_config: q
 			.global("site_config")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				siteName: f.text({ required: true, maxLength: 100 }),
 				featuredPost: f.relation({
 					to: "posts",
@@ -34,15 +34,15 @@ const testModule = q
 					maxVersions: 2,
 				},
 			}),
-		localized_config: q.global("localized_config").fields((f) => ({
+		localized_config: q.global("localized_config").fields(({ f }) => ({
 			title: f.textarea({ localized: true }),
 		})),
-		auto_config: q.global("auto_config").fields((f) => ({
+		auto_config: q.global("auto_config").fields(({ f }) => ({
 			mode: f.text({ maxLength: 20, default: "auto" }),
 		})),
 		read_only_config: q
 			.global("read_only_config")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				mode: f.text({ maxLength: 20, default: "read" }),
 			}))
 			.access({
@@ -51,7 +51,7 @@ const testModule = q
 			}),
 		workflow_config: q
 			.global("workflow_config")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.text({ required: true }),
 			}))
 			.options({
@@ -64,7 +64,7 @@ const testModule = q
 			}),
 		guarded_workflow_config: q
 			.global("guarded_workflow_config")
-			.fields((f) => ({
+			.fields(({ f }) => ({
 				title: f.text({ required: true }),
 			}))
 			.options({

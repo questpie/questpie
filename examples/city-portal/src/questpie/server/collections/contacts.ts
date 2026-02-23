@@ -8,7 +8,7 @@ import { qb } from "@/questpie/server/builder";
 
 export const contacts = qb
 	.collection("contacts")
-	.fields((f) => ({
+	.fields(({ f }) => ({
 		city: f.relation({
 			label: "City",
 			to: "cities",
