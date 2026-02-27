@@ -1,21 +1,21 @@
-import type { Seed } from "questpie";
+import { seed } from "questpie";
 
-export const siteSettingsSeed: Seed = {
+export default seed({
 	id: "siteSettings",
 	description: "Site settings with EN and SK translations",
 	category: "required",
-	async run({ app, ctx, log }) {
-		const ctxEn = await app.createContext({
+	async run({ globals, createContext, log }) {
+		const ctxEn = await createContext({
 			accessMode: "system",
 			locale: "en",
 		});
-		const ctxSk = await app.createContext({
+		const ctxSk = await createContext({
 			accessMode: "system",
 			locale: "sk",
 		});
 
 		log("Updating site settings (EN)...");
-		await app.api.globals.siteSettings.update(
+		await globals.siteSettings.update(
 			{
 				shopName: "Sharp Cuts",
 				tagline: "Precision grooming for the modern gentleman",
@@ -68,7 +68,7 @@ export const siteSettingsSeed: Seed = {
 		);
 
 		log("Updating site settings (SK)...");
-		await app.api.globals.siteSettings.update(
+		await globals.siteSettings.update(
 			{
 				tagline: "Precízna starostlivosť pre moderného gentlemana",
 				navigation: [
@@ -97,4 +97,4 @@ export const siteSettingsSeed: Seed = {
 
 		log("Site settings seeded");
 	},
-};
+});

@@ -56,7 +56,7 @@ export function CallToAction() {
 					viewport={{ once: true }}
 					transition={{ duration: 0.6, delay: 0.2 }}
 				>
-					Get CRUD + RPC running first. Add admin UI and client SDKs when you
+					Get CRUD + functions running first. Add admin UI and client SDKs when you
 					need them.
 				</motion.p>
 

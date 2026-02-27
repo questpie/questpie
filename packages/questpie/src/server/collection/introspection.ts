@@ -105,7 +105,7 @@ export interface CollectionSchema {
 
 	/**
 	 * Admin configuration from .admin(), .list(), .form(), .preview(), .actions()
-	 * Only present when the `admin()` module is used.
+	 * Only present when the `adminModule` is used.
 	 */
 	admin?: {
 		/** Collection metadata (label, icon, hidden, group, order) */
@@ -736,7 +736,7 @@ export async function introspectCollection(
 		}
 	}
 
-	// Extract admin configuration if present (from admin() module)
+	// Extract admin configuration if present (from adminModule)
 	const adminConfig = extractAdminConfig(state);
 
 	return {
@@ -845,7 +845,7 @@ function serializeActionFormFields(
 
 /**
  * Extract admin configuration from collection state.
- * These properties are added by the `admin()` module via monkey patching.
+ * These properties are added by the `adminModule` via monkey patching.
  */
 function extractAdminConfig(
 	state: CollectionBuilderState,
@@ -999,12 +999,15 @@ async function evaluateCollectionAccess(
 	const { access } = state;
 	const appDefaultAccess = (app as any)?.defaultAccess;
 
-	const accessContext: AccessContext = {
-		app: app,
-		session: context.session,
+	const { extractAppServices } = await import("#questpie/server/config/app-context.js");
+	const services = extractAppServices(app, {
 		db: context.db,
+		session: context.session,
+	});
+	const accessContext: AccessContext = {
+		...services,
 		locale: context.locale,
-	};
+	} as AccessContext;
 
 	const operations = {
 		create: await evaluateAccessRule(
@@ -1053,7 +1056,7 @@ async function evaluateAccessRule(
 ): Promise<AccessResult> {
 	// No rule = require session (secure by default)
 	if (rule === undefined) {
-		return context.session ? { allowed: true } : { allowed: false };
+		return (context as any).session ? { allowed: true } : { allowed: false };
 	}
 
 	if (rule === true) {
@@ -1108,12 +1111,15 @@ async function evaluateFieldAccess(
 		return undefined;
 	}
 
-	const accessContext: AccessContext = {
-		app: app,
-		session: context.session,
+	const { extractAppServices } = await import("#questpie/server/config/app-context.js");
+	const services = extractAppServices(app, {
 		db: context.db,
+		session: context.session,
+	});
+	const accessContext: AccessContext = {
+		...services,
 		locale: context.locale,
-	};
+	} as AccessContext;
 
 	return {
 		read: await evaluateFieldAccessRule(fieldAccess.read, accessContext),

@@ -4,7 +4,7 @@
  * Contact form submissions from the public website.
  */
 
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export default collection("submissions")
 	.fields(({ f }) => ({

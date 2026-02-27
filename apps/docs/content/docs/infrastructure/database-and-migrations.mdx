@@ -16,12 +16,13 @@ Your collection definitions produce Drizzle table schemas automatically. When yo
 ### PostgreSQL
 
 ```ts
-.build({
-  db: {
-    url: "postgres://postgres:postgres@localhost:5432/mydb",
-  },
-  // ...
-})
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
+
+export default runtimeConfig({
+  db: { url: "postgres://postgres:postgres@localhost:5432/mydb" },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 ### PGlite (Development)
@@ -29,14 +30,12 @@ Your collection definitions produce Drizzle table schemas automatically. When yo
 For local development without installing PostgreSQL:
 
 ```ts
-import { PGlite } from "@electric-sql/pglite";
+import { runtimeConfig } from "questpie";
 
-.build({
-  db: {
-    url: "pglite://./data",  // local file-based database
-  },
-  // ...
-})
+export default runtimeConfig({
+  db: { url: "pglite://./data" },  // local file-based database
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 ## Auto-Generated Schema
@@ -51,7 +50,7 @@ The `id` (UUID), `createdAt`, and `updatedAt` columns are added automatically wh
 
 ## Migrations
 
-Define migrations and register them in the builder:
+Migrations are generated via the CLI and placed in the `migrations/` directory:
 
 ```ts
 // migrations/0001-initial.ts
@@ -69,17 +68,11 @@ export const initialMigration = defineMigration({
 });
 ```
 
-Register in the builder:
-
-```ts
-import { initialMigration } from "./migrations/0001-initial";
-
-.migrations([initialMigration])
-```
+Migrations in the `migrations/` directory are automatically discovered by codegen.
 
 ## Accessing the Database
 
-The Drizzle client is available in hooks, RPC handlers, and jobs:
+The Drizzle client is available in hooks, function handlers, and jobs:
 
 ```ts
 // In a hook
@@ -90,9 +83,9 @@ The Drizzle client is available in hooks, RPC handlers, and jobs:
   },
 })
 
-// In an RPC handler
-handler: async ({ app }) => {
-  const result = await app.db.execute(sql`SELECT count(*) FROM posts`);
+// In a function handler
+handler: async ({ db }) => {
+  const result = await db.execute(sql`SELECT count(*) FROM posts`);
   return { count: result.rows[0].count };
 }
 ```

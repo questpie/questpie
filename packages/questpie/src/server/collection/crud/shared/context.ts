@@ -6,23 +6,41 @@
  *
  * ## Context Propagation
  *
- * `normalizeContext()` automatically inherits `locale` and `accessMode` from
- * the current `runWithContext` scope (via AsyncLocalStorage) when not explicitly
- * provided. This enables implicit context propagation in nested API calls.
+ * `normalizeContext()` automatically inherits `locale`, `accessMode`, `session`,
+ * and `stage` from the current `runWithContext` scope (via AsyncLocalStorage)
+ * when not explicitly provided. This enables implicit context propagation in
+ * nested API calls without manual threading.
+ *
+ * ### Propagation priority (highest → lowest):
+ * 1. **Explicit param** — values passed directly to `normalizeContext(ctx)`
+ * 2. **ALS stored** — values set by the nearest `runWithContext()` ancestor
+ * 3. **Defaults** — `accessMode: "system"`, `locale: "en"`
+ *
+ * ### session propagation in partial overrides
+ *
+ * When you override only `accessMode` inside a function handler (e.g. to
+ * perform a user-level CRUD check), `session` is automatically inherited from
+ * the ALS scope, so you don't need to thread it manually:
+ *
+ * ```typescript
+ * // Inside a function handler — session comes from the request ALS scope
+ * const posts = await app.api.collections.posts.find({ accessMode: "user" });
+ * // ↑ session auto-merged from ALS, no need to pass it explicitly
+ * ```
  *
  * @example
  * ```typescript
- * // Parent operation sets context
- * await runWithContext({ app: app, locale: "sk" }, async () => {
- *   // Nested API call automatically inherits locale
+ * // HTTP adapter sets context via runWithContext for the entire request
+ * await runWithContext({ locale: "sk", session, accessMode: "user" }, async () => {
+ *   // All nested CRUD calls inherit locale + session automatically
  *   const posts = await app.api.collections.posts.find();
- *   // posts are fetched with locale: "sk"
+ *   // posts fetched with locale: "sk", session from request
  * });
  * ```
  *
  * This is particularly useful for:
+ * - Function handlers that call multiple collections (locale + session propagate)
  * - Block prefetch hooks fetching related data
- * - Custom functions calling multiple collections
  * - Hooks that need to query other entities
  */
 
@@ -41,9 +59,12 @@ export type NormalizedContext = Required<
 /**
  * Normalize context with defaults
  *
- * Automatically inherits locale, accessMode, and stage from AsyncLocalStorage
- * if not explicitly provided. This enables implicit context propagation
- * in nested API calls (e.g., prefetch hooks calling collection.find()).
+ * Merges the explicit context with inherited values from AsyncLocalStorage (ALS).
+ * Priority: explicit param > ALS stored > defaults.
+ *
+ * **session** is always inherited from ALS when not explicitly provided.
+ * This means that if you only override `accessMode` inside a function handler,
+ * the caller's session is still available for access checks — no manual threading.
  *
  * @param context - Optional CRUD context
  * @returns Context with required fields populated with defaults
@@ -61,6 +82,12 @@ export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
 
 	return {
 		...context,
+		// session: always inherit from ALS when not explicitly provided.
+		// Critical for partial overrides like { accessMode: "user" } inside
+		// function handlers — the caller's session propagates automatically.
+		// Cast needed: StoredContext.session is `unknown` (generic ALS store),
+		// but here we know it matches the CRUD session shape.
+		session: context.session ?? (stored?.session as CRUDContext["session"]),
 		accessMode: context.accessMode ?? storedAccessMode ?? "system",
 		locale:
 			context.locale ??

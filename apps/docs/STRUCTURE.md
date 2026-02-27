@@ -76,7 +76,7 @@ apps/docs/
 │   │   │
 │   │   ├── extensibility/              # ⭐ KEY FEATURE!
 │   │   │   ├── index.mdx               # Overview of extensibility
-│   │   │   ├── core-module.mdx         # Using coreAdminModule
+│   │   │   ├── core-module.mdx         # Using adminModule
 │   │   │   ├── custom-fields/
 │   │   │   │   ├── index.mdx
 │   │   │   │   ├── creating-fields.mdx

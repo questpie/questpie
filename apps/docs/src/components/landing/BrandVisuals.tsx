@@ -607,7 +607,7 @@ export function AnimLayerStack({ className }: { className?: string }) {
 export function AnimSchemaFlow({ className }: { className?: string }) {
 	const outs = [
 		{ l: "REST", y: 30 },
-		{ l: "RPC", y: 70 },
+		{ l: "Functions", y: 70 },
 		{ l: "Realtime", y: 110 },
 		{ l: "Admin UI", y: 150 },
 		{ l: "Typed Client", y: 190 },

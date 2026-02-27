@@ -26,7 +26,7 @@ import {
 /**
  * Helper to get typed app from handler context.
  */
-function getApp(ctx: { app: unknown }): Questpie<any> {
+function getApp(ctx: any): Questpie<any> {
 	return ctx.app as Questpie<any>;
 }
 
@@ -36,7 +36,7 @@ function getApp(ctx: { app: unknown }): Questpie<any> {
 function getAdminLocaleConfig(
 	app: Questpie<any>,
 ): AdminLocaleConfig | undefined {
-	return (app as any).state?.adminLocale;
+	return app.state?.adminLocale as AdminLocaleConfig | undefined;
 }
 
 // ============================================================================

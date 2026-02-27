@@ -1,35 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { questpie } from "../../src/exports/index.js";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
+import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-const q = questpie({ name: "test-module" }).fields(defaultFields);
-
-const testModule = q.collections({
-	posts: q
-		.collection("posts")
-		.fields(({ f }) => ({
-			title: f.textarea({ required: true }),
-			slug: f.text({ required: true, maxLength: 255 }),
-			status: f.text({ maxLength: 50 }),
-			viewCount: f.number(),
-			isFeatured: f.boolean(),
-			publishedAt: f.datetime(),
-		}))
-		.options({
-			timestamps: true,
-			softDelete: true,
-		}),
-});
+const posts = collection("posts")
+	.fields(({ f }) => ({
+		title: f.textarea({ required: true }),
+		slug: f.text({ required: true, maxLength: 255 }),
+		status: f.text({ maxLength: 50 }),
+		viewCount: f.number(),
+		isFeatured: f.boolean(),
+		publishedAt: f.datetime(),
+	}))
+	.options({
+		timestamps: true,
+		softDelete: true,
+	});
 
 describe("collection query operations", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	let testPosts: any[];
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({ collections: { posts } });
 		await runTestDbMigrations(setup.app);
 
 		// Seed test data

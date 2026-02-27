@@ -11,7 +11,7 @@
 import { Icon } from "@iconify/react";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Questpie } from "questpie";
+import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
 import { toast } from "sonner";
 import { useAdminConfig } from "../../hooks/use-admin-config";
@@ -26,7 +26,7 @@ import { ResourceSheet } from "../sheets/resource-sheet";
 import { Button } from "../ui/button";
 import { LocaleBadge } from "./locale-badge";
 
-export interface RelationSelectProps<_T extends Questpie<any>> {
+export interface RelationSelectProps<_T extends QuestpieApp> {
 	/**
 	 * Field name
 	 */
@@ -103,7 +103,7 @@ export interface RelationSelectProps<_T extends Questpie<any>> {
 	renderValue?: (item: any) => React.ReactNode;
 }
 
-export function RelationSelect<T extends Questpie<any>>({
+export function RelationSelect<T extends QuestpieApp>({
 	name,
 	value,
 	onChange,

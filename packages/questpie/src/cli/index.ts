@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { Command } from "commander";
+import { addCommand } from "./commands/add.js";
 import { devCommand, generateCommand } from "./commands/codegen.js";
 import { generateMigrationCommand } from "./commands/generate.js";
 import { pushCommand } from "./commands/push.js";
@@ -359,6 +360,32 @@ program
 			});
 		} catch (error) {
 			console.error("❌ Failed to reset seed tracking:", error);
+			process.exit(1);
+		}
+	});
+
+// Scaffold entity files
+program
+	.command("add <type> <name>")
+	.description(
+		"Scaffold a new entity file (collection, global, fn, job, service, block, email, route, seed, migration)",
+	)
+	.option(
+		"-c, --config <path>",
+		"Path to questpie.config.ts",
+		"questpie.config.ts",
+	)
+	.option("--dry-run", "Show what would be created without writing files")
+	.action(async (type, name, options) => {
+		try {
+			await addCommand({
+				type,
+				name,
+				configPath: options.config,
+				dryRun: options.dryRun,
+			});
+		} catch (error) {
+			console.error("❌ Failed to add entity:", error);
 			process.exit(1);
 		}
 	});

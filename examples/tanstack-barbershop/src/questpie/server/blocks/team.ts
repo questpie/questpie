@@ -70,7 +70,7 @@ export const teamBlock = block("team")
 		if (values.mode === "manual") {
 			const ids = (values.barbers as string[]) || [];
 			if (ids.length === 0) return { barbers: [] };
-			const res = await ctx.app.api.collections.barbers.find({
+			const res = await ctx.collections.barbers.find({
 				where: { id: { in: ids } },
 				limit: ids.length,
 				with: { avatar: true },
@@ -78,7 +78,7 @@ export const teamBlock = block("team")
 			return { barbers: res.docs };
 		}
 		// Auto mode
-		const res = await ctx.app.api.collections.barbers.find({
+		const res = await ctx.collections.barbers.find({
 			limit: values.limit || 4,
 			where: { isActive: true },
 			with: { avatar: true },

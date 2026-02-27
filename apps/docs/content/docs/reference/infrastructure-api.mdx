@@ -5,11 +5,11 @@ description: Method signatures for queue, email, storage, search, KV, and realti
 
 # Infrastructure API
 
-Reference for all infrastructure service methods available on the app instance.
+Reference for all infrastructure service methods. These are available on the `app` instance and also directly in handler context (`{ queue, email, storage, kv, logger }`).
 
 ## Queue — `app.queue`
 
-Queue methods are job-scoped. If you register `.jobs({ sendConfirmation })`, you call `app.queue.sendConfirmation.*`.
+Queue methods are job-scoped. Each job defined in your `jobs/` directory becomes a property on the queue — e.g., `queue.sendConfirmation.*`.
 
 ### `app.queue.<job>.publish(payload, options?)`
 
@@ -52,15 +52,13 @@ await app.queue.registerSchedules();
 
 Stops running consumers and the queue adapter.
 
-### Typed Queue Context
+### Typed Queue in Handlers
+
+Queue is available directly in the handler context:
 
 ```ts
-import { getContext } from "questpie";
-import type { App } from '../app';
-
-afterChange: async (ctx) => {
-  const { app } = getContext<App>(ctx);
-  await app.queue.sendConfirmation.publish({ appointmentId: ctx.data.id });
+afterChange: async ({ data, queue }) => {
+  await queue.sendConfirmation.publish({ appointmentId: data.id });
 }
 ```
 
@@ -72,7 +70,7 @@ afterChange: async (ctx) => {
 await app.email.sendTemplate({
   template: "appointmentConfirmation",
   to: "customer@example.com",
-  context: { customerName: "Jane", date: "March 15" },
+  input: { customerName: "Jane", date: "March 15" },
 });
 ```
 

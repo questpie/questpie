@@ -18,8 +18,8 @@ Organizations have their own design systems, brand colors, and UI conventions. T
 Replace how individual field types render in forms and table cells:
 
 ```ts
-const admin = qa<App>()
-  .use(coreAdminModule)
+const admin = qa<AppConfig>()
+  .use(adminModule)
   .fields({
     text: {
       name: "text",
@@ -78,15 +78,16 @@ The admin's stylesheet is built on shadcn/ui conventions — see their [theming 
 
 ### 5. Branding
 
-Set admin branding on the server builder:
+Set admin branding in a `branding.ts` convention file:
 
 ```ts
-const app = q({ name: "app" })
-  .use(adminModule)
-  .branding({
-    name: { en: "My Brand" },
-    logo: "/logo.svg",
-  });
+// src/questpie/server/branding.ts
+import { branding } from "#questpie";
+
+export default branding({
+  name: { en: "My Brand" },
+  logo: "/logo.svg",
+});
 ```
 
 See [Dashboard, Sidebar & Branding](/docs/admin/dashboard-sidebar-branding).

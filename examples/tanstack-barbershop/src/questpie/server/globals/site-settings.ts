@@ -1,4 +1,4 @@
-import { global } from "questpie";
+import { global } from "#questpie";
 import type { WorkingHours } from "../collections/barbers";
 
 export type NavItem = {

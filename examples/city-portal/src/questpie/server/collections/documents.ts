@@ -4,7 +4,7 @@
  * Official documents, policies, and publications.
  */
 
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export default collection("documents")
 	.fields(({ f }) => ({

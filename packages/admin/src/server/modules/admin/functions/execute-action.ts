@@ -636,7 +636,7 @@ export const executeActionFn = fn({
 	schema: executeActionRequestSchema,
 	outputSchema: executeActionResponseSchema,
 	handler: async (ctx) => {
-		const app = ctx.app as App;
+		const app = (ctx as any).app as App;
 		const session = (ctx as any).session;
 		return executeAction(app, ctx.input, session);
 	},
@@ -651,14 +651,14 @@ export const getActionsConfigFn = fn({
 	schema: getActionsConfigRequestSchema,
 	outputSchema: getActionsConfigResponseSchema,
 	handler: (ctx) => {
-		const app = ctx.app as App;
+		const app = (ctx as any).app as App;
 		return getActionsConfig(app, ctx.input.collection);
 	},
 });
 
 /**
  * QuestPie functions for action execution.
- * These are registered on the `admin()` module.
+ * These are registered on the `adminModule`.
  */
 export const actionFunctions = {
 	executeAction: executeActionFn,

@@ -1,7 +1,7 @@
 import { CodeWindow } from "./CodeWindow";
 
 const serverCode = `// collections/posts.collection.ts
-import { collection } from 'questpie'
+import { collection } from '#questpie'
 
 export default collection('posts')
   .fields(({ f }) => ({
@@ -22,10 +22,10 @@ export default collection('posts')
 
 const clientCode = `// admin/admin.ts
 import { qa, adminModule } from '@questpie/admin/client'
-import type { App } from "../server/app"
+import type { AppConfig } from "#questpie"
 
 // That's it. The client just renders.
-export const admin = qa<App>()
+export const admin = qa<AppConfig>()
   .use(adminModule)`;
 
 export function Philosophy() {

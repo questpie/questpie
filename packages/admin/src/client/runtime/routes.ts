@@ -4,7 +4,7 @@
  * Generates type-safe route helpers from admin configuration
  */
 
-import type { Questpie } from "questpie";
+import type { QuestpieApp } from "questpie/client";
 import type { ComponentReference } from "#questpie/admin/server";
 import type { CollectionNames, GlobalNames, IconComponent } from "../builder";
 import type { Admin } from "../builder/admin";
@@ -43,7 +43,7 @@ type PageRoutes = {
 /**
  * All routes for an admin instance
  */
-type AdminRoutes<TApp extends Questpie<any>> = {
+type AdminRoutes<TApp extends QuestpieApp> = {
 	dashboard: () => string;
 	collections: {
 		[K in CollectionNames<TApp> & string]: CollectionRoutes<K>;
@@ -91,7 +91,7 @@ type BuildRoutesOptions = {
  * routes.globals.settings.edit(); // "/admin/globals/settings"
  * ```
  */
-function buildRoutes<TApp extends Questpie<any>>(
+function buildRoutes<TApp extends QuestpieApp>(
 	admin: Admin,
 	options: BuildRoutesOptions = {},
 ): AdminRoutes<TApp> {
@@ -180,7 +180,7 @@ export type NavigationGroup = {
  * Sidebar is driven by server config; this only provides
  * client-registered pages as a fallback lookup for useServerNavigation.
  */
-export function buildNavigation<TApp extends Questpie<any>>(
+export function buildNavigation<TApp extends QuestpieApp>(
 	admin: Admin,
 	options: BuildRoutesOptions = {},
 ): NavigationGroup[] {

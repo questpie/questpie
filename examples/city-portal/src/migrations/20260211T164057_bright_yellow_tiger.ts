@@ -1,10 +1,11 @@
+import { migration } from "questpie";
+import type { OperationSnapshot } from "questpie";
 import { sql } from "drizzle-orm";
-import type { Migration, OperationSnapshot } from "questpie";
 import snapshotJson from "./snapshots/20260211T164057_bright_yellow_tiger.json";
 
 const snapshot = snapshotJson as OperationSnapshot;
 
-export const brightYellowTiger20260211T164057: Migration = {
+export default migration({
 	id: "brightYellowTiger20260211T164057",
 	async up({ db }) {
 		await db.execute(sql`CREATE TABLE "assets" (
@@ -415,4 +416,4 @@ Saturday - Sunday: Closed',
 		await db.execute(sql`DROP TABLE "questpie_search_facets";`);
 	},
 	snapshot,
-};
+});

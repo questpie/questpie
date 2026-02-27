@@ -83,15 +83,21 @@ export class UploadError extends Error {
 	}
 }
 
-import type {
-	AnyGlobal,
-	GetGlobal,
-	Questpie,
-} from "#questpie/exports/index.js";
+import type { AnyGlobal, GetGlobal } from "#questpie/exports/index.js";
 import type { CollectionSchema } from "#questpie/server/collection/introspection.js";
 import type { CollectionMeta } from "#questpie/shared/collection-meta.js";
 import type { ApiErrorShape } from "#questpie/shared/error-types.js";
 import type { GlobalMeta } from "#questpie/shared/global-meta.js";
+
+/**
+ * Minimal app type constraint for client APIs.
+ * Generated `AppConfig` satisfies this — flat { collections, globals, auth }.
+ */
+export interface QuestpieApp {
+	collections: Record<string, AnyCollectionOrBuilder>;
+	globals?: Record<string, any>;
+	auth?: any;
+}
 
 /**
  * Type-safe client error with support for ApiErrorShape
@@ -422,10 +428,10 @@ type CollectionAPI<
 /**
  * Collections API proxy with type-safe collection methods
  */
-type CollectionsAPI<T extends Questpie> = {
-	[K in keyof T["config"]["collections"]]: CollectionAPI<
-		GetCollection<T["config"]["collections"], K>,
-		T["config"]["collections"]
+type CollectionsAPI<T extends QuestpieApp> = {
+	[K in keyof T["collections"]]: CollectionAPI<
+		GetCollection<T["collections"], K>,
+		T["collections"]
 	>;
 };
 
@@ -542,10 +548,10 @@ type GlobalAPI<
 /**
  * Globals API proxy with type-safe global methods
  */
-type GlobalsAPI<T extends Questpie> = {
-	[K in keyof NonNullable<T["config"]["globals"]>]: GlobalAPI<
-		GetGlobal<NonNullable<T["config"]["globals"]>, K>,
-		T["config"]["collections"]
+type GlobalsAPI<T extends QuestpieApp> = {
+	[K in keyof NonNullable<T["globals"]>]: GlobalAPI<
+		GetGlobal<NonNullable<T["globals"]>, K>,
+		T["collections"]
 	>;
 };
 
@@ -658,7 +664,7 @@ type SearchAPI = {
  * Questpie Client
  */
 export type QuestpieClient<
-	TApp extends Questpie<any>,
+	TApp extends QuestpieApp,
 	TRPC extends Record<string, any> = Record<string, never>,
 > = {
 	collections: CollectionsAPI<TApp>;
@@ -691,7 +697,7 @@ export type QuestpieClient<
  * ```
  */
 export function createClient<
-	TApp extends Questpie<any>,
+	TApp extends QuestpieApp,
 	TRPC extends Record<string, any> = Record<string, never>,
 >(config: QuestpieClientConfig): QuestpieClient<TApp, TRPC> {
 	const fetcher = config.fetch || globalThis.fetch;

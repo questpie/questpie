@@ -1,4 +1,4 @@
-import { collection } from "questpie";
+import { collection } from "#questpie";
 import { barbers } from "@/questpie/server/collections/barbers";
 import { services } from "@/questpie/server/collections/services";
 

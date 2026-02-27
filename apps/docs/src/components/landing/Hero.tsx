@@ -143,8 +143,8 @@ export function Hero() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.16 }}
 						>
-							Model in TypeScript. Ship REST, RPC, realtime, typed clients, and
-							optional admin UI.
+							Drop a file. Get an API. Ship REST, functions, realtime, typed
+							clients, and optional admin UI — all from one schema.
 						</motion.p>
 
 						<motion.div
@@ -154,9 +154,9 @@ export function Hero() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 						>
 							{[
-								"Backend-first",
+								"File conventions",
 								"Types end-to-end",
-								"Admin is optional UI",
+								"Admin is optional",
 							].map((pill) => (
 								<span
 									key={pill}

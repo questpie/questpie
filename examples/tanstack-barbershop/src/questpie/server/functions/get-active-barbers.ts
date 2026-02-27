@@ -3,8 +3,8 @@ import z from "zod";
 
 export default fn({
 	schema: z.object({}),
-	handler: async ({ app }) => {
-		return await app.api.collections.barbers.find({
+	handler: async ({ collections }) => {
+		return await collections.barbers.find({
 			where: { isActive: true },
 		});
 	},

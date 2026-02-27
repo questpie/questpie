@@ -15,6 +15,6 @@
  */
 
 import { adminModule, qa } from "@questpie/admin/client";
-import type { App } from "@/questpie/server/app";
+import type { AppConfig } from "@/questpie/server/app";
 
-export const admin = qa<App>().use(adminModule);
+export const admin = qa<AppConfig>().use(adminModule);

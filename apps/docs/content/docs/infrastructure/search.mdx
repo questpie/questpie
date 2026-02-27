@@ -16,9 +16,10 @@ As your content grows, simple WHERE clauses aren't enough. The search service pr
 The PostgreSQL search adapter is used by default when search is enabled:
 
 ```ts
-import { createPostgresSearchAdapter } from "questpie";
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig, createPostgresSearchAdapter } from "questpie";
 
-.build({
+export default runtimeConfig({
   // ...
   search: {
     adapter: createPostgresSearchAdapter({
@@ -26,7 +27,7 @@ import { createPostgresSearchAdapter } from "questpie";
       ftsWeight: 0.7,         // full-text vs trigram weight
     }),
   },
-})
+});
 ```
 
 ## Making Collections Searchable
@@ -34,8 +35,7 @@ import { createPostgresSearchAdapter } from "questpie";
 Add `.searchable()` to collections that should be indexed:
 
 ```ts
-export const posts = qb
-  .collection("posts")
+export const posts = collection("posts")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     content: f.richText({}),

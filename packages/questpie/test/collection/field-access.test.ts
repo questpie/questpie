@@ -1,14 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-const q = questpie({ name: "test-module" }).fields(defaultFields);
-
-const users = q
-	.collection("users")
+const users = collection("users")
 	.fields(({ f }) => ({
 		email: f.text({ required: true, maxLength: 255 }),
 		name: f.textarea({ required: true }),
@@ -36,8 +32,7 @@ const users = q
 		},
 	});
 
-const publicPosts = q
-	.collection("public_posts")
+const publicPosts = collection("public_posts")
 	.fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 		content: f.textarea({ required: true }),
@@ -48,16 +43,13 @@ const publicPosts = q
 		timestamps: true,
 	});
 
-const testModule = q.collections({
-	users,
-	public_posts: publicPosts,
-});
-
 describe("field-level access control", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({
+			collections: { users, public_posts: publicPosts },
+		});
 		await runTestDbMigrations(setup.app);
 	});
 

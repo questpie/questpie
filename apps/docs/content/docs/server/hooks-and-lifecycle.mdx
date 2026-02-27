@@ -50,8 +50,10 @@ beforeOperation → beforeRead → [DB SELECT] → [resolve relations] → after
 Use `.hooks()` on a collection builder:
 
 ```ts
-export const barbers = qb
-  .collection("barbers")
+// collections/barbers.ts
+import { collection } from "#questpie";
+
+export const barbers = collection("barbers")
   .fields(({ f }) => ({
     name: f.text({ required: true }),
     slug: f.text({}),
@@ -70,10 +72,9 @@ export const barbers = qb
       d.displayName = d.name ?? "Unknown Barber";
     },
 
-    afterChange: async ({ data, operation, app }) => {
+    afterChange: async ({ data, operation, logger }) => {
       if (operation === "create") {
-        const app = getApp(app);
-        app.logger.info("New barber created", { id: data.id });
+        logger.info("New barber created", { id: data.id });
       }
     },
   });
@@ -98,9 +99,8 @@ Each hook property accepts a single function or an array of functions:
 Runs before any operation. Use for logging, rate limiting, or early rejection.
 
 ```ts
-beforeOperation: async ({ operation, app }) => {
-  const app = getApp(app);
-  app.logger.info("Operation starting", { operation });
+beforeOperation: async ({ operation, logger }) => {
+  logger.info("Operation starting", { operation });
 }
 ```
 
@@ -135,11 +135,9 @@ beforeChange: async ({ data, operation, db }) => {
 Runs after create or update, inside the transaction. Use for notifications, queue jobs, and side effects.
 
 ```ts
-afterChange: async ({ data, operation, original, app }) => {
-  const app = getApp(app);
-
+afterChange: async ({ data, operation, original, queue }) => {
   if (operation === "create") {
-    await app.queue.sendConfirmation.publish({
+    await queue.sendConfirmation.publish({
       appointmentId: data.id,
     });
   }
@@ -148,7 +146,7 @@ afterChange: async ({ data, operation, original, app }) => {
     const prev = original as any;
     const curr = data as any;
     if (prev.status !== curr.status && curr.status === "cancelled") {
-      await app.queue.sendCancellation.publish({
+      await queue.sendCancellation.publish({
         appointmentId: data.id,
       });
     }
@@ -185,8 +183,7 @@ Runs before deletion. Throw an error to prevent the delete.
 
 ```ts
 beforeDelete: async ({ data, db }) => {
-  const typedDb = getDb(db);
-  const activeOrders = await typedDb
+  const activeOrders = await db
     .select()
     .from(orders)
     .where(eq(orders.customerId, data.id));
@@ -202,13 +199,12 @@ beforeDelete: async ({ data, db }) => {
 Runs after deletion. Use for cleanup, logging, or cascade operations.
 
 ```ts
-afterDelete: async ({ data, app }) => {
-  const app = getApp(app);
-  app.logger.info("Record deleted", { id: data.id });
+afterDelete: async ({ data, logger, storage }) => {
+  logger.info("Record deleted", { id: data.id });
 
   // Clean up related files
   if (data.avatarUrl) {
-    await app.storage.disk().delete(data.avatarUrl);
+    await storage.disk().delete(data.avatarUrl);
   }
 }
 ```
@@ -230,10 +226,9 @@ beforeTransition: ({ fromStage, toStage, data }) => {
 Runs after a stage transition completes. Use for notifications or side effects.
 
 ```ts
-afterTransition: async ({ fromStage, toStage, data, app }) => {
-  const app = getApp(app);
+afterTransition: async ({ fromStage, toStage, data, queue }) => {
   if (toStage === "published") {
-    await app.queue.notifySubscribers.publish({ postId: data.id });
+    await queue.notifySubscribers.publish({ postId: data.id });
   }
 }
 ```
@@ -247,35 +242,27 @@ Every hook receives a context object with these properties:
 | `data` | `TData` | All hooks | Current record or input data |
 | `original` | `TData \| undefined` | afterChange (update) | Previous record state before update |
 | `operation` | `"create" \| "update" \| "delete" \| "read"` | All hooks | Current operation type |
-| `app` | `TApp` | All hooks | app instance (use `getApp(app)` for typing) |
 | `session` | `Session \| null` | All hooks | Authenticated user session |
 | `locale` | `string` | All hooks | Current locale |
 | `accessMode` | `"system" \| "user"` | All hooks | Whether this is a system or user-initiated operation |
 | `db` | `Database` | All hooks | Database client (may be a transaction) |
+| `collections` | `AppCollections` | All hooks | Typed collection CRUD APIs |
+| `globals` | `AppGlobals` | All hooks | Typed global CRUD APIs |
+| `queue` | `QueueClient` | All hooks | Typed job queue |
+| `email` | `MailerService` | All hooks | Typed email service |
+| `logger` | `Logger` | All hooks | Logger instance |
+| `kv` | `KVStore` | All hooks | Key-value store |
+| `storage` | `StorageService` | All hooks | File storage service |
 
 ### Accessing Typed Services
 
-```ts
-import { getApp, getDb } from "questpie";
-import type { App } from '../app';
-
-afterChange: async ({ app, db, data }) => {
-  const app = getApp<App>(app);
-  const typedDb = getDb<App>(db);
-
-  await app.kv.set(`cache:${data.id}`, data, 300);
-  await typedDb.execute(sql`UPDATE counters SET value = value + 1`);
-}
-```
-
-You can also use one helper call:
+Hook context is fully typed via `AppContext` augmentation — no manual type casting needed:
 
 ```ts
-import { getContext } from "questpie";
-import type { App } from '../app';
-
-afterChange: async (ctx) => {
-  const { app, db, session } = getContext<App>(ctx);
+afterChange: async ({ db, kv, data }) => {
+  // db, kv, collections, queue, etc. are all typed automatically
+  await kv.set(`cache:${data.id}`, data, 300);
+  await db.execute(sql`UPDATE counters SET value = value + 1`);
 }
 ```
 
@@ -290,7 +277,7 @@ For side effects that should only execute after the transaction commits (sending
 ```ts
 import { onAfterCommit } from "questpie";
 
-afterChange: async ({ data, app }) => {
+afterChange: async ({ data }) => {
   onAfterCommit(async () => {
     // This runs only after the transaction commits
     await fetch("https://webhook.site/...", {
@@ -304,14 +291,22 @@ afterChange: async ({ data, app }) => {
 ## Real-World Example: Barbershop Appointments
 
 ```ts
-export const appointments = qb
-  .collection("appointments")
+// collections/appointments.ts
+import { collection } from "#questpie";
+
+export const appointments = collection("appointments")
   .fields(({ f }) => ({
-    customer: f.text({ required: true }),
+    customer: f.relation({ to: "user", required: true }),
     scheduledAt: f.datetime({ required: true }),
     status: f.select({
-      options: ["pending", "confirmed", "completed", "cancelled"],
-      defaultValue: "pending",
+      options: [
+        { value: "pending", label: { en: "Pending" } },
+        { value: "confirmed", label: { en: "Confirmed" } },
+        { value: "completed", label: { en: "Completed" } },
+        { value: "cancelled", label: { en: "Cancelled" } },
+      ],
+      default: "pending",
+      required: true,
     }),
   }))
   .hooks({
@@ -321,17 +316,14 @@ export const appointments = qb
       const date = d.scheduledAt
         ? new Date(d.scheduledAt).toLocaleDateString()
         : "";
-      d.displayTitle = `${d.customer} — ${date}`.trim();
+      d.displayTitle = `Appointment — ${date}`.trim();
     },
 
     // Send notifications on create/status change
-    afterChange: async ({ data, operation, original, app }) => {
-      const app = getApp(app);
-
+    afterChange: async ({ data, operation, original, queue }) => {
       if (operation === "create") {
-        await app.queue.sendAppointmentConfirmation.publish({
+        await queue.sendAppointmentConfirmation.publish({
           appointmentId: data.id,
-          customerId: data.customer,
         });
       }
 
@@ -339,7 +331,7 @@ export const appointments = qb
         const prev = original as any;
         const curr = data as any;
         if (prev.status !== curr.status && curr.status === "cancelled") {
-          await app.queue.sendAppointmentCancellation.publish({
+          await queue.sendAppointmentCancellation.publish({
             appointmentId: data.id,
           });
         }
@@ -353,7 +345,7 @@ export const appointments = qb
 - **Expensive queries in `afterRead`** — This hook runs for every record in list queries. Keep it lightweight (string formatting, simple computation). Move heavy work to background jobs.
 - **Side effects in `afterChange` without `onAfterCommit`** — If the transaction rolls back, the side effect has already fired. Use `onAfterCommit` for external API calls, emails, and webhooks.
 - **Mutating `data` in `afterRead`** — This is intentional. `afterRead` is the standard place to add computed fields. Just be aware the mutations affect the returned record.
-- **Forgetting `getApp()` cast** — The `app` parameter is untyped by default. Always use `getApp(app)` to get the typed app instance with access to `.queue`, `.kv`, `.email`, etc.
+- **Ignoring available context properties** — Hook context provides flat access to `collections`, `queue`, `email`, `kv`, `logger`, `storage`, and more via `AppContext` augmentation. Destructure what you need directly.
 
 ## Related Pages
 

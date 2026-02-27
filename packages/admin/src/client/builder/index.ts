@@ -2,8 +2,8 @@
  * Admin Builder - Main Export
  */
 
-import type { CollectionInfer, Questpie } from "questpie";
-import type { QuestpieClient } from "questpie/client";
+import type { CollectionInfer } from "questpie";
+import type { QuestpieApp, QuestpieClient } from "questpie/client";
 
 export { Admin, type AppAdmin, type InferAdminCMS } from "./admin";
 export { AdminBuilder } from "./admin-builder";
@@ -74,30 +74,26 @@ export type {
 // ============================================================================
 
 /**
- * Extract collection names from backend Questpie app
+ * Extract collection names from a QuestpieApp config
  */
-export type CollectionNames<TApp extends Questpie<any>> =
-	keyof TApp["config"]["collections"] & string;
+export type CollectionNames<TApp extends QuestpieApp> =
+	keyof TApp["collections"] & string;
 /**
- * Extract global names from backend Questpie app
+ * Extract global names from a QuestpieApp config
  */
-export type GlobalNames<TApp extends Questpie<any>> =
-	TApp extends Questpie<infer TConfig>
-		? keyof TConfig["globals"] & string
-		: never;
+export type GlobalNames<TApp extends QuestpieApp> =
+	keyof NonNullable<TApp["globals"]> & string;
 
 /**
  * Extract collection item type
  */
 export type CollectionItem<
-	TApp extends Questpie<any>,
+	TApp extends QuestpieApp,
 	TName extends CollectionNames<TApp>,
-> = TApp extends Questpie<any>
-	? Awaited<
-			ReturnType<QuestpieClient<TApp>["collections"][TName]["find"]>
-		> extends { docs: Array<infer TItem> }
-		? TItem
-		: never
+> = Awaited<
+	ReturnType<QuestpieClient<any>["collections"][TName]["find"]>
+> extends { docs: Array<infer TItem> }
+	? TItem
 	: never;
 
 /**
@@ -105,14 +101,14 @@ export type CollectionItem<
  *
  * @example
  * ```ts
- * type AppointmentFields = CollectionFieldKeys<App, "appointments">;
+ * type AppointmentFields = CollectionFieldKeys<AppConfig, "appointments">;
  * // = "customerId" | "barberId" | "serviceId" | "status" | ...
  * ```
  */
 export type CollectionFieldKeys<
-	TApp extends Questpie<any>,
+	TApp extends QuestpieApp,
 	TCollectionName extends string,
-> = TApp["config"]["collections"][TCollectionName] extends infer TCollection
+> = TApp["collections"][TCollectionName] extends infer TCollection
 	? CollectionInfer<TCollection> extends infer TInfer
 		? TInfer extends { select: infer TSelect }
 			? keyof TSelect

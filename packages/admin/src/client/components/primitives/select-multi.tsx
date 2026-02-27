@@ -289,7 +289,7 @@ export function SelectMulti<TValue extends string = string>({
 				<CommandEmpty>{resolvedEmptyMessage}</CommandEmpty>
 				<CommandGroup>
 					{filteredOptions.map((option) => {
-						const isSelected = resolvedValue.includes(option.value);
+						const isSelected = (resolvedValue as string[]).includes(option.value as string);
 						const isDisabled = option.disabled || (!isSelected && !canAddMore);
 
 						return (

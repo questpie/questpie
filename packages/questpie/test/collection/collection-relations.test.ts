@@ -7,7 +7,7 @@
  * Uses string literals for collection references to avoid circular dependency issues.
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { collection, questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -274,38 +274,38 @@ const productTags = collection("productTags").fields(({ f }) => ({
 	}),
 }));
 
-const testModule = questpie({ name: "test" }).collections({
-	users,
-	profiles,
-	authors,
-	posts,
-	comments,
-	restrictedCategories,
-	restrictedProducts,
-	articles,
-	articleTags,
-	articleTagJunction,
-	categories,
-	products,
-	tags,
-	categoryTags,
-	productTags,
-	// Collections for string field format test
-	test_assets: testAssets,
-	services,
-});
-
 // ==============================================================================
 // TESTS
 // ==============================================================================
 // ==============================================================================
 
 describe("collection relations", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
-	let app: typeof testModule.$inferApp;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	let app: (typeof setup)["app"];
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({
+			collections: {
+				users,
+				profiles,
+				authors,
+				posts,
+				comments,
+				restrictedCategories,
+				restrictedProducts,
+				articles,
+				articleTags,
+				articleTagJunction,
+				categories,
+				products,
+				tags,
+				categoryTags,
+				productTags,
+				// Collections for string field format test
+				test_assets: testAssets,
+				services,
+			},
+		});
 		app = setup.app;
 		await runTestDbMigrations(app);
 	});

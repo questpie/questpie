@@ -24,7 +24,7 @@ const outputs = [
 		id: "projections",
 		label: "Runtime Projections",
 		sublabel: "APIs and clients out of the box",
-		items: ["REST + RPC endpoints", "Realtime streams", "Typed client helpers"],
+		items: ["REST + function endpoints", "Realtime streams", "Typed client helpers"],
 	},
 	{
 		id: "admin",

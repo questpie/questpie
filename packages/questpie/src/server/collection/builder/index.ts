@@ -37,12 +37,8 @@ export {
 } from "../introspection.js";
 export { Collection } from "./collection.js";
 export { CollectionBuilder, collection } from "./collection-builder.js";
-// Extension types for module augmentation
-export type {
-	CollectionBuilderExtensions,
-	FieldsOf,
-	StateOf,
-} from "./extensions.js";
+// State/field extraction utilities
+export type { FieldsOf, StateOf } from "./extensions.js";
 export { softDeleteUniqueIndex } from "./index-helpers.js";
 export type {
 	AccessContext,
@@ -52,6 +48,7 @@ export type {
 	CollectionBuilderState,
 	CollectionHooks,
 	CollectionOptions,
+	EmptyCollectionState,
 	// TState-based field extraction (new approach)
 	ExtractFieldsByLocation,
 	FieldAccess,

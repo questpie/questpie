@@ -1018,8 +1018,8 @@ function TableViewInner({
 					</div>
 					<div className="flex items-center gap-2 shrink-0">
 						{headerActions}
-						{(actions.header.primary?.length > 0 ||
-							actions.header.secondary?.length > 0) && (
+						{((actions.header.primary?.length ?? 0) > 0 ||
+							(actions.header.secondary?.length ?? 0) > 0) && (
 							<HeaderActions
 								actions={actions.header}
 								collection={collection}

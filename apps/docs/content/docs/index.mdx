@@ -1,6 +1,6 @@
 ---
 title: QUESTPIE Documentation
-description: v2 — Runtime-first TypeScript backend framework with optional admin UI
+description: v2 — One schema. Every output. File-convention TypeScript backend framework with optional admin UI
 ---
 
 # QUESTPIE Documentation
@@ -9,7 +9,7 @@ description: v2 — Runtime-first TypeScript backend framework with optional adm
 **Active Development** — QUESTPIE is a bootstrapped, community-driven framework under active development. The API may still change between releases, but we follow semantic versioning to communicate breaking changes clearly. We do not recommend it for mission-critical production workloads yet. Full API stability is targeted for **v3**.
 </Callout>
 
-**v2** — QUESTPIE is a runtime-first TypeScript backend framework. Start with `questpie` to define schema, access rules, hooks, RPC, jobs, and HTTP endpoints. That runtime is fully usable on its own.
+**One schema. Every output.** QUESTPIE is a file-convention TypeScript backend framework. Define collections, functions, jobs, and hooks as plain files — codegen wires them into a type-safe runtime. No builder chains, no manual registration.
 
 `@questpie/admin` is an optional module that reads your server schema via introspection and generates an admin panel. You can add it when you need an internal interface, or skip it and ship API-only services.
 
@@ -17,7 +17,7 @@ description: v2 — Runtime-first TypeScript backend framework with optional adm
 
 ```text
 Required
-questpie            — backend runtime (collections, fields, hooks, access, RPC)
+questpie            — backend runtime (collections, fields, hooks, access, functions)
 @questpie/<adapter> — HTTP adapter (Hono, Elysia, or Next.js)
 
 Optional
@@ -25,14 +25,17 @@ Optional
 @questpie/tanstack-query, @questpie/openapi, other client tooling
 ```
 
-The runtime contract comes first. Admin, SDKs, and OpenAPI all consume the same server definitions instead of redefining schema in multiple places.
+The file convention comes first. Drop a collection file, run codegen, and get a fully typed runtime. Admin, SDKs, and OpenAPI all consume the same server definitions instead of redefining schema in multiple places.
 
 ## Field Definitions
 
-Fields are defined on the runtime using the `f` field builder. Each field maps to database behavior, API validation, and query typing. If admin is installed, those same fields also drive form rendering.
+Fields are defined in collection files using the `f` field builder. Each field maps to database behavior, API validation, and query typing. If admin is installed, those same fields also drive form rendering.
 
 ```ts
-collection("posts").fields(({ f }) => ({
+// src/questpie/server/collections/posts.ts
+import { collection } from "#questpie";
+
+export default collection("posts").fields(({ f }) => ({
   title: f.text({ required: true, maxLength: 255 }),
   body: f.richText({ localized: true }),
   cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
@@ -46,39 +49,43 @@ collection("posts").fields(({ f }) => ({
       seoDescription: f.textarea(),
     }),
   }),
-}))
+}));
 ```
 
 ## Start Here
 
 - [Installation](/docs/getting-started/installation) — Runtime baseline and optional modules
 - [Quickstart](/docs/getting-started/quickstart) — Build a working runtime in 5 minutes
-- [Server](/docs/server) — Collections, globals, fields, hooks, access, RPC
+- [Server](/docs/server) — Collections, globals, fields, hooks, access, functions
 - [Admin UI](/docs/admin) — Optional generated interface layer
 - [Client SDK](/docs/client) — Typed API consumption and adapters
 
 ## Architecture at a Glance
 
 ```text
-Runtime (questpie + one adapter)
-  ├── collections / globals / fields   — schema + persistence contract
-  ├── hooks + access + validation      — behavior + business rules
-  ├── RPC + jobs                       — custom endpoints + background tasks
-  ├── REST + realtime endpoints        — integration surface
-  └── introspection contract           — consumed by optional tooling
+src/questpie/server/
+  ├── collections/         — one file per collection (schema + hooks + access)
+  ├── globals/             — one file per global
+  ├── functions/           — typed server functions (replaces old RPC)
+  ├── jobs/                — background tasks
+  ├── modules.ts           — module imports (admin, audit, etc.)
+  ├── sidebar.ts           — admin sidebar convention
+  ├── dashboard.ts         — admin dashboard convention
+  ├── branding.ts          — admin branding convention
+  ├── questpie.config.ts   — runtime config (DB, secrets, adapters)
+  └── .generated/          — codegen output (never edit manually)
 
 Optional Interface Layer (@questpie/admin)
-  ├── server module                    — .admin() .list() .form() .sidebar() .dashboard()
-  └── client module                    — field/view/component registries
+  └── client module        — field/view/component registries
 ```
 
 ## Sections
 
 - [Getting Started](/docs/getting-started) — Install, quickstart, project structure
 - [Mentality](/docs/mentality) — Architecture philosophy and design principles
-- [Server](/docs/server) — Collections, globals, fields, hooks, access, RPC
+- [Server](/docs/server) — Collections, globals, fields, hooks, access, functions
 - [Infrastructure](/docs/infrastructure) — Auth, storage, email, queue, search, realtime, KV
-- [Admin UI](/docs/admin) — Builder, registries, views, dashboard, blocks
+- [Admin UI](/docs/admin) — Convention files, registries, views, dashboard, blocks
 - [Client SDK](/docs/client) — TanStack Query, adapters, OpenAPI, type inference
 - [Guides](/docs/guides) — End-to-end practical tutorials
 - [Examples](/docs/examples) — TanStack Barbershop deep dives
@@ -89,7 +96,11 @@ Optional Interface Layer (@questpie/admin)
 
 The TanStack Barbershop example is the source of truth for real patterns throughout these docs:
 
-- `examples/tanstack-barbershop/src/questpie/server/app.ts` — full server config
-- `examples/tanstack-barbershop/src/questpie/server/collections/` — 6 real collections
+- `examples/tanstack-barbershop/src/questpie/server/questpie.config.ts` — runtime config
+- `examples/tanstack-barbershop/src/questpie/server/collections/` — 7 real collections
 - `examples/tanstack-barbershop/src/questpie/server/globals/` — site settings
-- `examples/tanstack-barbershop/src/questpie/admin/builder.ts` — admin client config
+- `examples/tanstack-barbershop/src/questpie/server/functions/` — server functions
+- `examples/tanstack-barbershop/src/questpie/server/jobs/` — background jobs
+- `examples/tanstack-barbershop/src/questpie/server/modules.ts` — module imports
+- `examples/tanstack-barbershop/src/questpie/server/sidebar.ts` — admin sidebar
+- `examples/tanstack-barbershop/src/questpie/server/dashboard.ts` — admin dashboard

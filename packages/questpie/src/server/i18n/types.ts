@@ -92,8 +92,8 @@ export type TypedTranslateFn<TCustomKeys extends string = never> = (
  *   en: { "myModule.error": "Error occurred" },
  * } as const;
  *
- * const app = config({
- *   modules: [starter()], // Includes core messages
+ * const app = runtimeConfig({
+ *   modules: [starterModule], // Includes core messages
  *   messages, // Add custom messages
  *   db: { url: '...' },
  * });

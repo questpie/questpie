@@ -18,23 +18,25 @@ Structured logging is essential for debugging and monitoring. The logger service
 Works out of the box with sensible defaults:
 
 ```ts
-.build({
-  // logger not specified → Pino with level "info"
-  // pretty-prints automatically when NODE_ENV=development
-})
+// No logger config needed — uses Pino with level "info" by default
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 ### Custom Configuration
 
 ```ts
-.build({
-  // ...
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
   logger: {
     level: "debug",
     pretty: true,
     redact: ["req.headers.authorization", "password"],
   },
-})
+});
 ```
 
 ### Custom Adapter
@@ -42,14 +44,16 @@ Works out of the box with sensible defaults:
 Replace Pino with any logger that implements `LoggerAdapter`:
 
 ```ts
+import { runtimeConfig } from "questpie";
 import { createWinstonAdapter } from "./my-winston-adapter";
 
-.build({
-  // ...
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
   logger: {
     adapter: createWinstonAdapter({ /* ... */ }),
   },
-})
+});
 ```
 
 ## Usage
@@ -74,15 +78,12 @@ jobLogger.info("Job started");       // { module: "queue", jobName: "sendEmail",
 jobLogger.info("Job completed");     // { module: "queue", jobName: "sendEmail", msg: "Job completed" }
 ```
 
-### In Hooks and RPC
+### In Hooks and Functions
 
 ```ts
-import { getApp } from "questpie";
-
 .hooks({
-  afterChange: async ({ app, data, operation }) => {
-    const app = getApp(app);
-    app.logger.info("Record changed", {
+  afterChange: async ({ data, operation, logger }) => {
+    logger.info("Record changed", {
       collection: "appointments",
       operation,
       id: data.id,
@@ -138,10 +139,8 @@ import { MockLogger } from "questpie/test-utils";
 
 const mockLogger = new MockLogger();
 
-const app = questpie(builder).build({
-  // ...
-  logger: { adapter: mockLogger },
-});
+// Configure mock logger in runtimeConfig for tests
+// logger: { adapter: mockLogger }
 
 // After running operations...
 expect(mockLogger.wasLogged("info", "Record created")).toBe(true);

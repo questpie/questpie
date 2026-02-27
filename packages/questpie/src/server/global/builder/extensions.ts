@@ -1,25 +1,4 @@
 /**
- * Extension interface for GlobalBuilder.
- *
- * Packages can augment this interface to add methods to GlobalBuilder
- * without causing type explosion. Methods should use `this` return type
- * and `GlobalFieldsOf<this>` for field-typed parameters.
- *
- * @example
- * ```typescript
- * // In your package's augmentation file:
- * declare module "questpie" {
- *   interface GlobalBuilderExtensions {
- *     myMethod(config: MyConfig): this;
- *     myTypedMethod(fn: (ctx: { f: GlobalFieldsOf<this> }) => void): this;
- *   }
- * }
- * ```
- */
-// biome-ignore lint/suspicious/noEmptyInterface: This is an extension point for module augmentation
-export interface GlobalBuilderExtensions {}
-
-/**
  * Extract the state type from a GlobalBuilder instance.
  * Used for lazy type extraction in extension methods.
  */

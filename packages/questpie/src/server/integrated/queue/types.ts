@@ -1,6 +1,5 @@
 import type { z } from "zod";
-// Note: any types are intentional for composition flexibility.
-// Users should use typedApp<App>(), typedDb<App>(), and typedSession<App>() for type-safe access.
+import type { AppContext } from "#questpie/server/config/app-context.js";
 import type {
 	QueueAdapter,
 	QueueAdapterCapabilities,
@@ -21,19 +20,14 @@ export type { QueueAdapter } from "./adapter.js";
  * Context for job handlers.
  *
  * @template TPayload - The job payload type (from schema)
- * @template TApp - The app app type (defaults to any)
  *
  * @example
  * ```ts
- * import { typedApp } from "questpie";
- * import type { App } from "./questpie";
- *
  * const sendEmailJob = q.job({
  *   name: 'send-email',
  *   schema: z.object({ to: z.string(), subject: z.string() }),
- *   handler: async ({ payload, app }) => {
- *     const app = typedApp<App>(app);
- *     await app.email.send({
+ *   handler: async ({ payload, email }) => {
+ *     await email.send({
  *       to: payload.to,
  *       subject: payload.subject,
  *       html: '<p>Hello</p>'
@@ -42,21 +36,11 @@ export type { QueueAdapter } from "./adapter.js";
  * })
  * ```
  */
-export interface JobHandlerArgs<TPayload = any, TApp = any> {
+export interface JobHandlerArgs<TPayload = any> extends AppContext {
 	/** Validated job payload */
 	payload: TPayload;
-	/** app instance - use typedApp<App>(app) for type-safe access */
-	app: TApp;
-	/**
-	 * Auth session (user + session) - typically undefined for background jobs.
-	 * May be set if job was scheduled from authenticated request context.
-	 * Use typedSession<App>(session) for type-safe access.
-	 */
-	session?: any | null;
 	/** Current locale */
 	locale?: string;
-	/** Database client - use typedDb<App>(db) for type-safe access */
-	db: any;
 }
 
 /**
@@ -65,13 +49,11 @@ export interface JobHandlerArgs<TPayload = any, TApp = any> {
  * @template TPayload - The job payload type
  * @template TResult - The job result type
  * @template TName - The job name (literal string type)
- * @template TApp - The app app type (defaults to any from module augmentation)
  */
 export interface JobDefinition<
 	TPayload = any,
 	TResult = void,
 	TName extends string = string,
-	TApp = any,
 > {
 	/**
 	 * Unique name for this job
@@ -86,7 +68,7 @@ export interface JobDefinition<
 	/**
 	 * Job handler function
 	 */
-	handler: (args: JobHandlerArgs<TPayload, TApp>) => Promise<TResult>;
+	handler: (args: JobHandlerArgs<TPayload>) => Promise<TResult>;
 
 	/**
 	 * Optional job options (adapter agnostic where possible)

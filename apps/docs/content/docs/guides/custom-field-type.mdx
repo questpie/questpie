@@ -64,25 +64,19 @@ const colorField = field<ColorFieldConfig, string>()({
 | `getOperators` | Returns supported where clause operators | Query building |
 | `getMetadata` | Returns introspection data for the admin | Admin panel rendering |
 
-## Step 2: Register on the Server Builder
+## Step 2: Use in a Collection
+
+Once registered via module augmentation, use the field in any collection:
 
 ```ts
-import { collection, config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// collections/brands.ts
+import { collection } from "#questpie";
 
-const brands = collection("brands").fields(({ f }) => ({
-  name: f.text().notNull(),
-  primaryColor: f.color({ swatches: ["#FF5733", "#33FF57", "#3357FF"] }).notNull(),
-  secondaryColor: f.color(),
+export const brands = collection("brands").fields(({ f }) => ({
+  name: f.text({ required: true }),
+  primaryColor: f.color({ swatches: ["#FF5733", "#33FF57", "#3357FF"], required: true }),
+  secondaryColor: f.color({}),
 }));
-
-export default config({
-  modules: [admin()],
-  fields: { color: colorField },
-  collections: { brands },
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
-});
 ```
 
 Now `f.color()` is available in any collection or global definition.
@@ -152,12 +146,12 @@ export function ColorFieldRenderer({
 ## Step 4: Register the Renderer
 
 ```ts
-// admin/index.ts
+// admin/builder.ts
 import { qa, adminModule } from "@questpie/admin/client";
 import { ColorFieldRenderer } from "./fields/color-field";
-import type { App } from "../server/app";
+import type { AppConfig } from "#questpie";
 
-export const admin = qa<App>()
+export const admin = qa<AppConfig>()
   .use(adminModule)
   .fields({
     color: {
@@ -204,7 +198,7 @@ Server                          Admin
 ───────                         ─────
 field({ type: "color" })  →  getMetadata() emits { type: "color" }
          ↓                              ↓
-q.fields({ color })             qa.fields({ color: { type: "color", component } })
+module augmentation             qa.fields({ color: { type: "color", component } })
          ↓                              ↓
 f.color() in collection         Registry resolves "color" → ColorFieldRenderer
          ↓                              ↓

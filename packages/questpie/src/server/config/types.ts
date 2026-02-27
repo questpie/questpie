@@ -368,7 +368,18 @@ export interface QuestpieConfig {
 	 * Functions registered on the app instance.
 	 * Automatically routed by `createFetchHandler` at `/api/rpc/*`.
 	 */
-	functions?: FunctionsTree<any>;
+	functions?: FunctionsTree;
+
+	/**
+	 * Raw HTTP route handlers registered on the app instance.
+	 * Automatically routed by `createFetchHandler` at `/api/routes/*`.
+	 *
+	 * @see RFC-MODULE-ARCHITECTURE §5 (Routes — Raw HTTP Handlers)
+	 */
+	routes?: Record<
+		string,
+		import("#questpie/server/routes/types.js").RouteDefinition
+	>;
 
 	/**
 	 * Search adapter for full-text search
@@ -457,7 +468,7 @@ export interface QuestpieConfig {
 	 * Applied when a collection/global doesn't define its own `.access()` rules.
 	 *
 	 * Set via `.defaultAccess()` on the builder (chainable, composable via modules).
-	 * The `starter()` module sets this to require an authenticated session for all operations.
+	 * The `starterModule` sets this to require an authenticated session for all operations.
 	 *
 	 * **Resolution order for each CRUD operation:**
 	 * 1. Collection/global's own `.access()` rule for that operation
@@ -490,6 +501,12 @@ export interface QuestpieConfig {
 	 * Registered via `.hooks()` on the builder.
 	 */
 	globalHooks?: import("./global-hooks-types.js").GlobalHooksState;
+
+	/**
+	 * Service definitions (from services/*.ts and module services).
+	 * Keyed by service name. Resolved at runtime into service instances.
+	 */
+	services?: Record<string, import("#questpie/server/services/define-service.js").ServiceDefinition<any, any>>;
 
 	/**
 	 * Phantom type for tracking message keys.

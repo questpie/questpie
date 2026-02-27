@@ -1,28 +1,43 @@
-import { eq } from "drizzle-orm";
+/**
+ * Send Appointment Confirmation Job
+ *
+ * Sends a confirmation email when an appointment is booked.
+ * Uses context-first pattern — `collections` and `email` from AppContext.
+ *
+ * @see collections/appointments.ts — dispatches this job on create
+ * @see emails/appointment-confirmation.ts — the email template
+ */
 import { job } from "questpie";
 import { z } from "zod";
-import type { App } from "@/questpie/server/app";
 
-export default job<App>()({
+export default job({
 	name: "send-appointment-confirmation",
 	schema: z.object({
 		appointmentId: z.string(),
 		customerId: z.string(),
 	}),
-	handler: async ({ payload, app }) => {
-		// TODO: once module type safety lands, user.table.email will be typed
-		const userTable = app.config.collections.user.table as any;
-		const customer = await app.db
-			.select({ email: userTable.email, name: userTable.name })
-			.from(userTable)
-			.where(eq(userTable.id, payload.customerId))
-			.limit(1)
-			.then((res: any[]) => res[0]);
+	handler: async ({ payload, email, collections }) => {
+		const customer = await collections.user.findOne({
+			where: { id: payload.customerId },
+		});
 
-		await app.email.send({
-			to: customer?.email || "",
-			subject: "Appointment Confirmation",
-			text: `Dear ${customer?.name || "Customer"},\n\nYour appointment (ID: ${payload.appointmentId}) has been confirmed.\n\nThank you!`,
+		const appointment = await collections.appointments.findOne({
+			where: { id: payload.appointmentId },
+			with: { service: true, barber: true },
+		});
+
+		await email.sendTemplate({
+			template: "appointmentConfirmation",
+			input: {
+				customerName: customer?.name ?? "Customer",
+				appointmentId: payload.appointmentId,
+				barberName: appointment?.barber?.name ?? "Your Barber",
+				serviceName: appointment?.service?.name ?? "Your Service",
+				scheduledAt: appointment?.scheduledAt
+					? new Date(appointment.scheduledAt).toLocaleString()
+					: "TBD",
+			},
+			to: customer?.email ?? "",
 		});
 	},
 });

@@ -12,7 +12,7 @@ This guide shows how to build a page builder with drag-and-drop blocks, live pre
 Blocks are the building units. Each block defines its own fields and admin appearance.
 
 ```ts
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie";
 
 const heroBlock = block("hero")
   .fields(({ f }) => ({
@@ -68,6 +68,8 @@ const columnsBlock = block("columns")
 ## Step 2: Create the Pages Collection
 
 ```ts
+import { collection } from "#questpie";
+
 const pages = collection("pages")
   .fields(({ f }) => ({
     title: f.text({ required: true, localized: true }),
@@ -81,7 +83,7 @@ const pages = collection("pages")
     metaDescription: f.textarea().localized(),
     ogImage: f.upload(),
   }))
-  .title((t) => t.title)
+  .title(({ f }) => f.title)
   .options({ timestamps: true, versioning: true })
   .hooks({
     beforeValidate: ({ data, operation }) => {

@@ -33,12 +33,21 @@
  */
 
 import type {
+	AppContext,
+	BuiltinFields,
 	FieldBuilderProxy,
 	FieldDefinition,
 	FieldDefinitionState,
 	FieldSchema,
 } from "questpie";
+import type { adminFields } from "../fields/index.js";
 import type { AdminBlockConfig, AdminConfigContext } from "../augmentation.js";
+
+/**
+ * Combined field types available in block field definitions.
+ * Includes all built-in questpie fields plus admin-specific fields (richText, blocks).
+ */
+type AdminBlockFields = BuiltinFields & typeof adminFields;
 
 // ============================================================================
 // Block Types
@@ -59,17 +68,13 @@ import type { AdminBlockConfig, AdminConfigContext } from "../augmentation.js";
  * })
  * ```
  */
-export interface BlockPrefetchContext {
+export interface BlockPrefetchContext extends AppContext {
 	/** Block instance ID */
 	blockId: string;
 	/** Block type name */
 	blockType: string;
-	/** app instance — use `typedApp<App>(ctx.app)` for typed access */
-	app: Questpie<any>;
 	/** Current locale */
 	locale?: string;
-	/** Database client */
-	db: unknown;
 }
 
 /**
@@ -283,7 +288,7 @@ function createComponentProxy(
  */
 export class BlockBuilder<
 	TState extends BlockBuilderState = BlockBuilderState,
-	TFieldMap extends Record<string, any> = Record<string, any>,
+	TFieldMap extends Record<string, any> = AdminBlockFields,
 	TData = Record<string, unknown>,
 > {
 	private _state: TState;
@@ -541,8 +546,8 @@ export class BlockBuilder<
  *   }));
  *
  * // Register blocks on QuestPie
- * const app = config({
- *   modules: [admin()],
+ * const app = runtimeConfig({
+ *   modules: [adminModule],
  *   blocks: { hero: heroBlock },
  *   .build({ ... });
  * ```

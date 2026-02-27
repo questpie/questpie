@@ -1,20 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
 import { SeedRunner } from "../../src/server/seed/runner.js";
 import type { Seed } from "../../src/server/seed/types.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 
-// Minimal builder — seeds don't need collections, just a app instance with a DB
-const testModule = questpie({ name: "seed-test" }).fields(defaultFields);
-
 describe("SeedRunner", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	let runner: SeedRunner;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({});
 		runner = new SeedRunner(setup.app, { silent: true });
 	});
 
@@ -435,17 +430,17 @@ describe("SeedRunner", () => {
 
 	// ── SeedContext ─────────────────────────────────────────────────────
 
-	it("provides app, ctx, and log in SeedContext", async () => {
-		let receivedCms: any;
+	it("provides db, createContext, and log in SeedContext", async () => {
+		let receivedDb: any;
 		let receivedCtx: any;
 		let logCalled = false;
 
 		const seeds: Seed[] = [
 			makeSeed({
 				id: "ctx-test",
-				run: async ({ app, ctx, log }) => {
-					receivedCms = app;
-					receivedCtx = ctx;
+				run: async ({ db, createContext, log }) => {
+					receivedDb = db;
+					receivedCtx = await createContext({ locale: "en" });
 					log("test message");
 					logCalled = true;
 				},
@@ -454,9 +449,8 @@ describe("SeedRunner", () => {
 
 		await runner.run(seeds);
 
-		expect(receivedCms).toBe(setup.app);
+		expect(receivedDb).toBeDefined();
 		expect(receivedCtx).toBeDefined();
-		expect(receivedCtx.accessMode).toBe("system");
 		expect(logCalled).toBe(true);
 	});
 

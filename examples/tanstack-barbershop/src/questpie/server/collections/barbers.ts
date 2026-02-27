@@ -1,5 +1,5 @@
 import { uniqueIndex } from "drizzle-orm/pg-core";
-import { collection } from "questpie";
+import { collection } from "#questpie";
 import { slugify } from "@/questpie/server/utils";
 
 export type DaySchedule = {
@@ -283,9 +283,9 @@ export const barbers = collection("barbers")
 		}),
 	)
 	.hooks({
-		beforeValidate: async ({ data }) => {
+		beforeValidate: async (ctx) => {
 			// Generate slug from name if not provided (for create or update)
-			const d = data;
+			const d = ctx.data;
 			if (d.name && !d.slug) {
 				d.slug = slugify(d.name);
 			}

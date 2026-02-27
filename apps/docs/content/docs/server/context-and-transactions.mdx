@@ -68,43 +68,33 @@ the app normalizes context with defaults:
 
 QUESTPIE provides two categories of context utilities:
 
-### Type Helpers (compile-time only)
+### Flat Context in Handlers
 
-These add TypeScript types without any runtime effect. Use them to get type-safe access to context values:
+All handlers (hooks, functions, jobs) receive the fully typed `AppContext` directly — no type helpers needed:
 
 ```ts
-import { typedApp, typedDb, typedSession, typedContext } from "questpie";
-import type { App } from '../app';
-
 .hooks({
-  afterChange: async ({ app, db, session }) => {
-    const app = typedApp<App>(app);
-    const typedDatabase = typedDb<App>(db);
-    const typedSess = typedSession<App>(session);
-
-    await app.kv.set("cache:key", "value");
-    await typedDatabase.execute(sql`SELECT 1`);
+  afterChange: async ({ db, kv, session }) => {
+    // All properties are typed via AppContext augmentation
+    await kv.set("cache:key", "value");
+    await db.execute(sql`SELECT 1`);
   },
 })
 
-// Or type everything at once
 .access({
-  read: (ctx) => {
-    const { app, db, session } = typedContext<App>(ctx);
-    return !!session?.user;
-  },
+  read: ({ session }) => !!session?.user,
 })
 ```
 
-### Context Access (runtime)
+### Implicit Context (runtime)
 
-These actually retrieve context from AsyncLocalStorage at runtime:
+Use `getContext()` and `tryGetContext()` to access context from utility functions outside of handlers:
 
 ```ts
 import { getContext, tryGetContext, runWithContext } from "questpie";
 
 // Get context (throws if not in scope)
-const { db, session, locale } = getContext<App>();
+const { db, session, locale } = getContext();
 
 // Safe access (returns undefined if not in scope)
 const ctx = tryGetContext();
@@ -113,7 +103,7 @@ if (ctx?.locale) {
 }
 
 // Run code within a context scope
-await runWithContext({ app: app, session, db, locale: "sk" }, async () => {
+await runWithContext({ session, db, locale: "sk" }, async () => {
   // Inside here, getContext() works
 });
 ```
@@ -128,11 +118,9 @@ await app.api.collections.pages.find({}, { locale: "sk" });
 
 // Inside hooks or nested calls, locale is inherited automatically
 .hooks({
-  afterRead: async ({ app }) => {
-    const app = typedApp<App>(app);
-    
+  afterRead: async ({ collections }) => {
     // This automatically uses locale: "sk" from parent context
-    const related = await app.api.collections.posts.find({
+    const related = await collections.posts.find({
       where: { featured: true },
     });
     // No need to pass { locale: "sk" } - it's inherited!
@@ -175,21 +163,19 @@ BEGIN → access control → hooks → DB write → version → afterChange hook
 Use `withTransaction` for multi-step operations that must be atomic:
 
 ```ts
-import { withTransaction, typedApp } from "questpie";
+import { withTransaction } from "questpie";
 
-handler: async ({ input, app }) => {
-  const app = typedApp<App>(app);
-
-  return withTransaction(app.db, async (tx) => {
+handler: async ({ input, db, collections }) => {
+  return withTransaction(db, async (tx) => {
     // Create order — uses the transaction
-    const order = await app.api.collections.orders.create(
+    const order = await collections.orders.create(
       { cartId: input.cartId, status: "pending" },
       { db: tx },
     );
 
     // Deduct inventory — same transaction
     for (const item of order.items) {
-      await app.api.collections.products.updateById(
+      await collections.products.updateById(
         { id: item.productId, data: { stock: sql`stock - ${item.qty}` } },
         { db: tx },
       );
@@ -229,19 +215,17 @@ if (isInTransaction()) {
 The most important pattern for side effects in transactional hooks. `onAfterCommit` queues a callback that runs only after the enclosing transaction successfully commits:
 
 ```ts
-import { onAfterCommit, typedApp } from "questpie";
+import { onAfterCommit } from "questpie";
 
 .hooks({
-  afterChange: async ({ data, app }) => {
-    const app = typedApp<App>(app);
-
+  afterChange: async ({ data, kv, queue }) => {
     // This runs INSIDE the transaction — data is consistent
-    await app.kv.delete(`cache:${data.id}`);
+    await kv.delete(`cache:${data.id}`);
 
     // This runs AFTER the transaction commits
     onAfterCommit(async () => {
       // Safe to send external notifications now
-      await app.queue.sendNotification.publish({
+      await queue.sendNotification.publish({
         recordId: data.id,
       });
 
@@ -298,21 +282,22 @@ onAfterCommit(async () => {
 ## Real-World Example: Booking Checkout
 
 ```ts
-import { withTransaction, onAfterCommit, typedApp } from "questpie";
+// functions/process-booking.ts
+import { fn } from "questpie";
+import { withTransaction, onAfterCommit } from "questpie";
+import { z } from "zod";
 
-const processBooking = rpc.fn({
-  input: z.object({
+export default fn({
+  schema: z.object({
     barberId: z.string(),
     serviceId: z.string(),
     scheduledAt: z.string(),
     customerEmail: z.string(),
   }),
-  handler: async ({ input, app }) => {
-    const app = typedApp<App>(app);
-
-    return withTransaction(app.db, async (tx) => {
+  handler: async ({ input, db, collections, queue }) => {
+    return withTransaction(db, async (tx) => {
       // 1. Verify barber availability
-      const existing = await app.api.collections.appointments.find(
+      const existing = await collections.appointments.find(
         {
           where: {
             barberId: input.barberId,
@@ -328,7 +313,7 @@ const processBooking = rpc.fn({
       }
 
       // 2. Create appointment
-      const appointment = await app.api.collections.appointments.create(
+      const appointment = await collections.appointments.create(
         {
           barberId: input.barberId,
           serviceId: input.serviceId,
@@ -340,7 +325,7 @@ const processBooking = rpc.fn({
 
       // 3. Queue notifications AFTER commit
       onAfterCommit(async () => {
-        await app.queue.sendAppointmentConfirmation.publish({
+        await queue.sendAppointmentConfirmation.publish({
           appointmentId: appointment.id,
           customerEmail: input.customerEmail,
         });
@@ -354,7 +339,7 @@ const processBooking = rpc.fn({
 
 ## Common Mistakes
 
-- **Confusing `typed*` with `get*`** — `typedApp()` only adds types, `getContext()` actually retrieves from storage.
+- **Using old type helpers** — With `AppContext` augmentation, you don't need `typedApp()`, `typedDb()`, or `typedContext()`. All handler context is typed automatically.
 - **Sending emails/webhooks inside transactions** — If the transaction rolls back, the email is already sent. Always use `onAfterCommit` for external side effects.
 - **Assuming savepoint behavior** — Nested `withTransaction` calls reuse the parent transaction. There are no independent nested transactions.
 - **Forgetting `{ db: tx }` in nested CRUD calls** — When calling CRUD inside `withTransaction`, pass the transaction via context. Otherwise the operation creates its own transaction.

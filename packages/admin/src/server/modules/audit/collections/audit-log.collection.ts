@@ -1,8 +1,10 @@
 import { index } from "drizzle-orm/pg-core";
 import { collection } from "questpie";
-// Side-effect imports: apply runtime patches so .admin(), .list(), .form() are available
-import "../../../augmentation.js";
-import "../../../patch.js";
+import type {
+	AdminCollectionConfig,
+	FormViewConfig,
+	ListViewConfig,
+} from "../../../augmentation.js";
 
 /**
  * Audit Log Collection
@@ -76,56 +78,54 @@ export const auditLogCollection = collection("admin_audit_log")
 		delete: false,
 		read: true,
 	})
-	.admin(({ c }) => ({
+	.set("admin", {
 		label: { key: "audit.collection.label" },
-		icon: c.icon("ph:clock-counter-clockwise"),
+		icon: { type: "icon", props: { name: "ph:clock-counter-clockwise" } },
 		description: { key: "audit.collection.description" },
 		group: "administration",
 		audit: false,
-	}))
+	} satisfies AdminCollectionConfig)
 	.title(({ f }) => f.title)
-	.list(({ v, f }) =>
-		v.table({
-			columns: [f.title, f.userName, "createdAt"],
-			searchable: [f.title, f.userName],
-			defaultSort: { field: "createdAt", direction: "desc" },
-			actions: {
-				header: { primary: [], secondary: [] },
-				row: [],
-				bulk: [],
+	.set("adminList", {
+		view: "table",
+		columns: ["title", "userName", "createdAt"],
+		searchable: ["title", "userName"],
+		defaultSort: { field: "createdAt", direction: "desc" },
+		actions: {
+			header: { primary: [], secondary: [] },
+			row: [],
+			bulk: [],
+		},
+	} satisfies ListViewConfig)
+	.set("adminForm", {
+		view: "form",
+		fields: [
+			{
+				type: "section",
+				label: { key: "audit.sections.event" },
+				layout: "grid",
+				columns: 2,
+				fields: [
+					{ field: "title" },
+					{ field: "action" },
+					{ field: "resourceType" },
+					{ field: "resource" },
+					{ field: "resourceId" },
+					{ field: "resourceLabel" },
+					{ field: "locale" },
+				],
 			},
-		}),
-	)
-	.form(({ v, f }) =>
-		v.form({
-			fields: [
-				{
-					type: "section",
-					label: { key: "audit.sections.event" },
-					layout: "grid",
-					columns: 2,
-					fields: [
-						{ field: f.title },
-						{ field: f.action },
-						{ field: f.resourceType },
-						{ field: f.resource },
-						{ field: f.resourceId },
-						{ field: f.resourceLabel },
-						{ field: f.locale },
-					],
-				},
-				{
-					type: "section",
-					label: { key: "audit.sections.user" },
-					layout: "grid",
-					columns: 2,
-					fields: [{ field: f.userId }, { field: f.userName }],
-				},
-				{
-					type: "section",
-					label: { key: "audit.sections.changes" },
-					fields: [{ field: f.changes }, { field: f.metadata }],
-				},
-			],
-		}),
-	);
+			{
+				type: "section",
+				label: { key: "audit.sections.user" },
+				layout: "grid",
+				columns: 2,
+				fields: [{ field: "userId" }, { field: "userName" }],
+			},
+			{
+				type: "section",
+				label: { key: "audit.sections.changes" },
+				fields: [{ field: "changes" }, { field: "metadata" }],
+			},
+		],
+	} satisfies FormViewConfig);

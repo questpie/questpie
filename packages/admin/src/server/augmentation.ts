@@ -11,17 +11,17 @@
  *
  * @example
  * ```ts
- * import { config } from "questpie";
- * import { admin } from "@questpie/admin/server";
+ * import { runtimeConfig } from "questpie";
+ * import { adminModule } from "@questpie/admin/server";
  *
- * export default config({
- *   modules: [admin()],
+ * export default runtimeConfig({
+ *   modules: [adminModule],
  *   collections: {
  *     posts: collection("posts")
  *       .fields(({ f }) => ({
  *         title: f.text({ required: true }),
  *       }))
- *       // These methods are added by admin() at runtime:
+ *       // These methods are added by adminModule at runtime:
  *       .admin(({ c }) => ({
  *         label: { en: "Posts" },
  *         icon: c.icon("ph:article"),
@@ -184,7 +184,7 @@ export interface AdminCollectionConfig {
 	order?: number;
 	/**
 	 * Whether this collection should be included in audit logging.
-	 * Requires the audit module to be registered via `config({ modules: [audit()] })`.
+	 * Requires the audit module to be registered via `runtimeConfig({ modules: [auditModule] })`.
 	 *
 	 * - `true` or `undefined` (default): audited when audit module is active
 	 * - `false`: never audited, even when audit module is active
@@ -981,12 +981,230 @@ export interface ServerSidebarSection {
 }
 
 /**
- * Server-side sidebar configuration
+ * Server-side sidebar configuration (final merged output)
  */
 export interface ServerSidebarConfig {
 	/** Sidebar sections */
 	sections: ServerSidebarSection[];
 }
+
+// ============================================================================
+// Composable Sidebar/Dashboard Contributions (§5.8)
+// ============================================================================
+
+/**
+ * Sidebar contribution — what a module or user config contributes.
+ * Multiple contributions are merged by createApp() (§5.8.3).
+ * Resolved from callback: `sidebar: ({ s, c }) => ({ sections: [...], items: [...] })`
+ */
+export interface SidebarContribution {
+	/** Section definitions — merged by id across modules. Later wins for title/icon. */
+	sections?: SidebarSectionDef[];
+	/** Items — appended to sections by sectionId. Module resolution order. */
+	items?: SidebarItemDef[];
+}
+
+/**
+ * Sidebar section definition for contributions.
+ */
+export interface SidebarSectionDef {
+	/** Unique section ID — used for targeting from other modules. */
+	id: string;
+	/** Section title. */
+	title?: I18nText;
+	/** Section icon. */
+	icon?: ComponentReference;
+	/** Whether section is collapsible. */
+	collapsible?: boolean;
+}
+
+/**
+ * Sidebar item definition for contributions.
+ * Each item references a sectionId to indicate which section it belongs to.
+ */
+export interface SidebarItemDef extends Omit<ServerSidebarItem, "type"> {
+	/** Which section this item belongs to. */
+	sectionId: string;
+	/** 'start' to prepend, default is 'end' (append). */
+	position?: "start" | "end";
+	/** Item type. */
+	type: "collection" | "global" | "page" | "link" | "divider";
+	/** Collection slug (when type = "collection"). */
+	collection?: string;
+	/** Global slug (when type = "global"). */
+	global?: string;
+	/** Page ID (when type = "page"). */
+	pageId?: string;
+	/** Display label (for links, overrides). */
+	label?: I18nText;
+	/** URL (for links). */
+	href?: string;
+	/** Icon reference. */
+	icon?: ComponentReference;
+	/** Open in new tab (for links). */
+	external?: boolean;
+}
+
+/**
+ * Dashboard contribution — what a module or user config contributes.
+ * Multiple contributions are merged by createApp() (§5.8.3).
+ * Resolved from callback: `dashboard: ({ d, c, a }) => ({ ... })`
+ */
+export interface DashboardContribution {
+	/** Dashboard title — last module/user wins. */
+	title?: I18nText;
+	/** Dashboard description — last module/user wins. */
+	description?: I18nText;
+	/** Grid columns — last module/user wins. */
+	columns?: number;
+	/** Enable realtime — last module/user wins. */
+	realtime?: boolean;
+
+	/** Quick actions — concatenated from all modules. */
+	actions?: ServerDashboardAction[];
+	/** Section definitions — merged by id across modules. */
+	sections?: DashboardSectionDef[];
+	/** Widget items — appended to sections by sectionId. */
+	items?: DashboardItemDef[];
+}
+
+/**
+ * Dashboard section definition for contributions.
+ */
+export interface DashboardSectionDef {
+	/** Unique section ID. */
+	id: string;
+	/** Section title. */
+	label?: I18nText;
+	/** Layout mode. */
+	layout?: "grid";
+	/** Grid columns for this section. */
+	columns?: number;
+}
+
+/**
+ * Dashboard item (widget) definition for contributions.
+ * Each item references a sectionId to indicate which section it belongs to.
+ */
+export interface DashboardItemDef {
+	/** Which section this item belongs to. */
+	sectionId: string;
+	/** 'start' to prepend, default is 'end' (append). */
+	position?: "start" | "end";
+	/** Unique widget ID. */
+	id: string;
+	/** Widget type. */
+	type:
+		| "stats"
+		| "value"
+		| "progress"
+		| "chart"
+		| "recentItems"
+		| "timeline"
+		| "table"
+		| "custom";
+	/** Display label. */
+	label?: I18nText;
+	/** Grid span (1-4). */
+	span?: number;
+	/** Refresh interval in ms. */
+	refreshInterval?: number;
+	/** Widget-specific config (collection, filter, loader, chartType, etc.) */
+	[key: string]: unknown;
+}
+
+// ============================================================================
+// Sidebar/Dashboard Proxy Types (for callbacks)
+// ============================================================================
+
+/**
+ * Sidebar proxy — provided in sidebar callbacks as `s`.
+ * Creates serializable contribution objects.
+ */
+export interface SidebarProxy {
+	/** Define a sidebar section. */
+	section(def: SidebarSectionDef): SidebarSectionDef;
+	/** Define a sidebar item. */
+	item(def: SidebarItemDef): SidebarItemDef;
+}
+
+/**
+ * Dashboard proxy — provided in dashboard callbacks as `d`.
+ * Creates serializable widget/section objects.
+ */
+export interface DashboardProxy {
+	/** Define a dashboard section. */
+	section(def: DashboardSectionDef): DashboardSectionDef;
+	/** Stats widget — count docs from a collection. */
+	stats(def: DashboardItemDef): DashboardItemDef;
+	/** Value widget — custom value from async loader. */
+	value(def: DashboardItemDef): DashboardItemDef;
+	/** Progress widget — progress bar from async loader. */
+	progress(def: DashboardItemDef): DashboardItemDef;
+	/** Chart widget — aggregate a field into chart. */
+	chart(def: DashboardItemDef): DashboardItemDef;
+	/** Recent items widget — latest docs from a collection. */
+	recentItems(def: DashboardItemDef): DashboardItemDef;
+	/** Timeline widget — event stream from async loader. */
+	timeline(def: DashboardItemDef): DashboardItemDef;
+	/** Table widget — tabular data from async loader. */
+	table(def: DashboardItemDef): DashboardItemDef;
+	/** Custom widget — resolved by client. */
+	custom(def: DashboardItemDef): DashboardItemDef;
+}
+
+/**
+ * Dashboard action proxy — provided in dashboard callbacks as `a`.
+ * Creates dashboard header action objects.
+ */
+export interface DashboardActionProxy {
+	/** Create link for a collection. */
+	create(
+		config: Omit<ServerDashboardAction, "href"> & { collection: string },
+	): ServerDashboardAction;
+	/** Edit link for a global. */
+	global(
+		config: Omit<ServerDashboardAction, "href"> & { global: string },
+	): ServerDashboardAction;
+	/** Plain link. */
+	link(config: ServerDashboardAction): ServerDashboardAction;
+}
+
+/**
+ * Context for sidebar callbacks on module() and config().
+ */
+export interface SidebarCallbackContext {
+	/** Sidebar builder proxy. */
+	s: SidebarProxy;
+	/** Component proxy (scoped to registered components). */
+	c: ComponentFactory;
+}
+
+/**
+ * Context for dashboard callbacks on module() and config().
+ */
+export interface DashboardCallbackContext {
+	/** Dashboard builder proxy. */
+	d: DashboardProxy;
+	/** Component proxy (scoped to registered components). */
+	c: ComponentFactory;
+	/** Dashboard action proxy. */
+	a: DashboardActionProxy;
+}
+
+/**
+ * Sidebar callback type for module() and config().
+ */
+export type SidebarCallback = (
+	ctx: SidebarCallbackContext,
+) => SidebarContribution;
+
+/**
+ * Dashboard callback type for module() and config().
+ */
+export type DashboardCallback = (
+	ctx: DashboardCallbackContext,
+) => DashboardContribution;
 
 // ============================================================================
 // Server-Side Action System
@@ -1488,7 +1706,7 @@ export type EditViewFactory<TEditViewNames extends string = string> = {
 /**
  * Context for list view config functions
  */
-interface ListViewConfigContext<
+export interface ListViewConfigContext<
 	TFields extends Record<string, any> = Record<string, any>,
 	TListViewNames extends string = string,
 > {
@@ -1516,7 +1734,7 @@ interface ListViewConfigContext<
 /**
  * Context for form view config functions
  */
-interface FormViewConfigContext<
+export interface FormViewConfigContext<
 	TFields extends Record<string, any> = Record<string, any>,
 	TEditViewNames extends string = string,
 > {
@@ -1538,8 +1756,8 @@ interface FormViewConfigContext<
  * ```ts
  * import type { WithAdminMethods } from "@questpie/admin/server";
  *
- * // admin() module adds these methods at runtime
- * const builder = q({ name: "app" }).use(admin()) as WithAdminMethods<typeof q>;
+ * // adminModule adds these methods at runtime
+ * const builder = q({ name: "app" }).use(adminModule) as WithAdminMethods<typeof q>;
  * builder.listView("table"); // now has type support
  * ```
  */
@@ -1755,7 +1973,7 @@ interface GlobalBuilderAdminMethods<
  *
  * @example
  * ```ts
- * const builder = q({ name: "app" }).use(admin()) as WithAdminMethods<typeof q>;
+ * const builder = q({ name: "app" }).use(adminModule) as WithAdminMethods<typeof q>;
  * ```
  */
 export type WithAdminMethods<T> = T & QuestpieBuilderAdminMethods;
@@ -1787,208 +2005,9 @@ export type WithGlobalAdminMethods<
 	TComponentNames extends string = string,
 > = T & GlobalBuilderAdminMethods<TFields, TEditViewNames, TComponentNames>;
 
-declare module "questpie" {
-	// ==========================================================================
-	// EXTENSION INTERFACES - Using new lazy evaluation pattern
-	// ==========================================================================
-	// These extensions use FieldsOf<this> which is evaluated LAZILY, avoiding
-	// type explosion when combining many collections via .use() and .collections().
-
-	/**
-	 * Admin methods for QuestpieBuilder.
-	 * Added via runtime monkey patching in ./patch.ts.
-	 */
-	interface QuestpieBuilderExtensions extends QuestpieBuilderAdminMethods {
-		/**
-		 * Configure admin UI locales (separate from content locales).
-		 *
-		 * UI locales control the admin interface language.
-		 * Content locales control which languages content can be edited in.
-		 * These don't need to match.
-		 *
-		 * @example
-		 * ```ts
-		 * const app = config({
-		 *   modules: [admin()],
-		 *   // Content can be in 10 languages
-		 *   .locale({
-		 *     locales: [{ code: "en" }, { code: "sk" }, { code: "de" }, ...],
-		 *     defaultLocale: "en",
-		 *   })
-		 *   // But admin UI only in 2 languages
-		 *   .adminLocale({
-		 *     locales: ["en", "sk"],
-		 *     defaultLocale: "en",
-		 *   })
-		 *   .build({ ... });
-		 * ```
-		 */
-		adminLocale(config: AdminLocaleConfig): this;
-
-		/**
-		 * Create a block builder bound to this Questpie builder.
-		 * The block has access to all registered field types.
-		 *
-		 * @example
-		 * ```ts
-		 * const qb = q.use(admin());
-		 *
-		 * const heroBlock = qb.block("hero")
-		 *   .label({ en: "Hero Section" })
-		 *   .icon("ph:image")
-		 *   .fields(({ f }) => ({
-		 *     title: f.text({ required: true }),  // typed from builder's field registry
-		 *     subtitle: f.text(),
-		 *   }));
-		 *
-		 * const app = qb
-		 *   .blocks({ hero: heroBlock })
-		 *   .build({ ... });
-		 * ```
-		 */
-		block<TName extends string>(
-			name: TName,
-		): BlockBuilder<
-			{ name: TName },
-			QuestpieStateOf<this> extends {
-				fields: infer F extends Record<string, any>;
-			}
-				? F
-				: Record<string, any>
-		>;
-	}
-
-	/**
-	 * Admin methods for CollectionBuilder.
-	 * Uses FieldsOf<this> for lazy field type extraction - this prevents
-	 * type explosion (TS7056) when combining many collections.
-	 */
-	interface CollectionBuilderExtensions {
-		/**
-		 * Set admin metadata for the collection.
-		 */
-		admin(
-			configOrFn:
-				| AdminCollectionConfig
-				| ((
-						ctx: AdminConfigContext<RegisteredComponentNamesOfBuilder<this>>,
-				  ) => AdminCollectionConfig),
-		): this;
-
-		/**
-		 * Configure list view for the collection.
-		 * Field proxy `f` provides autocomplete for field names.
-		 */
-		list(
-			configFn: (
-				ctx: ListViewConfigContext<
-					FieldsOf<this>,
-					RegisteredListViewNamesOfBuilder<this>
-				>,
-			) => ListViewConfig,
-		): this;
-
-		/**
-		 * Configure form view for the collection.
-		 */
-		form(
-			configFn: (
-				ctx: FormViewConfigContext<
-					FieldsOf<this>,
-					RegisteredEditViewNamesOfBuilder<this>
-				>,
-			) => FormViewConfig,
-		): this;
-
-		/**
-		 * Configure preview for the collection.
-		 */
-		preview(config: PreviewConfig): this;
-
-		/**
-		 * Configure actions for the collection.
-		 */
-		actions(
-			configFn: (
-				ctx: ActionsConfigContext<
-					FieldsOf<this>,
-					RegisteredComponentNamesOfBuilder<this>
-				>,
-			) => ServerActionsConfig,
-		): this;
-	}
-
-	/**
-	 * Admin methods for GlobalBuilder.
-	 * Uses GlobalFieldsOf<this> for lazy field type extraction.
-	 */
-	interface GlobalBuilderExtensions {
-		/**
-		 * Set admin metadata for the global.
-		 */
-		admin(
-			configOrFn:
-				| AdminGlobalConfig
-				| ((
-						ctx: AdminConfigContext<RegisteredComponentNamesOfBuilder<this>>,
-				  ) => AdminGlobalConfig),
-		): this;
-
-		/**
-		 * Configure form view for the global.
-		 */
-		form(
-			configFn: (
-				ctx: FormViewConfigContext<
-					GlobalFieldsOf<this>,
-					RegisteredEditViewNamesOfBuilder<this>
-				>,
-			) => FormViewConfig,
-		): this;
-	}
-
-	// ==========================================================================
-	// STATE EXTENSIONS - For storing admin config in builder state
-	// ==========================================================================
-
-	// Extend QuestpieBuilderState to include admin-specific properties
-	interface QuestpieBuilderState<
-		_TName extends string = string,
-		_TCollections extends BuilderCollectionsMap = BuilderCollectionsMap,
-		_TGlobals extends BuilderGlobalsMap = BuilderGlobalsMap,
-		_TJobs extends BuilderJobsMap = BuilderJobsMap,
-		_TEmailTemplates extends
-			BuilderEmailTemplatesMap = BuilderEmailTemplatesMap,
-		_TAuth extends BetterAuthOptions | Record<never, never> = Record<
-			never,
-			never
-		>,
-		_TMessageKeys extends string = never,
-		_TBuilderFields extends BuilderFieldsMap = BuilderFieldsMap,
-	> {
-		listViews?: Record<string, ListViewDefinition>;
-		editViews?: Record<string, EditViewDefinition>;
-		components?: Record<string, ComponentDefinition>;
-		blocks?: Record<string, AnyBlockDefinition>;
-		dashboard?: ServerDashboardConfig;
-		sidebar?: ServerSidebarConfig;
-		branding?: ServerBrandingConfig;
-		/** Admin UI locale configuration (separate from content locales) */
-		adminLocale?: AdminLocaleConfig;
-	}
-
-	// Extend CollectionBuilderState to include admin-specific properties
-	interface CollectionBuilderState {
-		admin?: AdminCollectionConfig;
-		adminList?: ListViewConfig;
-		adminForm?: FormViewConfig;
-		adminPreview?: PreviewConfig;
-		adminActions?: ServerActionsConfig;
-	}
-
-	// Extend GlobalBuilderState to include admin-specific properties
-	interface GlobalBuilderState {
-		admin?: AdminGlobalConfig;
-		adminForm?: FormViewConfig;
-	}
-}
+// ============================================================================
+// NOTE: `declare module "questpie"` augmentation block has been REMOVED.
+// Builder extension methods (.admin(), .list(), .form(), etc.) are now
+// provided by codegen-generated factories in .generated/factories.ts.
+// State keys (admin, adminList, adminForm, etc.) are stored via .set().
+// ============================================================================

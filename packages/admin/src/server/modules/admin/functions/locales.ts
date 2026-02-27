@@ -59,7 +59,7 @@ const getContentLocales = fn({
 	schema: getContentLocalesSchema,
 	outputSchema: getContentLocalesOutputSchema,
 	handler: async (ctx) => {
-		const app = ctx.app;
+		const app = (ctx as any).app;
 		const localeConfig = app.config.locale;
 
 		// If no locale config, return sensible defaults

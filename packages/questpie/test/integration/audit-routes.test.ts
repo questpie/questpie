@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection, global } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -13,45 +12,38 @@ import { runTestDbMigrations } from "../utils/test-db";
  * Here we set up a mock adminAuditLog collection so the routes have data to return.
  */
 
-const createModule = () => {
-	const q = questpie({ name: "audit-routes-test" }).fields(defaultFields);
+const posts = collection("posts").fields(({ f }) => ({
+	title: f.text({ required: true }),
+}));
 
-	const posts = q.collection("posts").fields(({ f }) => ({
-		title: f.text({ required: true }),
-	}));
+const settings = global("settings").fields(({ f }) => ({
+	siteName: f.text({ required: true }),
+}));
 
-	const settings = q.global("settings").fields(({ f }) => ({
-		siteName: f.text({ required: true }),
-	}));
-
-	// Mock audit log collection matching the schema the audit route expects
-	const adminAuditLog = q.collection("adminAuditLog").fields(({ f }) => ({
-		action: f.text({ required: true }),
-		resourceType: f.text({ required: true }),
-		resource: f.text({ required: true }),
-		resourceId: f.text(),
-		resourceLabel: f.text(),
-		userId: f.text(),
-		userName: f.text(),
-		locale: f.text(),
-		changes: f.json(),
-		metadata: f.json(),
-		title: f.text(),
-	}));
-
-	return q
-		.collections({ posts, adminAuditLog })
-		.globals({ settings })
-		.defaultAccess({ read: true, create: true, update: true, delete: true });
-};
+// Mock audit log collection matching the schema the audit route expects
+const adminAuditLog = collection("adminAuditLog").fields(({ f }) => ({
+	action: f.text({ required: true }),
+	resourceType: f.text({ required: true }),
+	resource: f.text({ required: true }),
+	resourceId: f.text(),
+	resourceLabel: f.text(),
+	userId: f.text(),
+	userName: f.text(),
+	locale: f.text(),
+	changes: f.json(),
+	metadata: f.json(),
+	title: f.text(),
+}));
 
 describe("audit routes", () => {
-	let setup: Awaited<
-		ReturnType<typeof buildMockApp<ReturnType<typeof createModule>>>
-	>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(createModule());
+		setup = await buildMockApp({
+			collections: { posts, adminAuditLog },
+			globals: { settings },
+			defaultAccess: { read: true, create: true, update: true, delete: true },
+		});
 		await runTestDbMigrations(setup.app);
 	});
 
@@ -260,18 +252,14 @@ describe("audit routes", () => {
 
 		it("returns empty array when no audit log collection exists", async () => {
 			// Set up an app without adminAuditLog collection
-			const q = questpie({ name: "no-audit-test" }).fields(defaultFields);
-			const settings = q.global("settings").fields(({ f }) => ({
+			const settingsNoAudit = global("settings").fields(({ f }) => ({
 				siteName: f.text({ required: true }),
 			}));
-			const noAuditModule = q.globals({ settings }).defaultAccess({
-				read: true,
-				create: true,
-				update: true,
-				delete: true,
-			});
 
-			const noAuditSetup = await buildMockApp(noAuditModule);
+			const noAuditSetup = await buildMockApp({
+				globals: { settings: settingsNoAudit },
+				defaultAccess: { read: true, create: true, update: true, delete: true },
+			});
 			await runTestDbMigrations(noAuditSetup.app);
 
 			try {

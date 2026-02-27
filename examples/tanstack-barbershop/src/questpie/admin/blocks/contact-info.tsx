@@ -13,7 +13,7 @@ import type { BlockProps } from "./types";
 export function ContactInfoRenderer({
 	values,
 	data,
-}: BlockProps<"contact-info">) {
+}: BlockProps<"contactInfo">) {
 	const { t } = useTranslation();
 	const contactPhone = data?.contactPhone as string | undefined;
 	const contactEmail = data?.contactEmail as string | undefined;

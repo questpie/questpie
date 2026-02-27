@@ -4,7 +4,7 @@
  * Contact information for city departments and services.
  */
 
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export default collection("contacts")
 	.fields(({ f }) => ({

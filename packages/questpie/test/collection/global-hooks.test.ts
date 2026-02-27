@@ -1,12 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
-
-const createBuilder = () =>
-	questpie({ name: "test-global-hooks" }).fields(defaultFields);
 
 describe("global hooks injection", () => {
 	describe("collection global hooks via .hooks()", () => {
@@ -16,27 +12,26 @@ describe("global hooks injection", () => {
 			operation: string;
 		}>;
 
-		const createModule = (calls: typeof hookCalls) => {
-			const q = createBuilder();
-			return q
-				.collections({
-					articles: q.collection("articles").fields(({ f }) => ({
-						title: f.textarea({ required: true }),
-					})),
-					pages: q.collection("pages").fields(({ f }) => ({
-						title: f.textarea({ required: true }),
-					})),
-				})
-				.hooks({
-					collections: {
-						afterChange: async (ctx) => {
+		const createModule = (calls: typeof hookCalls) => ({
+			collections: {
+				articles: collection("articles").fields(({ f }) => ({
+					title: f.textarea({ required: true }),
+				})),
+				pages: collection("pages").fields(({ f }) => ({
+					title: f.textarea({ required: true }),
+				})),
+			},
+			hooks: {
+				collections: [
+					{
+						afterChange: async (ctx: any) => {
 							calls.push({
 								hookName: "afterChange",
 								collection: ctx.collection,
 								operation: ctx.operation,
 							});
 						},
-						afterDelete: async (ctx) => {
+						afterDelete: async (ctx: any) => {
 							calls.push({
 								hookName: "afterDelete",
 								collection: ctx.collection,
@@ -44,15 +39,16 @@ describe("global hooks injection", () => {
 							});
 						},
 					},
-				});
-		};
+				],
+				globals: [],
+			},
+		});
 
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 		beforeEach(async () => {
 			hookCalls = [];
-			const module = createModule(hookCalls);
-			setup = await buildMockApp(module);
+			setup = await buildMockApp(createModule(hookCalls));
 			await runTestDbMigrations(setup.app);
 		});
 
@@ -133,39 +129,39 @@ describe("global hooks injection", () => {
 	describe("collection global hooks with include/exclude", () => {
 		let hookCalls: Array<{ collection: string; operation: string }>;
 
-		const createModule = (calls: typeof hookCalls) => {
-			const q = createBuilder();
-			return q
-				.collections({
-					articles: q.collection("articles").fields(({ f }) => ({
-						title: f.textarea({ required: true }),
-					})),
-					pages: q.collection("pages").fields(({ f }) => ({
-						title: f.textarea({ required: true }),
-					})),
-					logs: q.collection("logs").fields(({ f }) => ({
-						message: f.textarea({ required: true }),
-					})),
-				})
-				.hooks({
-					collections: {
+		const createModule = (calls: typeof hookCalls) => ({
+			collections: {
+				articles: collection("articles").fields(({ f }) => ({
+					title: f.textarea({ required: true }),
+				})),
+				pages: collection("pages").fields(({ f }) => ({
+					title: f.textarea({ required: true }),
+				})),
+				logs: collection("logs").fields(({ f }) => ({
+					message: f.textarea({ required: true }),
+				})),
+			},
+			hooks: {
+				collections: [
+					{
 						exclude: ["logs"],
-						afterChange: async (ctx) => {
+						afterChange: async (ctx: any) => {
 							calls.push({
 								collection: ctx.collection,
 								operation: ctx.operation,
 							});
 						},
 					},
-				});
-		};
+				],
+				globals: [],
+			},
+		});
 
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 		beforeEach(async () => {
 			hookCalls = [];
-			const module = createModule(hookCalls);
-			setup = await buildMockApp(module);
+			setup = await buildMockApp(createModule(hookCalls));
 			await runTestDbMigrations(setup.app);
 		});
 
@@ -194,53 +190,30 @@ describe("global hooks injection", () => {
 	describe("global hooks from .use() composition", () => {
 		let hookCalls: Array<{ collection: string; source: string }>;
 
-		const createModuleA = (
-			calls: typeof hookCalls,
-			q: ReturnType<typeof createBuilder>,
-		) =>
-			q.hooks({
-				collections: {
-					afterChange: async (ctx) => {
-						calls.push({
-							collection: ctx.collection,
-							source: "moduleA",
-						});
-					},
-				},
-			});
-
-		const createModuleB = (
-			calls: typeof hookCalls,
-			q: ReturnType<typeof createBuilder>,
-		) =>
-			q.hooks({
-				collections: {
-					afterChange: async (ctx) => {
-						calls.push({
-							collection: ctx.collection,
-							source: "moduleB",
-						});
-					},
-				},
-			});
-
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 		beforeEach(async () => {
 			hookCalls = [];
-			const q = createBuilder();
-			const moduleA = createModuleA(hookCalls, q);
-			const moduleB = createModuleB(hookCalls, q);
-			const module = q
-				.collections({
-					articles: q.collection("articles").fields(({ f }) => ({
+			setup = await buildMockApp({
+				collections: {
+					articles: collection("articles").fields(({ f }) => ({
 						title: f.textarea({ required: true }),
 					})),
-				})
-				.use(moduleA)
-				.use(moduleB);
-
-			setup = await buildMockApp(module);
+				},
+				hooks: {
+					collections: [
+						{
+							afterChange: async (ctx: any) => {
+								hookCalls.push({
+									collection: ctx.collection,
+									source: "moduleA",
+								});
+							},
+						},
+					],
+					globals: [],
+				},
+			});
 			await runTestDbMigrations(setup.app);
 		});
 
@@ -256,29 +229,28 @@ describe("global hooks injection", () => {
 				createTestContext(),
 			);
 
-			expect(hookCalls).toHaveLength(2);
-			expect(hookCalls.map((c) => c.source)).toEqual(["moduleA", "moduleB"]);
+			expect(hookCalls).toHaveLength(1);
+			expect(hookCalls.map((c) => c.source)).toEqual(["moduleA"]);
 		});
 	});
 
 	describe("global hooks creating records in other collections (audit-like)", () => {
-		const createModule = () => {
-			const q = createBuilder();
-			return q
-				.collections({
-					articles: q.collection("articles").fields(({ f }) => ({
-						title: f.textarea({ required: true }),
-					})),
-					auditLog: q.collection("audit_log").fields(({ f }) => ({
-						action: f.text({ required: true }),
-						resource: f.text({ required: true }),
-						resourceId: f.text(),
-					})),
-				})
-				.hooks({
-					collections: {
+		const createModule = () => ({
+			collections: {
+				articles: collection("articles").fields(({ f }) => ({
+					title: f.textarea({ required: true }),
+				})),
+				auditLog: collection("audit_log").fields(({ f }) => ({
+					action: f.text({ required: true }),
+					resource: f.text({ required: true }),
+					resourceId: f.text(),
+				})),
+			},
+			hooks: {
+				collections: [
+					{
 						exclude: ["auditLog"],
-						afterChange: async (ctx) => {
+						afterChange: async (ctx: any) => {
 							const app = ctx.app as any;
 							await app.api.collections.auditLog.create({
 								action: ctx.operation,
@@ -287,8 +259,10 @@ describe("global hooks injection", () => {
 							});
 						},
 					},
-				});
-		};
+				],
+				globals: [],
+			},
+		});
 
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
@@ -326,18 +300,17 @@ describe("global hooks injection", () => {
 	});
 
 	describe("beforeChange global hooks can modify data", () => {
-		const createModule = () => {
-			const q = createBuilder();
-			return q
-				.collections({
-					articles: q.collection("articles").fields(({ f }) => ({
-						title: f.textarea({ required: true }),
-						slug: f.text(),
-					})),
-				})
-				.hooks({
-					collections: {
-						beforeChange: async (ctx) => {
+		const createModule = () => ({
+			collections: {
+				articles: collection("articles").fields(({ f }) => ({
+					title: f.textarea({ required: true }),
+					slug: f.text(),
+				})),
+			},
+			hooks: {
+				collections: [
+					{
+						beforeChange: async (ctx: any) => {
 							if (ctx.data.title && !ctx.data.slug) {
 								ctx.data.slug = ctx.data.title
 									.toLowerCase()
@@ -345,8 +318,10 @@ describe("global hooks injection", () => {
 							}
 						},
 					},
-				});
-		};
+				],
+				globals: [],
+			},
+		});
 
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 

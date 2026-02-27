@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { extractAppServices } from "#questpie/server/config/app-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import type {
 	ResetSeedsOptions,
@@ -109,7 +110,11 @@ export class SeedRunner {
 
 		this.log(`🌱 Running ${pending.length} seed(s)...`);
 
-		const ctx = await this.app.createContext({ accessMode: "system" });
+		const reqCtx = await this.app.createContext({ accessMode: "system" });
+		const baseServices = extractAppServices(this.app, {
+			db: this.app.db,
+			session: (reqCtx as any).session,
+		});
 
 		for (const seed of pending) {
 			this.log(
@@ -118,10 +123,14 @@ export class SeedRunner {
 
 			try {
 				const seedCtx: SeedContext = {
-					app: this.app,
-					ctx,
+					...baseServices,
 					log: (msg: string) => this.log(`    ${msg}`),
-				};
+					createContext: (opts?: { locale?: string; accessMode?: "system" | "user" }) =>
+						this.app.createContext({
+							accessMode: opts?.accessMode ?? "system",
+							locale: opts?.locale,
+						}),
+				} as unknown as SeedContext;
 
 				await seed.run(seedCtx);
 
@@ -156,27 +165,34 @@ export class SeedRunner {
 	): Promise<void> {
 		this.log(`🔍 Validating ${pending.length} seed(s) (dry-run)...`);
 
-		const ctx = await this.app.createContext({ accessMode: "system" });
+		const reqCtx = await this.app.createContext({ accessMode: "system" });
 
 		// Use a sentinel error to force rollback
 		const ROLLBACK_SENTINEL = Symbol("validate-rollback");
 
 		try {
 			await (this.app.db as any).transaction(async (tx: any) => {
-				// Create a temporary app-like context with tx db
+				// Create a temporary context with tx db
 				// Note: We can't fully replace app.db inside a transaction,
 				// so validate mode has limitations — it validates the seed function
 				// doesn't throw, but some side effects (storage, email) won't be rolled back.
-				const txCtx = { ...ctx, db: tx };
+				const txServices = extractAppServices(this.app, {
+					db: tx,
+					session: (reqCtx as any).session,
+				});
 
 				for (const seed of pending) {
 					this.log(`  🔍 Validating seed: ${seed.id}`);
 
 					const seedCtx: SeedContext = {
-						app: this.app,
-						ctx: txCtx,
+						...txServices,
 						log: (msg: string) => this.log(`    ${msg}`),
-					};
+						createContext: (opts?: { locale?: string; accessMode?: "system" | "user" }) =>
+							this.app.createContext({
+								accessMode: opts?.accessMode ?? "system",
+								locale: opts?.locale,
+							}),
+					} as unknown as SeedContext;
 
 					await seed.run(seedCtx);
 					this.log(`  ✅ Seed valid: ${seed.id}`);
@@ -237,16 +253,24 @@ export class SeedRunner {
 
 		this.log(`🔄 Undoing ${toUndo.length} seed(s)...`);
 
-		const ctx = await this.app.createContext({ accessMode: "system" });
+		const reqCtx = await this.app.createContext({ accessMode: "system" });
+		const baseServices = extractAppServices(this.app, {
+			db: this.app.db,
+			session: (reqCtx as any).session,
+		});
 
 		for (const seed of toUndo) {
 			this.log(`  🔄 Undoing seed: ${seed.id}`);
 			try {
 				const seedCtx: SeedContext = {
-					app: this.app,
-					ctx,
+					...baseServices,
 					log: (msg: string) => this.log(`    ${msg}`),
-				};
+					createContext: (opts?: { locale?: string; accessMode?: "system" | "user" }) =>
+						this.app.createContext({
+							accessMode: opts?.accessMode ?? "system",
+							locale: opts?.locale,
+						}),
+				} as unknown as SeedContext;
 
 				await seed.undo?.(seedCtx);
 

@@ -1,0 +1,195 @@
+---
+title: Functions
+description: Typed server functions for custom business logic beyond CRUD
+---
+
+# Functions
+
+Functions are typed server endpoints for custom business logic that doesn't fit plain CRUD operations — booking workflows, analytics aggregation, external API integrations, multi-step domain logic.
+
+## Why Functions Exist
+
+Collections handle structured CRUD. But many operations are domain-specific: "create a booking" involves checking availability, creating a user, inserting an appointment, and queuing a confirmation email. Functions give you a typed, schema-validated endpoint for this kind of orchestration.
+
+## File Convention
+
+Each function lives in its own file under the `functions/` directory:
+
+```text
+src/questpie/server/
+├── functions/
+│   ├── create-booking.ts          → client.functions.createBooking(...)
+│   ├── get-active-barbers.ts      → client.functions.getActiveBarbers(...)
+│   ├── get-available-time-slots.ts
+│   └── get-revenue-stats.ts
+├── collections/
+├── questpie.config.ts
+└── modules.ts
+```
+
+Files are auto-discovered by codegen. The filename (kebab-case) is converted to camelCase for the function name.
+
+## Basic Example
+
+```ts
+// functions/get-active-barbers.ts
+import { fn } from "questpie";
+
+export default fn({
+  handler: async ({ collections }) => {
+    return collections.barbers.find({
+      where: { isActive: true },
+    });
+  },
+});
+```
+
+A function with no `schema` accepts no input. The `handler` receives the full `AppContext`.
+
+## With Schema Validation
+
+```ts
+// functions/create-booking.ts
+import { fn } from "questpie";
+import { z } from "zod";
+
+export default fn({
+  schema: z.object({
+    barberId: z.string(),
+    serviceId: z.string(),
+    scheduledAt: z.string().datetime(),
+    customerName: z.string().min(2),
+    customerEmail: z.string().email(),
+    notes: z.string().optional(),
+  }),
+  handler: async ({ input, collections }) => {
+    const service = await collections.services.findOne({
+      where: { id: input.serviceId },
+    });
+    if (!service) throw new Error("Service not found");
+
+    const appointment = await collections.appointments.create({
+      barber: input.barberId,
+      service: input.serviceId,
+      scheduledAt: new Date(input.scheduledAt),
+      status: "pending",
+      notes: input.notes || null,
+    });
+
+    return {
+      success: true,
+      appointmentId: appointment.id,
+    };
+  },
+});
+```
+
+The `schema` is validated automatically before the handler runs. `input` is typed from the schema.
+
+## Access Control
+
+Functions support an `access` callback to restrict who can call them:
+
+```ts
+// functions/get-revenue-stats.ts
+import { fn } from "questpie";
+import { z } from "zod";
+
+export default fn({
+  schema: z.object({
+    period: z.enum(["day", "week", "month"]),
+  }),
+  handler: async ({ input, collections }) => {
+    const appointments = await collections.appointments.find({
+      where: {
+        scheduledAt: { gte: getStartDate(input.period) },
+      },
+    });
+    return { count: appointments.docs.length };
+  },
+  access: ({ session }) => !!session,
+});
+```
+
+Access rules work the same way as collection access — return `true`, `false`, or throw an error.
+
+## Handler Context
+
+The handler receives the full `AppContext` plus `input`:
+
+```ts
+handler: async ({
+  input,        // Validated input from schema
+  collections,  // Typed collection CRUD APIs
+  globals,      // Typed global CRUD APIs
+  db,           // Drizzle database client
+  session,      // Auth session (user + session data)
+  queue,        // Typed job queue
+  email,        // Typed email service
+  kv,           // Key-value store
+  logger,       // Logger
+  storage,      // File storage
+  // ...any custom services
+}) => {
+  // All properties are fully typed
+}
+```
+
+## Route Handler
+
+Functions are automatically included in the HTTP handler — no additional configuration needed:
+
+```ts
+import { createFetchHandler } from "questpie";
+import { app } from "#questpie";
+
+const handler = createFetchHandler(app, { basePath: "/api" });
+```
+
+## Client Usage
+
+Call functions from the client SDK with full type safety:
+
+```ts
+import { createClient } from "questpie/client";
+import type { AppConfig } from "#questpie";
+
+const client = createClient<AppConfig>({ baseUrl: "/api" });
+
+// Typed input and return value
+const result = await client.functions.createBooking({
+  barberId: "abc",
+  serviceId: "def",
+  scheduledAt: new Date().toISOString(),
+  customerName: "John",
+  customerEmail: "john@example.com",
+});
+
+// No-input functions
+const barbers = await client.functions.getActiveBarbers();
+```
+
+## When to Use Functions
+
+| Use Case | Example |
+|----------|---------|
+| Multi-step orchestration | Create booking: check availability → create user → insert appointment → queue email |
+| Analytics/aggregation | Revenue stats, appointment counts, dashboard data |
+| External API integration | Payment processing, third-party webhooks |
+| Complex validation | Business rules that span multiple collections |
+| Custom queries | Queries that don't map to standard CRUD filters |
+
+For simple CRUD operations, use the built-in collection API instead.
+
+## Common Mistakes
+
+- **Using functions for basic CRUD** — If you just need to create/read/update/delete records, use the collection CRUD API directly. Functions are for operations that go beyond single-collection CRUD.
+- **Not using schema validation** — Always define a `schema` for functions that accept input. This gives you runtime validation and TypeScript types for free.
+- **Importing the app object directly** — Destructure `collections`, `queue`, etc. from the handler context instead of importing the app instance.
+
+## Related Pages
+
+- [Collections](/docs/server/collections) — CRUD operations
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — How context typing works
+- [Queue & Jobs](/docs/infrastructure/queue-and-jobs) — Background job processing
+- [Client SDK](/docs/client/index) — Calling functions from the client

@@ -8,13 +8,14 @@
  * - _tree: Array of block nodes with id, type, and children
  * - _values: Record mapping block id to field values
  *
- * This field type is only available when using the `admin()` module.
+ * This field type is only available when using the `adminModule`.
  */
 
 import {
 	type BaseFieldConfig,
 	type ContextualOperators,
 	type FieldMetadataBase,
+	type KnownBlockNames,
 	field,
 	isNotNull,
 	isNull,
@@ -101,7 +102,7 @@ export interface BlocksFieldConfig extends BaseFieldConfig {
 	 * If specified, only these block types can be added.
 	 * Block types must be registered via `.blocks()` on the app builder.
 	 */
-	allowedBlocks?: string[];
+	allowedBlocks?: KnownBlockNames[];
 
 	/**
 	 * Minimum number of blocks required.
@@ -368,12 +369,12 @@ export const blocksField = field<BlocksFieldConfig, BlocksDocument>()({
 		return docSchema as z.ZodType<BlocksDocument>;
 	},
 
-	getOperators<TApp>() {
+	getOperators<TApp>(config: BlocksFieldConfig) {
 		return getBlocksOperators();
 	},
 
 	getMetadata(config: BlocksFieldConfig): FieldMetadataBase & {
-		allowedBlocks?: string[];
+		allowedBlocks?: KnownBlockNames[];
 		minBlocks?: number;
 		maxBlocks?: number;
 		allowNesting: boolean;

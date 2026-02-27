@@ -20,10 +20,10 @@ Available reactive behaviors:
 Use the form view (via admin module's `.form()`) to add reactive behaviors inline with field layout:
 
 ```ts
+import { collection } from "#questpie";
 import { slugify } from "./utils";
 
-export const pages = qb
-  .collection("pages")
+export const pages = collection("pages")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     slug: f.text({ required: true, input: "optional" }),

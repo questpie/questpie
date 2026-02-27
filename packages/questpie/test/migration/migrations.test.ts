@@ -10,8 +10,8 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
-import { builtinFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
+import { createApp, module } from "../../src/exports/index.js";
 import type { Migration } from "../../src/server/migration/types.js";
 import { MockKVAdapter } from "../utils/mocks/kv.adapter";
 import { MockLogger } from "../utils/mocks/logger.adapter";
@@ -27,20 +27,20 @@ describe("Migration System - Programmatic", () => {
 		// Create in-memory PGlite instance
 		pgClient = await createTestDb();
 
-		// Create questpie instance with fields
-		const q = questpie({ name: "test-app" }).fields(builtinFields);
-
-		// Define test collections using q.collection()
-		const posts = q.collection("posts").fields(({ f }) => ({
+		// Define test collections using standalone collection()
+		const posts = collection("posts").fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 			content: f.textarea(),
 			published: f.boolean({ default: false }),
 		}));
 
-		// Create app instance
-		const builder = q.collections({ posts });
+		// Create app instance using new API
+		const def = module({
+			name: "test-app",
+			collections: { posts },
+		});
 
-		app = builder.build({
+		app = createApp(def, {
 			app: { url: "http://localhost:3000" },
 			db: { pglite: pgClient },
 			email: { adapter: new MockMailAdapter() },
@@ -271,14 +271,13 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			"../../src/server/migration/generator.js"
 		);
 
-		const q = questpie({ name: "test-app" }).fields(builtinFields);
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 			content: f.textarea(),
 		}));
 
-		const builder = q.collections({ posts });
-		const app = builder.build({
+		const def = module({ name: "test-app", collections: { posts } });
+		const app = createApp(def, {
 			app: { url: "http://localhost:3000" },
 			db: { pglite: pgClient },
 			email: { adapter: new MockMailAdapter() },
@@ -312,13 +311,12 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			"../../src/server/migration/generator.js"
 		);
 
-		const q = questpie({ name: "test-app" }).fields(builtinFields);
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 		}));
 
-		const builder = q.collections({ posts });
-		const app = builder.build({
+		const def = module({ name: "test-app", collections: { posts } });
+		const app = createApp(def, {
 			app: { url: "http://localhost:3000" },
 			db: { pglite: pgClient },
 			email: { adapter: new MockMailAdapter() },

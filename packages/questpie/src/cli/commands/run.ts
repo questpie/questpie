@@ -37,13 +37,18 @@ export async function runMigrationCommand(
 	const cmsConfig = await loadQuestpieConfig(resolvedConfigPath);
 	const app = cmsConfig.app;
 
-	// Get migrations from Questpie config (passed via .build())
-	const migrations: Migration[] = app.config.migrations?.migrations || [];
+	// Get migrations from Questpie config
+	// Supports both flat array (new codegen) and legacy nested format { migrations: [...] }
+	const migrations: Migration[] = (
+		Array.isArray(app.config.migrations)
+			? app.config.migrations
+			: app.config.migrations?.migrations
+	) || [];
 
 	if (migrations.length === 0) {
 		console.log("ℹ️  No migrations found");
 		console.log(
-			"\n💡 Tip: Make sure to import and add migrations via .build({ migrations: [...] })",
+			"\n💡 Tip: Place migration files in migrations/*.ts and run questpie generate",
 		);
 		return;
 	}

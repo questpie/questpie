@@ -1,25 +1,21 @@
 import type { z } from "zod";
-// Note: any types are intentional for composition flexibility.
-// Users should use typedApp<App>(), typedDb<App>(), and typedSession<App>() for type-safe access.
+import type { AppContext } from "#questpie/server/config/app-context.js";
 
 export type FunctionType = "query" | "mutation";
 
-export interface FunctionAccessContext<TApp = any> {
-	app: TApp;
-	session?: any | null;
-	db: any;
+export interface FunctionAccessContext extends AppContext {
 	locale?: string;
 	request?: Request;
 }
 
-export type FunctionAccessRule<TApp = any> =
+export type FunctionAccessRule =
 	| boolean
-	| ((ctx: FunctionAccessContext<TApp>) => boolean | Promise<boolean>);
+	| ((ctx: FunctionAccessContext) => boolean | Promise<boolean>);
 
-export type FunctionAccess<TApp = any> =
-	| FunctionAccessRule<TApp>
+export type FunctionAccess =
+	| FunctionAccessRule
 	| {
-			execute?: FunctionAccessRule<TApp>;
+			execute?: FunctionAccessRule;
 	  };
 
 // ============================================================================
@@ -30,100 +26,54 @@ export type FunctionAccess<TApp = any> =
  * Context for JSON function handlers.
  *
  * @template TInput - Input type (inferred from schema)
- * @template TApp - The app app type (defaults to any)
  *
  * @example
  * ```ts
- * import { typedApp, typedSession } from "questpie";
- * import type { App } from "./questpie";
- *
  * // Pattern 1: With outputSchema (recommended)
  * const getStats = q.fn({
  *   schema: z.object({ period: z.string() }),
  *   outputSchema: z.array(statsSchema),
  *   handler: async ({ input, session }) => {
- *     const sess = typedSession<App>(session);
- *     if (!sess) throw new Error('Unauthorized');
- *     // Return type inferred from outputSchema
+ *     if (!session) throw new Error('Unauthorized');
  *     return [...];
  *   }
  * });
  *
- * // Pattern 2: With BaseCMS (for complex cases)
- * import type { InferBaseApp } from "questpie";
- * type BaseCMS = InferBaseApp<typeof baseInstance>;
- *
+ * // Pattern 2: Direct db access
  * const getOrders = q.fn({
- *   handler: async ({ app }) => {
- *     const app = typedApp<BaseCMS>(app);
- *     return app.api.collections.orders.find();
+ *   handler: async ({ db }) => {
+ *     return db.select().from(orders);
  *   }
  * });
  * ```
  */
-export interface FunctionHandlerArgs<TInput = any, TApp = any> {
+export interface FunctionHandlerArgs<TInput = any> extends AppContext {
 	/** Validated input data */
 	input: TInput;
-	/** app instance - use typedApp<App>(app) for type-safe access */
-	app: TApp;
-	/**
-	 * Auth session (user + session) from Better Auth.
-	 * Use typedSession<App>(session) for type-safe access.
-	 * - undefined = session not resolved
-	 * - null = explicitly unauthenticated
-	 * - object = authenticated
-	 */
-	session?: any | null;
 	/** Current locale */
 	locale?: string;
-	/**
-	 * Database client (may be transaction).
-	 * Use typedDb<App>(db) for type-safe access.
-	 */
-	db: any;
 }
 
 /**
  * Context for raw function handlers.
  *
- * @template TApp - The app app type (defaults to any)
- *
  * @example
  * ```ts
- * import { typedApp } from "questpie";
- * import type { App } from "./questpie";
- *
  * const webhook = q.fn({
  *   mode: 'raw',
- *   handler: async ({ request, app }) => {
- *     const app = typedApp<App>(app);
+ *   handler: async ({ request, queue }) => {
  *     const body = await request.json();
- *     await app.queue.processWebhook.publish(body);
+ *     await queue.processWebhook.publish(body);
  *     return new Response('OK', { status: 200 });
  *   }
  * })
  * ```
  */
-export interface RawFunctionHandlerArgs<TApp = any> {
+export interface RawFunctionHandlerArgs extends AppContext {
 	/** Raw request object */
 	request: Request;
-	/** app instance - use typedApp<App>(app) for type-safe access */
-	app: TApp;
-	/**
-	 * Auth session (user + session) from Better Auth.
-	 * Use typedSession<App>(session) for type-safe access.
-	 * - undefined = session not resolved
-	 * - null = explicitly unauthenticated
-	 * - object = authenticated
-	 */
-	session?: any | null;
 	/** Current locale */
 	locale?: string;
-	/**
-	 * Database client (may be transaction).
-	 * Use typedDb<App>(db) for type-safe access.
-	 */
-	db: any;
 }
 
 // ============================================================================
@@ -135,58 +85,55 @@ export interface RawFunctionHandlerArgs<TApp = any> {
  *
  * @template TInput - Input type (inferred from schema)
  * @template TOutput - Output type (inferred from outputSchema or handler return)
- * @template TApp - The app app type (defaults to any from module augmentation)
  *
  * @example
  * ```ts
  * const getStats = q.fn({
  *   schema: z.object({ period: z.string() }),
- *   handler: async ({ input, app }) => {
- *     return app.api.collections.orders.find({
- *       where: { createdAt: { gte: input.period } }
- *     })
+ *   handler: async ({ input, db }) => {
+ *     return db.select().from(orders).where(
+ *       gte(orders.createdAt, input.period)
+ *     );
  *   }
  * })
  * ```
  */
-export type JsonFunctionDefinition<TInput = any, TOutput = any, TApp = any> = {
+export type JsonFunctionDefinition<TInput = any, TOutput = any> = {
 	mode?: "json";
 	type?: FunctionType;
-	access?: FunctionAccess<TApp>;
+	access?: FunctionAccess;
 	schema: z.ZodSchema<TInput>;
 	outputSchema?: z.ZodSchema<TOutput>;
 	handler: (
-		args: FunctionHandlerArgs<TInput, TApp>,
+		args: FunctionHandlerArgs<TInput>,
 	) => TOutput | Promise<TOutput>;
 };
 
 /**
  * Raw function definition for direct request/response handling.
  *
- * @template TApp - The app app type (defaults to any from module augmentation)
- *
  * @example
  * ```ts
  * const webhook = q.fn({
  *   mode: 'raw',
- *   handler: async ({ request, app }) => {
+ *   handler: async ({ request, queue }) => {
  *     const body = await request.json()
- *     await app.queue.processWebhook.publish(body)
+ *     await queue.processWebhook.publish(body)
  *     return new Response('OK', { status: 200 })
  *   }
  * })
  * ```
  */
-export type RawFunctionDefinition<TApp = any> = {
+export type RawFunctionDefinition = {
 	mode: "raw";
 	type?: FunctionType;
-	access?: FunctionAccess<TApp>;
-	handler: (args: RawFunctionHandlerArgs<TApp>) => Response | Promise<Response>;
+	access?: FunctionAccess;
+	handler: (args: RawFunctionHandlerArgs) => Response | Promise<Response>;
 };
 
-export type FunctionDefinition<TInput = any, TOutput = any, TApp = any> =
-	| JsonFunctionDefinition<TInput, TOutput, TApp>
-	| RawFunctionDefinition<TApp>;
+export type FunctionDefinition<TInput = any, TOutput = any> =
+	| JsonFunctionDefinition<TInput, TOutput>
+	| RawFunctionDefinition;
 
 export type FunctionsMap = Record<string, FunctionDefinition>;
 export type JsonFunctionsMap = Record<string, JsonFunctionDefinition<any, any>>;
@@ -225,6 +172,6 @@ export type ExtractJsonFunctions<T extends FunctionsMap> = {
  * };
  * ```
  */
-export type FunctionsTree<TApp = any> = {
-	[key: string]: FunctionDefinition<any, any, TApp> | FunctionsTree<TApp>;
+export type FunctionsTree = {
+	[key: string]: FunctionDefinition<any, any> | FunctionsTree;
 };

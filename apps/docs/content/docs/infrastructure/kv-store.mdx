@@ -18,9 +18,11 @@ Many API operations benefit from short-lived caching — expensive query results
 Works out of the box — no configuration needed:
 
 ```ts
-.build({
-  // kv not specified → uses MemoryKVAdapter
-})
+// No kv config needed — uses MemoryKVAdapter by default
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
+});
 ```
 
 ### Redis
@@ -28,16 +30,17 @@ Works out of the box — no configuration needed:
 For production with multiple processes or servers:
 
 ```ts
-import { IORedisKVAdapter } from "questpie";
+import { runtimeConfig, IORedisKVAdapter } from "questpie";
 import Redis from "ioredis";
 
-.build({
-  // ...
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
   kv: {
     adapter: new IORedisKVAdapter(new Redis(process.env.REDIS_URL)),
     defaultTtl: 300, // 5 minutes
   },
-})
+});
 ```
 
 ## Basic Operations
@@ -90,33 +93,28 @@ await adapter.invalidateByTag("posts");
 await adapter.invalidateByTags(["posts", "homepage"]);
 ```
 
-## Using KV in Hooks and RPC
+## Using KV in Hooks and Functions
 
-Access the KV service through the app instance:
+Access the KV service directly from handler context:
 
 ```ts
-import { getApp } from "questpie";
-
 // In a hook
 .hooks({
-  afterChange: async ({ app, data }) => {
-    const app = getApp(app);
+  afterChange: async ({ data, kv }) => {
     // Invalidate cached data when record changes
-    await app.kv.delete(`settings-cache`);
+    await kv.delete(`settings-cache`);
   },
 })
 
-// In an RPC handler
-handler: async ({ app }) => {
-  const app = getApp(app);
-
+// In a function handler
+handler: async ({ kv, collections }) => {
   // Check cache first
-  const cached = await app.kv.get<number>("stats:total-posts");
+  const cached = await kv.get<number>("stats:total-posts");
   if (cached !== null) return { count: cached };
 
   // Compute and cache
-  const result = await app.api.collections.posts.count({});
-  await app.kv.set("stats:total-posts", result, 60);
+  const result = await collections.posts.count({});
+  await kv.set("stats:total-posts", result, 60);
   return { count: result };
 }
 ```

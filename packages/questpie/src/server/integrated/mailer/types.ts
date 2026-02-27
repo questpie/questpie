@@ -1,5 +1,3 @@
-import type { ReactElement } from "react";
-
 /**
  * Base mail options interface
  */
@@ -16,17 +14,16 @@ export type MailOptions = {
 	}>;
 	headers?: Record<string, string>;
 	replyTo?: string;
-} & (
-	| { react: ReactElement; text?: never; html?: never }
-	| { text?: string; html?: string; react?: never }
-);
+	text?: string;
+	html?: string;
+};
 
 /**
- * Serializable mail options (after React rendering)
+ * Serializable mail options (after rendering)
  */
 export type SerializableMailOptions = Omit<
 	MailOptions,
-	"react" | "text" | "html"
+	"text" | "html"
 > & {
 	text: string;
 	html: string;

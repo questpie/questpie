@@ -8,7 +8,7 @@
  */
 
 import { watch } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { adminCodegenPlugin, runCodegen } from "../codegen/index.js";
 import type { CodegenPlugin } from "../codegen/types.js";
@@ -27,11 +27,57 @@ export interface GenerateOptions {
 }
 
 /**
+ * Resolve the entity root directory from a config file path.
+ *
+ * When `questpie.config.ts` lives at the project root and re-exports from
+ * a deeper server directory, codegen must follow the re-export to find entities.
+ *
+ * Supports two patterns:
+ *   1. `export { default } from "./src/questpie/server/questpie.config"` — re-export
+ *   2. Direct config (config file IS the entity root) — current behavior
+ *
+ * @returns { configPath, rootDir } — resolved inner config path and entity root dir
+ */
+export async function resolveEntityRoot(
+	configPath: string,
+): Promise<{ configPath: string; rootDir: string }> {
+	let content: string;
+	try {
+		content = await readFile(configPath, "utf-8");
+	} catch {
+		return { configPath, rootDir: dirname(configPath) };
+	}
+
+	// Detect re-export pattern: export { default } from "..."
+	const reExportMatch = content.match(
+		/^\s*export\s*\{\s*default\s*\}\s*from\s*["']([^"']+)["']/m,
+	);
+	if (!reExportMatch) {
+		return { configPath, rootDir: dirname(configPath) };
+	}
+
+	// Resolve the inner config path
+	const innerRaw = resolve(dirname(configPath), reExportMatch[1]);
+	// Try with and without .ts extension
+	for (const candidate of [innerRaw, `${innerRaw}.ts`, `${innerRaw}.mts`]) {
+		try {
+			await stat(candidate);
+			return { configPath: candidate, rootDir: dirname(candidate) };
+		} catch {
+			// try next
+		}
+	}
+
+	// Re-export target not found — fall back to config dir
+	return { configPath, rootDir: dirname(configPath) };
+}
+
+/**
  * Run codegen once — produces .generated/index.ts.
  */
 export async function generateCommand(options: GenerateOptions): Promise<void> {
-	const configPath = resolve(process.cwd(), options.configPath);
-	const rootDir = dirname(configPath);
+	const rawConfigPath = resolve(process.cwd(), options.configPath);
+	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
 	const outDir = join(rootDir, ".generated");
 
 	// Auto-detect plugins based on config contents
@@ -63,6 +109,8 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
 	if (d.functions.size > 0) counts.push(`${d.functions.size} function(s)`);
 	if (d.messages.size > 0) counts.push(`${d.messages.size} locale(s)`);
 	if (d.auth) counts.push("auth");
+	if (d.migrations.size > 0) counts.push(`${d.migrations.size} migration(s)`);
+	if (d.seeds.size > 0) counts.push(`${d.seeds.size} seed(s)`);
 	for (const [key, map] of d.custom) {
 		if (map.size > 0) counts.push(`${map.size} ${key}`);
 	}
@@ -116,8 +164,8 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		verbose: options.verbose,
 	});
 
-	const configPath = resolve(process.cwd(), options.configPath);
-	const rootDir = dirname(configPath);
+	const rawConfigPath = resolve(process.cwd(), options.configPath);
+	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
 	const outDir = join(rootDir, ".generated");
 	const plugins: CodegenPlugin[] = [adminCodegenPlugin()];
 
@@ -128,6 +176,8 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		"jobs",
 		"functions",
 		"messages",
+		"migrations",
+		"seeds",
 		"blocks",
 		"features",
 	];
@@ -234,6 +284,8 @@ function printDiscovered(d: {
 	jobs: Map<string, any>;
 	functions: Map<string, any>;
 	messages: Map<string, any>;
+	migrations: Map<string, any>;
+	seeds: Map<string, any>;
 	auth: any;
 	custom: Map<string, Map<string, any>>;
 }): void {
@@ -250,6 +302,8 @@ function printDiscovered(d: {
 	printMap("Jobs", d.jobs);
 	printMap("Functions", d.functions);
 	printMap("Messages", d.messages);
+	printMap("Migrations", d.migrations);
+	printMap("Seeds", d.seeds);
 	if (d.auth) {
 		console.log(`\n  Auth:`);
 		console.log(`    ${d.auth.source}`);

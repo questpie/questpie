@@ -1,24 +1,24 @@
-import type { Seed } from "questpie";
-import { richText, richTextFormatted, uploadAllImages } from "./helpers.js";
+import { seed } from "questpie";
+import { richText, richTextFormatted, uploadAllImages } from "./_helpers.js";
 
-export const demoDataSeed: Seed = {
+export default seed({
 	id: "demoData",
 	description:
 		"Demo barbershop data: services, barbers, reviews, and pages (EN + SK)",
 	category: "dev",
 	dependsOn: ["siteSettings"],
-	async run({ app, ctx, log }) {
-		const ctxEn = await app.createContext({
+	async run({ collections, createContext, log }) {
+		const ctxEn = await createContext({
 			accessMode: "system",
 			locale: "en",
 		});
-		const ctxSk = await app.createContext({
+		const ctxSk = await createContext({
 			accessMode: "system",
 			locale: "sk",
 		});
 
 		// Idempotency check
-		const existing = await app.api.collections.pages.find(
+		const existing = await collections.pages.find(
 			{ where: { slug: { eq: "home" } }, limit: 1 },
 			ctxEn,
 		);
@@ -31,13 +31,13 @@ export const demoDataSeed: Seed = {
 		// Upload images
 		// ================================================================
 		log("Uploading images...");
-		const img = await uploadAllImages(app, ctxEn, log);
+		const img = await uploadAllImages(collections, ctxEn, log);
 
 		// ================================================================
 		// Services (EN + SK)
 		// ================================================================
 		log("Creating services...");
-		const haircut = await app.api.collections.services.create(
+		const haircut = await collections.services.create(
 			{
 				name: "Classic Haircut",
 				description:
@@ -49,7 +49,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		const fade = await app.api.collections.services.create(
+		const fade = await collections.services.create(
 			{
 				name: "Skin Fade",
 				description:
@@ -61,7 +61,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		const shave = await app.api.collections.services.create(
+		const shave = await collections.services.create(
 			{
 				name: "Hot Towel Shave",
 				description:
@@ -73,7 +73,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		const beardTrim = await app.api.collections.services.create(
+		const beardTrim = await collections.services.create(
 			{
 				name: "Beard Sculpting",
 				description:
@@ -85,7 +85,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		const kidscut = await app.api.collections.services.create(
+		const kidscut = await collections.services.create(
 			{
 				name: "Junior Cut",
 				description:
@@ -97,7 +97,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		const grooming = await app.api.collections.services.create(
+		const grooming = await collections.services.create(
 			{
 				name: "Full Grooming Package",
 				description:
@@ -150,7 +150,7 @@ export const demoDataSeed: Seed = {
 			},
 		];
 		for (const s of skServices) {
-			await app.api.collections.services.update(
+			await collections.services.update(
 				{
 					where: { id: s.id },
 					data: { name: s.name, description: s.description },
@@ -164,7 +164,7 @@ export const demoDataSeed: Seed = {
 		// Barbers (EN + SK)
 		// ================================================================
 		log("Creating barbers...");
-		const barber1 = await app.api.collections.barbers.create(
+		const barber1 = await collections.barbers.create(
 			{
 				name: "Lukáš Novák",
 				slug: "lukas-novak",
@@ -189,7 +189,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		const barber2 = await app.api.collections.barbers.create(
+		const barber2 = await collections.barbers.create(
 			{
 				name: "David Horváth",
 				slug: "david-horvath",
@@ -214,7 +214,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		const barber3 = await app.api.collections.barbers.create(
+		const barber3 = await collections.barbers.create(
 			{
 				name: "Martin Kráľ",
 				slug: "martin-kral",
@@ -239,7 +239,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		const barber4 = await app.api.collections.barbers.create(
+		const barber4 = await collections.barbers.create(
 			{
 				name: "Tomáš Sedlák",
 				slug: "tomas-sedlak",
@@ -314,7 +314,7 @@ export const demoDataSeed: Seed = {
 			},
 		];
 		for (const b of skBarbers) {
-			await app.api.collections.barbers.update(
+			await collections.barbers.update(
 				{
 					where: { id: b.id },
 					data: { bio: b.bio, specialties: b.specialties },
@@ -336,7 +336,7 @@ export const demoDataSeed: Seed = {
 		];
 		for (const [barber, services] of links) {
 			for (const service of services) {
-				await app.api.collections.barberServices.create(
+				await collections.barberServices.create(
 					{ barber: barber.id, service: service.id },
 					ctxEn,
 				);
@@ -447,8 +447,8 @@ export const demoDataSeed: Seed = {
 			},
 		];
 		for (const r of reviewsData) {
-			const review = await app.api.collections.reviews.create(r.en, ctxEn);
-			await app.api.collections.reviews.update(
+			const review = await collections.reviews.create(r.en, ctxEn);
+			await collections.reviews.update(
 				{ where: { id: review.id }, data: r.sk },
 				ctxSk,
 			);
@@ -461,7 +461,7 @@ export const demoDataSeed: Seed = {
 		log("Creating pages...");
 
 		// ── HOME PAGE ──────────────────────────────────────────────────
-		const homePage = await app.api.collections.pages.create(
+		const homePage = await collections.pages.create(
 			{
 				title: "Home",
 				slug: "home",
@@ -583,7 +583,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		await app.api.collections.pages.update(
+		await collections.pages.update(
 			{
 				where: { id: homePage.id },
 				data: {
@@ -709,7 +709,7 @@ export const demoDataSeed: Seed = {
 		log("Home page created (EN + SK)");
 
 		// ── SERVICES PAGE ──────────────────────────────────────────────
-		const servicesPage = await app.api.collections.pages.create(
+		const servicesPage = await collections.pages.create(
 			{
 				title: "Services",
 				slug: "services",
@@ -792,7 +792,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		await app.api.collections.pages.update(
+		await collections.pages.update(
 			{
 				where: { id: servicesPage.id },
 				data: {
@@ -877,7 +877,7 @@ export const demoDataSeed: Seed = {
 		log("Services page created (EN + SK)");
 
 		// ── ABOUT PAGE ─────────────────────────────────────────────────
-		const aboutPage = await app.api.collections.pages.create(
+		const aboutPage = await collections.pages.create(
 			{
 				title: "About Us",
 				slug: "about",
@@ -997,7 +997,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		await app.api.collections.pages.update(
+		await collections.pages.update(
 			{
 				where: { id: aboutPage.id },
 				data: {
@@ -1110,7 +1110,7 @@ export const demoDataSeed: Seed = {
 		log("About page created (EN + SK)");
 
 		// ── GALLERY PAGE ───────────────────────────────────────────────
-		const galleryPage = await app.api.collections.pages.create(
+		const galleryPage = await collections.pages.create(
 			{
 				title: "Gallery",
 				slug: "gallery",
@@ -1191,7 +1191,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		await app.api.collections.pages.update(
+		await collections.pages.update(
 			{
 				where: { id: galleryPage.id },
 				data: {
@@ -1276,7 +1276,7 @@ export const demoDataSeed: Seed = {
 		log("Gallery page created (EN + SK)");
 
 		// ── CONTACT PAGE ───────────────────────────────────────────────
-		const contactPage = await app.api.collections.pages.create(
+		const contactPage = await collections.pages.create(
 			{
 				title: "Contact",
 				slug: "contact",
@@ -1334,7 +1334,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		await app.api.collections.pages.update(
+		await collections.pages.update(
 			{
 				where: { id: contactPage.id },
 				data: {
@@ -1396,7 +1396,7 @@ export const demoDataSeed: Seed = {
 		log("Contact page created (EN + SK)");
 
 		// ── PRIVACY POLICY PAGE ─────────────────────────────────────────
-		const privacyPage = await app.api.collections.pages.create(
+		const privacyPage = await collections.pages.create(
 			{
 				title: "Privacy Policy",
 				slug: "privacy",
@@ -1534,7 +1534,7 @@ export const demoDataSeed: Seed = {
 			},
 			ctxEn,
 		);
-		await app.api.collections.pages.update(
+		await collections.pages.update(
 			{
 				where: { id: privacyPage.id },
 				data: {
@@ -1678,8 +1678,8 @@ export const demoDataSeed: Seed = {
 		log("All demo data seeded successfully");
 	},
 
-	async undo({ app, ctx, log }) {
-		const ctxEn = await app.createContext({
+	async undo({ collections, createContext, log }) {
+		const ctxEn = await createContext({
 			accessMode: "system",
 			locale: "en",
 		});
@@ -1688,26 +1688,26 @@ export const demoDataSeed: Seed = {
 		const cleanupSteps: [string, () => Promise<unknown>][] = [
 			[
 				"appointments",
-				() => app.api.collections.appointments.delete({ where: {} }, ctxEn),
+				() => collections.appointments.delete({ where: {} }, ctxEn),
 			],
 			[
 				"barberServices",
-				() => app.api.collections.barberServices.delete({ where: {} }, ctxEn),
+				() => collections.barberServices.delete({ where: {} }, ctxEn),
 			],
 			[
 				"reviews",
-				() => app.api.collections.reviews.delete({ where: {} }, ctxEn),
+				() => collections.reviews.delete({ where: {} }, ctxEn),
 			],
 			[
 				"barbers",
-				() => app.api.collections.barbers.delete({ where: {} }, ctxEn),
+				() => collections.barbers.delete({ where: {} }, ctxEn),
 			],
 			[
 				"services",
-				() => app.api.collections.services.delete({ where: {} }, ctxEn),
+				() => collections.services.delete({ where: {} }, ctxEn),
 			],
-			["pages", () => app.api.collections.pages.delete({ where: {} }, ctxEn)],
-			["assets", () => app.api.collections.assets.delete({ where: {} }, ctxEn)],
+			["pages", () => collections.pages.delete({ where: {} }, ctxEn)],
+			["assets", () => collections.assets.delete({ where: {} }, ctxEn)],
 		];
 
 		for (const [name, fn] of cleanupSteps) {
@@ -1721,4 +1721,4 @@ export const demoDataSeed: Seed = {
 
 		log("Demo data cleaned");
 	},
-};
+});

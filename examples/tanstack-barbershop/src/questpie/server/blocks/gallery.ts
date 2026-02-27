@@ -37,7 +37,7 @@ export const galleryBlock = block("gallery")
 		const ids = values.images || [];
 		if (ids.length === 0) return { imageUrls: {} };
 		// assets is a module-provided collection (not in RegisteredCollections)
-		const res = await (ctx.app as any).api.collections.assets.find({
+		const res = await ctx.collections.assets.find({
 			where: { id: { in: ids } },
 			limit: ids.length,
 		});

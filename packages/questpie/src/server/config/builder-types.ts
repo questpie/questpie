@@ -33,7 +33,7 @@ export type BuilderEmailTemplatesMap = Record<
 	string,
 	EmailTemplateDefinition<any, any>
 >;
-export type BuilderFunctionsMap = FunctionsTree<any>;
+export type BuilderFunctionsMap = FunctionsTree;
 export type BuilderFieldsMap = Record<string, any>; // Field factory functions
 export type BuilderMapValues<TMap extends Record<PropertyKey, any>> =
 	TMap[keyof TMap];
@@ -108,7 +108,7 @@ export interface QuestpieBuilderState<
 	 * 2. This `defaultAccess` (from builder chain / module)
 	 * 3. Framework fallback: require authenticated session (`!!session`)
 	 *
-	 * The `starter()` module sets this to require an authenticated session for all operations.
+	 * The `starterModule` sets this to require an authenticated session for all operations.
 	 */
 	defaultAccess?: CollectionAccess;
 

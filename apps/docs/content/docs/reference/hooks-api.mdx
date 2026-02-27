@@ -29,15 +29,22 @@ Each property accepts a single function or an array of functions. Arrays execute
 ## Hook Context
 
 ```ts
-interface HookContext<TData, TOriginal, TOperation, TApp> {
+interface HookContext<TData, TOriginal, TOperation> {
   data: TData;
   original?: TOriginal;
   operation: TOperation;
-  app: TApp;
   session?: Session | null;
   locale?: string;
   accessMode?: "system" | "user";
   db: Database;
+  collections: AppCollections;
+  globals: AppGlobals;
+  queue: QueueClient;
+  email: MailerService;
+  kv: KVStore;
+  logger: Logger;
+  storage: StorageService;
+  // ...any custom services
 }
 ```
 
@@ -46,21 +53,25 @@ interface HookContext<TData, TOriginal, TOperation, TApp> {
 | `data` | `TData` | Current record or input data (mutable in before* hooks) |
 | `original` | `TOriginal \| undefined` | Previous record state (update/delete only) |
 | `operation` | `string` | `"create"`, `"update"`, `"delete"`, or `"read"` |
-| `app` | `TApp` | app instance — use `getApp<App>(app)` or `getContext<App>(ctx)` |
 | `session` | `Session \| null` | Authenticated user session |
 | `locale` | `string` | Current locale |
 | `accessMode` | `string` | `"system"` or `"user"` |
-| `db` | `Database` | Database client — use `getDb<App>(db)` or `getContext<App>(ctx)` |
+| `db` | `Database` | Typed database client (may be a transaction) |
+| `collections` | `AppCollections` | Typed collection CRUD APIs |
+| `globals` | `AppGlobals` | Typed global CRUD APIs |
+| `queue` | `QueueClient` | Typed job queue |
+| `email` | `MailerService` | Typed email service |
 
-### Type-Safe Context Pattern
+All context properties are fully typed via `AppContext` augmentation — no manual type casting needed.
+
+### Usage
 
 ```ts
-import { getContext } from "questpie";
-import type { App } from '../app';
-
-afterChange: async (ctx) => {
-  const { app, db, session } = getContext<App>(ctx);
-  // app, db, session are strongly typed here
+afterChange: async ({ data, operation, queue, logger }) => {
+  logger.info("Record changed", { id: data.id });
+  if (operation === "create") {
+    await queue.sendNotification.publish({ id: data.id });
+  }
 }
 ```
 
@@ -118,7 +129,7 @@ afterChange: async (ctx) => {
 ### beforeOperation
 
 ```ts
-(ctx: { operation: string; app: TApp; session?: Session }) => void | Promise<void>
+(ctx: { operation: string; session?: Session; logger: Logger; ... }) => void | Promise<void>
 ```
 
 ### beforeValidate
@@ -176,7 +187,7 @@ Throw to prevent deletion.
 ### beforeTransition
 
 ```ts
-(ctx: { data: TSelect; fromStage: string; toStage: string; app: TApp; session?: Session; db: Database }) => void | Promise<void>
+(ctx: { data: TSelect; fromStage: string; toStage: string; session?: Session; db: Database; queue: QueueClient; ... }) => void | Promise<void>
 ```
 
 Runs before a workflow stage transition. Throw to abort the transition. Only fires for `transitionStage()` calls (requires `workflow` enabled).
@@ -184,7 +195,7 @@ Runs before a workflow stage transition. Throw to abort the transition. Only fir
 ### afterTransition
 
 ```ts
-(ctx: { data: TSelect; fromStage: string; toStage: string; app: TApp; session?: Session; db: Database }) => void | Promise<void>
+(ctx: { data: TSelect; fromStage: string; toStage: string; session?: Session; db: Database; queue: QueueClient; ... }) => void | Promise<void>
 ```
 
 Runs after a workflow stage transition completes. Use for notifications, logging, or side effects.

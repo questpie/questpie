@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import type { SearchAdapter } from "../../src/server/integrated/search/types.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 
@@ -29,8 +28,8 @@ function createSearchAdapterMock(): {
 		}),
 		index: async () => {},
 		remove: async () => {},
-		reindex: async (collection) => {
-			reindexedCollections.push(collection);
+		reindex: async (col) => {
+			reindexedCollections.push(col);
 		},
 		clear: async () => {},
 	};
@@ -40,12 +39,7 @@ function createSearchAdapterMock(): {
 
 describe("adapter route config", () => {
 	describe("search reindex access", () => {
-		const q = questpie({ name: "adapter-search-config-test" }).fields(
-			defaultFields,
-		);
-
-		const posts = q
-			.collection("posts")
+		const posts = collection("posts")
 			.fields(({ f }) => ({
 				title: f.text({ required: true }),
 			}))
@@ -54,15 +48,16 @@ describe("adapter route config", () => {
 				update: ({ session }) => (session?.user as any)?.role === "admin",
 			});
 
-		const module = q.collections({ posts });
-
-		let setup: Awaited<ReturnType<typeof buildMockApp<typeof module>>>;
+		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 		let reindexedCollections: string[];
 
 		beforeEach(async () => {
 			const searchMock = createSearchAdapterMock();
 			reindexedCollections = searchMock.reindexedCollections;
-			setup = await buildMockApp(module, { search: searchMock.adapter });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ search: searchMock.adapter },
+			);
 		});
 
 		afterEach(async () => {
@@ -94,8 +89,8 @@ describe("adapter route config", () => {
 					session: { id: "session-1" },
 				}),
 				search: {
-					reindexAccess: ({ collection, session }) =>
-						collection === "posts" && !!session,
+					reindexAccess: ({ collection: col, session }) =>
+						col === "posts" && !!session,
 				},
 			});
 
@@ -115,27 +110,20 @@ describe("adapter route config", () => {
 	});
 
 	describe("storage alias resolution", () => {
-		const q = questpie({ name: "adapter-storage-config-test" }).fields(
-			defaultFields,
-		);
-
-		const media = q
-			.collection("media")
+		const media = collection("media")
 			.fields(({ f }) => ({
 				alt: f.text(),
 			}))
 			.upload({ visibility: "public" });
 
-		const documents = q
-			.collection("documents")
+		const documents = collection("documents")
 			.fields(({ f }) => ({
 				title: f.text({ required: true }),
 			}))
 			.upload({ visibility: "public" });
 
 		it("auto-resolves /storage/files alias when exactly one upload collection exists", async () => {
-			const module = q.collections({ media });
-			const setup = await buildMockApp(module);
+			const setup = await buildMockApp({ collections: { media } });
 
 			try {
 				const handler = createFetchHandler(setup.app);
@@ -152,8 +140,7 @@ describe("adapter route config", () => {
 		});
 
 		it("returns bad request for /storage/files alias when multiple upload collections exist", async () => {
-			const module = q.collections({ media, documents });
-			const setup = await buildMockApp(module);
+			const setup = await buildMockApp({ collections: { media, documents } });
 
 			try {
 				const handler = createFetchHandler(setup.app);
@@ -175,8 +162,7 @@ describe("adapter route config", () => {
 		});
 
 		it("uses configured storage.collection for /storage/files alias", async () => {
-			const module = q.collections({ media, documents });
-			const setup = await buildMockApp(module);
+			const setup = await buildMockApp({ collections: { media, documents } });
 
 			try {
 				const handler = createFetchHandler(setup.app, {

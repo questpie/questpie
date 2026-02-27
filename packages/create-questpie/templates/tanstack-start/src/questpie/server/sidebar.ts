@@ -1,5 +1,10 @@
-export function configureSidebar({ s, c }: any) {
-	return s.sidebar({
+/**
+ * Sidebar — admin panel sidebar configuration.
+ */
+import { sidebar } from "#questpie";
+
+export default sidebar(({ s, c }) =>
+	s.sidebar({
 		sections: [
 			s.section({
 				id: "main",
@@ -16,5 +21,4 @@ export function configureSidebar({ s, c }: any) {
 				],
 			}),
 		],
-	});
-}
+	}));

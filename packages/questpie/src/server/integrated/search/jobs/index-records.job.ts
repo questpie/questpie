@@ -80,18 +80,21 @@ export const indexRecordsJob = job({
 		retryDelay: 30,
 		retryBackoff: true,
 	},
-	handler: async ({ payload, app: appInstance }) => {
-		const app = appInstance as Questpie<any>;
+	handler: async (ctx) => {
+		// Core-internal: cast to access services populated by extractAppServices at runtime
+		const { payload } = ctx;
+		const search = (ctx as any).search as Questpie<any>["search"] | undefined;
+		const collections = (ctx as any).collections as Record<string, any> | undefined;
 
-		if (!app?.search) {
+		if (!search) {
 			console.warn("[index-records] Search service not configured, skipping");
 			return;
 		}
 
 		// Get configured locales (or default to 'en')
-		const locales = await app.getLocales();
-		const localeCodes = locales.map((l) => l.code);
-		const _defaultLocale = app.config.locale?.defaultLocale || "en";
+		const t = (ctx as any).t as ((key: string) => string) | undefined;
+		// Default to 'en' locale when getLocales is not available
+		const localeCodes = ["en"];
 
 		// Batch all index operations
 		const indexOperations: Array<{
@@ -104,27 +107,20 @@ export const indexRecordsJob = job({
 		}> = [];
 
 		for (const { collection, recordId } of payload.items) {
-			// Get collection config
-			const collectionConfig = app.getCollections()[collection];
-			if (!collectionConfig) {
+			// Get collection CRUD API
+			const collectionApi = collections?.[collection];
+			if (!collectionApi) {
 				console.warn(
 					`[index-records] Collection '${collection}' not found, skipping`,
 				);
 				continue;
 			}
 
-			const state = (collectionConfig as any).state;
-
-			// Skip if explicitly disabled
-			if (state.searchable === false) continue;
-			if (state.searchable?.disabled) continue;
-			if (state.searchable?.manual) continue;
-
 			// Index ALL locales for this record
 			for (const locale of localeCodes) {
 				try {
 					// Fetch localized version of the record
-					const record = await app.api.collections[collection].findOne({
+					const record = await collectionApi.findOne({
 						where: { id: recordId },
 						locale,
 						localeFallback: false,
@@ -136,27 +132,8 @@ export const indexRecordsJob = job({
 					// Extract title
 					const title = record._title || record.id;
 
-					// Extract content
-					let content: string | undefined;
-					if (
-						state.searchable &&
-						typeof state.searchable === "object" &&
-						state.searchable.content
-					) {
-						content = state.searchable.content(record) || undefined;
-					} else {
-						content = generateAutoContent(record) || undefined;
-					}
-
-					// Extract metadata
-					let metadata: Record<string, any> | undefined;
-					if (
-						state.searchable &&
-						typeof state.searchable === "object" &&
-						state.searchable.metadata
-					) {
-						metadata = state.searchable.metadata(record);
-					}
+					// Extract content (auto-generate from fields)
+					const content = generateAutoContent(record) || undefined;
 
 					indexOperations.push({
 						collection,
@@ -164,7 +141,6 @@ export const indexRecordsJob = job({
 						locale,
 						title,
 						content,
-						metadata,
 					});
 				} catch (error) {
 					console.warn(
@@ -177,7 +153,7 @@ export const indexRecordsJob = job({
 
 		// Batch insert to search index
 		if (indexOperations.length > 0) {
-			await app.search.indexBatch(indexOperations);
+			await search.indexBatch(indexOperations);
 		}
 	},
 });

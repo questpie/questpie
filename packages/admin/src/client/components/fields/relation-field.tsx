@@ -8,14 +8,14 @@
  * Integrates with react-hook-form via Controller.
  */
 
-import type { Questpie } from "questpie";
+import type { QuestpieApp } from "questpie/client";
 import type * as React from "react";
 import { type Control, Controller, useFormContext } from "react-hook-form";
 import { useResolveText } from "../../i18n/hooks";
 import { RelationPicker, type RelationPickerProps } from "./relation-picker";
 import { RelationSelect, type RelationSelectProps } from "./relation-select";
 
-type RelationFieldProps<T extends Questpie<any>> = {
+type RelationFieldProps<T extends QuestpieApp> = {
 	/**
 	 * Field name (for react-hook-form)
 	 */
@@ -137,7 +137,7 @@ type RelationFieldProps<T extends Questpie<any>> = {
  * />
  * ```
  */
-export function RelationField<T extends Questpie<any>>({
+export function RelationField<T extends QuestpieApp>({
 	name,
 	targetCollection,
 	type,

@@ -5,7 +5,7 @@
  * Accepts the admin config to provide fully type-safe routing.
  */
 
-import type { Questpie } from "questpie";
+import type { QuestpieApp } from "questpie/client";
 import type { CollectionNames, GlobalNames, PageDefinition } from "../builder";
 import type { Admin } from "../builder/admin";
 
@@ -21,7 +21,7 @@ export type CollectionAction = "list" | "create" | "edit" | "view";
 /**
  * Parsed route information
  */
-export type ParsedRoute<TApp extends Questpie<any>> =
+export type ParsedRoute<TApp extends QuestpieApp> =
 	| { type: "dashboard" }
 	| {
 			type: "collection";
@@ -41,7 +41,7 @@ export type ParsedRoute<TApp extends Questpie<any>> =
 /**
  * Admin routes builder result
  */
-export interface AdminRoutes<TApp extends Questpie<any>> {
+export interface AdminRoutes<TApp extends QuestpieApp> {
 	/** Base path */
 	basePath: string;
 
@@ -139,7 +139,7 @@ export interface AdminRoutes<TApp extends Questpie<any>> {
  * // { type: 'collection', collection: 'posts', action: 'edit', id: '123' }
  * ```
  */
-export function createAdminRoutes<TApp extends Questpie<any>>(
+export function createAdminRoutes<TApp extends QuestpieApp>(
 	admin: Admin,
 	options: { basePath?: string } = {},
 ): AdminRoutes<TApp> {
@@ -485,7 +485,7 @@ function parseGlobalRoute(
  * go.page('analytics')
  * ```
  */
-export function createNavigator<TApp extends Questpie<any>>(
+export function createNavigator<TApp extends QuestpieApp>(
 	routes: AdminRoutes<TApp>,
 	navigate: (path: string) => void,
 ) {

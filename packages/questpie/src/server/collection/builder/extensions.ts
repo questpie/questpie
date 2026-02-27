@@ -1,29 +1,4 @@
 /**
- * Extension interface for CollectionBuilder.
- *
- * Packages can augment this interface to add methods to CollectionBuilder
- * without causing type explosion. Methods should use `this` return type
- * and `FieldsOf<this>` for field-typed parameters.
- *
- * The key insight is that `FieldsOf<this>` is evaluated lazily - only when
- * the method is actually called on a specific builder instance, not when
- * types are being merged in QuestpieBuilder.
- *
- * @example
- * ```typescript
- * // In your package's augmentation file:
- * declare module "questpie" {
- *   interface CollectionBuilderExtensions {
- *     myMethod(config: MyConfig): this;
- *     myTypedMethod(fn: (ctx: { f: FieldsOf<this> }) => void): this;
- *   }
- * }
- * ```
- */
-// biome-ignore lint/suspicious/noEmptyInterface: This is an extension point for module augmentation
-export interface CollectionBuilderExtensions {}
-
-/**
  * Extract the state type from a CollectionBuilder instance.
  * Used for lazy type extraction in extension methods.
  *

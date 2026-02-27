@@ -63,7 +63,7 @@ export const fetchWidgetData = fn({
 	schema: fetchWidgetDataSchema,
 	outputSchema: z.unknown(),
 	handler: async (ctx) => {
-		const app = ctx.app as Questpie<any>;
+		const app = (ctx as any).app as Questpie<any>;
 		const state = (app as any).state || {};
 		const dashboard = state.dashboard;
 

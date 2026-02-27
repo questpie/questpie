@@ -46,7 +46,7 @@ type BlocksFieldProps = BaseFieldProps & BlocksFieldConfig;
  *
  * Renders the visual block editor for editing block content.
  */
-function BlocksField({
+export function BlocksField({
 	name,
 	value,
 	onChange,

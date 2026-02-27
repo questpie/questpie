@@ -3,9 +3,9 @@ import { ArrowLeftRight, Code2, Layers, Puzzle } from "lucide-react";
 const approaches = [
 	{
 		icon: Code2,
-		title: "Two Builders, One System",
+		title: "Convention + Codegen",
 		description:
-			"q() for backend schema and logic. qa() for admin UI configuration. Types flow automatically between them.",
+			"File conventions for backend. qa() for admin UI. Types flow automatically between them.",
 	},
 	{
 		icon: Layers,

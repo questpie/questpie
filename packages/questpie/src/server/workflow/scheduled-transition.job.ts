@@ -56,11 +56,14 @@ export const scheduledTransitionJob = job({
 		retryDelay: 30,
 		retryBackoff: true,
 	},
-	handler: async ({ payload, app: appInstance }) => {
-		const app = appInstance as Questpie<any>;
+	handler: async (ctx) => {
+		// Core-internal: cast to access services populated by extractAppServices at runtime
+		const { payload } = ctx;
+		const collections = (ctx as any).collections as Record<string, any> | undefined;
+		const globals = (ctx as any).globals as Record<string, any> | undefined;
 
 		if (payload.type === "collection") {
-			const crud = app.api.collections[payload.collection as any];
+			const crud = collections?.[payload.collection];
 			if (!crud) {
 				throw ApiError.notFound("Collection", payload.collection);
 			}
@@ -69,12 +72,11 @@ export const scheduledTransitionJob = job({
 				{ accessMode: "system" },
 			);
 		} else {
-			const globalConfig = app.getGlobalConfig(payload.global as any);
-			if (!globalConfig) {
+			const globalCrud = globals?.[payload.global];
+			if (!globalCrud) {
 				throw ApiError.notFound("Global", payload.global);
 			}
-			const crud = globalConfig.generateCRUD(app.db, app);
-			await crud.transitionStage(
+			await globalCrud.transitionStage(
 				{ stage: payload.stage },
 				{ accessMode: "system" },
 			);

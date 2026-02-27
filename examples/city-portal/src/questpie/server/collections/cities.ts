@@ -5,7 +5,7 @@
  */
 
 import { uniqueIndex } from "drizzle-orm/pg-core";
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export default collection("cities")
 	.fields(({ f }) => ({

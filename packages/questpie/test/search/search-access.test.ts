@@ -13,8 +13,7 @@ import {
 	setDefaultTimeout,
 } from "bun:test";
 import { sql } from "drizzle-orm";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import {
 	createPostgresSearchAdapter,
 	type PostgresSearchAdapter,
@@ -25,11 +24,7 @@ import { runTestDbMigrations } from "../utils/test-db";
 
 setDefaultTimeout(30000);
 
-// Create questpie builder with default fields
-const q = questpie({ name: "search-access-test" }).fields(defaultFields);
-
-const posts = q
-	.collection("posts")
+const posts = collection("posts")
 	.fields(({ f }) => ({
 		title: f.text({ required: true, maxLength: 255 }),
 		content: f.textarea(),
@@ -40,20 +35,17 @@ const posts = q
 	})
 	.options({ timestamps: true });
 
-const testModule = q.collections({
-	posts,
-});
-
 describe("Search Access Filtering", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	let adapter: PostgresSearchAdapter;
 
 	beforeEach(async () => {
 		adapter = createPostgresSearchAdapter();
 
-		setup = await buildMockApp(testModule, {
-			search: adapter,
-		});
+		setup = await buildMockApp(
+			{ collections: { posts } },
+			{ search: adapter },
+		);
 
 		await runTestDbMigrations(setup.app);
 		await runSearchMigrations(setup.app.db);

@@ -129,16 +129,16 @@ export function SelectSingle<TValue extends string = string>({
 	});
 
 	// Merge static and dynamic options (immutable pattern for React Compiler)
-	const allOptions = useMemo(() => {
+	const allOptions = useMemo<SelectOption<TValue>[]>(() => {
 		if (!loadOptions) {
-			return flatStaticOptions;
+			return flatStaticOptions as SelectOption<TValue>[];
 		}
 		if (flatStaticOptions.length === 0) {
-			return dynamicOptions;
+			return dynamicOptions as SelectOption<TValue>[];
 		}
 		// Use reduce to build Map immutably - dynamic options override static
 		const mergedMap = [...flatStaticOptions, ...dynamicOptions].reduce(
-			(map, opt) => new Map(map).set(opt.value, opt),
+			(map, opt) => new Map(map).set(opt.value as TValue, opt as SelectOption<TValue>),
 			new Map<TValue, SelectOption<TValue>>(),
 		);
 		return Array.from(mergedMap.values());

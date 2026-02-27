@@ -160,13 +160,6 @@ export class DrizzleMigrationGenerator {
 
 		writeFileSync(`${filePath}.ts`, migrationContent);
 
-		// Update index.ts
-		this.updateMigrationsIndex(
-			options.migrationDir,
-			fileName,
-			options.migrationName,
-		);
-
 		console.info(`📄 Generated migration: ${fileName}.ts`);
 		console.info(`⚡ Operations: ${operations.length} (embedded in migration)`);
 
@@ -176,152 +169,6 @@ export class DrizzleMigrationGenerator {
 			snapshot: newSnapshot,
 			skipped: false,
 		};
-	}
-
-	/**
-	 * Update or create the migrations index.ts file
-	 * If the file already exists and contains the migration, it won't be modified
-	 * Otherwise, the new migration is appended to preserve existing structure
-	 */
-	private updateMigrationsIndex(
-		migrationDir: string,
-		fileName: string,
-		migrationName: string,
-	): void {
-		const indexPath = join(migrationDir, "index.ts");
-
-		// Check if index.ts already exists
-		if (existsSync(indexPath)) {
-			const existingContent = readFileSync(indexPath, "utf8");
-
-			// Check if migration is already imported (by checking for the migration name)
-			if (existingContent.includes(migrationName)) {
-				// Migration already exists in index, no need to update
-				return;
-			}
-
-			// Parse existing content to append new migration
-			const updatedContent = this.appendMigrationToIndex(
-				existingContent,
-				fileName,
-				migrationName,
-			);
-			writeFileSync(indexPath, updatedContent);
-		} else {
-			// Create new index.ts from scratch
-			const indexContent = this.generateNewIndex(migrationDir);
-			writeFileSync(indexPath, indexContent);
-		}
-	}
-
-	/**
-	 * Append a new migration to existing index.ts content
-	 * Preserves existing formatting, imports, and export order
-	 */
-	private appendMigrationToIndex(
-		existingContent: string,
-		fileName: string,
-		migrationName: string,
-	): string {
-		// Generate the new import line
-		const newImport = `import { ${migrationName} } from "./${fileName}.js";`;
-
-		// Find where to insert the new import (after existing imports, before the export)
-		// Look for the last import statement
-		const importRegex = /^import .+ from .+;?\s*$/gm;
-		let lastImportMatch: RegExpExecArray | null = null;
-
-		for (const match of existingContent.matchAll(importRegex)) {
-			lastImportMatch = match;
-		}
-
-		let contentWithImport: string;
-		if (lastImportMatch) {
-			// Insert after the last import
-			const insertPos = lastImportMatch.index + lastImportMatch[0].length;
-			contentWithImport =
-				existingContent.slice(0, insertPos) +
-				"\n" +
-				newImport +
-				existingContent.slice(insertPos);
-		} else {
-			// No imports found, add at the beginning after type import
-			contentWithImport = existingContent.replace(
-				/(import type \{ Migration \} from .+;\n?)/,
-				`$1${newImport}\n`,
-			);
-		}
-
-		// Find and update the migrations array to include the new migration
-		// Match the migrations array pattern
-		const arrayRegex =
-			/(export const migrations:\s*Migration\[\]\s*=\s*\[)([\s\S]*?)(\];)/;
-		const arrayMatch = contentWithImport.match(arrayRegex);
-
-		if (arrayMatch) {
-			const [_fullMatch, arrayStart, arrayContent, arrayEnd] = arrayMatch;
-			const trimmedContent = arrayContent.trim();
-
-			// Detect indentation style from existing content
-			const indentMatch = arrayContent.match(/\n(\s+)/);
-			const indent = indentMatch ? indentMatch[1] : "\t";
-
-			let newArrayContent: string;
-			if (trimmedContent) {
-				// Add comma after last item if not present, then add new migration
-				const contentWithComma = trimmedContent.endsWith(",")
-					? trimmedContent
-					: `${trimmedContent},`;
-				newArrayContent = `\n${indent}${contentWithComma}\n${indent}${migrationName},\n`;
-			} else {
-				newArrayContent = `\n${indent}${migrationName},\n`;
-			}
-
-			contentWithImport = contentWithImport.replace(
-				arrayRegex,
-				`${arrayStart}${newArrayContent}${arrayEnd}`,
-			);
-		}
-
-		return contentWithImport;
-	}
-
-	/**
-	 * Generate a new index.ts from scratch by scanning migration files
-	 */
-	private generateNewIndex(migrationDir: string): string {
-		const { readdirSync } = require("node:fs");
-
-		// Get all migration files
-		const migrationFiles = readdirSync(migrationDir)
-			.filter((file: string) => file.endsWith(".ts") && file !== "index.ts")
-			.sort();
-
-		// Generate imports and exports
-		const imports: string[] = [];
-		const exports: string[] = [];
-
-		for (const file of migrationFiles) {
-			const baseName = file.replace(".ts", "");
-			// Extract migration variable name from file
-			const varMatch = baseName.match(/\d+_(.+)$/);
-			if (varMatch) {
-				const varName = this.toCamelCase(varMatch[1] || baseName);
-				const timestamp = baseName.match(/^(\d+)_/)?.[1] || "";
-				const migrationVarName = `${varName}${timestamp}`;
-
-				imports.push(`import { ${migrationVarName} } from "./${baseName}.js";`);
-				exports.push(migrationVarName);
-			}
-		}
-
-		return `import type { Migration } from "questpie";
-${imports.join("\n")}
-
-export const migrations: Migration[] = [
-	${exports.join(",\n\t")},
-];
-`;
 	}
 
 	private toCamelCase(str: string): string {
@@ -448,13 +295,14 @@ export const migrations: Migration[] = [
 				.join("\n\t\t");
 		};
 
-		return `import type { Migration, OperationSnapshot } from "questpie"
+		return `import { migration } from "questpie"
+import type { OperationSnapshot } from "questpie"
 import { sql } from "drizzle-orm"
 import snapshotJson from "./snapshots/${snapshotFileName}.json"
 
 const snapshot = snapshotJson as OperationSnapshot
 
-export const ${migrationName}: Migration = {
+export default migration({
 	id: "${migrationName}",
 	async up({ db }) {
 		${generateStatements(upSQL)}
@@ -463,7 +311,7 @@ export const ${migrationName}: Migration = {
 		${generateStatements(downSQL)}
 	},
 	snapshot,
-}
+})
 `;
 	}
 

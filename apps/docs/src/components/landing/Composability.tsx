@@ -9,29 +9,29 @@ const layers = [
 	{
 		icon: Box,
 		label: "Core",
-		api: "config()",
-		description: "Collections, globals, fields, jobs, auth — all type-safe.",
+		api: "collections/ functions/ jobs/",
+		description: "Drop files into convention directories. Collections, globals, functions, jobs — all discovered automatically.",
 	},
 	{
 		icon: Plug,
 		label: "Adapters",
-		api: "createApp()",
+		api: "runtimeConfig()",
 		description:
-			"Storage, queue, email, search, realtime — swap providers, keep your schema.",
+			"Storage, queue, email, search, realtime — swap any provider. Your business logic never changes.",
 	},
 	{
 		icon: Layers,
 		label: "Modules",
-		api: "modules",
+		api: "modules.ts",
 		description:
-			"Compose builders together. Admin module ships the full panel.",
+			"Compose pre-built modules. Admin ships a full panel. Audit adds logging. One array, unlimited capability.",
 	},
 	{
 		icon: Palette,
 		label: "Client",
 		api: "qa()",
 		description:
-			"Field renderers, views, widgets, components — all registries.",
+			"Field renderers, views, widgets, components — all registries. Your design system, our contracts.",
 	},
 ];
 

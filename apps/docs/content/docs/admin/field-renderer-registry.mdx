@@ -13,7 +13,7 @@ The server defines fields with semantic types (`f.text()`, `f.relation()`). The 
 
 ## Built-In Field Renderers
 
-`coreAdminModule` registers these field types:
+`adminModule` registers these field types:
 
 | Type ID | Form Component | Description |
 |---|---|---|
@@ -129,8 +129,8 @@ function MapPointCell({ value }) {
 ### 3. Register in the admin builder
 
 ```ts
-const admin = qa<App>()
-  .use(coreAdminModule)
+const admin = qa<AppConfig>()
+  .use(adminModule)
   .fields({
     mapPoint: {
       name: "mapPoint",

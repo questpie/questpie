@@ -4,18 +4,15 @@ import {
 	extractNestedLocalizationSchemas,
 } from "../../src/server/collection/crud/shared/field-extraction.js";
 import { splitByNestedSchema } from "../../src/server/collection/crud/shared/nested-i18n-split.js";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 
 /**
  * Unit tests for nested localization schema extraction and splitting.
  */
 
-const q = questpie({ name: "unit-test" }).fields(defaultFields);
-
 describe("extractNestedLocalizationSchema", () => {
 	it("returns null for non-localized object field", () => {
-		const collection = q.collection("test").fields(({ f }) => ({
+		const col = collection("test").fields(({ f }) => ({
 			profile: f.object({
 				fields: {
 					name: f.text({ required: true }),
@@ -24,13 +21,13 @@ describe("extractNestedLocalizationSchema", () => {
 			}),
 		}));
 
-		const fieldDef = collection.state.fieldDefinitions!.profile;
+		const fieldDef = col.state.fieldDefinitions!.profile;
 		const schema = extractNestedLocalizationSchema(fieldDef);
 		expect(schema).toBeNull();
 	});
 
 	it("extracts schema for object with localized nested field", () => {
-		const collection = q.collection("test").fields(({ f }) => ({
+		const col = collection("test").fields(({ f }) => ({
 			profile: f.object({
 				fields: {
 					name: f.text({ required: true }),
@@ -39,13 +36,13 @@ describe("extractNestedLocalizationSchema", () => {
 			}),
 		}));
 
-		const fieldDef = collection.state.fieldDefinitions!.profile;
+		const fieldDef = col.state.fieldDefinitions!.profile;
 		const schema = extractNestedLocalizationSchema(fieldDef);
 		expect(schema).toEqual({ description: true });
 	});
 
 	it("extracts schema for deeply nested localized fields", () => {
-		const collection = q.collection("test").fields(({ f }) => ({
+		const col = collection("test").fields(({ f }) => ({
 			workingHours: f.object({
 				fields: {
 					monday: f.object({
@@ -64,7 +61,7 @@ describe("extractNestedLocalizationSchema", () => {
 			}),
 		}));
 
-		const fieldDef = collection.state.fieldDefinitions!.workingHours;
+		const fieldDef = col.state.fieldDefinitions!.workingHours;
 		const schema = extractNestedLocalizationSchema(fieldDef);
 		expect(schema).toEqual({
 			monday: { note: true },
@@ -73,7 +70,7 @@ describe("extractNestedLocalizationSchema", () => {
 	});
 
 	it("extracts schema for array with localized item fields", () => {
-		const collection = q.collection("test").fields(({ f }) => ({
+		const col = collection("test").fields(({ f }) => ({
 			links: f.array({
 				of: f.object({
 					fields: {
@@ -84,7 +81,7 @@ describe("extractNestedLocalizationSchema", () => {
 			}),
 		}));
 
-		const fieldDef = collection.state.fieldDefinitions!.links;
+		const fieldDef = col.state.fieldDefinitions!.links;
 		const schema = extractNestedLocalizationSchema(fieldDef);
 		expect(schema).toEqual({
 			_item: { description: true },
@@ -92,7 +89,7 @@ describe("extractNestedLocalizationSchema", () => {
 	});
 
 	it("returns null for array without localized fields", () => {
-		const collection = q.collection("test").fields(({ f }) => ({
+		const col = collection("test").fields(({ f }) => ({
 			links: f.array({
 				of: f.object({
 					fields: {
@@ -103,13 +100,13 @@ describe("extractNestedLocalizationSchema", () => {
 			}),
 		}));
 
-		const fieldDef = collection.state.fieldDefinitions!.links;
+		const fieldDef = col.state.fieldDefinitions!.links;
 		const schema = extractNestedLocalizationSchema(fieldDef);
 		expect(schema).toBeNull();
 	});
 
 	it("extracts schema for mixed nested structure", () => {
-		const collection = q.collection("test").fields(({ f }) => ({
+		const col = collection("test").fields(({ f }) => ({
 			content: f.object({
 				fields: {
 					title: f.text({ localized: true }),
@@ -131,7 +128,7 @@ describe("extractNestedLocalizationSchema", () => {
 			}),
 		}));
 
-		const fieldDef = collection.state.fieldDefinitions!.content;
+		const fieldDef = col.state.fieldDefinitions!.content;
 		const schema = extractNestedLocalizationSchema(fieldDef);
 		expect(schema).toEqual({
 			title: true,
@@ -143,7 +140,7 @@ describe("extractNestedLocalizationSchema", () => {
 
 describe("extractNestedLocalizationSchemas", () => {
 	it("extracts schemas for all JSONB fields in collection", () => {
-		const collection = q.collection("test").fields(({ f }) => ({
+		const col = collection("test").fields(({ f }) => ({
 			name: f.text({ required: true }),
 			bio: f.text({ localized: true }), // Top-level localized - not nested
 			metadata: f.object({
@@ -163,7 +160,7 @@ describe("extractNestedLocalizationSchemas", () => {
 		}));
 
 		const schemas = extractNestedLocalizationSchemas(
-			collection.state.fieldDefinitions!,
+			col.state.fieldDefinitions!,
 		);
 
 		// bio is top-level localized, not nested - should not be in schemas
@@ -174,13 +171,13 @@ describe("extractNestedLocalizationSchemas", () => {
 	});
 
 	it("returns empty object for collection without nested localized fields", () => {
-		const collection = q.collection("simple").fields(({ f }) => ({
+		const col = collection("simple").fields(({ f }) => ({
 			name: f.text({ required: true }),
 			title: f.text({ localized: true }), // Top-level only
 		}));
 
 		const schemas = extractNestedLocalizationSchemas(
-			collection.state.fieldDefinitions!,
+			col.state.fieldDefinitions!,
 		);
 
 		expect(schemas).toEqual({});

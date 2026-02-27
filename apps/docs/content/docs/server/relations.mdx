@@ -96,9 +96,10 @@ For many-to-many relationships, you need a junction collection and `through` ref
 ### Step 1: Junction Collection
 
 ```ts
-// barber-services.ts — the junction
-export const barberServices = qb
-  .collection("barberServices")
+// collections/barber-services.ts — the junction
+import { collection } from "#questpie";
+
+export const barberServices = collection("barberServices")
   .fields(({ f }) => ({
     barber: f.relation({
       to: "barbers",
@@ -205,17 +206,19 @@ reviews → customer         (belongsTo user)
 Key excerpts:
 
 ```ts
-// Junction (barber-services.ts)
-export const barberServices = qb
-  .collection("barberServices")
+// collections/barber-services.ts — Junction
+import { collection } from "#questpie";
+
+export const barberServices = collection("barberServices")
   .fields(({ f }) => ({
     barber: f.relation({ to: "barbers", required: true, onDelete: "cascade" }),
     service: f.relation({ to: "services", required: true, onDelete: "cascade" }),
   }));
 
-// Appointments with multiple belongsTo
-export const appointments = qb
-  .collection("appointments")
+// collections/appointments.ts — Multiple belongsTo
+import { collection } from "#questpie";
+
+export const appointments = collection("appointments")
   .fields(({ f }) => ({
     customer: f.relation({ to: "user", required: true }),
     barber: f.relation({ to: "barbers", required: true }),

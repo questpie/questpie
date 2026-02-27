@@ -15,7 +15,7 @@
 		"versioning",
 		"localization",
 		"modules-and-extensions",
-		"rpc",
+		"functions",
 		"context-and-transactions",
 		"type-safe-contexts"
 	]

@@ -40,9 +40,9 @@ export default config({
 
 ```ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { App } from "../server/app";
+import type { AppConfig } from "#questpie";
 
-export const admin = qa<App>()
+export const admin = qa<AppConfig>()
   .use(adminModule);
 ```
 

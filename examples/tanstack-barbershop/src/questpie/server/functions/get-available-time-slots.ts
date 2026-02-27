@@ -7,17 +7,17 @@ export default fn({
 		barberId: z.string(),
 		serviceId: z.string(),
 	}),
-	handler: async ({ input, app }) => {
+	handler: async ({ input, collections }) => {
 		const { date, barberId, serviceId } = input;
 
 		const [barber, service] = await Promise.all([
-			app.api.collections.barbers
+			collections.barbers
 				.findOne({ where: { id: barberId } })
 				.catch((e: any) => {
 					console.log("Barber not found for ID:", barberId, e);
 					return null;
 				}),
-			app.api.collections.services
+			collections.services
 				.findOne({ where: { id: serviceId } })
 				.catch((e: any) => {
 					console.log("Service not found for ID:", serviceId, e);
@@ -56,7 +56,7 @@ export default fn({
 		const endOfDay = new Date(dateObj);
 		endOfDay.setHours(23, 59, 59, 999);
 
-		const appointments = await app.api.collections.appointments.find({
+		const appointments = await collections.appointments.find({
 			where: {
 				barber: barberId,
 				scheduledAt: {
@@ -76,7 +76,7 @@ export default fn({
 		const servicesMap = new Map<string, { duration: number }>();
 
 		if (serviceIds.length > 0) {
-			const relatedServices = await app.api.collections.services.find({
+			const relatedServices = await collections.services.find({
 				where: {
 					id: { in: serviceIds },
 				},

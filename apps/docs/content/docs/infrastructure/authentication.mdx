@@ -13,13 +13,14 @@ Instead of building auth from scratch, QUESTPIE integrates Better Auth with pre-
 
 ## Mental Model
 
+Auth is configured via the `auth.ts` convention file:
+
 ```text
-.auth({
+// src/questpie/server/auth.ts
+auth({
   emailAndPassword: { enabled: true },     ← login method
   socialProviders: { google: {...} },       ← OAuth
-  baseURL: "http://localhost:3000",         ← redirect URLs
-  basePath: "/api/auth",               ← auth API path
-  secret: "...",                           ← token signing
+  basePath: "/api/auth",                    ← auth API path
 })
 ```
 
@@ -28,19 +29,29 @@ Auth runs as part of the app fetch handler. The admin panel uses it for login/si
 ## Basic Setup
 
 ```ts
-export const app = q({ name: "my-app" })
-  .use(adminModule)
-  .collections({ ... })
-  .auth({
-    emailAndPassword: {
-      enabled: true,
-      requireEmailVerification: false,  // true in production
-    },
-    baseURL: process.env.APP_URL || "http://localhost:3000",
-    basePath: "/api/auth",
-    secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
-  })
-  .build({ ... });
+// src/questpie/server/auth.ts
+import { auth } from "#questpie";
+
+export default auth({
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: false,  // true in production
+  },
+  basePath: "/api/auth",
+});
+```
+
+The `baseURL` and `secret` are configured in `questpie.config.ts`:
+
+```ts
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
+
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL || "http://localhost:3000" },
+  secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
+});
 ```
 
 This gives you:
@@ -65,10 +76,13 @@ When auth is configured, these endpoints are available under your `basePath`:
 
 ## OAuth Providers
 
-Add social login by configuring providers:
+Add social login by configuring providers in `auth.ts`:
 
 ```ts
-.auth({
+// src/questpie/server/auth.ts
+import { auth } from "#questpie";
+
+export default auth({
   emailAndPassword: { enabled: true },
   socialProviders: {
     google: {
@@ -84,15 +98,13 @@ Add social login by configuring providers:
       clientSecret: process.env.DISCORD_CLIENT_SECRET!,
     },
   },
-  baseURL: process.env.APP_URL!,
   basePath: "/api/auth",
-  secret: process.env.BETTER_AUTH_SECRET!,
-})
+});
 ```
 
 ## Access Control Integration
 
-Auth sessions are available in hooks, access rules, and RPC handlers:
+Auth sessions are available in hooks, access rules, and function handlers:
 
 ```ts
 // In access rules
@@ -148,34 +160,34 @@ These are managed by Better Auth and accessible via `app.auth`.
 ## Barbershop Example
 
 ```ts
-.auth({
+// src/questpie/server/auth.ts
+import { auth } from "#questpie";
+
+export default auth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
   },
-  baseURL: process.env.APP_URL || "http://localhost:3000",
   basePath: "/api/auth",
-  secret: process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
-})
+});
 ```
 
 ## Advanced: Custom Auth Options
 
-You can pass additional Better Auth options using the `auth()` helper:
+You can pass additional Better Auth options in the `auth()` definition:
 
 ```ts
-import { auth } from "questpie";
+// src/questpie/server/auth.ts
+import { auth } from "#questpie";
 
-.auth(auth({
+export default auth({
   emailAndPassword: { enabled: true },
-  baseURL: process.env.APP_URL!,
   basePath: "/api/auth",
-  secret: process.env.BETTER_AUTH_SECRET!,
   plugins: [
     // additional Better Auth plugins
   ],
   // any other Better Auth options
-}))
+});
 ```
 
 ## Common Mistakes
@@ -189,5 +201,5 @@ import { auth } from "questpie";
 
 - [Access Control](/docs/server/access-control) — How auth integrates with CRUD security
 - [Hooks & Lifecycle](/docs/server/hooks-and-lifecycle) — Using session in hooks
-- [RPC](/docs/server/rpc) — Using session in RPC handlers
+- [Functions](/docs/server/functions) — Using session in function handlers
 - [Authentication Flows Guide](/docs/guides/authentication-flows) — Login, signup, OAuth patterns

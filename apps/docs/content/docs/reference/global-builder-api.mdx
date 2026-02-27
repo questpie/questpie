@@ -5,10 +5,12 @@ description: Global-level methods — singleton fields, hooks, access, versionin
 
 # Global Builder API
 
-`GlobalBuilder` defines a singleton document — a single record with no list view, only a form. Created via `q.global(name)`.
+`GlobalBuilder` defines a singleton document — a single record with no list view, only a form. Created via `global(name)` from `#questpie`.
 
 ```ts
-const siteSettings = q.global("siteSettings")
+import { global } from "#questpie";
+
+export const siteSettings = global("siteSettings")
   .fields(({ f }) => ({
     siteName: f.text({ required: true }),
     logo: f.upload(),
@@ -83,8 +85,8 @@ Register lifecycle hooks for the global.
 
 ```ts
 .hooks({
-  afterChange: async ({ data, app }) => {
-    await app.kv.delete("site-settings-cache");
+  afterChange: async ({ data, kv }) => {
+    await kv.delete("site-settings-cache");
   },
   afterRead: ({ data }) => {
     data.logoUrl = data.logo?.url;
@@ -147,7 +149,17 @@ Configure the edit form layout.
 
 ## Finalization
 
-Global builders are passed directly to `q.globals({ ... })` and finalized during top-level app `.build(...)`.
+Global builders are placed in the `globals/` directory and auto-discovered by codegen. Export the builder from each file:
+
+```ts
+// globals/site-settings.ts
+import { global } from "#questpie";
+
+export const siteSettings = global("siteSettings")
+  .fields(({ f }) => ({ ... }));
+```
+
+Run `questpie generate` to include them in the app entrypoint.
 
 ## Runtime
 

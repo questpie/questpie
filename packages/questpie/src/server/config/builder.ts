@@ -15,7 +15,6 @@ import type {
 	QuestpieBuilderState,
 	QuestpieRuntimeConfig,
 } from "#questpie/server/config/builder-types.js";
-import type { QuestpieBuilderExtensions } from "#questpie/server/config/extensions.js";
 import type { GlobalHooksInput } from "#questpie/server/config/global-hooks-types.js";
 import { Questpie } from "#questpie/server/config/questpie.js";
 import type {
@@ -427,12 +426,12 @@ export class QuestpieBuilder<
 	 * 2. `defaultAccess` from the builder chain (set here or via `.use()`)
 	 * 3. Framework fallback: require authenticated session (`!!session`)
 	 *
-	 * The `starter()` module sets this to require an authenticated session for all operations.
+	 * The `starterModule` sets this to require an authenticated session for all operations.
 	 * Override it to customize (e.g., public reads):
 	 *
 	 * @example
 	 * ```ts
-	 * // Require authentication for all operations (starter() default)
+	 * // Require authentication for all operations (starterModule default)
 	 * .defaultAccess({
 	 *   read: ({ session }) => !!session,
 	 *   create: ({ session }) => !!session,
@@ -482,8 +481,8 @@ export class QuestpieBuilder<
 	 * @example
 	 * ```ts
 	 * // questpie.config.ts
-	 * export default config({
-	 *   modules: [admin()],
+	 * export default runtimeConfig({
+	 *   modules: [adminModule],
 	 *   context: async ({ request, session, db }) => {
 	 *     const propertyId = request.headers.get('x-selected-property')
 	 *
@@ -921,21 +920,18 @@ export class QuestpieBuilder<
 	 * const welcomeEmail = q.email({
 	 *   name: 'welcome',
 	 *   schema: z.object({ name: z.string(), activationLink: z.string().url() }),
-	 *   render: ({ name, activationLink }) => (
-	 *     <div>
-	 *       <h1>Welcome, {name}!</h1>
-	 *       <a href={activationLink}>Activate</a>
-	 *     </div>
-	 *   ),
-	 *   subject: (ctx) => `Welcome, ${ctx.name}!`,
+	 *   handler: ({ input }) => ({
+	 *     subject: `Welcome, ${input.name}!`,
+	 *     html: `<h1>Welcome, ${input.name}!</h1><a href="${input.activationLink}">Activate</a>`,
+	 *   }),
 	 * });
 	 *
 	 * const app = q.emailTemplates({ welcome: welcomeEmail }).build({ ... });
 	 * ```
 	 */
-	email<TName extends string, TContext>(
-		definition: EmailTemplateDefinition<TContext, TName>,
-	): EmailTemplateDefinition<TContext, TName> {
+	email<TName extends string, TInput>(
+		definition: EmailTemplateDefinition<TInput, TName>,
+	): EmailTemplateDefinition<TInput, TName> {
 		return definition;
 	}
 
@@ -1004,23 +1000,10 @@ export class QuestpieBuilder<
 	}
 }
 
-// =============================================================================
-// Declaration Merging for Extensions
-// =============================================================================
-
-/**
- * Declaration merging: QuestpieBuilder implements QuestpieBuilderExtensions.
- *
- * This allows packages to augment QuestpieBuilderExtensions and have those
- * methods appear on QuestpieBuilder instances.
- */
-export interface QuestpieBuilder<TState extends QuestpieBuilderState>
-	extends QuestpieBuilderExtensions {}
-
 /**
  * Helper function to start building a Questpie instance
  *
- * Returns an empty builder - use `config({ modules: [starter()] })` to include
+ * Returns an empty builder - use `runtimeConfig({ modules: [starterModule] })` to include
  * auth collections and file upload support.
  *
  * @example
@@ -1034,10 +1017,10 @@ export interface QuestpieBuilder<TState extends QuestpieBuilderState>
  * @example
  * ```ts
  * // With starter module (auth + file uploads)
- * import { config, starter } from "questpie";
+ * import { runtimeConfig, starterModule } from "questpie";
  *
- * export default config({
- *   modules: [starter()],
+ * export default runtimeConfig({
+ *   modules: [starterModule],
  *   db: { url: '...' },
  *   storage: { driver: s3Driver(...) },
  * })

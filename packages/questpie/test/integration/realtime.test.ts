@@ -1,9 +1,9 @@
 // @ts-nocheck // TODO: Temporary until test utils are fully typed
 import { afterEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
 import {
 	createAdapterRoutes,
-	questpie,
+	collection,
+	global,
 	questpieRealtimeLogTable,
 	type RealtimeAdapter,
 	type RealtimeChangeEvent,
@@ -195,16 +195,15 @@ describe("realtime", () => {
 	describe("change logging", () => {
 		it("logs realtime changes for create/update/delete", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields(({ f }) => ({
+			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true, localized: true }),
 				slug: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({ posts }).locale({
+			const testModule = { collections: { posts }, locale: {
 				locales: [{ code: "en" }, { code: "sk" }],
 				defaultLocale: "en",
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -246,15 +245,14 @@ describe("realtime", () => {
 
 		it("logs bulk update/delete operations", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields(({ f }) => ({
+			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				slug: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				posts,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -290,15 +288,14 @@ describe("realtime", () => {
 
 		it("includes payload in realtime events", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields(({ f }) => ({
+			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				posts,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -333,15 +330,14 @@ describe("realtime", () => {
 	describe("WHERE filtering", () => {
 		it("only notifies subscribers with matching WHERE filter", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const messages = q.collection("messages").fields(({ f }) => ({
+			const messages = collection("messages").fields(({ f }) => ({
 				chatId: f.textarea({ required: true }),
 				content: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				messages,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -401,16 +397,15 @@ describe("realtime", () => {
 
 		it("handles complex WHERE filters with multiple fields", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields(({ f }) => ({
+			const posts = collection("posts").fields(({ f }) => ({
 				status: f.textarea({ required: true }),
 				authorId: f.textarea({ required: true }),
 				title: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				posts,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -462,14 +457,13 @@ describe("realtime", () => {
 
 		it("refreshes create events for complex OR filters", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields(({ f }) => ({
+			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 				authorId: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({ posts });
+			const testModule = { collections: { posts } };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -502,13 +496,12 @@ describe("realtime", () => {
 
 		it("conservatively refreshes create for complex filters", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields(({ f }) => ({
+			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({ posts });
+			const testModule = { collections: { posts } };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -541,15 +534,14 @@ describe("realtime", () => {
 
 		it("filters by boolean fields", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const tasks = q.collection("tasks").fields(({ f }) => ({
+			const tasks = collection("tasks").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				completed: f.boolean({ required: true, default: false }),
 			}));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				tasks,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -587,15 +579,14 @@ describe("realtime", () => {
 
 		it("filters by numeric fields", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const products = q.collection("products").fields(({ f }) => ({
+			const products = collection("products").fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				categoryId: f.number({ required: true }),
 			}));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				products,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -631,18 +622,15 @@ describe("realtime", () => {
 
 		it("supports wildcard collection subscriptions", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q
-				.collection("posts")
+			const posts = collection("posts")
 				.fields(({ f }) => ({ title: f.textarea({ required: true }) }));
-			const comments = q
-				.collection("comments")
+			const comments = collection("comments")
 				.fields(({ f }) => ({ content: f.textarea({ required: true }) }));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				posts,
 				comments,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -673,13 +661,12 @@ describe("realtime", () => {
 
 		it("re-sends snapshot when record leaves filter on update", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields(({ f }) => ({
+			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({ posts });
+			const testModule = { collections: { posts } };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -719,13 +706,12 @@ describe("realtime", () => {
 
 		it("re-sends snapshot for filtered subscriber on delete", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const posts = q.collection("posts").fields(({ f }) => ({
+			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				status: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({ posts });
+			const testModule = { collections: { posts } };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -768,12 +754,11 @@ describe("realtime", () => {
 	describe("WITH dependency tracking", () => {
 		it("notifies subscribers when related resource changes", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const users = q
-				.collection("users")
-				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
+			const users = collection("users")
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }))
+				.access({ read: true, create: true, update: true, delete: true });
 
-			const messages = q.collection("messages").fields(({ f }) => ({
+			const messages = collection("messages").fields(({ f }) => ({
 				chatId: f.textarea({ required: true }),
 				content: f.textarea({ required: true }),
 				user: f.relation({
@@ -781,19 +766,14 @@ describe("realtime", () => {
 					required: true,
 					relationName: "user",
 				}),
-			}));
+			})).access({ read: true, create: true, update: true, delete: true });
 
-			const testModule = q
-				.collections({
+			const testModule = {
+				collections: {
 					users,
 					messages,
-				})
-				.defaultAccess({
-					read: true,
-					create: true,
-					update: true,
-					delete: true,
-				});
+				},
+			};
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -844,12 +824,10 @@ describe("realtime", () => {
 
 		it("handles nested WITH relations (comments -> posts -> users)", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const users = q
-				.collection("users")
+			const users = collection("users")
 				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const posts = q.collection("posts").fields(({ f }) => ({
+			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 				user: f.relation({
 					to: "users",
@@ -858,7 +836,7 @@ describe("realtime", () => {
 				}),
 			}));
 
-			const comments = q.collection("comments").fields(({ f }) => ({
+			const comments = collection("comments").fields(({ f }) => ({
 				content: f.textarea({ required: true }),
 				post: f.relation({
 					to: "posts",
@@ -867,11 +845,11 @@ describe("realtime", () => {
 				}),
 			}));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				users,
 				posts,
 				comments,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -939,12 +917,10 @@ describe("realtime", () => {
 
 		it("service-level WITH dependency tracking", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const categories = q
-				.collection("categories")
+			const categories = collection("categories")
 				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const products = q.collection("products").fields(({ f }) => ({
+			const products = collection("products").fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				category: f.relation({
 					to: "categories",
@@ -953,10 +929,10 @@ describe("realtime", () => {
 				}),
 			}));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				categories,
 				products,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1006,21 +982,15 @@ describe("realtime", () => {
 	describe("global subscriptions", () => {
 		it("re-sends snapshots when global changes", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const settings = q
-				.global("settings")
-				.fields(({ f }) => ({ title: f.textarea() }));
+			const settings = global("settings")
+				.fields(({ f }) => ({ title: f.textarea() }))
+				.access({ read: true, update: true });
 
-			const testModule = q
-				.globals({
+			const testModule = {
+				globals: {
 					settings,
-				})
-				.defaultAccess({
-					read: true,
-					create: true,
-					update: true,
-					delete: true,
-				});
+				},
+			};
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1053,28 +1023,22 @@ describe("realtime", () => {
 
 		it("global subscriptions with WITH referencing collections", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const categories = q
-				.collection("categories")
-				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
+			const categories = collection("categories")
+				.fields(({ f }) => ({ name: f.textarea({ required: true }) }))
+				.access({ read: true, create: true, update: true, delete: true });
 
-			const settings = q.global("settings").fields(({ f }) => ({
+			const settings = global("settings").fields(({ f }) => ({
 				siteName: f.textarea(),
 				defaultCategory: f.relation({
 					to: "categories",
 					relationName: "defaultCategory",
 				}),
-			}));
+			})).access({ read: true, update: true });
 
-			const testModule = q
-				.collections({ categories })
-				.globals({ settings })
-				.defaultAccess({
-					read: true,
-					create: true,
-					update: true,
-					delete: true,
-				});
+			const testModule = {
+				collections: { categories },
+				globals: { settings },
+			};
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1133,12 +1097,10 @@ describe("realtime", () => {
 	describe("edge cases", () => {
 		it("restarts adapter after all subscribers disconnect", async () => {
 			const adapter = new LifecycleTrackingRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const items = q
-				.collection("items")
+			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const testModule = q.collections({ items });
+			const testModule = { collections: { items } };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1166,16 +1128,15 @@ describe("realtime", () => {
 
 		it("handles multiple subscribers with different filters", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const orders = q.collection("orders").fields(({ f }) => ({
+			const orders = collection("orders").fields(({ f }) => ({
 				status: f.textarea({ required: true }),
 				customerId: f.textarea({ required: true }),
 				total: f.number({ required: true }),
 			}));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				orders,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1237,14 +1198,12 @@ describe("realtime", () => {
 
 		it("properly cleans up subscriptions", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const items = q
-				.collection("items")
+			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				items,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1272,14 +1231,12 @@ describe("realtime", () => {
 
 		it("handles empty WHERE filter (matches all)", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const logs = q
-				.collection("logs")
+			const logs = collection("logs")
 				.fields(({ f }) => ({ message: f.textarea({ required: true }) }));
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				logs,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1304,13 +1261,12 @@ describe("realtime", () => {
 
 		it("scales filtered routing across many subscribers", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const messages = q.collection("messages").fields(({ f }) => ({
+			const messages = collection("messages").fields(({ f }) => ({
 				roomId: f.textarea({ required: true }),
 				content: f.textarea({ required: true }),
 			}));
 
-			const testModule = q.collections({ messages });
+			const testModule = { collections: { messages } };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1361,12 +1317,10 @@ describe("realtime", () => {
 
 		it("cleans up old realtime log rows with retentionDays", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const items = q
-				.collection("items")
+			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const testModule = q.collections({ items });
+			const testModule = { collections: { items } };
 
 			setup = await buildMockApp(testModule, {
 				realtime: { adapter, retentionDays: 1 },
@@ -1400,12 +1354,10 @@ describe("realtime", () => {
 
 		it("cleans up consumed realtime rows using min consumed seq", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const items = q
-				.collection("items")
+			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const testModule = q.collections({ items });
+			const testModule = { collections: { items } };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1460,9 +1412,7 @@ describe("realtime", () => {
 	describe("access control", () => {
 		it("should send error event when user lacks read permission", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const secrets = q
-				.collection("secrets")
+			const secrets = collection("secrets")
 				.fields(({ f }) => ({
 					content: f.textarea({ required: true }),
 					level: f.textarea({ required: true }),
@@ -1472,9 +1422,9 @@ describe("realtime", () => {
 					create: true,
 				});
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				secrets,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1517,9 +1467,7 @@ describe("realtime", () => {
 
 		it("should allow access for authorized users", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const secrets = q
-				.collection("secrets")
+			const secrets = collection("secrets")
 				.fields(({ f }) => ({
 					content: f.textarea({ required: true }),
 					level: f.textarea({ required: true }),
@@ -1529,9 +1477,9 @@ describe("realtime", () => {
 					create: true,
 				});
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				secrets,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1566,9 +1514,7 @@ describe("realtime", () => {
 
 		it("should filter payload fields based on field-level access", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const documents = q
-				.collection("documents")
+			const documents = collection("documents")
 				.fields(({ f }) => ({
 					title: f.textarea({ required: true }),
 					content: f.textarea({ required: true }),
@@ -1584,9 +1530,9 @@ describe("realtime", () => {
 					},
 				});
 
-			const testModule = q.collections({
+			const testModule = { collections: {
 				documents,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1627,9 +1573,7 @@ describe("realtime", () => {
 
 		it("should handle global access restrictions", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const config = q
-				.global("config")
+			const config = global("config")
 				.fields(({ f }) => ({
 					apiKey: f.textarea({ required: true }),
 					publicName: f.textarea({ required: true }),
@@ -1639,9 +1583,9 @@ describe("realtime", () => {
 					update: ({ session }) => (session?.user as any)?.role === "admin",
 				});
 
-			const testModule = q.globals({
+			const testModule = { globals: {
 				config,
-			});
+			} };
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1694,22 +1638,16 @@ describe("realtime", () => {
 	describe("E2E SSE streaming", () => {
 		it("should stream multiple snapshots on rapid updates", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const counters = q.collection("counters").fields(({ f }) => ({
+			const counters = collection("counters").fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				value: f.number({ required: true, default: 0 }),
-			}));
+			})).access({ read: true, create: true, update: true, delete: true });
 
-			const testModule = q
-				.collections({
+			const testModule = {
+				collections: {
 					counters,
-				})
-				.defaultAccess({
-					read: true,
-					create: true,
-					update: true,
-					delete: true,
-				});
+				},
+			};
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
@@ -1778,21 +1716,14 @@ describe("realtime", () => {
 
 		it("should handle client disconnection gracefully", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const q = questpie({ name: "realtime-test" }).fields(defaultFields);
-			const items = q
-				.collection("items")
+			const items = collection("items")
 				.fields(({ f }) => ({ name: f.textarea({ required: true }) }));
 
-			const testModule = q
-				.collections({
+			const testModule = {
+				collections: {
 					items,
-				})
-				.defaultAccess({
-					read: true,
-					create: true,
-					update: true,
-					delete: true,
-				});
+				},
+			};
 
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);

@@ -9,7 +9,7 @@ import {
 	type BlockCategoryConfig,
 	block,
 } from "@questpie/admin/server";
-import { typedApp, type Where } from "questpie";
+import type { Where } from "questpie";
 import type { App } from "@/questpie/server/.generated";
 import type _announcements from "@/questpie/server/collections/announcements";
 import type _documents from "@/questpie/server/collections/documents";
@@ -151,7 +151,7 @@ export const announcementBannerBlock = block("announcement-banner")
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const app = typedApp<App>(ctx.app);
+		const app = ctx.app as App;
 		let where: Where<typeof _announcements, App> = {};
 		if (!values.showExpired) {
 			where = {
@@ -441,7 +441,7 @@ export const latestNewsBlock = block("latest-news")
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const app = typedApp<App>(ctx.app);
+		const app = ctx.app as App;
 		let where: Where<typeof _news, App> = {};
 		if (values.category && values.category !== "all") {
 			where = {
@@ -481,7 +481,7 @@ export const contactsListBlock = block("contacts-list")
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const app = typedApp<App>(ctx.app);
+		const app = ctx.app as App;
 		const findOptions: any = {
 			orderBy: { order: "asc" },
 		};
@@ -529,7 +529,7 @@ export const documentsListBlock = block("documents-list")
 		}),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const app = typedApp<App>(ctx.app);
+		const app = ctx.app as App;
 		let where: Where<typeof _documents, App> = { isPublished: true };
 		if (values.category && values.category !== "all") {
 			where = { ...where, category: values.category };

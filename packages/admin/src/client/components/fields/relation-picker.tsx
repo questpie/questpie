@@ -14,7 +14,7 @@
 import { Icon } from "@iconify/react";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Questpie } from "questpie";
+import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
 import { toast } from "sonner";
 import { useAdminConfig } from "../../hooks/use-admin-config";
@@ -36,7 +36,7 @@ import {
 // Module-level constant for empty array to avoid recreating on each render
 const EMPTY_VALUE: string[] = [];
 
-export interface RelationPickerProps<_T extends Questpie<any>> {
+export interface RelationPickerProps<_T extends QuestpieApp> {
 	/**
 	 * Field name
 	 */
@@ -144,7 +144,7 @@ export interface RelationPickerProps<_T extends Questpie<any>> {
 	renderOption?: (item: any) => React.ReactNode;
 }
 
-export function RelationPicker<T extends Questpie<any>>({
+export function RelationPicker<T extends QuestpieApp>({
 	name,
 	value,
 	onChange,

@@ -16,6 +16,10 @@
 			"#questpie/*": ["./src/*"]
 		}
 	},
-	"include": ["src", "test/types"],
+	"include": [
+		"src",
+		"src/server/modules/starter/.generated/*.ts",
+		"test/types"
+	],
 	"exclude": ["node_modules", "dist"]
 }

@@ -1,15 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { ApiError } from "../../src/server/errors/index.js";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-const q = questpie({ name: "test-module" }).fields(defaultFields);
-
-const errorTest = q
-	.collection("error_test")
+const errorTest = collection("error_test")
 	.fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 		status: f.text({ required: true, maxLength: 50 }),
@@ -34,15 +30,11 @@ const errorTest = q
 		timestamps: true,
 	});
 
-const testModule = q.collections({
-	error_test: errorTest,
-});
-
 describe("error handling", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({ collections: { error_test: errorTest } });
 		await runTestDbMigrations(setup.app);
 	});
 

@@ -11,15 +11,12 @@ import type {
 	CollectionInsert,
 	CollectionSelect,
 } from "#questpie/server/collection/builder/collection.js";
-import { questpie } from "#questpie/server/config/builder.js";
-import { defaultFields } from "#questpie/server/fields/builtin/defaults.js";
-
-const q = questpie({ name: "test-module" }).fields(defaultFields);
+import { collection } from "#questpie/server/collection/builder/index.js";
 
 describe("TState Field Type Inference", () => {
 	test("basic field types are inferred correctly", () => {
 		// Test all field type combinations
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			// Standard field - required
 			title: f.text({ required: true, maxLength: 255 }),
 
@@ -61,7 +58,7 @@ describe("TState Field Type Inference", () => {
 	});
 
 	test("input types are correctly inferred", () => {
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			// required: true → input: string
 			title: f.text({ required: true }),
 
@@ -101,7 +98,7 @@ describe("TState Field Type Inference", () => {
 	});
 
 	test("output types are correctly inferred", () => {
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			// default → output: string
 			title: f.text({}),
 
@@ -119,7 +116,7 @@ describe("TState Field Type Inference", () => {
 	});
 
 	test("virtual fields have correct location", () => {
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			// Standard field
 			title: f.text({}),
 
@@ -148,7 +145,7 @@ describe("TState Field Type Inference", () => {
 	});
 
 	test("columns are null for virtual fields", () => {
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			title: f.text({}),
 			excerpt: f.text({ virtual: true }),
 		}));
@@ -170,7 +167,7 @@ describe("TState Field Type Inference", () => {
 
 describe("Collection Type Inference", () => {
 	test("CollectionSelect type works with field definitions", () => {
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			title: f.text({ required: true }),
 			content: f.text({ localized: true }),
 			excerpt: f.text({ virtual: true }),

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -36,11 +35,8 @@ import { runTestDbMigrations } from "../utils/test-db";
  * 3. Stores extracted values in i18n table _localized column
  */
 
-const q = questpie({ name: "schema-based-i18n-test" }).fields(defaultFields);
-
 // Collection with nested localized fields in object
-const barbers = q
-	.collection("barbers")
+const barbers = collection("barbers")
 	.fields(({ f }) => ({
 		name: f.text({ required: true, maxLength: 100 }),
 		// Top-level localized field (needed to create i18n table)
@@ -84,15 +80,11 @@ const barbers = q
 		timestamps: true,
 	});
 
-const testModule = q.collections({
-	barbers,
-});
-
 describe("schema-based nested localization", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({ collections: { barbers } });
 		await runTestDbMigrations(setup.app);
 	});
 

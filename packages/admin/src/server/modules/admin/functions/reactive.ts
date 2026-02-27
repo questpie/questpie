@@ -21,7 +21,7 @@ import { z } from "zod";
 /**
  * Get typed app from context.
  */
-function getApp(ctx: { app: unknown }): Questpie<any> {
+function getApp(ctx: any): Questpie<any> {
 	return ctx.app as Questpie<any>;
 }
 
@@ -530,10 +530,10 @@ export const batchReactive = fn({
 
 		// Build server context (req is not available in function handlers)
 		const serverCtx: ReactiveServerContext = {
-			db: ctx.db,
-			user: ctx.session?.user ?? null,
+			db: (ctx as any).db,
+			user: (ctx as any).session?.user ?? null,
 			req: new Request("http://localhost"), // Placeholder - not used in handlers
-			locale: ctx.locale ?? "en",
+			locale: (ctx as any).locale ?? "en",
 		};
 
 		const results: z.infer<typeof reactiveResultSchema>[] = [];
@@ -622,10 +622,10 @@ export const fieldOptions = fn({
 
 		// Build server context (req is not available in function handlers)
 		const serverCtx: ReactiveServerContext = {
-			db: ctx.db,
-			user: ctx.session?.user ?? null,
+			db: (ctx as any).db,
+			user: (ctx as any).session?.user ?? null,
 			req: new Request("http://localhost"), // Placeholder - not used in handlers
-			locale: ctx.locale ?? "en",
+			locale: (ctx as any).locale ?? "en",
 		};
 
 		try {

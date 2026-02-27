@@ -41,22 +41,37 @@ export {
 	type TransactionContext,
 	withTransaction,
 } from "./collection/crud/shared/transaction.js";
+export {
+	extractAppServices,
+	type AppContext,
+	type Registry,
+	/** @deprecated Use `Registry` instead */
+	type QuestpieRegistry,
+	type RegistryNames,
+	type KnownCollectionNames,
+	type KnownGlobalNames,
+	type KnownBlockNames,
+	type KnownJobNames,
+	type KnownFunctionNames,
+	type KnownServiceNames,
+	type KnownEmailNames,
+	type KnownRouteNames,
+	type KnownListViewNames,
+	type KnownEditViewNames,
+	type KnownComponentNames,
+} from "./config/app-context.js";
 export * from "./config/builder.js";
 export * from "./config/builder-types.js";
-// Re-export type safety helpers (typedApp, typedDb, typedSession, getContext, etc. exported via context.js)
+// Re-export type safety helpers (getContext, etc. exported via context.js)
 export type {
 	InferAppFromApp,
-	InferBaseApp,
 	InferDbFromApp,
 	InferSessionFromApp,
 } from "./config/context.js";
 export * from "./config/context.js";
 export * from "./config/create-app.js";
-// QuestpieBuilder extensions for module augmentation
-export type {
-	QuestpieBuilderExtensions,
-	QuestpieStateOf,
-} from "./config/extensions.js";
+// QuestpieBuilder state extraction utility (kept for backward compat)
+export type { QuestpieStateOf } from "./config/extensions.js";
 export * from "./config/global-hooks-types.js";
 export * from "./config/module-types.js";
 export * from "./config/questpie.js";
@@ -76,5 +91,7 @@ export * from "./integrated/storage/signed-url.js";
 export * from "./migration/index.js";
 export * from "./modules/core/core.module.js";
 export * from "./modules/starter/index.js";
+export * from "./routes/index.js";
 export * from "./seed/index.js";
+export * from "./services/define-service.js";
 export * from "./utils/drizzle-to-zod.js";

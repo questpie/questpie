@@ -26,7 +26,7 @@ Start with a simple collection for the services your business offers:
 
 ```ts
 // src/questpie/server/collections/services.ts
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export const services = collection("services")
   .fields(({ f }) => ({
@@ -96,7 +96,7 @@ For many-to-many relations, you need a junction collection:
 
 ```ts
 // src/questpie/server/collections/barber-services.ts
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export const barberServices = collection("barberServices")
   .fields(({ f }) => ({
@@ -131,7 +131,7 @@ Now the barbers collection, which uses a many-to-many relation through the junct
 
 ```ts
 // src/questpie/server/collections/barbers.ts
-import { collection } from "questpie";
+import { collection } from "#questpie";
 import { uniqueIndex } from "drizzle-orm/pg-core";
 
 export const barbers = collection("barbers")
@@ -265,59 +265,68 @@ Key patterns here:
 
 ## Step 5: Configure Everything
 
-```ts
-// src/questpie/questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+Set up the file convention files:
 
-export default config({
-  modules: [admin()],
+```ts
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
+
+export default runtimeConfig({
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL || "http://localhost:3000" },
-  auth: {
-    emailAndPassword: { enabled: true },
-    baseURL: process.env.APP_URL || "http://localhost:3000",
-    basePath: "/api/auth",
-    secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
-  },
-  branding: { name: { en: "My Platform" } },
-  sidebar: ({ s, c }) =>
-    s.sidebar({
-      sections: [
-        s.section({
-          id: "overview",
-          title: { en: "Overview" },
-          items: [
-            {
-              type: "link",
-              label: { en: "Dashboard" },
-              href: "/admin",
-              icon: c.icon("ph:house"),
-            },
-          ],
-        }),
-        s.section({
-          id: "content",
-          title: { en: "Content" },
-          items: [
-            { type: "collection", collection: "services" },
-            { type: "collection", collection: "barbers" },
-          ],
-        }),
-      ],
-    }),
+  secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
 });
+```
+
+```ts
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
+
+export default [adminModule] as const;
+```
+
+```ts
+// src/questpie/server/branding.ts
+import { branding } from "#questpie";
+
+export default branding({ name: { en: "My Platform" } });
+```
+
+```ts
+// src/questpie/server/sidebar.ts
+import { sidebar } from "#questpie";
+
+export default sidebar(({ s, c }) => [
+  s.section({
+    id: "overview",
+    title: { en: "Overview" },
+    items: [
+      {
+        type: "link",
+        label: { en: "Dashboard" },
+        href: "/admin",
+        icon: c.icon("ph:house"),
+      },
+    ],
+  }),
+  s.section({
+    id: "content",
+    title: { en: "Content" },
+    items: [
+      { type: "collection", collection: "services" },
+      { type: "collection", collection: "barbers" },
+    ],
+  }),
+]);
 ```
 
 ```ts
 // src/questpie/server/functions/get-active-barbers.ts
 import { fn } from "questpie";
-import z from "zod";
 
 export default fn({
-  schema: z.object({}),
-  handler: async ({ app }) => {
-    const result = await app.api.collections.barbers.find({
+  handler: async ({ collections }) => {
+    const result = await collections.barbers.find({
       where: { isActive: true },
     });
     return {
@@ -328,23 +337,27 @@ export default fn({
 });
 ```
 
-## Step 6: Admin Client
+## Step 6: Generate and Mount
 
-```ts
-// src/questpie/admin/admin.ts
-import { adminModule, qa } from "@questpie/admin/client";
-import type { App } from "../server/.generated";
+Run codegen to produce the app entrypoint:
 
-export const admin = qa<App>()
-  .use(adminModule);
+```bash
+bunx questpie generate
 ```
 
-## Step 7: Mount API
+```ts
+// src/questpie/admin/builder.ts
+import { adminModule, qa } from "@questpie/admin/client";
+import type { AppConfig } from "#questpie";
+
+export const admin = qa<AppConfig>()
+  .use(adminModule);
+```
 
 ```ts
 // src/routes/api.ts
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/.generated";
+import { app } from "#questpie";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",

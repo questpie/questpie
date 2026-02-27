@@ -55,7 +55,6 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
-import type { Questpie } from "questpie";
 import type { QuestpieClient } from "questpie/client";
 import type * as React from "react";
 import { Admin, type AdminInput } from "../../builder/admin";
@@ -68,7 +67,7 @@ import { AdminLayout, type AdminLayoutSharedProps } from "./admin-layout";
 // Types
 // ============================================================================
 
-interface AdminLayoutProviderProps<TApp extends Questpie<any> = Questpie<any>>
+interface AdminLayoutProviderProps
 	extends AdminLayoutSharedProps {
 	/**
 	 * Admin configuration - pass your AdminBuilder directly.
@@ -88,7 +87,7 @@ interface AdminLayoutProviderProps<TApp extends Questpie<any> = Questpie<any>>
 	/**
 	 * API client for data fetching
 	 */
-	client: QuestpieClient<TApp>;
+	client: QuestpieClient<any>;
 
 	/**
 	 * Auth client for authentication (created via createAdminAuthClient)
@@ -148,8 +147,8 @@ interface AdminLayoutProviderProps<TApp extends Questpie<any> = Questpie<any>>
 	 * @example
 	 * ```tsx
 	 * // Server configures locales and messages
-	 * const app = config({
-	 *   modules: [admin()],
+	 * const app = runtimeConfig({
+	 *   modules: [adminModule],
 	 *   adminLocale: { locales: ["en", "sk"], defaultLocale: "en" },
 	 *   messages: { sk: { "common.save": "Ulozit" } },
 	 * });
@@ -255,7 +254,7 @@ function isPublicPath(
  * Universal wrapper for admin layout that works with any router.
  * Handles all the provider setup and renders children inside the layout.
  */
-export function AdminLayoutProvider<TApp extends Questpie<any>>({
+export function AdminLayoutProvider({
 	admin: adminInput,
 	client,
 	authClient,
@@ -284,7 +283,7 @@ export function AdminLayoutProvider<TApp extends Questpie<any>>({
 	initialUiLocale,
 	// Children
 	children,
-}: AdminLayoutProviderProps<TApp>): React.ReactElement {
+}: AdminLayoutProviderProps): React.ReactElement {
 	const qc = queryClient ?? getDefaultQueryClient();
 
 	// Normalize admin input - accepts both AdminBuilder and Admin instance

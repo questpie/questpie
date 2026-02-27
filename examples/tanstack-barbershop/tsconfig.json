@@ -21,7 +21,8 @@
 		"baseUrl": ".",
 		"paths": {
 			"@/*": ["./src/*"],
-			"~/*": ["./src/*"]
+			"~/*": ["./src/*"],
+			"#questpie": ["./src/questpie/server/.generated/index.ts"]
 		}
 	}
 }

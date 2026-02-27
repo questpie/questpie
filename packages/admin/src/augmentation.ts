@@ -519,10 +519,13 @@ declare module "questpie" {
 	}
 }
 
-declare module "@questpie/admin/server" {
+declare module "./server/fields/rich-text.js" {
 	interface RichTextFieldMeta {
 		admin?: RichTextFieldAdminMeta;
 	}
+}
+
+declare module "./server/fields/blocks.js" {
 	interface BlocksFieldMeta {
 		admin?: BlocksFieldAdminMeta;
 	}

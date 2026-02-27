@@ -8,7 +8,8 @@
  * - Auto-generates fields when no form config is defined
  */
 
-import type { CollectionSchema, Questpie } from "questpie";
+import type { CollectionSchema } from "questpie";
+import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import type {
@@ -73,7 +74,7 @@ type AdminFormSchema = CollectionSchema["admin"] extends infer TAdmin
 	: undefined;
 
 interface AutoFormFieldsProps<
-	T extends Questpie<any> = Questpie<any>,
+	T extends QuestpieApp = QuestpieApp,
 	K extends string = string,
 > {
 	/**
@@ -894,7 +895,7 @@ function extractFieldNamesFromFieldItems(
  * Supports recursive tabs/sections nesting and auto-generates
  * field list when no form config is defined.
  */
-export function AutoFormFields<T extends Questpie<any>, K extends string>({
+export function AutoFormFields<T extends QuestpieApp, K extends string>({
 	app: _cms,
 	collection,
 	mode = "collection",

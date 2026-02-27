@@ -12,11 +12,9 @@ Actions let you add custom operations to collection UIs (row, bulk, and header a
 Use `.actions(({ a, c, f }) => ...)` on a collection:
 
 ```ts
-import { getContext } from "questpie";
-import type { App } from '../app';
+import { collection } from "#questpie";
 
-const posts = q
-  .collection("posts")
+const posts = collection("posts")
   .fields(({ f }) => ({
     title: f.text({ required: true }),
     status: f.select({ options: ["draft", "published", "archived"] }),
@@ -34,14 +32,13 @@ const posts = q
             reason: f.text({ label: { en: "Reason" } }),
           },
         },
-        handler: async (ctx) => {
-          const { app, session } = getContext<App>(ctx);
+        handler: async ({ itemIds, collections, session }) => {
           if (!session?.user) {
             return { type: "error", toast: { message: "Unauthorized" } };
           }
 
-          await app.api.collections.posts.updateMany({
-            where: { id: { $in: ctx.itemIds ?? [] } },
+          await collections.posts.updateMany({
+            where: { id: { $in: itemIds ?? [] } },
             data: { status: "archived" },
           });
 
@@ -63,13 +60,13 @@ Handlers return one of these server result shapes:
 
 ## Typed Context in Handlers
 
-Action handler context is `ServerActionContext` (`data`, `itemId`, `itemIds`, `app`, `db`, `session`, `locale`).
+Action handler context is `ServerActionContext` (`data`, `itemId`, `itemIds`, `collections`, `db`, `session`, `locale`).
 
-Use `getContext<App>(ctx)` as the standard cast point for typed app/db/session.
+Destructure the context directly: `{ itemIds, collections, session }` etc.
 
 ## Common Mistakes
 
-- Defining actions as RPC procedures instead of `.actions()`.
+- Defining actions as function procedures instead of `.actions()`.
 - Using untyped `app` directly inside handlers and losing queue/API autocomplete.
 - Returning plain objects without `type` (`success`, `error`, `redirect`, `download`).
 

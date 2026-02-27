@@ -109,11 +109,11 @@ export function useViewState(
 		queryFn: async (): Promise<ViewConfiguration | null> => {
 			if (!userId || !preferenceKey) return null;
 
-			const result = await client.collections.adminPreferences.findOne({
+			const result = await (client.collections as any).adminPreferences.findOne({
 				where: { userId, key: preferenceKey },
 			});
 
-			return (result?.value as unknown as ViewConfiguration) ?? null;
+			return ((result as any)?.value as unknown as ViewConfiguration) ?? null;
 		},
 	});
 

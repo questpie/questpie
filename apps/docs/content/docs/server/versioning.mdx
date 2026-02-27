@@ -142,9 +142,9 @@ Use `beforeTransition` and `afterTransition` hooks to inject logic around stage 
       throw ApiError.badRequest("Cannot publish without a title");
     }
   },
-  afterTransition: async ({ fromStage, toStage, data, app }) => {
+  afterTransition: async ({ fromStage, toStage, data, queue }) => {
     if (toStage === "published") {
-      await app.queue.notifySubscribers.publish({ postId: data.id });
+      await queue.notifySubscribers.publish({ postId: data.id });
     }
   },
 })
@@ -370,10 +370,10 @@ const articles = collection("articles")
         throw ApiError.badRequest("Cannot publish an article without content");
       }
     },
-    afterTransition: async ({ fromStage, toStage, data, app, context }) => {
+    afterTransition: async ({ fromStage, toStage, data, email, collections }) => {
       if (toStage === "review") {
         // Notify reviewers that a new article is waiting
-        await app.email.send({
+        await email.send({
           to: "reviewers@company.com",
           subject: `Review requested: ${data.title}`,
           text: `A new article "${data.title}" is ready for review.`,
@@ -382,12 +382,11 @@ const articles = collection("articles")
 
       if (toStage === "published") {
         // Notify the author their article was published
-        const author = await app.api.collections.users.findOne(
-          { where: { id: data.author } },
-          context,
-        );
+        const author = await collections.users.findOne({
+          where: { id: data.author },
+        });
         if (author?.email) {
-          await app.email.send({
+          await email.send({
             to: author.email,
             subject: `Your article "${data.title}" is now live!`,
             text: `Congratulations! Your article has been published.`,
@@ -397,7 +396,7 @@ const articles = collection("articles")
 
       if (fromStage === "review" && toStage === "draft") {
         // Article was sent back — notify the author
-        await app.email.send({
+        await email.send({
           to: "author@company.com",
           subject: `Revisions needed: ${data.title}`,
           text: `Your article "${data.title}" needs revisions.`,

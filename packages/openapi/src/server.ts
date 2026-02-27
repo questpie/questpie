@@ -22,7 +22,7 @@
  * ```
  */
 
-import type { FunctionsTree, Questpie } from "questpie";
+import type { FunctionsTree } from "questpie";
 import { generateOpenApiSpec as generate } from "./generator/index.js";
 import { serveScalarUI } from "./scalar.js";
 import type {
@@ -44,12 +44,12 @@ export type {
  * Functions are read from `app.functions` automatically if not provided.
  */
 export function generateOpenApiSpec(
-	app: Questpie<any>,
-	functions?: FunctionsTree<any>,
+	app: unknown,
+	functions?: FunctionsTree,
 	config?: OpenApiConfig,
 ): OpenApiSpec {
 	const fns = functions ?? (app as any).functions;
-	return generate(app, fns, config);
+	return generate(app as any, fns, config);
 }
 
 /**
@@ -118,7 +118,7 @@ export function withOpenApi(
 	} = config;
 
 	const fns = functions ?? (app as any).functions;
-	const spec = generate(app, fns, openApiConfig);
+	const spec = generate(app as any, fns, openApiConfig);
 	const { specHandler, scalarHandler } = createOpenApiHandlers(spec, {
 		scalar,
 	});

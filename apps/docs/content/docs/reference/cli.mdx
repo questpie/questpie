@@ -25,41 +25,21 @@ bun ./node_modules/questpie/dist/cli/index.js migrate:generate
 
 ## Configuration
 
-The CLI looks for `questpie.config.ts` in the current directory by default. Use `q.config` for type-safe configuration:
+The CLI discovers your app configuration from `questpie.config.ts` and the file convention structure. Collections, globals, functions, jobs, and migrations are all auto-discovered from their conventional directories.
 
 ```typescript
-// questpie.config.ts
-import { q } from "questpie";
-import { app } from "./src/server/app";
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
 
-export default q.config({
-  app: app,
-  cli: {
-    migrations: {
-      directory: "./src/migrations", // Where to save generated migrations
-    },
-  },
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL || "http://localhost:3000" },
 });
 ```
 
-The config has two parts:
-
-- **`app`** - Your QUESTPIE app instance (required)
-- **`cli`** - CLI-specific settings (optional)
-
 ### Migration Loading
 
-Migrations are loaded from the app instance via `.migrations([...])`, not from the directory. The directory is only used for saving newly generated migrations.
-
-```typescript
-// src/server/app.ts
-import { migrations } from "../migrations";
-
-export const app = q({ name: "my-app" })
-  .collections({ posts })
-  .migrations(migrations)  // Load migrations here
-  .build({ ... });
-```
+Migrations in the `migrations/` directory are automatically discovered by codegen and loaded at runtime.
 
 ## Migration Commands
 
@@ -336,24 +316,7 @@ Changes to apply:
 
 ## Migrations Directory
 
-The CLI saves generated migrations to `cli.migrations.directory` (default: `./src/migrations`). You can customize this in your `questpie.config.ts`:
-
-```typescript
-// questpie.config.ts
-import { q } from "questpie";
-import { app } from "./src/server/app";
-
-export default q.config({
-  app: app,
-  cli: {
-    migrations: {
-      directory: "./db/migrations", // Custom directory for generated files
-    },
-  },
-});
-```
-
-**Important:** The directory is only for storing generated migration files. Migrations are loaded at runtime via `.migrations([...])` on your app instance, not by scanning the directory.
+The CLI saves generated migrations to `./src/migrations` by default. Migrations are automatically discovered by codegen from this directory.
 
 ### migrations/index.ts
 
@@ -378,7 +341,7 @@ export const migrations: Migration[] = [
 
 ```bash
 # 1. Make schema changes in your collection definitions
-# Edit src/collections/posts.ts
+# Edit src/questpie/server/collections/posts.ts
 
 # 2. Generate migration
 bun questpie migrate:generate --name add_featured_to_posts
@@ -386,22 +349,14 @@ bun questpie migrate:generate --name add_featured_to_posts
 # 3. Review the generated migration
 # Check src/migrations/20240120T100000_add_featured_to_posts.ts
 
-# 4. Import migrations in your app instance (if not already done)
-# In src/server/app.ts:
-#   import { migrations } from "../migrations";
-#   export const app = q({ name: "my-app" })
-#     .collections({ posts })
-#     .migrations(migrations)  // <-- Add this
-#     .build({ ... });
-
-# 5. Run the migration
+# 4. Run the migration
 bun questpie migrate:up
 
-# 6. If something goes wrong, rollback
+# 5. If something goes wrong, rollback
 bun questpie migrate:down
 ```
 
-**Note:** Step 4 only needs to be done once. After that, the `migrations/index.ts` file is automatically updated when you generate new migrations.
+Migrations are automatically discovered from the `migrations/` directory — no manual imports needed.
 
 ## Manual Migrations
 
@@ -481,20 +436,15 @@ bun questpie migrate:up
 
 ### "Config file not found"
 
-Ensure `questpie.config.ts` exists and exports your app instance using `q.config`:
+Ensure `questpie.config.ts` exists in your server directory:
 
 ```typescript
-// questpie.config.ts
-import { q } from "questpie";
-import { app } from "./src/server/app";
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
 
-export default q.config({
-  app: app,
-  cli: {
-    migrations: {
-      directory: "./src/migrations",
-    },
-  },
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
 });
 ```
 
@@ -520,19 +470,7 @@ bun questpie migrate:generate --verbose
 
 ### "Migration not found" when running migrate:up
 
-Ensure you've imported the migrations in your app instance:
-
-```typescript
-// src/server/app.ts
-import { migrations } from "../migrations";
-
-export const app = q({ name: "my-app" })
-  .collections({ posts })
-  .migrations(migrations) // <-- Required!
-  .build({ ... });
-```
-
-The CLI loads migrations from `app.config.migrations.migrations`, not by scanning the directory.
+Ensure migration files exist in the `migrations/` directory and have been discovered by running `questpie generate`.
 
 ## Drizzle Kit vs QUESTPIE CLI
 
@@ -549,6 +487,6 @@ However, under the hood we use Drizzle's schema diffing. For more details on how
 - [Collections](/docs/server/collections) - Define your schema
 - [Field Builder](/docs/server/field-builder) - Field system overview
 - [Field Types](/docs/server/field-types) - Built-in and custom field types
-- [q Builder API](/docs/reference/q-builder-api) - Full builder config surface
+- [Config API](/docs/reference/q-builder-api) - Runtime config reference
 - [Drizzle ORM Documentation](https://orm.drizzle.team/) - Full Drizzle reference
 - [Drizzle Kit Migrations](https://orm.drizzle.team/docs/migrations) - How schema diffing works

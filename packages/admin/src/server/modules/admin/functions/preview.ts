@@ -105,7 +105,9 @@ export function createPreviewFunctions(secret: string) {
 		type: "mutation",
 		schema: mintPreviewTokenSchema,
 		outputSchema: mintPreviewTokenOutputSchema,
-		handler: async ({ input, session }) => {
+		handler: async (ctx) => {
+			const { input } = ctx;
+			const session = (ctx as any).session;
 			// Require authenticated admin session
 			if (!session) {
 				throw new Error("Unauthorized: Admin session required");
@@ -306,14 +308,16 @@ const getPreviewUrl = fn({
 	type: "query",
 	schema: getPreviewUrlSchema,
 	outputSchema: getPreviewUrlOutputSchema,
-	handler: async ({ input, app: appInstance, session }) => {
+	handler: async (ctx) => {
+		const { input } = ctx;
+		const session = (ctx as any).session;
 		// Require authenticated admin session
 		if (!session) {
 			return { url: null, error: "Unauthorized: Admin session required" };
 		}
 
 		const { collection: collectionName, record, locale } = input;
-		const app = appInstance as Questpie<any>;
+		const app = (ctx as any).app as Questpie<any>;
 
 		// Get collection from app
 		const collections = app.getCollections();
@@ -357,7 +361,7 @@ const getPreviewUrl = fn({
 
 /**
  * Default preview functions bundle with env-based secret.
- * Used by the `admin()` module to register preview RPC functions.
+ * Used by the `adminModule` to register preview RPC functions.
  */
 export const previewFunctions = {
 	...createPreviewFunctions(getPreviewSecret()),

@@ -5,7 +5,7 @@
  * Uses the AdminProvider context to get the current admin configuration.
  */
 
-import type { Questpie } from "questpie";
+import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
 import {
 	selectAdmin,
@@ -30,7 +30,7 @@ interface UseAdminRoutesOptions {
 	basePath?: string;
 }
 
-interface UseAdminRoutesResult<TApp extends Questpie<any>> {
+interface UseAdminRoutesResult<TApp extends QuestpieApp> {
 	/** Routes builder */
 	routes: AdminRoutes<TApp>;
 
@@ -127,7 +127,7 @@ interface UseAdminRoutesResult<TApp extends Questpie<any>> {
  * }
  * ```
  */
-export function useAdminRoutes<TApp extends Questpie<any>>(
+export function useAdminRoutes<TApp extends QuestpieApp>(
 	options: UseAdminRoutesOptions = {},
 ): UseAdminRoutesResult<TApp> {
 	const admin = useAdminStore(selectAdmin);
@@ -200,7 +200,7 @@ export function useAdminRoutes<TApp extends Questpie<any>>(
  * }
  * ```
  */
-function useAdminRoutesStandalone<TApp extends Questpie<any>>(options: {
+function useAdminRoutesStandalone<TApp extends QuestpieApp>(options: {
 	admin: import("../builder/admin").Admin;
 	basePath?: string;
 	navigate: (path: string) => void;
@@ -227,7 +227,7 @@ function useAdminRoutesStandalone<TApp extends Questpie<any>>(options: {
 /**
  * Props for admin link components
  */
-export interface AdminLinkProps<TApp extends Questpie<any>> {
+export interface AdminLinkProps<TApp extends QuestpieApp> {
 	/** Link to dashboard */
 	to?: "dashboard";
 	/** Link to collection */
@@ -247,7 +247,7 @@ export interface AdminLinkProps<TApp extends Questpie<any>> {
  *
  * @example
  * ```tsx
- * function AdminLink<TApp extends Questpie<any>>(
+ * function AdminLink<TApp extends QuestpieApp>(
  *   props: AdminLinkProps<TApp> & { children: React.ReactNode }
  * ) {
  *   const { routes } = useAdminRoutes<TApp>()
@@ -256,7 +256,7 @@ export interface AdminLinkProps<TApp extends Questpie<any>> {
  * }
  * ```
  */
-export function getAdminLinkHref<TApp extends Questpie<any>>(
+export function getAdminLinkHref<TApp extends QuestpieApp>(
 	routes: AdminRoutes<TApp>,
 	props: AdminLinkProps<TApp>,
 ): string {

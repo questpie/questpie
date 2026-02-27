@@ -1,4 +1,4 @@
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export const posts = collection("posts")
 	.fields(({ f }) => ({

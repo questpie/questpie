@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { starter } from "../../src/server/modules/starter/starter.module.js";
+import starterModule from "../../src/server/modules/starter/.generated/module.js";
 
-describe("starter()", () => {
+describe("starterModule", () => {
 	test("registers realtime cleanup cron job", () => {
-		const mod = starter();
-		const realtimeCleanup = mod.jobs!.realtimeCleanup;
+		const realtimeCleanup = starterModule.jobs.realtimeCleanup;
 
 		expect(realtimeCleanup).toBeDefined();
 		expect(realtimeCleanup.name).toBe("questpie.realtime.cleanup");
@@ -13,18 +12,15 @@ describe("starter()", () => {
 	});
 
 	test("realtime cleanup job calls realtime service cleanup", async () => {
-		const mod = starter();
-		const realtimeCleanup = mod.jobs!.realtimeCleanup;
+		const realtimeCleanup = starterModule.jobs.realtimeCleanup;
 		let called = 0;
 
 		await realtimeCleanup.handler({
 			payload: {},
-			app: {
-				realtime: {
-					cleanupOutbox: async (force: boolean) => {
-						expect(force).toBe(true);
-						called += 1;
-					},
+			realtime: {
+				cleanupOutbox: async (force: boolean) => {
+					expect(force).toBe(true);
+					called += 1;
 				},
 			},
 			db: {},
@@ -34,36 +30,33 @@ describe("starter()", () => {
 	});
 
 	test("includes all expected collections", () => {
-		const mod = starter();
-		expect(mod.collections).toBeDefined();
-		expect(mod.collections!.user).toBeDefined();
-		expect(mod.collections!.assets).toBeDefined();
-		expect(mod.collections!.session).toBeDefined();
-		expect(mod.collections!.account).toBeDefined();
-		expect(mod.collections!.verification).toBeDefined();
-		expect(mod.collections!.apikey).toBeDefined();
+		expect(starterModule.collections).toBeDefined();
+		expect(starterModule.collections.user).toBeDefined();
+		expect(starterModule.collections.assets).toBeDefined();
+		expect(starterModule.collections.session).toBeDefined();
+		expect(starterModule.collections.account).toBeDefined();
+		expect(starterModule.collections.verification).toBeDefined();
+		expect(starterModule.collections.apikey).toBeDefined();
 	});
 
 	test("sets default access to require authentication", () => {
-		const mod = starter();
-		expect(mod.defaultAccess).toBeDefined();
+		expect(starterModule.defaultAccess).toBeDefined();
 
 		const ctx = { session: { id: "test" } } as any;
 		const noAuth = { session: null } as any;
 
-		expect(mod.defaultAccess!.read(ctx)).toBe(true);
-		expect(mod.defaultAccess!.create(ctx)).toBe(true);
-		expect(mod.defaultAccess!.update(ctx)).toBe(true);
-		expect(mod.defaultAccess!.delete(ctx)).toBe(true);
+		expect(starterModule.defaultAccess.read(ctx)).toBe(true);
+		expect(starterModule.defaultAccess.create(ctx)).toBe(true);
+		expect(starterModule.defaultAccess.update(ctx)).toBe(true);
+		expect(starterModule.defaultAccess.delete(ctx)).toBe(true);
 
-		expect(mod.defaultAccess!.read(noAuth)).toBe(false);
-		expect(mod.defaultAccess!.create(noAuth)).toBe(false);
-		expect(mod.defaultAccess!.update(noAuth)).toBe(false);
-		expect(mod.defaultAccess!.delete(noAuth)).toBe(false);
+		expect(starterModule.defaultAccess.read(noAuth)).toBe(false);
+		expect(starterModule.defaultAccess.create(noAuth)).toBe(false);
+		expect(starterModule.defaultAccess.update(noAuth)).toBe(false);
+		expect(starterModule.defaultAccess.delete(noAuth)).toBe(false);
 	});
 
 	test("has module name", () => {
-		const mod = starter();
-		expect(mod.name).toBe("questpie-starter");
+		expect(starterModule.name).toBe("questpie-starter");
 	});
 });

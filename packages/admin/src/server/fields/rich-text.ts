@@ -4,7 +4,7 @@
  * TipTap-based WYSIWYG editor field stored as JSONB.
  * Provides structured rich text editing with configurable features.
  *
- * This field type is only available when using the `admin()` module.
+ * This field type is only available when using the `adminModule`.
  */
 
 import {
@@ -338,7 +338,7 @@ export const richTextField = field<RichTextFieldConfig, TipTapDocument>()({
 		return docSchema as any;
 	},
 
-	getOperators<TApp>() {
+	getOperators<TApp>(config: RichTextFieldConfig) {
 		return getRichTextOperators();
 	},
 

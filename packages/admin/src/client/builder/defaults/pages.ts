@@ -15,7 +15,7 @@ import { page } from "../page/page";
  * Login page - email/password authentication
  */
 const loginPage = page("login", {
-	component: () => import("../../views/pages/login-page"),
+	component: async () => ({ default: (await import("../../views/pages/login-page")).LoginPage }),
 	showInNav: false,
 }).path("/login");
 
@@ -23,7 +23,7 @@ const loginPage = page("login", {
  * Forgot password page - request password reset email
  */
 const forgotPasswordPage = page("forgot-password", {
-	component: () => import("../../views/pages/forgot-password-page"),
+	component: async () => ({ default: (await import("../../views/pages/forgot-password-page")).ForgotPasswordPage }),
 	showInNav: false,
 }).path("/forgot-password");
 
@@ -31,7 +31,7 @@ const forgotPasswordPage = page("forgot-password", {
  * Reset password page - set new password with token
  */
 const resetPasswordPage = page("reset-password", {
-	component: () => import("../../views/pages/reset-password-page"),
+	component: async () => ({ default: (await import("../../views/pages/reset-password-page")).ResetPasswordPage }),
 	showInNav: false,
 }).path("/reset-password");
 
@@ -39,7 +39,7 @@ const resetPasswordPage = page("reset-password", {
  * Setup page - create first admin account
  */
 const setupPage = page("setup", {
-	component: () => import("../../views/pages/setup-page"),
+	component: async () => ({ default: (await import("../../views/pages/setup-page")).SetupPage }),
 	showInNav: false,
 }).path("/setup");
 
@@ -51,7 +51,7 @@ const setupPage = page("setup", {
  * Dashboard page - main admin dashboard (already added as hardcoded item in buildNavigation)
  */
 const dashboardPage = page("dashboard", {
-	component: () => import("../../views/pages/dashboard-page"),
+	component: async () => ({ default: (await import("../../views/pages/dashboard-page")).DashboardPage }),
 	showInNav: false,
 }).path("/");
 

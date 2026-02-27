@@ -28,13 +28,15 @@ QUESTPIE uses two layers to determine admin visibility:
 Server-side filtering based on `access.read` rules. If a user doesn't have read access, the collection/global is completely hidden from the API response.
 
 ```ts
-const privateCollection = q.collection("internal-logs")
+import { collection } from "#questpie";
+
+const privateCollection = collection("internal-logs")
   .fields(f => ({ ... }))
   .access({
     read: false, // No one can see this in admin
   });
 
-const adminOnlyCollection = q.collection("settings")
+const adminOnlyCollection = collection("settings")
   .fields(f => ({ ... }))
   .access({
     read: ({ session }) => session?.user?.role === "admin",
@@ -46,7 +48,7 @@ const adminOnlyCollection = q.collection("settings")
 Client-side filtering based on `.admin({ hidden: true })`. Hidden items are still accessible via API but don't appear in navigation, search, or direct URL access.
 
 ```ts
-const sessions = q.collection("sessions")
+const sessions = collection("sessions")
   .fields(f => ({ ... }))
   .admin({ hidden: true }); // Not shown in admin UI
 ```
@@ -56,7 +58,7 @@ const sessions = q.collection("sessions")
 Use `.admin({ hidden: true })` to hide collections from the admin interface:
 
 ```ts
-const sessions = q.collection("sessions")
+const sessions = collection("sessions")
   .fields(f => ({
     userId: f.text(),
     token: f.text(),
@@ -81,15 +83,15 @@ const sessions = q.collection("sessions")
 **Internal system collections:**
 ```ts
 // Auth-related collections managed by the system
-const sessions = q.collection("sessions").admin({ hidden: true });
-const accounts = q.collection("accounts").admin({ hidden: true });
-const apiKeys = q.collection("apikeys").admin({ hidden: true });
+const sessions = collection("sessions").admin({ hidden: true });
+const accounts = collection("accounts").admin({ hidden: true });
+const apiKeys = collection("apikeys").admin({ hidden: true });
 ```
 
 **Draft/staging collections:**
 ```ts
 // Collection not ready for editors yet
-const newFeature = q.collection("beta-feature")
+const newFeature = collection("beta-feature")
   .fields(f => ({ ... }))
   .admin({ hidden: true }); // Hide until ready
 ```
@@ -97,7 +99,7 @@ const newFeature = q.collection("beta-feature")
 **Programmatically-managed collections:**
 ```ts
 // Data synced from external system
-const syncedProducts = q.collection("synced-products")
+const syncedProducts = collection("synced-products")
   .fields(f => ({ ... }))
   .admin({ hidden: true }); // Managed via API only
 ```
@@ -107,7 +109,7 @@ const syncedProducts = q.collection("synced-products")
 ### Public Collection (Everyone Can Read)
 
 ```ts
-const posts = q.collection("posts")
+const posts = collection("posts")
   .fields(f => ({
     title: f.text(),
     content: f.richText(),
@@ -120,7 +122,7 @@ const posts = q.collection("posts")
 ### Role-Based Access
 
 ```ts
-const settings = q.collection("settings")
+const settings = collection("settings")
   .fields(f => ({
     key: f.text(),
     value: f.json(),
@@ -136,7 +138,7 @@ const settings = q.collection("settings")
 When `access.read` returns a filter object, the collection is visible but only matching rows are shown:
 
 ```ts
-const documents = q.collection("documents")
+const documents = collection("documents")
   .fields(f => ({
     title: f.text(),
     ownerId: f.text(),
@@ -153,16 +155,14 @@ const documents = q.collection("documents")
 
 ### Auto-Generated Sidebar
 
-When no `.sidebar()` is configured, collections appear automatically:
+When no `sidebar.ts` convention file is configured, collections appear automatically based on their visibility settings:
 
 ```ts
-const app = q({ name: "app" })
-  .use(adminModule)
-  .collections({
-    posts,      // Visible (not hidden)
-    pages,      // Visible (not hidden)
-    sessions,   // Hidden via .admin({ hidden: true })
-  });
+// Collections defined in src/questpie/server/collections/
+// posts.ts      → Visible (not hidden)
+// pages.ts      → Visible (not hidden)
+// sessions.ts   → Hidden via .admin({ hidden: true })
+
 // Sidebar auto-generated with: posts, pages
 // sessions is excluded because hidden: true
 ```
@@ -174,22 +174,22 @@ Collections are:
 
 ### Explicit Sidebar
 
-With `.sidebar()`, you control exactly what appears:
+With a `sidebar.ts` convention file, you control exactly what appears:
 
 ```ts
-const app = q({ name: "app" })
-  .use(adminModule)
-  .collections({ posts, pages, comments, sessions })
-  .sidebar(({ s }) =>
-    s.sidebar({
-      sections: [
-        {
-          label: "Content",
-          items: [s.collection("posts"), s.collection("pages")],
-        },
-      ],
-    }),
-  );
+// src/questpie/server/sidebar.ts
+import { sidebar } from "#questpie";
+
+export default sidebar(({ s }) =>
+  s.sidebar({
+    sections: [
+      {
+        label: "Content",
+        items: [s.collection("posts"), s.collection("pages")],
+      },
+    ],
+  }),
+);
 // Sidebar shows: posts, pages
 // comments auto-appended (not listed, not hidden)
 // sessions excluded (hidden: true)
@@ -238,7 +238,7 @@ This keeps auth/system collections accessible via API but out of the admin UI, r
 You can combine both layers for fine-grained control:
 
 ```ts
-const auditLogs = q.collection("audit-logs")
+const auditLogs = collection("audit-logs")
   .fields(f => ({
     action: f.text(),
     userId: f.text(),
@@ -267,8 +267,12 @@ Actually, `hidden: true` blocks everyone from the UI, regardless of access. If y
 
 ```ts
 // Currently not supported - hidden is all-or-nothing for UI
-// Use explicit sidebar to control what appears:
-.sidebar(({ s }) =>
+// Use a sidebar.ts convention file to control what appears:
+
+// src/questpie/server/sidebar.ts
+import { sidebar } from "#questpie";
+
+export default sidebar(({ s }) =>
   s.sidebar({
     sections: [
       { label: "Content", items: [s.collection("posts")] },
@@ -276,7 +280,7 @@ Actually, `hidden: true` blocks everyone from the UI, regardless of access. If y
       // but can still be accessed via direct URL
     ],
   }),
-)
+);
 ```
 
 ## Best Practices

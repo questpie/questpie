@@ -1,126 +1,226 @@
 ---
 title: Type-Safe Contexts
-description: One pattern for strongly typed app, db, and session across hooks, access, functions, jobs, workflows, and admin handlers
+description: How AppContext augmentation gives every handler fully typed access to collections, services, and infrastructure
 ---
 
 # Type-Safe Contexts
 
-Most server callbacks in QUESTPIE intentionally expose `app`, `db`, and `session` as broad types. This keeps builder composition fast and avoids type explosions in large apps.
+Every server callback in QUESTPIE — hooks, access rules, functions, jobs, email handlers — receives a flat, fully typed context object. This is powered by `AppContext` module augmentation, generated automatically by `questpie generate`.
 
-The recommended pattern is to type these values at the edge with your `App` type using the `typed*` helpers.
+## How It Works
 
-## API Overview
+When you run `questpie generate`, the codegen produces a `.generated/index.ts` file that augments the `AppContext` interface:
 
-QUESTPIE provides two categories of context utilities:
+```ts
+// .generated/index.ts (auto-generated — do not edit)
+declare module "questpie" {
+  interface AppContext {
+    db: /* typed Drizzle client */;
+    collections: /* typed collection CRUD APIs */;
+    globals: /* typed global CRUD APIs */;
+    queue: /* typed job queue */;
+    email: /* typed email service */;
+    session: /* typed auth session */;
+    storage: /* storage service */;
+    kv: /* key-value store */;
+    logger: /* logger */;
+    // ...user services
+  }
+}
+```
 
-### Type Helpers (compile-time only)
-
-These functions **only add TypeScript types** — they perform no runtime logic. The `typed*` prefix clearly communicates they are type casts:
-
-| Function | Purpose |
-|----------|---------|
-| `typedApp<TApp>(app)` | Type cast `app` to your app type |
-| `typedDb<TApp>(db)` | Type cast `db` to your Drizzle client type |
-| `typedSession<TApp>(session)` | Type cast `session` to your auth session type |
-| `typedContext<TApp>(ctx)` | Type cast entire context object at once |
-
-### Context Access (runtime)
-
-These functions **actually retrieve values** from AsyncLocalStorage at runtime:
-
-| Function | Purpose |
-|----------|---------|
-| `getContext<TApp>()` | Get context from current scope (throws if not available) |
-| `tryGetContext()` | Safe version — returns `undefined` if not in scope |
-| `runWithContext(ctx, fn)` | Run code within a context scope |
+This means every handler automatically has typed access to the full app context — no manual type assertions needed.
 
 ## Basic Usage
 
-```ts
-import { typedApp, typedDb, typedSession, typedContext } from "questpie";
-import type { App } from '../app';
-
-// Type individual values
-const app = typedApp<App>(app);
-const db = typedDb<App>(db);
-const session = typedSession<App>(session);
-
-// Or type everything at once
-const { app, db, session } = typedContext<App>(ctx);
-```
-
-## Type Safety Matrix
-
-| Surface | Callback shape | Recommended helper |
-|---------|----------------|-------------------|
-| Collection hooks | `({ app, db, session, data, operation })` | `typedApp<App>()`, `typedDb<App>()` |
-| Collection access | `({ app, db, session, data, input })` | `typedContext<App>(ctx)` |
-| Global hooks/access | same as collection variants | `typedContext<App>(ctx)` |
-| Functions `fn()` | `({ input, app, db, session })` | `typedApp<App>()` |
-| Jobs | `({ payload, app, db, session })` | `job<App>()` or `typedApp<App>()` |
-| Workflows | `step(name, async ({ payload, app }))` | `workflow<App>()` |
-| Admin action handlers | `({ data, itemId, itemIds, app, db, session })` | `typedContext<App>(ctx)` |
-| Dashboard widget `loader` / `access` | `({ app, db, session, locale })` | `typedContext<App>(ctx)` |
-
-## Canonical Setup
-
-Export your app type once:
+Destructure what you need from any handler context:
 
 ```ts
-// questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// collections/appointments.ts
+import { collection } from "#questpie";
 
-export default config({
-  modules: [admin()],
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
-});
-
-// App type is exported from the codegen output:
-// import type { App } from "~/questpie/.generated";
-```
-
-Then import `App` in server-only files where callbacks run.
-
-## Hooks and Access
-
-```ts
-import { typedContext } from "questpie";
-import type { App } from '../app';
-
-collection("appointments")
+export const appointments = collection("appointments")
+  .fields(({ f }) => ({
+    customer: f.relation({ to: "user", required: true }),
+    scheduledAt: f.datetime({ required: true }),
+    status: f.select({
+      options: [
+        { value: "pending", label: { en: "Pending" } },
+        { value: "confirmed", label: { en: "Confirmed" } },
+      ],
+      default: "pending",
+      required: true,
+    }),
+  }))
   .hooks({
-    afterChange: async (ctx) => {
-      const { app, session } = typedContext<App>(ctx);
-      if (ctx.operation === "create") {
-        await app.queue.sendAppointmentConfirmation.publish({
-          appointmentId: ctx.data.id,
-          customerEmail: (ctx.data as { customerEmail?: string }).customerEmail ?? "",
+    afterChange: async ({ data, operation, queue }) => {
+      // queue is typed — sendAppointmentConfirmation is autocompleted
+      if (operation === "create") {
+        await queue.sendAppointmentConfirmation.publish({
+          appointmentId: data.id,
         });
       }
-      if (!session) return;
     },
   })
   .access({
-    update: (ctx) => {
-      const { session } = typedContext<App>(ctx);
+    update: ({ session }) => {
+      // session is typed — user fields are autocompleted
       return !!session?.user;
     },
   });
 ```
 
+## Context Properties
+
+Every handler receives these properties from `AppContext`:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `db` | `DrizzleClient` | Typed database client (may be a transaction inside hooks) |
+| `collections` | `AppCollections` | Typed collection CRUD APIs (`collections.posts.find(...)`) |
+| `globals` | `AppGlobals` | Typed global CRUD APIs (`globals.siteSettings.get()`) |
+| `queue` | `QueueClient<AppJobs>` | Typed job queue (`queue.sendEmail.publish(...)`) |
+| `email` | `MailerService<AppEmailTemplates>` | Typed email service |
+| `session` | `Session \| null` | Authenticated user session |
+| `storage` | `StorageService` | File storage service |
+| `kv` | `KVStore` | Key-value store |
+| `logger` | `Logger` | Logger instance |
+| `search` | `SearchService` | Full-text search service |
+| `realtime` | `RealtimeService` | Realtime event service |
+| `t` | `(key, params?, locale?) => string` | Translation function |
+| *custom services* | varies | Any services defined via `defineService()` |
+
+## Context Across Surfaces
+
+The same `AppContext` is available in all server callbacks:
+
+| Surface | Context shape |
+|---------|---------------|
+| Collection hooks | `{ data, operation, original, session, db, collections, queue, ... }` |
+| Collection access | `{ session, data, input, db, collections, ... }` |
+| Global hooks/access | Same as collection variants |
+| Functions (`fn()`) | `{ input, session, db, collections, queue, email, ... }` |
+| Jobs (`job()`) | `{ payload, db, collections, queue, email, ... }` |
+| Email handlers | `{ input, db, collections, ... }` |
+| Dashboard loaders | `{ db, collections, session, locale, ... }` |
+| Admin action handlers | `{ data, itemId, itemIds, session, db, collections, ... }` |
+
+## Functions
+
+Functions receive the full `AppContext` alongside their validated `input`:
+
+```ts
+// functions/create-booking.ts
+import { fn } from "questpie";
+import { z } from "zod";
+
+export default fn({
+  schema: z.object({ barberId: z.string(), serviceId: z.string() }),
+  handler: async ({ input, collections }) => {
+    // collections is typed — services, appointments are autocompleted
+    const service = await collections.services.findOne({
+      where: { id: input.serviceId },
+    });
+    if (!service) throw new Error("Service not found");
+
+    return collections.appointments.create({
+      barber: input.barberId,
+      service: input.serviceId,
+      scheduledAt: new Date(),
+      status: "pending",
+    });
+  },
+});
+```
+
+## Jobs
+
+Jobs receive `AppContext` with their validated `payload`:
+
+```ts
+// jobs/send-appointment-confirmation.ts
+import { job } from "questpie";
+import { z } from "zod";
+
+export default job({
+  name: "send-appointment-confirmation",
+  schema: z.object({ appointmentId: z.string() }),
+  handler: async ({ payload, collections, email }) => {
+    const appointment = await collections.appointments.findOne({
+      where: { id: payload.appointmentId },
+      with: { barber: true, service: true },
+    });
+    if (!appointment) return;
+
+    await email.sendTemplate({
+      template: "appointmentConfirmation",
+      to: "customer@example.com",
+      input: { appointment },
+    });
+  },
+});
+```
+
+## Custom Services
+
+Define custom services with `defineService()` — they become part of `AppContext`:
+
+```ts
+// services/blog.ts
+import { defineService } from "questpie";
+
+export default defineService(({ collections, db }) => ({
+  async getPublishedPosts(limit = 10) {
+    return collections.blogPosts.find({
+      where: { status: "published" },
+      limit,
+      orderBy: { createdAt: "desc" },
+    });
+  },
+
+  async getFeaturedPosts() {
+    return collections.blogPosts.find({
+      where: { featured: true },
+    });
+  },
+}));
+```
+
+After codegen, `blog` is available on the context:
+
+```ts
+// In any handler
+afterChange: async ({ blog }) => {
+  const featured = await blog.getFeaturedPosts();
+}
+```
+
+## AppConfig for Client
+
+For client-side type safety, import `AppConfig` from the generated code:
+
+```ts
+// src/lib/client.ts
+import { createClient } from "questpie/client";
+import type { AppConfig } from "#questpie";
+
+export const client = createClient<AppConfig>({
+  baseUrl: "/api",
+});
+```
+
+`AppConfig` is a flat type containing `collections`, `globals`, and `auth` — just what the client needs.
+
 ## Implicit Context with getContext()
 
-All CRUD operations run within `runWithContext()` scope, which means you can use `getContext<TApp>()` without parameters in reusable functions:
+All CRUD operations run within a context scope. Use `getContext()` to access context from reusable functions:
 
 ```ts
 import { getContext } from "questpie";
-import type { App } from '../app';
 
 // Reusable function — no need to pass context explicitly
 async function logActivity(action: string) {
-  const { db, session, locale } = getContext<App>();
+  const { db, session, locale } = getContext();
 
   await db.insert(activityLog).values({
     userId: session?.user.id,
@@ -129,31 +229,10 @@ async function logActivity(action: string) {
   });
 }
 
-// Usage in hook — works because CRUD runs within runWithContext
-const posts = collection("posts").hooks({
+// Usage in hook — works because CRUD runs within context scope
+export const posts = collection("posts").hooks({
   afterChange: async () => {
-    await logActivity("post_updated"); // ✅ Context available automatically
-  },
-});
-```
-
-### Automatic Context Propagation
-
-Context (including `locale` and `accessMode`) automatically propagates to nested API calls:
-
-```ts
-// Parent operation sets locale
-await app.api.collections.pages.find({ where: { slug: "home" } }, { locale: "sk" });
-
-// Inside the afterRead hook, nested calls inherit locale automatically
-.hooks({
-  afterRead: async ({ app }) => {
-    const app = typedApp<App>(app);
-    
-    // This call automatically uses locale: "sk" from parent context
-    const relatedPosts = await app.api.collections.posts.find({
-      where: { featured: true },
-    });
+    await logActivity("post_updated");
   },
 });
 ```
@@ -173,110 +252,18 @@ function maybeLogUser() {
 }
 ```
 
-## Functions
-
-Functions use `fn()` from `questpie`. Each function lives in its own file under `functions/`, and functions are automatically composed via codegen:
-
-```ts
-// functions/booking/create.ts
-import { fn } from "questpie";
-import { z } from "zod";
-
-export default fn({
-  schema: z.object({ barber: z.string(), service: z.string() }),
-  handler: async ({ input, app }) => {
-    // app is typed via codegen
-    return app.api.collections.appointments.create({
-      barber: input.barber,
-      service: input.service,
-    });
-  },
-});
-```
-
-For standalone typed helpers outside of `fn()`, use `typedApp<App>()`.
-
-## Jobs and Workflows
-
-```ts
-import { job, workflow } from "questpie";
-import z from "zod";
-import type { App } from '../app';
-
-const notify = job<App>()({
-  name: "notify-booking",
-  schema: z.object({ appointmentId: z.string() }),
-  handler: async ({ payload, app }) => {
-    await app.email.sendTemplate({
-      template: "booking-confirmation",
-      to: "user@example.com",
-      context: { appointmentId: payload.appointmentId },
-    });
-  },
-});
-
-const processBooking = workflow<App>()<{
-  appointmentId: string;
-}>("process-booking")
-  .step("load", async ({ payload, app }) => {
-    const appointment = await app.api.collections.appointments.findOne({
-      where: { id: payload.appointmentId },
-    });
-    if (!appointment) throw new Error("Appointment not found");
-    return { appointment };
-  })
-  .step("notify", async ({ payload, app }) => {
-    await app.queue.sendAppointmentConfirmation.publish({
-      appointmentId: payload.appointment.id,
-      customerEmail: "user@example.com",
-    });
-    return payload;
-  })
-  .build(z.object({ appointmentId: z.string() }));
-```
-
-## Admin Action and Widget Contexts
-
-```ts
-import { typedContext } from "questpie";
-import type { ServerActionContext, WidgetFetchContext } from "@questpie/admin/server";
-import type { App } from '../app';
-
-const executeBulkArchive = async (ctx: ServerActionContext) => {
-  const { app, session } = typedContext<App>(ctx);
-  if (!session?.user) {
-    return { type: "error", toast: { message: "Unauthorized" } } as const;
-  }
-
-  await app.api.collections.posts.updateMany({
-    where: { id: { $in: ctx.itemIds ?? [] } },
-    data: { status: "archived" },
-  });
-
-  return { type: "success", toast: { message: "Archived" } } as const;
-};
-
-const dashboardCount = async (ctx: WidgetFetchContext) => {
-  const { app } = typedContext<App>(ctx);
-  const count = await app.api.collections.appointments.count({});
-  return { count };
-};
-```
-
 ## Common Mistakes
 
-- **Confusing `typed*` with `get*`** — `typedApp()` only adds types, `getContext()` actually retrieves from storage.
-- Importing runtime `app` in many files instead of importing only `type App`.
-- Using generic queue access instead of job-specific typed calls (`app.queue.jobName.publish(payload)`).
-- Using untyped `session` directly and losing user field autocomplete.
-- Forgetting that `session` can be `undefined` or `null`.
-- Returning loosely typed objects from actions/jobs without schema guards.
+- **Manually casting types** — With `AppContext` augmentation, you don't need `typedApp()`, `getApp()`, or type assertions. Everything is typed automatically.
+- **Importing the runtime `app` object** — In handlers, destructure `collections`, `queue`, etc. from the context instead of importing the app instance.
+- **Forgetting that `session` can be `null`** — Always check for `session` before accessing user properties.
+- **Using generic queue access** — Use typed job-specific calls: `queue.jobName.publish(payload)`.
 
 ## Related Pages
 
 - [Context & Transactions](/docs/server/context-and-transactions)
 - [Hooks & Lifecycle](/docs/server/hooks-and-lifecycle)
 - [Access Control](/docs/server/access-control)
-- [Functions](/docs/server/rpc)
+- [Functions](/docs/server/functions)
 - [Queue & Jobs](/docs/infrastructure/queue-and-jobs)
 - [Actions System](/docs/admin/actions-system)

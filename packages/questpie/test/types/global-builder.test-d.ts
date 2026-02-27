@@ -12,6 +12,15 @@ import { sql } from "drizzle-orm";
 import { boolean, integer, jsonb, text, varchar } from "drizzle-orm/pg-core";
 import type { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
 import { global } from "#questpie/server/global/builder/global-builder.js";
+
+// Augment AppContext for type tests — simulates what generated code does
+declare module "#questpie/server/config/app-context.js" {
+	interface AppContext {
+		session: { user: { id: string } } | null;
+		db: any;
+	}
+}
+
 import type {
 	Equal,
 	Expect,

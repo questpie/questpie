@@ -20,12 +20,20 @@ import type {
 	AdminCollectionConfig,
 	AdminGlobalConfig,
 	ComponentReference,
+	DashboardContribution,
+	DashboardItemDef,
 	ServerDashboardConfig,
 	ServerDashboardItem,
 	ServerSidebarConfig,
 	ServerSidebarSection,
+	SidebarContribution,
+	SidebarItemDef,
 } from "../../../augmentation.js";
 import { introspectBlocks } from "../../../block/introspection.js";
+import {
+	resolveDashboardCallback,
+	resolveSidebarCallback,
+} from "../../../proxy-factories.js";
 
 // ============================================================================
 // Type Helpers
@@ -55,7 +63,7 @@ type AdminConfigItemMeta = {
 /**
  * Helper to get typed app from handler context.
  */
-function getApp(ctx: { app: unknown }): Questpie<any> {
+function getApp(ctx: any): Questpie<any> {
 	return ctx.app as Questpie<any>;
 }
 
@@ -355,6 +363,259 @@ function collectSidebarReferences(config: ServerSidebarConfig): {
 }
 
 // ============================================================================
+// Contribution Merging (SidebarContribution[] → ServerSidebarConfig, etc.)
+// ============================================================================
+
+/**
+ * Normalize sidebar/dashboard state from instance.state.
+ * The state can be:
+ * - An array of SidebarContribution[] (new composable pattern)
+ * - A single SidebarContribution or SidebarCallback (legacy or config-level)
+ * - A ServerSidebarConfig (old builder pattern from .sidebar() method)
+ *
+ * Returns a normalized array of contributions.
+ */
+function normalizeSidebarContributions(raw: unknown): SidebarContribution[] {
+	if (!raw) return [];
+	if (Array.isArray(raw)) {
+		// Array of contributions — may contain callbacks, objects, or mixed
+		const result: SidebarContribution[] = [];
+		for (const item of raw) {
+			const resolved = resolveSidebarCallback(item);
+			if (resolved) result.push(resolved);
+		}
+		return result;
+	}
+	// Single callback or contribution
+	const resolved = resolveSidebarCallback(raw);
+	return resolved ? [resolved] : [];
+}
+
+function normalizeDashboardContributions(
+	raw: unknown,
+): DashboardContribution[] {
+	if (!raw) return [];
+	if (Array.isArray(raw)) {
+		const result: DashboardContribution[] = [];
+		for (const item of raw) {
+			const resolved = resolveDashboardCallback(item);
+			if (resolved) result.push(resolved);
+		}
+		return result;
+	}
+	const resolved = resolveDashboardCallback(raw);
+	return resolved ? [resolved] : [];
+}
+
+/**
+ * Merge SidebarContribution[] into a ServerSidebarConfig.
+ *
+ * Rules (§5.8.3):
+ * - Sections: deduplicated by id. Later contribution wins for title/icon/collapsible.
+ * - Items: grouped by sectionId. Appended in module resolution order.
+ *   Items with `position: "start"` are prepended to the section.
+ * - Sections appear in the order they were first defined.
+ */
+function mergeSidebarContributions(
+	contributions: SidebarContribution[],
+): ServerSidebarConfig {
+	// Collect section definitions — later wins for metadata
+	const sectionOrder: string[] = [];
+	const sectionDefs = new Map<
+		string,
+		{ title?: unknown; icon?: unknown; collapsible?: boolean }
+	>();
+	// Collect items by sectionId
+	const sectionItems = new Map<string, SidebarItemDef[]>();
+
+	for (const contrib of contributions) {
+		// Process sections
+		if (contrib.sections) {
+			for (const sec of contrib.sections) {
+				if (!sectionDefs.has(sec.id)) {
+					sectionOrder.push(sec.id);
+				}
+				// Later wins for metadata
+				sectionDefs.set(sec.id, {
+					title: sec.title ?? sectionDefs.get(sec.id)?.title,
+					icon: sec.icon ?? sectionDefs.get(sec.id)?.icon,
+					collapsible: sec.collapsible ?? sectionDefs.get(sec.id)?.collapsible,
+				});
+			}
+		}
+
+		// Process items
+		if (contrib.items) {
+			for (const item of contrib.items) {
+				const sid = item.sectionId;
+				if (!sectionItems.has(sid)) {
+					sectionItems.set(sid, []);
+				}
+				const items = sectionItems.get(sid) ?? [];
+				if (item.position === "start") {
+					items.unshift(item);
+				} else {
+					items.push(item);
+				}
+				sectionItems.set(sid, items);
+				// Ensure section exists even if not explicitly defined
+				if (!sectionDefs.has(sid)) {
+					sectionOrder.push(sid);
+					sectionDefs.set(sid, {});
+				}
+			}
+		}
+	}
+
+	// Build final ServerSidebarConfig
+	const sections: ServerSidebarSection[] = [];
+	for (const sectionId of sectionOrder) {
+		const def = sectionDefs.get(sectionId);
+		const items = sectionItems.get(sectionId) ?? [];
+
+		sections.push({
+			id: sectionId,
+			title: def?.title as any,
+			icon: def?.icon as any,
+			collapsible: def?.collapsible,
+			items: items.map(
+				({ sectionId: _sid, position: _pos, ...rest }) => rest as any,
+			),
+		});
+	}
+
+	return { sections };
+}
+
+/**
+ * Merge DashboardContribution[] into a ServerDashboardConfig.
+ *
+ * Rules (§5.8.3):
+ * - Metadata (title, description, columns, realtime): last non-undefined wins.
+ * - Actions: concatenated from all contributions.
+ * - Sections: deduplicated by id. Later wins for label/layout/columns.
+ * - Items: grouped by sectionId. Appended in module resolution order.
+ *   Items with `position: "start"` are prepended.
+ */
+function mergeDashboardContributions(
+	contributions: DashboardContribution[],
+): ServerDashboardConfig {
+	let title: unknown;
+	let description: unknown;
+	let columns: number | undefined;
+	let realtime: boolean | undefined;
+	const allActions: unknown[] = [];
+
+	const sectionOrder: string[] = [];
+	const sectionDefs = new Map<
+		string,
+		{ label?: unknown; layout?: string; columns?: number }
+	>();
+	const sectionItems = new Map<string, DashboardItemDef[]>();
+
+	for (const contrib of contributions) {
+		if (contrib.title !== undefined) title = contrib.title;
+		if (contrib.description !== undefined) description = contrib.description;
+		if (contrib.columns !== undefined) columns = contrib.columns;
+		if (contrib.realtime !== undefined) realtime = contrib.realtime;
+
+		if (contrib.actions) {
+			allActions.push(...contrib.actions);
+		}
+
+		if (contrib.sections) {
+			for (const sec of contrib.sections) {
+				if (!sectionDefs.has(sec.id)) {
+					sectionOrder.push(sec.id);
+				}
+				sectionDefs.set(sec.id, {
+					label: sec.label ?? sectionDefs.get(sec.id)?.label,
+					layout: sec.layout ?? sectionDefs.get(sec.id)?.layout,
+					columns: sec.columns ?? sectionDefs.get(sec.id)?.columns,
+				});
+			}
+		}
+
+		if (contrib.items) {
+			for (const item of contrib.items) {
+				const sid = item.sectionId;
+				if (!sectionItems.has(sid)) {
+					sectionItems.set(sid, []);
+				}
+				const items = sectionItems.get(sid) ?? [];
+				if (item.position === "start") {
+					items.unshift(item);
+				} else {
+					items.push(item);
+				}
+				sectionItems.set(sid, items);
+				if (!sectionDefs.has(sid)) {
+					sectionOrder.push(sid);
+					sectionDefs.set(sid, {});
+				}
+			}
+		}
+	}
+
+	// Build final ServerDashboardConfig
+	const dashboardItems: ServerDashboardItem[] = [];
+	for (const sectionId of sectionOrder) {
+		const def = sectionDefs.get(sectionId);
+		const items = sectionItems.get(sectionId) ?? [];
+
+		if (items.length > 0 || def?.label) {
+			dashboardItems.push({
+				type: "section",
+				label: def?.label,
+				layout: def?.layout ?? "grid",
+				columns: def?.columns,
+				items: items.map(
+					({ sectionId: _sid, position: _pos, ...rest }) => rest as any,
+				),
+			} as any);
+		}
+	}
+
+	return {
+		title: title as any,
+		description: description as any,
+		columns,
+		realtime,
+		actions: allActions.length > 0 ? (allActions as any) : undefined,
+		items: dashboardItems.length > 0 ? dashboardItems : undefined,
+	};
+}
+
+/**
+ * Check whether a state value looks like legacy ServerSidebarConfig
+ * (has .sections array directly) vs contribution-based (array of contributions).
+ */
+function isLegacySidebarConfig(value: unknown): value is ServerSidebarConfig {
+	return (
+		value != null &&
+		typeof value === "object" &&
+		!Array.isArray(value) &&
+		"sections" in (value as any) &&
+		Array.isArray((value as any).sections)
+	);
+}
+
+/**
+ * Check whether a state value looks like legacy ServerDashboardConfig
+ * (has .items or .title directly) vs contribution-based.
+ */
+function isLegacyDashboardConfig(
+	value: unknown,
+): value is ServerDashboardConfig {
+	return (
+		value != null &&
+		typeof value === "object" &&
+		!Array.isArray(value) &&
+		("items" in (value as any) || "title" in (value as any))
+	);
+}
+
+// ============================================================================
 // Dashboard Processing (access + serialization + ID assignment)
 // ============================================================================
 
@@ -504,8 +765,8 @@ const getAdminConfigOutputSchema = z.object({
  * @example
  * ```ts
  * // In your app
- * const app = config({
- *   modules: [admin()],
+ * const app = runtimeConfig({
+ *   modules: [adminModule],
  *   dashboard: ({ d }) => d.dashboard({
  *     title: { en: "Dashboard" },
  *     items: [...],
@@ -593,9 +854,19 @@ const getAdminConfig = fn({
 			response.branding = state.branding;
 		}
 
-		// 3. Dashboard: assign IDs, process access, strip non-serializable
+		// 3. Dashboard: merge contributions → process access → strip non-serializable
 		if (state.dashboard) {
-			const dashboard = state.dashboard as ServerDashboardConfig;
+			let dashboard: ServerDashboardConfig;
+
+			if (isLegacyDashboardConfig(state.dashboard)) {
+				// Legacy: state.dashboard is already a ServerDashboardConfig (from .dashboard() builder)
+				dashboard = state.dashboard;
+			} else {
+				// New: state.dashboard is DashboardContribution[] or mixed
+				const contributions = normalizeDashboardContributions(state.dashboard);
+				dashboard = mergeDashboardContributions(contributions);
+			}
+
 			if (dashboard.items) {
 				assignWidgetIds(dashboard.items);
 			}
@@ -611,16 +882,27 @@ const getAdminConfig = fn({
 			};
 		}
 
-		// 4. Sidebar: explicit → filter + auto-append unlisted; auto → build from filtered meta
+		// 4. Sidebar: merge contributions → filter by access → auto-append unlisted
 		if (state.sidebar) {
+			let sidebarConfig: ServerSidebarConfig;
+
+			if (isLegacySidebarConfig(state.sidebar)) {
+				// Legacy: state.sidebar is already a ServerSidebarConfig (from .sidebar() builder)
+				sidebarConfig = state.sidebar;
+			} else {
+				// New: state.sidebar is SidebarContribution[] or mixed
+				const contributions = normalizeSidebarContributions(state.sidebar);
+				sidebarConfig = mergeSidebarContributions(contributions);
+			}
+
 			const filteredSidebar = filterSidebarConfig(
-				state.sidebar,
+				sidebarConfig,
 				accessibleCollections,
 				accessibleGlobals,
 			);
 
 			// Find collections/globals the user explicitly listed
-			const referenced = collectSidebarReferences(state.sidebar);
+			const referenced = collectSidebarReferences(sidebarConfig);
 
 			// Find non-hidden accessible items NOT referenced in the explicit sidebar
 			const unlistedCollectionsMeta = Object.fromEntries(

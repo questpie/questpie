@@ -35,7 +35,7 @@ const features = [
 		icon: FileText,
 		title: "OpenAPI & Scalar",
 		description:
-			"Generate OpenAPI from collections, globals, and RPC with built-in Scalar docs.",
+			"Generate OpenAPI from collections, globals, and functions with built-in Scalar docs.",
 		link: "client/openapi",
 	},
 	{

@@ -249,8 +249,8 @@ export interface AdminProviderProps {
 	 * @example
 	 * ```tsx
 	 * // Server configures locales and messages
-	 * const app = config({
-	 *   modules: [admin()],
+	 * const app = runtimeConfig({
+	 *   modules: [adminModule],
 	 *   adminLocale: { locales: ["en", "sk"], defaultLocale: "en" },
 	 *   messages: { sk: { "common.save": "Ulozit" } },
 	 * });

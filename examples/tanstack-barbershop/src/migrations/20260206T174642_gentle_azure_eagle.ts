@@ -1,10 +1,11 @@
+import { migration } from "questpie";
+import type { OperationSnapshot } from "questpie";
 import { sql } from "drizzle-orm";
-import type { Migration, OperationSnapshot } from "questpie";
 import snapshotJson from "./snapshots/20260206T174642_gentle_azure_eagle.json";
 
 const snapshot = snapshotJson as OperationSnapshot;
 
-export const gentleAzureEagle20260206T174642: Migration = {
+export default migration({
 	id: "gentleAzureEagle20260206T174642",
 	async up({ db }) {
 		// for now this must be done manually as part of the migration since we need the pg_trgm extension for some of the indexes, and not all users may have it installed already
@@ -448,4 +449,4 @@ export const gentleAzureEagle20260206T174642: Migration = {
 		await db.execute(sql`DROP TABLE "questpie_search_facets";`);
 	},
 	snapshot,
-};
+});

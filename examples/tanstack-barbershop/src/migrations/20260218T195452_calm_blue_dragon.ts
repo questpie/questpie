@@ -1,10 +1,11 @@
+import { migration } from "questpie";
+import type { OperationSnapshot } from "questpie";
 import { sql } from "drizzle-orm";
-import type { Migration, OperationSnapshot } from "questpie";
 import snapshotJson from "./snapshots/20260218T195452_calm_blue_dragon.json";
 
 const snapshot = snapshotJson as OperationSnapshot;
 
-export const calmBlueDragon20260218T195452: Migration = {
+export default migration({
 	id: "calmBlueDragon20260218T195452",
 	async up({ db }) {
 		await db.execute(
@@ -29,4 +30,4 @@ export const calmBlueDragon20260218T195452: Migration = {
 		);
 	},
 	snapshot,
-};
+});

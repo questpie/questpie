@@ -3,11 +3,8 @@ import type { JobDefinition } from "./types.js";
 /**
  * Define a typesafe job.
  *
- * @example Basic usage (use typedApp<App>() for type safety)
+ * @example Basic usage
  * ```ts
- * import { typedApp } from "questpie";
- * import type { App } from "./questpie";
- *
  * const sendEmailJob = job({
  *   name: 'send-email',
  *   schema: z.object({
@@ -15,9 +12,8 @@ import type { JobDefinition } from "./types.js";
  *     subject: z.string(),
  *     body: z.string(),
  *   }),
- *   handler: async ({ payload, app }) => {
- *     const app = typedApp<App>(app);
- *     await app.email.send({
+ *   handler: async ({ payload, email }) => {
+ *     await email.send({
  *       to: payload.to,
  *       subject: payload.subject,
  *       html: payload.body,
@@ -30,40 +26,21 @@ import type { JobDefinition } from "./types.js";
  *   },
  * });
  * ```
- *
- * @example With typed app (recommended for full type safety)
- * ```ts
- * import type { App } from './app';
- *
- * const sendEmailJob = job<App>()({
- *   name: 'send-email',
- *   schema: z.object({ to: z.string() }),
- *   handler: async ({ payload, app }) => {
- *     app.queue.notify.publish(...); // fully typed!
- *   }
- * });
- * ```
  */
 export function job<TName extends string, TPayload, TResult = void>(
 	definition: JobDefinition<TPayload, TResult, TName>,
 ): JobDefinition<TPayload, TResult, TName>;
 
 /**
- * Factory function with app type parameter for full type safety.
- * Call with no arguments to get a curried function that accepts the definition.
- *
- * @example
- * ```ts
- * const sendEmailJob = job<App>()({ name: 'send-email', ... });
- * ```
+ * @deprecated TApp generic removed; use flat context properties (db, queue, email, ...) instead.
  */
-export function job<TApp = any>(): <
+export function job(): <
 	TName extends string,
 	TPayload,
 	TResult = void,
 >(
-	definition: JobDefinition<TPayload, TResult, TName, TApp>,
-) => JobDefinition<TPayload, TResult, TName, TApp>;
+	definition: JobDefinition<TPayload, TResult, TName>,
+) => JobDefinition<TPayload, TResult, TName>;
 
 export function job<
 	TNameOrApp extends string | unknown,
@@ -76,10 +53,10 @@ export function job<
 		TNameOrApp extends string ? TNameOrApp : string
 	>,
 ): unknown {
-	// Overload 2: job<App>() returns a curried function
+	// Overload 2: job() returns a curried function
 	if (definition === undefined) {
 		return <TName extends string, TPayload, TResult = void>(
-			def: JobDefinition<TPayload, TResult, TName, TNameOrApp>,
+			def: JobDefinition<TPayload, TResult, TName>,
 		) => def;
 	}
 

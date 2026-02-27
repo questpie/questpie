@@ -1,11 +1,11 @@
 ---
 title: Build a Booking System
-description: End-to-end booking architecture with collections, reactive logic, RPC, and jobs
+description: End-to-end booking architecture with collections, reactive logic, functions, and jobs
 ---
 
 # Build a Booking System
 
-This guide walks through building a barbershop booking system using QUESTPIE — the same architecture used in the TanStack Barbershop example. It covers entity modeling, relations, reactive fields, RPC functions, and background jobs.
+This guide walks through building a barbershop booking system using QUESTPIE — the same architecture used in the TanStack Barbershop example. It covers entity modeling, relations, reactive fields, server functions, and background jobs.
 
 ## Entity Model
 
@@ -24,54 +24,71 @@ appointments ── references barber + service + customer data
 ### Services
 
 ```ts
-const services = collection("services")
+// collections/services.ts
+import { collection } from "#questpie";
+
+export const services = collection("services")
   .fields(({ f }) => ({
     name: f.text({ required: true }),
-    description: f.textarea(),
+    description: f.textarea({}),
     duration: f.number({ min: 15, required: true }),  // minutes
-    price: f.number({ min: 0, precision: 10, scale: 2, required: true }),
-    isActive: f.boolean({ required: true }).default(true),
+    price: f.number({ min: 0, required: true }),
+    isActive: f.boolean({ required: true, default: true }),
   }))
-  .title((t) => t.name)
+  .title(({ f }) => f.name)
   .options({ timestamps: true });
 ```
 
 ### Barbers
 
 ```ts
-const barbers = collection("barbers")
+// collections/barbers.ts
+import { collection } from "#questpie";
+
+export const barbers = collection("barbers")
   .fields(({ f }) => ({
     name: f.text({ required: true }),
     email: f.email({ required: true }),
-    phone: f.text(),
-    avatar: f.upload(),
-    bio: f.textarea(),
-    services: f.relation({ to: "services", hasMany: true, through: "barberServices" }),
+    phone: f.text({}),
+    avatar: f.upload({ to: "assets" }),
+    bio: f.textarea({}),
+    services: f.relation({ to: "services", hasMany: true, through: "barberServices", sourceField: "barber", targetField: "service" }),
   }))
-  .title((t) => t.name)
+  .title(({ f }) => f.name)
   .options({ timestamps: true });
 ```
 
 ### Appointments
 
 ```ts
-const appointments = collection("appointments")
+// collections/appointments.ts
+import { collection } from "#questpie";
+
+export const appointments = collection("appointments")
   .fields(({ f }) => ({
     barber: f.relation({ to: "barbers", required: true }),
     service: f.relation({ to: "services", required: true }),
     customerName: f.text({ required: true }),
     customerEmail: f.email({ required: true }),
-    customerPhone: f.text(),
+    customerPhone: f.text({}),
     date: f.date({ required: true }),
     startTime: f.time({ required: true }),
     endTime: f.time({ required: true }),
-    status: f.select(["pending", "confirmed", "completed", "cancelled"], { required: true }).default("pending"),
-    notes: f.textarea(),
-    // Cancellation fields — only visible when status is "cancelled"
-    cancellationReason: f.textarea(),
-    cancelledAt: f.datetime(),
+    status: f.select({
+      options: [
+        { value: "pending", label: { en: "Pending" } },
+        { value: "confirmed", label: { en: "Confirmed" } },
+        { value: "completed", label: { en: "Completed" } },
+        { value: "cancelled", label: { en: "Cancelled" } },
+      ],
+      required: true,
+      default: "pending",
+    }),
+    notes: f.textarea({}),
+    cancellationReason: f.textarea({}),
+    cancelledAt: f.datetime({}),
   }))
-  .title((t) => t.customerName)
+  .title(({ f }) => f.customerName)
   .options({ timestamps: true });
 ```
 
@@ -100,26 +117,30 @@ When a user changes `status` to "cancelled", the cancellation fields appear dyna
 ### Slot Availability
 
 ```ts
-const getAvailableSlots = fn({
+// functions/get-available-slots.ts
+import { fn } from "questpie";
+import { z } from "zod";
+
+export default fn({
   schema: z.object({
     barberId: z.string(),
     date: z.string(),
     serviceId: z.string().optional(),
   }),
-  handler: async ({ input, app }) => {
+  handler: async ({ input, collections }) => {
     const { barberId, date, serviceId } = input;
 
     // Get service duration
     let duration = 30; // default
     if (serviceId) {
-      const service = await app.api.collections.services.findOne({
+      const service = await collections.services.findOne({
         where: { id: serviceId },
       });
       if (service) duration = service.duration;
     }
 
     // Get existing appointments for this barber on this date
-    const existing = await app.api.collections.appointments.find({
+    const existing = await collections.appointments.find({
       where: {
         barber: barberId,
         date,
@@ -133,7 +154,7 @@ const getAvailableSlots = fn({
       for (let min = 0; min < 60; min += duration) {
         const time = `${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
         const isBooked = existing.docs.some(
-          (apt) => apt.startTime <= time && apt.endTime > time,
+          (apt: any) => apt.startTime <= time && apt.endTime > time,
         );
         if (!isBooked) {
           slots.push({ time, available: true });
@@ -149,7 +170,11 @@ const getAvailableSlots = fn({
 ### Create Booking
 
 ```ts
-const createBooking = fn({
+// functions/create-booking.ts
+import { fn } from "questpie";
+import { z } from "zod";
+
+export default fn({
   schema: z.object({
     barberId: z.string(),
     serviceId: z.string(),
@@ -159,18 +184,18 @@ const createBooking = fn({
     customerEmail: z.string().email(),
     customerPhone: z.string().optional(),
   }),
-  handler: async ({ input, app }) => {
-    const service = await app.api.collections.services.findOne({
+  handler: async ({ input, collections, queue }) => {
+    const service = await collections.services.findOne({
       where: { id: input.serviceId },
     });
-    if (!service) throw ApiError.notFound("Service", input.serviceId);
+    if (!service) throw new Error("Service not found");
 
     // Calculate end time
     const [h, m] = input.time.split(":").map(Number);
     const endMinutes = h * 60 + m + service.duration;
     const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 
-    const appointment = await app.api.collections.appointments.create({
+    const appointment = await collections.appointments.create({
       barber: input.barberId,
       service: input.serviceId,
       date: input.date,
@@ -182,7 +207,7 @@ const createBooking = fn({
     });
 
     // Send confirmation email via job queue
-    await app.queue.sendConfirmation.publish({
+    await queue.sendConfirmation.publish({
       appointmentId: appointment.id,
       customerEmail: input.customerEmail,
     });
@@ -197,26 +222,30 @@ const createBooking = fn({
 ### Confirmation Email
 
 ```ts
-const sendConfirmation = job({
+// jobs/send-confirmation.ts
+import { job } from "questpie";
+import { z } from "zod";
+
+export default job({
   name: "sendConfirmation",
   schema: z.object({
     appointmentId: z.string(),
     customerEmail: z.string().email(),
   }),
-  handler: async ({ payload, app }) => {
-    const appointment = await app.api.collections.appointments.findOne({
+  handler: async ({ payload, collections, email }) => {
+    const appointment = await collections.appointments.findOne({
       where: { id: payload.appointmentId },
       with: { barber: true, service: true },
     });
     if (!appointment) return;
 
-    await app.email.sendTemplate({
+    await email.sendTemplate({
       template: "appointmentConfirmation",
       to: payload.customerEmail,
-      context: {
+      input: {
         customerName: appointment.customerName,
-        barberName: appointment.barber.name,
-        serviceName: appointment.service.name,
+        barberName: (appointment as any).barber.name,
+        serviceName: (appointment as any).service.name,
         date: appointment.date,
         time: appointment.startTime,
       },
@@ -236,9 +265,9 @@ Automatically record cancellation time and send notification:
       data.cancelledAt = new Date();
     }
   },
-  afterChange: async ({ data, original, operation, app }) => {
+  afterChange: async ({ data, original, operation, queue }) => {
     if (operation === "update" && data.status === "cancelled" && original?.status !== "cancelled") {
-      await app.queue.sendCancellation.publish({
+      await queue.sendCancellation.publish({
         appointmentId: data.id,
         customerEmail: data.customerEmail,
       });
@@ -247,24 +276,28 @@ Automatically record cancellation time and send notification:
 })
 ```
 
-## Step 5: Assemble the app
+## Step 5: Configure and Generate
+
+With file convention, all entities are auto-discovered. Just configure the runtime and modules:
 
 ```ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// questpie.config.ts
+import { runtimeConfig } from "questpie";
 
-export default config({
-  modules: [admin()],
-  collections: { services, barbers, appointments },
-  jobs: { sendConfirmation, sendCancellation },
+export default runtimeConfig({
   app: { url: process.env.APP_URL! },
   db: { url: process.env.DATABASE_URL! },
 });
-
-// Functions live in the functions/ directory — no router needed.
-// functions/booking/getAvailableSlots.ts exports the fn() above
-// functions/booking/createBooking.ts exports the fn() above
 ```
+
+```ts
+// modules.ts
+import { adminModule } from "@questpie/admin/server";
+
+export default [adminModule] as const;
+```
+
+Then run `questpie generate` to produce the app entrypoint. Collections, functions, and jobs are discovered from their directories automatically.
 
 ## Patterns Used
 
@@ -279,6 +312,6 @@ export default config({
 - [Collections](/docs/server/collections) — Collection builder
 - [Relations](/docs/server/relations) — Relation types
 - [Reactive Fields](/docs/server/reactive-fields) — Hidden, readOnly, compute
-- [RPC](/docs/server/rpc) — Typed procedures
+- [Functions](/docs/server/functions) — Typed server functions
 - [Queue & Jobs](/docs/infrastructure/queue-and-jobs) — Background job processing
 - [Email](/docs/infrastructure/email) — Email templates and sending

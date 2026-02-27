@@ -1,15 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-const q = questpie({ name: "test-versioning-workflow" }).fields(defaultFields);
-
 // Workflow shorthand: versioning: { workflow: true } → draft/published
-const shorthand_posts = q
-	.collection("shorthand_posts")
+const shorthand_posts = collection("shorthand_posts")
 	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
@@ -20,8 +16,7 @@ const shorthand_posts = q
 	});
 
 // Full workflow config with stages
-const workflow_posts = q
-	.collection("workflow_posts")
+const workflow_posts = collection("workflow_posts")
 	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
@@ -35,8 +30,7 @@ const workflow_posts = q
 	});
 
 // Plain versioning (no workflow) for comparison
-const plain_versioned = q
-	.collection("plain_versioned")
+const plain_versioned = collection("plain_versioned")
 	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
@@ -44,17 +38,13 @@ const plain_versioned = q
 		versioning: true,
 	});
 
-const testModule = q.collections({
-	shorthand_posts,
-	workflow_posts,
-	plain_versioned,
-});
-
 describe("collection versioning + workflow", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({
+			collections: { shorthand_posts, workflow_posts, plain_versioned },
+		});
 		await runTestDbMigrations(setup.app);
 	});
 

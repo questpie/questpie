@@ -3,6 +3,9 @@
 	"version": "0.0.1",
 	"private": true,
 	"type": "module",
+	"imports": {
+		"#questpie": "./src/questpie/server/.generated/index.ts"
+	},
 	"scripts": {
 		"dev": "bun --bun vite dev --port 3000",
 		"build": "vite build",

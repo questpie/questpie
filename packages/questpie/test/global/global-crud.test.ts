@@ -1,92 +1,95 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection, global } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-const q = questpie({ name: "test-module" }).fields(defaultFields);
+const posts = collection("posts")
+	.fields(({ f }) => ({
+		title: f.textarea({ required: true }),
+	}))
+	.options({
+		versioning: true,
+	});
 
-const testModule = q
-	.collections({
-		posts: q
-			.collection("posts")
-			.fields(({ f }) => ({
-				title: f.textarea({ required: true }),
-			}))
-			.options({
-				versioning: true,
-			}),
-	})
-	.globals({
-		site_config: q
-			.global("site_config")
-			.fields(({ f }) => ({
-				siteName: f.text({ required: true, maxLength: 100 }),
-				featuredPost: f.relation({
-					to: "posts",
-					relationName: "featuredPost",
-				}),
-			}))
-			.options({
-				versioning: {
-					enabled: true,
-					maxVersions: 2,
+const site_config = global("site_config")
+	.fields(({ f }) => ({
+		siteName: f.text({ required: true, maxLength: 100 }),
+		featuredPost: f.relation({
+			to: "posts",
+			relationName: "featuredPost",
+		}),
+	}))
+	.options({
+		versioning: {
+			enabled: true,
+			maxVersions: 2,
+		},
+	});
+
+const localized_config = global("localized_config").fields(({ f }) => ({
+	title: f.textarea({ localized: true }),
+}));
+
+const auto_config = global("auto_config").fields(({ f }) => ({
+	mode: f.text({ maxLength: 20, default: "auto" }),
+}));
+
+const read_only_config = global("read_only_config")
+	.fields(({ f }) => ({
+		mode: f.text({ maxLength: 20, default: "read" }),
+	}))
+	.access({
+		read: true,
+		update: false,
+	});
+
+const workflow_config = global("workflow_config")
+	.fields(({ f }) => ({
+		title: f.text({ required: true }),
+	}))
+	.options({
+		versioning: {
+			workflow: {
+				stages: ["draft", "published"],
+				initialStage: "draft",
+			},
+		},
+	});
+
+const guarded_workflow_config = global("guarded_workflow_config")
+	.fields(({ f }) => ({
+		title: f.text({ required: true }),
+	}))
+	.options({
+		versioning: {
+			workflow: {
+				stages: {
+					draft: { transitions: ["review"] },
+					review: { transitions: ["published"] },
+					published: { transitions: [] },
 				},
-			}),
-		localized_config: q.global("localized_config").fields(({ f }) => ({
-			title: f.textarea({ localized: true }),
-		})),
-		auto_config: q.global("auto_config").fields(({ f }) => ({
-			mode: f.text({ maxLength: 20, default: "auto" }),
-		})),
-		read_only_config: q
-			.global("read_only_config")
-			.fields(({ f }) => ({
-				mode: f.text({ maxLength: 20, default: "read" }),
-			}))
-			.access({
-				read: true,
-				update: false,
-			}),
-		workflow_config: q
-			.global("workflow_config")
-			.fields(({ f }) => ({
-				title: f.text({ required: true }),
-			}))
-			.options({
-				versioning: {
-					workflow: {
-						stages: ["draft", "published"],
-						initialStage: "draft",
-					},
-				},
-			}),
-		guarded_workflow_config: q
-			.global("guarded_workflow_config")
-			.fields(({ f }) => ({
-				title: f.text({ required: true }),
-			}))
-			.options({
-				versioning: {
-					workflow: {
-						stages: {
-							draft: { transitions: ["review"] },
-							review: { transitions: ["published"] },
-							published: { transitions: [] },
-						},
-						initialStage: "draft",
-					},
-				},
-			}),
+				initialStage: "draft",
+			},
+		},
 	});
 
 describe("global CRUD", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	let app: any; // Use any to bypass type issues with FK column names
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({
+			collections: { posts },
+			globals: {
+				site_config,
+				localized_config,
+				auto_config,
+				read_only_config,
+				workflow_config,
+				guarded_workflow_config,
+			},
+		});
 		app = setup.app;
 		await runTestDbMigrations(app);
 	});

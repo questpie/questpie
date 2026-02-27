@@ -14,7 +14,7 @@ Adapters connect QUESTPIE to HTTP frameworks. The core provides a framework-agno
 Create the main HTTP handler for all API routes.
 
 ```ts
-import { createFetchHandler } from "@questpie/questpie";
+import { createFetchHandler } from "questpie";
 
 const handler = createFetchHandler(app, {
   basePath: "/api",
@@ -163,7 +163,7 @@ export { GET, POST, PATCH, DELETE };
 For frameworks not covered by existing packages:
 
 ```ts
-import { createFetchHandler } from "@questpie/questpie";
+import { createFetchHandler } from "questpie";
 
 const handler = createFetchHandler(app, {
   basePath: "/api",

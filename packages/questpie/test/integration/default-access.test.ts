@@ -1,20 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection, global } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../utils/test-context.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
 
-const q = questpie({ name: "test-module" }).fields(defaultFields);
-
 // Collection WITHOUT explicit access - should inherit defaultAccess
-const publicPosts = q.collection("public_posts").fields(({ f }) => ({
+const publicPosts = collection("public_posts").fields(({ f }) => ({
 	title: f.textarea({ required: true }),
 }));
 
 // Collection WITH explicit access - should override defaultAccess
-const adminNotes = q
-	.collection("admin_notes")
+const adminNotes = collection("admin_notes")
 	.fields(({ f }) => ({
 		content: f.textarea({ required: true }),
 	}))
@@ -24,8 +20,7 @@ const adminNotes = q
 	});
 
 // Collection with PARTIAL access - only read defined, others should fallback to defaultAccess
-const partialAccessPosts = q
-	.collection("partial_access_posts")
+const partialAccessPosts = collection("partial_access_posts")
 	.fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 	}))
@@ -35,13 +30,12 @@ const partialAccessPosts = q
 	});
 
 // Global WITHOUT explicit access - should inherit defaultAccess
-const siteSettings = q.global("site_settings").fields(({ f }) => ({
+const siteSettings = global("site_settings").fields(({ f }) => ({
 	siteName: f.textarea({ required: true }),
 }));
 
 // Global WITH explicit access - should override defaultAccess
-const adminSettings = q
-	.global("admin_settings")
+const adminSettings = global("admin_settings")
 	.fields(({ f }) => ({
 		secretKey: f.textarea({ required: true }),
 	}))
@@ -51,28 +45,26 @@ const adminSettings = q
 	});
 
 describe("default access control", () => {
-	// Create app with defaultAccess requiring authentication
-	const testModule = q
-		.collections({
-			public_posts: publicPosts,
-			admin_notes: adminNotes,
-			partial_access_posts: partialAccessPosts,
-		})
-		.globals({
-			site_settings: siteSettings,
-			admin_settings: adminSettings,
-		})
-		.defaultAccess({
-			read: ({ session }) => !!session,
-			create: ({ session }) => !!session,
-			update: ({ session }) => !!session,
-			delete: ({ session }) => !!session,
-		});
-
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({
+			collections: {
+				public_posts: publicPosts,
+				admin_notes: adminNotes,
+				partial_access_posts: partialAccessPosts,
+			},
+			globals: {
+				site_settings: siteSettings,
+				admin_settings: adminSettings,
+			},
+			defaultAccess: {
+				read: ({ session }) => !!session,
+				create: ({ session }) => !!session,
+				update: ({ session }) => !!session,
+				delete: ({ session }) => !!session,
+			},
+		});
 		await runTestDbMigrations(setup.app);
 	});
 

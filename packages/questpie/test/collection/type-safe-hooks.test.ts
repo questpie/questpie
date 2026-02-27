@@ -1,13 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
-
-const q = questpie({ name: "test-module" }).fields(defaultFields);
+import { collection } from "../../src/server/index.js";
 
 describe("Type-Safe Hooks", () => {
 	test("hooks should have proper type inference", () => {
-		const users = q
-			.collection("users")
+		const users = collection("users")
 			.fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				email: f.text({ required: true, maxLength: 255 }),
@@ -83,8 +79,7 @@ describe("Type-Safe Hooks", () => {
 	});
 
 	test("original field availability across all hooks", () => {
-		const users = q
-			.collection("users")
+		const users = collection("users")
 			.fields(({ f }) => ({
 				name: f.textarea({ required: true }),
 				email: f.text({ required: true, maxLength: 255 }),
@@ -204,8 +199,7 @@ describe("Type-Safe Hooks", () => {
 	});
 
 	test("beforeOperation hook has correct types", () => {
-		const posts = q
-			.collection("posts")
+		const posts = collection("posts")
 			.fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 			}))
@@ -244,8 +238,7 @@ describe("Type-Safe Hooks", () => {
 	});
 
 	test("hooks with localized fields", () => {
-		const posts = q
-			.collection("posts")
+		const posts = collection("posts")
 			.fields(({ f }) => ({
 				title: f.text({ required: true, localized: true }),
 				slug: f.text({ required: true }),
@@ -285,8 +278,7 @@ describe("Type-Safe Hooks", () => {
 	});
 
 	test("hooks with localized fields maintain correct types across lifecycle", () => {
-		const articles = q
-			.collection("articles")
+		const articles = collection("articles")
 			.fields(({ f }) => ({
 				title: f.textarea({ required: true, localized: true }),
 				body: f.textarea({ localized: true }),
@@ -345,8 +337,7 @@ describe("Type-Safe Hooks", () => {
 	});
 
 	test("hooks should not allow return values", () => {
-		const articles = q
-			.collection("articles")
+		const articles = collection("articles")
 			.fields(({ f }) => ({
 				title: f.textarea({ required: true }),
 			}))

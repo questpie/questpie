@@ -1,6 +1,5 @@
+import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { RequestContext } from "#questpie/server/config/context.js";
-import type { Questpie } from "#questpie/server/config/questpie.js";
-import type { QuestpieConfig } from "#questpie/server/config/types.js";
 
 /**
  * Seed categories control when seeds run:
@@ -12,16 +11,49 @@ export type SeedCategory = "required" | "dev" | "test";
 
 /**
  * Context passed to seed run/undo functions.
- * Provides full app access — unlike migrations which only get raw DB.
+ *
+ * Extends AppContext — provides the same flat, fully-typed access to all
+ * infrastructure (db, collections, globals, queue, email, storage, …) as
+ * function and job handlers. Auto-typed via `declare module "questpie"` in
+ * the generated `.generated/index.ts`.
+ *
+ * Adds two seed-specific helpers:
+ * - `log` — seed output logger
+ * - `createContext` — create a locale-specific request context for
+ *   multi-locale data operations (e.g. updating translated globals)
+ *
+ * @example
+ * ```ts
+ * export default seed({
+ *   async run({ collections, globals, createContext, log }) {
+ *     log("Seeding...");
+ *     await globals.siteSettings.update({ shopName: "My Shop" });
+ *
+ *     // For locale-specific operations:
+ *     const ctxSk = await createContext({ locale: "sk" });
+ *     await globals.siteSettings.update({ tagline: "Môj obchod" }, ctxSk);
+ *   },
+ * });
+ * ```
  */
-export type SeedContext<TConfig extends QuestpieConfig = QuestpieConfig> = {
-	/** Full app instance — access db, api, auth, storage, queue, etc. */
-	app: Questpie<TConfig>;
-	/** Pre-created system context for the default locale */
-	ctx: RequestContext;
+export interface SeedContext extends AppContext {
 	/** Logger for seed output */
 	log: (message: string) => void;
-};
+	/**
+	 * Create a locale-specific request context for multi-locale data operations.
+	 * Pass the result as the second argument to collection/global CRUD methods.
+	 *
+	 * @example
+	 * ```ts
+	 * const ctxSk = await createContext({ locale: "sk" });
+	 * await globals.siteSettings.update({ tagline: "Môj obchod" }, ctxSk);
+	 * ```
+	 */
+	createContext(options?: {
+		locale?: string;
+		accessMode?: "system" | "user";
+	}): Promise<RequestContext>;
+}
 
 /**
  * Seed definition — a unit of seed data.
@@ -32,7 +64,7 @@ export type SeedContext<TConfig extends QuestpieConfig = QuestpieConfig> = {
  * - They can optionally have an undo function
  * - They should be idempotent by default
  */
-export type Seed<TConfig extends QuestpieConfig = QuestpieConfig> = {
+export type Seed = {
 	/** Unique seed ID (e.g., "adminUser", "demoData") */
 	id: string;
 
@@ -47,13 +79,13 @@ export type Seed<TConfig extends QuestpieConfig = QuestpieConfig> = {
 	 * Should be idempotent (safe to re-run).
 	 * For "required" seeds, check if data exists before creating.
 	 */
-	run: (ctx: SeedContext<TConfig>) => Promise<void>;
+	run: (ctx: SeedContext) => Promise<void>;
 
 	/**
 	 * Optional: Undo the seed — remove seeded data.
 	 * Not all seeds need this (e.g., "required" seeds usually don't).
 	 */
-	undo?: (ctx: SeedContext<TConfig>) => Promise<void>;
+	undo?: (ctx: SeedContext) => Promise<void>;
 
 	/**
 	 * Dependencies — IDs of seeds that must run before this one.

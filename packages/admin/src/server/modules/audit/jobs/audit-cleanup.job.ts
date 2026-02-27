@@ -1,4 +1,4 @@
-import { lt, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { job } from "questpie";
 import { z } from "zod";
 
@@ -11,7 +11,10 @@ export const auditCleanupJob = job({
 	schema: z.object({
 		retentionDays: z.number().int().positive().default(90),
 	}),
-	handler: async ({ payload, app, db }) => {
+	handler: async (ctx) => {
+		const { payload } = ctx;
+		const app = (ctx as any).app;
+		const db = (ctx as any).db;
 		const cutoff = new Date();
 		cutoff.setDate(cutoff.getDate() - payload.retentionDays);
 

@@ -1,4 +1,3 @@
-import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { fn } from "questpie";
 import z from "zod";
 
@@ -8,38 +7,31 @@ export default fn({
 		endDate: z.string().datetime(),
 		completedOnly: z.boolean().optional().default(true),
 	}),
-	handler: async ({ input, app }) => {
+	handler: async ({ input, collections }) => {
 		const { startDate, endDate, completedOnly } = input;
 
-		const appointmentsTable = app.config.collections.appointments.table;
-		const servicesTable = app.config.collections.services.table;
-
-		const conditions = [
-			gte(appointmentsTable.scheduledAt as any, new Date(startDate)),
-			lte(appointmentsTable.scheduledAt as any, new Date(endDate)),
-		];
-
+		const where: Record<string, unknown> = {
+			scheduledAt: { gte: new Date(startDate), lte: new Date(endDate) },
+		};
 		if (completedOnly) {
-			conditions.push(eq(appointmentsTable.status as any, "completed"));
+			where.status = "completed";
 		}
 
-		const result = await app.db
-			.select({
-				totalRevenue: sql<number>`COALESCE(SUM(${servicesTable.price}), 0)`,
-				appointmentCount: sql<number>`COUNT(*)`,
-				avgRevenue: sql<number>`COALESCE(AVG(${servicesTable.price}), 0)`,
-			} as any)
-			.from(appointmentsTable)
-			.innerJoin(
-				servicesTable,
-				eq(appointmentsTable.service as any, servicesTable.id) as any,
-			)
-			.where(and(...conditions) as any);
+		const result = await collections.appointments.find({
+			where,
+			with: { service: true },
+			limit: 10_000,
+		});
 
-		return {
-			totalRevenue: Number(result[0]?.totalRevenue ?? 0),
-			appointmentCount: Number(result[0]?.appointmentCount ?? 0),
-			avgRevenue: Number(result[0]?.avgRevenue ?? 0),
-		};
+		const docs = (result.docs ?? []) as Array<{ service?: { price?: number } }>;
+		const totalRevenue = docs.reduce(
+			(sum, apt) => sum + (apt.service?.price ?? 0),
+			0,
+		);
+		const appointmentCount = docs.length;
+		const avgRevenue =
+			appointmentCount > 0 ? totalRevenue / appointmentCount : 0;
+
+		return { totalRevenue, appointmentCount, avgRevenue };
 	},
 });

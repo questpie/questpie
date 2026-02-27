@@ -40,7 +40,7 @@ export const getPage = createServerFn({ method: "GET" })
 				title: page.title,
 				slug: page.slug,
 				description: page.description,
-				content: page.content,
+				content: page.content as any,
 				metaTitle: page.metaTitle,
 				metaDescription: page.metaDescription,
 				isPublished: page.isPublished,

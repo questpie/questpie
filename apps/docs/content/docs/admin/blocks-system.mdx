@@ -38,7 +38,7 @@ const heroBlock = block("hero")
 Add blocks to a collection field using `richText` or a dedicated blocks field:
 
 ```typescript
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 const pages = collection("pages")
   .fields(({ f }) => ({
@@ -138,7 +138,7 @@ const teamBlock = block("team")
   }))
   .prefetch(async ({ values, ctx }) => {
     // Fetch barbers with their avatars expanded
-    const res = await ctx.app.api.collections.barbers.find({
+    const res = await ctx.collections.barbers.find({
       limit: values.limit || 4,
       where: { isActive: true },
       with: { avatar: true }, // Expand avatar relation
@@ -197,72 +197,11 @@ export function TeamRenderer({ values, data }: BlockProps<"team">) {
 | Dynamic query based on block values | Functional: use `values.limit`, etc. |
 | Expand + compute derived data | Combined: `{ with, loader }` |
 
-## Troubleshooting: Circular Dependencies with Typed Prefetch
+### Circular Dependencies — Solved by Codegen
 
-When blocks use functional `.prefetch()` handlers that need typed access to `ctx.app` (e.g., `ctx.app.api.collections.posts.find(...)`), you can run into a circular dependency:
+With the file-convention architecture, circular dependency issues are a thing of the past. Block definitions live in the `blocks/` directory and codegen automatically handles all wiring and type resolution. You never need to manually manage import order or use workarounds.
 
-- `app.ts` imports `blocks.ts` to register blocks via `.blocks(blocks)`
-- `blocks.ts` wants to import `App` from `app.ts` to get typed `ctx.app` in prefetch
-- **Circular import!**
-
-### The BaseCMS Pattern (Current Workaround)
-
-Split your app setup into a "base" (everything except blocks) and the final build:
-
-```typescript
-// app.ts
-import { blocks } from "./blocks";
-
-// Step 1: Configure everything EXCEPT blocks
-export const baseCms = qb
-  .collections({ posts, pages })
-  .globals({ siteSettings })
-  .auth({ ... });
-
-// Step 2: Export the base type for blocks to import
-export type BaseCMS = (typeof baseCms)["$inferApp"];
-
-// Step 3: Add blocks and build
-export const app = baseCms.blocks(blocks).build({ ... });
-
-export type App = typeof app;
-```
-
-```typescript
-// blocks.ts
-import { block } from "@questpie/admin/server";
-import { typedApp, type Where } from "questpie";
-import type { BaseCMS } from "./app"; // ← type-only import, no circular dependency
-import type { posts } from "./collections";
-
-const latestPostsBlock = block("latest-posts")
-  .fields(({ f }) => ({
-    count: f.number({ label: "Count", default: 3 }),
-  }))
-  .prefetch(async ({ values, ctx }) => {
-    // Cast the untyped ctx.app to your typed API
-    const app = typedApp<BaseCMS>(ctx.app);
-    const res = await app.api.collections.posts.find({
-      limit: values.count || 3,
-      where: { published: true } satisfies Where<typeof posts, BaseCMS>,
-      orderBy: { createdAt: "desc" },
-    });
-    return { posts: res.docs };
-  });
-```
-
-**Why this works:**
-- `BaseCMS` is derived from `baseCms` which does NOT import `blocks.ts` — no circular dependency
-- `BaseCMS` has all the same collections, globals, and APIs as the final `App` — blocks just aren't part of the type
-- `typedApp<BaseCMS>(ctx.app)` safely casts the runtime app instance to the typed API
-
-**When you DON'T need this pattern:**
-- Blocks that only use **declarative prefetch** (`{ with: { image: true } }`) to expand upload/relation fields — no `ctx.app` access needed, no circular dependency
-- Blocks without any prefetch at all
-
-<Callout type="info">
-This is a known ergonomic limitation of the current blocks API. We are actively working on a more seamless solution that removes the need for the `BaseCMS` split pattern.
-</Callout>
+The `ctx` object in prefetch handlers is fully typed with access to all your collections and globals via the flat context pattern (e.g., `ctx.collections.posts.find(...)`, `ctx.globals.siteSettings.get(...)`). No casting or type workarounds needed.
 
 ## Barbershop Example
 

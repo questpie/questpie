@@ -31,15 +31,16 @@ export const assetsCollection = q
 		visibility: "public",
 	})
 	.hooks({
-		afterDelete: async ({ data, app }) => {
-			const questpie = app as any;
-			const record = data as any;
-			if (!questpie?.storage || !record?.key) return;
+		afterDelete: async (ctx) => {
+			const storage = (ctx as any).storage;
+			const logger = (ctx as any).logger;
+			const record = ctx.data as any;
+			if (!storage || !record?.key) return;
 
 			try {
-				await questpie.storage.use().delete(record.key);
+				await storage.use().delete(record.key);
 			} catch (error) {
-				questpie.logger?.warn?.("Failed to delete asset file from storage", {
+				logger?.warn?.("Failed to delete asset file from storage", {
 					key: record.key,
 					error: error instanceof Error ? error.message : String(error),
 				});

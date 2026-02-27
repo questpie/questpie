@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import {
 	createPostgresSearchAdapter,
 	type PostgresSearchAdapter,
@@ -11,17 +10,10 @@ import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
 // ============================================================================
-// Create questpie builder with default fields
-// ============================================================================
-
-const q = questpie({ name: "search-test" }).fields(defaultFields);
-
-// ============================================================================
 // Test Collections
 // ============================================================================
 
-const posts = q
-	.collection("posts")
+const posts = collection("posts")
 	.fields(({ f }) => ({
 		title: f.text({ required: true, maxLength: 255 }),
 		content: f.textarea(),
@@ -34,8 +26,7 @@ const posts = q
 	})
 	.options({ timestamps: true });
 
-const products = q
-	.collection("products")
+const products = collection("products")
 	.fields(({ f }) => ({
 		name: f.text({ required: true, maxLength: 255 }),
 		description: f.textarea(),
@@ -48,17 +39,12 @@ const products = q
 	})
 	.options({ timestamps: true });
 
-const testModule = q.collections({
-	posts,
-	products,
-});
-
 // ============================================================================
 // Tests
 // ============================================================================
 
 describe("PostgresSearchAdapter", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	let adapter: PostgresSearchAdapter;
 
 	beforeEach(async () => {
@@ -67,9 +53,10 @@ describe("PostgresSearchAdapter", () => {
 			ftsWeight: 0.7,
 		});
 
-		setup = await buildMockApp(testModule, {
-			search: adapter,
-		});
+		setup = await buildMockApp(
+			{ collections: { posts, products } },
+			{ search: adapter },
+		);
 
 		await runTestDbMigrations(setup.app);
 

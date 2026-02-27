@@ -29,16 +29,14 @@
 
 import type { BetterAuthOptions } from "better-auth";
 import { createAuthClient } from "better-auth/react";
-import type { Questpie } from "questpie";
+import type { QuestpieApp } from "questpie/client";
 
 /**
- * Extract auth options type from Questpie instance
+ * Extract auth options type from app config
  */
-type ExtractAuthOptions<T extends Questpie<any>> =
-	T extends Questpie<infer TConfig>
-		? TConfig["auth"] extends BetterAuthOptions
-			? TConfig["auth"]
-			: BetterAuthOptions
+type ExtractAuthOptions<T extends QuestpieApp> =
+	T["auth"] extends BetterAuthOptions
+		? T["auth"]
 		: BetterAuthOptions;
 
 /**
@@ -69,7 +67,7 @@ type AdminAuthClientOptions = {
 /**
  * Internal client options type that includes $InferAuth
  */
-type InternalClientOptions<T extends Questpie<any>> = {
+type InternalClientOptions<T extends QuestpieApp> = {
 	baseURL: string;
 	fetchOptions?: {
 		credentials?: RequestCredentials;
@@ -110,7 +108,7 @@ type InternalClientOptions<T extends Questpie<any>> = {
  * }
  * ```
  */
-export function createAdminAuthClient<T extends Questpie<any>>(
+export function createAdminAuthClient<T extends QuestpieApp>(
 	options: AdminAuthClientOptions,
 ): ReturnType<typeof createAuthClient<InternalClientOptions<T>>> {
 	const basePath = options.basePath ?? "/auth";
@@ -135,7 +133,7 @@ export function createAdminAuthClient<T extends Questpie<any>>(
  * type MyAuthClient = AdminAuthClient<typeof app>
  * ```
  */
-type AdminAuthClient<T extends Questpie<any>> = ReturnType<
+type AdminAuthClient<T extends QuestpieApp> = ReturnType<
 	typeof createAdminAuthClient<T>
 >;
 
@@ -151,7 +149,7 @@ type AdminAuthClient<T extends Questpie<any>> = ReturnType<
  * // Includes: { user: { id, email, name, role, ... }, session: { ... } }
  * ```
  */
-type AdminSession<T extends Questpie<any>> =
+type AdminSession<T extends QuestpieApp> =
 	AdminAuthClient<T>["$Infer"]["Session"];
 
 /**
@@ -165,7 +163,7 @@ type AdminSession<T extends Questpie<any>> =
  * type MyUser = AdminUser<typeof app>
  * ```
  */
-type AdminUser<T extends Questpie<any>> = AdminSession<T>["user"];
+type AdminUser<T extends QuestpieApp> = AdminSession<T>["user"];
 
 // ============================================================================
 // Hooks

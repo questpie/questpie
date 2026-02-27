@@ -5,22 +5,17 @@ import type { JobDefinition, JobHandlerArgs } from "./types.js";
  * Arguments passed to workflow steps
  * Same structure as JobHandlerArgs for consistency
  * @template TInput - The step input type
- * @template TApp - The app app type
  */
-export type WorkflowStepArgs<TInput = any, TApp = any> = JobHandlerArgs<
-	TInput,
-	TApp
->;
+export type WorkflowStepArgs<TInput = any> = JobHandlerArgs<TInput>;
 
 /**
  * Workflow step - a job that can be chained with other jobs
  * @template TInput - The step input type
  * @template TOutput - The step output type
- * @template TApp - The app app type
  */
-export interface WorkflowStep<TInput = any, TOutput = any, TApp = any> {
+export interface WorkflowStep<TInput = any, TOutput = any> {
 	name: string;
-	execute: (args: WorkflowStepArgs<TInput, TApp>) => Promise<TOutput>;
+	execute: (args: WorkflowStepArgs<TInput>) => Promise<TOutput>;
 }
 
 /**
@@ -29,22 +24,21 @@ export interface WorkflowStep<TInput = any, TOutput = any, TApp = any> {
  * @template TInput - The workflow initial input type
  * @template TCurrentOutput - The current step output type (evolves through chaining)
  * @template TName - The workflow name (literal string type)
- * @template TApp - The app app type (defaults to any)
  *
  * @example
  * ```ts
  * const imageProcessingWorkflow = workflow('process-uploaded-image')
- *   .step('validate', async ({ payload, app }) => {
+ *   .step('validate', async ({ payload }) => {
  *     // Validate image
  *     const valid = await validateImage(payload.url);
  *     return { url: payload.url, valid };
  *   })
- *   .step('resize', async ({ payload, app }) => {
+ *   .step('resize', async ({ payload }) => {
  *     // Resize image
  *     const resized = await resizeImage(payload.url);
  *     return { ...payload, resized };
  *   })
- *   .step('optimize', async ({ payload, app }) => {
+ *   .step('optimize', async ({ payload }) => {
  *     // Optimize image
  *     const optimized = await optimizeImage(payload.resized);
  *     return { ...payload, optimized };
@@ -56,9 +50,8 @@ export class WorkflowBuilder<
 	TInput,
 	TCurrentOutput = TInput,
 	TName extends string = string,
-	TApp = any,
 > {
-	private steps: WorkflowStep<any, any, TApp>[] = [];
+	private steps: WorkflowStep<any, any>[] = [];
 
 	constructor(private workflowName: TName) {}
 
@@ -68,9 +61,9 @@ export class WorkflowBuilder<
 	step<TStepOutput>(
 		name: string,
 		execute: (
-			args: WorkflowStepArgs<TCurrentOutput, TApp>,
+			args: WorkflowStepArgs<TCurrentOutput>,
 		) => Promise<TStepOutput>,
-	): WorkflowBuilder<TInput, TStepOutput, TName, TApp> {
+	): WorkflowBuilder<TInput, TStepOutput, TName> {
 		this.steps.push({ name, execute });
 		return this as any;
 	}
@@ -80,7 +73,7 @@ export class WorkflowBuilder<
 	 */
 	build(
 		schema: z.ZodSchema<TInput>,
-	): JobDefinition<TInput, TCurrentOutput, TName, TApp> {
+	): JobDefinition<TInput, TCurrentOutput, TName> {
 		return {
 			name: this.workflowName,
 			schema,
@@ -123,7 +116,7 @@ export class WorkflowBuilder<
  *     // Validate order
  *     return { ...payload, validated: true };
  *   })
- *   .step('charge', async ({ payload, app }) => {
+ *   .step('charge', async ({ payload }) => {
  *     // Charge payment
  *     const payment = await chargeCustomer(payload);
  *     return { ...payload, payment };
@@ -133,9 +126,9 @@ export class WorkflowBuilder<
  *     await sendToWarehouse(payload);
  *     return { ...payload, fulfilled: true };
  *   })
- *   .step('notify', async ({ payload, app }) => {
+ *   .step('notify', async ({ payload, queue }) => {
  *     // Send confirmation email
- *     await app.queue.sendEmail.publish({
+ *     await queue.sendEmail.publish({
  *       to: payload.customerEmail,
  *       subject: 'Order confirmed',
  *       body: `Your order #${payload.id} is confirmed!`
@@ -145,42 +138,25 @@ export class WorkflowBuilder<
  *   .build(orderSchema);
  * ```
  *
- * @example With typed app (recommended for full type safety)
- * ```ts
- * import type { App } from './app';
- *
- * const processOrderWorkflow = workflow<App>()('process-order')
- *   .step('notify', async ({ payload, app }) => {
- *     app.queue.sendEmail.publish(...); // fully typed!
- *     return payload;
- *   })
- *   .build(orderSchema);
- * ```
  */
 export function workflow<TInput, TName extends string>(
 	name: TName,
 ): WorkflowBuilder<TInput, TInput, TName>;
 
 /**
- * Factory function with app type parameter for full type safety.
- * Call with no arguments to get a curried function that accepts the name.
- *
- * @example
- * ```ts
- * const processOrder = workflow<App>()('process-order');
- * ```
+ * @deprecated TApp generic removed; use flat context properties (db, queue, email, ...) instead.
  */
-export function workflow<TApp = any>(): <TInput, TName extends string>(
+export function workflow(): <TInput, TName extends string>(
 	name: TName,
-) => WorkflowBuilder<TInput, TInput, TName, TApp>;
+) => WorkflowBuilder<TInput, TInput, TName>;
 
 export function workflow<TInputOrApp, TName extends string = string>(
 	name?: TName,
 ): unknown {
-	// Overload 2: workflow<App>() returns a curried function
+	// Overload 2: workflow() returns a curried function
 	if (name === undefined) {
 		return <TInput, TN extends string>(n: TN) =>
-			new WorkflowBuilder<TInput, TInput, TN, TInputOrApp>(n);
+			new WorkflowBuilder<TInput, TInput, TN>(n);
 	}
 
 	// Overload 1: workflow('name') - direct name

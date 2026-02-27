@@ -35,13 +35,18 @@ export async function runSeedCommand(options: RunSeedOptions): Promise<void> {
 	const cmsConfig = await loadQuestpieConfig(resolvedConfigPath);
 	const app = cmsConfig.app;
 
-	// Get seeds from Questpie config (passed via .build())
-	const seeds: Seed[] = app.config.seeds?.seeds || [];
+	// Get seeds from Questpie config
+	// Supports both flat array (new codegen) and legacy nested format { seeds: [...] }
+	const seeds: Seed[] = (
+		Array.isArray(app.config.seeds)
+			? app.config.seeds
+			: app.config.seeds?.seeds
+	) || [];
 
 	if (seeds.length === 0 && options.action !== "reset") {
 		console.log("ℹ️  No seeds found");
 		console.log(
-			"\n💡 Tip: Make sure to import and add seeds via .build({ seeds: [...] })",
+			"\n💡 Tip: Place seed files in seeds/*.ts and run questpie generate",
 		);
 		return;
 	}

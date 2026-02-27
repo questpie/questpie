@@ -5,23 +5,18 @@ description: Server-side modeling patterns from the reference app
 
 # TanStack Barbershop Server Tour
 
-## Builder entry
+## Configuration
 
-- `examples/tanstack-barbershop/src/questpie/server/builder.ts`
-
-This file creates shared `qb` by extending core with admin server module.
-
-## app composition
-
-- `examples/tanstack-barbershop/src/questpie/server/app.ts`
+- `examples/tanstack-barbershop/src/questpie/server/questpie.config.ts` — runtime config (db, adapters)
+- `examples/tanstack-barbershop/src/questpie/server/modules.ts` — module registration
+- `examples/tanstack-barbershop/src/questpie/server/.generated/index.ts` — codegen output
 
 Shows:
 
-- collections/globals registration
-- dashboard/sidebar server config
-- locale/messages
-- jobs registration
-- runtime build config
+- File convention structure with convention files
+- Collections and globals in their respective directories
+- Dashboard/sidebar/branding via convention files
+- Functions and jobs auto-discovered from directories
 
 ## Field builder patterns
 

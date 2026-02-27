@@ -5,7 +5,7 @@ description: Registry-driven admin rendering in QUESTPIE
 
 # Admin Overview
 
-The QUESTPIE admin panel is a React application that renders collections, globals, dashboards, and custom pages based on server-defined contracts. The server defines **what** to show (fields, views, actions); the client defines **how** to render it (components, styling, layout).
+Admin is a feature, not a framework. Drop a `modules.ts`, add convention files, and get a full admin panel. The server defines **what** to show (fields, views, actions); the client defines **how** to render it (components, styling, layout).
 
 ## Why This Architecture
 
@@ -13,92 +13,179 @@ Traditional CMSes couple the admin UI to specific field implementations. QUESTPI
 
 ## Two-Layer Setup
 
-### Server — `@questpie/admin/server`
+### Server -- Convention Files
 
-Adds admin capabilities to your `q` builder: sidebar config, dashboard widgets, collection admin settings, and the introspection endpoint.
+Adding admin to your project is a single line in `modules.ts`. Everything else is file conventions using typed factories from `#questpie`.
+
+**1. Register the module**
 
 ```ts
-import { q } from "questpie";
-import { adminModule } from "@questpie/admin/server";
+// src/questpie/server/modules.ts
+import { adminModule, auditModule } from "@questpie/admin/server";
 
-const app = q({ name: "app" })
-  .use(adminModule)
-  .collections({ posts, barbers, services })
-  .sidebar(({ s }) =>
-    s.sidebar({
-      sections: [
-        { label: "Content", items: [s.collection("posts"), s.collection("barbers")] },
-        { label: "Config", items: [s.global("siteSettings")] },
-      ],
-    }),
-  )
-  .dashboard(({ d, c, a }) =>
-    d.dashboard({
-      actions: [
-        a.create({
-          id: "new-post",
-          collection: "posts",
-          label: "New Post",
-          icon: c.icon("ph:plus"),
-        }),
-      ],
-      items: [
-        d.stats({ collection: "posts", label: "Total Posts" }),
-        d.recentItems({ collection: "barbers", limit: 5 }),
-      ],
-    }),
-  )
-  .build({ db: { url: process.env.DATABASE_URL } });
+export default [adminModule, auditModule] as const;
 ```
 
-### Client — `@questpie/admin/client`
+This single import adds `.admin()`, `.list()`, `.form()`, `.preview()`, and `.actions()` methods to your collection and global builders, plus sidebar, dashboard, and branding support.
+
+**2. Configure the sidebar**
+
+```ts
+// src/questpie/server/sidebar.ts
+import { sidebar } from "#questpie";
+
+export default sidebar({
+  sections: [
+    { id: "content", title: { en: "Content" } },
+    { id: "config", title: { en: "Config" } },
+  ],
+  items: [
+    { sectionId: "content", type: "collection", collection: "posts" },
+    { sectionId: "content", type: "collection", collection: "barbers" },
+    { sectionId: "config", type: "global", global: "siteSettings" },
+    {
+      sectionId: "config",
+      type: "link",
+      label: { en: "Open Website" },
+      href: "/",
+      external: true,
+      icon: { type: "icon", props: { name: "ph:arrow-square-out" } },
+    },
+  ],
+});
+```
+
+**3. Configure the dashboard**
+
+```ts
+// src/questpie/server/dashboard.ts
+import { dashboard } from "#questpie";
+
+export default dashboard({
+  title: { en: "Dashboard" },
+  description: { en: "Overview of your content and operations" },
+  columns: 4,
+  actions: [
+    {
+      id: "new-post",
+      href: "/admin/collections/posts?create=true",
+      label: { en: "New Post" },
+      icon: { type: "icon", props: { name: "ph:plus" } },
+      variant: "primary",
+    },
+  ],
+  sections: [
+    { id: "overview", label: { en: "Overview" }, layout: "grid", columns: 4 },
+  ],
+  items: [
+    {
+      sectionId: "overview",
+      id: "total-posts",
+      type: "stats",
+      collection: "posts",
+      label: { en: "Total Posts" },
+      span: 1,
+    },
+    {
+      sectionId: "overview",
+      id: "recent-posts",
+      type: "recentItems",
+      collection: "posts",
+      label: { en: "Recent Posts" },
+      limit: 5,
+      span: 2,
+    },
+  ],
+});
+```
+
+**4. Configure branding**
+
+```ts
+// src/questpie/server/branding.ts
+import { branding } from "#questpie";
+
+export default branding({
+  name: { en: "My App" },
+});
+```
+
+**5. Configure admin locale**
+
+```ts
+// src/questpie/server/admin-locale.ts
+import type { AdminLocaleConfig } from "@questpie/admin/server";
+
+const adminLocale: AdminLocaleConfig = {
+  locales: ["en", "sk"],
+  defaultLocale: "en",
+};
+
+export default adminLocale;
+```
+
+### Client -- `@questpie/admin/client`
 
 Builds the admin rendering layer: registries for fields, views, components, widgets, and pages.
 
 ```ts
-import { qa, coreAdminModule } from "@questpie/admin/client";
-import type { App } from "../server/app";
+// src/questpie/admin/builder.ts
+import { adminModule, qa } from "@questpie/admin/client";
+import type { AppConfig } from "#questpie";
 
-export const admin = qa<App>()
-  .use(coreAdminModule);
+export const admin = qa<AppConfig>().use(adminModule);
 ```
 
-Branding and admin UI locales are configured on the server builder (`q`) via `@questpie/admin/server` (`.branding()`, `.adminLocale()`).
+The `AppConfig` type is auto-generated by codegen and exported from `#questpie`. It carries full type information about your collections, globals, and auth, giving the admin builder complete autocomplete and type safety.
 
 ## How Rendering Works
 
 ```text
 Server introspection payload
-  → field type IDs (e.g., "text", "relation", "blocks")
-  → view IDs (e.g., "table", "form")
-  → component refs (e.g., { type: "icon", props: { name: "ph:users" } })
+  -> field type IDs (e.g., "text", "relation", "blocks")
+  -> view IDs (e.g., "table", "form")
+  -> component refs (e.g., { type: "icon", props: { name: "ph:users" } })
 
 Client registries
-  → resolve IDs to React components
-  → render with server-provided config + props
+  -> resolve IDs to React components
+  -> render with server-provided config + props
 ```
 
 The admin router fetches the introspection payload for each collection/global and renders the appropriate views using registered components.
 
+## File Convention Summary
+
+Convention files (`branding.ts`, `dashboard.ts`, `sidebar.ts`, `admin-locale.ts`) use typed factories from `#questpie`. The codegen system discovers these files automatically and wires them into the generated entrypoint.
+
+| File | Factory | Purpose |
+|------|---------|---------|
+| `modules.ts` | N/A (array export) | Register `adminModule` and other modules |
+| `sidebar.ts` | `sidebar()` | Navigation sections and items |
+| `dashboard.ts` | `dashboard()` | Dashboard layout, widgets, and actions |
+| `branding.ts` | `branding()` | App name, logo, and theme |
+| `admin-locale.ts` | Plain object | Admin UI locale settings |
+
+Modules can also contribute their own sidebar items and dashboard widgets. For example, `auditModule` automatically adds an audit log sidebar item and timeline widget. Project-level convention files are merged with module contributions.
+
 ## Key Concepts
 
-- **Registries** — Map type IDs to React components. Four registries: fields, views, components, widgets.
-- **Introspection** — Server emits JSON describing each collection's fields, views, actions, and admin config. The admin fetches this on mount.
-- **Server-first config** — Collections own their sidebar position, dashboard widgets, list columns, and form layout. The client only handles rendering.
-- **Extensibility** — Add custom field renderers, views, or widgets by registering them in the `qa()` builder.
+- **Registries** -- Map type IDs to React components. Four registries: fields, views, components, widgets.
+- **Introspection** -- Server emits JSON describing each collection's fields, views, actions, and admin config. The admin fetches this on mount.
+- **Server-first config** -- Collections own their sidebar position, dashboard widgets, list columns, and form layout. The client only handles rendering.
+- **Extensibility** -- Add custom field renderers, views, or widgets by registering them in the `qa()` builder.
 
 ## Pages in This Section
 
-- [Client Builder (qa)](/docs/admin/client-builder-qa) — What qa owns and how to configure it
-- [Registries Overview](/docs/admin/registries-overview) — How registries resolve server contracts
-- [Field Renderer Registry](/docs/admin/field-renderer-registry) — Map field types to renderers
-- [View Registry](/docs/admin/view-registry-list-and-form) — List and form view registration
-- [Component Registry](/docs/admin/component-registry) — Resolve serializable component refs
-- [Dashboard, Sidebar & Branding](/docs/admin/dashboard-sidebar-branding) — Navigation and chrome
-- [Blocks System](/docs/admin/blocks-system) — Page builder blocks
-- [Actions System](/docs/admin/actions-system) — Custom actions and bulk operations
-- [Media & Uploads](/docs/admin/media-and-uploads) — Upload fields and media picker
-- [Filters & Saved Views](/docs/admin/filter-and-saved-views) — Filter builder and view presets
-- [Preview System](/docs/admin/preview-system) — Live preview with click-to-focus
-- [Realtime Features](/docs/admin/realtime-features) — Locks, presence, highlights
-- [Design System Integration](/docs/admin/design-system-integration) — Bring your own UI
+- [Client Builder (qa)](/docs/admin/client-builder-qa) -- What qa owns and how to configure it
+- [Registries Overview](/docs/admin/registries-overview) -- How registries resolve server contracts
+- [Field Renderer Registry](/docs/admin/field-renderer-registry) -- Map field types to renderers
+- [View Registry](/docs/admin/view-registry-list-and-form) -- List and form view registration
+- [Component Registry](/docs/admin/component-registry) -- Resolve serializable component refs
+- [Dashboard, Sidebar & Branding](/docs/admin/dashboard-sidebar-branding) -- Navigation and chrome
+- [Blocks System](/docs/admin/blocks-system) -- Page builder blocks
+- [Actions System](/docs/admin/actions-system) -- Custom actions and bulk operations
+- [Media & Uploads](/docs/admin/media-and-uploads) -- Upload fields and media picker
+- [Filters & Saved Views](/docs/admin/filter-and-saved-views) -- Filter builder and view presets
+- [Preview System](/docs/admin/preview-system) -- Live preview with click-to-focus
+- [Realtime Features](/docs/admin/realtime-features) -- Locks, presence, highlights
+- [Design System Integration](/docs/admin/design-system-integration) -- Bring your own UI

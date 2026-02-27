@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
+import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { buildWhereClause } from "#questpie/server/collection/crud/query-builders/index.js";
 import {
 	processNestedRelations,
@@ -1274,15 +1275,17 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			this.assertTransitionAllowed(fromStage, toStage);
 
 			// Build transition hook context
+			const transitionServices = extractAppServices(this.app, {
+				db,
+				session: normalized.session,
+			});
 			const transitionCtx: GlobalTransitionHookContext = {
+				...transitionServices,
 				data: existing,
 				fromStage,
 				toStage,
-				app: this.app,
-				session: normalized.session,
 				locale: normalized.locale,
-				db,
-			};
+			} as GlobalTransitionHookContext;
 
 			// Execute beforeTransition hooks (throw to abort)
 			await this.executeTransitionHooks(
@@ -1543,15 +1546,17 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		db: any;
 	}): GlobalHookContext {
 		const normalized = this.normalizeContext(params.context);
+		const services = extractAppServices(this.app, {
+			db: params.db,
+			session: normalized.session,
+		});
 		return {
+			...services,
 			data: params.data,
 			input: params.input,
-			app: this.app as any,
-			session: normalized.session,
 			locale: normalized.locale,
 			accessMode: normalized.accessMode,
-			db: params.db,
-		};
+		} as GlobalHookContext;
 	}
 
 	private async executeHooks(

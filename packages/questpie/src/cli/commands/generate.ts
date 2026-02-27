@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import {
@@ -118,8 +118,13 @@ async function generateMigrationInternal(
 		`📊 Loaded schema with ${Object.keys(schema).length} definitions`,
 	);
 
-	// Get migrations from app config (loaded via .migrations([...]))
-	const existingMigrations = app.config.migrations?.migrations ?? [];
+	// Get migrations from app config
+	// Supports both flat array (new codegen) and legacy nested format { migrations: [...] }
+	const existingMigrations = (
+		Array.isArray(app.config.migrations)
+			? app.config.migrations
+			: app.config.migrations?.migrations
+	) ?? [];
 	console.log(`📦 Found ${existingMigrations.length} existing migrations`);
 
 	// Get migration directory from CLI config
@@ -176,167 +181,13 @@ async function generateMigrationInternal(
 		return;
 	}
 
-	// Update migrations index file
-	await updateMigrationsIndex(
-		migrationDir,
-		fileBaseName,
-		migrationVariableName,
-	);
-
 	console.log("\n✅ Migration generated successfully!");
 	console.log(`\nNext steps:`);
 	console.log(
 		`  1. Review the migration file: ${migrationDir}/${fileBaseName}.ts`,
 	);
-	console.log(
-		`  2. Import migrations in your app config: .build({ migrations: [...] })`,
-	);
+	console.log(`  2. Run questpie generate to update .generated/index.ts`);
 	console.log(`  3. Run migrations: bun questpie migrate:up`);
-}
-
-/**
- * Update migrations/index.ts to export all migrations
- * Preserves existing imports and formatting, only appends new migration
- */
-async function updateMigrationsIndex(
-	migrationDir: string,
-	fileName: string,
-	migrationName: string,
-): Promise<void> {
-	const indexPath = join(migrationDir, "index.ts");
-
-	if (existsSync(indexPath)) {
-		const existingContent = readFileSync(indexPath, "utf-8");
-
-		// Check if migration is already present (by name or filename)
-		if (
-			existingContent.includes(migrationName) ||
-			existingContent.includes(fileName)
-		) {
-			console.log(`📝 Migration already in index: ${indexPath}`);
-			return;
-		}
-
-		// Append the new migration to existing file
-		const updatedContent = appendMigrationToIndex(
-			existingContent,
-			fileName,
-			migrationName,
-		);
-		writeFileSync(indexPath, updatedContent);
-		console.log(`📝 Updated migrations index: ${indexPath}`);
-	} else {
-		// Create new index from scratch
-		const content = generateFreshIndex(migrationDir);
-		writeFileSync(indexPath, content);
-		console.log(`📝 Created migrations index: ${indexPath}`);
-	}
-}
-
-/**
- * Append a new migration to existing index.ts content
- * Preserves existing formatting, imports, and export order
- */
-function appendMigrationToIndex(
-	existingContent: string,
-	fileName: string,
-	migrationName: string,
-): string {
-	// Generate the new import line
-	const newImport = `import { ${migrationName} } from "./${fileName}.js"`;
-
-	// Find the last import statement to insert after
-	const importRegex = /^import .+ from .+;?\s*$/gm;
-	let lastImportMatch: RegExpExecArray | null = null;
-
-	for (const match of existingContent.matchAll(importRegex)) {
-		lastImportMatch = match;
-	}
-
-	let contentWithImport: string;
-	if (lastImportMatch) {
-		// Insert after the last import
-		const insertPos = lastImportMatch.index + lastImportMatch[0].length;
-		contentWithImport =
-			existingContent.slice(0, insertPos) +
-			"\n" +
-			newImport +
-			existingContent.slice(insertPos);
-	} else {
-		// No imports found, add after type import
-		contentWithImport = existingContent.replace(
-			/(import type \{ Migration \} from .+;?\n?)/,
-			`$1${newImport}\n`,
-		);
-	}
-
-	// Find and update the migrations array
-	const arrayRegex =
-		/(export const migrations:\s*Migration\[\]\s*=\s*\[)([\s\S]*?)(\];?)/;
-	const arrayMatch = contentWithImport.match(arrayRegex);
-
-	if (arrayMatch) {
-		const [_fullMatch, arrayStart, arrayContent, arrayEnd] = arrayMatch;
-		const trimmedContent = arrayContent.trim();
-
-		// Detect indentation style from existing content
-		const indentMatch = arrayContent.match(/\n(\s+)/);
-		const indent = indentMatch ? indentMatch[1] : "\t";
-
-		let newArrayContent: string;
-		if (trimmedContent) {
-			// Add comma after last item if not present, then add new migration
-			const contentWithComma = trimmedContent.endsWith(",")
-				? trimmedContent
-				: `${trimmedContent},`;
-			newArrayContent = `\n${indent}${contentWithComma}\n${indent}${migrationName},\n`;
-		} else {
-			newArrayContent = `\n${indent}${migrationName},\n`;
-		}
-
-		contentWithImport = contentWithImport.replace(
-			arrayRegex,
-			`${arrayStart}${newArrayContent}${arrayEnd}`,
-		);
-	}
-
-	return contentWithImport;
-}
-
-/**
- * Generate a fresh index.ts by scanning migration files in directory
- */
-function generateFreshIndex(migrationDir: string): string {
-	const { readdirSync } = require("node:fs");
-
-	const migrationFiles = readdirSync(migrationDir)
-		.filter((file: string) => file.endsWith(".ts") && file !== "index.ts")
-		.sort();
-
-	const imports: string[] = [];
-	const exports: string[] = [];
-
-	for (const file of migrationFiles) {
-		const baseName = file.replace(".ts", "");
-		const varMatch = baseName.match(/\d+_(.+)$/);
-		if (varMatch) {
-			const varName = toCamelCase(varMatch[1] || baseName);
-			const timestamp = baseName.match(/^(\d+)_/)?.[1] || "";
-			const migrationVarName = `${varName}${timestamp}`;
-
-			imports.push(`import { ${migrationVarName} } from "./${baseName}.js"`);
-			exports.push(migrationVarName);
-		}
-	}
-
-	return `import type { Migration } from "questpie"
-
-${imports.join("\n")}
-
-export const migrations: Migration[] = [
-\t${exports.join(",\n\t")},
-]
-`;
 }
 
 function generateRandomName(): string {

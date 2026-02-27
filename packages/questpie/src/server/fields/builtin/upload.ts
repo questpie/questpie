@@ -8,6 +8,7 @@
 import { sql } from "drizzle-orm";
 import { varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import type { KnownCollectionNames } from "../../config/app-context.js";
 import {
 	stringColumnOperators,
 	stringJsonbOperators,
@@ -74,13 +75,13 @@ export interface UploadFieldConfig extends BaseFieldConfig {
 	 * @example "assets"
 	 * @example "media"
 	 */
-	to?: string;
+	to?: KnownCollectionNames;
 
 	/**
 	 * Junction collection name for many-to-many uploads.
 	 * @example "post_assets"
 	 */
-	through?: string;
+	through?: KnownCollectionNames;
 
 	/**
 	 * Source field on junction table (points to this collection).

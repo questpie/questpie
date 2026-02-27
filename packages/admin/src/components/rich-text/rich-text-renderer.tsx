@@ -174,7 +174,7 @@ function renderNode(
 	}
 
 	// Generate stable key for block nodes based on type, content, and index
-	const nodeKey = `${node.type}-${node.text?.slice(0, 20) ?? ""}-${index}`;
+	const nodeKey = `${node.type}-${(node as any).text?.slice(0, 20) ?? ""}-${index}`;
 
 	// Block nodes
 	const children = node.content?.map((child, i) =>

@@ -88,6 +88,7 @@ import type {
 	With,
 } from "#questpie/server/collection/crud/types.js";
 import { createVersionRecord } from "#questpie/server/collection/crud/versioning/index.js";
+import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { runWithContext } from "#questpie/server/config/context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { StorageVisibility } from "#questpie/server/config/types.js";
@@ -2524,15 +2525,17 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			this.assertTransitionAllowed(fromStage, toStage);
 
 			// Build transition hook context
+			const transitionServices = extractAppServices(this.app, {
+				db,
+				session: normalized.session,
+			});
 			const transitionCtx: TransitionHookContext = {
+				...transitionServices,
 				data: existing,
 				fromStage,
 				toStage,
-				app: this.app,
-				session: normalized.session,
 				locale: normalized.locale,
-				db,
-			};
+			} as TransitionHookContext;
 
 			// Execute beforeTransition hooks (throw to abort)
 			await this.executeTransitionHooks(

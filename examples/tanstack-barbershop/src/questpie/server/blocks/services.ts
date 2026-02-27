@@ -74,7 +74,7 @@ export const servicesBlock = block("services")
 		if (values.mode === "manual") {
 			const ids = (values.services as string[]) || [];
 			if (ids.length === 0) return { services: [] };
-			const res = await ctx.app.api.collections.services.find({
+			const res = await ctx.collections.services.find({
 				where: { id: { in: ids } },
 				limit: ids.length,
 				with: { image: true },
@@ -82,7 +82,7 @@ export const servicesBlock = block("services")
 			return { services: res.docs };
 		}
 		// Auto mode
-		const res = await ctx.app.api.collections.services.find({
+		const res = await ctx.collections.services.find({
 			limit: values.limit || 6,
 			with: { image: true },
 		});

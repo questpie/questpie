@@ -217,6 +217,27 @@ src/questpie/
 
 **Conflict resolution:** If `collections/posts.ts` and `features/blog/collections/posts.ts` both exist, that's an error — codegen reports a duplicate key.
 
+> **⚠️ One export per file.** Codegen discovers ONE entity per file — the first named or
+> default export. Multiple named exports from a single file are NOT supported and will
+> be silently ignored after the first.
+>
+> **Workaround — multiple functions in one file:** Use a single named export:
+>
+> ```ts
+> // functions/analytics.ts → exposes as rpc.analytics(input)
+> export const analytics = fn({ ... });
+> ```
+>
+> The recommended approach is to split into separate files:
+>
+> ```
+> functions/get-revenue-stats.ts   → rpc.getRevenueStats
+> functions/get-conversion-rate.ts → rpc.getConversionRate
+> ```
+>
+> For modules that expose multiple functions as a bundle (like `adminModule.functions`),
+> the module system handles bundling — not file discovery.
+
 ---
 
 ### 3. `collection()` — Full API
@@ -512,8 +533,8 @@ declare module "questpie" {
 
   // Extend config with admin-specific keys
   interface ConfigExtensions {
-    sidebar?: SidebarConfig;
-    dashboard?: DashboardConfig;
+    sidebar?: (ctx: { s: SidebarProxy; c: ComponentProxy }) => SidebarContribution;
+    dashboard?: (ctx: { d: DashboardProxy; c: ComponentProxy; a: DashboardActionProxy }) => DashboardContribution;
     branding?: BrandingConfig;
     adminLocale?: AdminLocaleConfig;
     listViews?: Record<string, ListViewDefinition>;
@@ -648,14 +669,14 @@ export default collection("orders").fields(({ f }) => ({ ... }))
 
 Extension methods receive proxies via destructured context objects (`({ c })`, `({ v, f, a })`, etc.). These proxies are:
 
-| Proxy           | Provided By | Available In                                 | Purpose                                                                    |
-| --------------- | ----------- | -------------------------------------------- | -------------------------------------------------------------------------- |
-| `c` (component) | admin       | `.admin()`, `.actions()`, sidebar, dashboard | `c.icon("ph:article")` → `{ type: "icon", props: { name: "ph:article" } }` |
-| `v` (view)      | admin       | `.list()`, `.form()`                         | `v.table({...})` → `{ view: "table", ...config }`                          |
-| `f` (field ref) | admin       | `.list()`, `.form()`                         | `f.title` → `"title"` (string reference to field name)                     |
-| `a` (action)    | admin       | `.list()`, `.actions()`                      | `a.delete`, `a.save()`, `a.custom("name", {...})`                          |
-| `s` (sidebar)   | admin       | sidebar config                               | `s.sidebar({...})`, `s.section({...})`                                     |
-| `d` (dashboard) | admin       | dashboard config                             | `d.stats({...})`, `d.recentItems({...})`, `d.chart({...})`                 |
+| Proxy           | Provided By | Available In                                          | Purpose                                                                    |
+| --------------- | ----------- | ----------------------------------------------------- | -------------------------------------------------------------------------- |
+| `c` (component) | admin       | `.admin()`, `.actions()`, sidebar cb, dashboard cb    | `c.icon("ph:article")` → `{ type: "icon", props: { name: "ph:article" } }` |
+| `v` (view)      | admin       | `.list()` (list views only), `.form()` (edit views)   | `v.table({...})` → `{ view: "table", ...config }` — scoped to context      |
+| `f` (field ref) | admin       | `.list()`, `.form()`                                  | `f.title` → `"title"` (string reference to field name)                     |
+| `a` (action)    | admin       | `.list()`, `.actions()` (collection), dashboard cb    | Scoped: collection `a` ≠ dashboard `a` — different helpers per context     |
+| `s` (sidebar)   | admin       | module/config `sidebar` callback                      | `s.section({...})`, `s.item({...})` — sidebar contribution builders        |
+| `d` (dashboard) | admin       | module/config `dashboard` callback                    | `d.section({...})`, `d.stats({...})`, `d.timeline({...})` — widget builders |
 
 **Important:** The `f` proxy in `.list(({ f })` and `.form(({ f })` is a **field reference proxy** (returns string field names), NOT the field builder proxy from `.fields(({ f })`. The field builder proxy creates `FieldDefinition` objects, while the field reference proxy returns string keys for referencing already-defined fields.
 
@@ -667,287 +688,443 @@ Extension methods receive proxies via destructured context objects (`({ c })`, `
 | `.title(({ f }) => ...)`   | Field reference proxy | `string`          | `f.title` → `"title"`                               |
 | `.actions(({ f }) => ...)` | Field builder proxy   | `FieldDefinition` | For action form fields: `f.text({ label: "Name" })` |
 
-#### 5.7 Server-Side Registries & Proxy Resolution
+#### 5.7 Server-Side Registries — Components, Views, Blocks
 
-The `v`, `c`, `f` (builder), `s`, `d` proxies don't hardcode which types are available. They resolve dynamically from **server-side registries** that modules populate:
+Components, views, and blocks follow the same **registry pattern**:
+
+1. **Server registers** — module defines the type in its `module()` definition (metadata, config schema, reference shape)
+2. **Types are extensible** — declaration merging augments registry interfaces
+3. **`c`, `v` are importable** — standalone typed proxies, usable anywhere (not just inside callbacks)
+4. **Client renders** — `qa` resolves server-emitted references to React components (out of scope for this RFC)
 
 ```
-Module.fields      →  merged into field registry      →  f proxy in .fields()
-Module.listViews   →  merged into listView registry   →  v proxy in .list()
-Module.editViews   →  merged into editView registry   →  v proxy in .form()
-Module.components  →  merged into component registry  →  c proxy in .admin(), sidebar, dashboard
+┌─────────────────────────────────────────────────────────────────┐
+│  Server (this RFC)                                              │
+│                                                                 │
+│  Module registers type     →  merged into registry              │
+│  Registry interface        →  augmented via declaration merging  │
+│  c / v are imports         →  typed via registry interfaces     │
+│  References are plain data →  { type: "icon", props: { ... } }  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  Client (out of scope)                                          │
+│                                                                 │
+│  qa.registerComponent("icon", IconRenderer)                     │
+│  qa.registerListView("table", TableRenderer)                    │
+│  qa.registerListView("kanban", KanbanRenderer)                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**How a view type is defined on the server:**
+**Registry interfaces (core defines empty, modules augment):**
 
 ```ts
-// packages/admin/src/server/modules/admin/views/list/table.ts
-import { listView } from "questpie";
-
-export const tableListView = listView({
-  name: "table",
-
-  // Config schema — validates what .list(({ v }) => v.table({...})) accepts
-  configSchema: z.object({
-    columns: z.array(z.string()),
-    searchable: z.array(z.string()).optional(),
-    defaultSort: z.object({ field: z.string(), direction: z.enum(["asc", "desc"]) }).optional(),
-    actions: z.object({
-      header: z.object({ primary: z.array(z.any()), secondary: z.array(z.any()) }).optional(),
-      row: z.array(z.any()).optional(),
-      bulk: z.array(z.any()).optional(),
-    }).optional(),
-  }),
-
-  // Introspection metadata — emitted to client for rendering
-  getMetadata: (config) => ({
-    type: "table",
-    ...config,
-  }),
-});
+// questpie core — empty extension points
+export interface ComponentRegistry {}
+export interface ListViewRegistry {}
+export interface EditViewRegistry {}
 ```
 
-**How a component type is defined on the server:**
+**Admin module augments with built-in types:**
 
 ```ts
-// packages/admin/src/server/modules/admin/components/icon.ts
-import { component } from "questpie";
-
-export const iconComponent = component({
-  name: "icon",
-
-  // What c.icon("ph:article") produces — a serializable reference
-  createReference: (name: string) => ({
-    type: "icon" as const,
-    props: { name },
-  }),
-});
-```
-
-**Declaration merging makes proxies type-safe:**
-
-```ts
-// @questpie/admin — augmentation.ts (alongside builder extensions)
+// @questpie/admin — augmentation.ts
 declare module "questpie" {
-  // v proxy in .list() knows about "table" and "kanban"
-  interface ListViewRegistry {
-    table: typeof tableListView;
-    kanban: typeof kanbanListView;
-  }
-
-  // v proxy in .form() knows about "form"
-  interface EditViewRegistry {
-    form: typeof formEditView;
-  }
-
-  // c proxy knows about "icon", "badge", "chip"
   interface ComponentRegistry {
-    icon: typeof iconComponent;
-    badge: typeof badgeComponent;
-    chip: typeof chipComponent;
+    icon: (name: string) => ComponentReference<"icon", { name: string }>;
+    badge: (props: { text: string; color?: string }) => ComponentReference<"badge", { text: string; color?: string }>;
+  }
+
+  interface ListViewRegistry {
+    table: (config: TableViewConfig) => ListViewReference<"table">;
+  }
+
+  interface EditViewRegistry {
+    form: (config: FormViewConfig) => EditViewReference<"form">;
   }
 }
 ```
 
-After augmentation, `v.table()` is type-checked against `tableListView.configSchema`, and `c.icon()` returns the correct `ComponentReference<"icon", { name: string }>`.
+**`c`, `v`, `a` are always provided via callbacks — scoped to context:**
 
-**Third-party plugins can add new view/component types the same way:**
+Callbacks are the single way to access proxies. They are context-aware — each callback only exposes helpers relevant to that context:
+
+```ts
+// .admin() — c is scoped to registered components:
+collection("posts").admin(({ c }) => ({
+  icon: c.icon("ph:article"),
+  label: "Posts",
+}))
+
+// .list() — v has only list views, f has this collection's fields, a has list actions:
+collection("posts").list(({ v, f, a }) => v.table({
+  columns: [f.title, f.author],
+  actions: { row: [a.delete] },
+}))
+
+// .form() — v has only edit views, f has this collection's fields:
+collection("posts").form(({ v, f }) => v.form({
+  fields: [f.title, f.content],
+}))
+
+// sidebar contribution — s has sidebar builders, c has components:
+sidebar: ({ s, c }) => [
+  s.section({ id: "content", title: { en: "Content" } }),
+  s.item({ sectionId: "content", type: "collection", collection: "posts", icon: c.icon("ph:article") }),
+]
+
+// dashboard contribution — d has widget builders, c has components, a has dashboard actions:
+dashboard: ({ d, c, a }) => ({
+  actions: [a.create({ collection: "posts", label: "New", icon: c.icon("ph:plus") })],
+  sections: [d.section({ id: "today", label: { en: "Today" } })],
+  items: [d.stats({ sectionId: "today", collection: "posts", label: "Posts" })],
+})
+```
+
+`c.icon("ph:users")` produces `{ type: "icon", props: { name: "ph:users" } }`. TypeScript knows exactly what methods exist based on declaration merging through `ComponentRegistry`.
+
+**No standalone imports of `c`, `v`, `a`.** Callbacks are always the entry point — they scope available options to the context. This is the best DX because autocomplete shows only what's valid in each position.
+
+**Third-party plugins extend the same registries:**
 
 ```ts
 // @questpie/kanban-view — augmentation.ts
 declare module "questpie" {
   interface ListViewRegistry {
-    kanban: typeof kanbanListView;
+    kanban: (config: KanbanConfig) => ListViewReference<"kanban">;
   }
 }
-```
 
-#### 5.8 Sidebar & Dashboard Configuration
-
-Sidebar and dashboard are **admin module extensions to the config**. They're defined via `ConfigExtensions` augmentation and configured in `admin()` options or `questpie.config.ts`.
-
-**Sidebar definition in `admin()` options:**
-
-```ts
-// questpie.config.ts
-export default config({
-  modules: [admin({
-    branding: {
-      name: "My App",
-      logo: "/logo.svg",
-    },
-
-    // Sidebar — callback receives s (sidebar proxy) and c (component proxy)
-    sidebar: ({ s, c }) => s.sidebar({
-      sections: [
-        s.section({
-          id: "content",
-          title: "Content",
-          items: [
-            s.collectionItem("posts", { icon: c.icon("ph:article") }),
-            s.collectionItem("categories", { icon: c.icon("ph:tag") }),
-            s.collectionItem("pages", { icon: c.icon("ph:file-text") }),
-          ],
-        }),
-        s.section({
-          id: "media",
-          title: "Media",
-          items: [
-            s.collectionItem("assets", { icon: c.icon("ph:image") }),
-          ],
-        }),
-        s.section({
-          id: "settings",
-          title: "Settings",
-          items: [
-            s.globalItem("siteSettings", { icon: c.icon("ph:gear") }),
-            s.collectionItem("user", { icon: c.icon("ph:users") }),
-          ],
-        }),
-      ],
-    }),
-
-    // Dashboard — callback receives d (dashboard proxy), c (component proxy), a (action proxy)
-    dashboard: ({ d, c, a }) => d.dashboard({
-      title: "My App Dashboard",
-      columns: 4,                           // grid columns
-      actions: [                            // quick action buttons
-        a.create({ id: "new-post", collection: "posts", label: "New Post", icon: c.icon("ph:plus"), variant: "primary" }),
-        a.global({ id: "edit-settings", global: "siteSettings", label: "Settings", icon: c.icon("ph:gear"), variant: "outline" }),
-      ],
-      items: [
-        // ── Section grouping ──
-        {
-          type: "section",
-          label: "Overview",
-          layout: "grid",
-          columns: 4,
-          items: [
-            // stats — count from collection with optional filter
-            d.stats({ id: "total-posts", collection: "posts", label: "Published", filter: { isPublished: true }, span: 1 }),
-            d.stats({ id: "total-users", collection: "user", label: "Users", span: 1 }),
-
-            // value — async loader returning { value, formatted, label, trend }
-            d.value({
-              id: "monthly-revenue",
-              span: 2,
-              refreshInterval: 1000 * 60 * 5,
-              loader: async ({ app }) => {
-                // Custom async data fetching — full app access
-                const revenue = 12500;
-                return {
-                  value: revenue,
-                  formatted: `${revenue.toLocaleString()} €`,
-                  label: "Monthly Revenue",
-                  trend: { value: "+12%" },
-                };
-              },
-            }),
-          ],
-        },
-        {
-          type: "section",
-          label: "Activity",
-          layout: "grid",
-          columns: 4,
-          items: [
-            // recentItems — latest docs from a collection
-            d.recentItems({ id: "recent-posts", collection: "posts", limit: 5, dateField: "createdAt", span: 2 }),
-
-            // progress — bar with current/target from async loader
-            d.progress({
-              id: "monthly-goal",
-              span: 1,
-              showPercentage: true,
-              label: "Monthly Goal",
-              loader: async ({ app }) => ({
-                current: 7500,
-                target: 10000,
-                label: "7,500 € / 10,000 €",
-              }),
-            }),
-
-            // chart — aggregate a collection field into pie/bar/line
-            d.chart({ id: "by-status", collection: "appointments", field: "status", chartType: "pie", label: "By Status", span: 1 }),
-
-            // timeline — async loader returning event items
-            d.timeline({
-              id: "activity",
-              maxItems: 8,
-              showTimestamps: true,
-              timestampFormat: "relative",
-              span: 2,
-              loader: async ({ app }) => {
-                const res = await app.api.collections.posts.find({ limit: 8, orderBy: { updatedAt: "desc" } });
-                return res.docs.map((doc: any) => ({
-                  id: doc.id,
-                  title: doc.title,
-                  timestamp: doc.updatedAt,
-                  variant: "info",
-                  href: `/admin/collections/posts/${doc.id}`,
-                }));
-              },
-            }),
-          ],
-        },
-      ],
-    }),
-  })],
-
-  // ... rest of config
+// The module registers the view type:
+export const kanbanView = () => module({
+  name: "questpie-kanban",
+  listViews: { kanban: listView("kanban") },
 });
+
+// User's collection — v.kanban() is now typed:
+collection("tasks").list(({ v }) => v.kanban({
+  groupBy: "status",
+  columns: ["todo", "in-progress", "done"],
+}))
 ```
 
-**How the `s`, `d`, and `a` proxies work:**
-
-The `s` proxy is a **sidebar builder** — `s.sidebar()`, `s.section()`, `s.collectionItem()`, `s.globalItem()`, `s.link()` etc. produce serializable config objects that the client renders.
-
-The `d` proxy is a **dashboard builder** with these widget factories:
-
-| Factory | Purpose | Key Config |
-|---------|---------|------------|
-| `d.stats()` | Count docs from a collection | `collection`, `filter`, `span` |
-| `d.value()` | Custom value from async `loader` | `loader: async ({ app }) => { value, formatted, label, trend }` |
-| `d.progress()` | Progress bar from async `loader` | `loader: async ({ app }) => { current, target, label }` |
-| `d.chart()` | Aggregate a field into chart | `collection`, `field`, `chartType` (`pie`/`bar`/`line`) |
-| `d.recentItems()` | Latest docs from a collection | `collection`, `limit`, `dateField` |
-| `d.timeline()` | Event stream from async `loader` | `loader: async ({ app }) => [{ id, title, timestamp, variant, href }]` |
-| `d.custom()` | Arbitrary widget resolved by client | `component` (string key), `props` |
-
-The `a` proxy in dashboard provides **quick action buttons**: `a.create({ collection, label, icon })`, `a.global({ global, label, icon })`.
-
-Dashboard items can be grouped in `{ type: "section", label, layout: "grid", columns, items: [...] }` for visual organization.
-
-**The `loader` pattern** — `value`, `progress`, and `timeline` widgets accept an async `loader` function that receives `{ app }` and returns data. These loaders run server-side on each dashboard load (or at `refreshInterval`).
-
-All proxies (`s`, `d`, `a`) are provided by the admin module through `ConfigExtensions`. These keys are NOT core — they exist only when `@questpie/admin` is a dependency:
+**User-defined components work the same way:**
 
 ```ts
-// @questpie/admin — augmentation.ts (within ConfigExtensions)
-interface ConfigExtensions {
-  sidebar?: SidebarConfig | ((ctx: { s: SidebarProxy; c: ComponentProxy }) => SidebarConfig);
-  dashboard?: DashboardConfig | ((ctx: { d: DashboardProxy; c: ComponentProxy; a: ActionProxy }) => DashboardConfig);
-  branding?: BrandingConfig;
-  adminLocale?: AdminLocaleConfig;  // admin UI locale, separate from content locale (core)
+// User's augmentation (types.d.ts):
+declare module "questpie" {
+  interface ComponentRegistry {
+    avatar: (props: { src: string; size?: number }) => ComponentReference<"avatar", { src: string; size?: number }>;
+  }
 }
+
+// Register in config:
+modules: [admin()],
+components: { avatar: component("avatar") },
+
+// Now c.avatar() is typed everywhere:
+collection("users").admin({ icon: c.avatar({ src: "/default.png" }) })
 ```
 
-**Sidebar without callback — static config:**
+**How `c` works at runtime — a proxy that creates `ComponentReference` objects:**
 
 ```ts
+// @questpie/admin/server — exported const
+export const c: ComponentRegistry = new Proxy({}, {
+  get: (_, type: string) => (props: unknown) => ({
+    type,
+    props: type === "icon" && typeof props === "string" ? { name: props } : (props ?? {}),
+  }),
+}) as ComponentRegistry;
+```
+
+Validation that the component type is actually registered happens at `createApp()` merge time — not at reference creation time. This is intentional: modules haven't been merged yet when you write your config, so runtime validation at startup catches invalid references.
+
+#### 5.8 Composable Sidebar & Dashboard
+
+Sidebar and dashboard are **composable from modules**. Each module contributes its own sections and items. `createApp()` merges them using the same depth-first module resolution as everything else.
+
+**The problem with the old approach:**
+
+```ts
+// OLD — monolithic sidebar in admin() options
+// If audit() adds adminAuditLog, user must manually wire it into admin's sidebar
 admin({
-  sidebar: {
+  sidebar: ({ s, c }) => s.sidebar({
     sections: [
-      { id: "content", title: "Content", items: [
-        { type: "collection", collection: "posts" },
-        { type: "collection", collection: "categories" },
-      ]},
+      s.section({ id: "admin", items: [
+        { type: "collection", collection: "user" },
+        { type: "collection", collection: "adminAuditLog" },  // ← manual, breaks colocation
+      ]}),
     ],
-  },
+  }),
 })
 ```
 
-Both forms (callback with proxies and static object) are supported. The callback form gives access to `c.icon()` etc.
+**The new approach — each module owns its sidebar contributions:**
+
+Each module contributes a `sidebar` callback. The callback receives `{ s, c }` — the same scopped proxies as before. The callback is resolved immediately when `module()` or `config()` is called, producing plain data. `createApp()` then merges the resolved data from all modules.
+
+```ts
+// admin() internally contributes:
+sidebar: ({ s, c }) => ({
+  sections: [
+    s.section({ id: "administration", title: { key: "defaults.sidebar.administration" } }),
+  ],
+  items: [
+    s.item({ sectionId: "administration", type: "collection", collection: "user", icon: c.icon("ph:users") }),
+    s.item({ sectionId: "administration", type: "collection", collection: "assets", icon: c.icon("ph:image") }),
+  ],
+})
+
+// audit() internally contributes:
+sidebar: ({ s }) => ({
+  items: [
+    s.item({ sectionId: "administration", type: "collection", collection: "adminAuditLog" }),
+  ],
+})
+
+// User's questpie.config.ts contributes:
+sidebar: ({ s, c }) => ({
+  sections: [
+    s.section({ id: "content", title: { en: "Content" } }),
+    s.section({ id: "operations", title: { en: "Operations" } }),
+  ],
+  items: [
+    s.item({ sectionId: "content", type: "collection", collection: "posts", icon: c.icon("ph:article") }),
+    s.item({ sectionId: "content", type: "collection", collection: "pages" }),
+    s.item({ sectionId: "operations", type: "collection", collection: "appointments" }),
+  ],
+})
+```
+
+**Merge result:** All sections collected (deduplicated by `id`, last definition wins for title/icon). All items appended to their sections in module resolution order (starter → admin → audit → user).
+
+##### 5.8.1 Sidebar Contribution Shape
+
+```ts
+interface SidebarContribution {
+  /** Section definitions — merged by id across modules. */
+  sections?: SidebarSectionDef[];
+  /** Items — appended to sections by sectionId. */
+  items?: SidebarItemDef[];
+}
+
+interface SidebarSectionDef {
+  /** Unique section ID — used for targeting from other modules. */
+  id: string;
+  /** Section title. */
+  title?: I18nText;
+  /** Section icon. */
+  icon?: ComponentReference;
+  /** Whether section is collapsible. */
+  collapsible?: boolean;
+}
+
+interface SidebarItemDef {
+  /** Which section this item belongs to. */
+  sectionId: string;
+  /** 'start' to prepend, default is 'end' (append). */
+  position?: "start" | "end";
+  /** Item type. */
+  type: "collection" | "global" | "link" | "divider";
+  /** Collection slug (when type = "collection"). */
+  collection?: string;
+  /** Global slug (when type = "global"). */
+  global?: string;
+  /** Display label (for links). */
+  label?: I18nText;
+  /** URL (for links). */
+  href?: string;
+  /** Icon reference. */
+  icon?: ComponentReference;
+  /** Open in new tab (for links). */
+  external?: boolean;
+}
+```
+
+##### 5.8.2 Dashboard Contribution Shape
+
+Dashboard follows the same composable pattern:
+
+```ts
+interface DashboardContribution {
+  /** Dashboard title — last module/user wins. */
+  title?: I18nText;
+  /** Dashboard description — last module/user wins. */
+  description?: I18nText;
+  /** Grid columns — last module/user wins. */
+  columns?: number;
+
+  /** Quick actions — concatenated from all modules. */
+  actions?: DashboardAction[];
+  /** Section definitions — merged by id across modules. */
+  sections?: DashboardSectionDef[];
+  /** Widget items — appended to sections by sectionId. */
+  items?: DashboardItemDef[];
+}
+
+interface DashboardSectionDef {
+  /** Unique section ID. */
+  id: string;
+  /** Section title. */
+  label?: I18nText;
+  /** Layout mode. */
+  layout?: "grid";
+  /** Grid columns for this section. */
+  columns?: number;
+}
+
+interface DashboardItemDef {
+  /** Which section this item belongs to. */
+  sectionId: string;
+  /** 'start' to prepend, default is 'end' (append). */
+  position?: "start" | "end";
+  /** Unique widget ID. */
+  id: string;
+  /** Widget type. */
+  type: "stats" | "value" | "progress" | "chart" | "recentItems" | "timeline" | "table" | "custom";
+  /** Grid span (1-4). */
+  span?: number;
+  /** Refresh interval in ms. */
+  refreshInterval?: number;
+  /** Widget-specific config (collection, filter, loader, etc.) */
+  [key: string]: unknown;
+}
+
+interface DashboardAction {
+  id: string;
+  label: I18nText;
+  href: string;
+  icon?: ComponentReference;
+  variant?: "primary" | "outline" | "ghost";
+}
+```
+
+**Dashboard action helpers — via callback `a` proxy (scoped to dashboard context):**
+
+```ts
+// Inside dashboard callback — a has dashboard-specific helpers:
+dashboard: ({ d, c, a }) => ({
+  actions: [
+    // a.create() — shorthand for collection create link
+    a.create({ id: "new-post", collection: "posts", label: "New Post", icon: c.icon("ph:plus") }),
+    // → { id: "new-post", href: "/admin/collections/posts/create", label: "New Post", icon: { type: "icon", props: { name: "ph:plus" } } }
+
+    // a.global() — shorthand for global edit link
+    a.global({ id: "settings", global: "siteSettings", label: "Settings", icon: c.icon("ph:gear") }),
+
+    // a.link() — plain link
+    a.link({ id: "docs", href: "https://docs.example.com", label: "Docs" }),
+  ],
+  // ...
+})
+```
+
+##### 5.8.3 Sidebar & Dashboard Merge Rules
+
+Sidebar and dashboard are now **first-class keys on `ModuleDefinition`** (not extension `[key: string]`). Merge follows the same depth-first, left-to-right module resolution as everything else (§13.7).
+
+**Sections** — deduplicated by `id`. Later module's section definition overrides earlier (for title, icon, collapsible). If a section is only referenced by items but never defined, it's auto-created with no title.
+
+**Items** — appended to their `sectionId` in module resolution order. Items with `position: "start"` are prepended. Default is append.
+
+**Dashboard metadata** (title, description, columns) — last module or user config wins.
+
+**Dashboard actions** — concatenated from all modules, user's come last.
+
+**User config always wins** — can override any section definition or contribute items to any module-defined section.
+
+```
+Module resolution for sidebar:
+  starter()  →  (no sidebar)
+  admin()    →  defines "administration" section + user/assets items
+  audit()    →  adds adminAuditLog item to "administration" section
+  user       →  defines "content", "operations" sections + their items
+
+Final merged sidebar:
+  [content]         ← user-defined section
+    posts           ← user item
+    pages           ← user item
+  [operations]      ← user-defined section
+    appointments    ← user item
+  [administration]  ← admin-defined section
+    user            ← admin item
+    assets          ← admin item
+    adminAuditLog   ← audit item (appended after admin's items)
+```
+
+##### 5.8.4 Widget Types
+
+Dashboard widgets that need data use an async `loader` function. Loaders run server-side on each dashboard load (or at `refreshInterval`):
+
+| Widget Type | Purpose | Key Config |
+|-------------|---------|------------|
+| `stats` | Count docs from a collection | `collection`, `filter`, `span` |
+| `value` | Custom value from async `loader` | `loader: async ({ app }) => { value, formatted, label, trend }` |
+| `progress` | Progress bar from async `loader` | `loader: async ({ app }) => { current, target, label }` |
+| `chart` | Aggregate a field into chart | `collection`, `field`, `chartType` (`pie`/`bar`/`line`) |
+| `recentItems` | Latest docs from a collection | `collection`, `limit`, `dateField` |
+| `timeline` | Event stream from async `loader` | `loader: async ({ app }) => [{ id, title, timestamp, variant, href }]` |
+| `table` | Tabular data from async `loader` | `loader: async ({ app }) => { columns, rows }` |
+| `custom` | Arbitrary widget resolved by client | `component` (string key), `props` |
+
+##### 5.8.5 Full Example — Composable Config
+
+```ts
+// questpie.config.ts
+import { config } from "questpie";
+import { admin, audit } from "@questpie/admin/server";
+
+export default config({
+  modules: [
+    admin({ branding: { name: "Barbershop" } }),
+    audit(),
+  ],
+
+  // User's sidebar contributions — callback with scoped { s, c }
+  // Merged with module contributions (admin's "administration" section, audit's items)
+  sidebar: ({ s, c }) => ({
+    sections: [
+      s.section({ id: "overview", title: { en: "Overview" } }),
+      s.section({ id: "operations", title: { en: "Operations" } }),
+      s.section({ id: "content", title: { en: "Content" } }),
+    ],
+    items: [
+      s.item({ sectionId: "overview", type: "link", label: { en: "Dashboard" }, href: "/admin", icon: c.icon("ph:house") }),
+      s.item({ sectionId: "overview", type: "global", global: "siteSettings" }),
+      s.item({ sectionId: "operations", type: "collection", collection: "appointments" }),
+      s.item({ sectionId: "operations", type: "collection", collection: "reviews" }),
+      s.item({ sectionId: "content", type: "collection", collection: "pages" }),
+      s.item({ sectionId: "content", type: "collection", collection: "services" }),
+    ],
+  }),
+
+  // User's dashboard contributions — callback with scoped { d, c, a }
+  // Merged with module contributions (audit's timeline widget)
+  dashboard: ({ d, c, a }) => ({
+    title: { en: "Barbershop Control" },
+    columns: 4,
+    actions: [
+      a.create({ id: "new-appointment", collection: "appointments", label: { en: "New Appointment" }, icon: c.icon("ph:calendar-plus"), variant: "primary" }),
+      a.global({ id: "edit-settings", global: "siteSettings", label: { en: "Settings" }, icon: c.icon("ph:gear"), variant: "outline" }),
+    ],
+    sections: [
+      d.section({ id: "today", label: { en: "Today" }, layout: "grid", columns: 4 }),
+      d.section({ id: "business", label: { en: "Business" }, layout: "grid", columns: 4 }),
+    ],
+    items: [
+      d.stats({ sectionId: "today", id: "appointments-today", collection: "appointments", label: { en: "Today's Appointments" }, filter: { scheduledAt: { gte: "..." } }, span: 1 }),
+      d.stats({ sectionId: "today", id: "pending", collection: "appointments", label: { en: "Pending" }, filter: { status: "pending" }, span: 1 }),
+      d.value({ sectionId: "business", id: "monthly-revenue", span: 2, loader: async ({ app }) => { /* ... */ } }),
+    ],
+  }),
+
+  app: { url: process.env.APP_URL! },
+  db: { url: process.env.DATABASE_URL! },
+});
+```
+
+The audit module's sidebar item (adminAuditLog → "administration" section) and dashboard widget (audit timeline) appear automatically — zero manual wiring. The user never needs to know about module-internal contributions.
 
 ---
 
@@ -1505,7 +1682,7 @@ Zero circular dependencies. The `app` is always provided in the prefetch/hook co
 ```ts
 // questpie.config.ts
 import { config } from "questpie";
-import { admin, audit } from "@questpie/admin";
+import { admin, audit } from "@questpie/admin/server";
 import { s3Driver } from "@questpie/storage-s3";
 import { smtpAdapter } from "questpie";
 import { pgBossAdapter } from "questpie";
@@ -1513,26 +1690,37 @@ import { pgBossAdapter } from "questpie";
 export default config({
   // Modules (order matters — later overrides earlier)
   modules: [
-    admin({
-      branding: { name: "My App" },
-      sidebar: ({ s, c }) => s.sidebar({
-        sections: [
-          s.section({ id: "content", title: "Content", items: [
-            { type: "collection", collection: "posts", icon: c.icon("ph:article") },
-            { type: "collection", collection: "categories", icon: c.icon("ph:tag") },
-          ]}),
-        ],
-      }),
-      dashboard: ({ d, c }) => d.dashboard({
-        widgets: [
-          d.stats({ collections: ["posts", "users"] }),
-          d.recentItems({ collection: "posts", limit: 5 }),
-        ],
-      }),
-    }),
-    // Third-party modules — order matters (later overrides earlier)
+    admin({ branding: { name: "My App" } }),
     audit({ retentionDays: 30 }),
   ],
+
+  // Sidebar — composable, merged with module contributions (see §5.8)
+  // Callback receives scoped { s, c } proxies
+  sidebar: ({ s, c }) => ({
+    sections: [
+      s.section({ id: "content", title: "Content" }),
+    ],
+    items: [
+      s.item({ sectionId: "content", type: "collection", collection: "posts", icon: c.icon("ph:article") }),
+      s.item({ sectionId: "content", type: "collection", collection: "categories", icon: c.icon("ph:tag") }),
+    ],
+  }),
+
+  // Dashboard — composable, merged with module contributions (see §5.8)
+  // Callback receives scoped { d, c, a } proxies
+  dashboard: ({ d, c, a }) => ({
+    title: "My App Dashboard",
+    actions: [
+      a.create({ id: "new-post", collection: "posts", label: "New Post", icon: c.icon("ph:plus"), variant: "primary" }),
+    ],
+    sections: [
+      d.section({ id: "overview", label: "Overview", layout: "grid", columns: 4 }),
+    ],
+    items: [
+      d.stats({ sectionId: "overview", id: "total-posts", collection: "posts", label: "Published", filter: { isPublished: true }, span: 1 }),
+      d.recentItems({ sectionId: "overview", id: "recent-posts", collection: "posts", limit: 5, dateField: "createdAt", span: 2 }),
+    ],
+  }),
 
   // Runtime — environment-dependent values
   app: { url: process.env.APP_URL! },
@@ -1556,7 +1744,7 @@ export default config({
 
   // Admin UI localization — from @questpie/admin ConfigExtensions, NOT core
   adminLocale: {
-    locales: ["en", "sk"],   // string shorthand also works
+    locales: ["en", "sk"],
     defaultLocale: "en",
   },
 
@@ -1614,10 +1802,11 @@ interface QuestpieConfig {
   defaultAccess?: CollectionAccess;
   hooks?: GlobalHooksState;
   
-  // Settings from ConfigExtensions (admin module adds these via declaration merging)
+  // Composable sidebar/dashboard — callbacks, merged across modules (see §5.8)
+  // Added by @questpie/admin via ConfigExtensions declaration merging
+  // sidebar?: (ctx: { s: SidebarProxy; c: ComponentProxy }) => SidebarContribution;
+  // dashboard?: (ctx: { d: DashboardProxy; c: ComponentProxy; a: ActionProxy }) => DashboardContribution;
   // adminLocale?: AdminLocaleConfig;
-  // sidebar?: SidebarConfig;
-  // dashboard?: DashboardConfig;
   // branding?: BrandingConfig;
   
   // Startup behavior
@@ -1810,8 +1999,6 @@ import { apikeyCollection } from "questpie/starter";
 
 export type AdminOptions = {
   branding?: BrandingConfig;
-  sidebar?: SidebarConfig | ((ctx: { s: SidebarProxy; c: ComponentProxy }) => SidebarConfig);
-  dashboard?: DashboardConfig | ((ctx: { d: DashboardProxy; c: ComponentProxy }) => DashboardConfig);
 };
 
 export const admin = (options?: AdminOptions) => module({
@@ -1873,8 +2060,24 @@ export const admin = (options?: AdminOptions) => module({
     sk: adminMessagesSk,
   },
 
+  // ── Composable sidebar/dashboard (§5.8) ────────────────
+  // Admin contributes its own sections + items.
+  // Other modules (audit) and user config add to the same sections.
+
+  sidebar: ({ s, c }) => ({
+    sections: [
+      s.section({ id: "administration", title: { key: "defaults.sidebar.administration" } }),
+    ],
+    items: [
+      s.item({ sectionId: "administration", type: "collection", collection: "user", icon: c.icon("ph:users") }),
+      s.item({ sectionId: "administration", type: "collection", collection: "assets", icon: c.icon("ph:image") }),
+    ],
+  }),
+
+  branding: options?.branding,
+
   // Codegen plugin — discovers blocks/ directory
-  plugins: [adminPlugin(options)],
+  plugins: [adminPlugin()],
 });
 ```
 
@@ -1945,11 +2148,50 @@ export const audit = (options?: AuditOptions) => module({
     },
   },
 
+  // Composable sidebar — adds audit log to admin's "administration" section
+  sidebar: ({ s }) => ({
+    items: [
+      s.item({ sectionId: "administration", type: "collection", collection: "adminAuditLog" }),
+    ],
+  }),
+
+  // Composable dashboard — contributes audit timeline widget
+  dashboard: ({ d }) => ({
+    sections: [
+      d.section({ id: "activity", label: { key: "audit.dashboard.activity" }, layout: "grid", columns: 4 }),
+    ],
+    items: [
+      d.timeline({
+        sectionId: "activity",
+        id: "audit-recent-activity",
+        label: { key: "audit.widget.recentActivity.title" },
+        maxItems: options?.maxItems ?? 10,
+        showTimestamps: true,
+        timestampFormat: "relative",
+        span: 2,
+        loader: async ({ app }) => {
+          const result = await app.api.collections.adminAuditLog.find({
+            limit: options?.maxItems ?? 10,
+            sort: { createdAt: "desc" },
+            accessMode: "system",
+          });
+          return result.docs.map((row) => ({
+            id: row.id,
+            title: `${row.userName} ${row.action}d ${row.resource}`,
+            timestamp: row.createdAt,
+            variant: row.action === "delete" ? "error" : row.action === "create" ? "success" : "info",
+          }));
+        },
+      }),
+    ],
+  }),
+
   migrations: [],     // audit table migration
   messages: {
     en: {
       "audit.widget.recentActivity.title": "Recent Activity",
       "audit.widget.recentActivity.empty": "No recent activity",
+      "audit.dashboard.activity": "Activity",
     },
   },
 });
@@ -1986,6 +2228,12 @@ interface Module {
   listViews?: Record<string, ListViewDefinition>;       // extends v proxy in .list(): v.table(), v.kanban()
   editViews?: Record<string, EditViewDefinition>;       // extends v proxy in .form(): v.form()
   components?: Record<string, ComponentDefinition>;     // extends c proxy: c.icon(), c.badge(), c.chip()
+  
+  // Composable sidebar/dashboard (§5.8) — callbacks resolved at module() time
+  sidebar?: (ctx: { s: SidebarProxy; c: ComponentProxy }) => SidebarContribution;
+  dashboard?: (ctx: { d: DashboardProxy; c: ComponentProxy; a: ActionProxy }) => DashboardContribution;
+  branding?: BrandingConfig;
+  adminLocale?: AdminLocaleConfig;
   
   // Config contributions
   auth?: Partial<AuthConfig>;
@@ -2026,21 +2274,25 @@ config.modules: [admin()]
 
 Merge rules per key:
 
-| Key             | Strategy                                   |
-| --------------- | ------------------------------------------ |
-| `collections`   | Spread-merge, later wins                   |
-| `globals`       | Spread-merge, later wins                   |
-| `jobs`          | Spread-merge, later wins                   |
-| `functions`     | Spread-merge, later wins                   |
-| `fields`        | Spread-merge, later wins                   |
-| `listViews`     | Spread-merge, later wins                   |
-| `editViews`     | Spread-merge, later wins                   |
-| `components`    | Spread-merge, later wins                   |
-| `auth`          | Deep-merge (recursive)                     |
-| `migrations`    | Concatenate (all kept)                     |
-| `messages`      | Deep-merge per locale (later wins per key) |
-| `defaultAccess` | Last wins                                  |
-| `plugins`       | Concatenate (all applied)                  |
+| Key             | Strategy                                                        |
+| --------------- | --------------------------------------------------------------- |
+| `collections`   | Spread-merge, later wins                                        |
+| `globals`       | Spread-merge, later wins                                        |
+| `jobs`          | Spread-merge, later wins                                        |
+| `functions`     | Spread-merge, later wins                                        |
+| `fields`        | Spread-merge, later wins                                        |
+| `listViews`     | Spread-merge, later wins                                        |
+| `editViews`     | Spread-merge, later wins                                        |
+| `components`    | Spread-merge, later wins                                        |
+| `sidebar`       | Sections dedup by id (later wins), items concatenated (§5.8.3)  |
+| `dashboard`     | Sections dedup by id, items concatenated, metadata last wins    |
+| `auth`          | Deep-merge (recursive)                                          |
+| `migrations`    | Concatenate (all kept)                                          |
+| `messages`      | Deep-merge per locale (later wins per key)                      |
+| `defaultAccess` | Last wins                                                       |
+| `branding`      | Last wins                                                       |
+| `adminLocale`   | Last wins                                                       |
+| `plugins`       | Concatenate (all applied)                                       |
 
 **User code always wins over modules.**
 
@@ -2580,6 +2832,50 @@ Fix the gaps identified in the validation report:
 
 **Commit:** `feat!: remove QuestpieBuilder, RPC module, and positional callback signatures`
 
+### Phase 7 — Composable Sidebar/Dashboard & Registry Pattern
+
+**Goal:** Implement the composable sidebar/dashboard pattern (§5.8) and the typed registry pattern for components, views, and blocks (§5.7). Sidebar and dashboard move from monolithic `admin()` options to per-module contributions that `createApp()` merges.
+
+#### Types & Registries
+
+- [ ] Add `ComponentRegistry`, `ListViewRegistry`, `EditViewRegistry` interfaces to core (empty, augmented by admin)
+- [ ] Add `SidebarContribution`, `DashboardContribution` types (§5.8.1, §5.8.2)
+- [ ] Add `sidebar`, `dashboard`, `branding`, `adminLocale` as typed keys on `ModuleDefinition` (not `[key: string]` extension)
+- [ ] Add `sidebar`, `dashboard` as typed keys on `AppConfig` (via `ConfigExtensions` augmentation)
+- [ ] Admin module augments registries with `icon`, `badge`, `table`, `form`
+
+#### Sidebar/Dashboard Proxy Resolution
+
+- [ ] `module()` resolves sidebar/dashboard callbacks at call time (not identity function for these keys)
+- [ ] `config()` resolves sidebar/dashboard callbacks at call time
+- [ ] Proxies: `s.section()`, `s.item()` for sidebar; `d.section()`, `d.stats()`, `d.timeline()` etc. for dashboard
+- [ ] `a.create()`, `a.global()`, `a.link()` for dashboard actions
+- [ ] `c` proxy scoped to registered components (same as in `.admin()` callbacks)
+
+#### Merge Logic in createApp
+
+- [ ] Sidebar merge: sections dedup by id (later wins), items concatenated by sectionId in module order
+- [ ] Dashboard merge: sections dedup by id, items concatenated, metadata (title, description, columns) last wins, actions concatenated
+- [ ] Items with `position: "start"` prepended, default append
+- [ ] Remove sidebar/dashboard from `EXTENSION_KEYS` hardcoded list — now first-class merge
+
+#### Module Updates
+
+- [ ] Update `admin()` — contribute sidebar sections+items as callback, remove old proxy resolution
+- [ ] Update `audit()` — contribute sidebar item (adminAuditLog → "administration") + dashboard widget (timeline)
+- [ ] Remove `createAuditDashboardWidget()` helper — audit contributes directly
+- [ ] Remove `AdminOptions.sidebar`, `AdminOptions.dashboard` — sidebar/dashboard are on module/config, not admin() options
+
+#### Migration
+
+- [ ] Update barbershop `questpie.config.ts` — sidebar/dashboard as callbacks on config level
+- [ ] Update `admin-config.ts` `getAdminConfig` — read merged sidebar/dashboard from `instance.state`
+- [ ] Update `create-questpie` templates
+- [ ] Update docs (`apps/docs`, `AGENTS.md`)
+- [ ] Run tests, type-check, biome format
+
+**Commit:** `feat: composable sidebar/dashboard from modules, typed registry pattern`
+
 ---
 
 ## Open Questions
@@ -2587,8 +2883,8 @@ Fix the gaps identified in the validation report:
 1. **Should `.generated/index.ts` be committed or `.gitignore`'d?**
    - Recommendation: `.gitignore`'d, `questpie generate` as `postinstall` script
 
-2. **Sidebar/dashboard — files or inline options?**
-   - Recommendation: Both. `admin({ sidebar: ... })` for simple, `sidebar.ts` for complex.
+2. ~~**Sidebar/dashboard — files or inline options?**~~
+   - **Resolved:** Sidebar/dashboard are composable callbacks on `module()` and `config()`. Each module contributes its own sections+items. `createApp()` merges them. See §5.8.
 
 3. **How to handle email templates?**
    - Option: `emails/*.ts` directory, same convention as jobs.

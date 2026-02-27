@@ -2,15 +2,14 @@
  * @questpie/admin/server - Server-Side Admin Module
  *
  * Server-side exports for the admin panel backend.
- * Use this when setting up your app with the `admin()` module.
  *
  * @example
  * ```ts
- * import { config } from "questpie";
- * import { admin } from "@questpie/admin/server";
+ * import { runtimeConfig } from "questpie";
+ * import { adminModule } from "@questpie/admin/server";
  *
- * export default config({
- *   modules: [admin()],
+ * // adminModule is imported by codegen-generated modules.ts
+ * export default runtimeConfig({
  *   db: { url: process.env.DATABASE_URL },
  * });
  * ```

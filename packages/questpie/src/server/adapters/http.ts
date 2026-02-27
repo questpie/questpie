@@ -22,6 +22,8 @@ export type {
 export { createAdapterContext } from "./utils/context.js";
 export { handleError } from "./utils/response.js";
 
+// Import types and utilities
+import type { RouteDefinition } from "../routes/types.js";
 import {
 	createAuthRoute,
 	createCollectionRoutes,
@@ -31,8 +33,8 @@ import {
 	createSearchRoutes,
 	createStorageRoutes,
 } from "./routes/index.js";
-// Import types and utilities
 import type { AdapterConfig, AdapterContext, AdapterRoutes } from "./types.js";
+import { resolveContext } from "./utils/context.js";
 import { handleError, normalizeBasePath } from "./utils/index.js";
 
 function resolveStorageAliasCollection(
@@ -70,6 +72,80 @@ function resolveStorageAliasCollection(
 }
 
 /**
+ * Handle custom route dispatch from `routes/*.ts` file convention.
+ * Routes are matched by slash-separated key against `app.config.routes`.
+ *
+ * URL: `/api/routes/webhooks/stripe` → key: `"webhooks/stripe"`
+ *
+ * @see RFC-MODULE-ARCHITECTURE §5.5 (URL Mapping)
+ */
+async function handleCustomRoute<
+	TConfig extends QuestpieConfig = QuestpieConfig,
+>(
+	app: Questpie<TConfig>,
+	config: AdapterConfig<TConfig>,
+	request: Request,
+	segments: string[],
+	context?: AdapterContext,
+): Promise<Response> {
+	const customRoutes = app.config.routes as
+		| Record<string, RouteDefinition>
+		| undefined;
+	if (!customRoutes || Object.keys(customRoutes).length === 0) {
+		return handleError(ApiError.notFound("Route"), { request, app });
+	}
+
+	// Build the route key from remaining segments: ["routes", "webhooks", "stripe"] → "webhooks/stripe"
+	const routeKey = segments.slice(1).join("/");
+	if (!routeKey) {
+		return handleError(ApiError.notFound("Route"), { request, app });
+	}
+
+	const routeDef = customRoutes[routeKey];
+	if (!routeDef) {
+		return handleError(ApiError.notFound("Route"), { request, app });
+	}
+
+	// Check HTTP method
+	if (routeDef.method) {
+		const allowedMethods = Array.isArray(routeDef.method)
+			? routeDef.method
+			: [routeDef.method];
+		if (
+			!allowedMethods.includes(
+				request.method as (typeof allowedMethods)[number],
+			)
+		) {
+			return handleError(ApiError.badRequest("Method not allowed"), {
+				request,
+				app,
+			});
+		}
+	}
+
+	// Resolve context (session, locale, db)
+	const resolved = await resolveContext(app, request, config, context);
+
+	const locale = resolved.appContext.locale ?? "en";
+
+	try {
+		const { extractAppServices } = await import("#questpie/server/config/app-context.js");
+		const services = extractAppServices(app, {
+			db: resolved.appContext.db ?? app.db,
+			session: resolved.appContext.session,
+		});
+		return await routeDef.handler({
+			...services,
+			request,
+			locale,
+			params: {},
+		} as any);
+	} catch (error) {
+		return handleError(error, { request, app, locale });
+	}
+}
+
+/**
  * Create all adapter routes
  */
 export const createAdapterRoutes = <
@@ -102,18 +178,19 @@ export const createAdapterRoutes = <
  * Create the main fetch handler with URL routing
  */
 export const createFetchHandler = (
-	app: Questpie<any>,
+	app: unknown,
 	config: AdapterConfig = {},
 ) => {
-	const routes = createAdapterRoutes(app, config);
+	const _app = app as Questpie<any>;
+	const routes = createAdapterRoutes(_app, config);
 	const basePath = normalizeBasePath(config.basePath ?? "/");
-	const storageAliasCollection = resolveStorageAliasCollection(app, config);
+	const storageAliasCollection = resolveStorageAliasCollection(_app, config);
 
 	/**
 	 * Helper to create error response with app context for i18n
 	 */
 	const errorResponse = (error: unknown, request: Request): Response => {
-		return handleError(error, { request, app });
+		return handleError(error, { request, app: _app });
 	};
 
 	return async (
@@ -185,6 +262,12 @@ export const createFetchHandler = (
 		// Realtime route - unified POST endpoint for multiplexed subscriptions
 		if (segments[0] === "realtime") {
 			return routes.realtime.subscribe(request, {}, context);
+		}
+
+		// Custom routes — dispatched from `routes/*.ts` file convention
+		// @see RFC-MODULE-ARCHITECTURE §5 (Routes — Raw HTTP Handlers)
+		if (segments[0] === "routes") {
+			return handleCustomRoute(_app, config, request, segments, context);
 		}
 
 		// Storage file serving

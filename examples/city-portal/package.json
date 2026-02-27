@@ -3,8 +3,12 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
+	"imports": {
+		"#questpie": "./src/questpie/server/.generated/index.ts"
+	},
 	"scripts": {
 		"dev": "bun --bun vite dev --port 3001",
+		"generate": "bun questpie generate -c src/questpie/server/questpie.config.ts",
 		"seed": "bun run seed.ts",
 		"build": "vite build",
 		"preview": "vite preview",

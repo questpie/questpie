@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { collection, questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -28,21 +28,16 @@ const services = collection("services").fields(({ f }) => ({
 	}),
 }));
 
-const testModule = questpie({ name: "upload-test" }).collections({
-	assets,
-	services,
-});
-
 // ==============================================================================
 // TESTS
 // ==============================================================================
 
 describe("collection upload URL generation", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
-	let app: typeof testModule.$inferApp;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	let app: (typeof setup)["app"];
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({ collections: { assets, services } });
 		app = setup.app;
 		await runTestDbMigrations(app);
 	});

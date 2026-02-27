@@ -1,23 +1,27 @@
 ---
 title: Email
-description: Email templates with React, SMTP adapter, and development console
+description: Handler-based email templates with HTML, SMTP adapter, and development console
 ---
 
 # Email
 
-QUESTPIE includes a mailer service for sending transactional emails. Define templates as React components with Zod-validated context, and send them via SMTP or log to the console during development.
+QUESTPIE includes a mailer service for sending transactional emails. Define templates with a handler function that returns `{ subject, html }`, validate input with Zod, and send them via SMTP or log to the console during development.
 
 ## Why This Exists
 
-applications often need to send emails — appointment confirmations, password resets, notifications. QUESTPIE's email system lets you define type-safe templates and send them through `app.email`.
+Applications often need to send emails — appointment confirmations, password resets, notifications. QUESTPIE's email system lets you define type-safe templates and send them through `app.email`. Handlers receive full AppContext (db, collections, services) so you can fetch data directly inside the template.
 
 ## Setup
 
-```ts
-import { SmtpAdapter, ConsoleAdapter } from "questpie";
+Configure the email adapter in `runtimeConfig()`:
 
-.build({
-  // ...
+```ts
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig, SmtpAdapter, ConsoleAdapter } from "questpie";
+
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  app: { url: process.env.APP_URL! },
   email: {
     adapter: process.env.NODE_ENV === "production"
       ? new SmtpAdapter({
@@ -33,19 +37,20 @@ import { SmtpAdapter, ConsoleAdapter } from "questpie";
         })
       : new ConsoleAdapter({ logHtml: false }),
   },
-})
+});
 ```
 
 ## Defining Email Templates
 
-Templates are defined with `email()` and registered in the builder:
+Templates are defined with `email()` and a `handler` that returns `{ subject, html, text? }`:
 
 ```ts
+// emails/appointment-confirmation.ts
 import { email } from "questpie";
 import { z } from "zod";
 
-export const appointmentConfirmation = email({
-  name: "appointmentConfirmation",
+export default email({
+  name: "appointment-confirmation",
   schema: z.object({
     customerName: z.string(),
     date: z.string(),
@@ -53,37 +58,77 @@ export const appointmentConfirmation = email({
     barberName: z.string(),
     serviceName: z.string(),
   }),
-  subject: (ctx) => `Appointment confirmed for ${ctx.date}`,
-  render: ({ customerName, date, time, barberName, serviceName }) => (
-    <div>
-      <h1>Hi {customerName}!</h1>
-      <p>Your appointment has been confirmed:</p>
-      <ul>
-        <li>Date: {date} at {time}</li>
-        <li>Barber: {barberName}</li>
-        <li>Service: {serviceName}</li>
-      </ul>
-    </div>
-  ),
+  handler: ({ input }) => ({
+    subject: `Appointment confirmed for ${input.date}`,
+    html: `
+      <div>
+        <h1>Hi ${input.customerName}!</h1>
+        <p>Your appointment has been confirmed:</p>
+        <ul>
+          <li>Date: ${input.date} at ${input.time}</li>
+          <li>Barber: ${input.barberName}</li>
+          <li>Service: ${input.serviceName}</li>
+        </ul>
+      </div>
+    `,
+  }),
 });
 ```
 
-Register templates in the builder:
+### Async Data Fetching
+
+Handlers receive full AppContext, so you can query the database:
 
 ```ts
-.emailTemplates({ appointmentConfirmation })
+export default email({
+  name: "order-receipt",
+  schema: z.object({ orderId: z.string() }),
+  handler: async ({ input, collections }) => {
+    const order = await collections.orders.findOne({
+      where: { id: input.orderId },
+      with: { items: true },
+    });
+
+    return {
+      subject: `Receipt for Order #${input.orderId.slice(0, 8)}`,
+      html: `<h1>Order confirmed</h1><p>Total: $${order?.total}</p>`,
+    };
+  },
+});
 ```
+
+### Using React (Optional)
+
+If you prefer React for complex layouts, install `@react-email/render` and call it inside the handler:
+
+```ts
+import { email } from "questpie";
+import { render } from "@react-email/render";
+import { z } from "zod";
+import { WelcomeTemplate } from "./components/welcome";
+
+export default email({
+  name: "welcome",
+  schema: z.object({ name: z.string() }),
+  handler: async ({ input }) => ({
+    subject: `Welcome, ${input.name}!`,
+    html: await render(<WelcomeTemplate name={input.name} />),
+  }),
+});
+```
+
+Templates placed in the `emails/` directory are automatically discovered by codegen.
 
 ## Sending Emails
 
 ### Using Templates
 
 ```ts
-// In a hook, RPC handler, or job
-await app.email.sendTemplate({
+// In a hook, function handler, or job
+await email.sendTemplate({
   template: "appointmentConfirmation",
   to: "customer@example.com",
-  context: {
+  input: {
     customerName: "Jane",
     date: "March 15, 2025",
     time: "10:00 AM",
@@ -101,6 +146,20 @@ await app.email.send({
   subject: "Hello",
   html: "<h1>Hello World</h1>",
 });
+```
+
+### Previewing Templates
+
+Use `renderTemplate()` to get the rendered output without sending:
+
+```ts
+const result = await app.email.renderTemplate({
+  template: "appointmentConfirmation",
+  input: { customerName: "Jane", date: "March 15", ... },
+});
+
+console.log(result.subject); // "Appointment confirmed for March 15"
+console.log(result.html);    // "<div>..."
 ```
 
 ## Adapters
@@ -141,9 +200,10 @@ const adapter = await createEtherealSmtpAdapter();
 
 ## Common Mistakes
 
-- **No adapter configured** — Without an email adapter, `app.email.send()` will fail. Use `ConsoleAdapter` for development.
-- **Missing template registration** — Templates must be registered via `.emailTemplates()` before they can be sent.
+- **No adapter configured** — Without an email adapter, `email.send()` will fail. Use `ConsoleAdapter` for development.
+- **Missing template file** — Templates must be placed in the `emails/` directory and export a default `email()` definition to be discovered by codegen.
 - **Sending emails synchronously in hooks** — Use background jobs for non-critical emails to avoid slowing down API responses.
+- **Forgetting to return `subject`** — The handler must return both `subject` and `html`.
 
 ## Related Pages
 

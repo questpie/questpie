@@ -1,26 +1,15 @@
 /**
- * QUESTPIE Configuration
+ * QUESTPIE Runtime Configuration
  *
- * Central config using config() API.
- * Collections, globals, functions, and jobs are discovered
- * from the file convention by `questpie generate`.
+ * Runtime-only configuration: database, adapters, secrets.
+ * Entity definitions (collections, globals, etc.) are codegen-generated.
+ * Sidebar, dashboard, branding are file conventions.
  */
 
-import { admin } from "@questpie/admin/server";
-import { ConsoleAdapter, config } from "questpie";
+import { ConsoleAdapter, runtimeConfig } from "questpie";
 import { env } from "@/lib/env.js";
-import { migrations } from "../../migrations/index.js";
-import { configureDashboard } from "./dashboard.js";
-import { configureSidebar } from "./sidebar.js";
 
-export default config({
-	modules: [
-		admin({
-			branding: { name: "{{projectName}}" },
-			sidebar: configureSidebar,
-			dashboard: configureDashboard,
-		}),
-	],
+export default runtimeConfig({
 	app: { url: env.APP_URL },
 	db: { url: env.DATABASE_URL },
 	auth: {
@@ -36,5 +25,4 @@ export default config({
 	email: {
 		adapter: new ConsoleAdapter({ logHtml: false }),
 	},
-	migrations,
 });

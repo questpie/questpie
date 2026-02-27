@@ -1,6 +1,6 @@
 ---
 title: Functions API
-description: Standalone fn() definitions — typed server functions with Zod validation, access control, and file-based routing
+description: fn() definitions — typed server functions with Zod validation, access control, and file-based routing
 ---
 
 # Functions API
@@ -23,8 +23,8 @@ export default fn({
     date: z.string(),
     serviceId: z.string().optional(),
   }),
-  handler: async ({ input, app, session }) => {
-    const barber = await app.api.collections.barbers.findOne({
+  handler: async ({ input, collections }) => {
+    const barber = await collections.barbers.findOne({
       where: { id: input.barberId },
     });
     // ... compute available slots
@@ -37,7 +37,7 @@ export default fn({
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `schema` | `ZodType` | Yes | Zod schema for input validation |
+| `schema` | `ZodType` | No | Zod schema for input validation |
 | `handler` | `(ctx) => Promise<TOutput>` | Yes | Function implementation |
 | `access` | `(ctx) => boolean \| Promise<boolean>` | No | Access control |
 | `outputSchema` | `ZodType` | No | Zod schema for output validation |
@@ -53,8 +53,8 @@ import { z } from "zod";
 export default fn({
   schema: z.object({ format: z.enum(["csv", "json"]) }),
   raw: true,
-  handler: async ({ input, app }) => {
-    const csv = await generateCsv(app);
+  handler: async ({ input, collections }) => {
+    const csv = await generateCsv(collections);
     return new Response(csv, {
       headers: { "Content-Type": "text/csv" },
     });
@@ -64,53 +64,48 @@ export default fn({
 
 ### Handler Context
 
-Both function types receive a context object:
+Both function types receive the full `AppContext` plus validated input:
 
 ```ts
 {
-  input: TInput;           // Validated input (JSON functions)
-  request: Request;        // Raw HTTP request (raw functions)
-  app: Questpie;           // app instance
+  input: TInput;           // Validated input (from schema)
+  request: Request;        // Raw HTTP request
   session: Session | null; // Authenticated user
   locale: string;          // Current locale
+  db: Database;            // Typed database client
+  collections: AppCollections;  // Typed collection CRUD APIs
+  globals: AppGlobals;     // Typed global CRUD APIs
+  queue: QueueClient;      // Typed job queue
+  email: MailerService;    // Typed email service
+  kv: KVStore;             // Key-value store
+  logger: Logger;          // Logger
+  storage: StorageService; // File storage
+  // ...any custom services
 }
 ```
 
-For strongly typed `app`, `db`, and `session`, cast inside the handler:
-
-```ts
-import { getContext } from "questpie";
-import type { App } from '../app';
-
-handler: async (ctx) => {
-  const { app, db, session } = getContext<App>(ctx);
-  // app, db, session are now strongly typed
-}
-```
+All properties are fully typed via `AppContext` augmentation — no manual type casting needed.
 
 ## File-Based Routing
 
-Functions live in a `functions/` directory. Nested folders create nested routes automatically — no manual router composition needed.
+Functions live in a `functions/` directory. Nested folders create nested routes automatically.
 
 ```
 functions/
-  booking/
-    getAvailableSlots.ts   → POST /api/functions/booking/getAvailableSlots
-    createBooking.ts       → POST /api/functions/booking/createBooking
-    cancelBooking.ts       → POST /api/functions/booking/cancelBooking
-  reports/
-    generateMonthly.ts     → POST /api/functions/reports/generateMonthly
-    exportCsv.ts           → POST /api/functions/reports/exportCsv
+  create-booking.ts        → POST /api/functions/createBooking
+  get-active-barbers.ts    → POST /api/functions/getActiveBarbers
+  get-revenue-stats.ts     → POST /api/functions/getRevenueStats
 ```
 
-Each file exports a default `fn()` definition. The file path determines the RPC route — no `router()` calls required.
+Each file exports a default `fn()` definition. The filename (kebab-case) is converted to camelCase for the route name.
 
 ## Mounting Functions
 
-Functions are discovered automatically from the `functions/` directory. No `rpc` option is needed in the fetch handler config:
+Functions are discovered automatically by codegen. No separate `rpc` option needed:
 
 ```ts
 import { createFetchHandler } from "questpie";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, {
   basePath: "/api",
@@ -128,7 +123,7 @@ fn({
     if (!session) return false;
     return session.user.role === "admin";
   },
-  handler: async ({ input, app }) => {
+  handler: async ({ input, collections }) => {
     // Only admins reach here
   },
 })
@@ -141,30 +136,28 @@ If `access` returns `false`, the function responds with `403 FORBIDDEN`.
 ### Via Client SDK
 
 ```ts
-import { createClient } from "@questpie/tanstack-query";
+import { createClient } from "questpie/client";
+import type { AppConfig } from "#questpie";
 
-const client = createClient<typeof app>({ baseUrl: "/api" });
+const client = createClient<AppConfig>({ baseUrl: "/api" });
 
 // Type-safe call
-const slots = await client.functions.booking.getAvailableSlots({
+const result = await client.functions.createBooking({
   barberId: "b1",
-  date: "2024-03-15",
+  serviceId: "s1",
+  scheduledAt: new Date().toISOString(),
+  customerName: "John",
+  customerEmail: "john@example.com",
 });
 ```
 
 ### Via HTTP
 
 ```
-POST /api/functions/booking/getAvailableSlots
+POST /api/functions/createBooking
 Content-Type: application/json
 
-{ "barberId": "b1", "date": "2024-03-15" }
-```
-
-Response:
-
-```json
-{ "slots": [...] }
+{ "barberId": "b1", "serviceId": "s1", ... }
 ```
 
 ## Error Handling
@@ -176,8 +169,8 @@ Response:
 
 ## Related Pages
 
-- [RPC](/docs/server/rpc) — Conceptual guide with patterns
-- [Type-Safe Contexts](/docs/server/type-safe-contexts) — Typed `app`, `db`, and `session` patterns
-- [q Builder API](/docs/reference/q-builder-api) — Builder factory methods
+- [Functions](/docs/server/functions) — Conceptual guide with patterns
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — How context typing works
+- [Config API](/docs/reference/q-builder-api) — Runtime config and factories
 - [Adapter API](/docs/reference/adapter-api) — Mounting the handler
 - [Error Codes](/docs/reference/error-codes) — Error responses

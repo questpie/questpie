@@ -11,8 +11,8 @@ export default fn({
 		customerPhone: z.string().optional(),
 		notes: z.string().optional(),
 	}),
-	handler: async ({ input, app }) => {
-		const service = await app.api.collections.services.findOne({
+	handler: async ({ input, collections }) => {
+		const service = await collections.services.findOne({
 			where: { id: input.serviceId },
 		});
 		if (!service) throw new Error("Service not found");
@@ -28,7 +28,7 @@ export default fn({
 		const endOfDay = new Date(scheduledDate);
 		endOfDay.setHours(23, 59, 59, 999);
 
-		const allAppointments = await app.api.collections.appointments.find({
+		const allAppointments = await collections.appointments.find({
 			where: {
 				barber: input.barberId,
 				scheduledAt: {
@@ -50,7 +50,7 @@ export default fn({
 		const servicesMap = new Map<string, { duration: number }>();
 
 		if (serviceIds.length > 0) {
-			const relatedServices = await app.api.collections.services.find({
+			const relatedServices = await collections.services.find({
 				where: {
 					id: { in: serviceIds },
 				},
@@ -75,19 +75,19 @@ export default fn({
 			throw new Error("This time slot is no longer available.");
 		}
 
-		let customer = await app.api.collections.user.findOne({
+		let customer = await collections.user.findOne({
 			where: { email: input.customerEmail },
 		});
 
 		if (!customer) {
-			customer = await app.api.collections.user.create({
+			customer = await collections.user.create({
 				email: input.customerEmail,
 				name: input.customerName,
 				emailVerified: false,
 			});
 		}
 
-		const appointment = await app.api.collections.appointments.create({
+		const appointment = await collections.appointments.create({
 			customer: customer.id,
 			barber: input.barberId,
 			service: input.serviceId,

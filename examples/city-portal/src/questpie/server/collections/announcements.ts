@@ -4,7 +4,7 @@
  * Official notices and announcements with validity periods.
  */
 
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export default collection("announcements")
 	.fields(({ f }) => ({

@@ -1,15 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection, global } from "../../src/server/index.js";
 import { scheduledTransitionJob } from "../../src/server/workflow/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-const q = questpie({ name: "test-scheduled-transition" }).fields(defaultFields);
-
-const workflow_posts = q
-	.collection("workflow_posts")
+const workflow_posts = collection("workflow_posts")
 	.fields(({ f }) => ({
 		title: f.text({ required: true }),
 	}))
@@ -22,8 +18,7 @@ const workflow_posts = q
 		},
 	});
 
-const workflow_settings = q
-	.global("workflow_settings")
+const workflow_settings = global("workflow_settings")
 	.fields(({ f }) => ({
 		siteName: f.text({ required: true }),
 	}))
@@ -36,16 +31,15 @@ const workflow_settings = q
 		},
 	});
 
-const testModule = q
-	.collections({ workflow_posts })
-	.globals({ workflow_settings })
-	.jobs({ "scheduled-transition": scheduledTransitionJob });
-
 describe("scheduled transitions", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({
+			collections: { workflow_posts },
+			globals: { workflow_settings },
+			jobs: { "scheduled-transition": scheduledTransitionJob },
+		});
 		await runTestDbMigrations(setup.app);
 	});
 

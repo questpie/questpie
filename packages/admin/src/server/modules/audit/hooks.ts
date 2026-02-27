@@ -109,7 +109,7 @@ function getResourceTypeLabel(
  */
 function generateTitle(
 	action: string,
-	resourceType: "collection" | "global",
+	_resourceType: "collection" | "global",
 	resourceTypeLabel: string,
 	resourceLabel: string | null,
 	userName: string | null,
@@ -132,6 +132,7 @@ function generateTitle(
 
 /**
  * Create global collection hooks for audit logging.
+ * @deprecated Use the default export instead (file convention).
  */
 export function createCollectionAuditHooks() {
 	return {
@@ -307,6 +308,10 @@ export function createCollectionAuditHooks() {
 /**
  * Create global global hooks for audit logging.
  */
+/**
+ * Create global global hooks for audit logging.
+ * @deprecated Use the default export instead (file convention).
+ */
 export function createGlobalAuditHooks() {
 	return {
 		async afterChange(ctx: GlobalGlobalHookContext) {
@@ -415,3 +420,30 @@ export function createGlobalAuditHooks() {
 		},
 	};
 }
+
+// ============================================================================
+// File convention — default export
+// ============================================================================
+
+const collectionHooks = createCollectionAuditHooks();
+const globalHooks = createGlobalAuditHooks();
+
+/**
+ * Audit hooks — file convention default export.
+ * Intercepts all collection and global mutations to create audit log entries.
+ */
+export default {
+	collections: [
+		{
+			afterChange: collectionHooks.afterChange,
+			afterDelete: collectionHooks.afterDelete,
+			afterTransition: collectionHooks.afterTransition,
+		},
+	],
+	globals: [
+		{
+			afterChange: globalHooks.afterChange,
+			afterTransition: globalHooks.afterTransition,
+		},
+	],
+};

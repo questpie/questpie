@@ -12,7 +12,10 @@ This guide walks through setting up file uploads in a QUESTPIE application — f
 ### 1. Configure Local Storage
 
 ```ts
-.build({
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
+
+export default runtimeConfig({
   // ...
   storage: {
     default: {
@@ -21,7 +24,7 @@ This guide walks through setting up file uploads in a QUESTPIE application — f
       urlPrefix: "/api/files",
     },
   },
-})
+});
 ```
 
 Files are stored in the `./uploads` directory and served via the app file endpoint.
@@ -29,8 +32,9 @@ Files are stored in the `./uploads` directory and served via the app file endpoi
 ### 2. Add Upload Fields
 
 ```ts
-export const barbers = qb
-  .collection("barbers")
+import { collection } from "#questpie";
+
+export const barbers = collection("barbers")
   .fields(({ f }) => ({
     name: f.text({ required: true }),
     avatar: f.upload({}),                    // Single image
@@ -57,9 +61,10 @@ bun add @flydrive/s3
 ### 2. Configure S3 Storage
 
 ```ts
+import { runtimeConfig } from "questpie";
 import { S3Driver } from "@flydrive/s3";
 
-.build({
+export default runtimeConfig({
   // ...
   storage: {
     default: {
@@ -73,7 +78,7 @@ import { S3Driver } from "@flydrive/s3";
       urlPrefix: process.env.CDN_URL,
     },
   },
-})
+});
 ```
 
 ### 3. Signed URLs

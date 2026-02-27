@@ -301,7 +301,7 @@ export async function processBlocksDocument(
 	);
 
 	// Step 3: Merge expanded + prefetched (prefetched overrides on conflict)
-	const mergedData: Record<string, Record<string, unknown>> = {};
+	const mergedData: Record<string, Record<string, {}>> = {};
 	const allBlockIds = new Set([
 		...Object.keys(expandedData),
 		...Object.keys(prefetchedData),
@@ -311,7 +311,7 @@ export async function processBlocksDocument(
 		mergedData[blockId] = {
 			...(expandedData[blockId] || {}),
 			...(prefetchedData[blockId] || {}),
-		};
+		} as Record<string, {}>;
 	}
 
 	return {
@@ -349,9 +349,8 @@ async function executePrefetchFunctions(
 		const prefetchCtx: BlockPrefetchContext = {
 			blockId: node.id,
 			blockType: node.type,
-			app: ctx.app,
-			db: ctx.db,
-			locale: ctx.locale,
+			...(ctx as any),
+			locale: (ctx as any).locale,
 		};
 
 		// Shape 3: with + loader

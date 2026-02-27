@@ -12,11 +12,11 @@ import { collection } from "questpie";
  *
  * @example
  * ```ts
- * import { config } from "questpie";
- * import { admin } from "@questpie/admin/server";
+ * import { runtimeConfig } from "questpie";
+ * import { adminModule } from "@questpie/admin/server";
  *
- * export default config({
- *   modules: [admin()],
+ * export default runtimeConfig({
+ *   modules: [adminModule],
  *   // ...
  * });
  *

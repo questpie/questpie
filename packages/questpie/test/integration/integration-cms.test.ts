@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { z } from "zod";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { job, questpie } from "../../src/server/index.js";
+import { collection, job } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -24,11 +23,8 @@ const articleDeletedJob = job({
 	handler: async () => {},
 });
 
-const createTestModule = () => {
-	const q = questpie({ name: "integration-test" }).fields(defaultFields);
-
-	const authors = q
-		.collection("authors")
+const createTestDefinition = () => {
+	const authors = collection("authors")
 		.fields(({ f }) => ({
 			name: f.textarea({ required: true }),
 			email: f.text({ required: true, maxLength: 255 }),
@@ -49,8 +45,7 @@ const createTestModule = () => {
 		});
 
 	// Define articles collection with relations
-	const articles = q
-		.collection("articles")
+	const articles = collection("articles")
 		.fields(({ f }) => ({
 			author: f.relation({
 				to: "authors",
@@ -119,8 +114,7 @@ const createTestModule = () => {
 		});
 
 	// Define tags collection
-	const tags = q
-		.collection("tags")
+	const tags = collection("tags")
 		.fields(({ f }) => ({
 			name: f.textarea({ required: true }),
 			articles: f.relation({
@@ -134,7 +128,7 @@ const createTestModule = () => {
 		.title(({ f }) => f.name);
 
 	// Define junction table
-	const articleTags = q.collection("article_tags").fields(({ f }) => ({
+	const articleTags = collection("article_tags").fields(({ f }) => ({
 		article: f.relation({
 			to: "articles",
 			required: true,
@@ -147,28 +141,26 @@ const createTestModule = () => {
 		}),
 	}));
 
-	return q
-		.collections({
+	return {
+		collections: {
 			authors,
 			articles,
 			tags,
 			article_tags: articleTags,
-		})
-		.jobs({
+		},
+		jobs: {
 			articlePublished: articlePublishedJob,
 			articleDeleted: articleDeletedJob,
-		});
+		},
+	};
 };
 
 describe("integration: full app workflow", () => {
-	let setup: Awaited<
-		ReturnType<typeof buildMockApp<ReturnType<typeof createTestModule>>>
-	>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		// Define authors collection
-		const testModule = createTestModule();
-		setup = (await buildMockApp(testModule)) as any;
+		const definition = createTestDefinition();
+		setup = (await buildMockApp(definition)) as any;
 		await runTestDbMigrations(setup.app);
 	});
 

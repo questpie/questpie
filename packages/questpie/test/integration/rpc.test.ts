@@ -1,13 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { z } from "zod";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { fn, questpie } from "../../src/server/index.js";
+import { collection, fn, global } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 
-const createModule = () => {
-	const q = questpie({ name: "rpc-test" }).fields(defaultFields);
-
+const createDefinition = () => {
 	const ping = fn({
 		schema: z.object({ message: z.string() }),
 		outputSchema: z.object({
@@ -31,31 +28,29 @@ const createModule = () => {
 		},
 	});
 
-	const posts = q.collection("posts").fields(({ f }) => ({
+	const posts = collection("posts").fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 	}));
 
-	const settings = q.global("settings").fields(({ f }) => ({
+	const settings = global("settings").fields(({ f }) => ({
 		title: f.textarea({ required: true }),
 	}));
 
-	// Register functions on the builder (not via rpc() factory)
-	const builder = q
-		.collections({ posts })
-		.globals({ settings })
-		.functions({ ping, webhook });
-
-	return { builder };
+	return {
+		definition: {
+			collections: { posts },
+			globals: { settings },
+			functions: { ping, webhook },
+		},
+	};
 };
 
 describe("rpc functions", () => {
-	let setup: Awaited<
-		ReturnType<typeof buildMockApp<ReturnType<typeof createModule>["builder"]>>
-	>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		const module = createModule();
-		setup = await buildMockApp(module.builder);
+		const { definition } = createDefinition();
+		setup = await buildMockApp(definition);
 	});
 
 	afterEach(async () => {
@@ -140,13 +135,13 @@ describe("rpc nested routers", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		const q = questpie({ name: "nested-rpc-test" }).fields(defaultFields);
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			title: f.textarea({ required: true }),
 		}));
-		setup = await buildMockApp(
-			q.collections({ posts }).functions(nestedFunctions),
-		);
+		setup = await buildMockApp({
+			collections: { posts },
+			functions: nestedFunctions,
+		});
 	});
 
 	afterEach(async () => {

@@ -1,10 +1,11 @@
+import { migration } from "questpie";
+import type { OperationSnapshot } from "questpie";
 import { sql } from "drizzle-orm";
-import type { Migration, OperationSnapshot } from "questpie";
 import snapshotJson from "./snapshots/20260206T180920_fancy_green_tiger.json";
 
 const snapshot = snapshotJson as OperationSnapshot;
 
-export const fancyGreenTiger20260206T180920: Migration = {
+export default migration({
 	id: "fancyGreenTiger20260206T180920",
 	async up({ db }) {
 		await db.execute(
@@ -35,4 +36,4 @@ export const fancyGreenTiger20260206T180920: Migration = {
 		await db.execute(sql`ALTER TABLE "verification" DROP COLUMN "updated_at";`);
 	},
 	snapshot,
-};
+});

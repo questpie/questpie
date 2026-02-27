@@ -23,15 +23,15 @@ description: Compose client registries for admin rendering
 - branding (`.branding()`)
 - admin UI locales (`.adminLocale()`)
 
-Those live on the server builder (`q()`) via `@questpie/admin/server`.
+Those live in convention files via `@questpie/admin/server`.
 
 ## Setup
 
 ```ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { App } from "../server/app";
+import type { AppConfig } from "#questpie";
 
-export const admin = qa<App>().use(adminModule);
+export const admin = qa<AppConfig>().use(adminModule);
 ```
 
 `adminModule` provides built-in field/view/widget/component registries.
@@ -43,7 +43,7 @@ export const admin = qa<App>().use(adminModule);
 Compose another admin builder module:
 
 ```ts
-const admin = qa<App>()
+const admin = qa<AppConfig>()
   .use(adminModule)
   .use(myCustomModule);
 ```
@@ -113,12 +113,11 @@ You can use helper factories directly:
 ## Common Mistakes
 
 - Forgetting `.use(adminModule)` and ending up with empty registries.
-- Putting branding/locale on `qa()` instead of configuring them on the server builder (`q()`).
+- Putting branding/locale on `qa()` instead of configuring them in convention files.
 - Duplicating schema or access logic on the client.
 
 ## Related Pages
 
 - [Admin Overview](/docs/admin) — Architecture split (server vs client)
 - [qa Builder API](/docs/reference/qa-builder-api) — Full API reference
-- [q Builder API](/docs/reference/q-builder-api) — Server methods (`.branding()`, `.adminLocale()`)
 - [Registries Overview](/docs/admin/registries-overview) — Registry concepts

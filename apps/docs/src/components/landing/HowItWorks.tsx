@@ -33,8 +33,8 @@ export default fn({
     barberId: z.string(),
     date: z.string(),
   }),
-  handler: async ({ input, app }) => {
-    const booked = await app.api.collections.appointments.find({
+  handler: async ({ input, collections }) => {
+    const booked = await collections.appointments.find({
       where: {
         barber: input.barberId,
         date: input.date,

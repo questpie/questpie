@@ -1,11 +1,32 @@
-import type { ComponentType } from "react";
 import type { z } from "zod";
+import type { AppContext } from "#questpie/server/config/app-context.js";
 
 /**
- * Email template definition with typesafe context
+ * The result returned by an email handler.
+ */
+export interface EmailResult {
+	subject: string;
+	html: string;
+	text?: string;
+}
+
+/**
+ * Arguments passed to an email handler.
+ * Extends AppContext with the validated input and optional locale.
+ */
+export type EmailHandlerArgs<TInput> = AppContext & {
+	input: TInput;
+	locale?: string;
+};
+
+/**
+ * Email template definition with typesafe input and handler-based rendering.
+ *
+ * Unlike the old React-based API, the handler receives full AppContext
+ * (db, collections, services, etc.) and can perform async data fetching.
  */
 export interface EmailTemplateDefinition<
-	TContext = any,
+	TInput = any,
 	TName extends string = string,
 > {
 	/**
@@ -14,26 +35,28 @@ export interface EmailTemplateDefinition<
 	name: TName;
 
 	/**
-	 * Zod schema for context validation
+	 * Zod schema for input validation
 	 */
-	schema: z.ZodSchema<TContext>;
+	schema: z.ZodSchema<TInput>;
 
 	/**
-	 * React component renderer
+	 * Handler that produces the email content.
+	 * Receives validated input + AppContext (db, collections, etc.).
+	 * Must return `{ subject, html, text? }`.
 	 */
-	render: ComponentType<TContext>;
-
-	/**
-	 * Optional default subject (can use context values)
-	 */
-	subject?: (context: TContext) => string;
+	handler: (args: EmailHandlerArgs<TInput>) => EmailResult | Promise<EmailResult>;
 }
 
 /**
- * Infer context type from email template definition
+ * Infer input type from email template definition
  */
-export type InferEmailTemplateContext<T> =
-	T extends EmailTemplateDefinition<infer C, any> ? C : never;
+export type InferEmailTemplateInput<T> =
+	T extends EmailTemplateDefinition<infer I, any> ? I : never;
+
+/**
+ * @deprecated Use `InferEmailTemplateInput` instead
+ */
+export type InferEmailTemplateContext<T> = InferEmailTemplateInput<T>;
 
 /**
  * Extract template names from email template definitions Record
@@ -57,26 +80,27 @@ export type GetEmailTemplate<
  * ```ts
  * import { email } from 'questpie';
  * import { z } from 'zod';
- * import * as React from 'react';
  *
- * const WelcomeEmail = email({
+ * export default email({
  *   name: 'welcome',
  *   schema: z.object({
  *     name: z.string(),
  *     activationLink: z.string().url(),
  *   }),
- *   render: ({ name, activationLink }) => (
- *     <div>
- *       <h1>Welcome, {name}!</h1>
- *       <a href={activationLink}>Activate your account</a>
- *     </div>
- *   ),
- *   subject: (ctx) => `Welcome to the platform, ${ctx.name}!`,
+ *   handler: ({ input }) => ({
+ *     subject: `Welcome to the platform, ${input.name}!`,
+ *     html: `
+ *       <div>
+ *         <h1>Welcome, ${input.name}!</h1>
+ *         <a href="${input.activationLink}">Activate your account</a>
+ *       </div>
+ *     `,
+ *   }),
  * });
  * ```
  */
-export function email<TName extends string, TContext>(
-	definition: EmailTemplateDefinition<TContext, TName>,
-): EmailTemplateDefinition<TContext, TName> {
+export function email<TName extends string, TInput>(
+	definition: EmailTemplateDefinition<TInput, TName>,
+): EmailTemplateDefinition<TInput, TName> {
 	return definition;
 }

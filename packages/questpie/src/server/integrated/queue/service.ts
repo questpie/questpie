@@ -139,13 +139,17 @@ export function createQueueClient<
 			handlers[jobDef.name] = async (job) => {
 				const context = await getContextOrThrow();
 				const validated = jobDef.schema.parse(job.data);
-				await jobDef.handler({
-					payload: validated,
-					app: getAppOrThrow() as any,
-					session: context.session,
-					locale: context.locale,
+				const appInstance = getAppOrThrow() as any;
+				const { extractAppServices } = await import("#questpie/server/config/app-context.js");
+				const services = extractAppServices(appInstance, {
 					db: context.db,
+					session: context.session,
 				});
+				await jobDef.handler({
+					...services,
+					payload: validated,
+					locale: context.locale,
+				} as any);
 			};
 		}
 

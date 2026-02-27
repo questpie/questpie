@@ -15,6 +15,16 @@ import type {
 } from "#questpie/server/functions/types.js";
 import { job } from "#questpie/server/integrated/queue/job.js";
 import type { JobDefinition } from "#questpie/server/integrated/queue/types.js";
+
+// Augment AppContext for type tests — simulates what generated code does
+declare module "#questpie/server/config/app-context.js" {
+	interface AppContext {
+		app: any;
+		session: { user: { id: string } } | null;
+		db: any;
+	}
+}
+
 import type {
 	Equal,
 	Expect,

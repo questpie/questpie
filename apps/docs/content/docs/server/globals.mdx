@@ -27,7 +27,7 @@ GlobalBuilder chain:
 ## Basic Example
 
 ```ts
-import { global } from "questpie";
+import { global } from "#questpie";
 
 export const siteSettings = global("siteSettings")
   .fields(({ f }) => ({
@@ -206,7 +206,7 @@ Lifecycle callbacks. Globals only support update and read hooks (no create or de
 ### Functions
 
 Custom server functions live in the `functions/` directory and are automatically composed via codegen.
-See [Functions](/docs/server/rpc) for patterns and usage.
+See [Functions](/docs/server/functions) for patterns and usage.
 
 ## API Usage
 
@@ -228,46 +228,42 @@ const settingsSk = await app.api.globals.siteSettings.get({
 
 ## Registering Globals
 
-Globals are registered the same way as collections:
+Globals are auto-discovered from the `globals/` directory via codegen. Place each global in its own file:
 
-```ts
-// questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
-
-export default config({
-  modules: [admin()],
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
-});
+```text
+src/questpie/server/
+├── globals/
+│   ├── site-settings.ts      # global("siteSettings")
+│   └── booking-settings.ts   # global("bookingSettings")
+├── questpie.config.ts
+└── modules.ts
 ```
 
-Globals are auto-discovered from the `globals/` directory via codegen.
+When you run `questpie generate`, all exported globals are collected into the generated app entrypoint automatically.
 
 ## Sidebar Integration
 
-Globals appear in the sidebar like collections:
+Globals appear in the sidebar via the `sidebar.ts` file convention:
 
 ```ts
-.sidebar(({ s, c }) =>
-  s.sidebar({
-    sections: [
-      s.section({
-        id: "overview",
-        title: { en: "Overview" },
-        items: [
-          { type: "global", global: "siteSettings" },
-        ],
-      }),
+// sidebar.ts
+import { sidebar } from "#questpie";
+
+export default sidebar(({ s }) => [
+  s.section({
+    id: "overview",
+    title: { en: "Overview" },
+    items: [
+      { type: "global", global: "siteSettings" },
     ],
   }),
-)
+]);
 ```
 
 ## Common Mistakes
 
 - **Trying to create or delete globals** — Globals have exactly one record. They only support `get` and `update` operations.
-- **Forgetting to register** — The global must be passed to `.globals({})` in your app builder.
+- **Forgetting to export** — The global must be exported from a file in the `globals/` directory. Codegen discovers exports automatically.
 - **Over-nesting** — If your global has many unrelated sections, consider splitting into multiple globals (e.g., `siteSettings`, `seoSettings`, `bookingSettings`).
 
 ## Related Pages

@@ -1,7 +1,7 @@
 /**
  * Admin Module (Client)
  *
- * Frontend counterpart to `admin()` from `@questpie/admin/server`.
+ * Frontend counterpart to `adminModule` from `@questpie/admin/server`.
  * All collection admin configs, sidebar, and branding come from the server.
  * The client module only carries registries: fields, components, views, pages, widgets, blocks, translations.
  *
@@ -19,7 +19,7 @@ import { coreAdminModule } from "./core";
 /**
  * Admin Module - the complete frontend config for QUESTPIE admin panel.
  *
- * All collection admin configs and sidebar come from the server `admin()` module.
+ * All collection admin configs and sidebar come from the server `adminModule`.
  */
 export const adminModule = coreAdminModule;
 

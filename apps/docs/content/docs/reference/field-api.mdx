@@ -324,7 +324,7 @@ const colorField = field<ColorFieldConfig, string>()({
 });
 ```
 
-Register via `q.fields({ color: colorField })`, then use as `f.color()`.
+Register via module augmentation, then use as `f.color()` in your collections.
 
 ### Definition Interface
 

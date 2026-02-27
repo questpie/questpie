@@ -9,17 +9,15 @@ Extension packages add capabilities to QUESTPIE through the module composition p
 
 ## How Modules Work
 
-Modules are composed via the `config()` call:
+Modules are composed via the `modules.ts` convention file:
 
 ```ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
+import { moduleA } from "@my-org/module-a/server";
+import { moduleB } from "@my-org/module-b/server";
 
-export default config({
-  modules: [admin(), moduleA(), moduleB()],
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
-});
+export default [adminModule, moduleA, moduleB] as const;
 ```
 
 State is merged by name — if two modules define the same collection, the last one wins. Fields, jobs, email templates, and auth config are all merged the same way.
@@ -55,7 +53,7 @@ const products = collection("products")
 const syncInventory = job({
   name: "syncInventory",
   schema: z.object({ productId: z.string() }),
-  handler: async ({ payload, app }) => {
+  handler: async ({ payload, collections }) => {
     // Sync with external inventory system
   },
 });
@@ -97,32 +95,20 @@ export const ecommerceAdminModule = qa()
 ## Using the Extension
 
 ```ts
-// App server
-import { collection, config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
 import { ecommerceModule } from "@my-org/ecommerce-plugin/server";
 
-export default config({
-  modules: [admin(), ecommerceModule],
-  collections: {
-    // You can add more collections alongside the plugin's
-    categories: categoriesCollection,
-    // Or extend the plugin's collection
-    products: ecommerceModule.state.collections.products.merge(
-      collection("products").fields(({ f }) => ({
-        featured: f.boolean().default(false),
-      })),
-    ),
-  },
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
-});
+export default [adminModule, ecommerceModule] as const;
+```
 
-// App client — client-side patterns stay as-is
+```ts
+// src/questpie/admin/builder.ts — client-side
 import { qa, adminModule } from "@questpie/admin/client";
 import { ecommerceAdminModule } from "@my-org/ecommerce-plugin/client";
+import type { AppConfig } from "#questpie";
 
-export const admin = qa<typeof app>()
+export const admin = qa<AppConfig>()
   .use(adminModule)
   .use(ecommerceAdminModule);
 ```
@@ -225,11 +211,11 @@ Use `peerDependencies` for QUESTPIE packages — consumers provide their own ver
 ## Common Mistakes
 
 - **Importing React in server module** — server modules must be framework-agnostic
-- **Building the app inside the module** — modules export builder state, the app uses `config()`
+- **Building the app inside the module** — modules export builder state, the app is built by codegen
 - **Not using peerDependencies** — bundling QUESTPIE in your package creates version conflicts
 
 ## Related Pages
 
-- [q Builder API](/docs/reference/q-builder-api) — `.use()` method
+- [Config API](/docs/reference/q-builder-api) — Runtime config and modules
 - [qa Builder API](/docs/reference/qa-builder-api) — Client `.use()` method
 - [Modules & Extensions](/docs/server/modules-and-extensions) — Composition pattern

@@ -1,6 +1,6 @@
 ---
 title: Server
-description: Core schema layer — collections, globals, fields, hooks, access, and RPC
+description: Core schema layer — collections, globals, fields, hooks, access, and functions
 ---
 
 # Server
@@ -13,8 +13,8 @@ The server layer is the heart of QUESTPIE. It defines **WHAT** your runtime does
 config (Configuration)
   ├── collections/              → database tables + CRUD API (file convention)
   ├── globals/                  → singleton records (file convention)
-  ├── functions/                → typed RPC (file convention)
-  ├── modules: [admin(), ...]   → extension modules
+  ├── functions/                → typed server functions (file convention)
+  ├── modules: [adminModule]    → extension modules
   ├── db: { url }               → database connection
   └── app: { url }              → application URL
 
@@ -41,9 +41,10 @@ CollectionBuilder
 Runtime-only:
 
 ```ts
-import { config } from "questpie";
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
 
-export default config({
+export default runtimeConfig({
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
 });
@@ -52,14 +53,10 @@ export default config({
 Runtime + optional admin:
 
 ```ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
 
-export default config({
-  modules: [admin()],    // adds .admin(), .list(), .form(), .sidebar(), etc.
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
-});
+export default [adminModule] as const;  // adds .admin(), .list(), .form() to collections
 ```
 
 ## Core Concepts
@@ -74,7 +71,7 @@ export default config({
 
 **Access control** determines who can read, create, update, and delete records — both at the operation level and the field level.
 
-**RPC** lets you define typed remote procedures alongside your collections, with Zod input validation and full access to the runtime instance.
+**Functions** let you define typed server procedures alongside your collections, with Zod input validation and full access to the typed context.
 
 **Admin blueprint methods** (`.admin()`, `.list()`, `.form()`, `.sidebar()`, `.dashboard()`) are optional extensions provided by `@questpie/admin/server`.
 
@@ -91,10 +88,10 @@ export default config({
 - [Validation](/docs/server/validation) — Zod schemas, custom refinements
 - [Versioning](/docs/server/versioning) — Record history and rollback
 - [Localization](/docs/server/localization) — i18n for fields and messages
-- [Modules & Extensions](/docs/server/modules-and-extensions) — `.use()` composition pattern
-- [RPC](/docs/server/rpc) — Typed remote procedures
+- [Modules & Extensions](/docs/server/modules-and-extensions) — File convention, codegen, and module composition
+- [Functions](/docs/server/functions) — Typed server functions
 - [Context & Transactions](/docs/server/context-and-transactions) — Request context and database transactions
-- [Type-Safe Contexts](/docs/server/type-safe-contexts) — End-to-end typing for hooks, access, RPC, jobs, and admin handlers
+- [Type-Safe Contexts](/docs/server/type-safe-contexts) — End-to-end typing for hooks, access, functions, jobs, and services
 
 ## Canonical References
 

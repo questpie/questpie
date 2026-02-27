@@ -8,7 +8,6 @@ import type {
 	CollectionUpdate,
 } from "#questpie/server/collection/builder/collection.js";
 import { Collection } from "#questpie/server/collection/builder/collection.js";
-import type { CollectionBuilderExtensions } from "#questpie/server/collection/builder/extensions.js";
 import type {
 	CollectionAccess,
 	CollectionBuilderIndexesFn,
@@ -756,6 +755,31 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Generic extension point for plugins.
+	 * Stores an arbitrary key-value pair in the builder state.
+	 * Used by codegen-generated factories to attach admin config, preview config, etc.
+	 * without monkey-patching.
+	 *
+	 * @example
+	 * ```ts
+	 * // In codegen-generated factory:
+	 * collection("posts")
+	 *   .fields(({ f }) => ({ title: f.text() }))
+	 *   .set("admin", { icon: { type: "icon", props: { name: "ph:article" } } })
+	 *   .set("adminList", { view: "table", columns: ["title"] })
+	 * ```
+	 */
+	set<K extends string, V>(
+		key: K,
+		value: V,
+	): CollectionBuilder<TState & Record<K, V>> {
+		const newState = { ...this.state, [key]: value } as any;
+		const newBuilder = new CollectionBuilder(newState);
+		newBuilder._indexesFn = this._indexesFn;
+		return newBuilder;
+	}
+
+	/**
 	 * Build the final collection.
 	 * Generates Drizzle tables and sets up all type inference.
 	 * Can be called explicitly or happens lazily on first property access.
@@ -934,38 +958,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		return merged;
 	}
 }
-
-// =============================================================================
-// Declaration Merging for Extensions
-// =============================================================================
-
-/**
- * Declaration merging: CollectionBuilder implements CollectionBuilderExtensions.
- *
- * This allows packages to augment CollectionBuilderExtensions and have those
- * methods appear on CollectionBuilder instances. The key benefit is that
- * extension methods use `FieldsOf<this>` which is evaluated lazily, avoiding
- * type explosion when combining many collections.
- *
- * @example
- * ```typescript
- * // In @questpie/admin augmentation:
- * declare module "questpie" {
- *   interface CollectionBuilderExtensions {
- *     admin(config: AdminConfig): this;
- *     list(fn: (ctx: { f: FieldsOf<this> }) => ListConfig): this;
- *   }
- * }
- *
- * // Now available on all CollectionBuilder instances:
- * collection("posts")
- *   .fields(({ f }) => ({ title: f.text() }))
- *   .admin({ label: "Posts" })
- *   .list(({ f }) => ({ columns: [f.title] }))
- * ```
- */
-export interface CollectionBuilder<TState extends CollectionBuilderState>
-	extends CollectionBuilderExtensions {}
 
 /**
  * Factory function to create a new collection builder.

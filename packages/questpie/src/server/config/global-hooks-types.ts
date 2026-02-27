@@ -13,12 +13,27 @@ export interface GlobalCollectionHookContext<TData = any, TOriginal = any> {
 	collection: string;
 	data: TData;
 	original: TOriginal | undefined;
-	app: any;
+	/** @deprecated Use flat context properties instead */
+	app?: any;
 	session?: any | null;
 	locale?: string;
 	accessMode?: AccessMode;
 	operation: "create" | "update" | "delete";
 	db: any;
+	/** Queue client for publishing background jobs */
+	queue: any;
+	/** Email service */
+	email: any;
+	/** Storage service */
+	storage: any;
+	/** Key-value store */
+	kv: any;
+	/** Logger */
+	logger: any;
+	/** Search service */
+	search: any;
+	/** Realtime service */
+	realtime: any;
 }
 
 /**
@@ -30,10 +45,25 @@ export interface GlobalCollectionTransitionHookContext<TData = any> {
 	data: TData;
 	fromStage: string;
 	toStage: string;
-	app: any;
+	/** @deprecated Use flat context properties instead */
+	app?: any;
 	session?: any | null;
 	locale?: string;
 	db: any;
+	/** Queue client for publishing background jobs */
+	queue: any;
+	/** Email service */
+	email: any;
+	/** Storage service */
+	storage: any;
+	/** Key-value store */
+	kv: any;
+	/** Logger */
+	logger: any;
+	/** Search service */
+	search: any;
+	/** Realtime service */
+	realtime: any;
 }
 
 /**
@@ -70,11 +100,26 @@ export interface GlobalGlobalHookContext<TData = any> {
 	global: string;
 	data: TData;
 	input?: any;
-	app: any;
+	/** @deprecated Use flat context properties instead */
+	app?: any;
 	session?: any | null;
 	locale?: string;
 	accessMode?: AccessMode;
 	db: any;
+	/** Queue client for publishing background jobs */
+	queue: any;
+	/** Email service */
+	email: any;
+	/** Storage service */
+	storage: any;
+	/** Key-value store */
+	kv: any;
+	/** Logger */
+	logger: any;
+	/** Search service */
+	search: any;
+	/** Realtime service */
+	realtime: any;
 }
 
 /**
@@ -86,10 +131,25 @@ export interface GlobalGlobalTransitionHookContext<TData = any> {
 	data: TData;
 	fromStage: string;
 	toStage: string;
-	app: any;
+	/** @deprecated Use flat context properties instead */
+	app?: any;
 	session?: any | null;
 	locale?: string;
 	db: any;
+	/** Queue client for publishing background jobs */
+	queue: any;
+	/** Email service */
+	email: any;
+	/** Storage service */
+	storage: any;
+	/** Key-value store */
+	kv: any;
+	/** Logger */
+	logger: any;
+	/** Search service */
+	search: any;
+	/** Realtime service */
+	realtime: any;
 }
 
 /**

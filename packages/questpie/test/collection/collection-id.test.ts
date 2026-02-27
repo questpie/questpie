@@ -1,22 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
 describe("collection IDs (field builder)", () => {
 	describe("default id", () => {
-		const q = questpie({ name: "test-default-id" }).fields(defaultFields);
-		const posts = q.collection("posts").fields(({ f }) => ({
+		const posts = collection("posts").fields(({ f }) => ({
 			title: f.text({ required: true, maxLength: 255 }),
 		}));
-		const testModule = q.collections({ posts });
 
-		let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 		beforeEach(async () => {
-			setup = await buildMockApp(testModule);
+			setup = await buildMockApp({ collections: { posts } });
 			await runTestDbMigrations(setup.app);
 		});
 
@@ -48,20 +45,17 @@ describe("collection IDs (field builder)", () => {
 	});
 
 	describe("i18n with default id", () => {
-		const q = questpie({ name: "test-i18n-default-id" }).fields(defaultFields);
-		const posts = q
-			.collection("posts")
+		const posts = collection("posts")
 			.fields(({ f }) => ({
 				sku: f.text({ required: true, maxLength: 50 }),
 				title: f.text({ required: true, localized: true, maxLength: 255 }),
 			}))
 			.title(({ f }) => f.title);
-		const testModule = q.collections({ posts });
 
-		let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 		beforeEach(async () => {
-			setup = await buildMockApp(testModule);
+			setup = await buildMockApp({ collections: { posts } });
 			await runTestDbMigrations(setup.app);
 		});
 
@@ -102,21 +96,16 @@ describe("collection IDs (field builder)", () => {
 	});
 
 	describe("versioning with default id", () => {
-		const q = questpie({ name: "test-versions-default-id" }).fields(
-			defaultFields,
-		);
-		const posts = q
-			.collection("posts")
+		const posts = collection("posts")
 			.fields(({ f }) => ({
 				title: f.text({ required: true, maxLength: 255 }),
 			}))
 			.options({ versioning: true });
-		const testModule = q.collections({ posts });
 
-		let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 		beforeEach(async () => {
-			setup = await buildMockApp(testModule);
+			setup = await buildMockApp({ collections: { posts } });
 			await runTestDbMigrations(setup.app);
 		});
 
@@ -149,22 +138,17 @@ describe("collection IDs (field builder)", () => {
 	});
 
 	describe("combined i18n + versioning with default id", () => {
-		const q = questpie({ name: "test-i18n-versions-default-id" }).fields(
-			defaultFields,
-		);
-		const posts = q
-			.collection("posts")
+		const posts = collection("posts")
 			.fields(({ f }) => ({
 				sku: f.text({ required: true, maxLength: 50 }),
 				title: f.text({ required: true, localized: true, maxLength: 255 }),
 			}))
 			.options({ versioning: true });
-		const testModule = q.collections({ posts });
 
-		let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 		beforeEach(async () => {
-			setup = await buildMockApp(testModule);
+			setup = await buildMockApp({ collections: { posts } });
 			await runTestDbMigrations(setup.app);
 		});
 

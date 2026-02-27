@@ -140,11 +140,10 @@ Runs after Zod validation. Use for async checks against the database:
 .hooks({
   beforeChange: async ({ data, operation, db }) => {
     const d = data as any;
-    const typedDb = getDb(db);
 
     // Uniqueness check
     if (d.slug) {
-      const existing = await typedDb
+      const existing = await db
         .select()
         .from(posts)
         .where(eq(posts.slug, d.slug))

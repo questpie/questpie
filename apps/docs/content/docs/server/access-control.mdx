@@ -9,7 +9,7 @@ QUESTPIE enforces access control at three levels: operation-level (can this user
 
 ## Why This Exists
 
-Admin panels and APIs need permissions. QUESTPIE's access system lets you define rules once on the collection and have them enforced automatically across the REST API, RPC calls, and the admin UI. Rules can be static booleans, functions that check the session, or queries that filter rows.
+Admin panels and APIs need permissions. QUESTPIE's access system lets you define rules once on the collection and have them enforced automatically across the REST API, custom functions, and the admin UI. Rules can be static booleans, functions that check the session, or queries that filter rows.
 
 ## Mental Model
 
@@ -190,32 +190,29 @@ interface FieldAccessContext {
 
 ## Access Context
 
-Collection and global access functions receive:
+Collection and global access functions receive a flat typed context:
 
 ```ts
-interface AccessContext<TData, TApp> {
-  app: TApp;                     // app instance
+interface AccessContext<TData> {
   session?: Session | null;      // Auth session (user + session data)
   data?: TData;                  // Record being accessed (for update/delete)
   input?: any;                   // Input data (for create/update)
-  db: Database;                  // Database client
+  db: Database;                  // Database client (typed via AppContext)
   locale?: string;               // Current locale
+  collections: AppCollections;   // Typed collection APIs
+  globals: AppGlobals;           // Typed global APIs
 }
 ```
 
 ### Using Typed Access
 
+Access functions receive a fully typed context via `AppContext` augmentation — no manual type assertions needed:
+
 ```ts
-import { getApp, getDb } from "questpie";
-import type { App } from '../app';
-
 .access({
-  delete: async ({ session, data, app, db }) => {
-    const app = getApp<App>(app);
-    const typedDb = getDb<App>(db);
-
-    // Complex check: can't delete if referenced elsewhere
-    const refs = await typedDb
+  delete: async ({ session, data, db }) => {
+    // db is already typed — no getDb() or type assertions needed
+    const refs = await db
       .select({ count: sql`count(*)` })
       .from(orderItems)
       .where(eq(orderItems.productId, data.id));
@@ -223,18 +220,6 @@ import type { App } from '../app';
     return refs[0].count === 0;
   },
 })
-```
-
-For full context typing in one line:
-
-```ts
-import { getContext } from "questpie";
-import type { App } from '../app';
-
-update: (ctx) => {
-  const { app, db, session } = getContext<App>(ctx);
-  return !!session?.user;
-}
 ```
 
 ## Default Access
@@ -255,13 +240,13 @@ If a collection defines `.access({ read: true })` but omits `create`, then `read
 
 ### Admin Module Defaults
 
-The `admin()` module sets `defaultAccess` to require authentication for all operations:
+The `adminModule` sets `defaultAccess` to require authentication for all operations:
 
 ```ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// modules.ts
+import { adminModule, auditModule } from "@questpie/admin/server";
 
-// admin() includes:
+// adminModule includes:
 // defaultAccess: {
 //   read: ({ session }) => !!session,
 //   create: ({ session }) => !!session,
@@ -269,26 +254,21 @@ import { admin } from "@questpie/admin/server";
 //   delete: ({ session }) => !!session,
 // }
 
-export default config({
-  modules: [admin()],
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
-});
+export default [adminModule, auditModule] as const;
 
-// posts and products now require authentication for ALL operations
+// All collections now require authentication for ALL operations
 // unless they define their own .access() rules
 ```
 
 ### Custom Default Access
 
-Override the default via `defaultAccess` in your config:
+Override the default via `defaultAccess` in your runtime config:
 
 ```ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// questpie.config.ts
+import { runtimeConfig } from "questpie";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
   // Override: public reads, authenticated writes
   defaultAccess: {
     read: true,
@@ -320,15 +300,18 @@ const publicPosts = collection("posts")
 
 Even without `admin()` or any `defaultAccess`, the framework falls back to requiring a session (`!!session`). This means you can never accidentally expose data by forgetting to set access rules.
 
-To explicitly make everything public (not recommended), set:
+To explicitly make everything public (not recommended), set in `questpie.config.ts`:
 
 ```ts
-.defaultAccess({
-  read: true,
-  create: true,
-  update: true,
-  delete: true,
-})
+export default runtimeConfig({
+  defaultAccess: {
+    read: true,
+    create: true,
+    update: true,
+    delete: true,
+  },
+  // ...
+});
 ```
 
 ## System Mode vs User Mode

@@ -5,7 +5,7 @@
  * Automatically generates correct URLs based on collection, global, or page targets.
  */
 
-import type { Questpie } from "questpie";
+import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
 import type { CollectionNames, GlobalNames } from "../builder";
 import {
@@ -18,7 +18,7 @@ import {
 // Types
 // ============================================================================
 
-interface AdminLinkProps<TApp extends Questpie<any>>
+interface AdminLinkProps<TApp extends QuestpieApp>
 	extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href"> {
 	/** Link to dashboard */
 	to?: "dashboard";
@@ -68,7 +68,7 @@ interface AdminLinkProps<TApp extends Questpie<any>>
  * <AdminLink pageId="analytics">Analytics</AdminLink>
  * ```
  */
-export function AdminLink<TApp extends Questpie<any>>({
+export function AdminLink<TApp extends QuestpieApp>({
 	to,
 	collection,
 	action,
@@ -132,7 +132,7 @@ export function AdminLink<TApp extends Questpie<any>>({
 /**
  * Link to a collection list
  */
-function CollectionLink<TApp extends Questpie<any>>({
+function CollectionLink<TApp extends QuestpieApp>({
 	collection,
 	...rest
 }: Omit<AdminLinkProps<TApp>, "to" | "global" | "pageId" | "action" | "id"> & {
@@ -144,7 +144,7 @@ function CollectionLink<TApp extends Questpie<any>>({
 /**
  * Link to create a new item in a collection
  */
-function CollectionCreateLink<TApp extends Questpie<any>>({
+function CollectionCreateLink<TApp extends QuestpieApp>({
 	collection,
 	...rest
 }: Omit<AdminLinkProps<TApp>, "to" | "global" | "pageId" | "action" | "id"> & {
@@ -156,7 +156,7 @@ function CollectionCreateLink<TApp extends Questpie<any>>({
 /**
  * Link to edit an item in a collection
  */
-export function CollectionEditLink<TApp extends Questpie<any>>({
+export function CollectionEditLink<TApp extends QuestpieApp>({
 	collection,
 	id,
 	...rest
@@ -172,7 +172,7 @@ export function CollectionEditLink<TApp extends Questpie<any>>({
 /**
  * Link to a global settings page
  */
-function GlobalLink<TApp extends Questpie<any>>({
+function GlobalLink<TApp extends QuestpieApp>({
 	global,
 	...rest
 }: Omit<
@@ -187,7 +187,7 @@ function GlobalLink<TApp extends Questpie<any>>({
 /**
  * Link to dashboard
  */
-function DashboardLink<TApp extends Questpie<any>>(
+function DashboardLink<TApp extends QuestpieApp>(
 	props: Omit<
 		AdminLinkProps<TApp>,
 		"to" | "collection" | "global" | "pageId" | "action" | "id"

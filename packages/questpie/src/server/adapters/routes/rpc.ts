@@ -4,6 +4,7 @@
  * Remote procedure call route handlers.
  */
 
+import { extractAppServices } from "../../config/app-context.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
@@ -44,13 +45,7 @@ const extractAccessRule = (
 
 const evaluateFunctionAccess = async (
 	definition: FunctionDefinition,
-	ctx: {
-		app: unknown;
-		session?: unknown | null;
-		db: unknown;
-		locale?: string;
-		request: Request;
-	},
+	ctx: Record<string, unknown>,
 ): Promise<boolean> => {
 	const rule = extractAccessRule(definition.access);
 
@@ -107,10 +102,13 @@ const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(
 
 	const resolved = await resolveContext(app, request, config, context);
 
-	const hasAccess = await evaluateFunctionAccess(definition, {
-		app: app,
-		session: resolved.appContext.session,
+	const services = extractAppServices(app, {
 		db: resolved.appContext.db ?? app.db,
+		session: resolved.appContext.session,
+	});
+
+	const hasAccess = await evaluateFunctionAccess(definition, {
+		...services,
 		locale: resolved.appContext.locale,
 		request,
 	});
@@ -130,12 +128,10 @@ const executeFunction = async <TConfig extends QuestpieConfig = QuestpieConfig>(
 	if (definition.mode === "raw") {
 		try {
 			return await definition.handler({
+				...services,
 				request,
-				app: app as any,
-				session: resolved.appContext.session,
 				locale: resolved.appContext.locale,
-				db: resolved.appContext.db ?? app.db,
-			});
+			} as any);
 		} catch (error) {
 			return errorResponse(error, request, resolved.appContext.locale);
 		}

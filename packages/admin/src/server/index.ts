@@ -6,24 +6,15 @@
  *
  * @example
  * ```ts
- * import { config } from "questpie";
- * import { admin } from "@questpie/admin/server";
+ * import { runtimeConfig } from "questpie";
+ * import { adminModule } from "@questpie/admin/server";
  *
- * export default config({
- *   modules: [admin()],
- *   app: { url: process.env.APP_URL! },
+ * export default runtimeConfig({
  *   db: { url: process.env.DATABASE_URL! },
+ *   app: { url: process.env.APP_URL! },
  * });
  * ```
  */
-
-// Server-side type augmentation for builder states
-// This import activates the module augmentation for questpie types
-import "./augmentation.js";
-
-// Apply runtime patches to builder prototypes (auto-applies on import)
-// This adds admin methods to QuestpieBuilder, CollectionBuilder, GlobalBuilder
-import "./patch.js";
 
 // Framework adapters
 export * from "./adapters/index.js";
@@ -36,13 +27,22 @@ export type {
 	AdminCollectionConfig,
 	AdminConfigContext,
 	AdminGlobalConfig,
+	AdminLocaleConfig,
 	BlockCategoryConfig,
 	BuiltinActionType,
 	ComponentDefinition,
 	ComponentFactory,
 	ComponentReference,
 	DashboardActionFactory,
+	// Composable sidebar/dashboard contribution types
+	DashboardActionProxy,
+	DashboardCallback,
+	DashboardCallbackContext,
 	DashboardConfigContext,
+	DashboardContribution,
+	DashboardItemDef,
+	DashboardProxy,
+	DashboardSectionDef,
 	EditViewDefinition,
 	EditViewFactory,
 	FieldLayoutItem,
@@ -54,7 +54,9 @@ export type {
 	FormTabConfig,
 	FormTabsLayout,
 	FormViewConfig,
+	FormViewConfigContext,
 	ListViewConfig,
+	ListViewConfigContext,
 	ListViewDefinition,
 	ListViewFactory,
 	PreviewConfig,
@@ -97,7 +99,13 @@ export type {
 	ServerTableWidget,
 	ServerTimelineWidget,
 	ServerValueWidget,
+	SidebarCallback,
+	SidebarCallbackContext,
 	SidebarConfigContext,
+	SidebarContribution,
+	SidebarItemDef,
+	SidebarProxy,
+	SidebarSectionDef,
 	WidgetAccessRule,
 	WidgetFetchContext,
 	WithAdminMethods,
@@ -156,11 +164,11 @@ export {
 } from "./fields/index.js";
 // Main admin module - the complete backend for admin panel
 export {
-	type AdminOptions,
+	type AdminModule,
 	// Action functions
 	actionFunctions,
-	// New module() factory function
-	admin,
+	// Static module
+	adminModule,
 	adminRpc,
 	// Reactive field functions
 	batchReactive,
@@ -193,21 +201,23 @@ export {
 } from "./modules/admin/index.js";
 // Audit module - automatic audit logging for all mutations
 export {
-	type AuditDashboardWidgetOptions,
-	type AuditModuleOptions,
-	audit,
+	type AuditModule,
 	auditLogCollection,
-	createAuditDashboardWidget,
+	// Static module
+	auditModule,
 } from "./modules/audit/index.js";
-// Runtime patching (applied automatically when this module is imported)
+// Proxy factories (runtime helpers for admin config callbacks)
 export {
-	applyAdminPatches,
-	arePatchesApplied,
-	component,
 	createActionProxy,
 	createComponentProxy,
+	createDashboardCallbackContext,
+	createDashboardContributionProxy,
 	createFieldProxy,
+	createSidebarCallbackContext,
+	createSidebarContributionProxy,
 	createViewProxy,
-	editView,
-	listView,
-} from "./patch.js";
+	resolveDashboardCallback,
+	resolveSidebarCallback,
+} from "./proxy-factories.js";
+// Registry definition helpers
+export { component, editView, listView } from "./registry-helpers.js";

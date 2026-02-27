@@ -16,7 +16,7 @@ import { generateSearchPaths } from "./search.js";
  */
 export function generateOpenApiSpec(
 	app: Questpie<any>,
-	functions?: FunctionsTree<any>,
+	functions?: FunctionsTree,
 	config: OpenApiConfig = {},
 ): OpenApiSpec {
 	const allPaths: OpenApiSpec["paths"] = {};

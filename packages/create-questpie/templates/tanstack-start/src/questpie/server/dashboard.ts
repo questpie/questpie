@@ -1,5 +1,10 @@
-export function configureDashboard({ d }: any) {
-	return d.dashboard({
+/**
+ * Dashboard — admin panel dashboard configuration.
+ */
+import { dashboard } from "#questpie";
+
+export default dashboard(({ d }) =>
+	d.dashboard({
 		title: "Dashboard",
 		description: "Overview of your content",
 		columns: 4,
@@ -64,5 +69,4 @@ export function configureDashboard({ d }: any) {
 				],
 			},
 		],
-	});
-}
+	}));

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { collection, questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -44,22 +44,18 @@ const posts = collection("posts").fields(({ f }) => ({
 	}),
 }));
 
-const testModule = questpie({ name: "upload-through-test" }).collections({
-	assets,
-	posts,
-	post_assets: postAssets,
-});
-
 // ==============================================================================
 // TESTS
 // ==============================================================================
 
 describe("upload + through (many-to-many)", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
-	let app: typeof testModule.$inferApp;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	let app: (typeof setup)["app"];
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({
+			collections: { assets, posts, post_assets: postAssets },
+		});
 		app = setup.app;
 		await runTestDbMigrations(app);
 	});

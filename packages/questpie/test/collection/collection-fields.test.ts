@@ -1,34 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
 import type { JsonValue } from "../../src/server/fields/builtin/json.js";
-import { questpie } from "../../src/server/index.js";
+import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-const q = questpie({ name: "test-module" }).fields(defaultFields);
-
-const testModule = q.collections({
-	content: q
-		.collection("content")
-		.fields(({ f }) => ({
-			title: f.text({ required: true, maxLength: 255 }),
-			description: f.textarea(),
-			richContent: f.json(),
-			isPublished: f.boolean({ default: false }),
-			viewCount: f.number({ default: 0 }),
-			publishedAt: f.datetime(),
-		}))
-		.options({
-			timestamps: true,
-		}),
-});
+const content = collection("content")
+	.fields(({ f }) => ({
+		title: f.text({ required: true, maxLength: 255 }),
+		description: f.textarea(),
+		richContent: f.json(),
+		isPublished: f.boolean({ default: false }),
+		viewCount: f.number({ default: 0 }),
+		publishedAt: f.datetime(),
+	}))
+	.options({
+		timestamps: true,
+	});
 
 describe("collection field types", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({ collections: { content } });
 		await runTestDbMigrations(setup.app);
 	});
 

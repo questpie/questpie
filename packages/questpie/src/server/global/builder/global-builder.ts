@@ -13,7 +13,6 @@ import type {
 	FieldDefinitionState,
 	RelationFieldMetadata,
 } from "#questpie/server/fields/types.js";
-import type { GlobalBuilderExtensions } from "#questpie/server/global/builder/extensions.js";
 import { Global } from "#questpie/server/global/builder/global.js";
 import type {
 	EmptyGlobalState,
@@ -360,6 +359,18 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	}
 
 	/**
+	 * Generic extension point for plugins.
+	 * Stores an arbitrary key-value pair in the builder state.
+	 */
+	set<K extends string, V>(
+		key: K,
+		value: V,
+	): GlobalBuilder<TState & Record<K, V>> {
+		const newState = { ...this.state, [key]: value } as any;
+		return new GlobalBuilder(newState);
+	}
+
+	/**
 	 * Build the final global
 	 */
 	build(): Global<Prettify<TState>> {
@@ -398,19 +409,6 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 		return this.build().$infer;
 	}
 }
-
-// =============================================================================
-// Declaration Merging for Extensions
-// =============================================================================
-
-/**
- * Declaration merging: GlobalBuilder implements GlobalBuilderExtensions.
- *
- * This allows packages to augment GlobalBuilderExtensions and have those
- * methods appear on GlobalBuilder instances.
- */
-export interface GlobalBuilder<TState extends GlobalBuilderState>
-	extends GlobalBuilderExtensions {}
 
 /**
  * Factory function to create a new global builder.

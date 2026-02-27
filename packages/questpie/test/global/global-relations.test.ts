@@ -1,22 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { defaultFields } from "../../src/server/fields/builtin/defaults.js";
-import { questpie } from "../../src/server/index.js";
+import { collection, global } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
-const q = questpie({ name: "test-module" }).fields(defaultFields);
-
 // Assets collection (target of many-to-many)
-const assets = q.collection("assets").fields(({ f }) => ({
+const assets = collection("assets").fields(({ f }) => ({
 	filename: f.text({ required: true, maxLength: 255 }),
 	mimeType: f.text({ maxLength: 100 }),
 }));
 
 // Junction table for candle settings images
-const candleSettingsImages = q
-	.collection("candle_settings_images")
-	.fields(({ f }) => ({
+const candleSettingsImages = collection("candle_settings_images").fields(
+	({ f }) => ({
 		candleSettings: f.relation({
 			to: "candle_settings",
 			required: true,
@@ -28,10 +24,11 @@ const candleSettingsImages = q
 			onDelete: "cascade",
 		}),
 		order: f.number({ default: 0 }),
-	}));
+	}),
+);
 
 // Candle settings global with many-to-many relation
-const candleSettings = q.global("candle_settings").fields(({ f }) => ({
+const candleSettings = global("candle_settings").fields(({ f }) => ({
 	pageTitle: f.text({
 		required: true,
 		maxLength: 255,
@@ -47,21 +44,20 @@ const candleSettings = q.global("candle_settings").fields(({ f }) => ({
 	}),
 }));
 
-const testModule = q
-	.collections({
-		assets,
-		candle_settings_images: candleSettingsImages,
-	})
-	.globals({
-		candle_settings: candleSettings,
-	});
-
 describe("global many-to-many relations", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp<typeof testModule>>>;
-	let app: typeof testModule.$inferApp;
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	let app: (typeof setup)["app"];
 
 	beforeEach(async () => {
-		setup = await buildMockApp(testModule);
+		setup = await buildMockApp({
+			collections: {
+				assets,
+				candle_settings_images: candleSettingsImages,
+			},
+			globals: {
+				candle_settings: candleSettings,
+			},
+		});
 		app = setup.app;
 		await runTestDbMigrations(app);
 	});

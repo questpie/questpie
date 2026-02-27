@@ -42,7 +42,7 @@ export const reviewsBlock = block("reviews")
 		if (values.filter === "featured") {
 			where.rating = { in: ["4", "5"] };
 		}
-		const res = await ctx.app.api.collections.reviews.find({
+		const res = await ctx.collections.reviews.find({
 			limit: values.limit || 3,
 			where,
 			orderBy: { createdAt: "desc" },

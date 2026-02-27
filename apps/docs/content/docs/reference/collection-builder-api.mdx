@@ -5,10 +5,12 @@ description: All collection-level methods — fields, hooks, access, options, se
 
 # Collection Builder API
 
-`CollectionBuilder` defines a single collection's schema, behavior, and admin configuration. Created via `q.collection(name)`.
+`CollectionBuilder` defines a single collection's schema, behavior, and admin configuration. Created via `collection(name)` from `#questpie`.
 
 ```ts
-const posts = q.collection("posts")
+import { collection } from "#questpie";
+
+export const posts = collection("posts")
   .fields(({ f }) => ({ ... }))
   .title(({ f }) => f.title)
   .hooks({ ... })
@@ -223,7 +225,7 @@ Enable live preview for this collection.
 
 ## Admin Configuration
 
-These methods configure how the collection appears in the admin panel. They are available when `@questpie/admin` is composed via `.use()`.
+These methods configure how the collection appears in the admin panel. They are available when `adminModule` is registered in `modules.ts`.
 
 ### `.admin(config)`
 
@@ -282,8 +284,10 @@ Configure the edit form view.
 Merge another collection builder into this one. Fields, hooks, access rules, and functions are combined.
 
 ```ts
+import { collection } from "#questpie";
+
 const extendedPosts = postsCollection.merge(
-  q.collection("posts").fields(({ f }) => ({
+  collection("posts").fields(({ f }) => ({
     featured: f.boolean().default(false),
   })),
 );
@@ -291,19 +295,18 @@ const extendedPosts = postsCollection.merge(
 
 ## Finalization
 
-Collection builders are passed directly to `q.collections({ ... })` and finalized during top-level app `.build(...)`.
-
-In app code, prefer this pattern:
+Collection builders are placed in the `collections/` directory and auto-discovered by codegen. Export the builder from each file:
 
 ```ts
-const posts = q.collection("posts")
+// collections/posts.ts
+import { collection } from "#questpie";
+
+export const posts = collection("posts")
   .fields(({ f }) => ({ ... }))
   .hooks({ ... });
-
-export const app = q({ name: "app" })
-  .collections({ posts })
-  .build({ app: { url: process.env.APP_URL! }, db: { url: process.env.DATABASE_URL! } });
 ```
+
+Run `questpie generate` to include them in the app entrypoint.
 
 ## Runtime
 

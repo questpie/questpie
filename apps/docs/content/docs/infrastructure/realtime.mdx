@@ -29,16 +29,17 @@ CRUD operation → outbox table (seq number) → adapter notifies → SSE endpoi
 Works with your existing database — no extra infrastructure:
 
 ```ts
-import { pgNotifyAdapter } from "questpie";
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig, pgNotifyAdapter } from "questpie";
 
-.build({
+export default runtimeConfig({
   // ...
   realtime: {
     adapter: pgNotifyAdapter({
       connectionString: process.env.DATABASE_URL,
     }),
   },
-})
+});
 ```
 
 ### Redis Streams
@@ -46,17 +47,17 @@ import { pgNotifyAdapter } from "questpie";
 For high-throughput production environments:
 
 ```ts
-import { redisStreamsAdapter } from "questpie";
+import { runtimeConfig, redisStreamsAdapter } from "questpie";
 import Redis from "ioredis";
 
-.build({
+export default runtimeConfig({
   // ...
   realtime: {
     adapter: redisStreamsAdapter({
       client: new Redis(process.env.REDIS_URL),
     }),
   },
-})
+});
 ```
 
 ## Client Usage

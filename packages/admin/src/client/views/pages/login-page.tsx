@@ -77,7 +77,7 @@ export interface LoginPageProps {
  * ```tsx
  * // In your admin config
  * const admin = qa<App>()
- *   .use(admin())
+ *   .use(adminModule)
  *   .pages({
  *     login: page("login", { component: LoginPage }).path("/login"),
  *   })

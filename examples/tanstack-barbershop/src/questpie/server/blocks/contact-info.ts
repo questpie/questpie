@@ -16,7 +16,7 @@ export const contactInfoBlock = block("contact-info")
 		}),
 	}))
 	.prefetch(async ({ ctx }) => {
-		const settings = await ctx.app.api.globals.siteSettings.get({});
+		const settings = await ctx.globals.siteSettings.get({});
 		return {
 			shopName: settings?.shopName,
 			contactEmail: settings?.contactEmail,

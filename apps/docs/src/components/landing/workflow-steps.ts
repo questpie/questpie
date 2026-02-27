@@ -19,7 +19,7 @@ export const workflowSteps: WorkflowStep[] = [
 		file: "collections.ts",
 		action: "Define collections",
 		mode: "full",
-		code: `import { collection } from 'questpie'
+		code: `import { collection } from '#questpie'
 
 export const barbers = collection('barbers')
   .fields(({ f }) => ({
@@ -43,13 +43,11 @@ export const appointments = collection('appointments')
 		file: "questpie.config.ts",
 		action: "Create config",
 		mode: "full",
-		code: `import { config } from 'questpie'
-import { admin } from '@questpie/admin/server'
+		code: `import { runtimeConfig } from 'questpie'
 
-export default config({
+export default runtimeConfig({
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
-  modules: [admin()],
 })`,
 	},
 
@@ -67,9 +65,13 @@ export default fn({
     appointmentId: z.string(),
     email: z.string().email(),
   }),
-  handler: async ({ input, app }) => {
+  handler: async ({ input, email }) => {
     // Send reminder email
-    console.log(\`Reminder sent to \${input.email}\`)
+    await email.send({
+      to: input.email,
+      subject: 'Appointment Reminder',
+      text: \`Don't forget your appointment!\`,
+    })
   },
 })`,
 	},
@@ -84,10 +86,10 @@ export default fn({
 			{
 				line: -1,
 				code: `  .hooks({
-    afterChange: async ({ data, operation, app }) => {
+    afterChange: async ({ data, operation, queue }) => {
       if (operation !== 'create') return
       // Call the send-reminder function
-      await app.api.fn.sendReminder({
+      await queue.sendReminder.publish({
         appointmentId: data.id,
         email: data.customerEmail,
       })
@@ -103,7 +105,7 @@ export default fn({
 		file: "routes/api.ts",
 		action: "Create fetch handler",
 		mode: "full",
-		code: `import { app } from '~/questpie/.generated'
+		code: `import { app } from '#questpie'
 import { createFetchHandler } from 'questpie'
 
 const handler = createFetchHandler(app, {
@@ -120,9 +122,9 @@ export default handler`,
 		action: "Use type-safe client",
 		mode: "full",
 		code: `import { createClient } from 'questpie/client'
-import type { App } from '~/questpie/.generated'
+import type { AppConfig } from '#questpie'
 
-const client = createClient<App>({
+const client = createClient<AppConfig>({
   baseURL: 'http://localhost:3000',
 })
 

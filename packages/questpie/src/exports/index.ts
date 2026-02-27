@@ -11,6 +11,7 @@ import {
 	config,
 	createApp,
 	module,
+	runtimeConfig,
 } from "#questpie/server/config/create-app.js";
 import { defaultFields } from "#questpie/server/fields/builtin/defaults.js";
 import { fn } from "#questpie/server/functions/define-function.js";
@@ -18,7 +19,9 @@ import { global } from "#questpie/server/global/builder/global-builder.js";
 import { auth } from "#questpie/server/integrated/auth/config.js";
 import { email } from "#questpie/server/integrated/mailer/template.js";
 import { job } from "#questpie/server/integrated/queue/job.js";
-import { starter } from "#questpie/server/modules/starter/index.js";
+import { migration } from "#questpie/server/migration/define-migration.js";
+import { route } from "#questpie/server/routes/define-route.js";
+import { seed } from "#questpie/server/seed/define-seed.js";
 
 // Create the base builder with default fields
 const baseBuilder = questpie({ name: "questpie" }).fields(defaultFields);
@@ -54,6 +57,8 @@ const q = Object.assign(callableQ, {
 export { q };
 
 // Re-export standalone functions
+import { service } from "#questpie/server/services/define-service.js";
+
 export {
 	auth,
 	collection,
@@ -63,6 +68,10 @@ export {
 	fn,
 	global,
 	job,
+	migration,
 	module,
-	starter,
+	route,
+	runtimeConfig,
+	seed,
+	service,
 };

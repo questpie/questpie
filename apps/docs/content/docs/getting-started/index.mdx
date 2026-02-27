@@ -34,9 +34,9 @@ bun add @questpie/hono hono  # or @questpie/elysia, @questpie/next
 ### 2. Define a collection
 
 ```ts
-import { collection } from "questpie";
-
 // src/questpie/server/collections/posts.ts
+import { collection } from "#questpie";
+
 export const posts = collection("posts").fields(({ f }) => ({
   title: f.text({ required: true }),
   slug: f.text({ required: true, input: "optional" }),
@@ -48,10 +48,10 @@ export const posts = collection("posts").fields(({ f }) => ({
 ### 3. Configure the runtime
 
 ```ts
-// src/questpie/questpie.config.ts
-import { config } from "questpie";
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
 
-export default config({
+export default runtimeConfig({
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL || "http://localhost:3000" },
 });
@@ -73,7 +73,7 @@ export default fn({
 ```ts
 // src/routes/api.ts
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/.generated";
+import { app } from "#questpie";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",
@@ -89,23 +89,18 @@ bun add @questpie/admin
 ```
 
 ```ts
-// src/questpie/questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
 
-export default config({
-  modules: [admin()],
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL || "http://localhost:3000" },
-});
+export default [adminModule] as const;
 ```
 
 ```ts
 // src/questpie/admin/builder.ts
 import { adminModule, qa } from "@questpie/admin/client";
-import type { App } from "../server/.generated";
+import type { AppConfig } from "#questpie";
 
-export const admin = qa<App>().use(adminModule);
+export const admin = qa<AppConfig>().use(adminModule);
 ```
 
 When you need admin-specific view metadata, define those collections with `collection(...)` and add `.admin()`, `.list()`, and `.form()`.

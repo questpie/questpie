@@ -5,7 +5,7 @@
  */
 
 import { uniqueIndex } from "drizzle-orm/pg-core";
-import { collection } from "questpie";
+import { collection } from "#questpie";
 import { slugify } from "@/questpie/server/utils";
 
 export default collection("pages")

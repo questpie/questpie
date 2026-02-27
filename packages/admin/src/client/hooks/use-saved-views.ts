@@ -5,7 +5,7 @@ import { useAdminStore } from "../runtime/provider.js";
 /**
  * Hook to fetch saved views for a collection
  *
- * Note: This hook requires the `admin()` module to be used in your app setup.
+ * Note: This hook requires the `adminModule` to be used in your app setup.
  * If adminSavedViews collection is not available, returns empty array.
  */
 export function useSavedViews(collectionName: string) {
@@ -49,7 +49,7 @@ export function useSaveView(collectionName: string) {
 				| undefined;
 			if (!collections?.adminSavedViews) {
 				throw new Error(
-					"adminSavedViews collection not available. Make sure to use the admin() module in your app setup.",
+					"adminSavedViews collection not available. Make sure to use the adminModule in your app setup.",
 				);
 			}
 
@@ -88,7 +88,7 @@ function useUpdateSavedView(collectionName: string) {
 				| undefined;
 			if (!collections?.adminSavedViews) {
 				throw new Error(
-					"adminSavedViews collection not available. Make sure to use the admin() module in your app setup.",
+					"adminSavedViews collection not available. Make sure to use the adminModule in your app setup.",
 				);
 			}
 
@@ -116,7 +116,7 @@ export function useDeleteSavedView(collectionName: string) {
 				| undefined;
 			if (!collections?.adminSavedViews) {
 				throw new Error(
-					"adminSavedViews collection not available. Make sure to use the admin() module in your app setup.",
+					"adminSavedViews collection not available. Make sure to use the adminModule in your app setup.",
 				);
 			}
 

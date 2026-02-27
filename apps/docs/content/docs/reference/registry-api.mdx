@@ -68,7 +68,7 @@ interface FieldRendererProps {
 ### Registration
 
 ```ts
-qa<App>().fields({
+qa<AppConfig>().fields({
   color: {
     type: "color",
     component: ColorFieldRenderer,
@@ -99,7 +99,7 @@ interface ViewRegistryEntry {
 ### Registration
 
 ```ts
-qa<App>().views({
+qa<AppConfig>().views({
   kanban: {
     kind: "list",
     component: KanbanView,
@@ -142,7 +142,7 @@ import { ComponentRenderer } from "@questpie/admin/client";
 ### Registration
 
 ```ts
-qa<App>().components({
+qa<AppConfig>().components({
   statusBadge: {
     component: ({ status }) => (
       <span className={`badge badge-${status}`}>{status}</span>
@@ -174,7 +174,7 @@ interface WidgetRegistryEntry {
 ### Registration
 
 ```ts
-qa<App>().widgets({
+qa<AppConfig>().widgets({
   recentActivity: {
     component: RecentActivityWidget,
     label: "Recent Activity",

@@ -86,7 +86,7 @@ export interface GlobalSchema {
 
 	/**
 	 * Admin configuration from .admin(), .form()
-	 * Only present when the `admin()` module is used.
+	 * Only present when the `adminModule` is used.
 	 */
 	admin?: {
 		/** Global metadata (label, icon, hidden, group, order) */
@@ -339,7 +339,7 @@ export async function introspectGlobal(
 		};
 	}
 
-	// Extract admin configuration if present (from admin() module)
+	// Extract admin configuration if present (from adminModule)
 	const adminConfig = extractAdminConfig(state);
 
 	return {
@@ -389,7 +389,7 @@ function buildGlobalValidation(
 
 /**
  * Extract admin configuration from global state.
- * These properties are added by the `admin()` module via monkey patching.
+ * These properties are added by the `adminModule` via monkey patching.
  */
 function extractAdminConfig(
 	state: GlobalBuilderState,
@@ -442,12 +442,15 @@ async function evaluateGlobalAccess(
 	const { access } = state;
 	const appDefaultAccess = (app as any)?.defaultAccess;
 
-	const accessContext: GlobalAccessContext = {
-		app: app,
-		session: context.session,
+	const { extractAppServices } = await import("#questpie/server/config/app-context.js");
+	const services = extractAppServices(app, {
 		db: context.db,
+		session: context.session,
+	});
+	const accessContext: GlobalAccessContext = {
+		...services,
 		locale: context.locale,
-	};
+	} as GlobalAccessContext;
 
 	const operations = {
 		read: await evaluateAccessRule(
@@ -485,7 +488,7 @@ async function evaluateAccessRule(
 ): Promise<GlobalAccessResult> {
 	// No rule = require session (secure by default)
 	if (rule === undefined) {
-		return context.session ? { allowed: true } : { allowed: false };
+		return (context as any).session ? { allowed: true } : { allowed: false };
 	}
 
 	if (rule === true) {

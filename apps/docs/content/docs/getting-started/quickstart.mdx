@@ -28,7 +28,7 @@ Collections are the core building block. Each collection becomes a database tabl
 
 ```ts
 // src/questpie/server/collections/posts.ts
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export const posts = collection("posts").fields(({ f }) => ({
   title: f.text({ required: true }),
@@ -47,10 +47,10 @@ This single definition produces:
 Create a config file and define functions:
 
 ```ts
-// src/questpie/questpie.config.ts
-import { config } from "questpie";
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
 
-export default config({
+export default runtimeConfig({
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL || "http://localhost:3000" },
 });
@@ -74,7 +74,7 @@ Create a route handler that serves your runtime API:
 ```ts
 // src/routes/api.ts (Hono example)
 import { questpieHono } from "@questpie/hono";
-import { app } from "@/questpie/.generated";
+import { app } from "#questpie";
 
 export const cmsApp = questpieHono(app, {
   basePath: "/api",
@@ -85,7 +85,7 @@ Or with the generic fetch handler (works with any Fetch-compatible framework):
 
 ```ts
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/.generated";
+import { app } from "#questpie";
 
 export const handler = createFetchHandler(app, {
   basePath: "/api",
@@ -122,26 +122,21 @@ bun add @questpie/admin
 ```
 
 ```ts
-// src/questpie/questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
 
-export default config({
-  modules: [admin()],
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL || "http://localhost:3000" },
-});
+export default [adminModule] as const;
 ```
 
 ```ts
 // src/questpie/admin/builder.ts
 import { adminModule, qa } from "@questpie/admin/client";
-import type { App } from "../server/.generated";
+import type { AppConfig } from "#questpie";
 
-export const admin = qa<App>().use(adminModule);
+export const admin = qa<AppConfig>().use(adminModule);
 ```
 
-Collections defined with `collection(...)` can now use `.admin()`, `.list()`, and `.form()`. Admin login also requires runtime auth configuration via `.auth({ ... })`.
+Run `questpie generate` to regenerate the app with admin module support. Collections defined with `collection(...)` can now use `.admin()`, `.list()`, and `.form()`.
 
 ## What This Proves
 

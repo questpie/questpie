@@ -36,7 +36,7 @@ CollectionBuilder chain:
 From the Barbershop example — a services collection:
 
 ```ts
-import { collection } from "questpie";
+import { collection } from "#questpie";
 
 export const services = collection("services")
   .fields(({ f }) => ({
@@ -283,7 +283,7 @@ Custom validation beyond field-level rules:
 ### Functions
 
 Custom server functions live in the `functions/` directory and are automatically composed via codegen.
-See [Functions](/docs/server/rpc) for patterns and usage.
+See [Functions](/docs/server/functions) for patterns and usage.
 
 ### `.upload({ ... })`
 
@@ -314,19 +314,21 @@ Enables live preview in the admin form:
 Combines two collection builders:
 
 ```ts
+import { collection } from "#questpie";
+
 const withSeo = collection("temp").fields(({ f }) => ({
   metaTitle: f.text({ maxLength: 255 }),
   metaDescription: f.textarea({}),
 }));
 
-const pages = collection("pages")
+export const pages = collection("pages")
   .fields(({ f }) => ({ title: f.text({ required: true }) }))
   .merge(withSeo);
 ```
 
 ## What the Builder Produces
 
-When the app is built from your `config()`, each collection generates:
+When the app is built via `questpie generate`, each collection generates:
 
 1. **Drizzle table schema** — PostgreSQL table with typed columns
 2. **I18n table** — separate table for localized fields (if any)
@@ -339,7 +341,7 @@ When the app is built from your `config()`, each collection generates:
 
 - **Forgetting `required: true`** — Without it, the field is nullable in the database. If you want a non-null column, always add `required: true`.
 - **Using `input: false` instead of `input: "optional"`** — `input: false` means the field can never be set via the API. `input: "optional"` means it can be set but isn't required.
-- **Not exporting the collection** — The collection must be passed to `.collections({})` in your app builder. If it's not registered, it won't exist at runtime.
+- **Not exporting the collection** — The collection must be exported from a file in the `collections/` directory. Codegen discovers exported collection builders automatically — if it's not exported, it won't be included in the generated app.
 
 ## Related Pages
 

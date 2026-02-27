@@ -5,7 +5,7 @@
  * navigation, contact info, and SEO configuration.
  */
 
-import { global } from "questpie";
+import { global } from "#questpie";
 
 export type NavItem = {
 	label: string;

@@ -7,16 +7,21 @@ description: Content locale and admin locale in the server-first architecture
 
 QUESTPIE supports both content localization and admin locale configuration.
 
-## Content locales
+## Content Locales
+
+Content locales are configured via the `locale.ts` convention file:
 
 ```ts
-.locale({
+// src/questpie/server/locale.ts
+import { locale } from "#questpie";
+
+export default locale({
   locales: [
     { code: "en", label: "English", fallback: true },
     { code: "sk", label: "Slovenčina" },
   ],
   defaultLocale: "en",
-})
+});
 ```
 
 Use `localized: true` on fields that should be translated:
@@ -25,25 +30,21 @@ Use `localized: true` on fields that should be translated:
 title: f.text({ label: { en: "Title" }, localized: true });
 ```
 
-## Admin locales
+## Admin Locales
+
+Admin UI locale is configured via the `admin-locale.ts` convention file:
 
 ```ts
-.adminLocale({
+// src/questpie/server/admin-locale.ts
+import { adminLocale } from "#questpie";
+
+export default adminLocale({
   locales: ["en", "sk"],
   defaultLocale: "en",
-})
+});
 ```
 
-## Messages
+## Practical Split
 
-```ts
-.messages({
-  en: { "booking.created": "Booking created" },
-  sk: { "booking.created": "Rezervácia vytvorená" },
-})
-```
-
-## Practical split
-
-- content locale config belongs to server app model
-- admin locale UI selection belongs to server `.adminLocale()` config
+- Content locale config belongs in `locale.ts` — defines which content languages are available
+- Admin locale config belongs in `admin-locale.ts` — defines which UI languages the admin panel supports

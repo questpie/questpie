@@ -1,4 +1,4 @@
-import { global } from "questpie";
+import { global } from "#questpie";
 
 export const siteSettings = global("site_settings")
 	.fields(({ f }) => ({

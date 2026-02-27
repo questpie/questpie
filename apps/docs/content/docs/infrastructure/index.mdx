@@ -13,8 +13,10 @@ Most app projects need auth, file storage, email, background jobs, and search ‚Ä
 
 ## Mental Model
 
+Infrastructure is configured in `runtimeConfig()`:
+
 ```text
-.build({
+runtimeConfig({
   db: { url: "..." },                         ‚Üê required
   app: { url: "..." },                        ‚Üê required
   secret: "...",                               ‚Üê for signed URLs & tokens
@@ -29,7 +31,7 @@ Most app projects need auth, file storage, email, background jobs, and search ‚Ä
 Each service has:
 - **A default** that works with PostgreSQL (or in-memory for development)
 - **An adapter interface** for production backends (Redis, S3, SMTP, etc.)
-- **Type-safe access** through the app instance (`app.email.send(...)`)
+- **Type-safe access** in all handler contexts (`{ email, queue, kv, logger, storage }`)
 
 ## Services Overview
 
@@ -50,30 +52,31 @@ Each service has:
 Here's how the Barbershop example configures infrastructure:
 
 ```ts
-export const app = q({ name: "barbershop" })
-  .use(baseInstance)
-  .build({
-    app: { url: process.env.APP_URL || "http://localhost:3000" },
-    db: { url: process.env.DATABASE_URL },
-    storage: { basePath: "/api" },
-    secret: process.env.SECRET,
-    email: {
-      adapter: process.env.MAIL_ADAPTER === "console"
-        ? new ConsoleAdapter({ logHtml: false })
-        : new SmtpAdapter({
-            transport: {
-              host: process.env.SMTP_HOST || "localhost",
-              port: Number.parseInt(process.env.SMTP_PORT || "1025", 10),
-              secure: false,
-            },
-          }),
-    },
-    queue: {
-      adapter: pgBossAdapter({
-        connectionString: DATABASE_URL,
-      }),
-    },
-  });
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig, pgBossAdapter, SmtpAdapter, ConsoleAdapter } from "questpie";
+
+export default runtimeConfig({
+  app: { url: process.env.APP_URL || "http://localhost:3000" },
+  db: { url: process.env.DATABASE_URL! },
+  storage: { basePath: "/api" },
+  secret: process.env.SECRET,
+  email: {
+    adapter: process.env.MAIL_ADAPTER === "console"
+      ? new ConsoleAdapter({ logHtml: false })
+      : new SmtpAdapter({
+          transport: {
+            host: process.env.SMTP_HOST || "localhost",
+            port: Number.parseInt(process.env.SMTP_PORT || "1025", 10),
+            secure: false,
+          },
+        }),
+  },
+  queue: {
+    adapter: pgBossAdapter({
+      connectionString: process.env.DATABASE_URL!,
+    }),
+  },
+});
 ```
 
 ## Common Mistakes

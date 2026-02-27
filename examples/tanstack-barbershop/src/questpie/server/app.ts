@@ -5,4 +5,4 @@
  * Run `questpie generate` to regenerate .generated/index.ts.
  */
 
-export { type App, type AppRpc, app } from "./.generated/index";
+export { type AppConfig, type AppFunctions, app } from "./.generated/index";

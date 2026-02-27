@@ -16,6 +16,7 @@ import { eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { jsonb, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import type { KnownCollectionNames } from "../../config/app-context.js";
 import { field } from "../field.js";
 import type { OptionsConfig } from "../reactive.js";
 import type {
@@ -87,16 +88,16 @@ export type InferredRelationType =
  * - Polymorphic object: `{ users: "users", posts: "posts" }` - multiple possible targets
  */
 export type RelationTarget =
-	| string
+	| KnownCollectionNames
 	| (() => { name: string; table?: { id: AnyPgColumn } })
-	| Record<string, string | (() => { name: string })>;
+	| Record<string, KnownCollectionNames | (() => { name: string })>;
 
 /**
  * Junction table specification for manyToMany relations.
  * - String literal: `"post_tags"` - junction collection name
  * - Callback: `() => postTags` - lazy reference
  */
-export type JunctionTarget = string | (() => { name: string });
+export type JunctionTarget = KnownCollectionNames | (() => { name: string });
 
 /**
  * Relation field configuration options.

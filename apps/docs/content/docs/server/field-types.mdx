@@ -387,7 +387,7 @@ All field types support these base options:
 
 ## Custom Field Types
 
-You can register custom field types through the builder:
+You can define custom field types and register them via module augmentation:
 
 ```ts
 import { field } from "questpie/server/fields";
@@ -407,9 +407,6 @@ const slugField = field<{ maxLength?: number }, string>()({
   }),
   getMetadata: () => ({ type: "slug" }),
 });
-
-// Register in builder
-const qb = q.fields({ slug: slugField });
 
 // Use in collections
 .fields(({ f }) => ({

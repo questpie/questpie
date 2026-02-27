@@ -5,165 +5,301 @@ description: Configure navigation, dashboard widgets, and admin branding
 
 # Dashboard, Sidebar & Branding
 
-The dashboard, sidebar, and branding are configured on the server builder (`q`) via `@questpie/admin/server`. The client (`qa`) only resolves registries and renders the server contract.
+The dashboard, sidebar, branding, and locale settings are configured via **convention files** inside `src/questpie/server/`. Each concern has its own file that is auto-discovered by codegen. The client (`qa`) only resolves registries and renders the server contract.
+
+| Convention file | Import | Purpose |
+|---|---|---|
+| `sidebar.ts` | `import { sidebar } from "#questpie"` | Admin navigation sections and items |
+| `dashboard.ts` | `import { dashboard } from "#questpie"` | Dashboard widgets, actions, and layout |
+| `branding.ts` | `import { branding } from "#questpie"` | Brand name and logo |
+| `locale.ts` | `import { locale } from "#questpie"` | Content localization config |
+| `admin-locale.ts` | `import { adminLocale } from "#questpie"` | Admin UI language options |
+| `modules.ts` | _(plain array export)_ | Module dependencies (admin, audit, etc.) |
 
 ## Sidebar
 
-The sidebar is defined on the server with `.sidebar()`:
+Create `src/questpie/server/sidebar.ts` and export a default sidebar configuration:
 
-```ts
-const app = q({ name: "barbershop" })
-  .use(adminModule)
-  .collections({ barbers, services, appointments, reviews, pages })
-  .globals({ siteSettings })
-  .sidebar(({ s }) =>
-    s.sidebar({
-      sections: [
-        {
-          label: "Content",
-          items: [
-            s.collection("barbers"),
-            s.collection("services"),
-            s.collection("pages"),
-          ],
-        },
-        {
-          label: "Business",
-          items: [
-            s.collection("appointments"),
-            s.collection("reviews"),
-          ],
-        },
-        {
-          label: "Settings",
-          items: [
-            s.global("siteSettings"),
-          ],
-        },
-      ],
-    }),
-  );
+```ts title="src/questpie/server/sidebar.ts"
+import { sidebar } from "#questpie";
+
+export default sidebar({
+  sections: [
+    { id: "overview", title: { en: "Overview", sk: "Prehľad" } },
+    { id: "operations", title: { en: "Operations", sk: "Prevádzka" } },
+    { id: "content", title: { en: "Content", sk: "Obsah" } },
+    { id: "team", title: { en: "Team", sk: "Tím" } },
+    { id: "external", title: { en: "External", sk: "Externé" } },
+    // Override admin module's "administration" section title for this project
+    {
+      id: "administration",
+      title: { en: "Administration", sk: "Administrácia" },
+    },
+  ],
+  items: [
+    // Overview
+    {
+      sectionId: "overview",
+      type: "link",
+      label: { en: "Dashboard", sk: "Dashboard" },
+      href: "/admin",
+      icon: { type: "icon", props: { name: "ph:house" } },
+    },
+    { sectionId: "overview", type: "global", global: "siteSettings" },
+    // Operations
+    { sectionId: "operations", type: "collection", collection: "appointments" },
+    { sectionId: "operations", type: "collection", collection: "reviews" },
+    // Content
+    { sectionId: "content", type: "collection", collection: "pages" },
+    { sectionId: "content", type: "collection", collection: "services" },
+    // Team
+    { sectionId: "team", type: "collection", collection: "barbers" },
+    // External
+    {
+      sectionId: "external",
+      type: "link",
+      label: { en: "Open Website", sk: "Otvoriť web" },
+      href: "/",
+      external: true,
+      icon: { type: "icon", props: { name: "ph:arrow-square-out" } },
+    },
+  ],
+});
 ```
 
 ### Sidebar Item Types
 
-| Type | Factory | Description |
+| Type | Shape | Description |
 |---|---|---|
-| Collection | `s.collection("name")` | Links to collection list view |
-| Global | `s.global("name")` | Links to global form view |
-| Page | `s.page("name")` | Links to a custom admin page |
-| Link | `s.link({ url, label })` | External or internal link |
-| Divider | `s.divider()` | Visual separator |
+| Collection | `{ type: "collection", collection: "name" }` | Links to collection list view |
+| Global | `{ type: "global", global: "name" }` | Links to global form view |
+| Link | `{ type: "link", href, label }` | External or internal link |
+
+Each item includes a `sectionId` to place it within the declared sections.
 
 ### Sidebar Section Config
 
 ```ts
 {
-  label: string;                   // Section heading
-  icon?: ComponentReference;       // Section icon
-  items: SidebarItem[];           // Items in this section
-  collapsible?: boolean;           // Allow user to collapse/expand (persisted)
+  id: string;                    // Unique section identifier
+  title: string | LocalizedString; // Section heading
+  icon?: ComponentReference;     // Section icon
 }
 ```
 
-## Dashboard
+### How Module Contributions Are Merged
 
-The dashboard is defined on the server with `.dashboard()`:
+Modules contribute their own sidebar sections and items. For example, the `adminModule` contributes an "administration" section with Users and Assets items. The `auditModule` adds an Audit Log item to that same section. Your project-level `sidebar.ts` is merged with these module contributions:
 
-```ts
-.dashboard(({ d, c, a }) =>
-  d.dashboard({
-    columns: 4,
-    actions: [
-      a.create({
-        id: "new-appointment",
-        collection: "appointments",
-        label: "New Appointment",
-        icon: c.icon("ph:calendar-plus"),
-        variant: "primary",
-      }),
-      a.global({
-        id: "site-settings",
-        global: "siteSettings",
-        label: "Site Settings",
-        icon: c.icon("ph:gear-six"),
-      }),
-      a.link({
-        id: "open-site",
-        label: "Open Website",
-        href: "/",
-        icon: c.icon("ph:arrow-square-out"),
-        variant: "outline",
-      }),
-    ],
-    items: [
-      d.stats({
-        collection: "appointments",
-        label: "Today's Appointments",
-        datePreset: "today",
-        span: 1,
-      }),
-      d.stats({
-        collection: "barbers",
-        label: "Active Barbers",
-        span: 1,
-      }),
-      d.recentItems({
-        collection: "reviews",
-        label: "Latest Reviews",
-        limit: 5,
-        span: 2,
-      }),
-      d.section({
-        label: "Activity",
-        wrapper: "card",
+- Module-contributed **sections** appear after your project sections (unless you declare a section with the same `id`, which overrides the module's title).
+- Module-contributed **items** are appended to their target sections.
+
+### Callback Style (Alternative)
+
+The sidebar also supports a callback form with helper factories:
+
+```ts title="src/questpie/server/sidebar.ts"
+import { sidebar } from "#questpie";
+
+export default sidebar(({ s, c }) =>
+  s.sidebar({
+    sections: [
+      s.section({
+        id: "content",
+        title: "Content",
         items: [
-          d.timeline({
-            collection: "appointments",
-            label: "Recent Activity",
-          }),
+          { type: "collection", collection: "pages" },
+          { type: "collection", collection: "news" },
+        ],
+      }),
+      s.section({
+        id: "external",
+        title: "External",
+        items: [
+          {
+            type: "link",
+            label: "View Website",
+            href: "/",
+            external: true,
+            icon: c.icon("ph:arrow-square-out"),
+          },
         ],
       }),
     ],
   }),
-)
+);
+```
+
+The `s.section()` helper groups items inline with their section. The `c.icon()` helper creates an icon component reference.
+
+## Dashboard
+
+Create `src/questpie/server/dashboard.ts` and export a default dashboard configuration:
+
+```ts title="src/questpie/server/dashboard.ts"
+import { dashboard } from "#questpie";
+
+export default dashboard({
+  title: { en: "Barbershop Control", sk: "Riadenie barbershopu" },
+  description: {
+    en: "Live operations, content, and business performance overview",
+  },
+  columns: 4,
+  actions: [
+    {
+      id: "new-appointment",
+      href: "/admin/collections/appointments?create=true",
+      label: { en: "New Appointment", sk: "Nová rezervácia" },
+      icon: { type: "icon", props: { name: "ph:calendar-plus" } },
+      variant: "primary",
+    },
+    {
+      id: "edit-site-settings",
+      href: "/admin/globals/siteSettings",
+      label: { en: "Edit Site Settings" },
+      icon: { type: "icon", props: { name: "ph:gear-six" } },
+      variant: "outline",
+    },
+  ],
+  sections: [
+    {
+      id: "today",
+      label: { en: "Today", sk: "Dnes" },
+      layout: "grid",
+      columns: 4,
+    },
+    {
+      id: "operations",
+      label: { en: "Operations", sk: "Prevádzka" },
+      layout: "grid",
+      columns: 4,
+    },
+  ],
+  items: [
+    {
+      sectionId: "today",
+      id: "appointments-today",
+      type: "stats",
+      collection: "appointments",
+      label: { en: "Today's Appointments" },
+      filter: {
+        scheduledAt: {
+          gte: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
+          lt: new Date(new Date().setHours(23, 59, 59, 999)).toISOString(),
+        },
+      },
+      span: 1,
+    },
+    {
+      sectionId: "today",
+      id: "active-barbers",
+      type: "stats",
+      collection: "barbers",
+      label: { en: "Active Barbers" },
+      filter: { isActive: true },
+      span: 1,
+    },
+    {
+      sectionId: "operations",
+      id: "recent-appointments",
+      type: "recentItems",
+      collection: "appointments",
+      label: { en: "Recent Appointments" },
+      limit: 6,
+      dateField: "scheduledAt",
+      span: 2,
+    },
+    // Note: audit timeline widget is auto-contributed by auditModule
+  ],
+});
 ```
 
 ### Dashboard Configuration
 
 | Option | Type | Default | Description |
 |---|---|---|---|
+| `title` | `string \| LocalizedString` | -- | Dashboard heading |
+| `description` | `string \| LocalizedString` | -- | Dashboard subtitle |
 | `layout` | `"grid" \| "list"` | `"grid"` | Layout mode |
 | `columns` | `number` | `4` | Grid columns |
-| `gap` | `number` | — | Gap between widgets |
-| `showRefresh` | `boolean` | — | Show refresh button |
-| `refreshInterval` | `number` | — | Auto-refresh (ms) |
-| `realtime` | `boolean` | — | Enable realtime updates |
-| `actions` | `DashboardAction[]` | — | Header action buttons |
+| `gap` | `number` | -- | Gap between widgets |
+| `showRefresh` | `boolean` | -- | Show refresh button |
+| `refreshInterval` | `number` | -- | Auto-refresh (ms) |
+| `realtime` | `boolean` | -- | Enable realtime updates |
+| `actions` | `DashboardAction[]` | -- | Header action buttons |
+| `sections` | `DashboardSection[]` | -- | Named sections for organizing widgets |
+| `items` | `DashboardItem[]` | -- | Widgets placed within sections |
+
+### Callback Style with Action Helpers (Alternative)
+
+The dashboard also supports a callback form with `d`, `c`, and `a` helper factories:
+
+```ts title="src/questpie/server/dashboard.ts"
+import { dashboard } from "#questpie";
+
+export default dashboard(({ d, c, a }) =>
+  d.dashboard({
+    title: "City Portal Dashboard",
+    description: "Content management overview for your city portal",
+    actions: [
+      a.create({
+        id: "new-page",
+        collection: "pages",
+        label: "New Page",
+        icon: c.icon("ph:article"),
+        variant: "primary",
+      }),
+      a.global({
+        id: "edit-site-settings",
+        global: "siteSettings",
+        label: "Site Settings",
+        icon: c.icon("ph:gear"),
+        variant: "outline",
+      }),
+    ],
+    columns: 4,
+    items: [
+      d.stats({
+        id: "published-pages",
+        collection: "pages",
+        label: "Published Pages",
+        filter: { isPublished: true },
+        span: 1,
+      }),
+      d.recentItems({
+        id: "recent-submissions",
+        collection: "submissions",
+        label: "Recent Submissions",
+        dateField: "createdAt",
+        limit: 6,
+        span: 2,
+      }),
+    ],
+  }),
+);
+```
 
 ### Header Action Helpers (`a`)
 
-Use `a` helpers in `.dashboard(({ d, c, a }) => ...)` for typed, consistent admin routes.
-
 | Helper | Input | Resolves to |
 |---|---|---|
-| `a.create(...)` | `{ collection: "appointments" }` | `/admin/collections/appointments/create` |
+| `a.create(...)` | `{ collection: "appointments" }` | `/admin/collections/appointments?create=true` |
 | `a.global(...)` | `{ global: "siteSettings" }` | `/admin/globals/siteSettings` |
 | `a.link(...)` | `{ href: "/custom" }` | `/custom` |
 | `a.action(...)` | `{ href: "/custom" }` | `/custom` |
 
 ### Widget Types
 
-| Widget | Factory | Description |
+| Widget | Type | Description |
 |---|---|---|
-| Stats | `d.stats({})` | Count with change percentage |
-| Chart | `d.chart({})` | Chart visualization |
-| Recent Items | `d.recentItems({})` | List of latest records |
-| Quick Actions | `d.quickActions({})` | Action buttons |
-| Value | `d.value({})` | Single value with trend |
-| Table | `d.table({})` | Mini table |
-| Timeline | `d.timeline({})` | Activity timeline |
-| Progress | `d.progress({})` | Progress bar toward goal |
+| Stats | `"stats"` | Count with optional change percentage |
+| Chart | `"chart"` | Chart visualization |
+| Recent Items | `"recentItems"` | List of latest records |
+| Quick Actions | `"quickActions"` | Action buttons |
+| Value | `"value"` | Single value with trend |
+| Table | `"table"` | Mini table |
+| Timeline | `"timeline"` | Activity timeline |
+| Progress | `"progress"` | Progress bar toward goal |
 
 ### Widget Common Config
 
@@ -171,7 +307,9 @@ Every widget accepts:
 
 ```ts
 {
-  label?: string;                  // Widget title
+  id: string;                      // Unique widget identifier
+  sectionId?: string;              // Which section this widget belongs to
+  label?: string | LocalizedString; // Widget title
   description?: string;            // Widget subtitle
   icon?: ComponentReference;       // Widget icon
   span?: number;                   // Column span (1-12)
@@ -182,42 +320,37 @@ Every widget accepts:
 }
 ```
 
-### Dashboard Sections and Tabs
+### Dashboard Sections
 
-Group widgets into sections or tabs:
+Group widgets into sections:
 
 ```ts
-// Section
-d.section({
-  label: "Analytics",
-  wrapper: "card",          // "flat" | "card" | "collapsible"
-  layout: "grid",
-  columns: 2,
-  items: [d.stats({...}), d.chart({...})],
-})
-
-// Tabs
-d.tabs({
-  defaultTab: "overview",
-  variant: "line",          // "default" | "line" | "pills"
-  tabs: [
-    { id: "overview", label: "Overview", items: [...] },
-    { id: "activity", label: "Activity", items: [...] },
+{
+  sections: [
+    {
+      id: "analytics",
+      label: "Analytics",
+      layout: "grid",
+      columns: 2,
+    },
   ],
-})
+  items: [
+    { sectionId: "analytics", id: "page-stats", type: "stats", ... },
+    { sectionId: "analytics", id: "chart", type: "chart", ... },
+  ],
+}
 ```
 
 ## Branding
 
-Branding is configured on the server via `.branding()`:
+Create `src/questpie/server/branding.ts` and export a default branding configuration:
 
-```ts
-const app = q({ name: "barbershop" })
-  .use(adminModule)
-  .branding({
-    name: { en: "Barbershop Admin", sk: "Barbershop Admin" },
-    logo: "/logo.svg",
-  });
+```ts title="src/questpie/server/branding.ts"
+import { branding } from "#questpie";
+
+export default branding({
+  name: { en: "Barbershop Control", sk: "Riadenie barbershopu" },
+});
 ```
 
 ### Branding Options
@@ -229,28 +362,72 @@ const app = q({ name: "barbershop" })
 
 ## Locale Configuration
 
-```ts
-q({ name: "barbershop" })
-  .use(adminModule)
-  .adminLocale({
-    locales: ["en", "sk"],
-    defaultLocale: "en",
-  })
-  .locale({
-    locales: [{ code: "en" }, { code: "sk" }],
-    defaultLocale: "en",
-  })
-  .messages({
-    en: { "common.save": "Save" },
-    sk: { "common.save": "Ulozit" },
-  });
+Content and admin UI locales are configured via separate convention files.
+
+### Content Locale
+
+Create `src/questpie/server/locale.ts`:
+
+```ts title="src/questpie/server/locale.ts"
+import { locale } from "#questpie";
+
+export default locale({
+  locales: [
+    {
+      code: "en",
+      label: "English",
+      fallback: true,
+      flagCountryCode: "us",
+    },
+    { code: "sk", label: "Slovenčina" },
+  ],
+  defaultLocale: "en",
+});
 ```
 
-- `.adminLocale()` controls admin UI language options.
-- `.locale()` controls content locale options for localized fields.
-- `.messages()` provides translation messages.
+### Admin UI Locale
 
-Use `useServerTranslations` in `AdminLayoutProvider` so the client fetches locales/messages from the server.
+Create `src/questpie/server/admin-locale.ts`:
+
+```ts title="src/questpie/server/admin-locale.ts"
+import { adminLocale } from "#questpie";
+
+export default adminLocale({
+  locales: ["en", "sk"],
+  defaultLocale: "en",
+});
+```
+
+Alternatively, if your admin-locale file does not use a `#questpie` factory, you can export a plain config object:
+
+```ts title="src/questpie/server/admin-locale.ts"
+import type { AdminLocaleConfig } from "@questpie/admin/server";
+
+const adminLocale: AdminLocaleConfig = {
+  locales: ["en", "sk"],
+  defaultLocale: "en",
+};
+
+export default adminLocale;
+```
+
+### Translation Messages
+
+Translation messages are provided via `runtimeConfig` in `questpie.config.ts`:
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { messages } from "@/questpie/server/i18n";
+
+export default runtimeConfig({
+  // ...
+  translations: {
+    messages: messages as Record<string, Record<string, string>>,
+  },
+});
+```
+
+Use `useServerTranslations` in `AdminLayoutProvider` so the client fetches locales and messages from the server:
 
 ```tsx
 <AdminLayoutProvider
@@ -262,87 +439,133 @@ Use `useServerTranslations` in `AdminLayoutProvider` so the client fetches local
 </AdminLayoutProvider>
 ```
 
+- `locale.ts` controls content locale options for localized fields.
+- `admin-locale.ts` controls admin UI language options.
+- `runtimeConfig.translations.messages` provides translation strings.
+
 ## Server-side Widget Loaders
 
-Widgets that need server-side data (DB queries, computed metrics) use a `loader` function. The loader runs on the server and its result is sent to the client via the `fetchWidgetData` RPC endpoint.
+Widgets that need server-side data (DB queries, computed metrics) use a `loader` function. The loader runs on the server and its result is sent to the client via the `fetchWidgetData` endpoint.
 
-```ts
-.dashboard(({ d }) =>
-  d.dashboard({
-    items: [
-      d.value({
-        id: "monthly-revenue",
-        label: "Revenue",
-        loader: async ({ app, db }) => {
-          const result = await app.api.collections.orders.find({
-            limit: 0,
-            accessMode: "system",
-            db,
-          });
-          return { value: result.totalDocs, label: "Total Orders" };
-        },
-      }),
-      d.timeline({
-        id: "recent-activity",
-        label: "Recent Activity",
-        loader: async ({ app, db }) => {
-          // query and return TimelineItem[]
-        },
-      }),
-    ],
-  }),
-)
+```ts title="src/questpie/server/dashboard.ts"
+import getRevenueStats from "@/questpie/server/functions/get-revenue-stats";
+import { dashboard } from "#questpie";
+
+export default dashboard({
+  // ...
+  items: [
+    {
+      sectionId: "business",
+      id: "monthly-revenue",
+      type: "value",
+      span: 2,
+      refreshInterval: 1000 * 60 * 5,
+      loader: async ({ app }) => {
+        const now = new Date();
+        const currentStart = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          1,
+        ).toISOString();
+
+        const stats = await getRevenueStats.handler({
+          input: {
+            startDate: currentStart,
+            endDate: now.toISOString(),
+            completedOnly: true,
+          },
+          app,
+        } as any);
+
+        const revenue = stats.totalRevenue / 100;
+        return {
+          value: revenue,
+          formatted: `${revenue.toLocaleString()} €`,
+          label: { en: "Monthly Revenue", sk: "Mesačné tržby" },
+        };
+      },
+    },
+    {
+      sectionId: "operations",
+      id: "activity-stream",
+      type: "timeline",
+      label: { en: "Activity", sk: "Aktivita" },
+      maxItems: 8,
+      showTimestamps: true,
+      timestampFormat: "relative",
+      loader: async ({ app }) => {
+        const res = await app.api.collections.appointments.find({
+          limit: 8,
+          orderBy: { updatedAt: "desc" },
+        });
+
+        return res.docs.map((apt: any) => ({
+          id: apt.id,
+          title: apt.displayTitle || apt.id,
+          description: `Status: ${apt.status}`,
+          timestamp: apt.updatedAt || apt.createdAt,
+          variant:
+            apt.status === "completed"
+              ? "success"
+              : apt.status === "cancelled"
+                ? "error"
+                : "info",
+          href: `/admin/collections/appointments/${apt.id}`,
+        }));
+      },
+      span: 2,
+    },
+  ],
+});
 ```
 
 Available in the loader context: `app` (typed QuestPie instance), `db`, `session`, `locale`.
 
 Widget types that support `loader`: `stats`, `chart`, `recentItems`, `custom`, `value`, `table`, `timeline`, `progress`.
 
-## Audit Module
+## Modules (Admin & Audit)
 
-The audit module is **opt-in** — add `.use(auditModule)` to enable automatic audit logging for all collection and global mutations.
+Modules are declared in `src/questpie/server/modules.ts` as a simple array export:
 
-```ts
-import { adminModule, auditModule, createAuditDashboardWidget } from "@questpie/admin/server";
+```ts title="src/questpie/server/modules.ts"
+import { adminModule, auditModule } from "@questpie/admin/server";
 
-const app = q({ name: "my-app" })
-  .use(adminModule)
-  .use(auditModule)  // opt-in: registers collection + global hooks + cleanup job
-  .sidebar(({ s, c }) =>
-    s.sidebar({
-      sections: [
-        s.section({
-          id: "admin",
-          title: "Administration",
-          items: [
-            { type: "collection", collection: "user" },
-            { type: "collection", collection: "adminAuditLog" },
-          ],
-        }),
-      ],
-    }),
-  )
-  .dashboard(({ d }) =>
-    d.dashboard({
-      items: [
-        createAuditDashboardWidget({ maxItems: 10 }),  // timeline widget
-      ],
-    }),
-  )
-  .build({ ... });
+export default [adminModule, auditModule] as const;
 ```
 
-### Per-collection opt-out
+The `adminModule` is required -- it provides authentication, user management, asset handling, and the admin UI itself. The `auditModule` is opt-in and enables automatic audit logging for all collection and global mutations.
+
+### What Modules Contribute
+
+Each module can contribute its own sidebar items, dashboard widgets, collections, and jobs. These are automatically merged with your project-level configuration:
+
+- **`adminModule`** contributes an "administration" sidebar section with Users and Assets items.
+- **`auditModule`** adds an Audit Log item to the "administration" sidebar section and a timeline widget to the dashboard.
+
+### Audit Module
+
+When included in `modules.ts`, the audit module automatically:
+
+- Registers hooks that log all collection and global mutations
+- Adds an `adminAuditLog` collection
+- Contributes a sidebar item and dashboard timeline widget
+- Runs a periodic cleanup job
+
+#### Per-collection Opt-out
 
 Collections with `audit: false` in `.admin()` are automatically skipped by the audit hooks. All internal admin collections already have this set. To disable auditing for your own collection:
 
 ```ts
-const tempData = q.collection("temp_data")
-  .fields(...)
+import { collection } from "#questpie";
+
+export const tempData = collection("temp_data")
+  .fields(({ f }) => ({
+    data: f.json(),
+  }))
   .admin({ audit: false });
 ```
 
-### Custom configuration
+#### Custom Configuration
 
 Use `createAuditModule()` for fine-grained control:
 
@@ -350,45 +573,41 @@ Use `createAuditModule()` for fine-grained control:
 import { createAuditModule } from "@questpie/admin/server";
 
 const audit = createAuditModule({
-  retentionDays: 30,  // cleanup after 30 days (default: 90)
+  retentionDays: 30, // cleanup after 30 days (default: 90)
 });
 ```
 
-To customize the audit collection's access rules, merge your own access config:
+Then use the custom instance in `modules.ts`:
 
-```ts
-import { auditLogCollection } from "@questpie/admin/server";
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/server";
+import { createAuditModule } from "@questpie/admin/server";
 
-const app = q({ name: "my-app" })
-  .use(adminModule)
-  .use(auditModule)
-  .collections({
-    adminAuditLog: auditLogCollection.access({
-      read: ({ session }) => session?.user?.role === "admin",
-    }),
-  })
-  .build({ ... });
+const audit = createAuditModule({ retentionDays: 30 });
+
+export default [adminModule, audit] as const;
 ```
 
 ### Exports
 
 | Export | Description |
 |---|---|
+| `adminModule` | Default admin module instance |
 | `auditModule` | Default audit module instance |
 | `createAuditModule(options?)` | Factory with custom config |
-| `createAuditDashboardWidget(options?)` | Dashboard timeline widget factory |
 | `auditLogCollection` | Raw collection builder (for merging/overriding) |
 
 ## Common Mistakes
 
-- **Configuring branding on `qa()`** — Branding belongs on the server builder (`.branding()`).
-- **Configuring admin UI locale on `qa()`** — Use the server builder's `.adminLocale()` and `useServerTranslations`.
-- **Widget `span` exceeding columns** — If `span: 3` but `columns: 2`, the widget overflows. Keep `span` at most equal to `columns`.
-- **Missing collection in sidebar** — If a collection exists but isn't in the sidebar, it's still accessible via URL but not discoverable. Always include active collections in the sidebar.
+- **Creating sidebar/dashboard/branding in the wrong location** -- These files must be at `src/questpie/server/sidebar.ts`, `dashboard.ts`, etc. They are auto-discovered by codegen.
+- **Forgetting to run codegen** -- After creating or modifying convention files, run `bunx questpie generate` to regenerate the `.generated/` directory.
+- **Widget `span` exceeding columns** -- If `span: 3` but `columns: 2`, the widget overflows. Keep `span` at most equal to `columns`.
+- **Missing collection in sidebar** -- If a collection exists but is not in the sidebar, it is still accessible via URL but not discoverable. Always include active collections in the sidebar.
+- **Missing `sectionId` on items** -- Every sidebar item and dashboard widget needs a `sectionId` to be placed within its section.
 
 ## Related Pages
 
-- [Admin Overview](/docs/admin) — Architecture overview
-- [Client Builder (qa)](/docs/admin/client-builder-qa) — Registry ownership
-- [Component Registry](/docs/admin/component-registry) — How icon references work
-- [Localization](/docs/server/localization) — Content vs admin locale split
+- [Admin Overview](/docs/admin) -- Architecture overview
+- [Client Builder (qa)](/docs/admin/client-builder-qa) -- Registry ownership
+- [Component Registry](/docs/admin/component-registry) -- How icon references work
+- [Localization](/docs/server/localization) -- Content vs admin locale split

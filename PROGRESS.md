@@ -256,6 +256,253 @@ feat!: remove QuestpieBuilder, RPC module, and positional callback signatures
 
 ---
 
+## Phase 7 — Composable Sidebar/Dashboard & Typed Registry Pattern
+
+> Move sidebar and dashboard from monolithic `admin()` options to **per-module contributions**.
+> Each module contributes its own sidebar sections/items and dashboard widgets.
+> `createApp()` merges contributions from all modules + user config.
+> See: RFC §5.7 (Registry Pattern), §5.8 (Composable Sidebar/Dashboard), Phase 7 checklist.
+
+### Types & Proxies
+
+- [x] Define contribution types: `SidebarContribution`, `DashboardContribution`, `SidebarSectionDef`, `SidebarItemDef`, `DashboardSectionDef`, `DashboardItemDef`
+  > RFC §5.8.1, §5.8.2
+- [x] Define proxy types: `SidebarProxy`, `DashboardProxy`, `DashboardActionProxy`
+  > RFC §5.8
+- [x] Define callback types: `SidebarCallbackContext`, `DashboardCallbackContext`, `SidebarCallback`, `DashboardCallback`
+  > RFC §5.8
+- [x] Augment `ModuleDefinition` and `AppConfig` with typed sidebar/dashboard/branding/adminLocale keys
+  > RFC §13.5 (Module Shape), §12.1 (Config Shape)
+
+### Proxy Factories (packages/admin/src/server/patch.ts)
+
+- [x] `createSidebarContributionProxy()` — creates `SidebarProxy` instances
+- [x] `createDashboardContributionProxy()` — creates `DashboardProxy` instances
+- [x] `createSidebarCallbackContext()` / `createDashboardCallbackContext()` — full callback contexts
+- [x] `resolveSidebarCallback()` / `resolveDashboardCallback()` — resolve callback or pass-through static
+
+### Core Merge Logic (packages/questpie/src/server/config/create-app.ts)
+
+- [x] `mergeModuleIntoState()` — array extension keys concatenated (sidebar/dashboard contributions)
+- [x] Entity extension key merging — same array concatenation support
+- [x] `createApp()` step 7 — config-level contributions appended to module-level arrays
+
+### Admin Module (packages/admin/src/server/modules/admin/index.ts)
+
+- [x] Remove `AdminOptions.sidebar` and `AdminOptions.dashboard`
+- [x] Default admin sidebar as `SidebarContribution` (administration section with users + assets)
+- [x] Module stores `sidebar: [contribution]` array on module definition
+- [x] Remove inline proxy resolution code (sProxy, dProxy, cProxy, aProxy)
+
+### Audit Module (packages/admin/src/server/modules/audit/index.ts)
+
+- [x] Auto-contribute sidebar item: audit log in "administration" section
+- [x] Auto-contribute dashboard widget: audit timeline in "activity" section (opt-out via `dashboard: false`)
+- [x] Remove `createAuditDashboardWidget()` helper
+
+### Admin Config Merge (packages/admin/src/server/modules/admin/functions/admin-config.ts)
+
+- [x] `normalizeSidebarContributions()` / `normalizeDashboardContributions()` — normalize state to contribution arrays
+- [x] `mergeSidebarContributions()` — sections dedup by id, items concat by sectionId, position support
+- [x] `mergeDashboardContributions()` — metadata last-wins, actions concat, sections dedup, items concat
+- [x] `isLegacySidebarConfig()` / `isLegacyDashboardConfig()` — backward compatibility with builder pattern
+- [x] Updated `getAdminConfig` handler to use new merge pipeline
+
+### Exports (packages/admin/src/server/index.ts)
+
+- [x] Export all new contribution types, proxy types, callback types
+- [x] Export proxy factory functions
+- [x] Remove `createAuditDashboardWidget` and `AuditDashboardWidgetOptions` exports
+
+### Barbershop Example
+
+- [x] Move sidebar from `admin({ sidebar })` to `config({ sidebar })` with contribution format
+- [x] Move dashboard from `admin({ dashboard })` to `config({ dashboard })` with contribution format
+- [x] Remove `createAuditDashboardWidget` import — audit contributes automatically
+
+### Verification
+
+- [x] Core package: `bun test` — 95 pass, 0 fail (integration tests)
+- [x] Core package: `bun run build` — clean
+- [x] Core package: `tsc --noEmit` — clean
+- [x] Admin package: `tsc --noEmit` — no new errors (only pre-existing client-side issues)
+- [x] Biome lint: no new warnings
+- [ ] Barbershop example: end-to-end run
+- [ ] Update `create-questpie` templates
+- [ ] Update `apps/docs` documentation
+
+### Commit
+
+```
+feat: composable sidebar/dashboard from modules, typed registry pattern (Phase 7)
+```
+
+---
+
+## Phase 8 — Unified Module Architecture (RFC-MODULE-ARCHITECTURE)
+
+> Transform modules from factory functions to static codegen-generated objects.
+> Move plugins to config level, split config into runtime-only + definition.
+> See: RFC-MODULE-ARCHITECTURE.md
+
+### Phase 8.1–4: New Type System, Plugin System, Core Conventions, Codegen Templates
+
+- [x] Created `RuntimeConfig` interface and `runtimeConfig()` factory
+- [x] Created `AppDefinition` interface and `RouteDefinition` type
+- [x] Updated `createApp()` with dual signature: `createApp(definition, runtime)` + legacy
+- [x] Updated `DiscoverPattern` type with full resolution spec
+- [x] Updated codegen discover.ts: routes core category, singles map, plugin resolution
+- [x] Updated codegen template.ts: new/legacy architecture support
+- [x] Added core single file discovery: locale.ts, hooks.ts, access.ts, context.ts
+- [x] Added route dispatch in `createFetchHandler` at /routes/* URL pattern
+- [x] Created module-template.ts for npm package codegen (.generated/module.ts)
+- [x] Updated admin codegen plugin: sidebar.ts, dashboard.ts, branding.ts, admin-locale.ts, blocks
+
+### Phase 8.5–6: Package-Level Codegen + Module Splits
+
+- [x] **Starter module split**: collections/ (6 files), jobs/, auth.ts, access.ts, messages/, .generated/module.ts
+- [x] **Audit module split**: sidebar.ts, dashboard.ts, hooks.ts (default export), .generated/module.ts
+- [x] **Admin module split**: collections/ (9 files), sidebar.ts, modules.ts, fields.ts, .generated/module.ts
+- [x] Export `starterModule` from packages/questpie, `adminModule`/`auditModule` from packages/admin
+
+### Phase 8.7: Migrate Examples
+
+- [x] **Barbershop**: modules.ts, sidebar.ts, dashboard.ts, branding.ts, admin-locale.ts, locale.ts, runtimeConfig()
+- [x] **City-portal**: modules.ts, sidebar.ts, dashboard.ts, branding.ts, admin-locale.ts, locale.ts, context.ts, runtimeConfig()
+
+### Phase 8.8: Delete Old Factory Functions
+
+- [x] Deleted `starter()` factory from `starter.module.ts` (file removed entirely)
+- [x] Deleted `admin()` factory from `packages/admin/src/server/modules/admin/index.ts` (~370 lines removed)
+- [x] Deleted `audit()` factory from `packages/admin/src/server/modules/audit/index.ts` (~55 lines removed)
+- [x] Removed `starter` export from `packages/questpie/src/exports/index.ts`
+- [x] Removed `admin`, `audit`, `AdminOptions`, `AuditModuleOptions` exports from admin barrel files
+- [x] Updated `create-questpie` template: `runtimeConfig()`, modules.ts, branding.ts, sidebar/dashboard as default exports
+- [x] Updated docs landing page code snippet to use `runtimeConfig()`
+- [x] Updated 30+ JSDoc comments across packages/questpie and packages/admin source files
+
+### Verification
+
+- [x] `tsc --noEmit` in packages/questpie — **clean** (0 errors)
+- [x] `tsc --noEmit` in packages/admin — **23 pre-existing errors** (0 new)
+- [x] `bun test` in packages/questpie — **781 pass, 0 fail**
+- [x] Biome check — auto-fixed formatting, no new errors
+- [ ] Barbershop example end-to-end
+- [ ] City-portal example end-to-end
+- [ ] Update documentation (.md/.mdx files) — low priority, many references remain in docs
+
+### Commit
+
+```
+feat!: unified module architecture — static modules, delete factory functions (Phase 8)
+```
+
+---
+
+## Phase 9 — Context-First Architecture (RFC-CONTEXT-FIRST)
+
+> Eliminate monkey-patching, `declare module` augmentation, and the `Questpie<TConfig>` god object.
+> Replace with codegen-generated typed factories, flat `AppContext`, and first-class services.
+> See: Plan file `concurrent-honking-narwhal.md`
+
+### Phase 9.1: Services Convention + Flat Context
+
+- [x] Added `defineService()` to questpie core
+- [x] Added `services` category to codegen discovery
+- [x] Generated `AppContext` interface with flat typed services
+- [x] `createContext()` function for scripts/standalone usage
+
+### Phase 9.2: Codegen-Generated Typed Builders (Eliminate Monkey-Patching)
+
+- [x] Added `CollectionBuilder.set()` generic extension point
+- [x] Admin codegen plugin declares `registries` (admin, list, form, preview, actions)
+- [x] Codegen generates `.generated/factories.ts` with:
+  - `declare module "questpie"` augmentation for `CollectionBuilder<TState>` and `GlobalBuilder<TState>`
+  - Prototype patches: `CollectionBuilder.prototype.admin = function(configOrFn) { ... }`
+  - Simple factory functions: `collection()`, `global()` with proper `EmptyCollectionState` return types
+- [x] Users import typed factories from `#questpie` (alias to `.generated/index.ts`)
+- [x] **Key insight**: wrapper approach `(...args: any[])` destroyed generic inference; prototype patching preserves it
+
+### Phase 9.3: Eliminate God Object
+
+- [x] Inline `_U2I` / `_MP` type helpers in generated code (no recursive `ExtractFromModuleArray`)
+- [x] `type AppX = _ModuleX & { ... }` pattern (intersection, not interface extends)
+- [x] `_MP<K>` falls back to `{}` when module doesn't contribute a category (handles `never`)
+- [x] `as any` casts for modules array and singles in `createApp()` (handles `as const` readonly)
+
+### Phase 9.4: Migrate Examples + Verify
+
+- [x] Set up `#questpie` import alias in barbershop, city-portal, create-questpie template
+  - `tsconfig.json` paths: `"#questpie": ["./src/questpie/server/.generated/index.ts"]`
+  - `package.json` imports: `"#questpie": "./src/questpie/server/.generated/index.ts"`
+- [x] Migrated 18 files across all examples: `collection`/`global` from `"#questpie"`, other symbols from `"questpie"`
+- [x] TypeScript compilation: **zero errors in generated files** across all examples
+- [x] Unit tests: **248 pass, 0 fail** (questpie core)
+- [x] Admin tests: **211 pass, 2 pre-existing fail** (unrelated `BlocksField` export issue)
+- [x] Integration tests: 697 pass, 76 fail (all pglite infrastructure — pre-existing)
+
+### Phase 9.5: Context-First AppContext + Proxy-Based Extensions
+
+- [x] Created `AppContext` interface (`packages/questpie/src/server/config/app-context.ts`)
+  - Empty by default, augmented via `declare module "questpie"` in generated code
+  - `extractAppServices()` helper populates flat services from app instance
+- [x] All handler contexts now extend `AppContext`:
+  - `HookContext`, `AccessContext`, `TransitionHookContext` (collection)
+  - `GlobalHookContext`, `GlobalAccessContext`, `GlobalTransitionHookContext` (global)
+  - `FunctionHandlerArgs`, `FunctionAccessContext`, `RawFunctionHandlerArgs` (functions)
+  - `JobHandlerArgs` (queue)
+  - `BlockPrefetchContext` (admin blocks)
+  - `RouteHandlerArgs` (routes)
+- [x] All context creation sites use `extractAppServices()` instead of manual service spreading
+- [x] Codegen template generates `declare module "questpie" { interface AppContext { ... } }` augmentation
+- [x] Standalone `App` interface (extends `AppContext`) replaces `Questpie<>` in user-facing generated code
+- [x] Internal `_AppInternal` type kept only for type derivation (not exported)
+- [x] Replaced prototype patches with Proxy-based extensions in `factory-template.ts`:
+  - Extension registry objects (`_collExt`, `_globExt`) with stateKey + resolve logic
+  - Proxy wrappers (`_wrapColl`, `_wrapGlob`) intercept extension calls → `builder.set()`
+  - Core builder methods pass-through and re-wrap to preserve Proxy chain
+  - `declare module "questpie"` type augmentations preserved for TypeScript inference
+- [x] Zero prototype mutations in generated code
+- [x] TypeScript: zero errors in questpie core, 1 pre-existing error in admin (unrelated)
+- [x] Unit tests: 248 pass, 0 fail
+
+### Key Files Changed
+
+| File | Action | Lines |
+|------|--------|-------|
+| `packages/questpie/src/server/config/app-context.ts` | **New** | ~50 |
+| `packages/questpie/src/cli/codegen/factory-template.ts` | **Rewritten** — Proxy wrappers | ~383 |
+| `packages/questpie/src/cli/codegen/template.ts` | Modified — AppContext augmentation | ~955 |
+| `packages/questpie/src/server/collection/builder/types.ts` | Modified — extends AppContext | ~1020 |
+| `packages/questpie/src/server/global/builder/types.ts` | Modified — extends AppContext | ~400 |
+| `packages/questpie/src/server/functions/types.ts` | Modified — extends AppContext | ~200 |
+| `packages/questpie/src/server/integrated/queue/types.ts` | Modified — extends AppContext | ~100 |
+| `packages/admin/src/server/block/block-builder.ts` | Modified — extends AppContext | ~200 |
+| `packages/questpie/src/server/collection/crud/shared/hooks.ts` | Modified — extractAppServices | ~200 |
+| All context creation sites (~12 files) | Modified — extractAppServices | various |
+
+### Phase 9.6: RFC Alignment — Remove App Type, Type AppContext (this session)
+
+- [x] Removed `export type App = _AppInternal` from generated template — RFC §1 "No App type"
+- [x] Removed `emitLegacyRuntime()` and all legacy codegen paths — modules.ts is now required
+- [x] Changed AppContext augmentation from `any` to typed `_AppInternal['db']` etc.
+- [x] Changed all admin client generics from `Questpie<any>` → `QuestpieApp`:
+  - `packages/admin/src/client/hooks/typed-hooks.ts`
+  - `packages/admin/src/exports/client.ts`
+  - `packages/admin/src/client/builder/index.ts`
+  - `packages/admin/src/client/utils/routes.ts`
+  - `packages/admin/src/client/components/admin-link.tsx`
+  - `packages/admin/src/client/hooks/use-admin-routes.ts`
+  - `packages/admin/src/client/runtime/routes.ts`
+  - Relation field components: `relation-picker.tsx`, `relation-select.tsx`, `relation-field.tsx`
+  - `packages/admin/src/client/views/collection/auto-form-fields.tsx`
+- [x] Updated barbershop user files: `App` → `AppConfig`, removed dead `App` imports
+- [x] Added `generate` script to both examples (`bun questpie generate -c src/questpie/server/questpie.config.ts`)
+- [x] TypeScript: **zero errors** in packages/questpie, packages/admin, examples/tanstack-barbershop
+- [x] Unit tests: **248 pass, 0 fail**
+
+---
+
 ## Quick Reference — RFC Section Index
 
 | Section | Topic | Key decisions |
@@ -267,7 +514,8 @@ feat!: remove QuestpieBuilder, RPC module, and positional callback signatures
 | §3 | `collection()` Full API | Standalone factory, all chain methods stay |
 | §4 | `global()` Full API | Standalone factory |
 | §5 | Builder Extension System | 3 layers: interfaces → declaration merging → monkey-patching |
-| §5.8 | Sidebar & Dashboard | Widget taxonomy, loader pattern, `a` proxy |
+| §5.7 | Registry Pattern | Extensible interfaces via declaration merging, `c`/`v` via callbacks |
+| §5.8 | Sidebar & Dashboard | Composable contributions, section dedup, item concat, callbacks |
 | §6 | Field System | 16 builtins, admin adds richText/blocks, custom fields |
 | §7 | Functions | Plain objects, nested folders = nested routes |
 | §7.5 | Route Handler | `createFetchHandler(app)` — no `rpc` option |

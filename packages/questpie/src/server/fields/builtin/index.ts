@@ -39,7 +39,7 @@ export {
  *   .fields(defaultFields);
  * ```
  */
-export { type DefaultFields, defaultFields } from "./defaults.js";
+export { builtinFields, type DefaultFields, defaultFields } from "./defaults.js";
 export {
 	type EmailFieldConfig,
 	type EmailFieldMeta,

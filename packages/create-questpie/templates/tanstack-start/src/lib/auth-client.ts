@@ -1,7 +1,7 @@
 import { createAdminAuthClient } from "@questpie/admin/client";
-import type { App } from "@/questpie/server/app.js";
+import type { AppConfig } from "@/questpie/server/app.js";
 
-export const authClient = createAdminAuthClient<App>({
+export const authClient = createAdminAuthClient<AppConfig>({
 	baseURL:
 		typeof window !== "undefined"
 			? window.location.origin

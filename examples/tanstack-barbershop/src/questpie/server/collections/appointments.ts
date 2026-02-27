@@ -1,5 +1,5 @@
-import { collection, sql, typedApp } from "questpie";
-import type { App } from "@/questpie/server/app";
+import { collection } from "#questpie";
+import { sql } from "questpie";
 
 export const appointments = collection("appointments")
 	.fields(({ f }) => ({
@@ -96,17 +96,15 @@ export const appointments = collection("appointments")
 		}),
 	)
 	.hooks({
-		afterChange: async ({ data, operation, original, app }) => {
-			const typed = typedApp<App>(app);
-
+		afterChange: async ({ data, operation, original, queue }) => {
 			if (operation === "create") {
-				await typed.queue.sendAppointmentConfirmation.publish({
+				await (queue as any).sendAppointmentConfirmation.publish({
 					appointmentId: data.id,
 					customerId: data.customer,
 				});
 			} else if (operation === "update" && original) {
 				if (data.status === "cancelled" && data.cancelledAt) {
-					await typed.queue.sendAppointmentCancellation.publish({
+					await (queue as any).sendAppointmentCancellation.publish({
 						appointmentId: data.id,
 						customerId: data.customer,
 					});

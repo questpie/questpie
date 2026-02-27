@@ -1,9 +1,10 @@
 import type { DriveManager } from "flydrive";
 import {
 	Questpie,
-	type QuestpieBuilder,
-	type QuestpieRuntimeConfig,
+	createApp,
+	module,
 } from "../../../src/exports/index.js";
+import type { ModuleDefinition, RuntimeConfig } from "../../../src/server/config/module-types.js";
 import { createTestDb } from "../test-db";
 import { MockKVAdapter } from "./kv.adapter";
 import { MockLogger } from "./logger.adapter";
@@ -24,47 +25,37 @@ export type MockApp<TApp = any> = TApp & {
 };
 
 /**
- * Builds a fully type-safe mock app instance from a Questpie builder for testing
+ * Builds a mock app instance from a module definition for testing.
  *
  * @example
  * ```ts
- * // Define test module with collections
- * const testModule = questpie({ name: 'test' })
- *   .collections({
- *     products: productsCollection,
- *     categories: categoriesCollection,
- *   })
- *   .jobs({
- *     sendEmail: sendEmailJob,
- *   });
+ * import { collection } from "questpie";
  *
- * // Create test database
- * const db = await createTestDb();
+ * const products = collection("products").fields(({ f }) => ({
+ *   name: f.text({ required: true }),
+ *   price: f.number({ required: true }),
+ * }));
  *
- * // Build mock app
- * const app = buildMockApp(testModule, {
- *   db: { pglite: db },
- *   app: { url: 'http://localhost:3000' },
- *   secret: 'test-secret',
+ * const { cleanup, app } = await buildMockApp({
+ *   collections: { products },
  * });
  *
- * await runTestDbMigrations(app);
- *
  * // Use app normally
- * await app.api.collections.products.create({ ... }, context);
+ * await app.api.collections.products.create({ name: "Widget", price: 9.99 });
  *
  * // Inspect mock state
- * expect(app.mocks.logger.hasErrors()).toBe(false);
- * expect(app.mocks.queue.getJobs()).toHaveLength(1);
- * expect(app.mocks.mailer.getSentCount()).toBe(1);
+ * expect(app.mocks.mailer.getSentCount()).toBe(0);
+ * expect(app.mocks.queue.getJobs()).toHaveLength(0);
+ *
+ * await cleanup();
  * ```
  */
-export async function buildMockApp<TBuilder extends QuestpieBuilder<any>>(
-	builder: TBuilder,
-	runtimeOverrides: Partial<QuestpieRuntimeConfig> = {},
+export async function buildMockApp(
+	definition: Omit<ModuleDefinition, "name"> & { name?: string },
+	runtimeOverrides: Partial<RuntimeConfig> = {},
 ): Promise<{
 	cleanup: () => Promise<void>;
-	app: MockApp<TBuilder["$inferApp"]>;
+	app: MockApp<any>;
 }> {
 	const mailerAdapter = new MockMailAdapter();
 	const queueAdapter = new MockQueueAdapter();
@@ -75,34 +66,40 @@ export async function buildMockApp<TBuilder extends QuestpieBuilder<any>>(
 	const testDb = usesCustomDb ? null : await createTestDb();
 	const dbConfig = runtimeOverrides.db ?? { pglite: testDb };
 
-	// Build app using builder pattern
-	const app = builder.build({
-		app: runtimeOverrides.app ?? { url: "http://localhost:3000" },
-		db: dbConfig,
-		storage: runtimeOverrides.storage,
-		email: {
-			...(runtimeOverrides.email ?? {}),
-			adapter: mailerAdapter,
-		},
-		kv: {
-			...(runtimeOverrides.kv ?? {}),
-			adapter: kvAdapter,
-		},
-		queue: {
-			...(runtimeOverrides.queue ?? {}),
-			adapter: queueAdapter,
-		},
-		logger: {
-			...(runtimeOverrides.logger ?? {}),
-			adapter: logger,
-		},
-		search: runtimeOverrides.search,
-		realtime: runtimeOverrides.realtime,
-		secret: runtimeOverrides.secret,
-	} as QuestpieRuntimeConfig);
+	// Extract top-level keys that createApp reads from definition (not from modules)
+	const { locale, contextResolver, ...moduleDef } = definition as any;
+	const normalizedDef = module({ name: "test", ...moduleDef });
+
+	const app = createApp(
+		{ modules: [normalizedDef], locale, contextResolver },
+		{
+			app: runtimeOverrides.app ?? { url: "http://localhost:3000" },
+			db: dbConfig,
+			storage: runtimeOverrides.storage,
+			email: {
+				...(runtimeOverrides.email ?? {}),
+				adapter: mailerAdapter,
+			},
+			kv: {
+				...(runtimeOverrides.kv ?? {}),
+				adapter: kvAdapter,
+			},
+			queue: {
+				...(runtimeOverrides.queue ?? {}),
+				adapter: queueAdapter,
+			},
+			logger: {
+				...(runtimeOverrides.logger ?? {}),
+				adapter: logger,
+			},
+			search: runtimeOverrides.search,
+			realtime: runtimeOverrides.realtime,
+			secret: runtimeOverrides.secret,
+		} as RuntimeConfig,
+	);
 
 	// Attach mock adapters for easy access in tests
-	const mockApp = app as MockApp<TBuilder["$inferApp"]>;
+	const mockApp = app as MockApp<any>;
 	mockApp.mocks = {
 		kv: kvAdapter,
 		queue: queueAdapter,
