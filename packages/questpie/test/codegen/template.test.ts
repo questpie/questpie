@@ -15,6 +15,7 @@ import { describe, expect, it } from "bun:test";
 import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
+	runAllTargets,
 } from "../../src/cli/codegen/index.js";
 import { generateTemplate } from "../../src/cli/codegen/template.js";
 import type {
@@ -966,5 +967,129 @@ describe("generateTemplate — factory re-exports", () => {
 		});
 
 		expect(code).toContain("branding");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10. Multi-target (runAllTargets)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("runAllTargets", () => {
+	it("generates the server target by default (single target)", async () => {
+		const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+		const { tmpdir } = await import("node:os");
+		const { join } = await import("node:path");
+
+		// Create a temp directory with a minimal setup
+		const dir = await mkdtemp(join(tmpdir(), "codegen-multi-"));
+		const configPath = join(dir, "questpie.config.ts");
+		await writeFile(
+			configPath,
+			'export default { app: { url: "http://localhost" }, db: { url: "sqlite://:memory:" } };',
+		);
+		// Create a modules.ts
+		await writeFile(join(dir, "modules.ts"), "export default [];");
+
+		const result = await runAllTargets({
+			rootDir: dir,
+			configPath,
+			plugins: [],
+		});
+
+		expect(result.targets.size).toBe(1);
+		expect(result.targets.has("server")).toBe(true);
+		expect(result.errors.length).toBe(0);
+
+		const serverResult = result.targets.get("server")!;
+		expect(serverResult.targetId).toBe("server");
+		expect(serverResult.code).toContain("createApp");
+		expect(serverResult.outputPath).toContain(".generated");
+	});
+
+	it("runs custom generator for non-default targets", async () => {
+		const { mkdtemp, writeFile } = await import("node:fs/promises");
+		const { tmpdir } = await import("node:os");
+		const { join } = await import("node:path");
+
+		const dir = await mkdtemp(join(tmpdir(), "codegen-custom-"));
+		const configPath = join(dir, "questpie.config.ts");
+		await writeFile(
+			configPath,
+			'export default { app: { url: "http://localhost" }, db: { url: "sqlite://:memory:" } };',
+		);
+		await writeFile(join(dir, "modules.ts"), "export default [];");
+
+		// Create a plugin with a custom target that has a generator
+		const customPlugin: CodegenPlugin = {
+			name: "test-custom",
+			targets: {
+				"custom-target": {
+					root: ".",
+					outputFile: "custom.ts",
+					generate: async ({ target, discovered }) => {
+						return {
+							code: `// Custom target: ${target.id}\n// Categories: ${discovered.categories.size}\nexport const custom = true;\n`,
+						};
+					},
+				},
+			},
+		};
+
+		const result = await runAllTargets({
+			rootDir: dir,
+			configPath,
+			plugins: [customPlugin],
+		});
+
+		expect(result.targets.size).toBe(2);
+		expect(result.targets.has("server")).toBe(true);
+		expect(result.targets.has("custom-target")).toBe(true);
+		expect(result.errors.length).toBe(0);
+
+		const customResult = result.targets.get("custom-target")!;
+		expect(customResult.targetId).toBe("custom-target");
+		expect(customResult.code).toContain("Custom target: custom-target");
+		expect(customResult.code).toContain("export const custom = true;");
+	});
+
+	it("reports errors per target without failing other targets", async () => {
+		const { mkdtemp, writeFile } = await import("node:fs/promises");
+		const { tmpdir } = await import("node:os");
+		const { join } = await import("node:path");
+
+		const dir = await mkdtemp(join(tmpdir(), "codegen-err-"));
+		const configPath = join(dir, "questpie.config.ts");
+		await writeFile(
+			configPath,
+			'export default { app: { url: "http://localhost" }, db: { url: "sqlite://:memory:" } };',
+		);
+		await writeFile(join(dir, "modules.ts"), "export default [];");
+
+		// Plugin with a target that throws during generation
+		const failingPlugin: CodegenPlugin = {
+			name: "test-failing",
+			targets: {
+				"failing-target": {
+					root: ".",
+					outputFile: "fail.ts",
+					generate: async () => {
+						throw new Error("Intentional test failure");
+					},
+				},
+			},
+		};
+
+		const result = await runAllTargets({
+			rootDir: dir,
+			configPath,
+			plugins: [failingPlugin],
+		});
+
+		// Server should succeed, failing-target should error
+		expect(result.targets.has("server")).toBe(true);
+		expect(result.targets.has("failing-target")).toBe(false);
+		expect(result.errors.length).toBe(1);
+		expect(result.errors[0].targetId).toBe("failing-target");
+		expect(result.errors[0].error.message).toBe("Intentional test failure");
 	});
 });

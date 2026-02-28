@@ -10,8 +10,16 @@
 import { watch } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { runCodegen } from "../codegen/index.js";
-import type { CodegenPlugin } from "../codegen/types.js";
+import {
+	coreCodegenPlugin,
+	resolveTargetGraph,
+	runAllTargets,
+	runCodegen,
+} from "../codegen/index.js";
+import type {
+	CodegenPlugin,
+	MultiTargetCodegenResult,
+} from "../codegen/types.js";
 import { isPackageConfig, type PackageConfig } from "../config.js";
 
 // ============================================================================
@@ -165,34 +173,46 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
 	}
 
 	// ── Single mode: root app or single module ──
-	const outDir = join(rootDir, ".generated");
-	const isModuleMode = !!moduleOpt;
-	const outputFile = isModuleMode
-		? (moduleOpt.outputFile ?? "module.ts")
-		: "index.ts";
+	if (moduleOpt) {
+		// Module mode: single-target codegen (always "server")
+		const outDir = join(rootDir, ".generated");
+		const outputFile = moduleOpt.outputFile ?? "module.ts";
 
-	console.log(
-		isModuleMode
-			? `Discovering files for module "${moduleOpt.name}"...`
-			: "Discovering files...",
-	);
-	if (options.verbose) {
-		console.log(`  Root: ${rootDir}`);
-		console.log(`  Config: ${configPath}`);
-		console.log(`  Output: ${outDir}/${outputFile}`);
-		if (isModuleMode) console.log(`  Mode: module`);
+		console.log(`Discovering files for module "${moduleOpt.name}"...`);
+		if (options.verbose) {
+			console.log(`  Root: ${rootDir}`);
+			console.log(`  Config: ${configPath}`);
+			console.log(`  Output: ${outDir}/${outputFile}`);
+			console.log(`  Mode: module`);
+		}
+
+		const result = await runCodegen({
+			rootDir,
+			configPath,
+			outDir,
+			plugins,
+			dryRun: options.dryRun,
+			module: moduleOpt,
+		});
+
+		printTargetResult(result, options);
+	} else {
+		// Root app mode: multi-target codegen (all targets)
+		console.log("Discovering files...");
+		if (options.verbose) {
+			console.log(`  Root: ${rootDir}`);
+			console.log(`  Config: ${configPath}`);
+		}
+
+		const multiResult = await runAllTargets({
+			rootDir,
+			configPath,
+			plugins,
+			dryRun: options.dryRun,
+		});
+
+		printMultiTargetResult(multiResult, options);
 	}
-
-	const result = await runCodegen({
-		rootDir,
-		configPath,
-		outDir,
-		plugins,
-		dryRun: options.dryRun,
-		module: moduleOpt,
-	});
-
-	printCodegenResult(result, options);
 }
 
 /**
@@ -264,7 +284,7 @@ async function generatePackageModules(
 			module: { name: moduleName, importRewriteMap },
 		});
 
-		printCodegenResult(result, options, "    ");
+		printTargetResult(result, options, "    ");
 	}
 
 	console.log(`\nDone: ${moduleDirs.length} module(s) generated.`);
@@ -336,9 +356,35 @@ async function buildImportRewriteMap(
 }
 
 /**
- * Print codegen result summary.
+ * Print multi-target codegen result summary.
  */
-function printCodegenResult(
+function printMultiTargetResult(
+	result: MultiTargetCodegenResult,
+	options: GenerateOptions,
+): void {
+	const targetCount = result.targets.size;
+	if (targetCount > 1) {
+		console.log(`\nGenerated ${targetCount} target(s):`);
+	}
+
+	for (const [targetId, targetResult] of result.targets) {
+		if (targetCount > 1) {
+			console.log(`\n  Target: ${targetId}`);
+		}
+		const indent = targetCount > 1 ? "    " : "";
+		printTargetResult(targetResult, options, indent);
+	}
+
+	// Print errors
+	for (const { targetId, error } of result.errors) {
+		console.error(`\nError in target "${targetId}": ${error.message}`);
+	}
+}
+
+/**
+ * Print single target codegen result summary.
+ */
+function printTargetResult(
 	result: import("../codegen/types.js").CodegenResult,
 	options: GenerateOptions,
 	indent = "",
@@ -383,14 +429,19 @@ export interface DevOptions {
 }
 
 /**
- * Watch mode — regenerate .generated/index.ts on file add/remove.
+ * Watch mode — regenerate on file add/remove across all targets.
  *
  * Per RFC §16.1:
- * - File added/removed → regenerate
+ * - File added/removed → regenerate all targets
  * - File content modified → NO regeneration (typeof import is stable)
  * - Config modified → full regeneration
  *
+ * Multi-target aware: resolves the full target graph, computes watch
+ * directories for all targets (including non-server targets with different
+ * roots like `../admin`), and regenerates everything on change.
+ *
  * @see RFC §16.1 (Watch Mode Granularity)
+ * @see PLAN-PLUGIN-CONSISTENCY.md §5 (Codegen Orchestration Model)
  */
 export async function devCommand(options: DevOptions): Promise<void> {
 	// Run initial generation
@@ -402,7 +453,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 	const rawConfigPath = resolve(process.cwd(), options.configPath);
 	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
 	const {
-		plugins,
+		plugins: userPlugins,
 		module: moduleOpt,
 		packageConfig: pkgConfig,
 	} = await loadConfigForCodegen(configPath);
@@ -414,10 +465,182 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		return;
 	}
 
+	// Module mode — single target, simple watch
+	if (moduleOpt) {
+		await watchSingleTarget(
+			rootDir,
+			configPath,
+			userPlugins,
+			moduleOpt,
+			options,
+		);
+		return;
+	}
+
+	// Root app mode — multi-target watch
+	// Resolve target graph to know all roots and directories to watch
+	const allPlugins = [coreCodegenPlugin(), ...(userPlugins ?? [])];
+	const targetGraph = resolveTargetGraph(allPlugins);
+
+	// Collect all watch directories across all targets
+	// Key = absolute directory path, Value = set of relative dirs within it
+	const watchRoots = new Map<string, Set<string>>();
+
+	for (const [_targetId, target] of targetGraph) {
+		const targetRootDir = resolve(rootDir, target.root);
+
+		// Get or create watch dir set for this root
+		let watchDirs = watchRoots.get(targetRootDir);
+		if (!watchDirs) {
+			watchDirs = new Set<string>();
+			watchRoots.set(targetRootDir, watchDirs);
+		}
+
+		// Add category directories
+		for (const cat of Object.values(target.categories)) {
+			for (const dir of cat.dirs) {
+				watchDirs.add(dir);
+			}
+		}
+
+		// Add "features" directory (always watched for server root)
+		if (target.root === ".") {
+			watchDirs.add("features");
+		}
+
+		// Add directories from discover patterns
+		for (const pattern of Object.values(target.discover)) {
+			const patternStr =
+				typeof pattern === "string" ? pattern : pattern.pattern;
+			const dirMatch = patternStr.match(/^([^/*]+)\//);
+			if (dirMatch) {
+				watchDirs.add(dirMatch[1]);
+			}
+		}
+	}
+
+	console.log("\nWatching for file changes...");
+	if (options.verbose) {
+		for (const [root, dirs] of watchRoots) {
+			console.log(`  Root: ${root}`);
+			console.log(`    Dirs: ${[...dirs].join(", ")}`);
+		}
+	}
+	console.log("  (Press Ctrl+C to stop)\n");
+
+	// Track file sets per directory to detect add/remove
+	const fileSets = new Map<string, Set<string>>();
+
+	// Initialize file sets for all watched directories
+	for (const [targetRoot, dirs] of watchRoots) {
+		for (const dir of dirs) {
+			const dirPath = join(targetRoot, dir);
+			const files = await listFilesRecursive(dirPath);
+			const key = dirPath; // Use absolute path as key for uniqueness
+			fileSets.set(key, new Set(files));
+		}
+	}
+
+	// Debounce timer
+	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+	const scheduleRegenerate = (reason: string) => {
+		if (debounceTimer) clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(async () => {
+			console.log(`Regenerating all targets... (${reason})`);
+			try {
+				const multiResult = await runAllTargets({
+					rootDir,
+					configPath,
+					plugins: userPlugins,
+				});
+
+				for (const [targetId, result] of multiResult.targets) {
+					console.log(`  Updated [${targetId}]: ${result.outputPath}`);
+				}
+				for (const { targetId, error } of multiResult.errors) {
+					console.error(`  Error [${targetId}]: ${error.message}`);
+				}
+			} catch (error) {
+				console.error("Codegen error:", error);
+			}
+		}, 100);
+	};
+
+	// Watch config file for any change
+	const configWatcher = watch(configPath, () => {
+		scheduleRegenerate("config changed");
+	});
+
+	// Watch entity directories for file add/remove across all target roots
+	const watchers: ReturnType<typeof watch>[] = [configWatcher];
+
+	for (const [targetRoot, dirs] of watchRoots) {
+		for (const dir of dirs) {
+			const dirPath = join(targetRoot, dir);
+			try {
+				await stat(dirPath);
+			} catch {
+				continue; // Directory doesn't exist, skip
+			}
+
+			const watcher = watch(
+				dirPath,
+				{ recursive: true },
+				async (_event, filename) => {
+					if (!filename) return;
+					// Ignore .generated directory and non-TS files
+					if (filename.includes(".generated")) return;
+					if (!/\.(ts|tsx|mts)$/.test(filename)) return;
+
+					// Check if file set changed (add/remove)
+					const currentFiles = await listFilesRecursive(dirPath);
+					const currentSet = new Set(currentFiles);
+					const previousSet = fileSets.get(dirPath) || new Set();
+
+					const added = [...currentSet].filter((f) => !previousSet.has(f));
+					const removed = [...previousSet].filter((f) => !currentSet.has(f));
+
+					if (added.length > 0 || removed.length > 0) {
+						fileSets.set(dirPath, currentSet);
+						const changes: string[] = [];
+						for (const f of added) changes.push(`+ ${f}`);
+						for (const f of removed) changes.push(`- ${f}`);
+						scheduleRegenerate(changes.join(", "));
+					}
+					// Content-only changes → skip (typeof import is stable)
+				},
+			);
+
+			watchers.push(watcher);
+		}
+	}
+
+	// Keep process alive
+	process.on("SIGINT", () => {
+		for (const w of watchers) w.close();
+		console.log("\nStopped watching.");
+		process.exit(0);
+	});
+
+	// Prevent Node from exiting
+	await new Promise(() => {});
+}
+
+/**
+ * Simple watch mode for module codegen — watches a single target root.
+ * Used in module mode where multi-target doesn't apply.
+ */
+async function watchSingleTarget(
+	rootDir: string,
+	configPath: string,
+	plugins: CodegenPlugin[],
+	moduleOpt: { name: string; outputFile?: string },
+	options: DevOptions,
+): Promise<void> {
 	const outDir = join(rootDir, ".generated");
 
-	// Directories to watch for file add/remove
-	// Start with core directories, then add plugin-discovered directory patterns
+	// Build watch dirs from plugin targets
 	const watchDirs = new Set([
 		"collections",
 		"globals",
@@ -429,14 +652,13 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		"features",
 	]);
 
-	// Add directories from plugin target discover patterns (e.g. "blocks/*.ts" → "blocks")
-	for (const plugin of plugins) {
+	const allPlugins = [coreCodegenPlugin(), ...(plugins ?? [])];
+	for (const plugin of allPlugins) {
 		for (const contribution of Object.values(plugin.targets)) {
 			if (!contribution.discover) continue;
 			for (const pattern of Object.values(contribution.discover)) {
 				const patternStr =
 					typeof pattern === "string" ? pattern : pattern.pattern;
-				// Extract directory name from glob (e.g. "blocks/*.ts" → "blocks")
 				const dirMatch = patternStr.match(/^([^/*]+)\//);
 				if (dirMatch) {
 					watchDirs.add(dirMatch[1]);
@@ -448,17 +670,13 @@ export async function devCommand(options: DevOptions): Promise<void> {
 	console.log("\nWatching for file changes...");
 	console.log("  (Press Ctrl+C to stop)\n");
 
-	// Track file sets per directory to detect add/remove
 	const fileSets = new Map<string, Set<string>>();
-
-	// Initialize file sets
 	for (const dir of watchDirs) {
 		const dirPath = join(rootDir, dir);
 		const files = await listFilesRecursive(dirPath);
 		fileSets.set(dir, new Set(files));
 	}
 
-	// Debounce timer
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const scheduleRegenerate = (reason: string) => {
@@ -480,12 +698,10 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		}, 100);
 	};
 
-	// Watch config file for any change
 	const configWatcher = watch(configPath, () => {
 		scheduleRegenerate("config changed");
 	});
 
-	// Watch entity directories for file add/remove
 	const watchers: ReturnType<typeof watch>[] = [configWatcher];
 
 	for (const dir of watchDirs) {
@@ -493,7 +709,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		try {
 			await stat(dirPath);
 		} catch {
-			continue; // Directory doesn't exist, skip
+			continue;
 		}
 
 		const watcher = watch(
@@ -501,11 +717,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
 			{ recursive: true },
 			async (_event, filename) => {
 				if (!filename) return;
-				// Ignore .generated directory and non-TS files
 				if (filename.includes(".generated")) return;
 				if (!/\.(ts|tsx|mts)$/.test(filename)) return;
 
-				// Check if file set changed (add/remove)
 				const currentFiles = await listFilesRecursive(dirPath);
 				const currentSet = new Set(currentFiles);
 				const previousSet = fileSets.get(dir) || new Set();
@@ -520,21 +734,18 @@ export async function devCommand(options: DevOptions): Promise<void> {
 					for (const f of removed) changes.push(`- ${f}`);
 					scheduleRegenerate(changes.join(", "));
 				}
-				// Content-only changes → skip (typeof import is stable)
 			},
 		);
 
 		watchers.push(watcher);
 	}
 
-	// Keep process alive
 	process.on("SIGINT", () => {
 		for (const w of watchers) w.close();
 		console.log("\nStopped watching.");
 		process.exit(0);
 	});
 
-	// Prevent Node from exiting
 	await new Promise(() => {});
 }
 

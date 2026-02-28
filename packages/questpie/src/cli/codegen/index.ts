@@ -11,7 +11,7 @@
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { discoverFiles } from "./discover.js";
 import { generateFactoryTemplate } from "./factory-template.js";
 import { generateModuleTemplate } from "./module-template.js";
@@ -22,6 +22,7 @@ import type {
 	CodegenOptions,
 	CodegenPlugin,
 	CodegenResult,
+	MultiTargetCodegenResult,
 	ResolvedTarget,
 } from "./types.js";
 
@@ -492,10 +493,155 @@ export async function runCodegen(
 	}
 
 	return {
+		targetId,
 		code,
 		outputPath,
 		discovered,
 	};
+}
+
+// ============================================================================
+// Multi-target orchestration
+// ============================================================================
+
+/**
+ * Options for running multi-target codegen.
+ *
+ * Unlike `CodegenOptions`, this does NOT take a `targetId` — it processes
+ * all resolved targets. Module mode is NOT supported here (use `runCodegen()`
+ * directly for module codegen).
+ */
+export interface RunAllTargetsOptions {
+	/** Absolute path to the server root (directory containing questpie.config.ts). */
+	rootDir: string;
+	/** Absolute path to the questpie.config.ts file. */
+	configPath: string;
+	/** Codegen plugins to run. */
+	plugins?: CodegenPlugin[];
+	/** If true, don't write files — just return the generated code. */
+	dryRun?: boolean;
+}
+
+/**
+ * Run codegen for ALL resolved targets.
+ *
+ * Resolves the target graph from plugins, then iterates each target:
+ * - For targets with a custom `generate` function, calls it.
+ * - For standard targets (no custom generator), uses the default template pipeline.
+ *
+ * Non-server targets resolve their `root` relative to `rootDir` (the server root).
+ * e.g., `root: "../admin"` → `resolve(rootDir, "../admin")`.
+ *
+ * @see PLAN-PLUGIN-CONSISTENCY.md §5 (Codegen Orchestration Model)
+ */
+export async function runAllTargets(
+	options: RunAllTargetsOptions,
+): Promise<MultiTargetCodegenResult> {
+	const { rootDir, configPath, plugins: userPlugins, dryRun } = options;
+
+	// Always prepend core plugin
+	const plugins = [coreCodegenPlugin(), ...(userPlugins ?? [])];
+	const targetGraph = resolveTargetGraph(plugins);
+
+	const results = new Map<string, CodegenResult>();
+	const errors: Array<{ targetId: string; error: Error }> = [];
+
+	for (const [targetId, target] of targetGraph) {
+		try {
+			// Resolve the target's root directory relative to the server root
+			const targetRootDir = resolve(rootDir, target.root);
+			const targetOutDir = join(targetRootDir, target.outDir);
+
+			if (target.generate) {
+				// Custom generator — run discovery, transforms, then the generator
+				const discovered = await discoverFiles(targetRootDir, targetOutDir, {
+					categories: target.categories,
+					discover: target.discover,
+				});
+
+				// Build and run transforms
+				const extraImports: Array<{ name: string; path: string }> = [];
+				const extraTypeDeclarations: string[] = [];
+				const extraRuntimeCode: string[] = [];
+				const extraEntities = new Map<string, string>();
+
+				const ctx: CodegenContext = {
+					categories: discovered.categories,
+					auth: discovered.auth,
+					singles: discovered.singles,
+					spreads: discovered.spreads,
+					addImport(name, path) {
+						extraImports.push({ name, path });
+					},
+					addTypeDeclaration(code) {
+						extraTypeDeclarations.push(code);
+					},
+					addRuntimeCode(code) {
+						extraRuntimeCode.push(code);
+					},
+					set(key, value) {
+						extraEntities.set(key, value);
+					},
+				};
+
+				for (const transform of target.transforms) {
+					transform(ctx);
+				}
+
+				// Run custom generator
+				const output = await target.generate({
+					target,
+					discovered,
+					extraImports,
+					extraTypeDeclarations,
+					extraRuntimeCode,
+					extraEntities,
+				});
+
+				// Write output
+				const outputPath = join(targetOutDir, target.outputFile);
+				if (!dryRun) {
+					await mkdir(targetOutDir, { recursive: true });
+					await writeFile(outputPath, output.code, "utf-8");
+
+					// Write additional files if provided
+					if (output.additionalFiles) {
+						for (const [relPath, content] of Object.entries(
+							output.additionalFiles,
+						)) {
+							const absPath = join(targetOutDir, relPath);
+							await writeFile(absPath, content, "utf-8");
+						}
+					}
+				}
+
+				results.set(targetId, {
+					targetId,
+					code: output.code,
+					outputPath,
+					discovered,
+				});
+			} else {
+				// Standard target — use runCodegen() with the resolved target
+				const result = await runCodegen({
+					rootDir: targetRootDir,
+					configPath,
+					outDir: targetOutDir,
+					plugins: userPlugins,
+					dryRun,
+					targetId,
+				});
+				results.set(targetId, result);
+			}
+		} catch (err) {
+			errors.push({
+				targetId,
+				error: err instanceof Error ? err : new Error(String(err)),
+			});
+		}
+	}
+
+	return { targets: results, errors };
 }
 
 // ============================================================================

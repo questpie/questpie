@@ -688,7 +688,7 @@ export interface CodegenOptions {
 
 	/**
 	 * Target ID to generate. When omitted, defaults to "server".
-	 * In Phase B+, runCodegen will iterate all targets; for now it processes one.
+	 * Use `runAllTargets()` to generate all targets at once.
 	 */
 	targetId?: string;
 
@@ -722,15 +722,27 @@ export interface CodegenOptions {
 }
 
 /**
- * Result of running codegen.
+ * Result of running codegen for a single target.
  */
 export interface CodegenResult {
+	/** Target ID that was generated (e.g. "server", "admin-client"). */
+	targetId: string;
 	/** Generated file content. */
 	code: string;
 	/** Absolute path of the generated file. */
 	outputPath: string;
 	/** All discovered files. */
 	discovered: DiscoveryResult;
+}
+
+/**
+ * Aggregated result of running codegen for all targets.
+ */
+export interface MultiTargetCodegenResult {
+	/** Per-target results, keyed by target ID. */
+	targets: Map<string, CodegenResult>;
+	/** Errors encountered during codegen (non-fatal per target). */
+	errors: Array<{ targetId: string; error: Error }>;
 }
 
 // ============================================================================

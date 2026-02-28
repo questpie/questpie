@@ -34,6 +34,7 @@ export type {
 	DiscoverPattern,
 	DiscoveryResult,
 	ModuleRegistryConfig,
+	MultiTargetCodegenResult,
 	RegistryExtension,
 	ResolvedTarget,
 	SingletonFactory,
