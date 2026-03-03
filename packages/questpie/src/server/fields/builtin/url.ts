@@ -5,16 +5,13 @@
  * Supports allowed protocols and host-based operators.
  */
 
-import { ilike, like, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { text, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import {
-	stringColumnOperators,
-	stringJsonbOperators,
-} from "../common-operators.js";
+import { urlOps } from "../operators/builtin.js";
+import { resolveContextualOperators } from "../operators/resolve.js";
 import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
-import { operator } from "../types.js";
 
 // ============================================================================
 // URL Field Meta (augmentable by admin)
@@ -79,37 +76,7 @@ export interface UrlFieldConfig extends BaseFieldConfig {
  * Includes URL-specific operators like host matching.
  */
 function getUrlOperators() {
-	return {
-		column: {
-			...stringColumnOperators,
-			// URL-specific operators
-			host: operator<string, unknown>((col, value) =>
-				ilike(col, `%://${value}%`),
-			),
-			hostIn: operator<string[], unknown>((col, values) => {
-				if (values.length === 0) return sql`FALSE`;
-				if (values.length === 1) return ilike(col, `%://${values[0]}%`);
-				return sql`(${sql.join(
-					values.map((h) => ilike(col, `%://${h}%`)),
-					sql` OR `,
-				)})`;
-			}),
-			protocol: operator<string, unknown>((col, value) =>
-				like(col, `${value}://%`),
-			),
-		},
-		jsonb: {
-			...stringJsonbOperators,
-			host: operator<string, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%://" + value + "%"}`;
-			}),
-			protocol: operator<string, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' LIKE ${value + "://%"}`;
-			}),
-		},
-	};
+	return resolveContextualOperators(urlOps);
 }
 
 // ============================================================================

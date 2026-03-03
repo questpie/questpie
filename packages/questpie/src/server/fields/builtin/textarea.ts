@@ -8,10 +8,9 @@
 import { sql } from "drizzle-orm";
 import { text } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import {
-	stringColumnOperators,
-	stringJsonbOperators,
-} from "../common-operators.js";
+import { stringOps } from "../operators/builtin.js";
+import { extendOperatorSet } from "../operators/operator-set.js";
+import { resolveContextualOperators } from "../operators/resolve.js";
 import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 import { operator } from "../types.js";
@@ -84,29 +83,29 @@ export interface TextareaFieldConfig extends BaseFieldConfig {
  * Get operators for textarea field.
  * Similar to text field but optimized for longer content.
  */
+const textareaOps = extendOperatorSet(stringOps, {
+	column: {
+		isEmpty: operator<boolean, unknown>(
+			(col) => sql`(${col} IS NULL OR ${col} = '')`,
+		),
+		isNotEmpty: operator<boolean, unknown>(
+			(col) => sql`(${col} IS NOT NULL AND ${col} != '')`,
+		),
+	},
+	jsonbOverrides: {
+		isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
+			const path = ctx.jsonbPath?.join(",") ?? "";
+			return sql`(${col}#>>'{${sql.raw(path)}}' IS NULL OR ${col}#>>'{${sql.raw(path)}}' = '')`;
+		}),
+		isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
+			const path = ctx.jsonbPath?.join(",") ?? "";
+			return sql`(${col}#>>'{${sql.raw(path)}}' IS NOT NULL AND ${col}#>>'{${sql.raw(path)}}' != '')`;
+		}),
+	},
+});
+
 function getTextareaOperators() {
-	return {
-		column: {
-			...stringColumnOperators,
-			isEmpty: operator<boolean, unknown>(
-				(col) => sql`(${col} IS NULL OR ${col} = '')`,
-			),
-			isNotEmpty: operator<boolean, unknown>(
-				(col) => sql`(${col} IS NOT NULL AND ${col} != '')`,
-			),
-		},
-		jsonb: {
-			...stringJsonbOperators,
-			isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}' IS NULL OR ${col}#>>'{${sql.raw(path)}}' = '')`;
-			}),
-			isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`(${col}#>>'{${sql.raw(path)}}' IS NOT NULL AND ${col}#>>'{${sql.raw(path)}}' != '')`;
-			}),
-		},
-	};
+	return resolveContextualOperators(textareaOps);
 }
 
 // ============================================================================

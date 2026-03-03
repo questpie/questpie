@@ -7,10 +7,8 @@
 
 import { text, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import {
-	stringColumnOperators,
-	stringJsonbOperators,
-} from "../common-operators.js";
+import { stringOps } from "../operators/builtin.js";
+import { resolveContextualOperators } from "../operators/resolve.js";
 import { field } from "../field.js";
 import type { FieldMetadataBase } from "../types.js";
 
@@ -110,10 +108,7 @@ import type { BaseFieldConfig } from "../types.js";
  * Provides rich text search and comparison.
  */
 function getTextOperators(_config: TextFieldConfig) {
-	return {
-		column: stringColumnOperators,
-		jsonb: stringJsonbOperators,
-	};
+	return resolveContextualOperators(stringOps);
 }
 
 // ============================================================================

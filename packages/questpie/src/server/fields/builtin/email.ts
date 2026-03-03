@@ -5,16 +5,13 @@
  * Extends text field with email-specific validation and operators.
  */
 
-import { ilike, inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import {
-	stringColumnOperators,
-	stringJsonbOperators,
-} from "../common-operators.js";
+import { emailOps } from "../operators/builtin.js";
+import { resolveContextualOperators } from "../operators/resolve.js";
 import { field } from "../field.js";
 import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
-import { operator } from "../types.js";
 
 // ============================================================================
 // Email Field Meta (augmentable by admin)
@@ -72,31 +69,7 @@ export interface EmailFieldConfig extends BaseFieldConfig {
  * Includes email-specific operators like domain matching.
  */
 function getEmailOperators() {
-	return {
-		column: {
-			...stringColumnOperators,
-			in: operator<string[], unknown>((col, values) => inArray(col, values)),
-			// Email-specific operators
-			domain: operator<string, unknown>((col, value) =>
-				ilike(col, `%@${value}`),
-			),
-			domainIn: operator<string[], unknown>((col, values) => {
-				if (values.length === 0) return sql`FALSE`;
-				if (values.length === 1) return ilike(col, `%@${values[0]}`);
-				return sql`(${sql.join(
-					values.map((d) => ilike(col, `%@${d}`)),
-					sql` OR `,
-				)})`;
-			}),
-		},
-		jsonb: {
-			...stringJsonbOperators,
-			domain: operator<string, unknown>((col, value, ctx) => {
-				const path = ctx.jsonbPath?.join(",") ?? "";
-				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%" + "@" + value}`;
-			}),
-		},
-	};
+	return resolveContextualOperators(emailOps);
 }
 
 // ============================================================================

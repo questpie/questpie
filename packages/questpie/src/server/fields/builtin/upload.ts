@@ -9,14 +9,11 @@ import { sql } from "drizzle-orm";
 import { varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { KnownCollectionNames } from "../../config/app-context.js";
-import {
-	stringColumnOperators,
-	stringJsonbOperators,
-} from "../common-operators.js";
+import { belongsToOps, toManyOps as toManyOpsDef } from "../operators/builtin.js";
+import { resolveContextualOperators } from "../operators/resolve.js";
 import { field } from "../field.js";
 import {
 	type BaseFieldConfig,
-	operator,
 	type RelationFieldMetadata,
 } from "../types.js";
 
@@ -102,27 +99,14 @@ export interface UploadFieldConfig extends BaseFieldConfig {
  * Get operators for single upload field.
  */
 function getSingleUploadOperators() {
-	return {
-		column: stringColumnOperators,
-		jsonb: stringJsonbOperators,
-	};
+	return resolveContextualOperators(belongsToOps);
 }
 
 /**
  * Get operators for many-to-many upload field.
  */
 function getToManyUploadOperators() {
-	const toManyOps = {
-		// Placeholder operators - actual implementation in query builder
-		some: operator<boolean, unknown>(() => sql`TRUE`),
-		none: operator<boolean, unknown>(() => sql`TRUE`),
-		every: operator<boolean, unknown>(() => sql`TRUE`),
-		count: operator<number, unknown>(() => sql`0`),
-	} as const;
-	return {
-		column: toManyOps,
-		jsonb: toManyOps,
-	};
+	return resolveContextualOperators(toManyOpsDef);
 }
 
 // ============================================================================

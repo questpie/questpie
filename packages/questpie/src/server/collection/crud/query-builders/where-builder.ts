@@ -18,6 +18,7 @@ import type {
 } from "#questpie/server/collection/crud/types.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import { ApiError } from "#questpie/server/errors/base.js";
+import type { FieldDefinition, FieldDefinitionState, OperatorFn } from "#questpie/server/fields/types.js";
 
 /**
  * Options for building WHERE clause
@@ -198,8 +199,18 @@ export function buildWhereClause(
 			value !== null &&
 			!Array.isArray(value)
 		) {
+			// Look up the field definition for field-driven operator dispatch
+			const fieldDef = state.fieldDefinitions?.[key] as
+				| FieldDefinition<FieldDefinitionState>
+				| undefined;
+			const fieldOps = fieldDef?.getOperators?.();
+			const fieldColumnOps = fieldOps?.column;
+
 			// Determine if value contains field operators or relation quantifiers
-			const fieldOperators = [
+			// Use the field's actual operator keys (if available) in addition to the
+			// standard hardcoded list, so custom operators (e.g., email.domain) are
+			// correctly recognized as field operators.
+			const standardFieldOperators = [
 				"eq",
 				"ne",
 				"not",
@@ -221,11 +232,28 @@ export function buildWhereClause(
 				"arrayOverlaps",
 				"arrayContained",
 				"arrayContains",
+				// JSONB structural ops (select multi, object, array)
+				"containsAll",
+				"containsAny",
+				"containedBy",
+				"hasKey",
+				"hasKeys",
+				"hasAnyKeys",
+				"pathEquals",
+				"jsonPath",
+				"isEmpty",
+				"isNotEmpty",
+				"length",
+				"count",
 			];
 			const relationQuantifiers = ["some", "none", "every", "is", "isNot"];
 			const valueKeys = Object.keys(value as Record<string, any>);
-			const hasFieldOperators = valueKeys.some((k) =>
-				fieldOperators.includes(k),
+
+			// A key is a field operator if it's in the standard list OR in the field's operator map
+			const hasFieldOperators = valueKeys.some(
+				(k) =>
+					standardFieldOperators.includes(k) ||
+					(fieldColumnOps && k in fieldColumnOps),
 			);
 			const hasRelationQuantifiers = valueKeys.some((k) =>
 				relationQuantifiers.includes(k),
@@ -253,7 +281,12 @@ export function buildWhereClause(
 				}
 
 				for (const [op, val] of Object.entries(value as Record<string, any>)) {
-					const condition = buildOperatorCondition(column, op, val);
+					const condition = resolveFieldOperatorCondition(
+						column,
+						op,
+						val,
+						fieldColumnOps,
+					);
 					if (condition) conditions.push(condition);
 				}
 			} else if (state.relations?.[key]) {
@@ -289,7 +322,12 @@ export function buildWhereClause(
 				}
 
 				for (const [op, val] of Object.entries(value as Record<string, any>)) {
-					const condition = buildOperatorCondition(column, op, val);
+					const condition = resolveFieldOperatorCondition(
+						column,
+						op,
+						val,
+						fieldColumnOps,
+					);
 					if (condition) conditions.push(condition);
 				}
 			}
@@ -321,6 +359,38 @@ export function buildWhereClause(
 	}
 
 	return conditions.length > 0 ? and(...conditions) : undefined;
+}
+
+/**
+ * Resolve a field operator condition.
+ *
+ * First checks the field's own operator map (if available) for field-driven
+ * dispatch. This enables custom operators like email's `domain` and url's
+ * `host` to work at runtime. Falls back to the standard hardcoded switch
+ * for built-in operators.
+ *
+ * @param column - The column to apply the operator to
+ * @param op - The operator name
+ * @param value - The value for the operator
+ * @param fieldOps - The field's column operator map (from getOperators().column)
+ * @returns SQL condition or undefined if operator not recognized
+ */
+export function resolveFieldOperatorCondition(
+	column: any,
+	op: string,
+	value: any,
+	fieldOps?: Record<string, OperatorFn<any, any> | undefined>,
+): SQL | undefined {
+	// Try field-driven dispatch first
+	if (fieldOps) {
+		const operatorFn = fieldOps[op];
+		if (operatorFn) {
+			return operatorFn(column, value, {});
+		}
+	}
+
+	// Fall back to standard hardcoded operators
+	return buildOperatorCondition(column, op, value);
 }
 
 /**
