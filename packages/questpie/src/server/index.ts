@@ -61,7 +61,6 @@ export type {
 } from "./config/extensions.js";
 export * from "./config/global-hooks-types.js";
 export * from "./config/questpie.js";
-export * from "./config/register.js";
 export * from "./config/types.js";
 export * from "./fields/index.js";
 export * from "./functions/index.js";
