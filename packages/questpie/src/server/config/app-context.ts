@@ -15,6 +15,9 @@
  *   }
  *   → ({ channels }) available in every hook, function, job, etc.
  *
+ * User services are namespaced under `services`:
+ *   ({ services }) => services.blog.computeReadingTime(text)
+ *
  * @see RFC-CONTEXT-FIRST.md §2
  */
 // biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented via `declare module "questpie"`
@@ -49,8 +52,6 @@ export interface AppContext {}
 // biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented via `declare module "questpie"`
 export interface Registry {}
 
-/** @deprecated Use `Registry` instead. Will be removed in a future version. */
-export type QuestpieRegistry = Registry;
 
 /**
  * Extract known names from a Registry key.
@@ -110,8 +111,7 @@ export function extractAppServices(
 	overrides?: { db?: any; session?: any; locale?: string },
 ): Record<string, unknown> {
 	if (!app) return { db: overrides?.db };
-	return {
-		app,
+	const result: Record<string, unknown> = {
 		db: overrides?.db ?? app.db,
 		session: overrides?.session ?? null,
 		queue: app.queue,
@@ -123,7 +123,21 @@ export function extractAppServices(
 		realtime: app.realtime,
 		collections: app.api?.collections,
 		globals: app.api?.globals,
-		tables: app.tables ?? {},
 		t: app.t,
 	};
+
+	// Resolve user-defined services — namespaced under `services`
+	const serviceDefs = app.config?.services;
+	if (serviceDefs) {
+		const services: Record<string, unknown> = {};
+		for (const name of Object.keys(serviceDefs)) {
+			services[name] = app.resolveService(name, {
+				db: result.db,
+				session: result.session,
+			});
+		}
+		result.services = services;
+	}
+
+	return result;
 }

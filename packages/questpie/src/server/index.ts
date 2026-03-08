@@ -45,8 +45,6 @@ export {
 	extractAppServices,
 	type AppContext,
 	type Registry,
-	/** @deprecated Use `Registry` instead */
-	type QuestpieRegistry,
 	type RegistryNames,
 	type KnownCollectionNames,
 	type KnownGlobalNames,

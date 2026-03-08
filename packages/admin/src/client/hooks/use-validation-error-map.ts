@@ -59,14 +59,3 @@ export function useValidationErrorMap(): ZodErrorMapFn {
 	}, [i18n]);
 }
 
-/**
- * Create a static error map (for use outside of React components)
- *
- * @param t - Translate function
- * @returns Zod error map function
- */
-function createAdminZodErrorMap(
-	t: (key: string, params?: Record<string, unknown>) => string,
-): ZodErrorMapFn {
-	return createZodErrorMap(t);
-}

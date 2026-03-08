@@ -267,7 +267,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				),
 				urlBuilder: {
 					// TODO: is this correct?
-					generateSignedURL(key, _filePath, _optionss) {
+					generateSignedURL(key, _filePath, _options) {
 						return Promise.resolve(`http://fake-storage.local/${key}`);
 					},
 					generateURL(key, _filePath) {
