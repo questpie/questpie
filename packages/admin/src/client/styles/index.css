@@ -82,60 +82,8 @@
    To disable: set body::before { display: none }
    ================================================================ */
 
-/* Dark theme (DEFAULT) */
+/* Light theme (default — :root) */
 :root {
-	--background: #0A0A0A;
-	--foreground: #FFFFFF;
-	--card: #111111;
-	--card-foreground: #FFFFFF;
-	--popover: #1A1A1A;
-	--popover-foreground: #FFFFFF;
-	--input: #1A1A1A;
-	--muted: #1A1A1A;
-	--muted-foreground: #666666;
-	--accent: #1A1A1A;
-	--accent-foreground: #FFFFFF;
-	--secondary: #1A1A1A;
-	--secondary-foreground: #CCCCCC;
-	--primary: #B700FF;
-	--primary-foreground: #FFFFFF;
-	--destructive: #FF3D57;
-	--success: #00E676;
-	--warning: #FFB300;
-	--info: #40C4FF;
-	--border: #333333;
-	--ring: #B700FF;
-	--radius: 0px;
-
-	/* Chart Colors */
-	--chart-1: #B700FF;
-	--chart-2: #6366F1;
-	--chart-3: #06B6D4;
-	--chart-4: #10B981;
-	--chart-5: #F97316;
-
-	/* Typography */
-	--font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-	--font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
-
-	/* Spacing Scale */
-	--spacing-section: 1.5rem;
-	--spacing-card: 1rem;
-	--spacing-input: 0.75rem;
-
-	/* Sidebar */
-	--sidebar: #111111;
-	--sidebar-foreground: #FFFFFF;
-	--sidebar-primary: #B700FF;
-	--sidebar-primary-foreground: #FFFFFF;
-	--sidebar-accent: #1A1A1A;
-	--sidebar-accent-foreground: #FFFFFF;
-	--sidebar-border: #333333;
-	--sidebar-ring: #B700FF;
-}
-
-/* Light theme */
-.light {
 	--background: #FFFFFF;
 	--foreground: #0A0A0A;
 	--card: #F8F8F8;
@@ -149,7 +97,15 @@
 	--accent-foreground: #0A0A0A;
 	--secondary: #F0F0F0;
 	--secondary-foreground: #333333;
+	--primary: #B700FF;
+	--primary-foreground: #FFFFFF;
+	--destructive: #FF3D57;
+	--success: #00E676;
+	--warning: #FFB300;
+	--info: #40C4FF;
 	--border: #E0E0E0;
+	--ring: #B700FF;
+	--radius: 0px;
 
 	/* Chart Colors */
 	--chart-1: #B700FF;
@@ -158,12 +114,56 @@
 	--chart-4: #059669;
 	--chart-5: #EA580C;
 
+	/* Typography */
+	--font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+	/* Spacing Scale */
+	--spacing-section: 1.5rem;
+	--spacing-card: 1rem;
+	--spacing-input: 0.75rem;
+
 	/* Sidebar */
 	--sidebar: #F8F8F8;
 	--sidebar-foreground: #0A0A0A;
+	--sidebar-primary: #B700FF;
+	--sidebar-primary-foreground: #FFFFFF;
 	--sidebar-accent: #F0F0F0;
 	--sidebar-accent-foreground: #0A0A0A;
 	--sidebar-border: #E0E0E0;
+	--sidebar-ring: #B700FF;
+}
+
+/* Dark theme (.dark class) */
+.dark {
+	--background: #0A0A0A;
+	--foreground: #FFFFFF;
+	--card: #111111;
+	--card-foreground: #FFFFFF;
+	--popover: #1A1A1A;
+	--popover-foreground: #FFFFFF;
+	--input: #1A1A1A;
+	--muted: #1A1A1A;
+	--muted-foreground: #666666;
+	--accent: #1A1A1A;
+	--accent-foreground: #FFFFFF;
+	--secondary: #1A1A1A;
+	--secondary-foreground: #CCCCCC;
+	--border: #333333;
+
+	/* Chart Colors */
+	--chart-1: #B700FF;
+	--chart-2: #6366F1;
+	--chart-3: #06B6D4;
+	--chart-4: #10B981;
+	--chart-5: #F97316;
+
+	/* Sidebar */
+	--sidebar: #111111;
+	--sidebar-foreground: #FFFFFF;
+	--sidebar-accent: #1A1A1A;
+	--sidebar-accent-foreground: #FFFFFF;
+	--sidebar-border: #333333;
 }
 
 @theme inline {

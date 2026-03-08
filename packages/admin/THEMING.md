@@ -91,6 +91,14 @@ body::before {
 
 Same components, different CSS, completely different look.
 
+## Dark / Light Mode
+
+The CSS uses the standard convention:
+- `:root` = light theme (default)
+- `.dark` class on `<html>` = dark theme
+
+This is compatible with `next-themes`, custom `ThemeProvider`, or any library that toggles a `.dark` class. Tailwind's `dark:` variant works automatically.
+
 ## Grid Texture
 
 The background grid is a `body::before` pseudo-element using `--primary` color at 3% opacity with 40px spacing. To disable it, add `body::before { display: none; }` to your theme.
