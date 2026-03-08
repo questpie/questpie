@@ -64,7 +64,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
 				// Alternating row colors (zebra striping) with solid backgrounds
 				// Using group/row for sticky cells to match
 				// Fixed height for consistent row appearance
-				"group/row bg-background hover:bg-muted data-[state=selected]:bg-accent border-b border-border transition-colors h-12",
+				"group/row bg-background hover:bg-muted data-[state=selected]:bg-accent border-b border-border transition-colors h-10",
 				className,
 			)}
 			{...props}

@@ -71,7 +71,7 @@ export function PreviewBanner({
 				gap: "1rem",
 				fontSize: "0.875rem",
 				fontWeight: 500,
-				boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+				borderBottom: "1px solid var(--border)",
 			}}
 		>
 			<div

@@ -65,7 +65,7 @@ export function EmptyState({
 	description,
 	icon: Icon,
 	action,
-	height = "h-64",
+	height = "h-48",
 	className,
 }: EmptyStateProps): React.ReactElement {
 	return (
@@ -83,12 +83,7 @@ export function EmptyState({
 				{Icon ? (
 					<Icon className="mx-auto mb-4 size-8 text-muted-foreground/50" />
 				) : (
-					<div
-						className="mx-auto mb-4 size-2 bg-primary/50"
-						style={{
-							boxShadow: "0 0 20px oklch(55% 0.3 300 / 0.25)",
-						}}
-					/>
+					<div className="mx-auto mb-4 size-1.5 bg-primary" />
 				)}
 
 				{/* Title */}
