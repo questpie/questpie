@@ -285,7 +285,7 @@ export function AssetThumbnail({
 	return (
 		<div
 			className={cn(
-				"relative overflow-hidden rounded-lg border bg-muted/30",
+				"relative overflow-hidden rounded-lg border bg-muted",
 				className,
 			)}
 		>

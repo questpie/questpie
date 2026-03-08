@@ -73,7 +73,7 @@ export function EmptyState({
 			data-slot="empty-state"
 			className={cn(
 				"relative flex flex-col items-center justify-center",
-				"border border-dashed border-border/40 bg-card/5",
+				"border border-dashed border-border bg-card",
 				height,
 				className,
 			)}

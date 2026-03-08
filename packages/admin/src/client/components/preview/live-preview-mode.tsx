@@ -272,7 +272,7 @@ function LivePreviewContent({
 					</div>
 
 					{/* Preview panel - fills remaining space */}
-					<div className="flex-1 min-w-0 bg-muted/30">
+					<div className="flex-1 min-w-0 bg-muted">
 						{previewUrl ? (
 							<PreviewPane
 								ref={previewRef}

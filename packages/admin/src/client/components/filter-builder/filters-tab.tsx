@@ -529,7 +529,7 @@ export function FiltersTab({
 				return (
 					<div
 						key={filter.id}
-						className="p-3 bg-muted/30 border border-border rounded-lg space-y-2"
+						className="p-3 bg-muted border border-border rounded-lg space-y-2"
 					>
 						<div className="flex justify-between items-center">
 							<span className="text-xs font-semibold text-muted-foreground uppercase">

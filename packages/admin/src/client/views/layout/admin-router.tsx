@@ -540,7 +540,7 @@ function DefaultDashboard() {
 					<div className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-primary/10 blur-3xl" />
 					<div className="relative">
 						<div className="mb-4 flex items-center gap-3">
-							<div className="h-2 w-2 rounded-full bg-primary glow-primary-sm" />
+							<div className="h-2 w-2 rounded-full bg-primary " />
 							<h3 className="font-mono text-xs font-bold uppercase tracking-widest text-primary">
 								System Status
 							</h3>
@@ -581,8 +581,8 @@ function RestrictedAccess({
 	return (
 		<div className="container py-12">
 			<Card className="relative mx-auto max-w-lg overflow-hidden p-8 text-center">
-				<div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-muted/50 blur-3xl" />
-				<div className="absolute -left-16 -bottom-16 h-40 w-40 rounded-full bg-muted/30 blur-3xl" />
+				<div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-muted blur-3xl" />
+				<div className="absolute -left-16 -bottom-16 h-40 w-40 rounded-full bg-muted blur-3xl" />
 				<div className="relative">
 					<div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
 						<Icon

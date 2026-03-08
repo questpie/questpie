@@ -260,7 +260,7 @@ export function AssetPreview({
 			<div
 				className={cn(
 					"group relative aspect-square overflow-hidden rounded-lg border",
-					"bg-muted/30 border-border/60",
+					"bg-muted border-border",
 					disabled && "opacity-60",
 					onClick && !disabled && "cursor-pointer hover:border-border",
 					className,
@@ -286,7 +286,7 @@ export function AssetPreview({
 
 				{/* Loading overlay */}
 				{loading && (
-					<div className="bg-background/80 absolute inset-0 flex items-center justify-center">
+					<div className="bg-background absolute inset-0 flex items-center justify-center">
 						<div className="relative">
 							<Icon
 								icon="ph:spinner-gap"
@@ -357,7 +357,7 @@ export function AssetPreview({
 				<div
 					className={cn(
 						"flex items-center gap-2 rounded-md border p-2",
-						"bg-muted/30 border-border/60",
+						"bg-muted border-border",
 						className,
 					)}
 				>
@@ -389,7 +389,7 @@ export function AssetPreview({
 			<div
 				className={cn(
 					"group flex items-center gap-2 rounded-md border p-2",
-					"bg-muted/30 border-border/60",
+					"bg-muted border-border",
 					disabled && "opacity-60",
 					onClick && !disabled && "cursor-pointer hover:border-border",
 					className,
@@ -496,7 +496,7 @@ export function AssetPreview({
 			<div
 				className={cn(
 					"overflow-hidden rounded-lg border",
-					"bg-muted/30 border-border/60",
+					"bg-muted border-border",
 					className,
 				)}
 			>
@@ -527,7 +527,7 @@ export function AssetPreview({
 		<div
 			className={cn(
 				"group relative overflow-hidden rounded-lg border",
-				"bg-muted/30 border-border/60",
+				"bg-muted border-border",
 				disabled && "opacity-60",
 				onClick && !disabled && "cursor-pointer hover:border-border",
 				className,
@@ -546,7 +546,7 @@ export function AssetPreview({
 			)}
 
 			{/* Thumbnail area */}
-			<div className="bg-muted/50 relative aspect-video w-full">
+			<div className="bg-muted relative aspect-video w-full">
 				{thumbnailUrl && !imageError ? (
 					<img
 						src={thumbnailUrl}
@@ -570,7 +570,7 @@ export function AssetPreview({
 
 				{/* Loading overlay */}
 				{loading && (
-					<div className="bg-background/80 absolute inset-0 flex flex-col items-center justify-center gap-2">
+					<div className="bg-background absolute inset-0 flex flex-col items-center justify-center gap-2">
 						<Icon
 							icon="ph:spinner-gap"
 							className="text-muted-foreground size-8 animate-spin"

@@ -173,8 +173,8 @@ function AssetItem({
 				"transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 				selected
 					? "ring-primary border-primary ring-2"
-					: "border-border/60 hover:border-border",
-				"bg-muted/30",
+					: "border-border hover:border-border",
+				"bg-muted",
 			)}
 		>
 			{/* Thumbnail or icon */}
@@ -205,7 +205,7 @@ function AssetItem({
 						"absolute right-2 top-2 flex size-5 items-center justify-center rounded-full border-2 transition-all",
 						selected
 							? "bg-primary border-primary"
-							: "border-white bg-black/20 backdrop-blur-sm group-hover:bg-black/40",
+							: "border-white bg-black/20 group-hover:bg-black/40",
 					)}
 				>
 					{selected && (
@@ -279,7 +279,7 @@ export function MediaGrid({
 			<div
 				className={cn(
 					"flex flex-col items-center justify-center rounded-lg border border-dashed p-12",
-					"bg-muted/30 text-muted-foreground",
+					"bg-muted text-muted-foreground",
 					className,
 				)}
 			>

@@ -237,9 +237,9 @@ export function AdminLayout({
 	return (
 		<BreadcrumbProvider>
 			<div
-				className={cn("min-h-screen bg-background bg-grid-quest", className)}
+				className={cn("min-h-screen bg-background ", className)}
 			>
-				{/* <div className="fixed inset-0 bg-grid-quest  pointer-events-none z-10" /> */}
+				{/* <div className="fixed inset-0 pointer-events-none z-10" /> */}
 				{isSearchOpen && (
 					<GlobalSearch
 						isOpen={isSearchOpen}
@@ -252,7 +252,7 @@ export function AdminLayout({
 				{/* Max-width container for ultrawide monitors - centered with subtle side borders */}
 				<SidebarProvider
 					defaultOpen={!sidebarCollapsedProp}
-					className="mx-auto max-w-[1920px] border-x border-border/40 h-svh overflow-hidden"
+					className="mx-auto max-w-[1920px] border-x border-border h-svh overflow-hidden"
 				>
 					{/* Sidebar */}
 					<AdminSidebar

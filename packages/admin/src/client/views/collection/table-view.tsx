@@ -1091,7 +1091,7 @@ function TableViewInner({
 				/>
 
 				{/* Table */}
-				<div className="bg-card/5 backdrop-blur-sm border border-border/40 overflow-hidden">
+				<div className="bg-card border border-border overflow-hidden">
 					<Table>
 						<TableHeader>
 							{table.getHeaderGroups().map((headerGroup) => (
@@ -1207,7 +1207,7 @@ function TableViewInner({
 																	const user = lock ? getLockUser(lock) : null;
 																	return (
 																		<span
-																			className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded-full"
+																			className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full"
 																			title={
 																				user?.name ??
 																				user?.email ??

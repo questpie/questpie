@@ -133,7 +133,7 @@ function ChangeDiff({
 			{expanded && (
 				<div className="mt-1.5 space-y-1.5 text-xs">
 					{entries.map(([field, { from, to }]) => (
-						<div key={field} className="rounded border px-2 py-1.5 bg-muted/30">
+						<div key={field} className="rounded border px-2 py-1.5 bg-muted">
 							<span className="font-medium text-foreground">{field}</span>
 							<div className="mt-0.5 flex flex-col gap-0.5">
 								<span className="text-red-600 dark:text-red-400">

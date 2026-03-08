@@ -105,7 +105,7 @@ export function FilterBuilderSheet({
 				</SheetHeader>
 
 				<div className="flex-1 overflow-y-auto px-6">
-					<div className="mt-4 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+					<div className="mt-4 rounded-md border border-border bg-muted px-3 py-2">
 						<div className="flex items-center justify-between gap-3">
 							<div>
 								<p className="text-sm font-medium">Realtime Updates</p>
@@ -123,7 +123,7 @@ export function FilterBuilderSheet({
 					</div>
 
 					{supportsSoftDelete && (
-						<div className="mt-3 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+						<div className="mt-3 rounded-md border border-border bg-muted px-3 py-2">
 							<div className="flex items-center justify-between gap-3">
 								<div>
 									<p className="text-sm font-medium">

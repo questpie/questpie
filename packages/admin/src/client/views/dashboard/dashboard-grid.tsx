@@ -692,7 +692,7 @@ export function DashboardGrid({
 					navigate={navigate}
 					resolveText={resolveText}
 				/>
-				<div className="flex h-64 items-center justify-center border border-dashed border-border bg-card/50 rounded-lg">
+				<div className="flex h-64 items-center justify-center border border-dashed border-border bg-card rounded-lg">
 					<div className="text-center">
 						<p className="text-muted-foreground font-medium">
 							No widgets configured

@@ -37,7 +37,7 @@ const Toaster = ({ theme = "system", ...props }: AdminToasterProps) => {
 			}
 			toastOptions={{
 				classNames: {
-					toast: "!backdrop-blur-sm !border !gap-3",
+					toast: "!!border !gap-3",
 					description: "!text-muted-foreground",
 					success: "!bg-success/10 !text-success !border-success/20",
 					error: "!bg-destructive/10 !text-destructive !border-destructive/20",

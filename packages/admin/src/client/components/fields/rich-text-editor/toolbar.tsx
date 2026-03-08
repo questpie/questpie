@@ -140,7 +140,7 @@ export function RichTextToolbar({
 	const isEditable = !disabled;
 
 	return (
-		<div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/30 p-1.5">
+		<div className="flex flex-wrap items-center gap-1.5 border-b bg-muted p-1.5">
 			{/* History Controls */}
 			{features.history && (
 				<ToolbarGroup>
@@ -165,7 +165,7 @@ export function RichTextToolbar({
 			{features.heading && (
 				<ToolbarGroup>
 					<select
-						className="h-6 rounded-sm border border-input/80 bg-input/20 px-2 text-xs"
+						className="h-6 rounded-sm border border-border bg-input px-2 text-xs"
 						value={headingValue}
 						onChange={(event) => onHeadingChange(event.target.value)}
 						disabled={!isEditable}

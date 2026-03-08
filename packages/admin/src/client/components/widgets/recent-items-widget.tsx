@@ -117,7 +117,7 @@ export default function RecentItemsWidget({ config }: RecentItemsWidgetProps) {
 							type="button"
 							key={item.id}
 							onClick={() => handleItemClick(item)}
-							className="flex w-full items-center gap-3 rounded-md p-2 hover:bg-muted/50 cursor-pointer transition-colors text-left"
+							className="flex w-full items-center gap-3 rounded-md p-2 hover:bg-muted cursor-pointer transition-colors text-left"
 						>
 							<div className="flex-1 min-w-0">
 								<p className="text-sm font-medium truncate">

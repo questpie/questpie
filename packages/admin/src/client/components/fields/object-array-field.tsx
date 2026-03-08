@@ -360,7 +360,7 @@ export function ObjectArrayField({
 							return (
 								<div
 									key={field.id}
-									className="rounded-lg border border-border/60 bg-card/30 backdrop-blur-sm"
+									className="rounded-lg border border-border bg-card "
 								>
 									<div className="flex items-center justify-between border-b px-3 py-2">
 										<div className="flex items-center gap-2">

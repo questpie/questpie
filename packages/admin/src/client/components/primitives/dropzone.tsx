@@ -339,7 +339,7 @@ export function Dropzone({
 			onDrop={handleDrop}
 			className={cn(
 				"relative flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors",
-				"border-border/60 bg-muted/30 hover:border-border hover:bg-muted/50",
+				"border-border bg-muted hover:border-border hover:bg-muted",
 				isDragging && "border-primary bg-primary/5",
 				error && "border-destructive/50 bg-destructive/5",
 				(disabled || loading) && "pointer-events-none opacity-60",

@@ -57,8 +57,8 @@ function SortableColumnItem({
 		<div
 			ref={setNodeRef}
 			style={style}
-			className={`flex items-center gap-2 p-2.5 hover:bg-muted/50 border border-transparent hover:border-border rounded-lg transition-colors ${
-				isDragging ? "opacity-50 bg-muted/30" : ""
+			className={`flex items-center gap-2 p-2.5 hover:bg-muted border border-transparent hover:border-border rounded-lg transition-colors ${
+				isDragging ? "opacity-50 bg-muted" : ""
 			}`}
 		>
 			<button

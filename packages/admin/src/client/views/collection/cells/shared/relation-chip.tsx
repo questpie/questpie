@@ -76,7 +76,7 @@ export function RelationChip({
 			<img
 				src={avatarUrl}
 				alt={label}
-				className="size-4 rounded-full object-cover border border-border/60"
+				className="size-4 rounded-full object-cover border border-border"
 			/>
 		) : null;
 

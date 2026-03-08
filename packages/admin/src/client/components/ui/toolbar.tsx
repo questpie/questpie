@@ -37,7 +37,7 @@ export function Toolbar({
 		<div
 			data-slot="toolbar"
 			className={cn(
-				"bg-card/10 backdrop-blur-sm border border-border/40",
+				"bg-card border border-border",
 				"p-1 flex items-center gap-2",
 				className,
 			)}
@@ -94,7 +94,7 @@ export function ToolbarSeparator({
 	return (
 		<div
 			data-slot="toolbar-separator"
-			className={cn("h-4 w-px bg-border/40", className)}
+			className={cn("h-4 w-px bg-border", className)}
 			{...props}
 		/>
 	);

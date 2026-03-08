@@ -236,7 +236,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			<div className={cn("relative h-full w-full", className)}>
 				{/* Loading overlay */}
 				{isLoading && (
-					<div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/80">
+					<div className="absolute inset-0 z-10 flex items-center justify-center bg-muted">
 						<Icon
 							icon="ph:spinner"
 							className="h-6 w-6 animate-spin text-muted-foreground"
@@ -249,7 +249,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 
 				{/* Error overlay */}
 				{tokenError && (
-					<div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/80">
+					<div className="absolute inset-0 z-10 flex items-center justify-center bg-muted">
 						<div className="rounded-md bg-destructive/10 border border-destructive px-4 py-3 text-sm text-destructive">
 							<p className="font-medium">Preview Error</p>
 							<p>{tokenError}</p>

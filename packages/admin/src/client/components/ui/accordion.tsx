@@ -7,7 +7,7 @@ function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
 		<AccordionPrimitive.Root
 			data-slot="accordion"
 			className={cn(
-				"overflow-hidden border border-border/60 bg-card/30 backdrop-blur-md flex w-full flex-col",
+				"overflow-hidden border border-border bg-card flex w-full flex-col",
 				className,
 			)}
 			{...props}
@@ -20,7 +20,7 @@ function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
 		<AccordionPrimitive.Item
 			data-slot="accordion-item"
 			className={cn(
-				"data-open:bg-muted/30 data-open:backdrop-blur-sm not-last:border-b border-border/40 transition-colors",
+				"data-open:bg-muted not-last:border-b border-border transition-colors",
 				className,
 			)}
 			{...props}
@@ -38,7 +38,7 @@ function AccordionTrigger({
 			<AccordionPrimitive.Trigger
 				data-slot="accordion-trigger"
 				className={cn(
-					"**:data-[slot=accordion-trigger-icon]:text-muted-foreground gap-4 px-4 py-3 text-left text-sm font-medium hover:bg-muted/20 **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-center justify-between transition-all outline-none disabled:pointer-events-none disabled:opacity-50",
+					"**:data-[slot=accordion-trigger-icon]:text-muted-foreground gap-4 px-4 py-3 text-left text-sm font-medium hover:bg-muted **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-center justify-between transition-all outline-none disabled:pointer-events-none disabled:opacity-50",
 					className,
 				)}
 				{...props}

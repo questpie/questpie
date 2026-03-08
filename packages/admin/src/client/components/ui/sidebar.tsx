@@ -237,7 +237,7 @@ function Sidebar({
 				<div
 					data-sidebar="sidebar"
 					data-slot="sidebar-inner"
-					className="bg-sidebar/50 backdrop-blur-xl border-r border-sidebar-border/50 group-data-[variant=floating]:shadow-lg group-data-[variant=floating]:border flex size-full flex-col"
+					className="bg-sidebar border-r border-sidebar-border group-data-[variant=floating]:shadow-lg group-data-[variant=floating]:border flex size-full flex-col"
 				>
 					{children}
 				</div>
@@ -319,7 +319,7 @@ function SidebarInput({
 			data-slot="sidebar-input"
 			data-sidebar="input"
 			className={cn(
-				"bg-muted/20 dark:bg-muted/30 border-input h-8 w-full",
+				"bg-muted dark:bg-muted border-input h-8 w-full",
 				className,
 			)}
 			{...props}

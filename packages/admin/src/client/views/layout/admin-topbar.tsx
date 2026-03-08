@@ -40,7 +40,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 	const shouldShowThemeToggle = setTheme && showThemeToggle !== false;
 
 	return (
-		<header className="relative sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border/60 bg-background/60 px-4 md:px-6 backdrop-blur-xl after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-primary/15 after:to-transparent">
+		<header className="relative sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border bg-background px-4 md:px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-primary/15 after:to-transparent">
 			<div className="flex items-center gap-2">
 				{/* Sidebar toggle - works for both mobile (opens sheet) and desktop (collapses) */}
 				<SidebarTrigger />

@@ -440,7 +440,7 @@ body::before {
 
 @keyframes realtime-pulse {
 	0% {
-		border-left-color: var(--success);
+		border-left-color: var(--primary);
 	}
 	100% {
 		border-left-color: transparent;

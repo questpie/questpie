@@ -33,7 +33,7 @@ function TableSkeleton({
 		<div className="rounded-md border">
 			<table className="w-full text-sm">
 				<thead>
-					<tr className="border-b border-border/40 bg-card/10 backdrop-blur-sm">
+					<tr className="border-b border-border bg-card ">
 						{columns.map((col) => (
 							<th key={col} className="px-3 py-2 text-left font-medium">
 								{formatColumnHeader(col)}
@@ -120,7 +120,7 @@ export function TableDisplay({
 		<div className="rounded-md border">
 			<table className="w-full text-sm">
 				<thead>
-					<tr className="border-b border-border/40 bg-card/10 backdrop-blur-sm">
+					<tr className="border-b border-border bg-card ">
 						{columns.map((col) => (
 							<th key={col} className="px-3 py-2 text-left font-medium">
 								{formatColumnHeader(col)}

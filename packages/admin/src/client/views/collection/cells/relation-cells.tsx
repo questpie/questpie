@@ -335,7 +335,7 @@ function ReverseRelationCell({
 								);
 							})}
 							{value.length > 15 && (
-								<div className="text-[11px] text-muted-foreground text-center pt-1 border-t border-border/50 mt-1">
+								<div className="text-[11px] text-muted-foreground text-center pt-1 border-t border-border mt-1">
 									+{value.length - 15} more
 								</div>
 							)}

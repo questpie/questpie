@@ -104,7 +104,7 @@ export function LocaleSwitcher({
 	);
 	const interactiveClassName = cn(
 		baseClassName,
-		"cursor-pointer transition-colors hover:bg-muted/80 focus:outline-none focus:ring-1 focus:ring-ring",
+		"cursor-pointer transition-colors hover:bg-muted focus:outline-none focus:ring-1 focus:ring-ring",
 	);
 	const ariaLabel = `Switch locale (current: ${nameLabel})`;
 

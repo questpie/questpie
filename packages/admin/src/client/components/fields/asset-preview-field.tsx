@@ -113,7 +113,7 @@ export function AssetPreviewField({
 				<div
 					className={cn(
 						"flex items-center justify-center rounded-lg border border-dashed p-8",
-						"bg-muted/30 text-muted-foreground",
+						"bg-muted text-muted-foreground",
 						className,
 					)}
 				>

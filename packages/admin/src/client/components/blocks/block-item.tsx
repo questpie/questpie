@@ -142,7 +142,7 @@ export const BlockItem = React.memo(function BlockItem({
 					tabIndex={0}
 					className={cn(
 						"group flex flex-row items-center gap-2 px-3 py-2 cursor-pointer select-none",
-						"hover:bg-muted/50 transition-colors",
+						"hover:bg-muted transition-colors",
 						"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
 					)}
 					onClick={handleToggleExpand}

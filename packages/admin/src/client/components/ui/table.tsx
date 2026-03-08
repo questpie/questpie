@@ -25,7 +25,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
 		<thead
 			data-slot="table-header"
 			className={cn(
-				"[&_tr]:border-b [&_tr]:border-border/40 bg-muted/80 sticky top-0 z-10",
+				"[&_tr]:border-b [&_tr]:border-border bg-muted sticky top-0 z-10",
 				className,
 			)}
 			{...props}
@@ -48,7 +48,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
 		<tfoot
 			data-slot="table-footer"
 			className={cn(
-				"bg-card/10 backdrop-blur-sm border-t border-border/40 font-medium [&>tr]:last:border-b-0",
+				"bg-card border-t border-border font-medium [&>tr]:last:border-b-0",
 				className,
 			)}
 			{...props}
@@ -64,7 +64,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
 				// Alternating row colors (zebra striping) with solid backgrounds
 				// Using group/row for sticky cells to match
 				// Fixed height for consistent row appearance
-				"group/row bg-background hover:bg-muted data-[state=selected]:bg-accent border-b border-border/30 transition-colors h-12",
+				"group/row bg-background hover:bg-muted data-[state=selected]:bg-accent border-b border-border transition-colors h-12",
 				className,
 			)}
 			{...props}

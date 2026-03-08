@@ -42,7 +42,7 @@ function CardsSkeleton({
 			{skeletonKeys.map((key) => (
 				<div
 					key={key}
-					className="rounded-lg border border-border/60 bg-card/30 backdrop-blur-sm overflow-hidden"
+					className="rounded-lg border border-border bg-card overflow-hidden"
 				>
 					{hasImage && <Skeleton className="aspect-video w-full" />}
 					<div className="p-3 space-y-2">
@@ -101,7 +101,7 @@ export function CardsDisplay({
 				const meta = getMeta(item);
 
 				const cardContent = (
-					<div className="rounded-lg border border-border/60 bg-card/30 backdrop-blur-sm hover:bg-card/50 transition-colors overflow-hidden h-full">
+					<div className="rounded-lg border border-border bg-card hover:bg-card transition-colors overflow-hidden h-full">
 						{image && (
 							<div className="aspect-video bg-muted">
 								<img

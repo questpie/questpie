@@ -150,14 +150,14 @@ export function ObjectField({
 		return (
 			<div
 				className={cn(
-					"rounded-lg border border-border/60 bg-card/30 backdrop-blur-sm",
+					"rounded-lg border border-border bg-card ",
 					className,
 				)}
 			>
 				<button
 					type="button"
 					onClick={() => setIsCollapsed(!isCollapsed)}
-					className="flex w-full items-center justify-between p-3 text-left hover:bg-muted/50"
+					className="flex w-full items-center justify-between p-3 text-left hover:bg-muted"
 					disabled={disabled}
 				>
 					<div className="flex items-center gap-2">

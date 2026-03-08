@@ -133,7 +133,7 @@ export function TableWidgetSkeleton({
 	return (
 		<div className="-mx-5">
 			{/* Header */}
-			<div className="flex gap-4 px-5 py-2 border-b border-border/50">
+			<div className="flex gap-4 px-5 py-2 border-b border-border">
 				<Skeleton className="h-4 w-24" />
 				{columns > 1 && <Skeleton className="h-4 flex-1" />}
 				{columns > 2 && <Skeleton className="h-4 flex-1" />}
@@ -158,7 +158,7 @@ function TableSkeletonRow({
 	return (
 		<div
 			className={cn(
-				"flex gap-4 px-5 py-3 border-b border-border/30",
+				"flex gap-4 px-5 py-3 border-b border-border",
 				last && "border-0",
 			)}
 		>

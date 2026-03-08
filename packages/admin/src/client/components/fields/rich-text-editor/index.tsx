@@ -172,7 +172,7 @@ export function RichTextEditor({
 
 			<div
 				className={cn(
-					"qp-rich-text-editor rounded-md border border-input/80 bg-input/20 backdrop-blur-sm",
+					"qp-rich-text-editor rounded-md border border-border bg-input ",
 					disabled || readOnly ? "opacity-60" : "",
 					error ? "border-destructive" : "border-input",
 				)}
@@ -239,7 +239,7 @@ export function RichTextEditor({
 
 				{/* Character Count */}
 				{allowCharacterCount && showCharacterCount && (
-					<div className="flex items-center justify-between border-t bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
+					<div className="flex items-center justify-between border-t bg-muted px-2 py-1 text-xs text-muted-foreground">
 						<span>
 							{characterCount.words} word{characterCount.words === 1 ? "" : "s"}
 						</span>

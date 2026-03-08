@@ -785,7 +785,7 @@ function NavGroup({
  */
 function UserFooterSkeleton({ collapsed }: { collapsed: boolean }) {
 	return (
-		<SidebarFooter className="border-t border-sidebar-border/50 p-2">
+		<SidebarFooter className="border-t border-sidebar-border p-2">
 			<div
 				className={cn(
 					"flex items-center gap-2.5 p-2",
@@ -872,7 +872,7 @@ function UserFooter() {
 	const displayEmail = user.email || "";
 
 	return (
-		<SidebarFooter className="border-t border-sidebar-border/50 p-2">
+		<SidebarFooter className="border-t border-sidebar-border p-2">
 			<SidebarMenu>
 				{/* User Menu */}
 				<SidebarMenuItem>
@@ -1065,7 +1065,7 @@ export function AdminSidebar({
 	return (
 		<Sidebar collapsible="icon" className={className}>
 			{/* Brand Header */}
-			<SidebarHeader className="p-2 border-b border-sidebar-border/50">
+			<SidebarHeader className="p-2 border-b border-sidebar-border">
 				<SidebarMenu>
 					<SidebarMenuItem onClickCapture={handleBrandClick}>
 						{collapsed && !isMobile ? (
@@ -1099,7 +1099,7 @@ export function AdminSidebar({
 
 			{/* After Brand Slot - for scope pickers, etc */}
 			{afterBrand && !collapsed && (
-				<div className="px-3 py-2 border-b border-sidebar-border/50">
+				<div className="px-3 py-2 border-b border-sidebar-border">
 					{afterBrand}
 				</div>
 			)}
@@ -1123,7 +1123,7 @@ export function AdminSidebar({
 
 			{/* Before Footer Slot - for additional actions */}
 			{beforeFooter && !collapsed && (
-				<div className="px-3 py-2 border-t border-sidebar-border/50">
+				<div className="px-3 py-2 border-t border-sidebar-border">
 					{beforeFooter}
 				</div>
 			)}
