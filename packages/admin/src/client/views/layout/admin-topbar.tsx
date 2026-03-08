@@ -45,6 +45,13 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 				{/* Sidebar toggle - works for both mobile (opens sheet) and desktop (collapses) */}
 				<SidebarTrigger />
 
+				{/* Mobile: show current page title */}
+				{resolvedBreadcrumbs.length > 0 && (
+					<span className="md:hidden font-mono text-xs text-foreground font-medium truncate max-w-[140px]">
+						{resolveText(resolvedBreadcrumbs[resolvedBreadcrumbs.length - 1].label)}
+					</span>
+				)}
+
 				{/* Breadcrumbs */}
 				<nav className="hidden md:flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
 					{resolvedBreadcrumbs.map((crumb) => {
@@ -131,11 +138,12 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 				<Button
 					variant="outline"
 					onClick={onSearchOpen}
-					className="gap-2 w-auto md:w-64 justify-between text-muted-foreground"
+					size="icon-sm"
+					className="md:size-auto md:h-9 md:w-64 md:justify-between md:px-3 gap-2 text-muted-foreground"
 				>
 					<span className="flex items-center gap-2">
 						<Icon icon="ph:magnifying-glass" />
-						<span className="hidden sm:inline">Search...</span>
+						<span className="hidden md:inline">Search...</span>
 					</span>
 					<Kbd className="hidden md:inline-flex">
 						<span className="text-xs">⌘</span>K
