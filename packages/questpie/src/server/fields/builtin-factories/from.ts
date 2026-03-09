@@ -61,7 +61,7 @@ export function from(
 /**
  * Add type-setting chain method to Field (for custom fields).
  */
-declare module "../field.js" {
+declare module "../field-class.js" {
 	interface Field<TState> {
 		/** Set the field type string (for admin UI mapping). */
 		type(typeName: string): Field<TState>;

@@ -129,7 +129,7 @@ function buildRelationMetadata(state: import("../field-class-types.js").FieldRun
 		relationName: state.relationName,
 		_toConfig: state.to,
 		_throughConfig: state.through,
-		meta: state.admin,
+		meta: state.admin as RelationFieldMetadata["meta"],
 	};
 }
 
@@ -217,7 +217,7 @@ export function relation(target: RelationTarget): Field<RelationFieldState> {
 // Chain Methods
 // ============================================================================
 
-declare module "../field.js" {
+declare module "../field-class.js" {
 	interface Field<TState> {
 		/** Convert to hasMany relation (FK on target table). */
 		hasMany(config: {

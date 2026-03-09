@@ -57,7 +57,7 @@ export function text(arg?: number | { mode: "text" }): Field<TextFieldState> {
  *
  * NOTE: min/max are declared in number.ts which handles both text and number fields.
  */
-declare module "../field.js" {
+declare module "../field-class.js" {
 	interface Field<TState> {
 		/** Set regex pattern (text fields). */
 		pattern(re: RegExp): Field<TState>;

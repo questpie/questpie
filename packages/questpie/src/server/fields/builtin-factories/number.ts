@@ -64,7 +64,7 @@ export function number(arg?: NumberMode | DecimalConfig): Field<NumberFieldState
 			case "double":
 				return doublePrecision(name);
 			case "decimal":
-				return numeric(name, { precision, scale });
+				return numeric(name, { precision, scale, mode: "number" });
 			case "integer":
 			default:
 				return integer(name);
@@ -96,7 +96,7 @@ export function number(arg?: NumberMode | DecimalConfig): Field<NumberFieldState
 /**
  * Add number-specific chain methods to Field.
  */
-declare module "../field.js" {
+declare module "../field-class.js" {
 	interface Field<TState> {
 		/** Set minimum value (number fields). */
 		min(n: number): Field<TState>;

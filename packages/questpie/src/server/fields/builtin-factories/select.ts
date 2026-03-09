@@ -119,7 +119,7 @@ export function select(
 /**
  * Add select-specific chain methods to Field.
  */
-declare module "../field.js" {
+declare module "../field-class.js" {
 	interface Field<TState> {
 		/** Use PostgreSQL enum type for storage. */
 		enum(enumName: string): Field<TState>;

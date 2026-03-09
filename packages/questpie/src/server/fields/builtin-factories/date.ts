@@ -41,7 +41,7 @@ export function date(): Field<DateFieldState> {
 /**
  * Add date-specific chain methods to Field.
  */
-declare module "../field.js" {
+declare module "../field-class.js" {
 	interface Field<TState> {
 		/** Auto-set to current date/time on create. */
 		autoNow(): Field<TState & { hasDefault: true }>;
