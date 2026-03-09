@@ -19,8 +19,15 @@ import { operator } from "../types.js";
 /**
  * Time field metadata - augmentable by external packages.
  */
-export interface TimeFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface TimeFieldMeta {}
+	}
+}
+
+export interface TimeFieldMeta extends Questpie.TimeFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

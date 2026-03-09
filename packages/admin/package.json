@@ -34,8 +34,7 @@
 			"default": "./src/exports/shared.ts"
 		},
 		"./*": "./*",
-		"./client/styles/index.css": "./src/client/styles/index.css",
-		"./client/module": "./src/server/modules/admin/client/index.ts"
+		"./client/styles/index.css": "./src/client/styles/index.css"
 	},
 	"scripts": {
 		"dev": "tsdown --watch",
@@ -138,8 +137,7 @@
 				"default": "./dist/shared.mjs"
 			},
 			"./*": "./*",
-			"./client/styles/index.css": "./dist/client/styles/index.css",
-			"./client/module": "./dist/server/modules/admin/client/index.mjs"
+			"./client/styles/index.css": "./dist/client/styles/index.css"
 		}
 	},
 	"main": "./dist/index.mjs",

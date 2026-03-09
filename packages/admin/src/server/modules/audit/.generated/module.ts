@@ -58,13 +58,5 @@ const _module = {
 export type AuditModule = typeof _module;
 export default _module;
 
-// ════════════════════════════════════════════════════════════
-// Registry augmentation — module registries
-// ════════════════════════════════════════════════════════════
-
-declare module "questpie" {
-	interface Registry {
-		collections: AuditCollections;
-		jobs: AuditJobs;
-	}
-}
+// Registry augmentation is handled by the user's .generated/index.ts
+// to avoid circular type references and TS2717 conflicts with sub-modules.

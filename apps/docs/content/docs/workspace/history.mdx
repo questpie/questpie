@@ -1,0 +1,123 @@
+---
+title: History & Versions
+description: Activity audit trail and version snapshots with one-click restore.
+---
+
+# History & Versions
+
+Every collection and global form has a **History sidebar** — a slide-over panel that shows who changed what, when, and lets you restore previous versions.
+
+## Opening History
+
+Click the clock icon in the form toolbar to open the sidebar. It appears on the right and has two tabs:
+
+| Tab | Shows | Requires |
+|---|---|---|
+| **Activity** | Audit log entries (create, update, delete, transition) | `auditModule` in `modules.ts` |
+| **Versions** | Full document snapshots with restore | `.versioning()` on the collection |
+
+If versioning is not enabled on the collection, only the Activity tab is shown.
+
+## Activity Tab
+
+The activity timeline shows every mutation to the current record:
+
+- **Created** — record was created (green dot)
+- **Updated** — fields were changed (blue dot)
+- **Deleted** — record was deleted (red dot)
+- **Transition** — workflow stage changed (amber dot)
+
+Each entry displays:
+- A human-readable title (e.g. "John updated Pages 'About Us'")
+- Relative timestamp
+- Expandable field-level diff showing `from → to` values
+
+### Enabling Audit Logging
+
+Add `auditModule` to your modules:
+
+```ts title="modules.ts"
+import { adminModule, auditModule } from "@questpie/admin/server";
+
+export default [adminModule, auditModule] as const;
+```
+
+The audit module registers global hooks on **all** collections and globals. Every `afterChange`, `afterDelete`, and `afterTransition` creates an entry in the `adminAuditLog` collection.
+
+### Disabling Audit for a Collection
+
+```ts title="collections/logs.ts"
+import { collection } from "#questpie";
+
+export const logs = collection("logs")
+  .admin(() => ({ audit: false }))
+  .fields(({ f }) => ({
+    message: f.text(),
+  }));
+```
+
+### What Gets Tracked
+
+| Hook | Action | Changes |
+|---|---|---|
+| `afterChange` (create) | `create` | — |
+| `afterChange` (update) | `update` | Field-level diff `{ field: { from, to } }` |
+| `afterDelete` | `delete` | — |
+| `afterTransition` | `transition` | `{ stage: { from: "draft", to: "published" } }` |
+
+Updates with no meaningful field changes (only `updatedAt`, `createdAt`, `id`, or `_`-prefixed fields) are skipped.
+
+## Versions Tab
+
+When a collection has versioning enabled, the Versions tab shows numbered snapshots of the entire document.
+
+### Enabling Versioning
+
+```ts title="collections/pages.ts"
+import { collection } from "#questpie";
+
+export const pages = collection("pages")
+  .versioning({ drafts: true, maxVersions: 20 })
+  .fields(({ f }) => ({
+    title: f.text().required(),
+    content: f.blocks().localized(),
+  }));
+```
+
+Each version shows:
+- Version number (e.g. "v3")
+- Operation that created it (create, update)
+- Timestamp
+- User ID
+- **Restore** button
+
+### Restoring a Version
+
+Click "Restore" on any version → a confirmation dialog appears → confirm → the document reverts to that snapshot. This creates a new version (so the action is non-destructive).
+
+## API Routes
+
+The admin fetches history data via built-in routes:
+
+| Route | Description |
+|---|---|
+| `GET /:collection/:id/audit?limit=50` | Audit entries for a record |
+| `GET /:collection/:id/versions` | Version snapshots |
+| `POST /:collection/:id/revert` | Restore a version |
+| `GET /globals/:name/audit` | Audit entries for a global |
+| `GET /globals/:name/versions` | Global version snapshots |
+
+All audit queries use `accessMode: "system"` — no access control filtering.
+
+## Audit Cleanup
+
+The audit module includes a daily cleanup job that runs at 3 AM. By default, entries older than **90 days** are deleted. This keeps the audit log from growing unbounded.
+
+## Audit Dashboard Widget
+
+The `auditModule` automatically contributes a "Recent Activity" timeline widget to the dashboard, showing the 10 most recent audit entries with action icons and relative timestamps.
+
+## Related Pages
+
+- [Setup](/docs/workspace/setup) — Enable audit and admin modules
+- [Form Views](/docs/workspace/views/form-views) — Form toolbar and sidebar

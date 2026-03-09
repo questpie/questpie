@@ -285,9 +285,8 @@ export const barbers = collection("barbers")
 	.hooks({
 		beforeValidate: async (ctx) => {
 			// Generate slug from name if not provided (for create or update)
-			const d = ctx.data;
-			if (d.name && !d.slug) {
-				d.slug = slugify(d.name);
+			if (ctx.data.name && !ctx.data.slug) {
+				ctx.data.slug = slugify(ctx.data.name);
 			}
 		},
 	});

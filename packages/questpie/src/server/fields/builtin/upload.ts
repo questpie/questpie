@@ -36,8 +36,15 @@ import {
  * }
  * ```
  */
-export interface UploadFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface UploadFieldMeta {}
+	}
+}
+
+export interface UploadFieldMeta extends Questpie.UploadFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

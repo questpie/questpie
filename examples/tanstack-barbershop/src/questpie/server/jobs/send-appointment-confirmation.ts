@@ -29,7 +29,7 @@ export default job({
 		await email.sendTemplate({
 			template: "appointmentConfirmation",
 			input: {
-				customerName: customer?.name ?? "Customer",
+				customerName: (customer?.name as string) ?? "Customer",
 				appointmentId: payload.appointmentId,
 				barberName: appointment?.barber?.name ?? "Your Barber",
 				serviceName: appointment?.service?.name ?? "Your Service",
@@ -37,7 +37,7 @@ export default job({
 					? new Date(appointment.scheduledAt).toLocaleString()
 					: "TBD",
 			},
-			to: customer?.email ?? "",
+			to: (customer?.email as string) ?? "",
 		});
 	},
 });

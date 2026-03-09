@@ -1,0 +1,147 @@
+---
+title: Live Preview
+description: Edit content side-by-side with a live preview of your frontend.
+---
+
+# Live Preview
+
+Live Preview opens a fullscreen overlay with your form on the left and an iframe showing your frontend on the right. Changes in the form reflect in the preview in real-time.
+
+## How It Works
+
+1. Click the **eye icon** in the form toolbar
+2. The admin opens a split-screen view:
+   - **Left panel**: The full collection form (same fields, validation, actions)
+   - **Right panel**: An iframe loading your frontend preview URL
+3. On save, the preview iframe refreshes automatically
+
+On mobile, the split view becomes **tabs** — switch between "Form" and "Preview".
+
+## Configuring Preview
+
+Add `.preview()` to your collection:
+
+```ts title="collections/pages.ts"
+import { collection } from "#questpie";
+
+export const pages = collection("pages")
+  .preview({
+    enabled: true,
+    position: "right",
+    defaultWidth: 50,
+    url: ({ record }) => {
+      const slug = record.slug as string;
+      return slug === "home" ? "/?preview=true" : `/${slug}?preview=true`;
+    },
+  })
+  .fields(({ f }) => ({
+    title: f.text().required().localized(),
+    slug: f.text().required(),
+    content: f.blocks().localized(),
+  }));
+```
+
+### Preview Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Enable/disable preview |
+| `url` | `(ctx) => string` | — | URL builder function (receives `{ record, locale? }`) |
+| `position` | `"left" \| "right" \| "bottom"` | `"right"` | Preview panel position |
+| `defaultWidth` | `number` | `50` | Panel width as percentage |
+
+## Draft Mode & Token Security
+
+Preview URLs go through a token-based security flow:
+
+1. Admin calls `mintPreviewToken` RPC with the target path and TTL
+2. Server returns an HMAC-SHA256 signed token
+3. Admin iframe loads `/api/preview?token={token}`
+4. Route handler verifies the token, sets a `__draft_mode` cookie, and redirects to the path
+5. Your frontend checks the cookie and loads draft data if present
+
+## Field Focus Sync
+
+Clicking a field in the form highlights it in the preview, and vice versa. This uses a bidirectional `postMessage` protocol between the admin iframe and your frontend:
+
+### Admin to Preview
+
+When you focus a field in the form, the admin sends:
+
+```ts
+iframe.postMessage({
+  type: "questpie:focus",
+  fieldPath: "title"          // or "content._values.blockId.fieldName"
+}, "*");
+```
+
+### Preview to Admin
+
+Add click handlers in your frontend that send messages back:
+
+```ts
+window.parent.postMessage({
+  type: "questpie:preview:field-click",
+  fieldPath: "title"
+}, "*");
+```
+
+The admin will scroll to and focus the corresponding form field.
+
+### Block Focus
+
+For block content, the field path includes the block ID:
+
+```ts
+// Clicking a specific block's field
+window.parent.postMessage({
+  type: "questpie:preview:block-click",
+  blockId: "abc-123"
+}, "*");
+```
+
+## Frontend Integration
+
+Use the `useCollectionPreview` hook in your frontend pages to detect preview mode and react to admin interactions:
+
+```tsx title="routes/pages/$slug.tsx"
+import { useCollectionPreview } from "@questpie/admin/client";
+
+function PageComponent({ initialData }) {
+  const {
+    data,               // Current data (refreshes on admin save)
+    isPreviewMode,      // Whether running inside the preview iframe
+    selectedBlockId,    // Currently selected block
+    focusedField,       // Currently focused field path
+    handleFieldClick,   // Attach to clickable field elements
+    handleBlockClick,   // Attach to clickable block elements
+  } = useCollectionPreview({
+    initialData,
+    onRefresh: () => router.invalidate(),
+  });
+
+  return (
+    <h1
+      data-preview-field="title"
+      onClick={() => handleFieldClick("title")}
+    >
+      {data.title}
+    </h1>
+  );
+}
+```
+
+The hook:
+- Detects preview mode via `window.self !== window.top`
+- Listens for `PREVIEW_REFRESH` messages and calls `onRefresh`
+- Tracks `selectedBlockId` and `focusedField` from admin focus events
+- Provides click handlers that send `FIELD_CLICKED` / `BLOCK_CLICKED` messages back to the admin
+
+## Exit Preview Mode
+
+The "Exit Preview" button redirects to `/api/preview?disable=true`, which clears the draft mode cookie.
+
+## Related Pages
+
+- [Form Views](/docs/workspace/views/form-views) — Form toolbar configuration
+- [Blocks](/docs/workspace/blocks) — Block content editing

@@ -20,37 +20,35 @@
  *
  * @see RFC-CONTEXT-FIRST.md §2
  */
-// biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented via `declare module "questpie"`
-export interface AppContext {}
+/**
+ * Global augmentation namespace.
+ * Uses `declare global` so augmentations work correctly with workspace symlinks
+ * (where `declare module "questpie"` fails due to module identity mismatch).
+ *
+ * Augment via: `declare global { namespace Questpie { interface AppContext { ... } } }`
+ */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented
+		interface AppContext {}
+		// biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented
+		interface Registry {}
+	}
+}
+
+/**
+ * AppContext — the extensible context interface.
+ * Augment via `declare global { namespace Questpie { interface AppContext { ... } } }`
+ */
+// biome-ignore lint/suspicious/noEmptyInterface: Extends global augmentable interface
+export interface AppContext extends Questpie.AppContext {}
 
 /**
  * Registry — the app-wide type catalogue.
- *
- * Contains **definitions** of everything in the app (collections, globals,
- * jobs, functions, blocks, services, emails, routes).
- *
- * Generated code augments this via module augmentation:
- *   declare module "questpie" {
- *     interface Registry {
- *       collections: AppCollections;
- *       globals: AppGlobals;
- *       jobs: AppJobs;
- *       functions: AppFunctions;
- *       blocks: AppBlocks;
- *       services: AppServices;
- *       emails: AppEmailTemplates;
- *       routes: AppRoutes;
- *     }
- *   }
- *
- * Relationship to AppContext:
- *   Registry  = "what exists in the app"    (definitions, for autocomplete)
- *   AppContext = "what you get in a handler" (instances, for runtime)
- *
- * @see RegistryNames — derive Known*Names helpers from Registry keys
+ * Augment via `declare global { namespace Questpie { interface Registry { ... } } }`
  */
-// biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented via `declare module "questpie"`
-export interface Registry {}
+// biome-ignore lint/suspicious/noEmptyInterface: Extends global augmentable interface
+export interface Registry extends Questpie.Registry {}
 
 
 /**

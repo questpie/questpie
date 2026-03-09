@@ -20,7 +20,7 @@ type Review = {
 
 export function ReviewsRenderer({ values, data }: BlockProps<"reviews">) {
 	const { t } = useTranslation();
-	const reviews = (data?.reviews ?? []) as Review[];
+	const reviews = (data?.reviews ?? []) as unknown as Review[];
 
 	const columnsClass = {
 		"2": "md:grid-cols-2",

@@ -462,14 +462,72 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Get total count only for 'many' mode (pagination)
 				let totalDocs = 0;
 				if (mode === "many") {
-					totalDocs = await this._buildCountQuery(
-						db,
-						mergedWhere,
-						includeDeleted,
-						readStage,
-						useStageVersions,
-						normalized,
-					);
+					if (useStageVersions && this.versionsTable) {
+						const latestStageSubquery = this.buildLatestStageSubquery(
+							db,
+							readStage,
+							"latest_stage_count",
+						);
+
+						let countQuery = db
+							.select({ count: count() })
+							.from(this.versionsTable)
+							.innerJoin(
+								latestStageSubquery,
+								and(
+									eq(
+										(this.versionsTable as any).id,
+										(latestStageSubquery as any).id,
+									),
+									eq(
+										(this.versionsTable as any).versionNumber,
+										(latestStageSubquery as any).maxVersionNumber,
+									),
+								),
+							);
+
+						const countWhereClauses: SQL[] = [];
+						if (mergedWhere) {
+							const whereClause = this.buildWhereClause(
+								mergedWhere,
+								false,
+								this.versionsTable,
+								normalized,
+							);
+							if (whereClause) {
+								countWhereClauses.push(whereClause);
+							}
+						}
+
+						if (this.state.options.softDelete && !includeDeleted) {
+							const deletedAtColumn = (this.versionsTable as any).deletedAt;
+							if (deletedAtColumn) {
+								countWhereClauses.push(sql`${deletedAtColumn} IS NULL`);
+							}
+						}
+
+						if (
+							!includeDeleted &&
+							(this.versionsTable as any).versionOperation
+						) {
+							countWhereClauses.push(
+								sql`${(this.versionsTable as any).versionOperation} != 'delete'`,
+							);
+						}
+
+						if (countWhereClauses.length > 0) {
+							countQuery = countQuery.where(and(...countWhereClauses));
+						}
+
+						const countRows = await countQuery;
+						totalDocs = countRows[0]?.count ?? 0;
+					} else {
+						const countFn = this.createCount();
+						totalDocs = await countFn(
+							{ where: mergedWhere, includeDeleted },
+							{ ...normalized, accessMode: "system" },
+						);
+					}
 				}
 
 				const readTable = useStageVersions
@@ -710,188 +768,73 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Execute query
 				let rows = await query;
 
-				// Post-process: i18n merge, relations, field filtering, hooks
-				rows = await this._postProcessRows(
-					rows,
-					options,
-					normalized,
-					db,
-					useI18n,
-					needsFallback,
-				);
+				// Application-side i18n merge: replace prefixed columns with final values
+				// Handles both flat localized fields and nested localized JSONB fields (via _localized column)
+				const hasLocalized = this.hasLocalizedFieldsInternal();
+				if (useI18n && rows.length > 0 && hasLocalized) {
+					rows = mergeI18nRows(rows, {
+						localizedFields: this.getLocalizedFieldNames(),
+						hasFallback: needsFallback,
+					});
+				}
+
+				// Handle relations
+				if (rows.length > 0 && options.with && this.app) {
+					await this.resolveRelations(rows, options.with, normalized);
+				}
+
+				// Filter fields based on field-level read access
+				for (const row of rows) {
+					await this.filterFieldsForRead(row, normalized);
+					await this.runFieldOutputHooks(row, "read", normalized, db);
+				}
+
+				// Execute afterRead hooks
+				if (this.state.hooks?.afterRead) {
+					for (const row of rows) {
+						await this.executeHooks(
+							this.state.hooks.afterRead,
+							this.createHookContext({
+								data: row,
+								operation: "read",
+								context: normalized,
+								db,
+							}),
+						);
+					}
+				}
 
 				// Return based on mode
 				if (mode === "one") {
 					return (rows[0] as T) || null;
 				}
 
-				return this._buildPaginatedResult<T>(
-					rows,
+				// Construct paginated result for 'many' mode
+				const manyOptions = options as FindManyOptions;
+				const limit = manyOptions.limit ?? totalDocs;
+				const totalPages = limit > 0 ? Math.ceil(totalDocs / limit) : 1;
+				const offset = manyOptions.offset ?? 0;
+				const page = limit > 0 ? Math.floor(offset / limit) + 1 : 1;
+				const pagingCounter = (page - 1) * limit + 1;
+				const hasPrevPage = page > 1;
+				const hasNextPage = page < totalPages;
+				const prevPage = hasPrevPage ? page - 1 : null;
+				const nextPage = hasNextPage ? page + 1 : null;
+
+				return {
+					docs: rows as T[],
 					totalDocs,
-					options as FindManyOptions,
-				);
+					limit,
+					totalPages,
+					page,
+					pagingCounter,
+					hasPrevPage,
+					hasNextPage,
+					prevPage,
+					nextPage,
+				};
 			},
 		);
-	}
-
-	/**
-	 * Build count query for pagination. Handles both stage-versioned and regular tables.
-	 */
-	private async _buildCountQuery(
-		db: any,
-		mergedWhere: Where | undefined,
-		includeDeleted: boolean,
-		readStage: string | undefined,
-		useStageVersions: boolean,
-		normalized: CRUDContext,
-	): Promise<number> {
-		if (useStageVersions && this.versionsTable) {
-			const latestStageSubquery = this.buildLatestStageSubquery(
-				db,
-				readStage,
-				"latest_stage_count",
-			);
-
-			let countQuery = db
-				.select({ count: count() })
-				.from(this.versionsTable)
-				.innerJoin(
-					latestStageSubquery,
-					and(
-						eq(
-							(this.versionsTable as any).id,
-							(latestStageSubquery as any).id,
-						),
-						eq(
-							(this.versionsTable as any).versionNumber,
-							(latestStageSubquery as any).maxVersionNumber,
-						),
-					),
-				);
-
-			const countWhereClauses: SQL[] = [];
-			if (mergedWhere) {
-				const whereClause = this.buildWhereClause(
-					mergedWhere,
-					false,
-					this.versionsTable,
-					normalized,
-				);
-				if (whereClause) {
-					countWhereClauses.push(whereClause);
-				}
-			}
-
-			if (this.state.options.softDelete && !includeDeleted) {
-				const deletedAtColumn = (this.versionsTable as any).deletedAt;
-				if (deletedAtColumn) {
-					countWhereClauses.push(sql`${deletedAtColumn} IS NULL`);
-				}
-			}
-
-			if (
-				!includeDeleted &&
-				(this.versionsTable as any).versionOperation
-			) {
-				countWhereClauses.push(
-					sql`${(this.versionsTable as any).versionOperation} != 'delete'`,
-				);
-			}
-
-			if (countWhereClauses.length > 0) {
-				countQuery = countQuery.where(and(...countWhereClauses));
-			}
-
-			const countRows = await countQuery;
-			return countRows[0]?.count ?? 0;
-		}
-
-		const countFn = this.createCount();
-		return countFn(
-			{ where: mergedWhere, includeDeleted },
-			{ ...normalized, accessMode: "system" },
-		);
-	}
-
-	/**
-	 * Post-process fetched rows: i18n merge, relation resolution, field filtering, hooks.
-	 */
-	private async _postProcessRows(
-		rows: any[],
-		options: FindManyOptions | FindOneOptionsBase,
-		normalized: CRUDContext,
-		db: any,
-		useI18n: boolean,
-		needsFallback: boolean,
-	): Promise<any[]> {
-		// Application-side i18n merge: replace prefixed columns with final values
-		const hasLocalized = this.hasLocalizedFieldsInternal();
-		if (useI18n && rows.length > 0 && hasLocalized) {
-			rows = mergeI18nRows(rows, {
-				localizedFields: this.getLocalizedFieldNames(),
-				hasFallback: needsFallback,
-			});
-		}
-
-		// Handle relations
-		if (rows.length > 0 && options.with && this.app) {
-			await this.resolveRelations(rows, options.with, normalized);
-		}
-
-		// Filter fields based on field-level read access
-		for (const row of rows) {
-			await this.filterFieldsForRead(row, normalized);
-			await this.runFieldOutputHooks(row, "read", normalized, db);
-		}
-
-		// Execute afterRead hooks
-		if (this.state.hooks?.afterRead) {
-			for (const row of rows) {
-				await this.executeHooks(
-					this.state.hooks.afterRead,
-					this.createHookContext({
-						data: row,
-						operation: "read",
-						context: normalized,
-						db,
-					}),
-				);
-			}
-		}
-
-		return rows;
-	}
-
-	/**
-	 * Build paginated result metadata from rows and count.
-	 */
-	private _buildPaginatedResult<T>(
-		rows: any[],
-		totalDocs: number,
-		options: FindManyOptions,
-	): PaginatedResult<T> {
-		const limit = options.limit ?? totalDocs;
-		const totalPages = limit > 0 ? Math.ceil(totalDocs / limit) : 1;
-		const offset = options.offset ?? 0;
-		const page = limit > 0 ? Math.floor(offset / limit) + 1 : 1;
-		const pagingCounter = (page - 1) * limit + 1;
-		const hasPrevPage = page > 1;
-		const hasNextPage = page < totalPages;
-		const prevPage = hasPrevPage ? page - 1 : null;
-		const nextPage = hasNextPage ? page + 1 : null;
-
-		return {
-			docs: rows as T[],
-			totalDocs,
-			limit,
-			totalPages,
-			page,
-			pagingCounter,
-			hasPrevPage,
-			hasNextPage,
-			prevPage,
-			nextPage,
-		};
 	}
 
 	/**

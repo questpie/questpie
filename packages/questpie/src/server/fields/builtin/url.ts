@@ -20,8 +20,15 @@ import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 /**
  * URL field metadata - augmentable by external packages.
  */
-export interface UrlFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface UrlFieldMeta {}
+	}
+}
+
+export interface UrlFieldMeta extends Questpie.UrlFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

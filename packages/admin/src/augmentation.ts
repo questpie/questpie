@@ -471,51 +471,53 @@ export interface WidgetTypeRegistry {
 // ============================================================================
 // Add `admin` property to all questpie field meta interfaces.
 
-declare module "questpie" {
-	interface TextFieldMeta {
-		admin?: TextFieldAdminMeta;
-	}
-	interface EmailFieldMeta {
-		admin?: EmailFieldAdminMeta;
-	}
-	interface UrlFieldMeta {
-		admin?: UrlFieldAdminMeta;
-	}
-	interface TextareaFieldMeta {
-		admin?: TextareaFieldAdminMeta;
-	}
-	interface NumberFieldMeta {
-		admin?: NumberFieldAdminMeta;
-	}
-	interface BooleanFieldMeta {
-		admin?: BooleanFieldAdminMeta;
-	}
-	interface DateFieldMeta {
-		admin?: DateFieldAdminMeta;
-	}
-	interface DatetimeFieldMeta {
-		admin?: DateFieldAdminMeta;
-	}
-	interface TimeFieldMeta {
-		admin?: TimeFieldAdminMeta;
-	}
-	interface SelectFieldMeta {
-		admin?: SelectFieldAdminMeta;
-	}
-	interface RelationFieldMeta {
-		admin?: RelationFieldAdminMeta;
-	}
-	interface ObjectFieldMeta {
-		admin?: ObjectFieldAdminMeta;
-	}
-	interface ArrayFieldMeta {
-		admin?: ArrayFieldAdminMeta;
-	}
-	interface JsonFieldMeta {
-		admin?: JsonFieldAdminMeta;
-	}
-	interface UploadFieldMeta {
-		admin?: UploadFieldAdminMeta;
+declare global {
+	namespace Questpie {
+		interface TextFieldMeta {
+			admin?: TextFieldAdminMeta;
+		}
+		interface EmailFieldMeta {
+			admin?: EmailFieldAdminMeta;
+		}
+		interface UrlFieldMeta {
+			admin?: UrlFieldAdminMeta;
+		}
+		interface TextareaFieldMeta {
+			admin?: TextareaFieldAdminMeta;
+		}
+		interface NumberFieldMeta {
+			admin?: NumberFieldAdminMeta;
+		}
+		interface BooleanFieldMeta {
+			admin?: BooleanFieldAdminMeta;
+		}
+		interface DateFieldMeta {
+			admin?: DateFieldAdminMeta;
+		}
+		interface DatetimeFieldMeta {
+			admin?: DateFieldAdminMeta;
+		}
+		interface TimeFieldMeta {
+			admin?: TimeFieldAdminMeta;
+		}
+		interface SelectFieldMeta {
+			admin?: SelectFieldAdminMeta;
+		}
+		interface RelationFieldMeta {
+			admin?: RelationFieldAdminMeta;
+		}
+		interface ObjectFieldMeta {
+			admin?: ObjectFieldAdminMeta;
+		}
+		interface ArrayFieldMeta {
+			admin?: ArrayFieldAdminMeta;
+		}
+		interface JsonFieldMeta {
+			admin?: JsonFieldAdminMeta;
+		}
+		interface UploadFieldMeta {
+			admin?: UploadFieldAdminMeta;
+		}
 	}
 }
 

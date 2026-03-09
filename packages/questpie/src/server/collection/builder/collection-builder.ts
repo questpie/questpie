@@ -33,7 +33,6 @@ import {
 	type BuiltinFields,
 	builtinFields,
 } from "#questpie/server/fields/builtin/defaults.js";
-import type { ExtractColumnsFromFieldDefinitions } from "#questpie/server/fields/builder-type-utils.js";
 import type {
 	FieldDefinition,
 	FieldDefinitionState,
@@ -41,6 +40,18 @@ import type {
 } from "#questpie/server/fields/types.js";
 import type { SearchableConfig } from "#questpie/server/integrated/search/index.js";
 import type { Override } from "#questpie/shared/type-utils.js";
+
+/**
+ * Extract Drizzle column types from field definitions.
+ * Maps each field definition to its column type, excluding virtual fields.
+ */
+type ExtractColumnsFromFieldDefinitions<
+	TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
+> = {
+	[K in keyof TFields]: TFields[K]["$types"]["column"] extends null
+		? never
+		: TFields[K]["$types"]["column"];
+};
 
 /**
  * Extract field types from CollectionBuilderState.
@@ -552,7 +563,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *   .searchable({
 	 *     content: (record) => extractTextFromJson(record.content),
 	 *     metadata: (record) => ({ status: record.status }),
-	 *     embeddings: async (record, ctx) => await ctx.search.generateEmbeddings(text),
+	 *     embeddings: async (record, ctx) => await ctx.app.embeddings.generate(text),
 	 *   })
 	 * ```
 	 */
@@ -675,15 +686,15 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		const uploadFields = Collection.uploadCols();
 
 		// Create afterRead hook for URL generation
-		const uploadAfterReadHook = async ({ data, storage }: any) => {
-			if (!storage || !data?.key) return;
+		const uploadAfterReadHook = async ({ data, app }: any) => {
+			if (!app?.storage || !data?.key) return;
 
 			const fileVisibility: StorageVisibility = data.visibility || "public";
 
 			if (fileVisibility === "private") {
-				data.url = await storage.use().getSignedUrl(data.key);
+				data.url = await app.storage.use().getSignedUrl(data.key);
 			} else {
-				data.url = await storage.use().getUrl(data.key);
+				data.url = await app.storage.use().getUrl(data.key);
 			}
 		};
 
@@ -691,14 +702,14 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		const uploadAfterChangeHook = async ({
 			data,
 			original,
-			storage,
+			app,
 			operation,
 		}: any) => {
 			if (operation !== "update") return;
-			if (!storage || !data?.key) return;
+			if (!app?.storage || !data?.key) return;
 			if (!original || original.visibility === data.visibility) return;
 
-			await storage.use().setVisibility(data.key, data.visibility);
+			await app.storage.use().setVisibility(data.key, data.visibility);
 		};
 
 		// Merge existing afterRead hooks with upload hook
@@ -758,10 +769,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *   .set("adminList", { view: "table", columns: ["title"] })
 	 * ```
 	 */
-	set<K extends string, V>(
-		key: K,
+	set<TKey extends string, V>(
+		key: TKey,
 		value: V,
-	): CollectionBuilder<TState & Record<K, V>> {
+	): CollectionBuilder<TState & Record<TKey, V>> {
 		const newState = { ...this.state, [key]: value } as any;
 		const newBuilder = new CollectionBuilder(newState);
 		newBuilder._indexesFn = this._indexesFn;
@@ -858,7 +869,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	): CollectionBuilder<
 		Override<
 			TState,
-			Omit<TOtherState, keyof CollectionBuilderState> & {
+			{
 				name: TState["name"];
 				fields: TState["fields"] & TOtherState["fields"];
 				virtuals: TState["virtuals"] & TOtherState["virtuals"];
@@ -871,23 +882,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				hooks: CollectionHooks;
 				access: CollectionAccess;
 				searchable: TState["searchable"] | TOtherState["searchable"];
-				localized: readonly [...TState["localized"], ...TOtherState["localized"]];
-				validation: TOtherState["validation"] extends undefined
-					? TState["validation"]
-					: TOtherState["validation"];
-				output: (TState["output"] extends undefined ? {} : TState["output"]) &
-					(TOtherState["output"] extends undefined ? {} : TOtherState["output"]);
-				upload: TOtherState["upload"] extends undefined
-					? TState["upload"]
-					: TOtherState["upload"];
-				fieldDefinitions: TState["fieldDefinitions"] & TOtherState["fieldDefinitions"];
-				"~questpieApp": TState["~questpieApp"];
-				"~fieldTypes": (TState["~fieldTypes"] extends undefined
-					? {}
-					: TState["~fieldTypes"]) &
-					(TOtherState["~fieldTypes"] extends undefined
-						? {}
-						: TOtherState["~fieldTypes"]);
 			}
 		>
 	> {
@@ -905,15 +899,8 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		};
 
 		const mergedState = {
-			...this.state,
-			...other.state,
 			name: this.state.name,
 			fields: { ...this.state.fields, ...other.state.fields },
-			relations: { ...this.state.relations, ...other.state.relations },
-			virtuals: {
-				...(this.state.virtuals || {}),
-				...(other.state.virtuals || {}),
-			},
 			indexes: { ...this.state.indexes, ...other.state.indexes },
 			title:
 				other.state.title !== undefined ? other.state.title : this.state.title,
@@ -921,18 +908,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			hooks: mergedHooks,
 			access: mergedAccess,
 			searchable: other.state.searchable ?? this.state.searchable,
-			localized: [
-				...new Set([
-					...(this.state.localized || []),
-					...(other.state.localized || []),
-				]),
-			],
-			validation: other.state.validation ?? this.state.validation,
-			output: {
-				...(this.state.output || {}),
-				...(other.state.output || {}),
-			},
-			upload: other.state.upload ?? this.state.upload,
 			fieldDefinitions: {
 				...(this.state.fieldDefinitions || {}),
 				...(other.state.fieldDefinitions || {}),

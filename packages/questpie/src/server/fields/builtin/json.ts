@@ -20,8 +20,15 @@ import { operator } from "../types.js";
 /**
  * JSON field metadata - augmentable by external packages.
  */
-export interface JsonFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface JsonFieldMeta {}
+	}
+}
+
+export interface JsonFieldMeta extends Questpie.JsonFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

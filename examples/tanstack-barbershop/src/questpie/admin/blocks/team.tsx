@@ -22,7 +22,7 @@ type Barber = {
 
 export function TeamRenderer({ values, data }: BlockProps<"team">) {
 	const { t } = useTranslation();
-	const barbers = (data?.barbers ?? []) as Barber[];
+	const barbers = (data?.barbers ?? []) as unknown as Barber[];
 	const showBio = values.showBio ?? false;
 
 	const columnsClass = {

@@ -71,12 +71,10 @@ export * from "./config/create-app.js";
 // QuestpieBuilder state extraction utility (kept for backward compat)
 export type { QuestpieStateOf } from "./config/extensions.js";
 export * from "./config/global-hooks-types.js";
-// Structured error types for consistent error handling across packages
-export { ApiError } from "./errors/index.js";
-export type { ApiErrorCode } from "./errors/index.js";
 export * from "./config/module-types.js";
 export * from "./config/questpie.js";
 export * from "./config/types.js";
+export * from "./errors/index.js";
 export * from "./fields/index.js";
 export * from "./functions/index.js";
 export * from "./global/builder/index.js";

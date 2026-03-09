@@ -66,7 +66,7 @@ type NonLocalizedFields<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
 > = {
-	[K in keyof TFields as K extends TLocalized[number] ? never : K]: TFields[K];
+	[FK in keyof TFields as FK extends TLocalized[number] ? never : FK]: TFields[FK];
 };
 
 /**
@@ -76,7 +76,7 @@ type LocalizedFields<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
 > = {
-	[K in keyof TFields as K extends TLocalized[number] ? K : never]: TFields[K];
+	[FK in keyof TFields as FK extends TLocalized[number] ? FK : never]: TFields[FK];
 };
 
 // ============================================================================

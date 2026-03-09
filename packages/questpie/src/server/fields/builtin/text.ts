@@ -35,8 +35,15 @@ import type { FieldMetadataBase } from "../types.js";
  */
 
 // biome-ignore lint/suspicious/noEmptyInterface: we need interface for module augmentation
-export interface TextFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface TextFieldMeta {}
+	}
+}
+
+export interface TextFieldMeta extends Questpie.TextFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

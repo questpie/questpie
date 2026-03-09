@@ -34,12 +34,12 @@ export default job({
 				email.sendTemplate({
 					template: "newBlogPost",
 					input: {
-						recipientName: user.name ?? "there",
+						recipientName: (user.name as string) ?? "there",
 						postTitle: payload.title,
 						postExcerpt: payload.excerpt,
 						postUrl,
 					},
-					to: user.email,
+					to: user.email as string,
 				}),
 			),
 		);

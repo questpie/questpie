@@ -35,6 +35,9 @@
  * ```
  */
 
+// V2 Field builder class
+export { Field } from "./v2/field.js";
+
 // Builder
 export {
 	type BuiltinFields,
@@ -88,18 +91,6 @@ export {
 	trackDependencies,
 	trackDepsFunction,
 } from "./reactive.js";
-// V2 Field class (immutable builder pattern)
-export { Field, createField } from "./v2/field.js";
-export { buildZodFromState } from "./v2/derive-schema.js";
-export type {
-	FieldState,
-	DefaultFieldState,
-	ArrayFieldState,
-	FieldRuntimeState,
-	ExtractSelectType,
-	ExtractInputType,
-	ExtractWhereType,
-} from "./v2/types.js";
 // Core types
 export type {
 	AnyFieldDefinition,

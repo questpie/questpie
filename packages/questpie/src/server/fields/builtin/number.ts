@@ -49,8 +49,15 @@ import { operator } from "../types.js";
  * }
  * ```
  */
-export interface NumberFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface NumberFieldMeta {}
+	}
+}
+
+export interface NumberFieldMeta extends Questpie.NumberFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

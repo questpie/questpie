@@ -199,6 +199,19 @@ export class Field<TState extends FieldState = FieldState> {
 	}
 
 	// ========================================================================
+	// Builder Methods — Plugin Extensions
+	// ========================================================================
+
+	/**
+	 * Set admin-specific configuration for this field.
+	 * Added at runtime by @questpie/admin via prototype patching.
+	 */
+	admin(opts: unknown): Field<TState> {
+		// Runtime implementation is patched in by @questpie/admin/server
+		return this._clone<{}>({ admin: opts });
+	}
+
+	// ========================================================================
 	// Builder Methods — Array Refinements (only meaningful after .array())
 	// ========================================================================
 
@@ -220,7 +233,13 @@ export class Field<TState extends FieldState = FieldState> {
 	 * Build the state object matching the old FieldDefinitionState shape.
 	 * This provides backward compatibility with existing CRUD and admin code.
 	 */
-	get state(): FieldDefinitionState {
+	get state(): FieldDefinitionState & {
+		value: TState["data"];
+		input: TState["data"];
+		output: TState["data"];
+		select: TState["data"];
+		column: TState["column"];
+	} {
 		return {
 			type: this._state.customType ?? this._state.type,
 			config: this._buildLegacyConfig(),
@@ -235,16 +254,14 @@ export class Field<TState extends FieldState = FieldState> {
 	}
 
 	/** Phantom types for inference — matches FieldDefinition.$types */
-	get $types(): {
-		value: unknown;
-		input: unknown;
-		output: unknown;
-		select: unknown;
-		column: unknown;
+	declare readonly $types: {
+		value: TState["data"];
+		input: TState["data"];
+		output: TState["data"];
+		select: TState["data"];
+		column: TState["column"];
 		location: FieldLocation;
-	} {
-		return {} as any;
-	}
+	};
 
 	/**
 	 * Generate Drizzle column(s) for this field.

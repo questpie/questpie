@@ -1,0 +1,318 @@
+---
+title: Package Distribution
+description: How QUESTPIE packages are built, versioned, and published — tsdown, exports strategy, changesets.
+---
+
+# Package Distribution
+
+This guide covers how QUESTPIE packages are built, structured, and published as npm packages. It applies to the core `questpie` package, `@questpie/admin`, adapters, and any custom module packages.
+
+## Monorepo Structure
+
+```text
+questpie-cms/
+├── packages/
+│   ├── questpie/              # Core framework
+│   ├── admin/                 # Admin UI
+│   ├── openapi/               # OpenAPI integration
+│   ├── elysia/                # Elysia adapter
+│   ├── hono/                  # Hono adapter
+│   ├── next/                  # Next.js integration
+│   ├── tanstack-query/        # TanStack Query client
+│   └── create-questpie/       # Project scaffolder
+├── apps/
+│   └── docs/                  # Documentation site
+├── examples/
+│   ├── city-portal/
+│   └── tanstack-barbershop/
+├── turbo.json                 # Turborepo task config
+├── biome.json                 # Linting & formatting
+└── package.json               # Workspace root
+```
+
+**Tooling:**
+- **Runtime**: Bun
+- **Package manager**: pnpm workspaces (via `workspaces` field in root `package.json`)
+- **Task orchestration**: Turborepo
+- **Build**: tsdown (TypeScript -> ESM)
+- **Versioning**: Changesets
+- **Formatting**: Prettier
+- **Linting**: Biome
+
+## Package Structure
+
+Every published package follows this structure:
+
+```text
+packages/my-package/
+├── src/
+│   └── exports/              # Public API entry points
+│       ├── index.ts          # Main entry (.)
+│       ├── client.ts         # Client entry (./client)
+│       └── server.ts         # Server entry (./server)
+├── dist/                     # Build output (gitignored)
+│   ├── index.mjs
+│   ├── index.d.mts
+│   ├── client.mjs
+│   ├── client.d.mts
+│   └── ...
+├── tsconfig.json
+├── tsdown.config.ts
+└── package.json
+```
+
+The `src/exports/` directory centralizes the public API. Internal modules are not directly importable by consumers.
+
+## Dual Exports Strategy
+
+Each package uses a **dual exports** pattern — development imports resolve to TypeScript source, published imports resolve to compiled output:
+
+```json title="package.json"
+{
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./src/exports/index.ts"
+    },
+    "./server": {
+      "types": "./dist/server.d.mts",
+      "default": "./src/exports/server.ts"
+    },
+    "./client": {
+      "types": "./dist/client.d.mts",
+      "default": "./src/exports/client.ts"
+    }
+  },
+
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./server": {
+        "types": "./dist/server.d.mts",
+        "default": "./dist/server.mjs"
+      },
+      "./client": {
+        "types": "./dist/client.d.mts",
+        "default": "./dist/client.mjs"
+      }
+    }
+  },
+
+  "files": ["dist"]
+}
+```
+
+**Why dual exports?**
+- During development (monorepo), `exports.default` points to `.ts` source — no build step needed, fast HMR
+- When published, `publishConfig.exports` overrides — consumers get compiled `.mjs` + `.d.mts`
+- `types` always points to `dist/` — TypeScript gets declaration files for both scenarios
+
+## Build System (tsdown)
+
+All packages use [tsdown](https://tsdown.dev) for building:
+
+```ts title="tsdown.config.ts"
+import { defineConfig } from "tsdown";
+
+export default defineConfig({
+  entry: ["src/exports/*.ts"],    // Entry points from exports directory
+  outDir: "dist",
+  format: ["esm"],                // ESM only, no CommonJS
+  clean: true,                    // Clean dist/ before build
+  dts: { sourcemap: false },      // Generate .d.mts declaration files
+  unbundle: true,                 // Don't bundle imports (keep as external)
+});
+```
+
+**Key settings:**
+- **ESM only** — all packages use `"type": "module"`, no CommonJS output
+- **Unbundled** — external dependencies stay as imports, not bundled
+- **Declaration files** — `.d.mts` generated alongside `.mjs`
+
+### Special Build Features
+
+**Admin package** — includes React Compiler:
+```ts
+plugins: [
+  pluginBabel({
+    plugins: ["babel-plugin-react-compiler"],
+  }),
+],
+copy: [{ from: "src/client/styles/**/*.css", to: "dist/client/styles" }],
+```
+
+**CLI packages** — mark output as executable:
+```ts
+onSuccess: async () => {
+  await chmod("dist/index.mjs", 0o755);
+},
+```
+
+## Path Aliases
+
+Packages use `imports` for internal path aliases:
+
+```json title="package.json"
+{
+  "imports": {
+    "#questpie/*": "./src/*"
+  }
+}
+```
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "paths": {
+      "#questpie/*": ["./src/*"]
+    }
+  }
+}
+```
+
+This prevents deep imports from external consumers while keeping internal imports clean.
+
+## Workspace Dependencies
+
+Packages reference each other via `workspace:*`:
+
+```json
+{
+  "dependencies": {
+    "questpie": "workspace:*"
+  },
+  "peerDependencies": {
+    "questpie": "workspace:*"
+  }
+}
+```
+
+During publishing, `workspace:*` is resolved to the actual version: `workspace:*` -> `^2.0.0`.
+
+## Versioning (Changesets)
+
+The project uses [Changesets](https://github.com/changesets/changesets) for version management:
+
+```json title=".changeset/config.json"
+{
+  "changelog": ["@changesets/changelog-github", { "repo": "questpie/questpie" }],
+  "commit": false,
+  "fixed": [
+    ["questpie", "@questpie/admin", "@questpie/elysia", "@questpie/hono",
+     "@questpie/next", "@questpie/tanstack-query"]
+  ],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": ["city-portal-example", "tanstack-barbershop-example"]
+}
+```
+
+**Key decisions:**
+- **Lock-step versioning** — all core packages (`fixed` group) are versioned together
+- **Public access** — scoped packages published as public
+- **Examples ignored** — example projects excluded from version tracking
+- **Internal deps** — automatically bumped to patch when changed
+
+## Publishing
+
+The publish flow is handled by a custom script that bridges npm and Bun incompatibilities:
+
+```bash
+# Full release flow
+bun run release
+# Which runs:
+# 1. turbo run build --filter='./packages/*'
+# 2. bun run scripts/publish.ts
+```
+
+The `scripts/publish.ts` script:
+
+1. **Pre-publish**: For each package:
+   - Applies `publishConfig` overrides to `package.json` (replaces `exports` with compiled paths)
+   - Resolves `workspace:*` to actual versions (`^2.0.0`)
+2. **Publish**: Runs `bunx changeset publish`
+3. **Post-publish**: Restores original `package.json` files
+
+## Turborepo Tasks
+
+```json title="turbo.json"
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
+```
+
+- `build` depends on `^build` (dependencies built first)
+- `test` depends on `^build` (packages must be built before testing)
+- `dev` is non-persistent and uncached
+
+## Codegen in Package Context
+
+Packages that contain modules (like `questpie` and `@questpie/admin`) run codegen **before** the tsdown build:
+
+```bash
+# 1. Run codegen to generate .generated/module.ts for all modules
+bunx questpie generate
+
+# 2. Build with tsdown (includes generated files)
+bunx tsdown
+```
+
+The generated `.generated/module.ts` files are **committed to git** and included in the published package via `dist/`. They are not in `.gitignore`.
+
+See [Building a Module](/docs/extend/building-a-module) for the full package-mode codegen workflow.
+
+## TypeScript Configuration
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "incremental": true,
+    "composite": true,
+    "paths": {
+      "#questpie/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "src",
+    "src/server/modules/**/.generated/*.ts"
+  ]
+}
+```
+
+Note: `include` explicitly adds `.generated/` directories so TypeScript processes them.
+
+## Related Pages
+
+- [Building a Module](/docs/extend/building-a-module) — Create and publish module packages
+- [Building a Plugin](/docs/extend/building-a-plugin) — Create codegen plugins
+- [Codegen](/docs/backend/architecture/codegen) — Generated output details

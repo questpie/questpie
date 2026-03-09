@@ -128,17 +128,5 @@ const _module = {
 export type AdminModule = typeof _module;
 export default _module;
 
-// ════════════════════════════════════════════════════════════
-// Registry augmentation — module registries
-// ════════════════════════════════════════════════════════════
-
-declare module "questpie" {
-	interface Registry {
-		collections: AdminCollections;
-		functions: typeof _module["functions"];
-		views: AdminViews;
-		listViews: typeof _reg_listViews;
-		formViews: typeof _reg_formViews;
-		components: AdminComponents;
-	}
-}
+// Registry augmentation is handled by the user's .generated/index.ts
+// to avoid circular type references and TS2717 conflicts with sub-modules.

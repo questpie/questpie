@@ -56,7 +56,7 @@ import type {
  * Materialize computed types
  */
 export type Prettify<T> = {
-	[K in keyof T]: T[K];
+	[P in keyof T]: T[P];
 } & {};
 
 /**

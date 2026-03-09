@@ -20,7 +20,9 @@ import { Route as AdminSplatRouteImport } from './routes/admin/$'
 import { Route as AppContactRouteImport } from './routes/_app/contact'
 import { Route as AppBookingRouteImport } from './routes/_app/booking'
 import { Route as AppSlugRouteImport } from './routes/_app/$slug'
+import { Route as AppBlogIndexRouteImport } from './routes/_app/blog.index'
 import { Route as AppBarbersIndexRouteImport } from './routes/_app/barbers.index'
+import { Route as AppBlogSlugRouteImport } from './routes/_app/blog.$slug'
 import { Route as AppBarbersSlugRouteImport } from './routes/_app/barbers.$slug'
 
 const AdminRoute = AdminRouteImport.update({
@@ -77,9 +79,19 @@ const AppSlugRoute = AppSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBlogIndexRoute = AppBlogIndexRouteImport.update({
+  id: '/blog/',
+  path: '/blog/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppBarbersIndexRoute = AppBarbersIndexRouteImport.update({
   id: '/barbers/',
   path: '/barbers/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBlogSlugRoute = AppBlogSlugRouteImport.update({
+  id: '/blog/$slug',
+  path: '/blog/$slug',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBarbersSlugRoute = AppBarbersSlugRouteImport.update({
@@ -100,7 +112,9 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/barbers/$slug': typeof AppBarbersSlugRoute
+  '/blog/$slug': typeof AppBlogSlugRoute
   '/barbers': typeof AppBarbersIndexRoute
+  '/blog': typeof AppBlogIndexRoute
 }
 export interface FileRoutesByTo {
   '/$slug': typeof AppSlugRoute
@@ -113,7 +127,9 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/admin': typeof AdminIndexRoute
   '/barbers/$slug': typeof AppBarbersSlugRoute
+  '/blog/$slug': typeof AppBlogSlugRoute
   '/barbers': typeof AppBarbersIndexRoute
+  '/blog': typeof AppBlogIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -129,7 +145,9 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/_app/barbers/$slug': typeof AppBarbersSlugRoute
+  '/_app/blog/$slug': typeof AppBlogSlugRoute
   '/_app/barbers/': typeof AppBarbersIndexRoute
+  '/_app/blog/': typeof AppBlogIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -145,7 +163,9 @@ export interface FileRouteTypes {
     | '/'
     | '/admin/'
     | '/barbers/$slug'
+    | '/blog/$slug'
     | '/barbers'
+    | '/blog'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/$slug'
@@ -158,7 +178,9 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/barbers/$slug'
+    | '/blog/$slug'
     | '/barbers'
+    | '/blog'
   id:
     | '__root__'
     | '/_app'
@@ -173,7 +195,9 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/admin/'
     | '/_app/barbers/$slug'
+    | '/_app/blog/$slug'
     | '/_app/barbers/'
+    | '/_app/blog/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -262,11 +286,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSlugRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/blog/': {
+      id: '/_app/blog/'
+      path: '/blog'
+      fullPath: '/blog'
+      preLoaderRoute: typeof AppBlogIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/barbers/': {
       id: '/_app/barbers/'
       path: '/barbers'
       fullPath: '/barbers'
       preLoaderRoute: typeof AppBarbersIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/blog/$slug': {
+      id: '/_app/blog/$slug'
+      path: '/blog/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof AppBlogSlugRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/barbers/$slug': {
@@ -285,7 +323,9 @@ interface AppRouteChildren {
   AppContactRoute: typeof AppContactRoute
   AppIndexRoute: typeof AppIndexRoute
   AppBarbersSlugRoute: typeof AppBarbersSlugRoute
+  AppBlogSlugRoute: typeof AppBlogSlugRoute
   AppBarbersIndexRoute: typeof AppBarbersIndexRoute
+  AppBlogIndexRoute: typeof AppBlogIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -294,7 +334,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppContactRoute: AppContactRoute,
   AppIndexRoute: AppIndexRoute,
   AppBarbersSlugRoute: AppBarbersSlugRoute,
+  AppBlogSlugRoute: AppBlogSlugRoute,
   AppBarbersIndexRoute: AppBarbersIndexRoute,
+  AppBlogIndexRoute: AppBlogIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

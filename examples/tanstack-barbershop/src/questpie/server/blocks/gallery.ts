@@ -43,7 +43,7 @@ export const galleryBlock = block("gallery")
 		});
 		const imageUrls: Record<string, string> = {};
 		for (const doc of res.docs) {
-			imageUrls[doc.id] = doc.url;
+			imageUrls[doc.id as string] = (doc as any).url;
 		}
 		return { imageUrls };
 	});

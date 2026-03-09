@@ -36,8 +36,15 @@ import { operator } from "../types.js";
  * }
  * ```
  */
-export interface ArrayFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface ArrayFieldMeta {}
+	}
+}
+
+export interface ArrayFieldMeta extends Questpie.ArrayFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

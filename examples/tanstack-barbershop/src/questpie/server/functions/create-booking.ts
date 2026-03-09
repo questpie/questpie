@@ -88,7 +88,7 @@ export default fn({
 		}
 
 		const appointment = await collections.appointments.create({
-			customer: customer.id,
+			customer: customer.id as string,
 			barber: input.barberId,
 			service: input.serviceId,
 			scheduledAt: scheduledDate,

@@ -10,15 +10,16 @@
  * @internal
  */
 
-import { Field } from "questpie";
+/**
+ * Field Builder — Admin Augmentation (Runtime Patch)
+ *
+ * The `.admin()` method type is declared directly on the Field class.
+ * This file patches the prototype with the admin-aware implementation.
+ *
+ * @internal
+ */
 
-// Declaration merging: add .admin() method to Field class
-declare module "questpie" {
-	interface Field<TState> {
-		/** Set admin-specific configuration for this field. */
-		admin(opts: unknown): Field<TState>;
-	}
-}
+import { Field } from "questpie";
 
 /**
  * Runtime implementation of `.admin()` on Field.

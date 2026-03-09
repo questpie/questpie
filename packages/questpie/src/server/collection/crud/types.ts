@@ -219,14 +219,14 @@ type OperatorKeysFromFieldDef<TFieldDef> =
 				| keyof ReturnType<TFieldDef["getOperators"]>["jsonb"]
 		: never;
 
-type OperatorValueFromFieldDef<TFieldDef, K> =
+type OperatorValueFromFieldDef<TFieldDef, TOpKey> =
 	TFieldDef extends FieldDefinition<any>
 		?
-				| (K extends keyof ReturnType<TFieldDef["getOperators"]>["column"]
-						? OperatorValue<ReturnType<TFieldDef["getOperators"]>["column"][K]>
+				| (TOpKey extends keyof ReturnType<TFieldDef["getOperators"]>["column"]
+						? OperatorValue<ReturnType<TFieldDef["getOperators"]>["column"][TOpKey]>
 						: never)
-				| (K extends keyof ReturnType<TFieldDef["getOperators"]>["jsonb"]
-						? OperatorValue<ReturnType<TFieldDef["getOperators"]>["jsonb"][K]>
+				| (TOpKey extends keyof ReturnType<TFieldDef["getOperators"]>["jsonb"]
+						? OperatorValue<ReturnType<TFieldDef["getOperators"]>["jsonb"][TOpKey]>
 						: never)
 		: never;
 
@@ -889,9 +889,9 @@ type RelationMutations<TRelations> = [TRelations] extends [never]
 				: {}; // Not a record type or unknown, return empty object instead of permissive Record
 
 // With unified field API, FK column key is the same as the relation field name
-type RelationIdKey<TInsert, K extends string> = Extract<
+type RelationIdKey<TInsert, TKey extends string> = Extract<
 	Extract<keyof TInsert, string>,
-	K
+	TKey
 >;
 
 type RelationForeignKeys<TInsert, TRelations> =
@@ -907,11 +907,11 @@ type OptionalKeys<T> = {
 
 type RequiredKeys<T> = Exclude<keyof T, OptionalKeys<T>>;
 
-type IsRequiredKey<T, K extends keyof T> = K extends RequiredKeys<T>
+type IsRequiredKey<T, TK extends keyof T> = TK extends RequiredKeys<T>
 	? true
 	: false;
 
-type OptionalizeKeys<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+type OptionalizeKeys<T, TK extends keyof T> = Omit<T, TK> & Partial<Pick<T, TK>>;
 
 type OptionalizeRelationForeignKeys<TInsert, TRelations> =
 	RelationForeignKeys<TInsert, TRelations> extends keyof TInsert

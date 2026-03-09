@@ -8,7 +8,6 @@ import {
 	type BuiltinFields,
 	builtinFields,
 } from "#questpie/server/fields/builtin/defaults.js";
-import type { ExtractColumnsFromFieldDefinitions } from "#questpie/server/fields/builder-type-utils.js";
 import type {
 	FieldDefinition,
 	FieldDefinitionState,
@@ -23,6 +22,17 @@ import type {
 	GlobalOptions,
 } from "#questpie/server/global/builder/types.js";
 import type { Override, Prettify } from "#questpie/shared/type-utils.js";
+
+/**
+ * Extract Drizzle column types from field definitions.
+ */
+type ExtractColumnsFromFieldDefinitions<
+	TFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
+> = {
+	[K in keyof TFields]: TFields[K]["$types"]["column"] extends null
+		? never
+		: TFields[K]["$types"]["column"];
+};
 
 /**
  * Extract field types from GlobalBuilderState.
@@ -352,10 +362,10 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	 * Generic extension point for plugins.
 	 * Stores an arbitrary key-value pair in the builder state.
 	 */
-	set<K extends string, V>(
-		key: K,
+	set<TKey extends string, V>(
+		key: TKey,
 		value: V,
-	): GlobalBuilder<TState & Record<K, V>> {
+	): GlobalBuilder<TState & Record<TKey, V>> {
 		const newState = { ...this.state, [key]: value } as any;
 		return new GlobalBuilder(newState);
 	}
@@ -408,13 +418,15 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
  * const settings = global("settings").fields({ ... });
  * ```
  *
- * @example With context-first hooks
+ * @example With typed app (recommended for full type safety)
  * ```ts
- * const settings = global("settings")
+ * import type { App } from './app';
+ *
+ * const settings = global<App>()("settings")
  *   .fields({ ... })
  *   .hooks({
- *     afterUpdate: ({ kv }) => {
- *       kv.set('cache', ...); // fully typed!
+ *     afterUpdate: ({ app }) => {
+ *       app.kv.set('cache', ...); // fully typed!
  *     }
  *   });
  * ```

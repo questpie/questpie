@@ -439,11 +439,13 @@ export function generateModuleTemplate(options: ModuleTemplateOptions): string {
 			lines.push("// Registry augmentation — module registries");
 			lines.push("// ════════════════════════════════════════════════════════════");
 			lines.push("");
-			lines.push('declare module "questpie" {');
-			lines.push("\tinterface Registry {");
+			lines.push("declare global {");
+			lines.push("\tnamespace Questpie {");
+			lines.push("\t\tinterface Registry {");
 			for (const line of registryLines) {
-				lines.push(line);
+				lines.push(`\t${line}`);
 			}
+			lines.push("\t\t}");
 			lines.push("\t}");
 			lines.push("}");
 			lines.push("");

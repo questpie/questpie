@@ -15,7 +15,7 @@ export default seed({
 		});
 
 		log("Updating site settings (EN)...");
-		await globals.siteSettings.update(
+		await (globals.siteSettings as any).update(
 			{
 				shopName: "Sharp Cuts",
 				tagline: "Precision grooming for the modern gentleman",
@@ -68,7 +68,7 @@ export default seed({
 		);
 
 		log("Updating site settings (SK)...");
-		await globals.siteSettings.update(
+		await (globals.siteSettings as any).update(
 			{
 				tagline: "Precízna starostlivosť pre moderného gentlemana",
 				navigation: [

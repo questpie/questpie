@@ -10,7 +10,6 @@
 import type { Dirent } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
-import { toCamelCase } from "#questpie/shared/utils/string-utils.js";
 import type {
 	CategoryDeclaration,
 	DiscoveredFile,
@@ -30,9 +29,9 @@ import type {
  * @see RFC §2.4 (Key Derivation)
  */
 export function kebabToCamelCase(filename: string): string {
-	// Remove extension, then delegate to shared toCamelCase
+	// Remove extension
 	const name = filename.replace(/\.(ts|tsx|js|jsx|mts|mjs)$/, "");
-	return toCamelCase(name);
+	return name.replace(/-([a-z0-9])/g, (_, char) => char.toUpperCase());
 }
 
 /**

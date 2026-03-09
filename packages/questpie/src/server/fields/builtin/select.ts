@@ -34,8 +34,15 @@ import { operator } from "../types.js";
  * }
  * ```
  */
-export interface SelectFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface SelectFieldMeta {}
+	}
+}
+
+export interface SelectFieldMeta extends Questpie.SelectFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

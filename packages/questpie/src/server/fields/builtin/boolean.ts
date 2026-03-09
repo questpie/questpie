@@ -30,8 +30,15 @@ import { operator } from "../types.js";
  * }
  * ```
  */
-export interface BooleanFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface BooleanFieldMeta {}
+	}
+}
+
+export interface BooleanFieldMeta extends Questpie.BooleanFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

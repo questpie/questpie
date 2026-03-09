@@ -96,9 +96,9 @@ type InferGlobalSelect<
 	TLocalized extends ReadonlyArray<keyof TFields>,
 	TVirtuals extends Record<string, SQL>,
 > = InferSelectModel<TTable> & {
-	[K in keyof TVirtuals]: InferSQLType<TVirtuals[K]>;
+	[VK in keyof TVirtuals]: InferSQLType<TVirtuals[VK]>;
 } & {
-	[K in TLocalized[number]]: GetColumnData<TFields[K]>;
+	[LK in TLocalized[number]]: GetColumnData<TFields[LK]>;
 };
 
 /**
@@ -109,7 +109,7 @@ type InferGlobalInsert<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
 > = InferInsertModel<TTable> & {
-	[K in TLocalized[number]]?: GetColumnData<TFields[K]>;
+	[LK in TLocalized[number]]?: GetColumnData<TFields[LK]>;
 };
 
 /**

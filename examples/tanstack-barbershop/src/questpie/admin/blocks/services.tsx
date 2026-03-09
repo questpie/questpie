@@ -21,7 +21,7 @@ type Service = {
 
 export function ServicesRenderer({ values, data }: BlockProps<"services">) {
 	const { t, locale } = useTranslation();
-	const services = (data?.services ?? []) as Service[];
+	const services = (data?.services ?? []) as unknown as Service[];
 
 	const columnsClass = {
 		"2": "md:grid-cols-2",

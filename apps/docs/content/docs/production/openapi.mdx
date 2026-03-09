@@ -1,0 +1,144 @@
+---
+title: OpenAPI
+description: Auto-generate OpenAPI 3.1 spec and interactive API docs from your schema.
+---
+
+# OpenAPI
+
+QUESTPIE auto-generates an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) spec from your collections, globals, and functions at runtime. The spec is served as a standard route alongside interactive [Scalar](https://scalar.com) API docs.
+
+## Setup
+
+Install the OpenAPI package:
+
+```bash
+bun add @questpie/openapi
+```
+
+Register the module in your `modules.ts`:
+
+```ts title="questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/server";
+import { openApiModule } from "@questpie/openapi";
+
+export default [
+  adminModule,
+  openApiModule({
+    info: {
+      title: "My API",
+      version: "1.0.0",
+    },
+  }),
+] as const;
+```
+
+Run codegen to pick up the new module:
+
+```bash
+bunx questpie generate
+```
+
+The module registers two routes:
+
+| Route | Description |
+|---|---|
+| `GET /api/routes/openapi.json` | OpenAPI 3.1 JSON spec |
+| `GET /api/routes/docs` | Scalar interactive API reference |
+
+## Configuration
+
+```ts
+openApiModule({
+  // OpenAPI info block
+  info: {
+    title: "My API",
+    version: "1.0.0",
+    description: "Backend for my app",
+  },
+
+  // Server definitions
+  servers: [
+    { url: "https://api.example.com", description: "Production" },
+  ],
+
+  // Base path (must match your adapter's basePath)
+  basePath: "/api",
+
+  // Exclude specific collections or globals from the spec
+  exclude: {
+    collections: ["_internal_logs"],
+    globals: ["_cache"],
+  },
+
+  // Include auth endpoints (sign-in, sign-up, etc.)
+  auth: true,
+
+  // Include search endpoints
+  search: true,
+
+  // Scalar UI theme
+  scalar: {
+    theme: "purple",
+  },
+
+  // Custom route keys (defaults shown)
+  specPath: "openapi.json",
+  docsPath: "docs",
+})
+```
+
+## What Gets Documented
+
+The spec is generated at runtime from your app's schema:
+
+| Source | Documented As |
+|---|---|
+| Collections | CRUD endpoints (`GET /collections/{name}`, `POST`, `PUT`, `DELETE`) |
+| Globals | Read/update endpoints (`GET /globals/{name}`, `PUT`) |
+| Functions | RPC endpoints (`POST /rpc/{path}`) with input/output schemas |
+| Auth | Sign-in, sign-up, session endpoints (when `auth: true`) |
+| Search | Search endpoints (when `search: true`) |
+
+Collection and global field schemas (from Zod) are automatically converted to JSON Schema in the spec. Function input/output schemas are included when defined.
+
+## Manual Route Approach
+
+Instead of the module, you can create route files directly:
+
+```ts title="routes/openapi.json.ts"
+import { openApiRoute } from "@questpie/openapi";
+
+export default openApiRoute({
+  info: { title: "My API", version: "1.0.0" },
+});
+```
+
+```ts title="routes/docs.ts"
+import { docsRoute } from "@questpie/openapi";
+
+export default docsRoute({
+  scalar: { theme: "purple" },
+});
+```
+
+This gives you full control over the route paths and allows co-locating OpenAPI config with other route files.
+
+## Programmatic Access
+
+Generate the spec object directly for custom use cases:
+
+```ts
+import { generateOpenApiSpec } from "@questpie/openapi";
+
+const spec = generateOpenApiSpec(app, {
+  info: { title: "My API", version: "1.0.0" },
+});
+
+// Use spec object for testing, CI validation, etc.
+```
+
+## Related Pages
+
+- [Routes](/docs/backend/business-logic/routes) — Raw HTTP route handlers
+- [Functions](/docs/backend/business-logic/functions) — Typed RPC endpoints
+- [Modules](/docs/backend/architecture/modules) — Module system

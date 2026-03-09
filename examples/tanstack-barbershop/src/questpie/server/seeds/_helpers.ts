@@ -68,7 +68,7 @@ export const IMAGES = {
 
 export function richText(paragraphs: string[]) {
 	return {
-		type: "doc",
+		type: "doc" as const,
 		content: paragraphs.map((text) => ({
 			type: "paragraph",
 			content: [{ type: "text", text }],
@@ -82,7 +82,7 @@ export function richTextFormatted(
 	>,
 ) {
 	return {
-		type: "doc",
+		type: "doc" as const,
 		content: blocks.map((block) => {
 			if (typeof block === "string") {
 				return {

@@ -51,8 +51,15 @@ import { operator } from "../types.js";
  * }
  * ```
  */
-export interface RelationFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface RelationFieldMeta {}
+	}
+}
+
+export interface RelationFieldMeta extends Questpie.RelationFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

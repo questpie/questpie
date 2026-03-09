@@ -196,10 +196,16 @@ export function generateFactoryTemplate(
 		}
 		lines.push("");
 
-		// Field types from Registry (augmented by module.ts with ~fieldTypes)
-		lines.push("// Field types — extracted from Registry");
+		// Field types — extracted directly from modules (avoids circular dependency with index.ts Registry augmentation)
+		lines.push("// Field types — extracted from modules");
 		lines.push(
-			'type _AllFieldTypes = Registry extends { "~fieldTypes": infer F } ? F : Record<string, never>;',
+			"type _ExtractProp<M, K extends string> = (M extends { modules: infer Sub extends readonly any[] } ? _ExtractPropArr<Sub, K> : {}) & (K extends keyof M ? M[K] extends Record<string, any> ? M[K] : {} : {});",
+		);
+		lines.push(
+			"type _ExtractPropArr<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? _ExtractProp<H, K> & _ExtractPropArr<T, K> : {};",
+		);
+		lines.push(
+			'type _AllFieldTypes = _ExtractProp<{ modules: typeof _modulesArr }, "fields">;',
 		);
 		lines.push("");
 	} else {
@@ -251,38 +257,47 @@ export function generateFactoryTemplate(
 
 	const placeholderMap = buildPlaceholderMap(registryCategories);
 
-	lines.push('declare module "questpie" {');
+	// Builder interface augmentations — keep declare module "questpie" for class merging
+	// (CollectionBuilder/GlobalBuilder are classes that need interface merging)
+	if (collExtensions.size > 0 || globalExtensions.size > 0) {
+		lines.push('declare module "questpie" {');
 
-	if (collExtensions.size > 0) {
-		lines.push("\tinterface CollectionBuilder<TState> {");
-		for (const [name, ext] of collExtensions) {
-			const paramName = ext.isCallback ? "configFn" : "config";
-			let paramType = ext.configType ?? "any";
-			paramType = resolvePlaceholders(paramType, hasModules, placeholderMap);
-			lines.push(
-				`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState>;`,
-			);
+		if (collExtensions.size > 0) {
+			lines.push("\tinterface CollectionBuilder<TState> {");
+			for (const [name, ext] of collExtensions) {
+				const paramName = ext.isCallback ? "configFn" : "config";
+				let paramType = ext.configType ?? "any";
+				paramType = resolvePlaceholders(paramType, hasModules, placeholderMap);
+				lines.push(
+					`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState>;`,
+				);
+			}
+			lines.push("\t}");
 		}
-		lines.push("\t}");
+
+		if (globalExtensions.size > 0) {
+			lines.push("\tinterface GlobalBuilder<TState> {");
+			for (const [name, ext] of globalExtensions) {
+				const paramName = ext.isCallback ? "configFn" : "config";
+				let paramType = ext.configType ?? "any";
+				paramType = resolvePlaceholders(paramType, hasModules, placeholderMap);
+				lines.push(
+					`\t\t${name}(${paramName}: ${paramType}): GlobalBuilder<TState>;`,
+				);
+			}
+			lines.push("\t}");
+		}
+
+		lines.push("}");
+		lines.push("");
 	}
 
-	if (globalExtensions.size > 0) {
-		lines.push("\tinterface GlobalBuilder<TState> {");
-		for (const [name, ext] of globalExtensions) {
-			const paramName = ext.isCallback ? "configFn" : "config";
-			let paramType = ext.configType ?? "any";
-			paramType = resolvePlaceholders(paramType, hasModules, placeholderMap);
-			lines.push(
-				`\t\t${name}(${paramName}: ${paramType}): GlobalBuilder<TState>;`,
-			);
-		}
-		lines.push("\t}");
-	}
+	// FieldTypeRegistry and type registries — use declare global (symlink-safe)
+	lines.push("declare global {");
+	lines.push("\tnamespace Questpie {");
 
-	// FieldTypeRegistry augmentation — always in the "questpie" module
-	// Uses keyof _AllFieldTypes so it narrows to exact field type literals
 	lines.push(
-		"\tinterface FieldTypeRegistry extends Record<keyof _AllFieldTypes, {}> {}",
+		"\t\tinterface FieldTypeRegistry extends Record<keyof _AllFieldTypes, {}> {}",
 	);
 
 	// Type registries from categories that target "questpie" module
@@ -290,11 +305,12 @@ export function generateFactoryTemplate(
 		if (decl.typeRegistry?.module === "questpie") {
 			const strictName = `_${key.charAt(0).toUpperCase() + key.slice(1)}Names_Strict`;
 			lines.push(
-				`\tinterface ${decl.typeRegistry.interface} extends Record<${strictName}, {}> {}`,
+				`\t\tinterface ${decl.typeRegistry.interface} extends Record<${strictName}, {}> {}`,
 			);
 		}
 	}
 
+	lines.push("\t}");
 	lines.push("}");
 	lines.push("");
 

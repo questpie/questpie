@@ -20,8 +20,15 @@ import { operator } from "../types.js";
 /**
  * Datetime field metadata - augmentable by external packages.
  */
-export interface DatetimeFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface DatetimeFieldMeta {}
+	}
+}
+
+export interface DatetimeFieldMeta extends Questpie.DatetimeFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

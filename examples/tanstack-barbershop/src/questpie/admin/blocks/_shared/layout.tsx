@@ -5,7 +5,7 @@
  * Design: Minimal utility blocks.
  */
 
-import { cn } from "../../../lib/utils";
+import { cn } from "../../../../lib/utils";
 import type { BlockProps } from "../../.generated/client";
 import {
 	getColumnsClass,

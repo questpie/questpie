@@ -35,8 +35,15 @@ import { operator } from "../types.js";
  * }
  * ```
  */
-export interface TextareaFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface TextareaFieldMeta {}
+	}
+}
+
+export interface TextareaFieldMeta extends Questpie.TextareaFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

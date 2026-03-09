@@ -20,8 +20,15 @@ import type { BaseFieldConfig, FieldMetadataBase } from "../types.js";
 /**
  * Email field metadata - augmentable by external packages.
  */
-export interface EmailFieldMeta {
-	/** Phantom property to prevent interface collapse - enables module augmentation */
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface EmailFieldMeta {}
+	}
+}
+
+export interface EmailFieldMeta extends Questpie.EmailFieldMeta {
+	/** Phantom property to prevent interface collapse */
 	_?: never;
 }
 

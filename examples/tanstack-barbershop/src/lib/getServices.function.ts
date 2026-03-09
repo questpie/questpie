@@ -22,7 +22,7 @@ export const getAllServices = createServerFn({ method: "GET" })
 				description: s.description,
 				price: s.price,
 				duration: s.duration,
-				image: s.image,
+				image: s.image as any,
 			})),
 		};
 	});
