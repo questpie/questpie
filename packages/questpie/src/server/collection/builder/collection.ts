@@ -66,7 +66,9 @@ type NonLocalizedFields<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
 > = {
-	[FK in keyof TFields as FK extends TLocalized[number] ? never : FK]: TFields[FK];
+	[FK in keyof TFields as FK extends TLocalized[number]
+		? never
+		: FK]: TFields[FK];
 };
 
 /**
@@ -76,7 +78,9 @@ type LocalizedFields<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
 > = {
-	[FK in keyof TFields as FK extends TLocalized[number] ? FK : never]: TFields[FK];
+	[FK in keyof TFields as FK extends TLocalized[number]
+		? FK
+		: never]: TFields[FK];
 };
 
 // ============================================================================
@@ -87,34 +91,26 @@ import type {
 	ExtractI18nFields,
 	ExtractMainFields,
 	ExtractVirtualFields,
-	FieldDefinition,
-	FieldDefinitionState,
 } from "#questpie/server/fields/types.js";
 
 /**
  * Extract input types from field definitions.
  * Maps each field to its input type from $types.input.
  */
-type ExtractInputTypes<
-	TFieldDefs extends Record<string, any>,
-> = {
+type ExtractInputTypes<TFieldDefs extends Record<string, any>> = {
 	[K in keyof TFieldDefs]: FieldInput<TFieldDefs[K]>;
 };
 
 type FieldInput<T> =
 	// V2: Field<TState> — extract input from accumulated state
-	T extends { readonly _: infer TState extends import("#questpie/server/fields/field-class-types.js").FieldState }
+	T extends {
+		readonly _: infer TState extends
+			import("#questpie/server/fields/field-class-types.js").FieldState;
+	}
 		? import("#questpie/server/fields/field-class-types.js").ExtractInputType<TState>
-		// V1: FieldDefinition<TState>
-		: T extends FieldDefinition<infer TState>
-			? TState extends FieldDefinitionState
-				? TState["input"]
-				: never
-			: never;
+		: never;
 
-type RequiredInputKeys<
-	TFieldDefs extends Record<string, any>,
-> = {
+type RequiredInputKeys<TFieldDefs extends Record<string, any>> = {
 	[K in keyof TFieldDefs]: FieldInput<TFieldDefs[K]> extends never
 		? never
 		: undefined extends FieldInput<TFieldDefs[K]>
@@ -122,9 +118,7 @@ type RequiredInputKeys<
 			: K;
 }[keyof TFieldDefs];
 
-type OptionalInputKeys<
-	TFieldDefs extends Record<string, any>,
-> = {
+type OptionalInputKeys<TFieldDefs extends Record<string, any>> = {
 	[K in keyof TFieldDefs]: FieldInput<TFieldDefs[K]> extends never
 		? never
 		: undefined extends FieldInput<TFieldDefs[K]>
@@ -136,9 +130,7 @@ type OptionalInputKeys<
  * Extract input object type from field definitions, using optional properties
  * when the field input type includes `undefined`.
  */
-type ExtractInputObject<
-	TFieldDefs extends Record<string, any>,
-> = Prettify<
+type ExtractInputObject<TFieldDefs extends Record<string, any>> = Prettify<
 	{
 		[K in RequiredInputKeys<TFieldDefs>]: FieldInput<TFieldDefs[K]>;
 	} & {
@@ -156,9 +148,7 @@ type ExtractInputObject<
  * Relation fields especially need FieldSelect because their TValue is a broad union (string | string[] | { type, id } | null)
  * but FieldSelect narrows based on actual config (belongsTo -> string, multiple -> string[], etc.)
  */
-type ExtractOutputTypes<
-	TFieldDefs extends Record<string, any>,
-> = {
+type ExtractOutputTypes<TFieldDefs extends Record<string, any>> = {
 	[K in keyof TFieldDefs]: FieldSelect<TFieldDefs[K]>;
 };
 
@@ -249,7 +239,10 @@ type OutputExtensions<TState extends CollectionBuilderState> =
 	TState["output"] extends Record<string, any> ? TState["output"] : {};
 
 export type CollectionSelect<TState extends CollectionBuilderState> =
-	TState["fieldDefinitions"] extends Record<string, { $types: any; toColumn: any }>
+	TState["fieldDefinitions"] extends Record<
+		string,
+		{ $types: any; toColumn: any }
+	>
 		? Prettify<
 				InferCollectionSelect<
 					InferMainTableWithColumns<
@@ -280,7 +273,10 @@ export type CollectionSelect<TState extends CollectionBuilderState> =
  * CollectionInsert - works with both field builder and raw Drizzle columns.
  */
 export type CollectionInsert<TState extends CollectionBuilderState> =
-	TState["fieldDefinitions"] extends Record<string, { $types: any; toColumn: any }>
+	TState["fieldDefinitions"] extends Record<
+		string,
+		{ $types: any; toColumn: any }
+	>
 		? InferCollectionInsert<
 				InferMainTableWithColumns<
 					TState["name"],
@@ -305,7 +301,10 @@ export type CollectionInsert<TState extends CollectionBuilderState> =
  * CollectionUpdate - works with both field builder and raw Drizzle columns.
  */
 export type CollectionUpdate<TState extends CollectionBuilderState> =
-	TState["fieldDefinitions"] extends Record<string, { $types: any; toColumn: any }>
+	TState["fieldDefinitions"] extends Record<
+		string,
+		{ $types: any; toColumn: any }
+	>
 		? InferCollectionUpdate<
 				InferMainTableWithColumns<
 					TState["name"],
@@ -534,7 +533,7 @@ export class Collection<TState extends CollectionBuilderState> {
 	public readonly name: TState["name"];
 	public readonly table: TState["fieldDefinitions"] extends Record<
 		string,
-		FieldDefinition<FieldDefinitionState>
+		{ $types: any; toColumn: any }
 	>
 		? InferMainTableWithColumns<
 				TState["name"],

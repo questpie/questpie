@@ -1,12 +1,23 @@
 /**
- * Time Field Factory (V2)
+ * Time Field Factory
  */
 
-import { time as pgTime, type PgTimeBuilder } from "drizzle-orm/pg-core";
+import { type PgTimeBuilder, time as pgTime } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { dateOps } from "../operators/builtin.js";
-import { createField } from "../field-class.js";
+import { field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { dateOps } from "../operators/builtin.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface TimeFieldMeta {}
+	}
+}
+
+export interface TimeFieldMeta extends Questpie.TimeFieldMeta {
+	_?: never;
+}
 
 export type TimeFieldState = DefaultFieldState & {
 	type: "time";
@@ -38,7 +49,7 @@ export function time(config?: TimeConfig): Field<TimeFieldState> {
 		? /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(\.\d+)?$/
 		: /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-	return createField<TimeFieldState>({
+	return field<TimeFieldState>({
 		type: "time",
 		columnFactory: (name) => pgTime(name, { precision }),
 		schemaFactory: () =>

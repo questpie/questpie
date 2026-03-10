@@ -1,6 +1,4 @@
 import type { BetterAuthOptions } from "better-auth";
-import type { MailAdapter } from "#questpie/server/integrated/mailer/adapter.js";
-import type { QueueAdapter } from "#questpie/server/integrated/queue/adapter.js";
 import { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
 import type {
 	CollectionAccess,
@@ -45,7 +43,9 @@ import {
 	type MergeAuthOptions,
 	mergeAuthOptions,
 } from "#questpie/server/integrated/auth/merge.js";
+import type { MailAdapter } from "#questpie/server/integrated/mailer/adapter.js";
 import type { EmailTemplateDefinition } from "#questpie/server/integrated/mailer/template.js";
+import type { QueueAdapter } from "#questpie/server/integrated/queue/adapter.js";
 import type { JobDefinition } from "#questpie/server/integrated/queue/types.js";
 import type {
 	Override,
@@ -818,15 +818,15 @@ export class QuestpieBuilder<
 	 *
 	 * @example
 	 * ```ts
-	 * import { defaultFields } from "@questpie/server/fields/builtin";
+	 * import { builtinFields } from "@questpie/server/fields/builtin";
 	 *
 	 * const q = questpie({ name: "app" })
-	 *   .fields(defaultFields);
+	 *   .fields(builtinFields);
 	 *
 	 * // Use q.global() for type-safe field access:
 	 * const settings = q.global("settings")
 	 *   .fields(({ f }) => ({
-	 *     siteName: f.text({ required: true }),  // ✅ autocomplete from defaultFields
+	 *     siteName: f.text({ required: true }),  // ✅ autocomplete from builtinFields
 	 *     maintenanceMode: f.boolean({ default: false }),
 	 *   }));
 	 *
@@ -1024,6 +1024,6 @@ export class QuestpieBuilder<
  * @example
  * ```ts
  * // Internal use only — use standalone factories (collection, global, etc.) instead
- * const builder = QuestpieBuilder.empty("my-app").fields(defaultFields);
+ * const builder = QuestpieBuilder.empty("my-app").fields(builtinFields);
  * ```
  */

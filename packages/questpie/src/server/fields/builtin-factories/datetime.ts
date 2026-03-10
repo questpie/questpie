@@ -1,12 +1,23 @@
 /**
- * Datetime Field Factory (V2)
+ * Datetime Field Factory
  */
 
-import { timestamp, type PgTimestampBuilder } from "drizzle-orm/pg-core";
+import { type PgTimestampBuilder, timestamp } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { dateOps } from "../operators/builtin.js";
-import { createField } from "../field-class.js";
+import { field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { dateOps } from "../operators/builtin.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface DatetimeFieldMeta {}
+	}
+}
+
+export interface DatetimeFieldMeta extends Questpie.DatetimeFieldMeta {
+	_?: never;
+}
 
 export type DatetimeFieldState = DefaultFieldState & {
 	type: "datetime";
@@ -36,7 +47,7 @@ interface DatetimeConfig {
 export function datetime(config?: DatetimeConfig): Field<DatetimeFieldState> {
 	const { precision = 3, withTimezone = true } = config ?? {};
 
-	return createField<DatetimeFieldState>({
+	return field<DatetimeFieldState>({
 		type: "datetime",
 		columnFactory: (name) =>
 			timestamp(name, { precision, withTimezone, mode: "date" }),

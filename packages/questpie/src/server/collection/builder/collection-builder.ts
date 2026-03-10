@@ -33,11 +33,7 @@ import {
 	type BuiltinFields,
 	builtinFields,
 } from "#questpie/server/fields/builtin/defaults.js";
-import type {
-	FieldDefinition,
-	FieldDefinitionState,
-	RelationFieldMetadata,
-} from "#questpie/server/fields/types.js";
+import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 import type { SearchableConfig } from "#questpie/server/integrated/search/index.js";
 import type { Override } from "#questpie/shared/type-utils.js";
 
@@ -171,13 +167,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 			for (const [name, fieldDef] of Object.entries(fieldDefs)) {
 				// Check if field is localized (location === "i18n")
-				if (fieldDef.state?.location === "i18n") {
+				if (fieldDef.getLocation?.() === "i18n") {
 					localizedFields.push(name);
 				}
 
-				if (fieldDef.state?.location === "virtual") {
-					const virtualValue = (fieldDef.state.config as { virtual?: unknown })
-						?.virtual;
+				if (fieldDef.getLocation?.() === "virtual") {
+					const virtualValue = fieldDef._state?.virtual;
 					if (virtualValue && virtualValue !== true) {
 						sqlVirtuals[name] = virtualValue as SQL;
 					}
@@ -610,7 +605,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				const column = this.state.fields[key];
 				if (!column) continue;
 
-				if (fieldDef.state?.location === "i18n") {
+				if (fieldDef.getLocation?.() === "i18n") {
 					localizedFields[key] = column;
 				} else {
 					mainFields[key] = column;

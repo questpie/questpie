@@ -11,7 +11,7 @@
  * ```ts
  * import { createFieldBuilder, builtinFields } from "questpie/server/fields";
  *
- * // Using built-in fields (V2 chain syntax)
+ * // Using built-in fields
  * const posts = collection("posts").fields(({ f }) => ({
  *   title: f.text(255).required(),
  *   content: f.textarea().localized(),
@@ -22,21 +22,6 @@
  * }));
  * ```
  */
-
-// V2 Field builder class
-export { Field } from "./field-class.js";
-export { createField } from "./field-class.js";
-
-// V2 Field state types
-export type {
-	DefaultFieldState,
-	FieldState,
-	FieldRuntimeState,
-	ArrayFieldState,
-	ExtractSelectType,
-	ExtractInputType,
-	ExtractWhereType,
-} from "./field-class-types.js";
 
 // Builder
 export {
@@ -51,21 +36,20 @@ export {
 	type FieldValues,
 	type InferFieldsFromFactory,
 } from "./builder.js";
-
-// V2 Built-in field factories
+// Built-in field factories
 export * from "./builtin-factories/index.js";
-
-// V1 field.ts — kept for InferSelectType (used by field-types.ts) and admin's rich-text/blocks
-export {
-	type BuildFieldState,
-	createFieldDefinition,
-	type ExtractConfigFromFieldDef,
-	type ExtractOpsFromFieldDef,
-	type ExtractTypeFromFieldDef,
-	type ExtractValueFromFieldDef,
-	type FieldDef,
-	field,
-} from "./field.js";
+// Field builder class
+export { Field, field } from "./field-class.js";
+// Field state types
+export type {
+	ArrayFieldState,
+	DefaultFieldState,
+	ExtractInputType,
+	ExtractSelectType,
+	ExtractWhereType,
+	FieldRuntimeState,
+	FieldState,
+} from "./field-class-types.js";
 
 // Reactive field system
 export {
@@ -92,14 +76,12 @@ export {
 } from "./reactive.js";
 
 // Core types
+// NOTE: FieldAccess is NOT re-exported here to avoid name collision with
+// collection-level FieldAccess in collection/builder/types.ts.
+// Import field-level FieldAccess directly from "#questpie/server/fields/types.js".
 export type {
-	AnyFieldDefinition,
-	BaseFieldConfig,
 	ContextualOperators,
 	FieldAccessContext,
-	FieldDefinition,
-	FieldDefinitionAccess,
-	FieldDefinitionState,
 	FieldHookContext,
 	FieldHooks,
 	FieldMetadata,

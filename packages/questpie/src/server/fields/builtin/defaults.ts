@@ -71,13 +71,3 @@ export const builtinFields = {
  * Type for the builtin fields map.
  */
 export type BuiltinFields = typeof builtinFields;
-
-/**
- * @deprecated Use `builtinFields` instead
- */
-export const defaultFields = builtinFields;
-
-/**
- * @deprecated Use `BuiltinFields` instead
- */
-export type DefaultFields = BuiltinFields;

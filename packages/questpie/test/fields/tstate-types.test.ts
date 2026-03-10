@@ -10,108 +10,112 @@
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { createFieldBuilder } from "#questpie/server/fields/builder.js";
-import { defaultFields } from "#questpie/server/fields/builtin/defaults.js";
+import { builtinFields } from "#questpie/server/fields/builtin/defaults.js";
 import type {
-	FieldDefinition,
-	FieldDefinitionState,
-} from "#questpie/server/fields/types.js";
+	ExtractInputType,
+	ExtractSelectType,
+} from "#questpie/server/fields/field-class-types.js";
 
 // Create callable proxy from plain field defs
-const f = createFieldBuilder(defaultFields);
+const f = createFieldBuilder(builtinFields);
 
 describe("TState Type Inference (compile-time only)", () => {
-	test("field state is correctly typed", () => {
+	test("field TState is correctly typed", () => {
 		// Create field definitions
 		const titleField = f.text(255).required();
 		const contentField = f.text().localized();
 		const excerptField = f.text().virtual();
 		const countField = f.number().virtual(sql<number>`(SELECT COUNT(*))`);
 
-		// Type tests - these should compile without errors
-		type TitleState = typeof titleField.state;
-		type ContentState = typeof contentField.state;
-		type ExcerptState = typeof excerptField.state;
-		type CountState = typeof countField.state;
+		// Type tests via _ phantom property
+		type TitleState = typeof titleField._;
+		type ContentState = typeof contentField._;
+		type ExcerptState = typeof excerptField._;
+		type CountState = typeof countField._;
 
-		// Verify types at compile time
-		const _titleLocation: TitleState["location"] = "main";
-		const _contentLocation: ContentState["location"] = "i18n";
-		const _excerptLocation: ExcerptState["location"] = "virtual";
-		const _countLocation: CountState["location"] = "virtual";
+		// Verify notNull/localized/virtual at type level
+		const _titleNotNull: TitleState["notNull"] = true;
+		const _contentLocalized: ContentState["localized"] = true;
+		const _excerptVirtual: ExcerptState["virtual"] = true;
+		const _countVirtual: CountState["virtual"] = true;
 
-		// Input types
-		type TitleInput = TitleState["input"]; // should be string
-		type ContentInput = ContentState["input"]; // should be string | null | undefined
-		type ExcerptInput = ExcerptState["input"]; // should be never
-		type CountInput = CountState["input"]; // should be never
+		// Input type extraction
+		type TitleInput = ExtractInputType<TitleState>; // string (required, no default)
+		type ContentInput = ExtractInputType<ContentState>; // string | null | undefined (nullable)
+		type ExcerptInput = ExtractInputType<ExcerptState>; // never (virtual, no input)
+		type CountInput = ExtractInputType<CountState>; // never (virtual, no input)
 
-		// Output types
-		type TitleOutput = TitleState["output"]; // should be string
-		type ContentOutput = ContentState["output"]; // should be string
-		type ExcerptOutput = ExcerptState["output"]; // should be string
-		type CountOutput = CountState["output"]; // should be number
+		// Output type extraction
+		type TitleOutput = ExtractSelectType<TitleState>; // string (notNull)
+		type ContentOutput = ExtractSelectType<ContentState>; // string | null
+		type ExcerptOutput = ExtractSelectType<ExcerptState>; // string | null
+		type CountOutput = ExtractSelectType<CountState>; // number | null
 
 		// Column types
-		type TitleColumn = TitleState["column"]; // should be PgVarchar
-		type ExcerptColumn = ExcerptState["column"]; // should be null
+		type TitleColumn = TitleState["column"]; // PgVarchar (not null)
+		type ExcerptColumn = ExcerptState["column"]; // null (virtual)
 
 		// Runtime assertions (just to have something to execute)
-		expect(_titleLocation).toBe("main");
-		expect(_contentLocation).toBe("i18n");
-		expect(_excerptLocation).toBe("virtual");
-		expect(_countLocation).toBe("virtual");
+		expect(titleField.getLocation()).toBe("main");
+		expect(contentField.getLocation()).toBe("i18n");
+		expect(excerptField.getLocation()).toBe("virtual");
+		expect(countField.getLocation()).toBe("virtual");
 	});
 
 	test("input variations are correctly inferred", () => {
 		// required: true
 		const requiredField = f.text().required();
-		type RequiredInput = typeof requiredField.state.input;
-		const _required: RequiredInput = "test"; // should be string
+		type RequiredInput = (typeof requiredField._)["input"];
+		// RequiredInput narrows to true (notNull means input is required)
 
 		// default value
 		const defaultField = f.text().default("untitled");
-		type DefaultInput = typeof defaultField.state.input;
-		const _default: DefaultInput = undefined; // should be string | undefined
+		type DefaultHasDefault = (typeof defaultField._)["hasDefault"];
+		// DefaultHasDefault narrows to true
 
 		// input: false
 		const noInputField = f.text().inputFalse();
-		type NoInput = typeof noInputField.state.input;
-		// NoInput should be never
+		type NoInputFlag = (typeof noInputField._)["input"];
+		// NoInputFlag narrows to false
 
 		// input: "optional"
 		const optionalField = f.text().inputOptional();
-		type OptionalInput = typeof optionalField.state.input;
-		const _optional: OptionalInput = undefined; // should be string | undefined
+		type OptionalInputFlag = (typeof optionalField._)["input"];
+		// OptionalInputFlag narrows to "optional"
 
 		// virtual + input: true
 		const virtualWithInput = f.text().virtual().inputTrue();
-		type VirtualWithInput = typeof virtualWithInput.state.input;
-		const _virtualInput: VirtualWithInput = undefined; // should be string | undefined
+		type VirtualWithInputFlag = (typeof virtualWithInput._)["input"];
+		// VirtualWithInputFlag narrows to true
 
-		expect(_required).toBe("test");
-		expect(_optional).toBe(undefined);
-		expect(_virtualInput).toBe(undefined);
+		expect(requiredField._state.notNull).toBe(true);
+		expect(defaultField._state.hasDefault).toBe(true);
+		expect(noInputField._state.input).toBe(false);
+		expect(optionalField._state.input).toBe("optional");
+		expect(virtualWithInput._state.input).toBe(true);
 	});
 
 	test("output variations are correctly inferred", () => {
 		// default
 		const normalField = f.text();
-		type NormalOutput = typeof normalField.state.output;
-		const _normal: NormalOutput = "test"; // should be string
+		type NormalOutput = (typeof normalField._)["output"];
+		// NormalOutput is true (default)
 
 		// output: false
 		const hiddenField = f.text().outputFalse();
-		type HiddenOutput = typeof hiddenField.state.output;
-		// HiddenOutput should be never
+		type HiddenOutput = (typeof hiddenField._)["output"];
+		// HiddenOutput is false
 
 		// access.read function
-		const restrictedField = f.text().access({ read: (ctx: any) => (ctx.user as any)?.role === "admin" });
-		type RestrictedOutput = typeof restrictedField.state.output;
-		// RestrictedOutput might be string depending on field def - just test compilation
-		const _restricted: RestrictedOutput = "test";
+		const restrictedField = f
+			.text()
+			.access({ read: (ctx: any) => (ctx.user as any)?.role === "admin" });
+		type RestrictedOutput = (typeof restrictedField._)["output"];
+		// RestrictedOutput is still true (access doesn't change type-level output)
 
-		expect(_normal).toBe("test");
-		expect(_restricted).toBe("test");
+		expect(normalField._state.output).toBe(true);
+		expect(hiddenField._state.output).toBe(false);
+		expect(restrictedField._state.output).toBe(true);
 	});
 
 	test("toColumn returns correct values", () => {

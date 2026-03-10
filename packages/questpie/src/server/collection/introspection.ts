@@ -14,6 +14,8 @@ import type {
 	CollectionBuilderState,
 } from "#questpie/server/collection/builder/types.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import {
 	extractDependencies,
 	getDebounce,
@@ -22,8 +24,6 @@ import {
 	type SerializedReactiveConfig,
 } from "#questpie/server/fields/reactive.js";
 import type {
-	FieldDefinition,
-	FieldDefinitionState,
 	FieldLocation,
 	FieldMetadata,
 	ReferentialAction,
@@ -458,7 +458,7 @@ export interface RelationSchema {
  * Synthetic upload system fields added by `.upload()`.
  *
  * `.upload()` extends collection columns/output with these fields, but they are
- * not represented as FieldDefinitions. Introspection adds them so admin clients
+ * not represented as field definitions. Introspection adds them so admin clients
  * can render forms/tables consistently (including asset preview).
  */
 function getUploadSystemFieldSchemas(): Record<string, FieldSchema> {
@@ -665,7 +665,7 @@ export async function introspectCollection(
 		fields[name] = {
 			name,
 			metadata,
-			location: fieldDef.state.location,
+			location: fieldDef.getLocation(),
 			access: fieldAccess,
 			validation,
 			...(reactive && { reactive }),
@@ -722,10 +722,7 @@ export async function introspectCollection(
 	if (fieldDefinitions && Object.keys(fieldDefinitions).length > 0) {
 		try {
 			const { insertSchema, updateSchema } = buildCollectionSchemas(
-				fieldDefinitions as Record<
-					string,
-					FieldDefinition<FieldDefinitionState>
-				>,
+				fieldDefinitions as Record<string, Field<FieldState>>,
 			);
 			validation = {
 				insert: insertSchema ? z.toJSONSchema(insertSchema) : undefined,
@@ -769,8 +766,8 @@ export async function introspectCollection(
 }
 
 /**
- * Serialize action form fields from FieldDefinition objects to flat config format.
- * FieldDefinition objects have { state: { type, config: { label, required, ... } }, getMetadata() }
+ * Serialize action form fields from Field objects to flat config format.
+ * Field objects have { state: { type, config: { ... } }, getMetadata() }
  * but the client expects flat { type, label, required, options, ... }.
  */
 function serializeActionFormFields(
@@ -784,41 +781,21 @@ function serializeActionFormFields(
 			continue;
 		}
 
-		// If it has getMetadata(), it's a FieldDefinition — use getMetadata() for type/label/etc
+		// If it has getMetadata(), it's a Field instance — use getMetadata() for type/label/etc
 		if (typeof field.getMetadata === "function") {
 			const metadata = field.getMetadata();
-			const config = field.state?.config ?? {};
+			const s = field._state ?? {};
 
 			const serialized: Record<string, any> = {
-				type: metadata.type ?? field.state?.type ?? "text",
+				type: metadata.type ?? field.getType?.() ?? "text",
 				label: metadata.label,
 				description: metadata.description,
 				required: metadata.required ?? false,
-				default: config.defaultValue ?? config.default,
+				default: s.defaultValue,
 			};
 
-			// Collect field-specific options (exclude common BaseFieldConfig props)
-			const commonKeys = new Set([
-				"label",
-				"description",
-				"required",
-				"localized",
-				"defaultValue",
-				"default",
-				"input",
-				"output",
-				"access",
-				"meta",
-				"hidden",
-				"virtual",
-				"unique",
-			]);
+			// Collect field-specific options from metadata
 			const fieldOptions: Record<string, unknown> = {};
-			for (const [key, value] of Object.entries(config)) {
-				if (!commonKeys.has(key)) {
-					fieldOptions[key] = value;
-				}
-			}
 
 			// For select fields, include options from metadata (already resolved)
 			if (metadata.options) {
@@ -918,7 +895,7 @@ function extractAdminConfig(
 		const customActions = (actionsConfig.custom || []).map(
 			(action: { handler?: unknown; form?: any; [key: string]: unknown }) => {
 				const { handler: _handler, ...rest } = action;
-				// Serialize form fields from FieldDefinition objects to flat config
+				// Serialize form fields from Field objects to flat config
 				if (rest.form?.fields) {
 					rest.form = {
 						...rest.form,
@@ -999,7 +976,9 @@ async function evaluateCollectionAccess(
 	const { access } = state;
 	const appDefaultAccess = (app as any)?.defaultAccess;
 
-	const { extractAppServices } = await import("#questpie/server/config/app-context.js");
+	const { extractAppServices } = await import(
+		"#questpie/server/config/app-context.js"
+	);
 	const services = extractAppServices(app, {
 		db: context.db,
 		session: context.session,
@@ -1100,18 +1079,20 @@ async function evaluateAccessRule(
  * Evaluate field-level access for current user.
  */
 async function evaluateFieldAccess(
-	fieldDef: FieldDefinition<FieldDefinitionState>,
+	fieldDef: Field<FieldState>,
 	context: CRUDContext,
 	app?: unknown,
 ): Promise<FieldAccessInfo | undefined> {
-	const fieldAccess = fieldDef.state.config?.access;
+	const fieldAccess = fieldDef._state.access;
 
 	// No field-level access config
 	if (!fieldAccess) {
 		return undefined;
 	}
 
-	const { extractAppServices } = await import("#questpie/server/config/app-context.js");
+	const { extractAppServices } = await import(
+		"#questpie/server/config/app-context.js"
+	);
 	const services = extractAppServices(app, {
 		db: context.db,
 		session: context.session,
@@ -1206,7 +1187,7 @@ type ReactiveFormFieldKey = "hidden" | "readOnly" | "disabled" | "compute";
  * @returns Serialized reactive config or undefined if no reactive behavior
  */
 export function extractFieldReactiveConfig(
-	fieldDef: FieldDefinition<FieldDefinitionState>,
+	fieldDef: Field<FieldState>,
 	formReactive?: FieldReactiveSchema,
 ): FieldReactiveSchema | undefined {
 	const optionsReactive = extractFieldOptionsReactiveConfig(fieldDef);
@@ -1386,12 +1367,12 @@ function serializeFormFieldReactiveConfig(
  * Extract reactive options config from field definition.
  */
 function extractFieldOptionsReactiveConfig(
-	fieldDef: FieldDefinition<FieldDefinitionState>,
+	fieldDef: Field<FieldState>,
 ): Pick<FieldReactiveSchema, "options"> | undefined {
-	const config = fieldDef.state.config as Record<string, unknown> | undefined;
+	const s = fieldDef._state;
 
 	// Also check for dynamic options on select/relation fields
-	const options = config?.options;
+	const options = s.options as Record<string, unknown> | undefined;
 	if (options && typeof options === "object" && "handler" in options) {
 		// Options is an OptionsConfig - extract deps
 		const optionsConfig = options as { handler: unknown; deps?: unknown };

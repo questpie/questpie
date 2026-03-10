@@ -1,5 +1,5 @@
 /**
- * Custom Field Factory (V2)
+ * Custom Field Factory
  *
  * Escape hatch for creating fields from arbitrary Drizzle column builders
  * and optional Zod schemas. Useful for PostGIS, custom types, etc.
@@ -7,7 +7,7 @@
 
 import { z, type ZodType } from "zod";
 import { basicOps } from "../operators/builtin.js";
-import { createField } from "../field-class.js";
+import { field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
 
 export type CustomFieldState = DefaultFieldState & {
@@ -43,7 +43,7 @@ export function from(
 		? (column as (name: string) => unknown)
 		: (_name: string) => column;
 
-	return createField<CustomFieldState>({
+	return field<CustomFieldState>({
 		type: "custom",
 		columnFactory,
 		schemaFactory: zodSchema ? () => zodSchema : () => z.unknown(),

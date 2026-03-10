@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 import { pgTable, varchar } from "drizzle-orm/pg-core";
 import { createFieldBuilder } from "#questpie/server/fields/builder.js";
-import { defaultFields } from "#questpie/server/fields/builtin/index.js";
+import { builtinFields } from "#questpie/server/fields/builtin/index.js";
 import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 
 // Mock tables for testing
@@ -36,7 +36,7 @@ const mockPostTags = { name: "postTags", table: postTagsTable };
 
 describe("Unified Relation Field", () => {
 	// Create a callable proxy from plain field defs
-	const fields = createFieldBuilder(defaultFields);
+	const fields = createFieldBuilder(builtinFields);
 
 	test("belongsTo relation is created correctly", () => {
 		const relationField = fields.relation(() => mockUsers as any).required();
@@ -81,9 +81,7 @@ describe("Unified Relation Field", () => {
 	});
 
 	test("multiple relation creates jsonb column", () => {
-		const relationField = fields
-			.relation(() => mockUsers as any)
-			.multiple();
+		const relationField = fields.relation(() => mockUsers as any).multiple();
 
 		expect(relationField).toBeDefined();
 
@@ -121,9 +119,7 @@ describe("Unified Relation Field", () => {
 
 	test("relation generates correct Zod schema", () => {
 		// belongsTo: required
-		const requiredRelation = fields
-			.relation(() => mockUsers as any)
-			.required();
+		const requiredRelation = fields.relation(() => mockUsers as any).required();
 		const requiredSchema = requiredRelation.toZodSchema();
 		expect(requiredSchema).toBeDefined();
 
@@ -141,10 +137,12 @@ describe("Unified Relation Field", () => {
 	});
 
 	test("morphTo (polymorphic) creates type and id columns", () => {
-		const relationField = fields.relation({
-			users: () => mockUsers as any,
-			posts: () => mockPosts as any,
-		}).required();
+		const relationField = fields
+			.relation({
+				users: () => mockUsers as any,
+				posts: () => mockPosts as any,
+			})
+			.required();
 
 		expect(relationField).toBeDefined();
 

@@ -1,57 +1,67 @@
 /**
  * Built-in Field Types — Barrel
  *
- * Re-exports V2 field factories and the builtinFields map.
+ * Re-exports field factories and the builtinFields map.
  */
 
-// V2 factories
+// Factories + meta augmentation interfaces
 export {
-	text,
-	type TextFieldState,
-	textarea,
-	type TextareaFieldState,
-	email,
-	type EmailFieldState,
-	url,
-	type UrlFieldState,
-	number,
-	type NumberFieldState,
-	boolean,
+	type BooleanFieldMeta,
 	type BooleanFieldState,
-	date,
+	boolean,
+	type CustomFieldState,
+	type DateFieldMeta,
 	type DateFieldState,
-	datetime,
+	type DatetimeFieldMeta,
 	type DatetimeFieldState,
-	time,
-	type TimeFieldState,
-	select,
-	type SelectOption,
-	type SelectFieldState,
-	json,
+	date,
+	datetime,
+	type EmailFieldMeta,
+	type EmailFieldState,
+	email,
+	from,
+	type JsonFieldMeta,
 	type JsonFieldState,
 	type JsonValue,
-	object,
+	json,
+	type NumberFieldMeta,
+	type NumberFieldState,
+	number,
+	type ObjectFieldMeta,
 	type ObjectFieldState,
-	from,
-	type CustomFieldState,
-	relation,
+	object,
+	type RelationFieldMeta,
 	type RelationFieldState,
-	upload,
+	relation,
+	type SelectFieldMeta,
+	type SelectFieldState,
+	type SelectOption,
+	select,
+	type TextareaFieldMeta,
+	type TextareaFieldState,
+	type TextFieldMeta,
+	type TextFieldState,
+	type TimeFieldMeta,
+	type TimeFieldState,
+	text,
+	textarea,
+	time,
+	type UploadFieldMeta,
 	type UploadFieldState,
+	type UrlFieldMeta,
+	type UrlFieldState,
+	upload,
+	url,
 } from "../builtin-factories/index.js";
 
-// Builtin fields map
-export {
-	builtinFields,
-	type BuiltinFields,
-	defaultFields,
-	type DefaultFields,
-} from "./defaults.js";
-
-// Re-export types from types.ts that were previously co-located with V1 builtin files
+// Array field meta (.array() chain method, no separate factory)
+export type { ArrayFieldMeta } from "../field-class-types.js";
+// Re-export types from types.ts
 export type {
 	InferredRelationType,
 	ReferentialAction,
 	RelationFieldMetadata,
 	SelectFieldMetadata,
 } from "../types.js";
+// Builtin fields map
+export { type BuiltinFields, builtinFields } from "./defaults.js";

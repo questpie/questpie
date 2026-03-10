@@ -1,30 +1,42 @@
 /**
- * Upload Field Factory (V2)
+ * Upload Field Factory
  *
  * File upload field that references an assets/media collection.
  * Supports single uploads (belongsTo) and many-to-many via junction table.
  */
 
-import { varchar, type PgVarcharBuilder } from "drizzle-orm/pg-core";
+import { type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { KnownCollectionNames } from "../../config/app-context.js";
-import { belongsToOps, toManyOps } from "../operators/builtin.js";
-import { createField } from "../field-class.js";
+import { field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
-import type { RelationFieldMetadata, ReferentialAction } from "../types.js";
+import { belongsToOps, toManyOps } from "../operators/builtin.js";
+import type { ReferentialAction, RelationFieldMetadata } from "../types.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface UploadFieldMeta {}
+	}
+}
+
+export interface UploadFieldMeta extends Questpie.UploadFieldMeta {
+	_?: never;
+}
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type UploadFieldState<TTo extends string = "assets"> = DefaultFieldState & {
-	type: "upload";
-	data: string;
-	column: PgVarcharBuilder<[string, ...string[]]>;
-	operators: typeof belongsToOps;
-	relationTo: TTo;
-	relationKind: "one";
-};
+export type UploadFieldState<TTo extends string = "assets"> =
+	DefaultFieldState & {
+		type: "upload";
+		data: string;
+		column: PgVarcharBuilder<[string, ...string[]]>;
+		operators: typeof belongsToOps;
+		relationTo: TTo;
+		relationKind: "one";
+	};
 
 interface UploadConfig {
 	/** Target upload collection. @default "assets" */
@@ -62,12 +74,21 @@ interface UploadConfig {
  * document: f.upload({ to: "media", mimeTypes: ["application/pdf"] })
  * ```
  */
-export function upload<TTo extends string = "assets">(config?: UploadConfig & { to?: TTo }): Field<UploadFieldState<TTo>> {
-	const { to = "assets" as TTo, through, mimeTypes, maxSize, sourceField, targetField } = config ?? {} as UploadConfig & { to?: TTo };
+export function upload<TTo extends string = "assets">(
+	config?: UploadConfig & { to?: TTo },
+): Field<UploadFieldState<TTo>> {
+	const {
+		to = "assets" as TTo,
+		through,
+		mimeTypes,
+		maxSize,
+		sourceField,
+		targetField,
+	} = config ?? ({} as UploadConfig & { to?: TTo });
 
 	const isM2M = !!through;
 
-	return createField<UploadFieldState<TTo>>({
+	return field<UploadFieldState<TTo>>({
 		type: "upload",
 		columnFactory: isM2M ? null : (name) => varchar(name, { length: 36 }),
 		schemaFactory: () =>

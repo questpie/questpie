@@ -13,11 +13,7 @@ import type {
 	FieldSelect,
 	FieldWhere,
 } from "#questpie/server/fields/field-types.js";
-import type {
-	CollectionWherePlaceholder,
-	FieldDefinition,
-	FieldDefinitionState,
-} from "#questpie/server/fields/types.js";
+import type { CollectionWherePlaceholder } from "#questpie/server/fields/types.js";
 import type {
 	AnyCollectionOrBuilder,
 	CollectionInsert as CollectionInsertFromInfer,
@@ -212,38 +208,44 @@ type OperatorValue<TFn> = TFn extends (...args: any[]) => any
 	? Parameters<TFn>[1]
 	: never;
 
-type OperatorKeysFromFieldDef<TFieldDef> =
-	TFieldDef extends FieldDefinition<any>
-		?
-				| keyof ReturnType<TFieldDef["getOperators"]>["column"]
-				| keyof ReturnType<TFieldDef["getOperators"]>["jsonb"]
-		: never;
+type OperatorKeysFromFieldDef<TFieldDef> = TFieldDef extends {
+	getOperators: () => any;
+}
+	?
+			| keyof ReturnType<TFieldDef["getOperators"]>["column"]
+			| keyof ReturnType<TFieldDef["getOperators"]>["jsonb"]
+	: never;
 
-type OperatorValueFromFieldDef<TFieldDef, TOpKey> =
-	TFieldDef extends FieldDefinition<any>
-		?
-				| (TOpKey extends keyof ReturnType<TFieldDef["getOperators"]>["column"]
-						? OperatorValue<ReturnType<TFieldDef["getOperators"]>["column"][TOpKey]>
-						: never)
-				| (TOpKey extends keyof ReturnType<TFieldDef["getOperators"]>["jsonb"]
-						? OperatorValue<ReturnType<TFieldDef["getOperators"]>["jsonb"][TOpKey]>
-						: never)
-		: never;
+type OperatorValueFromFieldDef<TFieldDef, TOpKey> = TFieldDef extends {
+	getOperators: () => any;
+}
+	?
+			| (TOpKey extends keyof ReturnType<TFieldDef["getOperators"]>["column"]
+					? OperatorValue<
+							ReturnType<TFieldDef["getOperators"]>["column"][TOpKey]
+						>
+					: never)
+			| (TOpKey extends keyof ReturnType<TFieldDef["getOperators"]>["jsonb"]
+					? OperatorValue<
+							ReturnType<TFieldDef["getOperators"]>["jsonb"][TOpKey]
+						>
+					: never)
+	: never;
 
-type FieldOperatorsFromFieldDef<TFieldDef> =
-	TFieldDef extends FieldDefinition<any>
-		? {
-				[K in OperatorKeysFromFieldDef<TFieldDef>]?: OperatorValueFromFieldDef<
-					TFieldDef,
-					K
-				>;
-			}
-		: Record<never, never>;
+type FieldOperatorsFromFieldDef<TFieldDef> = TFieldDef extends {
+	getOperators: () => any;
+}
+	? {
+			[K in OperatorKeysFromFieldDef<TFieldDef>]?: OperatorValueFromFieldDef<
+				TFieldDef,
+				K
+			>;
+		}
+	: Record<never, never>;
 
-export type WhereOperators<T> =
-	T extends FieldDefinition<any>
-		? FieldOperatorsFromFieldDef<T>
-		: WhereOperatorsLegacy<T>;
+export type WhereOperators<T> = T extends { getOperators: () => any }
+	? FieldOperatorsFromFieldDef<T>
+	: WhereOperatorsLegacy<T>;
 
 /**
  * Helper type to get value type from array or single relation
@@ -445,13 +447,14 @@ type ResolveWherePlaceholders<TWhereShape, TConfig, TApp> = {
  *
  * No field types are special-cased — the field's operators drive everything.
  */
-type V2RelationWhereResolved<TFieldDef, TState, TApp> =
-	TState extends { relationTo: infer TTo extends string }
-		?
+type V2RelationWhereResolved<TFieldDef, TState, TApp> = TState extends {
+	relationTo: infer TTo extends string;
+}
+	?
 			| FieldSelect<TFieldDef, TApp>
 			| ResolveWherePlaceholdersV2<FieldWhere<TFieldDef, TApp>, TTo, TApp>
 			| Where<GetCollection<AppCollections<TApp>, TTo>, TApp>
-		: FieldSelect<TFieldDef, TApp> | FieldWhere<TFieldDef, TApp>;
+	: FieldSelect<TFieldDef, TApp> | FieldWhere<TFieldDef, TApp>;
 
 type ResolveWherePlaceholdersV2<TWhereShape, TTo extends string, TApp> = {
 	[K in keyof TWhereShape]?: NonNullable<
@@ -467,24 +470,7 @@ type FieldWhereInputFromDefinition<TFieldDef, TApp> =
 		? TState extends { type: "relation" | "upload" }
 			? V2RelationWhereResolved<TFieldDef, TState, TApp>
 			: FieldSelect<TFieldDef, TApp> | FieldWhere<TFieldDef, TApp>
-		// V1: FieldDefinition<TState> dispatch (legacy)
-		: TFieldDef extends FieldDefinition<infer TState>
-			? TState extends FieldDefinitionState
-				? TState["type"] extends "relation"
-					?
-							| ResolveWherePlaceholders<
-									FieldWhere<TFieldDef, TApp>,
-									TState["config"],
-									TApp
-							  >
-							| FieldSelect<TFieldDef, TApp>
-							| Where<
-									RelationTargetCollectionFromConfig<TState["config"], TApp>,
-									TApp
-							  >
-					: FieldSelect<TFieldDef, TApp> | FieldWhere<TFieldDef, TApp>
-				: never
-			: never;
+		: never;
 
 type WhereFieldsFromDefinitions<
 	TFieldDefs extends Record<string, { $types: any; toColumn: any }>,
@@ -924,7 +910,8 @@ type IsRequiredKey<T, TK extends keyof T> = TK extends RequiredKeys<T>
 	? true
 	: false;
 
-type OptionalizeKeys<T, TK extends keyof T> = Omit<T, TK> & Partial<Pick<T, TK>>;
+type OptionalizeKeys<T, TK extends keyof T> = Omit<T, TK> &
+	Partial<Pick<T, TK>>;
 
 type OptionalizeRelationForeignKeys<TInsert, TRelations> =
 	RelationForeignKeys<TInsert, TRelations> extends keyof TInsert

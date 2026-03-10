@@ -5,18 +5,30 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import {
+	integer,
+	boolean as pgBoolean,
+	text as pgText,
+	varchar,
+} from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { varchar, integer, boolean as pgBoolean, text as pgText } from "drizzle-orm/pg-core";
-import { Field, createField } from "#questpie/server/fields/field-class.js";
-import { stringOps, numberOps, booleanOps } from "#questpie/server/fields/operators/builtin.js";
-import type { DefaultFieldState, FieldRuntimeState } from "#questpie/server/fields/field-class-types.js";
+import { Field, field } from "#questpie/server/fields/field-class.js";
+import type {
+	DefaultFieldState,
+	FieldRuntimeState,
+} from "#questpie/server/fields/field-class-types.js";
+import {
+	booleanOps,
+	numberOps,
+	stringOps,
+} from "#questpie/server/fields/operators/builtin.js";
 
 // ============================================================================
 // Helper: Create a text field for testing
 // ============================================================================
 
 function createTestTextField(maxLength = 255) {
-	return createField<DefaultFieldState & { type: "text"; data: string }>({
+	return field<DefaultFieldState & { type: "text"; data: string }>({
 		type: "text",
 		columnFactory: (name) => varchar(name, { length: maxLength }),
 		schemaFactory: () => z.string().max(maxLength),
@@ -33,7 +45,7 @@ function createTestTextField(maxLength = 255) {
 }
 
 function createTestNumberField() {
-	return createField<DefaultFieldState & { type: "number"; data: number }>({
+	return field<DefaultFieldState & { type: "number"; data: number }>({
 		type: "number",
 		columnFactory: (name) => integer(name),
 		schemaFactory: () => z.number(),
@@ -312,19 +324,18 @@ describe("Field V2 — getMetadata()", () => {
 	});
 });
 
-describe("Field V2 — state (legacy compat)", () => {
-	it("produces FieldDefinitionState-compatible state", () => {
+describe("Field — runtime accessors", () => {
+	it("getType() and getLocation() return correct values", () => {
 		const f = createTestTextField().required().localized();
-		const state = f.state;
 
-		expect(state.type).toBe("text");
-		expect(state.location).toBe("i18n"); // localized
-		expect(state.config.required).toBe(true);
-		expect(state.config.localized).toBe(true);
+		expect(f.getType()).toBe("text");
+		expect(f.getLocation()).toBe("i18n"); // localized
+		expect(f._state.notNull).toBe(true);
+		expect(f._state.localized).toBe(true);
 	});
 
 	it("virtual fields have location 'virtual'", () => {
 		const f = createTestTextField().virtual();
-		expect(f.state.location).toBe("virtual");
+		expect(f.getLocation()).toBe("virtual");
 	});
 });

@@ -139,9 +139,9 @@ function getFieldDefinition(
 			// Check for nested fields (object/array)
 			if (fieldDef.getNestedFields) {
 				currentDefs = fieldDef.getNestedFields();
-			} else if (fieldDef.state?.config?.of) {
+			} else if (fieldDef._state?.innerField) {
 				// Array field - get the "of" field's nested fields
-				const ofField = fieldDef.state.config.of;
+				const ofField = fieldDef._state.innerField;
 				if (ofField?.getNestedFields) {
 					currentDefs = ofField.getNestedFields();
 				}
@@ -153,7 +153,10 @@ function getFieldDefinition(
 
 	if (!fieldDef) {
 		const entityType = type === "global" ? "Global" : "Collection";
-		throw ApiError.notFound(`${entityType} field`, `${entityName}.${fieldPath}`);
+		throw ApiError.notFound(
+			`${entityType} field`,
+			`${entityName}.${fieldPath}`,
+		);
 	}
 
 	return fieldDef;
@@ -388,8 +391,7 @@ function getReactiveHandler(
 function getOptionsHandler(
 	fieldDef: any,
 ): ((ctx: OptionsContext) => any) | null {
-	const config = fieldDef.state?.config;
-	const options = config?.options;
+	const options = fieldDef._state?.options;
 
 	if (!options) return null;
 
@@ -635,10 +637,10 @@ export const fieldOptions = fn({
 
 			if (!handler) {
 				// No dynamic handler - check for static options
-				const config = fieldDef.state?.config;
-				if (Array.isArray(config?.options)) {
+				const fieldOptions = fieldDef._state?.options;
+				if (Array.isArray(fieldOptions)) {
 					// Static options - filter by search
-					let options = config.options as Array<{
+					let options = fieldOptions as Array<{
 						value: string | number;
 						label: string | Record<string, string>;
 					}>;

@@ -1,20 +1,31 @@
 /**
- * Number Field Factory (V2)
+ * Number Field Factory
  */
 
 import {
-	bigint as pgBigint,
 	doublePrecision,
 	integer,
 	numeric,
+	type PgIntegerBuilder,
+	bigint as pgBigint,
 	real,
 	smallint,
-	type PgIntegerBuilder,
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { numberOps } from "../operators/builtin.js";
-import { createField, Field } from "../field-class.js";
+import { field, Field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { numberOps } from "../operators/builtin.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface NumberFieldMeta {}
+	}
+}
+
+export interface NumberFieldMeta extends Questpie.NumberFieldMeta {
+	_?: never;
+}
 
 export type NumberFieldState = DefaultFieldState & {
 	type: "number";
@@ -23,7 +34,13 @@ export type NumberFieldState = DefaultFieldState & {
 	operators: typeof numberOps;
 };
 
-type NumberMode = "integer" | "smallint" | "bigint" | "real" | "double" | "decimal";
+type NumberMode =
+	| "integer"
+	| "smallint"
+	| "bigint"
+	| "real"
+	| "double"
+	| "decimal";
 
 interface DecimalConfig {
 	mode: "decimal";
@@ -44,17 +61,25 @@ interface DecimalConfig {
  * ```
  */
 export function number(): Field<NumberFieldState>;
-export function number(mode: Exclude<NumberMode, "decimal">): Field<NumberFieldState>;
+export function number(
+	mode: Exclude<NumberMode, "decimal">,
+): Field<NumberFieldState>;
 export function number(config: DecimalConfig): Field<NumberFieldState>;
-export function number(arg?: NumberMode | DecimalConfig): Field<NumberFieldState> {
+export function number(
+	arg?: NumberMode | DecimalConfig,
+): Field<NumberFieldState> {
 	const isDecimalConfig = typeof arg === "object" && arg?.mode === "decimal";
 	const mode: NumberMode = isDecimalConfig
 		? "decimal"
 		: typeof arg === "string"
 			? arg
 			: "integer";
-	const precision = isDecimalConfig ? (arg as DecimalConfig).precision ?? 10 : undefined;
-	const scale = isDecimalConfig ? (arg as DecimalConfig).scale ?? 2 : undefined;
+	const precision = isDecimalConfig
+		? ((arg as DecimalConfig).precision ?? 10)
+		: undefined;
+	const scale = isDecimalConfig
+		? ((arg as DecimalConfig).scale ?? 2)
+		: undefined;
 
 	const columnFactory = (name: string) => {
 		switch (mode) {
@@ -76,7 +101,7 @@ export function number(arg?: NumberMode | DecimalConfig): Field<NumberFieldState
 
 	const isInt = mode === "integer" || mode === "smallint";
 
-	return createField<NumberFieldState>({
+	return field<NumberFieldState>({
 		type: "number",
 		columnFactory,
 		schemaFactory: () => {
@@ -103,14 +128,18 @@ export function number(arg?: NumberMode | DecimalConfig): Field<NumberFieldState
 
 Field.prototype.min = function (n: number) {
 	// For text fields this is minLength; for number fields this is min
-	const isString = ["text", "textarea", "email", "url"].includes(this._state.type);
+	const isString = ["text", "textarea", "email", "url"].includes(
+		this._state.type,
+	);
 	return isString
 		? new Field({ ...this._state, minLength: n })
 		: new Field({ ...this._state, min: n });
 };
 
 Field.prototype.max = function (n: number) {
-	const isString = ["text", "textarea", "email", "url"].includes(this._state.type);
+	const isString = ["text", "textarea", "email", "url"].includes(
+		this._state.type,
+	);
 	return isString
 		? new Field({ ...this._state, maxLength: n })
 		: new Field({ ...this._state, max: n });

@@ -1,12 +1,27 @@
 /**
- * JSON Field Factory (V2)
+ * JSON Field Factory
  */
 
-import { json as pgJson, jsonb, type PgJsonbBuilder } from "drizzle-orm/pg-core";
+import {
+	jsonb,
+	type PgJsonbBuilder,
+	json as pgJson,
+} from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { basicOps } from "../operators/builtin.js";
-import { createField } from "../field-class.js";
+import { field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { basicOps } from "../operators/builtin.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface JsonFieldMeta {}
+	}
+}
+
+export interface JsonFieldMeta extends Questpie.JsonFieldMeta {
+	_?: never;
+}
 
 export type JsonValue =
 	| string
@@ -36,10 +51,12 @@ export type JsonFieldState = DefaultFieldState & {
  * rawData: f.json({ mode: "json" })
  * ```
  */
-export function json(config?: { mode?: "jsonb" | "json" }): Field<JsonFieldState> {
+export function json(config?: {
+	mode?: "jsonb" | "json";
+}): Field<JsonFieldState> {
 	const mode = config?.mode ?? "jsonb";
 
-	return createField<JsonFieldState>({
+	return field<JsonFieldState>({
 		type: "json",
 		columnFactory: (name) => (mode === "json" ? pgJson(name) : jsonb(name)),
 		schemaFactory: () => z.any(),

@@ -13,7 +13,6 @@ import {
 } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
-import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { buildWhereClause } from "#questpie/server/collection/crud/query-builders/index.js";
 import {
 	processNestedRelations,
@@ -45,12 +44,13 @@ import type {
 	With,
 } from "#questpie/server/collection/crud/types.js";
 import { createVersionRecord } from "#questpie/server/collection/crud/versioning/index.js";
+import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { ApiError } from "#questpie/server/errors/index.js";
 import {
 	applyFieldInputHooks,
 	applyFieldOutputHooks,
 } from "#questpie/server/fields/runtime.js";
-import type { FieldDefinitionAccess } from "#questpie/server/fields/types.js";
+import type { FieldAccess } from "#questpie/server/fields/types.js";
 import type {
 	GlobalAccessContext,
 	GlobalBuilderState,
@@ -213,12 +213,10 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		return rows[0]?.stage ?? this.workflowConfig.initialStage;
 	}
 
-	private getFieldAccessRules():
-		| Record<string, FieldDefinitionAccess>
-		| undefined {
+	private getFieldAccessRules(): Record<string, FieldAccess> | undefined {
 		// Source field access from global-level .access({ fields: {...} })
 		const globalAccess = this.state.access as
-			| { fields?: Record<string, FieldDefinitionAccess> }
+			| { fields?: Record<string, FieldAccess> }
 			| undefined;
 		return globalAccess?.fields;
 	}

@@ -1,15 +1,31 @@
 /**
- * Select Field Factory (V2)
+ * Select Field Factory
  */
 
-import { jsonb, pgEnum, varchar, type PgVarcharBuilder } from "drizzle-orm/pg-core";
+import {
+	jsonb,
+	type PgVarcharBuilder,
+	pgEnum,
+	varchar,
+} from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
-import { selectMultiOps, selectSingleOps } from "../operators/builtin.js";
-import { createField, Field } from "../field-class.js";
-import type { OptionsConfig } from "../reactive.js";
+import { field, Field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { selectMultiOps, selectSingleOps } from "../operators/builtin.js";
+import type { OptionsConfig } from "../reactive.js";
 import type { SelectFieldMetadata } from "../types.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface SelectFieldMeta {}
+	}
+}
+
+export interface SelectFieldMeta extends Questpie.SelectFieldMeta {
+	_?: never;
+}
 
 export type SelectFieldState = DefaultFieldState & {
 	type: "select";
@@ -73,7 +89,7 @@ export function select(
 			? Math.max(...staticOpts.map((o) => String(o.value).length), 50)
 			: 255;
 
-	return createField<SelectFieldState>({
+	return field<SelectFieldState>({
 		type: "select",
 		columnFactory: (name) => varchar(name, { length: maxLength }),
 		schemaFactory: () => {
@@ -129,7 +145,10 @@ Field.prototype.enum = function (enumName: string) {
 		return new Field({ ...state, enumType: true, enumName });
 	}
 
-	const enumValues = staticOpts.map((o) => String(o.value)) as [string, ...string[]];
+	const enumValues = staticOpts.map((o) => String(o.value)) as [
+		string,
+		...string[],
+	];
 
 	// Create or get cached enum
 	let enumDef = enumCache.get(enumName);

@@ -13,10 +13,10 @@ import {
 	extractFormReactiveConfigs,
 	type FieldReactiveSchema,
 } from "#questpie/server/collection/introspection.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type {
-	FieldDefinition,
-	FieldDefinitionAccess,
-	FieldDefinitionState,
+	FieldAccess,
 	FieldLocation,
 	FieldMetadata,
 } from "#questpie/server/fields/types.js";
@@ -332,7 +332,7 @@ export async function introspectGlobal(
 		fields[name] = {
 			name,
 			metadata,
-			location: fieldDef.state.location,
+			location: fieldDef.getLocation(),
 			access: fieldAccess,
 			validation,
 			...(reactive && { reactive }),
@@ -367,7 +367,7 @@ export async function introspectGlobal(
  * Uses field definitions as source of truth - respects input/output/virtual attributes.
  */
 function buildGlobalValidation(
-	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	fieldDefinitions: Record<string, Field<FieldState>>,
 ): GlobalSchema["validation"] {
 	if (!fieldDefinitions || Object.keys(fieldDefinitions).length === 0) {
 		return undefined;
@@ -442,7 +442,9 @@ async function evaluateGlobalAccess(
 	const { access } = state;
 	const appDefaultAccess = (app as any)?.defaultAccess;
 
-	const { extractAppServices } = await import("#questpie/server/config/app-context.js");
+	const { extractAppServices } = await import(
+		"#questpie/server/config/app-context.js"
+	);
 	const services = extractAppServices(app, {
 		db: context.db,
 		session: context.session,
@@ -520,13 +522,11 @@ async function evaluateAccessRule(
  * Evaluate field-level access for current user.
  */
 async function evaluateGlobalFieldAccess(
-	fieldDef: FieldDefinition<FieldDefinitionState>,
+	fieldDef: Field<FieldState>,
 	context: CRUDContext,
 	app?: unknown,
 ): Promise<GlobalFieldAccessInfo | undefined> {
-	const fieldAccess = fieldDef.state.config?.access as
-		| FieldDefinitionAccess
-		| undefined;
+	const fieldAccess = fieldDef._state.access as FieldAccess | undefined;
 
 	// No field-level access config
 	if (!fieldAccess) {

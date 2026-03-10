@@ -18,7 +18,9 @@ import type {
 } from "#questpie/server/collection/crud/types.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import { ApiError } from "#questpie/server/errors/base.js";
-import type { FieldDefinition, FieldDefinitionState, OperatorFn } from "#questpie/server/fields/types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { OperatorFn } from "#questpie/server/fields/types.js";
 
 /**
  * Options for building WHERE clause
@@ -71,7 +73,7 @@ export function buildLocalizedFieldRef(
 	}
 
 	const fieldDef = state.fieldDefinitions?.[field];
-	if (fieldDef?.state?.location === "virtual") {
+	if (fieldDef?.getLocation() === "virtual") {
 		return undefined;
 	}
 
@@ -105,7 +107,7 @@ function isNonQueryableVirtualField(
 	state: CollectionBuilderState,
 ): boolean {
 	const fieldDef = state.fieldDefinitions?.[field];
-	if (!fieldDef || fieldDef.state.location !== "virtual") {
+	if (!fieldDef || fieldDef.getLocation() !== "virtual") {
 		return false;
 	}
 
@@ -201,7 +203,7 @@ export function buildWhereClause(
 		) {
 			// Look up the field definition for field-driven operator dispatch
 			const fieldDef = state.fieldDefinitions?.[key] as
-				| FieldDefinition<FieldDefinitionState>
+				| Field<FieldState>
 				| undefined;
 			const fieldOps = fieldDef?.getOperators?.();
 			const fieldColumnOps = fieldOps?.column;

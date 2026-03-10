@@ -8,11 +8,7 @@ import {
 	type BuiltinFields,
 	builtinFields,
 } from "#questpie/server/fields/builtin/defaults.js";
-import type {
-	FieldDefinition,
-	FieldDefinitionState,
-	RelationFieldMetadata,
-} from "#questpie/server/fields/types.js";
+import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 import { Global } from "#questpie/server/global/builder/global.js";
 import type {
 	EmptyGlobalState,
@@ -26,9 +22,7 @@ import type { Override, Prettify } from "#questpie/shared/type-utils.js";
 /**
  * Extract Drizzle column types from field definitions.
  */
-type ExtractColumnsFromFieldDefinitions<
-	TFields extends Record<string, any>,
-> = {
+type ExtractColumnsFromFieldDefinitions<TFields extends Record<string, any>> = {
 	[K in keyof TFields]: TFields[K]["$types"]["column"] extends null
 		? never
 		: TFields[K]["$types"]["column"];
@@ -80,9 +74,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	 * }))
 	 * ```
 	 */
-	fields<
-		const TNewFields extends Record<string, any>,
-	>(
+	fields<const TNewFields extends Record<string, any>>(
 		factory: (
 			ctx: FieldsCallbackContext<ExtractFieldTypes<TState>>,
 		) => TNewFields,
@@ -98,7 +90,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	>;
 
 	/**
-	 * Define fields using Drizzle column definitions (backward compatible)
+	 * Define fields using raw Drizzle column definitions.
 	 */
 	fields<TNewFields extends Record<string, any>>(
 		// Exclude functions from this overload
@@ -122,9 +114,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	): GlobalBuilder<any> {
 		let columns: Record<string, any>;
 		let virtuals: Record<string, SQL> = {};
-		let fieldDefinitions:
-			| Record<string, FieldDefinition<FieldDefinitionState>>
-			| undefined;
+		let fieldDefinitions: Record<string, any> | undefined;
 		const pendingRelations: Array<{
 			name: string;
 			metadata: RelationFieldMetadata;
@@ -144,13 +134,12 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			columns = {};
 			for (const [name, fieldDef] of Object.entries(fieldDefs)) {
 				// Check if field is localized (location === "i18n")
-				if (fieldDef.state?.location === "i18n") {
+				if (fieldDef.getLocation?.() === "i18n") {
 					localizedFields.push(name);
 				}
 
-				if (fieldDef.state?.location === "virtual") {
-					const virtualValue = (fieldDef.state.config as { virtual?: unknown })
-						?.virtual;
+				if (fieldDef.getLocation?.() === "virtual") {
+					const virtualValue = fieldDef._state?.virtual;
 					if (virtualValue && virtualValue !== true) {
 						virtuals[name] = virtualValue as SQL;
 					}
@@ -186,7 +175,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 				...virtuals,
 			};
 		} else {
-			// Raw Drizzle columns (backward compatible)
+			// Raw Drizzle columns
 			columns = fieldsOrFactory;
 			virtuals = this.state.virtuals || {};
 			fieldDefinitions = undefined;

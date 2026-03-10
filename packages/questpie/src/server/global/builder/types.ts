@@ -17,7 +17,7 @@ import type {
 	AccessMode,
 	QuestpieContextExtension,
 } from "#questpie/server/config/types.js";
-import type { FieldDefinitionAccess } from "#questpie/server/fields/types.js";
+import type { FieldAccess } from "#questpie/server/fields/types.js";
 
 /**
  * Scope resolver function type for globals.
@@ -138,34 +138,22 @@ export type GlobalHookFunction<TRow = any> = (
  * @template TRow - The global data type
  */
 export interface GlobalHooks<TRow = any> {
-	beforeUpdate?:
-		| GlobalHookFunction<TRow>[]
-		| GlobalHookFunction<TRow>;
-	afterUpdate?:
-		| GlobalHookFunction<TRow>[]
-		| GlobalHookFunction<TRow>;
+	beforeUpdate?: GlobalHookFunction<TRow>[] | GlobalHookFunction<TRow>;
+	afterUpdate?: GlobalHookFunction<TRow>[] | GlobalHookFunction<TRow>;
 	beforeRead?: GlobalHookFunction<any>[] | GlobalHookFunction<any>;
 	afterRead?: GlobalHookFunction<TRow>[] | GlobalHookFunction<TRow>;
 	// Shorthand: runs on update
-	beforeChange?:
-		| GlobalHookFunction<TRow>[]
-		| GlobalHookFunction<TRow>;
-	afterChange?:
-		| GlobalHookFunction<TRow>[]
-		| GlobalHookFunction<TRow>;
+	beforeChange?: GlobalHookFunction<TRow>[] | GlobalHookFunction<TRow>;
+	afterChange?: GlobalHookFunction<TRow>[] | GlobalHookFunction<TRow>;
 	/**
 	 * Runs before a workflow stage transition.
 	 * Throw to abort the transition.
 	 */
-	beforeTransition?:
-		| GlobalTransitionHook<TRow>[]
-		| GlobalTransitionHook<TRow>;
+	beforeTransition?: GlobalTransitionHook<TRow>[] | GlobalTransitionHook<TRow>;
 	/**
 	 * Runs after a workflow stage transition.
 	 */
-	afterTransition?:
-		| GlobalTransitionHook<TRow>[]
-		| GlobalTransitionHook<TRow>;
+	afterTransition?: GlobalTransitionHook<TRow>[] | GlobalTransitionHook<TRow>;
 }
 
 /**
@@ -212,7 +200,7 @@ export interface GlobalAccess<TRow = any> {
 	 * Field-scoped access rules.
 	 * Source-of-truth for per-field authorization in globals.
 	 */
-	fields?: Record<string, Pick<FieldDefinitionAccess, "read" | "update">>;
+	fields?: Record<string, Pick<FieldAccess, "read" | "update">>;
 }
 
 export type GlobalBuilderRelationFn<

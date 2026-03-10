@@ -15,6 +15,7 @@
 
 // Side-effect: patch Field.prototype with .admin() method
 import "../server/field-patch.js";
+
 // Framework adapters
 export * from "../server/adapters/index.js";
 // Export augmentation types for external use
@@ -155,14 +156,10 @@ export {
 	adminFields,
 	type BlockNode,
 	type BlocksDocument,
-	type BlocksFieldConfig,
 	type BlocksFieldMeta,
 	type BlockValues,
-	blocksField,
 	type RichTextFeature,
-	type RichTextFieldConfig,
 	type RichTextFieldMeta,
-	richTextField,
 	type TipTapDocument,
 	type TipTapNode,
 } from "../server/fields/index.js";

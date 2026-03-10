@@ -5,7 +5,6 @@ import type {
 	InferRelationConfigsFromFields,
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
-import type { FieldDefinition } from "#questpie/server/fields/types.js";
 
 // ============================================================================
 // Opaque Types for Better Autocomplete
@@ -114,28 +113,23 @@ type CollectionFieldAccess<T> =
 	}
 		? FieldDefinitions extends Record<string, any>
 			? {
-					[K in keyof FieldDefinitions as FieldHasAccess<FieldDefinitions[K]> extends true
+					[K in keyof FieldDefinitions as FieldHasAccess<
+						FieldDefinitions[K]
+					> extends true
 						? K
 						: never]?: true;
 				}
 			: Record<never, never>
 		: Record<never, never>;
 
-/** Check if a field definition (V1 or V2) has access rules. */
-type FieldHasAccess<TField> =
-	// V2 Field: check phantom type for access property
-	TField extends { readonly _: infer TState }
-		? "access" extends keyof TState
-			? TState["access"] extends undefined
-				? false
-				: true
-			: false
-		// V1 FieldDefinition: check state.config.access
-		: TField extends { state: { config?: { access?: any } } }
-			? NonNullable<TField["state"]["config"]>["access"] extends undefined
-				? false
-				: true
-			: false;
+/** Check if a field has access rules via phantom type. */
+type FieldHasAccess<TField> = TField extends { readonly _: infer TState }
+	? "access" extends keyof TState
+		? TState["access"] extends undefined
+			? false
+			: true
+		: false
+	: false;
 
 /**
  * Make fields optional if they have access rules defined
@@ -223,7 +217,7 @@ type InferRelationsFromFieldDefs<TFieldDefs> =
  * Extract relations from a Collection or CollectionBuilder.
  *
  * Priority:
- * 1. state.relations when it has specific keys (from legacy .relations() API)
+ * 1. state.relations when it has specific keys (from .relations() API)
  * 2. Inferred from state.fieldDefinitions (from .fields() API with f.relation())
  * 3. Fallback: generic Record<string, RelationConfig>
  */
@@ -260,21 +254,18 @@ export type CollectionRelations<T> =
 export type GlobalInfer<T> = T extends { $infer: infer Infer } ? Infer : never;
 
 /**
- * Extract field access configuration from a Global state
+ * Extract field access configuration from a Global state.
+ * Uses Field phantom type dispatch.
  */
 type GlobalFieldAccess<T> = T extends {
 	state: { fieldDefinitions: infer FieldDefinitions };
 }
 	? FieldDefinitions extends Record<string, any>
 		? {
-				[K in keyof FieldDefinitions as FieldDefinitions[K] extends {
-					state: { config?: { access?: any } };
-				}
-					? NonNullable<
-							FieldDefinitions[K]["state"]["config"]
-						>["access"] extends undefined
-						? never
-						: K
+				[K in keyof FieldDefinitions as FieldHasAccess<
+					FieldDefinitions[K]
+				> extends true
+					? K
 					: never]?: true;
 			}
 		: {}
@@ -313,7 +304,7 @@ export type GlobalState<T> = T extends { state: infer State } ? State : never;
  * Extract relations from a Global or GlobalBuilder.
  *
  * Priority:
- * 1. state.relations when it has specific keys (from legacy .relations() API)
+ * 1. state.relations when it has specific keys (from .relations() API)
  * 2. Inferred from state.fieldDefinitions (from .fields() API with f.relation())
  * 3. Fallback: generic Record<string, RelationConfig>
  */

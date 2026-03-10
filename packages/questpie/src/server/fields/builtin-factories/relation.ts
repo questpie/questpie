@@ -1,5 +1,5 @@
 /**
- * Relation Field Factory (V2)
+ * Relation Field Factory
  *
  * Unified field for all relation types:
  * - belongsTo: FK column on this table (default)
@@ -10,43 +10,52 @@
  * - morphMany: Reverse polymorphic
  */
 
-import { jsonb, varchar, type PgVarcharBuilder } from "drizzle-orm/pg-core";
+import { jsonb, type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { KnownCollectionNames } from "../../config/app-context.js";
-import {
-	belongsToOps,
-	multipleOps,
-	toManyOps,
-} from "../operators/builtin.js";
-import { createField, Field } from "../field-class.js";
+import { field, Field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { belongsToOps, multipleOps, toManyOps } from "../operators/builtin.js";
 import type {
 	InferredRelationType,
 	ReferentialAction,
 	RelationFieldMetadata,
 } from "../types.js";
 
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface RelationFieldMeta {}
+	}
+}
+
+export interface RelationFieldMeta extends Questpie.RelationFieldMeta {
+	_?: never;
+}
+
 // ============================================================================
 // Types
 // ============================================================================
 
-export type RelationFieldState<TTo extends string = string> = DefaultFieldState & {
-	type: "relation";
-	data: string;
-	column: PgVarcharBuilder<[string, ...string[]]>;
-	operators: typeof belongsToOps;
-	relationTo: TTo;
-	relationKind: "one";
-};
+export type RelationFieldState<TTo extends string = string> =
+	DefaultFieldState & {
+		type: "relation";
+		data: string;
+		column: PgVarcharBuilder<[string, ...string[]]>;
+		operators: typeof belongsToOps;
+		relationTo: TTo;
+		relationKind: "one";
+	};
 
-export type ToManyRelationFieldState<TTo extends string = string> = DefaultFieldState & {
-	type: "relation";
-	data: string[];
-	virtual: true;
-	operators: typeof toManyOps;
-	relationTo: TTo;
-	relationKind: "many";
-};
+export type ToManyRelationFieldState<TTo extends string = string> =
+	DefaultFieldState & {
+		type: "relation";
+		data: string[];
+		virtual: true;
+		operators: typeof toManyOps;
+		relationTo: TTo;
+		relationKind: "many";
+	};
 
 export type MorphToFieldState = DefaultFieldState & {
 	type: "relation";
@@ -54,13 +63,14 @@ export type MorphToFieldState = DefaultFieldState & {
 	operators: typeof belongsToOps;
 };
 
-export type MultipleRelationFieldState<TTo extends string = string> = DefaultFieldState & {
-	type: "relation";
-	data: string[];
-	operators: typeof multipleOps;
-	relationTo: TTo;
-	relationKind: "one";
-};
+export type MultipleRelationFieldState<TTo extends string = string> =
+	DefaultFieldState & {
+		type: "relation";
+		data: string[];
+		operators: typeof multipleOps;
+		relationTo: TTo;
+		relationKind: "one";
+	};
 
 type RelationTarget =
 	| KnownCollectionNames
@@ -73,7 +83,9 @@ type JunctionTarget = KnownCollectionNames | (() => { name: string });
 // Helper Functions
 // ============================================================================
 
-function resolveTargetName(target: RelationTarget): string | string[] | undefined {
+function resolveTargetName(
+	target: RelationTarget,
+): string | string[] | undefined {
 	if (typeof target === "string") return target;
 	if (typeof target === "function") {
 		try {
@@ -86,7 +98,9 @@ function resolveTargetName(target: RelationTarget): string | string[] | undefine
 	return undefined;
 }
 
-function resolveJunctionName(target: JunctionTarget | undefined): string | undefined {
+function resolveJunctionName(
+	target: JunctionTarget | undefined,
+): string | undefined {
 	if (!target) return undefined;
 	if (typeof target === "string") return target;
 	if (typeof target === "function") {
@@ -100,13 +114,22 @@ function resolveJunctionName(target: JunctionTarget | undefined): string | undef
 }
 
 function isPolymorphicTarget(target: RelationTarget): boolean {
-	return typeof target === "object" && target !== null && typeof target !== "function";
+	return (
+		typeof target === "object" &&
+		target !== null &&
+		typeof target !== "function"
+	);
 }
 
-function buildRelationMetadata(state: import("../field-class-types.js").FieldRuntimeState): RelationFieldMetadata {
+function buildRelationMetadata(
+	state: import("../field-class-types.js").FieldRuntimeState,
+): RelationFieldMetadata {
 	const to = state.to as RelationTarget;
-	const targetCollection = (to ? resolveTargetName(to) : undefined) ?? "__unresolved__";
-	const through = resolveJunctionName(state.through as JunctionTarget | undefined);
+	const targetCollection =
+		(to ? resolveTargetName(to) : undefined) ?? "__unresolved__";
+	const through = resolveJunctionName(
+		state.through as JunctionTarget | undefined,
+	);
 
 	// Infer relation type
 	let relationType: InferredRelationType = "belongsTo";
@@ -171,7 +194,9 @@ function buildRelationMetadata(state: import("../field-class-types.js").FieldRun
  * subject: f.relation({ users: "users", posts: "posts" }).required()
  * ```
  */
-export function relation<TTo extends string>(target: TTo | Exclude<RelationTarget, string>): Field<RelationFieldState<TTo>> {
+export function relation<TTo extends string>(
+	target: TTo | Exclude<RelationTarget, string>,
+): Field<RelationFieldState<TTo>> {
 	const isPoly = isPolymorphicTarget(target);
 
 	if (isPoly) {
@@ -180,7 +205,7 @@ export function relation<TTo extends string>(target: TTo | Exclude<RelationTarge
 		const typeNames = Object.keys(types);
 		const maxTypeLength = Math.max(...typeNames.map((t) => t.length), 50);
 
-		return createField<RelationFieldState>({
+		return field<RelationFieldState>({
 			type: "relation",
 			columnFactory: (name) => {
 				// Returns an array of column builders — collection builder handles multi-column
@@ -207,7 +232,7 @@ export function relation<TTo extends string>(target: TTo | Exclude<RelationTarge
 	}
 
 	// Default: belongsTo
-	return createField<RelationFieldState<TTo>>({
+	return field<RelationFieldState<TTo>>({
 		type: "relation",
 		columnFactory: (name) => varchar(name, { length: 36 }),
 		schemaFactory: () => z.string().uuid(),

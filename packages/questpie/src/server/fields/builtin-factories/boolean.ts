@@ -1,12 +1,26 @@
 /**
- * Boolean Field Factory (V2)
+ * Boolean Field Factory
  */
 
-import { boolean as pgBoolean, type PgBooleanBuilder } from "drizzle-orm/pg-core";
+import {
+	type PgBooleanBuilder,
+	boolean as pgBoolean,
+} from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { booleanOps } from "../operators/builtin.js";
-import { createField } from "../field-class.js";
+import { field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { booleanOps } from "../operators/builtin.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface BooleanFieldMeta {}
+	}
+}
+
+export interface BooleanFieldMeta extends Questpie.BooleanFieldMeta {
+	_?: never;
+}
 
 export type BooleanFieldState = DefaultFieldState & {
 	type: "boolean";
@@ -25,7 +39,7 @@ export type BooleanFieldState = DefaultFieldState & {
  * ```
  */
 export function boolean(): Field<BooleanFieldState> {
-	return createField<BooleanFieldState>({
+	return field<BooleanFieldState>({
 		type: "boolean",
 		columnFactory: (name) => pgBoolean(name),
 		schemaFactory: () => z.boolean(),

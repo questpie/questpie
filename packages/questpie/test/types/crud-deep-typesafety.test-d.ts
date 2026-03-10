@@ -29,8 +29,8 @@ import type {
 	UpdateInput,
 	Where as WhereType,
 } from "#questpie/server/collection/crud/types.js";
-import { defaultFields } from "#questpie/server/fields/builtin/defaults.js";
 import { QuestpieBuilder } from "#questpie/server/config/builder.js";
+import { builtinFields } from "#questpie/server/fields/builtin/defaults.js";
 import type {
 	ExtractRelationRelations,
 	ExtractRelationSelect,
@@ -50,7 +50,7 @@ import type {
 // Test Fixtures — rich collection graph with diverse field types
 // ============================================================================
 
-const q = QuestpieBuilder.empty("deep-test").fields(defaultFields);
+const q = QuestpieBuilder.empty("deep-test").fields(builtinFields);
 
 const authors = q
 	.collection("authors")
@@ -78,10 +78,10 @@ const articles = q
 		rating: f.number(),
 		published: f.boolean().default(false),
 		status: f.select([
-				{ value: "draft", label: "Draft" },
-				{ value: "review", label: "In Review" },
-				{ value: "published", label: "Published" },
-			] as const),
+			{ value: "draft", label: "Draft" },
+			{ value: "review", label: "In Review" },
+			{ value: "published", label: "Published" },
+		] as const),
 		metadata: f.object({
 			seoTitle: f.text(60),
 			seoDescription: f.textarea().max(160),
@@ -89,8 +89,14 @@ const articles = q
 		}),
 		tagList: f.text().required().array(),
 		author: f.relation("authors").required().relationName("articleAuthor"),
-		categories: f.relation("categories").manyToMany({ through: "article_categories", sourceField: "article", targetField: "category" }),
-		comments: f.relation("article_comments").hasMany({ foreignKey: "article", relationName: "article" }),
+		categories: f.relation("categories").manyToMany({
+			through: "article_categories",
+			sourceField: "article",
+			targetField: "category",
+		}),
+		comments: f
+			.relation("article_comments")
+			.hasMany({ foreignKey: "article", relationName: "article" }),
 		publishedAt: f.datetime(),
 	}))
 	.options({ softDelete: true, versioning: true });

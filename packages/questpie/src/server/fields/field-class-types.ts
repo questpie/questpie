@@ -1,7 +1,7 @@
 /**
- * Field Builder V2 — Type Definitions
+ * Field Builder — Type Definitions
  *
- * The new field system uses a single generic parameter `TState` that
+ * The field system uses a single generic parameter `TState` that
  * accumulates properties through intersection at each builder step,
  * exactly like Drizzle column builders.
  *
@@ -11,17 +11,15 @@
 
 import type { SQL } from "drizzle-orm";
 import type { PgJsonbBuilder } from "drizzle-orm/pg-core";
+import type { ZodType } from "zod";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 import type { OperatorSetDefinition } from "./operators/types.js";
 import type {
-	ContextualOperators,
-	FieldDefinitionAccess,
+	FieldAccess,
 	FieldHooks,
-	FieldLocation,
 	FieldMetadata,
 	OperatorMap,
 } from "./types.js";
-import type { ZodType } from "zod";
 
 // ============================================================================
 // Field State — Type-Level Accumulator
@@ -77,6 +75,17 @@ export type DefaultFieldState = {
 	isArray: false;
 	operators: OperatorSetDefinition;
 };
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface ArrayFieldMeta {}
+	}
+}
+
+export interface ArrayFieldMeta extends Questpie.ArrayFieldMeta {
+	_?: never;
+}
 
 // ============================================================================
 // State After Builder Methods
@@ -139,7 +148,7 @@ export interface FieldRuntimeState {
 	/** Field hooks */
 	hooks?: FieldHooks;
 	/** Access control */
-	access?: FieldDefinitionAccess;
+	access?: FieldAccess;
 	/** Transform applied to Drizzle column builder */
 	drizzleTransform?: (col: unknown) => unknown;
 	/** Transform applied to auto-derived Zod schema */
@@ -238,53 +247,56 @@ export interface FieldRuntimeState {
  * Extract the select type from a field's TState.
  * Handles notNull, hasDefault, output, isArray, virtual.
  */
-export type ExtractSelectType<TState extends FieldState> =
-	TState extends { output: false }
-		? never
-		: TState extends { virtual: true }
+export type ExtractSelectType<TState extends FieldState> = TState extends {
+	output: false;
+}
+	? never
+	: TState extends { virtual: true }
+		? TState extends { notNull: true }
+			? TState["data"]
+			: TState["data"] | null
+		: TState extends { isArray: true }
 			? TState extends { notNull: true }
 				? TState["data"]
 				: TState["data"] | null
-			: TState extends { isArray: true }
-				? TState extends { notNull: true }
-					? TState["data"]
-					: TState["data"] | null
-				: TState extends { notNull: true }
-					? TState["data"]
-					: TState["data"] | null;
+			: TState extends { notNull: true }
+				? TState["data"]
+				: TState["data"] | null;
 
 /**
  * Extract the input type from a field's TState.
  * Handles notNull, hasDefault, input, virtual.
  */
-export type ExtractInputType<TState extends FieldState> =
-	TState extends { input: false }
-		? never
-		: TState extends { virtual: true }
-			? TState extends { input: true }
-				? TState["data"] | undefined
-				: never
-			: TState extends { input: "optional" }
-				? TState["data"] | undefined
-				: TState extends { notNull: true }
-					? TState extends { hasDefault: true }
-						? TState["data"] | undefined
-						: TState["data"]
-					: TState["data"] | null | undefined;
+export type ExtractInputType<TState extends FieldState> = TState extends {
+	input: false;
+}
+	? never
+	: TState extends { virtual: true }
+		? TState extends { input: true }
+			? TState["data"] | undefined
+			: never
+		: TState extends { input: "optional" }
+			? TState["data"] | undefined
+			: TState extends { notNull: true }
+				? TState extends { hasDefault: true }
+					? TState["data"] | undefined
+					: TState["data"]
+				: TState["data"] | null | undefined;
 
 /**
  * Extract the where type from a field's TState operators.
  * Reads from the column operator map.
  */
-export type ExtractWhereType<TState extends FieldState> =
-	TState extends { operators: { column: infer TOps extends OperatorMap } }
-		? {
-				[K in keyof TOps]?: TOps[K] extends (
-					col: any,
-					value: infer V,
-					...args: any[]
-				) => any
-					? V
-					: never;
-			}
-		: never;
+export type ExtractWhereType<TState extends FieldState> = TState extends {
+	operators: { column: infer TOps extends OperatorMap };
+}
+	? {
+			[K in keyof TOps]?: TOps[K] extends (
+				col: any,
+				value: infer V,
+				...args: any[]
+			) => any
+				? V
+				: never;
+		}
+	: never;

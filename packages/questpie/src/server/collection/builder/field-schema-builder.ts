@@ -13,11 +13,9 @@
  */
 
 import { z } from "zod";
-import type {
-	FieldDefinition,
-	FieldDefinitionState,
-	RelationFieldMetadata,
-} from "#questpie/server/fields/types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 
 // ============================================================================
 // Schema Building
@@ -36,14 +34,14 @@ import type {
  * @returns Zod schema for input validation
  */
 export function buildFieldBasedSchema(
-	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	fieldDefinitions: Record<string, Field<FieldState>>,
 	mode: "insert" | "update" = "insert",
 ): z.ZodObject<Record<string, z.ZodTypeAny>> {
 	const shape: Record<string, z.ZodTypeAny> = {};
 
 	for (const [fieldName, fieldDef] of Object.entries(fieldDefinitions)) {
 		// Skip fields that don't accept input
-		if (fieldDef.state.input === false) {
+		if (fieldDef._state.input === false) {
 			continue;
 		}
 
@@ -56,7 +54,7 @@ export function buildFieldBasedSchema(
 		}
 
 		// For insert mode with optional input, make the field optional
-		if (mode === "insert" && fieldDef.state.input === "optional") {
+		if (mode === "insert" && fieldDef._state.input === "optional") {
 			fieldSchema = fieldSchema.optional();
 		}
 
@@ -81,16 +79,15 @@ export function buildFieldBasedSchema(
  */
 export function extendSchemaWithNestedMutations(
 	schema: z.ZodObject<Record<string, z.ZodTypeAny>>,
-	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	fieldDefinitions: Record<string, Field<FieldState>>,
 ): z.ZodTypeAny {
 	// Create a nested mutation schema for each relation field
 	const nestedMutationShape: Record<string, z.ZodTypeAny> = {};
 
 	for (const [fieldName, fieldDef] of Object.entries(fieldDefinitions)) {
-		const metadata = fieldDef.state.metadata as
-			| RelationFieldMetadata
-			| undefined;
-		if (!metadata?.relationType) continue;
+		const rawMetadata = fieldDef.getMetadata();
+		if (rawMetadata.type !== "relation") continue;
+		const metadata = rawMetadata as RelationFieldMetadata;
 
 		// Create a flexible schema that accepts nested mutations
 		const nestedMutationSchema = z
@@ -142,7 +139,7 @@ export function extendSchemaWithNestedMutations(
  * @returns Empty map (no transformation needed with unified field API)
  */
 export function extractBelongsToMappings(
-	_fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	_fieldDefinitions: Record<string, Field<FieldState>>,
 ): Record<string, string> {
 	// With unified field API, field name = column key
 	// No transformation needed
@@ -206,7 +203,7 @@ export interface CollectionSchemas {
  * @returns Insert and update schemas with relation mappings
  */
 export function buildCollectionSchemas(
-	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	fieldDefinitions: Record<string, Field<FieldState>>,
 ): CollectionSchemas {
 	const insertSchema = buildFieldBasedSchema(fieldDefinitions, "insert");
 	const updateSchema = buildFieldBasedSchema(fieldDefinitions, "update");

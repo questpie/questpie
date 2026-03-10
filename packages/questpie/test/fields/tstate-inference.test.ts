@@ -30,7 +30,9 @@ describe("TState Field Type Inference", () => {
 			excerpt: f.text().virtual(),
 
 			// Virtual field with SQL
-			commentCount: f.number().virtual(sql<number>`(SELECT COUNT(*) FROM comments)`),
+			commentCount: f
+				.number()
+				.virtual(sql<number>`(SELECT COUNT(*) FROM comments)`),
 
 			// Write-only field (output: false)
 			password: f.text().outputFalse(),
@@ -76,16 +78,10 @@ describe("TState Field Type Inference", () => {
 		const fieldDefs = posts.state.fieldDefinitions;
 		expect(fieldDefs).toBeDefined();
 
-		// Check each field's state
+		// Check each field's runtime state
 		if (fieldDefs) {
-			// title: required → input should be string (not null/undefined)
-			// Note: 'required' is in config, not state.required
-			expect((fieldDefs.title as any).state?.config?.required ?? true).toBe(
-				true,
-			);
-
-			// content: localized → location should be "i18n"
-			// Note: content not in this test, but we check the pattern
+			// title: required → notNull should be true
+			expect(fieldDefs.title._state.notNull).toBe(true);
 		}
 	});
 
@@ -98,7 +94,9 @@ describe("TState Field Type Inference", () => {
 			password: f.text().outputFalse(),
 
 			// access.read function → output: string | undefined
-			secret: f.text().access({ read: (ctx: any) => (ctx.user as any)?.role === "admin" }),
+			secret: f
+				.text()
+				.access({ read: (ctx: any) => (ctx.user as any)?.role === "admin" }),
 		}));
 
 		const fieldDefs = posts.state.fieldDefinitions;
@@ -124,11 +122,11 @@ describe("TState Field Type Inference", () => {
 		expect(fieldDefs).toBeDefined();
 
 		if (fieldDefs) {
-			// Check locations - use any cast to avoid type literal narrowing issues
-			expect((fieldDefs.title.state as any).location).toBe("main");
-			expect((fieldDefs.content.state as any).location).toBe("i18n");
-			expect((fieldDefs.excerpt.state as any).location).toBe("virtual");
-			expect((fieldDefs.count.state as any).location).toBe("virtual");
+			// Check locations via getLocation()
+			expect(fieldDefs.title.getLocation()).toBe("main");
+			expect(fieldDefs.content.getLocation()).toBe("i18n");
+			expect(fieldDefs.excerpt.getLocation()).toBe("virtual");
+			expect(fieldDefs.count.getLocation()).toBe("virtual");
 		}
 	});
 

@@ -35,13 +35,13 @@
 import type {
 	AppContext,
 	BuiltinFields,
+	Field,
 	FieldBuilderProxy,
-	FieldDefinition,
-	FieldDefinitionState,
 	FieldSchema,
+	FieldState,
 } from "questpie";
-import type { adminFields } from "../fields/index.js";
 import type { AdminBlockConfig, AdminConfigContext } from "../augmentation.js";
+import type { adminFields } from "../fields/index.js";
 
 /**
  * Combined field types available in block field definitions.
@@ -143,10 +143,10 @@ export type ExpandWithResult<TWith> = {
  */
 export interface BlockBuilderState<
 	TName extends string = string,
-	TFields extends Record<
+	TFields extends Record<string, Field<FieldState>> = Record<
 		string,
-		FieldDefinition<FieldDefinitionState>
-	> = Record<string, FieldDefinition<FieldDefinitionState>>,
+		Field<FieldState>
+	>,
 > {
 	/** Block type name */
 	name: TName;
@@ -358,9 +358,7 @@ export class BlockBuilder<
 	 * }))
 	 * ```
 	 */
-	fields<
-		TNewFields extends Record<string, FieldDefinition<FieldDefinitionState>>,
-	>(
+	fields<TNewFields extends Record<string, Field<FieldState>>>(
 		factory: (ctx: { f: FieldBuilderProxy<TFieldMap> }) => TNewFields,
 	): BlockBuilder<
 		Omit<TState, "fields"> & { fields: TNewFields },
@@ -570,11 +568,11 @@ export function block<TName extends string>(
 export type InferBlockValues<TState extends BlockBuilderState> =
 	TState["fields"] extends Record<string, any>
 		? {
-				[K in keyof TState["fields"]]: TState["fields"][K] extends { readonly _: infer TS }
-					? TS extends { data: infer D } ? D : unknown
-					: TState["fields"][K] extends FieldDefinition<infer TFieldState>
-						? TFieldState["value"]
-						: unknown;
+				[K in keyof TState["fields"]]: TState["fields"][K] extends {
+					readonly _: infer TS extends FieldState;
+				}
+					? TS["data"]
+					: unknown;
 			}
 		: Record<string, unknown>;
 

@@ -1,17 +1,14 @@
 import type { RequestContext } from "#questpie/server/config/context.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type {
-	FieldDefinition,
-	FieldDefinitionState,
 	FieldHookContext,
 	FieldHooks,
 } from "#questpie/server/fields/types.js";
 
 type RuntimeOperation = "create" | "read" | "update";
 
-type FieldDefinitionsMap = Record<
-	string,
-	FieldDefinition<FieldDefinitionState>
->;
+type FieldDefinitionsMap = Record<string, Field<FieldState>>;
 
 function getRequest(context: RequestContext): Request {
 	const maybeReq = (context as any).req ?? (context as any).request;
@@ -65,15 +62,10 @@ export async function applyFieldInputHooks(params: {
 	for (const [fieldName, fieldDef] of Object.entries(params.fieldDefinitions)) {
 		if (!(fieldName in nextData)) continue;
 
-		const hooks = fieldDef.state.config?.hooks as
-			| FieldHooks<unknown>
-			| undefined;
+		const hooks = fieldDef._state.hooks as FieldHooks<unknown> | undefined;
 		if (!hooks) continue;
 
-		const fieldConfig = (fieldDef.state.config ?? {}) as Record<
-			string,
-			unknown
-		>;
+		const fieldConfig = fieldDef._state as Record<string, unknown>;
 		let value = nextData[fieldName];
 		const document = {
 			...(params.originalDocument ?? {}),
@@ -127,15 +119,10 @@ export async function applyFieldOutputHooks(params: {
 	for (const [fieldName, fieldDef] of Object.entries(params.fieldDefinitions)) {
 		if (!(fieldName in params.data)) continue;
 
-		const hooks = fieldDef.state.config?.hooks as
-			| FieldHooks<unknown>
-			| undefined;
+		const hooks = fieldDef._state.hooks as FieldHooks<unknown> | undefined;
 		if (!hooks?.afterRead) continue;
 
-		const fieldConfig = (fieldDef.state.config ?? {}) as Record<
-			string,
-			unknown
-		>;
+		const fieldConfig = fieldDef._state as Record<string, unknown>;
 		const hookContext = createFieldHookContext({
 			fieldName,
 			collectionName: params.collectionName,

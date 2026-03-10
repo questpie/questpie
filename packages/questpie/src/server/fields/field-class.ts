@@ -1,5 +1,5 @@
 /**
- * Field Builder V2 — Core Field Class
+ * Field Builder — Core Field Class
  *
  * Immutable builder class where each method returns a new Field
  * with updated type state via intersections.
@@ -12,10 +12,6 @@
  * - Field<{ type: "text", data: string, notNull: false, ... }>
  * - .required() → Field<{ ... } & { notNull: true }>
  * - .default("") → Field<{ ... } & { hasDefault: true }>
- *
- * The class implements the existing FieldDefinition interface via
- * toColumn(), toZodSchema(), getOperators(), getMetadata() so it
- * can be used wherever FieldDefinition is expected.
  */
 
 import type { SQL } from "drizzle-orm";
@@ -34,9 +30,7 @@ import { resolveContextualOperators } from "./operators/resolve.js";
 import type { OperatorSetDefinition } from "./operators/types.js";
 import type {
 	ContextualOperators,
-	FieldDefinition,
-	FieldDefinitionAccess,
-	FieldDefinitionState,
+	FieldAccess,
 	FieldHooks,
 	FieldLocation,
 	FieldMetadata,
@@ -105,9 +99,7 @@ export class Field<TState extends FieldState = FieldState> {
 	}
 
 	/** Set a default value. Makes input optional. */
-	default<V>(
-		value: V | (() => V),
-	): Field<
+	default<V>(value: V | (() => V)): Field<
 		Omit<TState, "hasDefault" | "column"> & {
 			hasDefault: true;
 			column: HasDefault<TState["column"]>;
@@ -173,10 +165,8 @@ export class Field<TState extends FieldState = FieldState> {
 	}
 
 	/** Set field-level access control. */
-	access(
-		a: FieldDefinitionAccess,
-	): Field<TState & { access: FieldDefinitionAccess }> {
-		return this._clone<{ access: FieldDefinitionAccess }>({ access: a });
+	access(a: FieldAccess): Field<TState & { access: FieldAccess }> {
+		return this._clone<{ access: FieldAccess }>({ access: a });
 	}
 
 	/**
@@ -350,36 +340,27 @@ export class Field<TState extends FieldState = FieldState> {
 	declare type: (typeName: string) => Field<TState>;
 
 	// ========================================================================
-	// FieldDefinition Interface — Backward Compatibility
+	// Public Runtime Accessors
 	// ========================================================================
 
 	/**
-	 * Build the state object matching the old FieldDefinitionState shape.
-	 * This provides backward compatibility with existing CRUD and admin code.
+	 * Get the resolved field type string.
+	 * Returns "array" for array-wrapped fields, custom type if set, else the base type.
 	 */
-	get state(): FieldDefinitionState & {
-		value: TState["data"];
-		input: TState["data"];
-		output: TState["data"];
-		select: TState["data"];
-		column: TState["column"];
-	} {
-		return {
-			type: this._state.isArray
-				? "array"
-				: (this._state.customType ?? this._state.type),
-			config: this._buildLegacyConfig(),
-			value: undefined as any,
-			input: undefined as any,
-			output: undefined as any,
-			select: undefined as any,
-			column: undefined as any,
-			location: this._inferLocation(),
-			operators: this.getOperators(),
-		};
+	getType(): string {
+		return this._state.isArray
+			? "array"
+			: (this._state.customType ?? this._state.type);
 	}
 
-	/** Phantom types for inference — matches FieldDefinition.$types */
+	/**
+	 * Get the field's storage location: "main", "i18n", "virtual", or "relation".
+	 */
+	getLocation(): FieldLocation {
+		return this._inferLocation();
+	}
+
+	/** Phantom types for type-level inference. */
 	declare readonly $types: {
 		value: TState["data"];
 		input: TState["data"];
@@ -481,9 +462,7 @@ export class Field<TState extends FieldState = FieldState> {
 	/**
 	 * Get nested field definitions (for object fields).
 	 */
-	getNestedFields():
-		| Record<string, FieldDefinition<FieldDefinitionState>>
-		| undefined {
+	getNestedFields(): Record<string, Field<FieldState>> | undefined {
 		return this._state.nestedFields as any;
 	}
 
@@ -537,46 +516,6 @@ export class Field<TState extends FieldState = FieldState> {
 
 		return Object.keys(v).length > 0 ? v : undefined;
 	}
-
-	/** Build a legacy config object from runtime state (for backward compat). */
-	private _buildLegacyConfig(): Record<string, any> {
-		const s = this._state;
-		return {
-			required: s.notNull || undefined,
-			default: s.defaultValue,
-			label: s.label,
-			description: s.description,
-			localized: s.localized || undefined,
-			virtual: s.virtual === true ? true : s.virtual || undefined,
-			input: s.input === true ? undefined : s.input,
-			output: s.output === true ? undefined : s.output,
-			hooks: s.hooks,
-			access: s.access,
-			// Field-specific
-			maxLength: s.maxLength,
-			minLength: s.minLength,
-			pattern: s.pattern,
-			min: s.min,
-			max: s.max,
-			// Select
-			options: s.options,
-			multiple: s.isArray || s.multiple || undefined,
-			// Relation
-			to: s.to,
-			hasMany: s.hasMany,
-			through: s.through,
-			foreignKey: s.foreignKey,
-			sourceField: s.sourceField,
-			targetField: s.targetField,
-			morphName: s.morphName,
-			onDelete: s.onDelete,
-			onUpdate: s.onUpdate,
-			relationName: s.relationName,
-			// Nested fields (object/array)
-			fields: s.nestedFields,
-			of: s.innerField,
-		};
-	}
 }
 
 // ============================================================================
@@ -589,7 +528,7 @@ export class Field<TState extends FieldState = FieldState> {
  *
  * @internal
  */
-export function createField<TState extends FieldState>(
+export function field<TState extends FieldState>(
 	state: FieldRuntimeState,
 ): Field<TState> {
 	return new Field(state) as unknown as Field<TState>;

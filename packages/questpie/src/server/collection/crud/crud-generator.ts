@@ -97,7 +97,7 @@ import {
 	applyFieldInputHooks,
 	applyFieldOutputHooks,
 } from "#questpie/server/fields/runtime.js";
-import type { FieldDefinitionAccess } from "#questpie/server/fields/types.js";
+import type { FieldAccess } from "#questpie/server/fields/types.js";
 import {
 	extractWorkflowFromVersioning,
 	type ResolvedWorkflowConfig,
@@ -332,12 +332,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		return fn;
 	}
 
-	private getFieldAccessRules():
-		| Record<string, FieldDefinitionAccess>
-		| undefined {
+	private getFieldAccessRules(): Record<string, FieldAccess> | undefined {
 		// Source field access from collection-level .access({ fields: {...} })
 		const collectionAccess = this.state.access as
-			| { fields?: Record<string, FieldDefinitionAccess> }
+			| { fields?: Record<string, FieldAccess> }
 			| undefined;
 		return collectionAccess?.fields;
 	}

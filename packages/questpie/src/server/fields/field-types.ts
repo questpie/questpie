@@ -5,9 +5,7 @@
  * Each field "owns" its type resolution — the collection and CRUD layers
  * just compose these selectors.
  *
- * Supports both:
- * - V2 Field<TState> (primary, via phantom `_` property)
- * - V1 FieldDefinition<TState> (legacy, for admin's richText/blocks until migrated)
+ * Dispatches via Field<TState> phantom `_` property.
  *
  * Three main selectors:
  *   FieldSelect<TFieldDef, TApp>         — "what value sits in the row?"
@@ -19,28 +17,24 @@ import type {
 	CollectionOptions,
 	UploadOptions,
 } from "#questpie/server/collection/builder/types.js";
-import { text } from "#questpie/server/fields/builtin-factories/text.js";
-import { number } from "#questpie/server/fields/builtin-factories/number.js";
 import { datetime } from "#questpie/server/fields/builtin-factories/datetime.js";
-import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import { number } from "#questpie/server/fields/builtin-factories/number.js";
+import { text } from "#questpie/server/fields/builtin-factories/text.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
-import type { InferSelectType } from "#questpie/server/fields/field.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type {
-	BaseFieldConfig,
 	ExtractOperatorParamType,
-	FieldDefinition,
-	FieldDefinitionState,
 	OperatorMap,
 } from "#questpie/server/fields/types.js";
 
 // ============================================================================
-// V2 Field Select — dispatch via accumulated state properties
+// Field Select — dispatch via accumulated state properties
 // ============================================================================
 
 /**
- * Extract select type from V2 Field<TState>.
+ * Extract select type from Field<TState>.
  *
- * V2 state encodes everything directly:
+ * State encodes everything directly:
  * - virtual relations/uploads → never (no FK column)
  * - output: false → never
  * - notNull: true → data type
@@ -57,87 +51,16 @@ type V2FieldSelect<TState extends FieldState> =
 				: TState["data"] | null;
 
 /**
- * Extract where clause type from V2 Field<TState>.
+ * Extract where clause type from Field<TState>.
  * Reads operators from the OperatorSetDefinition on TState.
  */
-type V2FieldWhere<TState extends FieldState> =
-	TState extends { operators: { column: infer TColumnOps extends OperatorMap } }
-		? {
-				[K in keyof TColumnOps]?: ExtractOperatorParamType<TColumnOps[K]>;
-			}
-		: never;
-
-// ============================================================================
-// V1 Relation Sub-type Inference (for legacy FieldDefinition dispatch)
-// ============================================================================
-
-/**
- * Infer the relation sub-type from its config.
- */
-export type InferRelationSubtype<TConfig> = TConfig extends {
-	morphName: string;
+type V2FieldWhere<TState extends FieldState> = TState extends {
+	operators: { column: infer TColumnOps extends OperatorMap };
 }
-	? "morphMany"
-	: TConfig extends { to: Record<string, any> }
-		? "morphTo"
-		: TConfig extends { hasMany: true; through: any }
-			? "manyToMany"
-			: TConfig extends { hasMany: true }
-				? "hasMany"
-				: TConfig extends { multiple: true }
-					? "multiple"
-					: "belongsTo";
-
-// ============================================================================
-// V1 Relation FK Select
-// ============================================================================
-
-type MorphToTypeKeys<TConfig> = TConfig extends { to: infer TTo }
-	? TTo extends Record<string, any>
-		? Extract<keyof TTo, string>
-		: string
-	: string;
-
-type RelationFKBase<TConfig> =
-	InferRelationSubtype<TConfig> extends "belongsTo"
-		? string
-		: InferRelationSubtype<TConfig> extends "multiple"
-			? string[]
-			: InferRelationSubtype<TConfig> extends "morphTo"
-				? { type: MorphToTypeKeys<TConfig>; id: string }
-				: never;
-
-export type InferRelationFKSelect<TConfig> =
-	RelationFKBase<TConfig> extends never
-		? never
-		: TConfig extends { required: true }
-			? RelationFKBase<TConfig>
-			: RelationFKBase<TConfig> | null;
-
-// ============================================================================
-// V1 Object/Array/Upload helpers
-// ============================================================================
-
-type ResolveFieldConfig<T> = T extends (...args: any[]) => infer R ? R : T;
-
-type ObjectFieldShape<TConfig, TApp> = TConfig extends { fields: infer TFields }
 	? {
-			[K in keyof ResolveFieldConfig<TFields>]: FieldSelect<
-				ResolveFieldConfig<TFields>[K],
-				TApp
-			>;
+			[K in keyof TColumnOps]?: ExtractOperatorParamType<TColumnOps[K]>;
 		}
-	: Record<string, {}>;
-
-type ArrayFieldElement<TConfig, TApp> = TConfig extends { of: infer TOf }
-	? FieldSelect<ResolveFieldConfig<TOf>, TApp>
-	: {};
-
-type InferUploadFKSelect<TConfig> = TConfig extends { through: string }
-	? never
-	: TConfig extends BaseFieldConfig
-		? InferSelectType<TConfig, string>
-		: string | null;
+	: never;
 
 // ============================================================================
 // FieldSelect — "what value does this field contribute to a row?"
@@ -146,37 +69,13 @@ type InferUploadFKSelect<TConfig> = TConfig extends { through: string }
 /**
  * Extract the select type for a single field.
  *
- * Dual dispatch:
- * 1. V2 Field<TState> — via phantom `_` property
- * 2. V1 FieldDefinition<TState> — via structural match (legacy)
+ * Dispatches via Field<TState> phantom `_` property.
  */
-export type FieldSelect<
-	TFieldDef,
-	_TApp = unknown,
-> =
-	// V2: Field<TState> dispatch
-	TFieldDef extends { readonly _: infer TState extends FieldState }
-		? V2FieldSelect<TState>
-		// V1: FieldDefinition<TState> dispatch (legacy)
-		: TFieldDef extends FieldDefinition<infer TState>
-			? TState extends FieldDefinitionState
-				? TState["type"] extends "relation"
-					? InferRelationFKSelect<TState["config"]>
-					: TState["type"] extends "upload"
-						? InferUploadFKSelect<TState["config"]>
-						: TState["type"] extends "object"
-							? InferSelectType<
-									TState["config"],
-									ObjectFieldShape<TState["config"], _TApp>
-								>
-							: TState["type"] extends "array"
-								? InferSelectType<
-										TState["config"],
-										ArrayFieldElement<TState["config"], _TApp>[]
-									>
-								: TState["select"]
-				: never
-			: never;
+export type FieldSelect<TFieldDef, _TApp = unknown> = TFieldDef extends {
+	readonly _: infer TState extends FieldState;
+}
+	? V2FieldSelect<TState>
+	: never;
 
 // ============================================================================
 // FieldWhere — "how do I filter on this field?"
@@ -185,47 +84,35 @@ export type FieldSelect<
 /**
  * Extract the where clause type for a single field.
  *
- * Dual dispatch:
- * 1. V2 Field<TState> — operators from OperatorSetDefinition
- * 2. V1 FieldDefinition<TState> — operators from ContextualOperators
+ * Dispatches via Field<TState> operators from OperatorSetDefinition.
  */
-export type FieldWhere<
-	TFieldDef,
-	_TApp = unknown,
-> =
-	// V2: Field<TState> dispatch
-	TFieldDef extends { readonly _: infer TState extends FieldState }
-		? V2FieldWhere<TState>
-		// V1: FieldDefinition<TState> dispatch (legacy)
-		: TFieldDef extends FieldDefinition<infer TState>
-			? TState extends FieldDefinitionState
-				? TState extends { operators: { column: infer TColumnOps } }
-					? TColumnOps extends Record<string, any>
-						? {
-								[K in keyof TColumnOps]?: ExtractOperatorParamType<TColumnOps[K]>;
-							}
-						: never
-					: never
-				: never
-			: never;
+export type FieldWhere<TFieldDef, _TApp = unknown> = TFieldDef extends {
+	readonly _: infer TState extends FieldState;
+}
+	? V2FieldWhere<TState>
+	: never;
 
 // ============================================================================
-// System Field Instances — V2 Field factories
+// System Field Instances
 // ============================================================================
 
 /**
- * System field definitions using V2 factories.
+ * System field definitions.
  * Operators, select types, input types — all inferred from Field<TState>.
  */
 
 /** id: text, required, has default */
-const _systemIdField = text().required().default(() => "");
+const _systemIdField = text()
+	.required()
+	.default(() => "");
 
 /** _title: text, required, virtual (computed) */
 const _systemTitleField = text().required().virtual();
 
 /** createdAt / updatedAt: datetime, required, has default */
-const _systemTimestampField = datetime().required().default(() => new Date());
+const _systemTimestampField = datetime()
+	.required()
+	.default(() => new Date());
 
 /** deletedAt: datetime, nullable */
 const _systemNullableTimestampField = datetime();
@@ -237,7 +124,9 @@ const _systemUploadTextField = text().required();
 const _systemUploadNumberField = number().required();
 
 /** Upload visibility field: text, required, default "public" */
-const _systemUploadVisibilityField = text().required().default("public" as const);
+const _systemUploadVisibilityField = text()
+	.required()
+	.default("public" as const);
 
 // Extract types from real field instances
 type IdField = typeof _systemIdField;
@@ -260,9 +149,7 @@ export type AutoInsertedFields<
 	TUserFields extends Record<string, any>,
 	TOptions extends CollectionOptions,
 	TUpload extends UploadOptions | undefined,
-> = ("id" extends keyof TUserFields
-	? {}
-	: { readonly id: IdField }) &
+> = ("id" extends keyof TUserFields ? {} : { readonly id: IdField }) &
 	("_title" extends keyof TUserFields ? {} : { readonly _title: TitleField }) &
 	(TOptions extends { timestamps: false }
 		? {}

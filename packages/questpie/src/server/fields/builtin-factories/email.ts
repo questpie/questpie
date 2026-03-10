@@ -1,12 +1,23 @@
 /**
- * Email Field Factory (V2)
+ * Email Field Factory
  */
 
-import { varchar, type PgVarcharBuilder } from "drizzle-orm/pg-core";
+import { type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { emailOps } from "../operators/builtin.js";
-import { createField } from "../field-class.js";
+import { field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { emailOps } from "../operators/builtin.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface EmailFieldMeta {}
+	}
+}
+
+export interface EmailFieldMeta extends Questpie.EmailFieldMeta {
+	_?: never;
+}
 
 export type EmailFieldState = DefaultFieldState & {
 	type: "email";
@@ -26,7 +37,7 @@ export type EmailFieldState = DefaultFieldState & {
  * ```
  */
 export function email(maxLength = 255): Field<EmailFieldState> {
-	return createField<EmailFieldState>({
+	return field<EmailFieldState>({
 		type: "email",
 		columnFactory: (name) => varchar(name, { length: maxLength }),
 		schemaFactory: () => z.string().email().max(maxLength),

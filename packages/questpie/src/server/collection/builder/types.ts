@@ -12,9 +12,7 @@ import type { ValidationSchemas } from "#questpie/server/collection/builder/vali
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
 import type {
-	FieldDefinition,
-	FieldDefinitionAccess,
-	FieldDefinitionState,
+	FieldAccess as FieldDefinitionAccess,
 	FieldLocation,
 } from "#questpie/server/fields/types.js";
 import type { SearchableConfig } from "#questpie/server/integrated/search/index.js";
@@ -201,17 +199,22 @@ type InferUploadTargetCollection<TConfig> = TConfig extends {
 export type InferRelationConfigsFromFields<
 	TFields extends Record<string, any>,
 > = {
-	[K in keyof TFields as TFields[K] extends { readonly _: infer TState extends import("../../fields/field-class-types.js").FieldState }
+	[K in keyof TFields as TFields[K] extends {
+		readonly _: infer TState extends
+			import("../../fields/field-class-types.js").FieldState;
+	}
 		? TState["type"] extends "relation" | "upload"
 			? K
 			: never
-		: TFields[K] extends FieldDefinition<infer TState>
-			? TState["type"] extends "relation" | "upload"
-				? K
-				: never
-			: never]: TFields[K] extends { readonly _: infer TState extends import("../../fields/field-class-types.js").FieldState }
+		: never]: TFields[K] extends {
+		readonly _: infer TState extends
+			import("../../fields/field-class-types.js").FieldState;
+	}
 		? TState["type"] extends "relation" | "upload"
-			? TState extends { relationTo: infer TTo extends string; relationKind: infer TKind }
+			? TState extends {
+					relationTo: infer TTo extends string;
+					relationKind: infer TKind;
+				}
 				? RelationConfig & {
 						type: TKind extends "many" ? "many" : "one";
 						collection: TTo;
@@ -223,19 +226,7 @@ export type InferRelationConfigsFromFields<
 						}
 					: RelationConfig
 			: never
-		: TFields[K] extends FieldDefinition<infer TState>
-			? TState["type"] extends "relation"
-				? RelationConfig & {
-						type: InferRelationTypeFromConfig<TState["config"]>;
-						collection: InferRelationTargetName<TState["config"]["to"]>;
-					}
-				: TState["type"] extends "upload"
-					? RelationConfig & {
-							type: InferUploadRelationType<TState["config"]>;
-							collection: InferUploadTargetCollection<TState["config"]>;
-						}
-					: never
-			: never;
+		: never;
 };
 
 /**
@@ -444,9 +435,7 @@ export type HookFunction<
 		| "update"
 		| "delete"
 		| "read",
-> = (
-	ctx: HookContext<TData, TOriginal, TOperation>,
-) => Promise<void> | void;
+> = (ctx: HookContext<TData, TOriginal, TOperation>) => Promise<void> | void;
 
 /**
  * BeforeOperation hook - runs before any operation
@@ -592,11 +581,7 @@ export type TransitionHook<TData = any> = (
  * @template TInsert - The insert data type
  * @template TUpdate - The update data type
  */
-export interface CollectionHooks<
-	TSelect = any,
-	TInsert = any,
-	TUpdate = any,
-> {
+export interface CollectionHooks<TSelect = any, TInsert = any, TUpdate = any> {
 	/**
 	 * Runs before any operation (create/update/delete/read)
 	 *
@@ -761,18 +746,14 @@ export interface CollectionHooks<
 	 *
 	 * **Context:** `data` (record), `fromStage`, `toStage`, `db`
 	 */
-	beforeTransition?:
-		| TransitionHook<TSelect>[]
-		| TransitionHook<TSelect>;
+	beforeTransition?: TransitionHook<TSelect>[] | TransitionHook<TSelect>;
 
 	/**
 	 * Runs after a workflow stage transition (transitionStage).
 	 *
 	 * **Context:** `data` (record), `fromStage`, `toStage`, `db`
 	 */
-	afterTransition?:
-		| TransitionHook<TSelect>[]
-		| TransitionHook<TSelect>;
+	afterTransition?: TransitionHook<TSelect>[] | TransitionHook<TSelect>;
 }
 
 /**
@@ -1018,9 +999,14 @@ export interface CollectionBuilderState {
 	upload: UploadOptions | undefined;
 	/**
 	 * Field definitions from Field Builder.
-	 * Stores the FieldDefinition objects for validation, introspection, and localization.
+	 * Stores the Field objects for validation, introspection, and localization.
 	 */
-	fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>;
+	fieldDefinitions: Record<
+		string,
+		import("../../fields/field-class.js").Field<
+			import("../../fields/field-class-types.js").FieldState
+		>
+	>;
 	/**
 	 * Phantom type for QuestpieBuilder reference.
 	 * Used to access field types registered via the fields config.
@@ -1095,29 +1081,27 @@ export type AnyCollectionState = CollectionBuilderState;
 
 /**
  * Extract fields by location from TState-based field definitions.
- * New approach using FieldDefinition state.location property.
+ * Uses V2 Field phantom property dispatch pattern.
  */
 export type ExtractFieldsByLocation<
 	TFields extends Record<string, any>,
 	TLocation extends FieldLocation,
 > = {
-	[K in keyof TFields as TFields[K] extends { readonly _: infer TState extends import("../../fields/field-class-types.js").FieldState }
-		? import("../../fields/types.js").InferLocationFromV2State<TState> extends TLocation
-			? TState["column"] extends null ? never : K
+	[K in keyof TFields as TFields[K] extends {
+		readonly _: infer TState extends
+			import("../../fields/field-class-types.js").FieldState;
+	}
+		? import("../../fields/types.js").InferLocationFromFieldState<TState> extends TLocation
+			? TState["column"] extends null
+				? never
+				: K
 			: never
-		: TFields[K] extends FieldDefinition<infer TState>
-			? TState extends FieldDefinitionState
-				? TState["location"] extends TLocation
-					? TState["column"] extends null ? never : K
-					: never
-				: never
-			: never]: TFields[K] extends { readonly _: infer TState extends import("../../fields/field-class-types.js").FieldState }
+		: never]: TFields[K] extends {
+		readonly _: infer TState extends
+			import("../../fields/field-class-types.js").FieldState;
+	}
 		? TState["column"]
-		: TFields[K] extends FieldDefinition<infer TState>
-			? TState extends FieldDefinitionState
-				? TState["column"] extends null ? never : TState["column"]
-				: never
-			: never;
+		: never;
 };
 
 /**
@@ -1197,10 +1181,9 @@ export type InferMainColumnsFromFields<
  * Infer i18n table columns from TState-based field definitions.
  * Extracts only fields with location: "i18n" and non-null columns.
  */
-export type InferI18nColumnsFromFields<
-	TFields extends Record<string, any>,
-> = ReturnType<typeof Collection.i18nCols> &
-	ExtractFieldsByLocation<TFields, "i18n">;
+export type InferI18nColumnsFromFields<TFields extends Record<string, any>> =
+	ReturnType<typeof Collection.i18nCols> &
+		ExtractFieldsByLocation<TFields, "i18n">;
 
 /**
  * Infer main table type from TState-based field definitions.

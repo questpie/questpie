@@ -6,11 +6,8 @@
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { pgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import type {
-	FieldDefinition,
-	FieldDefinitionState,
-	RelationFieldMetadata,
-} from "#questpie/server/fields/types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import {
 	createInsertSchema,
 	createUpdateSchema,
@@ -77,7 +74,7 @@ export interface ValidationSchemas {
  * @returns Empty map (no transformation needed with unified field API)
  */
 export function extractRelationFieldMappings(
-	_fieldDefinitions: Record<string, FieldDefinition<FieldDefinitionState>>,
+	_fieldDefinitions: Record<string, Field<FieldState>>,
 ): Record<string, string> {
 	// With unified field API, field name = column key
 	// No transformation needed
@@ -147,7 +144,7 @@ export function createCollectionValidationSchemas<
 		/** Custom refinements per field */
 		refine?: Record<string, (schema: z.ZodTypeAny) => z.ZodTypeAny>;
 		/** Field definitions for relation field name normalization */
-		fieldDefinitions?: Record<string, FieldDefinition<FieldDefinitionState>>;
+		fieldDefinitions?: Record<string, Field<FieldState>>;
 	},
 ): ValidationSchemas {
 	// Create merged table for validation

@@ -1,17 +1,13 @@
+import type { Collection } from "#questpie/server/collection/builder/collection.js";
+import type { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
 import type {
 	CollectionAccess,
 	ExtractFieldsByLocation,
 	InferTableWithColumns,
 } from "#questpie/server/collection/builder/types.js";
-import type {
-	FieldDefinition,
-	FieldDefinitionState,
-} from "#questpie/server/fields/types.js";
-import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
-import type { Collection } from "#questpie/server/collection/builder/collection.js";
-import type { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
 import type { Global } from "#questpie/server/global/builder/global.js";
 import type { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
+import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
 import type {
 	AnyCollectionOrBuilder,
 	AnyGlobal,
@@ -21,8 +17,7 @@ import type {
 	GetGlobal,
 } from "#questpie/shared/type-utils.js";
 
-// Local type definitions using new TState approach
-// These types maintain backward compatibility while using the new field definition system
+// Field extraction by location — dispatches via Field<TState> phantom type
 type NonLocalizedFields<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
@@ -39,12 +34,15 @@ type LocalizedFields<
 
 /**
  * Resolve which fields property to use for schema inference.
- * When fieldDefinitions has keys (new builder pattern), use it — it carries
- * FieldDefinition types that NonLocalizedFields/LocalizedFields can dispatch on.
- * Otherwise fall back to raw Drizzle columns in `fields` (legacy pattern).
+ * When fieldDefinitions has keys, use it — it carries Field<TState> types
+ * that NonLocalizedFields/LocalizedFields can dispatch on.
+ * Otherwise fall back to raw Drizzle columns in `fields`.
  */
 type SchemaFields<
-	TState extends { fields: Record<string, any>; fieldDefinitions: Record<string, any> },
+	TState extends {
+		fields: Record<string, any>;
+		fieldDefinitions: Record<string, any>;
+	},
 > = [keyof TState["fieldDefinitions"]] extends [never]
 	? TState["fields"]
 	: TState["fieldDefinitions"];
@@ -64,11 +62,8 @@ type HasI18nFields<
 		? true
 		: false
 	: [
-				keyof ExtractFieldsByLocation<
-					TState["fieldDefinitions"],
-					"i18n"
-				>,
-		  ] extends [never]
+				keyof ExtractFieldsByLocation<TState["fieldDefinitions"], "i18n">,
+			] extends [never]
 		? false
 		: true;
 
@@ -545,7 +540,13 @@ export interface QuestpieConfig {
 	 * Service definitions (from services/*.ts and module services).
 	 * Keyed by service name. Resolved at runtime into service instances.
 	 */
-	services?: Record<string, import("#questpie/server/services/define-service.js").ServiceDefinition<any, any>>;
+	services?: Record<
+		string,
+		import("#questpie/server/services/define-service.js").ServiceDefinition<
+			any,
+			any
+		>
+	>;
 
 	/**
 	 * Phantom type for tracking message keys.

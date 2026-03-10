@@ -2,17 +2,15 @@
  * Field Builder
  *
  * Creates a type-safe context object providing field factory methods.
- * V2 factories return Field<TState> with chain methods.
- *
  * Usage: f.text(255).required(), f.number().min(0), etc.
  */
 
 import type { BuiltinFields } from "./builtin/defaults.js";
+
 export type { BuiltinFields } from "./builtin/defaults.js";
 
 import type { Field } from "./field-class.js";
 import type { FieldState } from "./field-class-types.js";
-import type { FieldDefinition, FieldDefinitionState } from "./types.js";
 
 // ============================================================================
 // Field Builder Proxy Types
@@ -20,7 +18,7 @@ import type { FieldDefinition, FieldDefinitionState } from "./types.js";
 
 /**
  * Field builder proxy type.
- * For V2 factories, this is a direct passthrough — each property IS the factory function.
+ * Each property IS the factory function that returns a Field<TState> builder.
  *
  * @template TMap - The field type map to use (defaults to BuiltinFields)
  *
@@ -73,7 +71,7 @@ export function createFieldsCallbackContext<
  * Create a field builder from a field factories map.
  * Wraps the map in a Proxy for nice error messages on unknown field types.
  *
- * @param fieldDefs - Map of field type names to V2 factory functions
+ * @param fieldDefs - Map of field type names to factory functions
  * @returns A proxy object with field factory methods
  *
  * @example
@@ -104,15 +102,14 @@ export function createFieldBuilder<TFields extends Record<string, any>>(
 	});
 }
 
-
 // ============================================================================
 // Field Definition Extraction
 // ============================================================================
 
 /**
- * A field produced by V2 factories — either a Field<TState> or a FieldDefinition.
+ * Any field instance.
  */
-type AnyField = Field<FieldState> | FieldDefinition<FieldDefinitionState>;
+type AnyField = Field<FieldState>;
 
 /**
  * Extract field definitions from a fields function result.
@@ -156,26 +153,20 @@ export function extractFieldDefinitions<
  * Type helper to infer field types from a fields factory function.
  */
 export type InferFieldsFromFactory<
-	TFactory extends (
-		f: FieldBuilderProxy,
-	) => Record<string, AnyField>,
+	TFactory extends (f: FieldBuilderProxy) => Record<string, AnyField>,
 > = ReturnType<TFactory>;
 
 /**
  * Type helper to extract value types from field definitions.
  */
-export type FieldValues<
-	TFields extends Record<string, AnyField>,
-> = {
+export type FieldValues<TFields extends Record<string, AnyField>> = {
 	[K in keyof TFields]: TFields[K]["$types"]["value"];
 };
 
 /**
  * Type helper to extract input types from field definitions.
  */
-export type FieldInputs<
-	TFields extends Record<string, AnyField>,
-> = {
+export type FieldInputs<TFields extends Record<string, AnyField>> = {
 	[K in keyof TFields as TFields[K]["$types"]["input"] extends never
 		? never
 		: K]: TFields[K]["$types"]["input"];
@@ -184,9 +175,7 @@ export type FieldInputs<
 /**
  * Type helper to extract output types from field definitions.
  */
-export type FieldOutputs<
-	TFields extends Record<string, AnyField>,
-> = {
+export type FieldOutputs<TFields extends Record<string, AnyField>> = {
 	[K in keyof TFields as TFields[K]["$types"]["output"] extends never
 		? never
 		: K]: TFields[K]["$types"]["output"];

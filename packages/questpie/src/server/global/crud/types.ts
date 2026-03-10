@@ -5,14 +5,12 @@ import type {
 	NestedRelationMutation,
 	With,
 } from "#questpie/server/collection/crud/types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type {
 	FieldSelect,
 	GlobalFieldDefinitionsWithSystem,
 } from "#questpie/server/fields/field-types.js";
-import type {
-	FieldDefinition,
-	FieldDefinitionState,
-} from "#questpie/server/fields/types.js";
 import type { GlobalOptions } from "#questpie/server/global/builder/types.js";
 import type {
 	ExtractRelationInsert,
@@ -161,7 +159,7 @@ type GlobalFieldDefinitions<TGlobal> =
 		fieldDefinitions: infer TDefs;
 		options: infer TOptions;
 	}
-		? TDefs extends Record<string, FieldDefinition<FieldDefinitionState>>
+		? TDefs extends Record<string, Field<FieldState>>
 			? TOptions extends GlobalOptions
 				? GlobalFieldDefinitionsWithSystem<TDefs, TOptions>
 				: GlobalFieldDefinitionsWithSystem<TDefs, {}>
@@ -171,7 +169,7 @@ type GlobalFieldDefinitions<TGlobal> =
 			: Record<string, never>;
 
 type HasGlobalFieldDefinitions<TDefs> =
-	TDefs extends Record<string, FieldDefinition<FieldDefinitionState>>
+	TDefs extends Record<string, Field<FieldState>>
 		? keyof TDefs extends never
 			? false
 			: true
@@ -184,7 +182,7 @@ type HasGlobalFieldDefinitions<TDefs> =
  */
 type GlobalSelectFromFieldDefinitions<TGlobal, TApp> =
 	GlobalFieldDefinitions<TGlobal> extends infer TAllFields
-		? TAllFields extends Record<string, FieldDefinition<FieldDefinitionState>>
+		? TAllFields extends Record<string, Field<FieldState>>
 			? Prettify<{
 					[K in keyof TAllFields as FieldSelect<
 						TAllFields[K],

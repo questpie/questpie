@@ -1,12 +1,23 @@
 /**
- * URL Field Factory (V2)
+ * URL Field Factory
  */
 
-import { varchar, type PgVarcharBuilder } from "drizzle-orm/pg-core";
+import { type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { urlOps } from "../operators/builtin.js";
-import { createField } from "../field-class.js";
+import { field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { urlOps } from "../operators/builtin.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface UrlFieldMeta {}
+	}
+}
+
+export interface UrlFieldMeta extends Questpie.UrlFieldMeta {
+	_?: never;
+}
 
 export type UrlFieldState = DefaultFieldState & {
 	type: "url";
@@ -27,7 +38,7 @@ export type UrlFieldState = DefaultFieldState & {
  * ```
  */
 export function url(maxLength = 2048): Field<UrlFieldState> {
-	return createField<UrlFieldState>({
+	return field<UrlFieldState>({
 		type: "url",
 		columnFactory: (name) => varchar(name, { length: maxLength }),
 		schemaFactory: () => z.string().url().max(maxLength),

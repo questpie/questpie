@@ -1,12 +1,27 @@
 /**
- * Text Field Factory (V2)
+ * Text Field Factory
  */
 
-import { text as pgText, varchar, type PgVarcharBuilder } from "drizzle-orm/pg-core";
+import {
+	type PgVarcharBuilder,
+	text as pgText,
+	varchar,
+} from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { stringOps } from "../operators/builtin.js";
-import { createField, Field } from "../field-class.js";
+import { field, Field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
+import { stringOps } from "../operators/builtin.js";
+
+declare global {
+	namespace Questpie {
+		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
+		interface TextFieldMeta {}
+	}
+}
+
+export interface TextFieldMeta extends Questpie.TextFieldMeta {
+	_?: never;
+}
 
 export type TextFieldState = DefaultFieldState & {
 	type: "text";
@@ -32,7 +47,7 @@ export function text(arg?: number | { mode: "text" }): Field<TextFieldState> {
 	const isTextMode = typeof arg === "object" && arg?.mode === "text";
 	const maxLen = typeof arg === "number" ? arg : isTextMode ? undefined : 255;
 
-	return createField<TextFieldState>({
+	return field<TextFieldState>({
 		type: "text",
 		columnFactory: (name) =>
 			isTextMode ? pgText(name) : varchar(name, { length: maxLen }),
