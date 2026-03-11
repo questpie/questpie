@@ -11,6 +11,7 @@ import { buildCollectionSchemas } from "#questpie/server/collection/builder/fiel
 import type {
 	AccessContext,
 	AccessRule,
+	CollectionAccess,
 	CollectionBuilderState,
 } from "#questpie/server/collection/builder/types.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
@@ -634,9 +635,8 @@ export async function introspectCollection(
 ): Promise<CollectionSchema> {
 	const { state } = collection;
 	const fieldDefinitions = state.fieldDefinitions || {};
-	const formReactiveByField = extractFormReactiveConfigs(
-		(state as any).adminForm,
-	);
+	const adminState = state as CollectionBuilderState & AdminPluginState;
+	const formReactiveByField = extractFormReactiveConfigs(adminState.adminForm);
 
 	// Evaluate collection-level access
 	const access = await evaluateCollectionAccess(state, context, app);
@@ -824,11 +824,32 @@ function serializeActionFormFields(
  * Extract admin configuration from collection state.
  * These properties are added by the `adminModule` via monkey patching.
  */
+/**
+ * Shape of admin plugin state keys added via CollectionBuilder.set().
+ * These properties are dynamically added by the admin module, not part
+ * of the base CollectionBuilderState type. Values are typed as `any`
+ * because the admin plugin uses its own config shapes that are not
+ * known to the core package.
+ */
+interface AdminPluginState {
+	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
+	admin?: any;
+	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
+	adminList?: any;
+	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
+	adminForm?: any;
+	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
+	adminPreview?: any;
+	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
+	adminActions?: any;
+}
+
 function extractAdminConfig(
 	state: CollectionBuilderState,
 ): CollectionSchema["admin"] | undefined {
-	// Check if any admin config exists
-	const stateAny = state as any;
+	// Admin plugin adds dynamic keys via .set() — not part of base CollectionBuilderState.
+	// Cast to the known admin plugin shape rather than `any`.
+	const stateAny = state as CollectionBuilderState & AdminPluginState;
 	const hasAdminConfig =
 		stateAny.admin ||
 		stateAny.adminList ||
@@ -974,7 +995,11 @@ async function evaluateCollectionAccess(
 	app?: unknown,
 ): Promise<CollectionAccessInfo> {
 	const { access } = state;
-	const appDefaultAccess = (app as any)?.defaultAccess;
+	// app is typed as unknown at the interface boundary, but at runtime
+	// it's a Questpie instance with defaultAccess
+	const appDefaultAccess = (
+		app as { defaultAccess?: CollectionAccess } | undefined
+	)?.defaultAccess;
 
 	const { extractAppServices } = await import(
 		"#questpie/server/config/app-context.js"
@@ -1034,8 +1059,11 @@ async function evaluateAccessRule(
 	context: AccessContext,
 ): Promise<AccessResult> {
 	// No rule = require session (secure by default)
+	// AccessContext extends AppContext which is augmented with `session` at codegen time.
+	// At the library type level it's not present, so we use a narrowing cast.
 	if (rule === undefined) {
-		return (context as any).session ? { allowed: true } : { allowed: false };
+		const session = (context as { session?: unknown }).session;
+		return session ? { allowed: true } : { allowed: false };
 	}
 
 	if (rule === true) {
@@ -1381,10 +1409,10 @@ function extractFieldOptionsReactiveConfig(
 		if (Array.isArray(optionsConfig.deps)) {
 			watch = optionsConfig.deps as string[];
 		} else if (typeof optionsConfig.deps === "function") {
-			// Track deps from function
+			// Track deps from function using a recursive property-tracking proxy
 			const deps = new Set<string>();
-			const createProxy = (prefix: string): any =>
-				new Proxy({} as any, {
+			const createProxy = (prefix: string): unknown =>
+				new Proxy(Object.create(null) as Record<string, unknown>, {
 					get(_, prop: string | symbol) {
 						if (typeof prop === "symbol" || prop === "then") {
 							return undefined;

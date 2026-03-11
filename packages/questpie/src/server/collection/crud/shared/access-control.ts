@@ -147,16 +147,20 @@ function createFieldAccessContext(params: {
 	operation: "create" | "read" | "update" | "delete";
 	doc?: Record<string, unknown>;
 }): FieldAccessContext {
+	// CRUDContext uses an open index signature ([key: string]: unknown),
+	// so req/request may be present at runtime when set by the HTTP adapter.
+	const ctx = params.context as Record<string, unknown>;
 	const request =
-		(params.context as any).req ??
-		(params.context as any).request ??
+		(ctx.req as Request | undefined) ??
+		(ctx.request as Request | undefined) ??
 		(typeof Request !== "undefined"
 			? new Request("http://questpie.local")
 			: ({} as Request));
 
 	return {
 		req: request,
-		user: (params.context.session as any)?.user,
+		// session is typed as { user: User; session: Session } | null | undefined
+		user: params.context.session?.user,
 		doc: params.doc,
 		operation: params.operation,
 	};

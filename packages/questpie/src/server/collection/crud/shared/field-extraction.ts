@@ -5,7 +5,10 @@
  */
 
 import type { Field } from "#questpie/server/fields/field-class.js";
-import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type {
+	FieldRuntimeState,
+	FieldState,
+} from "#questpie/server/fields/field-class-types.js";
 
 /**
  * Extract field names by location from field definitions.
@@ -87,9 +90,9 @@ export function splitFieldsByLocation<T extends Record<string, any>>(
 
 	for (const [key, value] of Object.entries(data)) {
 		if (localizedNames.has(key)) {
-			(localized as any)[key] = value;
+			(localized as Record<string, unknown>)[key] = value;
 		} else {
-			(main as any)[key] = value;
+			(main as Record<string, unknown>)[key] = value;
 		}
 	}
 
@@ -250,8 +253,11 @@ export function extractNestedLocalizationSchema(
 	}
 
 	// Handle blocks field - extract schema from block definitions
+	// NOTE: _blockDefinitions is a forward-reference for the blocks field type
+	// which stores block definitions on the runtime state. This property is not
+	// part of FieldRuntimeState yet — it will be added when blocks are fully typed.
 	if (fieldType === "blocks") {
-		const blockDefinitions = (s as any)._blockDefinitions as
+		const blockDefinitions = (s as Record<string, unknown>)._blockDefinitions as
 			| Record<string, { state?: { fields?: unknown } }>
 			| undefined;
 

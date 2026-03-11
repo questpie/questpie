@@ -54,6 +54,7 @@ import {
 	extractNestedLocalizationSchemas,
 	type NestedLocalizationSchema,
 } from "#questpie/server/collection/crud/shared/field-extraction.js";
+import { getColumn } from "#questpie/server/collection/crud/shared/field-resolver.js";
 import {
 	appendRealtimeChange,
 	createHookContext,
@@ -234,21 +235,19 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			return this.workflowConfig?.initialStage ?? "draft";
 		}
 
-		const stageColumn = (this.versionsTable as any).versionStage;
+		const stageColumn = getColumn(this.versionsTable, "versionStage");
 		if (!stageColumn) {
 			return this.workflowConfig.initialStage;
 		}
 
+		const idCol = getColumn(this.versionsTable, "id")!;
+		const versionNumCol = getColumn(this.versionsTable, "versionNumber")!;
+
 		const rows = await db
 			.select({ stage: stageColumn })
 			.from(this.versionsTable)
-			.where(
-				and(
-					eq((this.versionsTable as any).id, recordId),
-					sql`${stageColumn} IS NOT NULL`,
-				),
-			)
-			.orderBy(sql`${(this.versionsTable as any).versionNumber} DESC`)
+			.where(and(eq(idCol, recordId), sql`${stageColumn} IS NOT NULL`))
+			.orderBy(sql`${versionNumCol} DESC`)
 			.limit(1);
 
 		return rows[0]?.stage ?? this.workflowConfig.initialStage;
@@ -259,17 +258,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			throw ApiError.notImplemented("Versioning");
 		}
 
+		const vIdCol = getColumn(this.versionsTable, "id")!;
+		const vNumCol = getColumn(this.versionsTable, "versionNumber")!;
+		const vStageCol = getColumn(this.versionsTable, "versionStage")!;
+
 		return db
 			.select({
-				id: (this.versionsTable as any).id,
-				maxVersionNumber:
-					sql<number>`MAX(${(this.versionsTable as any).versionNumber})`.as(
-						"max_version_number",
-					),
+				id: vIdCol,
+				maxVersionNumber: sql<number>`MAX(${vNumCol})`.as("max_version_number"),
 			})
 			.from(this.versionsTable)
-			.where(eq((this.versionsTable as any).versionStage, stage))
-			.groupBy((this.versionsTable as any).id)
+			.where(eq(vStageCol, stage))
+			.groupBy(vIdCol)
 			.as(aliasName);
 	}
 
@@ -439,7 +439,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Execute beforeRead hooks (read doesn't modify data)
 				if (this.state.hooks?.beforeRead) {
 					await this.executeHooks(
-						this.state.hooks.beforeRead as any,
+						this.state.hooks.beforeRead,
 						this.createHookContext({
 							data: options,
 							operation: "read",
@@ -474,12 +474,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								latestStageSubquery,
 								and(
 									eq(
-										(this.versionsTable as any).id,
-										(latestStageSubquery as any).id,
+										getColumn(this.versionsTable, "id")!,
+										latestStageSubquery.id,
 									),
 									eq(
-										(this.versionsTable as any).versionNumber,
-										(latestStageSubquery as any).maxVersionNumber,
+										getColumn(this.versionsTable, "versionNumber")!,
+										latestStageSubquery.maxVersionNumber,
 									),
 								),
 							);
@@ -498,19 +498,23 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						}
 
 						if (this.state.options.softDelete && !includeDeleted) {
-							const deletedAtColumn = (this.versionsTable as any).deletedAt;
+							const deletedAtColumn = getColumn(
+								this.versionsTable,
+								"deletedAt",
+							);
 							if (deletedAtColumn) {
 								countWhereClauses.push(sql`${deletedAtColumn} IS NULL`);
 							}
 						}
 
-						if (
-							!includeDeleted &&
-							(this.versionsTable as any).versionOperation
-						) {
-							countWhereClauses.push(
-								sql`${(this.versionsTable as any).versionOperation} != 'delete'`,
+						if (!includeDeleted) {
+							const versionOpColumn = getColumn(
+								this.versionsTable,
+								"versionOperation",
 							);
+							if (versionOpColumn) {
+								countWhereClauses.push(sql`${versionOpColumn} != 'delete'`);
+							}
 						}
 
 						if (countWhereClauses.length > 0) {
@@ -558,7 +562,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Build SELECT object with aliased i18n tables
 				const selectObj = this.buildSelectObject(
-					options.columns || (options as any).select,
+					options.columns ?? (options as { select?: Columns }).select,
 					options.extras,
 					normalized,
 					i18nCurrentTable,
@@ -581,10 +585,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.innerJoin(
 							latestStageSubquery,
 							and(
-								eq((readTable as any).id, (latestStageSubquery as any).id),
+								eq(getColumn(readTable, "id")!, latestStageSubquery.id),
 								eq(
-									(readTable as any).versionNumber,
-									(latestStageSubquery as any).maxVersionNumber,
+									getColumn(readTable, "versionNumber")!,
+									latestStageSubquery.maxVersionNumber,
 								),
 							),
 						);
@@ -598,12 +602,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						query = query.leftJoin(
 							i18nCurrentTable,
 							and(
-								eq((i18nCurrentTable as any).parentId, (readTable as any).id),
 								eq(
-									(i18nCurrentTable as any).versionNumber,
-									(readTable as any).versionNumber,
+									getColumn(i18nCurrentTable, "parentId")!,
+									getColumn(readTable, "id")!,
 								),
-								eq((i18nCurrentTable as any).locale, normalized.locale!),
+								eq(
+									getColumn(i18nCurrentTable, "versionNumber")!,
+									getColumn(readTable, "versionNumber")!,
+								),
+								eq(getColumn(i18nCurrentTable, "locale")!, normalized.locale!),
 							),
 						);
 
@@ -612,15 +619,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								i18nFallbackTable,
 								and(
 									eq(
-										(i18nFallbackTable as any).parentId,
-										(readTable as any).id,
+										getColumn(i18nFallbackTable, "parentId")!,
+										getColumn(readTable, "id")!,
 									),
 									eq(
-										(i18nFallbackTable as any).versionNumber,
-										(readTable as any).versionNumber,
+										getColumn(i18nFallbackTable, "versionNumber")!,
+										getColumn(readTable, "versionNumber")!,
 									),
 									eq(
-										(i18nFallbackTable as any).locale,
+										getColumn(i18nFallbackTable, "locale")!,
 										normalized.defaultLocale!,
 									),
 								),
@@ -630,8 +637,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						query = query.leftJoin(
 							i18nCurrentTable,
 							and(
-								eq((i18nCurrentTable as any).parentId, (readTable as any).id),
-								eq((i18nCurrentTable as any).locale, normalized.locale!),
+								eq(
+									getColumn(i18nCurrentTable, "parentId")!,
+									getColumn(readTable, "id")!,
+								),
+								eq(getColumn(i18nCurrentTable, "locale")!, normalized.locale!),
 							),
 						);
 
@@ -640,11 +650,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								i18nFallbackTable,
 								and(
 									eq(
-										(i18nFallbackTable as any).parentId,
-										(readTable as any).id,
+										getColumn(i18nFallbackTable, "parentId")!,
+										getColumn(readTable, "id")!,
 									),
 									eq(
-										(i18nFallbackTable as any).locale,
+										getColumn(i18nFallbackTable, "locale")!,
 										normalized.defaultLocale!,
 									),
 								),
@@ -673,7 +683,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Soft delete filter
 				if (this.state.options.softDelete && !includeDeleted) {
-					const deletedAtColumn = (readTable as any).deletedAt;
+					const deletedAtColumn = getColumn(readTable, "deletedAt");
 					if (deletedAtColumn) {
 						const softDeleteFilter = sql`${deletedAtColumn} IS NULL`;
 						whereClauses.push(softDeleteFilter);
@@ -681,15 +691,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				if (useStageVersions && !includeDeleted) {
-					const versionOperationColumn = (readTable as any).versionOperation;
+					const versionOperationColumn = getColumn(
+						readTable,
+						"versionOperation",
+					);
 					if (versionOperationColumn) {
 						whereClauses.push(sql`${versionOperationColumn} != 'delete'`);
 					}
 				}
 
 				// Search filter by _title (for relation pickers, etc.) - only for 'many' mode
-				if (mode === "many" && (options as any).search) {
-					const searchTerm = (options as any).search;
+				if (mode === "many" && (options as FindManyOptions).search) {
+					const searchTerm = (options as FindManyOptions).search;
 					// Get the title expression using aliased tables
 					let titleExpr: unknown = null;
 
@@ -710,7 +723,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						}
 						// If title is a regular field
 						else if (this.state.title in this.state.fields) {
-							titleExpr = (readTable as any)[this.state.title];
+							titleExpr = getColumn(readTable, this.state.title);
 						}
 						// If title is a virtual field, get from virtuals with aliased tables
 						else {
@@ -721,12 +734,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								? virtualGetter(normalized, i18nCurrentTable, i18nFallbackTable)
 								: undefined;
 							if (virtuals && this.state.title in virtuals) {
-								titleExpr = (virtuals as any)[this.state.title];
+								titleExpr = (virtuals as Record<string, unknown>)[
+									this.state.title
+								];
 							}
 						}
 					}
 
-					titleExpr = titleExpr || (readTable as any).id;
+					titleExpr = titleExpr || getColumn(readTable, "id");
 					// Case-insensitive search using ILIKE
 					const searchFilter = sql`${titleExpr}::text ILIKE ${`%${searchTerm}%`}`;
 					whereClauses.push(searchFilter);
@@ -912,7 +927,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			const hasFieldConfig =
 				(relation.fields && relation.fields.length > 0) ||
-				typeof (relation as any).field === "string";
+				typeof relation.field === "string";
 
 			// BelongsTo relation (FK on this table)
 			if (hasFieldConfig) {
@@ -1019,7 +1034,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			// Add soft delete filter
 			if (this.state.options.softDelete && !options.includeDeleted) {
-				const softDeleteClause = sql`${(this.table as any).deletedAt} IS NULL`;
+				const deletedAtCol = getColumn(this.table, "deletedAt");
+				const softDeleteClause = deletedAtCol
+					? sql`${deletedAtCol} IS NULL`
+					: undefined;
 				whereClause = whereClause
 					? and(whereClause, softDeleteClause)
 					: softDeleteClause;
@@ -1192,7 +1210,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 					// Execute beforeValidate hook (transform input before validation)
 					await this.executeHooks(
-						this.state.hooks?.beforeValidate as any,
+						this.state.hooks?.beforeValidate,
 						this.createHookContext({
 							data: input,
 							operation: "create",
@@ -1240,7 +1258,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 					// Execute beforeChange hooks (after validation)
 					await this.executeHooks(
-						this.state.hooks?.beforeChange as any,
+						this.state.hooks?.beforeChange,
 						this.createHookContext({
 							data: regularFields,
 							operation: "create",
@@ -1325,10 +1343,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 									i18nCurrentTable,
 									and(
 										eq(
-											(i18nCurrentTable as any).parentId,
-											(this.table as any).id,
+											getColumn(i18nCurrentTable, "parentId")!,
+											getColumn(this.table, "id")!,
 										),
-										eq((i18nCurrentTable as any).locale, context.locale!),
+										eq(getColumn(i18nCurrentTable, "locale")!, context.locale!),
 									),
 								);
 
@@ -1337,11 +1355,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 										i18nFallbackTable,
 										and(
 											eq(
-												(i18nFallbackTable as any).parentId,
-												(this.table as any).id,
+												getColumn(i18nFallbackTable, "parentId")!,
+												getColumn(this.table, "id")!,
 											),
 											eq(
-												(i18nFallbackTable as any).locale,
+												getColumn(i18nFallbackTable, "locale")!,
 												context.defaultLocale!,
 											),
 										),
@@ -1350,7 +1368,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							}
 
 							let [createdRecord] = await query.where(
-								eq((this.table as any).id, insertedRecord.id),
+								eq(getColumn(this.table, "id")!, insertedRecord.id),
 							);
 
 							// Application-side i18n merge
@@ -1365,7 +1383,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 							// Execute afterChange hooks
 							await this.executeHooks(
-								this.state.hooks?.afterChange as any,
+								this.state.hooks?.afterChange,
 								this.createHookContext({
 									data: createdRecord,
 									operation: "create",
@@ -1387,7 +1405,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							// Queue search indexing to run after transaction commits (fire-and-forget)
 							onAfterCommit(() => {
 								this.indexToSearch(createdRecord, context).catch((err) => {
-									(context as any).logger?.error("[Search] Index failed:", err);
+									const logger = context.logger as
+										| { error?: (...args: unknown[]) => void }
+										| undefined;
+									logger?.error?.("[Search] Index failed:", err);
 								});
 								return Promise.resolve();
 							});
@@ -1452,8 +1473,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		// 2. Load existing records
 		// Use system mode to ensure hooks have access to full records regardless of read permissions
 		const findOptions: FindManyOptions = isBatch
-			? { where: (params as any).where }
-			: { where: { id: (params as any).id } };
+			? { where: (params as { where: Where }).where }
+			: { where: { id: (params as { id: string | number }).id } };
 
 		const recordsResult = (await this._executeFind(
 			{ ...findOptions, includeDeleted: true },
@@ -1469,7 +1490,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 		if (records.length === 0) {
 			if (isBatch) return [];
-			throw ApiError.notFound("Record", (params as any).id);
+			throw ApiError.notFound(
+				"Record",
+				String((params as { id: string | number }).id),
+			);
 		}
 
 		// 3. Process each record (Access Control + beforeValidate)
@@ -1504,7 +1528,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			// Execute beforeValidate hook (transform input before validation)
 			await this.executeHooks(
-				this.state.hooks?.beforeValidate as any,
+				this.state.hooks?.beforeValidate,
 				this.createHookContext({
 					data,
 					original: existing,
@@ -1553,7 +1577,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			);
 
 			await this.executeHooks(
-				this.state.hooks?.beforeChange as any,
+				this.state.hooks?.beforeChange,
 				this.createHookContext({
 					data: regularFields,
 					original: existing,
@@ -1598,7 +1622,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								? { updatedAt: new Date() }
 								: {}),
 						})
-						.where(inArray((this.table as any).id, recordIds));
+						.where(inArray(getColumn(this.table, "id")!, recordIds));
 				}
 
 				// Upsert localized fields
@@ -1620,8 +1644,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							})
 							.onConflictDoUpdate({
 								target: [
-									(this.i18nTable as any).parentId,
-									(this.i18nTable as any).locale,
+									getColumn(this.i18nTable, "parentId")!,
+									getColumn(this.i18nTable, "locale")!,
 								],
 								set: i18nValues,
 							});
@@ -1658,7 +1682,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					await this.createVersion(tx, updated, "update", txContext);
 
 					await this.executeHooks(
-						this.state.hooks?.afterChange as any,
+						this.state.hooks?.afterChange,
 						this.createHookContext({
 							data: updated,
 							original,
@@ -1686,7 +1710,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				for (const updated of refetchedRecords) {
 					onAfterCommit(() => {
 						this.indexToSearch(updated, normalized).catch((err) => {
-							(context as any).logger?.error("[Search] Index failed:", err);
+							const logger = context.logger as
+								| { error?: (...args: unknown[]) => void }
+								| undefined;
+							logger?.error?.("[Search] Index failed:", err);
 						});
 						return Promise.resolve();
 					});
@@ -1750,7 +1777,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			await this.executeHooks(
 				this.state.hooks?.beforeOperation,
 				this.createHookContext({
-					data: params as any,
+					data: params,
 					operation: "delete",
 					context,
 					db,
@@ -1762,7 +1789,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const existingRows = await db
 				.select()
 				.from(this.table)
-				.where(eq((this.table as any).id, id))
+				.where(eq(getColumn(this.table, "id")!, id))
 				.limit(1);
 			const existing = existingRows[0];
 
@@ -1801,7 +1828,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			// Execute beforeDelete hooks
 			await this.executeHooks(
-				this.state.hooks?.beforeDelete as any,
+				this.state.hooks?.beforeDelete,
 				this.createHookContext({
 					data: existing,
 					original: existing,
@@ -1825,9 +1852,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					await tx
 						.update(this.table)
 						.set({ deletedAt: new Date() })
-						.where(eq((this.table as any).id, id));
+						.where(eq(getColumn(this.table, "id")!, id));
 				} else {
-					await tx.delete(this.table).where(eq((this.table as any).id, id));
+					await tx
+						.delete(this.table)
+						.where(eq(getColumn(this.table, "id")!, id));
 				}
 
 				changeEvent = await this.appendRealtimeChange(
@@ -1847,7 +1876,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			// Execute afterDelete hooks
 			await this.executeHooks(
-				this.state.hooks?.afterDelete as any,
+				this.state.hooks?.afterDelete,
 				this.createHookContext({
 					data: existing,
 					original: existing,
@@ -1892,7 +1921,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const existingRows = await db
 				.select()
 				.from(this.table)
-				.where(eq((this.table as any).id, id))
+				.where(eq(getColumn(this.table, "id")!, id))
 				.limit(1);
 			const existing = existingRows[0];
 
@@ -1935,7 +1964,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			return await updateFn(
 				{
 					id,
-					data: { deletedAt: null } as any,
+					data: { deletedAt: null } as Record<string, unknown>,
 				},
 				context,
 			);
@@ -2005,7 +2034,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Execute beforeDelete hooks
 				await this.executeHooks(
-					this.state.hooks?.beforeDelete as any,
+					this.state.hooks?.beforeDelete,
 					this.createHookContext({
 						data: record,
 						original: record,
@@ -2034,11 +2063,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					await tx
 						.update(this.table)
 						.set({ deletedAt: new Date() })
-						.where(inArray((this.table as any).id, recordIds));
+						.where(inArray(getColumn(this.table, "id")!, recordIds));
 				} else {
 					await tx
 						.delete(this.table)
-						.where(inArray((this.table as any).id, recordIds));
+						.where(inArray(getColumn(this.table, "id")!, recordIds));
 				}
 
 				changeEvent = await this.appendRealtimeChange(
@@ -2062,7 +2091,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			for (const record of records) {
 				// Execute afterDelete hooks
 				await this.executeHooks(
-					this.state.hooks?.afterDelete as any,
+					this.state.hooks?.afterDelete,
 					this.createHookContext({
 						data: record,
 						original: record,
@@ -2132,14 +2161,17 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						i18nVersionsCurrentTable,
 						and(
 							eq(
-								(i18nVersionsCurrentTable as any).parentId,
-								(this.versionsTable as any).id,
+								getColumn(i18nVersionsCurrentTable, "parentId")!,
+								getColumn(this.versionsTable!, "id")!,
 							),
 							eq(
-								(i18nVersionsCurrentTable as any).versionNumber,
-								(this.versionsTable as any).versionNumber,
+								getColumn(i18nVersionsCurrentTable, "versionNumber")!,
+								getColumn(this.versionsTable!, "versionNumber")!,
 							),
-							eq((i18nVersionsCurrentTable as any).locale, normalized.locale!),
+							eq(
+								getColumn(i18nVersionsCurrentTable, "locale")!,
+								normalized.locale!,
+							),
 						),
 					);
 
@@ -2149,15 +2181,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						i18nVersionsFallbackTable,
 						and(
 							eq(
-								(i18nVersionsFallbackTable as any).parentId,
-								(this.versionsTable as any).id,
+								getColumn(i18nVersionsFallbackTable, "parentId")!,
+								getColumn(this.versionsTable!, "id")!,
 							),
 							eq(
-								(i18nVersionsFallbackTable as any).versionNumber,
-								(this.versionsTable as any).versionNumber,
+								getColumn(i18nVersionsFallbackTable, "versionNumber")!,
+								getColumn(this.versionsTable!, "versionNumber")!,
 							),
 							eq(
-								(i18nVersionsFallbackTable as any).locale,
+								getColumn(i18nVersionsFallbackTable, "locale")!,
 								normalized.defaultLocale!,
 							),
 						),
@@ -2165,15 +2197,19 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				query = query
-					.where(eq((this.versionsTable as any).id, options.id))
-					.orderBy(sql`${(this.versionsTable as any).versionNumber} ASC`);
+					.where(eq(getColumn(this.versionsTable!, "id")!, options.id))
+					.orderBy(
+						sql`${getColumn(this.versionsTable!, "versionNumber")!} ASC`,
+					);
 			} else {
 				// Without i18n, simpler select
 				query = db
 					.select(this.buildVersionsSelectObject(normalized))
 					.from(this.versionsTable)
-					.where(eq((this.versionsTable as any).id, options.id))
-					.orderBy(sql`${(this.versionsTable as any).versionNumber} ASC`);
+					.where(eq(getColumn(this.versionsTable!, "id")!, options.id))
+					.orderBy(
+						sql`${getColumn(this.versionsTable!, "versionNumber")!} ASC`,
+					);
 			}
 
 			if (options.limit) {
@@ -2220,12 +2256,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				.where(
 					hasVersionId
 						? and(
-								eq((this.versionsTable as any).id, options.id),
-								eq((this.versionsTable as any).versionId, options.versionId),
+								eq(getColumn(this.versionsTable!, "id")!, options.id),
+								eq(
+									getColumn(this.versionsTable!, "versionId")!,
+									options.versionId,
+								),
 							)
 						: and(
-								eq((this.versionsTable as any).id, options.id),
-								eq((this.versionsTable as any).versionNumber, options.version),
+								eq(getColumn(this.versionsTable!, "id")!, options.id),
+								eq(
+									getColumn(this.versionsTable!, "versionNumber")!,
+									options.version,
+								),
 							),
 				)
 				.limit(1);
@@ -2240,7 +2282,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const existingRows = await db
 				.select()
 				.from(this.table)
-				.where(eq((this.table as any).id, options.id))
+				.where(eq(getColumn(this.table, "id")!, options.id))
 				.limit(1);
 			const existing = existingRows[0];
 
@@ -2267,12 +2309,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					.from(this.i18nVersionsTable)
 					.where(
 						and(
-							eq((this.i18nVersionsTable as any).parentId, options.id),
+							eq(getColumn(this.i18nVersionsTable!, "parentId")!, options.id),
 							eq(
-								(this.i18nVersionsTable as any).versionNumber,
+								getColumn(this.i18nVersionsTable!, "versionNumber")!,
 								version.versionNumber,
 							),
-							eq((this.i18nVersionsTable as any).locale, normalized.locale),
+							eq(
+								getColumn(this.i18nVersionsTable!, "locale")!,
+								normalized.locale,
+							),
 						),
 					)
 					.limit(1);
@@ -2314,7 +2359,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 
 			await this.executeHooks(
-				this.state.hooks?.beforeChange as any,
+				this.state.hooks?.beforeChange,
 				this.createHookContext({
 					data: restoreData,
 					original: existing,
@@ -2334,22 +2379,22 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								? { updatedAt: new Date() }
 								: {}),
 						})
-						.where(eq((this.table as any).id, options.id));
+						.where(eq(getColumn(this.table, "id")!, options.id));
 				}
 
 				if (this.i18nTable && this.i18nVersionsTable) {
 					await tx
 						.delete(this.i18nTable)
-						.where(eq((this.i18nTable as any).parentId, options.id));
+						.where(eq(getColumn(this.i18nTable!, "parentId")!, options.id));
 
 					const localeRows = await tx
 						.select()
 						.from(this.i18nVersionsTable)
 						.where(
 							and(
-								eq((this.i18nVersionsTable as any).parentId, options.id),
+								eq(getColumn(this.i18nVersionsTable!, "parentId")!, options.id),
 								eq(
-									(this.i18nVersionsTable as any).versionNumber,
+									getColumn(this.i18nVersionsTable!, "versionNumber")!,
 									version.versionNumber,
 								),
 							),
@@ -2378,7 +2423,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const updatedRows = await tx
 					.select()
 					.from(this.table)
-					.where(eq((this.table as any).id, options.id))
+					.where(eq(getColumn(this.table, "id")!, options.id))
 					.limit(1);
 				const result = updatedRows[0];
 
@@ -2387,11 +2432,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					result,
 					"update",
 					normalized,
-					(version as any).versionStage,
+					version.versionStage,
 				);
 
 				await this.executeHooks(
-					this.state.hooks?.afterChange as any,
+					this.state.hooks?.afterChange,
 					this.createHookContext({
 						data: result,
 						original: existing,
@@ -2405,7 +2450,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				if (result) {
 					onAfterCommit(() => {
 						this.indexToSearch(result, normalized).catch((err) => {
-							(context as any).logger?.error("[Search] Index failed:", err);
+							const logger = context.logger as
+								| { error?: (...args: unknown[]) => void }
+								| undefined;
+							logger?.error?.("[Search] Index failed:", err);
 						});
 						return Promise.resolve();
 					});
@@ -2435,7 +2483,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			// If scheduledAt is in the future, schedule via queue job
 			if (scheduledAt && scheduledAt.getTime() > Date.now()) {
-				const queue = (this.app as any)?.queue;
+				const queue = this.app?.queue as
+					| Record<string, { publish?: (...args: unknown[]) => Promise<void> }>
+					| undefined;
 				if (!queue?.["scheduled-transition"]?.publish) {
 					throw ApiError.badRequest(
 						"Scheduled transitions require a queue adapter with the scheduled-transition job registered",
@@ -2454,7 +2504,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const rows = await this.getDb(this.normalizeContext(context))
 					.select()
 					.from(this.table)
-					.where(eq((this.table as any).id, id))
+					.where(eq(getColumn(this.table, "id")!, id))
 					.limit(1);
 				return rows[0] ?? null;
 			}
@@ -2475,7 +2525,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const existingRows = await db
 				.select()
 				.from(this.table)
-				.where(eq((this.table as any).id, id))
+				.where(eq(getColumn(this.table, "id")!, id))
 				.limit(1);
 			const existing = existingRows[0];
 
@@ -3067,7 +3117,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Convert web ReadableStream to Node.js Readable for Flydrive
 				const { Readable } = await import("node:stream");
 				const webStream = file.stream();
-				const nodeStream = Readable.fromWeb(webStream as any);
+				// Web ReadableStream → Node.js stream type mismatch requires cast
+				const nodeStream = Readable.fromWeb(
+					webStream as unknown as import("node:stream/web").ReadableStream,
+				);
 				await this.app.storage.use().putStream(key, nodeStream, {
 					contentType: file.type,
 					contentLength: file.size,
@@ -3093,7 +3146,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					size: file.size,
 					visibility,
 					...additionalData,
-				} as any,
+				} as Record<string, unknown>,
 				context,
 			);
 

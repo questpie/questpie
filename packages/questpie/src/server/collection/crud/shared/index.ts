@@ -33,7 +33,7 @@ export {
 	type NestedObjectSchema,
 	splitFieldsByLocation,
 } from "./field-extraction.js";
-export { resolveFieldKey } from "./field-resolver.js";
+export { getColumn, resolveFieldKey } from "./field-resolver.js";
 export {
 	type CreateHookContextParams,
 	createHookContext,

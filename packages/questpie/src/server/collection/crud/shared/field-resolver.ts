@@ -4,8 +4,32 @@
  * Pure functions for resolving field keys from column definitions.
  */
 
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
+
+/**
+ * Internal record type for dynamic column access on PgTable.
+ *
+ * Drizzle's PgTable type does not expose an index signature, so accessing
+ * columns by dynamic string key requires a cast. This type centralizes
+ * that cast in one place so individual call-sites stay clean.
+ */
+type TableRecord = Record<string, AnyPgColumn | undefined>;
+
+/**
+ * Access a column on a PgTable by dynamic string key.
+ *
+ * Returns the column or `undefined` if the key does not exist.
+ * This is the **single place** where the PgTable → Record cast happens,
+ * replacing scattered `(table as any)[field]` casts throughout the CRUD
+ * pipeline.
+ */
+export function getColumn(
+	table: PgTable,
+	name: string,
+): AnyPgColumn | undefined {
+	return (table as unknown as TableRecord)[name];
+}
 
 /**
  * Resolve field key from column definition
