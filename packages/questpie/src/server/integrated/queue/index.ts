@@ -11,7 +11,7 @@
  * - **Worker Support**: Easy worker setup with `app.queue.listen()`
  * - **Serverless Support**: Tick mode with `app.queue.runOnce()`
  * - **Push Consumers**: Runtime-specific push consumer handlers
- * - **Workflows**: Chain multiple jobs together with the workflow builder
+ * - **Workflows**: Use `@questpie/workflows` for durable, replay-based workflows
  * - **Scheduling**: Support for delayed jobs and cron scheduling
  * - **Retries**: Built-in retry logic with exponential backoff
  * - **Context Access**: Full access to app context (db, auth, storage, email, etc.)
@@ -132,36 +132,6 @@
  * // await app.queue.listen({ shutdownTimeoutMs: 15000 });
  * ```
  *
- * ## Workflows
- *
- * Chain multiple steps together:
- *
- * ```ts
- * import { workflow } from 'questpie';
- *
- * const processOrderWorkflow = workflow('process-order')
- *   .step('validate', async (order, ctx) => {
- *     const valid = await validateOrder(order);
- *     return { ...order, validated: valid };
- *   })
- *   .step('charge', async (order, ctx) => {
- *     const payment = await chargeCustomer(order);
- *     return { ...order, payment };
- *   })
- *   .step('fulfill', async (order, ctx) => {
- *     await sendToWarehouse(order);
- *     return { ...order, fulfilled: true };
- *   })
- *   .build(orderSchema);
- *
- * // Use in app config
- * const app = new Questpie({
- *   queue: {
- *     jobs: [processOrderWorkflow],
- *     adapter: pgBossAdapter({ /* ... *\/ })
- *   }
- * });
- * ```
  *
  * ## Advanced Features
  *
@@ -208,4 +178,3 @@ export * from "./service.js";
 // Core exports
 export * from "./types.js";
 export * from "./worker.js";
-export * from "./workflow.js";

@@ -137,5 +137,11 @@ export function extractAppServices(
 		result.services = services;
 	}
 
+	// Spread extension services from packages (e.g. @questpie/workflows).
+	// Each key becomes a top-level AppContext property (ctx.workflows, etc.).
+	if (app.extensions) {
+		Object.assign(result, app.extensions);
+	}
+
 	return result;
 }

@@ -141,6 +141,20 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	/** Extension state for plugin-contributed configurations (admin layout, blocks, sidebar, etc.) */
 	public state?: Record<string, unknown>;
 
+	/**
+	 * Extension services injected by packages (e.g. `@questpie/workflows`).
+	 * Keys are spread into AppContext via `extractAppServices()`,
+	 * enabling `ctx.workflows`, `ctx.channels`, etc. without modifying core.
+	 *
+	 * @example
+	 * ```ts
+	 * // @questpie/workflows registers itself:
+	 * app.extensions.workflows = createWorkflowClient(defs, app);
+	 * // → ctx.workflows available in every hook, function, job handler
+	 * ```
+	 */
+	public extensions: Record<string, unknown> = {};
+
 	public migrations: QuestpieMigrationsAPI<TConfig>;
 	public seeds: QuestpieSeedsAPI<TConfig>;
 	public api: QuestpieApi<TConfig>;

@@ -97,6 +97,23 @@ export * from "#questpie/server/seed/index.js";
 export * from "#questpie/server/services/define-service.js";
 export { service } from "#questpie/server/services/define-service.js";
 export * from "#questpie/server/utils/drizzle-to-zod.js";
+// Workflow factory + types
+export { workflow } from "#questpie/server/workflows/define-workflow.js";
+export type {
+	WorkflowDefinition,
+	WorkflowHandlerContext,
+	StepToolbox,
+	WorkflowHandlerOptions,
+	WorkflowLogger,
+	WorkflowTriggerOptions,
+	WorkflowInstanceStatus,
+	WorkflowStepStatus,
+	WorkflowEventType,
+	WorkflowLogLevel,
+	InferWorkflowInput,
+	InferWorkflowOutput,
+	InferWorkflowName,
+} from "#questpie/server/workflows/types.js";
 export type {
 	CollectionInfer,
 	CollectionInsert,
