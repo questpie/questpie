@@ -3,18 +3,18 @@
 // Regenerate with: questpie generate --module
 
 // ── Collections ────────────────────────────────────────────
-import _coll_adminPreferences_collection from "../collections/admin-preferences.collection";
-import { locksCollection as _coll_locks_collection } from "../collections/locks.collection";
-import _coll_savedViews_collection from "../collections/saved-views.collection";
+import { locksCollection as _coll_admin_locks } from "../collections/locks.collection";
+import { adminPreferencesCollection as _coll_admin_preferences } from "../collections/admin-preferences.collection";
+import { savedViewsCollection as _coll_admin_saved_views } from "../collections/saved-views.collection";
 
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
 export interface AdminPreferencesCollections {
-	"adminPreferences.collection": typeof _coll_adminPreferences_collection;
-	"locks.collection": typeof _coll_locks_collection;
-	"savedViews.collection": typeof _coll_savedViews_collection;
+	admin_locks: typeof _coll_admin_locks;
+	admin_preferences: typeof _coll_admin_preferences;
+	admin_saved_views: typeof _coll_admin_saved_views;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -24,13 +24,12 @@ export interface AdminPreferencesCollections {
 const _module = {
 	name: "questpie-admin-preferences" as const,
 	collections: {
-		"adminPreferences.collection": _coll_adminPreferences_collection,
-		"locks.collection": _coll_locks_collection,
-		"savedViews.collection": _coll_savedViews_collection,
+		admin_locks: _coll_admin_locks,
+		admin_preferences: _coll_admin_preferences,
+		admin_saved_views: _coll_admin_saved_views,
 	} as AdminPreferencesCollections,
 	globals: {},
 	jobs: {},
-	functions: {},
 	routes: {},
 	messages: {},
 	services: {},
@@ -47,13 +46,3 @@ const _module = {
 
 export type AdminPreferencesModule = typeof _module;
 export default _module;
-
-// ════════════════════════════════════════════════════════════
-// Registry augmentation — module registries
-// ════════════════════════════════════════════════════════════
-
-declare module "questpie" {
-	interface Registry {
-		collections: AdminPreferencesCollections;
-	}
-}

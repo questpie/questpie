@@ -11,7 +11,7 @@
  *
  * The admin module itself follows the file convention:
  * - collections/  → merged starter collections + admin UI config
- * - functions/    → RPC handlers for admin panel operations
+ * - functions/    → route handlers for admin panel operations
  * - modules.ts    → [starterModule] dependency
  * - sidebar.ts    → admin sidebar contribution
  */

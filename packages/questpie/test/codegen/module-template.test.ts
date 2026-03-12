@@ -322,11 +322,11 @@ describe("generateModuleTemplate — bundle routes", () => {
 		expect(output).toContain("getConfig: _route_getConfig,");
 	});
 
-	it("includes all entries in type interface", () => {
-		expect(output).toContain("export interface TestRoutes {");
-		expect(output).toContain("getConfig: typeof _route_getConfig;");
-		// Bundle files are spread at runtime but still appear in the type interface
-		expect(output).toContain("setup: typeof _route_setup;");
+	it("includes all entries in type (intersection for bundles)", () => {
+		// When bundles are present, type is emitted as intersection, not interface
+		expect(output).toContain("export type TestRoutes =");
+		expect(output).toContain("getConfig: typeof _route_getConfig");
+		expect(output).toContain("typeof _route_setup");
 	});
 });
 
@@ -477,7 +477,7 @@ describe("generateModuleTemplate — singles with moduleEmit: array", () => {
 // Registry augmentation
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("generateModuleTemplate — Registry augmentation", () => {
+describe("generateModuleTemplate — no Registry augmentation", () => {
 	const result = emptyResult(["collections"]);
 	const colls = cat(result, "collections");
 	colls.set(
@@ -491,42 +491,9 @@ describe("generateModuleTemplate — Registry augmentation", () => {
 		categoryMeta: baseCategoryMeta(),
 	});
 
-	it("emits declare global with Questpie namespace and Registry", () => {
-		expect(output).toContain("declare global {");
-		expect(output).toContain("namespace Questpie {");
-		expect(output).toContain("interface Registry {");
-	});
-
-	it("uses named type for categories with type interfaces", () => {
-		expect(output).toContain("collections: TestCollections;");
-	});
-});
-
-describe("generateModuleTemplate — Registry with custom registryKey", () => {
-	const meta = new Map<string, CategoryDeclaration>([
-		[
-			"views",
-			{
-				dirs: ["views"],
-				prefix: "view",
-				emit: "record",
-				registryKey: "~views",
-			},
-		],
-	]);
-
-	const result = emptyResult(["views"]);
-	const views = cat(result, "views");
-	views.set("table", makeFile("table", { varName: "_view_table" }));
-
-	const output = generateModuleTemplate({
-		moduleName: "questpie-test",
-		discovered: result,
-		categoryMeta: meta,
-	});
-
-	it("uses custom registryKey string", () => {
-		expect(output).toContain('"~views": TestViews;');
+	it("does NOT emit Registry augmentation (handled centrally by root template)", () => {
+		expect(output).not.toContain("interface Registry {");
+		expect(output).not.toContain("declare global {");
 	});
 });
 
@@ -600,8 +567,8 @@ describe("generateModuleTemplate — extra module properties", () => {
 		expect(output).toContain("listViews: _reg_listViews,");
 	});
 
-	it("uses typeof extracted const in Registry augmentation", () => {
-		expect(output).toContain("listViews: typeof _reg_listViews;");
+	it("does not emit Registry augmentation (handled centrally)", () => {
+		expect(output).not.toContain("interface Registry {");
 	});
 });
 
@@ -641,8 +608,8 @@ describe("generateModuleTemplate — keyFromProperty", () => {
 		expect(output).not.toContain("export interface AdminViews");
 	});
 
-	it("uses typeof _module in Registry instead of named type", () => {
-		expect(output).toContain('views: typeof _module["views"];');
+	it("does not emit Registry augmentation (handled centrally)", () => {
+		expect(output).not.toContain("interface Registry {");
 	});
 });
 

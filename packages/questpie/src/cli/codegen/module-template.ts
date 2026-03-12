@@ -340,77 +340,11 @@ export function generateModuleTemplate(options: ModuleTemplateOptions): string {
 	lines.push("export default _module;");
 	lines.push("");
 
-	// ════════════════════════════════════════════════════════════
-	// Registry augmentation — break circular references
-	// ════════════════════════════════════════════════════════════
-	//
-	// Each module augments the global Registry with its categories that have
-	// `registryKey` on their CategoryDeclaration. This way factories.ts can
-	// read from Registry without referencing `typeof _modules`, which would
-	// create a circular type dependency:
-	//   typeof _modules → CollectionBuilder augmentation → Registry → typeof _modules
-	//
-	{
-		const registryLines: string[] = [];
-
-		// Iterate ALL categories with registryKey — unified path for everything
-		for (const [catName, decl] of categoryMeta) {
-			if (!decl.registryKey) continue;
-			const regKey = typeof decl.registryKey === "string" ? decl.registryKey : catName;
-
-			// Check if this category has a named type interface
-			const hasNamedType = categoriesNeedingTypes.has(catName);
-			const catTypeName = `${typePrefix}${catName.charAt(0).toUpperCase() + catName.slice(1)}`;
-
-			// Check if this property was extracted to a separate const (derived categories like listViews/formViews)
-			const extracted = extractedConsts.get(catName);
-
-			if (hasNamedType) {
-				registryLines.push(`\t\t${safeKey(regKey)}: ${catTypeName};`);
-			} else if (extracted) {
-				registryLines.push(`\t\t${safeKey(regKey)}: typeof ${extracted.constName};`);
-			} else if (emittedCategories.has(catName)) {
-				registryLines.push(`\t\t${safeKey(regKey)}: typeof _module["${catName}"];`);
-			} else if (extraPropNames.has(catName)) {
-				registryLines.push(`\t\t${safeKey(regKey)}: typeof _module["${catName}"];`);
-			} else {
-				// No discovered files, no extra property — skip to avoid conflicts
-				continue;
-			}
-		}
-
-		// Singles with registryKey — emit typeof augmentation for each.
-		// e.g., fields.ts with registryKey: "~fieldTypes" → "~fieldTypes": typeof _fields;
-		//
-		// SKIP ~-prefixed keys (e.g. "~fieldTypes") — these are emitted ONCE by the
-		// root template to avoid merge conflicts when multiple modules augment the
-		// same Registry property with different types (TypeScript degrades to `any`).
-		const discoverPatterns = options.discoverPatterns ?? {};
-		for (const [singleName, pattern] of Object.entries(discoverPatterns)) {
-			if (typeof pattern !== "object" || !pattern.registryKey) continue;
-			if (pattern.registryKey.startsWith("~")) continue;
-			const singleFile = discovered.singles.get(singleName);
-			if (!singleFile) continue;
-			registryLines.push(`\t\t${safeKey(pattern.registryKey)}: typeof ${singleFile.varName};`);
-		}
-
-		if (registryLines.length > 0) {
-			lines.push("// ════════════════════════════════════════════════════════════");
-			lines.push("// Registry augmentation — module registries");
-			lines.push("// ════════════════════════════════════════════════════════════");
-			lines.push("");
-			lines.push("declare global {");
-			lines.push("\tnamespace Questpie {");
-			lines.push("\t\tinterface Registry {");
-			for (const line of registryLines) {
-				lines.push(`\t${line}`);
-			}
-			lines.push("\t\t}");
-			lines.push("\t}");
-			lines.push("}");
-			lines.push("");
-		}
-	}
+	// Registry augmentation is handled CENTRALLY by the app-level .generated/index.ts.
+	// Modules MUST NOT augment Registry — multiple modules declaring the same key
+	// (e.g. "collections") causes TS2717 ("Subsequent property declarations must
+	// have the same type"). The root template merges all module types into a single
+	// Registry augmentation using _MP<> type extraction.
 
 	return lines.join("\n");
 }
@@ -459,11 +393,29 @@ function emitSimpleTypeInterface(
 	typeName: string,
 	fileMap: Map<string, DiscoveredFile>,
 ): void {
-	lines.push(`export interface ${typeName} {`);
-	for (const file of sortedValues(fileMap)) {
-		lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+	const leafFiles = sortedValues(fileMap).filter((f) => !f.isBundle);
+	const bundleFiles = sortedValues(fileMap).filter((f) => f.isBundle);
+
+	if (bundleFiles.length === 0) {
+		// No bundles — simple interface
+		lines.push(`export interface ${typeName} {`);
+		for (const file of leafFiles) {
+			lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+		}
+		lines.push("}");
+	} else {
+		// Bundles present — use type alias with intersection to capture spread keys
+		const parts: string[] = [];
+		if (leafFiles.length > 0) {
+			parts.push(
+				`{ ${leafFiles.map((f) => `${safeKey(f.key)}: typeof ${f.varName}`).join("; ")} }`,
+			);
+		}
+		for (const bundle of bundleFiles) {
+			parts.push(`typeof ${bundle.varName}`);
+		}
+		lines.push(`export type ${typeName} = ${parts.join(" & ")};`);
 	}
-	lines.push("}");
 	lines.push("");
 }
 

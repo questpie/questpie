@@ -21,7 +21,7 @@ import _coll_pages from "../collections/pages";
 import _coll_submissions from "../collections/submissions";
 
 // ── Globals ────────────────────────────────────────────────
-import _glob_siteSettings from "../globals/site-settings";
+import _glob_site_settings from "../globals/site-settings";
 
 // ── Core Singles ───────────────────────────────────────────
 import _auth from "../auth";
@@ -62,7 +62,7 @@ export type AppCollections = _ModuleCollections & {
 
 /** All globals in the app (modules + user, user overrides) */
 export type AppGlobals = _ModuleGlobals & {
-	siteSettings: typeof _glob_siteSettings;
+	site_settings: typeof _glob_site_settings;
 };
 
 /** All jobs in the app (modules + user, user overrides) */
@@ -146,7 +146,7 @@ export const app = createApp(
 			submissions: _coll_submissions,
 		},
 		globals: {
-			siteSettings: _glob_siteSettings,
+			site_settings: _glob_site_settings,
 		},
 		auth: _auth as any,
 		contextResolver: _contextResolver as any,

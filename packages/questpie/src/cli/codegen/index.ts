@@ -278,8 +278,8 @@ export function resolveTargetGraph(
 				if (contribution.root !== target.root) {
 					throw new Error(
 						`[codegen] Target "${targetId}" root conflict: ` +
-							`plugin "${plugin.name}" declares root "${contribution.root}" ` +
-							`but a previous plugin set root "${target.root}".`,
+						`plugin "${plugin.name}" declares root "${contribution.root}" ` +
+						`but a previous plugin set root "${target.root}".`,
 					);
 				}
 				if (
@@ -288,15 +288,15 @@ export function resolveTargetGraph(
 				) {
 					throw new Error(
 						`[codegen] Target "${targetId}" outDir conflict: ` +
-							`plugin "${plugin.name}" declares outDir "${contribution.outDir}" ` +
-							`but a previous plugin set outDir "${target.outDir}".`,
+						`plugin "${plugin.name}" declares outDir "${contribution.outDir}" ` +
+						`but a previous plugin set outDir "${target.outDir}".`,
 					);
 				}
 				if (contribution.outputFile !== target.outputFile) {
 					throw new Error(
 						`[codegen] Target "${targetId}" outputFile conflict: ` +
-							`plugin "${plugin.name}" declares outputFile "${contribution.outputFile}" ` +
-							`but a previous plugin set outputFile "${target.outputFile}".`,
+						`plugin "${plugin.name}" declares outputFile "${contribution.outputFile}" ` +
+						`but a previous plugin set outputFile "${target.outputFile}".`,
 					);
 				}
 			}
@@ -309,8 +309,8 @@ export function resolveTargetGraph(
 				) {
 					throw new Error(
 						`[codegen] Target "${targetId}" moduleRoot conflict: ` +
-							`plugin "${plugin.name}" declares moduleRoot "${contribution.moduleRoot}" ` +
-							`but a previous plugin set moduleRoot "${target.moduleRoot}".`,
+						`plugin "${plugin.name}" declares moduleRoot "${contribution.moduleRoot}" ` +
+						`but a previous plugin set moduleRoot "${target.moduleRoot}".`,
 					);
 				}
 				target.moduleRoot = contribution.moduleRoot;
@@ -369,7 +369,7 @@ export function resolveTargetGraph(
 				if (target.generate) {
 					throw new Error(
 						`[codegen] Target "${targetId}" has multiple generators. ` +
-							`Plugin "${plugin.name}" provides a generator but one already exists.`,
+						`Plugin "${plugin.name}" provides a generator but one already exists.`,
 					);
 				}
 				target.generate = contribution.generate;
@@ -457,7 +457,7 @@ export async function runCodegen(
 				if (routeKey === reserved || routeKey.startsWith(reserved.endsWith("/") ? reserved : reserved + "/")) {
 					throw new Error(
 						`[codegen] Route key "${routeKey}" collides with reserved path prefix "${reserved}". ` +
-							`Rename the route file to avoid conflicts with built-in HTTP handlers.`,
+						`Rename the route file to avoid conflicts with built-in HTTP handlers.`,
 					);
 				}
 			}
@@ -507,7 +507,7 @@ export async function runCodegen(
 					// Append /index.js for bare subpath imports (e.g. "/server" → "/server/index.js")
 					const resolvedSuffix =
 						suffix && !suffix.endsWith(".js") && !suffix.endsWith(".ts")
-							? `${suffix}/index.js`
+							? `${suffix}.js`
 							: suffix;
 					imp.path = `${to}${resolvedSuffix}`;
 				}

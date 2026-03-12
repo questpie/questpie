@@ -3,7 +3,7 @@
 // Regenerate with: questpie generate --module
 
 // ── Collections ────────────────────────────────────────────
-import { auditLogCollection as _coll_auditLog_collection } from "../collections/audit-log.collection";
+import { auditLogCollection as _coll_admin_audit_log } from "../collections/audit-log.collection";
 
 // ── Jobs ────────────────────────────────────────────
 import { auditCleanupJob as _job_auditCleanup_job } from "../jobs/audit-cleanup.job";
@@ -18,7 +18,7 @@ import _sidebar from "../sidebar";
 // ════════════════════════════════════════════════════════════
 
 export interface AuditCollections {
-	"auditLog.collection": typeof _coll_auditLog_collection;
+	admin_audit_log: typeof _coll_admin_audit_log;
 }
 
 export interface AuditJobs {
@@ -32,13 +32,12 @@ export interface AuditJobs {
 const _module = {
 	name: "questpie-audit" as const,
 	collections: {
-		"auditLog.collection": _coll_auditLog_collection,
+		admin_audit_log: _coll_admin_audit_log,
 	} as AuditCollections,
 	jobs: {
 		"auditCleanup.job": _job_auditCleanup_job,
 	} as AuditJobs,
 	globals: {},
-	functions: {},
 	routes: {},
 	messages: {},
 	services: {},
@@ -57,6 +56,3 @@ const _module = {
 
 export type AuditModule = typeof _module;
 export default _module;
-
-// Registry augmentation is handled by the user's .generated/index.ts
-// to avoid circular type references and TS2717 conflicts with sub-modules.

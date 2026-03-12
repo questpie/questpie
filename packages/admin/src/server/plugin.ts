@@ -302,7 +302,7 @@ export function adminPlugin(): CodegenPlugin {
 					// Derive listViews/formViews from discovered views.
 					const viewFiles = ctx.categories.get("views");
 					if (viewFiles && viewFiles.size > 0) {
-						ctx.addImport("{ filterViewsByKind }", "@questpie/admin/server");
+						ctx.addImport("{ filterViewsByKind }", "@questpie/admin/server/registry-helpers");
 
 						const viewVarNames = [...viewFiles.values()]
 							.sort((a, b) => a.key.localeCompare(b.key))

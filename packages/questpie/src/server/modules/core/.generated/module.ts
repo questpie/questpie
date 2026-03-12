@@ -11,7 +11,6 @@ const _module = {
 	collections: {},
 	globals: {},
 	jobs: {},
-	functions: {},
 	routes: {},
 	messages: {},
 	services: {},
