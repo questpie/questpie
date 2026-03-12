@@ -242,6 +242,30 @@ const MERGE_FNS = new Map<string, MergeFn>([
 const STRUCTURAL_KEYS = new Set(["name", "modules"]);
 
 /**
+ * Known infrastructure keys on RuntimeConfig that should NOT be forwarded
+ * to `instance.state`. Only truly unknown extension keys pass through.
+ *
+ * @see RuntimeConfig in module-types.ts for the full list.
+ */
+const RUNTIME_CONSUMED_KEYS = new Set([
+	"plugins",
+	"app",
+	"db",
+	"secret",
+	"storage",
+	"email",
+	"queue",
+	"search",
+	"realtime",
+	"logger",
+	"kv",
+	"translations",
+	"autoMigrate",
+	"autoSeed",
+	"cli",
+]);
+
+/**
  * Keys consumed by QuestpieConfig construction or definition metadata.
  * Everything NOT in this set flows to `instance.state` for plugins to read
  * (e.g., admin reads sidebar, dashboard, branding, blocks, views, components).
@@ -394,6 +418,27 @@ function buildExtensionState(
 	return extensionState;
 }
 
+/**
+ * Extract unknown extension keys from RuntimeConfig.
+ * Filters out known infrastructure keys so only truly unknown
+ * plugin-contributed keys (e.g. `channels`, `workflows`) flow through
+ * to `instance.state`.
+ */
+function extractRuntimeExtensions(
+	runtime: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+	if (!runtime) return undefined;
+	const extensions: Record<string, unknown> = {};
+	let hasAny = false;
+	for (const [key, value] of Object.entries(runtime)) {
+		if (!RUNTIME_CONSUMED_KEYS.has(key) && value !== undefined) {
+			extensions[key] = value;
+			hasAny = true;
+		}
+	}
+	return hasAny ? extensions : undefined;
+}
+
 // ============================================================================
 // createApp() — the main entry point
 // ============================================================================
@@ -542,7 +587,12 @@ function createAppFromDefinition(
 	const instance = new Questpie(cmsConfig);
 
 	// 7. Store plugin extension state (sidebar, dashboard, branding, blocks, views, etc.)
-	const extensionState = buildExtensionState(merged);
+	// Also forward unknown RuntimeConfig extension keys (e.g. channels, workflows)
+	// — same mechanism as legacy createAppLegacy() uses via configOverrides.
+	const runtimeExtensions = extractRuntimeExtensions(
+		runtime as Record<string, unknown>,
+	);
+	const extensionState = buildExtensionState(merged, runtimeExtensions);
 	if (Object.keys(extensionState).length > 0) {
 		instance.state = extensionState;
 	}

@@ -52,6 +52,7 @@ export function adminPlugin(): CodegenPlugin {
 					views: {
 						dirs: ["views"],
 						prefix: "view",
+						factoryFunctions: ["view"],
 						registryKey: true,
 						placeholder: "$VIEW_NAMES",
 						includeInAppState: true,
@@ -81,6 +82,7 @@ export function adminPlugin(): CodegenPlugin {
 					components: {
 						dirs: ["components"],
 						prefix: "comp",
+						factoryFunctions: ["component"],
 						registryKey: true,
 						placeholder: "$COMPONENT_NAMES",
 						recordPlaceholder: "$COMPONENTS",
@@ -95,6 +97,7 @@ export function adminPlugin(): CodegenPlugin {
 					blocks: {
 						dirs: ["blocks"],
 						prefix: "bloc",
+						factoryFunctions: ["block"],
 						registryKey: true,
 						includeInAppState: true,
 						extractFromModules: true,
@@ -159,11 +162,11 @@ export function adminPlugin(): CodegenPlugin {
 							isCallback: true,
 							callbackContextParams: ["v", "f", "a"],
 							defaults: {
-							view: "collection-table",
-							showSearch: true,
-							showFilters: true,
-							showToolbar: true,
-						},
+								view: "collection-table",
+								showSearch: true,
+								showFilters: true,
+								showToolbar: true,
+							},
 						},
 						form: {
 							stateKey: "adminForm",
@@ -182,9 +185,9 @@ export function adminPlugin(): CodegenPlugin {
 							isCallback: true,
 							callbackContextParams: ["v", "f"],
 							defaults: {
-							view: "collection-form",
-							showMeta: true,
-						},
+								view: "collection-form",
+								showMeta: true,
+							},
 						},
 						preview: {
 							stateKey: "adminPreview",
@@ -249,9 +252,9 @@ export function adminPlugin(): CodegenPlugin {
 							isCallback: true,
 							callbackContextParams: ["v", "f"],
 							defaults: {
-							view: "global-form",
-							showMeta: true,
-						},
+								view: "global-form",
+								showMeta: true,
+							},
 						},
 					},
 					singletonFactories: {
@@ -432,8 +435,8 @@ export function adminPlugin(): CodegenPlugin {
 
 					// Add per-block server type imports and build the map entries
 					const entries: string[] = [];
-					for (const [key, file] of [...blockFiles.entries()].sort(
-						([a], [b]) => a.localeCompare(b),
+					for (const [key, file] of [...blockFiles.entries()].sort(([a], [b]) =>
+						a.localeCompare(b),
 					)) {
 						const varName = `${key}Block`;
 						// Derive kebab-case filename from the client import path
@@ -456,9 +459,7 @@ export function adminPlugin(): CodegenPlugin {
 					ctx.addTypeDeclaration(
 						'\tInferBlockValues<_ServerBlocks[T]["state"]>,',
 					);
-					ctx.addTypeDeclaration(
-						"\tInferBlockData<_ServerBlocks[T]>",
-					);
+					ctx.addTypeDeclaration("\tInferBlockData<_ServerBlocks[T]>");
 					ctx.addTypeDeclaration(">;");
 				},
 
