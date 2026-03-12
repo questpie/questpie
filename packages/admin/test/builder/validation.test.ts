@@ -411,6 +411,106 @@ describe("buildValidationSchema", () => {
 		});
 	});
 
+	describe("url fields", () => {
+		it("should validate url format", () => {
+			const fields = {
+				website: fi("url", { required: true }),
+			};
+
+			const schema = buildValidationSchema(fields);
+
+			expect(() =>
+				schema.parse({ website: "https://example.com" }),
+			).not.toThrow();
+			expect(() =>
+				schema.parse({ website: "http://localhost:3000/path" }),
+			).not.toThrow();
+			expect(() => schema.parse({ website: "not-a-url" })).toThrow();
+		});
+
+		it("should allow optional url", () => {
+			const fields = {
+				website: fi("url", { required: false }),
+			};
+
+			const schema = buildValidationSchema(fields);
+
+			expect(() => schema.parse({ website: null })).not.toThrow();
+			expect(() => schema.parse({})).not.toThrow();
+		});
+
+		it("should apply maxLength to url", () => {
+			const fields = {
+				website: fi("url", { required: true, maxLength: 20 }),
+			};
+
+			const schema = buildValidationSchema(fields);
+
+			expect(() => schema.parse({ website: "https://a.co" })).not.toThrow();
+			expect(() =>
+				schema.parse({
+					website: "https://very-long-domain-name.example.com/path",
+				}),
+			).toThrow();
+		});
+	});
+
+	describe("multiSelect fields", () => {
+		it("should validate array of values", () => {
+			const fields = {
+				tags: fi("multiSelect", {
+					required: true,
+					options: [
+						{ label: "A", value: "a" },
+						{ label: "B", value: "b" },
+						{ label: "C", value: "c" },
+					],
+				}),
+			};
+
+			const schema = buildValidationSchema(fields);
+
+			expect(() => schema.parse({ tags: ["a", "b"] })).not.toThrow();
+			expect(() => schema.parse({ tags: ["a"] })).not.toThrow();
+			expect(() => schema.parse({ tags: ["invalid"] })).toThrow();
+		});
+
+		it("should apply minItems/maxItems constraints", () => {
+			const fields = {
+				tags: fi("multiSelect", {
+					required: true,
+					options: [
+						{ label: "A", value: "a" },
+						{ label: "B", value: "b" },
+						{ label: "C", value: "c" },
+					],
+					minItems: 1,
+					maxItems: 2,
+				}),
+			};
+
+			const schema = buildValidationSchema(fields);
+
+			expect(() => schema.parse({ tags: ["a"] })).not.toThrow();
+			expect(() => schema.parse({ tags: ["a", "b"] })).not.toThrow();
+			expect(() => schema.parse({ tags: [] })).toThrow();
+			expect(() => schema.parse({ tags: ["a", "b", "c"] })).toThrow();
+		});
+
+		it("should allow optional multiSelect", () => {
+			const fields = {
+				tags: fi("multiSelect", {
+					options: [{ label: "A", value: "a" }],
+				}),
+			};
+
+			const schema = buildValidationSchema(fields);
+
+			expect(() => schema.parse({ tags: null })).not.toThrow();
+			expect(() => schema.parse({})).not.toThrow();
+		});
+	});
+
 	describe("upload fields", () => {
 		it("should generate schema for single upload", () => {
 			const fields = {

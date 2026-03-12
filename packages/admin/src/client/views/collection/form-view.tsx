@@ -793,6 +793,7 @@ export default function FormView({
 	const form = useForm({
 		defaultValues: (transformedItem ?? defaultValuesProp ?? {}) as any,
 		resolver,
+		mode: "onBlur",
 	});
 
 	/**

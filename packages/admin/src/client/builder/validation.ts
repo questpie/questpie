@@ -44,7 +44,21 @@ const FIELD_VALIDATORS: Record<
 	email: (opts) => {
 		let schema = z.email("Invalid email address");
 		if (opts.maxLength) {
-			schema = schema.max(opts.maxLength, `Must be at most ${opts.maxLength} characters`);
+			schema = schema.max(
+				opts.maxLength,
+				`Must be at most ${opts.maxLength} characters`,
+			);
+		}
+		return wrapOptional(schema, opts.required);
+	},
+
+	url: (opts) => {
+		let schema = z.url("Invalid URL");
+		if (opts.maxLength) {
+			schema = schema.max(
+				opts.maxLength,
+				`Must be at most ${opts.maxLength} characters`,
+			);
 		}
 		return wrapOptional(schema, opts.required);
 	},
@@ -54,10 +68,41 @@ const FIELD_VALIDATORS: Record<
 			const values = opts.options.map((o: any) => o.value);
 			const schema = z
 				.union([z.string(), z.number()])
-				.refine((val) => values.includes(val), { message: "Invalid selection" });
+				.refine((val) => values.includes(val), {
+					message: "Invalid selection",
+				});
 			return wrapOptional(schema, opts.required);
 		}
 		return wrapOptional(z.union([z.string(), z.number()]), opts.required);
+	},
+
+	multiSelect: (opts) => {
+		const itemSchema =
+			opts.options?.length > 0
+				? z
+						.union([z.string(), z.number()])
+						.refine(
+							(val) => opts.options.map((o: any) => o.value).includes(val),
+							{
+								message: "Invalid selection",
+							},
+						)
+				: z.union([z.string(), z.number()]);
+
+		let schema = z.array(itemSchema);
+		if (opts.minItems !== undefined) {
+			schema = schema.min(
+				opts.minItems,
+				`Minimum ${opts.minItems} items required`,
+			);
+		}
+		if (opts.maxItems !== undefined) {
+			schema = schema.max(
+				opts.maxItems,
+				`Maximum ${opts.maxItems} items allowed`,
+			);
+		}
+		return wrapOptional(schema, opts.required);
 	},
 
 	date: (opts) => {
@@ -88,7 +133,10 @@ const FIELD_VALIDATORS: Record<
 		if (opts.type === "multiple") {
 			let schema = z.array(z.string());
 			if (opts.maxItems) {
-				schema = schema.max(opts.maxItems, `Maximum ${opts.maxItems} items allowed`);
+				schema = schema.max(
+					opts.maxItems,
+					`Maximum ${opts.maxItems} items allowed`,
+				);
 			}
 			return wrapOptional(schema, opts.required);
 		}
@@ -99,7 +147,10 @@ const FIELD_VALIDATORS: Record<
 		if (opts.multiple) {
 			let schema = z.array(z.string());
 			if (opts.maxItems) {
-				schema = schema.max(opts.maxItems, `Maximum ${opts.maxItems} files allowed`);
+				schema = schema.max(
+					opts.maxItems,
+					`Maximum ${opts.maxItems} files allowed`,
+				);
 			}
 			return wrapOptional(schema, opts.required);
 		}
@@ -113,7 +164,9 @@ const FIELD_VALIDATORS: Record<
 		const nestedFields =
 			typeof opts.fields === "function" ? opts.fields({}) : opts.fields;
 		const shape: Record<string, z.ZodTypeAny> = {};
-		for (const [name, fieldDef] of Object.entries(nestedFields as Record<string, any>)) {
+		for (const [name, fieldDef] of Object.entries(
+			nestedFields as Record<string, any>,
+		)) {
 			shape[name] = ctx.buildSchema(fieldDef);
 		}
 		return wrapOptional(z.object(shape), opts.required);
@@ -126,7 +179,9 @@ const FIELD_VALIDATORS: Record<
 			const itemFields =
 				typeof opts.item === "function" ? opts.item({}) : opts.item;
 			const shape: Record<string, z.ZodTypeAny> = {};
-			for (const [name, fieldDef] of Object.entries(itemFields as Record<string, any>)) {
+			for (const [name, fieldDef] of Object.entries(
+				itemFields as Record<string, any>,
+			)) {
 				shape[name] = ctx.buildSchema(fieldDef);
 			}
 			itemSchema = z.object(shape);
@@ -147,7 +202,9 @@ const FIELD_VALIDATORS: Record<
 						const values = opts.options.map((o: any) => o.value);
 						itemSchema = z
 							.union([z.string(), z.number()])
-							.refine((val) => values.includes(val), { message: "Invalid selection" });
+							.refine((val) => values.includes(val), {
+								message: "Invalid selection",
+							});
 					} else {
 						itemSchema = z.union([z.string(), z.number()]);
 					}
@@ -159,10 +216,16 @@ const FIELD_VALIDATORS: Record<
 
 		let schema = z.array(itemSchema);
 		if (opts.minItems !== undefined) {
-			schema = schema.min(opts.minItems, `Minimum ${opts.minItems} items required`);
+			schema = schema.min(
+				opts.minItems,
+				`Minimum ${opts.minItems} items required`,
+			);
 		}
 		if (opts.maxItems !== undefined) {
-			schema = schema.max(opts.maxItems, `Maximum ${opts.maxItems} items allowed`);
+			schema = schema.max(
+				opts.maxItems,
+				`Maximum ${opts.maxItems} items allowed`,
+			);
 		}
 		return wrapOptional(schema, opts.required);
 	},
@@ -185,8 +248,10 @@ const FIELD_VALIDATORS: Record<
 			schema = schema.refine(
 				(data) => {
 					const count = countBlocks(data._tree);
-					if (opts.minBlocks !== undefined && count < opts.minBlocks) return false;
-					if (opts.maxBlocks !== undefined && count > opts.maxBlocks) return false;
+					if (opts.minBlocks !== undefined && count < opts.minBlocks)
+						return false;
+					if (opts.maxBlocks !== undefined && count > opts.maxBlocks)
+						return false;
 					return true;
 				},
 				{
@@ -221,7 +286,6 @@ function resolveBaseType(fieldType: string): z.ZodTypeAny {
 	switch (fieldType) {
 		case "text":
 		case "textarea":
-		case "url":
 			return z.string();
 		case "number":
 			return z.number();
@@ -243,14 +307,19 @@ function applyConstraints(
 	if (schema instanceof z.ZodString) {
 		let s = schema;
 		if (opts.minLength) {
-			s = s.min(opts.minLength, `Must be at least ${opts.minLength} characters`);
+			s = s.min(
+				opts.minLength,
+				`Must be at least ${opts.minLength} characters`,
+			);
 		}
 		if (opts.maxLength) {
 			s = s.max(opts.maxLength, `Must be at most ${opts.maxLength} characters`);
 		}
 		if (opts.pattern) {
 			const regex =
-				typeof opts.pattern === "string" ? new RegExp(opts.pattern) : opts.pattern;
+				typeof opts.pattern === "string"
+					? new RegExp(opts.pattern)
+					: opts.pattern;
 			s = s.regex(regex, "Invalid format");
 		}
 		return s;
