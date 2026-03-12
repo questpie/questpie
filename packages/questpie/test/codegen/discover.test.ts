@@ -13,6 +13,8 @@ import { join } from "node:path";
 import type { DiscoverFilesOptions } from "../../src/cli/codegen/discover.js";
 import {
 	detectExportType,
+	detectExportTypeFromContent,
+	detectFactoryExports,
 	discoverFiles,
 	kebabToCamelCase,
 } from "../../src/cli/codegen/discover.js";
@@ -224,8 +226,8 @@ describe("discoverFiles", () => {
 	// ── Collections ───────────────────────────────────────────────────────────
 
 	it("discovers collections with camelCase keys", async () => {
-		await write("collections/posts.ts", "export const posts = {};");
-		await write("collections/blog-posts.ts", "export const blogPosts = {};");
+		await write("collections/posts.ts", "export const posts = collection('posts');");
+		await write("collections/blog-posts.ts", "export const blogPosts = collection('blog-posts');");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const collections = cat(result, "collections");
@@ -235,7 +237,7 @@ describe("discoverFiles", () => {
 	});
 
 	it("sets correct varName and importPath for collections", async () => {
-		await write("collections/posts.ts", "export const posts = {};");
+		await write("collections/posts.ts", "export const posts = collection('posts');");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const file = cat(result, "collections").get("posts")!;
@@ -247,7 +249,7 @@ describe("discoverFiles", () => {
 
 	it("ignores index.ts in collections", async () => {
 		await write("collections/index.ts", "export * from './posts';");
-		await write("collections/posts.ts", "export const posts = {};");
+		await write("collections/posts.ts", "export const posts = collection('posts');");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const collections = cat(result, "collections");
@@ -257,7 +259,7 @@ describe("discoverFiles", () => {
 
 	it("ignores private files starting with _ in collections", async () => {
 		await write("collections/_utils.ts", "export const util = {};");
-		await write("collections/posts.ts", "export const posts = {};");
+		await write("collections/posts.ts", "export const posts = collection('posts');");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const collections = cat(result, "collections");
@@ -268,7 +270,7 @@ describe("discoverFiles", () => {
 	// ── Globals ───────────────────────────────────────────────────────────────
 
 	it("discovers globals", async () => {
-		await write("globals/site-settings.ts", "export const siteSettings = {};");
+		await write("globals/site-settings.ts", "export const siteSettings = global('site-settings');");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const globals = cat(result, "globals");
@@ -357,7 +359,7 @@ describe("discoverFiles", () => {
 
 	it("does not treat auth.ts as a collection/job/etc.", async () => {
 		await write("auth.ts", "export default {};");
-		await write("collections/posts.ts", "export const posts = {};");
+		await write("collections/posts.ts", "export const posts = collection('posts');");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		expect(cat(result, "collections").size).toBe(1);
@@ -402,7 +404,7 @@ describe("discoverFiles", () => {
 	it("discovers collections from features/ layout", async () => {
 		await write(
 			"features/blog/collections/articles.ts",
-			"export const articles = {};",
+			"export const articles = collection('articles');",
 		);
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
@@ -410,10 +412,10 @@ describe("discoverFiles", () => {
 	});
 
 	it("merges by-type and by-feature layout collections", async () => {
-		await write("collections/posts.ts", "export const posts = {};");
+		await write("collections/posts.ts", "export const posts = collection('posts');");
 		await write(
 			"features/blog/collections/articles.ts",
-			"export const articles = {};",
+			"export const articles = collection('articles');",
 		);
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
@@ -426,10 +428,10 @@ describe("discoverFiles", () => {
 	// ── Conflict detection ────────────────────────────────────────────────────
 
 	it("throws on duplicate keys from by-type and by-feature layout", async () => {
-		await write("collections/posts.ts", "export const posts = {};");
+		await write("collections/posts.ts", "export const posts = collection('posts');");
 		await write(
 			"features/blog/collections/posts.ts",
-			"export const posts = {};",
+			"export const posts = collection('posts');",
 		);
 
 		await expect(
@@ -590,5 +592,359 @@ describe("discoverFiles — mergeStrategy spread", () => {
 		const [file] = result.spreads.get("sidebar")!;
 
 		expect(file.importPath).toBe("../features/admin/sidebar");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// detectFactoryExports — unit tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("detectFactoryExports", () => {
+	it("detects a single exported factory call", () => {
+		const matches = detectFactoryExports(
+			`export const hero = block("hero");`,
+			["block"],
+		);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].exportName).toBe("hero");
+		expect(matches[0].factoryName).toBe("block");
+		expect(matches[0].entityKey).toBe("hero");
+		expect(matches[0].isDefault).toBe(false);
+	});
+
+	it("detects multiple exported factory calls", () => {
+		const matches = detectFactoryExports(
+			`export const hero = block("hero");\nexport const cta = block("cta");`,
+			["block"],
+		);
+		expect(matches).toHaveLength(2);
+		expect(matches[0].exportName).toBe("hero");
+		expect(matches[1].exportName).toBe("cta");
+	});
+
+	it("extracts entity key from factory string argument", () => {
+		const matches = detectFactoryExports(
+			`export const x = block("hero-banner");`,
+			["block"],
+		);
+		expect(matches[0].entityKey).toBe("hero-banner");
+	});
+
+	it("returns null entityKey when factory arg is not a string literal", () => {
+		const matches = detectFactoryExports(
+			`export const heroBlock = block(dynamicVar);`,
+			["block"],
+		);
+		expect(matches[0].entityKey).toBeNull();
+		expect(matches[0].exportName).toBe("heroBlock");
+	});
+
+	it("detects inline default factory export", () => {
+		const matches = detectFactoryExports(
+			`export default block("hero");`,
+			["block"],
+		);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].isDefault).toBe(true);
+		expect(matches[0].entityKey).toBe("hero");
+	});
+
+	it("detects inline default factory without string arg", () => {
+		const matches = detectFactoryExports(
+			`export default block(dynamicVar);`,
+			["block"],
+		);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].isDefault).toBe(true);
+		expect(matches[0].entityKey).toBeNull();
+	});
+
+	it("returns empty for files with no factory calls", () => {
+		const matches = detectFactoryExports(
+			`export const helper = () => {};\nexport type Foo = string;`,
+			["block"],
+		);
+		expect(matches).toHaveLength(0);
+	});
+
+	it("detects re-export pattern: export { X }", () => {
+		const matches = detectFactoryExports(
+			`const hero = block("hero");\nexport { hero };`,
+			["block"],
+		);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].exportName).toBe("hero");
+		expect(matches[0].entityKey).toBe("hero");
+		expect(matches[0].isDefault).toBe(false);
+	});
+
+	it("detects aliased re-export: export { X as Y }", () => {
+		const matches = detectFactoryExports(
+			`const hero = block("hero");\nexport { hero as myHero };`,
+			["block"],
+		);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].exportName).toBe("myHero");
+		expect(matches[0].entityKey).toBe("hero");
+	});
+
+	it("detects default re-export of factory variable", () => {
+		const matches = detectFactoryExports(
+			`const hero = block("hero");\nexport default hero;\n`,
+			["block"],
+		);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].isDefault).toBe(true);
+		expect(matches[0].exportName).toBe("hero");
+		expect(matches[0].entityKey).toBe("hero");
+	});
+
+	it("handles generic type parameters on factory", () => {
+		const matches = detectFactoryExports(
+			`export const posts = collection<PostConfig>("posts");`,
+			["collection"],
+		);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].entityKey).toBe("posts");
+	});
+
+	it("matches multiple factory function names", () => {
+		const matches = detectFactoryExports(
+			`export const a = view("list");\nexport const b = listView("grid");`,
+			["view", "listView"],
+		);
+		expect(matches).toHaveLength(2);
+		expect(matches[0].factoryName).toBe("view");
+		expect(matches[1].factoryName).toBe("listView");
+	});
+
+	it("returns empty when factoryFunctions is empty", () => {
+		const matches = detectFactoryExports(
+			`export const hero = block("hero");`,
+			[],
+		);
+		expect(matches).toHaveLength(0);
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// detectExportTypeFromContent — backward compatibility
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("detectExportTypeFromContent", () => {
+	it("detects default export", () => {
+		expect(detectExportTypeFromContent("export default {};")).toEqual({
+			type: "default",
+		});
+	});
+
+	it("detects export { X as default }", () => {
+		expect(
+			detectExportTypeFromContent("export { X as default };"),
+		).toEqual({ type: "default" });
+	});
+
+	it("detects named const export", () => {
+		const result = detectExportTypeFromContent(
+			"export const posts = collection('posts');",
+		);
+		expect(result.type).toBe("named");
+		expect(result.namedExportName).toBe("posts");
+	});
+
+	it("detects bundle export (object literal)", () => {
+		const result = detectExportTypeFromContent("export const fns = {\n  fn1,\n  fn2,\n};");
+		expect(result.type).toBe("named");
+		expect(result.namedExportName).toBe("fns");
+		expect(result.isBundle).toBe(true);
+	});
+
+	it("does not mark function call as bundle", () => {
+		const result = detectExportTypeFromContent(
+			"export const x = collection('x');",
+		);
+		// collection('x') matches `export const X = <something>` — but the regex
+		// for bundle requires `= {` directly, which doesn't match `= collection(`
+		expect(result.isBundle).toBeUndefined();
+	});
+
+	it("detects named re-export", () => {
+		const result = detectExportTypeFromContent("export { foo };");
+		expect(result.type).toBe("named");
+		expect(result.namedExportName).toBe("foo");
+	});
+
+	it("returns unknown for no exports", () => {
+		expect(detectExportTypeFromContent("const x = 1;")).toEqual({
+			type: "unknown",
+		});
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// multi-export factory discovery (integration)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("multi-export factory discovery", () => {
+	let rootDir: string;
+	let outDir: string;
+
+	beforeEach(async () => {
+		rootDir = await mkdtemp(join(tmpdir(), "questpie-factory-"));
+		outDir = join(rootDir, ".generated");
+		await mkdir(outDir, { recursive: true });
+	});
+
+	afterEach(async () => {
+		await rm(rootDir, { recursive: true, force: true });
+	});
+
+	async function write(
+		relPath: string,
+		content: string,
+	): Promise<void> {
+		const full = join(rootDir, relPath);
+		await mkdir(join(full, ".."), { recursive: true });
+		await writeFile(full, content, "utf-8");
+	}
+
+	/** Custom options with a blocks category using factoryFunctions */
+	const factoryOpts: DiscoverFilesOptions = {
+		categories: {
+			blocks: {
+				dirs: ["blocks"],
+				prefix: "bloc",
+				factoryFunctions: ["block"],
+			},
+		},
+	};
+
+	it("discovers two named factory exports from one file", async () => {
+		await write(
+			"blocks/layout.ts",
+			'export const hero = block("hero");\nexport const cta = block("cta");',
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.size).toBe(2);
+		expect(blocks.has("hero")).toBe(true);
+		expect(blocks.has("cta")).toBe(true);
+
+		const heroFile = blocks.get("hero")!;
+		expect(heroFile.exportType).toBe("named");
+		expect(heroFile.namedExportName).toBe("hero");
+		expect(heroFile.varName).toBe("_bloc_hero");
+
+		const ctaFile = blocks.get("cta")!;
+		expect(ctaFile.namedExportName).toBe("cta");
+	});
+
+	it("derives key from factory string arg (kebab-case)", async () => {
+		await write(
+			"blocks/banner.ts",
+			'export const x = block("hero-banner");',
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.has("heroBanner")).toBe(true);
+	});
+
+	it("falls back to export name when factory arg is not a string", async () => {
+		await write(
+			"blocks/dynamic.ts",
+			"export const heroBlock = block(dynamicVar);",
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.has("heroBlock")).toBe(true);
+	});
+
+	it("discovers default inline factory export", async () => {
+		await write("blocks/hero.ts", 'export default block("hero");');
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.has("hero")).toBe(true);
+		expect(blocks.get("hero")!.exportType).toBe("default");
+	});
+
+	it("falls back to filename for default with non-string arg", async () => {
+		await write("blocks/hero-banner.ts", "export default block(dynamicVar);");
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.has("heroBanner")).toBe(true);
+	});
+
+	it("skips utility files with no factory calls", async () => {
+		await write(
+			"blocks/helpers.ts",
+			"export const helper = () => {};\nexport type Foo = string;",
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks") ?? new Map();
+		expect(blocks.size).toBe(0);
+	});
+
+	it("detects re-export pattern: export { X }", async () => {
+		await write(
+			"blocks/hero.ts",
+			'const hero = block("hero");\nexport { hero };',
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.has("hero")).toBe(true);
+		expect(blocks.get("hero")!.exportType).toBe("named");
+	});
+
+	it("detects aliased re-export: export { X as Y }", async () => {
+		await write(
+			"blocks/hero.ts",
+			'const hero = block("hero");\nexport { hero as myHero };',
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.has("hero")).toBe(true);
+		expect(blocks.get("hero")!.namedExportName).toBe("myHero");
+	});
+
+	it("detects default re-export of factory variable", async () => {
+		await write(
+			"blocks/hero.ts",
+			'const hero = block("hero");\nexport default hero;\n',
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.has("hero")).toBe(true);
+		expect(blocks.get("hero")!.exportType).toBe("default");
+	});
+
+	it("detects conflict with multi-export across files", async () => {
+		await write("blocks/file1.ts", 'export const hero = block("hero");');
+		await write("blocks/file2.ts", 'export const hero2 = block("hero");');
+
+		await expect(
+			discoverFiles(rootDir, outDir, factoryOpts),
+		).rejects.toThrow(/duplicate blocks key "hero"/);
+	});
+
+	it("both import paths point to same file for multi-export", async () => {
+		await write(
+			"blocks/layout.ts",
+			'export const hero = block("hero");\nexport const cta = block("cta");',
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.get("hero")!.importPath).toBe(
+			blocks.get("cta")!.importPath,
+		);
 	});
 });

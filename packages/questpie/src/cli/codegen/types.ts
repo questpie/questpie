@@ -270,6 +270,38 @@ export interface CategoryDeclaration {
 	 */
 	keyFromProperty?: string;
 
+	// ── Multi-export discovery ────────────────────────────────
+
+	/**
+	 * Factory function names that identify entities in this category.
+	 * Enables multi-export discovery: each matching export becomes
+	 * a separate `DiscoveredFile` entry.
+	 *
+	 * When set:
+	 * - Files are scanned for exports calling these factory functions
+	 * - Multiple entities can be discovered from a single file
+	 * - Files without any matching factory calls are automatically skipped
+	 *   (utility files, type-only files)
+	 *
+	 * When NOT set:
+	 * - Current one-file-one-entity behavior is preserved (backward compatible)
+	 *
+	 * Uses a two-pass regex approach (no AST parsing):
+	 * 1. Scan all `const/let/var X = factory(...)` assignments
+	 * 2. Cross-reference with export statements (`export const`, `export { }`,
+	 *    `export default`)
+	 *
+	 * Entity key derivation priority:
+	 * 1. Factory call's first string argument: `block("hero")` → `"hero"`
+	 * 2. Fallback to export name: `export const heroBlock = block(var)` → `"heroBlock"`
+	 * 3. For default exports, fallback to filename
+	 *
+	 * @example ["collection"] — for collections category
+	 * @example ["block"] — for blocks category
+	 * @example ["view", "listView"] — multiple factory names
+	 */
+	factoryFunctions?: string[];
+
 	// ── Registry / factory type integration ─────────────────────
 
 	/**

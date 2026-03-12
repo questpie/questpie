@@ -125,6 +125,8 @@ interface DiscoveryCategory {
 	prefix: string;
 	/** Key separator for recursive categories. */
 	keySeparator?: "." | "/";
+	/** Factory function names for multi-export discovery. */
+	factoryFunctions?: string[];
 }
 
 /**
@@ -141,6 +143,7 @@ function toDiscoveryCategory(
 		recursive: decl.recursive ?? false,
 		prefix: decl.prefix,
 		keySeparator: decl.keySeparator,
+		factoryFunctions: decl.factoryFunctions,
 	};
 }
 
@@ -231,23 +234,32 @@ export async function discoverFiles(
 				const scanPath = join(rootDir, dir);
 				const files = await scanDir(scanPath, scanPath, category.recursive);
 				for (const relFile of files) {
-					const file = await processFile(
+					const discovered = await processFile(
 						rootDir,
 						outDir,
 						join(dir, relFile),
 						category,
 					);
-					checkConflict(map, file, category.category);
-					map.set(file.key, file);
+					for (const file of discovered) {
+						checkConflict(map, file, category.category);
+						map.set(file.key, file);
+					}
 				}
 			}
 
 			// Scan by-feature layout
 			const featureFiles = await discoverFeatures(rootDir, category);
 			for (const { relPath } of featureFiles) {
-				const file = await processFile(rootDir, outDir, relPath, category);
-				checkConflict(map, file, category.category);
-				map.set(file.key, file);
+				const discovered = await processFile(
+					rootDir,
+					outDir,
+					relPath,
+					category,
+				);
+				for (const file of discovered) {
+					checkConflict(map, file, category.category);
+					map.set(file.key, file);
+				}
 			}
 
 			result.categories.set(name, map);
@@ -513,14 +525,16 @@ async function discoverDirectoryPattern(
 	const scanPath = join(rootDir, baseDir);
 	const files = await scanDir(scanPath, scanPath, recursive);
 	for (const relFile of files) {
-		const file = await processFile(
+		const discovered = await processFile(
 			rootDir,
 			outDir,
 			join(baseDir, relFile),
 			category,
 		);
-		checkConflict(pluginMap, file, stateKey);
-		pluginMap.set(file.key, file);
+		for (const file of discovered) {
+			checkConflict(pluginMap, file, stateKey);
+			pluginMap.set(file.key, file);
+		}
 	}
 
 	// By-feature scan
@@ -543,14 +557,16 @@ async function discoverDirectoryPattern(
 			recursive,
 		);
 		for (const relFile of featureFiles) {
-			const file = await processFile(
+			const discovered = await processFile(
 				rootDir,
 				outDir,
 				join("features", fDirName, baseDir, relFile),
 				category,
 			);
-			checkConflict(pluginMap, file, stateKey);
-			pluginMap.set(file.key, file);
+			for (const file of discovered) {
+				checkConflict(pluginMap, file, stateKey);
+				pluginMap.set(file.key, file);
+			}
 		}
 	}
 }
@@ -560,20 +576,11 @@ async function discoverDirectoryPattern(
 // ============================================================================
 
 /**
- * Process a discovered file into a DiscoveredFile object.
- * Detects export type (default vs named) for import generation.
+ * Derive the filename-based key for a file in a category.
+ * Handles recursive categories (functions/routes use path segments as keys)
+ * and simple categories (filename → camelCase).
  */
-async function processFile(
-	rootDir: string,
-	outDir: string,
-	relPath: string,
-	category: DiscoveryCategory,
-): Promise<DiscoveredFile> {
-	const absolutePath = join(rootDir, relPath);
-	const importPath = relativeImport(outDir, absolutePath);
-
-	// Derive key based on category
-	let key: string;
+function deriveFileKey(relPath: string, category: DiscoveryCategory): string {
 	if (category.recursive) {
 		// Recursive categories: path segments become keys
 		// routes/webhooks/stripe.ts → "webhooks/stripe" (keySeparator: "/")
@@ -602,27 +609,102 @@ async function processFile(
 			.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "")
 			.split("/")
 			.map(kebabToCamelCase);
-		key = segments.join(sep);
-	} else {
-		// Simple: filename → camelCase key
-		key = kebabToCamelCase(basename(relPath));
+		return segments.join(sep);
+	}
+	// Simple: filename → camelCase key
+	return kebabToCamelCase(basename(relPath));
+}
+
+/**
+ * Process a discovered file into one or more DiscoveredFile objects.
+ *
+ * When the category declares `factoryFunctions`, uses two-pass regex
+ * detection to find all exported factory calls. Each match becomes
+ * a separate DiscoveredFile. Files without matching factory calls
+ * are skipped (returns empty array) — this filters out utility files.
+ *
+ * When `factoryFunctions` is not set, falls back to single-entity
+ * detection (backward compatible).
+ */
+async function processFile(
+	rootDir: string,
+	outDir: string,
+	relPath: string,
+	category: DiscoveryCategory,
+): Promise<DiscoveredFile[]> {
+	const absolutePath = join(rootDir, relPath);
+	const importPath = relativeImport(outDir, absolutePath);
+
+	// Read file content once — used by both factory and legacy detection
+	let content: string;
+	try {
+		content = await readFile(absolutePath, "utf-8");
+	} catch {
+		return [];
 	}
 
-	const varName = toVarName(category.prefix, key);
+	// ── Multi-export mode (factory-aware) ───────────────────────
+	if (category.factoryFunctions && category.factoryFunctions.length > 0) {
+		const matches = detectFactoryExports(content, category.factoryFunctions);
+		if (matches.length === 0) {
+			// No factory calls found → skip file (utility/types file)
+			return [];
+		}
 
-	// Detect export type
-	const exportInfo = await detectExportType(absolutePath);
+		const results: DiscoveredFile[] = [];
+		const namedMatches = matches.filter((m) => !m.isDefault);
+		const defaultMatch = matches.find((m) => m.isDefault);
 
-	return {
-		absolutePath,
-		key,
-		importPath,
-		varName,
-		source: relPath,
-		exportType: exportInfo.type,
-		namedExportName: exportInfo.namedExportName,
-		isBundle: exportInfo.isBundle,
-	};
+		if (namedMatches.length > 0) {
+			// Named factory exports found — each becomes a separate entity
+			for (const m of namedMatches) {
+				const key = m.entityKey
+					? kebabToCamelCase(`${m.entityKey}.ts`)
+					: m.exportName;
+				results.push({
+					absolutePath,
+					key,
+					importPath,
+					varName: toVarName(category.prefix, key),
+					source: relPath,
+					exportType: "named",
+					namedExportName: m.exportName,
+				});
+			}
+		} else if (defaultMatch) {
+			// Only a default factory export — single entity
+			const key = defaultMatch.entityKey
+				? kebabToCamelCase(`${defaultMatch.entityKey}.ts`)
+				: deriveFileKey(relPath, category);
+			results.push({
+				absolutePath,
+				key,
+				importPath,
+				varName: toVarName(category.prefix, key),
+				source: relPath,
+				exportType: "default",
+			});
+		}
+
+		return results;
+	}
+
+	// ── Legacy single-entity mode ───────────────────────────────
+	const key = deriveFileKey(relPath, category);
+	const exportInfo = detectExportTypeFromContent(content);
+
+	return [
+		{
+			absolutePath,
+			key,
+			importPath,
+			varName: toVarName(category.prefix, key),
+			source: relPath,
+			exportType: exportInfo.type,
+			namedExportName: exportInfo.namedExportName,
+			isBundle: exportInfo.isBundle,
+		},
+	];
 }
 
 /**
@@ -658,8 +740,8 @@ export interface ExportDetection {
 }
 
 /**
- * Detect what kind of export a TypeScript file has.
- * Reads the file and checks for `export default` vs named exports.
+ * Detect what kind of export a TypeScript file has from its content string.
+ * Pure function — no I/O.
  *
  * Detection priority:
  * 1. `export default` → default export (no bundle check)
@@ -670,16 +752,7 @@ export interface ExportDetection {
  * - `export const bundle = {` (object literal value) → isBundle: true
  * - `export const myFn = fn({` (function call) → isBundle: false
  */
-export async function detectExportType(
-	absolutePath: string,
-): Promise<ExportDetection> {
-	let content: string;
-	try {
-		content = await readFile(absolutePath, "utf-8");
-	} catch {
-		return { type: "unknown" };
-	}
-
+export function detectExportTypeFromContent(content: string): ExportDetection {
 	// Check for default export patterns:
 	// - export default ...
 	// - export { X as default }
@@ -720,6 +793,177 @@ export async function detectExportType(
 	}
 
 	return { type: "unknown" };
+}
+
+/**
+ * Detect what kind of export a TypeScript file has.
+ * Reads the file and delegates to `detectExportTypeFromContent`.
+ */
+export async function detectExportType(
+	absolutePath: string,
+): Promise<ExportDetection> {
+	let content: string;
+	try {
+		content = await readFile(absolutePath, "utf-8");
+	} catch {
+		return { type: "unknown" };
+	}
+	return detectExportTypeFromContent(content);
+}
+
+// ============================================================================
+// Factory export detection (multi-export discovery)
+// ============================================================================
+
+/**
+ * Result of a factory export match in a file.
+ */
+interface FactoryExportMatch {
+	/** Export name used in the export statement (for import generation). */
+	exportName: string;
+	/** Which factory function was called. */
+	factoryName: string;
+	/** Entity key extracted from the factory's first string argument, or null. */
+	entityKey: string | null;
+	/** Whether this is a default export. */
+	isDefault: boolean;
+}
+
+/**
+ * Detect all exported factory function calls in a file's content.
+ *
+ * Uses a two-pass regex approach (no AST parsing):
+ *
+ * **Pass 1** — Build a map of all variable assignments that call a factory function.
+ * Matches both exported and non-exported assignments:
+ * `const hero = block("hero")`, `export const hero = block("hero")`
+ *
+ * **Pass 2** — Cross-reference with export statements to find which
+ * factory variables are actually exported:
+ * - `export const X` → direct export
+ * - `export { X }` or `export { X as Y }` → re-export (excluding `from "..."`)
+ * - `export default X` → default re-export of factory variable
+ * - `export default factory(...)` → inline default factory call
+ *
+ * @param content — File content string
+ * @param factoryFunctions — Factory function names to match (e.g. ["block", "view"])
+ * @returns Array of matched factory exports. Empty if no factory calls found.
+ */
+export function detectFactoryExports(
+	content: string,
+	factoryFunctions: string[],
+): FactoryExportMatch[] {
+	if (factoryFunctions.length === 0) return [];
+
+	const factoryAlt = factoryFunctions
+		.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+		.join("|");
+
+	// ── Pass 1: Build factory variable map ──────────────────────
+	// Matches: [export] const/let/var X = factory(...) or factory<T>(...)
+	// Captures: [1] varName, [2] factoryName, [3] first string arg (optional)
+	const assignRe = new RegExp(
+		`(?:const|let|var)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*(${factoryAlt})\\s*(?:<[^>]*>)?\\s*\\(\\s*(?:["']([^"']+)["'])?`,
+		"gm",
+	);
+
+	const factoryVars = new Map<
+		string,
+		{ factoryName: string; entityKey: string | null }
+	>();
+	let match: RegExpExecArray | null;
+	while ((match = assignRe.exec(content)) !== null) {
+		factoryVars.set(match[1], {
+			factoryName: match[2],
+			entityKey: match[3] ?? null,
+		});
+	}
+
+	// ── Pass 2: Cross-reference with export statements ──────────
+	const results: FactoryExportMatch[] = [];
+	const seen = new Set<string>(); // avoid duplicates
+
+	// 2a. Direct exports: export const/let/var X
+	const directExportRe =
+		/\bexport\s+(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/gm;
+	while ((match = directExportRe.exec(content)) !== null) {
+		const name = match[1];
+		const info = factoryVars.get(name);
+		if (info && !seen.has(name)) {
+			seen.add(name);
+			results.push({
+				exportName: name,
+				factoryName: info.factoryName,
+				entityKey: info.entityKey,
+				isDefault: false,
+			});
+		}
+	}
+
+	// 2b. Re-exports: export { X } or export { X as Y }
+	// Exclude re-exports from other modules: export { X } from "..."
+	const reExportBlockRe = /\bexport\s*\{([^}]+)\}(?!\s*from\s)/gm;
+	while ((match = reExportBlockRe.exec(content)) !== null) {
+		const specifiers = match[1];
+		// Parse individual specifiers: "X" or "X as Y"
+		const specRe =
+			/([a-zA-Z_$][a-zA-Z0-9_$]*)(?:\s+as\s+([a-zA-Z_$][a-zA-Z0-9_$]*))?/g;
+		let specMatch: RegExpExecArray | null;
+		while ((specMatch = specRe.exec(specifiers)) !== null) {
+			const localName = specMatch[1];
+			const exportedAs = specMatch[2]; // may be undefined
+			// Skip "as default" — handled separately
+			if (exportedAs === "default") continue;
+			const info = factoryVars.get(localName);
+			if (info) {
+				const name = exportedAs ?? localName;
+				if (!seen.has(name)) {
+					seen.add(name);
+					results.push({
+						exportName: name,
+						factoryName: info.factoryName,
+						entityKey: info.entityKey,
+						isDefault: false,
+					});
+				}
+			}
+		}
+	}
+
+	// 2c. Default re-export of a factory variable: export default X
+	const defaultVarRe =
+		/\bexport\s+default\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[;\n]/m;
+	const defaultVarMatch = content.match(defaultVarRe);
+	if (defaultVarMatch) {
+		const name = defaultVarMatch[1];
+		const info = factoryVars.get(name);
+		if (info && !seen.has(`default:${name}`)) {
+			seen.add(`default:${name}`);
+			results.push({
+				exportName: name,
+				factoryName: info.factoryName,
+				entityKey: info.entityKey,
+				isDefault: true,
+			});
+		}
+	}
+
+	// 2d. Inline default: export default factory(...)
+	const inlineDefaultRe = new RegExp(
+		`\\bexport\\s+default\\s+(${factoryAlt})\\s*(?:<[^>]*>)?\\s*\\(\\s*(?:["']([^"']+)["'])?`,
+		"m",
+	);
+	const inlineMatch = content.match(inlineDefaultRe);
+	if (inlineMatch && !defaultVarMatch) {
+		results.push({
+			exportName: "",
+			factoryName: inlineMatch[1],
+			entityKey: inlineMatch[2] ?? null,
+			isDefault: true,
+		});
+	}
+
+	return results;
 }
 
 /**

@@ -53,6 +53,7 @@ export function coreCodegenPlugin(): CodegenPlugin {
 					collections: {
 						dirs: ["collections"],
 						prefix: "coll",
+						factoryFunctions: ["collection"],
 						registryKey: true,
 						includeInAppState: true,
 						extractFromModules: true,
@@ -60,6 +61,7 @@ export function coreCodegenPlugin(): CodegenPlugin {
 					globals: {
 						dirs: ["globals"],
 						prefix: "glob",
+						factoryFunctions: ["global"],
 						registryKey: true,
 						includeInAppState: true,
 						extractFromModules: true,
@@ -418,20 +420,30 @@ export async function runCodegen(
 	});
 
 	// 2b. Warn about files with named exports (not default)
-	const allFiles: import("./types.js").DiscoveredFile[] = [];
-	for (const catMap of discovered.categories.values()) {
+	// Skip warnings for categories with factoryFunctions — named exports are expected there.
+	const factoryCategories = new Set<string>();
+	for (const [catName, decl] of Object.entries(target.categories)) {
+		if (decl.factoryFunctions && decl.factoryFunctions.length > 0) {
+			factoryCategories.add(catName);
+		}
+	}
+
+	for (const [catName, catMap] of discovered.categories) {
+		if (factoryCategories.has(catName)) continue;
 		for (const file of catMap.values()) {
-			allFiles.push(file);
+			if (file.exportType === "named") {
+				console.warn(
+					`⚠  ${file.source}: no default export found, using named export "${file.namedExportName}". ` +
+						`Consider: export default ${file.namedExportName};`,
+				);
+			}
 		}
 	}
 	for (const singleFile of discovered.singles.values()) {
-		allFiles.push(singleFile);
-	}
-	for (const file of allFiles) {
-		if (file.exportType === "named") {
+		if (singleFile.exportType === "named") {
 			console.warn(
-				`⚠  ${file.source}: no default export found, using named export "${file.namedExportName}". ` +
-					`Consider: export default ${file.namedExportName};`,
+				`⚠  ${singleFile.source}: no default export found, using named export "${singleFile.namedExportName}". ` +
+					`Consider: export default ${singleFile.namedExportName};`,
 			);
 		}
 	}
