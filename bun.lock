@@ -394,6 +394,7 @@
       "name": "@questpie/workflows",
       "version": "2.0.0",
       "dependencies": {
+        "@questpie/admin": "workspace:*",
         "questpie": "workspace:*",
       },
       "devDependencies": {
@@ -401,12 +402,18 @@
         "tsdown": "^0.18.3",
       },
       "peerDependencies": {
+        "@questpie/admin": "^2.0.0",
         "drizzle-orm": "1.0.0-beta.6-4414a19",
         "questpie": "^2.0.0",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
         "zod": "^4.2.1",
       },
       "optionalPeers": [
+        "@questpie/admin",
         "drizzle-orm",
+        "react",
+        "react-dom",
       ],
     },
   },

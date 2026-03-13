@@ -7,17 +7,17 @@ import { wfEventCollection as _coll_wf_event } from "../collections/wf-event.js"
 import { wfInstanceCollection as _coll_wf_instance } from "../collections/wf-instance.js";
 import { wfLogCollection as _coll_wf_log } from "../collections/wf-log.js";
 import { wfStepCollection as _coll_wf_step } from "../collections/wf-step.js";
-
+// ── Sidebar + Dashboard ────────────────────────────────────
+import _dashboard from "../dashboard.js";
 // ── Functions ──────────────────────────────────────────────
 import { workflowFunctions as _fn_workflows } from "../functions/workflow-functions.js";
-
 // ── Jobs ───────────────────────────────────────────────────
 import { wfExecuteJob as _job_wf_execute } from "../jobs/wf-execute.js";
 import { wfMaintenanceJob as _job_wf_maintenance } from "../jobs/wf-maintenance.js";
 import { wfResumeJob as _job_wf_resume } from "../jobs/wf-resume.js";
-
 // ── Services ───────────────────────────────────────────────
 import { workflowService as _svc_workflows } from "../services/workflow-service.js";
+import _sidebar from "../sidebar.js";
 
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
@@ -69,6 +69,8 @@ const _module = {
 	emails: {},
 	migrations: [] as const,
 	seeds: [] as const,
+	sidebar: [_sidebar],
+	dashboard: [_dashboard],
 };
 
 export type WorkflowsModule = typeof _module;
