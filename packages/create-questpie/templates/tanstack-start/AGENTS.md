@@ -64,7 +64,8 @@ Key documentation pages:
 src/
   questpie/
     server/              ← WHAT: data contracts and behavior
-      questpie.config.ts ← App config: config({ modules: [admin()], ... })
+      questpie.config.ts ← App config: runtimeConfig({ plugins: [adminPlugin()], ... })
+      modules.ts         ← Module dependencies (adminModule, openApiModule, etc.)
       auth.ts            ← Auth config (satisfies AuthConfig)
       .generated/        ← Codegen output (app instance + App type)
         index.ts
@@ -107,7 +108,8 @@ src/
 
 ### Key Files
 
-- **`src/questpie/server/questpie.config.ts`** — App config: `config({ modules: [admin()], db, app, ... })`. Sidebar, dashboard, branding are options to `admin()`.
+- **`src/questpie/server/questpie.config.ts`** — App config: `runtimeConfig({ plugins: [adminPlugin()], db, app, ... })`. Sidebar, dashboard, branding are configured via admin singleton factories.
+- **`src/questpie/server/modules.ts`** — Module dependencies: `export default [adminModule, openApiModule({ ... })] as const`.
 - **`src/questpie/server/auth.ts`** — Auth config (`export default { ... } satisfies AuthConfig`).
 - **`src/questpie/server/.generated/index.ts`** — Codegen output. Exports typed `app` instance and `App` type. Run `bunx questpie generate` to regenerate.
 - **`src/questpie/admin/.generated/client.ts`** — Codegen output: pre-built admin client config. Run `bunx questpie generate` to regenerate.
@@ -406,14 +408,12 @@ export const {
 ```ts
 // src/routes/api/$.ts
 import { createFetchHandler } from "questpie";
-import { withOpenApi } from "@questpie/openapi";
 import { app } from "~/questpie/server/.generated";
 
-const handler = withOpenApi(
-  createFetchHandler(app, { basePath: "/api" }),
-  { app, basePath: "/api", info: { title: "My API", version: "1.0.0" } },
-);
+const handler = createFetchHandler(app, { basePath: "/api" });
 ```
+
+OpenAPI is registered as a module in `src/questpie/server/modules.ts` via `openApiModule()` — no wrapper needed in the route handler.
 
 ### Icons
 

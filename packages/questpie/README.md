@@ -86,16 +86,25 @@ export const siteSettings = global("site_settings")
 
 ```ts
 // src/questpie/server/questpie.config.ts
-import { admin } from "@questpie/admin/server";
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/server";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   app: { url: process.env.APP_URL! },
   db: { url: process.env.DATABASE_URL! },
   secret: process.env.AUTH_SECRET!,
   storage: { basePath: "/api" },
 });
+```
+
+Modules are registered in a separate file:
+
+```ts
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
+
+export default [adminModule] as const;
 ```
 
 ### 4. Auth Config
@@ -376,11 +385,11 @@ import { app } from "./src/questpie/server/.generated";
 export default { app };
 ```
 
-CLI config (migrations directory etc.) is set inside `config()`:
+CLI config (migrations directory etc.) is set inside `runtimeConfig()`:
 
 ```ts
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   cli: { migrations: { directory: "./src/migrations" } },
 });

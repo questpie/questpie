@@ -2,28 +2,16 @@
  * API Routes - Catch-all handler
  *
  * Handles all API endpoints for the City Portal.
+ * OpenAPI spec + docs are served via openApiModule in modules.ts.
  */
 
-import { withOpenApi } from "@questpie/openapi";
 import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie";
 import { app } from "@/questpie/server/.generated";
 
-const handler = withOpenApi(
-	createFetchHandler(app, {
-		basePath: "/api",
-	}),
-	{
-		app,
-		basePath: "/api",
-		info: {
-			title: "City Portal API",
-			version: "1.0.0",
-			description: "QUESTPIE API for the City Portal example",
-		},
-		scalar: { theme: "blue" },
-	},
-);
+const handler = createFetchHandler(app, {
+	basePath: "/api",
+});
 
 const handleCmsRequest = async (request: Request) => {
 	const response = await handler(request);

@@ -30,6 +30,10 @@
 			"types": "./dist/server.d.mts",
 			"default": "./src/server.ts"
 		},
+		"./plugin": {
+			"types": "./dist/plugin.d.mts",
+			"default": "./src/plugin.ts"
+		},
 		"./package.json": "./package.json"
 	},
 	"publishConfig": {
@@ -38,6 +42,10 @@
 			".": {
 				"types": "./dist/server.d.mts",
 				"default": "./dist/server.mjs"
+			},
+			"./plugin": {
+				"types": "./dist/plugin.d.mts",
+				"default": "./dist/plugin.mjs"
 			},
 			"./package.json": "./package.json"
 		}

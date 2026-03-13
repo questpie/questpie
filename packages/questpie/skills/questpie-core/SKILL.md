@@ -91,14 +91,25 @@ export default route()
 
 ```ts
 // questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/server";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
 });
+```
+
+```ts
+// modules.ts
+import { adminModule } from "@questpie/admin/server";
+import { openApiModule } from "@questpie/openapi";
+
+export default [
+  adminModule,
+  openApiModule({ info: { title: "My API", version: "1.0.0" } }),
+] as const;
 ```
 
 ### Route Handler
@@ -137,7 +148,7 @@ Filenames are converted from kebab-case to camelCase: `blog-posts.ts` becomes `b
 
 | File | Factory | Purpose |
 |---|---|---|
-| `questpie.config.ts` | `config({...})` | DB, plugins, adapters |
+| `questpie.config.ts` | `runtimeConfig({...})` | DB, plugins, adapters |
 | `modules.ts` | `export default [...]` | Module dependencies |
 | `auth.ts` | `satisfies AuthConfig` | Authentication config |
 | `locale.ts` | `locale({...})` | Content locales |

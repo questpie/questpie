@@ -15,7 +15,7 @@ Source-of-truth guidance for AI agents working in this monorepo.
 | `packages/questpie`                                 | Core engine — field builders, CRUD, routes, introspection, CLI. Exports: `questpie`, `questpie/client`, `questpie/shared`. |
 | `packages/admin`                                    | Config-driven admin UI (React + Tailwind v4 + shadcn). Exports: `@questpie/admin/server`, `@questpie/admin/client`.     |
 | `packages/tanstack-query`                           | TanStack Query option builders, `streamedQuery`, batch helpers.                                                         |
-| `packages/openapi`                                  | OpenAPI spec generation + Scalar UI middleware (`withOpenApi`).                                                         |
+| `packages/openapi`                                  | OpenAPI spec generation + Scalar UI module (`openApiModule()`).                                                         |
 | `packages/elysia`, `packages/hono`, `packages/next` | Framework adapters — thin wrappers around `createFetchHandler`.                                                         |
 | `packages/create-questpie`                          | CLI scaffolder (`bunx create-questpie`). Templates live in `templates/`.                                                |
 | `apps/docs`                                         | Documentation site (TanStack Start + Vite + Fumadocs). Content in `content/docs/`.                                      |
@@ -67,14 +67,23 @@ export default route()
   .handler(async () => ({ status: "ok" }));
 
 // questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/server";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
 });
+
+// modules.ts
+import { adminModule } from "@questpie/admin/server";
+import { openApiModule } from "@questpie/openapi";
+
+export default [
+  adminModule,
+  openApiModule({ info: { title: "My API", version: "1.0.0" } }),
+] as const;
 ```
 
 Codegen discovers files and generates `.generated/index.ts` with the `app` instance. Route handlers use:
@@ -148,7 +157,7 @@ Server emits serializable references that the client resolves via registries:
 - **Views**: resolve from `state.views`.
 - **Components**: resolve `c.*` from `state.components`.
 - **Entities**: collections/globals/jobs/queues flow from builder state, not literal names.
-- Defaults are provided by module registration (`config({ modules: [admin()] })` on server / `qa.use(adminModule)` on client), not hardcoded.
+- Defaults are provided by module registration (`runtimeConfig({ plugins: [adminPlugin()] })` + `modules.ts` on server / `qa.use(adminModule)` on client), not hardcoded.
 - Client resolves server-emitted `{ type, props }` references using its own registry — never assume server-only types.
 - When extending builders, prefer lazy type extraction (`FieldsOf<this>`, `QuestpieStateOf<this>`) over giant mapped types.
 

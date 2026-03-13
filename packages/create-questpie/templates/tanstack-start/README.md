@@ -32,9 +32,8 @@ The API docs (Scalar UI) are at [http://localhost:3000/api/docs](http://localhos
 src/
   questpie/
     server/
-      app.ts                        # Main app configuration
-      builder.ts                    # Server-side builder
-      rpc.ts                        # RPC router
+      questpie.config.ts              # Runtime configuration
+      modules.ts                    # Module registrations
       collections/
         posts.collection.ts         # Posts collection
       globals/

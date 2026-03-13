@@ -79,18 +79,27 @@ export const posts = collection("posts")
 
 ```typescript
 // src/questpie/server/questpie.config.ts
-import { admin } from "@questpie/admin/server";
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/server";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   app: { url: process.env.APP_URL! },
   db: { url: process.env.DATABASE_URL! },
   secret: process.env.AUTH_SECRET!,
 });
 ```
 
-Collections, globals, functions, and jobs are auto-discovered via **file convention**. Run `bunx questpie generate` to produce a `.generated/index.ts` with your fully-typed `App` and runtime `app` instance.
+Modules are registered in a separate `modules.ts` file:
+
+```typescript
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
+
+export default [adminModule] as const;
+```
+
+Collections, globals, routes, and jobs are auto-discovered via **file convention**. Run `bunx questpie generate` to produce a `.generated/index.ts` with your fully-typed `App` and runtime `app` instance.
 
 ### Connect to Your Framework
 
@@ -145,24 +154,29 @@ bun questpie migrate:up        # Apply pending migrations
 
 ## Modules
 
-The `admin()` module includes the starter module (auth collections, assets, file uploads) plus the full admin UI:
+The `adminModule` includes the starter module (auth collections, assets, file uploads) plus the full admin UI. Plugins go in `questpie.config.ts`, modules go in `modules.ts`:
 
 ```typescript
-import { admin, audit } from "@questpie/admin/server";
-import { config } from "questpie";
+// src/questpie/server/questpie.config.ts
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/server";
 
-export default config({
-  modules: [
-    admin({ sidebar, dashboard, branding }),
-    audit(), // optional audit logging
-  ],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   app: { url: process.env.APP_URL! },
   db: { url: process.env.DATABASE_URL! },
   secret: process.env.AUTH_SECRET!,
 });
 ```
 
-The `admin()` module automatically provides:
+```typescript
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
+
+export default [adminModule] as const;
+```
+
+The `adminModule` automatically provides:
 - Auth collections (users, sessions, accounts, verifications, apikeys)
 - Assets collection with file upload support
 - Admin UI functions, views, and components
@@ -204,11 +218,11 @@ await app.api.collections.posts.deleteById({ id: post.id });
 
 ### File Uploads
 
-File uploads work automatically when the `admin()` module is included (it provides the `assets` collection). Configure storage in your config:
+File uploads work automatically when `adminModule` is included (it provides the `assets` collection). Configure storage in your config:
 
 ```typescript
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   storage: { basePath: "/api" },
 });
@@ -277,10 +291,10 @@ export default {
 Configure the queue adapter in your config:
 
 ```typescript
-import { pgBossAdapter, config } from "questpie";
+import { pgBossAdapter, runtimeConfig } from "questpie";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   queue: {
     adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL! }),
@@ -311,14 +325,11 @@ export const blogModule = module({
   },
 });
 
-// questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+// modules.ts
+import { adminModule } from "@questpie/admin/server";
 import { blogModule } from "./blog-module";
 
-export default config({
-  modules: [admin(), blogModule],
-});
+export default [adminModule, blogModule] as const;
 ```
 
 ## Admin UI

@@ -19,51 +19,31 @@ bun add @questpie/admin questpie @questpie/tanstack-query @tanstack/react-query
 
 ## Server Setup
 
-The admin module is configured via `config()` in your `questpie.config.ts`:
+The admin plugin is registered in `questpie.config.ts`, and the admin module is added to `modules.ts`:
 
 ```ts
-// questpie/server/questpie.config.ts
-import { admin } from "@questpie/admin/server";
-import { config } from "questpie";
+// questpie.config.ts
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/server";
 
-export default config({
-  modules: [
-    admin({
-      branding: { name: { en: "My Admin Panel" } },
-      sidebar: ({ s, c }) =>
-        s.sidebar({
-          sections: [
-            s.section({
-              id: "content",
-              title: { en: "Content" },
-              items: [
-                { type: "link", label: "Dashboard", href: "/admin", icon: c.icon("ph:house") },
-                { type: "collection", collection: "posts" },
-                { type: "collection", collection: "pages" },
-                { type: "divider" },
-                { type: "global", global: "siteSettings" },
-              ],
-            }),
-          ],
-        }),
-      dashboard: ({ d, c, a }) =>
-        d.dashboard({
-          title: { en: "Dashboard" },
-          actions: [
-            a.create({ collection: "posts", label: { en: "New Post" }, icon: c.icon("ph:plus") }),
-            a.global({ global: "siteSettings", label: { en: "Settings" }, icon: c.icon("ph:gear-six") }),
-          ],
-          items: [],
-        }),
-    }),
-  ],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   app: { url: process.env.APP_URL! },
   db: { url: process.env.DATABASE_URL! },
   secret: process.env.AUTH_SECRET!,
 });
 ```
 
-Collections, globals, functions, and jobs are auto-discovered via file convention. Codegen produces a `.generated/index.ts` with the fully-typed `App` and runtime `app` instance.
+```ts
+// modules.ts
+import { adminModule } from "@questpie/admin/server";
+
+export default [adminModule] as const;
+```
+
+Branding, sidebar, and dashboard are configured via the file convention (e.g. `branding.ts`, `sidebar.ts`, `dashboard.ts`) and auto-discovered by codegen.
+
+Collections, globals, routes, and jobs are auto-discovered via file convention. Codegen produces a `.generated/index.ts` with the fully-typed `App` and runtime `app` instance.
 
 ### Collection Admin Config
 
@@ -325,8 +305,8 @@ Legacy params (`history`, `viewOptions`, and `sidebar=preview`) are still read f
 // Client (React components, builder, hooks)
 import { qa, adminModule, AdminRouter, createTypedHooks, BlockRenderer, createBlockRegistry } from "@questpie/admin/client";
 
-// Server (admin module for QUESTPIE config)
-import { admin, audit, adminRpc } from "@questpie/admin/server";
+// Server (admin module + plugin for QUESTPIE config)
+import { adminModule, auditModule, adminPlugin } from "@questpie/admin/server";
 
 // Styles
 import "@questpie/admin/styles/index.css";

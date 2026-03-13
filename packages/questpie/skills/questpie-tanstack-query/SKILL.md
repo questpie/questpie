@@ -395,8 +395,10 @@ client.setLocale("sk"); // Set locale for localized content
 Pass `{ realtime: true }` as the second argument to `find()`, `count()`, or `get()` to enable SSE-based live updates. Requires a realtime adapter in `questpie.config.ts`:
 
 ```ts
+import { runtimeConfig } from "questpie";
 import { pgNotifyAdapter } from "questpie";
-export default config({
+
+export default runtimeConfig({
   realtime: { adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL }) },
 });
 ```
@@ -466,9 +468,10 @@ const { docs } = await client.collections.posts.find({ limit: 10 });
 Collection changes do not auto-refresh when realtime is enabled but no adapter is configured. Add a realtime adapter in `questpie.config.ts`:
 
 ```ts
+import { runtimeConfig } from "questpie";
 import { pgNotifyAdapter } from "questpie";
 
-export default config({
+export default runtimeConfig({
   realtime: {
     adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL }),
   },

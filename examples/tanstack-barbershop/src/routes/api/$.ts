@@ -1,36 +1,17 @@
 /**
  * API Routes - Catch-all handler
  *
- * Handles all API endpoints:
- * - /api/collections/*
- * - /api/globals/*
- * - /api/auth/*
- * - /api/storage/*
- * - /api/stream (SSE)
- * - /api/openapi.json (OpenAPI spec)
- * - /api/docs (Scalar UI)
+ * Handles all API endpoints including OpenAPI spec + docs
+ * (served via openApiModule registered in modules.ts).
  */
 
-import { withOpenApi } from "@questpie/openapi";
 import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie";
 import { app } from "~/questpie/server/app";
 
-const handler = withOpenApi(
-	createFetchHandler(app, {
-		basePath: "/api",
-	}),
-	{
-		app,
-		basePath: "/api",
-		info: {
-			title: "Barbershop API",
-			version: "1.0.0",
-			description: "QUESTPIE API for the Barbershop example",
-		},
-		scalar: { theme: "purple" },
-	},
-);
+const handler = createFetchHandler(app, {
+	basePath: "/api",
+});
 
 const handleCmsRequest = async (request: Request) => {
 	const response = await handler(request);

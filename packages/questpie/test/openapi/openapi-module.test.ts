@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import {
-	generateOpenApiSpec,
-	createOpenApiHandlers,
-	withOpenApi,
-} from "../../../openapi/src/server.js";
 import { generateOpenApiSpec as generateInternal } from "../../../openapi/src/generator/index.js";
 import { openApiPlugin } from "../../../openapi/src/plugin.js";
+import {
+	docsRoute,
+	generateOpenApiSpec,
+	openApiModule,
+	openApiRoute,
+} from "../../../openapi/src/server.js";
 import { collection, global } from "../../src/server/index.js";
 
 // ---------------------------------------------------------------------------
@@ -15,13 +16,14 @@ import { collection, global } from "../../src/server/index.js";
 function createMockApp(opts?: {
 	collections?: Record<string, any>;
 	globals?: Record<string, any>;
-	functions?: Record<string, any>;
+	routes?: Record<string, any>;
 }) {
 	return {
 		getCollections: () => opts?.collections ?? {},
 		getGlobals: () => opts?.globals ?? {},
-		functions: opts?.functions ?? {},
-		config: {},
+		config: {
+			routes: opts?.routes ?? {},
+		},
 	};
 }
 
@@ -39,7 +41,7 @@ describe("generateOpenApiSpec (public API)", () => {
 			},
 		});
 
-		const spec = generateOpenApiSpec(app, undefined, {
+		const spec = generateOpenApiSpec(app, {
 			info: { title: "Test", version: "2.0.0" },
 		});
 
@@ -67,7 +69,7 @@ describe("generateOpenApiSpec (public API)", () => {
 			},
 		});
 
-		const spec = generateOpenApiSpec(app, undefined, { basePath: "/api" });
+		const spec = generateOpenApiSpec(app, { basePath: "/api" });
 
 		expect(spec.paths["/api/posts"]).toBeDefined();
 		expect(spec.components.schemas?.PostsInsert).toBeDefined();
@@ -82,7 +84,7 @@ describe("generateOpenApiSpec (public API)", () => {
 			},
 		});
 
-		const spec = generateOpenApiSpec(app, undefined, { basePath: "/api" });
+		const spec = generateOpenApiSpec(app, { basePath: "/api" });
 
 		expect(spec.paths["/api/globals/settings"]).toBeDefined();
 	});
@@ -99,7 +101,7 @@ describe("generateOpenApiSpec (public API)", () => {
 			},
 		});
 
-		const spec = generateOpenApiSpec(app, undefined, {
+		const spec = generateOpenApiSpec(app, {
 			basePath: "/api",
 			exclude: { collections: ["internal"] },
 		});
@@ -110,168 +112,87 @@ describe("generateOpenApiSpec (public API)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// createOpenApiHandlers
+// openApiModule
 // ---------------------------------------------------------------------------
 
-describe("createOpenApiHandlers", () => {
-	it("returns specHandler and scalarHandler", () => {
-		const app = createMockApp();
-		const spec = generateOpenApiSpec(app);
-		const handlers = createOpenApiHandlers(spec);
-
-		expect(typeof handlers.specHandler).toBe("function");
-		expect(typeof handlers.scalarHandler).toBe("function");
-	});
-
-	it("specHandler returns JSON response with correct headers", async () => {
-		const app = createMockApp();
-		const spec = generateOpenApiSpec(app, undefined, {
-			info: { title: "Handler Test", version: "1.0.0" },
-		});
-		const { specHandler } = createOpenApiHandlers(spec);
-
-		const response = specHandler();
-
-		expect(response).toBeInstanceOf(Response);
-		expect(response.headers.get("Content-Type")).toBe("application/json");
-		expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
-
-		const body = await response.json();
-		expect(body.openapi).toBe("3.1.0");
-		expect(body.info.title).toBe("Handler Test");
-	});
-
-	it("scalarHandler returns HTML response with Scalar UI", async () => {
-		const app = createMockApp();
-		const spec = generateOpenApiSpec(app);
-		const { scalarHandler } = createOpenApiHandlers(spec);
-
-		const response = scalarHandler();
-
-		expect(response).toBeInstanceOf(Response);
-		expect(response.headers.get("Content-Type")).toBe(
-			"text/html; charset=utf-8",
-		);
-
-		const html = await response.text();
-		expect(html).toContain("<!DOCTYPE html>");
-		expect(html).toContain("@scalar/api-reference");
-	});
-
-	it("respects scalar theme config", async () => {
-		const app = createMockApp();
-		const spec = generateOpenApiSpec(app);
-		const { scalarHandler } = createOpenApiHandlers(spec, {
-			scalar: { theme: "bluePlanet" },
+describe("openApiModule", () => {
+	it("returns a valid module definition", () => {
+		const mod = openApiModule({
+			info: { title: "Test API", version: "1.0.0" },
 		});
 
-		const response = scalarHandler();
-		const html = await response.text();
-
-		expect(html).toContain("bluePlanet");
-	});
-});
-
-// ---------------------------------------------------------------------------
-// withOpenApi
-// ---------------------------------------------------------------------------
-
-describe("withOpenApi", () => {
-	const baseHandler = async (req: Request) =>
-		new Response("base", { status: 200 });
-
-	it("intercepts spec route and returns JSON", async () => {
-		const app = createMockApp();
-		const handler = withOpenApi(baseHandler, {
-			app,
-			basePath: "/api",
-			info: { title: "Wrap Test", version: "2.0.0" },
-		});
-
-		const response = await handler(
-			new Request("http://localhost/api/openapi.json"),
-		);
-
-		expect(response).toBeInstanceOf(Response);
-		const body = await response!.json();
-		expect(body.openapi).toBe("3.1.0");
-		expect(body.info.title).toBe("Wrap Test");
+		expect(mod.name).toBe("questpie-openapi");
+		expect(mod.routes).toBeDefined();
 	});
 
-	it("intercepts docs route and returns HTML", async () => {
-		const app = createMockApp();
-		const handler = withOpenApi(baseHandler, {
-			app,
-			basePath: "/api",
-		});
+	it("creates routes with default paths", () => {
+		const mod = openApiModule();
 
-		const response = await handler(
-			new Request("http://localhost/api/docs"),
-		);
-
-		expect(response).toBeInstanceOf(Response);
-		const html = await response!.text();
-		expect(html).toContain("<!DOCTYPE html>");
+		expect(mod.routes).toBeDefined();
+		expect(mod.routes!["openapi.json"]).toBeDefined();
+		expect(mod.routes!["docs"]).toBeDefined();
 	});
 
-	it("passes non-matching requests to the base handler", async () => {
-		const app = createMockApp();
-		const handler = withOpenApi(baseHandler, {
-			app,
-			basePath: "/api",
-		});
-
-		const response = await handler(
-			new Request("http://localhost/api/posts"),
-		);
-
-		expect(response).toBeInstanceOf(Response);
-		const text = await response!.text();
-		expect(text).toBe("base");
-	});
-
-	it("uses custom specPath and docsPath", async () => {
-		const app = createMockApp();
-		const handler = withOpenApi(baseHandler, {
-			app,
-			basePath: "/api",
+	it("supports custom specPath and docsPath", () => {
+		const mod = openApiModule({
 			specPath: "spec.json",
 			docsPath: "api-docs",
 		});
 
-		const specRes = await handler(
-			new Request("http://localhost/api/spec.json"),
-		);
-		const body = await specRes!.json();
-		expect(body.openapi).toBe("3.1.0");
-
-		const docsRes = await handler(
-			new Request("http://localhost/api/api-docs"),
-		);
-		const html = await docsRes!.text();
-		expect(html).toContain("<!DOCTYPE html>");
-
-		// Old paths should fall through
-		const oldSpec = await handler(
-			new Request("http://localhost/api/openapi.json"),
-		);
-		const oldText = await oldSpec!.text();
-		expect(oldText).toBe("base");
+		expect(mod.routes!["spec.json"]).toBeDefined();
+		expect(mod.routes!["api-docs"]).toBeDefined();
+		expect(mod.routes!["openapi.json"]).toBeUndefined();
+		expect(mod.routes!["docs"]).toBeUndefined();
 	});
 
-	it("only intercepts GET requests", async () => {
-		const app = createMockApp();
-		const handler = withOpenApi(baseHandler, {
-			app,
-			basePath: "/api",
-		});
+	it("routes have the correct __brand and mode", () => {
+		const mod = openApiModule();
+		const specRoute = mod.routes!["openapi.json"] as any;
+		const docsRoute = mod.routes!["docs"] as any;
 
-		const response = await handler(
-			new Request("http://localhost/api/openapi.json", { method: "POST" }),
-		);
+		expect(specRoute.__brand).toBe("route");
+		expect(specRoute.mode).toBe("raw");
+		expect(specRoute.method).toBe("GET");
 
-		const text = await response!.text();
-		expect(text).toBe("base");
+		expect(docsRoute.__brand).toBe("route");
+		expect(docsRoute.mode).toBe("raw");
+		expect(docsRoute.method).toBe("GET");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// openApiRoute
+// ---------------------------------------------------------------------------
+
+describe("openApiRoute", () => {
+	it("returns a raw GET route definition", () => {
+		const routeDef = openApiRoute();
+
+		expect((routeDef as any).__brand).toBe("route");
+		expect((routeDef as any).mode).toBe("raw");
+		expect((routeDef as any).method).toBe("GET");
+		expect(typeof (routeDef as any).handler).toBe("function");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// docsRoute
+// ---------------------------------------------------------------------------
+
+describe("docsRoute", () => {
+	it("returns a raw GET route definition", () => {
+		const routeDef = docsRoute();
+
+		expect((routeDef as any).__brand).toBe("route");
+		expect((routeDef as any).mode).toBe("raw");
+		expect((routeDef as any).method).toBe("GET");
+		expect(typeof (routeDef as any).handler).toBe("function");
+	});
+
+	it("accepts scalar config", () => {
+		const routeDef = docsRoute({ scalar: { theme: "purple" } });
+
+		expect((routeDef as any).__brand).toBe("route");
 	});
 });
 

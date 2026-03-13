@@ -78,10 +78,10 @@ export function myPlugin(): CodegenPlugin {
 ### Register in Config
 
 ```ts title="questpie.config.ts"
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
 import { myPlugin } from "my-plugin-package";
 
-export default config({
+export default runtimeConfig({
   plugins: [myPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
