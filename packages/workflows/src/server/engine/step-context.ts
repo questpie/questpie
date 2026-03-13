@@ -24,6 +24,8 @@ import type {
 } from "../workflow/types.js";
 import { parseDuration, resolveDate } from "./duration.js";
 import { NonDeterministicError, StepSuspendError } from "./errors.js";
+import type { EventPersistence, ResumeWaiterFn } from "./events.js";
+import { checkRetroactiveMatch, dispatchEvent } from "./events.js";
 
 // ============================================================================
 // Types
@@ -99,9 +101,24 @@ export interface StepPersistence {
 			error?: unknown;
 			scheduledAt?: Date;
 			attempt?: number;
+			childInstanceId?: string;
 		},
 	): Promise<void>;
 }
+
+/**
+ * Callback to trigger a child workflow.
+ * Returns the child instance ID.
+ */
+export type TriggerChildFn = (
+	workflowName: string,
+	input: unknown,
+	options: {
+		parentInstanceId: string;
+		parentStepName: string;
+		timeout?: string;
+	},
+) => Promise<{ instanceId: string }>;
 
 // ============================================================================
 // StepExecutionContext
@@ -137,6 +154,9 @@ export class StepExecutionContext implements WorkflowStepContext {
 		private readonly defaultRetry?: {
 			maxAttempts?: number;
 		},
+		private readonly eventPersistence?: EventPersistence,
+		private readonly resumeWaiter?: ResumeWaiterFn,
+		private readonly triggerChild?: TriggerChildFn,
 	) {}
 
 	// ── Public API ──────────────────────────────────────────
@@ -172,12 +192,30 @@ export class StepExecutionContext implements WorkflowStepContext {
 			return cached.result as T;
 		}
 
-		// Execute the function
+		// Execute the function (with optional step-level timeout)
 		const maxAttempts =
 			opts?.retry?.maxAttempts ?? this.defaultRetry?.maxAttempts ?? 1;
 
 		try {
-			const result = await fn();
+			let result: T;
+
+			if (opts?.timeout) {
+				const timeoutMs = parseDuration(opts.timeout);
+				result = await Promise.race([
+					fn(),
+					new Promise<never>((_, reject) =>
+						setTimeout(
+							() =>
+								reject(
+									new Error(`Step "${name}" timed out after ${opts!.timeout}`),
+								),
+							timeoutMs,
+						),
+					),
+				]);
+			} else {
+				result = await fn();
+			}
 
 			// Persist completed step
 			if (cached) {
@@ -302,6 +340,30 @@ export class StepExecutionContext implements WorkflowStepContext {
 			return cached.result as T | null;
 		}
 
+		// Retroactive check — see if a matching event was already sent
+		if (this.eventPersistence && !cached) {
+			const retroMatch = await checkRetroactiveMatch(
+				opts.event,
+				opts.match,
+				this.eventPersistence,
+			);
+			if (retroMatch) {
+				// Event already exists — complete immediately
+				await this.persistence.createStep({
+					instanceId: this.instanceId,
+					name,
+					type: "waitForEvent",
+					status: "completed",
+					result: retroMatch.data,
+					eventName: opts.event,
+					matchCriteria: opts.match,
+					hasCompensation: false,
+					maxAttempts: 1,
+				});
+				return retroMatch.data as T | null;
+			}
+		}
+
 		// Calculate timeout
 		const scheduledAt = opts.timeout ? resolveDate(opts.timeout) : undefined;
 
@@ -333,11 +395,41 @@ export class StepExecutionContext implements WorkflowStepContext {
 			return cached.result as T;
 		}
 
+		// If we have a failed cached step for this invoke, propagate the error
+		if (cached?.status === "failed") {
+			const errMsg =
+				typeof cached.error === "object" &&
+				cached.error !== null &&
+				"message" in cached.error
+					? (cached.error as { message: string }).message
+					: "Child workflow failed";
+			throw new Error(`Child workflow "${opts.workflow}" failed: ${errMsg}`);
+		}
+
 		// Calculate timeout
 		const scheduledAt = opts.timeout ? resolveDate(opts.timeout) : undefined;
 
-		// Persist invoke step (child instance creation happens in the job layer)
-		if (!cached) {
+		// Trigger child workflow if we have the triggerChild function and no cached step
+		if (this.triggerChild && !cached) {
+			const child = await this.triggerChild(opts.workflow, opts.input, {
+				parentInstanceId: this.instanceId,
+				parentStepName: name,
+				timeout: opts.timeout,
+			});
+
+			// Persist invoke step with child instance ID
+			await this.persistence.createStep({
+				instanceId: this.instanceId,
+				name,
+				type: "invoke",
+				status: "waiting",
+				scheduledAt,
+				childInstanceId: child.instanceId,
+				hasCompensation: false,
+				maxAttempts: 1,
+			});
+		} else if (!cached) {
+			// No triggerChild — just persist the step (tests or stub mode)
 			await this.persistence.createStep({
 				instanceId: this.instanceId,
 				name,
@@ -362,8 +454,23 @@ export class StepExecutionContext implements WorkflowStepContext {
 			return;
 		}
 
+		// Create event and match waiters if event persistence is available
+		if (this.eventPersistence && this.resumeWaiter) {
+			await dispatchEvent(
+				{
+					name: opts.event,
+					data: opts.data,
+					match: opts.match,
+					sourceType: "workflow",
+					sourceInstanceId: this.instanceId,
+					sourceStepName: name,
+				},
+				this.eventPersistence,
+				this.resumeWaiter,
+			);
+		}
+
 		// Persist the event step as completed (sendEvent is fire-and-forget)
-		// The actual event matching happens in the job layer
 		if (cached) {
 			await this.persistence.updateStep(this.instanceId, name, {
 				status: "completed",

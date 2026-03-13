@@ -68,7 +68,9 @@ function createMockQueue(): QueuePublish & { calls: any[] } {
 	};
 }
 
-function createDeps(overrides?: Partial<WorkflowClientDeps>) {
+function createDeps(
+	overrides?: Partial<WorkflowClientDeps> & { publishResume?: QueuePublish },
+) {
 	const instanceStore = new Map<string, any>();
 	const stepStore = new Map<string, any>();
 	const eventStore = new Map<string, any>();
@@ -80,6 +82,7 @@ function createDeps(overrides?: Partial<WorkflowClientDeps>) {
 			steps: overrides?.steps ?? createMockCrud(stepStore),
 			events: overrides?.events ?? createMockCrud(eventStore),
 			publishExecute: overrides?.publishExecute ?? queue,
+			publishResume: overrides?.publishResume,
 		},
 		instanceStore,
 		stepStore,
@@ -374,13 +377,42 @@ describe("createWorkflowClient", () => {
 	});
 
 	describe("sendEvent()", () => {
-		it("throws not-implemented error", async () => {
+		it("creates an event and matches waiting steps", async () => {
 			const { deps } = createDeps();
 			const client = createWorkflowClient({ "test-wf": testWorkflow }, deps);
 
-			await expect(
-				client.sendEvent("user.created", { id: "u1" }),
-			).rejects.toThrow("sendEvent() is not yet implemented");
+			// Should not throw — event gets created in the events collection
+			await client.sendEvent("user.created", { id: "u1" });
+		});
+
+		it("resumes waiting steps when publishResume is provided", async () => {
+			const stepStore = new Map<string, any>();
+			const stepsCrud = createMockCrud(stepStore);
+			const resumeQueue = createMockQueue();
+
+			const { deps } = createDeps({
+				steps: stepsCrud,
+				publishResume: resumeQueue,
+			});
+
+			const client = createWorkflowClient({ "test-wf": testWorkflow }, deps);
+
+			// Create a waiting step
+			await stepsCrud.create({
+				instanceId: "inst-1",
+				name: "wait-for-user",
+				type: "waitForEvent",
+				status: "waiting",
+				eventName: "user.created",
+				matchCriteria: null,
+			});
+
+			await client.sendEvent("user.created", { id: "u1" });
+
+			// The resume job should have been published
+			expect(resumeQueue.calls).toHaveLength(1);
+			expect(resumeQueue.calls[0].payload.instanceId).toBe("inst-1");
+			expect(resumeQueue.calls[0].payload.stepName).toBe("wait-for-user");
 		});
 	});
 });

@@ -16,6 +16,8 @@
  */
 
 import { parseDuration } from "./engine/duration.js";
+import type { EventPersistence, ResumeWaiterFn } from "./engine/events.js";
+import { dispatchEvent } from "./engine/events.js";
 import type {
 	WorkflowDefinition,
 	WorkflowInstance,
@@ -58,6 +60,8 @@ export interface WorkflowClientDeps {
 	events: CollectionCrud;
 	/** Queue publish for the execute job. */
 	publishExecute: QueuePublish;
+	/** Queue publish for the resume job. */
+	publishResume?: QueuePublish;
 }
 
 /**
@@ -259,9 +263,89 @@ export function createWorkflowClient<
 			return result.docs;
 		},
 
-		async sendEvent(_event, _data, _match) {
-			// Placeholder — full implementation in Phase 1 (commit 1.1)
-			throw new Error("sendEvent() is not yet implemented. Coming in Phase 1.");
+		async sendEvent(event, data, match) {
+			// Build EventPersistence from collection CRUD
+			const eventPersistence: EventPersistence = {
+				async createEvent(ev) {
+					const created = await deps.events.create(
+						{
+							eventName: ev.eventName,
+							data: ev.data ?? null,
+							matchCriteria: ev.matchCriteria ?? null,
+							sourceType: ev.sourceType,
+							sourceInstanceId: ev.sourceInstanceId ?? null,
+							sourceStepName: ev.sourceStepName ?? null,
+							consumedCount: 0,
+						},
+						{ accessMode: "system" },
+					);
+					return { id: created.id };
+				},
+				async findMatchingEvent() {
+					// Not needed for sendEvent dispatch
+					return null;
+				},
+				async findWaitingSteps(eventName, matchData) {
+					const result = await deps.steps.find(
+						{
+							where: {
+								type: "waitForEvent",
+								status: "waiting",
+								eventName,
+							},
+							limit: 1000,
+						},
+						{ accessMode: "system" },
+					);
+					return result.docs.map((s: any) => ({
+						instanceId: s.instanceId,
+						stepName: s.name,
+						matchCriteria: s.matchCriteria,
+					}));
+				},
+				async markEventConsumed(eventId) {
+					// Increment consumed count — best-effort
+					const ev = await deps.events.findOne(
+						{ where: { id: eventId } },
+						{ accessMode: "system" },
+					);
+					if (ev) {
+						await deps.events.updateById(
+							{
+								id: eventId,
+								data: { consumedCount: (ev.consumedCount ?? 0) + 1 },
+							},
+							{ accessMode: "system" },
+						);
+					}
+				},
+			};
+
+			// Build resume callback
+			const resumeWaiter: ResumeWaiterFn = async (
+				instanceId,
+				stepName,
+				result,
+			) => {
+				if (deps.publishResume) {
+					await deps.publishResume.publish({
+						instanceId,
+						stepName,
+						result,
+					});
+				}
+			};
+
+			await dispatchEvent(
+				{
+					name: event,
+					data,
+					match,
+					sourceType: "external",
+				},
+				eventPersistence,
+				resumeWaiter,
+			);
 		},
 	};
 }

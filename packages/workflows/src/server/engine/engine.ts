@@ -8,21 +8,26 @@
  * 2. Creates a `StepExecutionContext` with the cache
  * 3. Invokes the workflow handler
  * 4. Handles outcomes: completion, suspension, or failure
- * 5. Flushes logs
+ * 5. On failure: runs compensations → onFailure handler → persists
+ * 6. Flushes logs
  *
  * This module is decoupled from the QUESTPIE collection API — it operates
  * through the `EngineContext` port interface, which is implemented by the
- * wf-execute job in commit 0.8.
+ * wf-execute job.
  */
 
 import type { WorkflowDefinition } from "../workflow/types.js";
+import type { CompensationEntry } from "./compensation.js";
+import { createCompletedStepsMap, runCompensations } from "./compensation.js";
 import { StepSuspendError } from "./errors.js";
+import type { EventPersistence, ResumeWaiterFn } from "./events.js";
 import type { FlushCallback } from "./logger.js";
 import { WorkflowLoggerImpl } from "./logger.js";
 import {
 	type CachedStep,
 	StepExecutionContext,
 	type StepPersistence,
+	type TriggerChildFn,
 } from "./step-context.js";
 
 // ============================================================================
@@ -81,13 +86,26 @@ export interface EngineContext {
 
 	/** App context passed to the workflow handler. */
 	appContext: Record<string, any>;
+
+	/** Event persistence operations (optional — for event matching). */
+	eventPersistence?: EventPersistence;
+
+	/** Resume waiter callback (optional — for event matching). */
+	resumeWaiter?: ResumeWaiterFn;
+
+	/** Trigger child workflow callback (optional — for step.invoke). */
+	triggerChild?: TriggerChildFn;
 }
 
 /** Result of executing a workflow handler. */
 export type ExecutionResult =
 	| { status: "completed"; output: unknown }
 	| { status: "suspended"; stepName: string; resumeAt?: Date }
-	| { status: "failed"; error: Error };
+	| {
+			status: "failed";
+			error: Error;
+			compensationErrors?: Array<{ stepName: string; error: string }>;
+	  };
 
 // ============================================================================
 // Engine
@@ -138,6 +156,9 @@ export async function executeWorkflowHandler(
 		definition.retryPolicy
 			? { maxAttempts: definition.retryPolicy.maxAttempts }
 			: undefined,
+		engineCtx.eventPersistence,
+		engineCtx.resumeWaiter,
+		engineCtx.triggerChild,
 	);
 
 	// 5. Update instance to running
@@ -191,21 +212,84 @@ export async function executeWorkflowHandler(
 				resumeAt: error.resumeAt,
 			};
 		} else {
-			// Failure — update to failed
+			// Failure — run compensations, then onFailure, then update status
 			const err = error instanceof Error ? error : new Error(String(error));
+
+			logger.error(`Workflow failed: ${err.message}`);
+
+			// Run compensations (reverse LIFO order)
+			const compensations =
+				stepContext.getCompensations() as CompensationEntry[];
+			let compensationErrors:
+				| Array<{ stepName: string; error: string }>
+				| undefined;
+
+			if (compensations.length > 0) {
+				await engineCtx.updateInstance(instanceId, {
+					status: "failing",
+				});
+
+				const compensationResult = await runCompensations(
+					compensations,
+					logger,
+				);
+				if (compensationResult.errors.length > 0) {
+					compensationErrors = compensationResult.errors;
+				}
+			}
+
+			// Run onFailure handler if defined
+			if (definition.onFailure) {
+				try {
+					// Build completed steps map from cached steps
+					const completedEntries = Array.from(cachedSteps.entries())
+						.filter(([, s]) => s.status === "completed")
+						.map(([name, s]) => ({ name, result: s.result }));
+
+					// Also add steps that completed in this execution
+					for (const comp of compensations) {
+						if (!completedEntries.some((e) => e.name === comp.name)) {
+							completedEntries.push({
+								name: comp.name,
+								result: comp.result,
+							});
+						}
+					}
+
+					const completedSteps = createCompletedStepsMap(completedEntries);
+
+					await definition.onFailure({
+						input: instance.input,
+						error: err,
+						step: stepContext,
+						completedSteps,
+						log: logger,
+						ctx: engineCtx.appContext,
+					});
+
+					logger.info("onFailure handler completed");
+				} catch (onFailureErr) {
+					logger.error(
+						`onFailure handler threw: ${onFailureErr instanceof Error ? onFailureErr.message : String(onFailureErr)}`,
+					);
+				}
+			}
+
+			// Persist failure
 			const errData = {
 				message: err.message,
 				stack: err.stack,
 				name: err.name,
+				...(compensationErrors ? { compensationErrors } : {}),
 			};
 
 			await engineCtx.updateInstance(instanceId, {
 				status: "failed",
 				error: errData,
+				completedAt: new Date(),
 			});
 
-			logger.error(`Workflow failed: ${err.message}`);
-			result = { status: "failed", error: err };
+			result = { status: "failed", error: err, compensationErrors };
 		}
 	}
 
