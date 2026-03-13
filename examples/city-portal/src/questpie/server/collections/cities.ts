@@ -46,12 +46,12 @@ export default collection("cities")
 		description: "Manage city portals",
 	}))
 	.list(({ v }) =>
-		v.table({
+		v.collectionTable({
 			columns: ["name", "slug", "email", "isActive"],
 		}),
 	)
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [f.slug, f.isActive],

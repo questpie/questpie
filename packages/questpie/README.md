@@ -50,8 +50,8 @@ export const posts = collection("posts")
     label: { en: "Posts" },
     icon: c.icon("ph:article"),
   }))
-  .list(({ v }) => v.table({}))
-  .form(({ v, f }) => v.form({
+  .list(({ v }) => v.collectionTable({}))
+  .form(({ v, f }) => v.collectionForm({
     sidebar: { position: "right", fields: [f.published, f.cover] },
     fields: [f.title, f.content, f.category, f.author, f.publishedAt],
   }))
@@ -314,7 +314,7 @@ await app.api.globals.siteSettings.update({ data: { siteName: "New Name" } });
 Server-evaluated reactive behaviors in form config:
 
 ```ts
-.form(({ v, f }) => v.form({
+.form(({ v, f }) => v.collectionForm({
   fields: [
     f.title,
     {

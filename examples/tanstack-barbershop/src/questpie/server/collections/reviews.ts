@@ -3,19 +3,23 @@ import { collection } from "#questpie/factories";
 export const reviews = collection("reviews")
 	.fields(({ f }) => ({
 		// Customer relation - when set, use customer's name and email
-		customer: f.relation("user")
-			.label({ en: "Customer", sk: "Zákazník" }),
-		customerName: f.text(255)
+		customer: f.relation("user").label({ en: "Customer", sk: "Zákazník" }),
+		customerName: f
+			.text(255)
 			.label({ en: "Customer Name", sk: "Meno zákazníka" })
 			.required(),
-		customerEmail: f.email(255)
+		customerEmail: f
+			.email(255)
 			.label({ en: "Customer Email", sk: "Email zákazníka" }),
-		barber: f.relation("barbers")
+		barber: f
+			.relation("barbers")
 			.required()
 			.label({ en: "Barber", sk: "Holič" }),
-		appointment: f.relation("appointments")
+		appointment: f
+			.relation("appointments")
 			.label({ en: "Appointment", sk: "Rezervácia" }),
-		rating: f.select([
+		rating: f
+			.select([
 				{ value: "1", label: { en: "1 Star", sk: "1 Hviezdička" } },
 				{ value: "2", label: { en: "2 Stars", sk: "2 Hviezdičky" } },
 				{ value: "3", label: { en: "3 Stars", sk: "3 Hviezdičky" } },
@@ -24,15 +28,15 @@ export const reviews = collection("reviews")
 			])
 			.required()
 			.label({ en: "Rating", sk: "Hodnotenie" }),
-		comment: f.textarea()
-			.label({ en: "Comment", sk: "Komentár" })
-			.localized(),
-		isApproved: f.boolean()
+		comment: f.textarea().label({ en: "Comment", sk: "Komentár" }).localized(),
+		isApproved: f
+			.boolean()
 			.label({ en: "Approved", sk: "Schválené" })
 			.default(false)
 			.required(),
 		// Featured option only available for approved reviews
-		isFeatured: f.boolean()
+		isFeatured: f
+			.boolean()
 			.label({ en: "Featured", sk: "Odporúčané" })
 			.default(false)
 			.required(),
@@ -42,9 +46,9 @@ export const reviews = collection("reviews")
 		label: { en: "Reviews", sk: "Recenzie" },
 		icon: c.icon("ph:star"),
 	}))
-	.list(({ v }) => v.table({}))
+	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [

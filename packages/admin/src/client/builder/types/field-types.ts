@@ -737,7 +737,7 @@ export interface FormSidebarConfig<TData = any> {
  *
  * @example
  * ```ts
- * .form(({ v, f }) => v.form({
+ * .form(({ v, f }) => v.collectionForm({
  *   sidebar: {
  *     position: 'right',
  *     fields: [f.status, f.publishedAt]

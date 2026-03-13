@@ -149,9 +149,9 @@ export const posts = collection("posts")
   .hooks({
     beforeCreate: [async ({ data, ctx }) => { /* ... */ return data; }],
   })
-  .list(({ v }) => v.table({}))
+  .list(({ v }) => v.collectionTable({}))
   .form(({ v, f }) =>
-    v.form({
+    v.collectionForm({
       sidebar: { position: "right", fields: [f.slug, f.published, f.category] },
       fields: [f.title, f.content, f.author, f.image],
     })
@@ -182,7 +182,7 @@ export const siteSettings = global("site_settings")
     maintenanceMode: f.boolean({ label: "Maintenance Mode", default: false }),
   }))
   .admin(({ c }) => ({ label: "Site Settings", icon: c.icon("ph:gear") }))
-  .form(({ v, f }) => v.form({
+  .form(({ v, f }) => v.globalForm({
     fields: [f.siteName, f.description, f.logo, f.maintenanceMode],
   }));
 ```

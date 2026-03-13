@@ -51,12 +51,12 @@ export default collection("announcements")
 		description: "Official notices and public announcements",
 	}))
 	.list(({ v }) =>
-		v.table({
+		v.collectionTable({
 			columns: ["title", "category", "validFrom", "validTo", "isPinned"],
 		}),
 	)
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [

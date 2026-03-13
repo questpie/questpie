@@ -4,11 +4,13 @@ import { services } from "@/questpie/server/collections/services";
 
 export const barberServices = collection("barber_services")
 	.fields(({ f }) => ({
-		barber: f.relation(() => barbers)
+		barber: f
+			.relation(() => barbers)
 			.required()
 			.onDelete("cascade")
 			.label({ en: "Barber", sk: "Holič" }),
-		service: f.relation(() => services)
+		service: f
+			.relation(() => services)
 			.required()
 			.onDelete("cascade")
 			.label({ en: "Service", sk: "Služba" }),
@@ -18,9 +20,9 @@ export const barberServices = collection("barber_services")
 		icon: c.icon("ph:link"),
 		hidden: true,
 	}))
-	.list(({ v }) => v.table({}))
+	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			fields: [
 				{
 					type: "section",

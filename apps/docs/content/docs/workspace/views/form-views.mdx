@@ -10,7 +10,7 @@ Form views control the edit interface for collections and globals. Configure the
 ## Basic Form
 
 ```ts
-.form(({ v, f }) => v.form({}))
+.form(({ v, f }) => v.collectionForm({}))
 ```
 
 Without config, the form renders all fields in a single column.
@@ -21,7 +21,7 @@ Group fields into labeled sections:
 
 ```ts
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     fields: [
       {
         type: "section",
@@ -62,7 +62,7 @@ Place fields in a sidebar panel:
 
 ```ts
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     sidebar: {
       position: "right",
       fields: [f.isActive, f.avatar, f.status],
@@ -80,7 +80,7 @@ Auto-compute field values from other fields:
 
 ```ts
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     fields: [
       {
         type: "section",
@@ -118,7 +118,7 @@ Show or hide fields based on other field values:
 
 ```ts
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     fields: [
       {
         type: "section",
@@ -143,7 +143,7 @@ From the barbershop — barbers collection with sidebar, grid layout, sections, 
 
 ```ts title="collections/barbers.ts"
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     sidebar: {
       position: "right",
       fields: [f.isActive, f.avatar],

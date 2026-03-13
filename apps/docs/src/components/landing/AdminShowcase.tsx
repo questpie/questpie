@@ -48,13 +48,13 @@ const snippets: Record<TabId, { code: string; filename: string }> = {
 		filename: "server/collections/posts.ts",
 	},
 	table: {
-		code: `.list(({ v, f }) => v.table({
+		code: `.list(({ v, f }) => v.collectionTable({
   columns: [f.title, f.author, f.status],
 }))`,
 		filename: "server/collections/posts.ts",
 	},
 	form: {
-		code: `.form(({ v, f }) => v.form({
+		code: `.form(({ v, f }) => v.collectionForm({
   fields: [f.title, f.content],
   sidebar: {
     fields: [f.author, f.status],

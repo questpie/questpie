@@ -50,12 +50,12 @@ export default collection("submissions")
 		description: "Contact form submissions",
 	}))
 	.list(({ v }) =>
-		v.table({
+		v.collectionTable({
 			columns: ["name", "subject", "department", "status", "createdAt"],
 		}),
 	)
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [f.city, f.status, f.department],

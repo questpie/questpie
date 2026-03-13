@@ -41,7 +41,7 @@ Globals share most methods with collections:
 |---|---|
 | `.fields(({ f }) => {...})` | Define data fields |
 | `.admin(({ c }) => {...})` | Admin label and icon |
-| `.form(({ v, f }) => v.form({...}))` | Form layout |
+| `.form(({ v, f }) => v.globalForm({...}))` | Form layout |
 | `.hooks({...})` | Lifecycle hooks |
 | `.access({...})` | Read/update access control |
 | `.options({...})` | Timestamps, versioning |
@@ -120,7 +120,7 @@ export const siteSettings = global("site_settings")
     icon: c.icon("ph:gear"),
   }))
   .form(({ v, f }) =>
-    v.form({
+    v.globalForm({
       fields: [
         {
           type: "section",

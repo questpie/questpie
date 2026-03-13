@@ -343,9 +343,9 @@ export const posts = collection("posts")
     label: { en: "Blog Posts" },
     icon: c.icon("ph:file-text"),
   }))
-  .list(({ v, f }) => v.table({ columns: [f.title, f.status] }))
+  .list(({ v, f }) => v.collectionTable({ columns: [f.title, f.status] }))
   .form(({ v, f }) =>
-    v.form({
+    v.collectionForm({
       fields: [
         { type: "section", label: "Content", fields: [f.title, f.content] },
         { type: "section", label: "Publishing", fields: [f.status] },

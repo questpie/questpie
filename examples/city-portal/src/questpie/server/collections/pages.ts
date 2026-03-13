@@ -46,12 +46,12 @@ export default collection("pages")
 		description: "Website pages with block-based content",
 	}))
 	.list(({ v }) =>
-		v.table({
+		v.collectionTable({
 			columns: ["title", "slug", "parent", "isPublished"],
 		}),
 	)
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [

@@ -50,12 +50,12 @@ export default collection("documents")
 		description: "Official documents and publications",
 	}))
 	.list(({ v }) =>
-		v.table({
+		v.collectionTable({
 			columns: ["title", "category", "publishedDate", "isPublished"],
 		}),
 	)
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [f.city, f.category, f.publishedDate, f.version, f.isPublished],

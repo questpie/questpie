@@ -216,9 +216,9 @@ export const barbers = collection("barbers")
 			return `/barbers/${slug}?preview=true`;
 		},
 	})
-	.list(({ v, f }) => v.table({}))
+	.list(({ v, f }) => v.collectionTable({}))
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [f.isActive, f.avatar],

@@ -13,7 +13,7 @@ export const siteSettings = global("site_settings")
 		icon: c.icon("ph:gear"),
 	}))
 	.form(({ v, f }) =>
-		v.form({
+		v.globalForm({
 			fields: [f.siteName, f.description],
 		}),
 	);

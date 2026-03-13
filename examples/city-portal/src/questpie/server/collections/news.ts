@@ -52,7 +52,7 @@ export default collection("news")
 		description: "News articles and updates",
 	}))
 	.list(({ v }) =>
-		v.table({
+		v.collectionTable({
 			columns: [
 				"title",
 				"category",
@@ -63,7 +63,7 @@ export default collection("news")
 		}),
 	)
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [

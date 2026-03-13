@@ -33,12 +33,12 @@ export default collection("cityMembers")
 		description: "Manage who can access each city portal",
 	}))
 	.list(({ v }) =>
-		v.table({
+		v.collectionTable({
 			columns: ["user", "city", "role"],
 		}),
 	)
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			fields: [
 				{
 					type: "section",

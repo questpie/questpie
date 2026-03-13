@@ -115,13 +115,13 @@ const postsAdmin = qab
   }))
   // List view s field proxy - ({ v, f }) dáva autocomplete!
   .list(({ v, f }) =>
-    v.table({
+    v.collectionTable({
       columns: [f.title, f.status],
     }),
   )
   // Form view
   .form(({ v, f }) =>
-    v.form({
+    v.collectionForm({
       sections: [
         { title: "Content", fields: [f.title, f.content] },
         { title: "Settings", fields: [f.status] },
@@ -248,7 +248,7 @@ sections: [
 **Tabs:**
 
 ```typescript
-.form(({ v, f }) => v.form({
+.form(({ v, f }) => v.collectionForm({
   tabs: [
     { id: "content", label: "Content", fields: [f.title, f.content] },
     { id: "meta", label: "Metadata", fields: [f.seo, f.tags] },
@@ -259,7 +259,7 @@ sections: [
 **Sidebar Layout:**
 
 ```typescript
-.form(({ v, f }) => v.form({
+.form(({ v, f }) => v.collectionForm({
   layout: "with-sidebar",
   sections: [
     { title: "Content", fields: [f.title, f.content] },
@@ -511,8 +511,8 @@ export const postsAdmin = qab
     title: r.text({ label: "Title" }),
     content: r.textarea({ label: "Content" }),
   }))
-  .list(({ v, f }) => v.table({ columns: [f.title] }))
-  .form(({ v, f }) => v.form({ fields: [f.title, f.content] }));
+  .list(({ v, f }) => v.collectionTable({ columns: [f.title] }))
+  .form(({ v, f }) => v.collectionForm({ fields: [f.title, f.content] }));
 
 // 3. Build admin
 // src/admin/admin.ts

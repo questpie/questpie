@@ -39,11 +39,11 @@ posts
     label: 'Posts',
     icon: c.icon('ph:article'),
   }))
-  .list(({ v, f }) => v.table({
+  .list(({ v, f }) => v.collectionTable({
     columns: [f.title, f.status],
     searchable: ['title'],
   }))
-  .form(({ v, f }) => v.form({
+  .form(({ v, f }) => v.collectionForm({
     fields: [f.title, f.content, f.status],
   }))`;
 

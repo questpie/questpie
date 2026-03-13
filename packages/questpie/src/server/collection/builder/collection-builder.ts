@@ -791,7 +791,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * collection("posts")
 	 *   .fields(({ f }) => ({ title: f.text() }))
 	 *   .set("admin", { icon: { type: "icon", props: { name: "ph:article" } } })
-	 *   .set("adminList", { view: "table", columns: ["title"] })
+	 *   .set("adminList", { view: "collection-table", columns: ["title"] })
 	 * ```
 	 */
 	set<TKey extends string, V>(

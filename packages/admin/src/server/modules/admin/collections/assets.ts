@@ -21,7 +21,7 @@ const adminAssetsCollection = collection("assets")
 		group: "administration",
 	}))
 	.set("adminList", ({ v, f, a }: any) =>
-		v.table({
+		v.collectionTable({
 			// Note: filename, mimeType, size, createdAt are upload fields (added by .upload())
 			// so we use string literals instead of f.* proxy
 			columns: ["preview", "filename", "mimeType", "size"],
@@ -35,7 +35,7 @@ const adminAssetsCollection = collection("assets")
 		}),
 	)
 	.set("adminForm", ({ v, f }: any) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [

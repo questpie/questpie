@@ -35,12 +35,12 @@ export default collection("contacts")
 		description: "Department contacts and information",
 	}))
 	.list(({ v }) =>
-		v.table({
+		v.collectionTable({
 			columns: ["department", "contactPerson", "email", "phone"],
 		}),
 	)
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [f.city, f.order],

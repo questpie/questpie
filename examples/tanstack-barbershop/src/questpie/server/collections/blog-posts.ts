@@ -44,7 +44,7 @@ export const blogPosts = collection("blog_posts")
 		description: { en: "Barbershop blog and news" },
 	}))
 	.list(({ v, f }) =>
-		v.table({
+		v.collectionTable({
 			columns: [f.title, f.status, f.publishedAt, f.readingTime, f.author],
 			searchable: [f.title, f.tags],
 			defaultSort: { field: f.publishedAt, direction: "desc" },
@@ -56,7 +56,7 @@ export const blogPosts = collection("blog_posts")
 		}),
 	)
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [

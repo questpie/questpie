@@ -51,8 +51,8 @@ export default collection("posts")
 | `.title(({ f }) => f.name)` | Record display title |
 | `.admin(({ c }) => ({...}))` | Admin UI metadata (label, icon, hidden) |
 | `.indexes(({ table }) => [...])` | Database indexes |
-| `.list(({ v, f }) => v.table({...}))` | List view config |
-| `.form(({ v, f }) => v.form({...}))` | Form view config |
+| `.list(({ v, f }) => v.collectionTable({...}))` | List view config |
+| `.form(({ v, f }) => v.collectionForm({...}))` | Form view config |
 | `.hooks({...})` | Lifecycle hooks |
 | `.access({...})` | Access control rules |
 | `.preview({...})` | Live preview config |
@@ -172,7 +172,7 @@ Globals share most methods with collections but do NOT support `.list()`, `.inde
 |---|---|
 | `.fields(({ f }) => ({...}))` | Define data fields |
 | `.admin(({ c }) => ({...}))` | Admin label and icon |
-| `.form(({ v, f }) => v.form({...}))` | Form layout |
+| `.form(({ v, f }) => v.globalForm({...}))` | Form layout |
 | `.hooks({...})` | Lifecycle hooks |
 | `.access({...})` | Read/update access control |
 | `.options({...})` | Timestamps, versioning |
@@ -413,7 +413,7 @@ Use helper functions to avoid repetition in object fields:
 
 ```ts
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     sidebar: {
       position: "right",
       fields: [f.isActive, f.avatar],

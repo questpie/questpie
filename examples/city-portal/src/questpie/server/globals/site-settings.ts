@@ -173,7 +173,7 @@ export default global("site_settings")
 		description: "Configure site branding, navigation, and contact details",
 	}))
 	.form(({ v, f }) =>
-		v.form({
+		v.globalForm({
 			fields: [
 				{
 					type: "section",

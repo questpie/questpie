@@ -51,9 +51,9 @@ export const appointments = collection("appointments")
 		label: { en: "Appointments", sk: "Rezervácie" },
 		icon: c.icon("ph:calendar"),
 	}))
-	.list(({ v }) => v.table({}))
+	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [f.status],

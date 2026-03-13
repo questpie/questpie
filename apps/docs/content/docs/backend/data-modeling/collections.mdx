@@ -37,8 +37,8 @@ Collections use a chainable builder API. Each method adds a layer:
 | `.title(({ f }) => f.name)` | Record display title |
 | `.admin(({ c }) => {...})` | Admin UI metadata (label, icon) |
 | `.indexes(({ table }) => [...])` | Database indexes |
-| `.list(({ v, f }) => v.table({...}))` | List view config |
-| `.form(({ v, f }) => v.form({...}))` | Form view config |
+| `.list(({ v, f }) => v.collectionTable({...}))` | List view config |
+| `.form(({ v, f }) => v.collectionForm({...}))` | Form view config |
 | `.hooks({...})` | Lifecycle hooks |
 | `.access({...})` | Access control rules |
 | `.preview({...})` | Live preview config |
@@ -206,9 +206,9 @@ export const barbers = collection("barbers")
     defaultWidth: 50,
     url: ({ record }) => `/barbers/${record.slug}?preview=true`,
   })
-  .list(({ v }) => v.table({}))
+  .list(({ v }) => v.collectionTable({}))
   .form(({ v, f }) =>
-    v.form({
+    v.collectionForm({
       sidebar: {
         position: "right",
         fields: [f.isActive, f.avatar],

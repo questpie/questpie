@@ -83,7 +83,7 @@ export const auditLogCollection = collection("admin_audit_log")
 	} satisfies AdminCollectionConfig)
 	.title(({ f }) => f.title)
 	.set("adminList", {
-		view: "table",
+		view: "collection-table",
 		columns: ["title", "userName", "createdAt"],
 		searchable: ["title", "userName"],
 		defaultSort: { field: "createdAt", direction: "desc" },
@@ -94,7 +94,7 @@ export const auditLogCollection = collection("admin_audit_log")
 		},
 	} satisfies ListViewConfig)
 	.set("adminForm", {
-		view: "form",
+		view: "collection-form",
 		fields: [
 			{
 				type: "section",

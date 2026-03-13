@@ -84,8 +84,7 @@ export function generateFactoryTemplate(
 	}
 
 	// Collect imports for callback param factory functions (only when extensions exist)
-	const hasExtensions =
-		collExtensions.size > 0 || globalExtensions.size > 0;
+	const hasExtensions = collExtensions.size > 0 || globalExtensions.size > 0;
 	if (hasExtensions) {
 		collectCallbackParamImports(callbackParams, allImports);
 	}
@@ -170,9 +169,7 @@ export function generateFactoryTemplate(
 		lines.push("");
 
 		// Registry-based property extraction (imported utility, no dependency on typeof _modulesArr)
-		lines.push(
-			'import type { RegistryProp } from "questpie";',
-		);
+		lines.push('import type { RegistryProp } from "questpie";');
 		lines.push("");
 
 		// Generate type aliases for each category that has placeholder/recordPlaceholder
@@ -218,9 +215,7 @@ export function generateFactoryTemplate(
 	// Field types — extracted from modules using imported type utility
 	if (hasModules) {
 		lines.push("// Field types — extracted from modules");
-		lines.push(
-			'import type { ExtractModuleProp } from "questpie";',
-		);
+		lines.push('import type { ExtractModuleProp } from "questpie";');
 		lines.push(
 			'type _AllFieldTypes = ExtractModuleProp<{ modules: typeof _modulesArr }, "fields">;',
 		);
@@ -232,9 +227,13 @@ export function generateFactoryTemplate(
 
 	// ── Type augmentations (declare module) ────────────────────
 	if (hasExtensions || registryCategories.size > 0) {
-		lines.push("// ════════════════════════════════════════════════════════════");
+		lines.push(
+			"// ════════════════════════════════════════════════════════════",
+		);
 		lines.push("// Type augmentations — generated from plugin registries");
-		lines.push("// ════════════════════════════════════════════════════════════");
+		lines.push(
+			"// ════════════════════════════════════════════════════════════",
+		);
 		lines.push("");
 
 		const placeholderMap = buildPlaceholderMap(registryCategories);
@@ -248,7 +247,11 @@ export function generateFactoryTemplate(
 				for (const [name, ext] of collExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";
-					paramType = resolvePlaceholders(paramType, hasModules, placeholderMap);
+					paramType = resolvePlaceholders(
+						paramType,
+						hasModules,
+						placeholderMap,
+					);
 					lines.push(
 						`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState>;`,
 					);
@@ -261,7 +264,11 @@ export function generateFactoryTemplate(
 				for (const [name, ext] of globalExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";
-					paramType = resolvePlaceholders(paramType, hasModules, placeholderMap);
+					paramType = resolvePlaceholders(
+						paramType,
+						hasModules,
+						placeholderMap,
+					);
 					lines.push(
 						`\t\t${name}(${paramName}: ${paramType}): GlobalBuilder<TState>;`,
 					);
@@ -326,9 +333,13 @@ export function generateFactoryTemplate(
 
 	// ── Extension registries ─────────────────────────────────
 	if (hasExtensions) {
-		lines.push("// ════════════════════════════════════════════════════════════");
+		lines.push(
+			"// ════════════════════════════════════════════════════════════",
+		);
 		lines.push("// Extension registries");
-		lines.push("// ════════════════════════════════════════════════════════════");
+		lines.push(
+			"// ════════════════════════════════════════════════════════════",
+		);
 		lines.push("");
 
 		if (collExtensions.size > 0) {
@@ -337,7 +348,12 @@ export function generateFactoryTemplate(
 		}
 
 		if (globalExtensions.size > 0) {
-			emitExtensionRegistry(lines, "_globExt", globalExtensions, callbackParams);
+			emitExtensionRegistry(
+				lines,
+				"_globExt",
+				globalExtensions,
+				callbackParams,
+			);
 			lines.push("");
 		}
 	}
@@ -362,7 +378,9 @@ export function generateFactoryTemplate(
 	);
 	if (collExtensions.size > 0) {
 		lines.push(' *   .admin(({ c }) => ({ icon: c.icon("ph:article") }))');
-		lines.push(" *   .list(({ v, f }) => v.table({ columns: [f.title] }))");
+		lines.push(
+			" *   .list(({ v, f }) => v.collectionTable({ columns: [f.title] }))",
+		);
 	}
 	lines.push(" * ```");
 	lines.push(" */");
@@ -393,9 +411,7 @@ export function generateFactoryTemplate(
 			"\treturn wrapBuilderWithExtensions(GlobalBuilder.create<TName, _AllFieldTypes>(name), _globExt, GlobalBuilder) as any;",
 		);
 	} else {
-		lines.push(
-			"\treturn GlobalBuilder.create<TName, _AllFieldTypes>(name);",
-		);
+		lines.push("\treturn GlobalBuilder.create<TName, _AllFieldTypes>(name);");
 	}
 	lines.push("}");
 	lines.push("");

@@ -137,14 +137,14 @@ Functions are auto-discovered by codegen and available at `/api/fn/<name>`.
 Server emits serializable references that the client resolves via registries:
 
 - **Component references**: `c.icon("ph:article")`, `c.badge({ ... })` — `ComponentReference<TType, TProps>`.
-- **View references**: `v.table({})`, `v.form({ sidebar, fields })` — resolved from `state.listViews` / `state.editViews`.
+- **View references**: `v.collectionTable({})`, `v.collectionForm({ sidebar, fields })`, `v.globalForm({ fields })` — resolved from `state.views`.
 - **Field metadata**: Introspection API at `packages/questpie/src/server/collection/introspection.ts` emits `CollectionSchema` / `FieldSchema`.
 
 ## Registry-First Philosophy (Critical)
 
 - **Never** hardcode admin/view/component/type names in server runtime — always derive from builder state and registered maps.
 - **Fields**: resolve from builder state fields registry.
-- **Views**: resolve from `state.listViews` / `state.editViews`.
+- **Views**: resolve from `state.views`.
 - **Components**: resolve `c.*` from `state.components`.
 - **Entities**: collections/globals/jobs/queues flow from builder state, not literal names.
 - Defaults are provided by module registration (`config({ modules: [admin()] })` on server / `qa.use(adminModule)` on client), not hardcoded.
@@ -166,7 +166,7 @@ Lives in `packages/questpie/src/cli/codegen/index.ts`. Always auto-prepended by 
 
 Lives in `packages/admin/src/server/plugin.ts`. User registers in `questpie.config.ts` via `plugins: [adminPlugin()]`. Declares:
 - **7 discover patterns**: views, components, blocks, sidebar, dashboard, branding, adminLocale.
-- **4 module registries**: views, listViews, editViews, components — with placeholder tokens for type extraction.
+- **2 module registries**: views, components — with placeholder tokens for type extraction.
 - **5 collection extensions**: admin, list, form, preview, actions.
 - **2 global extensions**: admin, form.
 - **4 singleton factories**: branding, adminLocale, sidebar, dashboard.

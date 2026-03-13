@@ -51,9 +51,9 @@ export const pages = collection("pages")
 			return slug === "home" ? "/?preview=true" : `/${slug}?preview=true`;
 		},
 	})
-	.list(({ v }) => v.table({}))
+	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [

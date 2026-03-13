@@ -84,12 +84,12 @@ const posts = collection("posts")
     icon: c.icon("ph:article"),
   }))
   .list(({ v, f }) =>
-    v.table({
+    v.collectionTable({
       columns: [f.title, f.status, f.publishedAt],
     }),
   )
   .form(({ v, f }) =>
-    v.form({
+    v.collectionForm({
       layout: "with-sidebar",
       sidebar: { position: "right", fields: [f.status, f.publishedAt, f.cover] },
       fields: [
@@ -116,7 +116,7 @@ Icons use the [Iconify](https://icon-sets.iconify.design/) format with the Phosp
 
 ```ts
 // Sections
-.form(({ v, f }) => v.form({
+.form(({ v, f }) => v.collectionForm({
   fields: [
     { type: "section", label: "Basic Info", layout: "grid", columns: 2,
       fields: [f.name, f.email, f.phone, f.city] },
@@ -125,14 +125,14 @@ Icons use the [Iconify](https://icon-sets.iconify.design/) format with the Phosp
 }))
 
 // Sidebar layout
-.form(({ v, f }) => v.form({
+.form(({ v, f }) => v.collectionForm({
   layout: "with-sidebar",
   sidebar: { position: "right", fields: [f.status, f.image] },
   fields: [f.title, f.content],
 }))
 
 // Tabs
-.form(({ v, f }) => v.form({
+.form(({ v, f }) => v.collectionForm({
   tabs: [
     { id: "content", label: "Content", fields: [f.title, f.body] },
     { id: "meta", label: "Metadata", fields: [f.seoTitle, f.seoDescription] },
@@ -145,7 +145,7 @@ Icons use the [Iconify](https://icon-sets.iconify.design/) format with the Phosp
 Server-evaluated reactive behaviors in form config:
 
 ```ts
-.form(({ v, f }) => v.form({
+.form(({ v, f }) => v.collectionForm({
   fields: [
     {
       field: f.slug,
@@ -305,7 +305,7 @@ SSE-powered live updates are enabled by default. Collection lists and dashboard 
 <AdminRouter admin={admin} client={client} realtime={false} />
 
 // Disable per collection view
-.list(({ v }) => v.table({ realtime: false }))
+.list(({ v }) => v.collectionTable({ realtime: false }))
 ```
 
 ## URL-Synced Panels

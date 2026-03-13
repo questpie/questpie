@@ -22,7 +22,7 @@ const adminUserCollection = collection("user")
 		group: "administration",
 	}))
 	.set("adminList", ({ v, f, a }: any) =>
-		v.table({
+		v.collectionTable({
 			columns: [f.name, f.email, f.role, f.banned],
 			searchable: [f.name, f.email],
 			defaultSort: { field: f.name, direction: "asc" },
@@ -34,7 +34,7 @@ const adminUserCollection = collection("user")
 		}),
 	)
 	.set("adminForm", ({ v, f }: any) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [f.image, f.role, f.emailVerified],

@@ -9,8 +9,8 @@ Views control how data appears in the admin panel. They're configured server-sid
 
 ```text
 Server Config                     Admin UI
-.list(({ v }) => v.table({}))  →  Table with columns, sort, search
-.form(({ v, f }) => v.form({}))→  Form with sections, sidebar, tabs
+.list(({ v }) => v.collectionTable({}))   →  Table with columns, sort, search
+.form(({ v, f }) => v.collectionForm({})) →  Form with sections, sidebar, tabs
 sidebar({...})                 →  Navigation sidebar
 dashboard({...})               →  Dashboard with widgets
 ```

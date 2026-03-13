@@ -13,10 +13,10 @@ export default collection('posts')
     label: 'Posts',
     icon: c.icon('ph:article'),
   }))
-  .list(({ v, f }) => v.table({
+  .list(({ v, f }) => v.collectionTable({
     columns: [f.title, f.published],
   }))
-  .form(({ v, f }) => v.form({
+  .form(({ v, f }) => v.collectionForm({
     fields: [f.title, f.content, f.published],
   }))`;
 
@@ -61,9 +61,7 @@ export function Philosophy() {
 								— Schema + Admin + Access
 							</span>
 						</div>
-						<CodeWindow title="collections/posts.ts">
-							{serverCode}
-						</CodeWindow>
+						<CodeWindow title="collections/posts.ts">{serverCode}</CodeWindow>
 					</div>
 
 					<div className="space-y-3">

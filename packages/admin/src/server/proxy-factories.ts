@@ -95,10 +95,23 @@ function normalizeComponentProps(
 // ============================================================================
 
 /**
+ * Convert a view callback property name to a canonical view id.
+ *
+ * Examples:
+ * - `collectionTable` -> `collection-table`
+ * - `globalForm` -> `global-form`
+ * - `kanban` -> `kanban`
+ */
+function toViewId(name: string): string {
+	return name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+}
+
+/**
  * Create a simple view proxy for builder callback contexts.
  * Accessing any property returns a function that creates a view config object.
  *
- * Used as the `v` callback param: `v.table({ columns: [...] })` → `{ view: "table", columns: [...] }`.
+ * Used as the `v` callback param:
+ * `v.collectionTable({ columns: [...] })` -> `{ view: "collection-table", columns: [...] }`.
  */
 export function createViewCallbackProxy(): Record<
 	string,
@@ -109,7 +122,7 @@ export function createViewCallbackProxy(): Record<
 		{
 			get: (_: unknown, prop: string | symbol) => {
 				return (config: Record<string, unknown> = {}) => ({
-					view: String(prop),
+					view: toViewId(String(prop)),
 					...config,
 				});
 			},
@@ -137,9 +150,7 @@ export function createComponentCallbackProxy(): Record<
 				return (...args: unknown[]) => ({
 					type: String(prop),
 					props:
-						typeof args[0] === "string"
-							? { name: args[0] }
-							: (args[0] ?? {}),
+						typeof args[0] === "string" ? { name: args[0] } : (args[0] ?? {}),
 				});
 			},
 		},
@@ -161,13 +172,9 @@ export function createActionCallbackProxy(): Record<string, unknown> {
 			}),
 		} as Record<string, unknown>,
 		{
-			get: (
-				target: Record<string, unknown>,
-				prop: string | symbol,
-			) => {
+			get: (target: Record<string, unknown>, prop: string | symbol) => {
 				return (
-					(target as Record<string | symbol, unknown>)[prop] ??
-					String(prop)
+					(target as Record<string | symbol, unknown>)[prop] ?? String(prop)
 				);
 			},
 		},
@@ -292,7 +299,7 @@ export function createViewProxy(
 				}
 
 				return (config: Record<string, unknown> = {}) => ({
-					view: prop,
+					view: toViewId(prop),
 					...config,
 				});
 			},
@@ -317,7 +324,7 @@ export function createViewProxy(
 					enumerable: hasRegistry,
 					writable: false,
 					value: (config: Record<string, unknown> = {}) => ({
-						view: prop,
+						view: toViewId(prop),
 						...config,
 					}),
 				};

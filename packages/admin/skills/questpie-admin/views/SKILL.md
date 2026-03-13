@@ -12,8 +12,8 @@ Views control how data appears in the QUESTPIE admin panel. They are configured 
 
 ```text
 Server Config                     Admin UI
-.list(({ v }) => v.table({}))  ->  Table with columns, sort, search
-.form(({ v, f }) => v.form({}))-> Form with sections, sidebar, tabs
+.list(({ v }) => v.collectionTable({}))   ->  Table with columns, sort, search
+.form(({ v, f }) => v.collectionForm({})) ->  Form with sections, sidebar, tabs
 sidebar({...})                 ->  Navigation sidebar
 dashboard({...})               ->  Dashboard with widgets
 ```
@@ -25,7 +25,7 @@ Configure table views with `.list()` on a collection.
 ### Basic Table
 
 ```ts
-.list(({ v }) => v.table({}))
+.list(({ v }) => v.collectionTable({}))
 ```
 
 Shows all fields as columns with default rendering.
@@ -34,7 +34,7 @@ Shows all fields as columns with default rendering.
 
 ```ts
 .list(({ v, f }) =>
-  v.table({
+  v.collectionTable({
     columns: [f.name, f.email, f.isActive, f.createdAt],
     searchableFields: [f.name, f.email],
     defaultSort: { field: f.createdAt, direction: "desc" },
@@ -55,7 +55,7 @@ Configure edit forms with `.form()`.
 ### Basic Form
 
 ```ts
-.form(({ v, f }) => v.form({}))
+.form(({ v, f }) => v.collectionForm({}))
 ```
 
 Renders all fields in a single column.
@@ -66,7 +66,7 @@ Group fields into labeled sections with optional grid layout:
 
 ```ts
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     fields: [
       {
         type: "section",
@@ -100,7 +100,7 @@ Place fields in a right sidebar panel:
 
 ```ts
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     sidebar: {
       position: "right",
       fields: [f.isActive, f.avatar, f.status],

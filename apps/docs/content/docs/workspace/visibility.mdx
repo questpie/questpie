@@ -11,7 +11,7 @@ Make form fields conditionally visible based on the current record data. Fields 
 
 ```ts
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     fields: [
       {
         type: "section",
@@ -75,7 +75,7 @@ From the barbershop appointments form:
 
 ```ts title="collections/appointments.ts"
 .form(({ v, f }) =>
-  v.form({
+  v.collectionForm({
     sidebar: {
       position: "right",
       fields: [f.status],

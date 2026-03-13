@@ -103,7 +103,7 @@ export const appointments = collection("appointments")
       || ' - ' || TO_CHAR(appointments."scheduledAt", 'YYYY-MM-DD HH24:MI')`),
   }))
   .form(({ v, f }) =>
-    v.form({
+    v.collectionForm({
       fields: [{
         type: "section",
         fields: [

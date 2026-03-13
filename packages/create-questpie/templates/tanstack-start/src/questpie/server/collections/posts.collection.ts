@@ -46,9 +46,9 @@ export const posts = collection("posts")
 		label: "Posts",
 		icon: c.icon("ph:article"),
 	}))
-	.list(({ v }) => v.table({}))
+	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>
-		v.form({
+		v.collectionForm({
 			sidebar: {
 				position: "right",
 				fields: [f.slug, f.published],

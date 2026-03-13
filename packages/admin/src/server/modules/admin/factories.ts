@@ -15,16 +15,6 @@ import { CollectionBuilder, GlobalBuilder } from "questpie";
 
 // ── Proxy helpers (same as generated factories) ─────────────────
 
-const _viewProxy = new Proxy(
-	{},
-	{
-		get: (_, prop) => (config: any) => ({
-			view: String(prop),
-			...config,
-		}),
-	},
-);
-
 /** Create a view proxy with declarative aliases baked in. */
 function _viewProxyWithAliases(aliases: Record<string, string>) {
 	return new Proxy(
@@ -41,21 +31,17 @@ function _viewProxyWithAliases(aliases: Record<string, string>) {
 const _componentProxy = new Proxy(
 	{},
 	{
-		get: (_, prop) =>
+		get:
+			(_, prop) =>
 			(...args: any[]) => ({
 				type: String(prop),
 				props:
-					typeof args[0] === "string"
-						? { name: args[0] }
-						: (args[0] ?? {}),
+					typeof args[0] === "string" ? { name: args[0] } : (args[0] ?? {}),
 			}),
 	},
 );
 
-const _fieldRefProxy = new Proxy(
-	{},
-	{ get: (_, prop) => String(prop) },
-);
+const _fieldRefProxy = new Proxy({}, { get: (_, prop) => String(prop) });
 
 /**
  * Field builder proxy for actions context.
@@ -118,93 +104,103 @@ const _actionBuilderProxy = new Proxy(
 const _simpleActionProxy = new Proxy(
 	{ custom: (name: string, config: any) => ({ id: name, ...config }) },
 	{
-		get: (target, prop) =>
-			(target as any)[prop] ?? String(prop),
+		get: (target, prop) => (target as any)[prop] ?? String(prop),
 	},
 );
 
 // ── Extension registries ────────────────────────────────────────
 
-const _collExt: Record<
-	string,
-	{ stateKey: string; resolve: (v: any) => any }
-> = {
-	admin: {
-		stateKey: "admin",
-		resolve(configOrFn: any) {
-			if (typeof configOrFn === "function")
-				return configOrFn({ c: _componentProxy });
-			return configOrFn;
+const _collExt: Record<string, { stateKey: string; resolve: (v: any) => any }> =
+	{
+		admin: {
+			stateKey: "admin",
+			resolve(configOrFn: any) {
+				if (typeof configOrFn === "function")
+					return configOrFn({ c: _componentProxy });
+				return configOrFn;
+			},
 		},
-	},
-	list: {
-		stateKey: "adminList",
-		resolve(configOrFn: any) {
-			const resolved =
-				typeof configOrFn === "function"
-					? configOrFn({
-							v: _viewProxy,
-							f: _fieldRefProxy,
-							a: _simpleActionProxy,
-						})
-					: configOrFn;
-			return {
-				view: "table",
-				showSearch: true,
-				showFilters: true,
-				showToolbar: true,
-				...resolved,
-			};
+		list: {
+			stateKey: "adminList",
+			resolve(configOrFn: any) {
+				const resolved =
+					typeof configOrFn === "function"
+						? configOrFn({
+								v: _viewProxyWithAliases({
+									table: "collection-table",
+									collectionTable: "collection-table",
+								}),
+								f: _fieldRefProxy,
+								a: _simpleActionProxy,
+							})
+						: configOrFn;
+				return {
+					view: "collection-table",
+					showSearch: true,
+					showFilters: true,
+					showToolbar: true,
+					...resolved,
+				};
+			},
 		},
-	},
-	form: {
-		stateKey: "adminForm",
-		resolve(configOrFn: any) {
-			const resolved =
-				typeof configOrFn === "function"
-					? configOrFn({ v: _viewProxy, f: _fieldRefProxy })
-					: configOrFn;
-			return { view: "form", showMeta: true, ...resolved };
+		form: {
+			stateKey: "adminForm",
+			resolve(configOrFn: any) {
+				const resolved =
+					typeof configOrFn === "function"
+						? configOrFn({
+								v: _viewProxyWithAliases({
+									form: "collection-form",
+									collectionForm: "collection-form",
+								}),
+								f: _fieldRefProxy,
+							})
+						: configOrFn;
+				return { view: "collection-form", showMeta: true, ...resolved };
+			},
 		},
-	},
-	preview: { stateKey: "adminPreview", resolve: (v: any) => v },
-	actions: {
-		stateKey: "adminActions",
-		resolve(configOrFn: any) {
-			if (typeof configOrFn === "function")
-				return configOrFn({
-					a: _actionBuilderProxy,
-					c: _componentProxy,
-					f: _createFieldBuilderProxy(),
-				});
-			return configOrFn;
+		preview: { stateKey: "adminPreview", resolve: (v: any) => v },
+		actions: {
+			stateKey: "adminActions",
+			resolve(configOrFn: any) {
+				if (typeof configOrFn === "function")
+					return configOrFn({
+						a: _actionBuilderProxy,
+						c: _componentProxy,
+						f: _createFieldBuilderProxy(),
+					});
+				return configOrFn;
+			},
 		},
-	},
-};
+	};
 
-const _globExt: Record<
-	string,
-	{ stateKey: string; resolve: (v: any) => any }
-> = {
-	admin: {
-		stateKey: "admin",
-		resolve(configOrFn: any) {
-			if (typeof configOrFn === "function")
-				return configOrFn({ c: _componentProxy });
-			return configOrFn;
+const _globExt: Record<string, { stateKey: string; resolve: (v: any) => any }> =
+	{
+		admin: {
+			stateKey: "admin",
+			resolve(configOrFn: any) {
+				if (typeof configOrFn === "function")
+					return configOrFn({ c: _componentProxy });
+				return configOrFn;
+			},
 		},
-	},
-	form: {
-		stateKey: "adminForm",
-		resolve(configOrFn: any) {
-			const resolved =
-				typeof configOrFn === "function"
-					? configOrFn({ v: _viewProxyWithAliases({ form: "globalForm" }), f: _fieldRefProxy })
-					: configOrFn;
-			return { view: "globalForm", showMeta: true, ...resolved };
+		form: {
+			stateKey: "adminForm",
+			resolve(configOrFn: any) {
+				const resolved =
+					typeof configOrFn === "function"
+						? configOrFn({
+								v: _viewProxyWithAliases({
+									form: "global-form",
+									globalForm: "global-form",
+								}),
+								f: _fieldRefProxy,
+							})
+						: configOrFn;
+				return { view: "global-form", showMeta: true, ...resolved };
+			},
 		},
-	},
-};
+	};
 
 // ── Proxy wrappers ──────────────────────────────────────────────
 
@@ -242,9 +238,7 @@ function _wrapGlob(builder: any): any {
 			if (typeof val === "function") {
 				return function (this: any, ...args: any[]) {
 					const result = val.apply(target, args);
-					return result instanceof GlobalBuilder
-						? _wrapGlob(result)
-						: result;
+					return result instanceof GlobalBuilder ? _wrapGlob(result) : result;
 				};
 			}
 			return val;

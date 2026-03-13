@@ -17,10 +17,10 @@
  *     label: { en: "Posts" },
  *     icon: c.icon("ph:article"),
  *   }))
- *   .list(({ v, f }) => v.table({
+ *   .list(({ v, f }) => v.collectionTable({
  *     columns: [f.title],
  *   }))
- *   .form(({ v, f }) => v.form({
+ *   .form(({ v, f }) => v.collectionForm({
  *     fields: [f.title],
  *   }));
  * ```
@@ -178,11 +178,10 @@ export type ViewKind = keyof ViewKindRegistry;
  * type FormViews = FilterViewsByKind<AllViews, "form">;
  * ```
  */
-export type FilterViewsByKind<
-	TViews,
-	TKind extends ViewKind,
-> = {
-	[K in keyof TViews as TViews[K] extends { kind: TKind } ? K : never]: TViews[K];
+export type FilterViewsByKind<TViews, TKind extends ViewKind> = {
+	[K in keyof TViews as TViews[K] extends { kind: TKind }
+		? K
+		: never]: TViews[K];
 };
 
 // ============================================================================
@@ -212,7 +211,7 @@ export interface ViewDefinition<
 	 *
 	 * Not used at runtime — only exists for TypeScript to extract
 	 * per-view config in `ListViewFactory` / `EditViewFactory`.
-	 * When a user calls `v.table({ columns: [...] })`, TypeScript
+	 * When a user calls `v.collectionTable({ columns: [...] })`, TypeScript
 	 * infers the config shape from this phantom field.
 	 *
 	 * @example
@@ -591,7 +590,7 @@ export interface FormSidebarConfig {
  *
  * @example
  * ```ts
- * v.form({
+ * v.collectionForm({
  *   sidebar: { position: "right", fields: [f.status] },
  *   fields: [
  *     { type: "section", label: { en: "Details" }, layout: "grid", columns: 2, fields: [f.name, f.email] },
@@ -1822,7 +1821,7 @@ type ExtractViewConfig<
  *
  * Each key is a callable that accepts the **per-view config type** extracted
  * from the ViewDefinition's `~config` phantom field. When a view was defined
- * with `view<ListViewConfig>("table", { kind: "list" })`, calling `v.table()`
+ * with `view<ListViewConfig>("collection-table", { kind: "list" })`, calling `v.collectionTable()`
  * type-checks against `Omit<ListViewConfig, "view">`. A custom
  * `view<KanbanConfig>("kanban", ...)` would type-check against `KanbanConfig`.
  *

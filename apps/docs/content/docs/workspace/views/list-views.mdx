@@ -10,7 +10,7 @@ List views control how collections appear in the admin table. Configure them wit
 ## Basic Table
 
 ```ts
-.list(({ v }) => v.table({}))
+.list(({ v }) => v.collectionTable({}))
 ```
 
 With no additional config, the table shows all fields as columns with default rendering.
@@ -21,7 +21,7 @@ Specify which fields to show and their order:
 
 ```ts
 .list(({ v, f }) =>
-  v.table({
+  v.collectionTable({
     columns: [f.name, f.email, f.isActive, f.createdAt],
     searchableFields: [f.name, f.email],
   }),
@@ -40,7 +40,7 @@ Tables support sorting by any column. Set a default:
 
 ```ts
 .list(({ v, f }) =>
-  v.table({
+  v.collectionTable({
     defaultSort: { field: f.createdAt, direction: "desc" },
   }),
 )
@@ -52,7 +52,7 @@ Mark fields as searchable for the global search bar:
 
 ```ts
 .list(({ v, f }) =>
-  v.table({
+  v.collectionTable({
     searchableFields: [f.title, f.slug, f.tags],
   }),
 )
