@@ -70,7 +70,7 @@ export async function buildMockApp(
 	const { locale, contextResolver, ...moduleDef } = definition as any;
 	const normalizedDef = module({ name: "test", ...moduleDef });
 
-	const app = createApp(
+	const app = await createApp(
 		{ modules: [normalizedDef], locale, contextResolver },
 		{
 			app: runtimeOverrides.app ?? { url: "http://localhost:3000" },

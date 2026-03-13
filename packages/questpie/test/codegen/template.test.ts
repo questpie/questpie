@@ -201,7 +201,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 	});
 
 	it("emits createApp call with modules", () => {
-		expect(code).toContain("export const app = createApp(");
+		expect(code).toContain("export const app = await createApp(");
 		expect(code).toContain("modules: _modules as any");
 	});
 

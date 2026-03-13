@@ -40,7 +40,7 @@ describe("Migration System - Programmatic", () => {
 			collections: { posts },
 		});
 
-		app = createApp(def, {
+		app = await createApp(def, {
 			app: { url: "http://localhost:3000" },
 			db: { pglite: pgClient },
 			email: { adapter: new MockMailAdapter() },
@@ -277,7 +277,7 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 		}));
 
 		const def = module({ name: "test-app", collections: { posts } });
-		const app = createApp(def, {
+		const app = await createApp(def, {
 			app: { url: "http://localhost:3000" },
 			db: { pglite: pgClient },
 			email: { adapter: new MockMailAdapter() },
@@ -316,7 +316,7 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 		}));
 
 		const def = module({ name: "test-app", collections: { posts } });
-		const app = createApp(def, {
+		const app = await createApp(def, {
 			app: { url: "http://localhost:3000" },
 			db: { pglite: pgClient },
 			email: { adapter: new MockMailAdapter() },

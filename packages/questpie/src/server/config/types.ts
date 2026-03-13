@@ -544,10 +544,7 @@ export interface QuestpieConfig {
 	 */
 	services?: Record<
 		string,
-		import("#questpie/server/services/define-service.js").ServiceDefinition<
-			any,
-			any
-		>
+		import("#questpie/server/services/define-service.js").ServiceBuilder<any>
 	>;
 
 	/**

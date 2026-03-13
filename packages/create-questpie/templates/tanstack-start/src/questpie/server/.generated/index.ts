@@ -115,7 +115,7 @@ export type App = _AppInternal;
 // RUNTIME — create the app instance
 // ════════════════════════════════════════════════════════════
 
-export const app = createApp(
+export const app = await createApp(
 	{
 		modules: _modules as any,
 		collections: {
@@ -145,4 +145,3 @@ export const app = createApp(
  * ```
  */
 export const createContext = createContextFactory(app);
-

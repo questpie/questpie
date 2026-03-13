@@ -114,10 +114,7 @@ export interface ModuleDefinition {
 	/** Services this module contributes. Keyed by service name. */
 	services?: Record<
 		string,
-		import("#questpie/server/services/define-service.js").ServiceDefinition<
-			any,
-			any
-		>
+		import("#questpie/server/services/define-service.js").ServiceBuilder<any>
 	>;
 
 	/** Partial auth config — deep-merged with other modules and user config. */
@@ -330,10 +327,7 @@ export interface AppDefinition {
 	/** Services discovered from `services/` directory. */
 	services?: Record<
 		string,
-		import("#questpie/server/services/define-service.js").ServiceDefinition<
-			any,
-			any
-		>
+		import("#questpie/server/services/define-service.js").ServiceBuilder<any>
 	>;
 
 	/** Email templates discovered from `emails/` directory. */

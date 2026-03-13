@@ -15,8 +15,10 @@
  *   }
  *   → ({ channels }) available in every hook, function, job, etc.
  *
- * User services are namespaced under `services`:
- *   ({ services }) => services.blog.computeReadingTime(text)
+ * User services support namespace placement:
+ *   ({ services }) => services.blog.computeReadingTime(text) // default
+ *   ({ workflows }) => workflows.run(...)                    // namespace: null
+ *   ({ analytics }) => analytics.tracker.track(...)          // namespace: "analytics"
  *
  * @see RFC-CONTEXT-FIRST.md §2
  */
@@ -133,17 +135,43 @@ export function extractAppServices(
 		t: app.t,
 	};
 
-	// Resolve user-defined services — namespaced under `services`
-	const serviceDefs = app.config?.services;
+	const serviceDefs = app._serviceDefs ?? app.config?.services;
 	if (serviceDefs) {
 		const services: Record<string, unknown> = {};
-		for (const name of Object.keys(serviceDefs)) {
-			services[name] = app.resolveService(name, {
+
+		for (const [name, input] of Object.entries(serviceDefs as Record<string, any>)) {
+			const instance = app.resolveService(name, {
 				db: result.db,
 				session: result.session,
+				locale: overrides?.locale,
 			});
+
+			const state =
+				input && typeof input === "object" && "state" in input
+					? (input.state as Record<string, unknown>)
+					: (input as Record<string, unknown>);
+			const namespace = state?.namespace as string | null | undefined;
+
+			if (namespace === undefined || namespace === "services") {
+				services[name] = instance;
+				continue;
+			}
+
+			if (namespace === null) {
+				result[name] = instance;
+				continue;
+			}
+
+			if (!(namespace in result) || typeof result[namespace] !== "object") {
+				result[namespace] = {};
+			}
+
+			(result[namespace] as Record<string, unknown>)[name] = instance;
 		}
-		result.services = services;
+
+		if (Object.keys(services).length > 0) {
+			result.services = services;
+		}
 	}
 
 	return result;

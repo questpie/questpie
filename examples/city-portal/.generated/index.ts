@@ -87,7 +87,7 @@ export interface App extends AppContext {
 // RUNTIME — create the app instance
 // ════════════════════════════════════════════════════════════
 
-export const app = createApp(_runtime, {
+export const app = await createApp(_runtime, {
 }) as unknown as App;
 
 // ── createContext — typed context for scripts ──────────────
@@ -115,4 +115,3 @@ export async function createContext(options?: {
 	});
 	return { ...services, locale: reqCtx.locale } as AppContext;
 }
-

@@ -208,7 +208,7 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						dir: "services",
 						description: "Service definition",
 						template: ({ camel }) =>
-							`import { service } from "questpie";\n\nexport const ${camel}Service = service({\n\tsetup: async ({ ctx }) => {\n\t\treturn {};\n\t},\n});\n`,
+							`import { service } from "questpie";\n\nexport const ${camel}Service = service()\n\t.lifecycle("singleton")\n\t.create(() => {\n\t\treturn {};\n\t});\n`,
 					},
 					email: {
 						dir: "emails",

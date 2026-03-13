@@ -481,10 +481,10 @@ function isRuntimeConfig(arg: unknown): arg is RuntimeConfig {
  *
  * @see RFC-MODULE-ARCHITECTURE §9.1 (Root App — .generated/index.ts)
  */
-export function createApp(
+export async function createApp(
 	configOrDefinition: AppConfig | AppDefinition,
 	entitiesOrRuntime?: AppEntities | RuntimeConfig,
-) {
+): Promise<Questpie<QuestpieConfig>> {
 	// Detect new vs legacy signature
 	if (isRuntimeConfig(entitiesOrRuntime)) {
 		return createAppFromDefinition(
@@ -509,10 +509,10 @@ export function createApp(
  *
  * @see RFC-MODULE-ARCHITECTURE §9.1
  */
-function createAppFromDefinition(
+async function createAppFromDefinition(
 	definition: AppDefinition,
 	runtime: RuntimeConfig,
-) {
+): Promise<Questpie<QuestpieConfig>> {
 	// 1. Resolve modules depth-first
 	const flatModules = resolveModules(definition.modules ?? []);
 
@@ -593,9 +593,9 @@ function createAppFromDefinition(
 		runtime as Record<string, unknown>,
 	);
 	const extensionState = buildExtensionState(merged, runtimeExtensions);
-	if (Object.keys(extensionState).length > 0) {
-		instance.state = extensionState;
-	}
+	instance.state = extensionState;
+
+	await instance._initServices();
 
 	return instance;
 }
@@ -607,7 +607,10 @@ function createAppFromDefinition(
 /**
  * Legacy createApp — takes mixed config + optional entities.
  */
-function createAppLegacy(appConfig: AppConfig, entities?: AppEntities) {
+async function createAppLegacy(
+	appConfig: AppConfig,
+	entities?: AppEntities,
+): Promise<Questpie<QuestpieConfig>> {
 	// 1. Resolve modules depth-first
 	const flatModules = resolveModules(appConfig.modules ?? []);
 
@@ -672,6 +675,8 @@ function createAppLegacy(appConfig: AppConfig, entities?: AppEntities) {
 		contextResolver: appConfig.contextResolver,
 		globalHooks: mergeGlobalHooks(merged.hooks, appConfig.hooks),
 		defaultAccess: appConfig.defaultAccess ?? merged.defaultAccess,
+		services:
+			Object.keys(merged.services).length > 0 ? merged.services : undefined,
 	};
 
 	// 6. Create Questpie instance
@@ -682,9 +687,9 @@ function createAppLegacy(appConfig: AppConfig, entities?: AppEntities) {
 		merged,
 		appConfig as Record<string, unknown>,
 	);
-	if (Object.keys(extensionState).length > 0) {
-		instance.state = extensionState;
-	}
+	instance.state = extensionState;
+
+	await instance._initServices();
 
 	return instance;
 }
