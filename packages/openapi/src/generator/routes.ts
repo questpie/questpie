@@ -6,6 +6,14 @@ import type { RoutesTree } from "questpie";
 import type { OpenApiConfig, PathOperation } from "../types.js";
 import { jsonRequestBody, jsonResponse, zodToJsonSchema } from "./schemas.js";
 
+/**
+ * Convert camelCase to kebab-case, matching the HTTP adapter's URL generation.
+ * e.g. "createBooking" → "create-booking"
+ */
+function camelToKebab(str: string): string {
+	return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+}
+
 interface FlatRouteEntry {
 	path: string;
 	segments: string[];
@@ -80,7 +88,7 @@ export function generateRoutePaths(
 		}
 
 		const operationId = `route_${entry.segments.join("_")}`;
-		const routePath = `${basePath}/${entry.path}`;
+		const routePath = `${basePath}/${entry.segments.map(camelToKebab).join("/")}`;
 
 		const operation: PathOperation = {
 			operationId,

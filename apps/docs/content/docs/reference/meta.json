@@ -6,7 +6,7 @@
 		"collection-api",
 		"global-api",
 		"field-api",
-		"functions-api",
+		"routes-api",
 		"crud-api",
 		"hooks-api",
 		"query-operators",
