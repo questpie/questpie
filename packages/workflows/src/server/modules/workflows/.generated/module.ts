@@ -8,6 +8,9 @@ import { wfInstanceCollection as _coll_wf_instance } from "../collections/wf-ins
 import { wfLogCollection as _coll_wf_log } from "../collections/wf-log.js";
 import { wfStepCollection as _coll_wf_step } from "../collections/wf-step.js";
 
+// ── Functions ──────────────────────────────────────────────
+import { workflowFunctions as _fn_workflows } from "../functions/workflow-functions.js";
+
 // ── Jobs ───────────────────────────────────────────────────
 import { wfExecuteJob as _job_wf_execute } from "../jobs/wf-execute.js";
 import { wfMaintenanceJob as _job_wf_maintenance } from "../jobs/wf-maintenance.js";
@@ -50,7 +53,9 @@ const _module = {
 		wf_log: _coll_wf_log,
 	} as WorkflowsCollections,
 	globals: {},
-	functions: {},
+	functions: {
+		..._fn_workflows,
+	},
 	jobs: {
 		"questpie-wf-execute": _job_wf_execute,
 		"questpie-wf-resume": _job_wf_resume,
