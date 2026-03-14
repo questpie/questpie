@@ -106,7 +106,7 @@ export function ContentLocalesProvider({
 			try {
 				// Use type assertion since the client type may not include getContentLocales
 				// depending on which modules are used
-				const result = await (client as any).rpc.getContentLocales({});
+				const result = await (client as any).routes.getContentLocales({});
 				return result as ContentLocalesData;
 			} catch {
 				// If the function doesn't exist, return default locales

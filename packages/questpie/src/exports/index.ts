@@ -38,7 +38,6 @@ export {
 	type KnownComponentNames,
 	type KnownEmailNames,
 	type KnownFormViewNames,
-	type KnownFunctionNames,
 	type KnownGlobalNames,
 	type KnownJobNames,
 	type KnownListViewNames,
@@ -83,8 +82,6 @@ export * from "#questpie/server/config/questpie.js";
 export * from "#questpie/server/config/types.js";
 export * from "#questpie/server/errors/index.js";
 export * from "#questpie/server/fields/index.js";
-export { fn } from "#questpie/server/functions/define-function.js";
-export * from "#questpie/server/functions/index.js";
 export { global } from "#questpie/server/global/builder/global-builder.js";
 export * from "#questpie/server/global/builder/index.js";
 export * from "#questpie/server/global/crud/index.js";

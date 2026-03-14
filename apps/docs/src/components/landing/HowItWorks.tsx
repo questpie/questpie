@@ -22,18 +22,19 @@ const steps = [
 	},
 	{
 		number: "02",
-		title: "Custom functions with end-to-end types",
+		title: "Custom routes with end-to-end types",
 		description:
-			"Define typed functions for business logic. Input validation, database access, and return types — all inferred.",
-		file: "functions/get-available-slots.ts",
-		code: `import { fn } from 'questpie'
+			"Define typed routes for business logic. Input validation, database access, and return types — all inferred.",
+		file: "routes/get-available-slots.ts",
+		code: `import { route } from 'questpie'
 
-export default fn({
-  schema: z.object({
+export default route()
+  .post()
+  .schema(z.object({
     barberId: z.string(),
     date: z.string(),
-  }),
-  handler: async ({ input, collections }) => {
+  }))
+  .handler(async ({ input, collections }) => {
     const booked = await collections.appointments.find({
       where: {
         barber: input.barberId,
@@ -42,14 +43,13 @@ export default fn({
       },
     });
     return calculateFreeSlots(input.date, booked.docs);
-  },
-});`,
+  });`,
 	},
 	{
 		number: "03",
 		title: "Typed client SDK — full autocomplete",
 		description:
-			"Query collections and call functions with complete type safety. No codegen step required.",
+			"Query collections and call routes with complete type safety. No codegen step required.",
 		file: "app/dashboard.tsx",
 		code: `// Collections — fully typed filters, sort, relations
 const { docs: upcoming } = await client.collections.appointments.find({
@@ -62,8 +62,8 @@ const { docs: upcoming } = await client.collections.appointments.find({
   limit: 10,
 });
 
-// Functions — fully typed input and output
-const slots = await client.rpc.getAvailableSlots({
+// Routes — fully typed input and output
+const slots = await client.routes.getAvailableSlots({
   barberId: selectedBarber.id,
   date: "2025-03-15",
 });`,

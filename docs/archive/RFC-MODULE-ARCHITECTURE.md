@@ -312,7 +312,7 @@ OpenAPI should be a **plugin** registered in `questpie.config.ts`:
 
 ```ts
 import { runtimeConfig } from "questpie";
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import { openapiPlugin } from "@questpie/openapi";
 
 export default runtimeConfig({
@@ -478,7 +478,7 @@ export default [adminModule, auditModule];
 **`questpie.config.ts`:**
 ```ts
 import { runtimeConfig, ConsoleAdapter, pgBossAdapter } from "questpie";
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgres://localhost/barbershop";
 

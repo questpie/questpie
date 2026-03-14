@@ -15,9 +15,9 @@ Each directory maps to a category of entity:
 |---|---|---|---|
 | `collections/` | Collections | Default or named | Filename → camelCase |
 | `globals/` | Globals | Default or named | Filename → camelCase |
-| `functions/` | Functions | Default | Filename → camelCase (nested: dot-separated) |
+| `routes/` | Routes | Default | Filename → camelCase/slash path |
 | `jobs/` | Jobs | Default | Filename → camelCase |
-| `routes/` | Routes | Default | Filename → slash-separated path |
+| `routes/` (raw) | Routes | Default | Filename → slash-separated path |
 | `services/` | Services | Default | Filename → camelCase |
 | `emails/` | Email templates | Default | Filename → camelCase |
 | `blocks/` | Blocks | Named exports | Export name |
@@ -66,7 +66,7 @@ src/questpie/server/
 │   ├── posts.ts
 │   ├── categories.ts
 │   └── comments.ts
-├── functions/
+├── routes/
 │   ├── create-booking.ts
 │   └── get-stats.ts
 ├── jobs/
@@ -85,14 +85,14 @@ src/questpie/server/
 │   ├── blog/
 │   │   ├── collections/
 │   │   │   └── posts.ts
-│   │   ├── functions/
+│   │   ├── routes/
 │   │   │   └── publish.ts
 │   │   └── jobs/
 │   │       └── notify-subscribers.ts
 │   └── booking/
 │       ├── collections/
 │       │   └── appointments.ts
-│       └── functions/
+│       └── routes/
 │           └── create-booking.ts
 ```
 
@@ -102,16 +102,16 @@ Both layouts can coexist. Codegen scans all configured paths.
 
 ## Nested Namespacing
 
-Functions and routes support nested directories:
+Routes support nested directories:
 
 ```text
-functions/
+routes/
 ├── booking/
-│   ├── create.ts    → rpc.booking.create
-│   └── cancel.ts    → rpc.booking.cancel
+│   ├── create.ts    → client.routes.booking.create()
+│   └── cancel.ts    → client.routes.booking.cancel()
 ├── admin/
-│   └── stats.ts     → rpc.admin.stats
-└── get-barbers.ts   → rpc.getBarbers
+│   └── stats.ts     → client.routes.admin.stats()
+└── get-barbers.ts   → client.routes.getBarbers()
 ```
 
 ## Discovery Process

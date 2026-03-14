@@ -3,7 +3,7 @@ import { glob } from "tinyglobby";
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-	// Clean entry points from exports folder
+	// Clean entry points from exports folder + lightweight plugin entry
 	entry: ["src/exports/*.ts"],
 	outDir: "dist",
 	format: ["esm"],
@@ -57,24 +57,6 @@ export default defineConfig({
 					...exports,
 					...cssExports,
 				};
-
-				const typedEntries: Record<string, string> = {
-					".": "./dist/index.d.mts",
-					"./client": "./dist/client.d.mts",
-					"./server": "./dist/server.d.mts",
-					"./shared": "./dist/shared.d.mts",
-					"./client-module": "./dist/client-module.d.mts",
-				};
-
-				for (const [entry, typesPath] of Object.entries(typedEntries)) {
-					const current = exports[entry];
-					if (typeof current === "string") {
-						mergedExports[entry] = {
-							types: typesPath,
-							default: current,
-						};
-					}
-				}
 
 				return {
 					...mergedExports,

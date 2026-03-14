@@ -28,7 +28,7 @@ my-app/
 │   │   │   ├── globals/                  # One file per global
 │   │   │   │   └── site-settings.ts
 │   │   │   │
-│   │   │   ├── functions/                # Server functions (RPC)
+│   │   │   ├── routes/                   # App routes (JSON or raw)
 │   │   │   │   ├── create-booking.ts
 │   │   │   │   └── get-stats.ts
 │   │   │   │
@@ -37,9 +37,6 @@ my-app/
 │   │   │   │
 │   │   │   ├── services/                 # Singleton services
 │   │   │   │   └── blog.ts
-│   │   │   │
-│   │   │   ├── routes/                   # Raw HTTP routes
-│   │   │   │   └── webhook.ts
 │   │   │   │
 │   │   │   ├── blocks/                   # Content blocks (admin plugin)
 │   │   │   │   ├── hero.ts
@@ -82,9 +79,9 @@ Codegen discovers files based on **directory name** and **export pattern**:
 |---|---|---|---|
 | `collections/` | Default or named | Filename → camelCase | `blog-posts.ts` → `blogPosts` |
 | `globals/` | Default or named | Filename → camelCase | `site-settings.ts` → `siteSettings` |
-| `functions/` | Default | Filename → camelCase | `create-booking.ts` → `createBooking` |
+| `routes/` | Default | Filename → camelCase/slash path | `create-booking.ts` → `createBooking` |
 | `jobs/` | Default | Filename → camelCase | `send-email.ts` → `sendEmail` |
-| `routes/` | Default | Filename → path | `webhook.ts` → `/webhook` |
+| `routes/` (raw) | Default | Filename → slash path | `webhook.ts` → `webhook` |
 | `services/` | Default | Filename → camelCase | `blog.ts` → `blog` |
 | `blocks/` | Named exports | Export name | `export const hero` → `hero` |
 | `emails/` | Default | Filename → camelCase | `appointment-confirmation.ts` → `appointmentConfirmation` |
@@ -104,16 +101,16 @@ Some configs are single files instead of directories:
 | `branding.ts` | Admin branding (name, logo) |
 | `admin-locale.ts` | Admin UI locale |
 
-### Nested functions/routes
+### Nested routes
 
-Functions and routes support nested directories for namespacing:
+Routes support nested directories for namespacing:
 
 ```text
-functions/
+routes/
 ├── booking/
-│   ├── create.ts          → rpc.booking.create
-│   └── cancel.ts          → rpc.booking.cancel
-├── get-stats.ts           → rpc.getStats
+│   ├── create.ts          → client.routes.booking.create()
+│   └── cancel.ts          → client.routes.booking.cancel()
+├── get-stats.ts           → client.routes.getStats()
 ```
 
 ## The `.generated/` Directory
@@ -124,18 +121,17 @@ Running `bunx questpie generate` creates `.generated/` with:
 
 ```ts
 // Auto-generated — do not edit
-import type { AppCollections, AppGlobals, AppFunctions, AppRoutes, AppJobs } from "./module";
+import type { AppCollections, AppGlobals, AppRoutes, AppJobs } from "./module";
 
 export type AppConfig = {
   collections: AppCollections;
   globals: AppGlobals;
-  functions: AppFunctions;
   routes: AppRoutes;
   // ... auth, locales
 };
 
 export { app, createContext } from "./app";
-export type { AppConfig, AppCollections, AppGlobals, AppFunctions, AppRoutes, AppJobs };
+export type { AppConfig, AppCollections, AppGlobals, AppRoutes, AppJobs };
 ```
 
 ### Module augmentation
@@ -178,14 +174,14 @@ src/questpie/server/
 │   ├── blog/
 │   │   ├── collections/
 │   │   │   └── posts.ts
-│   │   ├── functions/
+│   │   ├── routes/
 │   │   │   └── publish.ts
 │   │   └── jobs/
 │   │       └── notify-subscribers.ts
 │   └── booking/
 │       ├── collections/
 │       │   └── appointments.ts
-│       └── functions/
+│       └── routes/
 │           └── create-booking.ts
 ├── questpie.config.ts
 └── modules.ts

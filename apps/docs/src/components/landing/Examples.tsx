@@ -8,7 +8,7 @@ const highlights = [
 	},
 	{
 		icon: Workflow,
-		title: "Reactive forms and typed RPC workflows",
+		title: "Reactive forms and typed route workflows",
 	},
 	{
 		icon: Code,
@@ -33,7 +33,7 @@ export function Examples() {
 						</h3>
 						<p className="text-muted-foreground">
 							TanStack Barbershop shows server-defined collections, globals,
-							dashboard/sidebar, reactive fields, typed RPC, and custom block
+							dashboard/sidebar, reactive fields, typed routes, and custom block
 							rendering in one coherent project.
 						</p>
 
@@ -89,10 +89,10 @@ export function Examples() {
 
 						<article className="border border-border bg-card/40 p-4">
 							<p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-								Typed RPC
+								Typed routes
 							</p>
 							<div className="h-[124px] border border-border bg-background/60 p-3 font-mono text-[11px] text-muted-foreground">
-								<p>client.rpc.getAvailableSlots( )</p>
+								<p>client.routes.getAvailableSlots( )</p>
 								<p className="mt-2">-&gt; slots: string[]</p>
 								<p className="mt-2">-&gt; nextWindow: string</p>
 							</div>

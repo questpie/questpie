@@ -106,13 +106,6 @@ export type AdapterRoutes = {
 		params: { collection: string; key: string },
 		context?: AdapterContext,
 	) => Promise<Response>;
-	rpc: {
-		root: (
-			request: Request,
-			params: { path: string[] },
-			context?: AdapterContext,
-		) => Promise<Response>;
-	};
 	realtime: {
 		/**
 		 * Unified SSE endpoint for multiplexed realtime subscriptions.

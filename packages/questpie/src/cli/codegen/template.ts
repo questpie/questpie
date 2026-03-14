@@ -297,23 +297,7 @@ export function generateTemplate(options: TemplateOptions): string {
 				emitTypeInterface(lines, appTypeName, moduleTypeName, fileMap);
 				break;
 			}
-			case "functions": {
-				const hasUser = fileMap.size > 0;
-				lines.push(
-					"/** All functions in the app (modules + user, user overrides) */",
-				);
-				if (hasUser) {
-					lines.push(`export type ${appTypeName} = ${moduleTypeName} & {`);
-					const nested = buildNestedFunctions(fileMap);
-					emitNestedTypeObject(lines, nested, 1);
-					lines.push("};");
-				} else {
-					lines.push(`export type ${appTypeName} = ${moduleTypeName};`);
-				}
-				lines.push("");
-				break;
-			}
-			case "services": {
+				case "services": {
 				const hasUser = fileMap.size > 0;
 				lines.push(
 					"/** All service definitions in the app (modules + user, user overrides). */",
@@ -542,7 +526,6 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push("export type AppConfig = {");
 	lines.push("\tcollections: AppCollections & Record<string, any>;");
 	lines.push("\tglobals: AppGlobals & Record<string, any>;");
-	lines.push("\tfunctions: AppFunctions;");
 	lines.push("\troutes: AppRoutes;");
 	const authFile = discovered.singles.get("auth");
 	if (authFile) {
@@ -649,13 +632,6 @@ function emitNewArchitectureRuntime(
 						lines.push(`\t\t\t${safeKey(file.key)}: ${file.varName},`);
 					}
 				}
-				lines.push("\t\t},");
-				break;
-			}
-			case "nested": {
-				lines.push(`\t\t${safeKey(createAppKey)}: {`);
-				const nested = buildNestedFunctions(fileMap);
-				emitNestedObject(lines, nested, 3);
 				lines.push("\t\t},");
 				break;
 			}
@@ -848,88 +824,6 @@ function emitTypeInterface(
 }
 
 // ============================================================================
-// Nested functions builder
-// ============================================================================
-
-type NestedNode =
-	| { type: "leaf"; varName: string }
-	| { type: "branch"; children: Map<string, NestedNode> };
-
-/**
- * Build a nested tree from dot-separated function keys.
- * "search" → { search: leaf }
- * "admin.stats" → { admin: { stats: leaf } }
- */
-function buildNestedFunctions(
-	functions: Map<string, DiscoveredFile>,
-): Map<string, NestedNode> {
-	const root = new Map<string, NestedNode>();
-
-	for (const file of functions.values()) {
-		const segments = file.key.split(".");
-		let current = root;
-
-		for (let i = 0; i < segments.length; i++) {
-			const seg = segments[i];
-			const isLast = i === segments.length - 1;
-
-			if (isLast) {
-				current.set(seg, { type: "leaf", varName: file.varName });
-			} else {
-				let node = current.get(seg);
-				if (!node || node.type === "leaf") {
-					node = { type: "branch", children: new Map() };
-					current.set(seg, node);
-				}
-				current = (node as Extract<NestedNode, { type: "branch" }>).children;
-			}
-		}
-	}
-
-	return root;
-}
-
-/**
- * Emit a nested object structure as runtime code lines.
- */
-function emitNestedObject(
-	lines: string[],
-	tree: Map<string, NestedNode>,
-	indent: number,
-): void {
-	const tabs = "\t".repeat(indent);
-	for (const [key, node] of tree) {
-		if (node.type === "leaf") {
-			lines.push(`${tabs}${safeKey(key)}: ${node.varName},`);
-		} else {
-			lines.push(`${tabs}${safeKey(key)}: {`);
-			emitNestedObject(lines, node.children, indent + 1);
-			lines.push(`${tabs}},`);
-		}
-	}
-}
-
-/**
- * Emit a nested type structure for interface declarations.
- */
-function emitNestedTypeObject(
-	lines: string[],
-	tree: Map<string, NestedNode>,
-	indent: number,
-): void {
-	const tabs = "\t".repeat(indent);
-	for (const [key, node] of tree) {
-		if (node.type === "leaf") {
-			lines.push(`${tabs}${safeKey(key)}: typeof ${node.varName};`);
-		} else {
-			lines.push(`${tabs}${safeKey(key)}: {`);
-			emitNestedTypeObject(lines, node.children, indent + 1);
-			lines.push(`${tabs}};`);
-		}
-	}
-}
-
-// ============================================================================
 // Utilities
 // ============================================================================
 
@@ -960,22 +854,6 @@ function safeKey(key: string): string {
 		return key;
 	}
 	return `"${key}"`;
-}
-
-/**
- * Collect all factory export names from the resolved target.
- * Always includes "collection" and "global", plus any singleton factories.
- */
-function getFactoryNames(
-	singletonFactories?: Record<string, SingletonFactory>,
-): string[] {
-	const names = new Set(["collection", "global"]);
-	if (singletonFactories) {
-		for (const name of Object.keys(singletonFactories)) {
-			names.add(name);
-		}
-	}
-	return [...names].sort();
 }
 
 /**

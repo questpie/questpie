@@ -59,7 +59,6 @@ const _module = {
 		en: _msg_en,
 	},
 	globals: {},
-	functions: {},
 	routes: {},
 	services: {},
 	emails: {},
@@ -72,6 +71,3 @@ const _module = {
 
 export type StarterModule = typeof _module;
 export default _module;
-
-// Registry augmentation is handled by the user's .generated/index.ts
-// to avoid circular type references and TS2717 conflicts with sub-modules.

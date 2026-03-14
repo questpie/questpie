@@ -1,10 +1,12 @@
 import qs from "qs";
 import superjson from "superjson";
 import type {
-	InferFunctionInput,
-	InferFunctionOutput,
-	JsonFunctionDefinition,
-} from "#questpie/server/functions/types.js";
+	InferRouteInput,
+	InferRouteOutput,
+	JsonRouteDefinition,
+	RawRouteDefinition,
+	RouteDefinition,
+} from "#questpie/server/routes/types.js";
 import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
 	AnyCollection,
@@ -91,12 +93,11 @@ import type { GlobalMeta } from "#questpie/shared/global-meta.js";
 
 /**
  * Minimal app type constraint for client APIs.
- * Generated `AppConfig` satisfies this — flat { collections, globals, functions, routes, auth }.
+ * Generated `AppConfig` satisfies this — flat { collections, globals, routes, auth }.
  */
 export interface QuestpieApp {
 	collections: Record<string, AnyCollectionOrBuilder>;
 	globals?: Record<string, any>;
-	functions?: Record<string, any>;
 	routes?: Record<string, any>;
 	auth?: any;
 }
@@ -218,24 +219,63 @@ export type QuestpieClientConfig = {
 	useSuperJSON?: boolean;
 };
 
-type JsonFunctionCaller<TDefinition extends JsonFunctionDefinition<any, any>> =
-	(
-		input: InferFunctionInput<TDefinition>,
-	) => Promise<InferFunctionOutput<TDefinition>>;
+/**
+ * Caller for a JSON route — sends input, returns typed output.
+ */
+type JsonRouteCaller<TDef extends JsonRouteDefinition<any, any>> = (
+	input: InferRouteInput<TDef>,
+) => Promise<InferRouteOutput<TDef>>;
 
-type RpcClientAPI<TRouter> =
-	TRouter extends Record<string, any>
-		? {
-				[K in keyof TRouter]: TRouter[K] extends JsonFunctionDefinition<
-					any,
-					any
-				>
-					? JsonFunctionCaller<TRouter[K]>
-					: TRouter[K] extends Record<string, any>
-						? RpcClientAPI<TRouter[K]>
-						: never;
-			}
-		: {};
+/**
+ * Caller for a raw route — returns raw Response.
+ */
+type RawRouteCaller = (options?: RouteCallOptions) => Promise<Response>;
+
+/**
+ * Type-safe routes client API.
+ *
+ * Flat route keys like `"admin/stats"` are expanded into nested dot notation:
+ * ```ts
+ * client.routes.admin.stats.post({ period: "week" })
+ * ```
+ *
+ * For routes with `:METHOD` suffix in key (multi-export), only that method is available.
+ */
+type RoutesClientAPI<TRoutes> = TRoutes extends Record<string, any>
+	? ExpandRoutes<TRoutes>
+	: {};
+
+/**
+ * Expand flat route keys into nested structure.
+ * `"admin/stats"` → `{ admin: { stats: RouteLeaf } }`
+ * `"admin/stats:GET"` → `{ admin: { stats: { get: ... } } }`
+ */
+type ExpandRoutes<TRoutes extends Record<string, any>> = UnionToIntersection<
+	{
+		[K in keyof TRoutes & string]: ExpandKey<K, TRoutes[K]>;
+	}[keyof TRoutes & string]
+>;
+
+type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
+	k: infer I,
+) => void
+	? I
+	: never;
+
+/**
+ * Expand a single route key into its nested shape.
+ */
+type ExpandKey<K extends string, TDef> = K extends `${infer Head}/${infer Rest}`
+	? { [P in Head]: ExpandKey<Rest, TDef> }
+	: K extends `${infer Path}:${infer Method}`
+		? { [P in Path]: { [M in Lowercase<Method>]: RouteCallerFromDef<TDef> } }
+		: { [P in K]: RouteCallerFromDef<TDef> };
+
+type RouteCallerFromDef<TDef> = TDef extends JsonRouteDefinition<any, any>
+	? JsonRouteCaller<TDef>
+	: TDef extends RawRouteDefinition
+		? RawRouteCaller
+		: (input?: any) => Promise<any>;
 
 /**
  * Type-safe collection API for a single collection
@@ -671,36 +711,11 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
 };
 
 /**
- * A callable route — calls fetch on the route's URL and returns the raw Response.
- */
-type RouteEndpoint = {
-	/** Call the route with fetch. Returns the raw Response. */
-	(options?: RouteCallOptions): Promise<Response>;
-	/** Get the full URL for this route (useful for forms, links, etc.). */
-	url: string;
-};
-
-/**
- * Type-safe routes client API — maps route keys to callable endpoints.
- */
-type RoutesClientAPI<TRoutes> = TRoutes extends Record<string, any>
-	? { [K in keyof TRoutes]: RouteEndpoint }
-	: {};
-
-/**
  * Questpie Client
  */
-export type QuestpieClient<
-	TApp extends QuestpieApp,
-	TRPC extends Record<string, any> = TApp extends {
-		functions: infer F extends Record<string, any>;
-	}
-		? F
-		: Record<string, never>,
-> = {
+export type QuestpieClient<TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
 	globals: GlobalsAPI<TApp>;
-	rpc: RpcClientAPI<TRPC>;
 	routes: RoutesClientAPI<TApp extends { routes: infer R } ? R : Record<string, never>>;
 	search: SearchAPI;
 	realtime: RealtimeAPI;
@@ -724,18 +739,13 @@ export type QuestpieClient<
  * // Type-safe collections
  * const posts = await client.collections.posts.find({ limit: 10 })
  *
- * // Type-safe RPC
- * const result = await client.rpc.addToCart({ productId: '123' })
+ * // Type-safe routes
+ * const result = await client.routes.admin.stats.post({ period: "week" })
  * ```
  */
-export function createClient<
-	TApp extends QuestpieApp,
-	TRPC extends Record<string, any> = TApp extends {
-		functions: infer F extends Record<string, any>;
-	}
-		? F
-		: Record<string, never>,
->(config: QuestpieClientConfig): QuestpieClient<TApp, TRPC> {
+export function createClient<TApp extends QuestpieApp>(
+	config: QuestpieClientConfig,
+): QuestpieClient<TApp> {
 	const fetcher = config.fetch || globalThis.fetch;
 	const basePath = config.basePath ?? "/";
 	const normalizedBasePath = basePath.startsWith("/")
@@ -1327,37 +1337,6 @@ export function createClient<
 		},
 	});
 
-	const createRpcProcedureProxy = (segments: string[]): any => {
-		const callable = async (input: any) => {
-			return request(`${apiBasePath}/rpc/${segments.join("/")}`, {
-				method: "POST",
-				body: JSON.stringify(input),
-			});
-		};
-
-		return new Proxy(callable, {
-			get(_, prop) {
-				if (prop === "then") return undefined;
-				if (typeof prop !== "string") return undefined;
-				return createRpcProcedureProxy([...segments, prop]);
-			},
-			apply(_, __, args: unknown[]) {
-				const input = args[0];
-				return request(`${apiBasePath}/rpc/${segments.join("/")}`, {
-					method: "POST",
-					body: JSON.stringify(input),
-				});
-			},
-		});
-	};
-
-	const rpc = new Proxy({} as RpcClientAPI<TRPC>, {
-		get(_, prop) {
-			if (typeof prop !== "string") return undefined;
-			return createRpcProcedureProxy([prop]);
-		},
-	});
-
 	/**
 	 * Search API
 	 */
@@ -1376,29 +1355,78 @@ export function createClient<
 		},
 	};
 
+	/** Convert camelCase to kebab-case for URL paths */
+	const camelToKebab = (s: string) =>
+		s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+
 	/**
-	 * Routes API — proxy that maps route keys to callable endpoints.
-	 * Routes use slash-separated keys matching the file path:
-	 *   routes/webhooks/stripe.ts → client.routes["webhooks/stripe"]()
+	 * Routes API — nested proxy that maps route keys to callable endpoints.
+	 *
+	 * Route paths use slash-separated segments accessed via dot notation:
+	 *   `routes/admin/stats.ts` → `client.routes.admin.stats(input)`
+	 *
+	 * For multi-export routes with method suffix:
+	 *   `admin/stats:GET` → `client.routes.admin.stats.get(input)`
+	 *
+	 * The proxy is callable at any depth — calling it sends a POST request.
+	 * Traversing deeper builds the URL path.
+	 * Segment names are converted from camelCase to kebab-case for URLs.
 	 */
-	const routes = new Proxy({} as any, {
+	const createRouteProxy = (segments: string[]): any => {
+		const callable = async (input?: any) => {
+			const path = segments.map(camelToKebab).join("/");
+			return request(`${apiBasePath}/${path}`, {
+				method: "POST",
+				body: input !== undefined ? JSON.stringify(input) : undefined,
+			});
+		};
+
+		return new Proxy(callable, {
+			get(_, prop) {
+				if (prop === "then") return undefined;
+				if (prop === "url") return `${config.baseURL}${apiBasePath}/${segments.map(camelToKebab).join("/")}`;
+				if (typeof prop !== "string") return undefined;
+
+				// HTTP method names at leaf → method-specific caller
+				const methodUpper = prop.toUpperCase();
+				if (["GET", "POST", "PUT", "DELETE", "PATCH"].includes(methodUpper)) {
+					return async (input?: any) => {
+						const path = segments.map(camelToKebab).join("/");
+						if (methodUpper === "GET" && input) {
+							const queryString = qs.stringify(input, {
+								skipNulls: true,
+								arrayFormat: "brackets",
+							});
+							return request(
+								`${apiBasePath}/${path}${queryString ? `?${queryString}` : ""}`,
+								{ method: "GET" },
+							);
+						}
+						return request(`${apiBasePath}/${path}`, {
+							method: methodUpper,
+							body: input !== undefined ? JSON.stringify(input) : undefined,
+						});
+					};
+				}
+
+				// Otherwise, deeper nesting
+				return createRouteProxy([...segments, prop]);
+			},
+			apply(_, __, args: unknown[]) {
+				const input = args[0];
+				const path = segments.map(camelToKebab).join("/");
+				return request(`${apiBasePath}/${path}`, {
+					method: "POST",
+					body: input !== undefined ? JSON.stringify(input) : undefined,
+				});
+			},
+		});
+	};
+
+	const routesProxy = new Proxy({} as any, {
 		get(_, prop) {
 			if (typeof prop !== "string") return undefined;
-			const routeUrl = `${config.baseURL}${apiBasePath}/routes/${prop}`;
-			const endpoint = (options?: RouteCallOptions) => {
-				const { method = "GET", headers: extraHeaders, ...rest } = options ?? {};
-				return fetcher(routeUrl, {
-					method,
-					headers: {
-						...defaultHeaders,
-						...(extraHeaders as Record<string, string>),
-					},
-					credentials: "include",
-					...rest,
-				});
-			};
-			endpoint.url = routeUrl;
-			return endpoint;
+			return createRouteProxy([prop]);
 		},
 	});
 
@@ -1411,8 +1439,7 @@ export function createClient<
 	return {
 		collections,
 		globals,
-		rpc,
-		routes,
+		routes: routesProxy,
 		search,
 		realtime: realtimeApi,
 		setLocale: (locale?: string) => {

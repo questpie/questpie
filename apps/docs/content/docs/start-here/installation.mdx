@@ -70,7 +70,7 @@ export default collection("posts").fields(({ f }) => ({
 bunx questpie generate
 ```
 
-This scans your file convention directories, discovers collections/functions/jobs, and generates:
+This scans your file convention directories, discovers collections/routes/jobs, and generates:
 
 - `src/questpie/server/.generated/` — app instance, types, module augmentation
 
@@ -93,7 +93,7 @@ bun dev
 To add the admin interface, install `@questpie/admin` and register the plugin:
 
 ```ts title="src/questpie/server/questpie.config.ts"
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import { runtimeConfig } from "questpie";
 
 export default runtimeConfig({

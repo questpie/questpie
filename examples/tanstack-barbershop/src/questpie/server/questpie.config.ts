@@ -8,7 +8,7 @@
  * @see RFC-MODULE-ARCHITECTURE §8.1 (User Project)
  */
 
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import {
 	ConsoleAdapter,
 	pgBossAdapter,

@@ -289,7 +289,7 @@ export function useReactiveFields({
 			setError(null);
 
 			try {
-				const response = await (client.rpc as any).batchReactive({
+				const response = await (client.routes as any).batchReactive({
 					collection,
 					type: mode,
 					requests,

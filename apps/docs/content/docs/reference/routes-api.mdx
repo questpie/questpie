@@ -1,30 +1,32 @@
 ---
-title: Functions API
-description: fn() — server function definition reference.
+title: Routes API
+description: route() — server route definition reference.
 ---
 
-# Functions API
+# Routes API
 
-## `fn(options)`
+## `route()`
 
 ```ts
-import { fn } from "questpie";
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-  schema: z.object({ ... }),
-  handler: async (context) => { ... },
-});
+export default route()
+  .post()
+  .schema(z.object({ ... }))
+  .handler(async (context) => { ... });
 ```
 
-### Options
+### Builder Methods
 
-| Option | Type | Description |
-|---|---|---|
-| `schema` | `ZodSchema` | Input validation schema |
-| `handler` | `(ctx) => Promise<T>` | Handler function |
-| `outputSchema` | `ZodSchema` | Output type validation |
-| `access` | `boolean \| (ctx) => boolean` | Access control |
+| Method | Description |
+|---|---|
+| `.post()` | Set HTTP method to POST |
+| `.get()` | Set HTTP method to GET |
+| `.schema(zodSchema)` | Set input validation schema |
+| `.handler(fn)` | Set handler function |
+| `.raw()` | Raw mode — handler receives `{ request }` and returns `Response` |
+| `.access(boolean \| fn)` | Access control |
 
 ### Handler Context
 
@@ -65,7 +67,7 @@ export default job({
 
 ### Job Context
 
-Same as function context, but `input` is replaced by `payload`.
+Same as route handler context, but `input` is replaced by `payload`.
 
 ## `service(options)`
 
@@ -84,21 +86,18 @@ export default service({
 | `create` | `() => T` | Factory function |
 | `dispose` | `(instance) => void` | Cleanup function |
 
-## `route(options)`
+## Raw Routes
+
+Use `.raw()` for handlers that need direct `Request`/`Response` control:
 
 ```ts
 import { route } from "questpie";
 
-export default route({
-  method: "GET",
-  handler: async ({ request, db }) => new Response("OK"),
-});
+export default route()
+  .get()
+  .raw()
+  .handler(async ({ request, db }) => new Response("OK"));
 ```
-
-| Option | Type | Description |
-|---|---|---|
-| `method` | `"GET" \| "POST" \| "PATCH" \| "DELETE"` | HTTP method |
-| `handler` | `(ctx) => Promise<Response>` | Handler |
 
 ## `email(options)`
 

@@ -9,7 +9,7 @@
  * 5. Named vs default import generation
  * 6. Services — ServiceInstanceOf import
  * 7. Emails — MailerService import
- * 8. Nested functions — dot-separated keys build nested object
+ * 8. Routes — flat record with slash-separated keys
  */
 import { describe, expect, it } from "bun:test";
 import {
@@ -99,7 +99,6 @@ function minimalResult(): DiscoveryResult {
 		"collections",
 		"globals",
 		"jobs",
-		"functions",
 		"routes",
 		"messages",
 		"services",
@@ -183,8 +182,8 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("export type AppJobs = _ModuleJobs;");
 	});
 
-	it("emits AppFunctions type alias (no user functions)", () => {
-		expect(code).toContain("export type AppFunctions = _ModuleFunctions;");
+	it("emits AppRoutes type alias (no user routes)", () => {
+		expect(code).toContain("export type AppRoutes = _ModuleRoutes;");
 	});
 
 	it("emits declare global augmentation for AppContext", () => {
@@ -610,15 +609,15 @@ describe("generateTemplate — emails", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Functions — nested dot-key builder
+// Routes — flat record with slash-separated keys
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("generateTemplate — functions (nested keys)", () => {
-	it("emits flat function as direct key", () => {
+describe("generateTemplate — routes (flat record)", () => {
+	it("emits flat route as direct key", () => {
 		const result = minimalResult();
-		cat(result, "functions").set(
-			"getUsers",
-			makeFile("getUsers", { varName: "_fn_getUsers", exportType: "default" }),
+		cat(result, "routes").set(
+			"ping",
+			makeFile("ping", { varName: "_route_ping", exportType: "default" }),
 		);
 
 		const code = generateTemplate({
@@ -628,16 +627,16 @@ describe("generateTemplate — functions (nested keys)", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("functions: {");
-		expect(code).toContain("getUsers: _fn_getUsers,");
+		expect(code).toContain("routes: {");
+		expect(code).toContain("ping: _route_ping,");
 	});
 
-	it("emits nested function as nested object", () => {
+	it("emits slash-separated route key as quoted string key", () => {
 		const result = minimalResult();
-		cat(result, "functions").set(
-			"admin.getStats",
-			makeFile("admin.getStats", {
-				varName: "_fn_admin_getStats",
+		cat(result, "routes").set(
+			"admin/stats",
+			makeFile("admin/stats", {
+				varName: "_route_admin_stats",
 				exportType: "default",
 			}),
 		);
@@ -649,23 +648,23 @@ describe("generateTemplate — functions (nested keys)", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("admin: {");
-		expect(code).toContain("getStats: _fn_admin_getStats,");
+		expect(code).toContain("routes: {");
+		expect(code).toContain('"admin/stats": _route_admin_stats,');
 	});
 
-	it("groups nested functions under shared parent", () => {
+	it("emits multiple routes as flat record entries", () => {
 		const result = minimalResult();
-		cat(result, "functions").set(
-			"admin.getStats",
-			makeFile("admin.getStats", {
-				varName: "_fn_admin_getStats",
+		cat(result, "routes").set(
+			"admin/stats",
+			makeFile("admin/stats", {
+				varName: "_route_admin_stats",
 				exportType: "default",
 			}),
 		);
-		cat(result, "functions").set(
-			"admin.deleteUser",
-			makeFile("admin.deleteUser", {
-				varName: "_fn_admin_deleteUser",
+		cat(result, "routes").set(
+			"admin/users",
+			makeFile("admin/users", {
+				varName: "_route_admin_users",
 				exportType: "default",
 			}),
 		);
@@ -677,9 +676,8 @@ describe("generateTemplate — functions (nested keys)", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		// admin appears once as a group
-		const adminCount = (code.match(/admin: \{/g) || []).length;
-		expect(adminCount).toBeGreaterThanOrEqual(1);
+		expect(code).toContain('"admin/stats": _route_admin_stats,');
+		expect(code).toContain('"admin/users": _route_admin_users,');
 	});
 });
 

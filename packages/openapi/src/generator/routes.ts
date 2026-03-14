@@ -1,25 +1,33 @@
 /**
- * RPC tree -> OpenAPI paths generator.
+ * Routes tree -> OpenAPI paths generator.
  */
 
-import type { FunctionsTree } from "questpie";
+import type { RoutesTree } from "questpie";
 import type { OpenApiConfig, PathOperation } from "../types.js";
 import { jsonRequestBody, jsonResponse, zodToJsonSchema } from "./schemas.js";
 
-interface FlatRpcEntry {
+/**
+ * Convert camelCase to kebab-case, matching the HTTP adapter's URL generation.
+ * e.g. "createBooking" → "create-booking"
+ */
+function camelToKebab(str: string): string {
+	return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+}
+
+interface FlatRouteEntry {
 	path: string;
 	segments: string[];
 	definition: any;
 }
 
 /**
- * Flatten an RPC router tree into a list of { path, definition }.
+ * Flatten a routes tree into a list of { path, definition }.
  */
-function flattenRpcTree(
-	tree: FunctionsTree,
+function flattenRoutesTree(
+	tree: RoutesTree,
 	prefix: string[] = [],
-): FlatRpcEntry[] {
-	const entries: FlatRpcEntry[] = [];
+): FlatRouteEntry[] {
+	const entries: FlatRouteEntry[] = [];
 
 	for (const [key, value] of Object.entries(tree)) {
 		const segments = [...prefix, key];
@@ -35,7 +43,7 @@ function flattenRpcTree(
 				definition: value,
 			});
 		} else if (value && typeof value === "object") {
-			entries.push(...flattenRpcTree(value as FunctionsTree, segments));
+			entries.push(...flattenRoutesTree(value as RoutesTree, segments));
 		}
 	}
 
@@ -43,10 +51,10 @@ function flattenRpcTree(
 }
 
 /**
- * Generate OpenAPI paths for all RPC functions in the router tree.
+ * Generate OpenAPI paths for all routes in the routes tree.
  */
-export function generateRpcPaths(
-	rpc: FunctionsTree | undefined,
+export function generateRoutePaths(
+	routes: RoutesTree | undefined,
 	config: OpenApiConfig,
 ): {
 	paths: Record<string, Record<string, PathOperation>>;
@@ -57,10 +65,10 @@ export function generateRpcPaths(
 	const schemas: Record<string, unknown> = {};
 	const tags: Array<{ name: string; description?: string }> = [];
 
-	if (!rpc) return { paths, schemas, tags };
+	if (!routes) return { paths, schemas, tags };
 
 	const basePath = config.basePath ?? "/";
-	const entries = flattenRpcTree(rpc);
+	const entries = flattenRoutesTree(routes);
 
 	// Group by top-level key for tags
 	const tagSet = new Set<string>();
@@ -68,30 +76,31 @@ export function generateRpcPaths(
 	for (const entry of entries) {
 		const def = entry.definition;
 		const isRaw = def.mode === "raw";
-		const topLevel = entry.segments[0] ?? "rpc";
+		const method: string = (def.method ?? "post").toLowerCase();
+		const topLevel = entry.segments[0] ?? "routes";
 
 		if (!tagSet.has(topLevel)) {
 			tagSet.add(topLevel);
 			tags.push({
-				name: `RPC: ${topLevel}`,
-				description: `RPC functions under ${topLevel}`,
+				name: `Routes: ${topLevel}`,
+				description: `Routes under ${topLevel}`,
 			});
 		}
 
-		const operationId = `rpc_${entry.segments.join("_")}`;
-		const routePath = `${basePath}/rpc/${entry.path}`;
+		const operationId = `route_${entry.segments.join("_")}`;
+		const routePath = `${basePath}/${entry.segments.map(camelToKebab).join("/")}`;
 
 		const operation: PathOperation = {
 			operationId,
 			summary: entry.path,
-			tags: [`RPC: ${topLevel}`],
+			tags: [`Routes: ${topLevel}`],
 			responses: {},
 		};
 
 		if (isRaw) {
-			// Raw functions take a raw request and return a raw response
+			// Raw routes take a raw request and return a raw response
 			operation.description =
-				"Raw RPC function — accepts any request body and returns a raw response.";
+				"Raw route - accepts any request body and returns a raw response.";
 			operation.requestBody = {
 				content: {
 					"application/json": { schema: {} },
@@ -112,7 +121,7 @@ export function generateRpcPaths(
 				},
 			};
 		} else {
-			// JSON functions — extract input/output schemas
+			// JSON routes - extract input/output schemas
 			let inputSchema: unknown = {};
 			let outputSchema: unknown = { type: "object" };
 
@@ -130,14 +139,11 @@ export function generateRpcPaths(
 				outputSchema = { $ref: `#/components/schemas/${schemaName}` };
 			}
 
-			operation.requestBody = jsonRequestBody(
-				inputSchema,
-				"RPC function input",
-			);
-			operation.responses = jsonResponse(outputSchema, "RPC function output");
+			operation.requestBody = jsonRequestBody(inputSchema, "Route input");
+			operation.responses = jsonResponse(outputSchema, "Route output");
 		}
 
-		paths[routePath] = { post: operation };
+		paths[routePath] = { [method]: operation };
 	}
 
 	return { paths, schemas, tags };

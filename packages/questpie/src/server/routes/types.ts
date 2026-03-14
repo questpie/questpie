@@ -1,12 +1,13 @@
 /**
  * Route Types
  *
- * Types for the `routes/` file convention — raw HTTP handlers for
- * webhooks, payment callbacks, OAuth redirects, and custom API endpoints.
+ * Unified types for the route system — covers both JSON (schema-validated)
+ * and raw HTTP handlers.
  *
- * @see RFC-MODULE-ARCHITECTURE §5 (Routes — Raw HTTP Handlers)
+ * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
+import type { z } from "zod";
 import type { AppContext } from "#questpie/server/config/app-context.js";
 
 // ============================================================================
@@ -26,79 +27,131 @@ export type HttpMethod =
 	| "OPTIONS";
 
 // ============================================================================
-// Route Handler Args
+// Access Control
+// ============================================================================
+
+export interface RouteAccessContext extends AppContext {
+	locale?: string;
+	request?: Request;
+}
+
+export type RouteAccessRule =
+	| boolean
+	| ((ctx: RouteAccessContext) => boolean | Promise<boolean>);
+
+export type RouteAccess =
+	| RouteAccessRule
+	| {
+			execute?: RouteAccessRule;
+	  };
+
+// ============================================================================
+// Handler Args
 // ============================================================================
 
 /**
- * Context passed to route handlers.
- * Provides access to the raw request, session, and flat service properties.
- *
- * @see RFC-MODULE-ARCHITECTURE §5.4 (Route Handler Args)
+ * Context passed to JSON route handlers.
  */
-export interface RouteHandlerArgs extends AppContext {
-	/** Raw incoming request. */
+export interface JsonRouteHandlerArgs<TInput = any> extends AppContext {
+	/** Validated input data (from body or query string) */
+	input: TInput;
+	/** Current locale */
+	locale?: string;
+}
+
+/**
+ * Context passed to raw route handlers.
+ */
+export interface RawRouteHandlerArgs extends AppContext {
+	/** Raw incoming request */
 	request: Request;
-	/** Current locale. */
-	locale: string;
-	/** URL path parameters (if pattern-matched). */
+	/** Current locale */
+	locale?: string;
+	/** URL path parameters (if pattern-matched) */
 	params: Record<string, string>;
 }
 
 // ============================================================================
-// Route Definition
+// Route Definitions — New Unified Types
 // ============================================================================
 
 /**
- * Route definition for raw HTTP handlers.
- *
- * Routes are discovered from the `routes/` directory by codegen.
- * Each file exports a route definition that maps to a URL path:
- * - `routes/health.ts` → `/api/routes/health`
- * - `routes/webhooks/stripe.ts` → `/api/routes/webhooks/stripe`
- *
- * @example
- * ```ts
- * // routes/webhooks/stripe.ts
- * import { route } from "questpie";
- *
- * export default route({
- *   method: "POST",
- *   handler: async ({ request }) => {
- *     const body = await request.text();
- *     const sig = request.headers.get("stripe-signature");
- *     // verify webhook...
- *     return new Response("ok", { status: 200 });
- *   },
- * });
- * ```
- *
- * @example
- * ```ts
- * // routes/health.ts — all methods (default)
- * import { route } from "questpie";
- *
- * export default route({
- *   handler: async () => {
- *     return new Response(JSON.stringify({ status: "ok" }), {
- *       headers: { "content-type": "application/json" },
- *     });
- *   },
- * });
- * ```
- *
- * @see RFC-MODULE-ARCHITECTURE §5.3 (Route Definition)
+ * JSON route definition — schema-validated input/output with typed handler.
  */
-export interface RouteDefinition {
-	/**
-	 * HTTP method(s) this route handles.
-	 * - Single method: `"POST"`
-	 * - Multiple methods: `["GET", "POST"]`
-	 * - All methods: omit (default)
-	 */
-	method?: HttpMethod | HttpMethod[];
+export type JsonRouteDefinition<TInput = any, TOutput = any> = {
+	readonly __brand: "route";
+	readonly mode: "json";
+	readonly method: HttpMethod;
+	readonly schema: z.ZodSchema<TInput>;
+	readonly outputSchema?: z.ZodSchema<TOutput>;
+	readonly access?: RouteAccess;
+	readonly handler: (
+		args: JsonRouteHandlerArgs<TInput>,
+	) => TOutput | Promise<TOutput>;
+};
 
-	/**
-	 * Route handler — receives the raw request and returns a Response.
-	 */
-	handler: (args: RouteHandlerArgs) => Response | Promise<Response>;
+/**
+ * Raw route definition — direct request/response handling.
+ */
+export type RawRouteDefinition = {
+	readonly __brand: "route";
+	readonly mode: "raw";
+	readonly method: HttpMethod;
+	readonly access?: RouteAccess;
+	readonly handler: (args: RawRouteHandlerArgs) => Response | Promise<Response>;
+};
+
+/**
+ * Unified route definition — either JSON or raw.
+ */
+export type RouteDefinition<TInput = any, TOutput = any> =
+	| JsonRouteDefinition<TInput, TOutput>
+	| RawRouteDefinition;
+
+// ============================================================================
+// Type Helpers
+// ============================================================================
+
+export type InferRouteInput<T> = T extends {
+	schema: z.ZodSchema<infer Input>;
 }
+	? Input
+	: never;
+
+export type InferRouteOutput<T> = T extends {
+	outputSchema: z.ZodSchema<infer Output>;
+}
+	? Output
+	: T extends { handler: (args: any) => infer Result }
+		? Awaited<Result>
+		: never;
+
+// ============================================================================
+// Type Guards
+// ============================================================================
+
+/**
+ * Type guard: check if a route is a JSON route.
+ */
+export function isJsonRoute(
+	def: RouteDefinition,
+): def is JsonRouteDefinition {
+	return def.mode === "json";
+}
+
+/**
+ * Type guard: check if a route is a raw route.
+ */
+export function isRawRoute(
+	def: RouteDefinition,
+): def is RawRouteDefinition {
+	return def.mode === "raw";
+}
+
+/**
+ * Recursive tree of route definitions.
+ * Supports nested namespaces for organized routing.
+ */
+export type RoutesTree = {
+	[key: string]: RouteDefinition<any, any> | RoutesTree;
+};

@@ -47,7 +47,7 @@ type SetupFormProps = {
  *   const [error, setError] = useState<string | null>(null)
  *
  *   const handleSetup = async (values: SetupFormValues) => {
- *     const result = await client.rpc.createFirstAdmin({
+ *     const result = await client.routes.createFirstAdmin({
  *       email: values.email,
  *       password: values.password,
  *       name: values.name,

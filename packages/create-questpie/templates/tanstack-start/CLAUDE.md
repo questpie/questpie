@@ -22,13 +22,14 @@ This project follows QUESTPIE's **server-first** philosophy:
 ```
 src/questpie/
   server/              ← WHAT: data contracts and behavior
-    questpie.config.ts ← App config: config({ modules: [admin()], ... })
+    questpie.config.ts ← App config: runtimeConfig({ plugins: [adminPlugin()], ... })
+    modules.ts         ← Module dependencies (adminModule, openApiModule, etc.)
     auth.ts            ← Auth config (satisfies AuthConfig)
     .generated/        ← Codegen output (app instance + App type)
       index.ts
     collections/       ← One file per collection (auto-discovered)
     globals/           ← One file per global (auto-discovered)
-    functions/         ← Server functions via fn() (auto-discovered)
+    routes/            ← Server routes via route() (auto-discovered)
     jobs/              ← Background job definitions (auto-discovered)
     blocks/            ← Block definitions (auto-discovered)
   admin/               ← HOW: UI rendering concerns
@@ -39,7 +40,8 @@ src/questpie/
 
 ## Key Files
 
-- **`src/questpie/server/questpie.config.ts`** — App config: `config({ modules: [admin()], db, app, ... })`. Sidebar, dashboard, branding are options to `admin()`.
+- **`src/questpie/server/questpie.config.ts`** — App config: `runtimeConfig({ plugins: [adminPlugin()], db, app, ... })`. Sidebar, dashboard, branding are configured via admin singleton factories.
+- **`src/questpie/server/modules.ts`** — Module dependencies: `export default [adminModule, openApiModule({ ... })] as const`.
 - **`src/questpie/server/auth.ts`** — Auth config (`export default { ... } satisfies AuthConfig`).
 - **`src/questpie/server/.generated/index.ts`** — Codegen output. Exports typed `app` instance and `App` type. Run `bunx questpie generate` to regenerate.
 - **`src/lib/env.ts`** — Type-safe env variables via `@t3-oss/env-core`. Add new env vars here with Zod schemas.
@@ -78,25 +80,25 @@ Collections are auto-discovered by codegen — no manual registration needed.
 2. Run `bunx questpie generate`
 3. Run `bun questpie migrate:create`
 
-### Add a server function (end-to-end type-safe)
+### Add a server route (end-to-end type-safe)
 
-1. Create `src/questpie/server/functions/my-function.ts`:
+1. Create `src/questpie/server/routes/my-function.ts`:
    ```ts
-   import { fn } from "questpie";
+   import { route } from "questpie";
    import { z } from "zod";
 
-   export default fn({
-     schema: z.object({ id: z.string() }),
-     handler: async ({ input, app }) => {
+   export default route()
+     .post()
+     .schema(z.object({ id: z.string() }))
+     .handler(async ({ input, app }) => {
        // input: { id: string } — typed from Zod schema
        // app: fully typed, autocomplete works
        return { name: "result" };
-     },
-   });
+     });
    ```
-2. Run `bunx questpie generate` — function is auto-discovered and available at `/api/fn/my-function`
+2. Run `bunx questpie generate` — route is auto-discovered and available at `/api/my-function`
 
-See AGENTS.md for detailed function patterns, access control, and TanStack Query integration.
+See AGENTS.md for detailed route patterns, access control, and TanStack Query integration.
 
 ## Documentation
 

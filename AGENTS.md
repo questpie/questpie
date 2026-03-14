@@ -12,10 +12,10 @@ Source-of-truth guidance for AI agents working in this monorepo.
 
 | Path                                                | Purpose                                                                                                                 |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `packages/questpie`                                 | Core engine — field builders, CRUD, functions, introspection, CLI. Exports: `questpie`, `questpie/client`, `questpie/shared`. |
+| `packages/questpie`                                 | Core engine — field builders, CRUD, routes, introspection, CLI. Exports: `questpie`, `questpie/client`, `questpie/shared`. |
 | `packages/admin`                                    | Config-driven admin UI (React + Tailwind v4 + shadcn). Exports: `@questpie/admin/server`, `@questpie/admin/client`.     |
 | `packages/tanstack-query`                           | TanStack Query option builders, `streamedQuery`, batch helpers.                                                         |
-| `packages/openapi`                                  | OpenAPI spec generation + Scalar UI middleware (`withOpenApi`).                                                         |
+| `packages/openapi`                                  | OpenAPI spec generation + Scalar UI module (`openApiModule()`).                                                         |
 | `packages/elysia`, `packages/hono`, `packages/next` | Framework adapters — thin wrappers around `createFetchHandler`.                                                         |
 | `packages/create-questpie`                          | CLI scaffolder (`bunx create-questpie`). Templates live in `templates/`.                                                |
 | `apps/docs`                                         | Documentation site (TanStack Start + Vite + Fumadocs). Content in `content/docs/`.                                      |
@@ -27,7 +27,7 @@ Source-of-truth guidance for AI agents working in this monorepo.
 
 `packages/questpie/src/` is split into:
 
-- `server/` — Collections, globals, fields, functions, adapters, integrated services (auth, storage, queue, mailer, realtime), migration.
+- `server/` — Collections, globals, fields, routes, adapters, integrated services (auth, storage, queue, mailer, realtime), migration.
 - `client/` — Client-side client, typed hooks.
 - `shared/` — Shared types and utilities used by both sides.
 - `exports/` — Public entry points (`index.ts`, `client.ts`, `shared.ts`, `cli.ts`).
@@ -41,7 +41,7 @@ All QUESTPIE projects follow this split:
 
 | Layer      | Directory          | Defines                                                               |
 | ---------- | ------------------ | --------------------------------------------------------------------- |
-| **Server** | `questpie/server/` | Schema, fields, access control, hooks, functions, jobs — WHAT the data does |
+| **Server** | `questpie/server/` | Schema, fields, access control, hooks, routes, jobs — WHAT the data does |
 | **Admin**  | `questpie/admin/`  | Branding, custom renderers, client builder — HOW it renders           |
 | **Routes** | `routes/`          | HTTP mounting only — no business logic                                |
 
@@ -59,22 +59,31 @@ export default collection("posts")
     content: f.richText({ label: "Content" }),
   }));
 
-// functions/healthcheck.ts
-import { fn } from "questpie";
+// routes/healthcheck.ts
+import { route } from "questpie";
 
-export default fn({
-  handler: async ({ app }) => ({ status: "ok" }),
-});
+export default route()
+  .get()
+  .handler(async () => ({ status: "ok" }));
 
 // questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/plugin";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
 });
+
+// modules.ts
+import { adminModule } from "@questpie/admin/server";
+import { openApiModule } from "@questpie/openapi";
+
+export default [
+  adminModule,
+  openApiModule({ info: { title: "My API", version: "1.0.0" } }),
+] as const;
 ```
 
 Codegen discovers files and generates `.generated/index.ts` with the `app` instance. Route handlers use:
@@ -113,24 +122,25 @@ Built-in field types: `text`, `number`, `boolean`, `date`, `dateTime`, `select`,
 **Custom fields** via `field<TConfig, TValue>()` factory — see `packages/questpie/src/server/fields/field.ts`.
 **Custom operators** via `operator<TValue>()` — see `packages/questpie/src/server/fields/common-operators.ts`.
 
-### Standalone Functions
+### Standalone Routes
 
-Type-safe server functions via file convention:
+Type-safe server routes via file convention:
 
 ```ts
-// functions/get-stats.ts
-import { fn } from "questpie";
+// routes/get-stats.ts
+import { route } from "questpie";
+import z from "zod";
 
-export default fn({
-  schema: z.object({ period: z.enum(["day", "week", "month"]) }),
-  handler: async ({ input, app }) => {
+export default route()
+  .post()
+  .schema(z.object({ period: z.enum(["day", "week", "month"]) }))
+  .handler(async ({ app }) => {
     const count = await app.api.collections.posts.count({});
     return { posts: count };
-  },
-});
+  });
 ```
 
-Functions are auto-discovered by codegen and available at `/api/fn/<name>`.
+Routes are auto-discovered by codegen and available at `/api/<name>`.
 
 ### Introspection & Component References
 
@@ -147,7 +157,7 @@ Server emits serializable references that the client resolves via registries:
 - **Views**: resolve from `state.views`.
 - **Components**: resolve `c.*` from `state.components`.
 - **Entities**: collections/globals/jobs/queues flow from builder state, not literal names.
-- Defaults are provided by module registration (`config({ modules: [admin()] })` on server / `qa.use(adminModule)` on client), not hardcoded.
+- Defaults are provided by module registration (`runtimeConfig({ plugins: [adminPlugin()] })` + `modules.ts` on server / `qa.use(adminModule)` on client), not hardcoded.
 - Client resolves server-emitted `{ type, props }` references using its own registry — never assume server-only types.
 - When extending builders, prefer lazy type extraction (`FieldsOf<this>`, `QuestpieStateOf<this>`) over giant mapped types.
 
@@ -158,7 +168,7 @@ The codegen pipeline is fully plugin-driven. Nothing is hardcoded in the CLI —
 ### Core Plugin (`coreCodegenPlugin()`)
 
 Lives in `packages/questpie/src/cli/codegen/index.ts`. Always auto-prepended by `runCodegen()`. Declares:
-- **10 category declarations**: collections, globals, jobs, functions, routes, messages, services, emails, migrations, seeds — each with full `CategoryDeclaration` metadata (dirs, prefix, emit strategy, type emission, registry key).
+- **10 category declarations**: collections, globals, jobs, routes, messages, services, emails, migrations, seeds, and admin/plugin declarations — each with full `CategoryDeclaration` metadata (dirs, prefix, emit strategy, type emission, registry key).
 - **4 singleton factories**: locale, hooks, access, context.
 - **1 callback param**: `f` (field ref proxy: `f.title` → `"title"`).
 

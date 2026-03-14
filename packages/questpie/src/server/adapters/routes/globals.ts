@@ -14,7 +14,7 @@ import {
 	parseGlobalGetOptions,
 	parseGlobalUpdateOptions,
 } from "../utils/parsers.js";
-import { parseRpcBody } from "../utils/request.js";
+import { parseRouteBody } from "../utils/request.js";
 import { handleError, smartResponse } from "../utils/response.js";
 
 export interface GlobalRoutes {
@@ -142,7 +142,7 @@ export const createGlobalRoutes = <
 			input?: unknown,
 		): Promise<Response> => {
 			const resolved = await resolveContext(app, request, config, context);
-			const body = input !== undefined ? input : await parseRpcBody(request);
+			const body = input !== undefined ? input : await parseRouteBody(request);
 
 			if (body === null || typeof body !== "object") {
 				return errorResponse(
@@ -185,7 +185,7 @@ export const createGlobalRoutes = <
 			input?: unknown,
 		): Promise<Response> => {
 			const resolved = await resolveContext(app, request, config, context);
-			const body = input !== undefined ? input : await parseRpcBody(request);
+			const body = input !== undefined ? input : await parseRouteBody(request);
 
 			if (body === null || typeof body !== "object") {
 				return errorResponse(
@@ -261,7 +261,7 @@ export const createGlobalRoutes = <
 			input?: unknown,
 		): Promise<Response> => {
 			const resolved = await resolveContext(app, request, config, context);
-			const body = input !== undefined ? input : await parseRpcBody(request);
+			const body = input !== undefined ? input : await parseRouteBody(request);
 			if (body === null) {
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),

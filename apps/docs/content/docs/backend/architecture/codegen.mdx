@@ -32,7 +32,7 @@ export type AppGlobals = {
   siteSettings: typeof siteSettings;
 };
 
-export type AppFunctions = {
+export type AppRoutes = {
   createBooking: typeof createBooking;
   getActiveBarbers: typeof getActiveBarbers;
   // ...
@@ -41,12 +41,6 @@ export type AppFunctions = {
 export type AppJobs = {
   sendAppointmentConfirmation: typeof sendAppointmentConfirmation;
   notifyBlogSubscribers: typeof notifyBlogSubscribers;
-  // ...
-};
-
-export type AppRoutes = {
-  health: typeof healthRoute;
-  "webhooks/stripe": typeof stripeWebhookRoute;
   // ...
 };
 
@@ -63,7 +57,6 @@ export type AppEmails = {
 export type AppConfig = {
   collections: AppCollections;
   globals: AppGlobals;
-  functions: AppFunctions;
   routes: AppRoutes;
   // auth, locales, etc.
 };
@@ -146,7 +139,7 @@ export const {
 
 Re-run `questpie generate` when you:
 
-- Add, rename, or delete collection/global/function/job files
+- Add, rename, or delete collection/global/route/job files
 - Add or remove modules in `modules.ts`
 - Add or remove plugins in `questpie.config.ts`
 - Change file convention structure

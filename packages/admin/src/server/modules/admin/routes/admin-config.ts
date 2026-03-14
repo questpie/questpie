@@ -9,12 +9,12 @@
  * @example
  * ```ts
  * // Client usage
- * const config = await client.rpc.getAdminConfig({});
+ * const config = await client.routes.getAdminConfig({});
  * // { dashboard: {...}, sidebar: {...}, collections: {...}, globals: {...} }
  * ```
  */
 
-import { executeAccessRule, fn, type Questpie } from "questpie";
+import { executeAccessRule, type Questpie, route } from "questpie";
 import { z } from "zod";
 import type {
 	AdminCollectionConfig,
@@ -777,14 +777,14 @@ const getAdminConfigOutputSchema = z.object({
  *   .build({ ... });
  *
  * // Client fetches config
- * const config = await client.rpc.getAdminConfig({});
+ * const config = await client.routes.getAdminConfig({});
  * ```
  */
-const getAdminConfig = fn({
-	type: "query",
-	schema: getAdminConfigSchema,
-	outputSchema: getAdminConfigOutputSchema,
-	handler: async (ctx) => {
+const getAdminConfig = route()
+	.post()
+	.schema(getAdminConfigSchema)
+	.outputSchema(getAdminConfigOutputSchema)
+	.handler(async (ctx) => {
 		const app = getApp(ctx);
 		const state = (app as any).state || {};
 
@@ -942,16 +942,15 @@ const getAdminConfig = fn({
 		response.globals = filteredGlobalsMeta;
 
 		return response;
-	},
-});
+	});
 
 // ============================================================================
 // Export Bundle
 // ============================================================================
 
 /**
- * Admin config functions group.
- * Add to your app RPC router via `rpc().router({ ...adminConfigFunctions })`.
+ * Admin config route handlers.
+ * Registered via module routes and exposed through the fetch handler.
  */
 export const adminConfigFunctions = {
 	getAdminConfig,

@@ -411,8 +411,8 @@ openApiModule({
 
 | Route | Description |
 |---|---|
-| `GET /api/routes/openapi.json` | OpenAPI 3.1 JSON spec |
-| `GET /api/routes/docs` | Scalar interactive API reference |
+| `GET /api/openapi.json` | OpenAPI 3.1 JSON spec |
+| `GET /api/docs` | Scalar interactive API reference |
 
 ### What Gets Documented
 
@@ -420,7 +420,7 @@ openApiModule({
 |---|---|
 | Collections | CRUD endpoints (`GET`, `POST`, `PUT`, `DELETE`) |
 | Globals | Read/update endpoints (`GET`, `PUT`) |
-| Functions | RPC endpoints (`POST /rpc/{path}`) |
+| Routes | App route endpoints (`/api/{path}`) |
 | Auth | Sign-in, sign-up, session endpoints (when `auth: true`) |
 | Search | Search endpoints (when `search: true`) |
 

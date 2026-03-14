@@ -1,6 +1,6 @@
 # @questpie/next
 
-Next.js App Router adapter for QUESTPIE. Exports catch-all route handlers that mount CRUD, auth, storage, RPC, and realtime routes.
+Next.js App Router adapter for QUESTPIE. Exports catch-all route handlers that mount CRUD, auth, storage, custom app routes, and realtime routes.
 
 ## Installation
 
@@ -15,11 +15,10 @@ bun add @questpie/next questpie
 ```ts
 // app/api/[...path]/route.ts
 import { questpieNextRouteHandlers } from "@questpie/next";
-import { app, appRpc } from "@/questpie/server/app";
+import { app } from "@/questpie/server/app";
 
 export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(app, {
   basePath: "/api",
-  rpc: appRpc,
 });
 
 export const dynamic = "force-dynamic";
@@ -30,9 +29,9 @@ export const dynamic = "force-dynamic";
 ```ts
 // lib/client.ts
 import { createClient } from "questpie/client";
-import type { App, AppRpc } from "@/questpie/server/app";
+import type { AppConfig } from "@/questpie/server/app";
 
-export const appClient = createClient<App, AppRpc>({
+export const appClient = createClient<AppConfig>({
   baseURL: process.env.NEXT_PUBLIC_URL!,
   basePath: "/api",
 });
@@ -121,7 +120,7 @@ The adapter creates catch-all handlers under your base path:
 | POST   | `/api/globals/:name/revert`           | Revert global version |
 | POST   | `/api/collections/:name/upload`      | Upload file          |
 | ALL    | `/api/auth/*`                        | Better Auth routes   |
-| POST   | `/api/rpc/*`                         | RPC procedures       |
+| ANY    | `/api/:route*`                       | Custom app routes    |
 | GET    | `/api/collections/:name/subscribe`   | SSE realtime         |
 
 ## Environment Variables

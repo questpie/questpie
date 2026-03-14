@@ -5,7 +5,7 @@ description: Auto-generate OpenAPI 3.1 spec and interactive API docs from your s
 
 # OpenAPI
 
-QUESTPIE auto-generates an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) spec from your collections, globals, and functions at runtime. The spec is served as a standard route alongside interactive [Scalar](https://scalar.com) API docs.
+QUESTPIE auto-generates an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) spec from your collections, globals, and routes at runtime. The spec is served as a standard route alongside interactive [Scalar](https://scalar.com) API docs.
 
 ## Setup
 
@@ -42,8 +42,8 @@ The module registers two routes:
 
 | Route | Description |
 |---|---|
-| `GET /api/routes/openapi.json` | OpenAPI 3.1 JSON spec |
-| `GET /api/routes/docs` | Scalar interactive API reference |
+| `GET /api/openapi.json` | OpenAPI 3.1 JSON spec |
+| `GET /api/docs` | Scalar interactive API reference |
 
 ## Configuration
 
@@ -95,11 +95,11 @@ The spec is generated at runtime from your app's schema:
 |---|---|
 | Collections | CRUD endpoints (`GET /collections/{name}`, `POST`, `PUT`, `DELETE`) |
 | Globals | Read/update endpoints (`GET /globals/{name}`, `PUT`) |
-| Functions | RPC endpoints (`POST /rpc/{path}`) with input/output schemas |
+| Routes | App routes (`/api/{path}`) with input/output schemas when available |
 | Auth | Sign-in, sign-up, session endpoints (when `auth: true`) |
 | Search | Search endpoints (when `search: true`) |
 
-Collection and global field schemas (from Zod) are automatically converted to JSON Schema in the spec. Function input/output schemas are included when defined.
+Collection and global field schemas (from Zod) are automatically converted to JSON Schema in the spec. Route input/output schemas are included when defined.
 
 ## Manual Route Approach
 
@@ -139,6 +139,6 @@ const spec = generateOpenApiSpec(app, {
 
 ## Related Pages
 
-- [Routes](/docs/backend/business-logic/routes) — Raw HTTP route handlers
-- [Functions](/docs/backend/business-logic/functions) — Typed RPC endpoints
+- [Routes](/docs/backend/business-logic/routes) — Typed JSON route handlers
+- [Routes (Raw)](/docs/backend/business-logic/raw-routes) — Raw HTTP route handlers
 - [Modules](/docs/backend/architecture/modules) — Module system

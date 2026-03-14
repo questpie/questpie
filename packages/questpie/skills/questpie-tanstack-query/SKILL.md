@@ -1,6 +1,6 @@
 ---
 name: questpie-tanstack-query
-description: QUESTPIE TanStack Query integration — createQuestpieQueryOptions option builders, useQuery useMutation queryOptions mutationOptions, collections globals RPC, streamedQuery SSE realtime subscriptions, batch helpers, type inference AppConfig createClient, React data fetching caching, framework adapters TanStack Start Next.js Hono Elysia, frontend client SDK querying where orderBy pagination with select
+description: QUESTPIE TanStack Query integration - createQuestpieQueryOptions option builders, useQuery useMutation queryOptions mutationOptions, collections globals routes, streamedQuery SSE realtime subscriptions, batch helpers, type inference AppConfig createClient, React data fetching caching, framework adapters TanStack Start Next.js Hono Elysia, frontend client SDK querying where orderBy pagination with select
 type: composition
 requires:
   - questpie-core
@@ -227,18 +227,18 @@ function SiteSettings() {
 const { data } = useQuery(q.globals.siteSettings.get(undefined, { realtime: true }));
 ```
 
-## RPC (Server Functions)
+## Routes
 
-RPC calls support nested namespaces matching your `functions/` directory structure.
+Route calls support nested namespaces matching your `routes/` directory structure.
 
 ```tsx
-// functions/get-stats.ts -> rpc.getStats
+// routes/get-stats.ts -> routes.getStats
 const { data: stats } = useQuery(
-  q.rpc.getStats.query({ period: "week" })
+  q.routes.getStats.query({ period: "week" })
 );
 
-// functions/booking/create.ts -> rpc.booking.create
-const createBooking = useMutation(q.rpc.booking.create.mutation());
+// routes/booking/create.ts -> routes.booking.create
+const createBooking = useMutation(q.routes.booking.create.mutation());
 
 createBooking.mutate({
   barberId: "abc",
@@ -247,21 +247,21 @@ createBooking.mutate({
 });
 ```
 
-### RPC Query Keys
+### Route Query Keys
 
 Access query keys for manual invalidation:
 
 ```tsx
 const queryClient = useQueryClient();
 
-// Get the query key for a specific RPC call
-const key = q.rpc.getStats.key({ period: "week" });
+// Get the query key for a specific route call
+const key = q.routes.getStats.key({ period: "week" });
 queryClient.invalidateQueries({ queryKey: key });
 ```
 
 ## Custom Queries
 
-For queries that don't fit the standard collection/global/rpc pattern:
+For queries that don't fit the standard collection/global/route pattern:
 
 ```tsx
 const { data } = useQuery(
@@ -358,7 +358,7 @@ f.number()                    ->   with field types        ->   where: { price: 
 f.select({ options: [...] })  ->   and operators           ->   data.status === "published"
 ```
 
-The generated `AppConfig` type includes collections, globals, functions, and routes:
+The generated `AppConfig` type includes collections, globals, and routes:
 
 ```ts
 export type AppConfig = {
@@ -386,7 +386,7 @@ await client.collections.posts.create({ title: "Hello", status: "draft" });
 await client.collections.posts.update({ id: "abc", data: { status: "published" } });
 await client.collections.posts.delete({ id: "abc" });
 const settings = await client.globals.siteSettings.get();
-const result = await client.rpc.createBooking({ barberId: "abc", serviceId: "def" });
+const result = await client.routes.createBooking({ barberId: "abc", serviceId: "def" });
 client.setLocale("sk"); // Set locale for localized content
 ```
 
@@ -395,8 +395,10 @@ client.setLocale("sk"); // Set locale for localized content
 Pass `{ realtime: true }` as the second argument to `find()`, `count()`, or `get()` to enable SSE-based live updates. Requires a realtime adapter in `questpie.config.ts`:
 
 ```ts
+import { runtimeConfig } from "questpie";
 import { pgNotifyAdapter } from "questpie";
-export default config({
+
+export default runtimeConfig({
   realtime: { adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL }) },
 });
 ```
@@ -466,9 +468,10 @@ const { docs } = await client.collections.posts.find({ limit: 10 });
 Collection changes do not auto-refresh when realtime is enabled but no adapter is configured. Add a realtime adapter in `questpie.config.ts`:
 
 ```ts
+import { runtimeConfig } from "questpie";
 import { pgNotifyAdapter } from "questpie";
 
-export default config({
+export default runtimeConfig({
   realtime: {
     adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL }),
   },

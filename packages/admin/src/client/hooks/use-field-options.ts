@@ -237,7 +237,7 @@ export function useFieldOptions({
 			setError(null);
 
 			try {
-				const response = await (client.rpc as any).fieldOptions({
+				const response = await (client.routes as any).fieldOptions({
 					collection,
 					type: mode,
 					field,

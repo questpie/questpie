@@ -1,0 +1,176 @@
+---
+title: Routes
+description: Raw HTTP routes for webhooks, custom APIs, and endpoints that need full request/response control.
+---
+
+# Routes
+
+Routes give you raw HTTP request/response handling for cases that don't fit collection CRUD or JSON routes - webhooks, OAuth callbacks, health checks, file downloads, streaming.
+
+## Defining a Route
+
+```ts title="routes/health.ts"
+import { route } from "questpie";
+
+export default route()
+  .get()
+  .raw()
+  .handler(async () => {
+    return new Response(JSON.stringify({ status: "ok" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+```
+
+Place route files in `routes/`. The file path maps to a flat URL under your `basePath` (`/api` by default):
+
+```text
+routes/
+├── health.ts             → /api/health
+├── webhooks/
+│   ├── stripe.ts         → /api/webhooks/stripe
+│   └── github.ts         → /api/webhooks/github
+└── export.ts             → /api/export
+```
+
+## Route Methods
+
+Set the HTTP method with the builder (`POST` by default):
+
+```ts
+route().post().handler(async ({ request }) => new Response("OK"))
+route().get().raw().handler(async ({ request }) => new Response("OK"))
+route().patch().schema(z.object({ title: z.string() })).handler(async ({ input }) => ({ ok: true }))
+```
+
+Supported method setters: `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`.
+
+## Handler Context
+
+Route handlers receive `AppContext` plus request-specific properties:
+
+| Property | Type | Description |
+|---|---|---|
+| `request` | `Request` | Standard Web API Request object |
+| `locale` | `string` | Current locale |
+| `params` | `Record<string, string>` | URL path parameters |
+| `db` | `Database` | Database instance |
+| `session` | `Session \| null` | Current auth session |
+| `collections` | `CollectionsAPI` | Typed collection API |
+| `queue` | `QueueClient` | Queue client for jobs |
+| `email` | `MailerService` | Email service |
+| `*services*` | | Any user-defined services |
+
+```ts
+route({
+  method: "POST",
+  handler: async ({ request, db, session, collections, queue }) => {
+    const body = await request.json();
+    // Full access to AppContext
+    return new Response("OK");
+  },
+})
+```
+
+## Calling Routes from the Client
+
+The client SDK provides typed access to routes:
+
+```ts
+// Call a route
+const response = await client.routes["webhooks/stripe"]({
+  method: "POST",
+  body: JSON.stringify(payload),
+  headers: { "stripe-signature": sig },
+});
+
+// Get a route URL (for forms, links, etc.)
+const url = client.routes["health"].url;
+// → "http://localhost:3000/api/health"
+```
+
+Raw routes return `Response` objects - you handle parsing yourself.
+
+## JSON vs Raw Routes
+
+| | JSON route | Raw route |
+|---|---|---|
+| **Transport** | HTTP JSON (`/api/<route-path>`) | Raw HTTP (`/api/<route-path>`) |
+| **Input** | Zod-validated via `.schema()` | Manual - `request.json()`, `request.text()` |
+| **Output** | Auto-serialized JSON | Raw `Response` object |
+| **Client** | `client.routes.createBooking(input)` → typed result | `client.routes["webhooks/stripe"]()` → `Response` |
+| **Use for** | Typed business endpoints | Webhooks, file downloads, streams, OAuth |
+
+**Rule of thumb**: use a JSON route when you want typed input/output and automatic validation. Use a raw route when you need full HTTP control (custom headers, binary data, streams, signature verification).
+
+## Use Cases
+
+### Webhook handler
+
+```ts title="routes/webhooks/stripe.ts"
+import { route } from "questpie";
+
+export default route()
+  .post()
+  .raw()
+  .handler(async ({ request, db }) => {
+    const body = await request.text();
+    const signature = request.headers.get("stripe-signature");
+
+    // Verify webhook signature
+    const event = verifyStripeWebhook(body, signature);
+
+    // Process event
+    await db.insert(webhookEvents).values({
+      type: event.type,
+      payload: body,
+    });
+
+    return new Response("OK", { status: 200 });
+  });
+```
+
+### File download
+
+```ts title="routes/export.ts"
+import { route } from "questpie";
+
+export default route()
+  .get()
+  .raw()
+  .handler(async ({ collections, session }) => {
+    if (!session) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    const data = await collections.appointments.find({ limit: 1000 });
+    const csv = generateCSV(data.docs);
+
+    return new Response(csv, {
+      headers: {
+        "Content-Type": "text/csv",
+        "Content-Disposition": "attachment; filename=appointments.csv",
+      },
+    });
+  });
+```
+
+### Health check
+
+```ts title="routes/health.ts"
+import { route } from "questpie";
+
+export default route()
+  .get()
+  .raw()
+  .handler(async ({ db }) => {
+    const healthy = await db.execute(sql`SELECT 1`).then(() => true).catch(() => false);
+    return Response.json({ status: healthy ? "ok" : "degraded" });
+  });
+```
+
+## Related Pages
+
+- [Routes (JSON)](/docs/backend/business-logic/routes) — Typed JSON route handlers
+- [Jobs](/docs/backend/business-logic/jobs) — Background processing
+- [File Convention](/docs/backend/architecture/file-convention) — Discovery rules

@@ -34,7 +34,6 @@ type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;
 type _ModuleCollections = _MP<"collections">;
 type _ModuleGlobals = _MP<"globals">;
 type _ModuleJobs = _MP<"jobs">;
-type _ModuleFunctions = _MP<"functions">;
 type _ModuleRoutes = _MP<"routes">;
 type _ModuleServices = _MP<"services">;
 
@@ -51,9 +50,6 @@ export type AppGlobals = _ModuleGlobals & {
 /** All jobs in the app (modules + user, user overrides) */
 export type AppJobs = _ModuleJobs;
 
-/** All functions in the app (modules + user, user overrides) */
-export type AppFunctions = _ModuleFunctions;
-
 /** All routes in the app (modules + user, user overrides) */
 export type AppRoutes = _ModuleRoutes;
 
@@ -65,7 +61,6 @@ type _AppInternal = Questpie<QuestpieConfig & {
 	collections: AppCollections;
 	globals: AppGlobals;
 	jobs: AppJobs;
-	functions: AppFunctions;
 	routes: AppRoutes;
 	services: AppServices;
 }>;

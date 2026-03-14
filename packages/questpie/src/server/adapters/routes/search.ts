@@ -20,7 +20,7 @@ import type {
 } from "../../integrated/search/types.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
-import { parseRpcBody } from "../utils/request.js";
+import { parseRouteBody } from "../utils/request.js";
 import { handleError, smartResponse } from "../utils/response.js";
 
 export const createSearchRoutes = <
@@ -126,7 +126,7 @@ export const createSearchRoutes = <
 				);
 			}
 
-			const body = await parseRpcBody(request);
+			const body = await parseRouteBody(request);
 			if (body === null) {
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),

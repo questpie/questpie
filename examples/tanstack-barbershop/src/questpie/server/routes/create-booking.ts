@@ -1,8 +1,9 @@
-import { fn } from "questpie";
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-	schema: z.object({
+export default route()
+	.post()
+	.schema(z.object({
 		barberId: z.string(),
 		serviceId: z.string(),
 		scheduledAt: z.string().datetime(),
@@ -10,8 +11,8 @@ export default fn({
 		customerEmail: z.string().email(),
 		customerPhone: z.string().optional(),
 		notes: z.string().optional(),
-	}),
-	handler: async ({ input, collections }) => {
+	}))
+	.handler(async ({ input, collections }) => {
 		const service = await collections.services.findOne({
 			where: { id: input.serviceId },
 		});
@@ -101,5 +102,4 @@ export default fn({
 			appointmentId: appointment.id,
 			message: "Appointment booked successfully!",
 		};
-	},
-});
+	});

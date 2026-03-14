@@ -1,23 +1,10 @@
-import { withOpenApi } from "@questpie/openapi";
 import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie";
 import { app } from "@/questpie/server/app.js";
 
-const handler = withOpenApi(
-	createFetchHandler(app, {
-		basePath: "/api",
-	}),
-	{
-		app,
-		basePath: "/api",
-		info: {
-			title: "{{projectName}} API",
-			version: "1.0.0",
-			description: "QUESTPIE API",
-		},
-		scalar: { theme: "purple" },
-	},
-);
+const handler = createFetchHandler(app, {
+	basePath: "/api",
+});
 
 const handleCmsRequest = async (request: Request) => {
 	const response = await handler(request);

@@ -18,6 +18,11 @@
 			"cache": false,
 			"env": ["QUESTPIE_MIGRATIONS_SILENT"]
 		},
+		"questpie:generate": {
+			"dependsOn": ["^questpie:generate"],
+			 "inputs": ["$TURBO_DEFAULT$"],
+			 "outputs": ["**/.generated/**"]
+		},
 		"dev": {
 			"cache": false,
 			"persistent": true

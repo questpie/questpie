@@ -50,7 +50,7 @@ Place job files in `jobs/`. The filename becomes the job key: `send-appointment-
 
 ## Publishing Jobs
 
-Publish jobs from hooks, functions, or other jobs via the `queue` context:
+Publish jobs from hooks, routes, or other jobs via the `queue` context:
 
 ```ts title="collections/appointments.ts"
 .hooks({
@@ -69,7 +69,7 @@ The `queue` object is fully typed — autocompletion shows all available jobs an
 
 ## Handler Context
 
-Job handlers receive the same `AppContext` as functions:
+Job handlers receive the same `AppContext` as routes:
 
 | Property | Description |
 |---|---|
@@ -167,6 +167,6 @@ export default job({
 ## Related Pages
 
 - [Hooks](/docs/backend/rules/hooks) — Trigger jobs from collection hooks
-- [Functions](/docs/backend/business-logic/functions) — Server-side logic
+- [Routes](/docs/backend/business-logic/routes) — Server-side logic
 - [Queue](/docs/production/queue) — Queue infrastructure setup
 - [Email](/docs/production/email) — Email adapter configuration

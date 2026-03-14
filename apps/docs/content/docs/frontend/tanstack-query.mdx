@@ -102,11 +102,11 @@ import { client } from "@/lib/client";
 function BookingForm() {
   const { data: barbers } = useQuery({
     queryKey: ["barbers", "active"],
-    queryFn: () => client.rpc.getActiveBarbers({}),
+    queryFn: () => client.routes.getActiveBarbers({}),
   });
 
   const booking = useMutation({
-    mutationFn: (data) => client.rpc.createBooking(data),
+    mutationFn: (data) => client.routes.createBooking(data),
   });
 
   return (

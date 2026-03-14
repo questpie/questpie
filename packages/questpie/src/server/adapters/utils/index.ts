@@ -22,7 +22,7 @@ export {
 	normalizeBasePath,
 	normalizeMimeType,
 	parseBoolean,
-	parseRpcBody,
+	parseRouteBody,
 	resolveUploadFile,
 } from "./request.js";
 export {

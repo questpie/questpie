@@ -799,7 +799,7 @@ export default _module;
 ```ts
 // questpie.config.ts
 import { runtimeConfig } from "questpie";
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import { myPlugin } from "@questpie/my-plugin";
 
 export default runtimeConfig({

@@ -82,7 +82,6 @@ import type { BetterAuthOptions } from "better-auth";
 import type { drizzle as drizzleBun } from "drizzle-orm/bun-sql";
 import type { drizzle as drizzlePgLite } from "drizzle-orm/pglite";
 import type { DriverContract } from "flydrive/types";
-import type { FunctionsTree } from "../functions/types.js";
 import type { MailerConfig } from "../integrated/mailer/index.js";
 import type { QueueConfig as BaseQueueConfig } from "../integrated/queue/types.js";
 import type { RealtimeConfig } from "../integrated/realtime/index.js";
@@ -399,16 +398,10 @@ export interface QuestpieConfig {
 	queue?: BaseQueueConfig;
 
 	/**
-	 * Functions registered on the app instance.
-	 * Automatically routed by `createFetchHandler` at `/api/rpc/*`.
-	 */
-	functions?: FunctionsTree;
-
-	/**
-	 * Raw HTTP route handlers registered on the app instance.
-	 * Automatically routed by `createFetchHandler` at `/api/routes/*`.
+	 * Unified route handlers registered on the app instance.
+	 * Automatically routed by `createFetchHandler` — no URL prefix needed.
 	 *
-	 * @see RFC-MODULE-ARCHITECTURE §5 (Routes — Raw HTTP Handlers)
+	 * @see QUE-158 (Unified route() builder + URL flattening)
 	 */
 	routes?: Record<
 		string,

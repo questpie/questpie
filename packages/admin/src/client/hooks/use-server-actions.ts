@@ -169,9 +169,9 @@ function mapServerAction(
 				cancelLabel: form.cancelLabel,
 				width: form.width,
 				onSubmit: async (data, ctx) => {
-					const rpc = client?.rpc;
-					if (!rpc?.executeAction) {
-						throw new Error("executeAction RPC is not available");
+					const routes = client?.routes;
+					if (!routes?.executeAction) {
+						throw new Error("executeAction route is not available");
 					}
 
 					const itemId =
@@ -193,7 +193,7 @@ function mapServerAction(
 								? idsFromItemArray
 								: undefined;
 
-					const response = (await rpc.executeAction({
+					const response = (await routes.executeAction({
 						collection,
 						actionId: serverAction.id,
 						itemId,

@@ -6,7 +6,7 @@
  * Sidebar, dashboard, branding, locale, context are file conventions.
  */
 
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import {
 	ConsoleAdapter,
 	pgBossAdapter,

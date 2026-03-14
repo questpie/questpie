@@ -318,7 +318,7 @@ logger.info({ appointmentId: "abc", action: "created" }, "Appointment created");
 
 ## OpenAPI
 
-Auto-generate OpenAPI 3.1 spec with `@questpie/openapi`. Install with `bun add @questpie/openapi`, add `openApiModule({ info: { title: "My API", version: "1.0.0" } })` to modules, run `bunx questpie generate`. Serves spec at `/api/routes/openapi.json` and Scalar docs at `/api/routes/docs`. See `references/infrastructure-adapters.md` for full options.
+Auto-generate OpenAPI 3.1 spec with `@questpie/openapi`. Install with `bun add @questpie/openapi`, add `openApiModule({ info: { title: "My API", version: "1.0.0" } })` to modules, run `bunx questpie generate`. Serves spec at `/api/openapi.json` and Scalar docs at `/api/docs`. See `references/infrastructure-adapters.md` for full options.
 
 ## Deployment
 

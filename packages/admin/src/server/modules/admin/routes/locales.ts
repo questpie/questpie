@@ -5,7 +5,7 @@
  * Used by the admin panel to populate locale switchers and validate locale selection.
  */
 
-import { fn } from "questpie";
+import { route } from "questpie";
 import { z } from "zod";
 
 // ============================================================================
@@ -43,7 +43,7 @@ const getContentLocalesOutputSchema = z.object({
  *
  * @example
  * ```ts
- * const result = await client.rpc.getContentLocales({});
+ * const result = await client.routes.getContentLocales({});
  * // {
  * //   locales: [
  * //     { code: "en", label: "English", fallback: true },
@@ -54,11 +54,11 @@ const getContentLocalesOutputSchema = z.object({
  * // }
  * ```
  */
-const getContentLocales = fn({
-	type: "query",
-	schema: getContentLocalesSchema,
-	outputSchema: getContentLocalesOutputSchema,
-	handler: async (ctx) => {
+const getContentLocales = route()
+	.post()
+	.schema(getContentLocalesSchema)
+	.outputSchema(getContentLocalesOutputSchema)
+	.handler(async (ctx) => {
 		const app = (ctx as any).app;
 		const localeConfig = app.config.locale;
 
@@ -93,8 +93,7 @@ const getContentLocales = fn({
 			defaultLocale: localeConfig.defaultLocale,
 			fallbacks: localeConfig.fallbacks,
 		};
-	},
-});
+	});
 
 // ============================================================================
 // Export Bundle

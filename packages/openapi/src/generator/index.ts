@@ -2,21 +2,21 @@
  * OpenAPI spec generation orchestrator.
  */
 
-import type { FunctionsTree, Questpie } from "questpie";
+import type { Questpie, RoutesTree } from "questpie";
 import type { OpenApiConfig, OpenApiSpec } from "../types.js";
 import { generateAuthPaths } from "./auth.js";
 import { generateCollectionPaths } from "./collections.js";
 import { generateGlobalPaths } from "./globals.js";
-import { generateRpcPaths } from "./rpc.js";
+import { generateRoutePaths } from "./routes.js";
 import { baseComponentSchemas } from "./schemas.js";
 import { generateSearchPaths } from "./search.js";
 
 /**
- * Generate a complete OpenAPI 3.1 spec from a Questpie app instance and optional RPC router.
+ * Generate a complete OpenAPI 3.1 spec from a Questpie app instance and optional routes tree.
  */
 export function generateOpenApiSpec(
 	app: Questpie<any>,
-	functions?: FunctionsTree,
+	routes?: RoutesTree,
 	config: OpenApiConfig = {},
 ): OpenApiSpec {
 	const allPaths: OpenApiSpec["paths"] = {};
@@ -35,11 +35,11 @@ export function generateOpenApiSpec(
 	Object.assign(allSchemas, globals.schemas);
 	allTags.push(...globals.tags);
 
-	// Functions (RPC)
-	const rpcResult = generateRpcPaths(functions, config);
-	Object.assign(allPaths, rpcResult.paths);
-	Object.assign(allSchemas, rpcResult.schemas);
-	allTags.push(...rpcResult.tags);
+	// Routes
+	const routeResult = generateRoutePaths(routes, config);
+	Object.assign(allPaths, routeResult.paths);
+	Object.assign(allSchemas, routeResult.schemas);
+	allTags.push(...routeResult.tags);
 
 	// Auth
 	const auth = generateAuthPaths(config);

@@ -1,11 +1,11 @@
 ---
 title: First App
-description: Build a working CRUD API with a server function in 5 minutes.
+description: Build a working CRUD API with a server route in 5 minutes.
 ---
 
 # First App
 
-Build a working API with a collection, a server function, and an HTTP handler. This takes about 5 minutes.
+Build a working API with a collection, a server route, and an HTTP handler. This takes about 5 minutes.
 
 ## 1. Define a collection
 
@@ -27,15 +27,16 @@ This defines:
 - Zod validation for create/update
 - Type-safe query operators for `where`, `orderBy`
 
-## 2. Add a server function
+## 2. Add a server route
 
-```ts title="src/questpie/server/functions/get-overdue-tasks.ts"
-import { fn } from "questpie";
+```ts title="src/questpie/server/routes/get-overdue-tasks.ts"
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-  schema: z.object({}),
-  handler: async ({ collections }) => {
+export default route()
+  .post()
+  .schema(z.object({}))
+  .handler(async ({ collections }) => {
     return await collections.tasks.find({
       where: {
         completed: false,
@@ -43,11 +44,10 @@ export default fn({
       },
       orderBy: { dueDate: "asc" },
     });
-  },
-});
+  });
 ```
 
-Functions are typed server-side logic exposed via RPC. The `collections` object is injected through context — fully typed from your schema.
+Routes are typed server-side logic exposed as endpoints. The `collections` object is injected through context — fully typed from your schema.
 
 ## 3. Run codegen
 
@@ -56,8 +56,8 @@ bunx questpie generate
 ```
 
 This discovers your files and generates:
-- `src/questpie/server/.generated/index.ts` — app instance with typed collections and functions
-- `AppConfig` type for the client SDK (includes collections, globals, and functions)
+- `src/questpie/server/.generated/index.ts` — app instance with typed collections and routes
+- `AppConfig` type for the client SDK (includes collections, globals, and routes)
 - `AppContext` module augmentation
 
 ## 4. Push to database
@@ -96,8 +96,8 @@ curl -X POST http://localhost:3000/api/tasks \
   -H "Content-Type: application/json" \
   -d '{"title": "Write docs", "priority": "high", "dueDate": "2025-03-01"}'
 
-# Call a function via RPC
-curl -X POST http://localhost:3000/api/rpc/getOverdueTasks \
+# Call a route
+curl -X POST http://localhost:3000/api/get-overdue-tasks \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -121,8 +121,8 @@ const tasks = await client.collections.tasks.find({
   orderBy: { priority: "desc" },
 });
 
-// Call functions via RPC
-const overdue = await client.rpc.getOverdueTasks({});
+// Call routes
+const overdue = await client.routes.getOverdueTasks({});
 ```
 
 ## Adding the Admin Panel
@@ -134,7 +134,7 @@ bun add @questpie/admin
 ```
 
 ```ts title="src/questpie/server/questpie.config.ts"
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import { runtimeConfig } from "questpie";
 
 export default runtimeConfig({

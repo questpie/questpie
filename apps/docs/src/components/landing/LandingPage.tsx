@@ -133,7 +133,7 @@ function FileConventionsSection() {
 │   └── `}
 			<span className="text-primary font-semibold">users.ts</span>
 			{`
-├── functions/
+├── routes/
 │   └── `}
 			<span className="text-primary font-semibold">admin/stats.ts</span>
 			{`
@@ -187,7 +187,7 @@ function FileConventionsSection() {
 			<span className="text-primary font-semibold">users.collection.ts</span>
 			{`
 │   └── `}
-			<span className="text-primary font-semibold">stats.function.ts</span>
+			<span className="text-primary font-semibold">stats.route.ts</span>
 			{`
 └── `}
 			<span className="text-primary font-semibold">auth.ts</span>
@@ -197,7 +197,7 @@ function FileConventionsSection() {
 	const byTypeBadges = [
 		["posts.ts", "CRUD + API + ADMIN", "text-[var(--syntax-string)]"],
 		["users.ts", "AUTH-CONNECTED ENTITY", "text-[var(--syntax-string)]"],
-		["admin/stats.ts", "TYPE-SAFE RPC", "text-primary"],
+		["admin/stats.ts", "TYPE-SAFE ROUTE", "text-primary"],
 		["hero.ts", "VISUAL BLOCK", "text-[#FFB300]"],
 		["send-newsletter.ts", "BACKGROUND JOB", "text-[#40C4FF]"],
 		["stripe.ts", "SINGLETON SERVICE", "text-muted-foreground"],
@@ -213,7 +213,7 @@ function FileConventionsSection() {
 		["orders.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
 		["stripe.service.ts", "SERVICE", "text-muted-foreground"],
 		["users.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["stats.function.ts", "RPC", "text-primary"],
+		["stats.route.ts", "ROUTE", "text-primary"],
 	];
 
 	const badges = layout === "by-type" ? byTypeBadges : byFeatureBadges;
@@ -553,7 +553,9 @@ function LandingFooter() {
 						<div className="font-mono text-[9px] tracking-[2px] uppercase text-muted-foreground/60 mb-2">
 							Install
 						</div>
-						<div className="font-mono text-xs text-primary mt-1">npx create-questpie</div>
+						<div className="font-mono text-xs text-primary mt-1">
+							npx create-questpie
+						</div>
 						<div className="text-[10px] text-muted-foreground mt-3 leading-relaxed">
 							MIT License
 							<br />
@@ -618,9 +620,9 @@ export function LandingPage() {
 							Ship everywhere.
 						</h1>
 						<p className="text-sm text-muted-foreground leading-relaxed mt-5 max-w-[440px]">
-							Define your schema once. Get REST, RPC, realtime, typed client
-							SDK, and optional admin UI. Server-first TypeScript. Built on
-							Drizzle, Zod, Better Auth.
+							Define your schema once. Get REST, typed routes, realtime, typed
+							client SDK, and optional admin UI. Server-first TypeScript. Built
+							on Drizzle, Zod, Better Auth.
 						</p>
 						<div className="flex gap-px mt-8">
 							<Link
@@ -665,11 +667,14 @@ export function LandingPage() {
 								<span className="text-[var(--syntax-function)]">fields</span>
 								{`(({ f }) => ({
     title:   f.`}
-								<span className="text-[var(--syntax-function)]">text</span>(<span className="text-[#FFB300]">255</span>
-								).<span className="text-[var(--syntax-function)]">required</span>
+								<span className="text-[var(--syntax-function)]">text</span>(
+								<span className="text-[#FFB300]">255</span>
+								).
+								<span className="text-[var(--syntax-function)]">required</span>
 								{`(),
     content: f.`}
-								<span className="text-[var(--syntax-function)]">richText</span>().
+								<span className="text-[var(--syntax-function)]">richText</span>
+								().
 								<span className="text-[var(--syntax-function)]">localized</span>
 								{`(),
     status:  f.`}
@@ -705,7 +710,8 @@ export function LandingPage() {
 								<span className="text-[var(--syntax-function)]">text</span>
 								{`(),
       desc:  f.`}
-								<span className="text-[var(--syntax-function)]">text</span>(<span className="text-[#FFB300]">160</span>)
+								<span className="text-[var(--syntax-function)]">text</span>(
+								<span className="text-[#FFB300]">160</span>)
 								{`,
     }),
   }))
@@ -720,7 +726,9 @@ export function LandingPage() {
       doc.authorId === session?.user?.id,
   })
   .`}
-								<span className="text-[var(--syntax-function)]">versioning</span>
+								<span className="text-[var(--syntax-function)]">
+									versioning
+								</span>
 								{`({ enabled: `}
 								<span className="text-primary font-semibold">true</span>
 								{`, maxVersions: `}
@@ -765,13 +773,15 @@ export function LandingPage() {
 									</span>
 									{"\n"}
 									<span className="text-muted-foreground/60">
-										{"// REST, RPC, Admin, Validation,"}
+										{"// REST, Routes, Admin, Validation,"}
 									</span>
 									{"\n"}
-									<span className="text-muted-foreground/60">{"// Client SDK, Realtime, Search"}</span>
+									<span className="text-muted-foreground/60">
+										{"// Client SDK, Realtime, Search"}
+									</span>
 									{"\n\n"}
-									<span className="text-primary font-semibold">collection</span>(
-									<span className="text-[var(--syntax-string)]">"posts"</span>)
+									<span className="text-primary font-semibold">collection</span>
+									(<span className="text-[var(--syntax-string)]">"posts"</span>)
 									{`
   .`}
 									<span className="text-[var(--syntax-function)]">fields</span>
@@ -779,20 +789,31 @@ export function LandingPage() {
     title:   f.`}
 									<span className="text-[var(--syntax-function)]">text</span>(
 									<span className="text-[#FFB300]">255</span>).
-									<span className="text-[var(--syntax-function)]">required</span>
+									<span className="text-[var(--syntax-function)]">
+										required
+									</span>
 									{`(),
     content: f.`}
-									<span className="text-[var(--syntax-function)]">richText</span>().
-									<span className="text-[var(--syntax-function)]">localized</span>
+									<span className="text-[var(--syntax-function)]">
+										richText
+									</span>
+									().
+									<span className="text-[var(--syntax-function)]">
+										localized
+									</span>
 									{`(),
     status:  f.`}
 									<span className="text-[var(--syntax-function)]">select</span>
 									{`([...]).`}
-									<span className="text-[var(--syntax-function)]">required</span>
+									<span className="text-[var(--syntax-function)]">
+										required
+									</span>
 									{`(),
     author:  f.`}
-									<span className="text-[var(--syntax-function)]">relation</span>(
-									<span className="text-[var(--syntax-string)]">"users"</span>)
+									<span className="text-[var(--syntax-function)]">
+										relation
+									</span>
+									(<span className="text-[var(--syntax-string)]">"users"</span>)
 									{`,
   }))`}
 								</pre>
@@ -801,7 +822,7 @@ export function LandingPage() {
 								<ul className="list-none font-mono text-xs p-0 m-0">
 									{[
 										["REST API", "/api/collections/posts"],
-										["RPC functions", "typed, namespaced"],
+										["Typed routes", "typed, namespaced"],
 										["Realtime via SSE", "subscribe to changes"],
 										["Typed client SDK", "zero codegen step"],
 										["Admin panel", "table, form, block editor"],
@@ -888,26 +909,38 @@ export function LandingPage() {
 								<pre className="px-5 py-4">
 									{`runtimeConfig({
   db: { url: `}
-									<span className="text-[var(--syntax-string)]">DATABASE_URL</span>
+									<span className="text-[var(--syntax-string)]">
+										DATABASE_URL
+									</span>
 									{` },
   queue: { adapter: `}
-									<span className="text-[var(--syntax-function)]">pgBossAdapter</span>
+									<span className="text-[var(--syntax-function)]">
+										pgBossAdapter
+									</span>
 									{`() },
   search: `}
-									<span className="text-[var(--syntax-function)]">postgresSearchAdapter</span>
+									<span className="text-[var(--syntax-function)]">
+										postgresSearchAdapter
+									</span>
 									{`(),
   realtime: { adapter: `}
-									<span className="text-[var(--syntax-function)]">pgNotifyAdapter</span>
+									<span className="text-[var(--syntax-function)]">
+										pgNotifyAdapter
+									</span>
 									{`() },
   storage: { driver: `}
-									<span className="text-[var(--syntax-function)]">s3Driver</span>
+									<span className="text-[var(--syntax-function)]">
+										s3Driver
+									</span>
 									{`({
     bucket: `}
 									<span className="text-[var(--syntax-string)]">"assets"</span>
 									{`
   }) },
   email: { adapter: `}
-									<span className="text-[var(--syntax-function)]">smtpAdapter</span>
+									<span className="text-[var(--syntax-function)]">
+										smtpAdapter
+									</span>
 									{`() },
 })`}
 								</pre>
@@ -932,8 +965,8 @@ export function LandingPage() {
 						<TwoCol>
 							<TwoColLeft className="bg-background font-mono text-xs leading-relaxed text-muted-foreground p-0!">
 								<pre className="px-5 py-4">
-									<span className="text-primary font-semibold">collection</span>(
-									<span className="text-[var(--syntax-string)]">"posts"</span>)
+									<span className="text-primary font-semibold">collection</span>
+									(<span className="text-[var(--syntax-string)]">"posts"</span>)
 									{`
   .`}
 									<span className="text-[var(--syntax-function)]">admin</span>
@@ -941,11 +974,16 @@ export function LandingPage() {
     label: { en: `}
 									<span className="text-[var(--syntax-string)]">"Posts"</span>
 									{`, sk: `}
-									<span className="text-[var(--syntax-string)]">"Príspevky"</span>
+									<span className="text-[var(--syntax-string)]">
+										"Príspevky"
+									</span>
 									{` },
     icon: c.`}
 									<span className="text-[var(--syntax-function)]">icon</span>(
-									<span className="text-[var(--syntax-string)]">"ph:article"</span>)
+									<span className="text-[var(--syntax-string)]">
+										"ph:article"
+									</span>
+									)
 									{`,
   }))
   .`}
@@ -1012,10 +1050,18 @@ export function LandingPage() {
 										<table className="w-full border-collapse text-[11px]">
 											<thead>
 												<tr>
-													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">Title</th>
-													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">Status</th>
-													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">Author</th>
-													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">Date</th>
+													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">
+														Title
+													</th>
+													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">
+														Status
+													</th>
+													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">
+														Author
+													</th>
+													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">
+														Date
+													</th>
 												</tr>
 											</thead>
 											<tbody>
@@ -1026,8 +1072,12 @@ export function LandingPage() {
 													<td className="px-2.5 py-1.5 border-b border-border text-[#00E676] text-[9px] tracking-wide">
 														PUBLISHED
 													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">admin</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">Mar 6</td>
+													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
+														admin
+													</td>
+													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
+														Mar 6
+													</td>
 												</tr>
 												<tr>
 													<td className="px-2.5 py-1.5 border-b border-border text-foreground">
@@ -1036,8 +1086,12 @@ export function LandingPage() {
 													<td className="px-2.5 py-1.5 border-b border-border text-[#FFB300] text-[9px] tracking-wide">
 														DRAFT
 													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">admin</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">Mar 5</td>
+													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
+														admin
+													</td>
+													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
+														Mar 5
+													</td>
 												</tr>
 												<tr>
 													<td className="px-2.5 py-1.5 border-b border-border text-foreground">
@@ -1046,8 +1100,12 @@ export function LandingPage() {
 													<td className="px-2.5 py-1.5 border-b border-border text-[#00E676] text-[9px] tracking-wide">
 														PUBLISHED
 													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">admin</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">Mar 3</td>
+													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
+														admin
+													</td>
+													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
+														Mar 3
+													</td>
 												</tr>
 												<tr>
 													<td className="px-2.5 py-1.5 border-b-0 text-foreground">
@@ -1056,8 +1114,12 @@ export function LandingPage() {
 													<td className="px-2.5 py-1.5 border-b-0 text-[#FFB300] text-[9px] tracking-wide">
 														DRAFT
 													</td>
-													<td className="px-2.5 py-1.5 border-b-0 text-muted-foreground">admin</td>
-													<td className="px-2.5 py-1.5 border-b-0 text-muted-foreground">Mar 1</td>
+													<td className="px-2.5 py-1.5 border-b-0 text-muted-foreground">
+														admin
+													</td>
+													<td className="px-2.5 py-1.5 border-b-0 text-muted-foreground">
+														Mar 1
+													</td>
 												</tr>
 											</tbody>
 										</table>
@@ -1129,13 +1191,19 @@ export function LandingPage() {
 								{`,
 });
 `}
-								<span className="text-muted-foreground/60">{"// docs[0].title → string"}</span>
+								<span className="text-muted-foreground/60">
+									{"// docs[0].title → string"}
+								</span>
 								{`
 `}
-								<span className="text-muted-foreground/60">{"// docs[0].author → User"}</span>
+								<span className="text-muted-foreground/60">
+									{"// docs[0].author → User"}
+								</span>
 								{`
 `}
-								<span className="text-muted-foreground/60">{"// docs[0].tags → Tag[]"}</span>
+								<span className="text-muted-foreground/60">
+									{"// docs[0].tags → Tag[]"}
+								</span>
 								{`
 `}
 								<span className="text-muted-foreground/60">
@@ -1219,10 +1287,13 @@ export function LandingPage() {
 								</div>
 								<div className="bg-background font-mono text-[11px] leading-[1.8] px-4 py-3 whitespace-pre text-muted-foreground my-2">
 									<span className="text-primary">$</span> questpie dev{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span> Watching...{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span> server (23 collections)
+									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
+									Watching...{"\n"}
+									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
+									server (23 collections)
 									{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span> admin-client (15 blocks)
+									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
+									admin-client (15 blocks)
 								</div>
 								<div className="text-xs text-muted-foreground leading-normal">
 									Instant regeneration on file changes.
@@ -1233,11 +1304,13 @@ export function LandingPage() {
 									SCAFFOLD
 								</div>
 								<div className="bg-background font-mono text-[11px] leading-[1.8] px-4 py-3 whitespace-pre text-muted-foreground my-2">
-									<span className="text-primary">$</span> questpie add collection products
+									<span className="text-primary">$</span> questpie add
+									collection products
 									{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span> Created
-									collections/products.ts{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span> Regenerated types
+									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
+									Created collections/products.ts{"\n"}
+									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
+									Regenerated types
 								</div>
 								<div className="text-xs text-muted-foreground leading-normal">
 									One command. Typed immediately.
@@ -1252,7 +1325,9 @@ export function LandingPage() {
 										&#10007; Server defines blocks/hero
 									</span>
 									{"\n"}
-									<span className="text-destructive">&nbsp; but no renderer found</span>
+									<span className="text-destructive">
+										&nbsp; but no renderer found
+									</span>
 									{"\n"}
 									<span className="text-primary">
 										&rarr; Create admin/blocks/hero.tsx
@@ -1272,13 +1347,17 @@ export function LandingPage() {
 								>
 									<pre>
 										{`client.realtime.`}
-										<span className="text-[var(--syntax-function)]">subscribe</span>
+										<span className="text-[var(--syntax-function)]">
+											subscribe
+										</span>
 										{`(
   { resource: `}
 										<span className="text-[var(--syntax-string)]">"posts"</span>
 										{` },
   (event) => `}
-										<span className="text-[var(--syntax-function)]">updateUI</span>
+										<span className="text-[var(--syntax-function)]">
+											updateUI
+										</span>
 										{`(event)
 );`}
 									</pre>
@@ -1299,7 +1378,9 @@ export function LandingPage() {
 						<h2 className="font-mono text-[clamp(20px,3vw,28px)] font-extrabold text-foreground tracking-tight">
 							One backend. Ship everywhere.
 						</h2>
-						<div className="font-mono mt-3 text-sm text-primary">npx create-questpie</div>
+						<div className="font-mono mt-3 text-sm text-primary">
+							npx create-questpie
+						</div>
 					</div>
 					<div className="p-6 flex flex-col gap-px justify-center">
 						<Link

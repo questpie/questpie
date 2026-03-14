@@ -99,7 +99,7 @@ This controls the admin interface language, not the content locales.
 The locale is part of the request context:
 
 ```ts
-// In functions/hooks — locale comes from the request
+// In routes/hooks - locale comes from the request
 const services = await collections.services.find({
   where: { isActive: true },
 });

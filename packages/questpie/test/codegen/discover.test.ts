@@ -213,7 +213,6 @@ describe("discoverFiles", () => {
 		expect(cat(result, "collections").size).toBe(0);
 		expect(cat(result, "globals").size).toBe(0);
 		expect(cat(result, "jobs").size).toBe(0);
-		expect(cat(result, "functions").size).toBe(0);
 		expect(cat(result, "routes").size).toBe(0);
 		expect(cat(result, "messages").size).toBe(0);
 		expect(cat(result, "services").size).toBe(0);
@@ -226,8 +225,14 @@ describe("discoverFiles", () => {
 	// ── Collections ───────────────────────────────────────────────────────────
 
 	it("discovers collections with camelCase keys", async () => {
-		await write("collections/posts.ts", "export const posts = collection('posts');");
-		await write("collections/blog-posts.ts", "export const blogPosts = collection('blog-posts');");
+		await write(
+			"collections/posts.ts",
+			"export const posts = collection('posts');",
+		);
+		await write(
+			"collections/blog-posts.ts",
+			"export const blogPosts = collection('blog-posts');",
+		);
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const collections = cat(result, "collections");
@@ -237,7 +242,10 @@ describe("discoverFiles", () => {
 	});
 
 	it("sets correct varName and importPath for collections", async () => {
-		await write("collections/posts.ts", "export const posts = collection('posts');");
+		await write(
+			"collections/posts.ts",
+			"export const posts = collection('posts');",
+		);
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const file = cat(result, "collections").get("posts")!;
@@ -249,7 +257,10 @@ describe("discoverFiles", () => {
 
 	it("ignores index.ts in collections", async () => {
 		await write("collections/index.ts", "export * from './posts';");
-		await write("collections/posts.ts", "export const posts = collection('posts');");
+		await write(
+			"collections/posts.ts",
+			"export const posts = collection('posts');",
+		);
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const collections = cat(result, "collections");
@@ -259,7 +270,10 @@ describe("discoverFiles", () => {
 
 	it("ignores private files starting with _ in collections", async () => {
 		await write("collections/_utils.ts", "export const util = {};");
-		await write("collections/posts.ts", "export const posts = collection('posts');");
+		await write(
+			"collections/posts.ts",
+			"export const posts = collection('posts');",
+		);
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const collections = cat(result, "collections");
@@ -270,7 +284,10 @@ describe("discoverFiles", () => {
 	// ── Globals ───────────────────────────────────────────────────────────────
 
 	it("discovers globals", async () => {
-		await write("globals/site-settings.ts", "export const siteSettings = global('site-settings');");
+		await write(
+			"globals/site-settings.ts",
+			"export const siteSettings = global('site-settings');",
+		);
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		const globals = cat(result, "globals");
@@ -292,25 +309,41 @@ describe("discoverFiles", () => {
 		expect(jobs.has("cleanup")).toBe(true);
 	});
 
-	// ── Functions (recursive) ─────────────────────────────────────────────────
+	// ── Routes ────────────────────────────────────────────────────────────────
 
-	it("discovers flat functions with simple keys", async () => {
-		await write("functions/get-users.ts");
+	it("discovers routes dir files under routes category", async () => {
+		await write("routes/get-users.ts");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		expect(cat(result, "functions").has("getUsers")).toBe(true);
+		expect(cat(result, "routes").has("getUsers")).toBe(true);
 	});
 
-	it("discovers nested functions with dot-separated keys", async () => {
-		await write("functions/admin/get-stats.ts");
+	it("discovers functions dir files under routes category", async () => {
+		await write("functions/get-stats.ts");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		const functions = cat(result, "functions");
-		expect(functions.has("admin.getStats")).toBe(true);
+		expect(cat(result, "routes").has("getStats")).toBe(true);
+	});
 
-		const file = functions.get("admin.getStats")!;
-		// varName replaces dots with underscores
-		expect(file.varName).toBe("_fn_admin_getStats");
+	it("merges routes and functions into a single routes category", async () => {
+		await write("routes/webhook.ts");
+		await write("functions/get-stats.ts");
+
+		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
+		const routes = cat(result, "routes");
+		expect(routes.has("webhook")).toBe(true);
+		expect(routes.has("getStats")).toBe(true);
+	});
+
+	it("discovers nested routes with slash-separated camelCase keys", async () => {
+		await write("routes/admin/get-stats.ts");
+
+		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
+		const routes = cat(result, "routes");
+		expect(routes.has("admin/getStats")).toBe(true);
+
+		const file = routes.get("admin/getStats")!;
+		expect(file.varName).toBe("_route_admin_getStats");
 	});
 
 	// ── Migrations ────────────────────────────────────────────────────────────
@@ -360,7 +393,10 @@ describe("discoverFiles", () => {
 
 	it("does not treat auth.ts as a collection/job/etc.", async () => {
 		await write("auth.ts", "export default {};");
-		await write("collections/posts.ts", "export const posts = collection('posts');");
+		await write(
+			"collections/posts.ts",
+			"export const posts = collection('posts');",
+		);
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		expect(cat(result, "collections").size).toBe(1);
@@ -413,7 +449,10 @@ describe("discoverFiles", () => {
 	});
 
 	it("merges by-type and by-feature layout collections", async () => {
-		await write("collections/posts.ts", "export const posts = collection('posts');");
+		await write(
+			"collections/posts.ts",
+			"export const posts = collection('posts');",
+		);
 		await write(
 			"features/blog/collections/articles.ts",
 			"export const articles = collection('articles');",
@@ -429,7 +468,10 @@ describe("discoverFiles", () => {
 	// ── Conflict detection ────────────────────────────────────────────────────
 
 	it("throws on duplicate keys from by-type and by-feature layout", async () => {
-		await write("collections/posts.ts", "export const posts = collection('posts');");
+		await write(
+			"collections/posts.ts",
+			"export const posts = collection('posts');",
+		);
 		await write(
 			"features/blog/collections/posts.ts",
 			"export const posts = collection('posts');",
@@ -438,6 +480,17 @@ describe("discoverFiles", () => {
 		await expect(
 			discoverFiles(rootDir, outDir, coreDiscoverOptions()),
 		).rejects.toThrow(/duplicate collections key "posts"/);
+	});
+
+	it("throws clear error for route name collision between routes and functions", async () => {
+		await write("routes/get-stats.ts");
+		await write("functions/get-stats.ts");
+
+		await expect(
+			discoverFiles(rootDir, outDir, coreDiscoverOptions()),
+		).rejects.toThrow(
+			/Route name collision: 'get-stats' found in both functions\/ and routes\//,
+		);
 	});
 
 	// ── Plugin discovery ──────────────────────────────────────────────────────
@@ -602,10 +655,9 @@ describe("discoverFiles — mergeStrategy spread", () => {
 
 describe("detectFactoryExports", () => {
 	it("detects a single exported factory call", () => {
-		const matches = detectFactoryExports(
-			`export const hero = block("hero");`,
-			["block"],
-		);
+		const matches = detectFactoryExports(`export const hero = block("hero");`, [
+			"block",
+		]);
 		expect(matches).toHaveLength(1);
 		expect(matches[0].exportName).toBe("hero");
 		expect(matches[0].factoryName).toBe("block");
@@ -641,20 +693,18 @@ describe("detectFactoryExports", () => {
 	});
 
 	it("detects inline default factory export", () => {
-		const matches = detectFactoryExports(
-			`export default block("hero");`,
-			["block"],
-		);
+		const matches = detectFactoryExports(`export default block("hero");`, [
+			"block",
+		]);
 		expect(matches).toHaveLength(1);
 		expect(matches[0].isDefault).toBe(true);
 		expect(matches[0].entityKey).toBe("hero");
 	});
 
 	it("detects inline default factory without string arg", () => {
-		const matches = detectFactoryExports(
-			`export default block(dynamicVar);`,
-			["block"],
-		);
+		const matches = detectFactoryExports(`export default block(dynamicVar);`, [
+			"block",
+		]);
 		expect(matches).toHaveLength(1);
 		expect(matches[0].isDefault).toBe(true);
 		expect(matches[0].entityKey).toBeNull();
@@ -740,9 +790,9 @@ describe("detectExportTypeFromContent", () => {
 	});
 
 	it("detects export { X as default }", () => {
-		expect(
-			detectExportTypeFromContent("export { X as default };"),
-		).toEqual({ type: "default" });
+		expect(detectExportTypeFromContent("export { X as default };")).toEqual({
+			type: "default",
+		});
 	});
 
 	it("detects named const export", () => {
@@ -754,7 +804,9 @@ describe("detectExportTypeFromContent", () => {
 	});
 
 	it("detects bundle export (object literal)", () => {
-		const result = detectExportTypeFromContent("export const fns = {\n  fn1,\n  fn2,\n};");
+		const result = detectExportTypeFromContent(
+			"export const fns = {\n  fn1,\n  fn2,\n};",
+		);
 		expect(result.type).toBe("named");
 		expect(result.namedExportName).toBe("fns");
 		expect(result.isBundle).toBe(true);
@@ -800,10 +852,7 @@ describe("multi-export factory discovery", () => {
 		await rm(rootDir, { recursive: true, force: true });
 	});
 
-	async function write(
-		relPath: string,
-		content: string,
-	): Promise<void> {
+	async function write(relPath: string, content: string): Promise<void> {
 		const full = join(rootDir, relPath);
 		await mkdir(join(full, ".."), { recursive: true });
 		await writeFile(full, content, "utf-8");
@@ -842,10 +891,7 @@ describe("multi-export factory discovery", () => {
 	});
 
 	it("derives key from factory string arg (kebab-case)", async () => {
-		await write(
-			"blocks/banner.ts",
-			'export const x = block("hero-banner");',
-		);
+		await write("blocks/banner.ts", 'export const x = block("hero-banner");');
 
 		const result = await discoverFiles(rootDir, outDir, factoryOpts);
 		const blocks = result.categories.get("blocks")!;
@@ -931,9 +977,9 @@ describe("multi-export factory discovery", () => {
 		await write("blocks/file1.ts", 'export const hero = block("hero");');
 		await write("blocks/file2.ts", 'export const hero2 = block("hero");');
 
-		await expect(
-			discoverFiles(rootDir, outDir, factoryOpts),
-		).rejects.toThrow(/duplicate blocks key "hero"/);
+		await expect(discoverFiles(rootDir, outDir, factoryOpts)).rejects.toThrow(
+			/duplicate blocks key "hero"/,
+		);
 	});
 
 	it("both import paths point to same file for multi-export", async () => {
@@ -944,8 +990,6 @@ describe("multi-export factory discovery", () => {
 
 		const result = await discoverFiles(rootDir, outDir, factoryOpts);
 		const blocks = result.categories.get("blocks")!;
-		expect(blocks.get("hero")!.importPath).toBe(
-			blocks.get("cta")!.importPath,
-		);
+		expect(blocks.get("hero")!.importPath).toBe(blocks.get("cta")!.importPath);
 	});
 });

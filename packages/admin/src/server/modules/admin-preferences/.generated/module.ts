@@ -30,7 +30,6 @@ const _module = {
 	} as AdminPreferencesCollections,
 	globals: {},
 	jobs: {},
-	functions: {},
 	routes: {},
 	messages: {},
 	services: {},

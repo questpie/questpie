@@ -38,7 +38,6 @@ const _module = {
 		"auditCleanup.job": _job_auditCleanup_job,
 	} as AuditJobs,
 	globals: {},
-	functions: {},
 	routes: {},
 	messages: {},
 	services: {},

@@ -16,15 +16,15 @@ import _coll_session from "../collections/session";
 import _coll_user from "../collections/user";
 import _coll_verification from "../collections/verification";
 
-// ── Functions ────────────────────────────────────────────
-import { adminConfigFunctions as _fn_adminConfig } from "../functions/admin-config";
-import { actionFunctions as _fn_executeAction } from "../functions/execute-action";
-import { localeFunctions as _fn_locales } from "../functions/locales";
-import { previewFunctions as _fn_preview } from "../functions/preview";
-import { reactiveFunctions as _fn_reactive } from "../functions/reactive";
-import { setupFunctions as _fn_setup } from "../functions/setup";
-import { translationFunctions as _fn_translations } from "../functions/translations";
-import { widgetDataFunctions as _fn_widgetData } from "../functions/widget-data";
+// ── Routes ────────────────────────────────────────────
+import { adminConfigFunctions as _route_adminConfig } from "../routes/admin-config";
+import { actionFunctions as _route_executeAction } from "../routes/execute-action";
+import { localeFunctions as _route_locales } from "../routes/locales";
+import { previewFunctions as _route_preview } from "../routes/preview";
+import { reactiveFunctions as _route_reactive } from "../routes/reactive";
+import { setupFunctions as _route_setup } from "../routes/setup";
+import { translationFunctions as _route_translations } from "../routes/translations";
+import { widgetDataFunctions as _route_widgetData } from "../routes/widget-data";
 
 // ── Views ────────────────────────────────────────────
 import _view_collectionForm from "../views/form";
@@ -55,6 +55,8 @@ export interface AdminCollections {
 	verification: typeof _coll_verification;
 }
 
+export type AdminRoutes = typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
+
 export interface AdminViews {
 	collectionForm: typeof _view_collectionForm;
 	collectionTable: typeof _view_collectionTable;
@@ -84,16 +86,16 @@ const _module = {
 		user: _coll_user,
 		verification: _coll_verification,
 	} as AdminCollections,
-	functions: {
-		..._fn_adminConfig,
-		..._fn_executeAction,
-		..._fn_locales,
-		..._fn_preview,
-		..._fn_reactive,
-		..._fn_setup,
-		..._fn_translations,
-		..._fn_widgetData,
-	},
+	routes: {
+		..._route_adminConfig,
+		..._route_executeAction,
+		..._route_locales,
+		..._route_preview,
+		..._route_reactive,
+		..._route_setup,
+		..._route_translations,
+		..._route_widgetData,
+	} as AdminRoutes,
 	views: {
 		collectionForm: _view_collectionForm,
 		collectionTable: _view_collectionTable,
@@ -105,7 +107,6 @@ const _module = {
 	} as AdminComponents,
 	globals: {},
 	jobs: {},
-	routes: {},
 	messages: {},
 	services: {},
 	emails: {},

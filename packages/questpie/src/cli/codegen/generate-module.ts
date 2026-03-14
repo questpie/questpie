@@ -25,7 +25,7 @@ import type { CodegenPlugin, CodegenResult } from "./types.js";
 export interface GenerateModuleOptions {
 	/** Module name (e.g. "questpie-starter", "questpie-admin"). */
 	moduleName: string;
-	/** Absolute path to the module root directory (containing collections/, functions/, etc.). */
+	/** Absolute path to the module root directory (containing collections/, routes/, etc.). */
 	rootDir: string;
 	/**
 	 * Output directory for generated file.

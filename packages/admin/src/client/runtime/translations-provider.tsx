@@ -98,7 +98,7 @@ function getAdminTranslationsQueryOptions(client: any, locale: string) {
 		queryKey: ["questpie", "adminTranslations", locale] as const,
 		queryFn: async () => {
 			try {
-				const result = await client.rpc.getAdminTranslations({ locale });
+				const result = await client.routes.getAdminTranslations({ locale });
 				return result as {
 					locale: string;
 					messages: SimpleMessages;
@@ -138,7 +138,7 @@ function getAdminLocalesQueryOptions(client: any) {
 		queryKey: ["questpie", "adminLocales"] as const,
 		queryFn: async () => {
 			try {
-				const result = await client.rpc.getAdminLocales({});
+				const result = await client.routes.getAdminLocales({});
 				return result as {
 					locales: string[];
 					defaultLocale: string;

@@ -1,18 +1,20 @@
 /**
- * Functions and Jobs Type Tests
+ * Routes and Jobs Type Tests
  *
  * These tests verify that TypeScript correctly infers types for
- * RPC functions (q.fn) and background jobs (q.job).
+ * route definitions (route()) and background jobs (job()).
  *
  * Run with: tsc --noEmit
  */
 
 import { z } from "zod";
-import { fn } from "#questpie/server/functions/define-function.js";
+import { route } from "#questpie/server/routes/define-route.js";
 import type {
-	FunctionDefinition,
-	JsonFunctionDefinition,
-} from "#questpie/server/functions/types.js";
+	JsonRouteDefinition,
+	RawRouteDefinition,
+	RouteDefinition,
+} from "#questpie/server/routes/types.js";
+import { isJsonRoute, isRawRoute } from "#questpie/server/routes/types.js";
 import { job } from "#questpie/server/integrated/queue/job.js";
 import type { JobDefinition } from "#questpie/server/integrated/queue/types.js";
 
@@ -33,73 +35,74 @@ import type {
 } from "./type-test-utils.js";
 
 // ============================================================================
-// q.fn() - RPC functions type tests
+// route() - JSON route type tests
 // ============================================================================
 
-// Function with input schema should infer input type correctly
-const pingFn = fn({
-	schema: z.object({
+// Route with input schema should infer input type correctly
+const pingRoute = route()
+	.post()
+	.schema(z.object({
 		message: z.string(),
 		count: z.number().optional(),
-	}),
-	handler: async ({ input }) => {
+	}))
+	.handler(async ({ input }) => {
 		// input should have correct types
 		const msg: string = input.message;
 		const cnt: number | undefined = input.count;
 		return { received: msg, count: cnt };
-	},
-});
+	});
 
-type PingFnType = typeof pingFn;
-type _pingIsJsonFn = Expect<
-	Extends<PingFnType, JsonFunctionDefinition<any, any>>
+type PingRouteType = typeof pingRoute;
+type _pingIsJsonRoute = Expect<
+	Extends<PingRouteType, JsonRouteDefinition<any, any>>
 >;
 
-// Function output type should be inferred from handler return
-const addFn = fn({
-	schema: z.object({ a: z.number(), b: z.number() }),
-	handler: async ({ input }) => {
+// Route output type should be inferred from handler return
+const addRoute = route()
+	.post()
+	.schema(z.object({ a: z.number(), b: z.number() }))
+	.handler(async ({ input }) => {
 		return { sum: input.a + input.b, timestamp: new Date() };
-	},
-});
+	});
 
-type AddFnType = typeof addFn;
-type AddHandlerReturn = Awaited<ReturnType<AddFnType["handler"]>>;
+type AddRouteType = typeof addRoute;
+type AddHandlerReturn = Awaited<ReturnType<AddRouteType["handler"]>>;
 type _addHasSumInOutput = Expect<Equal<HasKey<AddHandlerReturn, "sum">, true>>;
 type _addHasTimestamp = Expect<
 	Equal<HasKey<AddHandlerReturn, "timestamp">, true>
 >;
 
-// Function with explicit output schema
-const validateFn = fn({
-	schema: z.object({ data: z.string() }),
-	outputSchema: z.object({
+// Route with explicit output schema
+const validateRoute = route()
+	.post()
+	.schema(z.object({ data: z.string() }))
+	.outputSchema(z.object({
 		valid: z.boolean(),
 		errors: z.array(z.string()),
-	}),
-	handler: async ({ input }) => {
+	}))
+	.handler(async ({ input }) => {
 		return { valid: true, errors: [] };
-	},
-});
+	});
 
-type ValidateFnType = typeof validateFn;
+type ValidateRouteType = typeof validateRoute;
 type _validateHasOutputSchema = Expect<
-	Equal<HasKey<ValidateFnType, "outputSchema">, true>
+	Equal<HasKey<ValidateRouteType, "outputSchema">, true>
 >;
 
-// Function with app and session context
-const protectedFn = fn({
-	schema: z.object({ action: z.string() }),
-	handler: async ({ input, session }) => {
+// Route with session context
+const protectedRoute = route()
+	.post()
+	.schema(z.object({ action: z.string() }))
+	.handler(async ({ input, session }) => {
 		// session should be available
 		const userId = session?.user?.id;
 		return { success: true, userId };
-	},
-});
+	});
 
 // Complex input schema should preserve nested types
-const complexFn = fn({
-	schema: z.object({
+const complexRoute = route()
+	.post()
+	.schema(z.object({
 		user: z.object({
 			name: z.string(),
 			email: z.string().email(),
@@ -110,17 +113,41 @@ const complexFn = fn({
 		}),
 		tags: z.array(z.string()),
 		metadata: z.record(z.string(), z.unknown()).optional(),
-	}),
-	handler: async ({ input }) => {
+	}))
+	.handler(async ({ input }) => {
 		// All nested types should be inferred
 		const theme = input.user.preferences.theme; // "light" | "dark"
 		const tags = input.tags; // string[]
 		return { processed: true };
-	},
-});
+	});
+
+// GET route should work
+const getRoute = route()
+	.get()
+	.schema(z.object({ id: z.string() }))
+	.handler(async ({ input }) => {
+		return { id: input.id, found: true };
+	});
+
+type GetRouteType = typeof getRoute;
+// Method literal is not preserved in the definition type (runtime value only)
+type _getRouteHasMethod = Expect<Equal<HasKey<GetRouteType, "method">, true>>;
+
+// Raw route should have correct type
+const rawRoute = route()
+	.post()
+	.raw()
+	.handler(async ({ request }) => {
+		return new Response("ok");
+	});
+
+type RawRouteType = typeof rawRoute;
+type _rawIsRawRoute = Expect<
+	Extends<RawRouteType, RawRouteDefinition>
+>;
 
 // ============================================================================
-// q.job() - Background jobs type tests
+// job() - Background jobs type tests
 // ============================================================================
 
 // Job name should be inferred as literal type
@@ -239,20 +266,20 @@ const logJob = job({
 });
 
 // Union types in schema
-const actionFn = fn({
-	schema: z.object({
+const actionRoute = route()
+	.post()
+	.schema(z.object({
 		action: z.union([
 			z.object({ type: z.literal("create"), data: z.string() }),
 			z.object({ type: z.literal("delete"), id: z.string() }),
 		]),
-	}),
-	handler: async ({ input }) => {
+	}))
+	.handler(async ({ input }) => {
 		if (input.action.type === "create") {
 			return { created: input.action.data };
 		}
 		return { deleted: input.action.id };
-	},
-});
+	});
 
 // Discriminated unions
 const webhookJob = job({
@@ -278,32 +305,34 @@ const webhookJob = job({
 });
 
 // Nullable schema fields
-const updateFn = fn({
-	schema: z.object({
+const updateRoute = route()
+	.post()
+	.schema(z.object({
 		id: z.string(),
 		name: z.string().nullable(),
 		description: z.string().nullish(),
-	}),
-	handler: async ({ input }) => {
+	}))
+	.handler(async ({ input }) => {
 		const name: string | null = input.name;
 		const desc: string | null | undefined = input.description;
 		return { updated: true };
-	},
-});
+	});
 
 // ============================================================================
-// Function/Job definition structure tests
+// Route/Job definition structure tests
 // ============================================================================
 
-// JsonFunctionDefinition structure
-const testFn = fn({
-	schema: z.object({ x: z.number() }),
-	handler: async ({ input }) => ({ doubled: input.x * 2 }),
-});
+// JsonRouteDefinition structure
+const testRoute = route()
+	.post()
+	.schema(z.object({ x: z.number() }))
+	.handler(async ({ input }) => ({ doubled: input.x * 2 }));
 
-type TestFnType = typeof testFn;
-type _testFnHasSchema = Expect<Equal<HasKey<TestFnType, "schema">, true>>;
-type _testFnHasHandler = Expect<Equal<HasKey<TestFnType, "handler">, true>>;
+type TestRouteType = typeof testRoute;
+type _testRouteHasSchema = Expect<Equal<HasKey<TestRouteType, "schema">, true>>;
+type _testRouteHasHandler = Expect<Equal<HasKey<TestRouteType, "handler">, true>>;
+type _testRouteHasMethod = Expect<Equal<HasKey<TestRouteType, "method">, true>>;
+type _testRouteHasBrand = Expect<Equal<HasKey<TestRouteType, "__brand">, true>>;
 
 // JobDefinition structure
 const testJob = job({
@@ -316,3 +345,15 @@ type TestJobType = typeof testJob;
 type _testJobHasName = Expect<Equal<HasKey<TestJobType, "name">, true>>;
 type _testJobHasSchema = Expect<Equal<HasKey<TestJobType, "schema">, true>>;
 type _testJobHasHandler = Expect<Equal<HasKey<TestJobType, "handler">, true>>;
+
+// ============================================================================
+// Route type guards
+// ============================================================================
+
+const someRoute: RouteDefinition = testRoute;
+if (isJsonRoute(someRoute)) {
+	type _isJson = Expect<Extends<typeof someRoute, JsonRouteDefinition<any, any>>>;
+}
+if (isRawRoute(someRoute)) {
+	type _isRaw = Expect<Extends<typeof someRoute, RawRouteDefinition>>;
+}

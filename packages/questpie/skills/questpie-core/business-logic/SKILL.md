@@ -1,57 +1,58 @@
 ---
 name: questpie-core-business-logic
-description: QUESTPIE functions jobs routes services emails fn job route service email RPC background queue scheduling Zod input validation server-side logic reusable services email templates
+description: QUESTPIE routes jobs services emails route job service email background queue scheduling Zod input validation server-side logic reusable services email templates
 type: sub-skill
 requires:
   - questpie-core
 ---
 
-# QUESTPIE Business Logic — Functions, Jobs, Routes, Services, Emails
+# QUESTPIE Business Logic - Routes, Jobs, Services, Emails
 
-This skill builds on questpie-core. It covers the five business-logic primitives: functions (typed RPC), jobs (background tasks), routes (raw HTTP), services (reusable logic), and emails (templates).
+This skill builds on questpie-core. It covers four business-logic primitives: routes (JSON and raw HTTP), jobs (background tasks), services (reusable logic), and emails (templates).
 
-## Functions
+## Routes (JSON)
 
-Functions are typed server-side logic exposed via RPC. Define an input schema with Zod, write a handler, and call it from the client with full type safety.
+JSON routes are typed server-side endpoints. Define an input schema with Zod, write a handler, and call it from the client with full type safety.
 
-### Defining a Function
+### Defining a Route
 
 ```ts
-// functions/get-active-barbers.ts
-import { fn } from "questpie";
+// routes/get-active-barbers.ts
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-  schema: z.object({}),
-  handler: async ({ collections }) => {
+export default route()
+  .post()
+  .schema(z.object({}))
+  .handler(async ({ collections }) => {
     return await collections.barbers.find({
       where: { isActive: true },
     });
-  },
-});
+  });
 ```
 
-Place files in `functions/`. The filename becomes the function key: `get-active-barbers.ts` maps to `getActiveBarbers`. Files **must** use `export default`.
+Place files in `routes/`. The filename becomes the route key: `get-active-barbers.ts` maps to `getActiveBarbers`. Files **must** use `export default`.
 
 ### Input Validation
 
-Functions validate input with Zod automatically:
+JSON routes validate input with Zod automatically:
 
 ```ts
-// functions/create-booking.ts
-import { fn } from "questpie";
+// routes/create-booking.ts
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-  schema: z.object({
+export default route()
+  .post()
+  .schema(z.object({
     barberId: z.string(),
     serviceId: z.string(),
     scheduledAt: z.string().datetime(),
     customerName: z.string().min(2),
     customerEmail: z.string().email(),
     notes: z.string().optional(),
-  }),
-  handler: async ({ input, collections }) => {
+  }))
+  .handler(async ({ input, collections }) => {
     const service = await collections.services.findOne({
       where: { id: input.serviceId },
     });
@@ -69,13 +70,12 @@ export default fn({
       success: true,
       appointmentId: appointment.id,
     };
-  },
-});
+  });
 ```
 
 ### Handler Context
 
-Function handlers receive the full `AppContext`:
+Route handlers receive the full `AppContext`:
 
 | Property      | Description                           |
 |---------------|---------------------------------------|
@@ -87,14 +87,14 @@ Function handlers receive the full `AppContext`:
 | `session`     | Current auth session                  |
 | `services`    | Custom services from `services/`      |
 
-### Calling Functions
+### Calling Routes
 
 From the client SDK:
 
 ```ts
 import { client } from "@/lib/client";
 
-const result = await client.rpc.createBooking({
+const result = await client.routes.createBooking({
   barberId: "abc",
   serviceId: "def",
   scheduledAt: "2025-03-15T10:00:00Z",
@@ -103,18 +103,18 @@ const result = await client.rpc.createBooking({
 });
 ```
 
-Via HTTP: `POST /api/rpc/createBooking` with JSON body.
+Via HTTP: `POST /api/create-booking` with JSON body.
 
-### Nested Functions
+### Nested Routes
 
 Organize in subdirectories for namespacing:
 
 ```text
-functions/
+routes/
   booking/
-    create.ts          --> client.rpc.booking.create()
-    cancel.ts          --> client.rpc.booking.cancel()
-  get-active-barbers.ts --> client.rpc.getActiveBarbers()
+    create.ts          --> client.routes.booking.create()
+    cancel.ts          --> client.routes.booking.cancel()
+  get-active-barbers.ts --> client.routes.getActiveBarbers()
 ```
 
 ## Jobs
@@ -165,7 +165,7 @@ Place files in `jobs/`. The filename becomes the job key: `send-appointment-conf
 
 ### Publishing Jobs
 
-Publish from hooks, functions, or other jobs via the typed `queue` context:
+Publish from hooks, routes, or other jobs via the typed `queue` context:
 
 ```ts
 .hooks({
@@ -228,14 +228,14 @@ export default route({
 });
 ```
 
-Place files in `routes/`. The file path maps to a URL under `/api/routes/`:
+Place files in `routes/`. The file path maps to a flat URL under your `basePath` (`/api` by default):
 
 ```text
 routes/
-  health.ts             --> /api/routes/health
+  health.ts             --> /api/health
   webhooks/
-    stripe.ts           --> /api/routes/webhooks/stripe
-  export.ts             --> /api/routes/export
+    stripe.ts           --> /api/webhooks/stripe
+  export.ts             --> /api/export
 ```
 
 ### Route Methods
@@ -264,17 +264,17 @@ Supported: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`.
 
 Route handlers must return a `Response` object.
 
-### Routes vs Functions
+### JSON Routes vs Raw Routes
 
-| Aspect        | Functions                        | Routes                              |
+| Aspect        | JSON route                        | Raw route                           |
 |---------------|----------------------------------|-------------------------------------|
-| **Transport** | JSON-RPC (`POST /rpc/*`)         | Raw HTTP (`/api/routes/*`)          |
+| **Transport** | HTTP JSON (`/api/{path}`)        | Raw HTTP (`/api/{path}`)            |
 | **Input**     | Zod-validated, auto-parsed       | Manual: `request.json()`            |
 | **Output**    | Auto-serialized to JSON          | Raw `Response` object               |
-| **Client**    | `client.rpc.name(input)`         | `client.routes["name"]()`           |
+| **Client**    | `client.routes.name(input)`      | `client.routes["name"]()`          |
 | **Use for**   | Business logic, data operations  | Webhooks, file uploads, streaming   |
 
-**Rule of thumb**: Use functions for typed input/output with automatic validation. Use routes for raw HTTP control (custom headers, binary data, streams, signature verification).
+**Rule of thumb**: Use JSON routes for typed input/output with automatic validation. Use raw routes for HTTP-level control (custom headers, binary data, streams, signature verification).
 
 ### Webhook Example
 
@@ -301,7 +301,7 @@ export default route({
 
 ## Services
 
-Services are reusable units of logic injected into `AppContext` under the `services` key. Define in `services/`, and they become available in every hook, function, job, and route handler.
+Services are reusable units of logic injected into `AppContext` under the `services` key. Define in `services/`, and they become available in every hook, route, and job handler.
 
 ### Defining a Service
 
@@ -527,9 +527,9 @@ export default email({
 ## Common Mistakes
 
 1. **HIGH: Putting business logic in route files.**
-   Routes should only mount HTTP handlers. Business logic belongs in functions, hooks, or services. Routes are for raw HTTP control (webhooks, file downloads, streaming).
+   Framework route files should only mount HTTP handlers. Business logic belongs in routes, hooks, or services. Raw routes are for HTTP control (webhooks, file downloads, streaming).
 
-2. **HIGH: Not using `export default` on function/job/route/service/email files.**
+2. **HIGH: Not using `export default` on route/job/service/email files.**
    Codegen discovery requires `export default`. Named exports are not discovered.
 
 3. **MEDIUM: Accessing `app.api` without context.**
@@ -538,5 +538,5 @@ export default email({
 4. **MEDIUM: Defining job handlers without queue configuration.**
    Jobs require a queue adapter in production config. Without it, `queue.jobName.publish()` calls will fail at runtime. Configure via `runtimeConfig({ queue: { adapter: pgBossAdapter(...) } })`.
 
-5. **MEDIUM: Confusing function keys with filenames.**
-   Filenames use kebab-case (`get-active-barbers.ts`) but the key is camelCase (`getActiveBarbers`). The client SDK uses the camelCase key: `client.rpc.getActiveBarbers()`.
+5. **MEDIUM: Confusing route keys with filenames.**
+   Filenames use kebab-case (`get-active-barbers.ts`) but the key is camelCase (`getActiveBarbers`). The client SDK uses the camelCase key: `client.routes.getActiveBarbers()`.

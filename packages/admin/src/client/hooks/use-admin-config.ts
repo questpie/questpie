@@ -18,10 +18,10 @@ function getAdminConfigQueryOptions(client: unknown) {
 	return {
 		queryKey: adminConfigQueryKey,
 		queryFn: async (): Promise<AdminConfigResponse> => {
-			if (!client || !(client as any).rpc) {
+			if (!client || !(client as any).routes) {
 				return {};
 			}
-			return (client as any).rpc.getAdminConfig();
+			return (client as any).routes.getAdminConfig();
 		},
 		staleTime: 5 * 60 * 1000,
 		gcTime: 30 * 60 * 1000,

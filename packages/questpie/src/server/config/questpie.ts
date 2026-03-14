@@ -62,7 +62,6 @@ import type {
 	AnyGlobal,
 	AnyGlobalBuilder,
 } from "#questpie/shared/type-utils.js";
-import type { FunctionsTree } from "../functions/types.js";
 import type { GlobalHooksState } from "./global-hooks-types.js";
 import type { GetMessageKeys, QuestpieConfig } from "./types.js";
 
@@ -151,8 +150,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public logger: LoggerService;
 	public search: SearchService;
 	public realtime: RealtimeService;
-	public functions!: FunctionsTree;
-
 	/** Extension state for plugin-contributed configurations (admin layout, blocks, sidebar, etc.) */
 	public state?: Record<string, unknown>;
 
@@ -169,7 +166,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		this.config = config;
 		this.defaultAccess = config.defaultAccess;
 		this.globalHooks = config.globalHooks ?? { collections: [], globals: [] };
-		this.functions = config.functions ?? {};
 
 		// Initialize translator
 		this.t = createTranslator(config.translations);

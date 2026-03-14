@@ -35,15 +35,16 @@ Codegen discovers this file automatically. No manual registration needed.
 
 ## Session Access
 
-### In Functions
+### In Routes
 
 ```ts
-import { fn } from "questpie";
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-  schema: z.object({ postId: z.string() }),
-  handler: async ({ input, session, collections }) => {
+export default route()
+  .post()
+  .schema(z.object({ postId: z.string() }))
+  .handler(async ({ input, session, collections }) => {
     if (!session) {
       throw new Error("Not authenticated");
     }
@@ -59,8 +60,7 @@ export default fn({
     });
 
     return post;
-  },
-});
+  });
 ```
 
 ### In Hooks

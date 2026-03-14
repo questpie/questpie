@@ -12,6 +12,7 @@
 		"format": "prettier --write \"**/*.{ts,tsx,md}\"",
 		"check-types": "turbo run check-types",
 		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test",
+		"questpie:generate": "turbo run questpie:generate",
 		"changeset": "changeset",
 		"version": "changeset version",
 		"release": "turbo run build --filter='./packages/*' && bun run scripts/publish.ts"

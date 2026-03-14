@@ -30,7 +30,7 @@ export function useServerWidgetData<T = unknown>(
 	return useQuery<T>({
 		queryKey: ["widget", "serverData", widgetId],
 		queryFn: () =>
-			(client as any).rpc.fetchWidgetData({ widgetId }) as Promise<T>,
+			(client as any).routes.fetchWidgetData({ widgetId }) as Promise<T>,
 		enabled: options?.enabled ?? true,
 		refetchInterval: options?.refreshInterval,
 	});

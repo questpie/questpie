@@ -16,7 +16,7 @@
  * ```
  */
 
-import { fn, type Questpie } from "questpie";
+import { route, type Questpie } from "questpie";
 import { z } from "zod";
 import type {
 	ServerActionContext,
@@ -625,37 +625,35 @@ const getActionsConfigResponseSchema = z
  * @example
  * ```ts
  * // From client
- * const result = await client.rpc.executeAction({
+ * const result = await client.routes.executeAction({
  *   collection: "posts",
  *   actionId: "publish",
  *   itemId: "123",
  * });
  * ```
  */
-export const executeActionFn = fn({
-	type: "mutation",
-	schema: executeActionRequestSchema,
-	outputSchema: executeActionResponseSchema,
-	handler: async (ctx) => {
+export const executeActionFn = route()
+	.post()
+	.schema(executeActionRequestSchema)
+	.outputSchema(executeActionResponseSchema)
+	.handler(async (ctx) => {
 		const app = (ctx as any).app as App;
 		const session = (ctx as any).session;
 		return executeAction(app, ctx.input, session);
-	},
-});
+	});
 
 /**
  * Get actions configuration for a collection.
  * Returns action definitions without handlers for client rendering.
  */
-export const getActionsConfigFn = fn({
-	type: "query",
-	schema: getActionsConfigRequestSchema,
-	outputSchema: getActionsConfigResponseSchema,
-	handler: (ctx) => {
+export const getActionsConfigFn = route()
+	.post()
+	.schema(getActionsConfigRequestSchema)
+	.outputSchema(getActionsConfigResponseSchema)
+	.handler((ctx) => {
 		const app = (ctx as any).app as App;
 		return getActionsConfig(app, ctx.input.collection);
-	},
-});
+	});
 
 /**
  * QuestPie functions for action execution.

@@ -11,7 +11,7 @@ import type {
 	ReactiveContext,
 	ReactiveServerContext,
 } from "questpie";
-import { ApiError, fn, type Questpie } from "questpie";
+import { ApiError, route, type Questpie } from "questpie";
 import { z } from "zod";
 
 // ============================================================================
@@ -519,12 +519,11 @@ const optionsOutputSchema = z.object({
  * Batch reactive endpoint.
  * Executes multiple reactive handlers in a single request.
  */
-export const batchReactive = fn({
-	type: "query",
-	schema: batchReactiveInputSchema,
-	outputSchema: batchReactiveOutputSchema,
-
-	handler: async (ctx) => {
+export const batchReactive = route()
+	.post()
+	.schema(batchReactiveInputSchema)
+	.outputSchema(batchReactiveOutputSchema)
+	.handler(async (ctx) => {
 		const app = getApp(ctx);
 		const { collection: entityName, type: entityType, requests } = ctx.input;
 
@@ -595,19 +594,17 @@ export const batchReactive = fn({
 		}
 
 		return { results };
-	},
-});
+	});
 
 /**
  * Dynamic options endpoint.
  * Fetches options for select/relation fields with search and pagination.
  */
-export const fieldOptions = fn({
-	type: "query",
-	schema: optionsInputSchema,
-	outputSchema: optionsOutputSchema,
-
-	handler: async (ctx) => {
+export const fieldOptions = route()
+	.post()
+	.schema(optionsInputSchema)
+	.outputSchema(optionsOutputSchema)
+	.handler(async (ctx) => {
 		const app = getApp(ctx);
 		const {
 			collection: entityName,
@@ -702,8 +699,7 @@ export const fieldOptions = fn({
 				hasMore: false,
 			};
 		}
-	},
-});
+	});
 
 /**
  * Reactive functions bundle.

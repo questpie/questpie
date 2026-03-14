@@ -1,6 +1,6 @@
 # @questpie/elysia
 
-Elysia adapter for QUESTPIE. Mounts CRUD, auth, storage, RPC, and realtime routes on an Elysia instance with end-to-end type safety via Eden Treaty.
+Elysia adapter for QUESTPIE. Mounts CRUD, auth, storage, custom app routes, and realtime routes on an Elysia instance with end-to-end type safety via Eden Treaty.
 
 ## Installation
 
@@ -13,10 +13,10 @@ bun add @questpie/elysia questpie elysia
 ```ts
 import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia";
-import { app, appRpc } from "./questpie";
+import { app } from "./questpie";
 
 const app = new Elysia()
-  .use(questpieElysia(app, { basePath: "/api", rpc: appRpc }))
+  .use(questpieElysia(app, { basePath: "/api" }))
   .listen(3000);
 
 export type App = typeof app;
@@ -29,17 +29,17 @@ export type App = typeof app;
 ```ts
 import { createClientFromEden } from "@questpie/elysia/client";
 import type { App } from "./server";
-import type { App, AppRpc } from "./questpie";
+import type { AppConfig } from "./questpie";
 
-const client = createClientFromEden<App, App, AppRpc>({
+const client = createClientFromEden<App, AppConfig>({
   server: "localhost:3000",
 });
 
 // CRUD — fully typed
 const { docs } = await client.collections.posts.find({ limit: 10 });
 
-// RPC — fully typed
-const stats = await client.rpc.getStats({ period: "week" });
+// App routes — fully typed
+const stats = await client.routes.getStats({ period: "week" });
 
 // Custom Elysia routes — fully typed via Eden Treaty
 const result = await client.api.custom.route.get();
@@ -49,9 +49,9 @@ const result = await client.api.custom.route.get();
 
 ```ts
 import { createClient } from "questpie/client";
-import type { App, AppRpc } from "./questpie";
+import type { AppConfig } from "./questpie";
 
-const client = createClient<App, AppRpc>({
+const client = createClient<AppConfig>({
   baseURL: "http://localhost:3000",
   basePath: "/api",
 });
@@ -77,7 +77,7 @@ The adapter automatically creates:
 | POST   | `/api/globals/:name/revert`           | Revert global version |
 | POST   | `/api/collections/:name/upload`      | Upload file          |
 | ALL    | `/api/auth/*`                        | Better Auth routes   |
-| POST   | `/api/rpc/*`                         | RPC procedures       |
+| ANY    | `/api/:route*`                       | Custom app routes    |
 | GET    | `/api/collections/:name/subscribe`   | SSE realtime         |
 
 ## Documentation

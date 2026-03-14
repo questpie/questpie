@@ -34,7 +34,7 @@ import type {
 /**
  * Built-in core codegen plugin.
  *
- * Declares all core categories (collections, globals, jobs, functions, routes,
+ * Declares all core categories (collections, globals, jobs, routes,
  * messages, services, emails, migrations, seeds) and core single files
  * (modules, locale, hooks, access, context).
  *
@@ -73,19 +73,8 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						includeInAppState: true,
 						extractFromModules: true,
 					},
-					functions: {
-						dirs: ["functions"],
-						recursive: true,
-						prefix: "fn",
-						emit: "nested",
-						keySeparator: ".",
-						typeEmit: "functions",
-						registryKey: true,
-						includeInAppState: true,
-						extractFromModules: true,
-					},
 					routes: {
-						dirs: ["routes"],
+						dirs: ["routes", "functions"],
 						recursive: true,
 						prefix: "route",
 						keySeparator: "/",
@@ -189,12 +178,6 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						template: ({ kebab, camel }) =>
 							`import { global } from "#questpie/factories";\n\nexport const ${camel} = global("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text("Title"),\n\t}));\n`,
 					},
-					fn: {
-						dir: "functions",
-						description: "Server function",
-						template: () =>
-							`import { fn } from "questpie";\nimport { z } from "zod";\n\nexport default fn({\n\tschema: z.object({}),\n\thandler: async ({ input, ctx }) => {\n\t\treturn {};\n\t},\n});\n`,
-					},
 					job: {
 						dir: "jobs",
 						description: "Background job",
@@ -217,8 +200,8 @@ export function coreCodegenPlugin(): CodegenPlugin {
 					route: {
 						dir: "routes",
 						description: "API route",
-						template: ({ kebab }) =>
-							`import { route } from "questpie";\n\nexport default route("GET", "/${kebab}", async ({ ctx }) => {\n\treturn Response.json({});\n});\n`,
+						template: () =>
+							`import { route } from "questpie";\nimport { z } from "zod";\n\nexport default route()\n\t.get()\n\t.schema(z.object({}))\n\t.handler(async ({ input, ctx }) => {\n\t\treturn {};\n\t});\n`,
 					},
 					seed: {
 						dir: "seeds",
@@ -463,6 +446,34 @@ export async function runCodegen(
 		}
 	}
 
+	// 2c. Check for reserved path collisions in route keys
+	const routesMap = discovered.categories.get("routes");
+	if (routesMap) {
+		const RESERVED_PREFIXES = [
+			"auth/",
+			"search",
+			"realtime",
+			"storage/",
+			"globals/",
+			"health",
+		];
+		for (const [routeKey] of routesMap) {
+			for (const reserved of RESERVED_PREFIXES) {
+				if (
+					routeKey === reserved ||
+					routeKey.startsWith(
+						reserved.endsWith("/") ? reserved : reserved + "/",
+					)
+				) {
+					throw new Error(
+						`[codegen] Route key "${routeKey}" collides with reserved path prefix "${reserved}". ` +
+							`Rename the route file to avoid conflicts with built-in HTTP handlers.`,
+					);
+				}
+			}
+		}
+	}
+
 	// 3. Build codegen context for transforms
 	const extraImports: Array<{ name: string; path: string }> = [];
 	const extraTypeDeclarations: string[] = [];
@@ -506,7 +517,7 @@ export async function runCodegen(
 					// Append /index.js for bare subpath imports (e.g. "/server" → "/server/index.js")
 					const resolvedSuffix =
 						suffix && !suffix.endsWith(".js") && !suffix.endsWith(".ts")
-							? `${suffix}/index.js`
+							? `${suffix}.js`
 							: suffix;
 					imp.path = `${to}${resolvedSuffix}`;
 				}

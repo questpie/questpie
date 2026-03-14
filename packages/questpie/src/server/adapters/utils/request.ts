@@ -47,7 +47,7 @@ export const normalizeMimeType = (value: string) =>
 /**
  * Smart body parser that detects SuperJSON
  */
-export const parseRpcBody = async (request: Request) => {
+export const parseRouteBody = async (request: Request) => {
 	const text = await request.text();
 	if (!text) return undefined;
 

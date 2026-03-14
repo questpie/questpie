@@ -35,7 +35,7 @@ bun add @questpie/admin
 ### 2. Server Plugin
 
 ```ts title="questpie.config.ts"
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import { runtimeConfig } from "questpie";
 
 export default runtimeConfig({

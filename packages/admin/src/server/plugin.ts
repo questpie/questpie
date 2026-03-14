@@ -6,7 +6,7 @@
  *
  * ```ts
  * import { runtimeConfig } from "questpie";
- * import { adminPlugin } from "@questpie/admin/server";
+ * import { adminPlugin } from "@questpie/admin/plugin";
  *
  * export default runtimeConfig({
  *   plugins: [adminPlugin()],

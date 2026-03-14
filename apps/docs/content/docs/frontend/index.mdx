@@ -5,7 +5,7 @@ description: Type-safe client SDK — createClient(), auth/session, and full-sta
 
 # Integrate Frontend
 
-QuestPie provides a typed client SDK that connects to your backend with full type safety. Collection names, field types, query operators, and function signatures are all inferred from your schema.
+QuestPie provides a typed client SDK that connects to your backend with full type safety. Collection names, field types, query operators, and route signatures are all inferred from your schema.
 
 ## Create Client
 
@@ -77,11 +77,11 @@ await client.globals.siteSettings.update({
 });
 ```
 
-## Functions (RPC)
+## Typed JSON Routes
 
 ```ts
-// Call server functions via RPC
-const result = await client.rpc.createBooking({
+// Call a JSON route
+const result = await client.routes.createBooking({
   barberId: "abc",
   serviceId: "def",
   scheduledAt: "2025-03-15T10:00:00Z",
@@ -106,7 +106,7 @@ const response = await client.routes["webhooks/stripe"]({
 const healthUrl = client.routes["health"].url;
 ```
 
-Unlike collections and RPC, routes return raw `Response` objects — you handle parsing yourself.
+Unlike collections and JSON routes, raw routes return `Response` objects - you handle parsing yourself.
 
 ## Locale
 

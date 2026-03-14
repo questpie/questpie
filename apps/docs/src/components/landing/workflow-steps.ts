@@ -51,29 +51,29 @@ export default runtimeConfig({
 })`,
 	},
 
-	// 3. Add a function
+	// 3. Add a route
 	{
 		id: 3,
-		file: "functions/send-reminder.ts",
-		action: "Add a function",
+		file: "routes/send-reminder.ts",
+		action: "Add a route",
 		mode: "full",
-		code: `import { fn } from 'questpie'
+		code: `import { route } from 'questpie'
 import { z } from 'zod'
 
-export default fn({
-  schema: z.object({
+export default route()
+  .post()
+  .schema(z.object({
     appointmentId: z.string(),
     email: z.string().email(),
-  }),
-  handler: async ({ input, email }) => {
+  }))
+  .handler(async ({ input, email }) => {
     // Send reminder email
     await email.sendTemplate({
       template: 'appointmentReminder',
       input: { email: input.email },
       to: input.email,
     })
-  },
-})`,
+  })`,
 	},
 
 	// 4. Add lifecycle hooks

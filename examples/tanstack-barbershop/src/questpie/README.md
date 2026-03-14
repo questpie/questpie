@@ -6,7 +6,8 @@ This directory contains the QUESTPIE app configuration for the Barbershop exampl
 
 ```
 questpie/
-  questpie.config.ts   # Main config (replaces server/app.ts)
+  questpie.config.ts   # Main config (runtimeConfig + plugins)
+  modules.ts           # Module registrations ([adminModule, ...] as const)
   collections/         # Collection definitions (standalone factories)
     barbers.collection.ts
     services.collection.ts
@@ -14,7 +15,7 @@ questpie/
     reviews.collection.ts
   jobs/                # Background jobs
     index.ts
-  functions/           # Standalone functions (auto-discovered)
+  routes/              # Standalone routes (auto-discovered)
     index.ts
   .generated/          # Auto-generated app instance (codegen)
     index.ts
@@ -35,19 +36,28 @@ questpie/
 
 Both server and admin are fully code-generated from file conventions. No manual wiring needed.
 
-### Server (`questpie.config.ts` + `.generated/index.ts`)
+### Server (`questpie.config.ts` + `modules.ts` + `.generated/index.ts`)
 
 ```typescript
 // questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/plugin";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
 });
+```
 
+```typescript
+// modules.ts
+import { adminModule } from "@questpie/admin/server";
+
+export default [adminModule] as const;
+```
+
+```typescript
 // Collections are auto-discovered from collections/*.collection.ts
 // The codegen generates .generated/index.ts with the typed app instance:
 //   import { app } from "~/questpie/.generated";
@@ -99,7 +109,7 @@ const { client } = useAdminContext();
 
 **Server (`/server`):**
 
-- Backend application framework using standalone factories + `config()`
+- Backend application framework using standalone factories + `runtimeConfig()`
 - Drizzle schema definitions
 - Validation schemas (Zod)
 - Hooks, jobs, auth, etc.
@@ -143,20 +153,27 @@ export default {
 
 ## API Features
 
-### 1. `config()` + Codegen
+### 1. `runtimeConfig()` + `modules.ts` + Codegen
 
-Server configuration uses the top-level `config()` factory. Collections, functions, and jobs are auto-discovered by codegen from file conventions — no need to manually wire them:
+Server configuration uses the top-level `runtimeConfig()` factory. Modules are registered in a separate `modules.ts` file. Collections, routes, and jobs are auto-discovered by codegen from file conventions — no need to manually wire them:
 
 ```typescript
 // questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/plugin";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
 });
+```
+
+```typescript
+// modules.ts
+import { adminModule } from "@questpie/admin/server";
+
+export default [adminModule] as const;
 // Codegen generates .generated/index.ts with the typed app instance
 ```
 
@@ -234,8 +251,8 @@ const backendMessages = {
   },
 } as const;
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
   // Configure content locales
@@ -261,11 +278,11 @@ Admin UI translations are configured server-side via `.adminLocale()` and fetche
 
 ```typescript
 // questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/plugin";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
   adminLocale: {
@@ -275,7 +292,7 @@ export default config({
 });
 ```
 
-The client automatically fetches these translations via RPC (`useServerTranslations` prop on `AdminLayoutProvider`).
+The client automatically fetches these translations via server routes (`useServerTranslations` prop on `AdminLayoutProvider`).
 
 ### Using Translations in Components
 

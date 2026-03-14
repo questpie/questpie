@@ -1,181 +1,183 @@
 ---
 title: Routes
-description: Raw HTTP routes for webhooks, custom APIs, and endpoints that need full request/response control.
+description: Typed server routes — define input schema, handler logic, and call from the client.
 ---
 
 # Routes
 
-Routes give you raw HTTP request/response handling for cases that don't fit the collection or function pattern — webhooks, OAuth callbacks, health checks, file downloads, streaming.
+Routes are typed server-side logic exposed as endpoints. Define an input schema with Zod, write a handler that receives typed context, and call it from the client with full type safety.
+
+On the client, you call `client.routes.routeName()`.
 
 ## Defining a Route
 
-```ts title="routes/health.ts"
+```ts title="routes/get-active-barbers.ts"
 import { route } from "questpie";
+import z from "zod";
 
-export default route({
-  method: "GET",
-  handler: async () => {
-    return new Response(JSON.stringify({ status: "ok" }), {
-      headers: { "Content-Type": "application/json" },
+export default route()
+  .post()
+  .schema(z.object({}))
+  .handler(async ({ collections }) => {
+    return await collections.barbers.find({
+      where: { isActive: true },
     });
-  },
-});
+  });
 ```
 
-Place route files in `routes/`. The file path maps to a URL under `/api/routes/`:
+Place route files in `routes/`. The filename becomes the route key: `get-active-barbers.ts` → `getActiveBarbers`.
 
-```text
-routes/
-├── health.ts             → /api/routes/health
-├── webhooks/
-│   ├── stripe.ts         → /api/routes/webhooks/stripe
-│   └── github.ts         → /api/routes/webhooks/github
-└── export.ts             → /api/routes/export
+## Input Validation
+
+Routes validate input with Zod:
+
+```ts title="routes/create-booking.ts"
+import { route } from "questpie";
+import z from "zod";
+
+export default route()
+  .post()
+  .schema(z.object({
+    barberId: z.string(),
+    serviceId: z.string(),
+    scheduledAt: z.string().datetime(),
+    customerName: z.string().min(2),
+    customerEmail: z.string().email(),
+    customerPhone: z.string().optional(),
+    notes: z.string().optional(),
+  }))
+  .handler(async ({ input, collections }) => {
+    const service = await collections.services.findOne({
+      where: { id: input.serviceId },
+    });
+    if (!service) throw new Error("Service not found");
+
+    const appointment = await collections.appointments.create({
+      barber: input.barberId,
+      service: input.serviceId,
+      scheduledAt: new Date(input.scheduledAt),
+      status: "pending",
+      notes: input.notes || null,
+    });
+
+    return {
+      success: true,
+      appointmentId: appointment.id,
+      message: "Appointment booked successfully!",
+    };
+  });
 ```
-
-## Route Methods
-
-Restrict to specific HTTP methods, allow multiple, or omit for all:
-
-```ts
-// Single method
-route({ method: "POST", handler: ... })
-
-// Multiple methods
-route({ method: ["GET", "POST"], handler: ... })
-
-// All methods (default when omitted)
-route({ handler: ... })
-```
-
-Supported methods: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`.
 
 ## Handler Context
 
-Route handlers receive `AppContext` plus request-specific properties:
-
-| Property | Type | Description |
-|---|---|---|
-| `request` | `Request` | Standard Web API Request object |
-| `locale` | `string` | Current locale |
-| `params` | `Record<string, string>` | URL path parameters |
-| `db` | `Database` | Database instance |
-| `session` | `Session \| null` | Current auth session |
-| `collections` | `CollectionsAPI` | Typed collection API |
-| `queue` | `QueueClient` | Queue client for jobs |
-| `email` | `MailerService` | Email service |
-| `*services*` | | Any user-defined services |
+Route handlers receive the full `AppContext`:
 
 ```ts
-route({
-  method: "POST",
-  handler: async ({ request, db, session, collections, queue }) => {
-    const body = await request.json();
-    // Full access to AppContext
-    return new Response("OK");
-  },
-})
+handler: async ({ input, collections, queue, email, db, session, blog }) => {
+  // input — validated data matching the Zod schema
+  // collections — typed collection API
+  // queue — publish background jobs
+  // email — send emails
+  // db — raw database access
+  // session — current auth session
+  // blog — custom service from services/blog.ts
+}
 ```
 
-## Calling Routes from the Client
+## Calling Routes
 
-The client SDK provides typed access to routes:
+### From the client SDK
 
 ```ts
-// Call a route
-const response = await client.routes["webhooks/stripe"]({
-  method: "POST",
-  body: JSON.stringify(payload),
-  headers: { "stripe-signature": sig },
+import { client } from "@/lib/client";
+
+// Fully typed — input and return type inferred from the route definition
+const result = await client.routes.createBooking({
+  barberId: "abc",
+  serviceId: "def",
+  scheduledAt: "2025-03-15T10:00:00Z",
+  customerName: "John",
+  customerEmail: "john@example.com",
 });
-
-// Get a route URL (for forms, links, etc.)
-const url = client.routes["health"].url;
-// → "http://localhost:3000/api/routes/health"
 ```
 
-Routes return raw `Response` objects — you handle parsing yourself, unlike functions which auto-serialize JSON.
+### Via HTTP
 
-## Routes vs Functions
+Routes are accessible at flat URLs under your `basePath` (`/api` by default):
 
-| | Functions | Routes |
-|---|---|---|
-| **Transport** | JSON-RPC (`POST /rpc/*`) | Raw HTTP (`/api/routes/*`) |
-| **Input** | Zod-validated, auto-parsed | Manual — `request.json()`, `request.text()` |
-| **Output** | Auto-serialized to JSON | Raw `Response` object |
-| **Client** | `client.rpc.name(input)` → typed result | `client.routes["name"]()` → `Response` |
-| **Use for** | Business logic, data operations | Webhooks, file uploads, streaming, OAuth |
+```bash
+curl -X POST http://localhost:3000/api/create-booking \
+  -H "Content-Type: application/json" \
+  -d '{"barberId": "abc", "serviceId": "def", ...}'
+```
 
-**Rule of thumb**: If you need typed input/output with automatic validation, use a **function**. If you need raw HTTP control (custom headers, binary data, streams, signature verification), use a **route**.
+## Nested Routes
 
-## Use Cases
+Organize routes in subdirectories for namespacing:
 
-### Webhook handler
+```text
+routes/
+├── booking/
+│   ├── create.ts          → client.routes.booking.create()
+│   └── cancel.ts          → client.routes.booking.cancel()
+├── get-active-barbers.ts  → client.routes.getActiveBarbers()
+└── get-stats.ts           → client.routes.getStats()
+```
 
-```ts title="routes/webhooks/stripe.ts"
+## Real-World Example
+
+Computing available time slots with business logic:
+
+```ts title="routes/get-available-time-slots.ts"
 import { route } from "questpie";
+import z from "zod";
 
-export default route({
-  method: "POST",
-  handler: async ({ request, db }) => {
-    const body = await request.text();
-    const signature = request.headers.get("stripe-signature");
-
-    // Verify webhook signature
-    const event = verifyStripeWebhook(body, signature);
-
-    // Process event
-    await db.insert(webhookEvents).values({
-      type: event.type,
-      payload: body,
+export default route()
+  .post()
+  .schema(z.object({
+    date: z.string(),
+    barberId: z.string(),
+    serviceId: z.string(),
+  }))
+  .handler(async ({ input, collections }) => {
+    const barber = await collections.barbers.findOne({
+      where: { id: input.barberId, isActive: true },
     });
+    if (!barber) throw new Error("Barber not found or inactive");
 
-    return new Response("OK", { status: 200 });
-  },
-});
-```
+    const service = await collections.services.findOne({
+      where: { id: input.serviceId, isActive: true },
+    });
+    if (!service) throw new Error("Service not found or inactive");
 
-### File download
+    // Get existing appointments for the day
+    const startOfDay = new Date(input.date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(input.date);
+    endOfDay.setHours(23, 59, 59, 999);
 
-```ts title="routes/export.ts"
-import { route } from "questpie";
-
-export default route({
-  method: "GET",
-  handler: async ({ collections, session }) => {
-    if (!session) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const data = await collections.appointments.find({ limit: 1000 });
-    const csv = generateCSV(data.docs);
-
-    return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv",
-        "Content-Disposition": "attachment; filename=appointments.csv",
+    const existing = await collections.appointments.find({
+      where: {
+        barber: input.barberId,
+        scheduledAt: { gte: startOfDay, lte: endOfDay },
       },
     });
-  },
-});
-```
 
-### Health check
+    // Generate available slots (business logic)
+    const slots = generateAvailableSlots(
+      barber.workingHours,
+      existing.docs,
+      service.duration,
+      input.date,
+    );
 
-```ts title="routes/health.ts"
-import { route } from "questpie";
-
-export default route({
-  method: "GET",
-  handler: async ({ db }) => {
-    const healthy = await db.execute(sql`SELECT 1`).then(() => true).catch(() => false);
-    return Response.json({ status: healthy ? "ok" : "degraded" });
-  },
-});
+    return slots;
+  });
 ```
 
 ## Related Pages
 
-- [Functions](/docs/backend/business-logic/functions) — For typed RPC endpoints
-- [Jobs](/docs/backend/business-logic/jobs) — Background processing
-- [File Convention](/docs/backend/architecture/file-convention) — Discovery rules
+- [Jobs](/docs/backend/business-logic/jobs) — Background tasks
+- [Routes API](/docs/reference/routes-api) — Route builder API reference
+- [Hooks](/docs/backend/rules/hooks) — Collection lifecycle hooks
+- [TanStack Query](/docs/frontend/tanstack-query) — Client-side data fetching

@@ -1,6 +1,6 @@
 ---
 name: questpie-core
-description: QUESTPIE framework overview config codegen file-convention project-structure collections globals functions jobs services schema TypeScript backend architecture monorepo bun setup
+description: QUESTPIE framework overview config codegen file-convention project-structure collections globals routes jobs services schema TypeScript backend architecture monorepo bun setup
 metadata:
   version: 1.0.0
   category: framework
@@ -27,7 +27,7 @@ Schema Files  -->  Codegen  -->  Typed Runtime  -->  Projections (Admin, SDK, Op
 
 | Package | Path | Purpose |
 |---|---|---|
-| `questpie` | `packages/questpie` | Core engine -- fields, CRUD, functions, introspection, CLI |
+| `questpie` | `packages/questpie` | Core engine -- fields, CRUD, routes, introspection, CLI |
 | `@questpie/admin` | `packages/admin` | Config-driven admin UI (React + Tailwind v4 + shadcn) |
 | `@questpie/tanstack-query` | `packages/tanstack-query` | TanStack Query option builders, `streamedQuery`, batch helpers |
 | `@questpie/openapi` | `packages/openapi` | OpenAPI spec generation + Scalar UI middleware |
@@ -44,7 +44,7 @@ Runtime: **Bun** is the only package manager. TypeScript + ESM everywhere.
 
 | Layer | Directory | Defines |
 |---|---|---|
-| **Server** | `src/questpie/server/` | Schema, fields, access control, hooks, functions, jobs -- WHAT the data does |
+| **Server** | `src/questpie/server/` | Schema, fields, access control, hooks, routes, jobs -- WHAT the data does |
 | **Admin** | `src/questpie/admin/` | Branding, custom renderers, client config -- HOW it renders |
 | **Routes** | `src/routes/` | HTTP mounting only -- no business logic here |
 
@@ -74,31 +74,42 @@ export default global("site-settings").fields(({ f }) => ({
 ```
 
 ```ts
-// functions/get-stats.ts
-import { fn } from "questpie";
+// routes/get-stats.ts
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-  schema: z.object({ period: z.enum(["day", "week", "month"]) }),
-  handler: async ({ input, collections }) => {
+export default route()
+  .post()
+  .schema(z.object({ period: z.enum(["day", "week", "month"]) }))
+  .handler(async ({ input, collections }) => {
     const count = await collections.posts.count({});
     return { posts: count };
-  },
-});
+  });
 ```
 
 ### Config
 
 ```ts
 // questpie.config.ts
-import { config } from "questpie";
-import { admin } from "@questpie/admin/server";
+import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/plugin";
 
-export default config({
-  modules: [admin()],
+export default runtimeConfig({
+  plugins: [adminPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
 });
+```
+
+```ts
+// modules.ts
+import { adminModule } from "@questpie/admin/server";
+import { openApiModule } from "@questpie/openapi";
+
+export default [
+  adminModule,
+  openApiModule({ info: { title: "My API", version: "1.0.0" } }),
+] as const;
 ```
 
 ### Route Handler
@@ -122,9 +133,8 @@ QUESTPIE uses your file system as the source of truth. Drop a file in the right 
 |---|---|---|---|
 | `collections/` | Collections | Default or named | Filename to camelCase |
 | `globals/` | Globals | Default or named | Filename to camelCase |
-| `functions/` | Functions | Default | Filename to camelCase (nested: dot-separated) |
+| `routes/` | Routes | Default | Filename to camelCase/slash path |
 | `jobs/` | Jobs | Default | Filename to camelCase |
-| `routes/` | Routes | Default | Filename to slash-separated path |
 | `services/` | Services | Default | Filename to camelCase |
 | `emails/` | Email templates | Default | Filename to camelCase |
 | `blocks/` | Blocks | Named exports | Export name |
@@ -153,14 +163,14 @@ Filenames are converted from kebab-case to camelCase: `blog-posts.ts` becomes `b
 
 ### Nested Namespacing
 
-Functions and routes support nested directories:
+Routes support nested directories:
 
 ```text
-functions/
+routes/
   booking/
-    create.ts    -> rpc.booking.create
-    cancel.ts    -> rpc.booking.cancel
-  get-stats.ts   -> rpc.getStats
+    create.ts    -> client.routes.booking.create()
+    cancel.ts    -> client.routes.booking.cancel()
+  get-stats.ts   -> client.routes.getStats()
 ```
 
 ### Project Layout (by-type, default)
@@ -180,7 +190,7 @@ my-app/
           categories.ts
         globals/
           site-settings.ts
-        functions/
+        routes/
           create-booking.ts
         jobs/
           send-email.ts
@@ -205,7 +215,7 @@ my-app/
         $.ts
 ```
 
-By-feature layout is also supported: nest `collections/`, `functions/`, etc. under `features/<domain>/`. Both layouts can coexist.
+By-feature layout is also supported: nest `collections/`, `routes/`, etc. under `features/<domain>/`. Both layouts can coexist.
 
 ## Codegen
 
@@ -222,7 +232,6 @@ Run `questpie generate` (or `questpie dev` for watch mode) to scan file conventi
 ```ts
 export type AppCollections = { posts: typeof posts; categories: typeof categories };
 export type AppGlobals = { siteSettings: typeof siteSettings };
-export type AppFunctions = { createBooking: typeof createBooking };
 export type AppJobs = { sendEmail: typeof sendEmail };
 export type AppRoutes = { webhook: typeof webhookRoute };
 export type AppServices = { blog: BlogService };
@@ -231,7 +240,6 @@ export type AppEmails = { appointmentConfirmation: typeof appointmentConfirmatio
 export type AppConfig = {
   collections: AppCollections;
   globals: AppGlobals;
-  functions: AppFunctions;
   routes: AppRoutes;
 };
 ```
@@ -290,17 +298,17 @@ Custom fields: use `field<TConfig, TValue>()` factory. Custom operators: use `op
 Every handler receives dependencies through context -- no imports, no singletons:
 
 ```ts
-export default fn({
-  schema: z.object({ barberId: z.string() }),
-  handler: async ({ input, collections, queue }) => {
+export default route()
+  .post()
+  .schema(z.object({ barberId: z.string() }))
+  .handler(async ({ input, collections, queue }) => {
     const appointment = await collections.appointments.create({
       barber: input.barberId,
       status: "pending",
     });
     await queue.sendConfirmation.publish({ appointmentId: appointment.id });
     return { success: true };
-  },
-});
+  });
 ```
 
 `collections`, `queue`, `email`, `db`, `session` are all injected via `AppContext`. Codegen generates the type augmentation.
@@ -311,7 +319,7 @@ export default fn({
 
 | Directory | Contents |
 |---|---|
-| `server/` | Collections, globals, fields, functions, adapters, integrated services (auth, storage, queue, mailer, realtime), migration |
+| `server/` | Collections, globals, fields, routes, adapters, integrated services (auth, storage, queue, mailer, realtime), migration |
 | `client/` | Client-side client, typed hooks |
 | `shared/` | Shared types and utilities |
 | `exports/` | Public entry points (`index.ts`, `client.ts`, `shared.ts`, `cli.ts`) |
@@ -325,7 +333,7 @@ Internal imports use `#questpie/*` subpath alias (e.g., `#questpie/server/fields
 |---|---|
 | Define collections, fields, globals, relations | `questpie-core/data-modeling` |
 | Set up access control, hooks, validation | `questpie-core/rules` |
-| Add functions, jobs, routes, services | `questpie-core/business-logic` |
+| Add routes, jobs, services | `questpie-core/business-logic` |
 | Query data with the CRUD API | `questpie-core/crud-api` |
 | Configure auth, storage, queue, deploy | `questpie-core/production` |
 | Build plugins, modules, custom fields | `questpie-core/extend` |
@@ -342,7 +350,7 @@ WRONG:  src/questpie/server/models/posts.ts
 RIGHT:  src/questpie/server/collections/posts.ts
 
 WRONG:  src/questpie/server/api/get-stats.ts
-RIGHT:  src/questpie/server/functions/get-stats.ts
+RIGHT:  src/questpie/server/routes/get-stats.ts
 ```
 
 ### HIGH: Importing from `.generated/` before running codegen
@@ -357,9 +365,9 @@ bunx questpie generate
 bun run dev
 ```
 
-### HIGH: Putting business logic in route files
+### HIGH: Putting business logic in framework route mount files
 
-Routes should only mount handlers. Business logic belongs in collections (hooks), functions, or jobs.
+Framework routes should only mount handlers. Business logic belongs in collections (hooks), routes, or jobs.
 
 ```ts
 // WRONG -- logic in route file
@@ -370,16 +378,16 @@ app.post("/create-post", async (req) => {
   return post;
 });
 
-// CORRECT -- logic in function, route just mounts
-// functions/create-post.ts
-export default fn({
-  schema: z.object({ title: z.string(), body: z.string() }),
-  handler: async ({ input, collections, email }) => {
+// CORRECT -- logic in typed route, framework route just mounts
+// routes/create-post.ts
+export default route()
+  .post()
+  .schema(z.object({ title: z.string(), body: z.string() }))
+  .handler(async ({ input, collections, email }) => {
     const post = await collections.posts.create(input);
     await email.send("newPost", { to: post.author });
     return post;
-  },
-});
+  });
 ```
 
 ### MEDIUM: Using npm/yarn instead of Bun

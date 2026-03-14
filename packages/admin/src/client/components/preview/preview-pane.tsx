@@ -90,7 +90,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			setIsLoading(true);
 			setTokenError(null);
 
-			(client as any).rpc
+			(client as any).routes
 				.mintPreviewToken({
 					path: url,
 					ttlMs: 60 * 60 * 1000, // 1 hour

@@ -24,7 +24,7 @@ You write a collection file. Codegen reads it and generates:
 
 1. **Database schema** — Drizzle ORM table definitions
 2. **API layer** — CRUD endpoints with Zod validation
-3. **Type exports** — `AppConfig`, `AppCollections`, `AppFunctions` for end-to-end type safety
+3. **Type exports** - `AppConfig`, `AppCollections`, `AppRoutes` for end-to-end type safety
 4. **Module augmentation** — `AppContext` with typed `collections`, `queue`, `email`, and any custom services
 
 The admin panel, client SDK, and OpenAPI spec all consume these generated types. Nothing is defined twice.
@@ -49,7 +49,7 @@ export default collection("posts").fields(({ f }) => ({
 
 Running `questpie generate` discovers your files and generates:
 
-- Type-safe `app` instance with all collections, functions, jobs, services
+- Type-safe `app` instance with all collections, routes, jobs, services
 - `AppContext` module augmentation so every handler gets typed DI
 - `AppConfig` type for the client SDK
 
@@ -73,7 +73,7 @@ const posts = await client.collections.posts.find({
 | If you need... | QuestPie gives you... |
 |---|---|
 | A typed API from schema | Collections → CRUD endpoints + Zod validation + query operators |
-| Business logic alongside data | Functions, hooks, jobs — all in the same project with DI |
+| Business logic alongside data | Routes, hooks, jobs - all in the same project with DI |
 | An admin panel | `@questpie/admin` reads your schema, no separate config |
 | Multiple frontends | One schema, typed client SDK for any framework |
 | Full-stack type safety | Schema types flow from server → codegen → client |
@@ -82,17 +82,18 @@ const posts = await client.collections.posts.find({
 
 Every handler in QuestPie receives its dependencies through context — no imports, no singletons, no god objects:
 
-```ts title="functions/create-booking.ts"
-import { fn } from "questpie";
+```ts title="routes/create-booking.ts"
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-  schema: z.object({
+export default route()
+  .post()
+  .schema(z.object({
     barberId: z.string(),
     serviceId: z.string(),
     scheduledAt: z.string().datetime(),
-  }),
-  handler: async ({ input, collections, queue }) => {
+  }))
+  .handler(async ({ input, collections, queue }) => {
     const service = await collections.services.findOne({
       where: { id: input.serviceId },
     });
@@ -109,8 +110,7 @@ export default fn({
     });
 
     return { success: true, appointmentId: appointment.id };
-  },
-});
+  });
 ```
 
 `collections`, `queue`, `email`, `db`, `session` — all injected through `AppContext`. Codegen generates the type augmentation, so everything is discoverable and typed.

@@ -5,7 +5,7 @@ description: Singleton and request-scoped services — define once, inject every
 
 # Services
 
-Services are reusable units of logic that get injected into `AppContext` under the `services` key. Define a service in `services/`, and it becomes available in every hook, function, job, and route handler.
+Services are reusable units of logic that get injected into `AppContext` under the `services` key. Define a service in `services/`, and it becomes available in every hook, route, and job handler.
 
 ## Defining a Service
 
@@ -65,17 +65,17 @@ export const posts = collection("posts")
   });
 ```
 
-```ts title="functions/get-post-stats.ts"
-export default fn({
-  schema: z.object({ postId: z.string() }),
-  handler: async ({ input, collections, services }) => {
+```ts title="routes/get-post-stats.ts"
+export default route()
+  .post()
+  .schema(z.object({ postId: z.string() }))
+  .handler(async ({ input, collections, services }) => {
     const post = await collections.posts.findOne({ where: { id: input.postId } });
     return {
       readingTime: services.blog.computeReadingTime(post.content),
       excerpt: services.blog.extractExcerpt(post.content),
     };
-  },
-});
+  });
 ```
 
 ## Lifecycle
@@ -163,6 +163,6 @@ service({
 
 ## Related Pages
 
-- [Functions](/docs/backend/business-logic/functions) — Use services in function handlers
+- [Routes](/docs/backend/business-logic/routes) — Use services in route handlers
 - [Hooks](/docs/backend/rules/hooks) — Use services in lifecycle hooks
 - [Codegen](/docs/backend/architecture/codegen) — How services appear in AppContext

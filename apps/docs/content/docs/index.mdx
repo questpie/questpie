@@ -11,7 +11,7 @@ QuestPie is a **backend-first TypeScript framework** where you define your data 
 Schema → Codegen → Typed Runtime → Projection → Any Frontend
 ```
 
-Define collections, functions, jobs, and hooks as plain files. Codegen wires them into a type-safe runtime. The admin panel, client SDK, and OpenAPI spec are all **projections** of the same schema — not separate definitions.
+Define collections, routes, jobs, and hooks as plain files. Codegen wires them into a type-safe runtime. The admin panel, client SDK, and OpenAPI spec are all **projections** of the same schema — not separate definitions.
 
 <Callout type="warn">
 **Active Development** — QuestPie follows semantic versioning. The API may change between releases. Full stability is targeted for **v3**.
@@ -43,7 +43,7 @@ This single file defines:
 
 ```text
 Required
-questpie              — core runtime (collections, fields, hooks, functions, codegen)
+questpie              — core runtime (collections, fields, hooks, routes, codegen)
 @questpie/<adapter>   — HTTP adapter (hono, elysia, or nextjs)
 
 Optional
@@ -64,4 +64,4 @@ Optional
 
 ## Canonical Example
 
-All code examples in these docs come from the [TanStack Barbershop](https://github.com/nicepie/questpie-cms/tree/main/examples/tanstack-barbershop) — a real booking app with 7 collections, server functions, background jobs, email templates, and a full admin dashboard.
+All code examples in these docs come from the [TanStack Barbershop](https://github.com/nicepie/questpie-cms/tree/main/examples/tanstack-barbershop) — a real booking app with 7 collections, server routes, background jobs, email templates, and a full admin dashboard.

@@ -8,7 +8,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { ApiError, fn, type Questpie } from "questpie";
+import { ApiError, route, type Questpie } from "questpie";
 import { z } from "zod";
 import { getPreviewSecret } from "#questpie/admin/shared/preview-utils.js";
 import type { PreviewConfig } from "../../../augmentation.js";
@@ -94,18 +94,18 @@ export function createPreviewFunctions(secret: string) {
 	 *
 	 * @example
 	 * ```ts
-	 * const { token } = await client.rpc.mintPreviewToken({
+	 * const { token } = await client.routes.mintPreviewToken({
 	 *   path: "/pages/about",
 	 *   ttlMs: 30 * 60 * 1000, // 30 minutes
 	 * });
 	 * // Use: /api/preview?token=${token}
 	 * ```
 	 */
-	const mintPreviewToken = fn({
-		type: "mutation",
-		schema: mintPreviewTokenSchema,
-		outputSchema: mintPreviewTokenOutputSchema,
-		handler: async (ctx) => {
+	const mintPreviewToken = route()
+		.post()
+		.schema(mintPreviewTokenSchema)
+		.outputSchema(mintPreviewTokenOutputSchema)
+		.handler(async (ctx) => {
 			const { input } = ctx;
 			const session = (ctx as any).session;
 			// Require authenticated admin session
@@ -125,8 +125,7 @@ export function createPreviewFunctions(secret: string) {
 				token: `${encodedPayload}.${signature}`,
 				expiresAt,
 			};
-		},
-	});
+		});
 
 	/**
 	 * Verify a preview token.
@@ -136,17 +135,17 @@ export function createPreviewFunctions(secret: string) {
 	 *
 	 * @example
 	 * ```ts
-	 * const result = await client.rpc.verifyPreviewToken({ token });
+	 * const result = await client.routes.verifyPreviewToken({ token });
 	 * if (result.valid) {
 	 *   // Redirect to result.path with draft mode cookie
 	 * }
 	 * ```
 	 */
-	const verifyPreviewToken = fn({
-		type: "query",
-		schema: verifyPreviewTokenSchema,
-		outputSchema: verifyPreviewTokenOutputSchema,
-		handler: async ({ input }) => {
+	const verifyPreviewToken = route()
+		.post()
+		.schema(verifyPreviewTokenSchema)
+		.outputSchema(verifyPreviewTokenOutputSchema)
+		.handler(async ({ input }) => {
 			const { token } = input;
 
 			const [encodedPayload, signature] = token.split(".");
@@ -189,8 +188,7 @@ export function createPreviewFunctions(secret: string) {
 			} catch {
 				return { valid: false, error: "Invalid payload" };
 			}
-		},
-	});
+		});
 
 	return {
 		mintPreviewToken,
@@ -296,7 +294,7 @@ const getPreviewUrlOutputSchema = z.object({
  *
  * @example
  * ```ts
- * const { url } = await client.rpc.getPreviewUrl({
+ * const { url } = await client.routes.getPreviewUrl({
  *   collection: "pages",
  *   record: { slug: "about", title: "About Us" },
  *   locale: "en",
@@ -304,11 +302,11 @@ const getPreviewUrlOutputSchema = z.object({
  * // Returns: "/about?preview=true"
  * ```
  */
-const getPreviewUrl = fn({
-	type: "query",
-	schema: getPreviewUrlSchema,
-	outputSchema: getPreviewUrlOutputSchema,
-	handler: async (ctx) => {
+const getPreviewUrl = route()
+	.post()
+	.schema(getPreviewUrlSchema)
+	.outputSchema(getPreviewUrlOutputSchema)
+	.handler(async (ctx) => {
 		const { input } = ctx;
 		const session = (ctx as any).session;
 		// Require authenticated admin session
@@ -352,8 +350,7 @@ const getPreviewUrl = fn({
 				error: `Failed to generate preview URL: ${err instanceof Error ? err.message : "Unknown error"}`,
 			};
 		}
-	},
-});
+	});
 
 // ============================================================================
 // Default Functions Bundle

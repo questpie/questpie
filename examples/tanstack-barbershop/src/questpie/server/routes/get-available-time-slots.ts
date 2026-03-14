@@ -1,13 +1,14 @@
-import { fn } from "questpie";
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-	schema: z.object({
+export default route()
+	.post()
+	.schema(z.object({
 		date: z.string(),
 		barberId: z.string(),
 		serviceId: z.string(),
-	}),
-	handler: async ({ input, collections }) => {
+	}))
+	.handler(async ({ input, collections }) => {
 		const { date, barberId, serviceId } = input;
 
 		const [barber, service] = await Promise.all([
@@ -123,5 +124,4 @@ export default fn({
 		}
 
 		return { slots };
-	},
-});
+	});

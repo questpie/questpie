@@ -23,34 +23,10 @@ import _coll_submissions from "../collections/submissions";
 // ── Globals ────────────────────────────────────────────────
 import _glob_site_settings from "../globals/site-settings";
 
-// ── Blocks ─────────────────────────────────────────────────
-import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
-import { announcementBannerBlock as _bloc_announcementBanner } from "../blocks/announcement-banner";
-import { columnsBlock as _bloc_columns } from "../blocks/columns";
-import { contactsListBlock as _bloc_contactsList } from "../blocks/contacts-list";
-import { ctaBlock as _bloc_cta } from "../blocks/cta";
-import { dividerBlock as _bloc_divider } from "../blocks/divider";
-import { documentsListBlock as _bloc_documentsList } from "../blocks/documents-list";
-import { galleryBlock as _bloc_gallery } from "../blocks/gallery";
-import { headingBlock as _bloc_heading } from "../blocks/heading";
-import { heroBlock as _bloc_hero } from "../blocks/hero";
-import { imageBlock as _bloc_image } from "../blocks/image";
-import { imageTextBlock as _bloc_imageText } from "../blocks/image-text";
-import { latestNewsBlock as _bloc_latestNews } from "../blocks/latest-news";
-import { spacerBlock as _bloc_spacer } from "../blocks/spacer";
-import { textBlock as _bloc_text } from "../blocks/text";
-import { videoBlock as _bloc_video } from "../blocks/video";
-
 // ── Core Singles ───────────────────────────────────────────
 import _auth from "../auth";
 import _contextResolver from "../context";
 import _locale from "../locale";
-
-// ── Plugin Singles ─────────────────────────────────────────
-import _adminLocale from "../admin-locale";
-import _branding from "../branding";
-import _dashboard from "../dashboard";
-import _sidebar from "../sidebar";
 
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
@@ -64,24 +40,8 @@ type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;
 type _ModuleCollections = _MP<"collections">;
 type _ModuleGlobals = _MP<"globals">;
 type _ModuleJobs = _MP<"jobs">;
-type _ModuleFunctions = _MP<"functions">;
 type _ModuleRoutes = _MP<"routes">;
 type _ModuleServices = _MP<"services">;
-type _ModuleViews = _MP<"views">;
-type _ModuleComponents = _MP<"components">;
-type _ModuleBlocks = _MP<"blocks">;
-// Registry category extraction from modules
-type _Registry_Collections = _MP<"collections">;
-type _Registry_Globals = _MP<"globals">;
-type _Registry_Jobs = _MP<"jobs">;
-type _Registry_Functions = _MP<"functions">;
-type _Registry_Routes = _MP<"routes">;
-type _Registry_Services = _MP<"services">;
-type _Registry_Emails = _MP<"emails">;
-type _Registry_Views = _MP<"views">;
-type _Registry_Components = _MP<"components">;
-type _Registry_Blocks = _MP<"blocks">;
-
 // Recursive module property extraction (for fields contributed at each level)
 import type { ExtractModuleProp } from "questpie";
 
@@ -102,13 +62,11 @@ export type AppCollections = _ModuleCollections & {
 /** All globals in the app (modules + user, user overrides) */
 export type AppGlobals = _ModuleGlobals & {
 	site_settings: typeof _glob_site_settings;
+	site_settings: typeof _glob_site_settings;
 };
 
 /** All jobs in the app (modules + user, user overrides) */
 export type AppJobs = _ModuleJobs;
-
-/** All functions in the app (modules + user, user overrides) */
-export type AppFunctions = _ModuleFunctions;
 
 /** All routes in the app (modules + user, user overrides) */
 export type AppRoutes = _ModuleRoutes;
@@ -119,43 +77,13 @@ export type AppServices = _ModuleServices;
 /** All email templates in the app — use with email.sendTemplate() */
 export type AppEmailTemplates = Record<string, never>;
 
-/** All views in the app (modules + user, user overrides) */
-export type AppViews = _ModuleViews;
-
-/** All components in the app (modules + user, user overrides) */
-export type AppComponents = _ModuleComponents;
-
-/** All blocks in the app (modules + user, user overrides) */
-export type AppBlocks = _ModuleBlocks & {
-	accordion: typeof _bloc_accordion;
-	announcementBanner: typeof _bloc_announcementBanner;
-	columns: typeof _bloc_columns;
-	contactsList: typeof _bloc_contactsList;
-	cta: typeof _bloc_cta;
-	divider: typeof _bloc_divider;
-	documentsList: typeof _bloc_documentsList;
-	gallery: typeof _bloc_gallery;
-	heading: typeof _bloc_heading;
-	hero: typeof _bloc_hero;
-	image: typeof _bloc_image;
-	imageText: typeof _bloc_imageText;
-	latestNews: typeof _bloc_latestNews;
-	spacer: typeof _bloc_spacer;
-	text: typeof _bloc_text;
-	video: typeof _bloc_video;
-};
-
 /** @internal — used only for type derivation, not exported */
 type _AppInternal = Questpie<QuestpieConfig & {
 	collections: AppCollections;
 	globals: AppGlobals;
 	jobs: AppJobs;
-	functions: AppFunctions;
 	routes: AppRoutes;
 	services: AppServices;
-	views: AppViews;
-	components: AppComponents;
-	blocks: AppBlocks;
 }>;
 
 // ── AppContext augmentation — auto-types ALL handlers ──────
@@ -206,7 +134,6 @@ declare global {
 export type AppConfig = {
 	collections: AppCollections & Record<string, any>;
 	globals: AppGlobals & Record<string, any>;
-	functions: AppFunctions;
 	routes: AppRoutes;
 	auth: typeof _auth;
 };
@@ -231,31 +158,9 @@ export const app = await createApp(
 		globals: {
 			site_settings: _glob_site_settings,
 		},
-		blocks: {
-			accordion: _bloc_accordion,
-			announcementBanner: _bloc_announcementBanner,
-			columns: _bloc_columns,
-			contactsList: _bloc_contactsList,
-			cta: _bloc_cta,
-			divider: _bloc_divider,
-			documentsList: _bloc_documentsList,
-			gallery: _bloc_gallery,
-			heading: _bloc_heading,
-			hero: _bloc_hero,
-			image: _bloc_image,
-			imageText: _bloc_imageText,
-			latestNews: _bloc_latestNews,
-			spacer: _bloc_spacer,
-			text: _bloc_text,
-			video: _bloc_video,
-		},
 		auth: _auth as any,
 		contextResolver: _contextResolver as any,
 		locale: _locale as any,
-		adminLocale: _adminLocale as any,
-		branding: _branding as any,
-		dashboard: _dashboard as any,
-		sidebar: _sidebar as any,
 	},
 	_runtime,
 ) as unknown as _AppInternal;

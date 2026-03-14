@@ -1,11 +1,11 @@
 # @questpie/tanstack-query
 
-Type-safe TanStack Query option builders for QUESTPIE — collections, globals, RPC procedures, and realtime streaming.
+Type-safe TanStack Query option builders for QUESTPIE — collections, globals, app routes, and realtime streaming.
 
 ## Features
 
 - **Query Options Factory** — Pre-built `queryOptions()` and `mutationOptions()` for all CRUD operations
-- **RPC Query Options** — Typed `query()` / `mutation()` builders for standalone RPC procedures with nested router support
+- **Route Query Options** — Typed `query()` / `mutation()` builders for app routes with nested path support
 - **Realtime Streaming** — `streamedQuery`-based options for SSE live updates on collections and globals
 - **Batch Operations** — `updateMany` and `deleteMany` mutation builders
 - **SSR Ready** — Prefetch data on the server, hydrate on the client
@@ -24,9 +24,9 @@ bun add @questpie/tanstack-query questpie @tanstack/react-query
 ```ts
 import { createClient } from "questpie/client";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
-import type { App, AppRpc } from "@/questpie/server/app";
+import type { AppConfig } from "@/questpie/server/app";
 
-const appClient = createClient<App, AppRpc>({
+const appClient = createClient<AppConfig>({
   baseURL: "http://localhost:3000",
   basePath: "/api",
 });
@@ -122,25 +122,25 @@ cmsQueries.globals.siteSettings.update()
 cmsQueries.globals.siteSettings.key()
 ```
 
-## RPC
+## Routes
 
-Full type-safe query/mutation options for standalone RPC procedures:
+Full type-safe query/mutation options for app routes:
 
 ```ts
-// Query options from RPC procedure
+// Query options from route
 const { data } = useQuery(
-  cmsQueries.rpc.dashboard.getStats.query({ period: "week" })
+  cmsQueries.routes.dashboard.getStats.query({ period: "week" })
 );
 
-// Mutation options from RPC procedure
+// Mutation options from route
 const publish = useMutation(
-  cmsQueries.rpc.posts.publish.mutation()
+  cmsQueries.routes.posts.publish.mutation()
 );
 publish.mutate({ id: "post_123" });
 
 // Query key for invalidation/prefetch
 queryClient.invalidateQueries({
-  queryKey: cmsQueries.rpc.dashboard.getStats.key({ period: "week" }),
+  queryKey: cmsQueries.routes.dashboard.getStats.key({ period: "week" }),
 });
 ```
 
@@ -228,9 +228,9 @@ export default async function PostsPage() {
 // Globals
 ["globals", globalName, "get"]
 
-// RPC
-["rpc", ...segments, "query", input]
-["rpc", ...segments, "mutation"]
+// Routes
+["routes", ...segments, "query", input]
+["routes", ...segments, "mutation"]
 ```
 
 ## Documentation

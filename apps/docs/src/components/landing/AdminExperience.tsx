@@ -4,7 +4,7 @@ const cards = [
 	{
 		icon: Braces,
 		title: "Server Contract",
-		body: "Collections, globals, fields, access, list/form/dashboard/sidebar config, and RPC procedures live in one server-first model.",
+		body: "Collections, globals, fields, access, list/form/dashboard/sidebar config, and routes live in one server-first model.",
 		accent: "WHAT",
 	},
 	{

@@ -6,141 +6,186 @@
  *
  * @example
  * ```ts
- * import { createFetchHandler } from 'questpie'
- * import { withOpenApi } from '@questpie/openapi'
- * import { app } from './app'
+ * // questpie/server/modules.ts
+ * import { adminModule } from "@questpie/admin/server";
+ * import { openApiModule } from "@questpie/openapi";
  *
- * // Wrap the fetch handler — adds /openapi.json and /docs routes
- * const handler = withOpenApi(
- *   createFetchHandler(app, { basePath: '/api' }),
- *   {
- *     app,
- *     basePath: '/api',
- *     info: { title: 'My API', version: '1.0.0' },
- *   }
- * )
+ * export default [
+ *   adminModule,
+ *   openApiModule({
+ *     info: { title: "My API", version: "1.0.0" },
+ *   }),
+ * ] as const;
  * ```
  */
 
-import type { FunctionsTree } from "questpie";
+import type { Questpie } from "questpie";
+import { module, route } from "questpie";
 import { generateOpenApiSpec as generate } from "./generator/index.js";
 import { serveScalarUI } from "./scalar.js";
 import type {
 	OpenApiConfig,
+	OpenApiModuleConfig,
 	OpenApiSpec,
 	ScalarConfig,
-	WithOpenApiConfig,
 } from "./types.js";
 
 export type {
 	OpenApiConfig,
+	OpenApiModuleConfig,
 	OpenApiSpec,
 	ScalarConfig,
-	WithOpenApiConfig,
 } from "./types.js";
 
-/**
- * Generate a complete OpenAPI 3.1 spec from a QuestPie instance.
- * Functions are read from `app.functions` automatically if not provided.
- */
-export function generateOpenApiSpec(
-	app: unknown,
-	functions?: FunctionsTree,
-	config?: OpenApiConfig,
-): OpenApiSpec {
-	const fns = functions ?? (app as any).functions;
-	return generate(app as any, fns, config);
-}
+// ============================================================================
+// Spec generation utility
+// ============================================================================
 
 /**
- * Create request handlers for serving the OpenAPI spec and Scalar UI.
- */
-export function createOpenApiHandlers(
-	spec: OpenApiSpec,
-	options?: { scalar?: ScalarConfig },
-) {
-	return {
-		/** Returns the OpenAPI spec as JSON */
-		specHandler: () =>
-			new Response(JSON.stringify(spec), {
-				headers: {
-					"Content-Type": "application/json",
-					"Access-Control-Allow-Origin": "*",
-				},
-			}),
-
-		/** Returns the Scalar UI HTML page */
-		scalarHandler: () => serveScalarUI(spec, options?.scalar),
-	};
-}
-
-/**
- * Wrap a QuestPie fetch handler to add OpenAPI spec and Scalar UI routes.
- *
- * Intercepts requests to `{basePath}/{specPath}` and `{basePath}/{docsPath}`
- * before they reach the handler. Everything else passes through unchanged.
- *
- * Functions are read from `app.functions` automatically.
+ * Generate a complete OpenAPI 3.1 spec from a QuestPie app instance.
+ * Routes are read from `app.config.routes` automatically.
  *
  * @example
  * ```ts
- * const handler = withOpenApi(
- *   createFetchHandler(app, { basePath: '/api' }),
- *   {
- *     app,
- *     basePath: '/api',
- *     info: { title: 'My API', version: '1.0.0' },
- *     scalar: { theme: 'purple' },
- *   }
- * )
- * // GET /api/openapi.json → spec JSON
- * // GET /api/docs          → Scalar UI
- * // Everything else        → handler
+ * import { generateOpenApiSpec } from "@questpie/openapi";
+ *
+ * const spec = generateOpenApiSpec(app, {
+ *   info: { title: "My API", version: "1.0.0" },
+ * });
  * ```
  */
-export function withOpenApi(
-	handler: (
-		request: Request,
-		context?: any,
-	) => Promise<Response | null> | Response | null,
-	config: WithOpenApiConfig,
-): (
-	request: Request,
-	context?: any,
-) => Promise<Response | null> | Response | null {
-	const {
-		app,
-		functions,
-		scalar,
-		specPath = "openapi.json",
-		docsPath = "docs",
-		...openApiConfig
-	} = config;
-
-	const fns = functions ?? (app as any).functions;
-	const spec = generate(app as any, fns, openApiConfig);
-	const { specHandler, scalarHandler } = createOpenApiHandlers(spec, {
-		scalar,
-	});
-
-	const basePath = normalizeBasePath(openApiConfig.basePath ?? "/");
-	const specRoute = `${basePath}/${specPath}`;
-	const docsRoute = `${basePath}/${docsPath}`;
-
-	return (request: Request, context?: any) => {
-		const url = new URL(request.url);
-		const pathname = url.pathname;
-
-		if (request.method === "GET") {
-			if (pathname === specRoute) return specHandler();
-			if (pathname === docsRoute) return scalarHandler();
-		}
-
-		return handler(request, context);
-	};
+export function generateOpenApiSpec(
+	app: unknown,
+	config?: OpenApiConfig,
+): OpenApiSpec {
+	const routes = (app as any).config?.routes;
+	return generate(app as any, routes, config);
 }
 
-function normalizeBasePath(path: string): string {
-	// Remove trailing slash but keep leading slash
-	return path.endsWith("/") ? path.slice(0, -1) : path;
+// ============================================================================
+// Lazy-cached spec — generated once per app instance, served with ETag
+// ============================================================================
+
+const specCache = new WeakMap<object, { json: string; etag: string }>();
+
+function getCachedSpec(app: unknown, config: OpenApiConfig | undefined) {
+	const appObj = app as object;
+	let cached = specCache.get(appObj);
+	if (!cached) {
+		const spec = generateOpenApiSpec(app, config);
+		const json = JSON.stringify(spec);
+		// Simple hash for ETag — deterministic per spec content
+		let hash = 0;
+		for (let i = 0; i < json.length; i++) {
+			hash = ((hash << 5) - hash + json.charCodeAt(i)) | 0;
+		}
+		const etag = `"oapi-${(hash >>> 0).toString(36)}"`;
+		cached = { json, etag };
+		specCache.set(appObj, cached);
+	}
+	return cached;
+}
+
+// ============================================================================
+// Route factories — for file convention usage
+// ============================================================================
+
+/**
+ * Create a route that serves the OpenAPI 3.1 JSON spec.
+ * Place in your `routes/` directory for automatic discovery.
+ *
+ * Spec is lazy-generated on first request and cached with ETag.
+ *
+ * @example
+ * ```ts title="routes/openapi-spec.ts"
+ * import { openApiRoute } from "@questpie/openapi";
+ *
+ * export default openApiRoute({
+ *   info: { title: "My API", version: "1.0.0" },
+ * });
+ * ```
+ */
+export function openApiRoute(config?: OpenApiConfig) {
+	return route()
+		.get()
+		.raw()
+		.handler(async (ctx) => {
+			const app = (ctx as any).app as Questpie<any>;
+			const { json, etag } = getCachedSpec(app, config);
+
+			if (ctx.request.headers.get("if-none-match") === etag) {
+				return new Response(null, { status: 304 });
+			}
+
+			return new Response(json, {
+				headers: {
+					"Content-Type": "application/json",
+					"Cache-Control": "public, max-age=3600, stale-while-revalidate=43200",
+					ETag: etag,
+					"Access-Control-Allow-Origin": "*",
+				},
+			});
+		});
+}
+
+/**
+ * Create a route that serves the Scalar interactive API docs.
+ * Place in your `routes/` directory for automatic discovery.
+ *
+ * @example
+ * ```ts title="routes/docs.ts"
+ * import { docsRoute } from "@questpie/openapi";
+ *
+ * export default docsRoute({ scalar: { theme: "purple" } });
+ * ```
+ */
+export function docsRoute(config?: OpenApiConfig & { scalar?: ScalarConfig }) {
+	const { scalar: scalarConfig, ...openApiConfig } = config ?? {};
+	return route()
+		.get()
+		.raw()
+		.handler(async (ctx) => {
+			const app = (ctx as any).app as Questpie<any>;
+			const spec = generateOpenApiSpec(app, openApiConfig);
+			return serveScalarUI(spec, scalarConfig);
+		});
+}
+
+// ============================================================================
+// Module — register in modules.ts for zero-config setup
+// ============================================================================
+
+/**
+ * Create an OpenAPI module that registers spec + docs routes.
+ *
+ * Routes are served as:
+ * - `GET /api/{specPath}` — OpenAPI 3.1 JSON spec (default: `openapi.json`)
+ * - `GET /api/{docsPath}` — Scalar interactive API reference (default: `docs`)
+ *
+ * @example
+ * ```ts title="questpie/server/modules.ts"
+ * import { adminModule } from "@questpie/admin/server";
+ * import { openApiModule } from "@questpie/openapi";
+ *
+ * export default [
+ *   adminModule,
+ *   openApiModule({
+ *     info: { title: "My API", version: "1.0.0" },
+ *     scalar: { theme: "purple" },
+ *   }),
+ * ] as const;
+ * ```
+ */
+export function openApiModule(config?: OpenApiModuleConfig) {
+	const specKey = config?.specPath ?? "openapi.json";
+	const docsKey = config?.docsPath ?? "docs";
+	const { specPath: _, docsPath: __, scalar, ...openApiConfig } = config ?? {};
+
+	return module({
+		name: "questpie-openapi" as const,
+		routes: {
+			[specKey]: openApiRoute(openApiConfig),
+			[docsKey]: docsRoute({ ...openApiConfig, scalar }),
+		},
+	});
 }

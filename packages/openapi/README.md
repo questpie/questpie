@@ -10,27 +10,37 @@ bun add @questpie/openapi
 
 ## Usage
 
-Wrap your fetch handler with `withOpenApi` to add `/openapi.json` and `/docs` routes:
+Register `openApiModule()` in your `modules.ts` file to add `/openapi.json` and `/docs` routes:
 
 ```ts
-import { createFetchHandler } from "questpie";
-import { withOpenApi } from "@questpie/openapi";
-import { app, appRpc } from "./questpie";
+// src/questpie/server/modules.ts
+import { adminModule } from "@questpie/admin/server";
+import { openApiModule } from "@questpie/openapi";
 
-const handler = withOpenApi(
-  createFetchHandler(app, { basePath: "/api", rpc: appRpc }),
-  {
-    app,
-    rpc: appRpc,
-    basePath: "/api",
+export default [
+  adminModule,
+  openApiModule({
     info: { title: "My API", version: "1.0.0" },
     scalar: { theme: "purple" },
-  },
-);
+  }),
+] as const;
+```
 
-// GET /api/openapi.json → OpenAPI spec
-// GET /api/docs         → Scalar UI
-// Everything else           → routes
+Your route handler stays clean — no wrapper needed:
+
+```ts
+// routes/api/$.ts
+import { createFetchHandler } from "questpie";
+import { app } from "~/questpie/server/.generated";
+
+const handler = createFetchHandler(app, { basePath: "/api" });
+```
+
+Once registered, the following endpoints are available:
+
+```
+GET /api/openapi.json → OpenAPI spec
+GET /api/docs         → Scalar UI
 ```
 
 ## What Gets Documented
@@ -39,11 +49,11 @@ const handler = withOpenApi(
 | --------------- | --------------------------------------------------------------------------------------- |
 | **Collections** | List, create, findOne, update, delete, count, deleteMany, restore, versions, revert, upload, schema, meta |
 | **Globals**     | Get, update, versions, revert, schema                                                   |
-| **RPC**         | All procedures from the RPC router tree, with input/output from Zod schemas             |
+| **Routes**      | All standalone routes, with input/output from Zod schemas                               |
 | **Auth**        | Better Auth endpoints (sign-in, sign-up, session, sign-out)                             |
 | **Search**      | Full-text search and reindex                                                            |
 
-RPC functions with an explicit `outputSchema` get full request/response documentation. Functions without it fall back to `{ type: "object" }`.
+Routes with an explicit `outputSchema` get full request/response documentation. Routes without it fall back to `{ type: "object" }`.
 
 ## Standalone Spec Generation
 
@@ -52,7 +62,7 @@ Generate the spec without mounting routes:
 ```ts
 import { generateOpenApiSpec } from "@questpie/openapi";
 
-const spec = generateOpenApiSpec(app, appRpc, {
+const spec = generateOpenApiSpec(app, {
   basePath: "/api",
   info: { title: "My API", version: "1.0.0" },
 });

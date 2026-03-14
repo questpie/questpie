@@ -42,13 +42,14 @@ The filename becomes the template key: `appointment-confirmation.ts` → `email.
 
 Use `email.sendTemplate()` from any handler:
 
-```ts title="functions/confirm-appointment.ts"
-import { fn } from "questpie";
+```ts title="routes/confirm-appointment.ts"
+import { route } from "questpie";
 import { z } from "zod";
 
-export default fn({
-  schema: z.object({ appointmentId: z.string() }),
-  handler: async ({ input, collections, email }) => {
+export default route()
+  .post()
+  .schema(z.object({ appointmentId: z.string() }))
+  .handler(async ({ input, collections, email }) => {
     const appointment = await collections.appointments.findOne({
       where: { id: input.appointmentId },
       with: { barber: true, service: true },
@@ -67,8 +68,7 @@ export default fn({
     });
 
     return { success: true };
-  },
-});
+  });
 ```
 
 ## Handler Context

@@ -1,37 +1,24 @@
 /**
  * Route Factory
  *
- * Identity function for defining raw HTTP route handlers with type safety.
+ * Entry point for defining routes. Returns a builder.
  *
- * @see RFC-MODULE-ARCHITECTURE §5.3 (Route Definition)
+ * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
-import type { RouteDefinition } from "./types.js";
+import { RouteBuilder } from "./route-builder.js";
 
 /**
- * Define a raw HTTP route handler.
- *
- * Routes are discovered from the `routes/` directory by codegen and mapped
- * to URL paths based on the file path:
- * - `routes/health.ts` → `GET /api/routes/health`
- * - `routes/webhooks/stripe.ts` → `POST /api/routes/webhooks/stripe`
+ * Define a route.
  *
  * @example
  * ```ts
- * // routes/webhooks/stripe.ts
- * import { route } from "questpie";
- *
- * export default route({
- *   method: "POST",
- *   handler: async ({ request }) => {
- *     const body = await request.text();
- *     return new Response("ok", { status: 200 });
- *   },
- * });
+ * export default route()
+ *   .post()
+ *   .schema(z.object({ name: z.string() }))
+ *   .handler(({ input }) => ({ ok: true }));
  * ```
- *
- * @see RFC-MODULE-ARCHITECTURE §5.3 (Route Definition)
  */
-export function route<T extends RouteDefinition>(definition: T): T {
-	return definition;
+export function route(): RouteBuilder {
+	return new RouteBuilder();
 }

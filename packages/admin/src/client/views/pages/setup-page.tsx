@@ -90,7 +90,7 @@ export function SetupPage({
 			redirectTo !== undefined ? redirectTo : `${basePath}/login`;
 
 		try {
-			const result = await (client as any).rpc.createFirstAdmin({
+			const result = await (client as any).routes.createFirstAdmin({
 				email: values.email,
 				password: values.password,
 				name: values.name,

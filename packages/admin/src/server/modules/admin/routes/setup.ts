@@ -7,7 +7,7 @@
  */
 
 import { eq, sql } from "drizzle-orm";
-import { fn, type Questpie } from "questpie";
+import { route, type Questpie } from "questpie";
 import { z } from "zod";
 
 // ============================================================================
@@ -59,25 +59,24 @@ const createFirstAdminOutputSchema = z.object({
  *
  * @example
  * ```ts
- * const result = await client.rpc.isSetupRequired({});
+ * const result = await client.routes.isSetupRequired({});
  * if (result.required) {
  *   // Redirect to setup page
  * }
  * ```
  */
-export const isSetupRequired = fn({
-	type: "query",
-	schema: isSetupRequiredSchema,
-	outputSchema: isSetupRequiredOutputSchema,
-	handler: async (ctx) => {
+export const isSetupRequired = route()
+	.post()
+	.schema(isSetupRequiredSchema)
+	.outputSchema(isSetupRequiredOutputSchema)
+	.handler(async (ctx) => {
 		const app = getApp(ctx);
 		const userCollection = app.getCollectionConfig("user");
 		const result = await app.db
 			.select({ count: sql`count(*)::int` as any })
 			.from(userCollection.table);
 		return { required: (result[0] as { count: number }).count === 0 };
-	},
-});
+	});
 
 /**
  * Create the first admin user in the system.
@@ -88,7 +87,7 @@ export const isSetupRequired = fn({
  *
  * @example
  * ```ts
- * const result = await client.rpc.createFirstAdmin({
+ * const result = await client.routes.createFirstAdmin({
  *   email: "admin@example.com",
  *   password: "securepassword123",
  *   name: "Admin User",
@@ -101,11 +100,11 @@ export const isSetupRequired = fn({
  * }
  * ```
  */
-export const createFirstAdmin = fn({
-	type: "mutation",
-	schema: createFirstAdminSchema,
-	outputSchema: createFirstAdminOutputSchema,
-	handler: async (ctx) => {
+export const createFirstAdmin = route()
+	.post()
+	.schema(createFirstAdminSchema)
+	.outputSchema(createFirstAdminOutputSchema)
+	.handler(async (ctx) => {
 		const app = getApp(ctx);
 		const input = ctx.input as z.infer<typeof createFirstAdminSchema>;
 		const userCollection = app.getCollectionConfig("user");
@@ -167,8 +166,7 @@ export const createFirstAdmin = fn({
 						: "An unexpected error occurred",
 			};
 		}
-	},
-});
+	});
 
 // ============================================================================
 // Export Bundle

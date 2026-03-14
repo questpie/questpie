@@ -1,8 +1,8 @@
 /**
- * Tests: context propagation in function handlers + normalizeContext
+ * Tests: context propagation in route handlers + normalizeContext
  *
  * Covers two bugs fixed:
- * 1. `executeJsonFunction` now wraps handler in `runWithContext` — locale/session
+ * 1. `executeJsonRoute` now wraps handler in `runWithContext` — locale/session
  *    propagate into nested CRUD calls without manual threading.
  * 2. `normalizeContext` now merges `session` from ALS — partial overrides like
  *    `{ accessMode: "user" }` inside a handler still carry the request session.
@@ -15,8 +15,8 @@ import {
 	tryGetContext,
 } from "../../src/server/config/context.js";
 import { normalizeContext } from "../../src/server/collection/crud/shared/context.js";
-import { executeJsonFunction } from "../../src/server/functions/execute.js";
-import { fn } from "../../src/server/index.js";
+import { executeJsonRoute } from "../../src/server/routes/execute.js";
+import { route } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,10 +89,10 @@ describe("normalizeContext — ALS propagation", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// executeJsonFunction context propagation — uses mock app but no DB interaction
+// executeJsonRoute context propagation — uses mock app but no DB interaction
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("executeJsonFunction — context propagation via runWithContext", () => {
+describe("executeJsonRoute — context propagation via runWithContext", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
@@ -106,17 +106,17 @@ describe("executeJsonFunction — context propagation via runWithContext", () =>
 	it("sets locale in ALS so nested calls can inherit it", async () => {
 		let capturedLocale: string | undefined;
 
-		const getLocale = fn({
-			schema: z.object({}),
-			handler: async () => {
+		const getLocale = route()
+			.post()
+			.schema(z.object({}))
+			.handler(async () => {
 				// Read ALS directly — simulates what normalizeContext does in nested CRUD
 				const ctx = tryGetContext();
 				capturedLocale = ctx?.locale;
 				return {};
-			},
-		});
+			});
 
-		await executeJsonFunction(setup.app, getLocale, {}, {
+		await executeJsonRoute(setup.app, getLocale, {}, {
 			locale: "sk",
 			accessMode: "system",
 		});
@@ -129,16 +129,16 @@ describe("executeJsonFunction — context propagation via runWithContext", () =>
 
 		const fakeSession = { user: { id: "u42" }, session: { id: "s42" } } as any;
 
-		const getSession = fn({
-			schema: z.object({}),
-			handler: async () => {
+		const getSession = route()
+			.post()
+			.schema(z.object({}))
+			.handler(async () => {
 				const ctx = tryGetContext();
 				capturedSession = ctx?.session;
 				return {};
-			},
-		});
+			});
 
-		await executeJsonFunction(setup.app, getSession, {}, {
+		await executeJsonRoute(setup.app, getSession, {}, {
 			session: fakeSession,
 			accessMode: "system",
 		});
@@ -149,17 +149,17 @@ describe("executeJsonFunction — context propagation via runWithContext", () =>
 	it("sets accessMode to 'system' inside handler regardless of request accessMode", async () => {
 		let capturedAccessMode: string | undefined;
 
-		const checkAccess = fn({
-			schema: z.object({}),
-			handler: async () => {
+		const checkAccess = route()
+			.post()
+			.schema(z.object({}))
+			.handler(async () => {
 				const ctx = tryGetContext();
 				capturedAccessMode = ctx?.accessMode;
 				return {};
-			},
-		});
+			});
 
 		// Even though the request comes in as "user", handler body runs as "system"
-		await executeJsonFunction(setup.app, checkAccess, {}, {
+		await executeJsonRoute(setup.app, checkAccess, {}, {
 			accessMode: "user",
 		});
 
@@ -169,16 +169,16 @@ describe("executeJsonFunction — context propagation via runWithContext", () =>
 	it("propagates stage into ALS", async () => {
 		let capturedStage: string | undefined;
 
-		const checkStage = fn({
-			schema: z.object({}),
-			handler: async () => {
+		const checkStage = route()
+			.post()
+			.schema(z.object({}))
+			.handler(async () => {
 				const ctx = tryGetContext();
 				capturedStage = ctx?.stage;
 				return {};
-			},
-		});
+			});
 
-		await executeJsonFunction(setup.app, checkStage, {}, {
+		await executeJsonRoute(setup.app, checkStage, {}, {
 			stage: "draft",
 			accessMode: "system",
 		});
@@ -190,18 +190,18 @@ describe("executeJsonFunction — context propagation via runWithContext", () =>
 		const fakeSession = { user: { id: "u99" }, session: { id: "s99" } } as any;
 		let capturedSession: unknown;
 
-		const checkNestedSession = fn({
-			schema: z.object({}),
-			handler: async () => {
+		const checkNestedSession = route()
+			.post()
+			.schema(z.object({}))
+			.handler(async () => {
 				// Simulate what a nested CRUD call does internally:
 				// developer passes { accessMode: "user" } and session should auto-merge
 				const normalized = normalizeContext({ accessMode: "user" });
 				capturedSession = normalized.session;
 				return {};
-			},
-		});
+			});
 
-		await executeJsonFunction(setup.app, checkNestedSession, {}, {
+		await executeJsonRoute(setup.app, checkNestedSession, {}, {
 			session: fakeSession,
 			locale: "en",
 		});
@@ -214,22 +214,22 @@ describe("executeJsonFunction — context propagation via runWithContext", () =>
 // HTTP adapter — locale propagates from request Accept-Language header
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("RPC via HTTP — locale propagates from request into handler ALS", () => {
-	const echoLocale = fn({
-		schema: z.object({}),
-		outputSchema: z.object({ locale: z.string().optional() }),
-		handler: async () => {
+describe("Route via HTTP — locale propagates from request into handler ALS", () => {
+	const echoLocale = route()
+		.post()
+		.schema(z.object({}))
+		.outputSchema(z.object({ locale: z.string().optional() }))
+		.handler(async () => {
 			const ctx = tryGetContext();
 			return { locale: ctx?.locale };
-		},
-	});
+		});
 
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
 		// Must register supported locales so createContext doesn't reject them
 		setup = await buildMockApp({
-			functions: { echoLocale },
+			routes: { echoLocale },
 			locale: {
 				locales: [{ code: "en" }, { code: "fr" }, { code: "sk" }, { code: "de" }],
 				defaultLocale: "en",
@@ -245,7 +245,7 @@ describe("RPC via HTTP — locale propagates from request into handler ALS", () 
 		const handler = createFetchHandler(setup.app);
 
 		const response = await handler(
-			new Request("http://localhost/rpc/echoLocale", {
+			new Request("http://localhost/echo-locale", {
 				method: "POST",
 				headers: { "Accept-Language": "fr" },
 				body: JSON.stringify({}),
@@ -262,14 +262,14 @@ describe("RPC via HTTP — locale propagates from request into handler ALS", () 
 
 		const [r1, r2] = await Promise.all([
 			handler(
-				new Request("http://localhost/rpc/echoLocale", {
+				new Request("http://localhost/echo-locale", {
 					method: "POST",
 					headers: { "Accept-Language": "sk" },
 					body: JSON.stringify({}),
 				}),
 			),
 			handler(
-				new Request("http://localhost/rpc/echoLocale", {
+				new Request("http://localhost/echo-locale", {
 					method: "POST",
 					headers: { "Accept-Language": "de" },
 					body: JSON.stringify({}),

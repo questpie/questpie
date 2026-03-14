@@ -9,8 +9,9 @@ const layers = [
 	{
 		icon: Box,
 		label: "Core",
-		api: "collections/ functions/ jobs/",
-		description: "Drop files into convention directories. Collections, globals, functions, jobs — all discovered automatically.",
+		api: "collections/ routes/ jobs/",
+		description:
+			"Drop files into convention directories. Collections, globals, routes, jobs - all discovered automatically.",
 	},
 	{
 		icon: Plug,
@@ -200,9 +201,7 @@ export function Composability() {
 										<span
 											className={cn(
 												"font-mono text-[10px] md:text-sm font-bold uppercase transition-colors duration-300",
-												isActive
-													? "text-primary"
-													: "text-foreground",
+												isActive ? "text-primary" : "text-foreground",
 											)}
 										>
 											{layer.label}
@@ -238,9 +237,7 @@ export function Composability() {
 									<div className="flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center border border-primary/20 bg-primary/10 text-primary transition-colors">
 										{(() => {
 											const Icon = layers[activeLayer].icon;
-											return (
-												<Icon className="h-5 w-5 md:h-6 md:w-6" />
-											);
+											return <Icon className="h-5 w-5 md:h-6 md:w-6" />;
 										})()}
 									</div>
 									<div>

@@ -137,11 +137,23 @@ export async function loadConfigForCodegen(
 	} catch (error) {
 		// Config import failed (missing deps, syntax error, etc.)
 		// Fall back gracefully — codegen can still run without config-defined plugins
+		const reason =
+			error instanceof Error
+				? error.message
+				: typeof error === "string"
+					? error
+					: String(error);
 		console.warn(
-			`Warning: Could not load plugins from config (${configPath}).`,
+			`Warning: Could not load plugins from config (${configPath}).\n  Reason: ${reason}`,
 		);
-		if (error instanceof Error) {
-			console.warn(`  ${error.message}`);
+		if (error instanceof Error && error.stack) {
+			// Show the first relevant stack frame (skip the error line itself)
+			const frames = error.stack.split("\n").slice(1, 4);
+			if (frames.length > 0) {
+				console.warn(
+					`  Stack:\n${frames.map((f) => `    ${f.trim()}`).join("\n")}`,
+				);
+			}
 		}
 		return { plugins: [] };
 	}
@@ -302,9 +314,7 @@ async function generatePackageModules(
 
 			if (options.verbose) {
 				console.log(`    [${targetId}] Root: ${discoveryRoot}`);
-				console.log(
-					`    [${targetId}] Output: ${moduleOutDir}/module.ts`,
-				);
+				console.log(`    [${targetId}] Output: ${moduleOutDir}/module.ts`);
 			}
 
 			const result = await runCodegen({
@@ -716,6 +726,7 @@ async function watchSingleTarget(
 		"globals",
 		"jobs",
 		"functions",
+		"routes",
 		"messages",
 		"migrations",
 		"seeds",

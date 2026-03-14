@@ -12,7 +12,7 @@ Replace the manual `QuestpieBuilder` chain with automatic file-convention + code
 ## Breaking Changes
 
 - **`QuestpieBuilder` removed** — `q()`, `.use()`, `.build()` chain replaced by file convention + `questpie generate`
-- **RPC module removed** — `rpc()`, `r.fn()`, `r.router()` replaced by `functions/*.ts` directory
+- **RPC module removed** — `rpc()`, `r.fn()`, `r.router()` replaced by `routes/*.ts` directory with `route()` builder
 - **Positional callbacks → destructured** — `.fields((f) => ...)` → `.fields(({ f }) => ...)`
 - **`createFetchHandler`** — `rpc` option removed, functions auto-discovered
 - **Module factories removed** — `admin()`, `starter()` → static `adminModule`, `starterModule` imports in `modules.ts`
@@ -26,7 +26,7 @@ src/questpie/server/
 ├── modules.ts                # Module imports
 ├── collections/*.ts          # One per file
 ├── globals/*.ts
-├── functions/*.ts
+├── routes/*.ts
 ├── jobs/*.ts
 ├── blocks/*.ts               # Admin plugin
 ├── routes/*.ts
@@ -43,7 +43,7 @@ src/questpie/server/
 
 All entity categories, builder extensions, callback proxies, and type registries are declared by `CodegenPlugin` instances — the CLI has zero hardcoded knowledge of admin views, components, or blocks.
 
-- **Core plugin** — declares collections, globals, jobs, functions, routes, messages, services, emails, migrations, seeds + singleton factories (locale, hooks, access, context) + `f` callback param
+- **Core plugin** — declares collections, globals, jobs, routes, messages, services, emails, migrations, seeds + singleton factories (locale, hooks, access, context) + `f` callback param
 - **Admin plugin** — declares views, components, blocks, sidebar, dashboard, branding, adminLocale + collection/global extensions (`.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()`) + `v`, `c`, `a` callback params
 - **`ModuleRegistryConfig`** — `placeholder` for string union keys, `recordPlaceholder` for full typed records, optional `typeRegistry` for `declare module` augmentations
 

@@ -524,9 +524,9 @@ function BrandingSync() {
 	useEffect(() => {
 		if (!store) return;
 		const client = store.getState().client;
-		if (!client || !(client as any).rpc?.getAdminConfig) return;
+		if (!client || !(client as any).routes?.getAdminConfig) return;
 
-		(client as any).rpc
+		(client as any).routes
 			.getAdminConfig()
 			.then((config: any) => {
 				if (config?.branding?.name) {

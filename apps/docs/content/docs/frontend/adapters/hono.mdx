@@ -31,13 +31,19 @@ export default server;
 
 ## With OpenAPI
 
-```ts
-import { withOpenApi } from "questpie/openapi";
+OpenAPI is now registered as a module rather than wrapping the handler. Add `openApiModule()` to your `modules.ts`:
 
-const handler = withOpenApi(
-  createFetchHandler(app, { basePath: "/api" }),
-  { basePath: "/api" },
-);
+```ts title="modules.ts"
+import { adminModule } from "@questpie/admin/server";
+import { openApiModule } from "@questpie/openapi";
+
+export default [adminModule, openApiModule()] as const;
+```
+
+The fetch handler stays the same — no wrapping needed:
+
+```ts title="src/index.ts"
+const handler = createFetchHandler(app, { basePath: "/api" });
 
 // OpenAPI spec at /api/openapi.json
 // Scalar UI at /api/docs

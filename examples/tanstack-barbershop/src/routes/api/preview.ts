@@ -2,10 +2,10 @@
  * Preview API Route
  *
  * Handles preview token verification and sets draft mode cookie.
- * The token was minted by the admin via the mintPreviewToken RPC.
+ * The token was minted by the admin via the mintPreviewToken route.
  *
  * Flow:
- * 1. Admin calls mintPreviewToken RPC -> gets signed token with path
+ * 1. Admin calls mintPreviewToken route -> gets signed token with path
  * 2. Admin iframe loads /api/preview?token=xxx
  * 3. This route verifies token, sets __draft_mode cookie, redirects to path
  * 4. Page route checks cookie and loads drafts if present

@@ -1,13 +1,14 @@
-import { fn } from "questpie";
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-	schema: z.object({
+export default route()
+	.post()
+	.schema(z.object({
 		startDate: z.string().datetime(),
 		endDate: z.string().datetime(),
 		completedOnly: z.boolean().optional().default(true),
-	}),
-	handler: async ({ input, collections }) => {
+	}))
+	.handler(async ({ input, collections }) => {
 		const { startDate, endDate, completedOnly } = input;
 
 		const where: Record<string, unknown> = {
@@ -33,5 +34,4 @@ export default fn({
 			appointmentCount > 0 ? totalRevenue / appointmentCount : 0;
 
 		return { totalRevenue, appointmentCount, avgRevenue };
-	},
-});
+	});

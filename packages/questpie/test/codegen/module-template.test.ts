@@ -5,7 +5,7 @@
  * 1. `generateModuleTemplate` — minimal module (empty)
  * 2. Collections — record emission with type interfaces
  * 3. Jobs — record emission
- * 4. Functions — nested emission with bundles
+ * 4. Routes — flat emission with bundles
  * 5. Migrations, seeds — array emission
  * 6. Singles — auth, fields, sidebar (moduleEmit: "array")
  * 7. Sub-modules via modules.ts
@@ -94,14 +94,15 @@ function baseCategoryMeta(): Map<string, CategoryDeclaration> {
 			},
 		],
 		[
-			"functions",
+			"routes",
 			{
-				dirs: ["functions"],
-				prefix: "fn",
-				emit: "nested",
+				dirs: ["routes", "functions"],
+				prefix: "route",
+				emit: "record",
 				recursive: true,
-				keySeparator: ".",
+				keySeparator: "/",
 				registryKey: true,
+				includeInAppState: true,
 			},
 		],
 		[
@@ -203,9 +204,7 @@ describe("generateModuleTemplate — type prefix", () => {
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
 		});
-		expect(output).toContain(
-			"export type UserAuthModule = typeof _module;",
-		);
+		expect(output).toContain("export type UserAuthModule = typeof _module;");
 	});
 });
 
@@ -218,11 +217,17 @@ describe("generateModuleTemplate — collections", () => {
 	const colls = cat(result, "collections");
 	colls.set(
 		"posts",
-		makeFile("posts", { varName: "_coll_posts", importPath: "../collections/posts" }),
+		makeFile("posts", {
+			varName: "_coll_posts",
+			importPath: "../collections/posts",
+		}),
 	);
 	colls.set(
 		"comments",
-		makeFile("comments", { varName: "_coll_comments", importPath: "../collections/comments" }),
+		makeFile("comments", {
+			varName: "_coll_comments",
+			importPath: "../collections/comments",
+		}),
 	);
 
 	const output = generateModuleTemplate({
@@ -235,9 +240,7 @@ describe("generateModuleTemplate — collections", () => {
 		expect(output).toContain(
 			'import _coll_comments from "../collections/comments";',
 		);
-		expect(output).toContain(
-			'import _coll_posts from "../collections/posts";',
-		);
+		expect(output).toContain('import _coll_posts from "../collections/posts";');
 	});
 
 	it("emits type interface for collections", () => {
@@ -255,23 +258,23 @@ describe("generateModuleTemplate — collections", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Functions — nested emission with bundles
+// Routes — nested emission with bundles
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("generateModuleTemplate — nested functions", () => {
-	const result = emptyResult(["functions"]);
-	const fns = cat(result, "functions");
-	fns.set(
-		"admin.stats",
-		makeFile("admin.stats", { varName: "_fn_admin_stats" }),
+describe("generateModuleTemplate — routes with slash-separated keys", () => {
+	const result = emptyResult(["routes"]);
+	const routes = cat(result, "routes");
+	routes.set(
+		"admin/stats",
+		makeFile("admin/stats", { varName: "_route_admin_stats" }),
 	);
-	fns.set(
-		"admin.users.export",
-		makeFile("admin.users.export", { varName: "_fn_admin_users_export" }),
+	routes.set(
+		"admin/users/export",
+		makeFile("admin/users/export", { varName: "_route_admin_users_export" }),
 	);
-	fns.set(
+	routes.set(
 		"getConfig",
-		makeFile("getConfig", { varName: "_fn_getConfig" }),
+		makeFile("getConfig", { varName: "_route_getConfig" }),
 	);
 
 	const output = generateModuleTemplate({
@@ -280,33 +283,35 @@ describe("generateModuleTemplate — nested functions", () => {
 		categoryMeta: baseCategoryMeta(),
 	});
 
-	it("emits nested object structure", () => {
-		expect(output).toContain("functions: {");
-		expect(output).toContain("admin: {");
-		expect(output).toContain("stats: _fn_admin_stats,");
-		expect(output).toContain("users: {");
-		expect(output).toContain("export: _fn_admin_users_export,");
-		expect(output).toContain("getConfig: _fn_getConfig,");
+	it("emits flat record with camelCase slash keys", () => {
+		expect(output).toContain("routes: {");
+		expect(output).toContain('"admin/stats": _route_admin_stats,');
+		expect(output).toContain(
+			'"admin/users/export": _route_admin_users_export,',
+		);
+		expect(output).toContain("getConfig: _route_getConfig,");
 	});
 
-	it("emits nested type interface", () => {
-		expect(output).toContain("export interface TestFunctions {");
-		expect(output).toContain("stats: typeof _fn_admin_stats;");
-		expect(output).toContain("export: typeof _fn_admin_users_export;");
-		expect(output).toContain("getConfig: typeof _fn_getConfig;");
+	it("emits flat type interface with camelCase slash keys", () => {
+		expect(output).toContain("export interface TestRoutes {");
+		expect(output).toContain('"admin/stats": typeof _route_admin_stats;');
+		expect(output).toContain(
+			'"admin/users/export": typeof _route_admin_users_export;',
+		);
+		expect(output).toContain("getConfig: typeof _route_getConfig;");
 	});
 });
 
-describe("generateModuleTemplate — bundle functions", () => {
-	const result = emptyResult(["functions"]);
-	const fns = cat(result, "functions");
-	fns.set(
+describe("generateModuleTemplate — bundle routes", () => {
+	const result = emptyResult(["routes"]);
+	const routes = cat(result, "routes");
+	routes.set(
 		"setup",
-		makeFile("setup", { varName: "_fn_setup", isBundle: true }),
+		makeFile("setup", { varName: "_route_setup", isBundle: true }),
 	);
-	fns.set(
+	routes.set(
 		"getConfig",
-		makeFile("getConfig", { varName: "_fn_getConfig" }),
+		makeFile("getConfig", { varName: "_route_getConfig" }),
 	);
 
 	const output = generateModuleTemplate({
@@ -315,18 +320,19 @@ describe("generateModuleTemplate — bundle functions", () => {
 		categoryMeta: baseCategoryMeta(),
 	});
 
-	it("spreads bundle files into function object", () => {
-		expect(output).toContain("..._fn_setup,");
+	it("spreads bundle files into routes object", () => {
+		expect(output).toContain("..._route_setup,");
 	});
 
-	it("emits leaf files as nested values", () => {
-		expect(output).toContain("getConfig: _fn_getConfig,");
+	it("emits leaf files as record values", () => {
+		expect(output).toContain("getConfig: _route_getConfig,");
 	});
 
-	it("does not include bundle in type interface (only leaf files)", () => {
-		expect(output).toContain("export interface TestFunctions {");
-		expect(output).toContain("getConfig: typeof _fn_getConfig;");
-		expect(output).not.toContain("setup: typeof _fn_setup;");
+	it("includes all entries in type (intersection for bundles)", () => {
+		// When bundles are present, type is emitted as intersection, not interface
+		expect(output).toContain("export type TestRoutes =");
+		expect(output).toContain("getConfig: typeof _route_getConfig");
+		expect(output).toContain("typeof _route_setup");
 	});
 });
 
@@ -337,10 +343,7 @@ describe("generateModuleTemplate — bundle functions", () => {
 describe("generateModuleTemplate — array emission", () => {
 	const result = emptyResult(["migrations"]);
 	const migs = cat(result, "migrations");
-	migs.set(
-		"001_init",
-		makeFile("001_init", { varName: "_mig_001_init" }),
-	);
+	migs.set("001_init", makeFile("001_init", { varName: "_mig_001_init" }));
 	migs.set(
 		"002_addUsers",
 		makeFile("002_addUsers", { varName: "_mig_002_addUsers" }),
@@ -353,9 +356,7 @@ describe("generateModuleTemplate — array emission", () => {
 	});
 
 	it("emits flat array", () => {
-		expect(output).toContain(
-			"migrations: [_mig_001_init, _mig_002_addUsers],",
-		);
+		expect(output).toContain("migrations: [_mig_001_init, _mig_002_addUsers],");
 	});
 
 	it("does not emit type interface for array categories", () => {
@@ -463,9 +464,6 @@ describe("generateModuleTemplate — singles with moduleEmit: array", () => {
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: new Map(),
-		resolvedPatterns: {
-			sidebar: { pattern: "sidebar.ts", moduleEmit: "array" },
-		},
 	});
 
 	it("wraps moduleEmit: array singles in array", () => {
@@ -480,10 +478,7 @@ describe("generateModuleTemplate — singles with moduleEmit: array", () => {
 describe("generateModuleTemplate — no Registry augmentation", () => {
 	const result = emptyResult(["collections"]);
 	const colls = cat(result, "collections");
-	colls.set(
-		"posts",
-		makeFile("posts", { varName: "_coll_posts" }),
-	);
+	colls.set("posts", makeFile("posts", { varName: "_coll_posts" }));
 
 	const output = generateModuleTemplate({
 		moduleName: "questpie-test",
@@ -544,7 +539,7 @@ describe("generateModuleTemplate — empty stubs", () => {
 	it("emits empty record for declared categories without files", () => {
 		expect(output).toContain("globals: {},");
 		expect(output).toContain("jobs: {},");
-		expect(output).toContain("functions: {},");
+		expect(output).toContain("routes: {},");
 		expect(output).toContain("messages: {},");
 	});
 
@@ -581,7 +576,7 @@ describe("generateModuleTemplate — extra module properties", () => {
 		discovered: emptyResult(),
 		categoryMeta: meta,
 		extraModuleProperties: [
-			'listViews: { table: _reg_table, form: _reg_form },',
+			"listViews: { table: _reg_table, form: _reg_form },",
 		],
 	});
 
@@ -679,12 +674,8 @@ describe("generateModuleTemplate — extra imports", () => {
 		moduleName: "questpie-test",
 		discovered: emptyResult(),
 		categoryMeta: new Map(),
-		extraImports: [
-			{ name: "{ filterViewsByKind }", path: "questpie/admin" },
-		],
-		extraTypeDeclarations: [
-			"export type CustomType = string;",
-		],
+		extraImports: [{ name: "{ filterViewsByKind }", path: "questpie/admin" }],
+		extraTypeDeclarations: ["export type CustomType = string;"],
 	});
 
 	it("emits extra plugin imports", () => {

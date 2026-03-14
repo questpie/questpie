@@ -119,7 +119,7 @@ interface DiscoveryCategory {
 	category: string;
 	/** Directories to scan (relative to root). */
 	dirs: string[];
-	/** Whether to scan recursively (only for functions and routes). */
+	/** Whether to scan directories recursively. */
 	recursive: boolean;
 	/** Variable name prefix. */
 	prefix: string;
@@ -577,34 +577,38 @@ async function discoverDirectoryPattern(
 
 /**
  * Derive the filename-based key for a file in a category.
- * Handles recursive categories (functions/routes use path segments as keys)
+ * Handles recursive categories (routes use path segments as keys)
  * and simple categories (filename → camelCase).
  */
 function deriveFileKey(relPath: string, category: DiscoveryCategory): string {
 	if (category.recursive) {
-		// Functions/routes: path segments become nested keys
-		// functions/admin/stats.ts → "admin.stats"
-		// routes/webhooks/stripe.ts → "webhooks/stripe"
-		const dir = category.dirs[0];
+		// Recursive categories: path segments become keys
+		// routes/webhooks/stripe.ts → "webhooks/stripe" (keySeparator: "/")
+
+		// Determine which dir this file came from
 		let innerPath: string;
 		if (relPath.startsWith("features/")) {
 			const parts = relPath.split("/");
-			const dirIdx = parts.indexOf(dir);
+			// Find which category dir appears in the path
+			const dirIdx = parts.findIndex((p) => category.dirs.includes(p));
 			innerPath = parts.slice(dirIdx + 1).join("/");
 		} else {
-			innerPath = relPath.slice(dir.length + 1);
+			// relPath is like "routes/webhook.ts"
+			// Strip the leading dir segment
+			const matchedDir = category.dirs.find((d) => relPath.startsWith(d + "/"));
+			if (matchedDir) {
+				innerPath = relPath.slice(matchedDir.length + 1);
+			} else {
+				innerPath = relPath;
+			}
 		}
 
-		if (category.category === "routes") {
-			// Routes use slash-separated keys to match URL paths
-			return innerPath.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "");
-		}
-		// Functions use dot-separated keys
+		const sep = category.keySeparator ?? ".";
 		const segments = innerPath
 			.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "")
 			.split("/")
 			.map(kebabToCamelCase);
-		return segments.join(".");
+		return segments.join(sep);
 	}
 	// Simple: filename → camelCase key
 	return kebabToCamelCase(basename(relPath));
@@ -972,6 +976,13 @@ function checkConflict(
 ): void {
 	const existing = map.get(file.key);
 	if (existing) {
+		if (category === "routes") {
+			const message = buildRouteCollisionMessage(existing.source, file.source);
+			if (message) {
+				throw new Error(message);
+			}
+		}
+
 		throw new Error(
 			`Codegen conflict: duplicate ${category} key "${file.key}" found in:\n` +
 				`  - ${existing.source}\n` +
@@ -979,4 +990,52 @@ function checkConflict(
 				`Each key must be unique across by-type and by-feature layouts.`,
 		);
 	}
+}
+
+function routeSourceDir(source: string): "functions" | "routes" | null {
+	for (const segment of source.split("/")) {
+		if (segment === "functions" || segment === "routes") {
+			return segment;
+		}
+	}
+
+	return null;
+}
+
+function routeNameFromSource(source: string): string | null {
+	const segments = source.split("/");
+	const dirIndex = segments.findIndex(
+		(segment) => segment === "functions" || segment === "routes",
+	);
+
+	if (dirIndex === -1) return null;
+
+	const routePath = segments.slice(dirIndex + 1).join("/");
+	if (!routePath) return null;
+
+	return routePath.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "");
+}
+
+function buildRouteCollisionMessage(
+	existingSource: string,
+	incomingSource: string,
+): string | null {
+	const existingDir = routeSourceDir(existingSource);
+	const incomingDir = routeSourceDir(incomingSource);
+
+	if (!existingDir || !incomingDir || existingDir === incomingDir) {
+		return null;
+	}
+
+	const routeName =
+		routeNameFromSource(incomingSource) ??
+		routeNameFromSource(existingSource) ??
+		"(unknown)";
+
+	return (
+		`[codegen] Route name collision: '${routeName}' found in both functions/ and routes/.\n` +
+		`  - ${existingSource}\n` +
+		`  - ${incomingSource}\n` +
+		"Route names must be unique across functions/ and routes/."
+	);
 }

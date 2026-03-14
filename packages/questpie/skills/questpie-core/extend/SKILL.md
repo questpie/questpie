@@ -78,10 +78,10 @@ export function myPlugin(): CodegenPlugin {
 ### Register in Config
 
 ```ts title="questpie.config.ts"
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
 import { myPlugin } from "my-plugin-package";
 
-export default config({
+export default runtimeConfig({
   plugins: [myPlugin()],
   db: { url: process.env.DATABASE_URL! },
   app: { url: process.env.APP_URL! },
@@ -98,7 +98,7 @@ export default config({
 
 ### Real-World Example: Admin Plugin
 
-The `adminPlugin()` from `@questpie/admin/server` contributes to both `"server"` and `"admin-client"` targets -- declaring categories (`blocks`), discover patterns (`sidebar`, `dashboard`, `branding`, `adminLocale`), collection extensions (`admin`, `list`, `form` with callback context params `v`, `f`, `a`), and singleton factories (`branding`, `sidebar`).
+The `adminPlugin()` from `@questpie/admin/plugin` contributes to both `"server"` and `"admin-client"` targets -- declaring categories (`blocks`), discover patterns (`sidebar`, `dashboard`, `branding`, `adminLocale`), collection extensions (`admin`, `list`, `form` with callback context params `v`, `f`, `a`), and singleton factories (`branding`, `sidebar`).
 
 ## Building a Module
 

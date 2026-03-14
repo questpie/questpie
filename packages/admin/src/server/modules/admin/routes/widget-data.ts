@@ -5,7 +5,7 @@
  * Called by the client when a widget has `hasLoader: true`.
  */
 
-import { ApiError, fn, tryGetContext } from "questpie";
+import { ApiError, route, tryGetContext } from "questpie";
 import { z } from "zod";
 import type { ServerDashboardItem } from "../../../augmentation.js";
 
@@ -55,14 +55,14 @@ const fetchWidgetDataSchema = z.object({
  * @example
  * ```ts
  * // Client usage (via useServerWidgetData hook)
- * const data = await client.rpc.fetchWidgetData({ widgetId: "my-widget" });
+ * const data = await client.routes.fetchWidgetData({ widgetId: "my-widget" });
  * ```
  */
-export const fetchWidgetData = fn({
-	type: "query",
-	schema: fetchWidgetDataSchema,
-	outputSchema: z.unknown(),
-	handler: async (ctx) => {
+export const fetchWidgetData = route()
+	.post()
+	.schema(fetchWidgetDataSchema)
+	.outputSchema(z.unknown())
+	.handler(async (ctx) => {
 		// Access dashboard config from the app's internal state
 		const stored = tryGetContext();
 		const appState = (stored?.app as any)?.state || {};
@@ -102,8 +102,7 @@ export const fetchWidgetData = fn({
 
 		// Execute loader with server context
 		return widget.loader(widgetCtx);
-	},
-});
+	});
 
 // ============================================================================
 // Export Bundle

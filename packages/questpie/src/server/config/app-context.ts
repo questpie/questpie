@@ -76,9 +76,6 @@ export type KnownBlockNames = RegistryNames<"blocks">;
 /** Known job names (includes module jobs). @see Registry['jobs'] */
 export type KnownJobNames = RegistryNames<"jobs">;
 
-/** Known function names. @see Registry['functions'] */
-export type KnownFunctionNames = RegistryNames<"functions">;
-
 /** Known service names. @see Registry['services'] */
 export type KnownServiceNames = RegistryNames<"services">;
 
@@ -108,7 +105,7 @@ export type KnownComponentNames = RegistryNames<"components">;
 
 /**
  * Extract flat AppContext services from a Questpie app instance.
- * Used by all context creation functions (hooks, access, functions, jobs).
+ * Used by all context creation functions (hooks, access, routes, jobs).
  *
  * @param app - Questpie app instance (typed as `any` to avoid circular deps)
  * @param overrides - Optional overrides (e.g. db from transaction, session from request)

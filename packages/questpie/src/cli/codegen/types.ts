@@ -44,7 +44,7 @@ export interface DiscoveredFile {
 	 * into the parent object (`...varName`) instead of assigning them as leaves.
 	 *
 	 * Detection: `export const X = {` (object literal value, not a function call).
-	 * This allows function files to contain multiple `fn()` definitions plus
+	 * This allows route files to contain multiple `route()` definitions plus
 	 * a bundle export that aggregates them.
 	 */
 	isBundle?: boolean;
@@ -131,7 +131,7 @@ export type DiscoverPattern =
  * Declares a directory-pattern category for file discovery and code generation.
  *
  * Categories are the primary unit of the plugin system. Each category
- * (collections, globals, jobs, functions, blocks, views, etc.) is declared
+ * (collections, globals, jobs, routes, blocks, views, etc.) is declared
  * by a plugin via `categories` on `CodegenPlugin`.
  *
  * The core plugin declares all built-in categories (collections, globals, etc.).
@@ -149,10 +149,10 @@ export interface CategoryDeclaration {
 	 */
 	dirs: string[];
 
-	/** Whether to scan directories recursively (e.g., functions, routes). */
+	/** Whether to scan directories recursively (e.g., routes). */
 	recursive?: boolean;
 
-	/** Variable name prefix for generated imports (e.g., "coll", "fn", "bloc"). */
+	/** Variable name prefix for generated imports (e.g., "coll", "route", "bloc"). */
 	prefix: string;
 
 	// ── Emission metadata ─────────────────────────────────────
@@ -160,16 +160,15 @@ export interface CategoryDeclaration {
 	/**
 	 * How to emit this category in the `createApp()` call.
 	 * - "record" (default): `{ key: varName, ... }` — standard record emission
-	 * - "nested": nested object from dot-separated keys (functions)
 	 * - "array": flat array `[var1, var2, ...]` (migrations, seeds)
 	 *
 	 * @default "record"
 	 */
-	emit?: "record" | "nested" | "array";
+	emit?: "record" | "array";
 
 	/**
 	 * Key separator for recursive categories.
-	 * - "." — dot-separated keys (functions: `admin.stats`)
+	 * - "." — dot-separated keys
 	 * - "/" — slash-separated keys (routes: `webhooks/stripe`)
 	 *
 	 * Only meaningful when `recursive: true`.
@@ -201,18 +200,11 @@ export interface CategoryDeclaration {
 	 * - "services": like standard but values are `ServiceInstanceOf<typeof varName>`
 	 * - "emails": standalone record (no module merge), values are `typeof varName`
 	 * - "messages": union type of keys from all files (`AppMessageKeys`)
-	 * - "functions": nested type object from dot-separated keys
 	 * - "none": no type emitted (migrations, seeds)
 	 *
 	 * @default "standard"
 	 */
-	typeEmit?:
-		| "standard"
-		| "services"
-		| "emails"
-		| "messages"
-		| "functions"
-		| "none";
+	typeEmit?: "standard" | "services" | "emails" | "messages" | "none";
 
 	/**
 	 * Whether to extract types from modules for this category.

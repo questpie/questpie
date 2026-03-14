@@ -30,7 +30,7 @@ import { mergeAuthOptions } from "#questpie/server/integrated/auth/merge.js";
 
 /**
  * Define a module as a plain data object.
- * Modules contribute collections, globals, jobs, functions, fields,
+ * Modules contribute collections, globals, jobs, routes, fields,
  * auth config, migrations, messages, etc.
  *
  * @example
@@ -226,7 +226,6 @@ const MERGE_FNS = new Map<string, MergeFn>([
 	["collections", mergeRecord],
 	["globals", mergeRecord],
 	["jobs", mergeRecord],
-	["functions", mergeRecord],
 	["routes", mergeRecord],
 	["fields", mergeRecord],
 	["services", mergeRecord],
@@ -293,7 +292,6 @@ function emptyMergedState(): Record<string, any> {
 		collections: {},
 		globals: {},
 		jobs: {},
-		functions: {},
 		routes: {},
 		fields: {},
 		services: {},
@@ -560,8 +558,6 @@ async function createAppFromDefinition(
 						adapter: runtime.queue.adapter,
 					}
 				: undefined,
-		functions:
-			Object.keys(merged.functions).length > 0 ? merged.functions : undefined,
 		routes: Object.keys(merged.routes).length > 0 ? merged.routes : undefined,
 		search: runtime.search,
 		realtime: runtime.realtime,
@@ -656,8 +652,6 @@ async function createAppLegacy(
 						adapter: appConfig.queue.adapter,
 					}
 				: undefined,
-		functions:
-			Object.keys(merged.functions).length > 0 ? merged.functions : undefined,
 		routes: Object.keys(merged.routes).length > 0 ? merged.routes : undefined,
 		search: appConfig.search,
 		realtime: appConfig.realtime,

@@ -11,7 +11,7 @@ import { ApiError } from "../../errors/index.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { parseFindOneOptions, parseFindOptions } from "../utils/parsers.js";
-import { parseRpcBody } from "../utils/request.js";
+import { parseRouteBody } from "../utils/request.js";
 import { handleError, smartResponse } from "../utils/response.js";
 
 export const createCollectionRoutes = <
@@ -99,7 +99,7 @@ export const createCollectionRoutes = <
 				);
 			}
 
-			const body = input !== undefined ? input : await parseRpcBody(request);
+			const body = input !== undefined ? input : await parseRouteBody(request);
 			if (body === null) {
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),
@@ -165,7 +165,7 @@ export const createCollectionRoutes = <
 				);
 			}
 
-			const body = input !== undefined ? input : await parseRpcBody(request);
+			const body = input !== undefined ? input : await parseRouteBody(request);
 			if (body === null) {
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),
@@ -271,7 +271,7 @@ export const createCollectionRoutes = <
 				);
 			}
 
-			const body = input !== undefined ? input : await parseRpcBody(request);
+			const body = input !== undefined ? input : await parseRouteBody(request);
 			if (body === null || typeof body !== "object") {
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),
@@ -317,7 +317,7 @@ export const createCollectionRoutes = <
 				);
 			}
 
-			const body = input !== undefined ? input : await parseRpcBody(request);
+			const body = input !== undefined ? input : await parseRouteBody(request);
 			if (body === null || typeof body !== "object") {
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),
@@ -396,7 +396,7 @@ export const createCollectionRoutes = <
 				);
 			}
 
-			const body = input !== undefined ? input : await parseRpcBody(request);
+			const body = input !== undefined ? input : await parseRouteBody(request);
 			if (body === null || typeof body !== "object") {
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),
@@ -431,7 +431,7 @@ export const createCollectionRoutes = <
 				);
 			}
 
-			const body = input !== undefined ? input : await parseRpcBody(request);
+			const body = input !== undefined ? input : await parseRouteBody(request);
 			if (body === null || typeof body !== "object") {
 				return errorResponse(
 					ApiError.badRequest("Invalid JSON body"),

@@ -90,7 +90,6 @@ describe("scaffold types on resolved targets", () => {
 		const names = Object.keys(server.scaffolds);
 		expect(names).toContain("collection");
 		expect(names).toContain("global");
-		expect(names).toContain("fn");
 		expect(names).toContain("job");
 		expect(names).toContain("service");
 		expect(names).toContain("email");
@@ -108,7 +107,7 @@ describe("scaffold types on resolved targets", () => {
 
 		// Core scaffolds still present
 		expect(server.scaffolds.collection).toBeDefined();
-		expect(server.scaffolds.fn).toBeDefined();
+		expect(server.scaffolds.route).toBeDefined();
 
 		// Admin plugin added block + view to server
 		expect(server.scaffolds.block).toBeDefined();

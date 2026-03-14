@@ -3,7 +3,7 @@ import { Check, Code2, ShieldCheck, Waypoints } from "lucide-react";
 const dxPoints = [
 	"Autocomplete on collections and fields",
 	"Typed query and relation inputs",
-	"Typed RPC inputs and outputs",
+	"Typed route inputs and outputs",
 	"Shared contracts across server and client",
 ];
 
@@ -21,7 +21,7 @@ export function UseCases() {
 						</h3>
 						<p className="text-muted-foreground">
 							Types flow from server model to client usage. Collections,
-							relations, and RPC procedures are inferred directly from your app
+							relations, and routes are inferred directly from your app
 							definitions.
 						</p>
 

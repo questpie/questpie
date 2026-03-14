@@ -1,6 +1,6 @@
 # @questpie/hono
 
-Hono adapter for QUESTPIE. Mounts CRUD, auth, storage, RPC, and realtime routes on a Hono instance with a unified client combining QuestPie operations and Hono RPC.
+Hono adapter for QUESTPIE. Mounts CRUD, auth, storage, custom app routes, and realtime routes on a Hono instance with a unified client combining QuestPie operations and Hono RPC.
 
 ## Installation
 
@@ -13,10 +13,10 @@ bun add @questpie/hono questpie hono
 ```ts
 import { Hono } from "hono";
 import { questpieHono } from "@questpie/hono";
-import { app, appRpc } from "./questpie";
+import { app } from "./questpie";
 
 const app = new Hono()
-  .route("/", questpieHono(app, { basePath: "/api", rpc: appRpc }));
+  .route("/", questpieHono(app, { basePath: "/api" }));
 
 export default { port: 3000, fetch: app.fetch };
 export type AppType = typeof app;
@@ -29,17 +29,17 @@ export type AppType = typeof app;
 ```ts
 import { createClientFromHono } from "@questpie/hono/client";
 import type { AppType } from "./server";
-import type { App, AppRpc } from "./questpie";
+import type { App } from "./questpie";
 
-const client = createClientFromHono<AppType, App, AppRpc>({
+const client = createClientFromHono<AppType, App>({
   baseURL: "http://localhost:3000",
 });
 
 // CRUD — fully typed
 const { docs } = await client.collections.posts.find({ limit: 10 });
 
-// RPC — fully typed
-const stats = await client.rpc.getStats({ period: "week" });
+// App routes — fully typed
+const stats = await client.routes.getStats({ period: "week" });
 
 // Custom Hono routes — via Hono RPC
 const result = await client.api.custom.route.$get();
@@ -49,9 +49,9 @@ const result = await client.api.custom.route.$get();
 
 ```ts
 import { createClient } from "questpie/client";
-import type { App, AppRpc } from "./questpie";
+import type { App } from "./questpie";
 
-const client = createClient<App, AppRpc>({
+const client = createClient<App>({
   baseURL: "http://localhost:3000",
   basePath: "/api",
 });
@@ -77,7 +77,7 @@ The adapter automatically creates:
 | POST   | `/api/globals/:name/revert`           | Revert global version |
 | POST   | `/api/collections/:name/upload`      | Upload file          |
 | ALL    | `/api/auth/*`                        | Better Auth routes   |
-| POST   | `/api/rpc/*`                         | RPC procedures       |
+| ANY    | `/api/:route*`                       | Custom app routes    |
 | GET    | `/api/collections/:name/subscribe`   | SSE realtime         |
 
 ## Documentation

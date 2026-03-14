@@ -11,7 +11,7 @@ QuestPie backends follow a simple flow: **define schema → run codegen → get 
 Schema Files                    Codegen Output
 ├── collections/*.ts    →    ├── Database tables (Drizzle)
 ├── globals/*.ts        →    ├── CRUD API endpoints
-├── functions/*.ts      →    ├── RPC endpoints
+├── routes/*.ts         →    ├── Custom app routes
 ├── jobs/*.ts           →    ├── Type-safe AppContext
 ├── services/*.ts       →    └── Client SDK types
 └── hooks/access/validation
@@ -26,7 +26,7 @@ Define your collections, globals, fields, and relations. Fields are the single s
 Add validation, access control, and lifecycle hooks to your collections. Control who can do what, when, and how.
 
 ### [Business Logic](/docs/backend/business-logic)
-Write server functions (exposed via RPC), background jobs, and raw HTTP routes. All handlers receive typed context with DI.
+Write server routes (JSON or raw HTTP), background jobs, and shared services. All handlers receive typed context with DI.
 
 ### [Architecture](/docs/backend/architecture)
 Understand file conventions, the plugin system, modules, codegen, and the CLI.

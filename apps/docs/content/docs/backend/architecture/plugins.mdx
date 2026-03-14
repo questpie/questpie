@@ -18,7 +18,7 @@ The core framework is intentionally lean. Most functionality — including the a
 A plugin tells codegen **what to look for** and **what types to generate**:
 
 ```ts
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import { runtimeConfig } from "questpie";
 
 export default runtimeConfig({
@@ -44,7 +44,6 @@ The core framework discovers these categories by default:
 |---|---|
 | `collections/` | Collection definitions |
 | `globals/` | Global definitions |
-| `functions/` | Server functions |
 | `jobs/` | Background jobs |
 | `routes/` | HTTP routes |
 | `services/` | Singleton services |

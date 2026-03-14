@@ -10,7 +10,7 @@
  * - Custom messages via config translations
  */
 
-import { fn, type Questpie } from "questpie";
+import { route, type Questpie } from "questpie";
 import { z } from "zod";
 import type { AdminLocaleConfig } from "../../../augmentation.js";
 import {
@@ -87,18 +87,18 @@ const getAdminLocalesOutputSchema = z.object({
  * @example
  * ```ts
  * // Client fetches translations
- * const { messages, locale, fallbackLocale } = await client.rpc.getAdminTranslations({
+ * const { messages, locale, fallbackLocale } = await client.routes.getAdminTranslations({
  *   locale: "sk",
  * });
  *
  * // messages contains all admin UI strings in Slovak
  * ```
  */
-const getAdminTranslations = fn({
-	type: "query",
-	schema: getAdminTranslationsSchema,
-	outputSchema: getAdminTranslationsOutputSchema,
-	handler: async (ctx) => {
+const getAdminTranslations = route()
+	.post()
+	.schema(getAdminTranslationsSchema)
+	.outputSchema(getAdminTranslationsOutputSchema)
+	.handler(async (ctx) => {
 		const app = getApp(ctx);
 		const input = ctx.input as z.infer<typeof getAdminTranslationsSchema>;
 		const requestedLocale = input.locale;
@@ -141,8 +141,7 @@ const getAdminTranslations = fn({
 			messages,
 			fallbackLocale: defaultLocale,
 		};
-	},
-});
+	});
 
 /**
  * Get available admin UI locales.
@@ -152,16 +151,16 @@ const getAdminTranslations = fn({
  *
  * @example
  * ```ts
- * const { locales, defaultLocale } = await client.rpc.getAdminLocales({});
+ * const { locales, defaultLocale } = await client.routes.getAdminLocales({});
  * // locales: ["en", "sk"]
  * // defaultLocale: "en"
  * ```
  */
-const getAdminLocales = fn({
-	type: "query",
-	schema: getAdminLocalesSchema,
-	outputSchema: getAdminLocalesOutputSchema,
-	handler: async (ctx) => {
+const getAdminLocales = route()
+	.post()
+	.schema(getAdminLocalesSchema)
+	.outputSchema(getAdminLocalesOutputSchema)
+	.handler(async (ctx) => {
 		const app = getApp(ctx);
 		const adminLocaleConfig = getAdminLocaleConfig(app);
 
@@ -169,8 +168,7 @@ const getAdminLocales = fn({
 			locales: adminLocaleConfig?.locales ?? getSupportedAdminLocales(),
 			defaultLocale: adminLocaleConfig?.defaultLocale ?? "en",
 		};
-	},
-});
+	});
 
 // ============================================================================
 // Export Bundle

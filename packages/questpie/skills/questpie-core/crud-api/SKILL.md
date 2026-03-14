@@ -12,24 +12,24 @@ This skill builds on questpie-core.
 
 QUESTPIE exposes CRUD operations in two ways depending on where you call them:
 
-### 1. Handler Context (functions, hooks, jobs)
+### 1. Handler Context (routes, hooks, jobs)
 
 Inside any handler, `collections` and `globals` are injected via context. The current request context (session, locale, access mode) is implicit:
 
 ```ts
-// functions/get-published.ts
-import { fn } from "questpie";
+// routes/get-published.ts
+import { route } from "questpie";
 
-export default fn({
-  handler: async ({ collections }) => {
+export default route()
+  .get()
+  .handler(async ({ collections }) => {
     const result = await collections.posts.find({
       where: { status: "published" },
       limit: 10,
       orderBy: { createdAt: "desc" },
     });
     return result.docs;
-  },
-});
+  });
 ```
 
 ### 2. App Instance (scripts, seeds, external)
@@ -240,13 +240,13 @@ const posts = await collections.posts.find({
 Context is automatic. The current user's session determines access:
 
 ```ts
-export default fn({
-  handler: async ({ collections, session }) => {
+export default route()
+  .get()
+  .handler(async ({ collections, session }) => {
     // Access control is enforced based on session
     const posts = await collections.posts.find({});
     return posts;
-  },
-});
+  });
 ```
 
 ### In Scripts / Seeds
@@ -303,7 +303,7 @@ const ctx = await app.createContext({ accessMode: "system" });
 const posts = await app.api.collections.posts.find({}, ctx);
 ```
 
-Inside handlers (`fn`, hooks, jobs), context is injected automatically -- use `collections.*` directly.
+Inside handlers (route handlers, hooks, jobs), context is injected automatically -- use `collections.*` directly.
 
 ### HIGH: Expecting find() to return an array
 
@@ -339,20 +339,20 @@ const post = await collections.posts.findOne({
 System mode bypasses all access control. Only use it in background jobs, seeds, and scripts -- never in request handlers.
 
 ```ts
-// WRONG -- in an HTTP function handler
-export default fn({
-  handler: async ({ app }) => {
+// WRONG -- in an HTTP route handler
+export default route()
+  .get()
+  .handler(async ({ app }) => {
     const ctx = await app.createContext({ accessMode: "system" });
     return app.api.collections.posts.find({}, ctx); // bypasses access control!
-  },
-});
+  });
 
 // CORRECT -- use injected collections (respects session access rules)
-export default fn({
-  handler: async ({ collections }) => {
+export default route()
+  .get()
+  .handler(async ({ collections }) => {
     return collections.posts.find({});
-  },
-});
+  });
 ```
 
 ### MEDIUM: Wrong create() signature

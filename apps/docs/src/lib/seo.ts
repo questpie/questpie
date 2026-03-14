@@ -6,7 +6,7 @@ export const siteConfig = {
 	name: "QUESTPIE",
 	title: "QUESTPIE — One backend. Ship everywhere.",
 	description:
-		"Server-first TypeScript framework. Define your schema once, ship REST, RPC, realtime, typed clients, and optional admin UI. Open source.",
+		"Server-first TypeScript framework. Define your schema once, ship REST, typed routes, realtime, typed clients, and optional admin UI. Open source.",
 	url: "https://questpie.com",
 	ogImage: "/og-questpie.png",
 	twitterHandle: "@questpie",
@@ -21,7 +21,7 @@ export const siteConfig = {
 		"typed rest api",
 		"field builder",
 		"registry-first",
-		"typed rpc",
+		"typed routes",
 		"realtime sse",
 		"typed client sdk",
 		"admin framework",

@@ -18,6 +18,7 @@
 		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test",
 		"test:watch": "bun test --watch",
 		"check-types": "tsc --noEmit",
+		"questpie:generate": "bun run ./src/exports/cli.ts generate --verbose",
 		"dev": "bun run --watch src/index.ts"
 	},
 	"dependencies": {
@@ -86,30 +87,12 @@
 	"publishConfig": {
 		"access": "public",
 		"exports": {
-			".": {
-				"types": "./dist/index.d.mts",
-				"default": "./dist/index.mjs"
-			},
-			"./cli": {
-				"types": "./dist/cli.d.mts",
-				"default": "./dist/cli.mjs"
-			},
-			"./client": {
-				"types": "./dist/client.d.mts",
-				"default": "./dist/client.mjs"
-			},
-			"./drizzle": {
-				"types": "./dist/drizzle.d.mts",
-				"default": "./dist/drizzle.mjs"
-			},
-			"./drizzle-pg-core": {
-				"types": "./dist/drizzle-pg-core.d.mts",
-				"default": "./dist/drizzle-pg-core.mjs"
-			},
-			"./shared": {
-				"types": "./dist/shared.d.mts",
-				"default": "./dist/shared.mjs"
-			},
+			".": "./dist/index.mjs",
+			"./cli": "./dist/cli.mjs",
+			"./client": "./dist/client.mjs",
+			"./drizzle": "./dist/drizzle.mjs",
+			"./drizzle-pg-core": "./dist/drizzle-pg-core.mjs",
+			"./shared": "./dist/shared.mjs",
 			"./*": "./*"
 		}
 	},
@@ -117,30 +100,12 @@
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
 	"exports": {
-		".": {
-			"types": "./dist/index.d.mts",
-			"default": "./src/exports/index.ts"
-		},
-		"./cli": {
-			"types": "./dist/cli.d.mts",
-			"default": "./src/exports/cli.ts"
-		},
-		"./client": {
-			"types": "./dist/client.d.mts",
-			"default": "./src/exports/client.ts"
-		},
-		"./drizzle": {
-			"types": "./dist/drizzle.d.mts",
-			"default": "./src/exports/drizzle.ts"
-		},
-		"./drizzle-pg-core": {
-			"types": "./dist/drizzle-pg-core.d.mts",
-			"default": "./src/exports/drizzle-pg-core.ts"
-		},
-		"./shared": {
-			"types": "./dist/shared.d.mts",
-			"default": "./src/exports/shared.ts"
-		},
+		".": "./src/exports/index.ts",
+		"./cli": "./src/exports/cli.ts",
+		"./client": "./src/exports/client.ts",
+		"./drizzle": "./src/exports/drizzle.ts",
+		"./drizzle-pg-core": "./src/exports/drizzle-pg-core.ts",
+		"./shared": "./src/exports/shared.ts",
 		"./*": "./*"
 	}
 }

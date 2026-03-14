@@ -1544,8 +1544,8 @@ export default function FormView({
 
 		let cancelled = false;
 
-		const rpc = (client as any).rpc;
-		rpc
+		const routes = (client as any).routes;
+		routes
 			.getPreviewUrl({
 				collection,
 				record: persistedRecord,

@@ -3,7 +3,7 @@
  *
  * Generates the `.generated/module.ts` file content for npm package modules.
  * The generated file:
- * 1. Imports all discovered entities (collections, functions, jobs, etc.)
+ * 1. Imports all discovered entities (collections, routes, jobs, etc.)
  * 2. Imports sub-modules from `modules.ts` (if present)
  * 3. Emits type interfaces using typeof references (zero inference cost)
  * 4. Exports a plain static module definition object
@@ -21,8 +21,8 @@
 
 import type {
 	CategoryDeclaration,
-	DiscoverPattern,
 	DiscoveredFile,
+	DiscoverPattern,
 	DiscoveryResult,
 } from "./types.js";
 
@@ -95,7 +95,7 @@ export function generateModuleTemplate(options: ModuleTemplateOptions): string {
 		lines.push("");
 	}
 
-	// Import all categories (collections, globals, jobs, functions, etc.)
+	// Import all categories (collections, globals, jobs, routes, etc.)
 	for (const [catName, fileMap] of discovered.categories) {
 		if (fileMap.size === 0) continue;
 		const label = catName.charAt(0).toUpperCase() + catName.slice(1);
@@ -177,28 +177,9 @@ export function generateModuleTemplate(options: ModuleTemplateOptions): string {
 		//   maximum length"). Named interfaces give TypeScript a stable anchor.
 		for (const catName of categoriesNeedingTypes) {
 			const fileMap = discovered.categories.get(catName)!;
-			const decl = categoryMeta.get(catName);
-			const emitStrategy = decl?.emit ?? "record";
 			const typeName = `${typePrefix}${catName.charAt(0).toUpperCase() + catName.slice(1)}`;
 
-			if (emitStrategy === "nested") {
-				// Nested categories (functions) — only type leaf files,
-				// bundle files are opaque (their types are inferred via spread)
-				const leafFiles = sortedValues(fileMap).filter((f) => !f.isBundle);
-				if (leafFiles.length > 0) {
-					lines.push(`export interface ${typeName} {`);
-					const leafMap = new Map(leafFiles.map((f) => [f.key, f]));
-					const nested = buildNestedStructure(leafMap);
-					emitNestedTypeObject(lines, nested, 1);
-					lines.push("}");
-					lines.push("");
-				} else {
-					// All files are bundles — no named type emitted
-					categoriesNeedingTypes.delete(catName);
-				}
-			} else {
-				emitSimpleTypeInterface(lines, typeName, fileMap);
-			}
+			emitSimpleTypeInterface(lines, typeName, fileMap);
 		}
 	}
 
@@ -278,31 +259,7 @@ export function generateModuleTemplate(options: ModuleTemplateOptions): string {
 		const typeName = `${typePrefix}${catName.charAt(0).toUpperCase() + catName.slice(1)}`;
 		const hasNamedType = categoriesNeedingTypes.has(catName);
 
-		if (emitStrategy === "nested") {
-			// Nested emission (functions) — spread bundles, nest single-export files
-			const leafFiles: DiscoveredFile[] = [];
-			const bundleFiles: DiscoveredFile[] = [];
-			for (const file of sortedValues(fileMap)) {
-				if (file.isBundle) {
-					bundleFiles.push(file);
-				} else {
-					leafFiles.push(file);
-				}
-			}
-
-			lines.push(`\t${safeKey(catName)}: {`);
-			// Bundle files are spread (e.g. ...setupFunctions)
-			for (const file of bundleFiles) {
-				lines.push(`\t\t...${file.varName},`);
-			}
-			// Single-export files are nested leaves
-			if (leafFiles.length > 0) {
-				const leafMap = new Map(leafFiles.map((f) => [f.key, f]));
-				const nested = buildNestedStructure(leafMap);
-				emitNestedObject(lines, nested, 2);
-			}
-			lines.push("\t},");
-		} else if (emitStrategy === "array") {
+		if (emitStrategy === "array") {
 			// Array emission (migrations, seeds)
 			const vars = sortedValues(fileMap)
 				.map((f) => f.varName)
@@ -312,8 +269,13 @@ export function generateModuleTemplate(options: ModuleTemplateOptions): string {
 			// Record emission (collections, globals, jobs, messages, etc.)
 			lines.push(`\t${safeKey(catName)}: {`);
 			for (const file of sortedValues(fileMap)) {
-				if (decl?.keyFromProperty) {
-					lines.push(`\t\t[${file.varName}.${decl.keyFromProperty}]: ${file.varName},`);
+				if (file.isBundle) {
+					// Bundle files are spread into the parent object
+					lines.push(`\t\t...${file.varName},`);
+				} else if (decl?.keyFromProperty) {
+					lines.push(
+						`\t\t[${file.varName}.${decl.keyFromProperty}]: ${file.varName},`,
+					);
 				} else {
 					lines.push(`\t\t${safeKey(file.key)}: ${file.varName},`);
 				}
@@ -430,87 +392,35 @@ function emitSimpleTypeInterface(
 	typeName: string,
 	fileMap: Map<string, DiscoveredFile>,
 ): void {
-	lines.push(`export interface ${typeName} {`);
-	for (const file of sortedValues(fileMap)) {
-		lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+	const leafFiles = sortedValues(fileMap).filter((f) => !f.isBundle);
+	const bundleFiles = sortedValues(fileMap).filter((f) => f.isBundle);
+
+	if (bundleFiles.length === 0) {
+		// No bundles — simple interface
+		lines.push(`export interface ${typeName} {`);
+		for (const file of leafFiles) {
+			lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+		}
+		lines.push("}");
+	} else {
+		// Bundles present — use type alias with intersection to capture spread keys
+		const parts: string[] = [];
+		if (leafFiles.length > 0) {
+			parts.push(
+				`{ ${leafFiles.map((f) => `${safeKey(f.key)}: typeof ${f.varName}`).join("; ")} }`,
+			);
+		}
+		for (const bundle of bundleFiles) {
+			parts.push(`typeof ${bundle.varName}`);
+		}
+		lines.push(`export type ${typeName} = ${parts.join(" & ")};`);
 	}
-	lines.push("}");
 	lines.push("");
 }
 
 // ============================================================================
 // Nested structure builder (for emit: "nested" categories)
 // ============================================================================
-
-type NestedNode =
-	| { type: "leaf"; varName: string }
-	| { type: "branch"; children: Map<string, NestedNode> };
-
-/**
- * Build a nested tree from dot-separated keys.
- * Used for categories with `emit: "nested"` (e.g., functions).
- *
- * "admin.stats" → { admin: { stats: leaf } }
- * "getConfig" → { getConfig: leaf }
- */
-function buildNestedStructure(
-	files: Map<string, DiscoveredFile>,
-): Map<string, NestedNode> {
-	const root = new Map<string, NestedNode>();
-	for (const file of files.values()) {
-		const segments = file.key.split(".");
-		let current = root;
-		for (let i = 0; i < segments.length; i++) {
-			const seg = segments[i];
-			const isLast = i === segments.length - 1;
-			if (isLast) {
-				current.set(seg, { type: "leaf", varName: file.varName });
-			} else {
-				let node = current.get(seg);
-				if (!node || node.type === "leaf") {
-					node = { type: "branch", children: new Map() };
-					current.set(seg, node);
-				}
-				current = (node as Extract<NestedNode, { type: "branch" }>).children;
-			}
-		}
-	}
-	return root;
-}
-
-function emitNestedObject(
-	lines: string[],
-	tree: Map<string, NestedNode>,
-	indent: number,
-): void {
-	const tabs = "\t".repeat(indent);
-	for (const [key, node] of tree) {
-		if (node.type === "leaf") {
-			lines.push(`${tabs}${safeKey(key)}: ${node.varName},`);
-		} else {
-			lines.push(`${tabs}${safeKey(key)}: {`);
-			emitNestedObject(lines, node.children, indent + 1);
-			lines.push(`${tabs}},`);
-		}
-	}
-}
-
-function emitNestedTypeObject(
-	lines: string[],
-	tree: Map<string, NestedNode>,
-	indent: number,
-): void {
-	const tabs = "\t".repeat(indent);
-	for (const [key, node] of tree) {
-		if (node.type === "leaf") {
-			lines.push(`${tabs}${safeKey(key)}: typeof ${node.varName};`);
-		} else {
-			lines.push(`${tabs}${safeKey(key)}: {`);
-			emitNestedTypeObject(lines, node.children, indent + 1);
-			lines.push(`${tabs}};`);
-		}
-	}
-}
 
 function sortedValues(map: Map<string, DiscoveredFile>): DiscoveredFile[] {
 	return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));

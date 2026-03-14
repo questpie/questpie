@@ -78,7 +78,7 @@ ${sections.join("\n")}
 
 - Schema is the source of truth for data and behavior.
 - Introspection is the contract between server model and interfaces.
-- Runtime projections expose REST, RPC, realtime, and typed clients.
+- Runtime projections expose REST, routes, realtime, and typed clients.
 - Interfaces (admin and custom apps) resolve these projections via registries.
 `;
 }

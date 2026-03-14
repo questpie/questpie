@@ -1,6 +1,6 @@
 ---
 title: TanStack Barbershop
-description: End-to-end tour of the barbershop booking app — collections, functions, jobs, admin, and frontend.
+description: End-to-end tour of the barbershop booking app - collections, routes, jobs, admin, and frontend.
 ---
 
 # TanStack Barbershop
@@ -35,7 +35,7 @@ examples/tanstack-barbershop/
 │   │   │   │   └── pages.ts                  # Blocks, preview
 │   │   │   ├── globals/
 │   │   │   │   └── site-settings.ts          # Nested config, versioning
-│   │   │   ├── functions/
+│   │   │   ├── routes/
 │   │   │   │   ├── create-booking.ts          # Business logic
 │   │   │   │   ├── get-available-time-slots.ts
 │   │   │   │   ├── get-active-barbers.ts
@@ -70,7 +70,7 @@ examples/tanstack-barbershop/
 ### Runtime Config
 
 ```ts title="questpie.config.ts"
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import { pgBossAdapter, runtimeConfig, SmtpAdapter } from "questpie";
 
 export default runtimeConfig({
@@ -177,11 +177,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 function BookingWizard() {
   const { data: barbers } = useQuery({
     queryKey: ["barbers"],
-    queryFn: () => client.rpc.getActiveBarbers({}),
+    queryFn: () => client.routes.getActiveBarbers({}),
   });
 
   const booking = useMutation({
-    mutationFn: (data) => client.rpc.createBooking(data),
+    mutationFn: (data) => client.routes.createBooking(data),
     onSuccess: (result) => {
       // Navigate to confirmation
     },
@@ -202,7 +202,7 @@ function BookingWizard() {
 | Service injection | `blog.ts` → used in `blog-posts.ts` hooks |
 | Background jobs | `jobs/send-appointment-confirmation.ts` |
 | Email templates | `emails/appointment-confirmation.ts` |
-| Server functions (RPC) | `functions/create-booking.ts` |
+| Server routes | `routes/create-booking.ts` |
 | Admin dashboard | `dashboard.ts` — stats, charts, timeline |
 | Admin sidebar | `sidebar.ts` — 6 sections, mixed items |
 | Content blocks | `blocks/hero.ts`, `pages.ts` with `f.blocks()` |
@@ -216,5 +216,5 @@ function BookingWizard() {
 
 - [First App](/docs/start-here/first-app) — Minimal getting started
 - [Collections](/docs/backend/data-modeling/collections) — Collection API
-- [Functions](/docs/backend/business-logic/functions) — Server functions
+- [Routes](/docs/backend/business-logic/routes) — Typed JSON route handlers
 - [Dashboard](/docs/workspace/views/dashboard) — Dashboard widgets

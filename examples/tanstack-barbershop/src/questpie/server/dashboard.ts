@@ -5,7 +5,7 @@
 
 import type { WidgetFetchContext } from "@questpie/admin/server";
 import { dashboard } from "#questpie/factories";
-import getRevenueStats from "@/questpie/server/functions/get-revenue-stats";
+import getRevenueStats from "@/questpie/server/routes/get-revenue-stats";
 
 export default dashboard({
 	title: { en: "Barbershop Control", sk: "Riadenie barbershopu" },

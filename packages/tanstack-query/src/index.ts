@@ -82,91 +82,76 @@ type MutationBuilder<TVariables, TData> = () => UseMutationOptions<
 /** Extract collection keys from QuestpieClient */
 type CollectionKeys<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-> = Extract<keyof QuestpieClient<TApp, TRPC>["collections"], string>;
+> = Extract<keyof QuestpieClient<TApp>["collections"], string>;
 
 /** Extract global keys from QuestpieClient */
 type GlobalKeys<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-> = Extract<keyof QuestpieClient<TApp, TRPC>["globals"], string>;
+> = Extract<keyof QuestpieClient<TApp>["globals"], string>;
 
 // Collection method type extractors
 type CollectionFind<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["find"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["find"];
 type CollectionCount<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["count"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["count"];
 type CollectionFindOne<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["findOne"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["findOne"];
 type CollectionCreate<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["create"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["create"];
 type CollectionUpdate<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["update"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["update"];
 type CollectionDelete<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["delete"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["delete"];
 type CollectionRestore<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["restore"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["restore"];
 type CollectionFindVersions<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["findVersions"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["findVersions"];
 type CollectionRevertToVersion<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["revertToVersion"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["revertToVersion"];
 type CollectionTransitionStage<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["collections"][K]["transitionStage"];
+	K extends CollectionKeys<TApp>,
+> = QuestpieClient<TApp>["collections"][K]["transitionStage"];
 
 // Global method type extractors
 type GlobalGet<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends GlobalKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["globals"][K] extends { get: infer TGet }
+	K extends GlobalKeys<TApp>,
+> = QuestpieClient<TApp>["globals"][K] extends { get: infer TGet }
 	? TGet extends AnyAsyncFn
 		? TGet
 		: never
 	: never;
 type GlobalUpdate<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends GlobalKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["globals"][K] extends { update: infer TUpdate }
+	K extends GlobalKeys<TApp>,
+> = QuestpieClient<TApp>["globals"][K] extends { update: infer TUpdate }
 	? TUpdate extends AnyAsyncFn
 		? TUpdate
 		: never
 	: never;
 type GlobalFindVersions<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends GlobalKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["globals"][K] extends {
+	K extends GlobalKeys<TApp>,
+> = QuestpieClient<TApp>["globals"][K] extends {
 	findVersions: infer TFindVersions;
 }
 	? TFindVersions extends AnyAsyncFn
@@ -175,9 +160,8 @@ type GlobalFindVersions<
 	: never;
 type GlobalRevertToVersion<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends GlobalKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["globals"][K] extends {
+	K extends GlobalKeys<TApp>,
+> = QuestpieClient<TApp>["globals"][K] extends {
 	revertToVersion: infer TRevert;
 }
 	? TRevert extends AnyAsyncFn
@@ -186,9 +170,8 @@ type GlobalRevertToVersion<
 	: never;
 type GlobalTransitionStage<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends GlobalKeys<TApp, TRPC>,
-> = QuestpieClient<TApp, TRPC>["globals"][K] extends {
+	K extends GlobalKeys<TApp>,
+> = QuestpieClient<TApp>["globals"][K] extends {
 	transitionStage: infer TTransition;
 }
 	? TTransition extends AnyAsyncFn
@@ -196,17 +179,17 @@ type GlobalTransitionStage<
 		: never
 	: never;
 
-type RpcProcedureQueryOptionsAPI<TFn extends AnyAsyncFn> = {
+type RouteLeafQueryOptionsAPI<TFn extends AnyAsyncFn> = {
 	query: QueryBuilder<TFn>;
 	mutation: MutationBuilder<MutationVariables<TFn>, QueryData<TFn>>;
 	key: KeyBuilder<TFn>;
 };
 
-type RpcQueryOptionsAPI<TRpcNode> = TRpcNode extends AnyAsyncFn
-	? RpcProcedureQueryOptionsAPI<TRpcNode>
-	: TRpcNode extends Record<string, any>
+type RoutesQueryOptionsAPI<TNode> = TNode extends AnyAsyncFn
+	? RouteLeafQueryOptionsAPI<TNode>
+	: TNode extends Record<string, any>
 		? {
-				[K in keyof TRpcNode]: RpcQueryOptionsAPI<TRpcNode[K]>;
+				[K in keyof TNode]: RoutesQueryOptionsAPI<TNode[K]>;
 			}
 		: never;
 
@@ -216,40 +199,39 @@ type RpcQueryOptionsAPI<TRpcNode> = TRpcNode extends AnyAsyncFn
 
 type CollectionQueryOptionsAPI<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends CollectionKeys<TApp, TRPC>,
+	K extends CollectionKeys<TApp>,
 > = {
-	find: QueryBuilder<CollectionFind<TApp, TRPC, K>>;
-	count: QueryBuilder<CollectionCount<TApp, TRPC, K>>;
-	findOne: QueryBuilder<CollectionFindOne<TApp, TRPC, K>>;
+	find: QueryBuilder<CollectionFind<TApp, K>>;
+	count: QueryBuilder<CollectionCount<TApp, K>>;
+	findOne: QueryBuilder<CollectionFindOne<TApp, K>>;
 	create: MutationBuilder<
-		FirstArg<CollectionCreate<TApp, TRPC, K>>,
-		QueryData<CollectionCreate<TApp, TRPC, K>>
+		FirstArg<CollectionCreate<TApp, K>>,
+		QueryData<CollectionCreate<TApp, K>>
 	>;
 	update: MutationBuilder<
-		FirstArg<CollectionUpdate<TApp, TRPC, K>>,
-		QueryData<CollectionUpdate<TApp, TRPC, K>>
+		FirstArg<CollectionUpdate<TApp, K>>,
+		QueryData<CollectionUpdate<TApp, K>>
 	>;
 	delete: MutationBuilder<
-		FirstArg<CollectionDelete<TApp, TRPC, K>>,
-		QueryData<CollectionDelete<TApp, TRPC, K>>
+		FirstArg<CollectionDelete<TApp, K>>,
+		QueryData<CollectionDelete<TApp, K>>
 	>;
 	restore: MutationBuilder<
-		FirstArg<CollectionRestore<TApp, TRPC, K>>,
-		QueryData<CollectionRestore<TApp, TRPC, K>>
+		FirstArg<CollectionRestore<TApp, K>>,
+		QueryData<CollectionRestore<TApp, K>>
 	>;
-	findVersions: QueryBuilder<CollectionFindVersions<TApp, TRPC, K>>;
+	findVersions: QueryBuilder<CollectionFindVersions<TApp, K>>;
 	revertToVersion: MutationBuilder<
-		FirstArg<CollectionRevertToVersion<TApp, TRPC, K>>,
-		QueryData<CollectionRevertToVersion<TApp, TRPC, K>>
+		FirstArg<CollectionRevertToVersion<TApp, K>>,
+		QueryData<CollectionRevertToVersion<TApp, K>>
 	>;
 	transitionStage: MutationBuilder<
-		FirstArg<CollectionTransitionStage<TApp, TRPC, K>>,
-		QueryData<CollectionTransitionStage<TApp, TRPC, K>>
+		FirstArg<CollectionTransitionStage<TApp, K>>,
+		QueryData<CollectionTransitionStage<TApp, K>>
 	>;
 	updateMany: MutationBuilder<
 		{ where: any; data: any },
-		QueryData<CollectionUpdate<TApp, TRPC, K>>
+		QueryData<CollectionUpdate<TApp, K>>
 	>;
 	deleteMany: MutationBuilder<
 		{ where: any },
@@ -259,45 +241,43 @@ type CollectionQueryOptionsAPI<
 
 type GlobalQueryOptionsAPI<
 	TApp extends QuestpieApp,
-	TRPC extends Record<string, any>,
-	K extends GlobalKeys<TApp, TRPC>,
+	K extends GlobalKeys<TApp>,
 > = {
-	get: QueryBuilder<GlobalGet<TApp, TRPC, K>>;
+	get: QueryBuilder<GlobalGet<TApp, K>>;
 	update: MutationBuilder<
 		{
-			data: Parameters<GlobalUpdate<TApp, TRPC, K>>[0];
-			options?: Parameters<GlobalUpdate<TApp, TRPC, K>>[1];
+			data: Parameters<GlobalUpdate<TApp, K>>[0];
+			options?: Parameters<GlobalUpdate<TApp, K>>[1];
 		},
-		QueryData<GlobalUpdate<TApp, TRPC, K>>
+		QueryData<GlobalUpdate<TApp, K>>
 	>;
-	findVersions: QueryBuilder<GlobalFindVersions<TApp, TRPC, K>>;
+	findVersions: QueryBuilder<GlobalFindVersions<TApp, K>>;
 	revertToVersion: MutationBuilder<
 		{
-			params: Parameters<GlobalRevertToVersion<TApp, TRPC, K>>[0];
-			options?: Parameters<GlobalRevertToVersion<TApp, TRPC, K>>[1];
+			params: Parameters<GlobalRevertToVersion<TApp, K>>[0];
+			options?: Parameters<GlobalRevertToVersion<TApp, K>>[1];
 		},
-		QueryData<GlobalRevertToVersion<TApp, TRPC, K>>
+		QueryData<GlobalRevertToVersion<TApp, K>>
 	>;
 	transitionStage: MutationBuilder<
 		{
-			params: Parameters<GlobalTransitionStage<TApp, TRPC, K>>[0];
-			options?: Parameters<GlobalTransitionStage<TApp, TRPC, K>>[1];
+			params: Parameters<GlobalTransitionStage<TApp, K>>[0];
+			options?: Parameters<GlobalTransitionStage<TApp, K>>[1];
 		},
-		QueryData<GlobalTransitionStage<TApp, TRPC, K>>
+		QueryData<GlobalTransitionStage<TApp, K>>
 	>;
 };
 
 export type QuestpieQueryOptionsProxy<
-	TApp extends QuestpieApp,
-	TRPC extends Record<string, any> = Record<string, never>,
+	TApp extends QuestpieApp = QuestpieApp,
 > = {
 	collections: {
-		[K in CollectionKeys<TApp, TRPC>]: CollectionQueryOptionsAPI<TApp, TRPC, K>;
+		[K in CollectionKeys<TApp>]: CollectionQueryOptionsAPI<TApp, K>;
 	};
 	globals: {
-		[K in GlobalKeys<TApp, TRPC>]: GlobalQueryOptionsAPI<TApp, TRPC, K>;
+		[K in GlobalKeys<TApp>]: GlobalQueryOptionsAPI<TApp, K>;
 	};
-	rpc: RpcQueryOptionsAPI<QuestpieClient<TApp, TRPC>["rpc"]>;
+	routes: RoutesQueryOptionsAPI<QuestpieClient<TApp>["routes"]>;
 	custom: {
 		query: <TData>(config: {
 			key: QueryKey;
@@ -394,29 +374,28 @@ const wrapMutationFn = <TVariables, TData>(
  * // Use with useMutation
  * const mutation = useMutation(cmsQueries.collections.posts.create())
  *
- * // Use with RPC
- * const stats = useQuery(cmsQueries.rpc.dashboard.getStats.query({ period: "week" }))
+ * // Use with routes
+ * const stats = useQuery(cmsQueries.routes.dashboard.getStats.query({ period: "week" }))
  * ```
  */
 export function createQuestpieQueryOptions<
-	TApp extends QuestpieApp,
-	TRPC extends Record<string, any> = Record<string, never>,
+	TApp extends QuestpieApp = QuestpieApp,
 >(
-	client: QuestpieClient<TApp, TRPC>,
+	client: QuestpieClient<TApp>,
 	config: QuestpieQueryOptionsConfig = {},
-): QuestpieQueryOptionsProxy<TApp, TRPC> {
+): QuestpieQueryOptionsProxy<TApp> {
 	const keyPrefix = config.keyPrefix ?? ["questpie"];
 	const errorMap = config.errorMap ?? defaultErrorMap;
 	const locale = config.locale;
 	const stage = config.stage;
 
 	const collections = new Proxy(
-		{} as QuestpieQueryOptionsProxy<TApp, TRPC>["collections"],
+		{} as QuestpieQueryOptionsProxy<TApp>["collections"],
 		{
 			get: (_target, collectionName) => {
 				if (typeof collectionName !== "string") return undefined;
 				const collection = client.collections[
-					collectionName as CollectionKeys<TApp, TRPC>
+					collectionName as CollectionKeys<TApp>
 				] as any;
 				const baseKey: QueryKey = ["collections", collectionName];
 
@@ -705,12 +684,12 @@ export function createQuestpieQueryOptions<
 	);
 
 	const globals = new Proxy(
-		{} as QuestpieQueryOptionsProxy<TApp, TRPC>["globals"],
+		{} as QuestpieQueryOptionsProxy<TApp>["globals"],
 		{
 			get: (_target, globalName) => {
 				if (typeof globalName !== "string") return undefined;
 				const global = client.globals[
-					globalName as GlobalKeys<TApp, TRPC>
+					globalName as GlobalKeys<TApp>
 				] as any;
 				const baseKey: QueryKey = ["globals", globalName];
 
@@ -826,8 +805,11 @@ export function createQuestpieQueryOptions<
 		},
 	);
 
-	const callRpcProcedure = async (segments: string[], input: unknown) => {
-		let current: any = client.rpc as any;
+	/**
+	 * Resolve a nested route caller from the client by traversing dot segments.
+	 */
+	const callRoute = async (segments: string[], input: unknown) => {
+		let current: any = client.routes as any;
 
 		for (const segment of segments) {
 			current = current?.[segment];
@@ -835,7 +817,7 @@ export function createQuestpieQueryOptions<
 
 		if (typeof current !== "function") {
 			throw new Error(
-				`RPC procedure not found at path: ${segments.join(".") || "<root>"}`,
+				`Route not found at path: ${segments.join(".") || "<root>"}`,
 			);
 		}
 
@@ -846,7 +828,7 @@ export function createQuestpieQueryOptions<
 		return current(input);
 	};
 
-	const createRpcNodeProxy = (segments: string[]): any => {
+	const createRouteNodeProxy = (segments: string[]): any => {
 		return new Proxy(
 			{},
 			{
@@ -855,14 +837,14 @@ export function createQuestpieQueryOptions<
 						return (input?: any) =>
 							queryOptions({
 								queryKey: buildKey(keyPrefix, [
-									"rpc",
+									"routes",
 									...segments,
 									"query",
 									locale,
 									normalizeQueryKeyOptions(input),
 								]),
 								queryFn: wrapQueryFn(
-									() => callRpcProcedure(segments, input),
+									() => callRoute(segments, input),
 									errorMap,
 								),
 							});
@@ -872,13 +854,13 @@ export function createQuestpieQueryOptions<
 						return () =>
 							mutationOptions({
 								mutationKey: buildKey(keyPrefix, [
-									"rpc",
+									"routes",
 									...segments,
 									"mutation",
 									locale,
 								]),
 								mutationFn: wrapMutationFn(
-									(variables: any) => callRpcProcedure(segments, variables),
+									(variables: any) => callRoute(segments, variables),
 									errorMap,
 								),
 							});
@@ -887,7 +869,7 @@ export function createQuestpieQueryOptions<
 					if (prop === "key") {
 						return (input?: any) =>
 							buildKey(keyPrefix, [
-								"rpc",
+								"routes",
 								...segments,
 								"query",
 								locale,
@@ -896,23 +878,26 @@ export function createQuestpieQueryOptions<
 					}
 
 					if (typeof prop !== "string") return undefined;
-					return createRpcNodeProxy([...segments, prop]);
+					return createRouteNodeProxy([...segments, prop]);
 				},
 			},
 		);
 	};
 
-	const rpc = new Proxy({} as QuestpieQueryOptionsProxy<TApp, TRPC>["rpc"], {
-		get: (_target, prop) => {
-			if (typeof prop !== "string") return undefined;
-			return createRpcNodeProxy([prop]);
+	const routesProxy = new Proxy(
+		{} as QuestpieQueryOptionsProxy<TApp>["routes"],
+		{
+			get: (_target, prop) => {
+				if (typeof prop !== "string") return undefined;
+				return createRouteNodeProxy([prop]);
+			},
 		},
-	});
+	);
 
 	return {
 		collections,
 		globals,
-		rpc,
+		routes: routesProxy,
 		custom: {
 			query: (customConfig) =>
 				queryOptions({

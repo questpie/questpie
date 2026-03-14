@@ -57,7 +57,7 @@ my-app/
 │   │   │   ├── locale.ts                 # Content locale config
 │   │   │   ├── collections/              # One file per collection
 │   │   │   ├── globals/                  # One file per global
-│   │   │   ├── functions/                # Server functions (RPC)
+│   │   │   ├── routes/                   # App routes (JSON or raw)
 │   │   │   ├── jobs/                     # Background tasks
 │   │   │   ├── services/                 # Singleton services
 │   │   │   ├── routes/                   # Raw HTTP routes
@@ -85,14 +85,14 @@ Codegen discovers files by **directory name** and **default export**:
 |-----------------|--------------------------|----------------------------------------|
 | `collections/`  | Filename to camelCase    | `blog-posts.ts` -> `blogPosts`         |
 | `globals/`      | Filename to camelCase    | `site-settings.ts` -> `siteSettings`   |
-| `functions/`    | Filename to camelCase    | `create-booking.ts` -> `createBooking` |
+| `routes/`       | Filename to camelCase/path | `create-booking.ts` -> `createBooking` |
 | `jobs/`         | Filename to camelCase    | `send-email.ts` -> `sendEmail`         |
-| `routes/`       | Filename to path         | `webhook.ts` -> `/webhook`             |
+| `routes/` (raw) | Filename to path         | `webhook.ts` -> `webhook`              |
 | `services/`     | Filename to camelCase    | `blog.ts` -> `blog`                    |
 | `blocks/`       | Named exports            | `export const hero` -> `hero`          |
 | `emails/`       | Filename to camelCase    | `welcome.ts` -> `welcome`              |
 
-Functions and routes support nested directories for namespacing (`functions/booking/create.ts` -> `rpc.booking.create`).
+Routes support nested directories for namespacing (`routes/booking/create.ts` -> `client.routes.booking.create()`).
 
 ---
 
@@ -153,16 +153,17 @@ This creates:
 
 ---
 
-## 5. Add a Server Function
+## 5. Add a Route
 
 ```ts
-// src/questpie/server/functions/get-overdue-tasks.ts
-import { fn } from "questpie";
+// src/questpie/server/routes/get-overdue-tasks.ts
+import { route } from "questpie";
 import z from "zod";
 
-export default fn({
-  schema: z.object({}),
-  handler: async ({ collections }) => {
+export default route()
+  .post()
+  .schema(z.object({}))
+  .handler(async ({ collections }) => {
     return await collections.tasks.find({
       where: {
         completed: false,
@@ -170,11 +171,10 @@ export default fn({
       },
       orderBy: { dueDate: "asc" },
     });
-  },
-});
+  });
 ```
 
-Functions are typed server-side logic exposed via RPC at `/api/rpc/<functionName>`.
+Typed JSON routes are exposed as flat endpoints at `/api/<route-path>`.
 
 ---
 
@@ -278,7 +278,7 @@ bun add @questpie/admin
 
 ```ts
 // src/questpie/server/questpie.config.ts
-import { adminPlugin } from "@questpie/admin/server";
+import { adminPlugin } from "@questpie/admin/plugin";
 import { runtimeConfig } from "questpie";
 
 export default runtimeConfig({
@@ -336,8 +336,8 @@ const tasks = await client.collections.tasks.find({
   orderBy: { priority: "desc" },
 });
 
-// Call functions via RPC
-const overdue = await client.rpc.getOverdueTasks({});
+// Call route
+const overdue = await client.routes.getOverdueTasks({});
 ```
 
 ---
@@ -348,7 +348,7 @@ const overdue = await client.rpc.getOverdueTasks({});
 bun dev
 ```
 
-Test: `curl http://localhost:3000/api/tasks` for collection CRUD, `curl -X POST http://localhost:3000/api/rpc/getOverdueTasks -H "Content-Type: application/json" -d '{}'` for RPC functions.
+Test: `curl http://localhost:3000/api/tasks` for collection CRUD, `curl -X POST http://localhost:3000/api/get-overdue-tasks -H "Content-Type: application/json" -d '{}'` for typed route calls.
 
 ---
 
@@ -372,7 +372,7 @@ bun dev
 
 ### HIGH: Forgetting to run `questpie generate` after changes
 
-Every time you add, rename, or remove a file in a convention directory (`collections/`, `functions/`, `globals/`, `jobs/`, etc.), you must re-run:
+Every time you add, rename, or remove a file in a convention directory (`collections/`, `routes/`, `globals/`, `jobs/`, etc.), you must re-run:
 
 ```bash
 bunx questpie generate
@@ -402,7 +402,7 @@ export default collection("tasks").fields(/* ... */);
 
 ### MEDIUM: Putting business logic in route handlers
 
-Route handlers should only mount the QUESTPIE fetch handler. Business logic belongs in `functions/`, `jobs/`, or collection hooks:
+Framework route handlers should only mount the QUESTPIE fetch handler. Business logic belongs in `routes/`, `jobs/`, or collection hooks:
 
 ```ts
 // WRONG — business logic in route file
@@ -413,14 +413,14 @@ export const Route = createAPIFileRoute("/api/custom")({
   },
 });
 
-// CORRECT — use a server function
-// src/questpie/server/functions/my-logic.ts
-export default fn({
-  schema: z.object({ /* ... */ }),
-  handler: async ({ input, collections }) => {
+// CORRECT — use a typed route
+// src/questpie/server/routes/my-logic.ts
+export default route()
+  .post()
+  .schema(z.object({ /* ... */ }))
+  .handler(async ({ input, collections }) => {
     return await collections.tasks.create({ data: input });
-  },
-});
+  });
 ```
 
 ---
