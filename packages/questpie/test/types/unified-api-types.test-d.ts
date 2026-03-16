@@ -79,7 +79,7 @@ const siteSettings = globalBuilder("site_settings")
 	}))
 	.options({ versioning: { enabled: true } });
 
-// Manually construct the app type (matches codegen _AppInternal pattern)
+// Manually construct the app type (matches codegen App pattern)
 type TCollectionsMap = {
 	users: typeof users;
 	posts: typeof posts;

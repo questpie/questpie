@@ -1,12 +1,18 @@
 /**
- * Shared server-side helpers for data fetching
+ * Shared server-side helpers for data fetching.
+ *
+ * `createRequestContext()` creates a lean RequestContext (session, locale, db)
+ * for passing as the 2nd argument to CRUD operations like `app.api.collections.*.find({}, ctx)`.
+ *
+ * This is NOT the rich AppContext you get in route handlers / hooks / block prefetch.
+ * For scripts and standalone code, use `createContext()` from `#questpie` instead.
  */
 
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { app } from "@/questpie/server/app";
+import { app } from "#questpie";
 
 /**
- * Extract locale from cookie header
+ * Extract locale from cookie header.
  */
 export function getLocaleFromCookie(cookieHeader?: string): "en" | "sk" {
 	if (!cookieHeader) return "en";
@@ -15,7 +21,7 @@ export function getLocaleFromCookie(cookieHeader?: string): "en" | "sk" {
 }
 
 /**
- * Get locale from request headers
+ * Get locale from request headers.
  */
 export function getRequestLocale(overrideLocale?: string): "en" | "sk" {
 	if (overrideLocale === "en" || overrideLocale === "sk") {
@@ -27,14 +33,13 @@ export function getRequestLocale(overrideLocale?: string): "en" | "sk" {
 }
 
 /**
- * Create app context for server-side data fetching
+ * Create a locale-scoped RequestContext for CRUD operations.
+ * Pass the result as the 2nd argument to `app.api.collections.*.find({}, ctx)`.
  */
-export async function createServerContext(locale?: string) {
+export async function createRequestContext(locale?: string) {
 	const resolvedLocale = getRequestLocale(locale);
 	return app.createContext({
 		accessMode: "system",
 		locale: resolvedLocale,
 	});
 }
-
-export { app };

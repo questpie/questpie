@@ -2,7 +2,8 @@ import { isDraftMode } from "@questpie/admin/shared";
 import { notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { app, getRequestLocale } from "@/lib/server-helpers";
+import { app } from "#questpie";
+import { createRequestContext } from "@/lib/server-helpers";
 
 export type PageLoaderData = Awaited<ReturnType<typeof getPage>>;
 
@@ -13,13 +14,8 @@ export const getPage = createServerFn({ method: "GET" })
 		const cookie = headers.get("cookie");
 		const cookieHeader = cookie ? String(cookie) : undefined;
 		const isDraft = isDraftMode(cookieHeader);
-		const locale = getRequestLocale();
+		const ctx = await createRequestContext();
 
-		// Use direct app API for proper afterRead hooks (including blocks prefetch)
-		const ctx = await app.createContext({
-			accessMode: "system",
-			locale,
-		});
 		const page = await app.api.collections.pages.findOne(
 			{
 				where: isDraft

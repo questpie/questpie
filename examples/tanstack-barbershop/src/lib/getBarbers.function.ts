@@ -2,7 +2,8 @@ import { isDraftMode } from "@questpie/admin/shared";
 import { notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { app, createServerContext } from "@/lib/server-helpers";
+import { app } from "#questpie";
+import { createRequestContext } from "@/lib/server-helpers";
 
 export const getBarber = createServerFn({ method: "GET" })
 	.inputValidator((data: { slug: string; locale?: string }) => data)
@@ -12,7 +13,7 @@ export const getBarber = createServerFn({ method: "GET" })
 		const cookieHeader = cookie ? String(cookie) : undefined;
 		const draftMode = isDraftMode(cookieHeader);
 
-		const ctx = await createServerContext(data.locale);
+		const ctx = await createRequestContext(data.locale);
 
 		const barber = await app.api.collections.barbers.findOne(
 			{
@@ -53,7 +54,7 @@ export const getBarber = createServerFn({ method: "GET" })
 export const getAllBarbers = createServerFn({ method: "GET" })
 	.inputValidator((data: { locale?: string } | undefined) => data)
 	.handler(async ({ data }) => {
-		const ctx = await createServerContext(data?.locale);
+		const ctx = await createRequestContext(data?.locale);
 
 		const result = await app.api.collections.barbers.find(
 			{

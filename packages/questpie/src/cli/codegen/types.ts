@@ -226,7 +226,7 @@ export interface CategoryDeclaration {
 	registryKey?: string | boolean;
 
 	/**
-	 * Whether to include this category in the `_AppInternal` state type.
+	 * Whether to include this category in the `App` state type.
 	 * When `true`, adds `categoryName: AppCategoryName;` to the state.
 	 * When `false`, omitted.
 	 *

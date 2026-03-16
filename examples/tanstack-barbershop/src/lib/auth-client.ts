@@ -5,7 +5,7 @@
  */
 
 import { createAdminAuthClient } from "@questpie/admin/client";
-import type { AppConfig } from "@/questpie/server/app";
+import type { AppConfig } from "#questpie";
 
 export const authClient = createAdminAuthClient<AppConfig>({
 	baseURL:

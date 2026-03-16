@@ -447,7 +447,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("");
 	}
 
-	// ── _AppInternal — internal Questpie<> type ──────────────────
+	// ── App — the full Questpie<> app type ──────────────────────
 	{
 		const stateMembers: string[] = [];
 
@@ -465,16 +465,23 @@ export function generateTemplate(options: TemplateOptions): string {
 			stateMembers.push('\t"~messageKeys": AppMessageKeys;');
 		}
 
+		lines.push("/**");
+		lines.push(" * The fully-typed app instance type.");
 		lines.push(
-			"/** @internal — used only for type derivation, not exported */",
+			" * Use `typeof app` or this alias when you need to reference the app type.",
 		);
-		// Intersect QuestpieConfig with concrete app types.
-		// The concrete types (AppCollections, AppGlobals, etc.) shadow the
-		// index-signature-bearing base types from QuestpieConfig at known keys,
-		// while preserving the `extends QuestpieConfig` constraint.
-		// CRUD type correctness relies on HasFieldDefinitions + CollectionFieldDefinitions
-		// guards rather than removing the index signature.
-		lines.push("type _AppInternal = Questpie<QuestpieConfig & {");
+		lines.push(" *");
+		lines.push(
+			" * **Note:** Do NOT import `app` inside framework-defined files (collections,",
+		);
+		lines.push(
+			" * globals, routes, hooks, blocks) — it creates circular dependencies with",
+		);
+		lines.push(
+			" * the generated index. Use the context parameters provided to handlers instead.",
+		);
+		lines.push(" */");
+		lines.push("export type App = Questpie<QuestpieConfig & {");
 		for (const member of stateMembers) {
 			lines.push(member);
 		}
@@ -507,27 +514,27 @@ export function generateTemplate(options: TemplateOptions): string {
 			lines.push("\t\tinterface AppContext {");
 		}
 		lines.push("\t\t\t// Infrastructure");
-		lines.push("\t\t\tdb: _AppInternal['db'];");
+		lines.push("\t\t\tdb: App['db'];");
 		if (hasEmails) {
 			lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
 		} else {
-			lines.push("\t\t\temail: _AppInternal['email'];");
+			lines.push("\t\t\temail: App['email'];");
 		}
 		lines.push("\t\t\tqueue: QueueClient<AppJobs>;");
-		lines.push("\t\t\tstorage: _AppInternal['storage'];");
-		lines.push("\t\t\tkv: _AppInternal['kv'];");
-		lines.push("\t\t\tlogger: _AppInternal['logger'];");
-		lines.push("\t\t\tsearch: _AppInternal['search'];");
-		lines.push("\t\t\trealtime: _AppInternal['realtime'];");
+		lines.push("\t\t\tstorage: App['storage'];");
+		lines.push("\t\t\tkv: App['kv'];");
+		lines.push("\t\t\tlogger: App['logger'];");
+		lines.push("\t\t\tsearch: App['search'];");
+		lines.push("\t\t\trealtime: App['realtime'];");
 		lines.push("");
 		lines.push("\t\t\t// Entity APIs");
-		lines.push("\t\t\tcollections: _AppInternal['api']['collections'];");
-		lines.push("\t\t\tglobals: _AppInternal['api']['globals'];");
-		lines.push("\t\t\ttables: _AppInternal['tables'];");
+		lines.push("\t\t\tcollections: App['api']['collections'];");
+		lines.push("\t\t\tglobals: App['api']['globals'];");
+		lines.push("\t\t\ttables: App['tables'];");
 		lines.push("");
 		lines.push("\t\t\t// Request-scoped");
 		lines.push(
-			"\t\t\tsession: _AppInternal['auth'] extends { api: { getSession: (...args: any[]) => Promise<infer TSession> } } ? NonNullable<TSession> | null : null;",
+			"\t\t\tsession: App['auth'] extends { api: { getSession: (...args: any[]) => Promise<infer TSession> } } ? NonNullable<TSession> | null : null;",
 		);
 		if (hasMessages) {
 			lines.push(
@@ -753,7 +760,7 @@ function emitNewArchitectureRuntime(
 
 	lines.push("\t}) satisfies AppDefinition,");
 	lines.push("\t_runtime,");
-	lines.push(") as unknown as _AppInternal;");
+	lines.push(") as unknown as App;");
 	lines.push("");
 }
 

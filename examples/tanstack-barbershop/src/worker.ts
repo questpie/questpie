@@ -5,7 +5,7 @@
  * Start with: bun run worker.ts
  */
 
-import { app } from "@/questpie/server/app";
+import { app } from "#questpie";
 
 async function startWorker() {
 	console.log("Starting job worker...");

@@ -190,7 +190,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("declare global {");
 		expect(code).toContain("namespace Questpie {");
 		expect(code).toContain("interface AppContext");
-		expect(code).toContain("collections: _AppInternal['api']['collections']");
+		expect(code).toContain("collections: App['api']['collections']");
 	});
 
 	it("emits AppConfig type", () => {

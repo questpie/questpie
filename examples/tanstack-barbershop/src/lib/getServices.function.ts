@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
-import { app, createServerContext } from "@/lib/server-helpers";
+import { app } from "#questpie";
+import { createRequestContext } from "@/lib/server-helpers";
 
 export const getAllServices = createServerFn({ method: "GET" })
 	.inputValidator((data: { locale?: string } | undefined) => data)
 	.handler(async ({ data }) => {
-		const ctx = await createServerContext(data?.locale);
+		const ctx = await createRequestContext(data?.locale);
 
 		const result = await app.api.collections.services.find(
 			{
