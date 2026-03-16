@@ -91,7 +91,7 @@ export function RelationChip({
 	if (canInteract) {
 		const href = `/admin/collections/${targetCollection}/${id}`;
 		const chipClassName = cn(
-			"inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs",
+			"qa-relation-chip inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs",
 			"bg-primary/10 text-primary hover:bg-primary/20",
 			"transition-colors cursor-pointer",
 			"border border-primary/20 hover:border-primary/40",
@@ -116,7 +116,7 @@ export function RelationChip({
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs",
+				"qa-relation-chip inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs",
 				"bg-muted text-muted-foreground",
 				"border border-border",
 				className,

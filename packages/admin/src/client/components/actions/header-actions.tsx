@@ -129,7 +129,7 @@ export function HeaderActions<TItem = any>({
 	}
 
 	return (
-		<div className="flex items-center gap-2">
+		<div className="qa-header-actions flex items-center gap-2">
 			{/* Primary actions as buttons */}
 			{visiblePrimary.map((action) => (
 				<ActionButton

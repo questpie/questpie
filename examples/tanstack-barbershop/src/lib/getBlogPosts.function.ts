@@ -2,7 +2,8 @@ import { isDraftMode } from "@questpie/admin/shared";
 import { notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { app, createServerContext } from "@/lib/server-helpers";
+import { app } from "#questpie";
+import { createRequestContext } from "@/lib/server-helpers";
 
 export const getBlogPost = createServerFn({ method: "GET" })
 	.inputValidator((data: { slug: string; locale?: string }) => data)
@@ -12,9 +13,9 @@ export const getBlogPost = createServerFn({ method: "GET" })
 		const cookieHeader = cookie ? String(cookie) : undefined;
 		const draftMode = isDraftMode(cookieHeader);
 
-		const ctx = await createServerContext(data.locale);
+		const ctx = await createRequestContext(data.locale);
 
-		const post = await app.api.collections.blogPosts.findOne(
+		const post = await app.api.collections.blog_posts.findOne(
 			{
 				where: draftMode
 					? { slug: data.slug }
@@ -57,9 +58,9 @@ export const getBlogPost = createServerFn({ method: "GET" })
 export const getAllBlogPosts = createServerFn({ method: "GET" })
 	.inputValidator((data: { locale?: string } | undefined) => data)
 	.handler(async ({ data }) => {
-		const ctx = await createServerContext(data?.locale);
+		const ctx = await createRequestContext(data?.locale);
 
-		const result = await app.api.collections.blogPosts.find(
+		const result = await app.api.collections.blog_posts.find(
 			{
 				where: { status: "published" },
 				sort: { publishedAt: "desc" },

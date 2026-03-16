@@ -294,6 +294,7 @@ export default function TableWidget({
 		<WidgetCard
 			title={title}
 			isLoading={isLoading}
+			className="qa-table-widget"
 			loadingSkeleton={
 				<TableWidgetSkeleton rows={limit} columns={columns.length} />
 			}

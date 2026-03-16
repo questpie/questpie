@@ -86,14 +86,16 @@ export default [
 ] as const;
 ```
 
-Codegen discovers files and generates `.generated/index.ts` with the `app` instance. Route handlers use:
+Codegen discovers files and generates `.generated/index.ts` with the `app` instance and `App` type. User code imports via the `#questpie` subpath:
 
 ```ts
-import { app } from "~/questpie/.generated";
+import { app } from "#questpie";
 import { createFetchHandler } from "questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 ```
+
+The `#questpie` alias is configured in both `package.json` (`imports` field) and `tsconfig.json` (`paths`) — it resolves to `./src/questpie/server/.generated/index.ts`.
 
 ### Internal `q` Builder (Admin Module)
 
@@ -134,8 +136,8 @@ import z from "zod";
 export default route()
   .post()
   .schema(z.object({ period: z.enum(["day", "week", "month"]) }))
-  .handler(async ({ app }) => {
-    const count = await app.api.collections.posts.count({});
+  .handler(async ({ collections }) => {
+    const count = await collections.posts.count({});
     return { posts: count };
   });
 ```
@@ -207,6 +209,81 @@ Codegen generates `declare module` augmentations that extend these interfaces wi
 - **`MERGE_FNS`**: `Map<string, MergeFn>` — per-key merge functions (e.g., `["auth", mergeAuthOptions]`). No string strategies, no switch statements.
 - **`CONFIG_CONSUMED_KEYS`**: Derived from `MERGE_FNS.keys()`. Keys NOT in this set flow to `instance.state` for plugins.
 - **`mergeRecord`, `mergeConcat`, `lastWins`**: Exported reusable merge helpers for plugins.
+
+## Codegen Output & Exports
+
+Running `questpie generate` produces `.generated/index.ts` which exports:
+
+| Export | Type | Purpose |
+|---|---|---|
+| `app` | `App` | The runtime app instance — use in server functions, scripts, API handlers |
+| `App` | type | Fully-typed `Questpie<...>` alias — use for type references (`typeof app`) |
+| `AppConfig` | type | Flat config for client APIs — `createClient<AppConfig>()`, `createAdminAuthClient<AppConfig>()` |
+| `AppCollections` | type | Map of all collection definitions |
+| `AppGlobals` | type | Map of all global definitions |
+| `AppRoutes` | type | Map of all route definitions |
+| `createContext` | function | Creates a rich `AppContext` for scripts/tests/standalone code |
+
+### The `#questpie` Subpath Import
+
+All user code should import from `#questpie` — the subpath alias configured in `package.json` (`imports`) and `tsconfig.json` (`paths`):
+
+```ts
+import { app, createContext } from "#questpie";
+import type { App, AppConfig } from "#questpie";
+```
+
+Do NOT import from `.generated/index.ts` directly or create re-export wrapper files.
+
+## Context System
+
+Two distinct context types exist. Understanding when to use which is critical.
+
+### `RequestContext` (lean — for CRUD operations)
+
+Created by `app.createContext({ locale, accessMode })`. Contains only request-scoped data:
+`session`, `locale`, `accessMode`, `db`, `stage`.
+
+Used as the **2nd argument** to CRUD methods:
+
+```ts
+const ctx = await app.createContext({ accessMode: "system", locale: "en" });
+const posts = await app.api.collections.posts.find({ where: { published: true } }, ctx);
+```
+
+### `AppContext` (rich — flat services for handlers)
+
+Provided automatically to framework handlers via `declare global { namespace Questpie { interface AppContext } }` augmentation. Contains **everything**: `db`, `collections`, `globals`, `queue`, `storage`, `email`, `kv`, `session`, `services`, `t`, etc.
+
+You get this in:
+- **Route handlers**: `route().handler(async ({ collections, db, input }) => ...)`
+- **Hooks**: `beforeCreate: [async ({ data, collections, db }) => ...]`
+- **Block prefetch**: `.prefetch(async ({ values, ctx }) => ctx.collections.*)`
+- **Jobs**: `job().handler(async ({ data, collections }) => ...)`
+- **Services**: `service().create(({ db, collections }) => ...)`
+
+For standalone use (scripts, seeds, tests), create one explicitly:
+
+```ts
+import { createContext } from "#questpie";
+const ctx = await createContext();
+const posts = await ctx.collections.posts.find({});
+```
+
+### When to Import `app` vs Use Handler Context
+
+| Context | Import `app`? | How to access data |
+|---|---|---|
+| Server functions (`createServerFn`) | Yes — `import { app } from "#questpie"` | `app.api.collections.*` + `RequestContext` |
+| API route mount (`createFetchHandler`) | Yes — `import { app } from "#questpie"` | Pass to handler |
+| Worker (`app.queue.listen()`) | Yes — `import { app } from "#questpie"` | Direct call |
+| Scripts, seeds, tests | Yes — `import { createContext } from "#questpie"` | Rich `AppContext` |
+| QuestPie route handlers | **NO** — destructure `{ collections }` | Provided automatically |
+| Collection hooks | **NO** — destructure from handler args | Provided automatically |
+| Block prefetch | **NO** — use `ctx.collections.*` | Provided automatically |
+| Access control | **NO** — destructure from handler args | Provided automatically |
+
+**Rule:** Files inside `questpie/server/collections/`, `globals/`, `routes/`, `hooks/`, `blocks/`, `jobs/` must NEVER import from `#questpie` or `.generated/index.ts` — this creates circular dependencies because `.generated/index.ts` imports them.
 
 ## Development Workflow
 
@@ -308,25 +385,30 @@ base-ui uses `render` prop, NOT `asChild`:
 
 ## Blocks & Circular Dependencies
 
-When blocks use functional `.prefetch()` that needs typed `ctx.app`, a circular dependency can arise. With codegen, blocks import the `App` type from `.generated/index.ts`:
+Block prefetch handlers receive `ctx` with fully typed `collections` and `globals` via `AppContext` augmentation.
+Use `ctx.collections.*` directly — no app import needed:
 
 ```ts
-// blocks/hero.ts
-import { block } from "@questpie/admin";
-import { typedApp } from "questpie";
-import type { App } from "~/questpie/.generated";
+// blocks/team.ts
+import { block } from "@questpie/admin/server";
 
-export default block("hero")
+export const teamBlock = block("team")
   .fields(({ f }) => ({
-    heading: f.text({ label: "Heading" }),
+    limit: f.number({ label: "Limit", default: 4 }),
   }))
   .prefetch(async ({ values, ctx }) => {
-    const app = typedApp<App>(ctx.app);
-    return { posts: (await app.api.collections.posts.find({})).docs };
+    const res = await ctx.collections.barbers.find({
+      limit: values.limit || 4,
+      where: { isActive: true },
+      with: { avatar: true },
+    });
+    return { members: res.docs };
   });
 ```
 
-Blocks with only declarative prefetch (`{ with: { field: true } }`) don't need this pattern.
+Blocks with only declarative prefetch (`{ with: { field: true } }`) don't need a function at all.
+
+**Important:** Do NOT import `app` from `#questpie` inside block/collection/route/hook files — these are imported BY `.generated/index.ts`, so importing from it back creates circular dependencies. Use the `ctx`/handler parameters instead.
 
 ## Reactive Field System
 

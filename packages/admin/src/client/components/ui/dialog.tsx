@@ -30,7 +30,7 @@ function DialogOverlay({
 		<DialogPrimitive.Backdrop
 			data-slot="dialog-overlay"
 			className={cn(
-				"data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/80 duration-100 fixed inset-0 isolate z-50",
+				"qa-dialog__overlay data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/80 duration-100 fixed inset-0 isolate z-50",
 				className,
 			)}
 			{...props}
@@ -52,7 +52,7 @@ function DialogContent({
 			<DialogPrimitive.Popup
 				data-slot="dialog-content"
 				className={cn(
-					"bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 border border-border grid max-w-[calc(100%-2rem)] gap-4 p-4 text-sm duration-100 sm:max-w-md fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none",
+					"qa-dialog__content bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 border border-border grid max-w-[calc(100%-2rem)] gap-4 p-4 text-sm duration-100 sm:max-w-md fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none",
 					className,
 				)}
 				{...props}
@@ -82,7 +82,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 	return (
 		<div
 			data-slot="dialog-header"
-			className={cn("gap-1 flex flex-col", className)}
+			className={cn("qa-dialog__header gap-1 flex flex-col", className)}
 			{...props}
 		/>
 	);
@@ -100,7 +100,7 @@ function DialogFooter({
 		<div
 			data-slot="dialog-footer"
 			className={cn(
-				"gap-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+				"qa-dialog__footer gap-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
 				className,
 			)}
 			{...props}
@@ -119,7 +119,10 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
 	return (
 		<DialogPrimitive.Title
 			data-slot="dialog-title"
-			className={cn("font-mono text-sm font-medium", className)}
+			className={cn(
+				"qa-dialog__title font-mono text-sm font-medium",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -133,7 +136,7 @@ function DialogDescription({
 		<DialogPrimitive.Description
 			data-slot="dialog-description"
 			className={cn(
-				"text-muted-foreground *:[a]:hover:text-foreground text-xs/relaxed *:[a]:underline *:[a]:underline-offset-3",
+				"qa-dialog__description text-muted-foreground *:[a]:hover:text-foreground text-xs/relaxed *:[a]:underline *:[a]:underline-offset-3",
 				className,
 			)}
 			{...props}

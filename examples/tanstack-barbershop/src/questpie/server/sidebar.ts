@@ -30,7 +30,7 @@ export default sidebar({
 		{
 			sectionId: "overview",
 			type: "global",
-			global: "siteSettings",
+			global: "site_settings",
 		},
 		// Operations
 		{

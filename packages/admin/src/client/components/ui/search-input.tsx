@@ -77,7 +77,9 @@ export function SearchInput({
 	const showShortcut = shortcut && !hasValue;
 
 	return (
-		<InputGroup className={cn("bg-transparent", containerClassName)}>
+		<InputGroup
+			className={cn("qa-search-input bg-transparent", containerClassName)}
+		>
 			<InputGroupAddon align="inline-start">
 				{isLoading ? (
 					<Icon

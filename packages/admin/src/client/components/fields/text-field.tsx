@@ -1,4 +1,5 @@
 import { Controller } from "react-hook-form";
+import { cn } from "../../lib/utils";
 import { TextInput } from "../primitives/text-input";
 import type { TextFieldProps } from "./field-types";
 import { useResolvedControl } from "./field-utils";
@@ -46,7 +47,7 @@ export function TextField({
 						maxLength={maxLength}
 						autoComplete={autoComplete}
 						aria-invalid={!!fieldState.error}
-						className={className}
+						className={cn("qa-text-field", className)}
 					/>
 				</FieldWrapper>
 			)}

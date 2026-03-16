@@ -51,23 +51,27 @@ export function AuthLayout({
 	className,
 }: AuthLayoutProps) {
 	return (
-		<div className="bg-background flex min-h-screen flex-col items-center justify-center p-4">
-			<div className="w-full max-w-sm space-y-6">
+		<div className="qa-auth-layout bg-background flex min-h-screen flex-col items-center justify-center p-4">
+			<div className="qa-auth-layout__content w-full max-w-sm space-y-6">
 				{/* Logo */}
-				{logo && <div className="flex justify-center">{logo}</div>}
+				{logo && (
+					<div className="qa-auth-layout__logo flex justify-center">{logo}</div>
+				)}
 
 				{/* Main Card */}
-				<Card className={cn("w-full", className)}>
-					<CardHeader className="text-center">
+				<Card className={cn("qa-auth-layout__card w-full", className)}>
+					<CardHeader className="qa-auth-layout__card-header text-center">
 						<CardTitle className="text-lg">{title}</CardTitle>
 						{description && <CardDescription>{description}</CardDescription>}
 					</CardHeader>
-					<CardContent>{children}</CardContent>
+					<CardContent className="qa-auth-layout__card-content">
+						{children}
+					</CardContent>
 				</Card>
 
 				{/* Footer */}
 				{footer && (
-					<div className="text-muted-foreground text-center text-xs">
+					<div className="qa-auth-layout__footer text-muted-foreground text-center text-xs">
 						{footer}
 					</div>
 				)}

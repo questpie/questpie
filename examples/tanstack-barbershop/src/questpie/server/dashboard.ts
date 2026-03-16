@@ -32,7 +32,7 @@ export default dashboard({
 		},
 		{
 			id: "edit-site-settings",
-			href: "/admin/globals/siteSettings",
+			href: "/admin/globals/site_settings",
 			label: {
 				en: "Edit Site Settings",
 				sk: "Upraviť nastavenia webu",

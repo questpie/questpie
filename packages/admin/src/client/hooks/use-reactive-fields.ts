@@ -240,9 +240,9 @@ export function useReactiveFields({
 	);
 
 	const watchedDepValues = useWatch({
-		control: form.control,
+		control: form?.control ?? undefined!,
 		name: watchDeps as any,
-		disabled: watchDeps.length === 0,
+		disabled: !form || watchDeps.length === 0,
 	});
 
 	const currentDepValues = React.useMemo(
@@ -263,7 +263,7 @@ export function useReactiveFields({
 	// Fetch reactive states from server
 	const fetchReactiveStates = React.useCallback(
 		async (descriptors: ReactiveRequestDescriptor[] = requestDescriptors) => {
-			if (!enabled || !client || descriptors.length === 0) {
+			if (!enabled || !client || !form || descriptors.length === 0) {
 				return;
 			}
 

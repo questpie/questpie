@@ -167,7 +167,7 @@ The client creates a typed admin builder and mounts the admin UI in React:
 ```ts
 // questpie/admin/builder.ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { App } from "../server/.generated";
+import type { App } from "#questpie";
 
 export const admin = qa<App>().use(adminModule);
 ```
@@ -179,7 +179,7 @@ export const admin = qa<App>().use(adminModule);
 ```ts
 // questpie/admin/hooks.ts
 import { createTypedHooks } from "@questpie/admin/client";
-import type { App } from "../server/.generated";
+import type { App } from "#questpie";
 
 export const {
   useCollectionList,

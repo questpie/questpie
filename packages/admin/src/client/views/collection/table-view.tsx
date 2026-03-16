@@ -977,22 +977,30 @@ function TableViewInner({
 
 	if (isLoading) {
 		return (
-			<div className="container">
-				<div className="flex h-64 items-center justify-center text-muted-foreground">
-					<Icon icon="ph:spinner-gap" className="size-6 animate-spin" />
+			<div className="container" aria-busy="true">
+				<div
+					className="flex h-64 items-center justify-center text-muted-foreground"
+					role="status"
+				>
+					<Icon
+						icon="ph:spinner-gap"
+						className="size-6 animate-spin"
+						aria-hidden="true"
+					/>
+					<span className="sr-only">Loading collection data...</span>
 				</div>
 			</div>
 		);
 	}
 
 	return (
-		<div className="container">
-			<div className="space-y-4">
+		<div className="qa-table-view container">
+			<div className="qa-table-view__inner space-y-4">
 				{/* Header - Title & Actions */}
-				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div className="qa-table-view__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-3">
-							<h1 className="text-2xl md:text-3xl font-extrabold tracking-tight truncate">
+							<h1 className="qa-table-view__title text-2xl md:text-3xl font-extrabold tracking-tight truncate">
 								{resolveText(
 									(config as any)?.label ?? schema?.admin?.config?.label,
 									collection,
@@ -1008,7 +1016,7 @@ function TableViewInner({
 						</div>
 						{((config as any)?.description ??
 						schema?.admin?.config?.description) ? (
-							<p className="text-muted-foreground text-sm mt-1 line-clamp-2">
+							<p className="qa-table-view__description text-muted-foreground text-sm mt-1 line-clamp-2">
 								{resolveText(
 									(config as any)?.description ??
 										schema?.admin?.config?.description,
@@ -1091,8 +1099,13 @@ function TableViewInner({
 				/>
 
 				{/* Table */}
-				<div className="bg-card border border-border overflow-hidden">
-					<Table>
+				<div className="qa-table-view__table-wrapper bg-card border border-border overflow-hidden">
+					<Table
+						aria-label={resolveText(
+							(config as any)?.label ?? schema?.admin?.config?.label,
+							collection,
+						)}
+					>
 						<TableHeader>
 							{table.getHeaderGroups().map((headerGroup) => (
 								<TableRow key={headerGroup.id} className="hover:bg-transparent">
@@ -1110,6 +1123,20 @@ function TableViewInner({
 										// Checkbox column gets compact styling
 										const isCheckboxCol = headerIndex === 0;
 
+										// Determine aria-sort for sortable columns
+										const sortDirection = header.column.getIsSorted();
+										const ariaSort:
+											| "ascending"
+											| "descending"
+											| "none"
+											| undefined = header.column.getCanSort()
+											? sortDirection === "asc"
+												? "ascending"
+												: sortDirection === "desc"
+													? "descending"
+													: "none"
+											: undefined;
+
 										return (
 											<TableHead
 												key={header.id}
@@ -1118,6 +1145,7 @@ function TableViewInner({
 												className={
 													isCheckboxCol ? "w-9 min-w-9 px-1.5" : undefined
 												}
+												aria-sort={ariaSort}
 											>
 												{header.isPlaceholder ? null : (
 													<button
@@ -1128,13 +1156,18 @@ function TableViewInner({
 																: ""
 														}
 														onClick={header.column.getToggleSortingHandler()}
+														aria-label={
+															header.column.getCanSort()
+																? `Sort by ${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id}`
+																: undefined
+														}
 													>
 														{flexRender(
 															header.column.columnDef.header,
 															header.getContext(),
 														)}
 														{header.column.getIsSorted() && (
-															<span>
+															<span aria-hidden="true">
 																{header.column.getIsSorted() === "asc"
 																	? "↑"
 																	: "↓"}
@@ -1264,9 +1297,17 @@ function TableViewInner({
 
 				{/* Footer - Pagination */}
 				{!isSearching && (
-					<div className="flex items-center justify-between gap-4 py-2">
+					<div
+						className="qa-table-view__pagination flex items-center justify-between gap-4 py-2"
+						role="navigation"
+						aria-label="Pagination"
+					>
 						{/* Left side - item count and page size */}
-						<div className="flex items-center gap-4 text-sm text-muted-foreground">
+						<div
+							className="flex items-center gap-4 text-sm text-muted-foreground"
+							aria-live="polite"
+							aria-atomic="true"
+						>
 							<span>
 								{filteredItems.length > 0
 									? `${((viewState.config.pagination?.page ?? 1) - 1) * (viewState.config.pagination?.pageSize ?? 25) + 1}-${Math.min(((viewState.config.pagination?.page ?? 1) - 1) * (viewState.config.pagination?.pageSize ?? 25) + (viewState.config.pagination?.pageSize ?? 25), listData?.totalDocs ?? filteredItems.length)}`
@@ -1307,6 +1348,7 @@ function TableViewInner({
 										(viewState.config.pagination?.page ?? 1) - 1,
 									)
 								}
+								aria-label="Previous page"
 							>
 								<Icon icon="ph:caret-left" className="size-4" />
 							</Button>
@@ -1338,6 +1380,10 @@ function TableViewInner({
 											size="sm"
 											className="size-8 p-0 min-w-[32px]"
 											onClick={() => viewState.setPage(pageNum)}
+											aria-label={`Page ${pageNum}`}
+											aria-current={
+												currentPage === pageNum ? "page" : undefined
+											}
 										>
 											{pageNum}
 										</Button>
@@ -1358,6 +1404,7 @@ function TableViewInner({
 										(viewState.config.pagination?.page ?? 1) + 1,
 									)
 								}
+								aria-label="Next page"
 							>
 								<Icon icon="ph:caret-right" className="size-4" />
 							</Button>
@@ -1367,7 +1414,11 @@ function TableViewInner({
 
 				{/* Search mode footer */}
 				{isSearching && (
-					<div className="text-sm text-muted-foreground flex items-center gap-2 py-2">
+					<div
+						className="text-sm text-muted-foreground flex items-center gap-2 py-2"
+						aria-live="polite"
+						aria-atomic="true"
+					>
 						{isSearchActive && (
 							<Icon icon="ph:spinner-gap" className="size-3 animate-spin" />
 						)}

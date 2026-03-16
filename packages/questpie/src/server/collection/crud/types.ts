@@ -120,14 +120,17 @@ type CollectionFieldDefinitions<TCollection> =
 	CollectionStateFor<TCollection> extends {
 		fieldDefinitions: infer TDefs;
 		options: infer TOptions;
-		upload: infer TUpload;
 	}
 		? TDefs extends Record<string, { $types: any; toColumn: any }>
 			? TOptions extends CollectionOptions
 				? FieldDefinitionsWithSystem<
 						TDefs,
 						TOptions,
-						TUpload extends UploadOptions ? TUpload : undefined
+						CollectionStateFor<TCollection> extends {
+							upload: infer TUpload extends UploadOptions;
+						}
+							? TUpload
+							: undefined
 					>
 				: FieldDefinitionsWithSystem<TDefs, {}, undefined>
 			: TDefs
@@ -191,11 +194,15 @@ type CollectionRelationsFor<TCollection> =
 		: InferRelationsFromFieldDefs<CollectionFieldDefinitions<TCollection>>;
 
 type HasFieldDefinitions<TDefs> =
-	TDefs extends Record<string, { $types: any; toColumn: any }>
-		? keyof TDefs extends never
-			? false
-			: true
-		: false;
+	// Guard: reject Record<string, never> — `never` extends anything,
+	// so a generic fallback type would incorrectly pass the constraint.
+	[TDefs] extends [Record<string, never>]
+		? false
+		: TDefs extends Record<string, { $types: any; toColumn: any }>
+			? keyof TDefs extends never
+				? false
+				: true
+			: false;
 
 type DecrementDepth<Depth extends unknown[]> = Depth extends [
 	unknown,

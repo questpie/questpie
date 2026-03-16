@@ -121,7 +121,10 @@ export function InviteForm({
 	});
 
 	return (
-		<form onSubmit={handleFormSubmit} className={cn("space-y-4", className)}>
+		<form
+			onSubmit={handleFormSubmit}
+			className={cn("qa-invite-form space-y-4", className)}
+		>
 			<FieldGroup>
 				{/* Email Field */}
 				<Field data-invalid={!!errors.email}>

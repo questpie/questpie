@@ -37,7 +37,7 @@ export function Toolbar({
 		<div
 			data-slot="toolbar"
 			className={cn(
-				"bg-card border border-border",
+				"qa-toolbar bg-card border border-border",
 				"p-1 flex items-center gap-2",
 				className,
 			)}
@@ -70,7 +70,7 @@ export function ToolbarSection({
 	return (
 		<div
 			data-slot="toolbar-section"
-			className={cn("flex items-center gap-1", className)}
+			className={cn("qa-toolbar__section flex items-center gap-1", className)}
 			{...props}
 		>
 			{children}
@@ -94,7 +94,7 @@ export function ToolbarSeparator({
 	return (
 		<div
 			data-slot="toolbar-separator"
-			className={cn("h-4 w-px bg-border", className)}
+			className={cn("qa-toolbar__separator h-4 w-px bg-border", className)}
 			{...props}
 		/>
 	);
@@ -122,7 +122,7 @@ function ToolbarGroup({
 	return (
 		<div
 			data-slot="toolbar-group"
-			className={cn("flex items-center", className)}
+			className={cn("qa-toolbar__group flex items-center", className)}
 			{...props}
 		>
 			{children}

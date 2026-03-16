@@ -50,19 +50,32 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	private _builtGlobal?: Global<TState>;
 
 	/**
+	 * Runtime field factories map. When provided (by codegen-generated factories),
+	 * includes both builtin fields AND module-contributed fields (e.g. richText, blocks).
+	 * Falls back to builtinFields when not provided (direct GlobalBuilder usage).
+	 */
+	private _fieldDefs?: Record<string, any>;
+
+	/**
 	 * Create a new GlobalBuilder with the standard empty initial state.
 	 *
 	 * Encapsulates the hardcoded initial state so that codegen-generated
-	 * factories.ts can use `GlobalBuilder.create(name)` instead of
+	 * factories.ts can use `GlobalBuilder.create(name, fieldDefs)` instead of
 	 * duplicating the 9-property state object inline.
+	 *
+	 * @param name - Global name
+	 * @param fieldDefs - Optional runtime field factories map. When provided,
+	 *   used instead of builtinFields in `.fields()` callbacks. Codegen-generated
+	 *   factory functions pass the merged map (builtins + module-contributed fields).
 	 */
 	static create<
 		TName extends string,
 		TFieldTypes extends Record<string, any> | undefined = BuiltinFields,
 	>(
 		name?: TName,
+		fieldDefs?: Record<string, any>,
 	): GlobalBuilder<EmptyGlobalState<TName, undefined, TFieldTypes>> {
-		return new GlobalBuilder({
+		const builder = new GlobalBuilder({
 			name: name as string,
 			fields: {},
 			localized: [],
@@ -72,7 +85,11 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			hooks: {},
 			access: {},
 			fieldDefinitions: {},
-		}) as any;
+		});
+		if (fieldDefs) {
+			builder._fieldDefs = fieldDefs;
+		}
+		return builder as any;
 	}
 
 	constructor(state: TState) {
@@ -138,7 +155,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 
 		if (typeof fieldsOrFactory === "function") {
 			const contextProxy = createFieldsCallbackContext(
-				builtinFields,
+				this._fieldDefs ?? builtinFields,
 			) as unknown as FieldsCallbackContext<ExtractFieldTypes<TState>>;
 
 			const fieldDefs = fieldsOrFactory(contextProxy);
@@ -228,7 +245,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	 */
 	hooks<TNewHooks extends GlobalHooks<any>>(
 		hooks: TNewHooks,
-	): GlobalBuilder<Override<TState, { hooks: TNewHooks }>> {
+	): GlobalBuilder<Override<TState, { hooks: Record<string, any> }>> {
 		const newState = {
 			...this.state,
 			hooks,
@@ -243,7 +260,7 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	 */
 	access<TNewAccess extends GlobalAccess<any>>(
 		access: TNewAccess,
-	): GlobalBuilder<Override<TState, { access: TNewAccess }>> {
+	): GlobalBuilder<Override<TState, { access: Record<string, any> }>> {
 		const newState = {
 			...this.state,
 			access,

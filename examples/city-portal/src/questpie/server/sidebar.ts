@@ -16,7 +16,7 @@ export default sidebar(({ s, c }) =>
 						href: "/admin",
 						icon: c.icon("ph:house"),
 					},
-					{ type: "global", global: "siteSettings" },
+					{ type: "global", global: "site_settings" },
 				],
 			}),
 			s.section({
@@ -63,4 +63,5 @@ export default sidebar(({ s, c }) =>
 				],
 			}),
 		],
-	}));
+	}),
+);

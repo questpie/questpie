@@ -125,6 +125,7 @@ export function SetupPage({
 			title={title}
 			description={description}
 			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			className="qa-setup-page"
 			footer={
 				showLoginLink && (
 					<p className="text-muted-foreground text-center text-xs">

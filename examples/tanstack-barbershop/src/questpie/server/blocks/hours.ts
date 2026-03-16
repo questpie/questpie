@@ -16,6 +16,6 @@ export const hoursBlock = block("hours")
 			.default(true),
 	}))
 	.prefetch(async ({ ctx }) => {
-		const settings = await ctx.globals.siteSettings.get({});
+		const settings = await ctx.globals.site_settings.get({});
 		return { businessHours: settings?.businessHours };
 	});

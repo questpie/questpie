@@ -82,37 +82,39 @@
    To disable: set body::before { display: none }
    ================================================================ */
 
-/* Light theme (default — :root) */
+/* Light theme (default — :root)
+   All colors use OKLCH for perceptually uniform contrast management.
+   L = lightness (0–1), C = chroma (saturation), H = hue angle. */
 :root {
-	--background: #FFFFFF;
-	--foreground: #0A0A0A;
-	--card: #F8F8F8;
-	--card-foreground: #0A0A0A;
-	--popover: #FFFFFF;
-	--popover-foreground: #0A0A0A;
-	--input: #F0F0F0;
-	--muted: #F0F0F0;
-	--muted-foreground: #666666;
-	--accent: #F0F0F0;
-	--accent-foreground: #0A0A0A;
-	--secondary: #F0F0F0;
-	--secondary-foreground: #333333;
-	--primary: #B700FF;
-	--primary-foreground: #FFFFFF;
-	--destructive: #FF3D57;
-	--success: #00E676;
-	--warning: #FFB300;
-	--info: #40C4FF;
-	--border: #E0E0E0;
-	--ring: #B700FF;
+	--background: oklch(1 0 0);
+	--foreground: oklch(0.145 0 0);
+	--card: oklch(0.98 0 0);
+	--card-foreground: oklch(0.145 0 0);
+	--popover: oklch(1 0 0);
+	--popover-foreground: oklch(0.145 0 0);
+	--input: oklch(0.955 0 0);
+	--muted: oklch(0.955 0 0);
+	--muted-foreground: oklch(0.5 0 0);
+	--accent: oklch(0.955 0 0);
+	--accent-foreground: oklch(0.145 0 0);
+	--secondary: oklch(0.955 0 0);
+	--secondary-foreground: oklch(0.31 0 0);
+	--primary: oklch(0.542 0.292 303);
+	--primary-foreground: oklch(1 0 0);
+	--destructive: oklch(0.637 0.237 18);
+	--success: oklch(0.81 0.218 155);
+	--warning: oklch(0.814 0.176 75);
+	--info: oklch(0.776 0.134 224);
+	--border: oklch(0.91 0 0);
+	--ring: oklch(0.542 0.292 303);
 	--radius: 0px;
 
 	/* Chart Colors */
-	--chart-1: #B700FF;
-	--chart-2: #4F46E5;
-	--chart-3: #0891B2;
-	--chart-4: #059669;
-	--chart-5: #EA580C;
+	--chart-1: oklch(0.542 0.292 303);
+	--chart-2: oklch(0.467 0.218 270);
+	--chart-3: oklch(0.595 0.121 212);
+	--chart-4: oklch(0.598 0.135 163);
+	--chart-5: oklch(0.596 0.19 41);
 
 	/* Typography */
 	--font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
@@ -124,46 +126,46 @@
 	--spacing-input: 0.75rem;
 
 	/* Sidebar */
-	--sidebar: #F8F8F8;
-	--sidebar-foreground: #0A0A0A;
-	--sidebar-primary: #B700FF;
-	--sidebar-primary-foreground: #FFFFFF;
-	--sidebar-accent: #F0F0F0;
-	--sidebar-accent-foreground: #0A0A0A;
-	--sidebar-border: #E0E0E0;
-	--sidebar-ring: #B700FF;
+	--sidebar: oklch(0.98 0 0);
+	--sidebar-foreground: oklch(0.145 0 0);
+	--sidebar-primary: oklch(0.542 0.292 303);
+	--sidebar-primary-foreground: oklch(1 0 0);
+	--sidebar-accent: oklch(0.955 0 0);
+	--sidebar-accent-foreground: oklch(0.145 0 0);
+	--sidebar-border: oklch(0.91 0 0);
+	--sidebar-ring: oklch(0.542 0.292 303);
 }
 
 /* Dark theme (.dark class) */
 .dark {
-	--background: #0A0A0A;
-	--foreground: #FFFFFF;
-	--card: #111111;
-	--card-foreground: #FFFFFF;
-	--popover: #1A1A1A;
-	--popover-foreground: #FFFFFF;
-	--input: #1A1A1A;
-	--muted: #1A1A1A;
-	--muted-foreground: #666666;
-	--accent: #1A1A1A;
-	--accent-foreground: #FFFFFF;
-	--secondary: #1A1A1A;
-	--secondary-foreground: #CCCCCC;
-	--border: #333333;
+	--background: oklch(0.145 0 0);
+	--foreground: oklch(1 0 0);
+	--card: oklch(0.178 0 0);
+	--card-foreground: oklch(1 0 0);
+	--popover: oklch(0.22 0 0);
+	--popover-foreground: oklch(1 0 0);
+	--input: oklch(0.22 0 0);
+	--muted: oklch(0.22 0 0);
+	--muted-foreground: oklch(0.705 0.015 264);
+	--accent: oklch(0.22 0 0);
+	--accent-foreground: oklch(1 0 0);
+	--secondary: oklch(0.22 0 0);
+	--secondary-foreground: oklch(0.84 0 0);
+	--border: oklch(0.31 0 0);
 
 	/* Chart Colors */
-	--chart-1: #B700FF;
-	--chart-2: #6366F1;
-	--chart-3: #06B6D4;
-	--chart-4: #10B981;
-	--chart-5: #F97316;
+	--chart-1: oklch(0.542 0.292 303);
+	--chart-2: oklch(0.541 0.213 275);
+	--chart-3: oklch(0.715 0.127 210);
+	--chart-4: oklch(0.696 0.153 163);
+	--chart-5: oklch(0.685 0.19 41);
 
 	/* Sidebar */
-	--sidebar: #111111;
-	--sidebar-foreground: #FFFFFF;
-	--sidebar-accent: #1A1A1A;
-	--sidebar-accent-foreground: #FFFFFF;
-	--sidebar-border: #333333;
+	--sidebar: oklch(0.178 0 0);
+	--sidebar-foreground: oklch(1 0 0);
+	--sidebar-accent: oklch(0.22 0 0);
+	--sidebar-accent-foreground: oklch(1 0 0);
+	--sidebar-border: oklch(0.31 0 0);
 }
 
 @theme inline {
@@ -228,7 +230,7 @@
    ============================================================================= */
 
 body::before {
-	content: '';
+	content: "";
 	position: fixed;
 	inset: 0;
 	z-index: 0;
@@ -426,7 +428,7 @@ body::before {
 		background-color: transparent;
 	}
 	50% {
-		background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+		background-color: color-mix(in oklch, var(--primary) 8%, transparent);
 	}
 }
 
@@ -455,15 +457,15 @@ body::before {
 /* Delete animation - red pulse + fade out */
 @keyframes realtime-delete {
 	0% {
-		background-color: color-mix(in srgb, var(--destructive) 25%, transparent);
+		background-color: color-mix(in oklch, var(--destructive) 25%, transparent);
 		opacity: 1;
 	}
 	70% {
-		background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
+		background-color: color-mix(in oklch, var(--destructive) 15%, transparent);
 		opacity: 0.7;
 	}
 	100% {
-		background-color: color-mix(in srgb, var(--destructive) 10%, transparent);
+		background-color: color-mix(in oklch, var(--destructive) 10%, transparent);
 		opacity: 0;
 	}
 }
@@ -471,4 +473,63 @@ body::before {
 .animate-realtime-delete {
 	animation: realtime-delete 1.5s ease-out forwards;
 	pointer-events: none;
+}
+
+/* =============================================================================
+   Reduced Motion — Respect user's motion preferences (WCAG 2.1 AA)
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+
+	.animate-field-glow,
+	.animate-realtime-pulse,
+	.animate-realtime-delete,
+	.animate-spin {
+		animation: none !important;
+	}
+}
+
+/* =============================================================================
+   High Contrast — Improve visibility for users needing more contrast
+   ============================================================================= */
+
+@media (prefers-contrast: more) {
+	:root {
+		--muted-foreground: oklch(0.37 0 0);
+		--border: oklch(0.66 0 0);
+	}
+
+	.dark {
+		--muted-foreground: oklch(0.73 0 0);
+		--border: oklch(0.56 0 0);
+	}
+}
+
+/* =============================================================================
+   Focus Visible — Enhanced focus styles for keyboard navigation
+   ============================================================================= */
+
+@layer base {
+	:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
+	}
+
+	/* Skip link styles */
+	[href="#main-content"]:focus {
+		clip: auto;
+		clip-path: none;
+		height: auto;
+		width: auto;
+		overflow: visible;
+		white-space: nowrap;
+	}
 }

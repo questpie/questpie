@@ -58,7 +58,7 @@ export const getSiteSettings = createServerFn({ method: "GET" })
 		const city = cityResult.docs[0];
 		if (!city) return null;
 
-		const settings = await app.api.globals.siteSettings.get(
+		const settings = await app.api.globals.site_settings.get(
 			{ scope: city.id, with: { logo: true, favicon: true, ogImage: true } },
 			ctx,
 		);

@@ -234,7 +234,7 @@ bunx questpie migrate:fresh
 // src/routes/api/$.ts
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
@@ -250,7 +250,7 @@ export const Route = createAPIFileRoute("/api/$")({
 
 ```ts
 import { createFetchHandler } from "questpie/adapters/hono";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 export default createFetchHandler(app, { basePath: "/api" });
 ```
@@ -319,7 +319,7 @@ Navigate to `/admin` to see the admin panel with your collections.
 ```ts
 // src/lib/client.ts
 import { createClient } from "questpie/client";
-import type { AppConfig } from "@/questpie/server/.generated";
+import type { AppConfig } from "#questpie";
 
 export const client = createClient<AppConfig>({
   baseURL: "http://localhost:3000",
@@ -475,7 +475,7 @@ export default collection("posts").fields(({ f }) => ({
 // src/routes/api/$.ts
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 

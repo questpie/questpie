@@ -202,10 +202,14 @@ export function WidgetCard({
 
 	return (
 		<Card
-			className={cn("h-full flex flex-col", variantStyles[variant], className)}
+			className={cn(
+				"qa-widget-card h-full flex flex-col",
+				variantStyles[variant],
+				className,
+			)}
 		>
 			{hasHeader && (
-				<CardHeader>
+				<CardHeader className="qa-widget-card__header">
 					<div className="flex items-center gap-2">
 						{resolveIconElement(icon, {
 							className: "h-4 w-4 text-muted-foreground",
@@ -305,7 +309,7 @@ export function WidgetCard({
 			)}
 			<CardContent
 				className={cn(
-					"flex-1",
+					"qa-widget-card__content flex-1",
 					variantContentStyles[variant],
 					!hasHeader && "pt-0",
 				)}

@@ -1,4 +1,5 @@
 import { Controller } from "react-hook-form";
+import { cn } from "../../lib/utils";
 import { SelectMulti } from "../primitives/select-multi";
 import { SelectSingle } from "../primitives/select-single";
 import type { SelectFieldProps } from "./field-types";
@@ -52,7 +53,7 @@ export function SelectField<TValue extends string = string>({
 							placeholder={placeholder}
 							disabled={disabled}
 							aria-invalid={!!fieldState.error}
-							className={className}
+							className={cn("qa-select-field", className)}
 						/>
 					) : (
 						<SelectSingle<TValue>
@@ -66,7 +67,7 @@ export function SelectField<TValue extends string = string>({
 							placeholder={placeholder}
 							disabled={disabled}
 							aria-invalid={!!fieldState.error}
-							className={className}
+							className={cn("qa-select-field", className)}
 						/>
 					)}
 				</FieldWrapper>

@@ -269,6 +269,7 @@ export function resolveTargetGraph(
 					callbackParams: {},
 					transforms: [],
 					scaffolds: {},
+					runtimeFieldImports: [],
 				};
 				targets.set(targetId, target);
 			} else {
@@ -355,6 +356,11 @@ export function resolveTargetGraph(
 			// Merge scaffolds
 			if (contribution.scaffolds) {
 				Object.assign(target.scaffolds, contribution.scaffolds);
+			}
+
+			// Collect runtime field imports
+			if (contribution.runtimeFieldImports) {
+				target.runtimeFieldImports.push(...contribution.runtimeFieldImports);
 			}
 
 			// Collect transform functions
@@ -529,6 +535,9 @@ export async function runCodegen(
 	let code: string;
 	let outputFile: string;
 
+	// Track additional files to write (e.g. registries.ts for module augmentations)
+	let moduleRegistriesCode: string | null = null;
+
 	if (options.module) {
 		// Module mode: generate module.ts (static module definition)
 		outputFile = options.module.outputFile ?? "module.ts";
@@ -539,7 +548,7 @@ export async function runCodegen(
 			categoryMeta.set(name, decl);
 		}
 
-		code = generateModuleTemplate({
+		const result = generateModuleTemplate({
 			moduleName: options.module.name,
 			discovered,
 			categoryMeta,
@@ -550,6 +559,8 @@ export async function runCodegen(
 			extraModuleProperties:
 				extraRuntimeCode.length > 0 ? extraRuntimeCode : undefined,
 		});
+		code = result.code;
+		moduleRegistriesCode = result.registriesCode;
 	} else {
 		// Root app mode: generate index.ts (app with createApp)
 		outputFile = target.outputFile;
@@ -575,9 +586,12 @@ export async function runCodegen(
 	let factoriesCode: string | null = null;
 	if (!options.module) {
 		const hasModules = discovered.singles.has("modules");
+		// Check if user has a fields.ts singleton for custom field types
+		const userFieldsFile = discovered.singles.get("fields");
 		factoriesCode = generateFactoryTemplate({
 			target,
 			hasModules,
+			userFieldsImportPath: userFieldsFile?.importPath,
 		});
 	}
 
@@ -586,6 +600,12 @@ export async function runCodegen(
 	if (!dryRun) {
 		await mkdir(outDir, { recursive: true });
 		await writeFile(outputPath, code, "utf-8");
+
+		// Write registries.ts for module factory registry augmentations
+		if (moduleRegistriesCode) {
+			const registriesPath = join(outDir, "registries.ts");
+			await writeFile(registriesPath, moduleRegistriesCode, "utf-8");
+		}
 
 		// Always write factories.ts in root app mode
 		if (factoriesCode) {

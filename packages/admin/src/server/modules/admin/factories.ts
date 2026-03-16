@@ -12,6 +12,53 @@
  */
 
 import { CollectionBuilder, GlobalBuilder } from "questpie";
+import type {
+	ActionsConfigContext,
+	AdminCollectionConfig,
+	AdminConfigContext,
+	AdminGlobalConfig,
+	FormViewConfig,
+	FormViewConfigContext,
+	ListViewConfig,
+	ListViewConfigContext,
+	PreviewConfig,
+	ServerActionsConfig,
+} from "../../augmentation.js";
+
+// ── Type augmentation — gives CollectionBuilder/GlobalBuilder typed extension methods ──
+
+declare module "questpie" {
+	interface CollectionBuilder<TState> {
+		admin(
+			config:
+				| AdminCollectionConfig
+				| ((ctx: AdminConfigContext) => AdminCollectionConfig),
+		): CollectionBuilder<TState>;
+		list(
+			config: ListViewConfig | ((ctx: ListViewConfigContext) => ListViewConfig),
+		): CollectionBuilder<TState>;
+		form(
+			config: FormViewConfig | ((ctx: FormViewConfigContext) => FormViewConfig),
+		): CollectionBuilder<TState>;
+		preview(config: PreviewConfig): CollectionBuilder<TState>;
+		actions(
+			config:
+				| ServerActionsConfig
+				| ((ctx: ActionsConfigContext) => ServerActionsConfig),
+		): CollectionBuilder<TState>;
+	}
+
+	interface GlobalBuilder<TState> {
+		admin(
+			config:
+				| AdminGlobalConfig
+				| ((ctx: AdminConfigContext) => AdminGlobalConfig),
+		): GlobalBuilder<TState>;
+		form(
+			config: FormViewConfig | ((ctx: FormViewConfigContext) => FormViewConfig),
+		): GlobalBuilder<TState>;
+	}
+}
 
 // ── Proxy helpers (same as generated factories) ─────────────────
 
@@ -252,7 +299,26 @@ function _wrapGlob(builder: any): any {
  * Create a collection builder with admin extension methods.
  * Use this instead of importing `collection` from "questpie" in admin module collections.
  */
-export function collection<TName extends string>(name: TName) {
+export function collection<TName extends string>(
+	name: TName,
+): CollectionBuilder<{
+	name: TName;
+	fields: Record<string, never>;
+	localized: [];
+	virtuals: undefined;
+	relations: Record<string, never>;
+	indexes: Record<string, never>;
+	title: undefined;
+	options: Record<string, never>;
+	hooks: Record<string, never>;
+	access: Record<string, never>;
+	searchable: undefined;
+	validation: undefined;
+	output: undefined;
+	upload: undefined;
+	fieldDefinitions: Record<string, never>;
+	"~questpieApp": undefined;
+}> {
 	return _wrapColl(
 		new CollectionBuilder({
 			name: name as string,
@@ -272,14 +338,27 @@ export function collection<TName extends string>(name: TName) {
 			fieldDefinitions: {},
 			"~questpieApp": undefined,
 		}),
-	) as any;
+	);
 }
 
 /**
  * Create a global builder with admin extension methods.
  * Use this instead of importing `global` from "questpie" in admin module globals.
  */
-export function global<TName extends string>(name: TName) {
+export function global<TName extends string>(
+	name: TName,
+): GlobalBuilder<{
+	name: TName;
+	fields: Record<string, never>;
+	localized: [];
+	virtuals: Record<string, never>;
+	relations: Record<string, never>;
+	options: Record<string, never>;
+	hooks: Record<string, never>;
+	access: Record<string, never>;
+	fieldDefinitions: Record<string, never>;
+	"~questpieApp": undefined;
+}> {
 	return _wrapGlob(
 		new GlobalBuilder({
 			name: name as string,
@@ -293,5 +372,5 @@ export function global<TName extends string>(name: TName) {
 			fieldDefinitions: {},
 			"~questpieApp": undefined,
 		}),
-	) as any;
+	);
 }

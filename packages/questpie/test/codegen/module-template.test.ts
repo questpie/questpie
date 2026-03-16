@@ -152,7 +152,7 @@ function cat(
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateModuleTemplate — minimal", () => {
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: emptyResult(),
 		categoryMeta: new Map(),
@@ -181,7 +181,7 @@ describe("generateModuleTemplate — minimal", () => {
 
 describe("generateModuleTemplate — type prefix", () => {
 	it("derives Admin from questpie-admin", () => {
-		const output = generateModuleTemplate({
+		const { code: output } = generateModuleTemplate({
 			moduleName: "questpie-admin",
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
@@ -190,7 +190,7 @@ describe("generateModuleTemplate — type prefix", () => {
 	});
 
 	it("derives Billing from billing (no questpie- prefix)", () => {
-		const output = generateModuleTemplate({
+		const { code: output } = generateModuleTemplate({
 			moduleName: "billing",
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
@@ -199,7 +199,7 @@ describe("generateModuleTemplate — type prefix", () => {
 	});
 
 	it("derives UserAuth from questpie-user-auth (multi-segment)", () => {
-		const output = generateModuleTemplate({
+		const { code: output } = generateModuleTemplate({
 			moduleName: "questpie-user-auth",
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
@@ -230,7 +230,7 @@ describe("generateModuleTemplate — collections", () => {
 		}),
 	);
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-blog",
 		discovered: result,
 		categoryMeta: baseCategoryMeta(),
@@ -277,7 +277,7 @@ describe("generateModuleTemplate — routes with slash-separated keys", () => {
 		makeFile("getConfig", { varName: "_route_getConfig" }),
 	);
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: baseCategoryMeta(),
@@ -314,7 +314,7 @@ describe("generateModuleTemplate — bundle routes", () => {
 		makeFile("getConfig", { varName: "_route_getConfig" }),
 	);
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: baseCategoryMeta(),
@@ -349,7 +349,7 @@ describe("generateModuleTemplate — array emission", () => {
 		makeFile("002_addUsers", { varName: "_mig_002_addUsers" }),
 	);
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: baseCategoryMeta(),
@@ -381,7 +381,7 @@ describe("generateModuleTemplate — named imports", () => {
 		}),
 	);
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: baseCategoryMeta(),
@@ -408,7 +408,7 @@ describe("generateModuleTemplate — sub-modules", () => {
 		}),
 	);
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: new Map(),
@@ -441,7 +441,7 @@ describe("generateModuleTemplate — singles", () => {
 		}),
 	);
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: new Map(),
@@ -460,7 +460,7 @@ describe("generateModuleTemplate — singles with moduleEmit: array", () => {
 		makeFile("sidebar", { varName: "_sidebar", importPath: "../sidebar" }),
 	);
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: new Map(),
@@ -480,7 +480,7 @@ describe("generateModuleTemplate — no Registry augmentation", () => {
 	const colls = cat(result, "collections");
 	colls.set("posts", makeFile("posts", { varName: "_coll_posts" }));
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: baseCategoryMeta(),
@@ -509,7 +509,7 @@ describe("generateModuleTemplate — no Registry even with custom registryKey", 
 	const views = cat(result, "views");
 	views.set("table", makeFile("table", { varName: "_view_table" }));
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: meta,
@@ -530,7 +530,7 @@ describe("generateModuleTemplate — empty stubs", () => {
 	const colls = cat(result, "collections");
 	colls.set("posts", makeFile("posts", { varName: "_coll_posts" }));
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: baseCategoryMeta(),
@@ -571,7 +571,7 @@ describe("generateModuleTemplate — extra module properties", () => {
 		],
 	]);
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-admin",
 		discovered: emptyResult(),
 		categoryMeta: meta,
@@ -617,7 +617,7 @@ describe("generateModuleTemplate — keyFromProperty", () => {
 	const views = cat(result, "views");
 	views.set("table", makeFile("table", { varName: "_view_table" }));
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-admin",
 		discovered: result,
 		categoryMeta: meta,
@@ -646,7 +646,7 @@ describe("generateModuleTemplate — messages", () => {
 	msgs.set("en", makeFile("en", { varName: "_msg_en" }));
 	msgs.set("sk", makeFile("sk", { varName: "_msg_sk" }));
 
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: result,
 		categoryMeta: baseCategoryMeta(),
@@ -670,7 +670,7 @@ describe("generateModuleTemplate — messages", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateModuleTemplate — extra imports", () => {
-	const output = generateModuleTemplate({
+	const { code: output } = generateModuleTemplate({
 		moduleName: "questpie-test",
 		discovered: emptyResult(),
 		categoryMeta: new Map(),

@@ -18,7 +18,7 @@ bun add @questpie/hono hono
 ```ts title="src/index.ts"
 import { Hono } from "hono";
 import { createFetchHandler } from "questpie/adapters/hono";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const server = new Hono();
 

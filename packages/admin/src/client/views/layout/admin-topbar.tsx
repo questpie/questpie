@@ -40,20 +40,28 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 	const shouldShowThemeToggle = setTheme && showThemeToggle !== false;
 
 	return (
-		<header className="relative sticky top-0 z-30 flex h-14 w-full items-center justify-between border-b border-border bg-background px-4 md:px-6">
-			<div className="flex items-center gap-2">
+		<header
+			role="banner"
+			className="qa-topbar relative sticky top-0 z-30 flex h-14 w-full items-center justify-between border-b border-border bg-background px-4 md:px-6"
+		>
+			<div className="qa-topbar__left flex items-center gap-2">
 				{/* Sidebar toggle - works for both mobile (opens sheet) and desktop (collapses) */}
 				<SidebarTrigger />
 
 				{/* Mobile: show current page title */}
 				{resolvedBreadcrumbs.length > 0 && (
-					<span className="md:hidden font-mono text-xs text-foreground font-medium truncate max-w-[140px]">
-						{resolveText(resolvedBreadcrumbs[resolvedBreadcrumbs.length - 1].label)}
+					<span className="qa-topbar__mobile-title md:hidden font-mono text-xs text-foreground font-medium truncate max-w-[140px]">
+						{resolveText(
+							resolvedBreadcrumbs[resolvedBreadcrumbs.length - 1].label,
+						)}
 					</span>
 				)}
 
 				{/* Breadcrumbs */}
-				<nav className="hidden md:flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+				<nav
+					aria-label="Breadcrumb"
+					className="qa-topbar__breadcrumbs hidden md:flex items-center gap-1.5 font-mono text-xs text-muted-foreground"
+				>
 					{resolvedBreadcrumbs.map((crumb) => {
 						const CrumbIcon = crumb.icon;
 						const crumbLabel = resolveText(crumb.label);
@@ -61,7 +69,9 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 						return (
 							<React.Fragment key={crumbKey}>
 								{resolvedBreadcrumbs[0] !== crumb && (
-									<span className="text-muted-foreground/40 mx-1">/</span>
+									<span className="qa-topbar__breadcrumb-separator text-muted-foreground/40 mx-1">
+										/
+									</span>
 								)}
 
 								{crumb.menu ? (
@@ -72,7 +82,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 												<button
 													type="button"
 													className={cn(
-														"flex items-center gap-1 hover:text-foreground transition-colors",
+														"qa-topbar__breadcrumb-item flex items-center gap-1 hover:text-foreground transition-colors",
 														resolvedBreadcrumbs[
 															resolvedBreadcrumbs.length - 1
 														] === crumb && "text-foreground font-medium",
@@ -108,7 +118,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 									// Breadcrumb with link
 									<a
 										href={crumb.href}
-										className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+										className="qa-topbar__breadcrumb-item flex items-center gap-1.5 hover:text-foreground transition-colors"
 									>
 										{CrumbIcon && <CrumbIcon className="size-3.5" />}
 										{crumbLabel}
@@ -117,12 +127,18 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 									// Static breadcrumb (current page)
 									<span
 										className={cn(
-											"flex items-center gap-1.5",
+											"qa-topbar__breadcrumb-item flex items-center gap-1.5",
 											resolvedBreadcrumbs[resolvedBreadcrumbs.length - 1] ===
 												crumb
 												? "text-foreground font-medium"
 												: "",
 										)}
+										aria-current={
+											resolvedBreadcrumbs[resolvedBreadcrumbs.length - 1] ===
+											crumb
+												? "page"
+												: undefined
+										}
 									>
 										{CrumbIcon && <CrumbIcon className="size-3.5" />}
 										{crumbLabel}
@@ -134,12 +150,13 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 				</nav>
 			</div>
 
-			<div className="flex items-center gap-2">
+			<div className="qa-topbar__right flex items-center gap-2">
 				<Button
 					variant="outline"
 					onClick={onSearchOpen}
 					size="icon-sm"
-					className="md:size-auto md:h-9 md:w-64 md:justify-between md:px-3 gap-2 text-muted-foreground"
+					className="qa-topbar__search-btn md:size-auto md:h-9 md:w-64 md:justify-between md:px-3 gap-2 text-muted-foreground"
+					aria-label="Search (⌘K)"
 				>
 					<span className="flex items-center gap-2">
 						<Icon icon="ph:magnifying-glass" />
@@ -154,7 +171,11 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 					<DropdownMenu>
 						<DropdownMenuTrigger
 							render={
-								<Button variant="ghost" size="icon">
+								<Button
+									variant="ghost"
+									size="icon"
+									className="qa-topbar__theme-toggle"
+								>
 									<Icon
 										icon="ph:sun"
 										className="size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90"

@@ -65,8 +65,7 @@ export type ExtractModuleProp<M, K extends string> = (M extends {
 export type ExtractModulePropArr<
 	A extends readonly any[],
 	K extends string,
-> = // biome-ignore lint/suspicious/noExplicitAny: Required for generic module shape matching
-A extends readonly [infer H, ...infer T extends readonly any[]]
+> = A extends readonly [infer H, ...infer T extends readonly any[]] // biome-ignore lint/suspicious/noExplicitAny: Required for generic module shape matching
 	? ExtractModuleProp<H, K> & ExtractModulePropArr<T, K>
 	: // biome-ignore lint/complexity/noBannedTypes: Empty object is correct base case
 		{};
@@ -123,15 +122,25 @@ export type ServiceTopLevelInstances<TServices> = ServiceInstancesInNamespace<
 	null
 >;
 
+type NarrowString<T> = [T] extends [string]
+	? [string] extends [T]
+		? never
+		: T
+	: never;
+
+type CustomServiceNamespaceNames<TServices> = Exclude<
+	NarrowString<
+		NormalizeServiceNamespace<ServiceNamespaceOf<TServices[keyof TServices]>>
+	>,
+	"services"
+>;
+
 /**
  * Custom namespace map: `{ analytics: { tracker: Tracker } }`.
  */
 export type ServiceCustomNamespaceInstances<TServices> = {
-	[TNamespace in Exclude<
-		Extract<
-			NormalizeServiceNamespace<ServiceNamespaceOf<TServices[keyof TServices]>>,
-			string
-		>,
-		"services"
-	>]: ServiceInstancesInNamespace<TServices, TNamespace>;
+	[TNamespace in CustomServiceNamespaceNames<TServices>]: ServiceInstancesInNamespace<
+		TServices,
+		TNamespace
+	>;
 };

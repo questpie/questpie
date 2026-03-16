@@ -149,7 +149,10 @@ export function BlockLibrarySidebar({
 				if (!nextOpen) onClose();
 			}}
 		>
-			<SheetContent side="left" className="w-full sm:max-w-md flex flex-col">
+			<SheetContent
+				side="left"
+				className="qa-block-library w-full sm:max-w-md flex flex-col"
+			>
 				<SheetHeader className="space-y-2">
 					<SheetTitle>Add Block</SheetTitle>
 					<SheetDescription>

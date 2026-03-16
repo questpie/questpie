@@ -1,4 +1,6 @@
 import { useResolveText } from "../../i18n/hooks";
+import { cn } from "../../lib/utils";
+import { useFieldIds } from "../ui/field";
 import { Textarea } from "../ui/textarea";
 import type { TextareaInputProps } from "./types";
 
@@ -28,8 +30,19 @@ export function TextareaInput({
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedByProp,
 }: TextareaInputProps) {
 	const resolveText = useResolveText();
+	const fieldIds = useFieldIds();
+	const ariaDescribedBy =
+		ariaDescribedByProp ??
+		([
+			fieldIds?.hasError ? fieldIds.errorId : null,
+			fieldIds?.hasDescription ? fieldIds.descriptionId : null,
+		]
+			.filter(Boolean)
+			.join(" ") ||
+			undefined);
 
 	return (
 		<Textarea
@@ -42,7 +55,8 @@ export function TextareaInput({
 			disabled={disabled}
 			readOnly={readOnly}
 			aria-invalid={ariaInvalid}
-			className={className}
+			aria-describedby={ariaDescribedBy}
+			className={cn("qa-textarea-input", className)}
 		/>
 	);
 }

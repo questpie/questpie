@@ -186,7 +186,7 @@ export function RelationField<T extends QuestpieApp>({
 
 				if (type === "single") {
 					return (
-						<div className="space-y-1">
+						<div className="qa-relation-field space-y-1">
 							<RelationSelect<T>
 								name={name}
 								value={field.value as string | null}
@@ -214,7 +214,7 @@ export function RelationField<T extends QuestpieApp>({
 				}
 
 				return (
-					<div className="space-y-1">
+					<div className="qa-relation-field space-y-1">
 						<RelationPicker<T>
 							name={name}
 							value={field.value as string[] | null}

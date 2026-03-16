@@ -319,8 +319,8 @@ export function BulkActionToolbar<TItem = any>({
 	return (
 		<>
 			{/* Fixed toolbar at bottom of screen */}
-			<div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200 max-w-[calc(100%-2rem)] sm:max-w-none">
-				<div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 bg-background border border-border shadow-lg rounded-full overflow-x-auto">
+			<div className="qa-bulk-toolbar fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200 max-w-[calc(100%-2rem)] sm:max-w-none">
+				<div className="qa-bulk-toolbar__bar flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 bg-background border border-border shadow-lg rounded-full overflow-x-auto">
 					{/* Filter segment - shows when filters are active */}
 					{hasFilters && (
 						<>

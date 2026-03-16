@@ -8,7 +8,10 @@ type LocaleBadgeProps = {
 export function LocaleBadge({ locale }: LocaleBadgeProps) {
 	if (!locale) return null;
 	return (
-		<Badge variant="secondary" className="uppercase text-[10px] tracking-wide">
+		<Badge
+			variant="secondary"
+			className="qa-locale-badge uppercase text-[10px] tracking-wide"
+		>
 			{locale}
 		</Badge>
 	);

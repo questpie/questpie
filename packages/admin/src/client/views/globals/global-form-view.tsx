@@ -483,12 +483,15 @@ export default function GlobalFormView({
 
 	return (
 		<FormProvider {...form}>
-			<form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-4">
+			<form
+				onSubmit={form.handleSubmit(onSubmit)}
+				className="qa-global-form w-full space-y-4"
+			>
 				{/* Header - Title & Actions */}
-				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div className="qa-global-form__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-3 flex-wrap">
-							<h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+							<h1 className="qa-global-form__title text-2xl md:text-3xl font-extrabold tracking-tight">
 								{globalLabel}
 							</h1>
 							{localeOptions.length > 0 && (
@@ -508,13 +511,13 @@ export default function GlobalFormView({
 							)}
 						</div>
 						{showMeta && globalData?.updatedAt && (
-							<p className="mt-1 text-xs text-muted-foreground">
+							<p className="qa-global-form__meta mt-1 text-xs text-muted-foreground">
 								{t("form.lastUpdated")}: {formatDate(globalData.updatedAt)}
 							</p>
 						)}
 					</div>
 
-					<div className="flex items-center gap-2 shrink-0">
+					<div className="qa-global-form__actions flex items-center gap-2 shrink-0">
 						{headerActions}
 
 						{/* Workflow transition dropdown */}

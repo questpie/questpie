@@ -1,18 +1,51 @@
 "use client";
 
 import { cva, type VariantProps } from "class-variance-authority";
+import * as React from "react";
 import { useMemo } from "react";
 
 import { cn } from "../../lib/utils";
 import { Label } from "./label";
 import { Separator } from "./separator";
 
+// ============================================================================
+// Field ID Context — links labels, descriptions, and errors to inputs
+// ============================================================================
+
+interface FieldIdsContextValue {
+	/** Stable base id for generating related ids */
+	baseId: string;
+	/** ID for the description element (aria-describedby target) */
+	descriptionId: string;
+	/** ID for the error element (aria-describedby target) */
+	errorId: string;
+	/** Whether the field currently has an error */
+	hasError: boolean;
+	/** Whether the field currently has a description */
+	hasDescription: boolean;
+	/** Set by FieldDescription when it mounts */
+	setHasDescription: (v: boolean) => void;
+	/** Set by FieldError when it mounts */
+	setHasError: (v: boolean) => void;
+}
+
+const FieldIdsContext = React.createContext<FieldIdsContextValue | null>(null);
+
+/**
+ * Hook for input primitives to get `aria-describedby` linking.
+ * Returns the composed aria-describedby string pointing to
+ * description and/or error elements in the parent Field.
+ */
+export function useFieldIds() {
+	return React.useContext(FieldIdsContext);
+}
+
 function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
 	return (
 		<fieldset
 			data-slot="field-set"
 			className={cn(
-				"gap-4 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3 flex flex-col",
+				"qa-field-set gap-4 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3 flex flex-col",
 				className,
 			)}
 			{...props}
@@ -43,7 +76,7 @@ function FieldGroup({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-slot="field-group"
 			className={cn(
-				"gap-4 data-[slot=checkbox-group]:gap-3 [&>[data-slot=field-group]]:gap-4 group/field-group @container/field-group flex w-full flex-col",
+				"qa-field-group gap-4 data-[slot=checkbox-group]:gap-3 [&>[data-slot=field-group]]:gap-4 group/field-group @container/field-group flex w-full flex-col",
 				className,
 			)}
 			{...props}
@@ -52,7 +85,7 @@ function FieldGroup({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 const fieldVariants = cva(
-	"data-[invalid=true]:text-destructive gap-2 group/field flex w-full",
+	"qa-field data-[invalid=true]:text-destructive gap-2 group/field flex w-full",
 	{
 		variants: {
 			orientation: {
@@ -74,14 +107,33 @@ function Field({
 	orientation = "vertical",
 	...props
 }: React.ComponentProps<"div"> & VariantProps<typeof fieldVariants>) {
+	const baseId = React.useId();
+	const [hasDescription, setHasDescription] = React.useState(false);
+	const [hasError, setHasError] = React.useState(false);
+
+	const ids = useMemo(
+		() => ({
+			baseId,
+			descriptionId: `${baseId}-desc`,
+			errorId: `${baseId}-err`,
+			hasDescription,
+			hasError,
+			setHasDescription,
+			setHasError,
+		}),
+		[baseId, hasDescription, hasError],
+	);
+
 	return (
-		<div
-			role="group"
-			data-slot="field"
-			data-orientation={orientation}
-			className={cn(fieldVariants({ orientation }), className)}
-			{...props}
-		/>
+		<FieldIdsContext.Provider value={ids}>
+			<div
+				role="group"
+				data-slot="field"
+				data-orientation={orientation}
+				className={cn(fieldVariants({ orientation }), className)}
+				{...props}
+			/>
+		</FieldIdsContext.Provider>
 	);
 }
 
@@ -90,7 +142,7 @@ function FieldContent({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-slot="field-content"
 			className={cn(
-				"gap-0.5 group/field-content flex flex-1 flex-col leading-snug",
+				"qa-field__content gap-0.5 group/field-content flex flex-1 flex-col leading-snug",
 				className,
 			)}
 			{...props}
@@ -106,7 +158,7 @@ function FieldLabel({
 		<Label
 			data-slot="field-label"
 			className={cn(
-				"has-data-checked:bg-primary/5 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:border [&>*]:data-[slot=field]:p-2 group/field-label peer/field-label flex w-fit leading-snug",
+				"qa-field__label has-data-checked:bg-primary/5 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:border [&>*]:data-[slot=field]:p-2 group/field-label peer/field-label flex w-fit leading-snug",
 				"has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col",
 				className,
 			)}
@@ -120,7 +172,7 @@ function FieldTitle({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-slot="field-label"
 			className={cn(
-				"gap-2 font-mono text-xs font-medium group-data-[disabled=true]/field:opacity-50 flex w-fit items-center leading-snug",
+				"qa-field__title gap-2 font-mono text-xs font-medium group-data-[disabled=true]/field:opacity-50 flex w-fit items-center leading-snug",
 				className,
 			)}
 			{...props}
@@ -129,11 +181,19 @@ function FieldTitle({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
+	const fieldIds = React.useContext(FieldIdsContext);
+
+	React.useEffect(() => {
+		fieldIds?.setHasDescription(true);
+		return () => fieldIds?.setHasDescription(false);
+	}, [fieldIds]);
+
 	return (
 		<p
+			id={fieldIds?.descriptionId}
 			data-slot="field-description"
 			className={cn(
-				"text-muted-foreground text-left text-xs/relaxed [[data-variant=legend]+&]:-mt-1.5 leading-normal font-normal group-has-[[data-orientation=horizontal]]/field:text-balance",
+				"qa-field__description text-muted-foreground text-left text-xs/relaxed [[data-variant=legend]+&]:-mt-1.5 leading-normal font-normal group-has-[[data-orientation=horizontal]]/field:text-balance",
 				"last:mt-0 nth-last-2:-mt-1",
 				"[&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4",
 				className,
@@ -155,7 +215,7 @@ function FieldSeparator({
 			data-slot="field-separator"
 			data-content={!!children}
 			className={cn(
-				"-my-2 h-5 text-xs/relaxed group-data-[variant=outline]/field-group:-mb-2 relative",
+				"qa-field__separator -my-2 h-5 text-xs/relaxed group-data-[variant=outline]/field-group:-mb-2 relative",
 				className,
 			)}
 			{...props}
@@ -181,6 +241,8 @@ function FieldError({
 }: React.ComponentProps<"div"> & {
 	errors?: Array<{ message?: string } | undefined>;
 }) {
+	const fieldIds = React.useContext(FieldIdsContext);
+
 	const content = useMemo(() => {
 		if (children) {
 			return children;
@@ -208,15 +270,24 @@ function FieldError({
 		);
 	}, [children, errors]);
 
+	React.useEffect(() => {
+		fieldIds?.setHasError(!!content);
+		return () => fieldIds?.setHasError(false);
+	}, [fieldIds, content]);
+
 	if (!content) {
 		return null;
 	}
 
 	return (
 		<div
+			id={fieldIds?.errorId}
 			role="alert"
 			data-slot="field-error"
-			className={cn("text-destructive text-xs/relaxed font-normal", className)}
+			className={cn(
+				"qa-field__error text-destructive text-xs/relaxed font-normal",
+				className,
+			)}
 			{...props}
 		>
 			{content}

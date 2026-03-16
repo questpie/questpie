@@ -75,7 +75,7 @@ export function ConfirmationDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px]">
+			<DialogContent className="qa-confirmation-dialog sm:max-w-[425px]">
 				<DialogHeader>
 					<div className="flex items-start gap-3">
 						{config.destructive && (

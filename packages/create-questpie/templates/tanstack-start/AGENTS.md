@@ -292,7 +292,7 @@ const teamBlock = block("team")
     limit: f.number({ label: "Number to Show", default: 4 }),
   }))
   .prefetch(async ({ values, ctx }) => {
-    const res = await ctx.app.api.collections.members.find({
+    const res = await ctx.collections.members.find({
       limit: values.limit || 4,
       where: { isActive: true },
       with: { avatar: true },
@@ -314,30 +314,28 @@ content: f.richText({
 
 #### Blocks & Circular Dependencies
 
-When blocks use `.prefetch()` with functional handlers that need typed `ctx.app`, import the `App` type from `.generated/index.ts`:
+Block prefetch handlers receive `ctx` with fully typed `collections` and `globals` via `AppContext` augmentation. Use `ctx.collections.*` directly — no app import needed:
 
 ```ts
 // blocks/latest-posts.ts
 import { block } from "@questpie/admin/server";
-import { typedApp } from "questpie";
-import type { App } from "~/questpie/server/.generated";
 
 export const latestPostsBlock = block("latest-posts")
   .fields(({ f }) => ({
     count: f.number({ label: "Number of Posts", default: 3 }),
   }))
   .prefetch(async ({ values, ctx }) => {
-    const app = typedApp<App>(ctx.app);
-    const res = await app.api.collections.posts.find({
+    const res = await ctx.collections.posts.find({
       limit: values.count || 3,
       where: { published: true },
-      orderBy: { createdAt: "desc" },
     });
     return { posts: res.docs };
   });
 ```
 
-If your blocks only use declarative prefetch (`{ with: { field: true } }`), you don't need this pattern.
+Do NOT import `app` from `#questpie` inside block files — these are imported BY `.generated/index.ts`, creating circular dependencies. Use the `ctx` parameters instead.
+
+If your blocks only use declarative prefetch (`{ with: { field: true } }`), you don't need a function at all.
 
 ### Reactive Fields
 
@@ -394,7 +392,7 @@ export { default as admin } from "./.generated/client";
 ```ts
 // src/questpie/admin/hooks.ts
 import { createTypedHooks } from "@questpie/admin/client";
-import type { App } from "../server/.generated";
+import type { App } from "#questpie";
 
 export const {
   useCollectionList, useCollectionCount, useCollectionItem,
@@ -408,7 +406,7 @@ export const {
 ```ts
 // src/routes/api/$.ts
 import { createFetchHandler } from "questpie";
-import { app } from "~/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 ```
@@ -472,4 +470,4 @@ Always use these exact versions — check `package.json` before upgrading:
 - **Using `asChild` prop** — This project uses `@base-ui/react`, not Radix. Use `render` prop instead.
 - **Using Radix UI or Lucide icons** — Use `@base-ui/react` and `@iconify/react` with `ph:` prefix.
 - **Adding UI config to database schema** — Admin UI config is UI-only, defined in builder chain.
-- **Importing `App` in blocks with functional prefetch** — Import `App` from `.generated/index.ts` and use `typedApp<App>()` (see Blocks section).
+- **Importing `app` from `#questpie` in blocks/collections/hooks** — Files inside `collections/`, `globals/`, `routes/`, `hooks/`, `blocks/` are imported BY `.generated/index.ts`, so importing from it back creates circular dependencies. Use the `ctx` parameters instead.

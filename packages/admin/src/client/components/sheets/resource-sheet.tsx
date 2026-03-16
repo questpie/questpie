@@ -129,7 +129,10 @@ export function ResourceSheet(props: ResourceSheetProps) {
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent side={side} className="overflow-y-auto p-6 pt-12">
+			<SheetContent
+				side={side}
+				className="qa-resource-sheet overflow-y-auto p-6 pt-12"
+			>
 				{/* LocaleScopeProvider isolates locale changes in nested forms */}
 				<LocaleScopeProvider>
 					{props.type === "collection" ? (

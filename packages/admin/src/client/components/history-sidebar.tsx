@@ -353,7 +353,10 @@ export function HistorySidebar({
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="sm:max-w-xl flex flex-col p-0">
+			<SheetContent
+				side="right"
+				className="qa-history-sidebar sm:max-w-xl flex flex-col p-0"
+			>
 				<SheetHeader className="px-6 py-5 border-b">
 					<SheetTitle>{t("history.title")}</SheetTitle>
 					<SheetDescription>{t("history.description")}</SheetDescription>

@@ -266,7 +266,7 @@ export function MediaPickerDialog({
 		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent
 				side="right"
-				className="data-[side=right]:sm:max-w-6xl w-full p-0"
+				className="qa-media-picker data-[side=right]:sm:max-w-6xl w-full p-0"
 			>
 				<SheetHeader className="px-6 pt-6">
 					<SheetTitle>Browse Media Library</SheetTitle>

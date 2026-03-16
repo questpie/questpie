@@ -72,7 +72,7 @@ export function EmptyState({
 		<div
 			data-slot="empty-state"
 			className={cn(
-				"relative flex flex-col items-center justify-center",
+				"qa-empty-state relative flex flex-col items-center justify-center",
 				"border border-dashed border-border bg-card",
 				height,
 				className,

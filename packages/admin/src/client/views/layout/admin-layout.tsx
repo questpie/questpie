@@ -33,8 +33,8 @@ export type AdminTheme = "light" | "dark" | "system";
 
 /**
  * Layout mode for content area width
- * - default: max-w-4xl centered (forms, settings)
- * - wide: full width (tables, cards, grids)
+ * - default: max-w-5xl centered (settings, narrow forms)
+ * - wide: full width with padding (tables, forms, dashboards) — the default
  * - full: full width reduced padding (kanban, calendar)
  * - immersive: full width no padding (block editor, canvas)
  */
@@ -107,7 +107,7 @@ export interface AdminLayoutSharedProps {
 
 	/**
 	 * Layout mode for content area width
-	 * @default "default"
+	 * @default "wide"
 	 */
 	layoutMode?: LayoutMode;
 }
@@ -207,7 +207,7 @@ export function AdminLayout({
 	setTheme,
 	showThemeToggle,
 	toasterProps,
-	layoutMode = "default",
+	layoutMode = "wide",
 }: AdminLayoutProps): React.ReactElement {
 	// Infer show flags from content
 	const shouldShowHeader = !!header;
@@ -237,9 +237,16 @@ export function AdminLayout({
 	return (
 		<BreadcrumbProvider>
 			<div
-				className={cn("min-h-screen bg-background ", className)}
+				className={cn("qa-admin-layout min-h-screen bg-background ", className)}
 			>
-				{/* <div className="fixed inset-0 pointer-events-none z-10" /> */}
+				{/* Skip to main content link — visible on focus for keyboard users */}
+				<a
+					href="#main-content"
+					className="qa-admin-layout__skip-link sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:text-sm focus:font-medium"
+				>
+					Skip to main content
+				</a>
+
 				{isSearchOpen && (
 					<GlobalSearch
 						isOpen={isSearchOpen}
@@ -252,7 +259,7 @@ export function AdminLayout({
 				{/* Max-width container for ultrawide monitors - centered with subtle side borders */}
 				<SidebarProvider
 					defaultOpen={!sidebarCollapsedProp}
-					className="mx-auto max-w-[1600px] h-svh overflow-hidden"
+					className="qa-admin-layout__sidebar-wrapper mx-auto max-w-[1920px] h-svh overflow-hidden"
 				>
 					{/* Sidebar */}
 					<AdminSidebar
@@ -264,7 +271,7 @@ export function AdminLayout({
 					/>
 
 					{/* Content Area */}
-					<SidebarInset className="flex h-svh flex-col">
+					<SidebarInset className="qa-admin-layout__content flex h-svh flex-col">
 						<AdminTopbarWithBreadcrumbs
 							onSearchOpen={openSearch}
 							theme={theme}
@@ -274,13 +281,21 @@ export function AdminLayout({
 
 						{/* Header (optional) */}
 						{shouldShowHeader && header && (
-							<header className="border-b">{header}</header>
+							<header className="qa-admin-layout__header border-b">
+								{header}
+							</header>
 						)}
 
-						<main className="flex-1 overflow-y-auto">
+						<main
+							id="main-content"
+							className="qa-admin-layout__main flex-1 overflow-y-auto"
+							tabIndex={-1}
+						>
 							<div
 								className={cn(
-									layoutMode === "default" && "max-w-4xl mx-auto p-3 md:p-4 lg:p-6",
+									"qa-admin-layout__main-content",
+									layoutMode === "default" &&
+										"max-w-5xl mx-auto p-3 md:p-4 lg:p-6",
 									layoutMode === "wide" && "p-3 md:p-4 lg:p-6",
 									layoutMode === "full" && "p-2 md:p-3",
 									layoutMode === "immersive" && "p-0",
@@ -292,7 +307,9 @@ export function AdminLayout({
 
 						{/* Footer (optional) */}
 						{shouldShowFooter && footer && (
-							<footer className="border-t">{footer}</footer>
+							<footer className="qa-admin-layout__footer border-t">
+								{footer}
+							</footer>
 						)}
 					</SidebarInset>
 				</SidebarProvider>

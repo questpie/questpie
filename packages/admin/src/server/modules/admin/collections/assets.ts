@@ -10,17 +10,18 @@
  * stateKey mapping: admin=".admin()", adminList=".list()", adminForm=".form()"
  */
 
-import { collection, starterModule } from "questpie";
+import { starterModule } from "questpie";
+import { collection } from "../factories";
 
 const adminAssetsCollection = collection("assets")
 	.merge(starterModule.collections.assets)
-	.set("admin", ({ c }: any) => ({
+	.admin(({ c }: any) => ({
 		label: { key: "defaults.assets.label" },
 		icon: c.icon("ph:image"),
 		description: { key: "defaults.assets.description" },
 		group: "administration",
 	}))
-	.set("adminList", ({ v, f, a }: any) =>
+	.list(({ v, f, a }: any) =>
 		v.collectionTable({
 			// Note: filename, mimeType, size, createdAt are upload fields (added by .upload())
 			// so we use string literals instead of f.* proxy
@@ -34,7 +35,7 @@ const adminAssetsCollection = collection("assets")
 			},
 		}),
 	)
-	.set("adminForm", ({ v, f }: any) =>
+	.form(({ v, f }: any) =>
 		v.collectionForm({
 			sidebar: {
 				position: "right",

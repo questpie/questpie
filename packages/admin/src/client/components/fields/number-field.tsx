@@ -1,4 +1,5 @@
 import { Controller } from "react-hook-form";
+import { cn } from "../../lib/utils";
 import { NumberInput } from "../primitives/number-input";
 import type { NumberFieldProps } from "./field-types";
 import { useResolvedControl } from "./field-utils";
@@ -48,7 +49,7 @@ export function NumberField({
 						step={step}
 						showButtons={showButtons}
 						aria-invalid={!!fieldState.error}
-						className={className}
+						className={cn("qa-number-field", className)}
 					/>
 				</FieldWrapper>
 			)}

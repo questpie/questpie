@@ -2,6 +2,7 @@ import { Icon } from "@iconify/react";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
+import { useFieldIds } from "../ui/field";
 import { Input } from "../ui/input";
 import type { NumberInputProps } from "./types";
 
@@ -35,8 +36,19 @@ export function NumberInput({
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedByProp,
 }: NumberInputProps) {
 	const resolveText = useResolveText();
+	const fieldIds = useFieldIds();
+	const ariaDescribedBy =
+		ariaDescribedByProp ??
+		([
+			fieldIds?.hasError ? fieldIds.errorId : null,
+			fieldIds?.hasDescription ? fieldIds.descriptionId : null,
+		]
+			.filter(Boolean)
+			.join(" ") ||
+			undefined);
 
 	const handleChange = (newValue: number | null) => {
 		if (newValue === null) {
@@ -63,7 +75,7 @@ export function NumberInput({
 
 	if (showButtons) {
 		return (
-			<div className={cn("flex items-center gap-1", className)}>
+			<div className={cn("qa-number-input flex items-center gap-1", className)}>
 				<Button
 					type="button"
 					variant="outline"
@@ -93,6 +105,7 @@ export function NumberInput({
 					max={max}
 					step={step}
 					aria-invalid={ariaInvalid}
+					aria-describedby={ariaDescribedBy}
 					className="text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
 				/>
 				<Button
@@ -129,7 +142,8 @@ export function NumberInput({
 			max={max}
 			step={step}
 			aria-invalid={ariaInvalid}
-			className={className}
+			aria-describedby={ariaDescribedBy}
+			className={cn("qa-number-input", className)}
 		/>
 	);
 }

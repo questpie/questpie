@@ -24,7 +24,7 @@ bun add @questpie/tanstack-query questpie @tanstack/react-query
 ```ts
 import { createClient } from "questpie/client";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
-import type { AppConfig } from "@/questpie/server/app";
+import type { AppConfig } from "#questpie";
 
 const appClient = createClient<AppConfig>({
   baseURL: "http://localhost:3000",

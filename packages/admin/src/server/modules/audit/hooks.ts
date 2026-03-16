@@ -1,18 +1,15 @@
-import { tryGetContext } from "questpie";
 import type {
 	GlobalCollectionHookContext,
 	GlobalCollectionTransitionHookContext,
 	GlobalGlobalHookContext,
 	GlobalGlobalTransitionHookContext,
 } from "questpie";
+import { tryGetContext } from "questpie";
 
 /**
  * Check if a collection/global has `audit: false` in its `.admin()` config.
  */
-function isAuditDisabled(
-	type: "collection" | "global",
-	name: string,
-): boolean {
+function isAuditDisabled(type: "collection" | "global", name: string): boolean {
 	try {
 		const stored = tryGetContext();
 		const app = stored?.app as any;
@@ -168,7 +165,7 @@ export function createCollectionAuditHooks() {
 					ctx.collection,
 				);
 
-				await collections.adminAuditLog.create(
+				await collections.admin_audit_log.create(
 					{
 						action,
 						resourceType: "collection",
@@ -216,7 +213,7 @@ export function createCollectionAuditHooks() {
 					ctx.collection,
 				);
 
-				await collections.adminAuditLog.create(
+				await collections.admin_audit_log.create(
 					{
 						action: "delete",
 						resourceType: "collection",
@@ -269,7 +266,7 @@ export function createCollectionAuditHooks() {
 					ctx.collection,
 				);
 
-				await collections.adminAuditLog.create(
+				await collections.admin_audit_log.create(
 					{
 						action: "transition",
 						resourceType: "collection",
@@ -327,12 +324,9 @@ export function createGlobalAuditHooks() {
 
 				const userName =
 					ctx.session?.user?.name || ctx.session?.user?.email || null;
-				const resourceTypeLabel = getResourceTypeLabel(
-					"global",
-					ctx.global,
-				);
+				const resourceTypeLabel = getResourceTypeLabel("global", ctx.global);
 
-				await collections.adminAuditLog.create(
+				await collections.admin_audit_log.create(
 					{
 						action: "update",
 						resourceType: "global",
@@ -378,12 +372,9 @@ export function createGlobalAuditHooks() {
 
 				const userName =
 					ctx.session?.user?.name || ctx.session?.user?.email || null;
-				const resourceTypeLabel = getResourceTypeLabel(
-					"global",
-					ctx.global,
-				);
+				const resourceTypeLabel = getResourceTypeLabel("global", ctx.global);
 
-				await collections.adminAuditLog.create(
+				await collections.admin_audit_log.create(
 					{
 						action: "transition",
 						resourceType: "global",

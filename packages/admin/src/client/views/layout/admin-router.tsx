@@ -271,6 +271,22 @@ function matchRoute(
 	return { type: "not-found" };
 }
 
+/**
+ * Find the first registered view of a given kind from the views registry.
+ * Used as a fallback when no explicit view is configured on a collection/global.
+ */
+function findDefaultView(
+	views: Record<string, any>,
+	kind: "list" | "form",
+): string | undefined {
+	for (const [name, def] of Object.entries(views)) {
+		if (def && typeof def === "object" && def.kind === kind) {
+			return name;
+		}
+	}
+	return undefined;
+}
+
 function getConfiguredViewName(config: unknown): string | undefined {
 	if (!config || typeof config !== "object") return undefined;
 	const maybeConfig = config as Record<string, any>;
@@ -366,7 +382,7 @@ function UnknownViewState({
  */
 function RouterSkeleton() {
 	return (
-		<div className="container space-y-4 py-6">
+		<div className="qa-router-skeleton container space-y-4 py-6">
 			<Skeleton className="h-8 w-48" />
 			<Skeleton className="h-10 w-full" />
 			<div className="space-y-2">
@@ -525,7 +541,7 @@ function DefaultDashboard() {
 	});
 
 	return (
-		<div className="container ">
+		<div className="qa-default-dashboard container ">
 			<div className="mb-8 flex items-end justify-between">
 				<div>
 					<h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
@@ -558,7 +574,7 @@ function DefaultDashboard() {
 
 function DefaultNotFound() {
 	return (
-		<div className="container ">
+		<div className="qa-not-found container ">
 			<h1 className="mb-4 text-2xl font-bold">Page Not Found</h1>
 			<p className="text-muted-foreground">
 				The page you're looking for doesn't exist.
@@ -579,7 +595,7 @@ function RestrictedAccess({
 	basePath: string;
 }) {
 	return (
-		<div className="container py-12">
+		<div className="qa-restricted-access container py-12">
 			<Card className="relative mx-auto max-w-lg overflow-hidden p-8 text-center">
 				<div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-muted blur-3xl" />
 				<div className="absolute -left-16 -bottom-16 h-40 w-40 rounded-full bg-muted blur-3xl" />
@@ -797,6 +813,43 @@ function AdminRouterInner({
 		},
 	);
 
+	// Focus management + document.title on route change
+	const routeKey = segments.join("/");
+	React.useEffect(() => {
+		// Build document title from route
+		let pageTitle = "Admin";
+		switch (route.type) {
+			case "dashboard":
+				pageTitle = "Dashboard";
+				break;
+			case "collection-list":
+				pageTitle = `${route.name} — List`;
+				break;
+			case "collection-create":
+				pageTitle = `${route.name} — Create`;
+				break;
+			case "collection-edit":
+				pageTitle = `${route.name} — Edit`;
+				break;
+			case "global-edit":
+				pageTitle = `${route.name} — Settings`;
+				break;
+			case "page":
+				pageTitle = route.name;
+				break;
+		}
+		document.title = pageTitle;
+
+		// Move focus to main content area on route change for screen readers
+		const main = document.getElementById("main-content");
+		if (main) {
+			// Use requestAnimationFrame to ensure DOM has updated
+			requestAnimationFrame(() => {
+				main.focus({ preventScroll: true });
+			});
+		}
+	}, [routeKey, route]);
+
 	// Dashboard
 	if (route.type === "dashboard") {
 		// Priority 1: Legacy DashboardComponent prop
@@ -840,10 +893,10 @@ function AdminRouterInner({
 		const viewNameFromSchema = (activeCollectionSchema as any)?.admin?.list
 			?.view;
 		const viewNameFromConfig = getConfiguredViewName((config as any)?.list);
-		const selectedListView = viewNameFromSchema ?? viewNameFromConfig;
-		if (!selectedListView && process.env.NODE_ENV !== "production") {
-			console.warn(`No list view configured for collection "${name}". Add .list() to the collection.`);
-		}
+		const selectedListView =
+			viewNameFromSchema ??
+			viewNameFromConfig ??
+			findDefaultView(views, "list");
 		const selectedListViewDefinition = views[selectedListView];
 		const selectedListViewConfig = mergeViewConfig(
 			getViewBaseConfig(selectedListViewDefinition),
@@ -855,8 +908,14 @@ function AdminRouterInner({
 		const listViewLoader = getViewLoader(selectedListViewDefinition);
 
 		// Kind validation
-		if (selectedListViewDefinition && (selectedListViewDefinition as any).kind !== "list" && process.env.NODE_ENV !== "production") {
-			console.warn(`View "${selectedListView}" kind "${(selectedListViewDefinition as any).kind}" != expected "list"`);
+		if (
+			selectedListViewDefinition &&
+			(selectedListViewDefinition as any).kind !== "list" &&
+			process.env.NODE_ENV !== "production"
+		) {
+			console.warn(
+				`View "${selectedListView}" kind "${(selectedListViewDefinition as any).kind}" != expected "list"`,
+			);
 		}
 
 		// Priority 1: Custom component override
@@ -905,10 +964,10 @@ function AdminRouterInner({
 		const viewNameFromSchema = (activeCollectionSchema as any)?.admin?.form
 			?.view;
 		const viewNameFromConfig = getConfiguredViewName((config as any)?.form);
-		const selectedFormView = viewNameFromSchema ?? viewNameFromConfig;
-		if (!selectedFormView && process.env.NODE_ENV !== "production") {
-			console.warn(`No form view configured for collection "${name}". Add .form() to the collection.`);
-		}
+		const selectedFormView =
+			viewNameFromSchema ??
+			viewNameFromConfig ??
+			findDefaultView(views, "form");
 		const selectedFormViewDefinition = views[selectedFormView];
 		const selectedFormViewConfig = mergeViewConfig(
 			getViewBaseConfig(selectedFormViewDefinition),
@@ -920,8 +979,14 @@ function AdminRouterInner({
 		const formViewLoader = getViewLoader(selectedFormViewDefinition);
 
 		// Kind validation
-		if (selectedFormViewDefinition && (selectedFormViewDefinition as any).kind !== "form" && process.env.NODE_ENV !== "production") {
-			console.warn(`View "${selectedFormView}" kind "${(selectedFormViewDefinition as any).kind}" != expected "form"`);
+		if (
+			selectedFormViewDefinition &&
+			(selectedFormViewDefinition as any).kind !== "form" &&
+			process.env.NODE_ENV !== "production"
+		) {
+			console.warn(
+				`View "${selectedFormView}" kind "${(selectedFormViewDefinition as any).kind}" != expected "form"`,
+			);
 		}
 
 		// Priority 1: Custom component override
@@ -979,10 +1044,10 @@ function AdminRouterInner({
 		const custom = resolvedGlobalComponents[name];
 		const viewNameFromSchema = (activeGlobalSchema as any)?.admin?.form?.view;
 		const viewNameFromConfig = getConfiguredViewName((config as any)?.form);
-		const selectedFormView = viewNameFromSchema ?? viewNameFromConfig;
-		if (!selectedFormView && process.env.NODE_ENV !== "production") {
-			console.warn(`No form view configured for global "${name}". Add .form() to the global.`);
-		}
+		const selectedFormView =
+			viewNameFromSchema ??
+			viewNameFromConfig ??
+			findDefaultView(views, "form");
 		const selectedFormViewDefinition = views[selectedFormView];
 		const selectedFormViewConfig = mergeViewConfig(
 			getViewBaseConfig(selectedFormViewDefinition),
@@ -994,8 +1059,14 @@ function AdminRouterInner({
 		const globalViewLoader = getViewLoader(selectedFormViewDefinition);
 
 		// Kind validation
-		if (selectedFormViewDefinition && (selectedFormViewDefinition as any).kind !== "form" && process.env.NODE_ENV !== "production") {
-			console.warn(`View "${selectedFormView}" kind "${(selectedFormViewDefinition as any).kind}" != expected "form"`);
+		if (
+			selectedFormViewDefinition &&
+			(selectedFormViewDefinition as any).kind !== "form" &&
+			process.env.NODE_ENV !== "production"
+		) {
+			console.warn(
+				`View "${selectedFormView}" kind "${(selectedFormViewDefinition as any).kind}" != expected "form"`,
+			);
 		}
 
 		if (custom?.Form) {

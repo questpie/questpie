@@ -1,4 +1,5 @@
 import { Controller } from "react-hook-form";
+import { cn } from "../../lib/utils";
 import { DateTimeInput } from "../primitives/date-input";
 import type { DateTimeFieldProps } from "./field-types";
 import { useResolvedControl } from "./field-utils";
@@ -57,7 +58,7 @@ export function DatetimeField({
 							placeholder={placeholder}
 							disabled={disabled}
 							aria-invalid={!!fieldState.error}
-							className={className}
+							className={cn("qa-datetime-field", className)}
 						/>
 					</FieldWrapper>
 				);

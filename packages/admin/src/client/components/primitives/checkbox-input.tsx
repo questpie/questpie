@@ -37,7 +37,7 @@ export function CheckboxInput({
 			onCheckedChange={(checked) => onChange(checked === true)}
 			disabled={disabled}
 			aria-invalid={ariaInvalid}
-			className={className}
+			className={cn("qa-checkbox-input", className)}
 		/>
 	);
 }
@@ -87,7 +87,7 @@ function CheckboxGroup<TValue extends string = string>({
 			role="group"
 			aria-invalid={ariaInvalid}
 			className={cn(
-				"flex gap-3",
+				"qa-checkbox-group flex gap-3",
 				orientation === "vertical" ? "flex-col" : "flex-row flex-wrap",
 				className,
 			)}
@@ -156,7 +156,7 @@ function RadioGroup<TValue extends string = string>({
 			role="radiogroup"
 			aria-invalid={ariaInvalid}
 			className={cn(
-				"flex gap-3",
+				"qa-radio-group flex gap-3",
 				orientation === "vertical" ? "flex-col" : "flex-row flex-wrap",
 				className,
 			)}

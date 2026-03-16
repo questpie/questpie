@@ -1,4 +1,5 @@
 import { Controller } from "react-hook-form";
+import { cn } from "../../lib/utils";
 import { TextareaInput } from "../primitives/textarea-input";
 import type { TextareaFieldProps } from "./field-types";
 import { useResolvedControl } from "./field-utils";
@@ -46,7 +47,7 @@ export function TextareaField({
 						maxLength={maxLength}
 						autoResize={autoResize}
 						aria-invalid={!!fieldState.error}
-						className={className}
+						className={cn("qa-textarea-field", className)}
 					/>
 				</FieldWrapper>
 			)}

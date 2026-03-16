@@ -28,6 +28,7 @@ import type {
 } from "../../builder/types/action-types";
 import { buildValidationSchema } from "../../builder/validation";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
+import { cn } from "../../lib/utils";
 import { AutoFormFields } from "../../views/collection/auto-form-fields";
 import { Button } from "../ui/button";
 import {
@@ -401,7 +402,9 @@ export function ActionDialog<TItem = any>({
 
 	return (
 		<ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-			<ResponsiveDialogContent className={getDialogClassName()}>
+			<ResponsiveDialogContent
+				className={cn("qa-action-dialog", getDialogClassName())}
+			>
 				{action.handler.type === "form" && (
 					<FormDialogContent action={action} ctx={ctx} onClose={handleClose} />
 				)}

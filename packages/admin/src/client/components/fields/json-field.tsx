@@ -151,7 +151,10 @@ export function JsonField({
 				const error = fieldState.error?.message;
 
 				return (
-					<Field data-invalid={!!error} className={className}>
+					<Field
+						data-invalid={!!error}
+						className={cn("qa-json-field", className)}
+					>
 						{/* Header with label and mode switch */}
 						<div className="flex items-center justify-between">
 							{resolvedLabel && (

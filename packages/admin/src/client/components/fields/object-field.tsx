@@ -54,9 +54,7 @@ function NestedFieldRenderer({
 
 	// Get the component from the field definition (registry-based)
 	// Cast to ComponentType since MaybeLazyComponent includes lazy variants
-	const Component = fieldDef.component as
-		| React.ComponentType<any>
-		| undefined;
+	const Component = fieldDef.component as React.ComponentType<any> | undefined;
 
 	if (!Component) {
 		// Fallback error display if no component found
@@ -128,7 +126,10 @@ export function ObjectField({
 		// If it's a callback, evaluate it with field registry
 		if (typeof fieldsProp === "function") {
 			const registeredFields = admin.getFields();
-			const r: Record<string, (opts?: Record<string, unknown>) => FieldInstance> = {};
+			const r: Record<
+				string,
+				(opts?: Record<string, unknown>) => FieldInstance
+			> = {};
 			for (const key in registeredFields) {
 				r[key] = (opts) => configureField(registeredFields[key], opts ?? {});
 			}
@@ -150,7 +151,7 @@ export function ObjectField({
 		return (
 			<div
 				className={cn(
-					"rounded-lg border border-border bg-card ",
+					"qa-object-field rounded-lg border border-border bg-card ",
 					className,
 				)}
 			>
@@ -202,7 +203,7 @@ export function ObjectField({
 				localized={localized}
 				locale={locale}
 			>
-				<div className={cn("pt-1", className)}>
+				<div className={cn("qa-object-field pt-1", className)}>
 					<NestedFieldsLayout
 						fieldEntries={fieldEntries}
 						layout={layout}
@@ -217,7 +218,7 @@ export function ObjectField({
 
 	// No label - just render fields
 	return (
-		<div className={className}>
+		<div className={cn("qa-object-field", className)}>
 			<NestedFieldsLayout
 				fieldEntries={fieldEntries}
 				layout={layout}

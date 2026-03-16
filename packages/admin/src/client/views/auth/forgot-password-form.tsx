@@ -124,7 +124,10 @@ export function ForgotPasswordForm({
 	}
 
 	return (
-		<form onSubmit={handleFormSubmit} className={cn("space-y-4", className)}>
+		<form
+			onSubmit={handleFormSubmit}
+			className={cn("qa-forgot-password-form space-y-4", className)}
+		>
 			<p className="text-muted-foreground text-xs">
 				Enter your email address and we'll send you a link to reset your
 				password.

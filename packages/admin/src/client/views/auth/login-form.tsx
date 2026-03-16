@@ -107,7 +107,10 @@ export function LoginForm({
 	});
 
 	return (
-		<form onSubmit={handleFormSubmit} className={cn("space-y-4", className)}>
+		<form
+			onSubmit={handleFormSubmit}
+			className={cn("qa-login-form space-y-4", className)}
+		>
 			<FieldGroup>
 				{/* Email Field */}
 				<Field data-invalid={!!errors.email}>

@@ -127,7 +127,7 @@ Run codegen to produce the typed app instance, then mount:
 
 ```ts
 // Route handler
-import { app } from "~/questpie/server/.generated";
+import { app } from "#questpie";
 import { createFetchHandler } from "questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
@@ -381,7 +381,7 @@ bun questpie seed:generate      # Generate a new seed file
 Config file (`questpie.config.ts` at project root):
 
 ```ts
-import { app } from "./src/questpie/server/.generated";
+import { app } from "#questpie";
 export default { app };
 ```
 

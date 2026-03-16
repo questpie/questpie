@@ -138,7 +138,8 @@ export function SelectSingle<TValue extends string = string>({
 		}
 		// Use reduce to build Map immutably - dynamic options override static
 		const mergedMap = [...flatStaticOptions, ...dynamicOptions].reduce(
-			(map, opt) => new Map(map).set(opt.value as TValue, opt as SelectOption<TValue>),
+			(map, opt) =>
+				new Map(map).set(opt.value as TValue, opt as SelectOption<TValue>),
 			new Map<TValue, SelectOption<TValue>>(),
 		);
 		return Array.from(mergedMap.values());
@@ -199,7 +200,7 @@ export function SelectSingle<TValue extends string = string>({
 			aria-invalid={ariaInvalid}
 			disabled={disabled}
 			className={cn(
-				"w-full justify-between font-normal",
+				"qa-select-single w-full justify-between font-normal",
 				!value && "text-muted-foreground",
 				className,
 			)}

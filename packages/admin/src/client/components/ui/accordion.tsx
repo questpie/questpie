@@ -7,7 +7,7 @@ function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
 		<AccordionPrimitive.Root
 			data-slot="accordion"
 			className={cn(
-				"overflow-hidden border border-border bg-card flex w-full flex-col",
+				"qa-accordion overflow-hidden border border-border bg-card flex w-full flex-col",
 				className,
 			)}
 			{...props}
@@ -20,7 +20,7 @@ function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
 		<AccordionPrimitive.Item
 			data-slot="accordion-item"
 			className={cn(
-				"data-open:bg-muted not-last:border-b border-border transition-colors",
+				"qa-accordion__item data-open:bg-muted not-last:border-b border-border transition-colors",
 				className,
 			)}
 			{...props}
@@ -38,7 +38,7 @@ function AccordionTrigger({
 			<AccordionPrimitive.Trigger
 				data-slot="accordion-trigger"
 				className={cn(
-					"**:data-[slot=accordion-trigger-icon]:text-muted-foreground gap-4 px-4 py-3 text-left text-sm font-medium hover:bg-muted **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-center justify-between transition-all outline-none disabled:pointer-events-none disabled:opacity-50",
+					"qa-accordion__trigger **:data-[slot=accordion-trigger-icon]:text-muted-foreground gap-4 px-4 py-3 text-left text-sm font-medium hover:bg-muted **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-center justify-between transition-all outline-none disabled:pointer-events-none disabled:opacity-50",
 					className,
 				)}
 				{...props}
@@ -62,7 +62,7 @@ function AccordionContent({
 	return (
 		<AccordionPrimitive.Panel
 			data-slot="accordion-content"
-			className="data-open:animate-accordion-down data-closed:animate-accordion-up overflow-hidden"
+			className="qa-accordion__content data-open:animate-accordion-down data-closed:animate-accordion-up overflow-hidden"
 			{...props}
 		>
 			<div

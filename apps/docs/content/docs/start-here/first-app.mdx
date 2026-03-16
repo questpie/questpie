@@ -73,7 +73,7 @@ For TanStack Start:
 ```ts title="src/routes/api/$.ts"
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
@@ -106,7 +106,7 @@ curl -X POST http://localhost:3000/api/get-overdue-tasks \
 
 ```ts title="src/lib/client.ts"
 import { createClient } from "questpie/client";
-import type { AppConfig } from "@/questpie/server/.generated";
+import type { AppConfig } from "#questpie";
 
 export const client = createClient<AppConfig>({
   baseURL: "http://localhost:3000",

@@ -99,7 +99,10 @@ export function FilterBuilderSheet({
 
 	return (
 		<Sheet open={isOpen} onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="sm:max-w-md flex flex-col p-0">
+			<SheetContent
+				side="right"
+				className="qa-filter-builder sm:max-w-md flex flex-col p-0"
+			>
 				<SheetHeader className="px-6 pt-6">
 					<SheetTitle>{t("viewOptions.title")}</SheetTitle>
 				</SheetHeader>

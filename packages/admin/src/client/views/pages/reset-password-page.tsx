@@ -160,6 +160,7 @@ export function ResetPasswordPage({
 			title={title}
 			description={description}
 			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			className="qa-reset-password-page"
 		>
 			<ResetPasswordForm
 				token={token}

@@ -1597,7 +1597,7 @@ export default function FormView({
 		<>
 			{/* Lock banner - show when someone else is editing */}
 			{isBlocked && blockedByUser && (
-				<div className="flex items-center gap-3 p-3 mb-4 rounded-lg bg-warning/10 border border-warning/30">
+				<div className="qa-form-view__lock-banner flex items-center gap-3 p-3 mb-4 rounded-lg bg-warning/10 border border-warning/30">
 					{blockedByUser.image ? (
 						<img
 							src={blockedByUser.image}
@@ -1674,13 +1674,13 @@ export default function FormView({
 								});
 							})(e);
 						}}
-						className="space-y-4"
+						className="qa-form-view__form space-y-4"
 					>
 						{/* Header - Title, Meta & Actions */}
-						<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+						<div className="qa-form-view__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-3 flex-wrap">
-									<h1 className="text-2xl md:text-3xl font-extrabold tracking-tight truncate">
+									<h1 className="qa-form-view__title text-2xl md:text-3xl font-extrabold tracking-tight truncate">
 										{title}
 									</h1>
 									{localeOptions.length > 0 && (
@@ -1713,7 +1713,7 @@ export default function FormView({
 								</div>
 								{/* Metadata - horizontal scroll on mobile */}
 								{showMeta && item && (
-									<div className="mt-1 overflow-x-auto no-scrollbar">
+									<div className="qa-form-view__meta mt-1 overflow-x-auto no-scrollbar">
 										<p className="text-xs text-muted-foreground font-mono flex items-center gap-2 whitespace-nowrap">
 											<span className="opacity-60">{t("form.id")}:</span>
 											<button
@@ -1756,7 +1756,7 @@ export default function FormView({
 								)}
 							</div>
 
-							<div className="flex items-center gap-2 shrink-0 w-auto">
+							<div className="qa-form-view__actions flex items-center gap-2 shrink-0 w-auto">
 								{headerActions}
 
 								{/* Live Preview button */}
@@ -1911,7 +1911,7 @@ export default function FormView({
 
 						{/* Soft-deleted banner */}
 						{item?.deletedAt && (
-							<div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+							<div className="qa-form-view__deleted-banner flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
 								<Icon icon="ph:trash" className="size-4 shrink-0" />
 								<span>
 									{t("form.deletedBanner", {
@@ -2118,7 +2118,7 @@ export default function FormView({
 
 	return (
 		<>
-			<div className="w-full">{formContent}</div>
+			<div className="qa-form-view w-full">{formContent}</div>
 
 			{/* Live Preview Mode */}
 			{canUseLivePreview && isLivePreviewOpen && (

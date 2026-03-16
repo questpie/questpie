@@ -25,7 +25,7 @@ const Toaster = ({ theme = "system", ...props }: AdminToasterProps) => {
 	return (
 		<Sonner
 			theme={theme}
-			className="toaster group"
+			className="qa-toaster toaster group"
 			icons={toastIcons}
 			style={
 				{

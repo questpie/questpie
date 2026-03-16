@@ -11,17 +11,18 @@
  * stateKey mapping: admin=".admin()", adminList=".list()", adminForm=".form()", adminActions=".actions()"
  */
 
-import { collection, starterModule } from "questpie";
+import { starterModule } from "questpie";
+import { collection } from "../factories";
 
 const adminUserCollection = collection("user")
 	.merge(starterModule.collections.user)
-	.set("admin", ({ c }: any) => ({
+	.admin(({ c }) => ({
 		label: { key: "defaults.users.label" },
 		icon: c.icon("ph:users"),
 		description: { key: "defaults.users.description" },
 		group: "administration",
 	}))
-	.set("adminList", ({ v, f, a }: any) =>
+	.list(({ v, f, a }) =>
 		v.collectionTable({
 			columns: [f.name, f.email, f.role, f.banned],
 			searchable: [f.name, f.email],
@@ -33,7 +34,7 @@ const adminUserCollection = collection("user")
 			},
 		}),
 	)
-	.set("adminForm", ({ v, f }: any) =>
+	.form(({ v, f }) =>
 		v.collectionForm({
 			sidebar: {
 				position: "right",
@@ -88,7 +89,7 @@ const adminUserCollection = collection("user")
 			],
 		}),
 	)
-	.set("adminActions", ({ a, c, f }: any) => ({
+	.actions(({ a, c, f }: any) => ({
 		builtin: [a.save(), a.delete(), a.deleteMany(), a.duplicate()],
 		custom: [
 			a.headerAction({

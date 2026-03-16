@@ -1,4 +1,6 @@
 import { useResolveText } from "../../i18n/hooks";
+import { cn } from "../../lib/utils";
+import { useFieldIds } from "../ui/field";
 import { Input } from "../ui/input";
 import type { TextInputProps } from "./types";
 
@@ -30,8 +32,19 @@ export function TextInput({
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedByProp,
 }: TextInputProps) {
 	const resolveText = useResolveText();
+	const fieldIds = useFieldIds();
+	const ariaDescribedBy =
+		ariaDescribedByProp ??
+		([
+			fieldIds?.hasError ? fieldIds.errorId : null,
+			fieldIds?.hasDescription ? fieldIds.descriptionId : null,
+		]
+			.filter(Boolean)
+			.join(" ") ||
+			undefined);
 
 	return (
 		<Input
@@ -45,7 +58,8 @@ export function TextInput({
 			maxLength={maxLength}
 			autoComplete={autoComplete}
 			aria-invalid={ariaInvalid}
-			className={className}
+			aria-describedby={ariaDescribedBy}
+			className={cn("qa-text-input", className)}
 		/>
 	);
 }

@@ -11,7 +11,7 @@ QuestPie provides a typed client SDK that connects to your backend with full typ
 
 ```ts title="lib/client.ts"
 import { createClient } from "questpie/client";
-import type { AppConfig } from "@/questpie/server/.generated";
+import type { AppConfig } from "#questpie";
 
 export const client = createClient<AppConfig>({
   baseURL:

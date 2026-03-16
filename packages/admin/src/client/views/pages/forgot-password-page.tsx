@@ -126,6 +126,7 @@ export function ForgotPasswordPage({
 			title={title}
 			description={description}
 			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			className="qa-forgot-password-page"
 		>
 			<ForgotPasswordForm
 				onSubmit={handleSubmit}

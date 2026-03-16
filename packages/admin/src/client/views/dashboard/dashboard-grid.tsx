@@ -226,15 +226,17 @@ function DashboardHeader({
 	const secondaryActions = actions?.filter((a) => a !== primaryAction) || [];
 
 	return (
-		<div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+		<div className="qa-dashboard__header mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 			<div className="min-w-0 flex-1">
 				{title && (
-					<h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+					<h1 className="qa-dashboard__title text-2xl md:text-3xl font-extrabold tracking-tight">
 						{title}
 					</h1>
 				)}
 				{description && (
-					<p className="mt-1 text-muted-foreground">{description}</p>
+					<p className="qa-dashboard__description mt-1 text-muted-foreground">
+						{description}
+					</p>
 				)}
 			</div>
 			{actions && actions.length > 0 && (
@@ -684,7 +686,7 @@ export function DashboardGrid({
 	// If no items, show empty state
 	if (layoutItems.length === 0) {
 		return (
-			<div className={cn("@container", className)}>
+			<div className={cn("qa-dashboard @container", className)}>
 				<DashboardHeader
 					title={resolvedTitle}
 					description={resolvedDescription}
@@ -707,7 +709,7 @@ export function DashboardGrid({
 	}
 
 	return (
-		<div className={cn("@container", className)}>
+		<div className={cn("qa-dashboard @container", className)}>
 			<DashboardHeader
 				title={resolvedTitle}
 				description={resolvedDescription}
@@ -716,7 +718,12 @@ export function DashboardGrid({
 				resolveText={resolveText}
 			/>
 
-			<div className={cn("grid gap-4 items-stretch", getGridClass(columns))}>
+			<div
+				className={cn(
+					"qa-dashboard__grid grid gap-4 items-stretch",
+					getGridClass(columns),
+				)}
+			>
 				{layoutItems.map((item, index) => (
 					<LayoutItemRenderer
 						key={getLayoutItemKey(item, index)}

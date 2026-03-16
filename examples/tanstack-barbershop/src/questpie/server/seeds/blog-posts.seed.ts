@@ -17,7 +17,7 @@ export default seed({
 		});
 
 		// Idempotency check
-		const existing = await collections.blogPosts.find(
+		const existing = await collections.blog_posts.find(
 			{ where: { slug: { eq: "ultimate-guide-to-fades" } }, limit: 1 },
 			ctxEn,
 		);
@@ -34,7 +34,7 @@ export default seed({
 		// Blog Post 1: Ultimate Guide to Fades
 		// ================================================================
 		log("Creating blog post: Ultimate Guide to Fades...");
-		const post1 = await collections.blogPosts.create(
+		const post1 = await collections.blog_posts.create(
 			{
 				title: "The Ultimate Guide to Fade Haircuts",
 				slug: "ultimate-guide-to-fades",
@@ -88,7 +88,7 @@ export default seed({
 		);
 
 		// SK translation
-		await collections.blogPosts.updateById(
+		await collections.blog_posts.updateById(
 			{
 				id: post1.id,
 				data: {
@@ -143,7 +143,7 @@ export default seed({
 		// Blog Post 2: Beard Grooming
 		// ================================================================
 		log("Creating blog post: Beard Grooming 101...");
-		const post2 = await collections.blogPosts.create(
+		const post2 = await collections.blog_posts.create(
 			{
 				title: "Beard Grooming 101: Tips from Our Barbers",
 				slug: "beard-grooming-101",
@@ -201,7 +201,7 @@ export default seed({
 		);
 
 		// SK translation
-		await collections.blogPosts.updateById(
+		await collections.blog_posts.updateById(
 			{
 				id: post2.id,
 				data: {
@@ -260,7 +260,7 @@ export default seed({
 		// Blog Post 3: Grooming Trends 2026
 		// ================================================================
 		log("Creating blog post: Grooming Trends 2026...");
-		const post3 = await collections.blogPosts.create(
+		const post3 = await collections.blog_posts.create(
 			{
 				title: "Top 5 Men's Grooming Trends for 2026",
 				slug: "grooming-trends-2026",
@@ -318,7 +318,7 @@ export default seed({
 		);
 
 		// SK translation
-		await collections.blogPosts.updateById(
+		await collections.blog_posts.updateById(
 			{
 				id: post3.id,
 				data: {

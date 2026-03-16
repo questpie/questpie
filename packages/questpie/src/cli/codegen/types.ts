@@ -226,7 +226,7 @@ export interface CategoryDeclaration {
 	registryKey?: string | boolean;
 
 	/**
-	 * Whether to include this category in the `_AppInternal` state type.
+	 * Whether to include this category in the `App` state type.
 	 * When `true`, adds `categoryName: AppCategoryName;` to the state.
 	 * When `false`, omitted.
 	 *
@@ -458,6 +458,36 @@ export interface CodegenTargetContribution {
 	 * creates files in ALL matching targets (they write to different roots).
 	 */
 	scaffolds?: Record<string, ScaffoldConfig>;
+
+	/**
+	 * Runtime field factory imports contributed by this plugin.
+	 *
+	 * When a plugin provides additional field types (e.g. richText, blocks),
+	 * it declares how to import them at runtime so the codegen-generated
+	 * `factories.ts` can construct a merged field map for collection/global
+	 * builders.
+	 *
+	 * These imports are spread-merged with `builtinFields` and passed to
+	 * `CollectionBuilder.create()` / `GlobalBuilder.create()` so that
+	 * `.fields(({ f }) => ...)` callbacks have access to all field types
+	 * at runtime — not just the 15 built-in ones.
+	 *
+	 * @example
+	 * ```ts
+	 * runtimeFieldImports: [
+	 *   { name: "adminFields", from: "@questpie/admin/server" },
+	 * ]
+	 * // Generated in factories.ts:
+	 * // import { adminFields } from "@questpie/admin/server";
+	 * // const _allFieldDefs = { ...builtinFields, ...adminFields };
+	 * ```
+	 */
+	runtimeFieldImports?: Array<{
+		/** Named export to import (e.g. "adminFields") */
+		name: string;
+		/** Package/path to import from (e.g. "@questpie/admin/server") */
+		from: string;
+	}>;
 }
 
 // ============================================================================
@@ -546,6 +576,9 @@ export interface ResolvedTarget {
 
 	/** Merged scaffold templates from all contributing plugins. */
 	scaffolds: Record<string, ScaffoldConfig>;
+
+	/** Merged runtime field imports from all contributing plugins. */
+	runtimeFieldImports: Array<{ name: string; from: string }>;
 }
 
 // ============================================================================

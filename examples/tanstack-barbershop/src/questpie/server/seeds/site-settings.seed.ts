@@ -16,7 +16,7 @@ export default seed({
 
 		log("Updating site settings (EN)...");
 		// GlobalUpdateInput currently omits localized fields — core type bug
-		await globals.siteSettings.update(
+		await globals.site_settings.update(
 			{
 				shopName: "Sharp Cuts",
 				tagline: "Precision grooming for the modern gentleman",
@@ -70,7 +70,7 @@ export default seed({
 
 		log("Updating site settings (SK)...");
 		// GlobalUpdateInput currently omits localized fields — core type bug
-		await globals.siteSettings.update(
+		await globals.site_settings.update(
 			{
 				tagline: "Precízna starostlivosť pre moderného gentlemana",
 				navigation: [

@@ -176,7 +176,7 @@ export function AssetThumbnail({
 			return (
 				<div
 					className={cn(
-						"flex items-center gap-2",
+						"qa-asset-thumbnail flex items-center gap-2",
 						onClick && "cursor-pointer hover:opacity-80",
 						className,
 					)}
@@ -234,7 +234,7 @@ export function AssetThumbnail({
 			return (
 				<div
 					className={cn(
-						"flex items-center justify-center",
+						"qa-asset-thumbnail flex items-center justify-center",
 						onClick && "cursor-pointer hover:opacity-80",
 						className,
 					)}
@@ -267,7 +267,7 @@ export function AssetThumbnail({
 			return (
 				<div
 					className={cn(
-						"flex items-center justify-center",
+						"qa-asset-thumbnail flex items-center justify-center",
 						onClick && "cursor-pointer hover:opacity-80",
 						className,
 					)}
@@ -285,7 +285,7 @@ export function AssetThumbnail({
 	return (
 		<div
 			className={cn(
-				"relative overflow-hidden rounded-lg border bg-muted",
+				"qa-asset-thumbnail relative overflow-hidden rounded-lg border bg-muted",
 				className,
 			)}
 		>

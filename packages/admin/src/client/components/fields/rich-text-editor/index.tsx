@@ -172,9 +172,9 @@ export function RichTextEditor({
 
 			<div
 				className={cn(
-					"qp-rich-text-editor rounded-md border border-border bg-input ",
+					"qp-rich-text-editor rounded-md border bg-input",
 					disabled || readOnly ? "opacity-60" : "",
-					error ? "border-destructive" : "border-input",
+					error ? "border-destructive" : "border-border",
 				)}
 			>
 				{/* Toolbar */}

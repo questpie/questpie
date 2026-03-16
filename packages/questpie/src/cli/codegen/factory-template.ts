@@ -30,6 +30,12 @@ export interface FactoryTemplateOptions {
 	target: ResolvedTarget;
 	/** Whether modules.ts exists (new architecture). */
 	hasModules: boolean;
+	/**
+	 * Import path for the user's fields.ts file, if one exists.
+	 * Relative path from the .generated/ output directory.
+	 * When present, the default export is spread into _allFieldDefs.
+	 */
+	userFieldsImportPath?: string;
 }
 
 /**
@@ -40,7 +46,7 @@ export interface FactoryTemplateOptions {
 export function generateFactoryTemplate(
 	options: FactoryTemplateOptions,
 ): string {
-	const { target, hasModules } = options;
+	const { target, hasModules, userFieldsImportPath } = options;
 
 	// Extract merged registries and callback params from the resolved target
 	const collExtensions = new Map<string, RegistryExtension>();
@@ -115,24 +121,57 @@ export function generateFactoryTemplate(
 	lines.push("");
 
 	// Core imports — always import builders; conditionally import wrapBuilderWithExtensions
+	// Also import builtinFields (runtime value) for constructing the merged field defs map
 	lines.push("// ── Core Imports ───────────────────────────────────────────");
 	if (hasExtensions) {
 		lines.push(
-			'import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, type EmptyCollectionState, type EmptyGlobalState } from "questpie";',
+			'import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields } from "questpie";',
 		);
 	} else {
 		lines.push(
-			'import { CollectionBuilder, GlobalBuilder, type EmptyCollectionState, type EmptyGlobalState } from "questpie";',
+			'import { CollectionBuilder, GlobalBuilder, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields } from "questpie";',
 		);
 	}
 	lines.push("");
 
-	// Module import (for type-level field extraction only)
-	if (hasModules) {
-		lines.push("// ── Module import (for type extraction) ──");
-		lines.push('import _modulesArr from "../modules";');
+	// Runtime field imports from plugins (e.g. adminFields from @questpie/admin/server)
+	// These are spread-merged with builtinFields to create _allFieldDefs, which is
+	// passed to CollectionBuilder.create() / GlobalBuilder.create() so that
+	// .fields(({ f }) => ...) callbacks have access to ALL field types at runtime.
+	const runtimeFieldImports = target.runtimeFieldImports;
+	if (runtimeFieldImports.length > 0 || userFieldsImportPath) {
+		lines.push(
+			"// ── Runtime Field Imports ──────────────────────────────────",
+		);
+		for (const { name, from } of runtimeFieldImports) {
+			lines.push(`import { ${name} } from "${from}";`);
+		}
+		if (userFieldsImportPath) {
+			lines.push(`import _userFields from "${userFieldsImportPath}";`);
+		}
 		lines.push("");
 	}
+
+	// Build merged field defs constant — builtinFields + plugin fields + user fields
+	{
+		const spreads = ["...builtinFields"];
+		for (const { name } of runtimeFieldImports) {
+			spreads.push(`...${name}`);
+		}
+		if (userFieldsImportPath) {
+			spreads.push("..._userFields");
+		}
+		lines.push(
+			"// Merged field factories — builtins + module-contributed (e.g. richText, blocks) + user fields",
+		);
+		lines.push(`const _allFieldDefs = { ${spreads.join(", ")} } as const;`);
+		lines.push("");
+	}
+
+	// NOTE: No module import here — factories.ts must NOT reference typeof _modulesArr
+	// to avoid circular references. Type information flows through augmentable
+	// interfaces (Questpie.ViewsRegistry, Questpie.ComponentsRegistry, Questpie.FieldTypesMap)
+	// which are populated by each module's codegen output independently.
 
 	// Plugin imports (only types needed for signatures)
 	if (allImports.size > 0) {
@@ -155,75 +194,70 @@ export function generateFactoryTemplate(
 		lines.push("");
 	}
 
-	// ── Type extraction from Registry (breaks circular reference) ──
-	if (hasModules && registryCategories.size > 0) {
+	// ── Type extraction — driven by CategoryDeclaration ──────────
+	// ALL type aliases (both names and records) use augmentable interfaces
+	// (Questpie.ViewsRegistry, Questpie.ComponentsRegistry) instead of
+	// RegistryProp<> or ExtractModuleProp<typeof _modulesArr, ...>.
+	// This breaks TWO circular reference chains:
+	//
+	//   Cycle 1 (recordPlaceholder):
+	//     factories.ts augments CollectionBuilder → uses _ViewsRecord
+	//     → was: ExtractModuleProp<typeof _modulesArr, "views"> → typeof _modulesArr
+	//     → admin module → CollectionBuilder → CYCLE
+	//
+	//   Cycle 2 (placeholder — THE CRITICAL ONE):
+	//     factories.ts augments CollectionBuilder → uses _ViewsNames
+	//     → was: keyof RegistryProp<"views"> → Registry["views"]
+	//     → Registry augmented from _Module → typeof _modules
+	//     → admin module → CollectionBuilder → CYCLE
+	//
+	//   Now: Both read from Questpie.*Registry (populated independently by each
+	//   module's codegen output, no reference to typeof _modules or Registry)
+	//   → NO CYCLE
+	if (registryCategories.size > 0) {
 		lines.push(
 			"// ════════════════════════════════════════════════════════════",
 		);
-		lines.push(
-			"// Type extraction from Registry — driven by CategoryDeclaration",
-		);
+		lines.push("// Type extraction — driven by CategoryDeclaration");
 		lines.push(
 			"// ════════════════════════════════════════════════════════════",
 		);
 		lines.push("");
 
-		// Registry-based property extraction (imported utility, no dependency on typeof _modulesArr)
-		lines.push('import type { RegistryProp } from "questpie";');
-		lines.push("");
-
-		// Generate type aliases for each category that has placeholder/recordPlaceholder
+		// Generate type aliases for each category
+		// Both placeholder (names) and recordPlaceholder (records) use
+		// augmentable interfaces — never RegistryProp (which reads from Registry)
 		for (const [key, decl] of registryCategories) {
-			const registryKey =
-				typeof decl.registryKey === "string" ? decl.registryKey : key;
+			const cap = key.charAt(0).toUpperCase() + key.slice(1);
+			const interfaceName = `${cap}Registry`;
+
 			if (decl.placeholder) {
-				const typeName = `_${key.charAt(0).toUpperCase() + key.slice(1)}Names`;
+				const typeName = `_${cap}Names`;
+				// Read from augmentable interface — NOT from Registry via RegistryProp
 				lines.push(
-					`type ${typeName} = (keyof RegistryProp<"${registryKey}"> & string) | (string & {});`,
+					`type ${typeName} = (keyof Questpie.${interfaceName} & string) | (string & {});`,
 				);
 				if (decl.typeRegistry) {
 					lines.push(
-						`type ${typeName}_Strict = keyof RegistryProp<"${registryKey}"> & string;`,
+						`type ${typeName}_Strict = keyof Questpie.${interfaceName} & string;`,
 					);
 				}
 			}
 			if (decl.recordPlaceholder) {
-				const recordTypeName = `_${key.charAt(0).toUpperCase() + key.slice(1)}Record`;
-				lines.push(`type ${recordTypeName} = RegistryProp<"${registryKey}">;`);
-			}
-		}
-		lines.push("");
-	} else if (registryCategories.size > 0) {
-		// No modules — use string fallback for all registry categories
-		lines.push("// No modules.ts — using string fallback for type extraction");
-		for (const [key, decl] of registryCategories) {
-			if (decl.placeholder) {
-				const typeName = `_${key.charAt(0).toUpperCase() + key.slice(1)}Names`;
-				lines.push(`type ${typeName} = string;`);
-				if (decl.typeRegistry) {
-					lines.push(`type ${typeName}_Strict = never;`);
-				}
-			}
-			if (decl.recordPlaceholder) {
-				const recordTypeName = `_${key.charAt(0).toUpperCase() + key.slice(1)}Record`;
-				lines.push(`type ${recordTypeName} = Record<string, any>;`);
+				const recordTypeName = `_${cap}Record`;
+				// Use augmentable interface — populated by module codegen, NOT typeof _modulesArr
+				lines.push(`type ${recordTypeName} = Questpie.${interfaceName};`);
 			}
 		}
 		lines.push("");
 	}
 
-	// Field types — extracted from modules using imported type utility
-	if (hasModules) {
-		lines.push("// Field types — extracted from modules");
-		lines.push('import type { ExtractModuleProp } from "questpie";');
-		lines.push(
-			'type _AllFieldTypes = ExtractModuleProp<{ modules: typeof _modulesArr }, "fields">;',
-		);
-		lines.push("");
-	} else {
-		lines.push("type _AllFieldTypes = Record<string, never>;");
-		lines.push("");
-	}
+	// Field types — from augmentable interface (populated by module codegen)
+	lines.push(
+		"// Field types — populated by module codegen via Questpie.FieldTypesMap",
+	);
+	lines.push("type _AllFieldTypes = Questpie.FieldTypesMap;");
+	lines.push("");
 
 	// ── Type augmentations (declare module) ────────────────────
 	if (hasExtensions || registryCategories.size > 0) {
@@ -284,6 +318,8 @@ export function generateFactoryTemplate(
 		lines.push("declare global {");
 		lines.push("\tnamespace Questpie {");
 
+		// Ensure FieldTypesMap always includes builtin fields
+		lines.push("\t\tinterface FieldTypesMap extends BuiltinFields {}");
 		lines.push(
 			"\t\tinterface FieldTypeRegistry extends Record<keyof _AllFieldTypes, {}> {}",
 		);
@@ -389,11 +425,11 @@ export function generateFactoryTemplate(
 	);
 	if (collExtensions.size > 0) {
 		lines.push(
-			"\treturn wrapBuilderWithExtensions(CollectionBuilder.create<TName, _AllFieldTypes>(name), _collExt, CollectionBuilder) as any;",
+			"\treturn wrapBuilderWithExtensions(CollectionBuilder.create<TName, _AllFieldTypes>(name, _allFieldDefs), _collExt, CollectionBuilder) as any;",
 		);
 	} else {
 		lines.push(
-			"\treturn CollectionBuilder.create<TName, _AllFieldTypes>(name);",
+			"\treturn CollectionBuilder.create<TName, _AllFieldTypes>(name, _allFieldDefs);",
 		);
 	}
 	lines.push("}");
@@ -408,10 +444,12 @@ export function generateFactoryTemplate(
 	);
 	if (globalExtensions.size > 0) {
 		lines.push(
-			"\treturn wrapBuilderWithExtensions(GlobalBuilder.create<TName, _AllFieldTypes>(name), _globExt, GlobalBuilder) as any;",
+			"\treturn wrapBuilderWithExtensions(GlobalBuilder.create<TName, _AllFieldTypes>(name, _allFieldDefs), _globExt, GlobalBuilder) as any;",
 		);
 	} else {
-		lines.push("\treturn GlobalBuilder.create<TName, _AllFieldTypes>(name);");
+		lines.push(
+			"\treturn GlobalBuilder.create<TName, _AllFieldTypes>(name, _allFieldDefs);",
+		);
 	}
 	lines.push("}");
 	lines.push("");

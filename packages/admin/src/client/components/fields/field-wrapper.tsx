@@ -58,7 +58,7 @@ export function FieldWrapper({
 			data-invalid={!!error}
 			data-field-path={fieldPath ?? name}
 		>
-			<div className="space-y-2">
+			<div className="qa-field-wrapper space-y-2">
 				{resolvedLabel && (
 					<FieldLabel htmlFor={name} className="flex items-center gap-2">
 						<span className="flex items-center gap-1">

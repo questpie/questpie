@@ -112,7 +112,7 @@ export function AssetPreviewField({
 			<FieldWrapper name={name} label={label} description={description}>
 				<div
 					className={cn(
-						"flex items-center justify-center rounded-lg border border-dashed p-8",
+						"qa-asset-preview-field flex items-center justify-center rounded-lg border border-dashed p-8",
 						"bg-muted text-muted-foreground",
 						className,
 					)}
@@ -129,7 +129,7 @@ export function AssetPreviewField({
 				asset={asset}
 				size="lg"
 				showControls
-				className={className}
+				className={cn("qa-asset-preview-field", className)}
 			/>
 		</FieldWrapper>
 	);

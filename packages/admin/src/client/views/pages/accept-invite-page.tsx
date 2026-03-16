@@ -235,6 +235,7 @@ export function AcceptInvitePage({
 			title={title}
 			description={description}
 			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			className="qa-accept-invite-page"
 		>
 			<AcceptInviteForm
 				onSubmit={handleSubmit}

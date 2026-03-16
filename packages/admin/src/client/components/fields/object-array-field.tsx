@@ -72,9 +72,7 @@ function ItemFieldRenderer({
 	const options = (fieldDef["~options"] || {}) as Record<string, any>;
 
 	// Get the component from the field definition (registry-based)
-	const Component = fieldDef.component as
-		| React.ComponentType<any>
-		| undefined;
+	const Component = fieldDef.component as React.ComponentType<any> | undefined;
 
 	if (!Component) {
 		return (
@@ -221,7 +219,10 @@ export function ObjectArrayField({
 
 		if (typeof itemProp === "function") {
 			const registeredFields = admin.getFields();
-			const r: Record<string, (opts?: Record<string, unknown>) => FieldInstance> = {};
+			const r: Record<
+				string,
+				(opts?: Record<string, unknown>) => FieldInstance
+			> = {};
 			for (const key in registeredFields) {
 				r[key] = (opts) => configureField(registeredFields[key], opts ?? {});
 			}
@@ -327,7 +328,7 @@ export function ObjectArrayField({
 	const showEditor = mode === "modal" || mode === "drawer";
 
 	return (
-		<div className="space-y-2">
+		<div className="qa-object-array-field space-y-2">
 			{label && (
 				<div className="flex items-center gap-2">
 					<label htmlFor={name} className="text-sm font-medium">

@@ -18,7 +18,7 @@ export function getAdminPreferenceQueryKey(
 	userId: string | undefined,
 	key: string,
 ) {
-	return ["adminPreferences", userId, key] as const;
+	return ["admin_preferences", userId, key] as const;
 }
 
 /**
@@ -47,7 +47,7 @@ function getAdminPreferenceQueryOptions<T>(
 		queryFn: async (): Promise<T | null> => {
 			if (!userId) return null;
 
-			const result = await client.collections.adminPreferences.findOne({
+			const result = await client.collections.admin_preferences.findOne({
 				where: { userId, key },
 			});
 
@@ -88,11 +88,13 @@ export function useAdminPreference<T = unknown>(key: string) {
 	const user = useCurrentUser();
 
 	return useQuery({
-		queryKey: ["adminPreferences", user?.id, key],
+		queryKey: ["admin_preferences", user?.id, key],
 		queryFn: async (): Promise<T | null> => {
 			if (!user?.id) return null;
 
-			const result = await (client.collections as any).adminPreferences.findOne({
+			const result = await (
+				client.collections as any
+			).admin_preferences.findOne({
 				where: { userId: user.id, key },
 			});
 
@@ -133,26 +135,26 @@ export function useSetAdminPreference<T = unknown>(key: string) {
 			const collections = client?.collections as
 				| Record<string, any>
 				| undefined;
-			if (!collections?.adminPreferences) {
+			if (!collections?.admin_preferences) {
 				throw new Error(
-					"adminPreferences collection not available. Make sure to use the adminModule in your app setup.",
+					"admin_preferences collection not available. Make sure to use the adminModule in your app setup.",
 				);
 			}
 
 			// Try to find existing preference
-			const existing = await collections.adminPreferences.findOne({
+			const existing = await collections.admin_preferences.findOne({
 				where: { userId: user.id, key },
 			});
 
 			if (existing) {
 				// Update existing
-				return collections.adminPreferences.update({
+				return collections.admin_preferences.update({
 					id: existing.id,
 					data: { value },
 				});
 			}
 			// Create new
-			return collections.adminPreferences.create({
+			return collections.admin_preferences.create({
 				userId: user.id,
 				key,
 				value,
@@ -160,7 +162,7 @@ export function useSetAdminPreference<T = unknown>(key: string) {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
-				queryKey: ["adminPreferences", user?.id, key],
+				queryKey: ["admin_preferences", user?.id, key],
 			});
 		},
 	});
@@ -195,26 +197,26 @@ function useDeleteAdminPreference(key: string) {
 			const collections = client?.collections as
 				| Record<string, any>
 				| undefined;
-			if (!collections?.adminPreferences) {
+			if (!collections?.admin_preferences) {
 				throw new Error(
-					"adminPreferences collection not available. Make sure to use the adminModule in your app setup.",
+					"admin_preferences collection not available. Make sure to use the adminModule in your app setup.",
 				);
 			}
 
 			// Find existing preference
-			const existing = await collections.adminPreferences.findOne({
+			const existing = await collections.admin_preferences.findOne({
 				where: { userId: user.id, key },
 			});
 
 			if (existing) {
-				return collections.adminPreferences.delete({ id: existing.id });
+				return collections.admin_preferences.delete({ id: existing.id });
 			}
 
 			return null;
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
-				queryKey: ["adminPreferences", user?.id, key],
+				queryKey: ["admin_preferences", user?.id, key],
 			});
 		},
 	});
@@ -257,7 +259,9 @@ function useSuspenseAdminPreference<T = unknown>(key: string, userId: string) {
 	return useSuspenseQuery<T | null>({
 		queryKey: getAdminPreferenceQueryKey(userId, key),
 		queryFn: async () => {
-			const result = await (client.collections as any).adminPreferences.findOne({
+			const result = await (
+				client.collections as any
+			).admin_preferences.findOne({
 				where: { userId, key },
 			});
 

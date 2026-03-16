@@ -60,7 +60,7 @@ export function DateInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"flex h-9 w-full items-center justify-start gap-2 border border-border bg-input px-3 py-2 text-sm",
+					"qa-date-input flex h-9 w-full items-center justify-start gap-2 border border-border bg-input px-3 py-2 text-sm",
 					"hover:bg-accent hover:text-accent-foreground",
 					"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 					"disabled:cursor-not-allowed disabled:opacity-50",
@@ -204,7 +204,7 @@ export function DateTimeInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"flex h-9 w-full items-center justify-start gap-2 border border-border bg-input px-3 py-2 text-sm",
+					"qa-datetime-input flex h-9 w-full items-center justify-start gap-2 border border-border bg-input px-3 py-2 text-sm",
 					"hover:bg-accent hover:text-accent-foreground",
 					"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 					"disabled:cursor-not-allowed disabled:opacity-50",
@@ -340,7 +340,7 @@ function DateRangeInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"flex h-9 w-full items-center justify-start gap-2 border border-border bg-input px-3 py-2 text-sm",
+					"qa-date-range-input flex h-9 w-full items-center justify-start gap-2 border border-border bg-input px-3 py-2 text-sm",
 					"hover:bg-accent hover:text-accent-foreground",
 					"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 					"disabled:cursor-not-allowed disabled:opacity-50",

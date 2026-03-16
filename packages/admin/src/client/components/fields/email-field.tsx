@@ -1,4 +1,5 @@
 import { Controller } from "react-hook-form";
+import { cn } from "../../lib/utils";
 import { TextInput } from "../primitives/text-input";
 import type { BaseFieldProps } from "./field-types";
 import { useResolvedControl } from "./field-utils";
@@ -42,7 +43,7 @@ export function EmailField({
 						disabled={disabled}
 						autoComplete="email"
 						aria-invalid={!!fieldState.error}
-						className={className}
+						className={cn("qa-email-field", className)}
 					/>
 				</FieldWrapper>
 			)}

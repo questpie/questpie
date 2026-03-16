@@ -134,7 +134,10 @@ export function ResetPasswordForm({
 	}
 
 	return (
-		<form onSubmit={handleFormSubmit} className={cn("space-y-4", className)}>
+		<form
+			onSubmit={handleFormSubmit}
+			className={cn("qa-reset-password-form space-y-4", className)}
+		>
 			<p className="text-muted-foreground text-xs">
 				Enter your new password below.
 			</p>

@@ -143,7 +143,11 @@ function ResponsiveDialogContent({
 		);
 	}
 
-	return <DialogContent className={className}>{children}</DialogContent>;
+	return (
+		<DialogContent className={cn("qa-responsive-dialog__content", className)}>
+			{children}
+		</DialogContent>
+	);
 }
 
 function ResponsiveDialogHeader({
@@ -177,7 +181,10 @@ function ResponsiveDialogTitle({
 	return (
 		<DialogPrimitive.Title
 			data-slot="responsive-dialog-title"
-			className={cn("text-sm font-medium", className)}
+			className={cn(
+				"qa-responsive-dialog__title text-sm font-medium",
+				className,
+			)}
 			{...props}
 		>
 			{children}

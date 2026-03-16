@@ -135,21 +135,18 @@ Blocks often reference related data (images, linked records). Use `.prefetch()` 
 
 ### Functional Prefetch
 
-For complex queries, use a function. Import `App` type from the generated output:
+For complex queries, use a function. The `ctx` parameter provides fully typed `collections` and `globals` via `AppContext` augmentation — no imports needed:
 
 ```ts title="blocks/featured.ts"
 import { block } from "#questpie";
-import { typedApp } from "questpie";
-import type { App } from "~/questpie/.generated";
 
 export const featuredBlock = block("featured")
   .fields(({ f }) => ({
     heading: f.text({ required: true }),
   }))
   .prefetch(async ({ values, ctx }) => {
-    const app = typedApp<App>(ctx.app);
     return {
-      posts: (await app.api.collections.posts.find({ limit: 5 })).docs,
+      posts: (await ctx.collections.posts.find({ limit: 5 })).docs,
     };
   });
 ```
@@ -252,27 +249,21 @@ function PageRenderer({ page }) {
 
 ## Common Mistakes
 
-1. **HIGH: Missing `typedApp<App>()` cast in functional prefetch** — without the cast, `ctx.app` has no typed API and you lose type safety on collection queries.
+1. **HIGH: Not using `ctx.collections.*` in functional prefetch** — use the context-injected collections directly. Do NOT import `app` from `#questpie` inside block files (causes circular dependencies).
    ```ts
-   // WRONG — untyped
+   // WRONG — importing app creates circular dependency
+   import { app } from "#questpie";
    .prefetch(async ({ values, ctx }) => {
-     const posts = await ctx.app.api.collections.posts.find({});
-   })
-
-   // CORRECT — typed
-   .prefetch(async ({ values, ctx }) => {
-     const app = typedApp<App>(ctx.app);
      const posts = await app.api.collections.posts.find({});
    })
+
+   // CORRECT — use ctx.collections directly
+   .prefetch(async ({ values, ctx }) => {
+     const posts = await ctx.collections.posts.find({});
+   })
    ```
 
-2. **HIGH: Importing `App` type from wrong location** — must be from `~/questpie/.generated`, not from `questpie` or `@questpie/admin`.
-   ```ts
-   // WRONG
-   import type { App } from "questpie";
-   // CORRECT
-   import type { App } from "~/questpie/.generated";
-   ```
+2. **HIGH: Importing from `.generated/` inside block files** — block files are imported BY `.generated/index.ts`, so importing from it back creates circular dependencies. Use the `ctx` parameter instead.
 
 3. **MEDIUM: Block renderer not exported as default or named export** — codegen discovers named exports from block renderer files. Ensure the component is exported.
 

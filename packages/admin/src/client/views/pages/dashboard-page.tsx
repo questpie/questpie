@@ -8,6 +8,7 @@
 import * as React from "react";
 import type { DashboardConfig } from "../../builder";
 import { useAdminConfig } from "../../hooks/use-admin-config";
+import { cn } from "../../lib/utils";
 import {
 	selectBasePath,
 	selectNavigate,
@@ -67,7 +68,7 @@ export function DashboardPage({
 			config={config}
 			basePath={basePath}
 			navigate={navigate}
-			className={className}
+			className={cn("qa-dashboard-page", className)}
 		/>
 	);
 }

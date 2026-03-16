@@ -319,7 +319,11 @@ export interface AppDefinition {
 	/** Services discovered from `services/` directory. */
 	services?: Record<
 		string,
-		import("#questpie/server/services/define-service.js").ServiceBuilder<any>
+		import("#questpie/server/services/define-service.js").ServiceBuilder<
+			any,
+			any,
+			any
+		>
 	>;
 
 	/** Email templates discovered from `emails/` directory. */

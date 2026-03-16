@@ -676,7 +676,7 @@ function SectionLayoutRenderer({
 		section.label || section.description ? (
 			<div className="mb-4">
 				{section.label && (
-					<h3 className="text-lg font-semibold">
+					<h3 className="qa-form-fields__section-title text-lg font-semibold">
 						{resolveText(section.label, "", formValues)}
 					</h3>
 				)}
@@ -720,7 +720,7 @@ function SectionLayoutRenderer({
 
 	// Flat wrapper (no visual container)
 	return (
-		<div className={cn("space-y-4", section.className)}>
+		<div className={cn("qa-form-fields__section space-y-4", section.className)}>
 			{header}
 			{content}
 		</div>
@@ -1044,16 +1044,19 @@ export function AutoFormFields<T extends QuestpieApp, K extends string>({
 
 		// Single @container on outermost wrapper for all container queries
 		return (
-			<div className="@container w-full">
+			<div className="qa-form-fields @container w-full">
 				<div
 					className={cn(
-						"flex flex-col-reverse gap-6 @2xl:flex-row",
+						"qa-form-fields__layout flex flex-col-reverse gap-6 @2xl:flex-row",
 						sidebarPosition === "left" && "@2xl:flex-row-reverse",
 					)}
 				>
-					<div className="min-w-0 flex-1">{mainContent}</div>
+					<div className="qa-form-fields__main min-w-0 flex-1">
+						{mainContent}
+					</div>
 					<aside
 						className={cn(
+							"qa-form-fields__sidebar",
 							"@2xl:border-l @max-2xl:border-b @max-2xl:pb-4 w-full border-border @2xl:pl-4",
 							"w-full @2xl:max-w-xs",
 						)}
@@ -1078,5 +1081,5 @@ export function AutoFormFields<T extends QuestpieApp, K extends string>({
 		);
 	}
 
-	return <div className="@container">{mainContent}</div>;
+	return <div className="qa-form-fields @container">{mainContent}</div>;
 }

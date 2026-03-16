@@ -37,7 +37,7 @@ export default route()
 Outside handlers, use `app.api.collections.*` and pass an explicit context as the second argument:
 
 ```ts
-import { app } from "~/questpie/.generated";
+import { app } from "#questpie";
 
 const ctx = await app.createContext({ accessMode: "system", locale: "en" });
 

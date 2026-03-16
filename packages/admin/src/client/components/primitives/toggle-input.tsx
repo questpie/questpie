@@ -1,3 +1,4 @@
+import { cn } from "../../lib/utils";
 import { Switch } from "../ui/switch";
 import type { ToggleInputProps } from "./types";
 
@@ -29,7 +30,7 @@ export function ToggleInput({
 			onCheckedChange={onChange}
 			disabled={disabled}
 			aria-invalid={ariaInvalid}
-			className={className}
+			className={cn("qa-toggle-input", className)}
 		/>
 	);
 }

@@ -116,7 +116,7 @@ export default [
 
 ```ts
 // routes/api/$.ts
-import { app } from "~/questpie/.generated";
+import { app } from "#questpie";
 import { createFetchHandler } from "questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
@@ -249,15 +249,17 @@ export type AppConfig = {
 Codegen augments `AppContext` so every handler gets typed DI:
 
 ```ts
-declare module "questpie" {
-  interface AppContext {
-    db: Database;
-    email: MailerService<AppEmailTemplates>;
-    queue: QueueClient<AppJobs>;
-    collections: AppCollections;
-    globals: AppGlobals;
-    session: Session | null;
-    blog: BlogService;
+declare global {
+  namespace Questpie {
+    interface AppContext {
+      db: Database;
+      email: MailerService<AppEmailTemplates>;
+      queue: QueueClient<AppJobs>;
+      collections: AppCollections;
+      globals: AppGlobals;
+      session: Session | null;
+      blog: BlogService;
+    }
   }
 }
 ```

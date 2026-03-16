@@ -116,6 +116,11 @@ export function buildFieldDefinitionsFromMetadata(
 
 		const fieldBuilder = registry[fieldType];
 		if (!fieldBuilder) {
+			if (process.env.NODE_ENV !== "production") {
+				console.warn(
+					`[buildFieldDefinitionsFromMetadata] Field "${fieldName}" has type "${fieldType}" which is not registered in the field registry. Available types: ${Object.keys(registry).join(", ")}`,
+				);
+			}
 			continue;
 		}
 

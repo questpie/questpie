@@ -152,6 +152,7 @@ export function LoginPage({
 			title={title}
 			description={description}
 			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			className="qa-login-page"
 		>
 			<LoginForm
 				onSubmit={handleSubmit}

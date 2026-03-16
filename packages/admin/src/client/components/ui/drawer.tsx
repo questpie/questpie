@@ -37,7 +37,7 @@ function DrawerOverlay({
 		<DrawerPrimitive.Overlay
 			data-slot="drawer-overlay"
 			className={cn(
-				"data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/80 fixed inset-0 z-50",
+				"qa-drawer__overlay data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/80 fixed inset-0 z-50",
 				className,
 			)}
 			{...props}
@@ -56,7 +56,7 @@ function DrawerContent({
 			<DrawerPrimitive.Content
 				data-slot="drawer-content"
 				className={cn(
-					"before:bg-background px-4 pb-4 relative flex h-auto flex-col bg-transparent  text-xs/relaxed before:absolute before:inset-2 before:-z-10 before:rounded-xl data-[vaul-drawer-direction=bottom]:inset-x-0 data-[vaul-drawer-direction=bottom]:bottom-0 data-[vaul-drawer-direction=bottom]:mt-24 data-[vaul-drawer-direction=bottom]:max-h-[80vh] data-[vaul-drawer-direction=left]:inset-y-0 data-[vaul-drawer-direction=left]:left-0 data-[vaul-drawer-direction=left]:w-3/4 data-[vaul-drawer-direction=right]:inset-y-0 data-[vaul-drawer-direction=right]:right-0 data-[vaul-drawer-direction=right]:w-3/4 data-[vaul-drawer-direction=top]:inset-x-0 data-[vaul-drawer-direction=top]:top-0 data-[vaul-drawer-direction=top]:mb-24 data-[vaul-drawer-direction=top]:max-h-[80vh] data-[vaul-drawer-direction=left]:sm:max-w-sm data-[vaul-drawer-direction=right]:sm:max-w-sm group/drawer-content fixed z-50",
+					"qa-drawer__content before:bg-background px-4 pb-4 relative flex h-auto flex-col bg-transparent  text-xs/relaxed before:absolute before:inset-2 before:-z-10 before:rounded-xl data-[vaul-drawer-direction=bottom]:inset-x-0 data-[vaul-drawer-direction=bottom]:bottom-0 data-[vaul-drawer-direction=bottom]:mt-24 data-[vaul-drawer-direction=bottom]:max-h-[80vh] data-[vaul-drawer-direction=left]:inset-y-0 data-[vaul-drawer-direction=left]:left-0 data-[vaul-drawer-direction=left]:w-3/4 data-[vaul-drawer-direction=right]:inset-y-0 data-[vaul-drawer-direction=right]:right-0 data-[vaul-drawer-direction=right]:w-3/4 data-[vaul-drawer-direction=top]:inset-x-0 data-[vaul-drawer-direction=top]:top-0 data-[vaul-drawer-direction=top]:mb-24 data-[vaul-drawer-direction=top]:max-h-[80vh] data-[vaul-drawer-direction=left]:sm:max-w-sm data-[vaul-drawer-direction=right]:sm:max-w-sm group/drawer-content fixed z-50",
 					className,
 				)}
 				{...props}
@@ -73,7 +73,7 @@ function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-slot="drawer-header"
 			className={cn(
-				"gap-1 pt-4 group-data-[vaul-drawer-direction=bottom]/drawer-content:text-center group-data-[vaul-drawer-direction=top]/drawer-content:text-center md:text-left flex flex-col",
+				"qa-drawer__header gap-1 pt-4 group-data-[vaul-drawer-direction=bottom]/drawer-content:text-center group-data-[vaul-drawer-direction=top]/drawer-content:text-center md:text-left flex flex-col",
 				className,
 			)}
 			{...props}
@@ -85,7 +85,10 @@ function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
 	return (
 		<div
 			data-slot="drawer-footer"
-			className={cn("gap-2 py-4 mt-auto flex flex-col", className)}
+			className={cn(
+				"qa-drawer__footer gap-2 py-4 mt-auto flex flex-col",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -98,7 +101,10 @@ function DrawerTitle({
 	return (
 		<DrawerPrimitive.Title
 			data-slot="drawer-title"
-			className={cn("text-foreground text-sm font-medium", className)}
+			className={cn(
+				"qa-drawer__title text-foreground text-sm font-medium",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -111,7 +117,10 @@ function DrawerDescription({
 	return (
 		<DrawerPrimitive.Description
 			data-slot="drawer-description"
-			className={cn("text-muted-foreground text-xs/relaxed", className)}
+			className={cn(
+				"qa-drawer__description text-muted-foreground text-xs/relaxed",
+				className,
+			)}
 			{...props}
 		/>
 	);

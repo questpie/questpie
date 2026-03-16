@@ -283,7 +283,7 @@ export function RelationSelect<T extends QuestpieApp>({
 	);
 
 	return (
-		<div className="space-y-2">
+		<div className="qa-relation-select space-y-2">
 			{label && (
 				<div className="flex items-center gap-2">
 					<label

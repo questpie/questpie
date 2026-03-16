@@ -1,4 +1,5 @@
 import { Controller } from "react-hook-form";
+import { cn } from "../../lib/utils";
 import { CheckboxInput } from "../primitives/checkbox-input";
 import { ToggleInput } from "../primitives/toggle-input";
 import type { BaseFieldProps } from "./field-types";
@@ -53,7 +54,7 @@ export function BooleanField({
 							onChange={field.onChange}
 							disabled={disabled}
 							aria-invalid={!!fieldState.error}
-							className={className}
+							className={cn("qa-boolean-field", className)}
 						/>
 					) : (
 						<CheckboxInput
@@ -62,7 +63,7 @@ export function BooleanField({
 							onChange={field.onChange}
 							disabled={disabled}
 							aria-invalid={!!fieldState.error}
-							className={className}
+							className={cn("qa-boolean-field", className)}
 						/>
 					)}
 				</FieldWrapper>

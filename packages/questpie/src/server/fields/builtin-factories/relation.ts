@@ -12,8 +12,7 @@
 
 import { jsonb, type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import type { KnownCollectionNames } from "../../config/app-context.js";
-import { field, Field } from "../field-class.js";
+import { Field, field } from "../field-class.js";
 import type { DefaultFieldState } from "../field-class-types.js";
 import { belongsToOps, multipleOps, toManyOps } from "../operators/builtin.js";
 import type {
@@ -72,12 +71,21 @@ export type MultipleRelationFieldState<TTo extends string = string> =
 		relationKind: "one";
 	};
 
+/**
+ * Relation target — accepts collection name, factory function, or polymorphic map.
+ *
+ * Uses plain `string` (with autocomplete hint via `string & {}`) instead of
+ * `KnownCollectionNames` to avoid a circular type dependency:
+ *   relation() → KnownCollectionNames → RegistryNames → Registry
+ *   → _Registry_Collections → _MP<"collections"> → _Module → typeof _modules
+ *   → adminModule → collections → CollectionBuilder (uses relation()) → CYCLE
+ */
 type RelationTarget =
-	| KnownCollectionNames
+	| (string & {})
 	| (() => { name: string; table?: { id: unknown } })
-	| Record<string, KnownCollectionNames | (() => { name: string })>;
+	| Record<string, (string & {}) | (() => { name: string })>;
 
-type JunctionTarget = KnownCollectionNames | (() => { name: string });
+type JunctionTarget = (string & {}) | (() => { name: string });
 
 // ============================================================================
 // Helper Functions

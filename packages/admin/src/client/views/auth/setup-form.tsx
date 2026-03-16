@@ -95,7 +95,10 @@ export function SetupForm({
 	});
 
 	return (
-		<form onSubmit={handleFormSubmit} className={cn("space-y-4", className)}>
+		<form
+			onSubmit={handleFormSubmit}
+			className={cn("qa-setup-form space-y-4", className)}
+		>
 			<FieldGroup>
 				{/* Name Field */}
 				<Field data-invalid={!!errors.name}>

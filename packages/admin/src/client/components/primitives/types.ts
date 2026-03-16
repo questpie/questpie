@@ -18,6 +18,8 @@ export interface BasePrimitiveProps {
 	className?: string;
 	/** aria-invalid for error state */
 	"aria-invalid"?: boolean;
+	/** aria-describedby for linking to description/error elements */
+	"aria-describedby"?: string;
 }
 
 // =============================================================================

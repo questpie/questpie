@@ -403,9 +403,9 @@ export function GlobalSearch({
 
 	return (
 		<ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-			<ResponsiveDialogContent className="p-0 gap-0 max-w-2xl">
+			<ResponsiveDialogContent className="qa-global-search p-0 gap-0 max-w-2xl">
 				{/* Search Input */}
-				<div className="flex items-center border-b px-3">
+				<div className="qa-global-search__input-area flex items-center border-b px-3">
 					<Icon
 						icon="ph:magnifying-glass"
 						className="mr-2 h-5 w-5 text-muted-foreground shrink-0"
@@ -433,7 +433,7 @@ export function GlobalSearch({
 				</div>
 
 				{/* Results */}
-				<div className="max-h-[60vh] overflow-y-auto p-2">
+				<div className="qa-global-search__results max-h-[60vh] overflow-y-auto p-2">
 					{hasResults ? (
 						<>
 							{/* Navigation Groups */}
@@ -489,7 +489,7 @@ export function GlobalSearch({
 				</div>
 
 				{/* Footer with keyboard hints */}
-				<div className="border-t px-3 py-2 flex items-center justify-end gap-4 text-xs text-muted-foreground">
+				<div className="qa-global-search__footer border-t px-3 py-2 flex items-center justify-end gap-4 text-xs text-muted-foreground">
 					<span className="flex items-center gap-1">
 						<Kbd className="text-[10px] px-1">↑</Kbd>
 						<Kbd className="text-[10px] px-1">↓</Kbd>

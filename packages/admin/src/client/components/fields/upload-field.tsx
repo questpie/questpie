@@ -58,6 +58,7 @@ import { useCollectionItem } from "../../hooks/use-collection";
 import { type Asset, useUpload } from "../../hooks/use-upload";
 import { useUploadCollection } from "../../hooks/use-upload-collection";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
+import { cn } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime";
 import { MediaPickerDialog } from "../media/media-picker-dialog";
 import { AssetPreview } from "../primitives/asset-preview";
@@ -933,7 +934,7 @@ export function UploadField({
 								onUploadStart={onUploadStart}
 								onUploadComplete={onUploadComplete as (assets: Asset[]) => void}
 								onUploadError={onUploadError}
-								className={className}
+								className={cn("qa-upload-field", className)}
 							/>
 						) : (
 							<SingleUploadInner
@@ -951,7 +952,7 @@ export function UploadField({
 								onUploadStart={onUploadStart}
 								onUploadComplete={onUploadComplete as (asset: Asset) => void}
 								onUploadError={onUploadError}
-								className={className}
+								className={cn("qa-upload-field", className)}
 							/>
 						)}
 					</FieldWrapper>

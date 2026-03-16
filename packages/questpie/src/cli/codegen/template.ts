@@ -88,7 +88,7 @@ export function generateTemplate(options: TemplateOptions): string {
 
 	// Import createApp + types
 	lines.push(
-		'import { createApp, createContextFactory, extractAppServices, type Questpie, type AppContext, type Registry, type QuestpieConfig, type QueueClient } from "questpie";',
+		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type Questpie, type AppContext, type Registry, type QuestpieConfig, type QueueClient } from "questpie";',
 	);
 	lines.push("");
 
@@ -285,6 +285,76 @@ export function generateTemplate(options: TemplateOptions): string {
 	}
 	lines.push("");
 
+	// ── Augment factory registries with user-defined files ────────────
+	// User-defined views, components, and fields augment the same
+	// Questpie.*Registry interfaces that modules populate. This provides
+	// autocomplete on v.*, c.*, f.* for BOTH module and user entities.
+	// These augmentations use direct typeof references — NOT _MP<> — to
+	// avoid circular dependencies.
+	{
+		const factoryRegistryAugmentations: string[] = [];
+		const factoryTypeAliases: string[] = [];
+
+		// Categories with recordPlaceholder (views, components) — user files
+		for (const [catName, decl] of allDecls) {
+			if (!decl.recordPlaceholder) continue;
+			const fileMap = discovered.categories.get(catName);
+			if (!fileMap || fileMap.size === 0) continue;
+
+			const cap = capitalize(catName);
+			const interfaceName = `${cap}Registry`;
+
+			// Build inline type with user file entries
+			const entries = sortedValues(fileMap)
+				.map((f) => `${safeKey(f.key)}: typeof ${f.varName}`)
+				.join("; ");
+			factoryRegistryAugmentations.push(
+				`\t\tinterface ${interfaceName} { ${entries}; }`,
+			);
+		}
+
+		// User fields.ts → FieldTypesMap
+		// NOTE: We use a type alias instead of inline `extends typeof _fields`
+		// because some bundlers (rolldown/tsdown) cannot parse that syntax.
+		{
+			const tildeKeys = collectTildeRegistryKeys(
+				discoverPatterns,
+				discovered.singles,
+			);
+			for (const { singleName } of tildeKeys) {
+				if (singleName !== "fields") continue;
+				const userFile = discovered.singles.get(singleName);
+				if (userFile) {
+					const aliasName = `_UserFieldTypes`;
+					factoryTypeAliases.push(
+						`type ${aliasName} = typeof ${userFile.varName};`,
+					);
+					factoryRegistryAugmentations.push(
+						`\t\tinterface FieldTypesMap extends ${aliasName} {}`,
+					);
+				}
+			}
+		}
+
+		if (factoryRegistryAugmentations.length > 0) {
+			lines.push("// Augment factory registries with user-defined files");
+
+			// Emit type aliases before declare global (bundler compatibility)
+			for (const alias of factoryTypeAliases) {
+				lines.push(alias);
+			}
+
+			lines.push("declare global {");
+			lines.push("\tnamespace Questpie {");
+			for (const aug of factoryRegistryAugmentations) {
+				lines.push(aug);
+			}
+			lines.push("\t}");
+			lines.push("}");
+			lines.push("");
+		}
+	}
+
 	// ── App* type interfaces for each category ───────────────────
 	for (const [catName, fileMap] of discovered.categories) {
 		const decl = allDecls.get(catName);
@@ -297,7 +367,7 @@ export function generateTemplate(options: TemplateOptions): string {
 				emitTypeInterface(lines, appTypeName, moduleTypeName, fileMap);
 				break;
 			}
-				case "services": {
+			case "services": {
 				const hasUser = fileMap.size > 0;
 				lines.push(
 					"/** All service definitions in the app (modules + user, user overrides). */",
@@ -377,7 +447,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("");
 	}
 
-	// ── _AppInternal — internal Questpie<> type ──────────────────
+	// ── App — the full Questpie<> app type ──────────────────────
 	{
 		const stateMembers: string[] = [];
 
@@ -395,10 +465,23 @@ export function generateTemplate(options: TemplateOptions): string {
 			stateMembers.push('\t"~messageKeys": AppMessageKeys;');
 		}
 
+		lines.push("/**");
+		lines.push(" * The fully-typed app instance type.");
 		lines.push(
-			"/** @internal — used only for type derivation, not exported */",
+			" * Use `typeof app` or this alias when you need to reference the app type.",
 		);
-		lines.push("type _AppInternal = Questpie<QuestpieConfig & {");
+		lines.push(" *");
+		lines.push(
+			" * **Note:** Do NOT import `app` inside framework-defined files (collections,",
+		);
+		lines.push(
+			" * globals, routes, hooks, blocks) — it creates circular dependencies with",
+		);
+		lines.push(
+			" * the generated index. Use the context parameters provided to handlers instead.",
+		);
+		lines.push(" */");
+		lines.push("export type App = Questpie<QuestpieConfig & {");
 		for (const member of stateMembers) {
 			lines.push(member);
 		}
@@ -431,27 +514,27 @@ export function generateTemplate(options: TemplateOptions): string {
 			lines.push("\t\tinterface AppContext {");
 		}
 		lines.push("\t\t\t// Infrastructure");
-		lines.push("\t\t\tdb: _AppInternal['db'];");
+		lines.push("\t\t\tdb: App['db'];");
 		if (hasEmails) {
 			lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
 		} else {
-			lines.push("\t\t\temail: _AppInternal['email'];");
+			lines.push("\t\t\temail: App['email'];");
 		}
 		lines.push("\t\t\tqueue: QueueClient<AppJobs>;");
-		lines.push("\t\t\tstorage: _AppInternal['storage'];");
-		lines.push("\t\t\tkv: _AppInternal['kv'];");
-		lines.push("\t\t\tlogger: _AppInternal['logger'];");
-		lines.push("\t\t\tsearch: _AppInternal['search'];");
-		lines.push("\t\t\trealtime: _AppInternal['realtime'];");
+		lines.push("\t\t\tstorage: App['storage'];");
+		lines.push("\t\t\tkv: App['kv'];");
+		lines.push("\t\t\tlogger: App['logger'];");
+		lines.push("\t\t\tsearch: App['search'];");
+		lines.push("\t\t\trealtime: App['realtime'];");
 		lines.push("");
 		lines.push("\t\t\t// Entity APIs");
-		lines.push("\t\t\tcollections: _AppInternal['api']['collections'];");
-		lines.push("\t\t\tglobals: _AppInternal['api']['globals'];");
-		lines.push("\t\t\ttables: _AppInternal['tables'];");
+		lines.push("\t\t\tcollections: App['api']['collections'];");
+		lines.push("\t\t\tglobals: App['api']['globals'];");
+		lines.push("\t\t\ttables: App['tables'];");
 		lines.push("");
 		lines.push("\t\t\t// Request-scoped");
 		lines.push(
-			"\t\t\tsession: _AppInternal['auth'] extends { api: { getSession: (...args: any[]) => Promise<infer TSession> } } ? NonNullable<TSession> | null : null;",
+			"\t\t\tsession: App['auth'] extends { api: { getSession: (...args: any[]) => Promise<infer TSession> } } ? NonNullable<TSession> | null : null;",
 		);
 		if (hasMessages) {
 			lines.push(
@@ -607,7 +690,7 @@ function emitNewArchitectureRuntime(
 	const coreSingles = getCategorizedSingles(discovered.singles, allDecls);
 
 	lines.push("export const app = await createApp(");
-	lines.push("\t{");
+	lines.push("\t({");
 
 	// Modules
 	lines.push(`\t\tmodules: ${modulesFile.varName} as any,`);
@@ -675,9 +758,9 @@ function emitNewArchitectureRuntime(
 		}
 	}
 
-	lines.push("\t},");
+	lines.push("\t}) satisfies AppDefinition,");
 	lines.push("\t_runtime,");
-	lines.push(") as unknown as _AppInternal;");
+	lines.push(") as unknown as App;");
 	lines.push("");
 }
 

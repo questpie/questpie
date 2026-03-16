@@ -48,7 +48,7 @@ import {
 } from "../../hooks/use-admin-preferences";
 import { useAuthClientSafe } from "../../hooks/use-auth";
 import { useCurrentUser, useSessionState } from "../../hooks/use-current-user";
-import { useResolveText, useTranslation } from "../../i18n/hooks";
+import { useResolveText, useSafeI18n, useTranslation } from "../../i18n/hooks";
 import { cn, formatLabel } from "../../lib/utils";
 import {
 	selectAdmin,
@@ -549,14 +549,23 @@ function NavItem({
 			}
 		: {};
 
+	const ariaCurrent = isActive ? ("page" as const) : undefined;
+
 	const linkContent = (
 		<LinkComponent
 			to={item.href}
-			className={cn(menuButtonStyles, isActive && menuButtonActiveStyles)}
+			className={cn(
+				"qa-sidebar__nav-link",
+				menuButtonStyles,
+				isActive && "qa-sidebar__nav-link--active",
+				isActive && menuButtonActiveStyles,
+			)}
 			{...linkActiveProps}
 		>
-			{item.icon && <RenderIcon icon={item.icon} />}
-			<span className="truncate group-data-[collapsible=icon]:hidden">
+			{item.icon && (
+				<RenderIcon icon={item.icon} className="qa-sidebar__nav-icon" />
+			)}
+			<span className="qa-sidebar__nav-label truncate group-data-[collapsible=icon]:hidden">
 				{label}
 			</span>
 		</LinkComponent>
@@ -565,14 +574,20 @@ function NavItem({
 	// Show tooltip when collapsed (desktop only)
 	if (collapsed && !isMobile) {
 		return (
-			<SidebarMenuItem onClickCapture={handleClick}>
+			<SidebarMenuItem
+				className="qa-sidebar__nav-item"
+				onClickCapture={handleClick}
+				aria-current={ariaCurrent}
+			>
 				<Tooltip>
 					<TooltipTrigger
 						render={
 							<LinkComponent
 								to={item.href}
 								className={cn(
+									"qa-sidebar__nav-link",
 									menuButtonStyles,
+									isActive && "qa-sidebar__nav-link--active",
 									isActive && menuButtonActiveStyles,
 								)}
 								{...linkActiveProps}
@@ -593,7 +608,11 @@ function NavItem({
 	}
 
 	return (
-		<SidebarMenuItem className={className} onClickCapture={handleClick}>
+		<SidebarMenuItem
+			className={cn("qa-sidebar__nav-item", className)}
+			onClickCapture={handleClick}
+			aria-current={ariaCurrent}
+		>
 			{linkContent}
 		</SidebarMenuItem>
 	);
@@ -685,15 +704,17 @@ function NavGroup({
 	const hasContent = items.length > 0 || sections.length > 0;
 
 	return (
-		<SidebarGroup>
+		<SidebarGroup className="qa-sidebar__group">
 			{/* Section header with optional icon and collapse toggle */}
 			{groupLabel && (
 				<SidebarGroupLabel
 					className={cn(
-						"gap-2 px-3 mt-2",
+						"qa-sidebar__group-label gap-2 px-3 mt-2",
 						group.collapsible && "cursor-pointer hover:text-sidebar-foreground",
 						depth > 0 && "pl-6",
 					)}
+					role={group.collapsible ? "button" : undefined}
+					aria-expanded={group.collapsible ? !isCollapsed : undefined}
 					onClick={
 						group.collapsible && group.id
 							? () => toggleSection(group.id!)
@@ -709,6 +730,7 @@ function NavGroup({
 								"size-3.5 transition-transform",
 								isCollapsed && "-rotate-90",
 							)}
+							aria-hidden="true"
 						/>
 					)}
 				</SidebarGroupLabel>
@@ -820,10 +842,12 @@ function UserFooter() {
 		setLocale: setUiLocale,
 		getLocaleName,
 	} = useTranslation();
+	const i18nAdapter = useSafeI18n();
 
-	// Get available locales from admin config
+	// Get available locales from the i18n adapter (populated by TranslationsProvider from server)
+	// Falls back to admin config locale (static, codegen-time) if adapter isn't available
 	const localeConfig = admin.getLocale();
-	const uiLocales = localeConfig.supported ?? ["en"];
+	const uiLocales = i18nAdapter?.locales ?? localeConfig.supported ?? ["en"];
 	const hasMultipleUiLocales = uiLocales.length > 1;
 	const uiLocaleOptions = uiLocales.map((code) => ({
 		code,
@@ -872,7 +896,7 @@ function UserFooter() {
 	const displayEmail = user.email || "";
 
 	return (
-		<SidebarFooter className="border-t border-sidebar-border p-2">
+		<SidebarFooter className="qa-sidebar__footer border-t border-sidebar-border p-2">
 			<SidebarMenu>
 				{/* User Menu */}
 				<SidebarMenuItem>
@@ -885,22 +909,23 @@ function UserFooter() {
 								collapsed && "justify-center",
 							)}
 						>
-							<div className="flex size-8 shrink-0 items-center justify-center bg-sidebar-primary/10 text-sidebar-primary border border-sidebar-primary/20">
+							<div className="qa-sidebar__user-avatar flex size-8 shrink-0 items-center justify-center bg-sidebar-primary/10 text-sidebar-primary border border-sidebar-primary/20">
 								<Icon icon="ph:user-bold" className="size-4" />
 							</div>
 							{!collapsed && (
 								<>
 									<div className="grid flex-1 text-left leading-tight">
-										<span className="truncate text-xs font-medium">
+										<span className="qa-sidebar__user-name truncate text-xs font-medium">
 											{displayName}
 										</span>
-										<span className="truncate text-[10px] text-sidebar-foreground/50">
+										<span className="qa-sidebar__user-email truncate text-[10px] text-sidebar-foreground/70">
 											{displayEmail}
 										</span>
 									</div>
 									<Icon
 										icon="ph:caret-up-down"
-										className="ml-auto size-3.5 text-sidebar-foreground/40"
+										className="ml-auto size-3.5 text-sidebar-foreground/60"
+										aria-hidden="true"
 									/>
 								</>
 							)}
@@ -1053,7 +1078,7 @@ export function AdminSidebar({
 		<LinkComponent
 			to={basePath}
 			className={cn(
-				"flex items-center gap-2.5 p-2 transition-colors duration-150",
+				"qa-sidebar__brand flex items-center gap-2.5 p-2 transition-colors duration-150",
 				"hover:bg-sidebar-accent",
 				collapsed && "justify-center",
 			)}
@@ -1063,9 +1088,9 @@ export function AdminSidebar({
 	);
 
 	return (
-		<Sidebar collapsible="icon" className={className}>
+		<Sidebar collapsible="icon" className={cn("qa-sidebar", className)}>
 			{/* Brand Header */}
-			<SidebarHeader className="p-2 border-b border-sidebar-border">
+			<SidebarHeader className="qa-sidebar__header p-2 border-b border-sidebar-border">
 				<SidebarMenu>
 					<SidebarMenuItem onClickCapture={handleBrandClick}>
 						{collapsed && !isMobile ? (
@@ -1099,31 +1124,33 @@ export function AdminSidebar({
 
 			{/* After Brand Slot - for scope pickers, etc */}
 			{afterBrand && !collapsed && (
-				<div className="px-3 py-2 border-b border-sidebar-border">
+				<div className="qa-sidebar__after-brand px-3 py-2 border-b border-sidebar-border">
 					{afterBrand}
 				</div>
 			)}
 
 			{/* Navigation */}
-			<SidebarContent>
-				{navigation.map((group, index) => (
-					<NavGroup
-						key={group.id ?? `group-${index}`}
-						group={group}
-						activeRoute={activeRoute}
-						LinkComponent={LinkComponent}
-						renderNavItem={renderNavItem}
-						basePath={basePath}
-						useActiveProps={useActiveProps}
-						isSectionCollapsed={isSectionCollapsed}
-						toggleSection={toggleSection}
-					/>
-				))}
+			<SidebarContent className="qa-sidebar__content">
+				<nav aria-label="Admin navigation" className="qa-sidebar__nav">
+					{navigation.map((group, index) => (
+						<NavGroup
+							key={group.id ?? `group-${index}`}
+							group={group}
+							activeRoute={activeRoute}
+							LinkComponent={LinkComponent}
+							renderNavItem={renderNavItem}
+							basePath={basePath}
+							useActiveProps={useActiveProps}
+							isSectionCollapsed={isSectionCollapsed}
+							toggleSection={toggleSection}
+						/>
+					))}
+				</nav>
 			</SidebarContent>
 
 			{/* Before Footer Slot - for additional actions */}
 			{beforeFooter && !collapsed && (
-				<div className="px-3 py-2 border-t border-sidebar-border">
+				<div className="qa-sidebar__before-footer px-3 py-2 border-t border-sidebar-border">
 					{beforeFooter}
 				</div>
 			)}

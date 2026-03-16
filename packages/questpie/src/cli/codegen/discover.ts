@@ -26,6 +26,11 @@ import type {
  * `send-newsletter.ts` → `sendNewsletter`
  * `site-settings.ts` → `siteSettings`
  *
+ * Note: Only hyphens are converted. Underscores pass through unchanged
+ * because collection/global names use snake_case (PostgreSQL convention)
+ * and the name IS the canonical runtime identifier used by relation
+ * references (through, f.relation target, sidebar config).
+ *
  * @see RFC §2.4 (Key Derivation)
  */
 export function kebabToCamelCase(filename: string): string {
@@ -653,7 +658,6 @@ async function processFile(
 		const results: DiscoveredFile[] = [];
 		const namedMatches = matches.filter((m) => !m.isDefault);
 		const defaultMatch = matches.find((m) => m.isDefault);
-
 		if (namedMatches.length > 0) {
 			// Named factory exports found — each becomes a separate entity
 			for (const m of namedMatches) {

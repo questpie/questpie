@@ -435,7 +435,7 @@ export function RelationPicker<T extends QuestpieApp>({
 	);
 
 	return (
-		<div className="space-y-2">
+		<div className="qa-relation-picker space-y-2">
 			{label && (
 				<div className="flex items-center gap-2">
 					<label

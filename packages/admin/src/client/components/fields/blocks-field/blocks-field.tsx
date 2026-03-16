@@ -104,41 +104,43 @@ export function BlocksField({
 			required={required}
 			disabled={disabled}
 		>
-			{hasBlocks ? (
-				<BlockEditorProvider
-					value={content}
-					onChange={handleChange}
-					blocks={filteredBlocks}
-					allowedBlocks={allowedBlocks}
-				>
-					<BlockEditorLayout />
-				</BlockEditorProvider>
-			) : (
-				<Card className="border-dashed">
-					<CardHeader className="pb-2">
-						<CardTitle className="flex items-center justify-between text-sm font-medium">
-							<span>Blocks ({blockCount})</span>
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="py-8 text-center text-muted-foreground">
-							<p className="text-sm">No block definitions registered</p>
-							<p className="mt-1 text-xs">
-								Register blocks with .blocks() in your admin configuration
-							</p>
-						</div>
-					</CardContent>
-				</Card>
-			)}
+			<div className="qa-blocks-field">
+				{hasBlocks ? (
+					<BlockEditorProvider
+						value={content}
+						onChange={handleChange}
+						blocks={filteredBlocks}
+						allowedBlocks={allowedBlocks}
+					>
+						<BlockEditorLayout />
+					</BlockEditorProvider>
+				) : (
+					<Card className="border-dashed">
+						<CardHeader className="pb-2">
+							<CardTitle className="flex items-center justify-between text-sm font-medium">
+								<span>Blocks ({blockCount})</span>
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="py-8 text-center text-muted-foreground">
+								<p className="text-sm">No block definitions registered</p>
+								<p className="mt-1 text-xs">
+									Register blocks with .blocks() in your admin configuration
+								</p>
+							</div>
+						</CardContent>
+					</Card>
+				)}
 
-			{/* Constraints info */}
-			{(minBlocks || maxBlocks) && (
-				<div className="mt-2 text-xs text-muted-foreground">
-					{minBlocks && <span>Min: {minBlocks} blocks </span>}
-					{maxBlocks && <span>Max: {maxBlocks} blocks</span>}
-					<span className="ml-2">Current: {blockCount}</span>
-				</div>
-			)}
+				{/* Constraints info */}
+				{(minBlocks || maxBlocks) && (
+					<div className="mt-2 text-xs text-muted-foreground">
+						{minBlocks && <span>Min: {minBlocks} blocks </span>}
+						{maxBlocks && <span>Max: {maxBlocks} blocks</span>}
+						<span className="ml-2">Current: {blockCount}</span>
+					</div>
+				)}
+			</div>
 		</FieldWrapper>
 	);
 }

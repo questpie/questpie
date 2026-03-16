@@ -60,7 +60,7 @@ export default [adminModule] as const;
 ```typescript
 // Collections are auto-discovered from collections/*.collection.ts
 // The codegen generates .generated/index.ts with the typed app instance:
-//   import { app } from "~/questpie/.generated";
+//   import { app } from "#questpie";
 //   export type App = typeof app;
 ```
 
@@ -75,7 +75,7 @@ files (blocks, views, components, etc.) and exports a plain config object.
 export { default as admin } from "./.generated/client";
 
 // admin/hooks.ts — typed hooks with module augmentation
-import type { App } from "../.generated";
+import type { App } from "#questpie";
 import type { admin } from "./admin";
 
 declare module "@questpie/admin/client" {

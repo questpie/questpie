@@ -663,14 +663,14 @@ export interface AdminGlobalConfig {
  * Context available to widget loader and access functions on the server.
  * Provides typed access to collections, globals, and infrastructure.
  */
-export interface WidgetFetchContext extends AppContext {
+export type WidgetFetchContext = AppContext & {
 	/** Database handle — populated at runtime by extractAppServices */
 	db: unknown;
 	/** Collection APIs — populated at runtime by extractAppServices */
 	collections: Record<string, any>;
 	/** Global APIs — populated at runtime by extractAppServices */
 	globals: Record<string, any>;
-}
+};
 
 /**
  * Per-widget access rule. Can be a boolean or async function.

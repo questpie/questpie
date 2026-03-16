@@ -218,7 +218,7 @@ export function ArrayField({
 	};
 
 	return (
-		<div className="space-y-2">
+		<div className="qa-array-field space-y-2">
 			{label && (
 				<div className="flex items-center gap-2">
 					<label htmlFor={name} className="text-sm font-medium">

@@ -43,7 +43,7 @@ function ContentLineSkeleton({ width }: { width: string }) {
  */
 export function TableViewSkeleton() {
 	return (
-		<div className="container">
+		<div className="qa-table-view-skeleton container">
 			<div className="space-y-4">
 				{/* Header */}
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -90,7 +90,7 @@ export function TableViewSkeleton() {
  */
 export function FormViewSkeleton() {
 	return (
-		<div className="container max-w-4xl py-6">
+		<div className="qa-form-view-skeleton container max-w-4xl py-6">
 			<div className="space-y-6">
 				{/* Header */}
 				<div className="flex items-center justify-between">

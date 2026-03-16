@@ -84,7 +84,7 @@ export function BlockEditorLayout({
 
 	return (
 		<div
-			className={cn("relative flex flex-col", className)}
+			className={cn("qa-block-editor relative flex flex-col", className)}
 			style={{ minHeight }}
 		>
 			{/* Main content area */}

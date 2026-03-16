@@ -119,7 +119,7 @@ interface CategoryDeclaration {
   /** Include in Registry augmentation. String = custom key, true = category name. */
   registryKey?: string | boolean;
 
-  /** Include in _AppInternal state type. @default true */
+  /** Include in App state type. @default true */
   includeInAppState?: boolean;
 
   /** Custom AppContext property emission. */

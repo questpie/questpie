@@ -221,7 +221,7 @@ export function SelectMulti<TValue extends string = string>({
 			aria-invalid={ariaInvalid}
 			tabIndex={0}
 			className={cn(
-				"flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-border bg-input px-3 py-1.5 text-sm transition-colors",
+				"qa-select-multi flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-border bg-input px-3 py-1.5 text-sm transition-colors",
 				"focus-within:ring-2 focus-within:ring-ring focus-within:border-ring",
 				disabled && "cursor-not-allowed opacity-50",
 				ariaInvalid && "border-destructive ring-destructive/20",
@@ -289,7 +289,9 @@ export function SelectMulti<TValue extends string = string>({
 				<CommandEmpty>{resolvedEmptyMessage}</CommandEmpty>
 				<CommandGroup>
 					{filteredOptions.map((option) => {
-						const isSelected = (resolvedValue as string[]).includes(option.value as string);
+						const isSelected = (resolvedValue as string[]).includes(
+							option.value as string,
+						);
 						const isDisabled = option.disabled || (!isSelected && !canAddMore);
 
 						return (

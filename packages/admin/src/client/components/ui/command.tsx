@@ -24,7 +24,7 @@ function Command({
 		<CommandPrimitive
 			data-slot="command"
 			className={cn(
-				"bg-popover text-popover-foreground p-1 flex size-full flex-col overflow-hidden",
+				"qa-command bg-popover text-popover-foreground p-1 flex size-full flex-col overflow-hidden",
 				className,
 			)}
 			{...props}
@@ -72,7 +72,7 @@ function CommandInput({
 				<CommandPrimitive.Input
 					data-slot="command-input"
 					className={cn(
-						"w-full text-xs/relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
+						"qa-command__input w-full text-xs/relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
 						className,
 					)}
 					{...props}
@@ -96,7 +96,7 @@ function CommandList({
 		<CommandPrimitive.List
 			data-slot="command-list"
 			className={cn(
-				"no-scrollbar max-h-72 scroll-py-1 outline-none overflow-x-hidden overflow-y-auto",
+				"qa-command__list no-scrollbar max-h-72 scroll-py-1 outline-none overflow-x-hidden overflow-y-auto",
 				className,
 			)}
 			{...props}
@@ -111,7 +111,10 @@ function CommandEmpty({
 	return (
 		<CommandPrimitive.Empty
 			data-slot="command-empty"
-			className={cn("py-6 text-center text-xs/relaxed", className)}
+			className={cn(
+				"qa-command__empty py-6 text-center text-xs/relaxed",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -125,7 +128,7 @@ function CommandGroup({
 		<CommandPrimitive.Group
 			data-slot="command-group"
 			className={cn(
-				"text-foreground [&_[cmdk-group-heading]]:text-muted-foreground overflow-hidden p-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium",
+				"qa-command__group text-foreground [&_[cmdk-group-heading]]:text-muted-foreground overflow-hidden p-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium",
 				className,
 			)}
 			{...props}
@@ -140,7 +143,10 @@ function CommandSeparator({
 	return (
 		<CommandPrimitive.Separator
 			data-slot="command-separator"
-			className={cn("bg-border -mx-1 my-1 h-px", className)}
+			className={cn(
+				"qa-command__separator bg-border -mx-1 my-1 h-px",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -155,7 +161,7 @@ function CommandItem({
 		<CommandPrimitive.Item
 			data-slot="command-item"
 			className={cn(
-				"data-selected:bg-current/5 data-selected:text-foreground data-selected:*:[svg]:text-foreground relative flex min-h-7 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-xs/relaxed outline-hidden select-none [&_svg:not([class*='size-'])]:size-3.5 group/command-item data-[disabled=true]:pointer-events-none data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+				"qa-command__item data-selected:bg-current/5 data-selected:text-foreground data-selected:*:[svg]:text-foreground relative flex min-h-7 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-xs/relaxed outline-hidden select-none [&_svg:not([class*='size-'])]:size-3.5 group/command-item data-[disabled=true]:pointer-events-none data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
 				className,
 			)}
 			{...props}

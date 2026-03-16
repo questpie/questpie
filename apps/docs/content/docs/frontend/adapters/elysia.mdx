@@ -18,7 +18,7 @@ bun add @questpie/elysia elysia
 ```ts title="src/index.ts"
 import { Elysia } from "elysia";
 import { createFetchHandler } from "questpie/adapters/elysia";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
