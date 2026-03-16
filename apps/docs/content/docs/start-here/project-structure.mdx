@@ -139,7 +139,7 @@ export type { AppConfig, AppCollections, AppGlobals, AppRoutes, AppJobs };
 The generated code augments `AppContext` so every handler gets typed DI:
 
 ```ts
-declare module "questpie" {
+declare global { namespace Questpie {
   interface AppContext {
     db: Database;
     email: MailerService<AppEmailTemplates>;
@@ -149,7 +149,7 @@ declare module "questpie" {
     session: Session | null;
     // ... custom services
   }
-}
+}}
 ```
 
 This is why `collections`, `queue`, `email` are available and typed in every handler — codegen generates the augmentation from your file structure.

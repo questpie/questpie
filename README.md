@@ -108,7 +108,7 @@ Collections, globals, routes, and jobs are auto-discovered via **file convention
 ```typescript
 import { Hono } from "hono";
 import { questpieHono } from "@questpie/hono";
-import { app } from "./questpie/server/.generated";
+import { app } from "#questpie";
 
 const server = new Hono();
 server.route("/api", questpieHono(app));
@@ -121,7 +121,7 @@ export default { port: 3000, fetch: server.fetch };
 ```typescript
 import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia";
-import { app } from "./questpie/server/.generated";
+import { app } from "#questpie";
 
 const server = new Elysia().use(questpieElysia(app)).listen(3000);
 
@@ -133,7 +133,7 @@ export type AppServer = typeof server;
 ```typescript
 // app/api/[...path]/route.ts
 import { questpieNextRouteHandlers } from "@questpie/next";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(
   app,
@@ -370,7 +370,7 @@ The client creates a typed admin builder and mounts the admin UI in React:
 ```typescript
 // src/questpie/admin/builder.ts
 import { qa, adminModule } from "@questpie/admin/client";
-import type { App } from "../server/.generated";
+import type { App } from "#questpie";
 
 export const admin = qa<App>().use(adminModule);
 ```

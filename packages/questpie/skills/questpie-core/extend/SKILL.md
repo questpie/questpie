@@ -244,7 +244,7 @@ QUESTPIE ships with adapters for Hono, Elysia, and Next.js. For other frameworks
 
 ```ts
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 // Use with any framework supporting standard Request/Response
@@ -257,7 +257,7 @@ const response = await handler(request);
 ```ts
 import { Elysia } from "elysia";
 import { createFetchHandler } from "questpie/adapters/elysia";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 const server = new Elysia()
@@ -269,7 +269,7 @@ const server = new Elysia()
 ```ts
 import { Hono } from "hono";
 import { createFetchHandler } from "questpie/adapters/hono";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const server = new Hono();
 const handler = createFetchHandler(app, { basePath: "/api" });
@@ -280,7 +280,7 @@ export default server;
 **Next.js (App Router):**
 ```ts title="app/api/[...slug]/route.ts"
 import { createFetchHandler } from "questpie/adapters/nextjs";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 export const GET = handler;
@@ -293,7 +293,7 @@ export const DELETE = handler;
 ```ts title="src/routes/api/$.ts"
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 export const Route = createAPIFileRoute("/api/$")({
@@ -341,10 +341,12 @@ questpie/admin/
 Codegen generates `declare module` augmentations:
 
 ```ts
-declare module "questpie" {
-  interface FieldTypeRegistry {
-    color: {};
-    currency: {};
+declare global {
+  namespace Questpie {
+    interface FieldTypeRegistry {
+      color: {};
+      currency: {};
+    }
   }
 }
 ```
@@ -432,16 +434,20 @@ This erases named keys via index signature intersection. The resulting type beco
 
 ```ts
 // WRONG -- erases literal types
-declare module "questpie" {
-  interface FieldTypeRegistry extends Record<string, unknown> {
-    color: {};
+declare global {
+  namespace Questpie {
+    interface FieldTypeRegistry extends Record<string, unknown> {
+      color: {};
+    }
   }
 }
 
 // CORRECT -- only named keys
-declare module "questpie" {
-  interface FieldTypeRegistry {
-    color: {};
+declare global {
+  namespace Questpie {
+    interface FieldTypeRegistry {
+      color: {};
+    }
   }
 }
 ```

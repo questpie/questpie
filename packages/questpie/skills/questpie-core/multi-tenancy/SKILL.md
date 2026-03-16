@@ -99,9 +99,11 @@ Use module augmentation so your custom context properties are type-safe everywhe
 
 ```ts
 // src/questpie/server/context.ts (same file, add at the top)
-declare module "questpie" {
-  interface QuestpieContextExtension {
-    workspaceId: string | null;
+declare global {
+  namespace Questpie {
+    interface QuestpieContextExtension {
+      workspaceId: string | null;
+    }
   }
 }
 ```
@@ -326,7 +328,7 @@ export default service({
 
 ### HIGH: Forgetting module augmentation
 
-Without `declare module "questpie" { interface QuestpieContextExtension { ... } }`, your custom context properties won't be typed. TypeScript won't error, but `ctx.workspaceId` will be `unknown`.
+Without `declare global { namespace Questpie { interface QuestpieContextExtension { ... } } }`, your custom context properties won't be typed. TypeScript won't error, but `ctx.workspaceId` will be `unknown`.
 
 ### HIGH: Not filtering in access rules
 

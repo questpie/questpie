@@ -134,7 +134,7 @@ QuestPie needs an HTTP adapter to serve your API. Choose one:
 
 ```ts title="API handler (Hono example)"
 import { createFetchHandler } from "questpie/adapters/hono";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 export default createFetchHandler(app, { basePath: "/api" });
 ```
@@ -143,7 +143,7 @@ For TanStack Start, use the generic fetch handler directly — there is no adapt
 
 ```ts title="src/routes/api/$.ts"
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 

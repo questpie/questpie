@@ -15,11 +15,11 @@ The `context.ts` file convention extracts custom properties from each incoming r
 import { context } from "#questpie";
 
 // Type your custom context properties
-declare module "questpie" {
+declare global { namespace Questpie {
   interface QuestpieContextExtension {
     workspaceId: string | null;
   }
-}
+}}
 
 export default context(async ({ request, session, db }) => {
   const workspaceId = request.headers.get("x-selected-workspace");

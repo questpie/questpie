@@ -17,7 +17,7 @@ bun add @questpie/nextjs
 
 ```ts title="app/api/[...slug]/route.ts"
 import { createFetchHandler } from "questpie/adapters/nextjs";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
@@ -34,7 +34,7 @@ TanStack Start does not have an adapter package. Use the generic fetch handler:
 ```ts title="src/routes/api/$.ts"
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 import { createFetchHandler } from "questpie";
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 

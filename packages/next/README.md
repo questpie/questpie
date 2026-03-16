@@ -15,7 +15,7 @@ bun add @questpie/next questpie
 ```ts
 // app/api/[...path]/route.ts
 import { questpieNextRouteHandlers } from "@questpie/next";
-import { app } from "@/questpie/server/app";
+import { app } from "#questpie";
 
 export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(app, {
   basePath: "/api",
@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 ```ts
 // lib/client.ts
 import { createClient } from "questpie/client";
-import type { AppConfig } from "@/questpie/server/app";
+import type { AppConfig } from "#questpie";
 
 export const appClient = createClient<AppConfig>({
   baseURL: process.env.NEXT_PUBLIC_URL!,
@@ -87,7 +87,7 @@ export function PostsList() {
 ```ts
 "use server";
 
-import { app } from "@/questpie/server/app";
+import { app } from "#questpie";
 import { revalidatePath } from "next/cache";
 
 export async function createPost(formData: FormData) {

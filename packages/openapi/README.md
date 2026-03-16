@@ -31,7 +31,7 @@ Your route handler stays clean — no wrapper needed:
 ```ts
 // routes/api/$.ts
 import { createFetchHandler } from "questpie";
-import { app } from "~/questpie/server/.generated";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 ```
