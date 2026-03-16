@@ -14,7 +14,15 @@ import _job_wfExecute from "../jobs/wf-execute";
 import _job_wfMaintenance from "../jobs/wf-maintenance";
 import _job_wfResume from "../jobs/wf-resume";
 // ── Routes ────────────────────────────────────────────
-import { workflowFunctions as _route_workflowFunctions } from "../routes/workflow-functions";
+import _route_cancel_all_workflow_instances from "../routes/cancel-all-workflow-instances";
+import _route_cancel_workflow_instance from "../routes/cancel-workflow-instance";
+import _route_get_workflow_instance from "../routes/get-workflow-instance";
+import _route_list_workflow_definitions from "../routes/list-workflow-definitions";
+import _route_list_workflow_instances from "../routes/list-workflow-instances";
+import _route_retry_all_workflow_instances from "../routes/retry-all-workflow-instances";
+import _route_retry_workflow_instance from "../routes/retry-workflow-instance";
+import _route_send_workflow_event from "../routes/send-workflow-event";
+import _route_trigger_workflow from "../routes/trigger-workflow";
 // ── Services ────────────────────────────────────────────
 import _svc_workflowService from "../services/workflow-service";
 import _sidebar from "../sidebar";
@@ -36,7 +44,17 @@ export interface WorkflowsJobs {
 	wfResume: typeof _job_wfResume;
 }
 
-export type WorkflowsRoutes = typeof _route_workflowFunctions;
+export interface WorkflowsRoutes {
+	"cancel-all-workflow-instances": typeof _route_cancel_all_workflow_instances;
+	"cancel-workflow-instance": typeof _route_cancel_workflow_instance;
+	"get-workflow-instance": typeof _route_get_workflow_instance;
+	"list-workflow-definitions": typeof _route_list_workflow_definitions;
+	"list-workflow-instances": typeof _route_list_workflow_instances;
+	"retry-all-workflow-instances": typeof _route_retry_all_workflow_instances;
+	"retry-workflow-instance": typeof _route_retry_workflow_instance;
+	"send-workflow-event": typeof _route_send_workflow_event;
+	"trigger-workflow": typeof _route_trigger_workflow;
+}
 
 export interface WorkflowsServices {
 	workflowService: typeof _svc_workflowService;
@@ -60,12 +78,21 @@ const _module = {
 		wfResume: _job_wfResume,
 	} as WorkflowsJobs,
 	routes: {
-		..._route_workflowFunctions,
+		"cancel-all-workflow-instances": _route_cancel_all_workflow_instances,
+		"cancel-workflow-instance": _route_cancel_workflow_instance,
+		"get-workflow-instance": _route_get_workflow_instance,
+		"list-workflow-definitions": _route_list_workflow_definitions,
+		"list-workflow-instances": _route_list_workflow_instances,
+		"retry-all-workflow-instances": _route_retry_all_workflow_instances,
+		"retry-workflow-instance": _route_retry_workflow_instance,
+		"send-workflow-event": _route_send_workflow_event,
+		"trigger-workflow": _route_trigger_workflow,
 	} as WorkflowsRoutes,
 	services: {
 		workflowService: _svc_workflowService,
 	} as WorkflowsServices,
 	globals: {},
+	functions: {},
 	messages: {},
 	emails: {},
 	migrations: [] as const,

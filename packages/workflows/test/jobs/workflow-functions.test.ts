@@ -1,6 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import { z } from "zod";
-import { workflowFunctions } from "../../src/server/modules/workflows/routes/workflow-functions.js";
+import cancelAllWorkflowInstances from "../../src/server/modules/workflows/routes/cancel-all-workflow-instances.js";
+import cancelWorkflowInstance from "../../src/server/modules/workflows/routes/cancel-workflow-instance.js";
+import getWorkflowInstance from "../../src/server/modules/workflows/routes/get-workflow-instance.js";
+import listWorkflowDefinitions from "../../src/server/modules/workflows/routes/list-workflow-definitions.js";
+import listWorkflowInstances from "../../src/server/modules/workflows/routes/list-workflow-instances.js";
+import retryAllWorkflowInstances from "../../src/server/modules/workflows/routes/retry-all-workflow-instances.js";
+import retryWorkflowInstance from "../../src/server/modules/workflows/routes/retry-workflow-instance.js";
+import sendWorkflowEvent from "../../src/server/modules/workflows/routes/send-workflow-event.js";
+import triggerWorkflow from "../../src/server/modules/workflows/routes/trigger-workflow.js";
 import type { WorkflowDefinition } from "../../src/server/workflow/types.js";
 import { createFnContext, createMockStores } from "./helpers.js";
 
@@ -29,31 +37,14 @@ const workflows = {
 	"cron-wf": cronWorkflow,
 };
 
-/**
- * Call an fn() handler with the mock context shape.
- * fn handlers destructure { input, ...ctx }, so we spread everything.
- */
-async function _callFn(fn: any, input: any, overrides?: any) {
-	const { ctx } = createFnContext(input, overrides);
-	// fn handlers receive a single object { input, ...rest }
-	return fn.handler(ctx);
-}
-
-async function _callFnWithCtx(fn: any, input: any, overrides?: any) {
-	const result = createFnContext(input, overrides);
-	const response = await fn.handler(result.ctx);
-	return { response, ...result };
-}
-
 // ── Tests ──────────────────────────────────────────────────
 
-describe("workflow functions", () => {
+describe("workflow routes", () => {
 	describe("listWorkflowInstances", () => {
 		it("returns paginated list of instances", async () => {
 			const stores = createMockStores();
 			const { ctx } = createFnContext({ limit: 50, page: 1 }, { stores });
 
-			// Populate some instances
 			stores.instances.set("inst-1", {
 				id: "inst-1",
 				name: "test-wf",
@@ -67,7 +58,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.listWorkflowInstances.handler(ctx);
+			const result = await listWorkflowInstances.handler(ctx);
 			expect(result.docs).toHaveLength(2);
 			expect(result.page).toBe(1);
 			expect(result.limit).toBe(50);
@@ -93,7 +84,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.listWorkflowInstances.handler(ctx);
+			const result = await listWorkflowInstances.handler(ctx);
 			expect(result.docs).toHaveLength(1);
 			expect(result.docs[0].status).toBe("running");
 		});
@@ -118,7 +109,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.listWorkflowInstances.handler(ctx);
+			const result = await listWorkflowInstances.handler(ctx);
 			expect(result.docs).toHaveLength(1);
 			expect(result.docs[0].name).toBe("test-wf");
 		});
@@ -147,7 +138,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.getWorkflowInstance.handler(ctx);
+			const result = await getWorkflowInstance.handler(ctx);
 			expect(result.instance.id).toBe("inst-1");
 			expect(result.steps).toHaveLength(1);
 			expect(result.logs).toHaveLength(0);
@@ -174,7 +165,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.getWorkflowInstance.handler(ctx);
+			const result = await getWorkflowInstance.handler(ctx);
 			expect(result.steps).toHaveLength(0);
 			expect(result.logs).toHaveLength(1);
 		});
@@ -186,9 +177,9 @@ describe("workflow functions", () => {
 				{ stores },
 			);
 
-			await expect(
-				workflowFunctions.getWorkflowInstance.handler(ctx),
-			).rejects.toThrow("Workflow instance not found");
+			await expect(getWorkflowInstance.handler(ctx)).rejects.toThrow(
+				"Workflow instance not found",
+			);
 		});
 	});
 
@@ -204,8 +195,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result =
-				await workflowFunctions.cancelWorkflowInstance.handler(ctx);
+			const result = await cancelWorkflowInstance.handler(ctx);
 			expect(result.success).toBe(true);
 
 			const instance = stores.instances.get("inst-1");
@@ -224,8 +214,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result =
-				await workflowFunctions.cancelWorkflowInstance.handler(ctx);
+			const result = await cancelWorkflowInstance.handler(ctx);
 			expect(result.success).toBe(true);
 		});
 
@@ -240,8 +229,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result =
-				await workflowFunctions.cancelWorkflowInstance.handler(ctx);
+			const result = await cancelWorkflowInstance.handler(ctx);
 			expect(result.success).toBe(true);
 		});
 
@@ -256,8 +244,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result =
-				await workflowFunctions.cancelWorkflowInstance.handler(ctx);
+			const result = await cancelWorkflowInstance.handler(ctx);
 			expect(result.success).toBe(false);
 			expect(result.reason).toContain("completed");
 		});
@@ -273,8 +260,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result =
-				await workflowFunctions.cancelWorkflowInstance.handler(ctx);
+			const result = await cancelWorkflowInstance.handler(ctx);
 			expect(result.success).toBe(false);
 		});
 
@@ -282,9 +268,9 @@ describe("workflow functions", () => {
 			const stores = createMockStores();
 			const { ctx } = createFnContext({ id: "non-existent" }, { stores });
 
-			await expect(
-				workflowFunctions.cancelWorkflowInstance.handler(ctx),
-			).rejects.toThrow("Workflow instance not found");
+			await expect(cancelWorkflowInstance.handler(ctx)).rejects.toThrow(
+				"Workflow instance not found",
+			);
 		});
 	});
 
@@ -301,7 +287,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.retryWorkflowInstance.handler(ctx);
+			const result = await retryWorkflowInstance.handler(ctx);
 			expect(result.success).toBe(true);
 
 			const instance = stores.instances.get("inst-1");
@@ -328,7 +314,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.retryWorkflowInstance.handler(ctx);
+			const result = await retryWorkflowInstance.handler(ctx);
 			expect(result.success).toBe(true);
 
 			const executeChannel = queue["questpie-wf-execute"];
@@ -346,7 +332,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.retryWorkflowInstance.handler(ctx);
+			const result = await retryWorkflowInstance.handler(ctx);
 			expect(result.success).toBe(false);
 			expect(result.reason).toContain("running");
 		});
@@ -355,9 +341,9 @@ describe("workflow functions", () => {
 			const stores = createMockStores();
 			const { ctx } = createFnContext({ id: "non-existent" }, { stores });
 
-			await expect(
-				workflowFunctions.retryWorkflowInstance.handler(ctx),
-			).rejects.toThrow("Workflow instance not found");
+			await expect(retryWorkflowInstance.handler(ctx)).rejects.toThrow(
+				"Workflow instance not found",
+			);
 		});
 	});
 
@@ -365,8 +351,7 @@ describe("workflow functions", () => {
 		it("returns all registered definitions with metadata", async () => {
 			const { ctx } = createFnContext({}, { workflows });
 
-			const result =
-				await workflowFunctions.listWorkflowDefinitions.handler(ctx);
+			const result = await listWorkflowDefinitions.handler(ctx);
 			expect(result.definitions).toHaveLength(2);
 
 			const testDef = result.definitions.find((d: any) => d.name === "test-wf");
@@ -387,8 +372,7 @@ describe("workflow functions", () => {
 		it("returns empty list when no workflows registered", async () => {
 			const { ctx } = createFnContext({}, { workflows: {} });
 
-			const result =
-				await workflowFunctions.listWorkflowDefinitions.handler(ctx);
+			const result = await listWorkflowDefinitions.handler(ctx);
 			expect(result.definitions).toHaveLength(0);
 		});
 	});
@@ -401,7 +385,7 @@ describe("workflow functions", () => {
 				{ stores, workflows },
 			);
 
-			const result = await workflowFunctions.triggerWorkflow.handler(ctx);
+			const result = await triggerWorkflow.handler(ctx);
 			expect(result.existing).toBe(false);
 			expect(result.instanceId).toBeDefined();
 
@@ -423,9 +407,7 @@ describe("workflow functions", () => {
 				{ workflows },
 			);
 
-			await expect(
-				workflowFunctions.triggerWorkflow.handler(ctx),
-			).rejects.toThrow();
+			await expect(triggerWorkflow.handler(ctx)).rejects.toThrow();
 		});
 
 		it("returns existing instance for duplicate idempotency key", async () => {
@@ -439,7 +421,7 @@ describe("workflow functions", () => {
 				{ stores, workflows },
 			);
 
-			const result1 = await workflowFunctions.triggerWorkflow.handler(ctx1);
+			const result1 = await triggerWorkflow.handler(ctx1);
 			expect(result1.existing).toBe(false);
 
 			const { ctx: ctx2 } = createFnContext(
@@ -451,7 +433,7 @@ describe("workflow functions", () => {
 				{ stores, workflows },
 			);
 
-			const result2 = await workflowFunctions.triggerWorkflow.handler(ctx2);
+			const result2 = await triggerWorkflow.handler(ctx2);
 			expect(result2.existing).toBe(true);
 			expect(result2.instanceId).toBe(result1.instanceId);
 		});
@@ -462,9 +444,9 @@ describe("workflow functions", () => {
 				{ workflows },
 			);
 
-			await expect(
-				workflowFunctions.triggerWorkflow.handler(ctx),
-			).rejects.toThrow('Unknown workflow: "unknown-wf"');
+			await expect(triggerWorkflow.handler(ctx)).rejects.toThrow(
+				'Unknown workflow: "unknown-wf"',
+			);
 		});
 
 		it("sets timeoutAt from workflow definition", async () => {
@@ -474,7 +456,7 @@ describe("workflow functions", () => {
 				{ stores, workflows },
 			);
 
-			await workflowFunctions.triggerWorkflow.handler(ctx);
+			await triggerWorkflow.handler(ctx);
 
 			const instances = Array.from(stores.instances.values());
 			expect(instances[0].timeoutAt).toBeInstanceOf(Date);
@@ -492,7 +474,7 @@ describe("workflow functions", () => {
 				{ stores },
 			);
 
-			const result = await workflowFunctions.sendWorkflowEvent.handler(ctx);
+			const result = await sendWorkflowEvent.handler(ctx);
 			expect(result.matchedCount).toBe(0);
 
 			// Event should be stored
@@ -521,7 +503,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.sendWorkflowEvent.handler(ctx);
+			const result = await sendWorkflowEvent.handler(ctx);
 			expect(result.matchedCount).toBe(1);
 
 			const resumeChannel = queue["questpie-wf-resume"];
@@ -548,7 +530,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result = await workflowFunctions.sendWorkflowEvent.handler(ctx);
+			const result = await sendWorkflowEvent.handler(ctx);
 			expect(result.matchedCount).toBe(0);
 		});
 	});
@@ -577,8 +559,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result =
-				await workflowFunctions.cancelAllWorkflowInstances.handler(ctx);
+			const result = await cancelAllWorkflowInstances.handler(ctx);
 			expect(result.cancelledCount).toBe(2);
 
 			expect(stores.instances.get("inst-1").status).toBe("cancelled");
@@ -590,8 +571,7 @@ describe("workflow functions", () => {
 			const stores = createMockStores();
 			const { ctx } = createFnContext({ name: "test-wf" }, { stores });
 
-			const result =
-				await workflowFunctions.cancelAllWorkflowInstances.handler(ctx);
+			const result = await cancelAllWorkflowInstances.handler(ctx);
 			expect(result.cancelledCount).toBe(0);
 		});
 	});
@@ -620,8 +600,7 @@ describe("workflow functions", () => {
 				createdAt: new Date(),
 			});
 
-			const result =
-				await workflowFunctions.retryAllWorkflowInstances.handler(ctx);
+			const result = await retryAllWorkflowInstances.handler(ctx);
 			expect(result.retriedCount).toBe(2);
 
 			expect(stores.instances.get("inst-1").status).toBe("pending");
@@ -636,8 +615,7 @@ describe("workflow functions", () => {
 			const stores = createMockStores();
 			const { ctx } = createFnContext({ name: "test-wf" }, { stores });
 
-			const result =
-				await workflowFunctions.retryAllWorkflowInstances.handler(ctx);
+			const result = await retryAllWorkflowInstances.handler(ctx);
 			expect(result.retriedCount).toBe(0);
 		});
 	});
