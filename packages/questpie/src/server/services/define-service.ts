@@ -83,8 +83,8 @@ export class ServiceBuilder<
 export function service(): ServiceBuilder<unknown>;
 export function service<
 	TInstance,
-	TNamespace extends ServiceNamespace,
-	TLifecycle extends ServiceLifecycle,
+	TNamespace extends ServiceNamespace = undefined,
+	TLifecycle extends ServiceLifecycle = ServiceLifecycle,
 >(state: {
 	create: (
 		ctx: Questpie.ServiceCreateContext,

@@ -77,20 +77,34 @@ interface CategoryInfo {
 // ============================================================================
 
 /**
+ * Normalize a block entry to a BlockDefinition.
+ * App state may contain either built BlockDefinition objects (with getFieldMetadata)
+ * or raw BlockBuilder instances (with a .build() method). This normalizes both
+ * to a BlockDefinition by calling .build() on builders.
+ */
+function normalizeBlockDef(blockDef: any): AnyBlockDefinition {
+	if (typeof blockDef?.build === "function" && !blockDef.getFieldMetadata) {
+		return blockDef.build();
+	}
+	return blockDef;
+}
+
+/**
  * Introspect a single block definition.
  * Handles both server BlockBuilder definitions and client BlockDefinition objects
  * that were converted via the `.blocks()` patch.
  */
 export function introspectBlock(blockDef: AnyBlockDefinition): BlockSchema {
-	const state = blockDef.state;
+	const resolved = normalizeBlockDef(blockDef);
+	const state = resolved.state;
 
 	return {
-		name: state.name ?? blockDef.name,
+		name: state.name ?? resolved.name,
 		admin: state.admin,
 		allowChildren: state.allowChildren,
 		maxChildren: state.maxChildren,
 		hasPrefetch: typeof state.prefetch === "function",
-		fields: blockDef.getFieldMetadata(),
+		fields: resolved.getFieldMetadata(),
 	};
 }
 

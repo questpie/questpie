@@ -100,7 +100,7 @@ export interface GlobalOptions {
  * })
  * ```
  */
-export interface GlobalHookContext<TData = any> extends AppContext {
+export type GlobalHookContext<TData = any> = AppContext & {
 	/** The global data */
 	data: TData;
 	/** Input data for update operations */
@@ -109,21 +109,21 @@ export interface GlobalHookContext<TData = any> extends AppContext {
 	locale?: string;
 	/** Access mode */
 	accessMode?: AccessMode;
-}
+};
 
 /**
  * Access control context for global operations.
  *
  * @template TData - The global data type
  */
-export interface GlobalAccessContext<TData = any> extends AppContext {
+export type GlobalAccessContext<TData = any> = AppContext & {
 	/** The global data */
 	data?: TData;
 	/** Input data for update */
 	input?: unknown;
 	/** Current locale */
 	locale?: string;
-}
+};
 
 /**
  * Hook function type
@@ -159,7 +159,7 @@ export interface GlobalHooks<TRow = any> {
 /**
  * Context passed to global workflow transition hooks.
  */
-export interface GlobalTransitionHookContext<TData = any> extends AppContext {
+export type GlobalTransitionHookContext<TData = any> = AppContext & {
 	/** Global record being transitioned */
 	data: TData;
 	/** Stage the global is transitioning from */
@@ -168,7 +168,7 @@ export interface GlobalTransitionHookContext<TData = any> extends AppContext {
 	toStage: string;
 	/** Current locale */
 	locale?: string;
-}
+};
 
 /**
  * Hook function for global workflow stage transitions.
@@ -242,8 +242,16 @@ export interface GlobalBuilderState {
 	virtuals: Record<string, SQL>;
 	relations: Record<string, RelationConfig>;
 	options: GlobalOptions;
-	hooks: GlobalHooks;
-	access: GlobalAccess;
+	/**
+	 * Lifecycle hooks — stored as Record<string, any> to avoid
+	 * circular type references through AppContext.
+	 */
+	hooks: Record<string, any>;
+	/**
+	 * Access control — stored as Record<string, any> to avoid
+	 * circular type references through AppContext.
+	 */
+	access: Record<string, any>;
 	/**
 	 * Validation schemas for the global.
 	 * Auto-generated if not explicitly provided.

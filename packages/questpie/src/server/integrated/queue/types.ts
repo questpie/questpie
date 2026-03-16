@@ -36,12 +36,12 @@ export type { QueueAdapter } from "./adapter.js";
  * })
  * ```
  */
-export interface JobHandlerArgs<TPayload = any> extends AppContext {
+export type JobHandlerArgs<TPayload = any> = AppContext & {
 	/** Validated job payload */
 	payload: TPayload;
 	/** Current locale */
 	locale?: string;
-}
+};
 
 /**
  * Job definition with typesafe payload and result
@@ -228,76 +228,73 @@ export interface QueueListenHandle {
 /**
  * Typesafe queue client for publishing jobs
  */
-export type QueueClient<TJobs extends Record<string, any>> =
-	{
-		[K in keyof TJobs]: {
-			/**
-			 * Publish a job to the queue
-			 */
-			publish: (
-				payload: InferJobPayload<TJobs[K]>,
-				options?: PublishOptions,
-			) => Promise<string | null>;
-
-			/**
-			 * Schedule a recurring job with cron
-			 */
-			schedule: (
-				payload: InferJobPayload<TJobs[K]>,
-				cron: string,
-				options?: Omit<PublishOptions, "startAfter">,
-			) => Promise<void>;
-
-			/**
-			 * Cancel scheduled jobs
-			 */
-			unschedule: () => Promise<void>;
-		};
-	} & {
+export type QueueClient<TJobs extends Record<string, any>> = {
+	[K in keyof TJobs]: {
 		/**
-		 * Adapter capabilities exposed to runtime.
+		 * Publish a job to the queue
 		 */
-		capabilities: QueueAdapterCapabilities;
+		publish: (
+			payload: InferJobPayload<TJobs[K]>,
+			options?: PublishOptions,
+		) => Promise<string | null>;
 
 		/**
-		 * Start long-running queue consumers.
+		 * Schedule a recurring job with cron
 		 */
-		listen: (options?: QueueListenRuntimeOptions) => Promise<QueueListenHandle>;
-
-		/**
-		 * Process one bounded batch of jobs.
-		 */
-		runOnce: (options?: QueueRunOnceOptions) => Promise<QueueRunOnceResult>;
-
-		/**
-		 * Register recurring cron schedules declared in job options.
-		 */
-		registerSchedules: (
-			options?: QueueRegisterSchedulesOptions,
+		schedule: (
+			payload: InferJobPayload<TJobs[K]>,
+			cron: string,
+			options?: Omit<PublishOptions, "startAfter">,
 		) => Promise<void>;
 
 		/**
-		 * Stop all running queue consumers and adapter.
+		 * Cancel scheduled jobs
 		 */
-		stop: () => Promise<void>;
-
-		/**
-		 * Create push consumer handler (for runtimes like Cloudflare Queues).
-		 */
-		createPushConsumer: () => QueuePushConsumerHandler;
-
-		/**
-		 * Access to underlying Queue Adapter
-		 */
-		_adapter: QueueAdapter;
-
-		/**
-		 * Start the queue (called automatically)
-		 */
-		_start: () => Promise<void>;
-
-		/**
-		 * Stop the queue
-		 */
-		_stop: () => Promise<void>;
+		unschedule: () => Promise<void>;
 	};
+} & {
+	/**
+	 * Adapter capabilities exposed to runtime.
+	 */
+	capabilities: QueueAdapterCapabilities;
+
+	/**
+	 * Start long-running queue consumers.
+	 */
+	listen: (options?: QueueListenRuntimeOptions) => Promise<QueueListenHandle>;
+
+	/**
+	 * Process one bounded batch of jobs.
+	 */
+	runOnce: (options?: QueueRunOnceOptions) => Promise<QueueRunOnceResult>;
+
+	/**
+	 * Register recurring cron schedules declared in job options.
+	 */
+	registerSchedules: (options?: QueueRegisterSchedulesOptions) => Promise<void>;
+
+	/**
+	 * Stop all running queue consumers and adapter.
+	 */
+	stop: () => Promise<void>;
+
+	/**
+	 * Create push consumer handler (for runtimes like Cloudflare Queues).
+	 */
+	createPushConsumer: () => QueuePushConsumerHandler;
+
+	/**
+	 * Access to underlying Queue Adapter
+	 */
+	_adapter: QueueAdapter;
+
+	/**
+	 * Start the queue (called automatically)
+	 */
+	_start: () => Promise<void>;
+
+	/**
+	 * Stop the queue
+	 */
+	_stop: () => Promise<void>;
+};

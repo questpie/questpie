@@ -1,5 +1,6 @@
 import qs from "qs";
 import superjson from "superjson";
+import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
 	InferRouteInput,
 	InferRouteOutput,
@@ -7,7 +8,6 @@ import type {
 	RawRouteDefinition,
 	RouteDefinition,
 } from "#questpie/server/routes/types.js";
-import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
 	AnyCollection,
 	AnyCollectionOrBuilder,
@@ -85,11 +85,11 @@ export class UploadError extends Error {
 	}
 }
 
-import type { AnyGlobal, GetGlobal } from "#questpie/shared/type-utils.js";
 import type { CollectionSchema } from "#questpie/server/collection/introspection.js";
 import type { CollectionMeta } from "#questpie/shared/collection-meta.js";
 import type { ApiErrorShape } from "#questpie/shared/error-types.js";
 import type { GlobalMeta } from "#questpie/shared/global-meta.js";
+import type { AnyGlobal, GetGlobal } from "#questpie/shared/type-utils.js";
 
 /**
  * Minimal app type constraint for client APIs.
@@ -241,9 +241,9 @@ type RawRouteCaller = (options?: RouteCallOptions) => Promise<Response>;
  *
  * For routes with `:METHOD` suffix in key (multi-export), only that method is available.
  */
-type RoutesClientAPI<TRoutes> = TRoutes extends Record<string, any>
-	? ExpandRoutes<TRoutes>
-	: {};
+type RoutesClientAPI<TRoutes extends Record<string, any>> = {
+	[K in keyof TRoutes & string]: RouteCallerFromDef<TRoutes[K]>;
+};
 
 /**
  * Expand flat route keys into nested structure.
@@ -271,11 +271,12 @@ type ExpandKey<K extends string, TDef> = K extends `${infer Head}/${infer Rest}`
 		? { [P in Path]: { [M in Lowercase<Method>]: RouteCallerFromDef<TDef> } }
 		: { [P in K]: RouteCallerFromDef<TDef> };
 
-type RouteCallerFromDef<TDef> = TDef extends JsonRouteDefinition<any, any>
-	? JsonRouteCaller<TDef>
-	: TDef extends RawRouteDefinition
-		? RawRouteCaller
-		: (input?: any) => Promise<any>;
+type RouteCallerFromDef<TDef> =
+	TDef extends JsonRouteDefinition<any, any>
+		? JsonRouteCaller<TDef>
+		: TDef extends RawRouteDefinition
+			? RawRouteCaller
+			: (input?: any) => Promise<any>;
 
 /**
  * Type-safe collection API for a single collection
@@ -716,7 +717,7 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
 export type QuestpieClient<TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
 	globals: GlobalsAPI<TApp>;
-	routes: RoutesClientAPI<TApp extends { routes: infer R } ? R : Record<string, never>>;
+	routes: RoutesClientAPI<NonNullable<TApp["routes"]> & Record<string, any>>;
 	search: SearchAPI;
 	realtime: RealtimeAPI;
 	setLocale?: (locale?: string) => void;
@@ -1384,7 +1385,8 @@ export function createClient<TApp extends QuestpieApp>(
 		return new Proxy(callable, {
 			get(_, prop) {
 				if (prop === "then") return undefined;
-				if (prop === "url") return `${config.baseURL}${apiBasePath}/${segments.map(camelToKebab).join("/")}`;
+				if (prop === "url")
+					return `${config.baseURL}${apiBasePath}/${segments.map(camelToKebab).join("/")}`;
 				if (typeof prop !== "string") return undefined;
 
 				// HTTP method names at leaf → method-specific caller

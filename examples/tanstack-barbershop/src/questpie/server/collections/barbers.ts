@@ -180,7 +180,7 @@ export const barbers = collection("barbers")
 			services: f
 				.relation("services")
 				.manyToMany({
-					through: "barberServices",
+					through: "barber_services",
 					sourceField: "barber",
 					targetField: "service",
 				})

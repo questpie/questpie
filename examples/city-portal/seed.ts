@@ -193,7 +193,7 @@ async function seed() {
 			cityId,
 		});
 
-		await app.api.globals.siteSettings.update(
+		await app.api.globals.site_settings.update(
 			{
 				siteName: `${city.name} Council`,
 				tagline: city.tagline,

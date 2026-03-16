@@ -6,23 +6,23 @@ import { useAdminStore } from "../runtime/provider.js";
  * Hook to fetch saved views for a collection
  *
  * Note: This hook requires the `adminModule` to be used in your app setup.
- * If adminSavedViews collection is not available, returns empty array.
+ * If admin_saved_views collection is not available, returns empty array.
  */
 export function useSavedViews(collectionName: string) {
 	const client = useAdminStore((s) => s.client);
 
 	return useQuery({
-		queryKey: ["adminSavedViews", collectionName],
+		queryKey: ["admin_saved_views", collectionName],
 		queryFn: async (): Promise<{ docs: SavedView[] }> => {
 			// Check if the collection exists on the client
 			const collections = client?.collections as
 				| Record<string, any>
 				| undefined;
-			if (!collections?.adminSavedViews) {
+			if (!collections?.admin_saved_views) {
 				return { docs: [] };
 			}
 
-			const result = await collections.adminSavedViews.find({
+			const result = await collections.admin_saved_views.find({
 				where: { collectionName },
 			});
 			return { docs: (result?.docs ?? []) as SavedView[] };
@@ -47,13 +47,13 @@ export function useSaveView(collectionName: string) {
 			const collections = client?.collections as
 				| Record<string, any>
 				| undefined;
-			if (!collections?.adminSavedViews) {
+			if (!collections?.admin_saved_views) {
 				throw new Error(
-					"adminSavedViews collection not available. Make sure to use the adminModule in your app setup.",
+					"admin_saved_views collection not available. Make sure to use the adminModule in your app setup.",
 				);
 			}
 
-			return collections.adminSavedViews.create({
+			return collections.admin_saved_views.create({
 				...data,
 				collectionName,
 				userId: data.userId || "anonymous",
@@ -62,7 +62,7 @@ export function useSaveView(collectionName: string) {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
-				queryKey: ["adminSavedViews", collectionName],
+				queryKey: ["admin_saved_views", collectionName],
 			});
 		},
 	});
@@ -86,17 +86,17 @@ function useUpdateSavedView(collectionName: string) {
 			const collections = client?.collections as
 				| Record<string, any>
 				| undefined;
-			if (!collections?.adminSavedViews) {
+			if (!collections?.admin_saved_views) {
 				throw new Error(
-					"adminSavedViews collection not available. Make sure to use the adminModule in your app setup.",
+					"admin_saved_views collection not available. Make sure to use the adminModule in your app setup.",
 				);
 			}
 
-			return collections.adminSavedViews.update({ id, data });
+			return collections.admin_saved_views.update({ id, data });
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
-				queryKey: ["adminSavedViews", collectionName],
+				queryKey: ["admin_saved_views", collectionName],
 			});
 		},
 	});
@@ -114,17 +114,17 @@ export function useDeleteSavedView(collectionName: string) {
 			const collections = client?.collections as
 				| Record<string, any>
 				| undefined;
-			if (!collections?.adminSavedViews) {
+			if (!collections?.admin_saved_views) {
 				throw new Error(
-					"adminSavedViews collection not available. Make sure to use the adminModule in your app setup.",
+					"admin_saved_views collection not available. Make sure to use the adminModule in your app setup.",
 				);
 			}
 
-			return collections.adminSavedViews.delete({ id: viewId });
+			return collections.admin_saved_views.delete({ id: viewId });
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
-				queryKey: ["adminSavedViews", collectionName],
+				queryKey: ["admin_saved_views", collectionName],
 			});
 		},
 	});

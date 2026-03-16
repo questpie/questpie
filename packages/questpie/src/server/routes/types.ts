@@ -30,10 +30,10 @@ export type HttpMethod =
 // Access Control
 // ============================================================================
 
-export interface RouteAccessContext extends AppContext {
+export type RouteAccessContext = AppContext & {
 	locale?: string;
 	request?: Request;
-}
+};
 
 export type RouteAccessRule =
 	| boolean
@@ -52,24 +52,24 @@ export type RouteAccess =
 /**
  * Context passed to JSON route handlers.
  */
-export interface JsonRouteHandlerArgs<TInput = any> extends AppContext {
+export type JsonRouteHandlerArgs<TInput = any> = AppContext & {
 	/** Validated input data (from body or query string) */
 	input: TInput;
 	/** Current locale */
 	locale?: string;
-}
+};
 
 /**
  * Context passed to raw route handlers.
  */
-export interface RawRouteHandlerArgs extends AppContext {
+export type RawRouteHandlerArgs = AppContext & {
 	/** Raw incoming request */
 	request: Request;
 	/** Current locale */
 	locale?: string;
 	/** URL path parameters (if pattern-matched) */
 	params: Record<string, string>;
-}
+};
 
 // ============================================================================
 // Route Definitions — New Unified Types
@@ -133,18 +133,14 @@ export type InferRouteOutput<T> = T extends {
 /**
  * Type guard: check if a route is a JSON route.
  */
-export function isJsonRoute(
-	def: RouteDefinition,
-): def is JsonRouteDefinition {
+export function isJsonRoute(def: RouteDefinition): def is JsonRouteDefinition {
 	return def.mode === "json";
 }
 
 /**
  * Type guard: check if a route is a raw route.
  */
-export function isRawRoute(
-	def: RouteDefinition,
-): def is RawRouteDefinition {
+export function isRawRoute(def: RouteDefinition): def is RawRouteDefinition {
 	return def.mode === "raw";
 }
 

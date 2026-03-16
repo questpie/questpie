@@ -88,7 +88,7 @@ export function generateTemplate(options: TemplateOptions): string {
 
 	// Import createApp + types
 	lines.push(
-		'import { createApp, createContextFactory, extractAppServices, type Questpie, type AppContext, type Registry, type QuestpieConfig, type QueueClient } from "questpie";',
+		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type Questpie, type AppContext, type Registry, type QuestpieConfig, type QueueClient } from "questpie";',
 	);
 	lines.push("");
 
@@ -285,6 +285,76 @@ export function generateTemplate(options: TemplateOptions): string {
 	}
 	lines.push("");
 
+	// ── Augment factory registries with user-defined files ────────────
+	// User-defined views, components, and fields augment the same
+	// Questpie.*Registry interfaces that modules populate. This provides
+	// autocomplete on v.*, c.*, f.* for BOTH module and user entities.
+	// These augmentations use direct typeof references — NOT _MP<> — to
+	// avoid circular dependencies.
+	{
+		const factoryRegistryAugmentations: string[] = [];
+		const factoryTypeAliases: string[] = [];
+
+		// Categories with recordPlaceholder (views, components) — user files
+		for (const [catName, decl] of allDecls) {
+			if (!decl.recordPlaceholder) continue;
+			const fileMap = discovered.categories.get(catName);
+			if (!fileMap || fileMap.size === 0) continue;
+
+			const cap = capitalize(catName);
+			const interfaceName = `${cap}Registry`;
+
+			// Build inline type with user file entries
+			const entries = sortedValues(fileMap)
+				.map((f) => `${safeKey(f.key)}: typeof ${f.varName}`)
+				.join("; ");
+			factoryRegistryAugmentations.push(
+				`\t\tinterface ${interfaceName} { ${entries}; }`,
+			);
+		}
+
+		// User fields.ts → FieldTypesMap
+		// NOTE: We use a type alias instead of inline `extends typeof _fields`
+		// because some bundlers (rolldown/tsdown) cannot parse that syntax.
+		{
+			const tildeKeys = collectTildeRegistryKeys(
+				discoverPatterns,
+				discovered.singles,
+			);
+			for (const { singleName } of tildeKeys) {
+				if (singleName !== "fields") continue;
+				const userFile = discovered.singles.get(singleName);
+				if (userFile) {
+					const aliasName = `_UserFieldTypes`;
+					factoryTypeAliases.push(
+						`type ${aliasName} = typeof ${userFile.varName};`,
+					);
+					factoryRegistryAugmentations.push(
+						`\t\tinterface FieldTypesMap extends ${aliasName} {}`,
+					);
+				}
+			}
+		}
+
+		if (factoryRegistryAugmentations.length > 0) {
+			lines.push("// Augment factory registries with user-defined files");
+
+			// Emit type aliases before declare global (bundler compatibility)
+			for (const alias of factoryTypeAliases) {
+				lines.push(alias);
+			}
+
+			lines.push("declare global {");
+			lines.push("\tnamespace Questpie {");
+			for (const aug of factoryRegistryAugmentations) {
+				lines.push(aug);
+			}
+			lines.push("\t}");
+			lines.push("}");
+			lines.push("");
+		}
+	}
+
 	// ── App* type interfaces for each category ───────────────────
 	for (const [catName, fileMap] of discovered.categories) {
 		const decl = allDecls.get(catName);
@@ -297,7 +367,7 @@ export function generateTemplate(options: TemplateOptions): string {
 				emitTypeInterface(lines, appTypeName, moduleTypeName, fileMap);
 				break;
 			}
-				case "services": {
+			case "services": {
 				const hasUser = fileMap.size > 0;
 				lines.push(
 					"/** All service definitions in the app (modules + user, user overrides). */",
@@ -398,6 +468,12 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"/** @internal — used only for type derivation, not exported */",
 		);
+		// Intersect QuestpieConfig with concrete app types.
+		// The concrete types (AppCollections, AppGlobals, etc.) shadow the
+		// index-signature-bearing base types from QuestpieConfig at known keys,
+		// while preserving the `extends QuestpieConfig` constraint.
+		// CRUD type correctness relies on HasFieldDefinitions + CollectionFieldDefinitions
+		// guards rather than removing the index signature.
 		lines.push("type _AppInternal = Questpie<QuestpieConfig & {");
 		for (const member of stateMembers) {
 			lines.push(member);
@@ -607,7 +683,7 @@ function emitNewArchitectureRuntime(
 	const coreSingles = getCategorizedSingles(discovered.singles, allDecls);
 
 	lines.push("export const app = await createApp(");
-	lines.push("\t{");
+	lines.push("\t({");
 
 	// Modules
 	lines.push(`\t\tmodules: ${modulesFile.varName} as any,`);
@@ -675,7 +751,7 @@ function emitNewArchitectureRuntime(
 		}
 	}
 
-	lines.push("\t},");
+	lines.push("\t}) satisfies AppDefinition,");
 	lines.push("\t_runtime,");
 	lines.push(") as unknown as _AppInternal;");
 	lines.push("");

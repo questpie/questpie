@@ -68,7 +68,7 @@ type AdminBlockFields = BuiltinFields & typeof adminFields;
  * })
  * ```
  */
-export interface BlockPrefetchContext extends AppContext {
+export type BlockPrefetchContext = AppContext & {
 	/** App instance — populated at runtime by extractAppServices */
 	app: unknown;
 	/** Database handle — populated at runtime by extractAppServices */
@@ -83,7 +83,7 @@ export interface BlockPrefetchContext extends AppContext {
 	blockType: string;
 	/** Current locale */
 	locale?: string;
-}
+};
 
 /**
  * Block prefetch function.

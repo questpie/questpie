@@ -109,7 +109,9 @@ export function useViewState(
 		queryFn: async (): Promise<ViewConfiguration | null> => {
 			if (!userId || !preferenceKey) return null;
 
-			const result = await (client.collections as any).adminPreferences.findOne({
+			const result = await (
+				client.collections as any
+			).admin_preferences.findOne({
 				where: { userId, key: preferenceKey },
 			});
 

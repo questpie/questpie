@@ -16,7 +16,7 @@ export const contactInfoBlock = block("contact-info")
 			.default(true),
 	}))
 	.prefetch(async ({ ctx }) => {
-		const settings = await ctx.globals.siteSettings.get({});
+		const settings = await ctx.globals.site_settings.get({});
 		return {
 			shopName: settings?.shopName,
 			contactEmail: settings?.contactEmail,

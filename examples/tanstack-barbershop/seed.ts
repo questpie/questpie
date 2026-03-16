@@ -177,8 +177,8 @@ async function seed() {
 				() => app.api.collections.appointments.delete({ where: {} }, ctxEn),
 			],
 			[
-				"barberServices",
-				() => app.api.collections.barberServices.delete({ where: {} }, ctxEn),
+				"barber_services",
+				() => app.api.collections.barber_services.delete({ where: {} }, ctxEn),
 			],
 			[
 				"reviews",
@@ -222,7 +222,7 @@ async function seed() {
 		// Site Settings (EN)
 		// ========================================
 		console.log("Updating site settings (EN)...");
-		await app.api.globals.siteSettings.update(
+		await app.api.globals.site_settings.update(
 			{
 				shopName: "Sharp Cuts",
 				tagline: "Precision grooming for the modern gentleman",
@@ -279,7 +279,7 @@ async function seed() {
 		// Site Settings (SK)
 		// ========================================
 		console.log("Updating site settings (SK)...");
-		await app.api.globals.siteSettings.update(
+		await app.api.globals.site_settings.update(
 			{
 				tagline: "Precízna starostlivosť pre moderného gentlemana",
 				navigation: [
@@ -639,7 +639,7 @@ async function seed() {
 		] as const;
 		for (const [barber, services] of links) {
 			for (const service of services) {
-				await app.api.collections.barberServices.create(
+				await app.api.collections.barber_services.create(
 					{ barber: barber.id, service: service.id },
 					ctxEn,
 				);

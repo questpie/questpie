@@ -24,7 +24,7 @@ export const services = collection("services")
 		barbers: f
 			.relation("barbers")
 			.manyToMany({
-				through: "barberServices",
+				through: "barber_services",
 				sourceField: "service",
 				targetField: "barber",
 			})

@@ -340,7 +340,7 @@ export default seed({
 		];
 		for (const [barber, services] of links) {
 			for (const service of services) {
-				await collections.barberServices.create(
+				await collections.barber_services.create(
 					{ barber: barber.id, service: service.id },
 					ctxEn,
 				);
@@ -1702,7 +1702,7 @@ export default seed({
 			],
 			[
 				"barberServices",
-				() => collections.barberServices.delete({ where: {} }, ctxEn),
+				() => collections.barber_services.delete({ where: {} }, ctxEn),
 			],
 			["reviews", () => collections.reviews.delete({ where: {} }, ctxEn)],
 			["barbers", () => collections.barbers.delete({ where: {} }, ctxEn)],

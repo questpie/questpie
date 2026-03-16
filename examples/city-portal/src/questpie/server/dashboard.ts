@@ -24,7 +24,7 @@ export default dashboard(({ d, c, a }) =>
 			}),
 			a.global({
 				id: "edit-site-settings",
-				global: "siteSettings",
+				global: "site_settings",
 				label: "Site Settings",
 				icon: c.icon("ph:gear"),
 				variant: "outline",
@@ -98,4 +98,5 @@ export default dashboard(({ d, c, a }) =>
 				],
 			},
 		],
-	}));
+	}),
+);

@@ -30,7 +30,7 @@ const ACTION_VARIANTS: Record<
  */
 function createAuditTimelineLoader(maxItems: number) {
 	return async (ctx: WidgetFetchContext) => {
-		const result = await (ctx.collections as any).adminAuditLog.find({
+		const result = await (ctx.collections as any).admin_audit_log.find({
 			limit: maxItems,
 			sort: { createdAt: "desc" },
 			accessMode: "system",

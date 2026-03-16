@@ -37,6 +37,29 @@ declare global {
 		interface Registry {}
 		// biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented
 		interface QuestpieContextExtension {}
+
+		/**
+		 * Augmentable interface for view record types.
+		 * Populated by each module's codegen output to provide autocomplete on `v.*` proxies.
+		 * Declared empty to break circular references in the CollectionBuilder augmentation chain.
+		 */
+		// biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented by module codegen
+		interface ViewsRegistry {}
+
+		/**
+		 * Augmentable interface for component record types.
+		 * Populated by each module's codegen output to provide autocomplete on `c.*` proxies.
+		 */
+		// biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented by module codegen
+		interface ComponentsRegistry {}
+
+		/**
+		 * Augmentable interface for merged field type map.
+		 * Populated by each module's codegen output with field factory functions.
+		 * Used by `.fields(({ f }) => ...)` for autocomplete on `f.*`.
+		 */
+		// biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented by module codegen
+		interface FieldTypesMap {}
 	}
 }
 

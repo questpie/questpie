@@ -164,7 +164,7 @@ export function useLocks(options: UseLocksOptions): UseLocksResult {
 
 	// Query active locks for this resource (with user data expanded)
 	const { data: rawData, isLoading } = useQuery({
-		...(queryOpts as any).collections.adminLocks.find(
+		...(queryOpts as any).collections.admin_locks.find(
 			{
 				where: {
 					resourceType,
@@ -261,7 +261,7 @@ export function useLock(options: UseLockOptions): UseLockResult {
 
 	// Query existing lock for this resource (with user data expanded)
 	const { data: rawExistingLockData, isLoading: isCheckingLock } = useQuery({
-		...(queryOpts as any).collections.adminLocks.find({
+		...(queryOpts as any).collections.admin_locks.find({
 			where: {
 				resourceType,
 				resource,
@@ -298,7 +298,7 @@ export function useLock(options: UseLockOptions): UseLockResult {
 
 			const expiresAt = new Date(Date.now() + LOCK_DURATION_MS);
 
-			const result = await (queryOpts as any).collections.adminLocks.create({
+			const result = await (queryOpts as any).collections.admin_locks.create({
 				resourceType,
 				resource,
 				resourceId,
@@ -315,7 +315,7 @@ export function useLock(options: UseLockOptions): UseLockResult {
 
 			// Invalidate locks query
 			queryClient.invalidateQueries({
-				queryKey: ["collections", "adminLocks"],
+				queryKey: ["collections", "admin_locks"],
 			});
 		},
 	});
@@ -327,7 +327,7 @@ export function useLock(options: UseLockOptions): UseLockResult {
 
 			const expiresAt = new Date(Date.now() + LOCK_DURATION_MS);
 
-			await (queryOpts as any).collections.adminLocks.update({
+			await (queryOpts as any).collections.admin_locks.update({
 				id: lockIdRef.current,
 				data: { expiresAt },
 			});
@@ -339,7 +339,7 @@ export function useLock(options: UseLockOptions): UseLockResult {
 		mutationFn: async () => {
 			if (!lockIdRef.current) return;
 
-			await (queryOpts as any).collections.adminLocks.delete({
+			await (queryOpts as any).collections.admin_locks.delete({
 				id: lockIdRef.current,
 			});
 		},
@@ -349,7 +349,7 @@ export function useLock(options: UseLockOptions): UseLockResult {
 
 			// Invalidate locks query
 			queryClient.invalidateQueries({
-				queryKey: ["collections", "adminLocks"],
+				queryKey: ["collections", "admin_locks"],
 			});
 		},
 	});

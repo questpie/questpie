@@ -14,7 +14,7 @@ export const getBlogPost = createServerFn({ method: "GET" })
 
 		const ctx = await createServerContext(data.locale);
 
-		const post = await app.api.collections.blogPosts.findOne(
+		const post = await app.api.collections.blog_posts.findOne(
 			{
 				where: draftMode
 					? { slug: data.slug }
@@ -59,7 +59,7 @@ export const getAllBlogPosts = createServerFn({ method: "GET" })
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext(data?.locale);
 
-		const result = await app.api.collections.blogPosts.find(
+		const result = await app.api.collections.blog_posts.find(
 			{
 				where: { status: "published" },
 				sort: { publishedAt: "desc" },

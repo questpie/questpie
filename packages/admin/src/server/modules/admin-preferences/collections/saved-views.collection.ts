@@ -28,7 +28,7 @@ export type {
  * });
  *
  * // Access saved views
- * const views = await app.api.collections.adminSavedViews.find({
+ * const views = await app.api.collections.admin_saved_views.find({
  *   where: { collectionName: "posts", userId: currentUser.id }
  * });
  * ```

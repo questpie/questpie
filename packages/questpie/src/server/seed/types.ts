@@ -36,7 +36,7 @@ export type SeedCategory = "required" | "dev" | "test";
  * });
  * ```
  */
-export interface SeedContext extends AppContext {
+export type SeedContext = AppContext & {
 	/** Logger for seed output */
 	log: (message: string) => void;
 	/**
@@ -53,7 +53,7 @@ export interface SeedContext extends AppContext {
 		locale?: string;
 		accessMode?: "system" | "user";
 	}): Promise<RequestContext>;
-}
+};
 
 /**
  * Seed definition — a unit of seed data.

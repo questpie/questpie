@@ -93,19 +93,32 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	private _indexesFn?: CollectionBuilderIndexesFn<TState, TState["indexes"]>;
 
 	/**
+	 * Runtime field factories map. When provided (by codegen-generated factories),
+	 * includes both builtin fields AND module-contributed fields (e.g. richText, blocks).
+	 * Falls back to builtinFields when not provided (direct CollectionBuilder usage).
+	 */
+	private _fieldDefs?: Record<string, any>;
+
+	/**
 	 * Create a new CollectionBuilder with the standard empty initial state.
 	 *
 	 * Encapsulates the hardcoded initial state so that codegen-generated
-	 * factories.ts can use `CollectionBuilder.create(name)` instead of
+	 * factories.ts can use `CollectionBuilder.create(name, fieldDefs)` instead of
 	 * duplicating the 14-property state object inline.
+	 *
+	 * @param name - Collection name
+	 * @param fieldDefs - Optional runtime field factories map. When provided,
+	 *   used instead of builtinFields in `.fields()` callbacks. Codegen-generated
+	 *   factory functions pass the merged map (builtins + module-contributed fields).
 	 */
 	static create<
 		TName extends string,
 		TFieldTypes extends Record<string, any> = BuiltinFields,
 	>(
 		name: TName,
+		fieldDefs?: Record<string, any>,
 	): CollectionBuilder<EmptyCollectionState<TName, undefined, TFieldTypes>> {
-		return new CollectionBuilder({
+		const builder = new CollectionBuilder({
 			name: name as string,
 			fields: {},
 			localized: [],
@@ -121,7 +134,11 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			output: undefined,
 			upload: undefined,
 			fieldDefinitions: {},
-		}) as any;
+		});
+		if (fieldDefs) {
+			builder._fieldDefs = fieldDefs;
+		}
+		return builder as any;
 	}
 
 	constructor(state: TState) {
@@ -187,7 +204,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			) => Record<string, any>;
 
 			const contextProxy = createFieldsCallbackContext(
-				builtinFields,
+				this._fieldDefs ?? builtinFields,
 			) as unknown as FieldsCallbackContext<ExtractFieldTypes<TState>>;
 
 			const fieldDefs = factory(contextProxy);
@@ -517,7 +534,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		>,
 	>(
 		hooks: TNewHooks,
-	): CollectionBuilder<Override<TState, { hooks: TNewHooks }>> {
+	): CollectionBuilder<Override<TState, { hooks: Record<string, any> }>> {
 		const existingHooks = this.state.hooks;
 		const mergedHooks: Record<string, any> = { ...(existingHooks || {}) };
 
@@ -563,7 +580,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 */
 	access<TNewAccess extends CollectionAccess<CollectionSelect<TState>>>(
 		access: TNewAccess,
-	): CollectionBuilder<Override<TState, { access: TNewAccess }>> {
+	): CollectionBuilder<Override<TState, { access: Record<string, any> }>> {
 		const newState = {
 			...this.state,
 			access,
@@ -702,7 +719,6 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				output: (TState["output"] extends Record<string, any>
 					? TState["output"]
 					: {}) & { url: string };
-				hooks: TState["hooks"];
 				upload: UploadOptions;
 			}
 		>
@@ -904,8 +920,8 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					? TState["title"]
 					: TOtherState["title"];
 				options: TState["options"] & TOtherState["options"];
-				hooks: CollectionHooks;
-				access: CollectionAccess;
+				hooks: Record<string, any>;
+				access: Record<string, any>;
 				searchable: TState["searchable"] | TOtherState["searchable"];
 				fieldDefinitions: MergeFieldDefinitions<
 					TState["fieldDefinitions"],

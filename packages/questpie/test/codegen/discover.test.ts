@@ -50,6 +50,21 @@ describe("kebabToCamelCase", () => {
 		expect(kebabToCamelCase("blog-posts.ts")).toBe("blogPosts");
 	});
 
+	it("preserves underscores (snake_case passes through unchanged)", () => {
+		// Underscores are intentionally NOT converted to camelCase.
+		// Collection/global names use snake_case (PostgreSQL convention)
+		// and the name is the canonical runtime identifier used by relation
+		// references (through, f.relation target, sidebar config).
+		expect(kebabToCamelCase("admin_preferences.ts")).toBe("admin_preferences");
+		expect(kebabToCamelCase("admin_saved_views.ts")).toBe("admin_saved_views");
+		expect(kebabToCamelCase("admin_locks.ts")).toBe("admin_locks");
+		expect(kebabToCamelCase("admin_audit_log.ts")).toBe("admin_audit_log");
+	});
+
+	it("converts hyphens but preserves underscores in mixed names", () => {
+		expect(kebabToCamelCase("my_cool-thing.ts")).toBe("my_coolThing");
+	});
+
 	it("handles multiple consecutive dashes", () => {
 		expect(kebabToCamelCase("a-b-c.ts")).toBe("aBC");
 	});

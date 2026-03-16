@@ -9,7 +9,7 @@ const sidebarContribution: SidebarContribution = {
 		{
 			sectionId: "administration",
 			type: "collection",
-			collection: "adminAuditLog",
+			collection: "admin_audit_log",
 			icon: { type: "icon", props: { name: "ph:clipboard-text" } },
 		},
 	],

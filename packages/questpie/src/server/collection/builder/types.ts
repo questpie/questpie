@@ -363,7 +363,7 @@ export interface RelationVariant {
  * })
  * ```
  */
-export interface HookContext<
+export type HookContext<
 	TData = any,
 	TOriginal = any,
 	TOperation extends "create" | "update" | "delete" | "read" =
@@ -371,7 +371,7 @@ export interface HookContext<
 		| "update"
 		| "delete"
 		| "read",
-> extends AppContext {
+> = AppContext & {
 	/**
 	 * The record data (created/updated record)
 	 */
@@ -396,7 +396,7 @@ export interface HookContext<
 	 * Operation type (specific to hook)
 	 */
 	operation: TOperation;
-}
+};
 
 /**
  * Access control context for collection operations.
@@ -413,14 +413,14 @@ export interface HookContext<
  * })
  * ```
  */
-export interface AccessContext<TData = any> extends AppContext {
+export type AccessContext<TData = any> = AppContext & {
 	/** The record being accessed (for read/update/delete) */
 	data?: TData;
 	/** Input data (for create/update) */
 	input?: unknown;
 	/** Current locale */
 	locale?: string;
-}
+};
 
 /**
  * Hook function type
@@ -551,7 +551,7 @@ export type AfterDeleteHook<TSelect = any> = HookFunction<
  * Context passed to workflow transition hooks.
  * Includes the stage transition info alongside standard hook fields.
  */
-export interface TransitionHookContext<TData = any> extends AppContext {
+export type TransitionHookContext<TData = any> = AppContext & {
 	/** Record being transitioned */
 	data: TData;
 	/** Stage the record is transitioning from */
@@ -560,7 +560,7 @@ export interface TransitionHookContext<TData = any> extends AppContext {
 	toStage: string;
 	/** Current locale */
 	locale?: string;
-}
+};
 
 /**
  * Hook function for workflow stage transitions.
@@ -979,8 +979,20 @@ export interface CollectionBuilderState {
 	indexes: Record<string, any>;
 	title: TitleExpression | undefined;
 	options: CollectionOptions;
-	hooks: CollectionHooks<any, any, any>;
-	access: CollectionAccess;
+	/**
+	 * Lifecycle hooks — stored as Record<string, any> to avoid
+	 * circular type references through AppContext.
+	 * The `.hooks()` method provides full AppContext-typed constraints
+	 * at the call site while this storage type stays opaque.
+	 */
+	hooks: Record<string, any>;
+	/**
+	 * Access control — stored as Record<string, any> to avoid
+	 * circular type references through AppContext.
+	 * The `.access()` method provides full AppContext-typed constraints
+	 * at the call site while this storage type stays opaque.
+	 */
+	access: Record<string, any>;
 	/**
 	 * Search indexing configuration.
 	 * - undefined: auto-index with defaults (title + auto-generated content)
@@ -1059,7 +1071,7 @@ export type EmptyCollectionState<
 	indexes: {};
 	title: undefined;
 	options: {};
-	hooks: CollectionHooks<any, any, any>;
+	hooks: Record<string, any>;
 	access: {};
 	searchable: undefined;
 	validation: undefined;

@@ -413,6 +413,29 @@ function buildExtensionState(
 		}
 	}
 
+	// Auto-build any builder instances in extension state records.
+	// This handles e.g. BlockBuilder → BlockDefinition without coupling
+	// the core engine to specific builder types from other packages.
+	// Duck-type check: if a value has a .build() method, call it.
+	for (const [key, value] of Object.entries(extensionState)) {
+		if (value && typeof value === "object" && !Array.isArray(value)) {
+			const record = value as Record<string, unknown>;
+			let rebuilt = false;
+			const builtRecord: Record<string, unknown> = {};
+			for (const [k, v] of Object.entries(record)) {
+				if (v && typeof (v as any).build === "function") {
+					builtRecord[k] = (v as any).build();
+					rebuilt = true;
+				} else {
+					builtRecord[k] = v;
+				}
+			}
+			if (rebuilt) {
+				extensionState[key] = builtRecord;
+			}
+		}
+	}
+
 	return extensionState;
 }
 
