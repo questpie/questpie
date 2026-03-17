@@ -1,30 +1,19 @@
-/**
- * Field Options Hook
- *
- * Fetches dynamic options for select/relation fields from the server.
- * Supports search, pagination, and dependency-based refetching.
- */
-
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type { SerializedOptionsConfig } from "questpie";
 import * as React from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { useAdminStore } from "../runtime/provider.js";
+import { useDebouncedValue } from "./use-search.js";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-/**
- * Option item
- */
 export interface OptionItem {
 	value: string | number;
 	label: string | Record<string, string>;
 }
 
-/**
- * Options for useFieldOptions hook
- */
 export interface UseFieldOptionsOptions {
 	/** Collection or global name */
 	collection: string;
@@ -51,9 +40,6 @@ export interface UseFieldOptionsOptions {
 	enabled?: boolean;
 }
 
-/**
- * Result from useFieldOptions hook
- */
 export interface UseFieldOptionsResult {
 	/** Current options */
 	options: OptionItem[];
@@ -87,9 +73,6 @@ export interface UseFieldOptionsResult {
 // Utility Functions
 // ============================================================================
 
-/**
- * Get sibling data for a field path (for fields inside arrays)
- */
 function getSiblingData(
 	values: Record<string, any>,
 	fieldPath: string,
@@ -115,9 +98,6 @@ function getSiblingData(
 	return typeof sibling === "object" ? sibling : null;
 }
 
-/**
- * Get watched dependency values
- */
 function getWatchedValues(
 	allValues: Record<string, any>,
 	siblingData: Record<string, any> | null,
@@ -141,28 +121,6 @@ function getWatchedValues(
 // Hook Implementation
 // ============================================================================
 
-/**
- * Hook to fetch dynamic options for select/relation fields.
- * Supports search, pagination, and dependency-based refetching.
- *
- * @example
- * ```tsx
- * const { options, isLoading, search, setSearch, loadMore } = useFieldOptions({
- *   collection: "orders",
- *   field: "items.0.city",
- *   optionsConfig: schema.fields.city.reactive?.options,
- * });
- *
- * return (
- *   <Select
- *     options={options}
- *     isLoading={isLoading}
- *     onInputChange={setSearch}
- *     onMenuScrollToBottom={loadMore}
- *   />
- * );
- * ```
- */
 export function useFieldOptions({
 	collection,
 	mode = "collection",
@@ -175,30 +133,20 @@ export function useFieldOptions({
 }: UseFieldOptionsOptions): UseFieldOptionsResult {
 	const client = useAdminStore((s) => s.client);
 	const form = useFormContext();
+	const queryClient = useQueryClient();
 
-	// State
-	const [options, setOptions] = React.useState<OptionItem[]>([]);
-	const [isLoading, setIsLoading] = React.useState(false);
-	const [hasMore, setHasMore] = React.useState(false);
-	const [total, setTotal] = React.useState<number | undefined>();
 	const [search, setSearch] = React.useState(initialSearch);
-	const [page, setPage] = React.useState(0);
-	const [error, setError] = React.useState<Error | null>(null);
+	const debouncedSearch = useDebouncedValue(search, 300);
 
-	// Watch form values for deps
 	const watchedValues = useWatch({ control: form.control });
 	const formValues = React.useMemo(
 		() => (watchedValues ?? {}) as Record<string, any>,
 		[watchedValues],
 	);
-
-	// Get sibling data
 	const siblingData = React.useMemo(
 		() => getSiblingData(formValues, field),
 		[formValues, field],
 	);
-
-	// Get watched dep values for comparison
 	const watchDeps = optionsConfig?.watch ?? [];
 	const depValues = React.useMemo(
 		() => getWatchedValues(formValues, siblingData, watchDeps),
@@ -206,137 +154,89 @@ export function useFieldOptions({
 	);
 	const depKey = JSON.stringify(depValues);
 
-	// Previous dep key for change detection
-	const prevDepKeyRef = React.useRef(depKey);
+	const filteredStaticOptions = React.useMemo(() => {
+		if (optionsConfig || !staticOptions) return null;
+		if (!debouncedSearch) return staticOptions;
+		const searchLower = debouncedSearch.toLowerCase();
+		return staticOptions.filter((opt) => {
+			const label =
+				typeof opt.label === "string"
+					? opt.label
+					: Object.values(opt.label).join(" ");
+			return label.toLowerCase().includes(searchLower);
+		});
+	}, [optionsConfig, staticOptions, debouncedSearch]);
 
-	// Fetch options from server
-	const fetchOptions = React.useCallback(
-		async (currentPage: number, append: boolean = false) => {
-			// If no dynamic config, use static options
-			if (!optionsConfig || !client) {
-				if (staticOptions) {
-					let filtered = staticOptions;
-					if (search) {
-						const searchLower = search.toLowerCase();
-						filtered = staticOptions.filter((opt) => {
-							const label =
-								typeof opt.label === "string"
-									? opt.label
-									: Object.values(opt.label).join(" ");
-							return label.toLowerCase().includes(searchLower);
-						});
-					}
-					setOptions(filtered);
-					setHasMore(false);
-					setTotal(filtered.length);
-				}
-				return;
-			}
-
-			setIsLoading(true);
-			setError(null);
-
-			try {
-				const response = await (client.routes as any).fieldOptions({
-					collection,
-					type: mode,
-					field,
-					formData: formValues,
-					siblingData,
-					search,
-					page: currentPage,
-					limit,
-				});
-
-				const newOptions = response.options as OptionItem[];
-
-				if (append) {
-					setOptions((prev) => [...prev, ...newOptions]);
-				} else {
-					setOptions(newOptions);
-				}
-
-				setHasMore(response.hasMore ?? false);
-				setTotal(response.total);
-			} catch (err) {
-				console.error("Field options error:", err);
-				setError(err instanceof Error ? err : new Error(String(err)));
-			} finally {
-				setIsLoading(false);
-			}
-		},
-		[
-			client,
+	const {
+		data,
+		isLoading: queryLoading,
+		error: queryError,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useInfiniteQuery({
+		queryKey: [
+			"questpie",
+			"field-options",
 			collection,
 			mode,
 			field,
-			formValues,
-			siblingData,
-			search,
-			limit,
-			optionsConfig,
-			staticOptions,
+			debouncedSearch,
+			depKey,
 		],
-	);
+		queryFn: async ({ pageParam = 0 }) => {
+			const currentFormValues = (form.getValues() ?? {}) as Record<
+				string,
+				any
+			>;
+			const currentSiblingData = getSiblingData(currentFormValues, field);
+			const response = await (client!.routes as any).fieldOptions({
+				collection,
+				type: mode,
+				field,
+				formData: currentFormValues,
+				siblingData: currentSiblingData,
+				search: debouncedSearch,
+				page: pageParam,
+				limit,
+			});
+			return {
+				options: response.options as OptionItem[],
+				hasMore: response.hasMore ?? false,
+				total: response.total as number | undefined,
+				page: pageParam,
+			};
+		},
+		initialPageParam: 0,
+		getNextPageParam: (lastPage) =>
+			lastPage.hasMore ? lastPage.page + 1 : undefined,
+		enabled: enabled && !!optionsConfig && !!client,
+		staleTime: 10_000,
+		placeholderData: (prev) => prev,
+	});
 
-	// Effect to fetch options when deps change
-	React.useEffect(() => {
-		if (!enabled) return;
+	const serverOptions = React.useMemo(() => {
+		if (!data) return [];
+		return data.pages.flatMap((page) => page.options);
+	}, [data]);
 
-		// Check if deps changed
-		if (prevDepKeyRef.current !== depKey) {
-			prevDepKeyRef.current = depKey;
-			setPage(0);
-			fetchOptions(0, false);
-		}
-	}, [enabled, depKey, fetchOptions]);
+	const total = data?.pages[data.pages.length - 1]?.total;
 
-	// Effect to fetch options when search changes
-	const searchDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(
-		null,
-	);
+	const options = filteredStaticOptions ?? serverOptions;
+	const isLoading = filteredStaticOptions ? false : queryLoading;
+	const hasMore = filteredStaticOptions ? false : (hasNextPage ?? false);
 
-	React.useEffect(() => {
-		if (!enabled) return;
-
-		if (searchDebounceRef.current) {
-			clearTimeout(searchDebounceRef.current);
-		}
-
-		searchDebounceRef.current = setTimeout(() => {
-			setPage(0);
-			fetchOptions(0, false);
-		}, 300); // Debounce search
-
-		return () => {
-			if (searchDebounceRef.current) {
-				clearTimeout(searchDebounceRef.current);
-			}
-		};
-	}, [enabled, search, fetchOptions]);
-
-	// Initial fetch
-	React.useEffect(() => {
-		if (enabled) {
-			fetchOptions(0, false);
-		}
-		// Only run on mount
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
-
-	// Load more handler
 	const loadMore = React.useCallback(() => {
-		if (isLoading || !hasMore) return;
-		const nextPage = page + 1;
-		setPage(nextPage);
-		fetchOptions(nextPage, true);
-	}, [isLoading, hasMore, page, fetchOptions]);
+		if (!isFetchingNextPage && hasNextPage) {
+			fetchNextPage();
+		}
+	}, [isFetchingNextPage, hasNextPage, fetchNextPage]);
 
-	// Refresh handler
 	const refresh = React.useCallback(() => {
-		setPage(0);
-		fetchOptions(0, false);
-	}, [fetchOptions]);
+		queryClient.invalidateQueries({
+			queryKey: ["questpie", "field-options", collection, mode, field],
+		});
+	}, [queryClient, collection, mode, field]);
 
 	return {
 		options,
@@ -347,6 +247,6 @@ export function useFieldOptions({
 		setSearch,
 		loadMore,
 		refresh,
-		error,
+		error: (queryError as Error) ?? null,
 	};
 }

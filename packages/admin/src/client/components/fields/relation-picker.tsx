@@ -13,7 +13,7 @@
 
 import { Icon } from "@iconify/react";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
 import { toast } from "sonner";
@@ -207,14 +207,38 @@ export function RelationPicker<T extends QuestpieApp>({
 	}, [resolvedValue]);
 	const client = useAdminStore(selectClient);
 
-	// Keep track of fetched items for display
-	// Using lazy init to avoid creating new Map on every render
-	const [fetchedItems, setFetchedItems] = React.useState<Map<string, any>>(
-		() => new Map(),
-	);
-
-	// Track loading state for items
-	const [isLoadingItems, setIsLoadingItems] = React.useState(false);
+	const {
+		data: fetchedItemsMap = new Map<string, any>(),
+		isLoading: isLoadingItems,
+	} = useQuery({
+		queryKey: [
+			"questpie",
+			"collections",
+			targetCollection,
+			"relation-batch",
+			...selectedIds,
+		],
+		queryFn: async () => {
+			if (!client || selectedIds.length === 0)
+				return new Map<string, any>();
+			const response = await (client as any).collections[
+				targetCollection
+			].find({
+				where: { id: { in: selectedIds } },
+				limit: selectedIds.length,
+			});
+			const map = new Map<string, any>();
+			if (response?.docs) {
+				for (const doc of response.docs) {
+					map.set(doc.id, doc);
+				}
+			}
+			return map;
+		},
+		enabled: !!client && selectedIds.length > 0,
+		staleTime: 30_000,
+		placeholderData: (prev) => prev,
+	});
 
 	// Load options from server with search
 	const loadOptions = React.useCallback(
@@ -250,15 +274,6 @@ export function RelationPicker<T extends QuestpieApp>({
 					docs = [];
 				}
 
-				// Immutable update - create new Map with spread to avoid mutations
-				setFetchedItems(
-					(prev) =>
-						new Map([
-							...prev,
-							...docs.map((doc: any) => [doc.id, doc] as const),
-						]),
-				);
-
 				// Filter out already selected items and transform to SelectOption format
 				return docs
 					.filter((opt: any) => !selectedIds.includes(opt.id))
@@ -283,7 +298,7 @@ export function RelationPicker<T extends QuestpieApp>({
 					});
 			} catch (error) {
 				console.error("Failed to load relation options:", error);
-				toast.error("Failed to load options");
+				toast.error(t("error.failedToLoadOptions"));
 				return [];
 			}
 		},
@@ -294,6 +309,7 @@ export function RelationPicker<T extends QuestpieApp>({
 			selectedIds,
 			renderOption,
 			collectionIconRef,
+			t,
 		],
 	);
 
@@ -311,80 +327,25 @@ export function RelationPicker<T extends QuestpieApp>({
 	);
 
 	const refetch = React.useCallback(async () => {
-		// Clear cached items to force refresh
-		setFetchedItems(new Map());
+		queryClient.invalidateQueries({
+			queryKey: [
+				"questpie",
+				"collections",
+				targetCollection,
+				"relation-batch",
+			],
+		});
 		queryClient.invalidateQueries({
 			queryKey: queryOpts.key(["collections", targetCollection, "find"]),
 		});
-		selectedIds.forEach((id) => {
-			queryClient.invalidateQueries({
-				queryKey: queryOpts.key([
-					"collections",
-					targetCollection,
-					"findOne",
-					{ where: { id } },
-				]),
-			});
-		});
-	}, [queryClient, queryOpts, selectedIds, targetCollection]);
-
-	// Fetch selected items on mount for display
-	React.useEffect(() => {
-		if (!client || !selectedIds.length) {
-			setIsLoadingItems(false);
-			return;
-		}
-
-		// Fetch any selected items that we don't have in cache
-		const missingIds = selectedIds.filter((id) => !fetchedItems.has(id));
-		if (missingIds.length === 0) {
-			setIsLoadingItems(false);
-			return;
-		}
-
-		setIsLoadingItems(true);
-
-		let cancelled = false;
-
-		(async () => {
-			// Fetch all missing items in parallel instead of sequentially
-			const results = await Promise.allSettled(
-				missingIds.map((id) =>
-					(client as any).collections[targetCollection]
-						.findOne({ where: { id } })
-						.then((response: any) => ({ id, response })),
-				),
-			);
-			if (cancelled) return;
-			const newEntries: [string, any][] = [];
-			for (const result of results) {
-				if (result.status === "fulfilled" && result.value.response) {
-					newEntries.push([result.value.id, result.value.response]);
-				}
-			}
-			if (newEntries.length > 0) {
-				setFetchedItems((prev) => new Map([...prev, ...newEntries]));
-			}
-			setIsLoadingItems(false);
-		})().catch((error) => {
-			console.error("Failed to fetch selected items:", error);
-			toast.error("Failed to load selected items");
-			if (!cancelled) {
-				setIsLoadingItems(false);
-			}
-		});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [client, targetCollection, selectedIds, fetchedItems]);
+	}, [queryClient, queryOpts, targetCollection]);
 
 	// Get selected items from cache
 	const selectedItems = React.useMemo(() => {
 		return selectedIds
-			.map((id: string) => fetchedItems.get(id))
+			.map((id: string) => fetchedItemsMap.get(id))
 			.filter(Boolean);
-	}, [selectedIds, fetchedItems]);
+	}, [selectedIds, fetchedItemsMap]);
 
 	const handleAdd = React.useCallback(
 		(itemId: string | null) => {

@@ -7,7 +7,7 @@
 
 import { Icon } from "@iconify/react";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CollectionSchema, FieldReactiveSchema } from "questpie/client";
 import { QuestpieClientError } from "questpie/client";
 import * as React from "react";
@@ -237,6 +237,7 @@ const AutosaveManager = React.memo(function AutosaveManager({
 	onSavingChange,
 	onSaved,
 }: AutosaveManagerProps) {
+	const { t } = useTranslation();
 	const timerRef = React.useRef<NodeJS.Timeout | null>(null);
 
 	const runAutosave = React.useCallback(async () => {
@@ -270,7 +271,7 @@ const AutosaveManager = React.memo(function AutosaveManager({
 		} catch (error) {
 			onSavingChange(false);
 			console.error("Autosave failed:", error);
-			toast.error("Autosave failed", {
+			toast.error(t("error.autosaveFailed"), {
 				description: error instanceof Error ? error.message : undefined,
 			});
 		}
@@ -282,6 +283,7 @@ const AutosaveManager = React.memo(function AutosaveManager({
 		onSaved,
 		onSavingChange,
 		previewContext,
+		t,
 		updateMutation,
 	]);
 
@@ -1541,53 +1543,19 @@ export default function FormView({
 	}, [isEditMode, isBlocked, refreshLock]);
 
 	// Generate preview URL via server RPC (url function runs server-side)
-	const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-
-	React.useEffect(() => {
-		if (!isLivePreviewOpen || !canUseLivePreview || !client) {
-			setPreviewUrl(null);
-			return;
-		}
-
-		const persistedRecord = transformedItem as Record<string, unknown> | null;
-
-		if (!persistedRecord) {
-			setPreviewUrl(null);
-			return;
-		}
-
-		let cancelled = false;
-
-		const routes = (client as any).routes;
-		routes
-			.getPreviewUrl({
+	const { data: previewUrl = null } = useQuery({
+		queryKey: ["questpie", "preview-url", collection, (transformedItem as any)?.id, contentLocale],
+		queryFn: async () => {
+			const result = await (client as any).routes.getPreviewUrl({
 				collection,
-				record: persistedRecord,
+				record: transformedItem as Record<string, unknown>,
 				locale: contentLocale,
-			})
-			.then((result: { url?: string } | null | undefined) => {
-				if (!cancelled) {
-					setPreviewUrl(result?.url ?? null);
-				}
-			})
-			.catch((error: unknown) => {
-				if (!cancelled) {
-					console.error("[FormView] Failed to get preview URL:", error);
-					setPreviewUrl(null);
-				}
 			});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [
-		isLivePreviewOpen,
-		canUseLivePreview,
-		client,
-		collection,
-		contentLocale,
-		transformedItem,
-	]);
+			return result?.url ?? null;
+		},
+		enabled: isLivePreviewOpen && canUseLivePreview && !!client && !!transformedItem,
+		staleTime: 30_000,
+	});
 
 	// Show error state for failed item fetch
 	if (isEditMode && itemError) {

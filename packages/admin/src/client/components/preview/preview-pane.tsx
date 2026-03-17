@@ -8,7 +8,9 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import type {
 	AdminToPreviewMessage,
@@ -69,54 +71,30 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 		},
 		ref,
 	) => {
+		const { t } = useTranslation();
 		const client = useAdminStore(selectClient);
 		const iframeRef = React.useRef<HTMLIFrameElement>(null);
 		const [isReady, setIsReady] = React.useState(false);
 		const isReadyRef = React.useRef(false);
-		const [isLoading, setIsLoading] = React.useState(true);
+		const [iframeLoading, setIframeLoading] = React.useState(true);
 		const [isRefreshing, setIsRefreshing] = React.useState(false);
-		const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-		const [tokenError, setTokenError] = React.useState<string | null>(null);
 
-		// Mint preview token when URL changes
-		React.useEffect(() => {
-			if (!url) {
-				setPreviewUrl(null);
-				return;
-			}
-
-			let cancelled = false;
-
-			setIsLoading(true);
-			setTokenError(null);
-
-			(client as any).routes
-				.mintPreviewToken({
+		const { data: previewUrl, error: tokenQueryError, isLoading: isTokenLoading } = useQuery({
+			queryKey: ["questpie", "preview-token", url],
+			queryFn: async () => {
+				const result = await (client as any).routes.mintPreviewToken({
 					path: url,
-					ttlMs: 60 * 60 * 1000, // 1 hour
-				})
-				.then((result: { token: string }) => {
-					if (!cancelled) {
-						setPreviewUrl(`/api/preview?token=${result.token}`);
-					}
-				})
-				.catch((error: unknown) => {
-					if (!cancelled) {
-						console.error("Failed to mint preview token:", error);
-						setTokenError(
-							error instanceof Error
-								? error.message
-								: "Failed to generate preview token",
-						);
-						setPreviewUrl(null);
-						setIsLoading(false);
-					}
+					ttlMs: 60 * 60 * 1000,
 				});
-
-			return () => {
-				cancelled = true;
-			};
-		}, [url, client]);
+				return `/api/preview?token=${result.token}`;
+			},
+			enabled: !!url && !!client,
+			staleTime: 50 * 60 * 1000,
+			retry: false,
+		});
+		const previewUrlResolved = previewUrl ?? null;
+		const tokenError = tokenQueryError instanceof Error ? tokenQueryError.message : tokenQueryError ? t("error.failedToGeneratePreviewToken") : null;
+		const isLoading = isTokenLoading || iframeLoading;
 
 		// Validate origin for security
 		const isValidOrigin = React.useCallback(
@@ -191,7 +169,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					case "PREVIEW_READY":
 						isReadyRef.current = true;
 						setIsReady(true);
-						setIsLoading(false);
+						setIframeLoading(false);
 						break;
 
 					case "REFRESH_COMPLETE":
@@ -227,7 +205,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			// Preview should signal PREVIEW_READY, but set a fallback timeout
 			setTimeout(() => {
 				if (!isReadyRef.current) {
-					setIsLoading(false);
+					setIframeLoading(false);
 				}
 			}, 3000);
 		}, []);
@@ -242,7 +220,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 							className="h-6 w-6 animate-spin text-muted-foreground"
 						/>
 						<span className="ml-2 text-sm text-muted-foreground">
-							Loading preview...
+							{t("preview.loadingPreview")}
 						</span>
 					</div>
 				)}
@@ -251,7 +229,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 				{tokenError && (
 					<div className="absolute inset-0 z-10 flex items-center justify-center bg-muted">
 						<div className="rounded-md bg-destructive/10 border border-destructive px-4 py-3 text-sm text-destructive">
-							<p className="font-medium">Preview Error</p>
+							<p className="font-medium">{t("preview.previewError")}</p>
 							<p>{tokenError}</p>
 						</div>
 					</div>
@@ -264,17 +242,17 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 							icon="ph:spinner"
 							className="h-4 w-4 animate-spin text-muted-foreground"
 						/>
-						<span className="text-sm text-muted-foreground">Refreshing...</span>
+						<span className="text-sm text-muted-foreground">{t("preview.refreshing")}</span>
 					</div>
 				)}
 
 				{/* Preview iframe */}
-				{previewUrl && (
+				{previewUrlResolved && (
 					<iframe
 						ref={iframeRef}
-						src={previewUrl}
+						src={previewUrlResolved}
 						className="h-full w-full border-0"
-						title="Preview"
+						title={t("common.preview")}
 						onLoad={handleLoad}
 						sandbox="allow-scripts allow-same-origin allow-forms"
 					/>
@@ -307,6 +285,7 @@ function PreviewToggleButton({
 	onToggle,
 	className,
 }: PreviewToggleButtonProps) {
+	const { t } = useTranslation();
 	return (
 		<button
 			type="button"
@@ -320,7 +299,7 @@ function PreviewToggleButton({
 				className,
 			)}
 		>
-			{isPreviewVisible ? "Hide Preview" : "Show Preview"}
+			{isPreviewVisible ? t("preview.hidePreview") : t("preview.showPreview")}
 		</button>
 	);
 }

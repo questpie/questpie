@@ -12,6 +12,7 @@
 
 import * as React from "react";
 import { useFormContext, useWatch } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import type {
 	FieldHookContext,
 	SelectOption,
@@ -146,10 +147,6 @@ export function useFieldHooks({
 	staticOptions,
 }: UseFieldHooksOptions): UseFieldHooksResult {
 	const form = useFormContext();
-	const [asyncOptions, setAsyncOptions] = React.useState<
-		SelectOption[] | undefined
-	>(undefined);
-	const [optionsLoading, setOptionsLoading] = React.useState(false);
 
 	// Track dependencies for loadOptions (stored in state to trigger re-render when detected)
 	const [loadOptionsDeps, setLoadOptionsDeps] = React.useState<string[]>([]);
@@ -310,43 +307,16 @@ export function useFieldHooks({
 		return JSON.stringify(loadOptionsDeps.map((dep) => watchedDepMap[dep]));
 	}, [loadOptionsDeps, watchedDepMap]);
 
-	const initialOptionsLoadDone = React.useRef(false);
-	const prevDepKeyRef = React.useRef<string>("");
-
-	React.useEffect(() => {
-		if (!loadOptions) return;
-
-		// Skip if deps haven't been detected yet
-		if (loadOptionsDeps.length === 0 && !initialOptionsLoadDone.current) {
-			return;
-		}
-
-		// Check if this is initial load or deps changed
-		const depsChanged =
-			!initialOptionsLoadDone.current ||
-			prevDepKeyRef.current !== trackedDepKey;
-
-		if (!depsChanged) return;
-
-		prevDepKeyRef.current = trackedDepKey;
-		initialOptionsLoadDone.current = true;
-
-		const fetchOptions = async () => {
-			setOptionsLoading(true);
-			try {
-				const values = (form.getValues() ?? {}) as Record<string, any>;
-				const options = await loadOptions(values);
-				setAsyncOptions(options);
-			} catch (error) {
-				console.error(`Failed to load options for ${fieldName}:`, error);
-				setAsyncOptions([]);
-			} finally {
-				setOptionsLoading(false);
-			}
-		};
-
-		fetchOptions();
-	}, [loadOptions, loadOptionsDeps, trackedDepKey, form, fieldName]);
+	const { data: asyncOptions, isLoading: optionsLoading } = useQuery({
+		queryKey: ["questpie", "field-hooks-options", fieldName, trackedDepKey],
+		queryFn: async () => {
+			const values = (form.getValues() ?? {}) as Record<string, any>;
+			return loadOptions!(values);
+		},
+		enabled: !!loadOptions && loadOptionsDeps.length > 0,
+		staleTime: 30_000,
+		placeholderData: (prev) => prev,
+	});
 
 	// ========================================================================
 	// onChange Handler

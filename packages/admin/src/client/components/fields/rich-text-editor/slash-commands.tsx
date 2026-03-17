@@ -25,15 +25,7 @@ const SlashCommandList = React.forwardRef<
 	SlashCommandListProps
 >(function SlashCommandList({ items, command }, ref) {
 	const [selectedIndex, setSelectedIndex] = React.useState(0);
-
-	React.useEffect(() => {
-		if (items.length === 0) {
-			setSelectedIndex(0);
-			return;
-		}
-
-		setSelectedIndex((prev) => Math.min(prev, items.length - 1));
-	}, [items.length]);
+	const safeIndex = Math.min(selectedIndex, Math.max(0, items.length - 1));
 
 	const selectItem = (index: number) => {
 		const item = items[index];
@@ -59,7 +51,7 @@ const SlashCommandList = React.forwardRef<
 
 			if (event.key === "Enter") {
 				event.preventDefault();
-				selectItem(selectedIndex);
+				selectItem(safeIndex);
 				return true;
 			}
 
@@ -79,7 +71,7 @@ const SlashCommandList = React.forwardRef<
 					tabIndex={-1}
 					className={cn(
 						"qp-rich-text-editor__slash-item",
-						index === selectedIndex
+						index === safeIndex
 							? "qp-rich-text-editor__slash-item--active"
 							: "",
 					)}

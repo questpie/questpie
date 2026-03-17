@@ -47,6 +47,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import {
 	Controller,
@@ -301,7 +302,7 @@ function SingleUploadInner({
 		if (files.length === 0 || disabled) return;
 		if (!collection) {
 			toast.error(
-				unresolvedCollectionMessage || "No upload collection is configured.",
+				unresolvedCollectionMessage || t("error.noUploadCollection"),
 			);
 			return;
 		}
@@ -415,7 +416,7 @@ function SingleUploadInner({
 					disabled={disabled}
 					loading={isUploading}
 					progress={isUploading ? progress : undefined}
-					label={resolvedPlaceholder || "Drop file here or click to browse"}
+					label={resolvedPlaceholder || t("dropzone.label")}
 					hint={hintText}
 					onValidationError={handleValidationError}
 				/>
@@ -514,9 +515,7 @@ function MultipleUploadInner({
 	const [pendingUploads, setPendingUploads] = React.useState<
 		{ id: string; file: File }[]
 	>([]);
-	const [fetchedAssets, setFetchedAssets] = React.useState<Map<string, Asset>>(
-		() => new Map(),
-	);
+	const queryClient = useQueryClient();
 
 	const sensors = useSensors(
 		useSensor(PointerSensor),
@@ -527,62 +526,39 @@ function MultipleUploadInner({
 
 	const assetIds = (field.value as string[] | null | undefined) || [];
 
-	// Fetch assets that we don't have yet
-	React.useEffect(() => {
-		if (!client || !collection || assetIds.length === 0) return;
-
-		const missingIds = assetIds.filter((id) => !fetchedAssets.has(id));
-		if (missingIds.length === 0) return;
-
-		let cancelled = false;
-
-		(async () => {
-			try {
-				const response = await (client as any).collections[collection].find({
-					where: { id: { in: missingIds } },
-					limit: missingIds.length,
-				});
-				if (cancelled) {
-					return;
-				}
-				if (response) {
-					if (response.docs) {
-						setFetchedAssets((prev) => {
-							const next = new Map(prev);
-							for (const asset of response.docs) {
-								next.set(asset.id, asset as Asset);
-							}
-							// LRU eviction: keep max 200 cached assets
-							if (next.size > 200) {
-								const excess = next.size - 200;
-								const iter = next.keys();
-								for (let i = 0; i < excess; i++) {
-									const key = iter.next().value;
-									if (key !== undefined) next.delete(key);
-								}
-							}
-							return next;
-						});
-					}
-				}
-			} catch (fetchError) {
-				if (!cancelled) {
-					console.error("Failed to fetch assets:", fetchError);
-					toast.error("Failed to load assets");
+	const { data: fetchedAssetsMap = new Map<string, Asset>() } = useQuery({
+		queryKey: [
+			"questpie",
+			"collections",
+			collection,
+			"batch-assets",
+			...assetIds,
+		],
+		queryFn: async () => {
+			if (!client || !collection || assetIds.length === 0)
+				return new Map<string, Asset>();
+			const response = await (client as any).collections[collection].find({
+				where: { id: { in: assetIds } },
+				limit: assetIds.length,
+			});
+			const map = new Map<string, Asset>();
+			if (response?.docs) {
+				for (const doc of response.docs) {
+					map.set(doc.id, doc as Asset);
 				}
 			}
-		})();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [assetIds, collection, fetchedAssets, client]);
+			return map;
+		},
+		enabled: !!client && !!collection && assetIds.length > 0,
+		staleTime: 30_000,
+		placeholderData: (prev) => prev,
+	});
 
 	const handleDrop = (files: File[]) => {
 		if (files.length === 0 || disabled) return;
 		if (!collection) {
 			toast.error(
-				unresolvedCollectionMessage || "No upload collection is configured.",
+				unresolvedCollectionMessage || t("error.noUploadCollection"),
 			);
 			return;
 		}
@@ -622,9 +598,9 @@ function MultipleUploadInner({
 				const newIds = uploadedAssets.map((a) => a.id);
 				field.onChange([...assetIds, ...newIds]);
 
-				for (const asset of uploadedAssets) {
-					setFetchedAssets((prev) => new Map(prev).set(asset.id, asset));
-				}
+				queryClient.invalidateQueries({
+					queryKey: ["questpie", "collections", collection, "batch-assets"],
+				});
 
 				if (onUploadComplete) {
 					onUploadComplete(uploadedAssets);
@@ -678,7 +654,7 @@ function MultipleUploadInner({
 	const handlePickerSelect = (ids: string | string[]) => {
 		if (!collection) {
 			toast.error(
-				unresolvedCollectionMessage || "No upload collection is configured.",
+				unresolvedCollectionMessage || t("error.noUploadCollection"),
 			);
 			return;
 		}
@@ -687,7 +663,7 @@ function MultipleUploadInner({
 
 		const totalAfterAdd = assetIds.length + newIds.length;
 		if (maxItems && totalAfterAdd > maxItems) {
-			toast.warning(`Maximum ${maxItems} items allowed`);
+			toast.warning(t("error.maxItemsAllowed", { max: maxItems }));
 			const remainingSlots = maxItems - assetIds.length;
 			const idsToAdd = newIds.slice(0, remainingSlots);
 			field.onChange([...assetIds, ...idsToAdd]);
@@ -753,7 +729,7 @@ function MultipleUploadInner({
 								<SortableAssetItem
 									key={id}
 									id={id}
-									asset={fetchedAssets.get(id) || null}
+									asset={fetchedAssetsMap.get(id) || null}
 									disabled={disabled}
 									variant={previewVariant}
 									orderable={orderable}
@@ -799,8 +775,8 @@ function MultipleUploadInner({
 					progress={isUploading ? progress : undefined}
 					label={
 						hasItems
-							? "Drop more files or click to add"
-							: resolvedPlaceholder || "Drop files here or click to browse"
+							? t("dropzone.addMore")
+							: resolvedPlaceholder || t("dropzone.label")
 					}
 					hint={hintText}
 					onValidationError={handleValidationError}
@@ -843,7 +819,7 @@ function MultipleUploadInner({
 
 			{isUploading && !canAddMore && (
 				<div className="text-muted-foreground flex items-center justify-center gap-2 rounded-lg border border-dashed p-4 text-sm">
-					Uploading... {progress}%
+					{t("upload.uploading")} {progress}%
 				</div>
 			)}
 		</div>

@@ -36,12 +36,14 @@ export function LinkPopover({
 }: LinkPopoverProps) {
 	const { t } = useTranslation();
 	const [linkUrl, setLinkUrl] = React.useState("");
+	const prevOpenRef = React.useRef(false);
 
-	React.useEffect(() => {
-		if (!open || !editor) return;
+	// Reset linkUrl when the popover opens (transition from closed → open)
+	if (open && !prevOpenRef.current && editor) {
 		const currentLink = editor.getAttributes("link").href as string | undefined;
 		setLinkUrl(currentLink || "");
-	}, [editor, open]);
+	}
+	prevOpenRef.current = open;
 
 	const handleApplyLink = React.useCallback(() => {
 		if (!editor) return;

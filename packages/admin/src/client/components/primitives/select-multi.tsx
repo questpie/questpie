@@ -1,8 +1,9 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+import { useQuery } from "@tanstack/react-query";
 import type * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useId, useMemo, useState } from "react";
 import { useIsMobile } from "../../hooks/use-media-query";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
@@ -40,10 +41,12 @@ interface SelectMultiProps<TValue extends string = string>
 	options?: SelectOptions<TValue>;
 	/** Dynamic options loader */
 	loadOptions?: (search: string) => Promise<SelectOption<TValue>[]>;
+	/** Query key builder for loadOptions */
+	queryKey?: (search: string) => readonly unknown[];
+	/** Prefetch options on mount */
+	prefetchOnMount?: boolean;
 	/** Max selections */
 	maxSelections?: number;
-	/** Debounce delay for loadOptions (ms) */
-	debounceMs?: number;
 	/** External loading state */
 	loading?: boolean;
 	/** Empty state message */
@@ -82,8 +85,9 @@ export function SelectMulti<TValue extends string = string>({
 	onChange,
 	options: staticOptions,
 	loadOptions,
+	queryKey,
+	prefetchOnMount = false,
 	maxSelections,
-	debounceMs = 300,
 	loading: externalLoading = false,
 	emptyMessage = "No options found",
 	placeholder = "Select...",
@@ -102,11 +106,8 @@ export function SelectMulti<TValue extends string = string>({
 	const resolvedDrawerTitle = resolveText(drawerTitle);
 	const [open, setOpen] = useState(false);
 	const [search, setSearch] = useState("");
-	const [dynamicOptions, setDynamicOptions] = useState<SelectOption<TValue>[]>(
-		[],
-	);
-	const [isLoading, setIsLoading] = useState(false);
-	const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+	const instanceId = useId();
+	const deferredSearch = useDeferredValue(search);
 	const isMobile = useIsMobile();
 
 	// Flatten static options
@@ -115,15 +116,37 @@ export function SelectMulti<TValue extends string = string>({
 		[resolvedStaticOptions],
 	);
 
-	// Merge static and dynamic options
-	const allOptions = useMemo(() => {
-		if (loadOptions) {
-			return dynamicOptions;
+	const loadOptionsKey = useMemo(
+		() =>
+			queryKey
+				? queryKey(deferredSearch)
+				: ["select-multi", instanceId, deferredSearch],
+		[queryKey, deferredSearch, instanceId],
+	);
+
+	const { data: dynamicOptions = [], isFetching } = useQuery({
+		queryKey: loadOptionsKey,
+		queryFn: () => loadOptions?.(deferredSearch) ?? Promise.resolve([]),
+		enabled: !!loadOptions && (open || prefetchOnMount),
+		staleTime: 30_000,
+		gcTime: 5 * 60_000,
+	});
+
+	const allOptions = useMemo<SelectOption<TValue>[]>(() => {
+		if (!loadOptions) {
+			return flatStaticOptions as SelectOption<TValue>[];
 		}
-		return flatStaticOptions;
+		if (flatStaticOptions.length === 0) {
+			return dynamicOptions as SelectOption<TValue>[];
+		}
+		const mergedMap = [...flatStaticOptions, ...dynamicOptions].reduce(
+			(map, opt) =>
+				new Map(map).set(opt.value as TValue, opt as SelectOption<TValue>),
+			new Map<TValue, SelectOption<TValue>>(),
+		);
+		return Array.from(mergedMap.values());
 	}, [loadOptions, dynamicOptions, flatStaticOptions]);
 
-	// Filter options by search (for static options)
 	const filteredOptions = useMemo(() => {
 		if (loadOptions) {
 			return allOptions;
@@ -135,34 +158,6 @@ export function SelectMulti<TValue extends string = string>({
 			resolveText(opt.label).toLowerCase().includes(search.toLowerCase()),
 		);
 	}, [allOptions, search, loadOptions, resolveText]);
-
-	// Load dynamic options
-	useEffect(() => {
-		if (!loadOptions) return;
-
-		if (debounceRef.current) {
-			clearTimeout(debounceRef.current);
-		}
-
-		debounceRef.current = setTimeout(async () => {
-			setIsLoading(true);
-			try {
-				const results = await loadOptions(search);
-				setDynamicOptions(results);
-				setIsLoading(false);
-			} catch (error) {
-				console.error("Failed to load options:", error);
-				setDynamicOptions([]);
-				setIsLoading(false);
-			}
-		}, debounceMs);
-
-		return () => {
-			if (debounceRef.current) {
-				clearTimeout(debounceRef.current);
-			}
-		};
-	}, [search, loadOptions, debounceMs]);
 
 	// Get label for a value
 	const getLabel = useCallback(
@@ -204,7 +199,7 @@ export function SelectMulti<TValue extends string = string>({
 		[onChange],
 	);
 
-	const showLoading = isLoading || externalLoading;
+	const showLoading = isFetching || externalLoading;
 	const canAddMore = !maxSelections || resolvedValue.length < maxSelections;
 
 	// Visible and hidden chips
