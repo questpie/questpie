@@ -10,7 +10,7 @@ description: Admin conventions and client API reference.
 ### `sidebar(config)`
 
 ```ts
-import { sidebar } from "#questpie";
+import { sidebar } from "#questpie/factories";
 
 export default sidebar({
   sections: [
@@ -37,7 +37,7 @@ export default sidebar({
 ### `dashboard(config)`
 
 ```ts
-import { dashboard } from "#questpie";
+import { dashboard } from "#questpie/factories";
 
 export default dashboard({
   title: string | i18n,
@@ -53,7 +53,7 @@ export default dashboard({
 ### `branding(config)`
 
 ```ts
-import { branding } from "#questpie";
+import { branding } from "#questpie/factories";
 
 export default branding({
   name: string | i18n,
@@ -64,7 +64,7 @@ export default branding({
 ### `locale(config)`
 
 ```ts
-import { locale } from "#questpie";
+import { locale } from "#questpie/factories";
 
 export default locale({
   locales: [{ code: string, label: string, fallback?: boolean, flagCountryCode?: string }],

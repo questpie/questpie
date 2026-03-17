@@ -51,16 +51,16 @@ New projects use **standalone factories** and **file convention** with codegen:
 
 ```ts
 // collections/posts.collection.ts
-import { collection } from "questpie";
+import { collection } from "#questpie/factories";
 
-export default collection("posts")
+export const posts = collection("posts")
   .fields(({ f }) => ({
-    title: f.text({ label: "Title", required: true }),
-    content: f.richText({ label: "Content" }),
+    title: f.text(255).label("Title").required(),
+    content: f.richText().label("Content"),
   }));
 
 // routes/healthcheck.ts
-import { route } from "questpie";
+import { route } from "#questpie/factories";
 
 export default route()
   .get()
@@ -97,29 +97,25 @@ const handler = createFetchHandler(app, { basePath: "/api" });
 
 The `#questpie` alias is configured in both `package.json` (`imports` field) and `tsconfig.json` (`paths`) — it resolves to `./src/questpie/server/.generated/index.ts`.
 
-### Internal `q` Builder (Admin Module)
-
-The `q` builder still exists internally for `@questpie/admin` module construction. It is marked `@internal` and should not be used in new project code:
-
-```ts
-// @internal — used by admin module only
-import { q } from "questpie";
-```
-
 ### Field Builder System
 
-Fields are defined via a proxy-based `f` factory inside `.fields()`:
+Fields are defined via a proxy-based `f` factory inside `.fields()`. Fields use a **fluent builder** pattern (NOT options objects):
 
 ```ts
 const posts = collection("posts").fields(({ f }) => ({
-  title: f.text({ label: "Title", required: true }),
-  content: f.richText({ label: "Content" }),
-  published: f.boolean({ label: "Published", default: false }),
-  category: f.select({ label: "Category", options: ["news", "blog"] }),
+  title: f.text(255).label("Title").required(),
+  content: f.richText().label("Content"),
+  published: f.boolean().label("Published").default(false),
+  category: f.select().label("Category").options(["news", "blog"]),
+  author: f.relation().label("Author").to("users"),
+  image: f.upload().label("Cover Image"),
 }));
 ```
 
-Built-in field types: `text`, `number`, `boolean`, `date`, `dateTime`, `select`, `multiSelect`, `relation`, `upload`, `richText`, `json`, `slug`, `email`, `url`, `password`, `color`, `textarea`.
+Key builder methods: `.label()`, `.required()`, `.default()`, `.localized()`, `.inputOptional()`, `.admin()`, `.access()`, `.hooks()`, `.meta()`, `.operators()`.
+
+**Built-in field types (core):** `text`, `number`, `boolean`, `date`, `datetime`, `time`, `select`, `relation`, `upload`, `object`, `json`, `from`, `email`, `url`, `textarea`.
+**Admin module fields:** `richText`, `blocks` (provided by `@questpie/admin`).
 
 **Custom fields** via `field<TConfig, TValue>()` factory — see `packages/questpie/src/server/fields/field.ts`.
 **Custom operators** via `operator<TValue>()` — see `packages/questpie/src/server/fields/common-operators.ts`.
@@ -130,15 +126,16 @@ Type-safe server routes via file convention:
 
 ```ts
 // routes/get-stats.ts
-import { route } from "questpie";
-import z from "zod";
+import { route } from "#questpie/factories";
+import { z } from "zod";
 
 export default route()
   .post()
   .schema(z.object({ period: z.enum(["day", "week", "month"]) }))
-  .handler(async ({ collections }) => {
+  .handler(async ({ input, collections }) => {
+    // handler receives AppContext & { input } — destructure what you need
     const count = await collections.posts.count({});
-    return { posts: count };
+    return { posts: count, period: input.period };
   });
 ```
 
@@ -339,7 +336,7 @@ Inside `packages/questpie`:
 
 ### Dependencies
 
-- **Always check `DEPENDENCIES.md`** before adding deps — it lists pinned versions for critical packages (zod v4, drizzle-orm beta, better-auth, etc.).
+- **Check `package.json`** before adding deps — critical packages have pinned versions (zod v4, drizzle-orm beta, better-auth, etc.).
 - Internal deps **must** use `workspace:*`.
 - Key pinned versions: `zod ^4.2.1`, `drizzle-orm 1.0.0-beta.*`, `react ^19.2.0`, `tailwindcss ^4.0.6`.
 
@@ -394,7 +391,7 @@ import { block } from "@questpie/admin/server";
 
 export const teamBlock = block("team")
   .fields(({ f }) => ({
-    limit: f.number({ label: "Limit", default: 4 }),
+    limit: f.number().label("Limit").default(4),
   }))
   .prefetch(async ({ values, ctx }) => {
     const res = await ctx.collections.barbers.find({
@@ -424,8 +421,7 @@ All reactive handlers run **server-side** with access to `ctx.db`, `ctx.user`, `
 **Dynamic options** for select/relation:
 
 ```ts
-city: f.relation({
-  to: "cities",
+city: f.relation().to("cities").label("City").admin({
   options: {
     handler: async ({ data, search, ctx }) => {
       const cities = await ctx.db.query.cities.findMany({
@@ -435,13 +431,12 @@ city: f.relation({
     },
     deps: ({ data }) => [data.country],
   },
-});
+}),
 ```
 
 ## References
 
 - Core package README: `packages/questpie/README.md`
 - Admin package README: `packages/admin/README.md`
-- Admin builder guide: `packages/admin/BUILDER_GUIDE.md`
-- Dependencies: `DEPENDENCIES.md`
+- Archived dependencies: `docs/archive/DEPENDENCIES.md`
 - Documentation source: `apps/docs/content/docs/`

@@ -12,7 +12,7 @@ QuestPie supports per-field content localization. Mark any field as `localized: 
 Define content locales in the locale convention file:
 
 ```ts title="locale.ts"
-import { locale } from "#questpie";
+import { locale } from "#questpie/factories";
 
 export default locale({
   locales: [
@@ -82,7 +82,7 @@ name: f.text()
 The admin panel has its own locale config for the interface language:
 
 ```ts title="admin-locale.ts"
-import { adminLocale } from "#questpie";
+import { adminLocale } from "#questpie/factories";
 
 export default adminLocale({
   locales: ["en", "sk"],

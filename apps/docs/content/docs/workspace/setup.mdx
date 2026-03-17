@@ -51,7 +51,7 @@ export default [adminModule, auditModule] as const;
 Create the admin convention files:
 
 ```ts title="sidebar.ts"
-import { sidebar } from "#questpie";
+import { sidebar } from "#questpie/factories";
 
 export default sidebar({
   sections: [
@@ -76,7 +76,7 @@ export default sidebar({
 ```
 
 ```ts title="branding.ts"
-import { branding } from "#questpie";
+import { branding } from "#questpie/factories";
 
 export default branding({
   name: { en: "My App Admin" },

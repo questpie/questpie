@@ -38,18 +38,18 @@ export const appQueries = createQuestpieQueryOptions(appClient);
 
 ```tsx
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { cmsQueries } from "@/lib/queries";
+import { appQueries } from "@/lib/queries";
 
 function PostsList() {
   const { data } = useQuery(
-    cmsQueries.collections.posts.find({ limit: 10 })
+    appQueries.collections.posts.find({ limit: 10 })
   );
 
   const queryClient = useQueryClient();
   const createPost = useMutation({
-    ...cmsQueries.collections.posts.create(),
+    ...appQueries.collections.posts.create(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cmsQueries.collections.posts.key() });
+      queryClient.invalidateQueries({ queryKey: appQueries.collections.posts.key() });
     },
   });
 
@@ -68,7 +68,7 @@ function PostsList() {
 
 ```ts
 // Find many (paginated)
-cmsQueries.collections.posts.find({
+appQueries.collections.posts.find({
   where: { published: { eq: true } },
   orderBy: { createdAt: "desc" },
   limit: 10,
@@ -77,49 +77,49 @@ cmsQueries.collections.posts.find({
 })
 
 // Find one
-cmsQueries.collections.posts.findOne({
+appQueries.collections.posts.findOne({
   where: { id: "post-id" },
   with: { author: true },
 })
 
 // Count
-cmsQueries.collections.posts.count({
+appQueries.collections.posts.count({
   where: { published: { eq: true } },
 })
 
 // Create (mutation)
-cmsQueries.collections.posts.create()
+appQueries.collections.posts.create()
 
 // Update (mutation)
-cmsQueries.collections.posts.update()
+appQueries.collections.posts.update()
 
 // Delete (mutation)
-cmsQueries.collections.posts.delete()
+appQueries.collections.posts.delete()
 
 // Update many (mutation)
-cmsQueries.collections.posts.updateMany()
+appQueries.collections.posts.updateMany()
 
 // Delete many (mutation)
-cmsQueries.collections.posts.deleteMany()
+appQueries.collections.posts.deleteMany()
 
 // Restore soft-deleted (mutation)
-cmsQueries.collections.posts.restore()
+appQueries.collections.posts.restore()
 
 // Query key for invalidation
-cmsQueries.collections.posts.key()
+appQueries.collections.posts.key()
 ```
 
 ## Globals
 
 ```ts
 // Get global value
-cmsQueries.globals.siteSettings.get()
+appQueries.globals.siteSettings.get()
 
 // Update global (mutation)
-cmsQueries.globals.siteSettings.update()
+appQueries.globals.siteSettings.update()
 
 // Query key
-cmsQueries.globals.siteSettings.key()
+appQueries.globals.siteSettings.key()
 ```
 
 ## Routes
@@ -129,18 +129,18 @@ Full type-safe query/mutation options for app routes:
 ```ts
 // Query options from route
 const { data } = useQuery(
-  cmsQueries.routes.dashboard.getStats.query({ period: "week" })
+  appQueries.routes.dashboard.getStats.query({ period: "week" })
 );
 
 // Mutation options from route
 const publish = useMutation(
-  cmsQueries.routes.posts.publish.mutation()
+  appQueries.routes.posts.publish.mutation()
 );
 publish.mutate({ id: "post_123" });
 
 // Query key for invalidation/prefetch
 queryClient.invalidateQueries({
-  queryKey: cmsQueries.routes.dashboard.getStats.key({ period: "week" }),
+  queryKey: appQueries.routes.dashboard.getStats.key({ period: "week" }),
 });
 ```
 
@@ -151,7 +151,7 @@ Collection queries support SSE-based live updates via `streamedQuery`:
 ```ts
 // Enable realtime on a query
 const { data } = useQuery(
-  cmsQueries.collections.posts.find(
+  appQueries.collections.posts.find(
     { limit: 10 },
     { realtime: true }
   )
@@ -174,12 +174,12 @@ const settingsTopic = buildGlobalTopic("siteSettings");
 ```tsx
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { cmsQueries } from "@/lib/queries";
+import { appQueries } from "@/lib/queries";
 
 export const Route = createFileRoute("/posts")({
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(
-      cmsQueries.collections.posts.find({ limit: 10 })
+      appQueries.collections.posts.find({ limit: 10 })
     );
   },
   component: PostsPage,
@@ -187,7 +187,7 @@ export const Route = createFileRoute("/posts")({
 
 function PostsPage() {
   const { data } = useSuspenseQuery(
-    cmsQueries.collections.posts.find({ limit: 10 })
+    appQueries.collections.posts.find({ limit: 10 })
   );
   return (
     <ul>
@@ -202,12 +202,12 @@ function PostsPage() {
 ```tsx
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 import { getQueryClient } from "@/lib/query-client";
-import { cmsQueries } from "@/lib/queries";
+import { appQueries } from "@/lib/queries";
 
 export default async function PostsPage() {
   const queryClient = getQueryClient();
   await queryClient.prefetchQuery(
-    cmsQueries.collections.posts.find({ limit: 10 })
+    appQueries.collections.posts.find({ limit: 10 })
   );
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

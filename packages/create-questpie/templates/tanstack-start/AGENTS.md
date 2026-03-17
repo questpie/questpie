@@ -129,13 +129,19 @@ import { collection } from "questpie";
 
 export const posts = collection("posts")
   .fields(({ f }) => ({
-    title: f.text({ label: "Title", required: true }),
-    slug: f.slug({ label: "Slug", from: "title" }),
-    content: f.richText({ label: "Content" }),
-    published: f.boolean({ label: "Published", default: false }),
-    category: f.select({ label: "Category", options: ["news", "blog", "tutorial"] }),
-    author: f.relation({ label: "Author", to: "users" }),
-    image: f.upload({ label: "Cover Image" }),
+    title: f.text(255).label("Title").required(),
+    slug: f.text(255).label("Slug").required().inputOptional().admin({
+      compute: {
+        handler: ({ data, prev }) => { /* slugify title */ },
+        deps: ({ data }) => [data.title],
+        debounce: 300,
+      },
+    }),
+    content: f.richText().label("Content"),
+    published: f.boolean().label("Published").default(false),
+    category: f.select().label("Category").options(["news", "blog", "tutorial"]),
+    author: f.relation().label("Author").to("users"),
+    image: f.upload().label("Cover Image"),
   }))
   .title(({ f }) => f.title)
   .admin(({ c }) => ({
@@ -168,7 +174,8 @@ Collections are auto-discovered by codegen — no manual registration needed.
 
 ### Available Field Types
 
-`text`, `number`, `boolean`, `date`, `dateTime`, `select`, `multiSelect`, `relation`, `upload`, `richText`, `json`, `slug`, `email`, `url`, `password`, `color`, `textarea`
+**Core:** `text`, `number`, `boolean`, `date`, `datetime`, `time`, `select`, `relation`, `upload`, `object`, `json`, `from`, `email`, `url`, `textarea`.
+**Admin module:** `richText`, `blocks` (provided by `@questpie/admin`)
 
 ### Creating a Global
 
@@ -178,10 +185,10 @@ import { global } from "questpie";
 
 export const siteSettings = global("site_settings")
   .fields(({ f }) => ({
-    siteName: f.text({ label: "Site Name", required: true }),
-    description: f.textarea({ label: "Description" }),
-    logo: f.upload({ label: "Logo" }),
-    maintenanceMode: f.boolean({ label: "Maintenance Mode", default: false }),
+    siteName: f.text(255).label("Site Name").required(),
+    description: f.textarea().label("Description"),
+    logo: f.upload().label("Logo"),
+    maintenanceMode: f.boolean().label("Maintenance Mode").default(false),
   }))
   .admin(({ c }) => ({ label: "Site Settings", icon: c.icon("ph:gear") }))
   .form(({ v, f }) => v.globalForm({
@@ -213,10 +220,9 @@ export default route()
       period: z.enum(["day", "week", "month"]),
     }),
   )
-  .handler(async ({ input, app }) => {
-    // input: { period: "day" | "week" | "month" } — typed from Zod schema
-    // app: fully typed app instance with autocomplete
-    const count = await app.api.collections.posts.count({});
+  .handler(async ({ input, collections }) => {
+    // input: typed from Zod schema; collections, db, session, etc. from AppContext
+    const count = await collections.posts.count({});
     return { totalPosts: count, period: input.period };
   });
 ```
@@ -235,7 +241,7 @@ The route is auto-discovered and available at `/api/get-stats`.
 export default route()
   .post()
   .schema(z.object({ ... }))
-  .handler(async ({ input, app, session }) => {
+  .handler(async ({ input, session }) => {
     if (session?.user?.role !== "admin") throw new Error("Forbidden");
     return { ok: true };
   });
@@ -269,11 +275,11 @@ export const heroBlock = block("hero")
     category: { label: "Sections", icon: c.icon("ph:layout"), order: 1 },
   }))
   .fields(({ f }) => ({
-    title: f.text({ label: "Title", required: true }),
-    subtitle: f.textarea({ label: "Subtitle" }),
-    backgroundImage: f.upload({ label: "Background Image" }),
-    ctaText: f.text({ label: "CTA Text" }),
-    ctaLink: f.text({ label: "CTA Link" }),
+    title: f.text(255).label("Title").required(),
+    subtitle: f.textarea().label("Subtitle"),
+    backgroundImage: f.upload().label("Background Image"),
+    ctaText: f.text(255).label("CTA Text"),
+    ctaLink: f.text(255).label("CTA Link"),
   }))
   .prefetch({ with: { backgroundImage: true } }); // expand upload to full URL
 ```
@@ -288,8 +294,8 @@ const teamBlock = block("team")
     category: { label: "Sections", icon: c.icon("ph:layout"), order: 1 },
   }))
   .fields(({ f }) => ({
-    title: f.text({ label: "Title" }),
-    limit: f.number({ label: "Number to Show", default: 4 }),
+    title: f.text(255).label("Title"),
+    limit: f.number().label("Number to Show").default(4),
   }))
   .prefetch(async ({ values, ctx }) => {
     const res = await ctx.collections.members.find({
@@ -306,10 +312,7 @@ Blocks in `blocks/` are auto-discovered by codegen. No manual registration neede
 **Use blocks in a collection's richText field:**
 
 ```ts
-content: f.richText({
-  label: "Content",
-  blocks: [heroBlock, teamBlock],
-})
+content: f.richText().label("Content").blocks([heroBlock, teamBlock])
 ```
 
 #### Blocks & Circular Dependencies
@@ -322,7 +325,7 @@ import { block } from "@questpie/admin/server";
 
 export const latestPostsBlock = block("latest-posts")
   .fields(({ f }) => ({
-    count: f.number({ label: "Number of Posts", default: 3 }),
+    count: f.number().label("Number of Posts").default(3),
   }))
   .prefetch(async ({ values, ctx }) => {
     const res = await ctx.collections.posts.find({
@@ -349,11 +352,9 @@ Fields support reactive behaviors in `meta.admin`:
 All reactive handlers run **server-side** with access to `ctx.db`, `ctx.user`, `ctx.req`.
 
 ```ts
-fields: (f) => ({
-  country: f.relation({ to: "countries", label: "Country" }),
-  city: f.relation({
-    to: "cities",
-    label: "City",
+fields: ({ f }) => ({
+  country: f.relation().to("countries").label("Country"),
+  city: f.relation().to("cities").label("City").admin({
     options: {
       handler: async ({ data, search, ctx }) => {
         const cities = await ctx.db.query.cities.findMany({
@@ -364,17 +365,9 @@ fields: (f) => ({
       deps: ({ data }) => [data.country],
     },
   }),
-  status: f.select({
-    label: "Status",
-    options: ["draft", "published", "archived"],
-  }),
-  publishedAt: f.dateTime({
-    label: "Published At",
-    meta: {
-      admin: {
-        hidden: ({ data }: { data: Record<string, any> }) => data.status !== "published",
-      },
-    },
+  status: f.select().label("Status").options(["draft", "published", "archived"]),
+  publishedAt: f.datetime().label("Published At").admin({
+    hidden: ({ data }) => data.status !== "published",
   }),
 })
 ```

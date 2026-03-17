@@ -90,9 +90,8 @@ Collections are auto-discovered by codegen — no manual registration needed.
    export default route()
      .post()
      .schema(z.object({ id: z.string() }))
-     .handler(async ({ input, app }) => {
-       // input: { id: string } — typed from Zod schema
-       // app: fully typed, autocomplete works
+     .handler(async ({ input, collections }) => {
+       // input: typed from Zod schema; collections, db, session, etc. from AppContext
        return { name: "result" };
      });
    ```

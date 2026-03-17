@@ -163,31 +163,38 @@ function FileConventionsSection() {
 			<span className="text-muted-foreground/60">src/questpie/server/</span>
 			{`
 ├── blog/
-│   ├── `}
-			<span className="text-primary font-semibold">posts.collection.ts</span>
+│   ├── collections/
+│   │   └── `}
+			<span className="text-primary font-semibold">posts.ts</span>
 			{`
-│   ├── `}
-			<span className="text-primary font-semibold">hero.block.ts</span>
+│   ├── blocks/
+│   │   └── `}
+			<span className="text-primary font-semibold">hero.ts</span>
 			{`
-│   └── `}
-			<span className="text-primary font-semibold">newsletter.job.ts</span>
+│   └── jobs/
+│       └── `}
+			<span className="text-primary font-semibold">newsletter.ts</span>
 			{`
 ├── shop/
-│   ├── `}
-			<span className="text-primary font-semibold">products.collection.ts</span>
+│   ├── collections/
+│   │   ├── `}
+			<span className="text-primary font-semibold">products.ts</span>
 			{`
-│   ├── `}
-			<span className="text-primary font-semibold">orders.collection.ts</span>
+│   │   └── `}
+			<span className="text-primary font-semibold">orders.ts</span>
 			{`
-│   └── `}
-			<span className="text-primary font-semibold">stripe.service.ts</span>
+│   └── services/
+│       └── `}
+			<span className="text-primary font-semibold">stripe.ts</span>
 			{`
 ├── shared/
-│   ├── `}
-			<span className="text-primary font-semibold">users.collection.ts</span>
+│   ├── collections/
+│   │   └── `}
+			<span className="text-primary font-semibold">users.ts</span>
 			{`
-│   └── `}
-			<span className="text-primary font-semibold">stats.route.ts</span>
+│   └── routes/
+│       └── `}
+			<span className="text-primary font-semibold">stats.ts</span>
 			{`
 └── `}
 			<span className="text-primary font-semibold">auth.ts</span>
@@ -206,14 +213,22 @@ function FileConventionsSection() {
 	];
 
 	const byFeatureBadges = [
-		["posts.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["hero.block.ts", "BLOCK", "text-[#FFB300]"],
-		["newsletter.job.ts", "JOB", "text-[#40C4FF]"],
-		["products.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["orders.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["stripe.service.ts", "SERVICE", "text-muted-foreground"],
-		["users.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["stats.route.ts", "ROUTE", "text-primary"],
+		["blog/collections/posts.ts", "COLLECTION", "text-[var(--syntax-string)]"],
+		["blog/blocks/hero.ts", "BLOCK", "text-[#FFB300]"],
+		["blog/jobs/newsletter.ts", "JOB", "text-[#40C4FF]"],
+		[
+			"shop/collections/products.ts",
+			"COLLECTION",
+			"text-[var(--syntax-string)]",
+		],
+		["shop/collections/orders.ts", "COLLECTION", "text-[var(--syntax-string)]"],
+		["shop/services/stripe.ts", "SERVICE", "text-muted-foreground"],
+		[
+			"shared/collections/users.ts",
+			"COLLECTION",
+			"text-[var(--syntax-string)]",
+		],
+		["shared/routes/stats.ts", "ROUTE", "text-primary"],
 	];
 
 	const badges = layout === "by-type" ? byTypeBadges : byFeatureBadges;
@@ -824,7 +839,7 @@ export function LandingPage() {
 										["REST API", "/api/collections/posts"],
 										["Typed routes", "typed, namespaced"],
 										["Realtime via SSE", "subscribe to changes"],
-										["Typed client SDK", "zero codegen step"],
+										["Typed client SDK", "auto-generated types"],
 										["Admin panel", "table, form, block editor"],
 										["Zod validation", "from field definitions"],
 										["Access control", "row-level, field-level"],
@@ -883,7 +898,7 @@ export function LandingPage() {
 										["Runtime", "Node.js · Bun · Cloudflare Workers · Deno"],
 										["Database", "PostgreSQL · PGlite · Neon · PlanetScale"],
 										["Queue", "pg-boss · Cloudflare Queues"],
-										["Search", "Postgres FTS · Meilisearch · Elasticsearch"],
+										["Search", "Postgres FTS · pgvector"],
 										["Realtime", "PG NOTIFY · Redis Streams"],
 										["Storage", "Local · S3 · R2 · GCS (FlyDrive)"],
 										["HTTP", "Hono · Elysia · Next.js · TanStack Start"],
@@ -998,7 +1013,7 @@ export function LandingPage() {
 									{`, `}
 									<span className="text-[var(--syntax-string)]">"author"</span>
 									{`],
-    defaultSort: { field: f.createdAt },
+    defaultSort: { field: f.createdAt, direction: "desc" },
   }))
   .`}
 									<span className="text-[var(--syntax-function)]">form</span>

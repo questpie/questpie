@@ -71,7 +71,7 @@ const appQueries = createQuestpieQueryOptions(appClient);
 
 export function PostsList() {
   const { data } = useQuery(
-    cmsQueries.collections.posts.find({ limit: 10 })
+    appQueries.collections.posts.find({ limit: 10 })
   );
 
   return (

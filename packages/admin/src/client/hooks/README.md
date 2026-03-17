@@ -7,14 +7,14 @@ React hooks for data fetching and admin functionality. Built on TanStack Query.
 Hooks require `AdminProvider` to be mounted in your app:
 
 ```tsx
-import { AdminLayoutProvider } from "@questpie/admin/views/layout";
-import { Admin } from "@questpie/admin/builder";
+import { AdminLayoutProvider } from "@questpie/admin/client";
+import { Admin } from "@questpie/admin/client";
 import { admin } from "./admin";
 
 function App() {
   return (
     <AdminLayoutProvider
-      admin={Admin.from(admin)}
+      admin={Admin.normalize(admin)}
       client={client}
       queryClient={queryClient}
       LinkComponent={Link}

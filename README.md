@@ -379,7 +379,7 @@ export const admin = qa<App>().use(adminModule);
 // Mount in React
 import { Admin, AdminLayoutProvider } from "@questpie/admin/client";
 
-const adminInstance = Admin.from(admin);
+const adminInstance = Admin.normalize(admin);
 
 function AdminLayout() {
   return (

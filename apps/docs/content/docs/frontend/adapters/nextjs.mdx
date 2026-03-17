@@ -16,7 +16,7 @@ bun add @questpie/nextjs
 ## Setup (App Router)
 
 ```ts title="app/api/[...slug]/route.ts"
-import { createFetchHandler } from "questpie/adapters/nextjs";
+import { createFetchHandler } from "@questpie/next";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
