@@ -272,8 +272,8 @@ export function ArrayField({
 											className="h-6 w-6"
 											onClick={() => handleMove(index, index - 1)}
 											disabled={!canMoveUp || disabled}
-											title="Move up"
-											aria-label="Move item up"
+											title={t("field.moveUp")}
+											aria-label={t("field.moveUp")}
 										>
 											<Icon icon="ph:caret-up" className="h-3 w-3" />
 										</Button>
@@ -284,8 +284,8 @@ export function ArrayField({
 											className="h-6 w-6"
 											onClick={() => handleMove(index, index + 1)}
 											disabled={!canMoveDown || disabled}
-											title="Move down"
-											aria-label="Move item down"
+											title={t("field.moveDown")}
+											aria-label={t("field.moveDown")}
 										>
 											<Icon icon="ph:caret-down" className="h-3 w-3" />
 										</Button>
@@ -299,8 +299,8 @@ export function ArrayField({
 										className="h-6 w-6"
 										onClick={() => handleRemove(index)}
 										disabled={disabled}
-										title="Remove"
-										aria-label="Remove item"
+										title={t("common.remove")}
+										aria-label={t("field.removeItem")}
 									>
 										<Icon icon="ph:trash" className="h-3 w-3" />
 									</Button>

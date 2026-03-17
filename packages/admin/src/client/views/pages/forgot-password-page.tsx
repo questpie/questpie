@@ -7,6 +7,7 @@
 
 import * as React from "react";
 import { useAuthClient } from "../../hooks/use-auth";
+import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
 	selectBrandName,
@@ -67,12 +68,13 @@ export interface ForgotPasswordPageProps {
  * ```
  */
 export function ForgotPasswordPage({
-	title = "Forgot password",
-	description = "Enter your email to receive a password reset link",
+	title,
+	description,
 	logo,
 	loginPath,
 	resetPasswordRedirectUrl,
 }: ForgotPasswordPageProps) {
+	const { t } = useTranslation();
 	const authClient = useAuthClient();
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
@@ -102,7 +104,7 @@ export function ForgotPasswordPage({
 				if (result.error.message) {
 					setError(result.error.message);
 				} else {
-					setError("Failed to send reset email");
+					setError(t("error.failedToSendResetEmail"));
 				}
 				return;
 			}
@@ -112,7 +114,7 @@ export function ForgotPasswordPage({
 			if (err instanceof Error) {
 				setError(err.message);
 			} else {
-				setError("An error occurred");
+				setError(t("error.anErrorOccurred"));
 			}
 		}
 	};
@@ -123,8 +125,8 @@ export function ForgotPasswordPage({
 
 	return (
 		<AuthLayout
-			title={title}
-			description={description}
+			title={title ?? t("auth.forgotPasswordTitle")}
+			description={description ?? t("auth.forgotPasswordDescription")}
 			logo={logo ?? <DefaultLogo brandName={brandName} />}
 			className="qa-forgot-password-page"
 		>

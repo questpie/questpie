@@ -25,6 +25,7 @@ import {
 	DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
 import { Skeleton } from "../../components/ui/skeleton";
+import { useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 
 // ============================================================================
@@ -107,6 +108,7 @@ function WidgetCardError({
 	variant?: WidgetCardVariant;
 	onRetry?: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<Card
 			className={cn(
@@ -116,7 +118,7 @@ function WidgetCardError({
 		>
 			<CardHeader>
 				<CardTitle className="text-sm font-medium text-destructive">
-					Error
+					{t("toast.error")}
 				</CardTitle>
 				{onRetry && (
 					<CardAction>
@@ -167,6 +169,7 @@ export function WidgetCard({
 	loadingSkeleton,
 	children,
 }: WidgetCardProps): React.ReactElement {
+	const { t } = useTranslation();
 	// Loading state
 	if (isLoading) {
 		if (loadingSkeleton) {
@@ -280,7 +283,7 @@ export function WidgetCard({
 										variant="ghost"
 										size="icon-xs"
 										onClick={onRefresh}
-										title="Refresh"
+										title={t("common.refresh")}
 										disabled={isRefreshing}
 									>
 										<Icon
@@ -297,7 +300,7 @@ export function WidgetCard({
 										variant="ghost"
 										size="icon-xs"
 										onClick={onExpand}
-										title="Expand"
+										title={t("ui.expand")}
 									>
 										<Icon icon="ph:arrows-out-simple" className="h-3.5 w-3.5" />
 									</Button>

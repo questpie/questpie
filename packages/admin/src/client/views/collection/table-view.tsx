@@ -1023,8 +1023,8 @@ function TableViewInner({
 	}
 
 	return (
-		<div className="qa-table-view">
-			<div className="qa-table-view__inner space-y-4">
+		<div className="qa-table-view min-w-0">
+			<div className="qa-table-view__inner space-y-4 min-w-0">
 				{/* Header - Title & Actions */}
 				<div className="qa-table-view__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 					<div className="min-w-0 flex-1">
@@ -1289,7 +1289,7 @@ function TableViewInner({
 																				/>
 																			)}
 																			<span className="max-w-20 truncate">
-																				{user?.name?.split(" ")[0] ?? "Editing"}
+																				{user?.name?.split(" ")[0] ?? t("table.editing")}
 																			</span>
 																		</span>
 																	);
@@ -1317,7 +1317,7 @@ function TableViewInner({
 								description={
 									isSearching
 										? t("collectionSearch.noResults")
-										: "No items found in this collection"
+										: t("table.noItemsInCollection")
 								}
 								height="h-48"
 							/>
@@ -1329,7 +1329,7 @@ function TableViewInner({
 					<div
 						className="qa-table-view__pagination flex items-center justify-between gap-4 py-2"
 						role="navigation"
-						aria-label="Pagination"
+						aria-label={t("table.pagination")}
 					>
 						{/* Left side - item count and page size */}
 						<div

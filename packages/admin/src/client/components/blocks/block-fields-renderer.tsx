@@ -10,7 +10,7 @@
 import * as React from "react";
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
 import type { FieldInstance } from "../../builder/field/field.js";
-import { useResolveText } from "../../i18n/hooks.js";
+import { useResolveText, useTranslation } from "../../i18n/hooks.js";
 import { selectAdmin, useAdminStore } from "../../runtime/provider.js";
 import { buildFieldDefinitionsFromMetadata } from "../../utils/build-field-definitions-from-schema.js";
 
@@ -33,6 +33,7 @@ export function BlockFieldsRenderer({
 	blockId,
 	blockSchema,
 }: BlockFieldsRendererProps) {
+	const { t } = useTranslation();
 	const admin = useAdminStore(selectAdmin);
 
 	// Convert block field metadata to field definitions with component references
@@ -50,7 +51,7 @@ export function BlockFieldsRenderer({
 	if (Object.keys(blockFields).length === 0) {
 		return (
 			<div className="text-center text-sm text-muted-foreground py-4">
-				This block has no editable fields.
+				{t("blocks.noEditableFields")}
 			</div>
 		);
 	}

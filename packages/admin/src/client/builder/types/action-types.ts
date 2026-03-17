@@ -14,6 +14,7 @@ import type { I18nText } from "../../i18n/types";
 import type { FieldDefinition } from "../field/field";
 import type { IconComponent, MaybeLazyComponent } from "./common";
 
+
 // ============================================================================
 // Action Context
 // ============================================================================
@@ -224,13 +225,13 @@ export type ActionHandler<TItem = any> =
  */
 export interface ConfirmationConfig {
 	/** Dialog title */
-	title: string;
+	title: I18nText;
 	/** Dialog description */
-	description?: string;
+	description?: I18nText;
 	/** Confirm button label */
-	confirmLabel?: string;
+	confirmLabel?: I18nText;
 	/** Cancel button label */
-	cancelLabel?: string;
+	cancelLabel?: I18nText;
 	/** Use destructive styling */
 	destructive?: boolean;
 }

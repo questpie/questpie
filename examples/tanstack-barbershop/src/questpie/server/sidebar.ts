@@ -52,6 +52,11 @@ export default sidebar({
 		{
 			sectionId: "content",
 			type: "collection",
+			collection: "blog_posts",
+		},
+		{
+			sectionId: "content",
+			type: "collection",
 			collection: "services",
 		},
 		// Team

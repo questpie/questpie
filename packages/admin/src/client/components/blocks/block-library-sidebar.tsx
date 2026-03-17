@@ -11,6 +11,7 @@ import { Icon } from "@iconify/react";
 import * as React from "react";
 import type { BlockCategoryConfig } from "#questpie/admin/server/augmentation.js";
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
+import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import { Input } from "../ui/input.js";
 import {
@@ -55,6 +56,7 @@ export function BlockLibrarySidebar({
 	open,
 	onClose,
 }: BlockLibrarySidebarProps) {
+	const { t } = useTranslation();
 	const actions = useBlockEditorActions();
 	const blockRegistry = useBlockRegistry();
 	const allowedBlocks = useAllowedBlockTypes();
@@ -67,7 +69,7 @@ export function BlockLibrarySidebar({
 
 		// Default uncategorized category
 		const uncategorizedConfig: BlockCategoryConfig = {
-			label: { en: "Other" },
+			label: { key: "blocks.uncategorized", fallback: "Other" },
 			order: 999,
 		};
 
@@ -169,7 +171,7 @@ export function BlockLibrarySidebar({
 						/>
 						<Input
 							ref={searchInputRef}
-							placeholder="Search blocks..."
+							placeholder={t("blocks.searchPlaceholder")}
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
 							className="pl-9"
@@ -303,7 +305,7 @@ function getCategoryDisplayLabel(config: BlockCategoryConfig): string {
 	}
 
 	// I18nLocaleMap
-	return label.en || Object.values(label)[0] || "Other";
+	return label.en || Object.values(label)[0] || "Uncategorized";
 }
 
 function getDescriptionText(description: I18nText | undefined): string {

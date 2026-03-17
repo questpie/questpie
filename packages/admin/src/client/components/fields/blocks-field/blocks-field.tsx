@@ -13,6 +13,7 @@ import type { BlockSchema } from "#questpie/admin/server/block/index.js";
 import type { BlockContent } from "../../../blocks/types.js";
 import { EMPTY_BLOCK_CONTENT, isBlockContent } from "../../../blocks/types.js";
 import type { BaseFieldProps } from "../../../builder/types/common.js";
+import { useTranslation } from "../../../i18n/hooks.js";
 import {
 	Card,
 	CardContent,
@@ -60,6 +61,7 @@ export function BlocksField({
 	minBlocks,
 	maxBlocks,
 }: BlocksFieldProps) {
+	const { t } = useTranslation();
 	const form = useFormContext();
 	const watchedContent = useWatch({ control: form.control, name });
 	const { data: adminConfig } = useAdminConfig();
@@ -123,9 +125,9 @@ export function BlocksField({
 						</CardHeader>
 						<CardContent>
 							<div className="py-8 text-center text-muted-foreground">
-								<p className="text-sm">No block definitions registered</p>
+								<p className="text-sm">{t("blocks.noDefinitions")}</p>
 								<p className="mt-1 text-xs">
-									Register blocks with .blocks() in your admin configuration
+									{t("blocks.noDefinitionsHint")}
 								</p>
 							</div>
 						</CardContent>

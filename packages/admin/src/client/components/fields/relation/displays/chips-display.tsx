@@ -4,6 +4,7 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+import { useTranslation } from "../../../../i18n/hooks";
 import { CollectionEditLink } from "../../../admin-link";
 import { resolveIconElement } from "../../../component-renderer";
 import { Badge } from "../../../ui/badge";
@@ -36,6 +37,7 @@ export function ChipsDisplay({
 	isLoading = false,
 	loadingCount = 3,
 }: RelationDisplayProps) {
+	const { t } = useTranslation();
 	const iconElement = resolveIconElement(collectionIcon, {
 		className: "size-3 text-muted-foreground",
 	});
@@ -66,7 +68,7 @@ export function ChipsDisplay({
 									size="icon"
 									className="h-5 w-5"
 									onClick={() => actions.onEdit?.(item)}
-									aria-label="Edit item"
+									aria-label={t("field.editItem")}
 								>
 									<Icon icon="ph:pencil" className="size-3" />
 								</Button>
@@ -78,7 +80,7 @@ export function ChipsDisplay({
 									size="icon"
 									className="h-5 w-5"
 									onClick={() => actions.onRemove?.(item)}
-									aria-label="Remove item"
+									aria-label={t("field.removeItem")}
 								>
 									<Icon icon="ph:x" className="size-3" />
 								</Button>

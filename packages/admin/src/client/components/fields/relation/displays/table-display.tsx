@@ -6,6 +6,7 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+import { useTranslation } from "../../../../i18n/hooks";
 import { CollectionEditLink } from "../../../admin-link";
 import { Button } from "../../../ui/button";
 import { Skeleton } from "../../../ui/skeleton";
@@ -103,6 +104,7 @@ export function TableDisplay({
 	isLoading = false,
 	loadingCount = 3,
 }: RelationDisplayProps) {
+	const { t } = useTranslation();
 	const hasActions = editable || linkToDetail || !!actions?.onEdit;
 
 	// Show skeleton when loading and no items
@@ -152,7 +154,7 @@ export function TableDisplay({
 												size="icon"
 												className="h-7 w-7"
 												onClick={() => actions.onEdit?.(item)}
-												aria-label="Edit item"
+												aria-label={t("field.editItem")}
 											>
 												<Icon icon="ph:pencil" className="size-4" />
 											</Button>
@@ -166,7 +168,7 @@ export function TableDisplay({
 												size="icon"
 												className="h-7 w-7"
 												onClick={() => actions.onRemove?.(item)}
-												aria-label="Remove item"
+												aria-label={t("field.removeItem")}
 											>
 												<Icon icon="ph:x" className="size-4" />
 											</Button>

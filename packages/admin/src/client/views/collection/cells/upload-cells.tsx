@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { Badge } from "../../../components/ui/badge";
+import { useTranslation } from "../../../i18n/hooks";
 import { AssetThumbnail } from "./shared/asset-thumbnail";
 
 // ============================================================================
@@ -32,6 +33,7 @@ export function UploadCell({ value }: { value: unknown }) {
  * Upload many cell - displays multiple assets count or thumbnails
  */
 function UploadManyCell({ value }: { value: unknown }) {
+	const { t } = useTranslation();
 	if (value === null || value === undefined) {
 		return <span className="text-muted-foreground">-</span>;
 	}
@@ -80,7 +82,7 @@ function UploadManyCell({ value }: { value: unknown }) {
 	// Show count badge for non-images
 	return (
 		<Badge variant="secondary">
-			{value.length} file{value.length !== 1 ? "s" : ""}
+			{t("cell.file", { count: value.length })}
 		</Badge>
 	);
 }

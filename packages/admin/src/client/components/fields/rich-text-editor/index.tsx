@@ -7,7 +7,7 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import * as React from "react";
 
-import { useResolveText } from "../../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../../i18n/hooks";
 import { cn } from "../../../utils";
 import { Label } from "../../ui/label";
 import { LocaleBadge } from "../locale-badge";
@@ -59,6 +59,7 @@ export function RichTextEditor({
 	imageCollection,
 	enableMediaLibrary,
 }: RichTextEditorProps) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const resolvedLabel = label ? resolveText(label) : undefined;
 	const resolvedDescription = description
@@ -98,11 +99,11 @@ export function RichTextEditor({
 		() =>
 			buildExtensions({
 				features: resolvedFeatures,
-				placeholder,
+				placeholder: placeholder || t("editor.startWriting"),
 				maxCharacters,
 				customExtensions: extensions,
 			}),
-		[resolvedFeatures, placeholder, maxCharacters, extensions],
+		[resolvedFeatures, placeholder, maxCharacters, extensions, t],
 	);
 
 	// Initialize editor — no dependency array and no immediatelyRender:false

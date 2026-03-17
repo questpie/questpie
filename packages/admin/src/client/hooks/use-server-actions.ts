@@ -36,7 +36,7 @@ type ServerExecuteActionResponse = {
 function getActionErrorMessage(response: ServerExecuteActionResponse): string {
 	if (response.error) return response.error;
 	if (response.result?.toast?.message) return response.result.toast.message;
-	return "Action execution failed";
+	return "Action execution failed"; // Fallback; ctx.helpers.t() not available here
 }
 
 async function applyServerActionEffects(
@@ -146,7 +146,7 @@ function mapServerAction(
 	// Map confirmation config
 	if (serverAction.confirmation) {
 		action.confirmation = {
-			title: serverAction.confirmation.title ?? "Confirm",
+			title: serverAction.confirmation.title ?? { key: "common.confirm", fallback: "Confirm" },
 			description: serverAction.confirmation.description,
 			confirmLabel: serverAction.confirmation.confirmLabel,
 			cancelLabel: serverAction.confirmation.cancelLabel,

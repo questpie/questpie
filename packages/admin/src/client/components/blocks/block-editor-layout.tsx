@@ -9,6 +9,7 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+import { useTranslation } from "../../i18n/hooks.js";
 import { RenderProfiler } from "../../lib/render-profiler.js";
 import { cn } from "../../lib/utils.js";
 import { Button } from "../ui/button.js";
@@ -41,6 +42,7 @@ export function BlockEditorLayout({
 	className,
 	minHeight = 500,
 }: BlockEditorLayoutProps) {
+	const { t } = useTranslation();
 	const actions = useBlockEditorActions();
 	const tree = useBlockTree();
 	const isLibraryOpen = useBlockLibraryOpen();
@@ -102,7 +104,7 @@ export function BlockEditorLayout({
 						/>
 						<p className="text-sm font-medium">No blocks yet</p>
 						<p className="text-xs text-muted-foreground mt-1">
-							Add your first block to get started
+							{t("blocks.addFirst")}
 						</p>
 					</div>
 					<Button

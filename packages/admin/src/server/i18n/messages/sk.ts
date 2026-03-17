@@ -58,6 +58,12 @@ export default {
 	"dashboard.welcome": "Vitajte späť",
 	"dashboard.recentActivity": "Posledná aktivita",
 	"dashboard.quickActions": "Rýchle akcie",
+	"dashboard.noWidgets": "Žiadne widgety nakonfigurované",
+	"dashboard.noWidgetsDescription":
+		"Pridajte widgety do konfigurácie dashboardu pre zobrazenie dát.",
+	"dashboard.systemStatus": "Stav systému",
+	"dashboard.welcomeDescription":
+		"Vyberte kolekciu z bočného panelu pre správu obsahu.",
 
 	// Collections
 	"collection.create": "Vytvoriť {{name}}",
@@ -131,6 +137,17 @@ export default {
 	"blocks.addAbove": "Pridať nad",
 	"blocks.addBelow": "Pridať pod",
 	"blocks.addChild": "Pridať vnorený blok",
+	"blocks.add": "Pridať blok",
+	"blocks.addTo": "Pridať do {{parent}}",
+	"blocks.addFirst": "Pridajte svoj prvý blok",
+	"blocks.unknownType":
+		"Neznámy typ bloku \"{{type}}\". Tento typ bloku nie je zaregistrovaný.",
+	"blocks.searchPlaceholder": "Hľadať bloky...",
+	"blocks.uncategorized": "Ostatné",
+	"blocks.noEditableFields": "Tento blok nemá editovateľné polia.",
+	"blocks.noDefinitions": "Žiadne registrované bloky",
+	"blocks.noDefinitionsHint":
+		"Zaregistrujte bloky pomocou .blocks() vo vašej konfigurácii",
 
 	// Forms
 	"form.id": "ID",
@@ -207,6 +224,57 @@ export default {
 	"auth.profile": "Profil",
 	"auth.myAccount": "Môj účet",
 	"auth.logoutFailed": "Odhlásenie zlyhalo. Skúste to prosím znova.",
+	"auth.forgotPasswordTitle": "Zabudnuté heslo",
+	"auth.forgotPasswordDescription":
+		"Zadajte svoj email a pošleme vám odkaz na reset hesla",
+	"auth.checkYourEmail": "Skontrolujte svoj email",
+	"auth.resetLinkSentDescription":
+		"Poslali sme vám odkaz na reset hesla. Skontrolujte svoju emailovú schránku a postupujte podľa pokynov.",
+	"auth.backToLogin": "Späť na prihlásenie",
+	"auth.forgotPasswordFormDescription":
+		"Zadajte svoju emailovú adresu a pošleme vám odkaz na reset hesla.",
+	"auth.rememberYourPassword": "Pamätáte si heslo?",
+	"auth.resetPasswordSuccess": "Heslo bolo úspešne resetované",
+	"auth.resetPasswordSuccessDescription":
+		"Vaše heslo bolo úspešne resetované. Teraz sa môžete prihlásiť s novým heslom.",
+	"auth.enterNewPassword": "Zadajte nové heslo nižšie.",
+	"auth.createAccountDescription": "Vytvorte si účet a začnite",
+	"auth.inviteEmailLabel": "Emailová adresa",
+	"auth.inviteEmailDescription":
+		"Na tento email bude odoslaný pozývací odkaz",
+	"auth.inviteRole": "Rola",
+	"auth.inviteSelectRole": "Vyberte rolu",
+	"auth.inviteRoleDescription":
+		"Rola určuje, aké oprávnenia bude mať používateľ",
+	"auth.inviteMessage": "Osobná správa (voliteľné)",
+	"auth.inviteMessagePlaceholder":
+		"Pridajte osobnú správu k pozvánke...",
+	"auth.inviteMessageDescription":
+		"Táto správa bude zahrnutá v emailovej pozvánke",
+	"auth.sendingInvitation": "Odosielam pozvánku...",
+	"auth.sendInvitation": "Odoslať pozvánku",
+	"auth.inviteSentSuccess": "Pozvánka bola úspešne odoslaná",
+	"auth.signInDescription":
+		"Zadajte svoje prihlasovacie údaje pre prístup do administrácie",
+	"auth.inviteUser": "Pozvať používateľa",
+	"auth.inviteUserDescription":
+		"Odošlite pozvánku na pridanie nového používateľa",
+	"auth.inviteSentTo": "Pozvánka bola odoslaná na {{email}}",
+	"auth.completeRegistration": "Dokončiť registráciu",
+	"auth.validatingInvitation": "Overovanie pozvánky",
+	"auth.pleaseWait": "Prosím čakajte...",
+	"auth.invalidInvitation": "Neplatná pozvánka",
+	"auth.invalidInvitationDescription":
+		"Tento pozývací odkaz už nie je platný",
+	"auth.invalidOrExpiredInvitation": "Neplatná alebo expirovaná pozvánka",
+	"auth.invitationExpiredMessage":
+		"Pozvánka mohla expirovať alebo už bola použitá. Kontaktujte svojho administrátora pre novú pozvánku.",
+	"auth.goToLogin": "Prejsť na prihlásenie",
+	"auth.invalidLink": "Neplatný odkaz",
+	"auth.invalidLinkDescription":
+		"Odkaz na obnovenie hesla je neplatný alebo expiroval.",
+	"auth.requestNewResetLink":
+		"Prosím, požiadajte o nový odkaz na obnovenie hesla.",
 
 	// Errors
 	"error.notFound": "Nenájdené",
@@ -218,6 +286,51 @@ export default {
 	"error.unknown": "Nastala neznáma chyba",
 	"error.timeout": "Požiadavka vypršala. Skúste to prosím znova.",
 	"error.conflict": "Nastal konflikt. Obnovte stránku a skúste znova.",
+	"error.somethingWentWrong": "Niečo sa pokazilo",
+	"error.unexpectedError": "Nastala neočakávaná chyba",
+	"error.failedToLoad": "Nepodarilo sa načítať",
+	"error.failedToLoadView": "Nepodarilo sa načítať {{viewType}}",
+	"error.failedToLoadViewFor":
+		"Nepodarilo sa načítať {{viewType}} pre {{collection}}",
+	"error.widgetError": "Chyba widgetu",
+	"error.unknownWidget": "Neznámy widget",
+	"error.widgetTypeNotRecognized":
+		"Typ widgetu \"{{type}}\" nie je rozpoznaný.",
+	"error.componentNotFound": "Komponent sa nenašiel",
+	"error.failedToLoadComponent": "Nepodarilo sa načítať komponent",
+	"error.pageNotFound": "Stránka sa nenašla",
+	"error.pageNotFoundDescription":
+		"Stránka, ktorú hľadáte, neexistuje.",
+	"error.accessRestricted": "Prístup zamietnutý",
+	"error.accessRestrictedDescription":
+		"Nemáte oprávnenie na prístup k tejto stránke. Ak si myslíte, že ide o chybu, kontaktujte administrátora.",
+	"error.tryAgain": "Skúsiť znova",
+	"error.backToDashboard": "Späť na dashboard",
+	"error.noUploadCollection":
+		"Nie je nakonfigurovaná kolekcia pre nahrávanie.",
+	"error.multipleUploadCollections":
+		"K dispozícii je viacero kolekcií pre nahrávanie ({{collections}}). Špecifikujte, ktorú kolekciu použiť.",
+	"error.autosaveFailed": "Automatické uloženie zlyhalo",
+	"error.actionFailed": "Akcia zlyhala",
+	"error.serverActionFailed": "Serverová akcia zlyhala",
+	"error.failedToLoadOptions": "Nepodarilo sa načítať možnosti",
+	"error.failedToLoadAssets": "Nepodarilo sa načítať súbory",
+	"error.failedToLoadSelectedItems":
+		"Nepodarilo sa načítať vybrané položky",
+	"error.invalidCredentials": "Neplatné prihlasovacie údaje",
+	"error.failedToSendResetEmail":
+		"Nepodarilo sa odoslať email na reset hesla",
+	"error.failedToResetPassword": "Nepodarilo sa resetovať heslo",
+	"error.failedToCreateAccount": "Nepodarilo sa vytvoriť účet",
+	"error.failedToSendInvitation": "Nepodarilo sa odoslať pozvánku",
+	"error.anErrorOccurred": "Nastala chyba",
+	"error.uploadFailed": "Nahrávanie zlyhalo",
+	"error.failedToGeneratePreviewToken":
+		"Nepodarilo sa vygenerovať token náhľadu",
+	"error.missingFieldComponent":
+		"Žiadny komponent zaregistrovaný pre typ poľa: {{type}}",
+	"error.selectAtLeastOne": "Vyberte aspoň jednu položku",
+	"error.maxItemsAllowed": "Maximálne {{max}} položiek povolených",
 
 	// Table
 	"table.rowsPerPage": "Riadkov na stránku",
@@ -236,6 +349,10 @@ export default {
 	"table.columns": "Stĺpce",
 	"table.hideColumn": "Skryť stĺpec",
 	"table.showColumn": "Zobraziť stĺpec",
+	"table.noItemsInCollection":
+		"V tejto kolekcii sa nenašli žiadne položky",
+	"table.pagination": "Stránkovanie",
+	"table.editing": "Upravuje",
 
 	// Upload
 	"upload.dropzone": "Presuňte súbory sem alebo kliknite pre nahranie",
@@ -320,6 +437,7 @@ export default {
 	"editor.chooseFile": "Vybrať súbor",
 	"editor.uploading": "Nahráva sa...",
 	"editor.browseLibrary": "Prehľadať knižnicu",
+	"editor.startWriting": "Začnite písať...",
 
 	// Toasts
 	"toast.success": "Úspech",
@@ -369,6 +487,18 @@ export default {
 		"Máte neuložené zmeny. Prepnutie jazyka obsahu zahodí vaše zmeny a načíta obsah v novom jazyku.",
 	"confirm.localeChangeStay": "Zostať",
 	"confirm.localeChangeDiscard": "Zahodiť a prepnúť",
+	"confirm.deleteSelected": "Vymazať vybrané",
+	"confirm.deleteSelectedTitle": "Vymazať vybrané položky?",
+	"confirm.deleteSelectedDescription":
+		"Táto akcia sa nedá vrátiť späť. Všetky vybrané položky budú natrvalo vymazané.",
+	"confirm.deleteAll": "Vymazať všetko",
+	"confirm.restoreTitle": "Obnoviť položku?",
+	"confirm.restoreDescription":
+		"Táto položka sa znovu zobrazí v bežných zoznamoch.",
+	"confirm.restore": "Obnoviť",
+	"confirm.deleteItemTitle": "Vymazať položku?",
+	"confirm.deleteItemDescription":
+		"Táto akcia sa nedá vrátiť späť. Položka bude natrvalo vymazaná.",
 
 	// Status
 	"status.draft": "Koncept",
@@ -591,6 +721,14 @@ export default {
 	"preview.fullscreen": "Celá obrazovka",
 	"preview.close": "Zavrieť náhľad",
 	"preview.loading": "Načítava sa náhľad...",
+	"preview.exitPreview": "Ukončiť náhľad",
+	"preview.exitTooltip":
+		"Ukončiť režim náhľadu a vymazať draft cookie",
+	"preview.loadingPreview": "Načítava sa náhľad...",
+	"preview.previewError": "Chyba náhľadu",
+	"preview.refreshing": "Obnovuje sa...",
+	"preview.showPreview": "Zobraziť náhľad",
+	"preview.hidePreview": "Skryť náhľad",
 
 	// Autosave
 	"autosave.saving": "Ukladá sa...",
@@ -623,4 +761,71 @@ export default {
 	"audit.widget.recentActivity.title": "Posledná aktivita",
 	"audit.widget.recentActivity.empty":
 		"Žiadna nedávna aktivita nebola zaznamenaná.",
+
+	// UI
+	"ui.toggleSidebar": "Prepnúť bočný panel",
+	"ui.processing": "Spracováva sa...",
+	"ui.commandPalette": "Príkazová paleta",
+	"ui.commandPaletteDescription": "Hľadajte príkaz na spustenie...",
+	"ui.searchPlaceholder": "Hľadať...",
+	"ui.expand": "Rozšíriť",
+	"ui.toggleTheme": "Prepnúť tému",
+	"ui.themeLight": "Svetlá",
+	"ui.themeDark": "Tmavá",
+	"ui.themeSystem": "Systémová",
+
+	// Dropzone
+	"dropzone.label":
+		"Presuňte súbory sem alebo kliknite na prehľadávanie",
+	"dropzone.invalidType":
+		"\"{{name}}\" nie je povolený typ súboru",
+	"dropzone.tooLarge":
+		"\"{{name}}\" presahuje maximálnu veľkosť {{maxSize}}",
+	"dropzone.uploading": "Nahráva sa...",
+	"dropzone.typeImages": "Obrázky",
+	"dropzone.typeVideos": "Videá",
+	"dropzone.typeAudio": "Audio",
+	"dropzone.typePDF": "PDF",
+
+	// Date/Time inputs
+	"input.selectDate": "Vybrať dátum",
+	"input.selectDateTime": "Vybrať dátum a čas",
+	"input.selectDateRange": "Vybrať rozsah dátumov",
+	"input.selectTime": "Vybrať čas",
+
+	// Media
+	"media.browseLibrary": "Prehľadávať knižnicu médií",
+	"media.allFiles": "Všetky súbory",
+	"media.images": "Obrázky",
+	"media.videos": "Videá",
+	"media.audio": "Audio",
+	"media.documents": "Dokumenty",
+	"media.searchPlaceholder": "Hľadať podľa názvu...",
+
+	// Field actions
+	"field.moveUp": "Presunúť hore",
+	"field.moveDown": "Presunúť dole",
+	"field.dragToReorder": "Presunúť pre zmenu poradia",
+	"field.editItem": "Upraviť položku",
+	"field.removeItem": "Odstrániť položku",
+	"field.noItems": "Žiadne položky",
+	"field.codeEditor": "Editor kódu",
+	"field.formEditor": "Editor formulára",
+	"field.section": "Sekcia",
+
+	// Cells
+	"cell.file": {
+		one: "{{count}} súbor",
+		few: "{{count}} súbory",
+		many: "{{count}} súborov",
+		other: "{{count}} súborov",
+	},
+	"cell.item": {
+		one: "{{count}} položka",
+		few: "{{count}} položky",
+		many: "{{count}} položiek",
+		other: "{{count}} položiek",
+	},
+	"cell.more": "+{{count}} ďalších",
+	"cell.blocks": "Bloky",
 } as const;

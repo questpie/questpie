@@ -58,6 +58,12 @@ export default {
 	"dashboard.welcome": "Welcome back",
 	"dashboard.recentActivity": "Recent Activity",
 	"dashboard.quickActions": "Quick Actions",
+	"dashboard.noWidgets": "No widgets configured",
+	"dashboard.noWidgetsDescription":
+		"Add widgets to your dashboard configuration to display data here.",
+	"dashboard.systemStatus": "System Status",
+	"dashboard.welcomeDescription":
+		"Select a collection from the sidebar to manage your content.",
 
 	// Collections
 	"collection.create": "Create {{name}}",
@@ -123,6 +129,17 @@ export default {
 	"blocks.addAbove": "Add above",
 	"blocks.addBelow": "Add below",
 	"blocks.addChild": "Add child block",
+	"blocks.add": "Add block",
+	"blocks.addTo": "Add to {{parent}}",
+	"blocks.addFirst": "Add your first block to get started",
+	"blocks.unknownType":
+		'Unknown block type "{{type}}". This block type is not registered.',
+	"blocks.searchPlaceholder": "Search blocks...",
+	"blocks.uncategorized": "Other",
+	"blocks.noEditableFields": "This block has no editable fields.",
+	"blocks.noDefinitions": "No block definitions registered",
+	"blocks.noDefinitionsHint":
+		"Register blocks with .blocks() in your admin configuration",
 
 	// Forms
 	"form.id": "ID",
@@ -198,6 +215,55 @@ export default {
 	"auth.profile": "Profile",
 	"auth.myAccount": "My account",
 	"auth.logoutFailed": "Failed to log out. Please try again.",
+	"auth.forgotPasswordTitle": "Forgot password",
+	"auth.forgotPasswordDescription":
+		"Enter your email to receive a password reset link",
+	"auth.checkYourEmail": "Check your email",
+	"auth.resetLinkSentDescription":
+		"We've sent a password reset link to your email address. Please check your inbox and follow the instructions.",
+	"auth.backToLogin": "Back to login",
+	"auth.forgotPasswordFormDescription":
+		"Enter your email address and we'll send you a link to reset your password.",
+	"auth.rememberYourPassword": "Remember your password?",
+	"auth.resetPasswordSuccess": "Password reset successful",
+	"auth.resetPasswordSuccessDescription":
+		"Your password has been reset successfully. You can now sign in with your new password.",
+	"auth.enterNewPassword": "Enter your new password below.",
+	"auth.createAccountDescription": "Create your account to get started",
+	"auth.inviteEmailLabel": "Email Address",
+	"auth.inviteEmailDescription":
+		"An invitation link will be sent to this email",
+	"auth.inviteRole": "Role",
+	"auth.inviteSelectRole": "Select a role",
+	"auth.inviteRoleDescription":
+		"The role determines what permissions the user will have",
+	"auth.inviteMessage": "Personal Message (Optional)",
+	"auth.inviteMessagePlaceholder":
+		"Add a personal message to the invitation...",
+	"auth.inviteMessageDescription":
+		"This message will be included in the invitation email",
+	"auth.sendingInvitation": "Sending invitation...",
+	"auth.sendInvitation": "Send Invitation",
+	"auth.inviteSentSuccess": "Invitation sent successfully",
+	"auth.signInDescription":
+		"Enter your credentials to access the admin panel",
+	"auth.inviteUser": "Invite User",
+	"auth.inviteUserDescription": "Send an invitation to add a new user",
+	"auth.inviteSentTo": "Invitation sent to {{email}}",
+	"auth.completeRegistration": "Complete Registration",
+	"auth.validatingInvitation": "Validating Invitation",
+	"auth.pleaseWait": "Please wait...",
+	"auth.invalidInvitation": "Invalid Invitation",
+	"auth.invalidInvitationDescription":
+		"This invitation link is no longer valid",
+	"auth.invalidOrExpiredInvitation": "Invalid or expired invitation",
+	"auth.invitationExpiredMessage":
+		"The invitation may have expired or already been used. Please contact your administrator for a new invitation.",
+	"auth.goToLogin": "Go to Login",
+	"auth.invalidLink": "Invalid Link",
+	"auth.invalidLinkDescription":
+		"The password reset link is invalid or has expired.",
+	"auth.requestNewResetLink": "Please request a new password reset link.",
 
 	// Errors
 	"error.notFound": "Not found",
@@ -209,6 +275,46 @@ export default {
 	"error.unknown": "An unknown error occurred",
 	"error.timeout": "Request timed out. Please try again.",
 	"error.conflict": "A conflict occurred. Please refresh and try again.",
+	"error.somethingWentWrong": "Something went wrong",
+	"error.unexpectedError": "An unexpected error occurred",
+	"error.failedToLoad": "Failed to load",
+	"error.failedToLoadView": "Failed to load {{viewType}}",
+	"error.failedToLoadViewFor": "Failed to load {{viewType}} for {{collection}}",
+	"error.widgetError": "Widget Error",
+	"error.unknownWidget": "Unknown Widget",
+	"error.widgetTypeNotRecognized":
+		'Widget type "{{type}}" is not recognized.',
+	"error.componentNotFound": "Component not found",
+	"error.failedToLoadComponent": "Failed to load component",
+	"error.pageNotFound": "Page Not Found",
+	"error.pageNotFoundDescription":
+		"The page you're looking for doesn't exist.",
+	"error.accessRestricted": "Access Restricted",
+	"error.accessRestrictedDescription":
+		"You don't have permission to access this page. Contact your administrator if you believe this is an error.",
+	"error.tryAgain": "Try again",
+	"error.backToDashboard": "Back to Dashboard",
+	"error.noUploadCollection": "No upload collection is configured.",
+	"error.multipleUploadCollections":
+		"Multiple upload collections are available ({{collections}}). Specify which collection to use.",
+	"error.autosaveFailed": "Autosave failed",
+	"error.actionFailed": "Action failed",
+	"error.serverActionFailed": "Server action failed",
+	"error.failedToLoadOptions": "Failed to load options",
+	"error.failedToLoadAssets": "Failed to load assets",
+	"error.failedToLoadSelectedItems": "Failed to load selected items",
+	"error.invalidCredentials": "Invalid credentials",
+	"error.failedToSendResetEmail": "Failed to send reset email",
+	"error.failedToResetPassword": "Failed to reset password",
+	"error.failedToCreateAccount": "Failed to create account",
+	"error.failedToSendInvitation": "Failed to send invitation",
+	"error.anErrorOccurred": "An error occurred",
+	"error.uploadFailed": "Upload failed",
+	"error.failedToGeneratePreviewToken": "Failed to generate preview token",
+	"error.missingFieldComponent":
+		"No component registered for field type: {{type}}",
+	"error.selectAtLeastOne": "Please select at least one asset",
+	"error.maxItemsAllowed": "Maximum {{max}} items allowed",
 
 	// Table
 	"table.rowsPerPage": "Rows per page",
@@ -227,6 +333,9 @@ export default {
 	"table.columns": "Columns",
 	"table.hideColumn": "Hide column",
 	"table.showColumn": "Show column",
+	"table.noItemsInCollection": "No items found in this collection",
+	"table.pagination": "Pagination",
+	"table.editing": "Editing",
 
 	// Upload
 	"upload.dropzone": "Drop files here or click to upload",
@@ -300,6 +409,7 @@ export default {
 	"editor.chooseFile": "Choose file",
 	"editor.uploading": "Uploading...",
 	"editor.browseLibrary": "Browse library",
+	"editor.startWriting": "Start writing...",
 
 	// Toasts
 	"toast.success": "Success",
@@ -350,6 +460,18 @@ export default {
 		"You have unsaved changes. Switching content language will discard your changes and load the content in the new language.",
 	"confirm.localeChangeStay": "Stay",
 	"confirm.localeChangeDiscard": "Discard & switch",
+	"confirm.deleteSelected": "Delete Selected",
+	"confirm.deleteSelectedTitle": "Delete selected items?",
+	"confirm.deleteSelectedDescription":
+		"This action cannot be undone. All selected items will be permanently deleted.",
+	"confirm.deleteAll": "Delete All",
+	"confirm.restoreTitle": "Restore item?",
+	"confirm.restoreDescription":
+		"This item will become visible in normal list views again.",
+	"confirm.restore": "Restore",
+	"confirm.deleteItemTitle": "Delete item?",
+	"confirm.deleteItemDescription":
+		"This action cannot be undone. The item will be permanently deleted.",
 
 	// Status
 	"status.draft": "Draft",
@@ -366,6 +488,12 @@ export default {
 	"date.selectDate": "Select date",
 	"date.selectTime": "Select time",
 	"date.clear": "Clear date",
+
+	// Date/Time inputs
+	"input.selectDate": "Select date",
+	"input.selectDateTime": "Select date and time",
+	"input.selectDateRange": "Select date range",
+	"input.selectTime": "Select time",
 
 	// Accessibility
 	"a11y.openMenu": "Open menu",
@@ -568,6 +696,13 @@ export default {
 	"preview.fullscreen": "Fullscreen",
 	"preview.close": "Close preview",
 	"preview.loading": "Loading preview...",
+	"preview.exitPreview": "Exit Preview",
+	"preview.exitTooltip": "Exit preview mode and clear draft cookie",
+	"preview.loadingPreview": "Loading preview...",
+	"preview.previewError": "Preview Error",
+	"preview.refreshing": "Refreshing...",
+	"preview.showPreview": "Show Preview",
+	"preview.hidePreview": "Hide Preview",
 
 	// Autosave
 	"autosave.saving": "Saving...",
@@ -641,4 +776,53 @@ export default {
 	"lock.openElsewhere":
 		"You have this document open in another tab. Changes will sync automatically.",
 	"lock.cannotSave": "Cannot save - document is locked by another user",
+
+	// UI
+	"ui.toggleSidebar": "Toggle Sidebar",
+	"ui.processing": "Processing...",
+	"ui.commandPalette": "Command Palette",
+	"ui.commandPaletteDescription": "Search for a command to run...",
+	"ui.searchPlaceholder": "Search...",
+	"ui.expand": "Expand",
+	"ui.toggleTheme": "Toggle theme",
+	"ui.themeLight": "Light",
+	"ui.themeDark": "Dark",
+	"ui.themeSystem": "System",
+
+	// Dropzone
+	"dropzone.label": "Drop files here or click to browse",
+	"dropzone.invalidType": '"{{name}}" is not an accepted file type',
+	"dropzone.tooLarge":
+		'"{{name}}" exceeds maximum size of {{maxSize}}',
+	"dropzone.uploading": "Uploading...",
+	"dropzone.typeImages": "Images",
+	"dropzone.typeVideos": "Videos",
+	"dropzone.typeAudio": "Audio",
+	"dropzone.typePDF": "PDF",
+
+	// Media
+	"media.browseLibrary": "Browse Media Library",
+	"media.allFiles": "All Files",
+	"media.images": "Images",
+	"media.videos": "Videos",
+	"media.audio": "Audio",
+	"media.documents": "Documents",
+	"media.searchPlaceholder": "Search by filename...",
+
+	// Field actions
+	"field.moveUp": "Move up",
+	"field.moveDown": "Move down",
+	"field.dragToReorder": "Drag to reorder",
+	"field.editItem": "Edit item",
+	"field.removeItem": "Remove item",
+	"field.noItems": "No items",
+	"field.codeEditor": "Code editor",
+	"field.formEditor": "Form editor",
+	"field.section": "Section",
+
+	// Cells
+	"cell.file": { one: "{{count}} file", other: "{{count}} files" },
+	"cell.item": { one: "{{count}} item", other: "{{count}} items" },
+	"cell.more": "+{{count}} more",
+	"cell.blocks": "Blocks",
 } as const;

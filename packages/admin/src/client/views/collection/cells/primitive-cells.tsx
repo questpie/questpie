@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { Badge } from "../../../components/ui/badge";
+import { useTranslation } from "../../../i18n/hooks";
 
 // ============================================================================
 // Default Cell (Ultra-Simple Fallback)
@@ -116,9 +117,10 @@ export function NumberCell({ value }: { value: unknown }) {
  * Boolean cell - badge display
  */
 export function BooleanCell({ value }: { value: unknown }) {
+	const { t } = useTranslation();
 	return (
 		<Badge variant={value ? "default" : "secondary"}>
-			{value ? "Yes" : "No"}
+			{value ? t("common.yes") : t("common.no")}
 		</Badge>
 	);
 }

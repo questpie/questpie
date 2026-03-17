@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslation } from "../i18n/hooks";
 
 interface ErrorBoundaryProps {
 	children: React.ReactNode;
@@ -11,6 +12,23 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
 	hasError: boolean;
 	error: Error | null;
+}
+
+/**
+ * Default fallback component for ErrorBoundary (functional, so it can use hooks)
+ */
+function DefaultErrorFallback({ error }: { error: Error }) {
+	const { t } = useTranslation();
+	return (
+		<div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+			<p className="text-sm font-medium text-destructive">
+				{t("error.somethingWentWrong")}
+			</p>
+			<p className="mt-1 text-xs text-muted-foreground">
+				{error.message}
+			</p>
+		</div>
+	);
 }
 
 /**
@@ -63,17 +81,8 @@ class ErrorBoundary extends React.Component<
 				return fallback;
 			}
 
-			// Default fallback
-			return (
-				<div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
-					<p className="text-sm font-medium text-destructive">
-						Something went wrong
-					</p>
-					<p className="mt-1 text-xs text-muted-foreground">
-						{this.state.error.message}
-					</p>
-				</div>
-			);
+			// Default fallback (uses functional component to access hooks)
+			return <DefaultErrorFallback error={this.state.error} />;
 		}
 
 		return this.props.children;
@@ -90,11 +99,12 @@ export function WidgetErrorBoundary({
 	children: React.ReactNode;
 	widgetType?: string;
 }) {
+	const { t } = useTranslation();
 	return (
 		<ErrorBoundary
 			fallback={(error) => (
 				<div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
-					<p className="text-sm font-medium text-destructive">Widget Error</p>
+					<p className="text-sm font-medium text-destructive">{t("error.widgetError")}</p>
 					{widgetType && (
 						<p className="text-xs text-muted-foreground">Type: {widgetType}</p>
 					)}
@@ -132,6 +142,7 @@ function ViewErrorBoundary({
 	collection?: string;
 	onRetry?: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<ErrorBoundary
 			fallback={(error) => (
@@ -157,11 +168,12 @@ function ViewErrorBoundary({
 							</div>
 							<div className="flex-1">
 								<h3 className="text-sm font-semibold text-destructive">
-									Failed to load {viewType ?? "view"}
-									{collection && ` for ${collection}`}
+									{collection
+										? t("error.failedToLoadViewFor", { viewType: viewType ?? "view", collection })
+										: t("error.failedToLoadView", { viewType: viewType ?? "view" })}
 								</h3>
 								<p className="mt-1 text-sm text-muted-foreground">
-									{error.message || "An unexpected error occurred"}
+									{error.message || t("error.unexpectedError")}
 								</p>
 								{onRetry && (
 									<button
@@ -169,7 +181,7 @@ function ViewErrorBoundary({
 										onClick={onRetry}
 										className="mt-3 text-sm font-medium text-primary hover:underline"
 									>
-										Try again
+										{t("error.tryAgain")}
 									</button>
 								)}
 							</div>

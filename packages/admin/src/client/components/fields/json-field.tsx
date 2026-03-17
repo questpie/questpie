@@ -11,7 +11,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import { Controller, useFormContext } from "react-hook-form";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import {
@@ -106,6 +106,7 @@ export function JsonField({
 	control: controlProp,
 	className,
 }: JsonFieldProps) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const resolvedLabel = label ? resolveText(label) : undefined;
 	const resolvedDescription = description
@@ -172,7 +173,7 @@ export function JsonField({
 										size="icon-xs"
 										onClick={() => setMode("code")}
 										disabled={disabled}
-										title="Code editor"
+										title={t("field.codeEditor")}
 									>
 										<Icon icon="ph:code-bold" />
 									</Button>
@@ -182,7 +183,7 @@ export function JsonField({
 										size="icon-xs"
 										onClick={() => setMode("form")}
 										disabled={disabled}
-										title="Form editor"
+										title={t("field.formEditor")}
 									>
 										<Icon icon="ph:list-bullets-bold" />
 									</Button>

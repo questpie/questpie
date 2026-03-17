@@ -406,7 +406,7 @@ function useActionExecution<TItem = any>({
 						if (collectionClient) {
 							if (method === "delete" && collectionClient.delete) {
 								await collectionClient.delete({ id: (item as any)?.id });
-								helpers.toast.success("Item deleted successfully");
+								helpers.toast.success(helpers.t("toast.deleteSuccess"));
 							} else {
 								// For other methods, show info (actual implementation would call the API)
 								helpers.toast.info(`${handler.method || "POST"} ${endpoint}`);
@@ -475,7 +475,7 @@ function useActionExecution<TItem = any>({
 							}
 						} catch (err) {
 							helpers.toast.error(
-								err instanceof Error ? err.message : "Server action failed",
+								err instanceof Error ? err.message : helpers.t("error.serverActionFailed"),
 							);
 						}
 						break;
@@ -483,7 +483,7 @@ function useActionExecution<TItem = any>({
 				}
 			} catch (error) {
 				helpers.toast.error(
-					error instanceof Error ? error.message : "Action failed",
+					error instanceof Error ? error.message : helpers.t("error.actionFailed"),
 				);
 			} finally {
 				setIsExecuting(false);

@@ -16,7 +16,7 @@ import type {
 	ActionQueryClient,
 } from "../../builder/types/action-types";
 import { resolveIconElement } from "../../components/component-renderer";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { selectAuthClient, useAdminStore } from "../../runtime/provider";
 import { Button } from "../ui/button";
 import { ConfirmationDialog } from "./confirmation-dialog";
@@ -67,6 +67,7 @@ export function ActionButton<TItem = any>({
 	onOpenDialog,
 }: ActionButtonProps<TItem>): React.ReactElement | null {
 	const resolveText = useResolveText();
+	const { t } = useTranslation();
 	const authClient = useAdminStore(selectAuthClient);
 	const queryClient = useQueryClient();
 	const [showConfirm, setShowConfirm] = React.useState(false);
@@ -145,7 +146,7 @@ export function ActionButton<TItem = any>({
 					helpers.refresh();
 					setIsLoading(false);
 				} catch (error) {
-					helpers.toast.error("Action failed");
+					helpers.toast.error(t("error.actionFailed"));
 					setIsLoading(false);
 				}
 				break;
@@ -157,7 +158,7 @@ export function ActionButton<TItem = any>({
 					await handler.fn(ctx);
 					setIsLoading(false);
 				} catch (error) {
-					helpers.toast.error("Action failed");
+					helpers.toast.error(t("error.actionFailed"));
 					setIsLoading(false);
 				}
 				break;

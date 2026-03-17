@@ -10,7 +10,7 @@ import {
 import { Kbd } from "../../components/ui/kbd";
 import { SidebarTrigger } from "../../components/ui/sidebar";
 import type { Breadcrumb } from "../../contexts/breadcrumb-context";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 
 type Theme = "light" | "dark" | "system";
@@ -35,6 +35,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 }: AdminTopbarProps) {
 	const resolvedBreadcrumbs = breadcrumbs ?? EMPTY_BREADCRUMBS;
 	const resolveText = useResolveText();
+	const { t } = useTranslation();
 
 	// Show theme toggle if setTheme is provided and showThemeToggle is not explicitly false
 	const shouldShowThemeToggle = setTheme && showThemeToggle !== false;
@@ -156,11 +157,11 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 					onClick={onSearchOpen}
 					size="icon-sm"
 					className="qa-topbar__search-btn md:size-auto md:h-9 md:w-64 md:justify-between md:px-3 gap-2 text-muted-foreground"
-					aria-label="Search (⌘K)"
+					aria-label={t("ui.searchPlaceholder")}
 				>
 					<span className="flex items-center gap-2">
 						<Icon icon="ph:magnifying-glass" />
-						<span className="hidden md:inline">Search...</span>
+						<span className="hidden md:inline">{t("ui.searchPlaceholder")}</span>
 					</span>
 					<Kbd className="hidden md:inline-flex">
 						<span className="text-xs">⌘</span>K
@@ -184,22 +185,22 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 										icon="ph:moon"
 										className="absolute size-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0"
 									/>
-									<span className="sr-only">Toggle theme</span>
+									<span className="sr-only">{t("ui.toggleTheme")}</span>
 								</Button>
 							}
 						/>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem onClick={() => setTheme("light")}>
 								<Icon icon="ph:sun" className="mr-2 size-4" />
-								Light
+								{t("ui.themeLight")}
 							</DropdownMenuItem>
 							<DropdownMenuItem onClick={() => setTheme("dark")}>
 								<Icon icon="ph:moon" className="mr-2 size-4" />
-								Dark
+								{t("ui.themeDark")}
 							</DropdownMenuItem>
 							<DropdownMenuItem onClick={() => setTheme("system")}>
 								<Icon icon="ph:monitor" className="mr-2 size-4" />
-								System
+								{t("ui.themeSystem")}
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>

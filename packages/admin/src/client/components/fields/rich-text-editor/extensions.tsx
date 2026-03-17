@@ -59,7 +59,7 @@ export function buildExtensions({
 	const extensions: AnyExtension[] = [
 		StarterKit.configure(starterKitConfig),
 		Placeholder.configure({
-			placeholder: placeholder || "Start writing...",
+			placeholder: placeholder || "Start writing...", // Fallback; parent should pass translated string
 		}),
 	];
 

@@ -198,11 +198,11 @@ export function RelationSelect<T extends QuestpieApp>({
 				});
 			} catch (error) {
 				console.error("Failed to load relation options:", error);
-				toast.error("Failed to load options");
+				toast.error(t("error.failedToLoadOptions"));
 				return [];
 			}
 		},
-		[client, targetCollection, filter, renderOption, collectionIconRef, locale],
+		[client, targetCollection, filter, renderOption, collectionIconRef, locale, t],
 	);
 
 	const queryClient = useQueryClient();

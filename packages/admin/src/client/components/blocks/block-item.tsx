@@ -12,6 +12,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import type { BlockNode } from "../../blocks/types.js";
+import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import {
@@ -63,10 +64,12 @@ export const BlockItem = React.memo(function BlockItem({
 	index: _index,
 	parentId: _parentId,
 }: BlockItemProps) {
+	const { t } = useTranslation();
 	const actions = useBlockEditorActions();
 	const blockSchema = useBlockSchema(block.type);
 	const values = useBlockValues(block.id);
 	const isExpanded = useIsBlockExpanded(block.id);
+	const isUnknownType = !blockSchema;
 	const canHaveChildren = blockSchema?.allowChildren ?? false;
 
 	// Drag and drop
@@ -135,7 +138,7 @@ export const BlockItem = React.memo(function BlockItem({
 			)}
 
 			{/* Block card */}
-			<Card className={cn("overflow-hidden transition-shadow p-0 gap-0")}>
+			<Card className={cn("overflow-hidden transition-shadow p-0 gap-0", isUnknownType && "border-destructive/50")}>
 				{/* Header - clickable to expand/collapse */}
 				<CardHeader
 					role="button"
@@ -175,18 +178,29 @@ export const BlockItem = React.memo(function BlockItem({
 					</div>
 
 					{/* Block icon */}
-					<BlockIcon
-						icon={blockSchema?.admin?.icon}
-						size={14}
-						className={isRoot ? "text-foreground" : "text-muted-foreground"}
-					/>
+					{isUnknownType ? (
+						<Icon
+							icon="ph:warning"
+							className="h-3.5 w-3.5 text-destructive"
+						/>
+					) : (
+						<BlockIcon
+							icon={blockSchema?.admin?.icon}
+							size={14}
+							className={isRoot ? "text-foreground" : "text-muted-foreground"}
+						/>
+					)}
 
 					{/* Block label */}
 					<div className="flex-1 min-w-0 flex items-baseline gap-2">
 						<span
 							className={cn(
 								"text-sm font-medium truncate",
-								isRoot ? "text-foreground" : "text-foreground/90",
+								isUnknownType
+									? "text-destructive"
+									: isRoot
+										? "text-foreground"
+										: "text-foreground/90",
 							)}
 						>
 							{blockLabel}
@@ -215,6 +229,18 @@ export const BlockItem = React.memo(function BlockItem({
 				{isExpanded && blockSchema && (
 					<CardContent className={cn("p-3", !isRoot && "py-2")}>
 						<BlockFieldsRenderer blockId={block.id} blockSchema={blockSchema} />
+					</CardContent>
+				)}
+
+				{/* Unknown block type warning */}
+				{isExpanded && isUnknownType && (
+					<CardContent className="p-3">
+						<div className="flex items-center gap-2 text-sm text-destructive">
+							<Icon icon="ph:warning" className="h-4 w-4 shrink-0" />
+							<span>
+								{t("blocks.unknownType", { type: block.type })}
+							</span>
+						</div>
 					</CardContent>
 				)}
 			</Card>

@@ -4,7 +4,7 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
-import { useResolveText } from "../../../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../../../i18n/hooks";
 import { CollectionEditLink } from "../../../admin-link";
 import { Button } from "../../../ui/button";
 import { Skeleton } from "../../../ui/skeleton";
@@ -66,6 +66,7 @@ export function CardsDisplay({
 	isLoading = false,
 	loadingCount = 3,
 }: RelationDisplayProps) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const getTitle = (item: any) =>
 		item[fields?.title || "_title"] || getItemDisplayValue(item);
@@ -135,7 +136,7 @@ export function CardsDisplay({
 													e.stopPropagation();
 													actions.onEdit?.(item);
 												}}
-												aria-label="Edit item"
+												aria-label={t("field.editItem")}
 											>
 												<Icon icon="ph:pencil" className="size-3" />
 											</Button>
@@ -151,7 +152,7 @@ export function CardsDisplay({
 													e.stopPropagation();
 													actions.onRemove?.(item);
 												}}
-												aria-label="Remove item"
+												aria-label={t("field.removeItem")}
 											>
 												<Icon icon="ph:x" className="size-3" />
 											</Button>

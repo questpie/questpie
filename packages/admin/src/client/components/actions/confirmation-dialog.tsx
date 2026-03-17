@@ -10,6 +10,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import type { ConfirmationConfig } from "../../builder/types/action-types";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { Button } from "../ui/button";
 import {
 	Dialog,
@@ -57,6 +58,8 @@ export function ConfirmationDialog({
 	onConfirm,
 	loading = false,
 }: ConfirmationDialogProps): React.ReactElement {
+	const { t } = useTranslation();
+	const resolveText = useResolveText();
 	const [isProcessing, setIsProcessing] = React.useState(false);
 
 	const handleConfirm = async () => {
@@ -84,9 +87,9 @@ export function ConfirmationDialog({
 							</div>
 						)}
 						<div className="space-y-1">
-							<DialogTitle>{config.title}</DialogTitle>
+							<DialogTitle>{resolveText(config.title)}</DialogTitle>
 							{config.description && (
-								<DialogDescription>{config.description}</DialogDescription>
+								<DialogDescription>{resolveText(config.description)}</DialogDescription>
 							)}
 						</div>
 					</div>
@@ -97,14 +100,14 @@ export function ConfirmationDialog({
 						onClick={() => onOpenChange(false)}
 						disabled={isLoading}
 					>
-						{config.cancelLabel || "Cancel"}
+						{resolveText(config.cancelLabel) || t("common.cancel")}
 					</Button>
 					<Button
 						variant={config.destructive ? "destructive" : "default"}
 						onClick={handleConfirm}
 						disabled={isLoading}
 					>
-						{isLoading ? "Processing..." : config.confirmLabel || "Confirm"}
+						{isLoading ? t("ui.processing") : resolveText(config.confirmLabel) || t("common.confirm")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

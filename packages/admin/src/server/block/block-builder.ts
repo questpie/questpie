@@ -32,16 +32,18 @@
  * ```
  */
 
-import type {
-	AppContext,
-	BuiltinFields,
-	Field,
-	FieldBuilderProxy,
-	FieldSchema,
-	FieldState,
+import {
+	type AppContext,
+	type BuiltinFields,
+	builtinFields,
+	createFieldsCallbackContext,
+	type Field,
+	type FieldBuilderProxy,
+	type FieldSchema,
+	type FieldState,
 } from "questpie";
 import type { AdminBlockConfig, AdminConfigContext } from "../augmentation.js";
-import type { adminFields } from "../fields/index.js";
+import { adminFields } from "../fields/index.js";
 
 /**
  * Combined field types available in block field definitions.
@@ -373,11 +375,16 @@ export class BlockBuilder<
 		TFieldMap,
 		TData
 	> {
-		// Store the factory for later resolution when app is built
-		// The actual field definitions are created when block is registered
+		// Resolve the factory immediately (same pattern as CollectionBuilder)
+		const context = createFieldsCallbackContext({
+			...builtinFields,
+			...adminFields,
+		});
+		const resolvedFields = factory(context as any);
+
 		return new BlockBuilder({
 			...this._state,
-			_fieldsFactory: factory,
+			fields: resolvedFields,
 		} as any);
 	}
 

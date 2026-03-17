@@ -205,6 +205,7 @@ function CustomDialogContent<TItem>({
 	ctx: ActionContext<TItem>;
 	onClose: () => void;
 }) {
+	const { t } = useTranslation();
 	const handler = action.handler as DialogHandler<TItem>;
 	const [Component, setComponent] =
 		React.useState<React.ComponentType<any> | null>(null);
@@ -275,7 +276,7 @@ function CustomDialogContent<TItem>({
 					if (err instanceof Error) {
 						setError(err);
 					} else {
-						setError(new Error("Failed to load"));
+						setError(new Error(t("error.failedToLoad")));
 					}
 					setLoading(false);
 				}

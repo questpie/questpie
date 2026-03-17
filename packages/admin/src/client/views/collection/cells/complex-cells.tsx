@@ -20,7 +20,7 @@ import {
 	TooltipTrigger,
 } from "../../../components/ui/tooltip";
 import { useAdminConfig } from "../../../hooks/use-admin-config";
-import { useResolveText } from "../../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../../i18n/hooks";
 import { cn } from "../../../lib/utils";
 import { selectAdmin, useAdminStore } from "../../../runtime";
 import {
@@ -67,6 +67,7 @@ export function ObjectCell({
 	row?: unknown;
 	fieldDef?: FieldInstance;
 }) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	if (value === null || value === undefined) {
 		return <span className="text-muted-foreground">-</span>;
@@ -189,7 +190,7 @@ export function ObjectCell({
 				</div>
 				{entries.length > 12 && (
 					<div className="text-[11px] text-muted-foreground text-center py-1.5 border-t border-border">
-						+{entries.length - 12} more
+						{t("cell.more", { count: entries.length - 12 })}
 					</div>
 				)}
 			</TooltipContent>
@@ -212,6 +213,7 @@ export function ArrayCell({
 	row?: unknown;
 	fieldDef?: FieldInstance;
 }) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	if (value === null || value === undefined) {
 		return <span className="text-muted-foreground">-</span>;
@@ -339,7 +341,7 @@ export function ArrayCell({
 				</div>
 				{value.length > 10 && (
 					<div className="text-[11px] text-muted-foreground text-center py-1.5 border-t border-border">
-						+{value.length - 10} more
+						{t("cell.more", { count: value.length - 10 })}
 					</div>
 				)}
 			</TooltipContent>
@@ -413,6 +415,7 @@ function collectBlockStats(tree: BlockNode[]): {
  * Blocks cell - summarizes block tree content with type counts
  */
 export function BlocksCell({ value }: { value: unknown }) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const { data: adminConfig } = useAdminConfig();
 
@@ -485,7 +488,7 @@ export function BlocksCell({ value }: { value: unknown }) {
 				className="p-0 w-64 max-w-[90vw] bg-popover border-border"
 			>
 				<div className="flex items-center justify-between px-2 py-1.5 text-[11px] text-muted-foreground border-b border-border">
-					<span>Blocks</span>
+					<span>{t("cell.blocks")}</span>
 					<Badge variant="secondary" className="h-4 px-1 text-[10px]">
 						{total}
 					</Badge>
@@ -505,7 +508,7 @@ export function BlocksCell({ value }: { value: unknown }) {
 				</div>
 				{entries.length > 10 && (
 					<div className="text-[11px] text-muted-foreground text-center py-1.5 border-t border-border">
-						+{entries.length - 10} more
+						{t("cell.more", { count: entries.length - 10 })}
 					</div>
 				)}
 			</TooltipContent>

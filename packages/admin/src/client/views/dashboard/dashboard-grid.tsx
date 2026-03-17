@@ -49,7 +49,7 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "../../components/ui/tabs";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { DashboardWidget } from "./dashboard-widget";
 
@@ -668,6 +668,7 @@ export function DashboardGrid({
 	className,
 }: DashboardGridProps): React.ReactElement {
 	const resolveText = useResolveText();
+	const { t } = useTranslation();
 	const {
 		title,
 		description,
@@ -697,10 +698,10 @@ export function DashboardGrid({
 				<div className="flex h-64 items-center justify-center border border-dashed border-border bg-card rounded-lg">
 					<div className="text-center">
 						<p className="text-muted-foreground font-medium">
-							No widgets configured
+							{t("dashboard.noWidgets")}
 						</p>
 						<p className="mt-1 text-sm text-muted-foreground">
-							Add widgets to your dashboard configuration to display data here.
+							{t("dashboard.noWidgetsDescription")}
 						</p>
 					</div>
 				</div>

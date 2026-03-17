@@ -291,10 +291,10 @@ function LivePreviewContent({
 						size="sm"
 						onClick={handleExitPreview}
 						className="gap-1.5"
-						title="Exit preview mode and clear draft cookie"
+						title={t("preview.exitTooltip")}
 					>
 						<Icon icon="ph:sign-out" className="h-4 w-4" />
-						<span className="hidden sm:inline">Exit Preview</span>
+						<span className="hidden sm:inline">{t("preview.exitPreview")}</span>
 					</Button>
 					<Button variant="ghost" size="icon" onClick={onClose}>
 						<Icon icon="ph:x" className="h-4 w-4" />
@@ -339,7 +339,7 @@ function LivePreviewContent({
 										className="h-6 w-6 animate-spin text-muted-foreground"
 									/>
 									<span className="ml-2 text-sm text-muted-foreground">
-										Loading preview...
+										{t("preview.loadingPreview")}
 									</span>
 								</div>
 							)}
@@ -395,7 +395,7 @@ function LivePreviewContent({
 									className="h-6 w-6 animate-spin text-muted-foreground"
 								/>
 								<span className="ml-2 text-sm text-muted-foreground">
-									Loading preview...
+									{t("preview.loadingPreview")}
 								</span>
 							</div>
 						)}
@@ -485,6 +485,7 @@ interface LivePreviewButtonProps {
 }
 
 function LivePreviewButton({ onClick, disabled }: LivePreviewButtonProps) {
+	const { t } = useTranslation();
 	return (
 		<Button
 			type="button"
@@ -493,10 +494,10 @@ function LivePreviewButton({ onClick, disabled }: LivePreviewButtonProps) {
 			className="size-9"
 			onClick={onClick}
 			disabled={disabled}
-			title="Live Preview"
+			title={t("preview.livePreview")}
 		>
 			<Icon icon="ph:eye" className="size-4" />
-			<span className="sr-only">Live Preview</span>
+			<span className="sr-only">{t("preview.livePreview")}</span>
 		</Button>
 	);
 }

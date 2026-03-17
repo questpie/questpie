@@ -73,7 +73,7 @@ function createCreateAction<TItem>(
 ): ActionDefinition<TItem> {
 	return {
 		id: "create",
-		label: "Create",
+		label: { key: "action.create", fallback: "Create" },
 		icon: {
 			type: "icon",
 			props: { name: "ph:plus" },
@@ -95,7 +95,7 @@ function createDuplicateAction<TItem>(
 ): ActionDefinition<TItem> {
 	return {
 		id: "duplicate",
-		label: "Duplicate",
+		label: { key: "action.duplicate", fallback: "Duplicate" },
 		icon: {
 			type: "icon",
 			props: { name: "ph:copy" },
@@ -141,17 +141,16 @@ function createDeleteManyAction<TItem>(
 ): ActionDefinition<TItem> {
 	return {
 		id: "deleteMany",
-		label: "Delete Selected",
+		label: { key: "action.deleteSelected", fallback: "Delete Selected" },
 		icon: {
 			type: "icon",
 			props: { name: "ph:trash" },
 		} satisfies ComponentReference,
 		variant: "destructive",
 		confirmation: {
-			title: "Delete selected items?",
-			description:
-				"This action cannot be undone. All selected items will be permanently deleted.",
-			confirmLabel: "Delete All",
+			title: { key: "confirm.deleteSelectedTitle", fallback: "Delete selected items?" },
+			description: { key: "confirm.deleteSelectedDescription", fallback: "This action cannot be undone. All selected items will be permanently deleted." },
+			confirmLabel: { key: "confirm.deleteAll", fallback: "Delete All" },
 			destructive: true,
 		},
 		handler: {
@@ -174,7 +173,7 @@ function createRestoreAction<TItem>(
 ): ActionDefinition<TItem> {
 	return {
 		id: "restore",
-		label: "Restore",
+		label: { key: "action.restore", fallback: "Restore" },
 		icon: {
 			type: "icon",
 			props: { name: "ph:arrow-counter-clockwise" },
@@ -186,9 +185,9 @@ function createRestoreAction<TItem>(
 			return !!item?.deletedAt;
 		},
 		confirmation: {
-			title: "Restore item?",
-			description: "This item will become visible in normal list views again.",
-			confirmLabel: "Restore",
+			title: { key: "confirm.restoreItemTitle", fallback: "Restore item?" },
+			description: { key: "confirm.restoreItemDescription", fallback: "This item will become visible in normal list views again." },
+			confirmLabel: { key: "action.restore", fallback: "Restore" },
 			destructive: false,
 		},
 		handler: {
@@ -208,7 +207,7 @@ function createRestoreManyAction<TItem>(
 ): ActionDefinition<TItem> {
 	return {
 		id: "restoreMany",
-		label: "Restore Selected",
+		label: { key: "action.restoreSelected", fallback: "Restore Selected" },
 		icon: {
 			type: "icon",
 			props: { name: "ph:arrow-counter-clockwise" },
@@ -219,9 +218,9 @@ function createRestoreManyAction<TItem>(
 			return items.some((item) => !!item?.deletedAt);
 		},
 		confirmation: {
-			title: "Restore selected items?",
-			description: "Selected items will be restored and visible again.",
-			confirmLabel: "Restore All",
+			title: { key: "confirm.restoreSelectedTitle", fallback: "Restore selected items?" },
+			description: { key: "confirm.restoreSelectedDescription", fallback: "Selected items will be restored and visible again." },
+			confirmLabel: { key: "confirm.restoreAll", fallback: "Restore All" },
 			destructive: false,
 		},
 		handler: {
@@ -242,17 +241,16 @@ function createDeleteAction<TItem>(
 ): ActionDefinition<TItem> {
 	return {
 		id: "delete",
-		label: "Delete",
+		label: { key: "action.delete", fallback: "Delete" },
 		icon: {
 			type: "icon",
 			props: { name: "ph:trash" },
 		} satisfies ComponentReference,
 		variant: "destructive",
 		confirmation: {
-			title: "Delete item?",
-			description:
-				"This action cannot be undone. The item will be permanently deleted.",
-			confirmLabel: "Delete",
+			title: { key: "confirm.deleteItemTitle", fallback: "Delete item?" },
+			description: { key: "confirm.deleteItemDescription", fallback: "This action cannot be undone. The item will be permanently deleted." },
+			confirmLabel: { key: "action.delete", fallback: "Delete" },
 			destructive: true,
 		},
 		handler: {

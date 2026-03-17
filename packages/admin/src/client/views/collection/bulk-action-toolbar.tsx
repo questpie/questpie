@@ -503,7 +503,7 @@ export function BulkActionToolbar<TItem = any>({
 						...confirmAction.confirmation,
 						// Override description to include count
 						description: confirmAction.confirmation.description
-							? `${confirmAction.confirmation.description} (${selectedCount} items)`
+							? `${resolveText(confirmAction.confirmation.description)} (${selectedCount} items)`
 							: `This will affect ${selectedCount} items.`,
 					}}
 					onConfirm={handleConfirm}

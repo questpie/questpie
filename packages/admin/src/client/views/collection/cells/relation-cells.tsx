@@ -15,7 +15,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "../../../components/ui/tooltip";
-import { useResolveText } from "../../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../../i18n/hooks";
 import { cn } from "../../../lib/utils";
 import {
 	getRelationItemId,
@@ -212,6 +212,7 @@ function ReverseRelationCell({
 	row?: unknown;
 	fieldDef?: FieldInstance;
 }) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	// Get source collection from fieldDef (the collection that has the relation pointing here)
 	const sourceCollection = fieldDef?.["~options"]?.sourceCollection as
@@ -242,7 +243,7 @@ function ReverseRelationCell({
 	if (typeof value === "number") {
 		return (
 			<Badge variant="secondary">
-				{value} item{value !== 1 ? "s" : ""}
+				{t("cell.item", { count: value })}
 			</Badge>
 		);
 	}
@@ -336,7 +337,7 @@ function ReverseRelationCell({
 							})}
 							{value.length > 15 && (
 								<div className="text-[11px] text-muted-foreground text-center pt-1 border-t border-border mt-1">
-									+{value.length - 15} more
+									{t("cell.more", { count: value.length - 15 })}
 								</div>
 							)}
 						</div>

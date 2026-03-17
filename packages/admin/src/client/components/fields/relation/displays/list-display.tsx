@@ -4,6 +4,7 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+import { useTranslation } from "../../../../i18n/hooks";
 import { CollectionEditLink } from "../../../admin-link";
 import { resolveIconElement } from "../../../component-renderer";
 import { Button } from "../../../ui/button";
@@ -62,6 +63,7 @@ export function ListDisplay({
 	isLoading = false,
 	loadingCount = 3,
 }: RelationDisplayProps) {
+	const { t } = useTranslation();
 	const iconElement = resolveIconElement(collectionIcon, {
 		className: "size-3.5 text-muted-foreground shrink-0",
 	});
@@ -88,7 +90,7 @@ export function ListDisplay({
 							<button
 								type="button"
 								className="cursor-grab text-muted-foreground hover:text-foreground"
-								aria-label="Drag to reorder"
+								aria-label={t("field.dragToReorder")}
 							>
 								<Icon icon="ph:dots-six-vertical" className="h-4 w-4" />
 							</button>
@@ -114,8 +116,8 @@ export function ListDisplay({
 								size="icon"
 								className="h-7 w-7 shrink-0"
 								onClick={() => actions.onEdit?.(item)}
-								title="Edit"
-								aria-label="Edit item"
+								title={t("common.edit")}
+								aria-label={t("field.editItem")}
 							>
 								<Icon icon="ph:pencil" className="h-3 w-3" />
 							</Button>
@@ -129,8 +131,8 @@ export function ListDisplay({
 								size="icon"
 								className="h-7 w-7 shrink-0"
 								onClick={() => actions.onRemove?.(item)}
-								title="Remove"
-								aria-label="Remove item"
+								title={t("common.remove")}
+								aria-label={t("field.removeItem")}
 							>
 								<Icon icon="ph:x" className="h-3 w-3" />
 							</Button>

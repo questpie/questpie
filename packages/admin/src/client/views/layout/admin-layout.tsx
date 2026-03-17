@@ -293,7 +293,7 @@ export function AdminLayout({
 						>
 							<div
 								className={cn(
-									"qa-admin-layout__main-content",
+									"qa-admin-layout__main-content min-w-0",
 									layoutMode === "default" &&
 										"max-w-5xl mx-auto p-3 md:p-4 lg:p-6",
 									layoutMode === "wide" && "p-3 md:p-4 lg:p-6",

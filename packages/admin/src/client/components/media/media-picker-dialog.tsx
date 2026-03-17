@@ -25,6 +25,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import { toast } from "sonner";
+import { useTranslation } from "../../i18n/hooks";
 import { useCollectionList } from "../../hooks/use-collection";
 import type { Asset } from "../../hooks/use-upload";
 import { useUploadCollection } from "../../hooks/use-upload-collection";
@@ -96,11 +97,11 @@ interface MediaPickerDialogProps {
 // ============================================================================
 
 const MIME_TYPE_FILTERS = [
-	{ value: "all", label: "All Files", mimePattern: undefined },
-	{ value: "images", label: "Images", mimePattern: "image/" },
-	{ value: "videos", label: "Videos", mimePattern: "video/" },
-	{ value: "audio", label: "Audio", mimePattern: "audio/" },
-	{ value: "documents", label: "Documents", mimePattern: "application/pdf" },
+	{ value: "all", labelKey: "media.allFiles" as const, mimePattern: undefined },
+	{ value: "images", labelKey: "media.images" as const, mimePattern: "image/" },
+	{ value: "videos", labelKey: "media.videos" as const, mimePattern: "video/" },
+	{ value: "audio", labelKey: "media.audio" as const, mimePattern: "audio/" },
+	{ value: "documents", labelKey: "media.documents" as const, mimePattern: "application/pdf" },
 ];
 
 // ============================================================================
@@ -116,6 +117,7 @@ export function MediaPickerDialog({
 	maxItems,
 	collection,
 }: MediaPickerDialogProps) {
+	const { t } = useTranslation();
 	const {
 		collection: resolvedCollection,
 		collections: availableUploadCollections,
@@ -224,7 +226,7 @@ export function MediaPickerDialog({
 	const handleSelectionChange = (ids: Set<string>) => {
 		// Check maxItems for multiple mode
 		if (mode === "multiple" && maxItems && ids.size > maxItems) {
-			toast.warning(`Maximum ${maxItems} items allowed`);
+			toast.warning(t("error.maxItemsAllowed", { max: maxItems }));
 			return;
 		}
 
@@ -243,7 +245,7 @@ export function MediaPickerDialog({
 		}
 
 		if (selectedIds.size === 0) {
-			toast.error("Please select at least one asset");
+			toast.error(t("error.selectAtLeastOne"));
 			return;
 		}
 
@@ -269,7 +271,7 @@ export function MediaPickerDialog({
 				className="qa-media-picker data-[side=right]:sm:max-w-6xl w-full p-0"
 			>
 				<SheetHeader className="px-6 pt-6">
-					<SheetTitle>Browse Media Library</SheetTitle>
+					<SheetTitle>{t("media.browseLibrary")}</SheetTitle>
 					<SheetDescription>
 						{mode === "single"
 							? "Select an asset from your library"
@@ -296,7 +298,7 @@ export function MediaPickerDialog({
 							/>
 							<Input
 								type="text"
-								placeholder="Search by filename..."
+								placeholder={t("media.searchPlaceholder")}
 								value={searchQuery}
 								onChange={(e) => setSearchQuery(e.target.value)}
 								className="pl-9"
@@ -318,7 +320,7 @@ export function MediaPickerDialog({
 								<SelectContent>
 									{MIME_TYPE_FILTERS.map((filter) => (
 										<SelectItem key={filter.value} value={filter.value}>
-											{filter.label}
+											{t(filter.labelKey)}
 										</SelectItem>
 									))}
 								</SelectContent>

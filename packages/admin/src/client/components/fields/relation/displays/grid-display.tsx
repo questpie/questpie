@@ -4,6 +4,7 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+import { useTranslation } from "../../../../i18n/hooks";
 import { CollectionEditLink } from "../../../admin-link";
 import { resolveIconElement } from "../../../component-renderer";
 import { Button } from "../../../ui/button";
@@ -60,6 +61,7 @@ export function GridDisplay({
 	isLoading = false,
 	loadingCount = 6,
 }: RelationDisplayProps) {
+	const { t } = useTranslation();
 	const getTitle = (item: any) =>
 		item[fields?.title || "_title"] || getItemDisplayValue(item);
 	const getImage = (item: any) => getImageUrl(item, fields?.image);
@@ -106,7 +108,7 @@ export function GridDisplay({
 											e.stopPropagation();
 											actions.onEdit?.(item);
 										}}
-										aria-label="Edit item"
+										aria-label={t("field.editItem")}
 									>
 										<Icon icon="ph:pencil" className="size-3" />
 									</Button>
@@ -122,7 +124,7 @@ export function GridDisplay({
 											e.stopPropagation();
 											actions.onRemove?.(item);
 										}}
-										aria-label="Remove item"
+										aria-label={t("field.removeItem")}
 									>
 										<Icon icon="ph:x" className="size-3" />
 									</Button>

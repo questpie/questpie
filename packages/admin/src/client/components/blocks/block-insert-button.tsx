@@ -8,6 +8,7 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import { Button } from "../ui/button.js";
 import { useBlockEditorActions } from "./block-editor-context.js";
@@ -41,6 +42,7 @@ export function BlockInsertButton({
 	parentLabel,
 	className,
 }: BlockInsertButtonProps) {
+	const { t } = useTranslation();
 	const { openLibrary } = useBlockEditorActions();
 
 	const handleOpen = () => {
@@ -73,7 +75,7 @@ export function BlockInsertButton({
 				<div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center justify-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
 					<div className="pointer-events-auto flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground shadow-sm cursor-pointer">
 						<Icon icon="ph:plus-bold" width={10} height={10} />
-						<span>Add</span>
+						<span>{t("common.add")}</span>
 					</div>
 				</div>
 			</div>
@@ -98,7 +100,7 @@ export function BlockInsertButton({
 
 				{/* Label */}
 				<span className="truncate">
-					{parentLabel ? `Add to ${parentLabel}` : "Add block"}
+					{parentLabel ? t("blocks.addTo", { parent: parentLabel }) : t("blocks.add")}
 				</span>
 			</button>
 		);
@@ -112,7 +114,7 @@ export function BlockInsertButton({
 			onClick={handleOpen}
 		>
 			<Icon icon="ph:plus" className="mr-2 h-4 w-4" />
-			Add block
+			{t("blocks.add")}
 		</Button>
 	);
 }

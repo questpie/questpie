@@ -15,6 +15,7 @@ import {
 	FieldLabel,
 } from "../../components/ui/field";
 import { Input } from "../../components/ui/input";
+import { useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 
 export type ForgotPasswordFormValues = {
@@ -69,6 +70,7 @@ export function ForgotPasswordForm({
 	className,
 	error,
 }: ForgotPasswordFormProps) {
+	const { t } = useTranslation();
 	const [isSuccess, setIsSuccess] = React.useState(false);
 
 	const {
@@ -105,10 +107,9 @@ export function ForgotPasswordForm({
 					/>
 				</div>
 				<div className="space-y-2">
-					<h3 className="text-sm font-medium">Check your email</h3>
+					<h3 className="text-sm font-medium">{t("auth.checkYourEmail")}</h3>
 					<p className="text-muted-foreground text-xs">
-						We've sent a password reset link to your email address. Please check
-						your inbox and follow the instructions.
+						{t("auth.resetLinkSentDescription")}
 					</p>
 				</div>
 				<Button
@@ -117,7 +118,7 @@ export function ForgotPasswordForm({
 					className="w-full"
 					onClick={onBackToLoginClick}
 				>
-					Back to login
+					{t("auth.backToLogin")}
 				</Button>
 			</div>
 		);
@@ -129,14 +130,13 @@ export function ForgotPasswordForm({
 			className={cn("qa-forgot-password-form space-y-4", className)}
 		>
 			<p className="text-muted-foreground text-xs">
-				Enter your email address and we'll send you a link to reset your
-				password.
+				{t("auth.forgotPasswordFormDescription")}
 			</p>
 
 			<FieldGroup>
 				{/* Email Field */}
 				<Field data-invalid={!!errors.email}>
-					<FieldLabel htmlFor="email">Email</FieldLabel>
+					<FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
 					<FieldContent>
 						<div className="relative">
 							<Icon
@@ -146,15 +146,15 @@ export function ForgotPasswordForm({
 							<Input
 								id="email"
 								type="email"
-								placeholder="you@example.com"
+								placeholder={t("auth.emailPlaceholder")}
 								className="pl-8"
 								autoComplete="email"
 								aria-invalid={!!errors.email}
 								{...register("email", {
-									required: "Email is required",
+									required: t("auth.emailRequired"),
 									pattern: {
 										value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-										message: "Invalid email address",
+										message: t("auth.invalidEmail"),
 									},
 								})}
 							/>
@@ -182,16 +182,16 @@ export function ForgotPasswordForm({
 				{isSubmitting ? (
 					<>
 						<Icon icon="ph:spinner-gap-bold" className="animate-spin" />
-						Sending...
+						{t("auth.sendingResetLink")}
 					</>
 				) : (
-					"Send reset link"
+					t("auth.sendResetLink")
 				)}
 			</Button>
 
 			{/* Back to Login Link */}
 			<p className="text-muted-foreground text-center text-xs">
-				Remember your password?{" "}
+				{t("auth.rememberYourPassword")}{" "}
 				<Button
 					type="button"
 					variant="link"
@@ -199,7 +199,7 @@ export function ForgotPasswordForm({
 					onClick={onBackToLoginClick}
 					className="h-auto p-0 text-xs"
 				>
-					Back to login
+					{t("auth.backToLogin")}
 				</Button>
 			</p>
 		</form>

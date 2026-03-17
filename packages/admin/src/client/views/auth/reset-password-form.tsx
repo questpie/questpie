@@ -115,10 +115,9 @@ export function ResetPasswordForm({
 					/>
 				</div>
 				<div className="space-y-2">
-					<h3 className="text-sm font-medium">Password reset successful</h3>
+					<h3 className="text-sm font-medium">{t("auth.resetPasswordSuccess")}</h3>
 					<p className="text-muted-foreground text-xs">
-						Your password has been reset successfully. You can now sign in with
-						your new password.
+						{t("auth.resetPasswordSuccessDescription")}
 					</p>
 				</div>
 				<Button
@@ -127,7 +126,7 @@ export function ResetPasswordForm({
 					size="lg"
 					onClick={onBackToLoginClick}
 				>
-					Sign in
+					{t("auth.signIn")}
 				</Button>
 			</div>
 		);
@@ -139,7 +138,7 @@ export function ResetPasswordForm({
 			className={cn("qa-reset-password-form space-y-4", className)}
 		>
 			<p className="text-muted-foreground text-xs">
-				Enter your new password below.
+				{t("auth.enterNewPassword")}
 			</p>
 
 			<FieldGroup>

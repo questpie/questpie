@@ -24,7 +24,7 @@ import {
 	SelectValue,
 } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 
 export type InviteFormValues = {
@@ -84,10 +84,7 @@ type InviteFormProps = {
  */
 export function InviteForm({
 	onSubmit,
-	roles = [
-		{ value: "admin", label: "Admin" },
-		{ value: "user", label: "User" },
-	],
+	roles: rolesProp,
 	defaultRole = "user",
 	showMessage = true,
 	className,
@@ -111,6 +108,12 @@ export function InviteForm({
 
 	const selectedRole = useWatch({ control, name: "role" });
 	const resolveText = useResolveText();
+	const { t } = useTranslation();
+
+	const roles = rolesProp ?? [
+		{ value: "admin", label: t("defaults.users.fields.role.options.admin") },
+		{ value: "user", label: t("defaults.users.fields.role.options.user") },
+	];
 
 	const handleFormSubmit = handleSubmit(async (values) => {
 		await onSubmit(values);
@@ -128,7 +131,7 @@ export function InviteForm({
 			<FieldGroup>
 				{/* Email Field */}
 				<Field data-invalid={!!errors.email}>
-					<FieldLabel htmlFor="invite-email">Email Address</FieldLabel>
+					<FieldLabel htmlFor="invite-email">{t("auth.inviteEmailLabel")}</FieldLabel>
 					<FieldContent>
 						<div className="relative">
 							<Icon
@@ -143,16 +146,16 @@ export function InviteForm({
 								autoComplete="email"
 								aria-invalid={!!errors.email}
 								{...register("email", {
-									required: "Email is required",
+									required: t("auth.emailRequired"),
 									pattern: {
 										value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-										message: "Invalid email address",
+										message: t("auth.invalidEmail"),
 									},
 								})}
 							/>
 						</div>
 						<FieldDescription>
-							An invitation link will be sent to this email
+							{t("auth.inviteEmailDescription")}
 						</FieldDescription>
 						<FieldError>{errors.email?.message}</FieldError>
 					</FieldContent>
@@ -160,7 +163,7 @@ export function InviteForm({
 
 				{/* Role Field */}
 				<Field data-invalid={!!errors.role}>
-					<FieldLabel htmlFor="invite-role">Role</FieldLabel>
+					<FieldLabel htmlFor="invite-role">{t("auth.inviteRole")}</FieldLabel>
 					<FieldContent>
 						<Select
 							value={selectedRole}
@@ -172,7 +175,7 @@ export function InviteForm({
 										? resolveText(
 												roles.find((r) => r.value === selectedRole)?.label,
 											)
-										: "Select a role"}
+										: t("auth.inviteSelectRole")}
 								</SelectValue>
 							</SelectTrigger>
 							<SelectContent>
@@ -184,7 +187,7 @@ export function InviteForm({
 							</SelectContent>
 						</Select>
 						<FieldDescription>
-							The role determines what permissions the user will have
+							{t("auth.inviteRoleDescription")}
 						</FieldDescription>
 						<FieldError>{errors.role?.message}</FieldError>
 					</FieldContent>
@@ -194,17 +197,17 @@ export function InviteForm({
 				{showMessage && (
 					<Field>
 						<FieldLabel htmlFor="invite-message">
-							Personal Message (Optional)
+							{t("auth.inviteMessage")}
 						</FieldLabel>
 						<FieldContent>
 							<Textarea
 								id="invite-message"
-								placeholder="Add a personal message to the invitation..."
+								placeholder={t("auth.inviteMessagePlaceholder")}
 								rows={3}
 								{...register("message")}
 							/>
 							<FieldDescription>
-								This message will be included in the invitation email
+								{t("auth.inviteMessageDescription")}
 							</FieldDescription>
 						</FieldContent>
 					</Field>
@@ -237,12 +240,12 @@ export function InviteForm({
 				{isSubmitting ? (
 					<>
 						<Icon icon="ph:spinner-gap-bold" className="animate-spin" />
-						Sending invitation...
+						{t("auth.sendingInvitation")}
 					</>
 				) : (
 					<>
 						<Icon icon="ph:user-plus-bold" />
-						Send Invitation
+						{t("auth.sendInvitation")}
 					</>
 				)}
 			</Button>
