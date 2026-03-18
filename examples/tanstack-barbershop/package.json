@@ -19,9 +19,9 @@
 		"e2e:ui": "playwright test --ui",
 		"e2e:debug": "playwright test --debug",
 		"e2e:report": "playwright show-report",
-		"lint": "eslint",
-		"format": "prettier",
-		"check": "prettier --write . && eslint --fix"
+		"lint": "oxlint",
+		"format": "oxfmt",
+		"check": "oxfmt && oxlint --fix"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",
@@ -71,7 +71,6 @@
 		"@playwright/test": "^1.58.2",
 		"@rolldown/plugin-babel": "^0.2.0",
 		"@tanstack/devtools-vite": "^0.3.11",
-		"@tanstack/eslint-config": "^0.3.0",
 		"@testing-library/dom": "^10.4.0",
 		"@testing-library/react": "^16.2.0",
 		"@types/node": "^22.10.2",
@@ -80,9 +79,9 @@
 		"@typescript/native-preview": "^7.0.0-dev.20260213.1",
 		"@vitejs/plugin-react": "^6.0.1",
 		"babel-plugin-react-compiler": "^1.0.0",
-		"eslint": "^9.0.0",
 		"jsdom": "^27.0.0",
-		"prettier": "^3.5.3",
+		"oxfmt": "^0.41.0",
+		"oxlint": "^1.56.0",
 		"shadcn": "^3.6.1",
 		"typescript": "^5.9.2",
 		"vite": "^8.0.0",

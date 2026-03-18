@@ -326,7 +326,7 @@ feat!: remove QuestpieBuilder, RPC module, and positional callback signatures
 - [x] Core package: `bun run build` — clean
 - [x] Core package: `tsc --noEmit` — clean
 - [x] Admin package: `tsc --noEmit` — no new errors (only pre-existing client-side issues)
-- [x] Biome lint: no new warnings
+- [x] Lint: no new warnings
 - [ ] Barbershop example: end-to-end run
 - [ ] Update `create-questpie` templates
 - [ ] Update `apps/docs` documentation
@@ -386,7 +386,7 @@ feat: composable sidebar/dashboard from modules, typed registry pattern (Phase 7
 - [x] `tsc --noEmit` in packages/questpie — **clean** (0 errors)
 - [x] `tsc --noEmit` in packages/admin — **23 pre-existing errors** (0 new)
 - [x] `bun test` in packages/questpie — **781 pass, 0 fail**
-- [x] Biome check — auto-fixed formatting, no new errors
+- [x] Lint/format check — auto-fixed formatting, no new errors
 - [ ] Barbershop example end-to-end
 - [ ] City-portal example end-to-end
 - [ ] Update documentation (.md/.mdx files) — low priority, many references remain in docs

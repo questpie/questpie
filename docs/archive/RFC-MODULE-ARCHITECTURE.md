@@ -933,7 +933,7 @@ Now: `ExtractFromModuleArray<typeof _modules, "collections">` — extracted dire
 29. Update exports in `packages/questpie/src/exports/index.ts`
 30. `bun run check-types` across monorepo
 31. `bun test`
-32. `bunx @biomejs/biome check --write .`
+32. `bunx oxlint --fix && bunx oxfmt`
 33. Update RFC-FILE-CONVENTION.md (mark superseded sections)
 34. Update PROGRESS.md
 35. Update AGENTS.md

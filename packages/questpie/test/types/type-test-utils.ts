@@ -166,7 +166,7 @@ export type AssertTrue<T extends true> = T;
 export type AssertFalse<T extends false> = T;
 
 /**
- * Prettier type display - expands type for better IDE hover info.
+ * Type display - expands type for better IDE hover info.
  */
 export type Prettify<T> = {
 	[K in keyof T]: T[K];

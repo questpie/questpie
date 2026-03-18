@@ -72,7 +72,7 @@ export function I18nProvider({
 			getLocaleName: adapter.getLocaleName.bind(adapter),
 			isRTL: adapter.isRTL.bind(adapter),
 		}),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// oxlint-disable-next-line react/exhaustive-deps
 		[adapter, adapter.locale],
 	);
 
