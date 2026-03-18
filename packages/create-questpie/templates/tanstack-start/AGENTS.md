@@ -180,7 +180,13 @@ export const posts = collection("posts")
 	);
 ```
 
-Then:
+Then (preferred):
+
+1. Use `bun questpie add collection <name>` to scaffold files
+2. Codegen runs automatically
+3. Run `bun questpie migrate:create` to generate migration
+
+Manual workflow (if you create files yourself):
 
 1. Run `bunx questpie generate` to regenerate `.generated/index.ts`
 2. Run `bun questpie migrate:create` to generate migration
@@ -213,7 +219,13 @@ export const siteSettings = global("site_settings")
 	);
 ```
 
-Then:
+Then (preferred):
+
+1. Use `bun questpie add global <name>` to scaffold files
+2. Codegen runs automatically
+3. Run `bun questpie migrate:create`
+
+Manual workflow (if you create files yourself):
 
 1. Run `bunx questpie generate` to regenerate `.generated/index.ts`
 2. Run `bun questpie migrate:create`

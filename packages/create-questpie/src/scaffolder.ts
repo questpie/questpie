@@ -181,6 +181,13 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 			"",
 			"# Start dev server",
 			`${runCmd} dev`,
+			"",
+			"# Add entities (auto-runs codegen)",
+			`${runCmd} questpie add collection products`,
+			`${runCmd} questpie add global marketing`,
+			"",
+			"# If you create files manually",
+			"bunx questpie generate",
 		].join("\n"),
 		"Next steps",
 	);

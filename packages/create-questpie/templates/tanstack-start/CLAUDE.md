@@ -67,6 +67,14 @@ Optional (with defaults):
 
 ### Add a new collection
 
+Preferred workflow:
+
+1. Run `bun questpie add collection my-thing`
+2. The CLI creates the file and auto-runs codegen
+3. Run `bun questpie migrate:create`
+
+Manual workflow:
+
 1. Create `src/questpie/server/collections/my-thing.ts` with a named export:
    ```ts
    import { collection } from "questpie";
@@ -78,6 +86,14 @@ Optional (with defaults):
 Collections are auto-discovered by codegen — no manual registration needed.
 
 ### Add a new global
+
+Preferred workflow:
+
+1. Run `bun questpie add global my-global`
+2. The CLI creates the file and auto-runs codegen
+3. Run `bun questpie migrate:create`
+
+Manual workflow:
 
 1. Create `src/questpie/server/globals/my-global.ts` with a named export
 2. Run `bunx questpie generate`

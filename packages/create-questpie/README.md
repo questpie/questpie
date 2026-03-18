@@ -72,7 +72,13 @@ cd my-app
 cp .env.example .env              # Set DATABASE_URL
 bun questpie migrate              # Run migrations
 bun dev                           # Start dev server
+
+# Add entities (auto-runs codegen)
+bun questpie add collection products
+bun questpie add global marketing
 ```
+
+`questpie add` runs codegen automatically. Use `bunx questpie generate` only when you create files manually.
 
 ## Documentation
 

@@ -61,13 +61,22 @@ migrations/
 | `bun build`                   | Build for production                          |
 | `bun start`                   | Start production server                       |
 | `bun check-types`             | Type check                                    |
+| `bun questpie add <type> <name>` | Scaffold entity files (auto-runs codegen) |
 | `bun questpie migrate`        | Run migrations                                |
 | `bun questpie migrate:create` | Create migration                              |
 | `bunx questpie generate`      | Regenerate `src/questpie/server/.generated/*` |
 
 ## Adding a Collection
 
-1. Create a file in `src/questpie/server/collections/` (example: `products.collection.ts`).
+Preferred workflow:
+
+1. Run `bun questpie add collection products`.
+2. The CLI creates the file and runs codegen automatically.
+3. Run `bun questpie migrate:create`.
+
+Manual workflow (when you create files by hand):
+
+1. Create a file in `src/questpie/server/collections/`.
 2. Export a collection builder from that file.
 3. Run `bunx questpie generate`.
 4. Run `bun questpie migrate:create`.
@@ -76,7 +85,15 @@ Collections are discovered automatically by codegen. No manual `app.ts` registra
 
 ## Adding a Global
 
-1. Create a file in `src/questpie/server/globals/` (example: `marketing.global.ts`).
+Preferred workflow:
+
+1. Run `bun questpie add global marketing`.
+2. The CLI creates the file and runs codegen automatically.
+3. Run `bun questpie migrate:create`.
+
+Manual workflow (when you create files by hand):
+
+1. Create a file in `src/questpie/server/globals/`.
 2. Export a global builder from that file.
 3. Run `bunx questpie generate`.
 4. Run `bun questpie migrate:create`.
