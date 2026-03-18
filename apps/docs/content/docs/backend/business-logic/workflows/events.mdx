@@ -1,0 +1,92 @@
+---
+title: Events
+description: Event-driven coordination — send and wait for events with JSONB-containment matching.
+---
+
+# Events
+
+Workflows can wait for external events and emit events for other workflows to consume. Events are matched using JSONB-containment semantics, allowing flexible pattern matching without rigid schema coupling.
+
+## Sending Events
+
+### From Inside a Workflow
+
+```ts
+await step.sendEvent("notify-shipped", {
+  event: "order.shipped",
+  data: { trackingNumber: "1Z999AA10123456784" },
+  match: { orderId: input.orderId },
+});
+```
+
+### From Application Code
+
+Use the workflow client or the built-in route:
+
+```ts
+// Via workflow client
+await ctx.workflows.sendEvent({
+  event: "payment.received",
+  data: { amount: 99.99 },
+  match: { invoiceId: "inv-123" },
+});
+```
+
+## Waiting for Events
+
+```ts
+const event = await step.waitForEvent("wait-payment", {
+  event: "payment.received",
+  match: { invoiceId: input.invoiceId },
+  timeout: "72h",
+});
+```
+
+When the step reaches `waitForEvent`, the workflow suspends. It resumes when a matching event is dispatched.
+
+## Match Criteria
+
+Events are matched using **JSONB containment**. A dispatched event matches a waiting step when the step's `match` criteria is a subset of the event's `match` data.
+
+```ts
+// Waiting step
+step.waitForEvent("wait", {
+  event: "order.updated",
+  match: { orderId: "abc-123" },
+});
+
+// This event MATCHES (orderId matches)
+sendEvent({
+  event: "order.updated",
+  match: { orderId: "abc-123", status: "shipped" },
+});
+
+// This event does NOT match (different orderId)
+sendEvent({
+  event: "order.updated",
+  match: { orderId: "xyz-789" },
+});
+```
+
+### Match Hash Optimization
+
+For efficient event matching at scale, the engine computes FNV-1a hashes of match criteria and stores them in an indexed `match_hash` column. This enables O(1) lookups instead of scanning all waiting steps.
+
+## Retroactive Matching
+
+If an event was dispatched **before** a workflow reaches `waitForEvent`, the engine checks for existing matching events. If a match is found, the step completes immediately without suspending.
+
+This prevents race conditions where events arrive before the workflow is ready to consume them.
+
+## Event Persistence
+
+All events are stored in the `wf_event` collection with:
+
+| Field | Description |
+|---|---|
+| `eventName` | The event type string |
+| `data` | Arbitrary JSON payload |
+| `matchCriteria` | JSONB match data |
+| `sourceType` | `"workflow"` or `"external"` |
+| `sourceInstanceId` | Originating workflow instance (if any) |
+| `consumedCount` | Number of times this event was consumed |

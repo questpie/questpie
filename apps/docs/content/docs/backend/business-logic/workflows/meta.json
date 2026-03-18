@@ -1,0 +1,4 @@
+{
+	"title": "Workflows",
+	"pages": ["index", "steps", "events", "cron", "client", "admin-ui"]
+}

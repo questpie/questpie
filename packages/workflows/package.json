@@ -1,0 +1,90 @@
+{
+	"name": "@questpie/workflows",
+	"version": "2.0.0",
+	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/questpie/questpie.git",
+		"directory": "packages/workflows"
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsdown",
+		"check-types": "tsc --noEmit",
+		"questpie:generate": "bun questpie generate --verbose"
+	},
+	"dependencies": {
+		"questpie": "workspace:*",
+		"@questpie/admin": "workspace:*"
+	},
+	"devDependencies": {
+		"bun-types": "latest",
+		"tsdown": "^0.18.3"
+	},
+	"peerDependencies": {
+		"questpie": "^2.0.0",
+		"@questpie/admin": "^2.0.0",
+		"drizzle-orm": "1.0.0-beta.6-4414a19",
+		"zod": "^4.2.1",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0"
+	},
+	"peerDependenciesMeta": {
+		"drizzle-orm": {
+			"optional": true
+		},
+		"@questpie/admin": {
+			"optional": true
+		},
+		"react": {
+			"optional": true
+		},
+		"react-dom": {
+			"optional": true
+		}
+	},
+	"exports": {
+		".": {
+			"types": "./src/exports/index.ts",
+			"default": "./src/exports/index.ts"
+		},
+		"./client": {
+			"types": "./src/exports/client.ts",
+			"default": "./src/exports/client.ts"
+		},
+		"./server": {
+			"types": "./src/exports/server.ts",
+			"default": "./src/exports/server.ts"
+		},
+		"./package.json": {
+			"types": "./package.json",
+			"default": "./package.json"
+		}
+	},
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			".": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			},
+			"./client": {
+				"types": "./dist/client.d.mts",
+				"default": "./dist/client.mjs"
+			},
+			"./server": {
+				"types": "./dist/server.d.mts",
+				"default": "./dist/server.mjs"
+			},
+			"./package.json": {
+				"types": "./package.json",
+				"default": "./package.json"
+			}
+		}
+	},
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts"
+}

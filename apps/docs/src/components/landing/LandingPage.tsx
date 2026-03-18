@@ -1258,6 +1258,11 @@ export function LandingPage() {
 								],
 								[
 									"04",
+									"questpie-workflows",
+									"Durable workflows. Replay-based engine, step primitives, events, cron, compensation. Admin UI included.",
+								],
+								[
+									"05",
 									"Your module",
 									"Same file conventions, same patterns. Build your own module. Publish to npm. No special APIs.",
 								],

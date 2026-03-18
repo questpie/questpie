@@ -1,0 +1,101 @@
+---
+title: Workflow Client
+description: Trigger, cancel, retry, and query workflows from application code.
+---
+
+# Workflow Client
+
+The workflow client provides a typed API for interacting with workflows from your application code. It's available as `ctx.workflows` in route handlers and services.
+
+## Triggering a Workflow
+
+```ts
+const result = await ctx.workflows.trigger("order-fulfillment", {
+  orderId: "ord-123",
+  customerId: "cust-456",
+});
+
+console.log(result.instanceId); // "wf-inst-abc..."
+```
+
+### With Options
+
+```ts
+const result = await ctx.workflows.trigger("order-fulfillment", input, {
+  idempotencyKey: `order-${input.orderId}`, // Prevent duplicate instances
+});
+
+if (result.existing) {
+  // Instance already exists for this idempotency key
+  console.log("Already triggered:", result.instanceId);
+}
+```
+
+## Cancelling a Workflow
+
+```ts
+await ctx.workflows.cancel(instanceId);
+```
+
+Only active instances (pending, running, suspended) can be cancelled. Completed or failed instances are no-ops.
+
+## Retrying a Failed Workflow
+
+```ts
+await ctx.workflows.retry(instanceId);
+```
+
+Resets the instance to `pending` and re-queues execution. Only works on `failed` or `timed_out` instances.
+
+## Querying Instances
+
+```ts
+// Get a single instance with its steps
+const detail = await ctx.workflows.getInstance(instanceId, {
+  includeSteps: true,
+  includeLogs: false,
+});
+
+// Get step history
+const history = await ctx.workflows.getHistory(instanceId);
+```
+
+## Sending Events
+
+```ts
+const result = await ctx.workflows.sendEvent({
+  event: "payment.received",
+  data: { amount: 99.99, currency: "USD" },
+  match: { invoiceId: "inv-123" },
+});
+
+console.log(result.matchedCount); // Number of workflows resumed
+```
+
+## Batch Operations
+
+```ts
+// Cancel all running instances of a workflow
+const { cancelledCount } = await ctx.workflows.cancelAll("order-fulfillment");
+
+// Retry all failed instances
+const { retriedCount } = await ctx.workflows.retryAll("order-fulfillment");
+```
+
+## Creating a Standalone Client
+
+For use outside of route handlers (scripts, tests, migrations):
+
+```ts
+import { createWorkflowClient } from "@questpie/workflows/server";
+import { createContext } from "#questpie";
+
+const ctx = await createContext();
+const workflows = createWorkflowClient({
+  collections: ctx.collections,
+  queue: ctx.queue,
+  app: ctx.app,
+});
+
+await workflows.trigger("daily-report", {});
+```
