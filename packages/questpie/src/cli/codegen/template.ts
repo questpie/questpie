@@ -909,12 +909,7 @@ function getCoreSingleKeys(
 	// We use a simple heuristic: keys that match well-known core patterns.
 	return new Set([
 		"modules",
-		"auth",
 		"authConfig",
-		"locale",
-		"hooks",
-		"defaultAccess",
-		"contextResolver",
 		"appConfig",
 	]);
 }

@@ -134,7 +134,6 @@ export function coreCodegenPlugin(): CodegenPlugin {
 				discover: {
 					modules: "modules.ts",
 					fields: { pattern: "fields.ts", registryKey: "~fieldTypes" },
-					// ── config/ directory patterns (new) ─────────────────
 					authConfig: "config/auth.ts",
 					appConfig: {
 						pattern: "config/app.ts",
@@ -145,12 +144,6 @@ export function coreCodegenPlugin(): CodegenPlugin {
 							context: "contextResolver",
 						},
 					},
-					// ── Legacy flat-file fallbacks (overridden by config/ when both exist) ──
-					auth: "auth.ts",
-					locale: "locale.ts",
-					hooks: "hooks.ts",
-					defaultAccess: "access.ts",
-					contextResolver: "context.ts",
 				},
 				registries: {
 					singletonFactories: {
@@ -161,22 +154,6 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						authConfig: {
 							configType: "AuthConfig",
 							imports: [{ name: "AuthConfig", from: "questpie" }],
-						},
-						locale: {
-							configType: "LocaleConfig",
-							imports: [{ name: "LocaleConfig", from: "questpie" }],
-						},
-						hooks: {
-							configType: "GlobalHooksInput",
-							imports: [{ name: "GlobalHooksInput", from: "questpie" }],
-						},
-						access: {
-							configType: "CollectionAccess",
-							imports: [{ name: "CollectionAccess", from: "questpie" }],
-						},
-						context: {
-							configType: "ContextResolver",
-							imports: [{ name: "ContextResolver", from: "questpie" }],
 						},
 					},
 				},

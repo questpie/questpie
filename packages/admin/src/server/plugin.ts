@@ -87,7 +87,6 @@ export function adminPlugin(): CodegenPlugin {
 					},
 				},
 				discover: {
-					// ── config/ directory pattern (new) ──
 					adminConfig: {
 						pattern: "config/admin.ts",
 						destructure: {
@@ -97,11 +96,6 @@ export function adminPlugin(): CodegenPlugin {
 							locale: "adminLocale",
 						},
 					},
-					// ── Legacy flat-file fallbacks ──
-					sidebar: "sidebar.ts",
-					dashboard: "dashboard.ts",
-					branding: "branding.ts",
-					adminLocale: "admin-locale.ts",
 				},
 				registries: {
 					fieldExtensions: {
@@ -264,44 +258,6 @@ export function adminPlugin(): CodegenPlugin {
 							imports: [
 								{
 									name: "AdminConfigInput",
-									from: "@questpie/admin/server",
-								},
-							],
-							isCallback: true,
-						},
-						branding: {
-							configType: "ServerBrandingConfig",
-							imports: [
-								{
-									name: "ServerBrandingConfig",
-									from: "@questpie/admin/server",
-								},
-							],
-						},
-						adminLocale: {
-							configType: "AdminLocaleConfig",
-							imports: [
-								{
-									name: "AdminLocaleConfig",
-									from: "@questpie/admin/server",
-								},
-							],
-						},
-						sidebar: {
-							configType: "SidebarContribution",
-							imports: [
-								{
-									name: "SidebarContribution",
-									from: "@questpie/admin/server",
-								},
-							],
-							isCallback: true,
-						},
-						dashboard: {
-							configType: "DashboardContribution",
-							imports: [
-								{
-									name: "DashboardContribution",
 									from: "@questpie/admin/server",
 								},
 							],
