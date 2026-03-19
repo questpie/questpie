@@ -221,7 +221,7 @@ type DecrementDepth<Depth extends unknown[]> = Depth extends [
 	? Rest
 	: [];
 
-type DefaultWhereDepth = [1, 1, 1];
+type DefaultWhereDepth = [1, 1, 1, 1];
 
 type OperatorValue<TFn> = TFn extends (...args: any[]) => any
 	? Parameters<TFn>[1]
