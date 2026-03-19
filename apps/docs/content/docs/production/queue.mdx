@@ -8,37 +8,116 @@ QUESTPIE uses [pg-boss](https://github.com/timgit/pg-boss) for background job pr
 ## Configuration
 
 ```ts title="questpie.config.ts"
-import { pgBossAdapter, runtimeConfig } from "questpie";
+import { pgBossAdapter, runtimeConfig } from "questpie"
 
 export default runtimeConfig({
-	queue: {
-		adapter: pgBossAdapter({
-			connectionString: process.env.DATABASE_URL,
-		}),
-	},
-});
+  queue: {
+    adapter: pgBossAdapter({
+      connectionString: process.env.DATABASE_URL,
+    }),
+  },
+})
 ```
+
+pg-boss creates its own schema in your database (`pgboss.*` tables) for job storage, scheduling, and dead-letter queues.
+
+## Defining Jobs
+
+Jobs are defined in `jobs/` using the file convention:
+
+```ts title="src/questpie/server/jobs/send-email.ts"
+import { job } from "questpie"
+import z from "zod"
+
+export default job({
+  name: "send-email",
+  schema: z.object({
+    to: z.string().email(),
+    subject: z.string(),
+    body: z.string(),
+  }),
+  handler: async ({ payload, email, logger }) => {
+    await email.send({
+      to: payload.to,
+      subject: payload.subject,
+      html: payload.body,
+    })
+    logger.info({ to: payload.to }, "Email sent")
+  },
+  options: {
+    retryLimit: 3,
+    retryDelay: 5,
+    retryBackoff: true,
+  },
+})
+```
+
+See [Jobs](/docs/backend/business-logic/jobs) for the full job definition guide.
 
 ## Publishing Jobs
 
-From hooks, routes, or other jobs:
+From hooks, routes, or other jobs — use the typed `queue` context:
 
 ```ts
 handler: async ({ queue }) => {
-	await queue.sendAppointmentConfirmation.publish({
-		appointmentId: "abc",
-		customerId: "def",
-	});
-};
+  await queue.sendEmail.publish({
+    to: "user@example.com",
+    subject: "Welcome",
+    body: "<h1>Hello!</h1>",
+  })
+}
 ```
 
 The `queue` object is fully typed — autocompletion shows all registered jobs and their payload schemas.
 
-## Job Definition
+## Job Options
 
-See [Jobs](/docs/backend/business-logic/jobs) for defining job handlers.
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `retryLimit` | `number` | `0` | Max retry attempts on failure |
+| `retryDelay` | `number` | `0` | Seconds between retries |
+| `retryBackoff` | `boolean` | `false` | Exponential backoff on retries |
+| `expireInSeconds` | `number` | `900` | Job expires if not completed |
+| `startAfter` | `Date \| string` | now | Delay job start |
+| `singletonKey` | `string` | — | Prevent duplicate jobs with same key |
+| `priority` | `number` | `0` | Higher = processed first |
+
+## Scheduled Jobs
+
+Use `startAfter` to schedule future execution:
+
+```ts
+await queue.sendReminder.publish(
+  { appointmentId: "abc" },
+  { startAfter: new Date("2026-03-20T09:00:00Z") },
+)
+```
+
+## Singleton Jobs
+
+Prevent duplicate jobs with `singletonKey`:
+
+```ts
+await queue.syncInventory.publish(
+  { warehouseId: "wh-1" },
+  { singletonKey: "sync-wh-1" },
+)
+```
+
+If a job with the same singleton key is already queued/active, the publish is a no-op.
+
+## Monitoring
+
+pg-boss stores job status in PostgreSQL. Query the `pgboss.job` table for monitoring:
+
+```sql
+SELECT state, COUNT(*) FROM pgboss.job GROUP BY state;
+```
+
+States: `created` → `active` → `completed` / `failed` / `expired`
 
 ## Related Pages
 
 - [Jobs](/docs/backend/business-logic/jobs) — Defining job handlers
 - [Email](/docs/production/email) — Sending emails from jobs
+- [Config API](/docs/reference/config-api) — Queue adapter configuration

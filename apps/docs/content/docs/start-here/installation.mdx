@@ -53,7 +53,7 @@ The CLI resolves this file at the project root to find your config.
 ### 4. Create your first collection
 
 ```ts title="src/questpie/server/collections/posts.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("posts").fields(({ f }) => ({
 	title: f.text().required(),

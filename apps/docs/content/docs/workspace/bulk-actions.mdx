@@ -9,28 +9,69 @@ The list view supports multi-select for batch operations. Select records with ch
 
 1. Open any collection list view
 2. Check the checkbox on individual rows, or use the header checkbox to select all
-3. A toolbar appears at the bottom with available actions
+3. A floating toolbar appears at the bottom with available actions and the selection count
 4. Click an action to apply it to all selected records
 
-## Built-in Actions
+## Built-in Bulk Actions
 
-| Action     | Description                                            |
-| ---------- | ------------------------------------------------------ |
-| **Delete** | Delete all selected records. Prompts for confirmation. |
+| Action | Description |
+| --- | --- |
+| **Delete** | Delete all selected records. Shows a confirmation dialog with the count. |
 
-## Selection
+## Selection Modes
 
-- **Individual**: Click the checkbox on each row
-- **Select all (page)**: Click the header checkbox to select all visible rows
-- **Deselect**: Click the header checkbox again or close the toolbar
+| Mode | How | Description |
+| --- | --- | --- |
+| **Individual** | Click row checkboxes | Select specific records one by one |
+| **Select all (page)** | Click header checkbox | Select all visible rows on the current page |
+| **Deselect** | Click header checkbox again | Clear all selections |
 
-The toolbar shows the count of selected items.
+The floating toolbar shows the count of selected items (e.g., "3 selected").
+
+## Custom Bulk Actions
+
+Define custom bulk actions using the `.actions()` extension:
+
+```ts
+.actions([
+  {
+    name: "publish-all",
+    label: "Publish Selected",
+    bulk: true,
+    handler: async ({ ids, collections }) => {
+      for (const id of ids) {
+        await collections.posts.update(id, { status: "published" })
+      }
+    },
+  },
+  {
+    name: "export-csv",
+    label: "Export as CSV",
+    bulk: true,
+    handler: async ({ ids, collections }) => {
+      const records = await collections.posts.find({
+        where: { id: { in: ids } },
+      })
+      // Generate and return CSV
+    },
+  },
+])
+```
 
 ## Soft Delete Support
 
-If your collection has soft delete enabled, the bulk delete action soft-deletes records instead of permanently removing them. Soft-deleted records can be restored individually from the form view.
+If your collection has `softDelete: true`:
+
+- **Bulk delete** soft-deletes records (sets `deletedAt`) instead of permanently removing them
+- Soft-deleted records can be restored individually from the form view
+- A filter toggle shows/hides soft-deleted records in the list
+
+## Access Control
+
+Bulk actions respect the same access rules as single-record actions. If a user can't delete individual records, the bulk delete option is hidden.
 
 ## Related Pages
 
 - [List Views](/docs/workspace/views/list-views) — Table configuration
 - [Actions](/docs/workspace/actions) — Custom and built-in actions
+- [Filters](/docs/workspace/filters) — Filtering records

@@ -1,18 +1,39 @@
 ---
 title: API Reference
-description: Complete API reference for QUESTPIE.
+description: Complete API reference for QUESTPIE — all builders, factories, types, and configuration options.
 ---
 
-- [Config API](/docs/reference/config-api) — `runtimeConfig()` options
-- [Collection API](/docs/reference/collection-api) — Collection builder methods
-- [Global API](/docs/reference/global-api) — Global builder methods
-- [Field API](/docs/reference/field-api) — All field constructors and options
-- [Routes API](/docs/reference/routes-api) — `route()` builder definition
-- [CRUD API](/docs/reference/crud-api) — Collection CRUD operations
-- [Hooks API](/docs/reference/hooks-api) — Lifecycle hooks
-- [Query Operators](/docs/reference/query-operators) — All operators per field type
-- [Plugin API](/docs/reference/plugin-api) — `CodegenPlugin` interface
-- [Admin API](/docs/reference/admin-api) — Admin conventions and registries
-- [Infrastructure API](/docs/reference/infrastructure-api) — Service APIs
-- [Error Codes](/docs/reference/error-codes) — Error codes
-- [CLI](/docs/reference/cli) — CLI commands
+Comprehensive reference for every QUESTPIE API surface. Each page covers function signatures, all options, and code examples.
+
+## Core Builders
+
+| Page | Description |
+| --- | --- |
+| [Collection API](/docs/reference/collection-api) | `collection()` builder — fields, hooks, access, search, indexes |
+| [Global API](/docs/reference/global-api) | `global()` builder — singleton data models |
+| [Field API](/docs/reference/field-api) | All field constructors (`f.text()`, `f.number()`, etc.) and chainable options |
+| [Routes API](/docs/reference/routes-api) | `route()` builder — HTTP methods, schema, handler |
+| [Hooks API](/docs/reference/hooks-api) | Lifecycle hooks — execution order, context, all hook types |
+
+## Runtime & Config
+
+| Page | Description |
+| --- | --- |
+| [Config API](/docs/reference/config-api) | `runtimeConfig()` — database, storage, email, queue, realtime, KV |
+| [CRUD API](/docs/reference/crud-api) | Collection CRUD operations — find, findById, create, update, delete |
+| [Query Operators](/docs/reference/query-operators) | All `where` operators per field type — equals, contains, gt, lt, between, etc. |
+
+## Extensibility
+
+| Page | Description |
+| --- | --- |
+| [Plugin API](/docs/reference/plugin-api) | `CodegenPlugin` interface — categories, discovery, scaffolds |
+| [Admin API](/docs/reference/admin-api) | Admin conventions — field(), view(), page(), widget() client factories |
+| [Infrastructure API](/docs/reference/infrastructure-api) | Service adapter interfaces — email, queue, search, storage, KV, realtime |
+
+## Other
+
+| Page | Description |
+| --- | --- |
+| [Error Codes](/docs/reference/error-codes) | All error codes and their meanings |
+| [CLI](/docs/reference/cli) | CLI commands — generate, migrate, seed, add |

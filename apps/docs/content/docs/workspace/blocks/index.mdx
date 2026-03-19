@@ -3,7 +3,9 @@ title: Blocks
 description: Content blocks for page builders — define server-side, render client-side.
 ---
 
-Blocks are reusable content components for page builders. Define them server-side with fields and admin metadata, then render them client-side with React components.
+Blocks are reusable content components for visual page building. Define them server-side with fields and admin metadata, then render them client-side with React components. Block content is stored as JSONB in the database.
+
+## Architecture
 
 ```text
 Server: block("hero")           Client: HeroRenderer
@@ -14,13 +16,91 @@ Server: block("hero")           Client: HeroRenderer
 
 ## How Blocks Work
 
-1. **Define blocks** in `blocks/` — fields, admin config, prefetch
+1. **Define blocks** in `blocks/` using the file convention — each block has fields, admin config, and optional data prefetching
 2. **Use `f.blocks()`** on a collection field to enable block content
-3. **Register renderers** on the client to render each block type
-4. **Admin** shows a block editor; **frontend** renders blocks with data
+3. **Register renderers** on the client — React components that render each block type
+4. **Admin** shows a drag-and-drop block editor; **frontend** renders the block tree with prefetched data
+
+## Block Content Structure
+
+Block content is stored as JSONB with this structure:
+
+```ts
+type BlockContent = {
+  _tree: BlockNode[]                           // Hierarchical tree of blocks
+  _values: Record<string, Record<string, any>> // Field values per block instance
+  _data?: Record<string, Record<string, any>>  // Prefetched relation data
+}
+
+type BlockNode = {
+  id: string          // Unique instance ID
+  type: string        // Block type name (e.g., "hero", "columns")
+  children: BlockNode[] // Nested blocks
+}
+```
+
+## Block Categories
+
+Blocks can be organized into categories in the block editor:
+
+| Category | Purpose | Examples |
+| --- | --- | --- |
+| `layout` | Structural blocks | Columns, Grid, Container, Section |
+| `content` | Text content | Heading, Paragraph, List, Quote |
+| `media` | Visual content | Image, Video, Gallery |
+| `sections` | Pre-built sections | Hero, Features, Testimonials, CTA |
+| `interactive` | User interaction | Form, Accordion, Tabs |
+
+Custom categories are supported — use any string as the category name.
+
+## Quick Example
+
+**Server** — define a hero block:
+
+```ts title="src/questpie/server/blocks/hero.ts"
+import { block } from "#questpie/factories"
+
+export default block("hero")
+  .fields(({ f }) => ({
+    title: f.text(255).required(),
+    subtitle: f.textarea(),
+    backgroundImage: f.upload(),
+    ctaLabel: f.text(100),
+    ctaLink: f.url(),
+  }))
+  .admin({
+    label: "Hero Section",
+    icon: "ph:star",
+    category: "sections",
+  })
+```
+
+**Collection** — use blocks field:
+
+```ts
+export default collection("pages")
+  .fields(({ f }) => ({
+    title: f.text(255).required(),
+    content: f.blocks(),
+  }))
+```
+
+**Client** — render the block:
+
+```tsx title="src/questpie/admin/blocks/hero.tsx"
+export default function HeroRenderer({ values }) {
+  return (
+    <section style={{ backgroundImage: `url(${values.backgroundImage?.url})` }}>
+      <h1>{values.title}</h1>
+      <p>{values.subtitle}</p>
+      {values.ctaLabel && <a href={values.ctaLink}>{values.ctaLabel}</a>}
+    </section>
+  )
+}
+```
 
 ## Sections
 
-- [Defining Blocks](/docs/workspace/blocks/defining-blocks) — Server-side block definitions
-- [Renderers](/docs/workspace/blocks/renderers) — Client-side React components
+- [Defining Blocks](/docs/workspace/blocks/defining-blocks) — Server-side block definitions with fields and admin config
+- [Renderers](/docs/workspace/blocks/renderers) — Client-side React components for rendering blocks
 - [Prefetch](/docs/workspace/blocks/prefetch) — Prefetching relation data for blocks

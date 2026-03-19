@@ -12,7 +12,7 @@ The pattern: **HTTP header carries a scope ID → server extracts it into typed 
 The `context.ts` file convention extracts custom properties from each incoming request. Place it in `src/questpie/server/context.ts` and codegen discovers it automatically.
 
 ```ts title="src/questpie/server/context.ts"
-import { context } from "#questpie";
+import { context } from "#questpie/factories";
 
 // Type your custom context properties
 declare global {
@@ -44,7 +44,7 @@ The returned object merges into the request context and is available in every ha
 Use the typed context in access rules to enforce tenant isolation:
 
 ```ts title="collections/projects.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("projects")
 	.fields(({ f }) => ({

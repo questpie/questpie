@@ -1,116 +1,246 @@
 ---
 title: Routes API
-description: route() — server route definition reference.
+description: Complete reference for route(), job(), service(), and email() factories.
 ---
 
 ## `route()`
 
+Define server routes using the immutable route builder. Each method returns a new frozen instance.
+
 ```ts
 import { route } from "questpie";
-import z from "zod";
+import { z } from "zod";
 
 export default route()
   .post()
-  .schema(z.object({ ... }))
-  .handler(async (context) => { ... });
+  .schema(z.object({ title: z.string(), content: z.string() }))
+  .handler(async ({ input, db, collections, session }) => {
+    const post = await collections.posts.create(input);
+    return { id: post.id };
+  });
 ```
+
+### File Convention
+
+Routes are discovered by file convention. The file path determines the URL:
+
+| File path                         | HTTP endpoint              |
+| --------------------------------- | -------------------------- |
+| `routes/health.ts`                | `GET /api/health`          |
+| `routes/posts/search.ts`          | `POST /api/posts/search`   |
+| `routes/admin/stats.ts`           | `GET /api/admin/stats`     |
+| `routes/webhooks/stripe.ts`       | `POST /api/webhooks/stripe`|
 
 ### Builder Methods
 
-| Method                   | Description                                                      |
-| ------------------------ | ---------------------------------------------------------------- |
-| `.post()`                | Set HTTP method to POST                                          |
-| `.get()`                 | Set HTTP method to GET                                           |
-| `.schema(zodSchema)`     | Set input validation schema                                      |
-| `.handler(fn)`           | Set handler function                                             |
-| `.raw()`                 | Raw mode — handler receives `{ request }` and returns `Response` |
-| `.access(boolean \| fn)` | Access control                                                   |
+| Method        | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| `.get()`      | Set HTTP method to GET                                           |
+| `.post()`     | Set HTTP method to POST (default)                                |
+| `.put()`      | Set HTTP method to PUT                                           |
+| `.delete()`   | Set HTTP method to DELETE                                        |
+| `.patch()`    | Set HTTP method to PATCH                                         |
+| `.schema()`   | Set Zod input validation schema                                  |
+| `.handler()`  | Set handler function (terminal -- returns a RouteDefinition)     |
+| `.raw()`      | Raw mode -- handler receives `{ request }` and returns `Response`|
+| `.access()`   | Access control (boolean or function)                             |
 
 ### Handler Context
+
+The handler function receives a typed context object:
 
 | Property        | Type              | Description               |
 | --------------- | ----------------- | ------------------------- |
 | `input`         | `z.infer<schema>` | Validated input           |
-| `collections`   | `AppCollections`  | Collection API            |
-| `globals`       | `AppGlobals`      | Globals API               |
-| `db`            | `Database`        | Drizzle instance          |
+| `collections`   | `AppCollections`  | Typed collection API      |
+| `globals`       | `AppGlobals`      | Typed globals API         |
+| `db`            | `Database`        | Drizzle database instance |
 | `session`       | `Session \| null` | Auth session              |
-| `queue`         | `QueueClient`     | Job queue                 |
+| `queue`         | `QueueClient`     | Job queue client          |
 | `email`         | `MailerService`   | Email service             |
-| `logger`        | `Logger`          | Logger                    |
+| `logger`        | `Logger`          | Pino logger               |
 | `kv`            | `KVStore`         | Key-value store           |
 | `app`           | `QuestpieApp`     | App instance              |
-| Custom services | —                 | Services from `services/` |
+| Custom services | any               | Services from `services/` |
+
+### Example: GET with Query Params
+
+```ts
+export default route()
+  .get()
+  .schema(z.object({ page: z.coerce.number().default(1) }))
+  .handler(async ({ input, collections }) => {
+    const posts = await collections.posts.find({
+      limit: 20,
+      offset: (input.page - 1) * 20,
+    });
+    return posts;
+  });
+```
+
+### Access Control
+
+```ts
+export default route()
+  .post()
+  .access(({ session }) => session?.user?.role === "admin")
+  .schema(z.object({ ... }))
+  .handler(async ({ input }) => { ... });
+```
+
+---
+
+## Raw Routes
+
+Use `.raw()` for handlers that need direct `Request`/`Response` control. Cannot be combined with `.schema()`.
+
+```ts
+import { route } from "questpie";
+
+export default route()
+  .get()
+  .raw()
+  .handler(async ({ request, db }) => {
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    // ... custom logic
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+```
+
+---
 
 ## `job(options)`
 
+Define background jobs processed by the queue system.
+
 ```ts
 import { job } from "questpie";
+import { z } from "zod";
 
 export default job({
-  name: "jobName",
-  schema: z.object({ ... }),
-  handler: async (context) => { ... },
+  name: "sendWelcomeEmail",
+  schema: z.object({
+    userId: z.string(),
+    email: z.string().email(),
+  }),
+  handler: async ({ payload, email, collections }) => {
+    const user = await collections.users.findById(payload.userId);
+    await email.sendTemplate({
+      template: "welcome",
+      input: { name: user.name },
+      to: payload.email,
+    });
+  },
+  options: {
+    retryLimit: 3,
+    retryDelay: 5000,
+  },
 });
 ```
 
 ### Job Options
 
-| Option    | Type                         | Description      |
-| --------- | ---------------------------- | ---------------- |
-| `name`    | `string`                     | Job identifier   |
-| `schema`  | `ZodSchema`                  | Payload schema   |
-| `handler` | `(ctx) => Promise<void>`     | Handler function |
-| `options` | `{ retryLimit, retryDelay }` | Retry config     |
+| Option    | Type                         | Description             |
+| --------- | ---------------------------- | ----------------------- |
+| `name`    | `string`                     | Job identifier          |
+| `schema`  | `ZodSchema`                  | Typed payload schema    |
+| `handler` | `(ctx) => Promise<void>`     | Handler function        |
+| `options` | `{ retryLimit, retryDelay }` | Retry configuration     |
 
 ### Job Context
 
-Same as route handler context, but `input` is replaced by `payload`.
+Same as route handler context, but `input` is replaced by `payload` (typed to the job's Zod schema).
+
+### Publishing Jobs
+
+From any handler context (routes, hooks, other jobs):
+
+```ts
+await queue.sendWelcomeEmail.publish({
+  userId: user.id,
+  email: user.email,
+});
+```
+
+---
 
 ## `service(options)`
 
-```ts
+Define reusable services that are injected into handler contexts.
+
+```ts title="services/stripe.ts"
 import { service } from "questpie";
+import Stripe from "stripe";
 
 export default service({
-	lifecycle: "singleton",
-	create: () => new MyService(),
+  lifecycle: "singleton",
+  create: () => new Stripe(process.env.STRIPE_SECRET_KEY!),
+  dispose: (stripe) => {
+    // Cleanup if needed
+  },
 });
 ```
 
-| Option      | Type                       | Description        |
-| ----------- | -------------------------- | ------------------ |
-| `lifecycle` | `"singleton" \| "request"` | Instance lifecycle |
-| `create`    | `() => T`                  | Factory function   |
-| `dispose`   | `(instance) => void`       | Cleanup function   |
+### Service Options
 
-## Raw Routes
+| Option      | Type                       | Description                                    |
+| ----------- | -------------------------- | ---------------------------------------------- |
+| `lifecycle` | `"singleton" \| "request"` | `singleton`: one instance, `request`: per-request |
+| `create`    | `() => T`                  | Factory function                               |
+| `dispose`   | `(instance) => void`       | Optional cleanup function                      |
 
-Use `.raw()` for handlers that need direct `Request`/`Response` control:
+Services are available in all handler contexts by their filename:
 
 ```ts
-import { route } from "questpie";
-
-export default route()
-	.get()
-	.raw()
-	.handler(async ({ request, db }) => new Response("OK"));
+// In a route handler
+.handler(async ({ stripe }) => {
+  const session = await stripe.checkout.sessions.create({ ... });
+})
 ```
+
+---
 
 ## `email(options)`
 
-```ts
+Define email templates with typed input schemas.
+
+```ts title="emails/welcome.ts"
 import { email } from "questpie";
+import { z } from "zod";
 
 export default email({
-  name: "templateName",
-  schema: z.object({ ... }),
-  handler: ({ input }) => ({ subject: "...", html: "..." }),
+  name: "welcome",
+  schema: z.object({
+    name: z.string(),
+    verifyUrl: z.string().url(),
+  }),
+  handler: ({ input }) => ({
+    subject: `Welcome, ${input.name}!`,
+    html: `
+      <h1>Welcome to our platform, ${input.name}!</h1>
+      <p><a href="${input.verifyUrl}">Verify your email</a></p>
+    `,
+  }),
 });
 ```
 
-| Option    | Type                         | Description         |
-| --------- | ---------------------------- | ------------------- |
-| `name`    | `string`                     | Template identifier |
-| `schema`  | `ZodSchema`                  | Input schema        |
-| `handler` | `(ctx) => { subject, html }` | Template renderer   |
+### Email Options
+
+| Option    | Type                             | Description         |
+| --------- | -------------------------------- | ------------------- |
+| `name`    | `string`                         | Template identifier |
+| `schema`  | `ZodSchema`                      | Typed input schema  |
+| `handler` | `(ctx) => { subject, html }`     | Template renderer   |
+
+### Sending Emails
+
+```ts
+await email.sendTemplate({
+  template: "welcome",
+  input: { name: "Alice", verifyUrl: "https://..." },
+  to: "alice@example.com",
+});
+```

@@ -3,26 +3,71 @@ title: Branding
 description: Customize the admin panel name, logo, and appearance.
 ---
 
-Configure the admin panel's branding with `branding.ts`.
+Configure the admin panel's branding using the `branding.ts` file convention. This controls the app name, logo, and visual identity shown in the sidebar and login page.
 
 ## Basic Setup
 
-```ts title="branding.ts"
-import { branding } from "#questpie/factories";
+Create a `branding.ts` file in your questpie admin directory:
+
+```ts title="src/questpie/admin/branding.ts"
+import { branding } from "#questpie/factories"
 
 export default branding({
-	name: { en: "Barbershop Control", sk: "Riadenie barbershopu" },
-});
+  name: { en: "My CMS", sk: "Moj CMS" },
+})
 ```
+
+The file is auto-discovered by codegen — no manual registration needed.
 
 ## Options
 
-| Option | Type             | Description                      |
-| ------ | ---------------- | -------------------------------- |
-| `name` | `string \| i18n` | App name shown in sidebar header |
-| `logo` | `string`         | Logo URL or path                 |
+| Option | Type | Description |
+| --- | --- | --- |
+| `name` | `string \| Record<string, string>` | App name shown in the sidebar header. Supports i18n with locale keys. |
+| `logo` | `string` | URL or path to a logo image. Displayed in the sidebar and login page. |
+| `favicon` | `string` | URL or path to the favicon. |
+
+## Full Example
+
+```ts title="src/questpie/admin/branding.ts"
+import { branding } from "#questpie/factories"
+
+export default branding({
+  name: { en: "Barbershop Admin", sk: "Barbershop Admin" },
+  logo: "/images/logo.svg",
+  favicon: "/images/favicon.ico",
+})
+```
+
+## Localized Names
+
+The `name` field accepts a locale-keyed object. The admin panel shows the name matching the current UI locale:
+
+```ts
+name: {
+  en: "Content Management",
+  sk: "Sprava obsahu",
+  de: "Inhaltsverwaltung",
+}
+```
+
+If the current locale isn't in the object, it falls back to the first key.
+
+## Logo Placement
+
+The logo appears in:
+- **Sidebar header** — next to the app name
+- **Login page** — above the login form
+- **Collapsed sidebar** — icon-only mode shows just the logo
+
+Use an SVG for best results across light/dark themes.
+
+## Theming
+
+For deeper customization of colors, typography, and layout, see the [Theming guide](/docs/workspace/setup) and the admin package's `THEMING.md`.
 
 ## Related Pages
 
-- [Sidebar](/docs/workspace/views/sidebar) — Navigation
-- [Setup](/docs/workspace/setup) — Admin setup
+- [Sidebar](/docs/workspace/views/sidebar) — Navigation structure
+- [Setup](/docs/workspace/setup) — Admin panel setup
+- [Localization](/docs/workspace/localization) — UI locale configuration

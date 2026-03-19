@@ -9,11 +9,31 @@ These examples demonstrate real-world QUESTPIE patterns using actual code from t
 
 A full booking application built with TanStack Start + QUESTPIE. Features:
 
-- 7 collections with complex relations
-- Server routes for booking logic
-- Background jobs for email notifications
-- Custom services (blog utilities)
-- Admin dashboard with stats, charts, and timelines
-- Block-based page builder
+- 7 collections with complex relations (services, barbers, appointments, products, orders, pages, blog posts)
+- Server routes for booking logic and availability checking
+- Background jobs for email notifications and appointment reminders
+- Custom services (blog utilities, booking engine)
+- Admin dashboard with stats, charts, and appointment timelines
+- Block-based page builder for marketing pages
 - Multi-language support (English + Slovak)
-- Live preview
+- Live preview for content editing
+
+## create-questpie Template
+
+The `create-questpie` scaffolding tool generates a ready-to-run project with:
+
+- A `posts` collection with title, slug, content, and published status
+- A `site_settings` global with site name and description
+- Admin panel with sidebar, dashboard, and login page
+- Docker Compose for PostgreSQL
+- TanStack Start + Vite development setup
+
+```bash
+bunx create-questpie my-app
+cd my-app
+docker compose up -d
+bun run db:migrate
+bun run dev
+```
+
+See [First App](/docs/start-here/first-app) for the full walkthrough.

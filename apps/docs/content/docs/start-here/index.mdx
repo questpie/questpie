@@ -34,7 +34,7 @@ Think of QUESTPIE in three layers:
 ### Layer 1: Schema (you write this)
 
 ```ts title="collections/posts.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("posts").fields(({ f }) => ({
 	title: f.text().required(),

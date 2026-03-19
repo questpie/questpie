@@ -1,63 +1,169 @@
 ---
 title: Custom Views
-description: Create custom list and form view types.
+description: Create custom list and form view types for the admin panel.
 ---
 
-Create custom view types beyond the built-in table and form views — kanban boards, calendars, galleries, or domain-specific layouts.
+Create custom view types beyond the built-in table and form views -- kanban boards, calendars, galleries, or domain-specific layouts.
 
-## View Registration
+## Overview
 
-Custom views are registered through modules and the admin client:
+A custom view requires two parts:
 
-```ts
-// Server: declare the view type
-const myModule = module({
-	name: "custom-views",
-	views: {
-		kanban: kanbanViewDefinition,
-		calendar: calendarViewDefinition,
-	},
+1. **View definition** -- register the view using the `view()` factory with a `kind` discriminant
+2. **React component** -- the actual rendering logic
+
+Views have two kinds:
+- `"list"` -- displayed on the collection list page (e.g., table, kanban, gallery)
+- `"form"` -- displayed on the collection edit/create page (e.g., form, builder)
+
+---
+
+## Defining a Custom View
+
+### File Convention
+
+Create a view definition file using the `view()` factory:
+
+```ts title="src/admin/views/kanban.ts"
+import { view } from "@questpie/admin/client";
+
+export default view("kanban", {
+  kind: "list",
+  component: () => import("./kanban-view.js"),
 });
 ```
 
-## Using Custom Views
+After codegen, this view is registered in the admin client and available for use.
 
-Once registered, use them in your collection's `.list()` or `.form()`:
+### React Component
 
-```ts
-.list(({ v }) => v.kanban({
-  columns: "status",
-  cardTitle: "title",
-}))
-```
+```tsx title="src/admin/views/kanban-view.tsx"
+import { useListViewContext } from "@questpie/admin/client";
 
-## Client Rendering
+export function KanbanView() {
+  const { data, columns, config, onRecordClick } = useListViewContext();
 
-Register the React component that renders the view:
+  const statusColumn = config.groupBy || "status";
+  const groups = groupByField(data, statusColumn);
 
-```tsx
-function KanbanView({ data, columns, onDrop }) {
-	return (
-		<div className="flex gap-4">
-			{columns.map((col) => (
-				<div key={col.id} className="flex-1">
-					<h3>{col.label}</h3>
-					{data
-						.filter((item) => item.status === col.id)
-						.map((item) => (
-							<div key={item.id} className="card">
-								{item.title}
-							</div>
-						))}
-				</div>
-			))}
-		</div>
-	);
+  return (
+    <div style={{ display: "flex", gap: 16, overflowX: "auto" }}>
+      {Object.entries(groups).map(([status, items]) => (
+        <div key={status} style={{ minWidth: 280, flex: "0 0 280px" }}>
+          <h3 style={{ fontWeight: 600, marginBottom: 8 }}>
+            {status} ({items.length})
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {items.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => onRecordClick(item.id)}
+                style={{
+                  padding: 12,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{ fontWeight: 500 }}>{item._title}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function groupByField(data: any[], field: string) {
+  const groups: Record<string, any[]> = {};
+  for (const item of data) {
+    const key = item[field] || "unknown";
+    (groups[key] ??= []).push(item);
+  }
+  return groups;
 }
 ```
 
+---
+
+## Using Custom Views
+
+Once registered, reference the view in your collection's `.list()` configuration:
+
+```ts
+collection("tasks")
+  .fields(({ f }) => ({
+    title: f.text({ required: true }),
+    status: f.select({ options: ["todo", "in-progress", "done"] }),
+    assignee: f.relation(() => users),
+  }))
+  .list(({ v }) => v.kanban({
+    groupBy: "status",
+  }))
+```
+
+The view configuration object is passed to your component as `config` in the view context.
+
+---
+
+## Custom Form Views
+
+Form views work the same way but use `kind: "form"`:
+
+```ts title="src/admin/views/page-builder.ts"
+import { view } from "@questpie/admin/client";
+
+export default view("page-builder", {
+  kind: "form",
+  component: () => import("./page-builder-view.js"),
+});
+```
+
+```tsx title="src/admin/views/page-builder-view.tsx"
+import { useFormViewContext } from "@questpie/admin/client";
+
+export function PageBuilderView() {
+  const { data, onChange, fields } = useFormViewContext();
+
+  return (
+    <div>
+      {/* Custom drag-and-drop page builder UI */}
+    </div>
+  );
+}
+```
+
+Use in a collection:
+
+```ts
+.form(({ v }) => v.pageBuilder({
+  // Custom config
+}))
+```
+
+---
+
+## Module Registration
+
+To distribute custom views as part of a module:
+
+```ts
+import { module } from "questpie";
+
+export const kanbanModule = module({
+  name: "kanban-views",
+  // Views are discovered by file convention through the admin plugin
+  // The module can include the view files in its package
+});
+```
+
+The admin plugin's codegen automatically discovers view files in the configured directories.
+
+---
+
 ## Related Pages
 
-- [List Views](/docs/workspace/views/list-views) — Built-in list views
-- [Form Views](/docs/workspace/views/form-views) — Built-in form views
-- [Registries](/docs/extend/registries) — Registry deep dive
+- [List Views](/docs/workspace/views/list-views) -- Built-in list views
+- [Form Views](/docs/workspace/views/form-views) -- Built-in form views
+- [Admin API](/docs/reference/admin-api) -- Admin client factories

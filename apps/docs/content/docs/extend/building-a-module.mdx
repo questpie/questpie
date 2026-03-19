@@ -1,112 +1,245 @@
 ---
 title: Building a Module
-description: Create a reusable module — collections, jobs, sidebar items, and more.
+description: Create a reusable module — collections, globals, jobs, routes, services, and more.
 ---
 
-A module is a reusable package that contributes entities to any QUESTPIE project. Modules are static objects — they describe what exists.
+A module is a reusable package that contributes entities to any QUESTPIE project. Modules are static objects -- they describe what exists, and the framework merges them at startup.
 
 ## Module Structure
 
 ```ts
-import { module, collection, job } from "questpie";
+import { module, collection, global, job, route } from "questpie";
+import { z } from "zod";
 
-const notificationsCollection = collection("notifications")
-	.fields(({ f }) => ({
-		title: f.text().required(),
-		body: f.textarea(),
-		read: f.boolean().default(false),
-		userId: f.relation("user").required(),
-	}))
-	.admin(({ c }) => ({
-		label: { en: "Notifications" },
-		icon: c.icon("ph:bell"),
-	}));
+// Define collections
+const notifications = collection("notifications")
+  .fields(({ f }) => ({
+    title: f.text({ required: true }),
+    body: f.textarea(),
+    read: f.boolean({ default: false }),
+    userId: f.relation(() => users),
+  }))
+  .hooks({
+    afterCreate: async ({ data, queue }) => {
+      await queue.sendPushNotification.publish({
+        userId: data.userId,
+        title: data.title,
+        body: data.body,
+      });
+    },
+  })
+  .admin(({ c }) => ({
+    label: { en: "Notifications" },
+    icon: c.icon("ph:bell"),
+  }));
 
+// Define jobs
 const sendPushNotification = job({
-	name: "sendPushNotification",
-	schema: z.object({
-		userId: z.string(),
-		title: z.string(),
-		body: z.string(),
-	}),
-	handler: async ({ payload }) => {
-		// Send push notification
-	},
+  name: "sendPushNotification",
+  schema: z.object({
+    userId: z.string(),
+    title: z.string(),
+    body: z.string(),
+  }),
+  handler: async ({ payload }) => {
+    // Send push notification via external service
+  },
 });
 
+// Define routes
+const markAllRead = route()
+  .post()
+  .schema(z.object({ userId: z.string() }))
+  .handler(async ({ input, collections }) => {
+    // Mark all notifications as read for a user
+    return { ok: true };
+  });
+
+// Export the module
 export const notificationsModule = module({
-	name: "notifications",
+  name: "notifications",
 
-	collections: {
-		notifications: notificationsCollection,
-	},
+  collections: {
+    notifications,
+  },
 
-	jobs: {
-		sendPushNotification,
-	},
+  jobs: {
+    sendPushNotification,
+  },
 
-	sidebar: {
-		items: [
-			{
-				sectionId: "operations",
-				type: "collection",
-				collection: "notifications",
-			},
-		],
-	},
+  routes: {
+    markAllRead,
+  },
 
-	messages: {
-		en: {
-			"notifications.title": "Notifications",
-			"notifications.markRead": "Mark as read",
-		},
-	},
+  sidebar: {
+    items: [
+      {
+        sectionId: "operations",
+        type: "collection",
+        collection: "notifications",
+      },
+    ],
+  },
+
+  messages: {
+    en: {
+      "notifications.title": "Notifications",
+      "notifications.markRead": "Mark as read",
+      "notifications.empty": "No notifications",
+    },
+    sk: {
+      "notifications.title": "Notifikacie",
+      "notifications.markRead": "Oznacit ako precitane",
+    },
+  },
 });
 ```
 
+---
+
 ## Using the Module
 
-```ts title="modules.ts"
+Add the module to your `modules.ts` file:
+
+```ts title="src/questpie/server/modules.ts"
 import { adminModule } from "@questpie/admin/server";
-import { notificationsModule } from "my-notifications-package";
+import { notificationsModule } from "questpie-notifications";
 
 export default [adminModule, notificationsModule] as const;
 ```
 
+After running `questpie generate`, all module contributions are merged into the generated types and factories.
+
+---
+
 ## Module Options
 
-| Property      | Type          | Description              |
-| ------------- | ------------- | ------------------------ |
-| `name`        | `string`      | Module identifier        |
-| `modules`     | `Module[]`    | Module dependencies      |
-| `collections` | `Record`      | Collection contributions |
-| `globals`     | `Record`      | Global contributions     |
-| `jobs`        | `Record`      | Job contributions        |
-| `routes`      | `Record`      | Route contributions      |
-| `services`    | `Record`      | Service contributions    |
-| `fields`      | `Record`      | Custom field types       |
-| `sidebar`     | `object`      | Sidebar items            |
-| `dashboard`   | `object`      | Dashboard widgets        |
-| `migrations`  | `Migration[]` | Database migrations      |
-| `seeds`       | `Seed[]`      | Seed data                |
-| `messages`    | `Record`      | i18n translations        |
+| Property        | Type                | Description                                  |
+| --------------- | ------------------- | -------------------------------------------- |
+| `name`          | `string`            | Unique module identifier                     |
+| `modules`       | `ModuleDefinition[]`| Dependency modules (resolved depth-first)    |
+| `collections`   | `Record<string, Collection>` | Collection contributions          |
+| `globals`       | `Record<string, Global>`     | Global contributions              |
+| `jobs`          | `Record<string, JobDefinition>` | Background job definitions     |
+| `routes`        | `Record<string, RouteDefinition>` | API route definitions        |
+| `services`      | `Record<string, ServiceBuilder>` | Service contributions         |
+| `fields`        | `Record<string, FieldFactory>` | Custom field type factories     |
+| `auth`          | `BetterAuthOptions` | Auth configuration (deep-merged)              |
+| `migrations`    | `Migration[]`       | Database migrations                           |
+| `seeds`         | `Seed[]`            | Seed data                                     |
+| `messages`      | `Record<string, Record<string, string>>` | i18n translations |
+| `defaultAccess` | `CollectionAccess`  | Default access control rules                  |
+| `hooks`         | `GlobalHooksState`  | Global lifecycle hooks (concatenated)         |
+| `plugin`        | `CodegenPlugin \| CodegenPlugin[]` | Codegen plugin contributions |
+| `sidebar`       | `object`            | Admin sidebar items                           |
+| `dashboard`     | `object`            | Admin dashboard widgets                       |
 
-## Publishing
+---
 
-Package your module as an npm package. Users install it and add to `modules.ts`:
+## Module Dependencies
+
+Modules can depend on other modules. Dependencies are resolved depth-first:
+
+```ts
+export const ecommerceModule = module({
+  name: "ecommerce",
+  modules: [notificationsModule, paymentsModule],
+
+  collections: {
+    products: productsCollection,
+    orders: ordersCollection,
+  },
+});
+```
+
+When a module lists dependencies, those modules are merged first, ensuring their collections, routes, and types are available.
+
+---
+
+## Contributing a Codegen Plugin
+
+Modules can contribute codegen plugins that define new file conventions:
+
+```ts
+export const myModule = module({
+  name: "my-module",
+  plugin: {
+    name: "my-module",
+    categories: {
+      templates: {
+        pattern: "templates/**/*.ts",
+        cardinality: "map",
+        mergeStrategy: "record",
+        registryKey: "templates",
+      },
+    },
+  },
+  // ... other contributions
+});
+```
+
+See [Plugin API](/docs/reference/plugin-api) for the full plugin reference.
+
+---
+
+## Merge Behavior
+
+When multiple modules contribute to the same key, the merge behavior depends on the property type:
+
+| Property      | Merge Strategy                               |
+| ------------- | -------------------------------------------- |
+| `collections` | Later modules override by collection name    |
+| `globals`     | Later modules override by global name        |
+| `jobs`        | Later modules override by job name           |
+| `routes`      | Later modules override by route key          |
+| `services`    | Later modules override by service name       |
+| `fields`      | Later modules override by field type name    |
+| `auth`        | Deep-merged across all modules               |
+| `migrations`  | Concatenated (all migrations run)            |
+| `seeds`       | Concatenated (all seeds run)                 |
+| `messages`    | Deep-merged per locale                       |
+| `hooks`       | Concatenated (all hooks run in order)        |
+
+---
+
+## Publishing as a Package
+
+Package your module as an npm package for reuse:
 
 ```json title="package.json"
 {
-	"name": "questpie-notifications",
-	"main": "dist/index.js",
-	"types": "dist/index.d.ts",
-	"peerDependencies": {
-		"questpie": "^2.0.0"
-	}
+  "name": "questpie-notifications",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "questpie": "^2.0.0"
+  }
 }
 ```
 
+Export the module from your package entry point:
+
+```ts title="src/index.ts"
+export { notificationsModule } from "./module";
+```
+
+Users install it and add it to their `modules.ts`:
+
+```bash
+bun add questpie-notifications
+```
+
+---
+
 ## Related Pages
 
-- [Modules](/docs/backend/architecture/modules) — Module architecture
-- [Building a Plugin](/docs/extend/building-a-plugin) — Plugins (declarations)
+- [Modules](/docs/backend/architecture/modules) -- Module architecture
+- [Plugin API](/docs/reference/plugin-api) -- Codegen plugin reference
+- [Custom Fields](/docs/extend/custom-fields) -- Custom field types

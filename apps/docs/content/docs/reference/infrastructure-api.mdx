@@ -1,84 +1,330 @@
 ---
 title: Infrastructure API
-description: Service APIs — email, queue, storage, KV, realtime, logger.
+description: Service APIs — email, queue, storage, KV, realtime, logger, and database.
 ---
 
-All services are available through handler context (routes, hooks, jobs).
+All infrastructure services are available through handler context in routes, hooks, and jobs.
+
+```ts
+.handler(async ({ db, email, queue, kv, logger, app }) => {
+  // All services available here
+})
+```
+
+---
 
 ## Email
 
+Send emails using registered templates or raw HTML.
+
+### Sending a Template
+
 ```ts
-// Send template
 await email.sendTemplate({
-  template: "templateName",
-  input: { ... },
-  to: "user@example.com",
+  template: "welcome",
+  input: { name: "Alice", verifyUrl: "https://..." },
+  to: "alice@example.com",
 });
 ```
+
+### Adapter Configuration
+
+```ts title="questpie.config.ts"
+import { smtpAdapter, consoleAdapter } from "questpie/email";
+
+// SMTP (production)
+email: {
+  adapter: smtpAdapter({
+    host: "smtp.example.com",
+    port: 587,
+    auth: { user: "...", pass: "..." },
+    from: "noreply@example.com",
+  }),
+}
+
+// Console (development — prints to stdout)
+email: {
+  adapter: consoleAdapter(),
+}
+```
+
+### Defining Email Templates
+
+```ts title="emails/welcome.ts"
+import { email } from "questpie";
+import { z } from "zod";
+
+export default email({
+  name: "welcome",
+  schema: z.object({ name: z.string(), verifyUrl: z.string() }),
+  handler: ({ input }) => ({
+    subject: `Welcome, ${input.name}!`,
+    html: `<h1>Welcome!</h1><a href="${input.verifyUrl}">Verify</a>`,
+  }),
+});
+```
+
+---
 
 ## Queue
 
+Background job processing backed by pg-boss (PostgreSQL).
+
+### Publishing a Job
+
 ```ts
-// Publish job
-await queue.jobName.publish({
-	// typed payload
+await queue.sendWelcomeEmail.publish({
+  userId: user.id,
+  email: user.email,
 });
 ```
 
-## Storage
+Jobs are typed -- the payload must match the job's Zod schema.
+
+### Adapter Configuration
+
+```ts title="questpie.config.ts"
+import { pgBossAdapter } from "questpie/queue-pg-boss";
+
+queue: {
+  adapter: pgBossAdapter({
+    connectionString: process.env.DATABASE_URL!,
+  }),
+}
+```
+
+### Defining Jobs
+
+```ts title="jobs/send-welcome-email.ts"
+import { job } from "questpie";
+import { z } from "zod";
+
+export default job({
+  name: "sendWelcomeEmail",
+  schema: z.object({
+    userId: z.string(),
+    email: z.string().email(),
+  }),
+  handler: async ({ payload, email }) => {
+    await email.sendTemplate({
+      template: "welcome",
+      input: { name: payload.userId },
+      to: payload.email,
+    });
+  },
+  options: {
+    retryLimit: 3,
+    retryDelay: 5000,
+  },
+});
+```
+
+---
+
+## Search
+
+Full-text search using PostgreSQL FTS with BM25 ranking.
+
+### Configuring Search on a Collection
 
 ```ts
-// Upload
-const asset = await storage.upload(file);
+collection("posts")
+  .fields(({ f }) => ({ ... }))
+  .searchable({
+    content: (record) => `${record.title} ${extractText(record.content)}`,
+    metadata: (record) => ({ status: record.status }),
+  })
+```
+
+The `content` callback extracts plain text for full-text indexing. The `metadata` callback provides structured data for faceted filtering.
+
+### Searching
+
+```ts
+const results = await collections.posts.find({
+  search: "typescript tutorial",
+  where: { status: "published" },
+});
+```
+
+---
+
+## Storage
+
+File storage using FlyDrive with local or S3 backends.
+
+### Configuration
+
+```ts title="questpie.config.ts"
+// Local filesystem
+storage: {
+  driver: "local",
+  basePath: "./uploads",
+}
+
+// S3 / S3-compatible
+storage: {
+  driver: "s3",
+  s3: {
+    bucket: "my-bucket",
+    region: "us-east-1",
+    accessKeyId: "...",
+    secretAccessKey: "...",
+    endpoint: "https://...",  // For S3-compatible providers
+  },
+}
+```
+
+### Upload Collections
+
+Collections with `.upload()` automatically handle file storage:
+
+```ts
+collection("media")
+  .fields(({ f }) => ({
+    alt: f.text(),
+    folder: f.text(),
+  }))
+  .upload({
+    visibility: "public",
+    maxSize: 10_000_000,
+    allowedTypes: ["image/*", "application/pdf"],
+  })
+```
+
+Upload collections automatically:
+- Add storage fields (`key`, `filename`, `mimeType`, `size`, `visibility`)
+- Extend the output type with `{ url: string }`
+- Generate signed URLs for private files
+- Register HTTP upload and file-serving routes
+
+### Using Storage Directly
+
+```ts
+// Upload a file
+const disk = app.storage.use();
+await disk.put("path/to/file.txt", content);
 
 // Get URL
-const url = storage.getUrl(asset.path);
+const url = await disk.getUrl("path/to/file.txt");
+
+// Get signed URL (private files)
+const signedUrl = await disk.getSignedUrl("path/to/file.txt");
 ```
+
+---
 
 ## KV Store
 
-```ts
-// Set with TTL
-await kv.set("key", "value", { ttl: 3600 });
+Key-value store for caching and ephemeral data.
 
-// Get
-const value = await kv.get("key");
+### API
+
+```ts
+// Set with optional TTL (seconds)
+await kv.set("cache:settings", JSON.stringify(settings), { ttl: 3600 });
+
+// Get (returns string | null)
+const value = await kv.get("cache:settings");
 
 // Delete
-await kv.delete("key");
+await kv.delete("cache:settings");
 ```
+
+### Configuration
+
+```ts title="questpie.config.ts"
+// Redis (production)
+kv: {
+  adapter: "redis",
+  url: process.env.REDIS_URL!,
+}
+
+// In-memory (development)
+kv: {
+  adapter: "memory",
+}
+```
+
+---
 
 ## Realtime
 
+Event broadcasting for live updates.
+
+### Broadcasting
+
 ```ts
-// Broadcast
-await realtime.broadcast("channel", { type: "event", data: { ... } });
+await realtime.broadcast("posts", {
+  type: "post.updated",
+  data: { id: post.id, title: post.title },
+});
 ```
+
+### Configuration
+
+```ts title="questpie.config.ts"
+import { redisStreamsAdapter } from "questpie/realtime-redis";
+import { pgNotifyAdapter } from "questpie/realtime-pg";
+
+// Redis Streams (production, multi-instance)
+realtime: {
+  adapter: redisStreamsAdapter({ url: process.env.REDIS_URL! }),
+}
+
+// PostgreSQL NOTIFY (simpler, single-instance)
+realtime: {
+  adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL! }),
+}
+```
+
+---
 
 ## Logger
 
+Structured logging via Pino.
+
 ```ts
-logger.info("message");
-logger.error({ err: error }, "Error message");
-logger.debug({ key: "value" }, "Debug info");
+logger.info("User created");
+logger.info({ userId: user.id }, "User created");
+logger.warn({ attempt: 3 }, "Rate limit approaching");
+logger.error({ err: error }, "Failed to process webhook");
+logger.debug({ payload }, "Incoming request");
 ```
+
+Log levels: `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
+
+---
 
 ## Database
 
+Direct access to the Drizzle ORM instance for custom queries.
+
 ```ts
+import { eq, sql } from "drizzle-orm";
+
 // Raw SQL
-const result = await db.execute(sql`SELECT 1`);
+const result = await db.execute(sql`SELECT COUNT(*) FROM posts WHERE status = 'published'`);
 
 // Drizzle query builder
-const rows = await db.select().from(table).where(eq(table.id, id));
+const rows = await db.select()
+  .from(postsTable)
+  .where(eq(postsTable.status, "published"))
+  .orderBy(postsTable.createdAt)
+  .limit(10);
 ```
+
+---
 
 ## App Instance
 
+The app instance provides access to the full runtime for scripts and advanced use cases.
+
 ```ts
-// Create context (for scripts)
+// Create a system context (for scripts, cron jobs)
 const ctx = await app.createContext({ accessMode: "system", locale: "en" });
 
-// Collection API via app
+// Use the collection API directly
 const posts = await app.api.collections.posts.find({}, ctx);
+const settings = await app.api.globals.siteSettings.get(ctx);
 ```

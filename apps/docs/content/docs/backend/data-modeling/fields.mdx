@@ -16,7 +16,7 @@ Fields are the foundation of QUESTPIE. Each field definition drives:
 Fields are defined inside `.fields()` using the `f` field builder:
 
 ```ts title="collections/posts.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("posts").fields(({ f }) => ({
 	title: f.text(255).required(),

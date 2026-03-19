@@ -21,7 +21,7 @@ Define collections, routes, jobs, and hooks as plain files. Codegen wires them i
 ## How It Works
 
 ```ts title="collections/posts.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("posts").fields(({ f }) => ({
 	title: f.text(255).required(),

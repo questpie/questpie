@@ -10,6 +10,8 @@ Relations link collections together. QUESTPIE supports belongs-to, has-many, and
 A field that references one record from another collection:
 
 ```ts title="collections/appointments.ts"
+import { collection } from "#questpie/factories";
+
 export const appointments = collection("appointments").fields(({ f }) => ({
 	customer: f.relation("user").required(),
 	barber: f.relation("barbers").required(),
@@ -34,6 +36,8 @@ This creates a foreign key column `customer` → `user.id`, `barber` → `barber
 Define the reverse side of a belongs-to — one record has many related records:
 
 ```ts title="collections/services.ts"
+import { collection } from "#questpie/factories";
+
 export const services = collection("services").fields(({ f }) => ({
 	name: f.text().required(),
 	// Reverse: this service has many barbers (via barberServices junction)
@@ -50,7 +54,7 @@ export const services = collection("services").fields(({ f }) => ({
 Many-to-many requires a junction collection:
 
 ```ts title="collections/barber-services.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export const barberServices = collection("barberServices")
 	.fields(({ f }) => ({

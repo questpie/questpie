@@ -1,0 +1,148 @@
+---
+title: Seeds
+description: Database seeding for initial data and development fixtures.
+---
+
+Seeds populate your database with initial data (required config, admin users) or development fixtures (demo content). Define them in `seeds/` using the file convention.
+
+## Defining a Seed
+
+```ts title="src/questpie/server/seeds/site-settings.ts"
+import { seed } from "questpie"
+
+export default seed({
+  id: "siteSettings",
+  category: "required",
+  async run({ globals, log }) {
+    await globals.site_settings.upsert({
+      siteName: "My Site",
+      description: "A QUESTPIE-powered website",
+    })
+    log.info("Site settings seeded")
+  },
+})
+```
+
+## Seed Options
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `id` | `string` | Unique identifier — used to track which seeds have run |
+| `category` | `"required" \| "dev"` | `required` seeds always run; `dev` seeds only in development |
+| `run` | `(ctx) => Promise<void>` | The seed function — inserts/upserts data |
+| `undo` | `(ctx) => Promise<void>` | Optional — reverses the seed (for rollback) |
+
+## Categories
+
+- **`required`** — Run in all environments. Use for essential data: default admin user, site settings, initial configuration.
+- **`dev`** — Run only in development. Use for demo content, test data, sample records.
+
+## Context
+
+The `run` function receives the full app context:
+
+```ts
+async run({ globals, collections, db, createContext, app, log }) {
+  // collections — typed CRUD for all collections
+  // globals — typed CRUD for all globals
+  // db — raw Drizzle database instance
+  // createContext — create a request-scoped context
+  // app — the full app instance
+  // log — Pino logger
+}
+```
+
+## Examples
+
+### Seed an admin user
+
+```ts title="src/questpie/server/seeds/admin-user.ts"
+import { seed } from "questpie"
+
+export default seed({
+  id: "adminUser",
+  category: "required",
+  async run({ app, log }) {
+    const existing = await app.auth.api.getUser({ query: { email: "admin@example.com" } })
+    if (existing) return
+
+    await app.auth.api.createUser({
+      body: {
+        email: "admin@example.com",
+        password: "change-me-in-production",
+        name: "Admin",
+        role: "admin",
+      },
+    })
+    log.info("Admin user created")
+  },
+})
+```
+
+### Seed demo posts
+
+```ts title="src/questpie/server/seeds/demo-posts.ts"
+import { seed } from "questpie"
+
+export default seed({
+  id: "demoPosts",
+  category: "dev",
+  async run({ collections, log }) {
+    const posts = [
+      { title: "Getting Started with QUESTPIE", status: "published" },
+      { title: "Advanced Field Types", status: "draft" },
+      { title: "Building Custom Modules", status: "draft" },
+    ]
+
+    for (const post of posts) {
+      await collections.posts.create(post)
+    }
+    log.info(`Seeded ${posts.length} demo posts`)
+  },
+  async undo({ collections, log }) {
+    // Optional: remove seeded data
+    const posts = await collections.posts.find({
+      where: { title: { startsWith: "Getting Started" } },
+    })
+    for (const post of posts.docs) {
+      await collections.posts.delete(post.id)
+    }
+    log.info("Demo posts removed")
+  },
+})
+```
+
+## Running Seeds
+
+```bash
+# Run all required seeds
+bunx questpie seed
+
+# Run all seeds (including dev)
+bunx questpie seed --all
+
+# Run a specific seed by ID
+bunx questpie seed --id siteSettings
+```
+
+Seeds track execution in a `_questpie_seeds` table. A seed only runs once unless you pass `--force`.
+
+## File Convention
+
+Seeds are auto-discovered from the `seeds/` directory:
+
+```text
+src/questpie/server/
+  seeds/
+    site-settings.ts    → id: "siteSettings"
+    admin-user.ts       → id: "adminUser"
+    demo-posts.ts       → id: "demoPosts"
+```
+
+The filename is used for the import key in codegen. The `id` field inside the seed definition is the actual tracking identifier.
+
+## Related Pages
+
+- [Jobs](/docs/backend/business-logic/jobs) — Background job processing
+- [Migrations](/docs/production/migrations) — Schema changes
+- [CLI](/docs/reference/cli) — CLI commands reference

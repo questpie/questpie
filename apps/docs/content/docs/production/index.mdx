@@ -3,20 +3,74 @@ title: Operate in Production
 description: Infrastructure services — database, auth, storage, email, queue, search, realtime.
 ---
 
-QUESTPIE provides adapters for common infrastructure services. Configure them in your runtime config.
+QUESTPIE provides pluggable adapters for common infrastructure services. Configure them in `runtimeConfig()` and access them through the typed context in hooks, routes, and jobs.
 
 ## Services
 
-| Service                                           | Default Adapter          | Description         |
-| ------------------------------------------------- | ------------------------ | ------------------- |
-| [Database](/docs/production/database)             | PostgreSQL + Drizzle     | Primary data store  |
-| [Migrations](/docs/production/migrations)         | Built-in                 | Schema versioning   |
-| [Authentication](/docs/production/authentication) | Better Auth              | Sessions, providers |
-| [Storage](/docs/production/storage)               | Flydrive (S3/local)      | File uploads        |
-| [Email](/docs/production/email)                   | Nodemailer               | Transactional email |
-| [Queue](/docs/production/queue)                   | pg-boss                  | Background jobs     |
-| [Search](/docs/production/search)                 | PG full-text search      | Text search         |
-| [Realtime](/docs/production/realtime)             | pgNotify / Redis Streams | Live updates        |
-| [KV](/docs/production/kv)                         | Redis / in-memory        | Key-value store     |
-| [Logger](/docs/production/logger)                 | Pino                     | Structured logging  |
-| [Deployment](/docs/production/deployment)         | Docker                   | Production setup    |
+| Service | Default Adapter | Description |
+| --- | --- | --- |
+| [Database](/docs/production/database) | PostgreSQL + Drizzle | Primary data store |
+| [Migrations](/docs/production/migrations) | Built-in | Schema versioning |
+| [Authentication](/docs/production/authentication) | Better Auth | Sessions, providers |
+| [Storage](/docs/production/storage) | FlyDrive (S3/local) | File uploads |
+| [Email](/docs/production/email) | Nodemailer | Transactional email |
+| [Queue](/docs/production/queue) | pg-boss | Background jobs |
+| [Search](/docs/production/search) | PG full-text search | Text search |
+| [Realtime](/docs/production/realtime) | pgNotify / Redis Streams | Live updates |
+| [KV](/docs/production/kv) | Redis / in-memory | Key-value store |
+| [Logger](/docs/production/logger) | Pino | Structured logging |
+| [OpenAPI](/docs/production/openapi) | @questpie/openapi | API documentation |
+| [Deployment](/docs/production/deployment) | Docker | Production setup |
+
+## Configuration
+
+All services are configured in your `questpie.config.ts`:
+
+```ts title="questpie.config.ts"
+import { runtimeConfig, pgBossAdapter } from "questpie"
+import { adminPlugin } from "@questpie/admin/plugin"
+
+export default runtimeConfig({
+  app: { url: process.env.APP_URL },
+  db: { url: process.env.DATABASE_URL },
+  secret: process.env.BETTER_AUTH_SECRET,
+  plugins: [adminPlugin()],
+  queue: { adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL }) },
+  storage: { driver: "local", basePath: "./uploads" },
+  email: { adapter: consoleAdapter() },
+})
+```
+
+See [Config API](/docs/reference/config-api) for the full options reference.
+
+## Accessing Services
+
+All services are available through the context in hooks, routes, and jobs:
+
+```ts
+handler: async ({ db, collections, globals, queue, email, kv, logger, search, storage }) => {
+  // db — Drizzle database instance
+  // collections — typed CRUD for all collections
+  // globals — typed CRUD for all globals
+  // queue — publish background jobs
+  // email — send transactional emails
+  // kv — key-value cache
+  // logger — structured logging
+  // search — full-text search
+  // storage — file operations
+}
+```
+
+## Swappable Adapters
+
+Each service uses an adapter pattern. Swap adapters without changing your application code:
+
+```ts
+// Development
+queue: { adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL }) }
+kv: { adapter: "memory" }
+
+// Production
+queue: { adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL }) }
+kv: { adapter: "redis", url: process.env.REDIS_URL }
+```

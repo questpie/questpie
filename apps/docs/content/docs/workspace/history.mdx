@@ -46,7 +46,7 @@ The audit module registers global hooks on **all** collections and globals. Ever
 ### Disabling Audit for a Collection
 
 ```ts title="collections/logs.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export const logs = collection("logs")
 	.admin(() => ({ audit: false }))
@@ -73,7 +73,7 @@ When a collection has versioning enabled, the Versions tab shows numbered snapsh
 ### Enabling Versioning
 
 ```ts title="collections/pages.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export const pages = collection("pages")
 	.versioning({ drafts: true, maxVersions: 20 })

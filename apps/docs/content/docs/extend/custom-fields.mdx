@@ -3,62 +3,181 @@ title: Custom Fields
 description: Create custom field types with custom storage, validation, and admin rendering.
 ---
 
-Create field types that don't exist in the core — color pickers, phone numbers, currencies, coordinates, or domain-specific types.
+Create field types that don't exist in the core -- color pickers, phone numbers, currencies, coordinates, or domain-specific types.
 
-## Field Registration
+## Overview
 
-Custom fields are registered through modules:
+A custom field requires two parts:
 
-```ts
-const myModule = module({
-	name: "custom-fields",
-	fields: {
-		color: colorField,
-		currency: currencyField,
-		phone: phoneField,
-	},
-});
-```
+1. **Server field factory** -- defines storage, validation, and metadata
+2. **Admin renderer** -- React component for editing and displaying the field
 
-Once registered and codegen runs, the field becomes available on the `f` builder:
+Both are registered through a module and discovered by codegen.
 
-```ts
-.fields(({ f }) => ({
-  brandColor: f.color({ default: "#000000" }),
-  price: f.currency({ currency: "USD" }),
-}))
-```
+---
 
-## Field Definition
+## Server: Field Factory
 
-A custom field defines:
+Define a field factory that specifies how the value is stored and validated.
 
-- **Storage type** — How the value is stored in the database
-- **Validation** — Zod schema for the value
-- **Serialization** — How values are sent over the API
-- **Admin renderer** — React component for editing (optional)
+```ts title="src/fields/color.ts"
+import { varchar } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
-## Admin Renderer
-
-Register a React component to render the field in the admin panel:
-
-```tsx
-// Field renderer for the "color" field type
-function ColorFieldRenderer({ value, onChange }) {
-	return (
-		<input
-			type="color"
-			value={value || "#000000"}
-			onChange={(e) => onChange(e.target.value)}
-		/>
-	);
+/**
+ * Color field — stores a hex color string.
+ */
+export function colorField(columnName: string) {
+  return {
+    toColumn: (name: string) => varchar(columnName || name, { length: 7 }),
+    $types: {
+      input: "" as string,
+      output: "" as string,
+      column: varchar("", { length: 7 }),
+    },
+    getLocation: () => "main" as const,
+    getMetadata: () => ({
+      type: "color" as const,
+      validation: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color"),
+    }),
+  };
 }
 ```
 
-Register it in the admin client's field registry.
+### Field Factory Contract
+
+A field factory must return an object with:
+
+| Property        | Type                        | Description                                    |
+| --------------- | --------------------------- | ---------------------------------------------- |
+| `toColumn()`    | `(name) => PgColumn \| null`| Create a Drizzle column (or `null` for virtual)|
+| `$types`        | `{ input, output, column }` | Type inference helpers                          |
+| `getLocation()` | `() => "main" \| "i18n" \| "virtual"` | Where the field is stored        |
+| `getMetadata()` | `() => { type, ... }`      | Metadata for admin introspection                |
+
+---
+
+## Admin: Field Renderer
+
+Register a React component to render the field in the admin panel.
+
+```tsx title="src/admin/fields/color-field.tsx"
+import { useFieldContext } from "@questpie/admin/client";
+
+export function ColorField() {
+  const { value, onChange, field } = useFieldContext();
+
+  return (
+    <div>
+      <label>{field.label}</label>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          type="color"
+          value={value || "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <input
+          type="text"
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#000000"
+          pattern="^#[0-9a-fA-F]{6}$"
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+### Register via File Convention
+
+Create a field definition file using the `field()` factory:
+
+```ts title="src/admin/fields/color.ts"
+import { field } from "@questpie/admin/client";
+
+export default field("color", {
+  component: () => import("./color-field.js"),
+  cell: () => import("./color-cell.js"),
+});
+```
+
+The optional `cell` component renders the field in list view table columns:
+
+```tsx title="src/admin/fields/color-cell.tsx"
+export function ColorCell({ value }: { value: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: 4,
+          backgroundColor: value || "#ccc",
+        }}
+      />
+      <span>{value || "—"}</span>
+    </div>
+  );
+}
+```
+
+---
+
+## Module Registration
+
+Package the server-side field factory into a module so it extends the `f` proxy:
+
+```ts title="src/modules/custom-fields.ts"
+import { module } from "questpie";
+import { colorField } from "../fields/color";
+import { currencyField } from "../fields/currency";
+
+export const customFieldsModule = module({
+  name: "custom-fields",
+  fields: {
+    color: colorField,
+    currency: currencyField,
+  },
+});
+```
+
+Register the module in `modules.ts`:
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/server";
+import { customFieldsModule } from "../../modules/custom-fields";
+
+export default [adminModule, customFieldsModule] as const;
+```
+
+After running `questpie generate`, the fields become available on the `f` builder:
+
+```ts
+collection("products")
+  .fields(({ f }) => ({
+    name: f.text({ required: true }),
+    brandColor: f.color(),        // Your custom field!
+    price: f.currency("USD"),     // Your custom field!
+  }))
+```
+
+---
+
+## Localized Custom Fields
+
+To support localization, return `"i18n"` from `getLocation()`:
+
+```ts
+getLocation: () => "i18n" as const,
+```
+
+This stores the field value in the i18n table, one per locale.
+
+---
 
 ## Related Pages
 
-- [Fields](/docs/backend/data-modeling/fields) — Built-in field types
-- [Registries](/docs/extend/registries) — Registry deep dive
-- [Building a Module](/docs/extend/building-a-module) — Package as a module
+- [Fields](/docs/backend/data-modeling/fields) -- Built-in field types
+- [Building a Module](/docs/extend/building-a-module) -- Package as a module
+- [Plugin API](/docs/reference/plugin-api) -- Codegen plugin reference

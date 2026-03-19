@@ -3,39 +3,83 @@ title: Filters & Saved Views
 description: Filter collection records and save filter presets.
 ---
 
-The admin panel generates filters automatically from your field definitions. Each field type maps to appropriate filter operators.
+The admin panel generates filters automatically from your field definitions. Each field type maps to appropriate filter operators — no configuration needed.
 
 ## Auto-Generated Filters
 
-| Field Type          | Filter Operators                         |
-| ------------------- | ---------------------------------------- |
-| `text`              | Contains, equals, starts with, ends with |
-| `number`            | Equals, greater than, less than, between |
-| `boolean`           | Is true, is false                        |
-| `select`            | Is, is not, in                           |
-| `date` / `datetime` | Before, after, between                   |
-| `relation`          | Is (picker)                              |
+| Field Type | Filter Operators |
+| --- | --- |
+| `text`, `textarea` | Contains, equals, starts with, ends with, is empty |
+| `number` | Equals, greater than, less than, between |
+| `boolean` | Is true, is false |
+| `select` | Is, is not, is any of |
+| `date`, `datetime` | Before, after, between, is today, is this week |
+| `time` | Before, after, between |
+| `relation` | Is (relation picker), is any of |
+| `email`, `url` | Contains, equals, starts with |
+
+## Using Filters
+
+1. Click the **Filter** button in the list view toolbar
+2. Select a field from the dropdown
+3. Choose an operator (e.g., "contains", "equals")
+4. Enter the filter value
+5. Click **Apply** — the list updates immediately
+
+Multiple filters combine with AND logic. Add as many filters as needed.
+
+## Filter Bar
+
+Active filters show as pills below the toolbar. Each pill shows:
+- Field name
+- Operator
+- Value
+- Remove (×) button
+
+Click any pill to edit it. Click × to remove it.
 
 ## Custom Filter Display
 
-Control which fields appear as filters in the list view toolbar. By default, all filterable fields are available.
+Control which fields appear as default filters in the list view configuration:
+
+```ts
+.list(({ v, f }) => v.collectionTable({
+  columns: [f.title, f.status, f.author],
+  filters: [f.status, f.author, f.createdAt],
+}))
+```
+
+Only the fields listed in `filters` appear in the filter dropdown. If not specified, all filterable fields are available.
 
 ## Saved Views
 
-Users can save filter combinations as named views for quick access:
+Users can save filter + sort combinations as named views for quick access:
 
-1. Apply filters to the list view
-2. Click "Save View"
-3. Name the view
-4. Access it from the views dropdown
+1. Apply filters and sorting to the list view
+2. Click **Save View** in the toolbar
+3. Name the view (e.g., "Published Posts", "My Drafts")
+4. Access saved views from the views dropdown
 
 Saved views persist per-user and include:
 
 - Active filters
-- Sort order
+- Sort order and direction
 - Visible columns
+- Column widths
+
+## Search
+
+The list view includes a text search field that searches across all text-based columns using PostgreSQL full-text search (if the collection has `.searchable()` configured) or simple LIKE queries.
+
+## URL State
+
+Filter and sort state is reflected in the URL query parameters. This means:
+- Filters survive page refresh
+- You can share filtered views via URL
+- Browser back/forward navigates filter history
 
 ## Related Pages
 
 - [List Views](/docs/workspace/views/list-views) — Table configuration
 - [Fields](/docs/backend/data-modeling/fields) — Field types
+- [Search](/docs/production/search) — Full-text search

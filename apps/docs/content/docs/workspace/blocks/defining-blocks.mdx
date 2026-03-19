@@ -8,7 +8,7 @@ Blocks are defined in `blocks/` using the `block()` factory. Each block has fiel
 ## Basic Block
 
 ```ts title="blocks/hero.ts"
-import { block } from "#questpie";
+import { block } from "#questpie/factories";
 
 export const heroBlock = block("hero")
 	.admin(({ c }) => ({
@@ -43,7 +43,7 @@ export const heroBlock = block("hero")
 Add a `blocks` field to any collection:
 
 ```ts title="collections/pages.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export const pages = collection("pages").fields(({ f }) => ({
 	title: f.text().required().localized(),
@@ -59,7 +59,7 @@ The admin renders a visual block editor for this field.
 Export multiple named blocks from one file:
 
 ```ts title="blocks/layout.ts"
-import { block } from "#questpie";
+import { block } from "#questpie/factories";
 
 export const twoColumnBlock = block("twoColumn")
 	.admin(({ c }) => ({

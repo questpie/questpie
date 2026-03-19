@@ -206,8 +206,8 @@ function FileConventionsSection() {
 		["posts.ts", "CRUD + API + ADMIN", "text-[var(--syntax-string)]"],
 		["users.ts", "AUTH-CONNECTED ENTITY", "text-[var(--syntax-string)]"],
 		["admin/stats.ts", "TYPE-SAFE ROUTE", "text-primary"],
-		["hero.ts", "VISUAL BLOCK", "text-[#FFB300]"],
-		["send-newsletter.ts", "BACKGROUND JOB", "text-[#40C4FF]"],
+		["hero.ts", "VISUAL BLOCK", "text-[var(--syntax-number)]"],
+		["send-newsletter.ts", "BACKGROUND JOB", "text-[var(--syntax-type)]"],
 		["stripe.ts", "SINGLETON SERVICE", "text-muted-foreground"],
 		["demo-data.ts", "DB SEED", "text-muted-foreground"],
 		["auth.ts", "BETTER AUTH", "text-muted-foreground"],
@@ -215,8 +215,8 @@ function FileConventionsSection() {
 
 	const byFeatureBadges = [
 		["blog/collections/posts.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["blog/blocks/hero.ts", "BLOCK", "text-[#FFB300]"],
-		["blog/jobs/newsletter.ts", "JOB", "text-[#40C4FF]"],
+		["blog/blocks/hero.ts", "BLOCK", "text-[var(--syntax-number)]"],
+		["blog/jobs/newsletter.ts", "JOB", "text-[var(--syntax-type)]"],
 		[
 			"shop/collections/products.ts",
 			"COLLECTION",
@@ -381,7 +381,7 @@ function Nav() {
 					<Link
 						to="/docs/$"
 						params={{ _splat: "start-here/first-app" }}
-						className="border-primary/40 bg-primary/10 text-primary hover:bg-primary inline-flex h-7 items-center justify-center border px-4 font-mono text-[10px] font-semibold tracking-wider uppercase transition-all hover:text-white"
+						className="border-primary/40 bg-primary/10 text-primary hover:bg-primary inline-flex h-7 items-center justify-center border px-4 font-mono text-[10px] font-semibold tracking-wider uppercase transition-all hover:text-primary-foreground"
 					>
 						Get started
 					</Link>
@@ -644,7 +644,7 @@ export function LandingPage() {
 							<Link
 								to="/docs/$"
 								params={{ _splat: "start-here/first-app" }}
-								className="bg-primary border-primary hover:bg-primary/80 border px-5 py-2.5 font-mono text-[11px] font-semibold tracking-wider text-white uppercase transition-colors"
+								className="bg-primary border-primary hover:bg-primary/80 border px-5 py-2.5 font-mono text-[11px] font-semibold tracking-wider text-primary-foreground uppercase transition-colors"
 							>
 								Get started &rarr;
 							</Link>
@@ -684,7 +684,7 @@ export function LandingPage() {
 								{`(({ f }) => ({
     title:   f.`}
 								<span className="text-[var(--syntax-function)]">text</span>(
-								<span className="text-[#FFB300]">255</span>
+								<span className="text-[var(--syntax-number)]">255</span>
 								).
 								<span className="text-[var(--syntax-function)]">required</span>
 								{`(),
@@ -727,7 +727,7 @@ export function LandingPage() {
 								{`(),
       desc:  f.`}
 								<span className="text-[var(--syntax-function)]">text</span>(
-								<span className="text-[#FFB300]">160</span>)
+								<span className="text-[var(--syntax-number)]">160</span>)
 								{`,
     }),
   }))
@@ -748,7 +748,7 @@ export function LandingPage() {
 								{`({ enabled: `}
 								<span className="text-primary font-semibold">true</span>
 								{`, maxVersions: `}
-								<span className="text-[#FFB300]">10</span>
+								<span className="text-[var(--syntax-number)]">10</span>
 								{` })`}
 							</pre>
 						</div>
@@ -761,7 +761,7 @@ export function LandingPage() {
 							].map((label) => (
 								<div
 									key={label}
-									className="bg-background px-3 py-2.5 font-mono text-[10px] tracking-wide text-[#00E676]"
+									className="bg-background px-3 py-2.5 font-mono text-[10px] tracking-wide text-[var(--status-success)]"
 								>
 									<span className="text-muted-foreground/40">→ </span>
 									{label}
@@ -804,7 +804,7 @@ export function LandingPage() {
 									{`(({ f }) => ({
     title:   f.`}
 									<span className="text-[var(--syntax-function)]">text</span>(
-									<span className="text-[#FFB300]">255</span>).
+									<span className="text-[var(--syntax-number)]">255</span>).
 									<span className="text-[var(--syntax-function)]">
 										required
 									</span>
@@ -851,7 +851,7 @@ export function LandingPage() {
 											key={title}
 											className="border-border flex gap-2.5 border-b py-1"
 										>
-											<span className="text-[#00E676]">&#10003;</span>
+											<span className="text-[var(--status-success)]">&#10003;</span>
 											<span className="text-foreground">{title}</span>
 											<span className="text-muted-foreground ml-1">
 												&mdash;{" "}
@@ -859,7 +859,7 @@ export function LandingPage() {
 													? desc.split("→").map((part, i) => (
 															<span key={i}>
 																{i > 0 && (
-																	<span className="text-[#00E676]"> → </span>
+																	<span className="text-[var(--status-success)]"> → </span>
 																)}
 																{part.trim()}
 															</span>
@@ -1005,7 +1005,7 @@ export function LandingPage() {
   .`}
 									<span className="text-[var(--syntax-function)]">list</span>
 									{`(({ v, f }) => v.`}
-									<span className="text-[var(--syntax-function)]">table</span>
+									<span className="text-[var(--syntax-function)]">collectionTable</span>
 									{`({
     columns: [`}
 									<span className="text-[var(--syntax-string)]">"title"</span>
@@ -1014,15 +1014,19 @@ export function LandingPage() {
 									{`, `}
 									<span className="text-[var(--syntax-string)]">"author"</span>
 									{`],
-    defaultSort: { field: f.createdAt, direction: "desc" },
+    defaultSort: { field: f.createdAt, direction: `}
+									<span className="text-[var(--syntax-string)]">"desc"</span>
+									{` },
   }))
   .`}
 									<span className="text-[var(--syntax-function)]">form</span>
 									{`(({ v, f }) => v.`}
-									<span className="text-[var(--syntax-function)]">form</span>
+									<span className="text-[var(--syntax-function)]">collectionForm</span>
 									{`({
     fields: [f.title, f.content],
-    sidebar: { fields: [f.status, f.author] },
+    sidebar: { position: `}
+									<span className="text-[var(--syntax-string)]">"right"</span>
+									{`, fields: [f.status, f.author] },
   }))`}
 								</pre>
 								<div className="border-border text-muted-foreground mx-6 mt-4 border-t pt-3 pb-4 text-[11px]">
@@ -1055,7 +1059,7 @@ export function LandingPage() {
 										<div className="border-border flex items-center justify-between border-b px-3 py-2">
 											<span className="text-foreground font-bold">Posts</span>
 											<div className="flex gap-1">
-												<span className="bg-primary px-1.5 py-0.5 text-[9px] text-white opacity-80">
+												<span className="bg-primary px-1.5 py-0.5 text-[9px] text-primary-foreground opacity-80">
 													EN
 												</span>
 												<span className="border-border text-muted-foreground border px-1.5 py-0.5 text-[9px]">
@@ -1085,7 +1089,7 @@ export function LandingPage() {
 													<td className="border-border text-foreground border-b px-2.5 py-1.5">
 														Getting Started Guide
 													</td>
-													<td className="border-border border-b px-2.5 py-1.5 text-[9px] tracking-wide text-[#00E676]">
+													<td className="border-border border-b px-2.5 py-1.5 text-[9px] tracking-wide text-[var(--status-success)]">
 														PUBLISHED
 													</td>
 													<td className="border-border text-muted-foreground border-b px-2.5 py-1.5">
@@ -1099,7 +1103,7 @@ export function LandingPage() {
 													<td className="border-border text-foreground border-b px-2.5 py-1.5">
 														Adapter Architecture
 													</td>
-													<td className="border-border border-b px-2.5 py-1.5 text-[9px] tracking-wide text-[#FFB300]">
+													<td className="border-border border-b px-2.5 py-1.5 text-[9px] tracking-wide text-[var(--syntax-number)]">
 														DRAFT
 													</td>
 													<td className="border-border text-muted-foreground border-b px-2.5 py-1.5">
@@ -1113,7 +1117,7 @@ export function LandingPage() {
 													<td className="border-border text-foreground border-b px-2.5 py-1.5">
 														File Conventions Deep Dive
 													</td>
-													<td className="border-border border-b px-2.5 py-1.5 text-[9px] tracking-wide text-[#00E676]">
+													<td className="border-border border-b px-2.5 py-1.5 text-[9px] tracking-wide text-[var(--status-success)]">
 														PUBLISHED
 													</td>
 													<td className="border-border text-muted-foreground border-b px-2.5 py-1.5">
@@ -1127,7 +1131,7 @@ export function LandingPage() {
 													<td className="text-foreground border-b-0 px-2.5 py-1.5">
 														Block System Overview
 													</td>
-													<td className="border-b-0 px-2.5 py-1.5 text-[9px] tracking-wide text-[#FFB300]">
+													<td className="border-b-0 px-2.5 py-1.5 text-[9px] tracking-wide text-[var(--syntax-number)]">
 														DRAFT
 													</td>
 													<td className="text-muted-foreground border-b-0 px-2.5 py-1.5">
@@ -1412,7 +1416,7 @@ export function LandingPage() {
 						<Link
 							to="/docs/$"
 							params={{ _splat: "start-here/first-app" }}
-							className="bg-primary border-primary hover:bg-primary/80 block border px-5 py-2.5 text-center font-mono text-[11px] tracking-wider text-white uppercase transition-colors"
+							className="bg-primary border-primary hover:bg-primary/80 block border px-5 py-2.5 text-center font-mono text-[11px] tracking-wider text-primary-foreground uppercase transition-colors"
 						>
 							Read the docs &rarr;
 						</Link>
