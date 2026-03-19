@@ -659,14 +659,16 @@ async function processFile(
 		const results: DiscoveredFile[] = [];
 		const namedMatches = matches.filter((m) => !m.isDefault);
 		const defaultMatch = matches.find((m) => m.isDefault);
-		// For named exports: key from filename (single match) or export name (multi).
+		// For named exports: prefer factory string arg (camelCase'd), fall back to export name.
 		// For default exports: key from factory string arg if available, else filename.
 		// See AGENTS.md "Codegen Key Derivation" for the full decision table.
 		const fileKey = deriveFileKey(relPath, category);
 		if (namedMatches.length > 0) {
 			// Named factory exports found — each becomes a separate entity
 			for (const m of namedMatches) {
-				const key = namedMatches.length === 1 ? fileKey : m.exportName;
+				const key = m.entityKey
+					? kebabToCamelCase(m.entityKey)
+					: m.exportName;
 				results.push({
 					absolutePath,
 					key,
