@@ -88,7 +88,7 @@ export function generateTemplate(options: TemplateOptions): string {
 
 	// Import createApp + types
 	lines.push(
-		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type Questpie, type AppContext, type Registry, type QuestpieConfig, type QueueClient, type CollectionAPI, type GetCollection } from "questpie";',
+		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type Questpie, type AppContext, type Registry, type QuestpieConfig, type QueueClient, type CollectionAPI } from "questpie";',
 	);
 	lines.push("");
 
@@ -501,30 +501,11 @@ export function generateTemplate(options: TemplateOptions): string {
 		const servicesCat = discovered.categories.get("services");
 		const hasServices = !!servicesCat;
 
-		// Pre-resolve per-collection API types to avoid lazy mapped type evaluation
-		// in IntelliSense. Each property is a concrete type alias that TS caches independently.
-		const collectionsCat = discovered.categories.get("collections");
-		const collectionFiles = collectionsCat ? [...collectionsCat.values()] : [];
-		if (collectionFiles.length > 0) {
-			lines.push(
-				"// ── Pre-resolved collection API types for IntelliSense ──────",
-			);
-			lines.push("type _CollectionsAPI = {");
-			for (const file of collectionFiles) {
-				lines.push(
-					`\t${safeKey(file.key)}: CollectionAPI<GetCollection<AppCollections, '${file.key}'>, AppCollections>;`,
-				);
-			}
-			// Include module collections (they're in _ModuleCollections which is part of AppCollections)
-			lines.push("} & {");
-			lines.push(
-				"\t[K in Exclude<keyof AppCollections, " +
-					collectionFiles.map((f) => `'${f.key}'`).join(" | ") +
-					">]: CollectionAPI<GetCollection<AppCollections, K>, AppCollections>;",
-			);
-			lines.push("};");
-			lines.push("");
-		}
+		// Skip App['api']['collections'] class getter indirection — map directly over AppCollections
+		lines.push(
+			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
+		);
+		lines.push("");
 
 		lines.push(
 			"// ── AppContext augmentation — auto-types ALL handlers ──────",
@@ -553,11 +534,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("\t\t\trealtime: App['realtime'];");
 		lines.push("");
 		lines.push("\t\t\t// Entity APIs");
-		lines.push(
-			collectionFiles.length > 0
-				? "\t\t\tcollections: _CollectionsAPI;"
-				: "\t\t\tcollections: App['api']['collections'];",
-		);
+		lines.push("\t\t\tcollections: _CollectionsAPI;");
 		lines.push("\t\t\tglobals: App['api']['globals'];");
 		lines.push("\t\t\ttables: App['tables'];");
 		lines.push("");
