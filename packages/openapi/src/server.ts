@@ -7,21 +7,27 @@
  * @example
  * ```ts
  * // questpie/server/modules.ts
- * import { adminModule } from "@questpie/admin/server";
  * import { openApiModule } from "@questpie/openapi";
  *
  * export default [
- *   adminModule,
- *   openApiModule({
- *     info: { title: "My API", version: "1.0.0" },
- *   }),
+ *   openApiModule,
  * ] as const;
+ * ```
+ *
+ * Then configure in `config/openapi.ts`:
+ * ```ts
+ * import { openApiConfig } from "@questpie/openapi";
+ *
+ * export default openApiConfig({
+ *   info: { title: "My API", version: "1.0.0" },
+ * });
  * ```
  */
 
 import type { Questpie } from "questpie";
 import { module, route } from "questpie";
 
+import { openApiPlugin } from "./plugin.js";
 import { generateOpenApiSpec as generate } from "./generator/index.js";
 import { serveScalarUI } from "./scalar.js";
 import type {
@@ -37,6 +43,30 @@ export type {
 	OpenApiSpec,
 	ScalarConfig,
 } from "./types.js";
+
+// ============================================================================
+// Config factory
+// ============================================================================
+
+/**
+ * Identity factory for `config/openapi.ts` — provides type inference.
+ *
+ * @example
+ * ```ts
+ * // config/openapi.ts
+ * import { openApiConfig } from "@questpie/openapi";
+ *
+ * export default openApiConfig({
+ *   info: { title: "My API", version: "1.0.0" },
+ *   scalar: { theme: "purple" },
+ * });
+ * ```
+ */
+export function openApiConfig(
+	config: OpenApiModuleConfig,
+): OpenApiModuleConfig {
+	return config;
+}
 
 // ============================================================================
 // Spec generation utility
@@ -87,6 +117,20 @@ function getCachedSpec(app: unknown, config: OpenApiConfig | undefined) {
 	return cached;
 }
 
+/**
+ * Read OpenAPI config from `app.state.config.openapi` (set via config/openapi.ts).
+ * Falls back to explicit config parameter if provided.
+ */
+function resolveOpenApiConfig(
+	app: Questpie<any>,
+	explicitConfig?: OpenApiConfig,
+): OpenApiModuleConfig | undefined {
+	if (explicitConfig) return explicitConfig;
+	return (app.state?.config as any)?.openapi as
+		| OpenApiModuleConfig
+		| undefined;
+}
+
 // ============================================================================
 // Route factories — for file convention usage
 // ============================================================================
@@ -96,14 +140,14 @@ function getCachedSpec(app: unknown, config: OpenApiConfig | undefined) {
  * Place in your `routes/` directory for automatic discovery.
  *
  * Spec is lazy-generated on first request and cached with ETag.
+ * Config is read from `config/openapi.ts` at request time, or from
+ * explicit parameter if provided.
  *
  * @example
  * ```ts title="routes/openapi-spec.ts"
  * import { openApiRoute } from "@questpie/openapi";
  *
- * export default openApiRoute({
- *   info: { title: "My API", version: "1.0.0" },
- * });
+ * export default openApiRoute();
  * ```
  */
 export function openApiRoute(config?: OpenApiConfig) {
@@ -112,7 +156,8 @@ export function openApiRoute(config?: OpenApiConfig) {
 		.raw()
 		.handler(async (ctx) => {
 			const app = (ctx as any).app as Questpie<any>;
-			const { json, etag } = getCachedSpec(app, config);
+			const resolved = resolveOpenApiConfig(app, config);
+			const { json, etag } = getCachedSpec(app, resolved);
 
 			if (ctx.request.headers.get("if-none-match") === etag) {
 				return new Response(null, { status: 304 });
@@ -121,7 +166,8 @@ export function openApiRoute(config?: OpenApiConfig) {
 			return new Response(json, {
 				headers: {
 					"Content-Type": "application/json",
-					"Cache-Control": "public, max-age=3600, stale-while-revalidate=43200",
+					"Cache-Control":
+						"public, max-age=3600, stale-while-revalidate=43200",
 					ETag: etag,
 					"Access-Control-Allow-Origin": "*",
 				},
@@ -137,7 +183,7 @@ export function openApiRoute(config?: OpenApiConfig) {
  * ```ts title="routes/docs.ts"
  * import { docsRoute } from "@questpie/openapi";
  *
- * export default docsRoute({ scalar: { theme: "purple" } });
+ * export default docsRoute();
  * ```
  */
 export function docsRoute(config?: OpenApiConfig & { scalar?: ScalarConfig }) {
@@ -147,46 +193,49 @@ export function docsRoute(config?: OpenApiConfig & { scalar?: ScalarConfig }) {
 		.raw()
 		.handler(async (ctx) => {
 			const app = (ctx as any).app as Questpie<any>;
-			const spec = generateOpenApiSpec(app, openApiConfig);
-			return serveScalarUI(spec, scalarConfig);
+			const resolved = resolveOpenApiConfig(app, openApiConfig);
+			const scalarOpts =
+				scalarConfig ?? (resolved as OpenApiModuleConfig)?.scalar;
+			const spec = generateOpenApiSpec(app, resolved);
+			return serveScalarUI(spec, scalarOpts);
 		});
 }
 
 // ============================================================================
-// Module — register in modules.ts for zero-config setup
+// Module — static plain object, register in modules.ts
 // ============================================================================
 
 /**
- * Create an OpenAPI module that registers spec + docs routes.
+ * OpenAPI module — registers spec + docs routes.
  *
  * Routes are served as:
- * - `GET /api/{specPath}` — OpenAPI 3.1 JSON spec (default: `openapi.json`)
- * - `GET /api/{docsPath}` — Scalar interactive API reference (default: `docs`)
+ * - `GET /api/openapi.json` — OpenAPI 3.1 JSON spec
+ * - `GET /api/docs` — Scalar interactive API reference
  *
- * @example
+ * Configure via `config/openapi.ts`:
+ * ```ts
+ * import { openApiConfig } from "@questpie/openapi";
+ * export default openApiConfig({ info: { title: "My API", version: "1.0.0" } });
+ * ```
+ *
+ * Or pass config directly for backward compatibility:
+ * ```ts
+ * openApiModule({ info: { title: "My API" } })
+ * ```
+ *
+ * @example Static (reads config from config/openapi.ts):
  * ```ts title="questpie/server/modules.ts"
- * import { adminModule } from "@questpie/admin/server";
  * import { openApiModule } from "@questpie/openapi";
- *
- * export default [
- *   adminModule,
- *   openApiModule({
- *     info: { title: "My API", version: "1.0.0" },
- *     scalar: { theme: "purple" },
- *   }),
- * ] as const;
+ * export default [openApiModule] as const;
  * ```
  */
-export function openApiModule(config?: OpenApiModuleConfig) {
-	const specKey = config?.specPath ?? "openapi.json";
-	const docsKey = config?.docsPath ?? "docs";
-	const { specPath: _, docsPath: __, scalar, ...openApiConfig } = config ?? {};
+export const openApiModule = module({
+	name: "questpie-openapi" as const,
+	plugin: openApiPlugin(),
+	routes: {
+		"openapi.json": openApiRoute(),
+		docs: docsRoute(),
+	},
+});
 
-	return module({
-		name: "questpie-openapi" as const,
-		routes: {
-			[specKey]: openApiRoute(openApiConfig),
-			[docsKey]: docsRoute({ ...openApiConfig, scalar }),
-		},
-	});
-}
+export default openApiModule;
