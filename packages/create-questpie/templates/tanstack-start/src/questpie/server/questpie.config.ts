@@ -15,15 +15,6 @@ export default runtimeConfig({
 	plugins: [adminPlugin()],
 	app: { url: env.APP_URL },
 	db: { url: env.DATABASE_URL },
-	auth: {
-		emailAndPassword: {
-			enabled: true,
-			requireEmailVerification: false,
-		},
-		baseURL: env.APP_URL,
-		basePath: "/api/auth",
-		secret: env.BETTER_AUTH_SECRET,
-	},
 	storage: { basePath: "/api" },
 	email: {
 		adapter: new ConsoleAdapter({ logHtml: false }),
