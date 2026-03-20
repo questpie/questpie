@@ -1,4 +1,4 @@
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 
 import type { AuditEntry } from "../hooks/use-audit-history";

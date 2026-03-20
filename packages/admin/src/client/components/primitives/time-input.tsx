@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";

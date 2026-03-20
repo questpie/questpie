@@ -8,7 +8,7 @@
  * Integrates with react-hook-form via Controller.
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 import { Controller, useFormContext } from "react-hook-form";
 

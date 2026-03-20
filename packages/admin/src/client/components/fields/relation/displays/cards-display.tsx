@@ -2,7 +2,7 @@
  * Cards Display - card grid with image, title, subtitle, meta
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 
 import { useResolveText, useTranslation } from "../../../../i18n/hooks";

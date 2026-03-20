@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { useState } from "react";
 
 export function LLMCopyButton({ markdownUrl }: { markdownUrl: string }) {

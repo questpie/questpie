@@ -2,6 +2,11 @@
  * Tiptap Extensions Configuration
  *
  * Factory functions for creating and configuring Tiptap extensions.
+ *
+ * `buildExtensions` returns synchronously when codeBlock is disabled (most
+ * editors), so the editor mounts on the very first render — no loading state.
+ * When codeBlock IS enabled, lowlight is lazy-loaded once and cached at module
+ * level, making subsequent builds instant.
  */
 
 import type { AnyExtension } from "@tiptap/core";
@@ -20,20 +25,88 @@ import StarterKit from "@tiptap/starter-kit";
 import { createSlashCommandExtension } from "./slash-commands";
 import type { RichTextFeatures, SlashCommandItem } from "./types";
 
+// ============================================================================
+// Module-level lowlight cache — loaded once, reused forever
+// ============================================================================
+
+let codeBlockExtension: AnyExtension | null = null;
+let codeBlockLoadPromise: Promise<AnyExtension> | null = null;
+
 /**
- * Build Tiptap extensions based on feature configuration
+ * Returns the cached CodeBlockLowlight extension synchronously if already
+ * loaded, otherwise starts a single shared fetch and returns the promise.
  */
-export async function buildExtensions({
-	features,
-	placeholder,
-	maxCharacters,
-	customExtensions,
-}: {
+function getCodeBlockExtension(): AnyExtension | Promise<AnyExtension> {
+	if (codeBlockExtension) return codeBlockExtension;
+
+	if (!codeBlockLoadPromise) {
+		codeBlockLoadPromise = Promise.all([
+			import("@tiptap/extension-code-block-lowlight"),
+			import("lowlight"),
+		]).then(([{ default: CodeBlockLowlight }, { common, createLowlight }]) => {
+			const lowlight = createLowlight(common);
+			codeBlockExtension = CodeBlockLowlight.configure({ lowlight });
+			return codeBlockExtension;
+		});
+	}
+
+	return codeBlockLoadPromise;
+}
+
+// ============================================================================
+// Extension builder
+// ============================================================================
+
+type BuildExtensionsOptions = {
 	features: Required<RichTextFeatures>;
 	placeholder?: string;
 	maxCharacters?: number;
 	customExtensions?: AnyExtension[];
-}): Promise<AnyExtension[]> {
+};
+
+/**
+ * Build Tiptap extensions based on feature configuration.
+ *
+ * Returns **synchronously** (`AnyExtension[]`) when no async deps are needed
+ * (i.e. codeBlock disabled, or lowlight already cached). Only returns a
+ * `Promise` on the first build that includes codeBlock.
+ */
+export function buildExtensions({
+	features,
+	placeholder,
+	maxCharacters,
+	customExtensions,
+}: BuildExtensionsOptions): AnyExtension[] | Promise<AnyExtension[]> {
+	const base = buildBaseExtensions({
+		features,
+		placeholder,
+		maxCharacters,
+		customExtensions,
+	});
+
+	if (!features.codeBlock) return base;
+
+	const codeBlock = getCodeBlockExtension();
+
+	// Cached — return sync
+	if (!((codeBlock as any) instanceof Promise)) {
+		return [...base, codeBlock as AnyExtension];
+	}
+
+	// First load — async
+	return (codeBlock as Promise<AnyExtension>).then((ext) => [...base, ext]);
+}
+
+// ============================================================================
+// Sync base extension builder (everything except lowlight)
+// ============================================================================
+
+function buildBaseExtensions({
+	features,
+	placeholder,
+	maxCharacters,
+	customExtensions,
+}: BuildExtensionsOptions): AnyExtension[] {
 	const starterKitConfig: Record<string, any> = {
 		codeBlock: false,
 	};
@@ -88,16 +161,6 @@ export async function buildExtensions({
 			TableHeader,
 			TableCell,
 		);
-	}
-
-	if (features.codeBlock) {
-		const [{ default: CodeBlockLowlight }, { common, createLowlight }] =
-			await Promise.all([
-				import("@tiptap/extension-code-block-lowlight"),
-				import("lowlight"),
-			]);
-		const lowlight = createLowlight(common);
-		extensions.push(CodeBlockLowlight.configure({ lowlight }));
 	}
 
 	if (features.characterCount && maxCharacters) {

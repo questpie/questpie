@@ -13,7 +13,7 @@
  * - /admin/:customPage -> Custom pages
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 
 import type { PageDefinition } from "../../builder/page/page.js";

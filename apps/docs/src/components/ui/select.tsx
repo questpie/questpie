@@ -1,5 +1,5 @@
 import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import type * as React from "react";
 
 import { cn } from "@/lib/utils";

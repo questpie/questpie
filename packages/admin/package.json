@@ -59,7 +59,7 @@
 		"@fontsource-variable/geist": "^5.2.8",
 		"@fontsource-variable/jetbrains-mono": "^5.2.8",
 		"@hookform/resolvers": "^5.1.0",
-		"@iconify/react": "^6.0.2",
+		"@iconify-icon/react": "^3.0.2",
 		"@questpie/tanstack-query": "workspace:*",
 		"@tailwindcss/vite": "^4.0.6",
 		"@tiptap/core": "^2.x",

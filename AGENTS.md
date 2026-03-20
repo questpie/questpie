@@ -400,7 +400,7 @@ Inside `packages/questpie`:
 ### Component Stack
 
 - **Primitives**: `@base-ui/react` (NOT @radix-ui).
-- **Icons**: `@iconify/react` with Phosphor set (`ph:icon-name`). NOT lucide-react, NOT @phosphor-icons/react.
+- **Icons**: `@iconify-icon/react` with Phosphor set (`ph:icon-name`). NOT lucide-react, NOT @phosphor-icons/react.
 - **Toast**: `sonner` — `toast.error()`, `toast.success()`.
 - **Adding components**: `bunx shadcn@latest add <name>` from `packages/admin`.
 
@@ -436,7 +436,7 @@ Use `ctx.collections.*` directly — no app import needed:
 
 ```ts
 // blocks/team.ts
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
 
 export const teamBlock = block("team")
 	.fields(({ f }) => ({

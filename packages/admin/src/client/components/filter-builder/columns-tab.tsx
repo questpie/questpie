@@ -15,7 +15,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { useState } from "react";
 
 import { useResolveText, useTranslation } from "../../i18n/hooks";

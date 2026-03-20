@@ -1,4 +1,4 @@
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { useState } from "react";
 
 import { useTranslation } from "../../i18n/hooks.js";

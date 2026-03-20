@@ -2,8 +2,14 @@
  * RichTextEditor Component
  *
  * Tiptap-based rich text editor with modern icon-based toolbar.
+ *
+ * Uses composition to avoid a race condition: the outer component loads
+ * extensions asynchronously and renders a skeleton; the inner component
+ * mounts only once extensions are ready, so `useEditor` always receives
+ * real extensions — never an empty array.
  */
 
+import type { AnyExtension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import * as React from "react";
 
@@ -32,9 +38,17 @@ import {
 // Re-export types
 export type { RichTextEditorProps } from "./types";
 
-// Re-export variant components
+// ============================================================================
+// Outer component — async extension loading + shell
+// ============================================================================
+
 /**
- * Main RichText Editor Component
+ * Main RichText Editor Component.
+ *
+ * Loads Tiptap extensions asynchronously (lowlight etc.) and delegates to
+ * `RichTextEditorCore` once they are ready. This avoids initializing
+ * `useEditor` with an empty extension list which causes the ProseMirror
+ * "Schema is missing its top node type" error.
  */
 export function RichTextEditor({
 	name,
@@ -66,66 +80,175 @@ export function RichTextEditor({
 		? resolveText(description)
 		: undefined;
 
-	// Popover states
-	const [linkOpen, setLinkOpen] = React.useState(false);
-	const [imageOpen, setImageOpen] = React.useState(false);
-	const lastEmittedValueRef = React.useRef<OutputValue | undefined>(undefined);
-	// Track pending value when editor is not ready yet (race condition fix)
-	const pendingValueRef = React.useRef<OutputValue | undefined>(undefined);
-
 	// Resolved feature flags with preset support
 	const resolvedFeatures = React.useMemo(() => {
-		// If preset is specified, merge with features
 		if (preset) {
 			return mergePresetFeatures(preset, features);
 		}
-		// Otherwise use default features + overrides
 		return {
 			...defaultFeatures,
 			...features,
 		};
 	}, [preset, features]);
 
-	const allowImages = resolvedFeatures.image && (enableImages ?? true);
-	const allowLinks = resolvedFeatures.link;
-	const allowTables = resolvedFeatures.table;
-	const allowBubbleMenu = resolvedFeatures.bubbleMenu;
-	const allowToolbar = resolvedFeatures.toolbar;
-	const allowCharacterCount =
-		resolvedFeatures.characterCount && (showCharacterCount || maxCharacters);
-
-	// Build Tiptap extensions (async due to lazy-loaded lowlight)
+	// Build Tiptap extensions.
+	// `buildExtensions` returns sync when codeBlock is disabled (most editors)
+	// or when lowlight is already cached. The useState initializer captures the
+	// sync result so the editor renders on the very first frame — no loading.
 	const [resolvedExtensions, setResolvedExtensions] = React.useState<
-		Awaited<ReturnType<typeof buildExtensions>> | undefined
-	>(undefined);
-
-	React.useEffect(() => {
-		let mounted = true;
-		buildExtensions({
+		AnyExtension[] | undefined
+	>(() => {
+		const result = buildExtensions({
 			features: resolvedFeatures,
 			placeholder: placeholder || t("editor.startWriting"),
 			maxCharacters,
 			customExtensions: extensions,
-		}).then((exts) => {
-			if (mounted) setResolvedExtensions(exts);
 		});
+		return result instanceof Promise ? undefined : result;
+	});
+
+	React.useEffect(() => {
+		let mounted = true;
+		const result = buildExtensions({
+			features: resolvedFeatures,
+			placeholder: placeholder || t("editor.startWriting"),
+			maxCharacters,
+			customExtensions: extensions,
+		});
+		if (result instanceof Promise) {
+			result.then((exts) => {
+				if (mounted) setResolvedExtensions(exts);
+			});
+		} else {
+			setResolvedExtensions(result);
+		}
 		return () => {
 			mounted = false;
 		};
 	}, [resolvedFeatures, placeholder, maxCharacters, extensions, t]);
 
-	// Initialize editor — no dependency array and no immediatelyRender:false
-	// to avoid known tiptap race conditions (issues #5432, #5333).
-	// Content sync and locale changes are handled via the effect below.
+	return (
+		<div className="space-y-2" data-disabled={disabled || readOnly}>
+			{resolvedLabel && (
+				<div className="flex items-center gap-2">
+					<Label htmlFor={name}>
+						{resolvedLabel}
+						{required && <span className="text-destructive ml-1">*</span>}
+					</Label>
+					{localized && <LocaleBadge locale={locale || "i18n"} />}
+				</div>
+			)}
+
+			{resolvedExtensions ? (
+				<RichTextEditorCore
+					name={name}
+					value={value}
+					onChange={onChange}
+					disabled={disabled}
+					readOnly={readOnly}
+					error={error}
+					locale={locale}
+					features={resolvedFeatures}
+					resolvedExtensions={resolvedExtensions}
+					showCharacterCount={showCharacterCount}
+					maxCharacters={maxCharacters}
+					enableImages={enableImages}
+					onImageUpload={onImageUpload}
+					imageCollection={imageCollection}
+					enableMediaLibrary={enableMediaLibrary}
+				/>
+			) : (
+				<div
+					className={cn(
+						"qp-rich-text-editor bg-input rounded-md border",
+						disabled || readOnly ? "opacity-60" : "",
+						error ? "border-destructive" : "border-border",
+					)}
+				>
+					<div className="text-muted-foreground flex min-h-[120px] items-center justify-center text-sm">
+						Loading editor...
+					</div>
+				</div>
+			)}
+
+			{/* Description & Error */}
+			{resolvedDescription && (
+				<p className="text-muted-foreground text-xs">{resolvedDescription}</p>
+			)}
+			{error && <p className="text-destructive text-xs">{error}</p>}
+		</div>
+	);
+}
+
+// ============================================================================
+// Inner component — editor instance + all interactive state
+// ============================================================================
+
+type RichTextEditorCoreProps = {
+	name: string;
+	value: any;
+	onChange?: (value: any) => void;
+	disabled?: boolean;
+	readOnly?: boolean;
+	error?: string;
+	locale?: string;
+	features: Required<RichTextEditorProps["features"]> &
+		Record<string, boolean>;
+	resolvedExtensions: AnyExtension[];
+	showCharacterCount?: boolean;
+	maxCharacters?: number;
+	enableImages?: boolean;
+	onImageUpload?: (file: File) => Promise<string>;
+	imageCollection?: string;
+	enableMediaLibrary?: boolean;
+};
+
+/**
+ * Core editor — only mounts when extensions are ready.
+ * `useEditor` always receives a complete extension list, so the ProseMirror
+ * schema always has its `doc` node.
+ */
+function RichTextEditorCore({
+	name,
+	value,
+	onChange,
+	disabled,
+	readOnly,
+	error,
+	locale,
+	features,
+	resolvedExtensions,
+	showCharacterCount,
+	maxCharacters,
+	enableImages,
+	onImageUpload,
+	imageCollection,
+	enableMediaLibrary,
+}: RichTextEditorCoreProps) {
+	// Popover states
+	const [linkOpen, setLinkOpen] = React.useState(false);
+	const [imageOpen, setImageOpen] = React.useState(false);
+	const lastEmittedValueRef = React.useRef<OutputValue | undefined>(undefined);
+
+	const allowImages = features.image && (enableImages ?? true);
+	const allowLinks = features.link;
+	const allowBubbleMenu = features.bubbleMenu;
+	const allowToolbar = features.toolbar;
+	const allowCharacterCount =
+		features.characterCount && (showCharacterCount || maxCharacters);
+
+	const isEditable = !disabled && !readOnly;
+
+	// Initialize editor — extensions are guaranteed to be loaded at this point.
 	const editor = useEditor({
-		extensions: resolvedExtensions ?? [],
+		extensions: resolvedExtensions,
 		content: value ?? "",
 		editorProps: {
 			attributes: {
 				class: "qp-rich-text-editor__content",
 			},
 		},
-		editable: !disabled && !readOnly,
+		editable: isEditable,
 		onUpdate: ({ editor: currentEditor }) => {
 			if (disabled || readOnly) return;
 			const nextValue = getOutput(currentEditor);
@@ -134,7 +257,6 @@ export function RichTextEditor({
 		},
 	});
 
-	const isEditable = !disabled && !readOnly;
 	const headingValue = getHeadingLevel(editor);
 	const inTable = editor?.isActive("table") ?? false;
 
@@ -153,45 +275,23 @@ export function RichTextEditor({
 		if (prevLocaleRef.current !== locale) {
 			prevLocaleRef.current = locale;
 			lastEmittedValueRef.current = undefined;
-			pendingValueRef.current = undefined;
 		}
 	}, [locale]);
 
 	React.useEffect(() => {
-		// If value changed but editor not ready, store as pending
-		if (!editor) {
-			if (value !== undefined && !isSameValue(value, pendingValueRef.current)) {
-				pendingValueRef.current = value as OutputValue;
-			}
-			return;
-		}
+		if (!editor) return;
+		if (value === undefined) return;
+		if (isSameValue(value, lastEmittedValueRef.current)) return;
 
-		// Editor is ready - apply pending value first, then current value
-		const valueToApply = pendingValueRef.current ?? value;
-		pendingValueRef.current = undefined; // Clear pending after use
-
-		if (valueToApply === undefined) return;
-		if (isSameValue(valueToApply, lastEmittedValueRef.current)) return;
-
-		lastEmittedValueRef.current = valueToApply as OutputValue;
-		editor.commands.setContent(valueToApply ?? "", false);
+		lastEmittedValueRef.current = value as OutputValue;
+		editor.commands.setContent(value ?? "", false);
 	}, [editor, value]);
 
 	// Character count
 	const characterCount = getCharacterCount(editor);
 
 	return (
-		<div className="space-y-2" data-disabled={disabled || readOnly}>
-			{resolvedLabel && (
-				<div className="flex items-center gap-2">
-					<Label htmlFor={name}>
-						{resolvedLabel}
-						{required && <span className="text-destructive ml-1">*</span>}
-					</Label>
-					{localized && <LocaleBadge locale={locale || "i18n"} />}
-				</div>
-			)}
-
+		<>
 			<div
 				className={cn(
 					"qp-rich-text-editor bg-input rounded-md border",
@@ -203,7 +303,7 @@ export function RichTextEditor({
 				{editor && allowToolbar && (
 					<RichTextToolbar
 						editor={editor}
-						features={resolvedFeatures}
+						features={features}
 						disabled={!isEditable}
 						headingValue={headingValue}
 						onHeadingChange={(value) => {
@@ -244,7 +344,7 @@ export function RichTextEditor({
 				{editor && allowBubbleMenu && (
 					<RichTextBubbleMenu
 						editor={editor}
-						features={resolvedFeatures}
+						features={features}
 						disabled={!isEditable}
 						onLinkClick={() => setLinkOpen(true)}
 					/>
@@ -298,12 +398,6 @@ export function RichTextEditor({
 					enableMediaLibrary={enableMediaLibrary}
 				/>
 			)}
-
-			{/* Description & Error */}
-			{resolvedDescription && (
-				<p className="text-muted-foreground text-xs">{resolvedDescription}</p>
-			)}
-			{error && <p className="text-destructive text-xs">{error}</p>}
-		</div>
+		</>
 	);
 }

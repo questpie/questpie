@@ -2,7 +2,7 @@
  * Forgot Password Form - request password reset email
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 

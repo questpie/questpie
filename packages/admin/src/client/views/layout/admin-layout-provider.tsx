@@ -223,6 +223,7 @@ function getDefaultQueryClient(): QueryClient {
 			defaultOptions: {
 				queries: {
 					staleTime: 60 * 1000, // 1 minute
+					refetchOnWindowFocus: false, // Admin panel — no silent refetch on tab switch
 					retry: (failureCount, error) => {
 						// Don't retry on 401 (session expired)
 						const status =

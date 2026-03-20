@@ -7,7 +7,7 @@
  * The `backgroundImage` upload field is expanded via `.prefetch({ with: ['backgroundImage'] })`.
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";

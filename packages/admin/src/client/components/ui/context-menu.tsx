@@ -1,5 +1,5 @@
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import type * as React from "react";
 
 import { cn } from "#questpie/admin/client/lib/utils";

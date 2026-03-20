@@ -46,7 +46,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import {

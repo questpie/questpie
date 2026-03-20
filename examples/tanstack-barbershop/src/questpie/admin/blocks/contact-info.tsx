@@ -5,7 +5,7 @@
  * Design: Two-column layout with info cards and map.
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 
 import { useTranslation } from "../../../lib/providers/locale-provider";
 import { cn } from "../../../lib/utils";

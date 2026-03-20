@@ -5,7 +5,7 @@
  * Similar to EmbeddedCollectionField but with inline field definitions.
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 

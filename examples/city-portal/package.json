@@ -4,7 +4,8 @@
 	"private": true,
 	"type": "module",
 	"imports": {
-		"#questpie": "./src/questpie/server/.generated/factories.ts"
+		"#questpie": "./src/questpie/server/.generated/index.ts",
+		"#questpie/*": "./src/questpie/server/.generated/*"
 	},
 	"scripts": {
 		"dev": "bun --bun vite dev --port 3001",
@@ -17,7 +18,7 @@
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",
 		"@fontsource-variable/inter": "^5.2.8",
-		"@iconify/react": "^6.0.2",
+		"@iconify-icon/react": "^3.0.2",
 		"@questpie/admin": "workspace:*",
 		"@questpie/openapi": "workspace:*",
 		"@questpie/tanstack-query": "workspace:*",

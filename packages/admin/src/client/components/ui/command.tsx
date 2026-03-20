@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { Command as CommandPrimitive } from "cmdk";
 import type * as React from "react";
 

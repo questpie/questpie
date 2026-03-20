@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { useQuery } from "@tanstack/react-query";
 import type * as React from "react";
 import { useCallback, useDeferredValue, useId, useMemo, useState } from "react";

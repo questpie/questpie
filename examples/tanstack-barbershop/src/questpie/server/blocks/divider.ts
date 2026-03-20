@@ -1,4 +1,4 @@
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
 
 import { layout } from "./_categories";
 

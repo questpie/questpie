@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import type * as React from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 

@@ -2,7 +2,7 @@
  * Reset Password Form - set new password with token
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 import { useForm, useWatch } from "react-hook-form";
 

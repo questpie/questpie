@@ -2,7 +2,7 @@
  * Grid Display - compact grid with thumbnails
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 
 import { useTranslation } from "../../../../i18n/hooks";

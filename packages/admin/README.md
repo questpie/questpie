@@ -200,9 +200,9 @@ export const {
 ```tsx
 // routes/admin.tsx
 import { AdminRouter } from "@questpie/admin/client";
-import { admin } from "~/questpie/admin/builder";
-import { appClient } from "~/lib/client";
-import { queryClient } from "~/lib/query-client";
+import { admin } from "@/questpie/admin/builder";
+import { appClient } from "@/lib/client";
+import { queryClient } from "@/lib/query-client";
 
 export default function AdminRoute() {
 	return (
@@ -326,7 +326,7 @@ import "@questpie/admin/styles/index.css";
 ## Component Stack
 
 - **Primitives**: `@base-ui/react` (NOT Radix)
-- **Icons**: `@iconify/react` with Phosphor set (`ph:icon-name`)
+- **Icons**: `@iconify-icon/react` with Phosphor set (`ph:icon-name`)
 - **Styling**: Tailwind CSS v4 + shadcn components
 - **Toast**: `sonner`
 

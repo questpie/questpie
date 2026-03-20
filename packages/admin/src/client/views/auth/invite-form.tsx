@@ -2,7 +2,7 @@
  * Invite Form - invite new users to the admin
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 import { useForm, useWatch } from "react-hook-form";
 

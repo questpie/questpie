@@ -5,7 +5,7 @@
  * Provides consistent styling, header actions, and loading/error states.
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import type * as React from "react";
 
 import type { WidgetAction, WidgetCardVariant } from "../../builder";

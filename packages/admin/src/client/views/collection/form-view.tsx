@@ -5,7 +5,7 @@
  * This is the default edit view registered in the admin view registry.
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CollectionSchema, FieldReactiveSchema } from "questpie/client";
 import { QuestpieClientError } from "questpie/client";

@@ -4,7 +4,7 @@
  * Displays all active barbers with their specialties and bio snippets.
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getAllBarbers } from "@/lib/getBarbers.function";

@@ -8,6 +8,10 @@ import {
 } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import { authClient } from "@/lib/auth-client";
+import { client } from "@/lib/client";
+import { queryClient } from "@/lib/query-client";
+import admin from "@/questpie/admin/.generated/client";
 /**
  * Admin Layout Route
  *
@@ -19,10 +23,6 @@ import {
 	ScopePicker,
 	ScopeProvider,
 } from "@questpie/admin/client";
-import { authClient } from "~/lib/auth-client";
-import { client } from "~/lib/client";
-import { queryClient } from "~/lib/query-client";
-import admin from "~/questpie/admin/.generated/client";
 
 import adminCss from "../admin.css?url";
 

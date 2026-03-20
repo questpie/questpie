@@ -5,7 +5,7 @@
  * Uses WidgetCard for consistent styling.
  */
 
-import { Icon as IconifyIcon } from "@iconify/react";
+import { Icon as IconifyIcon } from "@iconify-icon/react";
 import { useQuery } from "@tanstack/react-query";
 import type * as React from "react";
 

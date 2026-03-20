@@ -4,7 +4,7 @@
  * Displays individual barber bio, specialties, and their specific services.
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 
 import { getBarber } from "@/lib/getBarbers.function";

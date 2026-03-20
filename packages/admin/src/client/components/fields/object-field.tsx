@@ -5,7 +5,7 @@
  * Supports wrapper modes (flat, collapsible) and layout modes (stack, inline, grid).
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import * as React from "react";
 
 import type { FieldInstance } from "../../builder/field/field";

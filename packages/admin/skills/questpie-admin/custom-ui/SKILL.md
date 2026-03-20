@@ -89,7 +89,7 @@ Once registered and codegen runs, the field becomes available on the `f` builder
 Create a React component for the field's edit form:
 
 ```tsx title="admin/fields/color.tsx"
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 
 function ColorFieldRenderer({ value, onChange }) {
 	return (
@@ -248,7 +248,7 @@ When building custom admin UI, use these patterns:
 ### Icons
 
 ```tsx
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 
 // Phosphor icon set with ph: prefix
 <Icon icon="ph:house" width={20} height={20} />
@@ -302,6 +302,6 @@ toast.error("Failed to save");
 
 5. **MEDIUM: Importing from `@radix-ui/*`** — QUESTPIE admin uses `@base-ui/react`. Never import Radix primitives.
 
-6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`** — use `@iconify/react` with `ph:` prefix for all icons.
+6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`** — use `@iconify-icon/react` with `ph:` prefix for all icons.
 
 7. **LOW: Not using shadcn components** — prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin has a consistent brutalist design system.

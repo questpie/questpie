@@ -1,5 +1,5 @@
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 
 import { cn } from "../../lib/utils";
 

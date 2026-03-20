@@ -193,8 +193,8 @@ export default [adminModule] as const;
 ```typescript
 // routes/admin.tsx
 import { AdminLayoutProvider } from "@questpie/admin/client";
-import { admin } from "~/questpie/admin/admin";
-import { client } from "~/lib/client";
+import { admin } from "@/questpie/admin/admin";
+import { client } from "@/lib/client";
 
 function AdminLayout() {
   return (

@@ -5,7 +5,7 @@
  * Can fetch options from a collection or use static options.
  */
 
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify-icon/react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
