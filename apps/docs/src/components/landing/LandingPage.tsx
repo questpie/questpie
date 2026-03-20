@@ -146,54 +146,131 @@ const ADAPTER_CATEGORIES: AdapterCategory[] = [
 		key: "kv",
 		label: "KV / Cache",
 		options: [
-			{ label: "IORedis", fn: "ioredisAdapter", code: "kv: { adapter: ioredisAdapter() }" },
-			{ label: "Memory", fn: "memoryAdapter", code: "kv: { adapter: memoryAdapter() }" },
-			{ label: "CF KV", fn: "cfKvAdapter", code: "kv: { adapter: cfKvAdapter() }", soon: true },
+			{
+				label: "IORedis",
+				fn: "ioredisAdapter",
+				code: "kv: { adapter: ioredisAdapter() }",
+			},
+			{
+				label: "Memory",
+				fn: "memoryAdapter",
+				code: "kv: { adapter: memoryAdapter() }",
+			},
+			{
+				label: "CF KV",
+				fn: "cfKvAdapter",
+				code: "kv: { adapter: cfKvAdapter() }",
+				soon: true,
+			},
 		],
 	},
 	{
 		key: "queue",
 		label: "Queue",
 		options: [
-			{ label: "pg-boss", fn: "pgBossAdapter", code: "queue: { adapter: pgBossAdapter() }" },
-			{ label: "CF Queues", fn: "cfQueuesAdapter", code: "queue: { adapter: cfQueuesAdapter() }" },
-			{ label: "BullMQ", fn: "bullmqAdapter", code: "queue: { adapter: bullmqAdapter() }", soon: true },
+			{
+				label: "pg-boss",
+				fn: "pgBossAdapter",
+				code: "queue: { adapter: pgBossAdapter() }",
+			},
+			{
+				label: "CF Queues",
+				fn: "cfQueuesAdapter",
+				code: "queue: { adapter: cfQueuesAdapter() }",
+			},
+			{
+				label: "BullMQ",
+				fn: "bullmqAdapter",
+				code: "queue: { adapter: bullmqAdapter() }",
+				soon: true,
+			},
 		],
 	},
 	{
 		key: "search",
 		label: "Search",
 		options: [
-			{ label: "Postgres FTS", fn: "postgresSearchAdapter", code: "search: postgresSearchAdapter()" },
-			{ label: "pgvector", fn: "pgvectorAdapter", code: "search: pgvectorAdapter()", soon: true },
-			{ label: "Meilisearch", fn: "meilisearchAdapter", code: "search: meilisearchAdapter()", soon: true },
+			{
+				label: "Postgres FTS",
+				fn: "postgresSearchAdapter",
+				code: "search: postgresSearchAdapter()",
+			},
+			{
+				label: "pgvector",
+				fn: "pgvectorAdapter",
+				code: "search: pgvectorAdapter()",
+				soon: true,
+			},
+			{
+				label: "Meilisearch",
+				fn: "meilisearchAdapter",
+				code: "search: meilisearchAdapter()",
+				soon: true,
+			},
 		],
 	},
 	{
 		key: "realtime",
 		label: "Realtime",
 		options: [
-			{ label: "PG NOTIFY", fn: "pgNotifyAdapter", code: "realtime: { adapter: pgNotifyAdapter() }" },
-			{ label: "Redis Streams", fn: "redisStreamsAdapter", code: "realtime: { adapter: redisStreamsAdapter() }" },
+			{
+				label: "PG NOTIFY",
+				fn: "pgNotifyAdapter",
+				code: "realtime: { adapter: pgNotifyAdapter() }",
+			},
+			{
+				label: "Redis Streams",
+				fn: "redisStreamsAdapter",
+				code: "realtime: { adapter: redisStreamsAdapter() }",
+			},
 		],
 	},
 	{
 		key: "storage",
 		label: "Storage",
 		options: [
-			{ label: "S3", fn: "s3Driver", code: 'storage: { driver: s3Driver({ bucket: "assets" }) }' },
-			{ label: "R2", fn: "r2Driver", code: 'storage: { driver: r2Driver({ bucket: "assets" }) }' },
-			{ label: "GCS", fn: "gcsDriver", code: 'storage: { driver: gcsDriver({ bucket: "assets" }) }' },
-			{ label: "Local", fn: "localDriver", code: 'storage: { driver: localDriver({ dir: "./uploads" }) }' },
+			{
+				label: "S3",
+				fn: "s3Driver",
+				code: 'storage: { driver: s3Driver({ bucket: "assets" }) }',
+			},
+			{
+				label: "R2",
+				fn: "r2Driver",
+				code: 'storage: { driver: r2Driver({ bucket: "assets" }) }',
+			},
+			{
+				label: "GCS",
+				fn: "gcsDriver",
+				code: 'storage: { driver: gcsDriver({ bucket: "assets" }) }',
+			},
+			{
+				label: "Local",
+				fn: "localDriver",
+				code: 'storage: { driver: localDriver({ dir: "./uploads" }) }',
+			},
 		],
 	},
 	{
 		key: "email",
 		label: "Email",
 		options: [
-			{ label: "SMTP", fn: "smtpAdapter", code: "email: { adapter: smtpAdapter() }" },
-			{ label: "Console", fn: "consoleAdapter", code: "email: { adapter: consoleAdapter() }" },
-			{ label: "Resend", fn: "resendAdapter", code: "email: { adapter: resendAdapter() }", soon: true },
+			{
+				label: "SMTP",
+				fn: "smtpAdapter",
+				code: "email: { adapter: smtpAdapter() }",
+			},
+			{
+				label: "Console",
+				fn: "consoleAdapter",
+				code: "email: { adapter: consoleAdapter() }",
+			},
+			{
+				label: "Resend",
+				fn: "resendAdapter",
+				code: "email: { adapter: resendAdapter() }",
+				soon: true,
+			},
 		],
 	},
 ];
@@ -215,7 +292,7 @@ function AdapterDropdown({
 			<button
 				type="button"
 				onClick={() => setOpen((v) => !v)}
-				className="text-[var(--syntax-function)] cursor-pointer border-b border-dashed border-[var(--syntax-function)]/40 transition-colors hover:border-[var(--syntax-function)]"
+				className="cursor-pointer border-b border-dashed border-[var(--syntax-function)]/40 text-[var(--syntax-function)] transition-colors hover:border-[var(--syntax-function)]"
 			>
 				{current.fn}
 				<Icon
@@ -254,7 +331,13 @@ function AdapterDropdown({
 											: "text-foreground hover:bg-secondary",
 								)}
 							>
-								<span className={opt.soon ? "text-muted-foreground/40" : "text-[var(--syntax-function)]"}>
+								<span
+									className={
+										opt.soon
+											? "text-muted-foreground/40"
+											: "text-[var(--syntax-function)]"
+									}
+								>
 									{opt.fn}
 								</span>
 								{opt.soon && (
@@ -267,10 +350,10 @@ function AdapterDropdown({
 						<Link
 							to="/docs/$"
 							params={{ _splat: "extend/custom-adapters" }}
-							className="text-primary hover:bg-secondary mt-1 flex w-full items-center gap-2 border-t border-border px-3 py-1.5 text-left font-mono text-[11px] transition-colors"
+							className="text-primary hover:bg-secondary border-border mt-1 flex w-full items-center gap-2 border-t px-3 py-1.5 text-left font-mono text-[11px] transition-colors"
 							onClick={() => setOpen(false)}
 						>
-							<Icon icon="ph:code" width={12} height={12} />
+							<Icon ssr icon="ph:code" width={12} height={12} />
 							Write your own
 						</Link>
 					</div>
@@ -346,9 +429,14 @@ function SwapAnythingSection() {
 							Custom
 						</div>
 						<div className="flex items-center gap-1.5 font-mono text-[12px]">
-							<Icon icon="ph:code" width={14} height={14} />
+							<Icon ssr icon="ph:code" width={14} height={14} />
 							Write your own adapter
-							<Icon icon="ph:arrow-right" width={12} height={12} className="ml-auto" />
+							<Icon
+								icon="ph:arrow-right"
+								width={12}
+								height={12}
+								className="ml-auto"
+							/>
 						</div>
 					</Link>
 				</div>
@@ -954,7 +1042,7 @@ export function LandingPage() {
 										className="bg-primary text-primary-foreground hover:bg-primary/80 inline-flex items-center gap-2 px-4 py-2 font-mono text-[13px] font-semibold tracking-[0.04em] uppercase transition-colors"
 									>
 										Get started{" "}
-										<Icon icon="ph:arrow-right" width={16} height={16} />
+										<Icon ssr icon="ph:arrow-right" width={16} height={16} />
 									</Link>
 									<a
 										href="https://github.com/questpie/questpie"
@@ -962,8 +1050,8 @@ export function LandingPage() {
 										rel="noreferrer"
 										className="border-border text-foreground hover:bg-secondary inline-flex items-center gap-2 border px-4 py-2 font-mono text-[13px] font-semibold tracking-[0.04em] uppercase transition-colors"
 									>
-										<Icon icon="ph:github-logo" width={16} height={16} /> GitHub
-										&#9733;
+										<Icon ssr icon="ph:github-logo" width={16} height={16} />{" "}
+										GitHub &#9733;
 									</a>
 								</div>
 								<div className="flex flex-wrap gap-2">
@@ -1077,17 +1165,18 @@ export function LandingPage() {
 								</TerminalBlock>
 								<div className="bg-primary text-primary-foreground border-border absolute -top-6 -right-6 hidden border p-4 font-mono text-[12px] shadow-2xl md:block">
 									<div className="mb-1 flex items-center gap-2">
-										<Icon icon="ph:check" width={12} height={12} /> REST API
+										<Icon ssr icon="ph:check" width={12} height={12} /> REST API
 									</div>
 									<div className="mb-1 flex items-center gap-2">
-										<Icon icon="ph:check" width={12} height={12} /> Typed client
-										SDK
+										<Icon ssr icon="ph:check" width={12} height={12} /> Typed
+										client SDK
 									</div>
 									<div className="mb-1 flex items-center gap-2">
-										<Icon icon="ph:check" width={12} height={12} /> Admin panel
+										<Icon ssr icon="ph:check" width={12} height={12} /> Admin
+										panel
 									</div>
 									<div className="flex items-center gap-2">
-										<Icon icon="ph:check" width={12} height={12} /> Zod
+										<Icon ssr icon="ph:check" width={12} height={12} /> Zod
 										validation
 									</div>
 								</div>
@@ -1199,7 +1288,7 @@ export function LandingPage() {
 									].map(([icon, title, desc]) => (
 										<div key={title} className="bg-background p-6">
 											<div className="text-primary mb-2 flex items-center gap-2">
-												<Icon icon={icon} width={16} height={16} />
+												<Icon ssr icon={icon} width={16} height={16} />
 												<span className="text-foreground font-mono text-[13px] font-bold">
 													{title}
 												</span>
@@ -1628,7 +1717,7 @@ export function LandingPage() {
 								className="bg-primary text-primary-foreground hover:bg-primary/80 inline-flex items-center gap-2 px-4 py-2 font-mono text-[13px] font-semibold tracking-[0.04em] uppercase transition-colors"
 							>
 								Read the docs{" "}
-								<Icon icon="ph:arrow-right" width={16} height={16} />
+								<Icon ssr icon="ph:arrow-right" width={16} height={16} />
 							</Link>
 							<Link
 								to="/docs/$"
@@ -1636,7 +1725,7 @@ export function LandingPage() {
 								className="border-border text-foreground hover:bg-secondary inline-flex items-center gap-2 border px-4 py-2 font-mono text-[13px] font-semibold tracking-[0.04em] uppercase transition-colors"
 							>
 								Browse examples{" "}
-								<Icon icon="ph:arrow-right" width={16} height={16} />
+								<Icon ssr icon="ph:arrow-right" width={16} height={16} />
 							</Link>
 							<a
 								href="https://github.com/questpie/questpie"
@@ -1644,8 +1733,8 @@ export function LandingPage() {
 								rel="noreferrer"
 								className="text-primary inline-flex items-center gap-2 bg-transparent font-mono text-[13px] font-semibold tracking-[0.04em] uppercase hover:underline"
 							>
-								<Icon icon="ph:github-logo" width={16} height={16} /> Star on
-								GitHub
+								<Icon ssr icon="ph:github-logo" width={16} height={16} /> Star
+								on GitHub
 							</a>
 						</div>
 					</section>
