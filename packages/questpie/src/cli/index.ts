@@ -7,7 +7,6 @@ import { devCommand, generateCommand } from "./commands/codegen.js";
 import { generateMigrationCommand } from "./commands/generate.js";
 import { pushCommand } from "./commands/push.js";
 import { runMigrationCommand } from "./commands/run.js";
-import { generateSeedCommand } from "./commands/seed-generate.js";
 import { runSeedCommand } from "./commands/seed.js";
 
 const program = new Command();
@@ -263,32 +262,6 @@ program
 			});
 		} catch (error) {
 			console.error("❌ Failed to run seeds:", error);
-			process.exit(1);
-		}
-	});
-
-// Generate seed
-program
-	.command("seed:generate")
-	.description("Generate a new seed file")
-	.option(
-		"-c, --config <path>",
-		"Path to app config file",
-		"questpie.config.ts",
-	)
-	.requiredOption("-n, --name <name>", "Seed name (e.g., adminUser, demoData)")
-	.option("--category <category>", "Seed category (required, dev, test)", "dev")
-	.option("--dry-run", "Show what would be generated without creating files")
-	.action(async (options) => {
-		try {
-			await generateSeedCommand({
-				configPath: options.config,
-				name: options.name,
-				category: options.category,
-				dryRun: options.dryRun,
-			});
-		} catch (error) {
-			console.error("❌ Failed to generate seed:", error);
 			process.exit(1);
 		}
 	});
