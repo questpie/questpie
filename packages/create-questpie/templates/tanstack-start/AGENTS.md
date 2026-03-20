@@ -66,7 +66,11 @@ src/
     server/              ← WHAT: data contracts and behavior
       questpie.config.ts ← App config: runtimeConfig({ plugins: [adminPlugin()], ... })
       modules.ts         ← Module dependencies (adminModule, openApiModule, etc.)
-      auth.ts            ← Auth config (satisfies AuthConfig)
+      config/            ← Typed configuration files
+        auth.ts          ← authConfig({...}) — Better Auth options
+        app.ts           ← appConfig({ locale, access, hooks, context })
+        admin.ts         ← adminConfig({ sidebar, dashboard, branding, locale })
+        openapi.ts       ← openApiConfig({ info, scalar })
       .generated/        ← Codegen output (app instance + App type)
         index.ts
       collections/       ← One file per collection (auto-discovered)
@@ -108,9 +112,12 @@ src/
 
 ### Key Files
 
-- **`src/questpie/server/questpie.config.ts`** — App config: `runtimeConfig({ plugins: [adminPlugin()], db, app, ... })`. Sidebar, dashboard, branding are configured via admin singleton factories.
-- **`src/questpie/server/modules.ts`** — Module dependencies: `export default [adminModule, openApiModule({ ... })] as const`.
-- **`src/questpie/server/auth.ts`** — Auth config (`export default { ... } satisfies AuthConfig`).
+- **`src/questpie/server/questpie.config.ts`** — App config: `runtimeConfig({ plugins: [adminPlugin()], db, app, ... })`.
+- **`src/questpie/server/modules.ts`** — Module dependencies: `export default [adminModule, openApiModule] as const`.
+- **`src/questpie/server/config/auth.ts`** — Auth config via `authConfig()` factory.
+- **`src/questpie/server/config/app.ts`** — App config (locale, access, hooks, context) via `appConfig()` factory.
+- **`src/questpie/server/config/admin.ts`** — Admin config (sidebar, dashboard, branding, locale) via `adminConfig()` factory.
+- **`src/questpie/server/config/openapi.ts`** — OpenAPI config via `openApiConfig()` factory.
 - **`src/questpie/server/.generated/index.ts`** — Codegen output. Exports typed `app` instance and `App` type. Run `bunx questpie generate` to regenerate.
 - **`src/questpie/admin/.generated/client.ts`** — Codegen output: pre-built admin client config. Run `bunx questpie generate` to regenerate.
 - **`src/lib/env.ts`** — Type-safe env variables via `@t3-oss/env-core`. Add new env vars here with Zod schemas.

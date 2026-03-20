@@ -151,7 +151,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public search: SearchService;
 	public realtime: RealtimeService;
 	/** Extension state for plugin-contributed configurations (admin layout, blocks, sidebar, etc.) */
-	public state?: Record<string, unknown>;
+	public state?: { config?: import("./app-state-config.js").ResolvedAppStateConfig } & Record<string, unknown>;
 
 	public migrations: QuestpieMigrationsAPI<TConfig>;
 	public seeds: QuestpieSeedsAPI<TConfig>;

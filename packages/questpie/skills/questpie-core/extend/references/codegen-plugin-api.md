@@ -187,6 +187,19 @@ type DiscoverPattern =
 
 			/** Augment interface Registry with typeof this under given key. */
 			registryKey?: string;
+
+			/**
+			 * Destructure a composite config file into multiple createApp keys.
+			 * Keys = property names on the exported object.
+			 * Values = createApp argument keys (state keys).
+			 *
+			 * @example
+			 * appConfig: {
+			 *   pattern: "config/app.ts",
+			 *   destructure: { locale: "locale", access: "defaultAccess" },
+			 * }
+			 */
+			destructure?: Record<string, string>;
 	  };
 ```
 

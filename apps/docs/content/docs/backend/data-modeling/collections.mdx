@@ -8,7 +8,7 @@ A collection is a data model backed by a database table. Each collection file de
 ## Defining a Collection
 
 ```ts title="collections/services.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export const services = collection("services")
 	.fields(({ f }) => ({
@@ -154,7 +154,7 @@ From the barbershop example — a complete collection with all builder methods:
 
 ```ts title="collections/barbers.ts"
 import { uniqueIndex } from "drizzle-orm/pg-core";
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 import { slugify } from "@/questpie/server/utils";
 
 export const barbers = collection("barbers")

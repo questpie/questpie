@@ -4,13 +4,13 @@ Detailed authentication configuration for QUESTPIE using Better Auth.
 
 ## File Convention
 
-Auth is configured via the `auth.ts` singleton file convention:
+Auth is configured via `config/auth.ts` using the `authConfig()` factory:
 
 ```ts
-// src/questpie/server/auth.ts
-import type { AuthConfig } from "questpie";
+// src/questpie/server/config/auth.ts
+import { authConfig } from "questpie";
 
-export default {
+export default authConfig({
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: false,
@@ -18,7 +18,7 @@ export default {
 	baseURL: process.env.APP_URL || "http://localhost:3000",
 	basePath: "/api/auth",
 	secret: process.env.BETTER_AUTH_SECRET || "change-me",
-} satisfies AuthConfig;
+});
 ```
 
 Codegen discovers this file automatically. No manual registration needed.

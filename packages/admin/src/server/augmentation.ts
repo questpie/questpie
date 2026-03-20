@@ -1239,6 +1239,42 @@ export interface DashboardContribution {
 	items?: DashboardItemDef[];
 }
 
+// ============================================================================
+// Admin Config Input — composite config/admin.ts type
+// ============================================================================
+
+/**
+ * Input type for `config/admin.ts` — a composite config file that consolidates
+ * sidebar, dashboard, branding, and locale into a single file.
+ *
+ * Used with `adminConfig()` factory for type inference.
+ *
+ * @example
+ * ```ts
+ * // config/admin.ts
+ * import { adminConfig } from "@questpie/admin/server";
+ *
+ * export default adminConfig({
+ *   sidebar: [s.section({ ... }), s.item({ ... })],
+ *   branding: { name: "My Admin" },
+ *   locale: { defaultLocale: "en" },
+ * });
+ * ```
+ */
+export interface AdminConfigInput {
+	sidebar?: SidebarContribution;
+	dashboard?: DashboardContribution;
+	branding?: ServerBrandingConfig;
+	locale?: AdminLocaleConfig;
+}
+
+/**
+ * Identity factory for `config/admin.ts` — provides type inference.
+ */
+export function adminConfig<T extends AdminConfigInput>(config: T): T {
+	return config;
+}
+
 /**
  * Dashboard section definition for contributions.
  */

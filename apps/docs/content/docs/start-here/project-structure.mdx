@@ -154,15 +154,30 @@ declare global {
 
 This is why `collections`, `queue`, `email` are available and typed in every handler — codegen generates the augmentation from your file structure.
 
-## The `#questpie` Import
+## The `#questpie` Imports
 
-Collection and global files use `#questpie` as the import specifier:
+QUESTPIE uses Node.js [subpath imports](https://nodejs.org/api/packages.html#subpath-imports) (the `"imports"` field in `package.json`) to wire your code to the generated output:
+
+| Import                | Resolves to               | Use for                                       |
+| --------------------- | ------------------------- | --------------------------------------------- |
+| `#questpie`           | `.generated/index.ts`     | `app` instance, `AppConfig` type              |
+| `#questpie/factories` | `.generated/factories.ts` | `collection()`, `global()`, `sidebar()`, etc. |
+
+Collection, global, and admin singleton files import from `#questpie/factories`:
 
 ```ts
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 ```
 
-This is a TypeScript path alias that resolves to the generated app instance. It ensures your builders have access to the correct types for field autocompletion and relation targets.
+The generated factories file provides typed builders with all plugin extensions (e.g. `.admin()`, `.form()`, `.list()`) and the merged field set (builtins + module-contributed fields like `richText`, `blocks`).
+
+Routes, jobs, and seeds import from the bare `questpie` package:
+
+```ts
+import { route } from "questpie";
+import { job } from "questpie";
+import { seed } from "questpie";
+```
 
 ## By-Feature Layout
 

@@ -24,13 +24,13 @@ QUESTPIE uses an adapter-based architecture for all infrastructure. Development 
 
 ## Authentication
 
-QUESTPIE uses [Better Auth](https://www.better-auth.com/). Configure via the `auth.ts` file convention:
+QUESTPIE uses [Better Auth](https://www.better-auth.com/). Configure via `config/auth.ts`:
 
 ```ts
-// src/questpie/server/auth.ts
-import type { AuthConfig } from "questpie";
+// src/questpie/server/config/auth.ts
+import { authConfig } from "questpie";
 
-export default {
+export default authConfig({
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: false,
@@ -38,7 +38,7 @@ export default {
 	baseURL: process.env.APP_URL || "http://localhost:3000",
 	basePath: "/api/auth",
 	secret: process.env.BETTER_AUTH_SECRET || "change-me",
-} satisfies AuthConfig;
+});
 ```
 
 ### Auth Options

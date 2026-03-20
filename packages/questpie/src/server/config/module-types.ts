@@ -138,10 +138,49 @@ export interface ModuleDefinition {
 	hooks?: GlobalHooksState;
 
 	/**
+	 * Codegen plugin(s) this module contributes.
+	 * Auto-extracted by codegen from modules.ts during the pre-pass.
+	 * Excluded from module merge — only used at codegen time.
+	 */
+	plugin?:
+		| import("#questpie/cli/codegen/types.js").CodegenPlugin
+		| import("#questpie/cli/codegen/types.js").CodegenPlugin[];
+
+	/**
 	 * Extensible — admin module augments this interface to add:
 	 * listViews, formViews, components, blocks, sidebar, dashboard, branding, adminLocale.
 	 */
 	[key: string]: unknown;
+}
+
+// ============================================================================
+// App Config Input — composite config/app.ts type
+// ============================================================================
+
+/**
+ * Input type for `config/app.ts` — a composite config file that consolidates
+ * locale, access, hooks, and context resolver into a single file.
+ *
+ * Used with `appConfig()` factory for type inference.
+ *
+ * @example
+ * ```ts
+ * // config/app.ts
+ * import { appConfig } from "questpie";
+ *
+ * export default appConfig({
+ *   locale: { locales: [{ code: "en" }, { code: "sk" }], defaultLocale: "en" },
+ *   access: { read: true, create: true, update: true, delete: true },
+ *   hooks: { collections: [...], globals: [...] },
+ *   context: async ({ session }) => ({ role: session?.user?.role ?? "guest" }),
+ * });
+ * ```
+ */
+export interface AppConfigInput {
+	locale?: LocaleConfig;
+	access?: CollectionAccess;
+	hooks?: import("#questpie/server/config/global-hooks-types.js").GlobalHooksInput;
+	context?: ContextResolver;
 }
 
 // ============================================================================

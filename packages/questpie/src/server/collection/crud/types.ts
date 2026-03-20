@@ -221,7 +221,7 @@ type DecrementDepth<Depth extends unknown[]> = Depth extends [
 	? Rest
 	: [];
 
-type DefaultWhereDepth = [1, 1];
+type DefaultWhereDepth = [1, 1, 1, 1];
 
 type OperatorValue<TFn> = TFn extends (...args: any[]) => any
 	? Parameters<TFn>[1]
@@ -413,7 +413,7 @@ type ResolveCollectionRelationFromApp<
 type ResolveRelationsDeepFromApp<
 	TRelations extends Record<string, RelationConfig>,
 	TApp,
-	Depth extends unknown[] = [1, 1, 1, 1, 1],
+	Depth extends unknown[] = [1, 1, 1],
 > = {
 	[K in keyof TRelations]: TRelations[K] extends {
 		type: "many" | "manyToMany";
@@ -871,12 +871,24 @@ export type FindManyOptions<
 	TRelations = any,
 > = FindManyOptionsBase<TFields, TRelations>;
 
-export type FindOptions<TCollection, TApp> = Omit<
-	FindManyOptionsBase<
-		CollectionSelect<TCollection, TApp>,
-		CollectionRelationsFromApp<TCollection, TApp>
-	>,
-	"where"
+/** Shared base props for collection-aware find — avoids Omit on FindManyOptionsBase which would eagerly instantiate Where<TFields,TRelations> */
+type FindOptionsShared<TSelect, TRelations> = {
+	columns?: Columns<TSelect>;
+	with?: With<TRelations>;
+	orderBy?: OrderBy<TSelect>;
+	limit?: number;
+	offset?: number;
+	extras?: Extras;
+	search?: string;
+	locale?: string;
+	localeFallback?: boolean;
+	includeDeleted?: boolean;
+	stage?: string;
+};
+
+export type FindOptions<TCollection, TApp> = FindOptionsShared<
+	CollectionSelect<TCollection, TApp>,
+	CollectionRelationsFromApp<TCollection, TApp>
 > & {
 	where?: Where<TCollection, TApp>;
 };
@@ -915,11 +927,11 @@ export interface FindOneOptionsBase<TFields = any, TRelations = any> {
 }
 
 export type FindOneOptions<TCollection, TApp> = Omit<
-	FindOneOptionsBase<
+	FindOptionsShared<
 		CollectionSelect<TCollection, TApp>,
 		CollectionRelationsFromApp<TCollection, TApp>
 	>,
-	"where"
+	"limit" | "offset"
 > & {
 	where?: Where<TCollection, TApp>;
 };

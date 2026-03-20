@@ -1,0 +1,291 @@
+---
+title: Codegen Internals
+description: Deep dive into the codegen pipeline — discovery, key derivation, template emission, type augmentation, and the plugin extension system.
+---
+
+The codegen system is the backbone of QUESTPIE's type safety. It scans your file conventions, discovers entities, and generates fully typed code that bridges your definitions to the runtime. This page explains **how** it works, from file scanning to emitted TypeScript.
+
+## Pipeline Overview
+
+{/* TODO: Replace with mermaid diagram once fumadocs-mermaid is set up (bun add mermaid, remarkMermaid plugin in source.config.ts) */}
+
+```text
+questpie.config.ts
+    │
+    ▼
+┌─────────────────┐
+│  Plugin Registry │  Each plugin declares categories, discover patterns,
+│  (core + admin)  │  builder extensions, callback params, singleton factories
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Target Graph    │  Merge all plugin contributions per target
+│  Resolution      │  ("server", "admin-client", etc.)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  File Discovery  │  Scan directories, match patterns, detect exports,
+│  (discover.ts)   │  derive keys, build DiscoveredFile records
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Transforms      │  Plugin transform functions modify the codegen context
+│  (plugin order)  │  (add imports, type declarations, runtime code)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│  Template Emission                       │
+│  ├── index.ts (root app) or module.ts   │
+│  ├── factories.ts (builder extensions)   │
+│  └── registries.ts (module augmentation) │
+└─────────────────────────────────────────┘
+```
+
+## Target System
+
+A **target** is a codegen output destination. Plugins contribute to targets — contributions from multiple plugins are merged.
+
+| Target | Root | Output | Purpose |
+|---|---|---|---|
+| `server` | `.` (server root) | `index.ts` + `factories.ts` | App instance, typed builders |
+| `admin-client` | `../admin` | `client.ts` | Admin UI component registry |
+
+Each target has its own categories, discover patterns, and registries. The core plugin always contributes to `server`, the admin plugin contributes to both.
+
+## File Discovery
+
+Discovery is the process of scanning directories for files that match category patterns, then extracting entity information from each file.
+
+### Category Declaration
+
+Every discoverable file type is declared as a **category** on a plugin:
+
+```ts
+categories: {
+  collections: {
+    dirs: ["collections"],       // Directories to scan
+    prefix: "coll",              // Variable name prefix (_coll_posts)
+    factoryFunctions: ["collection"],  // Factory calls to detect
+    registryKey: true,           // Include in Registry augmentation
+    includeInAppState: true,     // Include in App state type
+    extractFromModules: true,    // Extract from module contributions
+  },
+}
+```
+
+### Key Derivation Rules
+
+Every discovered entity gets a **key** that becomes the import variable name, object key, type key, and callback proxy key. The key derivation follows these rules:
+
+| Scenario | Key Source | Example |
+|---|---|---|
+| `factoryFunctions` + **named export**, single match | Filename (camelCase) | `blocks/hero.ts` → `hero` |
+| `factoryFunctions` + **named exports**, multiple | Export name | Two exports → each export name |
+| `factoryFunctions` + **default export**, has string arg | **Factory string arg** (kebab→camelCase) | `views/table.ts` with `export default view("collection-table", ...)` → `collectionTable` |
+| `factoryFunctions` + **default export**, no string arg | Filename (camelCase) | `views/custom.ts` with `export default view(config)` → `custom` |
+| No `factoryFunctions` | Filename (camelCase) | `fields/boolean.ts` → `boolean` |
+| Recursive category | Path segments (joined by keySeparator) | `routes/webhooks/stripe.ts` → `webhooks/stripe` |
+
+#### Why factory arg over filename?
+
+The factory string argument is the entity's **identity** — it's the name used at runtime for lookup, serialization, and API contracts. The filename is just file organization.
+
+```ts
+// views/table.ts
+export default view("collection-table", { kind: "list" });
+//                   ^^^^^^^^^^^^^^^^
+//                   This is the identity → key: "collectionTable"
+//                   The file could be named anything
+```
+
+This is consistent across all factory-based categories:
+
+```ts
+collection("posts")           // → key: "posts"
+block("hero")                 // → key: "hero"
+view("collection-table", ...) // → key: "collectionTable"
+component("icon", ...)        // → key: "icon"
+```
+
+#### `keyFromProperty`
+
+Some categories use a runtime property as the object key instead of the file-derived key:
+
+```ts
+// admin-client views category:
+views: {
+  dirs: ["views"],
+  keyFromProperty: "name",  // Use view.name as runtime object key
+}
+
+// Generated module.ts:
+views: {
+  [_view_collectionForm.name]: _view_collectionForm,  // runtime key
+  [_view_collectionTable.name]: _view_collectionTable,
+}
+```
+
+When `keyFromProperty` is set, the **type interface** for that category is skipped in module-template (the file-derived key wouldn't match the runtime key). The type comes from the registries augmentation instead.
+
+### Factory Export Detection
+
+For categories with `factoryFunctions`, codegen uses a two-pass regex approach (no AST parsing):
+
+**Pass 1** — Build a map of variable assignments calling factory functions:
+```ts
+// Detects:
+const hero = block("hero")         // varName: "hero", factoryArg: "hero"
+export const myView = view("kanban", ...) // varName: "myView", factoryArg: "kanban"
+export default view("collection-table")   // default, factoryArg: "collection-table"
+```
+
+**Pass 2** — Cross-reference with export statements to find which are actually exported:
+- `export const X` → direct export
+- `export { X }` or `export { X as Y }` → re-export
+- `export default X` → default re-export
+- `export default factory(...)` → inline default factory call
+
+Files with **no matching factory calls** are automatically skipped (utility files, type-only files). This means you can have helper functions alongside factory exports without them being picked up.
+
+## Template Emission
+
+### Root App (`index.ts`)
+
+Generated by `template.ts`. Contains:
+- Imports for all discovered entities
+- Type interfaces (`AppCollections`, `AppGlobals`, etc.)
+- `declare module "questpie"` augmentation for `Registry` and `AppContext`
+- `createApp()` call with all entities
+- `createContext()` helper
+
+### Factories (`factories.ts`)
+
+Generated by `factory-template.ts`. Contains:
+- Merged field definitions (`_allFieldDefs = { ...builtinFields, ...adminFields, ...userFields }`)
+- Extension registries (`_collExt`, `_globExt`, `_fieldExt`)
+- Wrapped `collection()` and `global()` factories with extension proxy
+- Wrapped field factories (when field extensions exist)
+- `declare module "questpie"` interface augmentation for builder extension methods
+- `declare global` augmentation for `FieldTypeRegistry`, `FieldTypesMap`
+
+#### Builder Extension System
+
+Extensions add methods to builders without monkey-patching. The process:
+
+1. **Plugin declares** extension in `registries`:
+   ```ts
+   collectionExtensions: {
+     admin: { stateKey: "admin", configType: "AdminConfig", isCallback: true },
+     list:  { stateKey: "adminList", configType: "...", callbackContextParams: ["v", "f"] },
+   }
+   ```
+
+2. **Codegen emits** extension registry + interface augmentation:
+   ```ts
+   // factories.ts
+   const _collExt = {
+     admin: { stateKey: "admin", resolve: (v) => typeof v === "function" ? v({ c: createComponentCallbackProxy() }) : v },
+     list: { stateKey: "adminList", resolve: (v) => { const resolved = v({ v: createViewCallbackProxy(), f: createFieldNameProxy() }); return { ...defaults, ...resolved }; } },
+   };
+
+   declare module "questpie" {
+     interface CollectionBuilder<TState> {
+       admin(config: AdminConfig | ((ctx: AdminConfigContext) => AdminConfig)): CollectionBuilder<TState>;
+       list(configFn: (ctx: ListViewConfigContext<...>) => ListViewConfig): CollectionBuilder<TState>;
+     }
+   }
+   ```
+
+3. **`wrapBuilderWithExtensions()`** creates a Proxy that intercepts extension method calls and delegates to `builder.set(stateKey, resolve(config))`. Core methods pass through, and builder-returning methods are re-wrapped.
+
+#### Field Extensions
+
+Same pattern as collection/global extensions, but wraps individual field factories:
+
+```ts
+// Plugin declares:
+fieldExtensions: {
+  admin: { stateKey: "admin", configType: "unknown" },
+  form:  { stateKey: "form", configType: "...", isCallback: true },
+}
+
+// Codegen wraps each field factory:
+function _wrapFieldFactory(fn) {
+  return (...args) => wrapBuilderWithExtensions(fn(...args), _fieldExt, Field);
+}
+const _allFieldDefs = Object.fromEntries(
+  Object.entries(_rawFieldDefs).map(([k, v]) => [k, _wrapFieldFactory(v)])
+);
+```
+
+This means `f.text(255).admin({ placeholder: "..." })` works — the `.admin()` method is intercepted by the proxy and stored in `field._state.extensions.admin`.
+
+### Module Template (`module.ts`)
+
+Generated by `module-template.ts` for npm packages (e.g. `@questpie/admin`). Contains:
+- Imports for all discovered entities
+- Type interfaces using `typeof` references
+- Static module object with all entities
+- Side-effect import of `registries.ts`
+
+### Registry Augmentation (`registries.ts`)
+
+Generated alongside `module.ts`. Separate file to avoid circular references. Contains:
+- `declare global { namespace Questpie { interface ViewsRegistry extends _RegViews {} } }`
+- Local type interfaces built from source file imports (not from module.ts)
+
+## Callback Context Parameters
+
+Extensions that use `isCallback: true` receive a context object with proxy helpers:
+
+| Param | Factory | What it does | Example |
+|---|---|---|---|
+| `f` | `createFieldNameProxy()` | Property access → field name string | `f.title` → `"title"` |
+| `v` | `createViewCallbackProxy()` | Property call → view config with camelCase→kebab | `v.collectionTable({})` → `{ view: "collection-table", ... }` |
+| `c` | `createComponentCallbackProxy()` | Property call → component reference | `c.icon("ph:article")` → `{ type: "icon", props: { name: "ph:article" } }` |
+| `a` | `createActionCallbackProxy()` | Property access → action name string | `a.create` → `"create"` |
+
+Each is declared in `callbackParams` on the plugin and imported in `factories.ts` when needed.
+
+## Cross-Target Validation
+
+Plugins can declare `validators` that run after all targets are generated. The admin plugin uses this to check that server-side references (views, components, blocks) have matching client-side registrations:
+
+```ts
+validators: [createAdminProjectionValidator()]
+// Checks: every block/view/component in server target exists in admin-client target
+```
+
+## Module Codegen (Package Mode)
+
+When running `questpie generate` on a package (not an app), codegen iterates all module directories and generates `module.ts` + `registries.ts` for each module, for each target:
+
+```text
+packages/admin/src/server/modules/
+├── admin/
+│   ├── .generated/
+│   │   ├── module.ts        ← server target
+│   │   └── registries.ts    ← type augmentation
+│   └── client/
+│       └── .generated/
+│           └── module.ts    ← admin-client target
+├── audit/
+│   └── .generated/
+│       └── module.ts
+└── admin-preferences/
+    └── .generated/
+        └── module.ts
+```
+
+Each target's `moduleRoot` determines where to look within each module directory. The admin-client target uses `moduleRoot: "client"`, so it discovers from `modules/admin/client/`.
+
+## Related Pages
+
+- [File Convention](/docs/backend/architecture/file-convention) — What files are discovered
+- [Building a Plugin](/docs/extend/building-a-plugin) — Creating your own plugin
+- [Building a Module](/docs/extend/building-a-module) — Creating reusable modules
+- [Registries](/docs/extend/registries) — Type registry system

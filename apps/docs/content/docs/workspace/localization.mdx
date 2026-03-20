@@ -52,7 +52,7 @@ export default runtimeConfig({
 Only fields marked with `.localized()` change when switching locales. Non-localized fields remain the same across all locales.
 
 ```ts title="collections/pages.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export const pages = collection("pages").fields(({ f }) => ({
 	title: f.text().required().localized(), // Changes per locale

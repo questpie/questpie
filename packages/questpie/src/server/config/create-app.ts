@@ -238,7 +238,7 @@ const MERGE_FNS = new Map<string, MergeFn>([
 ]);
 
 /** Keys skipped during module merging (structural, not data). */
-const STRUCTURAL_KEYS = new Set(["name", "modules"]);
+const STRUCTURAL_KEYS = new Set(["name", "modules", "plugin"]);
 
 /**
  * Known infrastructure keys on RuntimeConfig that should NOT be forwarded
@@ -284,6 +284,8 @@ const CONFIG_CONSUMED_KEYS = new Set([
 	// Structural
 	"name",
 	"modules",
+	// Codegen-only (never leaks to instance.state)
+	"plugin",
 ]);
 
 /** Create an empty merged state with correct initial values for known keys. */

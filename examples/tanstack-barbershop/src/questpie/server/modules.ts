@@ -8,12 +8,5 @@ import { openApiModule } from "@questpie/openapi";
 export default [
 	adminModule,
 	auditModule,
-	openApiModule({
-		info: {
-			title: "Barbershop API",
-			version: "1.0.0",
-			description: "QUESTPIE API for the Barbershop example",
-		},
-		scalar: { theme: "purple" },
-	}),
+	openApiModule,
 ] as const;

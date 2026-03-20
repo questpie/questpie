@@ -3,14 +3,14 @@
 // Factory registry augmentations for module. Separate file to avoid circular refs.
 // IMPORTANT: This file must NOT import from module.ts to avoid circular imports.
 
-import type _view_form from "../views/form";
+import type _view_collectionForm from "../views/form";
+import type _view_collectionTable from "../views/table";
 import type _view_globalForm from "../views/global-form";
-import type _view_table from "../views/table";
 
 interface _RegViews {
-	form: typeof _view_form;
+	collectionForm: typeof _view_collectionForm;
+	collectionTable: typeof _view_collectionTable;
 	globalForm: typeof _view_globalForm;
-	table: typeof _view_table;
 }
 
 import type _comp_badge from "../components/badge";

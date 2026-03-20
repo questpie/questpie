@@ -1,61 +1,248 @@
 ---
 title: Config API
-description: runtimeConfig() — all configuration options.
+description: runtimeConfig() — all configuration options for your QUESTPIE application.
 ---
 
 ## `runtimeConfig(options)`
 
-```ts
+The central configuration for your QUESTPIE application. Defines database connection, infrastructure adapters, plugins, and CLI settings.
+
+```ts title="questpie.config.ts"
 import { runtimeConfig } from "questpie";
+import { adminPlugin } from "@questpie/admin/plugin";
+import { pgBossAdapter } from "questpie/queue-pg-boss";
+import { redisStreamsAdapter } from "questpie/realtime-redis";
 
 export default runtimeConfig({
   // Required
-  app: { url: string },
-  db: { url: string },
-  secret: string,
+  app: { url: process.env.APP_URL ?? "http://localhost:3000" },
+  db: { url: process.env.DATABASE_URL! },
+  secret: process.env.AUTH_SECRET!,
 
-  // Optional
-  plugins?: CodegenPlugin[],
-  storage?: {
-    basePath?: string,
-    driver?: "local" | "s3",
-    s3?: { bucket, region, accessKeyId, secretAccessKey },
+  // Plugins
+  plugins: [adminPlugin()],
+
+  // Infrastructure
+  storage: {
+    driver: "s3",
+    s3: {
+      bucket: process.env.S3_BUCKET!,
+      region: process.env.S3_REGION!,
+      accessKeyId: process.env.S3_ACCESS_KEY!,
+      secretAccessKey: process.env.S3_SECRET_KEY!,
+    },
   },
-  email?: {
-    adapter: SmtpAdapter | ConsoleAdapter,
+  email: {
+    adapter: smtpAdapter({
+      host: process.env.SMTP_HOST!,
+      port: Number(process.env.SMTP_PORT),
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
   },
-  queue?: {
-    adapter: pgBossAdapter({ connectionString }),
+  queue: {
+    adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL! }),
   },
-  realtime?: {
-    adapter: pgNotifyAdapter({ connectionString }) | redisStreamsAdapter({ url }),
+  realtime: {
+    adapter: redisStreamsAdapter({ url: process.env.REDIS_URL! }),
   },
-  kv?: {
-    adapter: "redis" | "memory",
-    url?: string,
+  kv: {
+    adapter: "redis",
+    url: process.env.REDIS_URL!,
   },
-  translations?: {
-    messages: Record<string, Record<string, string>>,
+  translations: {
+    messages: {
+      en: { "app.name": "My App" },
+      sk: { "app.name": "Moja Aplikacia" },
+    },
   },
-  cli?: {
-    migrations?: { directory: string },
-    seeds?: { directory: string },
+  cli: {
+    migrations: { directory: "./src/migrations" },
+    seeds: { directory: "./src/seeds" },
   },
 });
 ```
 
-## Options
+---
 
-| Option         | Type              | Required | Description                  |
-| -------------- | ----------------- | -------- | ---------------------------- |
-| `app.url`      | `string`          | Yes      | Public app URL               |
-| `db.url`       | `string`          | Yes      | PostgreSQL connection string |
-| `secret`       | `string`          | Yes      | Session/auth secret          |
-| `plugins`      | `CodegenPlugin[]` | No       | Codegen plugins              |
-| `storage`      | `object`          | No       | File storage config          |
-| `email`        | `object`          | No       | Email adapter                |
-| `queue`        | `object`          | No       | Job queue adapter            |
-| `realtime`     | `object`          | No       | Realtime adapter             |
-| `kv`           | `object`          | No       | Key-value store              |
-| `translations` | `object`          | No       | i18n messages                |
-| `cli`          | `object`          | No       | CLI settings                 |
+## Options Reference
+
+### Required
+
+| Option    | Type     | Description                              |
+| --------- | -------- | ---------------------------------------- |
+| `app.url` | `string` | Public-facing application URL            |
+| `db.url`  | `string` | PostgreSQL connection string             |
+| `secret`  | `string` | Secret key for sessions and auth tokens  |
+
+### `plugins`
+
+Array of codegen plugins. Plugins define file conventions, categories, and extensions.
+
+```ts
+plugins: [adminPlugin()],
+```
+
+See [Plugin API](/docs/reference/plugin-api) for creating custom plugins.
+
+### `storage`
+
+File storage configuration using FlyDrive.
+
+```ts
+// Local filesystem (default)
+storage: {
+  driver: "local",
+  basePath: "./uploads",
+}
+
+// Amazon S3 / S3-compatible
+storage: {
+  driver: "s3",
+  s3: {
+    bucket: "my-bucket",
+    region: "us-east-1",
+    accessKeyId: "...",
+    secretAccessKey: "...",
+    endpoint: "https://...",  // Optional, for S3-compatible providers
+  },
+}
+```
+
+### `email`
+
+Email adapter configuration.
+
+```ts
+// SMTP
+email: {
+  adapter: smtpAdapter({
+    host: "smtp.example.com",
+    port: 587,
+    auth: { user: "...", pass: "..." },
+  }),
+}
+
+// Console (development — logs to stdout)
+email: {
+  adapter: consoleAdapter(),
+}
+```
+
+### `queue`
+
+Job queue adapter. Uses pg-boss (PostgreSQL-backed).
+
+```ts
+queue: {
+  adapter: pgBossAdapter({
+    connectionString: process.env.DATABASE_URL!,
+  }),
+}
+```
+
+### `realtime`
+
+Realtime event broadcasting adapter.
+
+```ts
+// Redis Streams (recommended for production)
+realtime: {
+  adapter: redisStreamsAdapter({ url: process.env.REDIS_URL! }),
+}
+
+// PostgreSQL NOTIFY (simpler, single-instance)
+realtime: {
+  adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL! }),
+}
+```
+
+### `kv`
+
+Key-value store for caching and session data.
+
+```ts
+// Redis (recommended for production)
+kv: {
+  adapter: "redis",
+  url: process.env.REDIS_URL!,
+}
+
+// In-memory (development only)
+kv: {
+  adapter: "memory",
+}
+```
+
+### `translations`
+
+Backend translation messages keyed by locale.
+
+```ts
+translations: {
+  messages: {
+    en: {
+      "auth.loginRequired": "Please log in to continue",
+      "validation.required": "{field} is required",
+    },
+    sk: {
+      "auth.loginRequired": "Prosim prihlaste sa",
+      "validation.required": "{field} je povinne",
+    },
+  },
+}
+```
+
+### `cli`
+
+CLI-related settings for migration and seed directories.
+
+```ts
+cli: {
+  migrations: {
+    directory: "./src/migrations",
+  },
+  seeds: {
+    directory: "./src/seeds",
+  },
+}
+```
+
+---
+
+## Environment Variables
+
+A typical `.env` file:
+
+```env
+APP_URL=http://localhost:3000
+DATABASE_URL=postgres://user:pass@localhost:5432/mydb
+AUTH_SECRET=your-secret-key-at-least-32-chars
+
+# Storage (S3)
+S3_BUCKET=my-bucket
+S3_REGION=us-east-1
+S3_ACCESS_KEY=...
+S3_SECRET_KEY=...
+
+# Redis (queue, KV, realtime)
+REDIS_URL=redis://localhost:6379
+
+# Email
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=...
+SMTP_PASS=...
+```
+
+---
+
+## Config File Location
+
+The CLI reads `questpie.config.ts` from the project root, which re-exports your runtime config:
+
+```ts title="questpie.config.ts"
+export { default } from "./src/questpie/server/questpie.config";
+```

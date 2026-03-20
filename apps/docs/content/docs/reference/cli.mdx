@@ -5,28 +5,169 @@ description: All QUESTPIE CLI commands.
 
 ## Commands
 
-| Command                     | Description                             |
-| --------------------------- | --------------------------------------- |
-| `questpie generate`         | Scan file conventions, generate types   |
-| `questpie dev`              | Watch mode — auto-regenerate on changes |
-| `questpie push`             | Push schema to database (no migrations) |
-| `questpie migrate:generate` | Generate migration from schema diff     |
-| `questpie migrate:up`       | Run pending migrations                  |
-| `questpie migrate:down`     | Rollback last migration                 |
-| `questpie migrate:fresh`    | Drop all + re-run migrations            |
-| `questpie migrate:reset`    | Reset migration tracking                |
-| `questpie seed:run`         | Run seed files                          |
-| `questpie add <module>`     | Add a module or starter                 |
+### Codegen
+
+| Command              | Description                                       |
+| -------------------- | ------------------------------------------------- |
+| `questpie generate`  | Scan file conventions, generate types and factories |
+| `questpie dev`       | Watch mode -- auto-regenerate on file changes     |
+
+### Database
+
+| Command                | Description                               |
+| ---------------------- | ----------------------------------------- |
+| `questpie push`        | Push schema to database (no migrations)   |
+| `questpie migrate:generate` | Generate migration from schema diff  |
+| `questpie migrate:up`  | Run pending migrations                    |
+| `questpie migrate:down`| Rollback last migration                   |
+| `questpie migrate:fresh`| Drop all tables and re-run migrations    |
+| `questpie migrate:reset`| Reset migration tracking                 |
+| `questpie migrate:status`| Show migration status                   |
+
+### Seeds
+
+| Command                | Description                   |
+| ---------------------- | ----------------------------- |
+| `questpie seed`        | Run pending seed files        |
+| `questpie seed:generate`| Generate a new seed file     |
+| `questpie seed:undo`   | Undo last seed                |
+| `questpie seed:status` | Show seed status              |
+| `questpie seed:reset`  | Reset seed tracking           |
+
+### Scaffolding
+
+| Command                  | Description                        |
+| ------------------------ | ---------------------------------- |
+| `questpie add [type] [name]` | Scaffold a new entity or module |
+
+---
 
 ## Usage
 
 ```bash
-# With bunx
+# With bunx (recommended)
 bunx questpie <command>
 
-# With npx
-npx questpie <command>
+# Or via package.json scripts
+bun run questpie <command>
 ```
+
+---
+
+## Command Details
+
+### `questpie generate`
+
+Scans your project for file conventions (collections, globals, routes, jobs, services, emails, fields, views, pages, widgets, etc.) and generates:
+
+- **`#questpie` imports** -- typed factory functions with all registered field types
+- **`#questpie/factories`** -- admin-specific factories (sidebar, dashboard, branding, locale)
+- **Type registry** -- merged types for collections, globals, routes, and services
+
+Run this after adding or removing any convention file.
+
+```bash
+bunx questpie generate
+```
+
+### `questpie dev`
+
+Watch mode that re-runs codegen whenever a convention file changes. Use during development.
+
+```bash
+bunx questpie dev
+```
+
+### `questpie push`
+
+Push the current Drizzle schema directly to the database without creating migration files. Useful during early development.
+
+```bash
+bunx questpie push
+```
+
+<Callout type="warn">This may cause data loss. Use only in development.</Callout>
+
+### `questpie migrate:generate`
+
+Compare the current schema against the database and generate a SQL migration file.
+
+```bash
+bunx questpie migrate:generate
+```
+
+### `questpie migrate:up`
+
+Run all pending migrations.
+
+```bash
+bunx questpie migrate:up
+```
+
+### `questpie migrate:down`
+
+Rollback the last applied migration.
+
+```bash
+bunx questpie migrate:down
+```
+
+### `questpie migrate:fresh`
+
+Drop all tables and re-run all migrations from scratch.
+
+```bash
+bunx questpie migrate:fresh
+```
+
+<Callout type="warn">Destroys all data. Development only.</Callout>
+
+### `questpie migrate:status`
+
+Show which migrations have been applied and which are pending.
+
+```bash
+bunx questpie migrate:status
+```
+
+### `questpie migrate:reset`
+
+Reset the migration tracking table without touching data tables.
+
+```bash
+bunx questpie migrate:reset
+```
+
+### `questpie seed`
+
+Run all pending seed files in order.
+
+```bash
+bunx questpie seed
+```
+
+### `questpie seed:generate`
+
+Generate a new timestamped seed file.
+
+```bash
+bunx questpie seed:generate
+```
+
+### `questpie add`
+
+Scaffold a new entity. Interactively prompts for type and name if not provided.
+
+```bash
+# Interactive
+bunx questpie add
+
+# With arguments
+bunx questpie add collection posts
+bunx questpie add global siteSettings
+```
+
+---
 
 ## Configuration
 
@@ -36,17 +177,17 @@ The CLI reads `questpie.config.ts` from the project root:
 export { default } from "./src/questpie/server/questpie.config";
 ```
 
-## CLI Config Options
+### CLI-Specific Options
 
 ```ts
 runtimeConfig({
-	cli: {
-		migrations: {
-			directory: "./src/migrations",
-		},
-		seeds: {
-			directory: "./src/seeds",
-		},
-	},
+  cli: {
+    migrations: {
+      directory: "./src/migrations",
+    },
+    seeds: {
+      directory: "./src/seeds",
+    },
+  },
 });
 ```

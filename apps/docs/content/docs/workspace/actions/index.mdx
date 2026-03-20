@@ -3,11 +3,61 @@ title: Actions
 description: CRUD actions and custom actions in the admin panel.
 ---
 
-Actions are operations users can perform on records — create, save, delete, duplicate, or custom operations with forms.
+Actions are server-executed operations triggered from the admin UI. Every collection gets built-in CRUD actions automatically, and you can define custom actions with forms, confirmation dialogs, and server-side handlers.
 
 ## How Actions Work
 
-The admin panel provides built-in CRUD actions automatically. You can also define custom actions with forms and server-side handlers.
+When a user opens a record or selects rows in a list view, the admin panel shows available actions in the toolbar. Each action:
+
+1. **Checks access** — the action is hidden if the user lacks permission
+2. **Shows UI** — optional confirmation dialog or custom form
+3. **Executes server-side** — runs the handler with full access to the app context (db, collections, queue, email, etc.)
+4. **Refreshes data** — the admin panel re-fetches after the action completes
+
+Actions appear in two locations:
+
+| Location | Scope | Example |
+| --- | --- | --- |
+| **Form view toolbar** | Single record | Save, Delete, Duplicate, Publish |
+| **List view bulk toolbar** | Multiple records | Delete selected, Export |
+
+## Action Types
+
+### Built-in Actions
+
+Every collection automatically gets Create, Save, Delete, and Duplicate actions. These respect your `.access()` rules — if a user can't delete, the Delete button is hidden.
+
+See [Built-in Actions](/docs/workspace/actions/builtin) for details.
+
+### Custom Actions
+
+Define your own actions with custom forms and server handlers using the `.actions()` extension method:
+
+```ts
+.actions([
+  {
+    name: "publish",
+    label: { en: "Publish", sk: "Publikovat" },
+    icon: "ph:paper-plane-tilt",
+    handler: async ({ id, collections }) => {
+      await collections.posts.update(id, { status: "published", publishedAt: new Date() });
+    },
+  },
+  {
+    name: "send-newsletter",
+    label: "Send Newsletter",
+    confirm: "This will send to all subscribers. Continue?",
+    handler: async ({ id, collections, queue }) => {
+      const post = await collections.posts.findById(id);
+      await queue.sendNewsletter.publish({ postId: post.id });
+    },
+  },
+])
+```
+
+See [Custom Actions](/docs/workspace/actions/custom) for the full guide.
+
+## Sections
 
 - [Built-in Actions](/docs/workspace/actions/builtin) — Create, save, delete, duplicate
 - [Custom Actions](/docs/workspace/actions/custom) — Custom forms and handlers

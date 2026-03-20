@@ -78,6 +78,8 @@ export {
 export { createContextFactory } from "#questpie/server/config/create-context-factory.js";
 export * from "#questpie/server/config/global-hooks-types.js";
 export * from "#questpie/server/config/module-types.js";
+export { appConfig, authConfig } from "#questpie/server/config/factories.js";
+export type { AppStateConfig, ResolvedAppStateConfig } from "#questpie/server/config/app-state-config.js";
 export * from "#questpie/server/config/questpie.js";
 export * from "#questpie/server/config/types.js";
 export * from "#questpie/server/errors/index.js";
@@ -129,3 +131,4 @@ export type {
 	ResolveRelations,
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
+export type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";

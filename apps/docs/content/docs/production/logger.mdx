@@ -3,46 +3,103 @@ title: Logger
 description: Structured logging with Pino.
 ---
 
-QUESTPIE uses [Pino](https://getpino.io) for structured, high-performance logging.
+QUESTPIE uses [Pino](https://getpino.io) for structured, high-performance JSON logging.
 
 ## Usage
 
-Access through the `logger` context:
+Access the logger through the context in hooks, routes, jobs, and services:
 
 ```ts
 handler: async ({ logger }) => {
-	logger.info("Processing booking");
-	logger.error({ err: error }, "Booking failed");
-	logger.debug({ barberId, serviceId }, "Checking availability");
-};
+  logger.info("Processing request")
+  logger.warn({ userId: "abc" }, "Rate limit approaching")
+  logger.error({ err: error }, "Failed to process payment")
+}
 ```
 
 ## Log Levels
 
-| Level   | Usage                 |
-| ------- | --------------------- |
-| `trace` | Detailed debugging    |
-| `debug` | Development debugging |
-| `info`  | Normal operations     |
-| `warn`  | Potential issues      |
-| `error` | Errors                |
-| `fatal` | Critical failures     |
+| Level | Value | Usage |
+| --- | --- | --- |
+| `trace` | 10 | Verbose debugging (hidden by default) |
+| `debug` | 20 | Development debugging |
+| `info` | 30 | Normal operations (default minimum) |
+| `warn` | 40 | Potential issues, deprecations |
+| `error` | 50 | Errors that need attention |
+| `fatal` | 60 | Critical failures, process should exit |
 
 ## Structured Logging
 
-Pass objects as the first argument for structured data:
+Pass an object as the first argument for structured data. Pino serializes it as JSON fields:
 
 ```ts
 logger.info(
-	{
-		appointmentId: "abc",
-		action: "created",
-		barberId: "def",
-	},
-	"Appointment created",
-);
+  {
+    appointmentId: "abc",
+    action: "created",
+    barberId: "def",
+    duration: 45,
+  },
+  "Appointment created",
+)
 ```
+
+Output (JSON):
+```json
+{"level":30,"time":1710854400000,"appointmentId":"abc","action":"created","barberId":"def","duration":45,"msg":"Appointment created"}
+```
+
+## Child Loggers
+
+Create scoped loggers with persistent context:
+
+```ts
+const bookingLogger = logger.child({ module: "booking", requestId: "req-123" })
+bookingLogger.info("Checking availability")
+// → { module: "booking", requestId: "req-123", msg: "Checking availability" }
+```
+
+## Error Logging
+
+Use the `err` key for Error objects — Pino serializes the stack trace:
+
+```ts
+try {
+  await processPayment(orderId)
+} catch (error) {
+  logger.error({ err: error, orderId }, "Payment processing failed")
+}
+```
+
+## Configuration
+
+The log level defaults to `info`. Set it via environment variable:
+
+```env
+LOG_LEVEL=debug
+```
+
+## Pretty Printing (Development)
+
+In development, pipe output through `pino-pretty` for human-readable logs:
+
+```json title="package.json"
+{
+  "scripts": {
+    "dev": "questpie dev | pino-pretty"
+  }
+}
+```
+
+## Production Best Practices
+
+- Use `info` level in production (default)
+- Ship JSON logs to your observability platform (Datadog, Grafana, etc.)
+- Use structured fields for queryable metadata
+- Avoid logging sensitive data (passwords, tokens, PII)
+- Use child loggers to add request context automatically
 
 ## Related Pages
 
 - [Deployment](/docs/production/deployment) — Production setup
+- [Config API](/docs/reference/config-api) — Application configuration

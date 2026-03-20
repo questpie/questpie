@@ -1,49 +1,213 @@
 ---
 title: Global API
-description: Global builder methods reference.
+description: Complete reference for global() builder methods.
 ---
 
 ## `global(name)`
 
-```ts
-import { global } from "#questpie";
+Creates a new global builder. Globals are singleton records (one row per global) used for site settings, configuration, and other single-instance data.
 
-global(name: string)
+```ts
+import { global } from "#questpie/factories";
+
+const siteSettings = global("siteSettings")
+  .fields(({ f }) => ({
+    siteName: f.text(255).required(),
+    tagline: f.text(255).localized(),
+    logo: f.upload(),
+    maintenanceMode: f.boolean().default(false),
+    socialLinks: f.object(),
+  }))
+  .options({ timestamps: true })
+  .hooks({
+    afterChange: async ({ data, kv }) => {
+      await kv.delete("site-settings-cache");
+    },
+  })
+  .access({
+    read: true,
+    update: ({ session }) => session?.user?.role === "admin",
+  });
 ```
 
-### Builder Methods
+## Builder Methods
 
-| Method       | Signature                            | Description            |
-| ------------ | ------------------------------------ | ---------------------- |
-| `.fields()`  | `(({ f }) => Record<string, Field>)` | Define data fields     |
-| `.admin()`   | `(({ c }) => AdminConfig)`           | Admin UI metadata      |
-| `.form()`    | `(({ v, f }) => FormView)`           | Form view config       |
-| `.hooks()`   | `(HooksConfig)`                      | Lifecycle hooks        |
-| `.access()`  | `(AccessConfig)`                     | Access control         |
-| `.options()` | `(OptionsConfig)`                    | Timestamps, versioning |
+All methods are chainable and return a new builder instance.
 
-### `.access()` Options
+| Method       | Description                                          |
+| ------------ | ---------------------------------------------------- |
+| `.fields()`  | Define data fields using the field builder            |
+| `.options()` | Configure timestamps, versioning, scoped mode         |
+| `.hooks()`   | Attach lifecycle hooks                                |
+| `.access()`  | Set access control rules                              |
+| `.set()`     | Generic extension point for plugins                   |
+
+With `@questpie/admin` installed:
+
+| Method     | Description                     |
+| ---------- | ------------------------------- |
+| `.admin()` | Admin UI metadata (label, icon) |
+| `.form()`  | Configure the form view         |
+
+---
+
+## `.fields(callback)`
+
+Define global fields using the field builder. Works identically to collection fields.
 
 ```ts
-.access({
-  read?: boolean | ((ctx) => boolean),
-  update?: boolean | ((ctx) => boolean),
+.fields(({ f }) => ({
+  siteName: f.text(255).required(),
+  description: f.textarea().localized(),
+  logo: f.upload(),
+  theme: f.select(["light", "dark", "system"]).default("system"),
+  analytics: f.object(),
+}))
+```
+
+## `.options(config)`
+
+Configure global-level options.
+
+```ts
+.options({
+  timestamps: true,       // Adds createdAt, updatedAt (default: true)
+  versioning: true,       // Creates a versions table for history
+  scoped: true,           // Scope globals by scope_id (multi-tenant)
 })
 ```
 
-### Server API
+When `scoped` is enabled, the global stores one row per scope instead of a single global row.
+
+### Versioning with Workflow
+
+Like collections, globals support versioning with optional publishing workflow:
 
 ```ts
-// Read
-const value = await globals.siteSettings.get();
-
-// Update
-await globals.siteSettings.update({ shopName: "New Name" });
+.options({
+  versioning: {
+    enabled: true,
+    workflow: {
+      stages: ["draft", "published"],
+      initialStage: "draft",
+    },
+  },
+})
 ```
 
-### Client API
+## `.hooks(config)`
+
+Attach lifecycle hooks. Globals support the same hook types as collections.
+
+```ts
+.hooks({
+  beforeChange: ({ data }) => {
+    if (data.siteName) {
+      data.siteName = data.siteName.trim();
+    }
+  },
+  afterChange: async ({ data, kv }) => {
+    // Invalidate cache when settings change
+    await kv.delete("site-settings-cache");
+  },
+})
+```
+
+## `.access(config)`
+
+Set access control rules. Globals support `read` and `update` operations (no create/delete since they are singletons).
+
+```ts
+.access({
+  read: true,
+  update: ({ session }) => session?.user?.role === "admin",
+})
+```
+
+## `.set(key, value)`
+
+Generic extension point for plugins to attach metadata.
+
+```ts
+.set("admin", { icon: { type: "icon", props: { name: "ph:gear" } } })
+```
+
+---
+
+## Admin Extension Methods
+
+### `.admin(callback)`
+
+Set admin UI metadata for the global.
+
+```ts
+.admin(({ c }) => ({
+  label: { en: "Site Settings" },
+  icon: c.icon("ph:gear"),
+}))
+```
+
+### `.form(callback)`
+
+Configure the admin form view.
+
+```ts
+.form(({ v, f }) => v.globalForm({
+  fields: [
+    f.siteName,
+    f.tagline,
+    {
+      type: "section",
+      label: "Appearance",
+      fields: [f.logo, f.theme],
+    },
+  ],
+}))
+```
+
+---
+
+## Server API
+
+Read and update globals through the runtime API:
+
+```ts
+// Read the global value
+const settings = await globals.siteSettings.get();
+console.log(settings.siteName);
+
+// Update the global
+await globals.siteSettings.update({
+  siteName: "New Site Name",
+  maintenanceMode: true,
+});
+```
+
+With localized fields, pass a locale:
+
+```ts
+const settings = await globals.siteSettings.get({ locale: "sk" });
+await globals.siteSettings.update(
+  { tagline: "Novy slogan" },
+  { locale: "sk" },
+);
+```
+
+## Client API
+
+Access globals from the client using the typed API client:
 
 ```ts
 const settings = await client.globals.siteSettings.get();
-await client.globals.siteSettings.update({ shopName: "New" });
+await client.globals.siteSettings.update({ siteName: "Updated" });
+```
+
+## Type Inference
+
+Globals provide type inference through `$infer`:
+
+```ts
+type SettingsSelect = typeof siteSettings.$infer.select;
+type SettingsInsert = typeof siteSettings.$infer.insert;
+type SettingsUpdate = typeof siteSettings.$infer.update;
 ```

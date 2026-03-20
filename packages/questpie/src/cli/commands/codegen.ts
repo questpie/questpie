@@ -17,6 +17,7 @@ import {
 	runAllTargets,
 	runCodegen,
 } from "../codegen/index.js";
+import { extractPluginsFromModules } from "../codegen/extract-plugins.js";
 import type {
 	CodegenPlugin,
 	MultiTargetCodegenResult,
@@ -217,10 +218,13 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
 			console.log(`  Config: ${configPath}`);
 		}
 
+		// Pre-pass: extract codegen plugins from modules.ts
+		const allPlugins = await extractModulePlugins(rootDir, plugins, options);
+
 		const multiResult = await runAllTargets({
 			rootDir,
 			configPath,
-			plugins,
+			plugins: allPlugins,
 			dryRun: options.dryRun,
 		});
 
@@ -913,6 +917,69 @@ function printDiscovered(
 	}
 	for (const [key, file] of d.singles) {
 		console.log(`\n  ${key}: ${file.source}`);
+	}
+}
+
+/**
+ * Pre-pass: extract codegen plugins from modules.ts.
+ *
+ * Module packages (e.g. `@questpie/admin`, `@questpie/openapi`) can declare
+ * `plugin` on their module definition. This pre-pass imports modules.ts,
+ * traverses the module tree, and extracts all plugins — so they participate
+ * in codegen without manual registration in questpie.config.ts.
+ *
+ * Merge order: module-extracted plugins → runtimeConfig plugins.
+ * Core plugin is always prepended by runAllTargets/runCodegen.
+ */
+async function extractModulePlugins(
+	rootDir: string,
+	configPlugins: CodegenPlugin[],
+	options: GenerateOptions,
+): Promise<CodegenPlugin[]> {
+	const modulesPath = join(rootDir, "modules.ts");
+	try {
+		await stat(modulesPath);
+	} catch {
+		return configPlugins;
+	}
+
+	try {
+		const modulesExport = await import(/* @vite-ignore */ modulesPath);
+		const modules = modulesExport.default ?? [];
+		if (!Array.isArray(modules)) return configPlugins;
+
+		const modulePlugins = extractPluginsFromModules(modules);
+		if (modulePlugins.length === 0) return configPlugins;
+
+		if (options.verbose) {
+			console.log(
+				`  Extracted ${modulePlugins.length} plugin(s) from modules.ts: ${modulePlugins.map((p) => p.name).join(", ")}`,
+			);
+		}
+
+		// Dedupe: module-extracted first, then config plugins (config wins on name collision)
+		const seen = new Set<string>();
+		const merged: CodegenPlugin[] = [];
+		// Config plugins take priority — add them first to the seen set
+		for (const p of configPlugins) {
+			seen.add(p.name);
+			merged.push(p);
+		}
+		// Then add module-extracted plugins that weren't already in config
+		for (const p of modulePlugins) {
+			if (!seen.has(p.name)) {
+				seen.add(p.name);
+				merged.push(p);
+			}
+		}
+		return merged;
+	} catch (error) {
+		if (options.verbose) {
+			const reason =
+				error instanceof Error ? error.message : String(error);
+			console.warn(`  Could not extract plugins from modules.ts: ${reason}`);
+		}
+		return configPlugins;
 	}
 }
 

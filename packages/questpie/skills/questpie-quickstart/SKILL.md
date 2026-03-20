@@ -54,19 +54,18 @@ my-app/
 │   │   ├── server/
 │   │   │   ├── questpie.config.ts        # Runtime config (DB, plugins, secret)
 │   │   │   ├── modules.ts                # Module dependencies
-│   │   │   ├── auth.ts                   # Authentication config
-│   │   │   ├── locale.ts                 # Content locale config
+│   │   │   ├── config/                   # Typed configuration files
+│   │   │   │   ├── auth.ts              # authConfig({...}) — Better Auth options
+│   │   │   │   ├── app.ts               # appConfig({ locale, access, hooks, context })
+│   │   │   │   ├── admin.ts             # adminConfig({ sidebar, dashboard, branding, locale })
+│   │   │   │   └── openapi.ts           # openApiConfig({ info, scalar })
 │   │   │   ├── collections/              # One file per collection
 │   │   │   ├── globals/                  # One file per global
 │   │   │   ├── routes/                   # App routes (JSON or raw)
 │   │   │   ├── jobs/                     # Background tasks
 │   │   │   ├── services/                 # Singleton services
-│   │   │   ├── routes/                   # Raw HTTP routes
 │   │   │   ├── blocks/                   # Content blocks (admin plugin)
 │   │   │   ├── emails/                   # Email templates
-│   │   │   ├── sidebar.ts               # Admin sidebar config
-│   │   │   ├── dashboard.ts             # Admin dashboard config
-│   │   │   ├── branding.ts              # Admin branding
 │   │   │   └── .generated/              # Codegen output (NEVER edit)
 │   │   └── admin/                        # Admin client customizations
 │   │       ├── .generated/              # Codegen output (NEVER edit)

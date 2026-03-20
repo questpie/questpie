@@ -7,6 +7,7 @@
 		"custom-adapters",
 		"registries",
 		"building-a-plugin",
-		"building-a-module"
+		"building-a-module",
+		"codegen-internals"
 	]
 }

@@ -3,30 +3,79 @@ title: Built-in Actions
 description: Default CRUD actions — create, save, delete, and duplicate.
 ---
 
-The admin panel provides these actions automatically for every collection:
+The admin panel provides these actions automatically for every collection. No configuration needed.
 
-| Action        | Description              | Location                          |
-| ------------- | ------------------------ | --------------------------------- |
-| **Create**    | Create a new record      | List view toolbar                 |
-| **Save**      | Save changes to a record | Form view toolbar                 |
-| **Delete**    | Delete a record          | Form view toolbar, list view bulk |
-| **Duplicate** | Clone a record           | Form view toolbar                 |
+## Available Actions
+
+| Action | Location | Trigger | Description |
+| --- | --- | --- | --- |
+| **Create** | List view toolbar | "New" button | Opens a blank form to create a new record |
+| **Save** | Form view toolbar | "Save" button | Saves the current form data (create or update) |
+| **Delete** | Form view toolbar | "Delete" button | Deletes the current record (with confirmation) |
+| **Duplicate** | Form view toolbar | "Duplicate" button | Clones the record and opens it as a new form |
+| **Bulk Delete** | List view (multi-select) | Bulk toolbar | Deletes all selected records |
 
 ## Access Control
 
-Actions respect your collection's access control rules:
+Actions respect your collection's `.access()` rules. If a user lacks permission for an operation, the corresponding action button is hidden:
 
 ```ts
-.access({
-  create: ({ session }) => session?.user?.role === "admin",
-  update: ({ session }) => session?.user?.role === "admin",
-  delete: ({ session }) => session?.user?.role === "admin",
+collection("posts")
+  .fields(({ f }) => ({ /* ... */ }))
+  .access({
+    create: ({ session }) => session?.user?.role === "admin",
+    update: ({ session }) => session?.user?.role === "admin",
+    delete: ({ session }) => session?.user?.role === "admin",
+    read: true,
+  })
+```
+
+| Access Rule | Controls |
+| --- | --- |
+| `create` | "New" button visibility |
+| `update` | "Save" button visibility |
+| `delete` | "Delete" and "Bulk Delete" visibility |
+| `read` | Whether records are shown at all |
+
+## Soft Delete Behavior
+
+When a collection has `softDelete: true` in its options:
+
+- **Delete** sets `deletedAt` instead of removing the row
+- **Restore** action appears on soft-deleted records
+- Soft-deleted records are hidden from default queries but accessible via filters
+
+```ts
+.options({ softDelete: true })
+```
+
+## Workflow Stage Actions
+
+When a collection uses versioning with a workflow, additional stage transition actions appear:
+
+```ts
+.options({
+  versioning: {
+    enabled: true,
+    workflow: {
+      stages: ["draft", "review", "published"],
+      initialStage: "draft",
+    },
+  },
 })
 ```
 
-If a user doesn't have `create` access, the "Create" button is hidden. Same for update (Save), delete, etc.
+The form toolbar shows transition buttons like "Move to Review" or "Publish" based on the current stage and allowed transitions.
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+S` / `Cmd+S` | Save current record |
+| `Delete` | Delete (when focused on record) |
 
 ## Related Pages
 
 - [Custom Actions](/docs/workspace/actions/custom) — Define your own actions
 - [Access Control](/docs/backend/rules/access-control) — Permission rules
+- [Bulk Actions](/docs/workspace/bulk-actions) — Multi-select operations

@@ -146,20 +146,24 @@ Filenames are converted from kebab-case to camelCase: `blog-posts.ts` becomes `b
 
 ### Single-File Conventions
 
-| File                 | Factory                                                  | Purpose                                                                           |
-| -------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `questpie.config.ts` | `runtimeConfig({...})`                                   | DB, plugins, adapters                                                             |
-| `modules.ts`         | `export default [...]`                                   | Module dependencies                                                               |
-| `auth.ts`            | `satisfies AuthConfig`                                   | Authentication config                                                             |
-| `locale.ts`          | `locale({...})`                                          | Content locales                                                                   |
-| `hooks.ts`           | `export default {...}`                                   | Global lifecycle hooks                                                            |
-| `access.ts`          | `export default {...}`                                   | Default access rules                                                              |
-| `context.ts`         | `context(async ({ request, session, db }) => ({ ... }))` | Custom context resolution (multi-tenant scope, see `questpie-core/multi-tenancy`) |
-| `fields.ts`          | `export default {...}`                                   | Custom field type definitions                                                     |
-| `sidebar.ts`         | `sidebar({...})`                                         | Admin sidebar                                                                     |
-| `dashboard.ts`       | `dashboard({...})`                                       | Admin dashboard                                                                   |
-| `branding.ts`        | `branding({...})`                                        | Admin branding                                                                    |
-| `admin-locale.ts`    | `adminLocale({...})`                                     | Admin UI locale                                                                   |
+| File                 | Factory                                        | Purpose                          |
+| -------------------- | ---------------------------------------------- | -------------------------------- |
+| `questpie.config.ts` | `runtimeConfig({...})`                         | DB, plugins, adapters            |
+| `modules.ts`         | `export default [...]`                         | Module dependencies              |
+| `fields.ts`          | `export default {...}`                         | Custom field type definitions    |
+
+### Config Directory (`config/`)
+
+All project configuration lives in `config/` with typed factory functions:
+
+| File                | Factory                                          | Package                        | Contains                                         |
+| ------------------- | ------------------------------------------------ | ------------------------------ | ------------------------------------------------ |
+| `config/auth.ts`    | `authConfig({...})`                              | `"questpie"`                   | Better Auth options (email/password, providers)   |
+| `config/app.ts`     | `appConfig({...})`                               | `"questpie"`                   | `locale`, `access`, `hooks`, `context`            |
+| `config/admin.ts`   | `adminConfig({...})`                             | `"@questpie/admin/server"`     | `sidebar`, `dashboard`, `branding`, `locale`      |
+| `config/openapi.ts` | `openApiConfig({...})`                           | `"@questpie/openapi"`          | OpenAPI spec info, Scalar UI options              |
+
+The `appConfig` uses `destructure` — properties map to individual createApp keys. Context resolver return type auto-propagates to handler `ctx`.
 
 ### Nested Namespacing
 
@@ -183,8 +187,11 @@ my-app/
       server/
         questpie.config.ts
         modules.ts
-        auth.ts
-        locale.ts
+        config/
+          auth.ts          <- authConfig({...})
+          app.ts           <- appConfig({ locale, access, hooks, context })
+          admin.ts         <- adminConfig({ sidebar, dashboard, branding, locale })
+          openapi.ts       <- openApiConfig({ info, scalar })
         collections/
           posts.ts
           categories.ts
@@ -196,13 +203,11 @@ my-app/
           send-email.ts
         services/
           blog.ts
-        routes/
-          webhook.ts
         emails/
           appointment-confirmation.ts
         .generated/
           index.ts
-          module.ts
+          factories.ts
       admin/
         admin.ts
         hooks.ts

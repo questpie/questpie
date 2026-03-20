@@ -134,29 +134,26 @@ export function coreCodegenPlugin(): CodegenPlugin {
 				discover: {
 					modules: "modules.ts",
 					fields: { pattern: "fields.ts", registryKey: "~fieldTypes" },
-					auth: "auth.ts",
-					locale: "locale.ts",
-					hooks: "hooks.ts",
-					defaultAccess: "access.ts",
-					contextResolver: "context.ts",
+					authConfig: "config/auth.ts",
+					appConfig: {
+						pattern: "config/app.ts",
+						destructure: {
+							locale: "locale",
+							access: "defaultAccess",
+							hooks: "hooks",
+							context: "contextResolver",
+						},
+					},
 				},
 				registries: {
 					singletonFactories: {
-						locale: {
-							configType: "LocaleConfig",
-							imports: [{ name: "LocaleConfig", from: "questpie" }],
+						appConfig: {
+							configType: "AppConfigInput",
+							imports: [{ name: "AppConfigInput", from: "questpie" }],
 						},
-						hooks: {
-							configType: "GlobalHooksInput",
-							imports: [{ name: "GlobalHooksInput", from: "questpie" }],
-						},
-						access: {
-							configType: "CollectionAccess",
-							imports: [{ name: "CollectionAccess", from: "questpie" }],
-						},
-						context: {
-							configType: "ContextResolver",
-							imports: [{ name: "ContextResolver", from: "questpie" }],
+						authConfig: {
+							configType: "AuthConfig",
+							imports: [{ name: "AuthConfig", from: "questpie" }],
 						},
 					},
 				},

@@ -87,10 +87,15 @@ export function adminPlugin(): CodegenPlugin {
 					},
 				},
 				discover: {
-					sidebar: "sidebar.ts",
-					dashboard: "dashboard.ts",
-					branding: "branding.ts",
-					adminLocale: "admin-locale.ts",
+					adminConfig: {
+						pattern: "config/admin.ts",
+						destructure: {
+							sidebar: "sidebar",
+							dashboard: "dashboard",
+							branding: "branding",
+							locale: "adminLocale",
+						},
+					},
 				},
 				registries: {
 					fieldExtensions: {
@@ -248,39 +253,11 @@ export function adminPlugin(): CodegenPlugin {
 						},
 					},
 					singletonFactories: {
-						branding: {
-							configType: "ServerBrandingConfig",
+						adminConfig: {
+							configType: "AdminConfigInput",
 							imports: [
 								{
-									name: "ServerBrandingConfig",
-									from: "@questpie/admin/server",
-								},
-							],
-						},
-						adminLocale: {
-							configType: "AdminLocaleConfig",
-							imports: [
-								{
-									name: "AdminLocaleConfig",
-									from: "@questpie/admin/server",
-								},
-							],
-						},
-						sidebar: {
-							configType: "SidebarContribution",
-							imports: [
-								{
-									name: "SidebarContribution",
-									from: "@questpie/admin/server",
-								},
-							],
-							isCallback: true,
-						},
-						dashboard: {
-							configType: "DashboardContribution",
-							imports: [
-								{
-									name: "DashboardContribution",
+									name: "AdminConfigInput",
 									from: "@questpie/admin/server",
 								},
 							],

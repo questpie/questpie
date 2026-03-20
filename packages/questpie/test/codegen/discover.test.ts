@@ -396,19 +396,19 @@ describe("discoverFiles", () => {
 
 	// ── Auth ──────────────────────────────────────────────────────────────────
 
-	it("discovers auth.ts as a single file", async () => {
-		await write("auth.ts", "export default {};");
+	it("discovers config/auth.ts as authConfig single file", async () => {
+		await write("config/auth.ts", "export default {};");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		const authSingle = result.singles.get("auth");
+		const authSingle = result.singles.get("authConfig");
 		expect(authSingle).not.toBeUndefined();
-		expect(authSingle!.key).toBe("auth");
-		expect(authSingle!.varName).toBe("_auth");
+		expect(authSingle!.key).toBe("authConfig");
+		expect(authSingle!.varName).toBe("_authConfig");
 		expect(authSingle!.exportType).toBe("default");
 	});
 
-	it("does not treat auth.ts as a collection/job/etc.", async () => {
-		await write("auth.ts", "export default {};");
+	it("does not treat config/auth.ts as a collection/job/etc.", async () => {
+		await write("config/auth.ts", "export default {};");
 		await write(
 			"collections/posts.ts",
 			"export const posts = collection('posts');",
@@ -416,7 +416,7 @@ describe("discoverFiles", () => {
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		expect(cat(result, "collections").size).toBe(1);
-		expect(result.singles.has("auth")).toBe(true);
+		expect(result.singles.has("authConfig")).toBe(true);
 	});
 
 	// ── Singles (modules, locale, hooks, access, context) ────────────────────
@@ -431,25 +431,15 @@ describe("discoverFiles", () => {
 		expect(file.exportType).toBe("default");
 	});
 
-	it("discovers locale.ts as a single", async () => {
-		await write("locale.ts", "export default {};");
+	it("discovers config/app.ts as appConfig single with destructure", async () => {
+		await write("config/app.ts", "export default {};");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		expect(result.singles.has("locale")).toBe(true);
-	});
-
-	it("discovers context.ts as contextResolver single", async () => {
-		await write("context.ts", "export default {};");
-
-		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		expect(result.singles.has("contextResolver")).toBe(true);
-	});
-
-	it("discovers access.ts as defaultAccess single", async () => {
-		await write("access.ts", "export default {};");
-
-		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		expect(result.singles.has("defaultAccess")).toBe(true);
+		expect(result.singles.has("appConfig")).toBe(true);
+		const file = result.singles.get("appConfig")!;
+		expect(file.destructure).toBeDefined();
+		expect(file.destructure!.locale).toBe("locale");
+		expect(file.destructure!.access).toBe("defaultAccess");
 	});
 
 	// ── Feature layout ────────────────────────────────────────────────────────

@@ -1,0 +1,208 @@
+---
+title: Seeds
+description: Database seeding for initial data, development fixtures, and test datasets.
+---
+
+Seeds populate your database with data using the full `AppContext` — collections, globals, services, and all infrastructure. Unlike migrations (which operate on raw SQL), seeds work through your application's typed API, ensuring data integrity and hook execution.
+
+## Defining a Seed
+
+Place seed files in `seeds/`. Each file exports a seed definition using the `seed()` factory:
+
+```ts title="seeds/site-settings.seed.ts"
+import { seed } from "questpie";
+
+export default seed({
+  id: "siteSettings",
+  description: "Default site settings",
+  category: "required",
+  async run({ globals, createContext, log }) {
+    log("Seeding site settings...");
+
+    const ctx = await createContext({ accessMode: "system", locale: "en" });
+    await globals.site_settings.update(
+      { shopName: "My Shop", tagline: "Welcome to our store" },
+      ctx,
+    );
+
+    log("Site settings seeded");
+  },
+});
+```
+
+## Seed Options
+
+| Option       | Type                     | Description                                     |
+| ------------ | ------------------------ | ----------------------------------------------- |
+| `id`         | `string`                 | Unique identifier for tracking execution         |
+| `description`| `string`                 | Human-readable description (shown in CLI output) |
+| `category`   | `SeedCategory`           | When this seed should run                        |
+| `run`        | `(ctx) => Promise<void>` | Seed logic — populate data                       |
+| `undo`       | `(ctx) => Promise<void>` | Optional: remove seeded data                     |
+| `dependsOn`  | `string[]`               | IDs of seeds that must run before this one        |
+
+## Categories
+
+Categories control when seeds run:
+
+| Category     | Purpose                               | Runs In                |
+| ------------ | ------------------------------------- | ---------------------- |
+| `"required"` | System bootstrap (admin user, default roles, settings) | Every environment |
+| `"dev"`      | Development/demo data (sample content, test users)     | Development only  |
+| `"test"`     | Test fixtures (known datasets for integration tests)   | Test suites only  |
+
+When you run `bunx questpie seed:run`, the `"required"` seeds always execute. Add `--category dev` to also run development seeds.
+
+## Seed Context
+
+The `run` and `undo` handlers receive a `SeedContext` — the full `AppContext` plus seed-specific helpers:
+
+| Property      | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `collections` | Typed collection API (create, update, find, delete)      |
+| `globals`     | Typed globals API                                        |
+| `db`          | Raw database instance                                    |
+| `queue`       | Publish background jobs                                  |
+| `email`       | Send emails                                              |
+| `services`    | User-defined services                                    |
+| `log`         | Seed output logger (prints to CLI)                       |
+| `createContext` | Create locale-specific contexts for multi-locale data  |
+
+### Multi-Locale Seeding
+
+Use `createContext` to seed data in multiple locales:
+
+```ts title="seeds/site-settings.seed.ts"
+import { seed } from "questpie";
+
+export default seed({
+  id: "siteSettings",
+  category: "required",
+  async run({ globals, createContext, log }) {
+    const ctxEn = await createContext({ accessMode: "system", locale: "en" });
+    const ctxSk = await createContext({ accessMode: "system", locale: "sk" });
+
+    await globals.site_settings.update(
+      { shopName: "Sharp Cuts", tagline: "Precision grooming" },
+      ctxEn,
+    );
+    await globals.site_settings.update(
+      { tagline: "Precízna starostlivosť" },
+      ctxSk,
+    );
+
+    log("Site settings seeded (EN + SK)");
+  },
+});
+```
+
+## Idempotency
+
+Seeds should be idempotent — safe to re-run without creating duplicates. Check for existing data before inserting:
+
+```ts title="seeds/demo-posts.seed.ts"
+import { seed } from "questpie";
+
+export default seed({
+  id: "demoPosts",
+  description: "Demo blog posts",
+  category: "dev",
+  dependsOn: ["siteSettings"],
+  async run({ collections, createContext, log }) {
+    const ctx = await createContext({ accessMode: "system", locale: "en" });
+
+    // Idempotency check
+    const existing = await collections.posts.find(
+      { where: { slug: { eq: "hello-world" } }, limit: 1 },
+      ctx,
+    );
+    if (existing.totalDocs > 0) {
+      log("Demo posts already exist, skipping");
+      return;
+    }
+
+    await collections.posts.create(
+      {
+        title: "Hello World",
+        slug: "hello-world",
+        content: "Welcome to our blog!",
+        isPublished: true,
+      },
+      ctx,
+    );
+    log("Demo posts created");
+  },
+});
+```
+
+## Dependencies
+
+Use `dependsOn` to declare execution order. The seed runner resolves dependencies via topological sort:
+
+```ts
+export default seed({
+  id: "demoData",
+  category: "dev",
+  dependsOn: ["siteSettings"], // Runs after siteSettings seed
+  async run({ collections, createContext, log }) {
+    // siteSettings is guaranteed to have run first
+  },
+});
+```
+
+## Undo
+
+Seeds can optionally define an `undo` function to remove seeded data:
+
+```ts
+export default seed({
+  id: "demoData",
+  category: "dev",
+  async run({ collections, createContext, log }) {
+    // ... create demo data
+  },
+  async undo({ collections, createContext, log }) {
+    const ctx = await createContext({ accessMode: "system" });
+    log("Cleaning demo data...");
+    await collections.posts.delete({ where: {} }, ctx);
+    await collections.services.delete({ where: {} }, ctx);
+    log("Demo data cleaned");
+  },
+});
+```
+
+## Running Seeds
+
+### CLI Commands
+
+```bash
+# Run all pending seeds (required category by default)
+bunx questpie seed:run
+
+# Run seeds of a specific category
+bunx questpie seed:run --category dev
+
+# Run a specific seed by ID
+bunx questpie seed:run --only siteSettings
+
+# Force re-run even if already executed
+bunx questpie seed:run --force
+
+# Dry-run: validate seeds without committing changes
+bunx questpie seed:run --validate
+```
+
+### Execution Tracking
+
+Seeds are tracked in the database. Once a seed has been executed, it will not run again unless you use `--force`. This prevents duplicate data when re-running seeds.
+
+<Callout type="info">
+The seed runner wraps each seed in a transaction. If a seed fails, its changes are rolled back and the seed is not marked as executed.
+</Callout>
+
+## Related Pages
+
+- [Jobs](/docs/backend/business-logic/jobs) — Background tasks
+- [Services](/docs/backend/business-logic/services) — Reusable logic
+- [CLI](/docs/reference/cli) — All CLI commands
+- [Codegen](/docs/backend/architecture/codegen) — How seeds are discovered

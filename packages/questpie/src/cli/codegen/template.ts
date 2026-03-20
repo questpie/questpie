@@ -88,7 +88,7 @@ export function generateTemplate(options: TemplateOptions): string {
 
 	// Import createApp + types
 	lines.push(
-		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type Questpie, type AppContext, type Registry, type QuestpieConfig, type QueueClient } from "questpie";',
+		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type Questpie, type AppContext, type Registry, type QuestpieConfig, type QueueClient, type CollectionAPI } from "questpie";',
 	);
 	lines.push("");
 
@@ -447,6 +447,43 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("");
 	}
 
+	// ── Context resolver return type auto-propagation ────────────
+	// If a context resolver is discovered (via appConfig.context or standalone context.ts),
+	// emit a type that extracts its return type and augments QuestpieContextExtension.
+	// This makes custom context properties available on all handler `ctx` parameters.
+	{
+		const appConfigFile = discovered.singles.get("appConfig");
+		const contextFile = discovered.singles.get("contextResolver");
+		let contextTypeExpr: string | null = null;
+
+		if (appConfigFile?.destructure && "context" in appConfigFile.destructure) {
+			// Composite config: context is a property of the appConfig export
+			contextTypeExpr = `typeof ${appConfigFile.varName}.context`;
+		} else if (contextFile) {
+			// Standalone context.ts
+			contextTypeExpr = `typeof ${contextFile.varName}`;
+		}
+
+		if (contextTypeExpr) {
+			lines.push("// Context resolver return type → auto-typed handler ctx");
+			lines.push(
+				`type _ContextReturn = ${contextTypeExpr} extends (...args: any[]) => any`,
+			);
+			lines.push(
+				`\t? Awaited<ReturnType<${contextTypeExpr}>>`,
+			);
+			lines.push("\t: {};");
+			lines.push("declare global {");
+			lines.push("\tnamespace Questpie {");
+			lines.push(
+				"\t\tinterface QuestpieContextExtension extends _ContextReturn {}",
+			);
+			lines.push("\t}");
+			lines.push("}");
+			lines.push("");
+		}
+	}
+
 	// ── App — the full Questpie<> app type ──────────────────────
 	{
 		const stateMembers: string[] = [];
@@ -501,6 +538,12 @@ export function generateTemplate(options: TemplateOptions): string {
 		const servicesCat = discovered.categories.get("services");
 		const hasServices = !!servicesCat;
 
+		// Skip App['api']['collections'] class getter indirection — map directly over AppCollections
+		lines.push(
+			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
+		);
+		lines.push("");
+
 		lines.push(
 			"// ── AppContext augmentation — auto-types ALL handlers ──────",
 		);
@@ -528,7 +571,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("\t\t\trealtime: App['realtime'];");
 		lines.push("");
 		lines.push("\t\t\t// Entity APIs");
-		lines.push("\t\t\tcollections: App['api']['collections'];");
+		lines.push("\t\t\tcollections: _CollectionsAPI;");
 		lines.push("\t\t\tglobals: App['api']['globals'];");
 		lines.push("\t\t\ttables: App['tables'];");
 		lines.push("");
@@ -610,7 +653,8 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push("\tcollections: AppCollections & Record<string, any>;");
 	lines.push("\tglobals: AppGlobals & Record<string, any>;");
 	lines.push("\troutes: AppRoutes;");
-	const authFile = discovered.singles.get("auth");
+	const authConfigFile = discovered.singles.get("authConfig");
+	const authFile = authConfigFile ?? discovered.singles.get("auth");
 	if (authFile) {
 		lines.push(`\tauth: typeof ${authFile.varName};`);
 	}
@@ -728,16 +772,48 @@ function emitNewArchitectureRuntime(
 		}
 	}
 
+	// Collect state keys that are covered by destructured or *Config singles,
+	// so we can skip flat singles that would be overridden.
+	const suppressedKeys = new Set<string>();
+	const allSingles = [...coreSingles.core, ...coreSingles.plugin];
+	for (const file of allSingles) {
+		if (file.destructure) {
+			for (const stateKey of Object.values(file.destructure)) {
+				suppressedKeys.add(stateKey);
+			}
+		}
+		// *Config singles (e.g. authConfig) suppress their base key (auth)
+		if (file.key.endsWith("Config")) {
+			suppressedKeys.add(file.key.slice(0, -"Config".length));
+		}
+	}
+
+	// Helper to emit a single file entry in createApp
+	const emitSingle = (file: DiscoveredFile) => {
+		if (file.destructure) {
+			// Destructured single: emit property-access assignments
+			for (const [prop, stateKey] of Object.entries(file.destructure)) {
+				lines.push(`\t\t${safeKey(stateKey)}: ${file.varName}.${prop} as any,`);
+			}
+		} else if (file.key.endsWith("Config")) {
+			// *Config single: emit under the base key name
+			const baseKey = file.key.slice(0, -"Config".length);
+			lines.push(`\t\t${safeKey(baseKey)}: ${file.varName} as any,`);
+		} else if (!suppressedKeys.has(file.key)) {
+			lines.push(`\t\t${safeKey(file.key)}: ${file.varName} as any,`);
+		}
+	};
+
 	// Core singles (auth, locale, hooks, access, context)
 	// Cast with `as any` because user files may use `as const` (readonly),
 	// and the whole expression is cast to App anyway.
 	for (const file of coreSingles.core) {
-		lines.push(`\t\t${safeKey(file.key)}: ${file.varName} as any,`);
+		emitSingle(file);
 	}
 
 	// Plugin singles (sidebar, dashboard, branding, adminLocale, etc.)
 	for (const file of coreSingles.plugin) {
-		lines.push(`\t\t${safeKey(file.key)}: ${file.varName} as any,`);
+		emitSingle(file);
 	}
 
 	// Spread singles (sidebar, dashboard — mergeStrategy: "spread")
@@ -833,11 +909,8 @@ function getCoreSingleKeys(
 	// We use a simple heuristic: keys that match well-known core patterns.
 	return new Set([
 		"modules",
-		"auth",
-		"locale",
-		"hooks",
-		"defaultAccess",
-		"contextResolver",
+		"authConfig",
+		"appConfig",
 	]);
 }
 

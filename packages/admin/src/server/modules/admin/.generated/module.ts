@@ -9,9 +9,9 @@ import _modules from "../modules";
 
 // ── Collections ────────────────────────────────────────────
 import _coll_account from "../collections/account";
-import _coll_adminLocks from "../collections/admin-locks";
-import _coll_adminPreferences from "../collections/admin-preferences";
-import _coll_adminSavedViews from "../collections/admin-saved-views";
+import _coll_admin_locks from "../collections/admin-locks";
+import _coll_admin_preferences from "../collections/admin-preferences";
+import _coll_admin_saved_views from "../collections/admin-saved-views";
 import _coll_apikey from "../collections/apikey";
 import _coll_assets from "../collections/assets";
 import _coll_session from "../collections/session";
@@ -29,9 +29,9 @@ import { translationFunctions as _route_translations } from "../routes/translati
 import { widgetDataFunctions as _route_widgetData } from "../routes/widget-data";
 
 // ── Views ────────────────────────────────────────────
-import _view_form from "../views/form";
+import _view_collectionForm from "../views/form";
+import _view_collectionTable from "../views/table";
 import _view_globalForm from "../views/global-form";
-import _view_table from "../views/table";
 
 // ── Components ────────────────────────────────────────────
 import _comp_badge from "../components/badge";
@@ -47,9 +47,9 @@ import _sidebar from "../sidebar";
 
 export interface AdminCollections {
 	account: typeof _coll_account;
-	adminLocks: typeof _coll_adminLocks;
-	adminPreferences: typeof _coll_adminPreferences;
-	adminSavedViews: typeof _coll_adminSavedViews;
+	admin_locks: typeof _coll_admin_locks;
+	admin_preferences: typeof _coll_admin_preferences;
+	admin_saved_views: typeof _coll_admin_saved_views;
 	apikey: typeof _coll_apikey;
 	assets: typeof _coll_assets;
 	session: typeof _coll_session;
@@ -60,9 +60,9 @@ export interface AdminCollections {
 export type AdminRoutes = typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
 
 export interface AdminViews {
-	form: typeof _view_form;
+	collectionForm: typeof _view_collectionForm;
+	collectionTable: typeof _view_collectionTable;
 	globalForm: typeof _view_globalForm;
-	table: typeof _view_table;
 }
 
 export interface AdminComponents {
@@ -79,9 +79,9 @@ const _module = {
 	modules: _modules,
 	collections: {
 		account: _coll_account,
-		adminLocks: _coll_adminLocks,
-		adminPreferences: _coll_adminPreferences,
-		adminSavedViews: _coll_adminSavedViews,
+		admin_locks: _coll_admin_locks,
+		admin_preferences: _coll_admin_preferences,
+		admin_saved_views: _coll_admin_saved_views,
 		apikey: _coll_apikey,
 		assets: _coll_assets,
 		session: _coll_session,
@@ -99,9 +99,9 @@ const _module = {
 		..._route_widgetData,
 	} as AdminRoutes,
 	views: {
-		form: _view_form,
+		collectionForm: _view_collectionForm,
+		collectionTable: _view_collectionTable,
 		globalForm: _view_globalForm,
-		table: _view_table,
 	} as AdminViews,
 	components: {
 		badge: _comp_badge,

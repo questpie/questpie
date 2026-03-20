@@ -1,36 +1,99 @@
 ---
 title: Search
-description: Full-text search with PostgreSQL and embedding-based search.
+description: Full-text search with PostgreSQL FTS and pgvector embeddings.
 ---
 
-QUESTPIE supports full-text search using PostgreSQL's built-in FTS capabilities and optional embedding-based semantic search.
+QUESTPIE supports full-text search using PostgreSQL's built-in FTS capabilities and optional embedding-based semantic search with pgvector.
 
-## PostgreSQL Full-Text Search
+<Callout type="info">
+Currently, PostgreSQL FTS and pgvector are the only implemented search adapters. External services like Meilisearch or Elasticsearch are not yet supported.
+</Callout>
 
-Collections can be indexed for full-text search:
+## Making Collections Searchable
 
-```ts
-.searchable(["title", "body", "tags"])
+Add `.searchable()` to index a collection for full-text search:
+
+```ts title="src/questpie/server/collections/posts.ts"
+import { collection } from "#questpie/factories"
+
+export default collection("posts")
+  .fields(({ f }) => ({
+    title: f.text(255).required(),
+    body: f.textarea(),
+    tags: f.text(500),
+  }))
+  .searchable({
+    content: (record) => `${record.title} ${record.body ?? ""} ${record.tags ?? ""}`,
+    metadata: (record) => ({
+      published: record.status === "published",
+    }),
+  })
 ```
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `content` | `(record) => string` | Extracts plain text for full-text indexing. Called on create/update. |
+| `metadata` | `(record) => object` | Structured metadata for faceted filtering. |
+
+## How It Works
+
+When a record is created or updated:
+
+1. The `content` function extracts plain text from the record
+2. PostgreSQL generates a `tsvector` for the text using the configured language
+3. A GIN index enables fast full-text queries
+4. BM25 ranking orders results by relevance
 
 ## Client Search
 
 ```ts
 const results = await client.search.search({
-	query: "haircut styles",
-	collections: ["posts", "services"],
-});
+  query: "haircut styles",
+  collections: ["posts", "services"],
+  limit: 20,
+})
 ```
 
 ## Search Options
 
-| Option        | Type       | Description           |
-| ------------- | ---------- | --------------------- |
-| `query`       | `string`   | Search query          |
-| `collections` | `string[]` | Collections to search |
-| `limit`       | `number`   | Max results           |
+| Option | Type | Description |
+| --- | --- | --- |
+| `query` | `string` | Search query (supports PostgreSQL tsquery syntax) |
+| `collections` | `string[]` | Limit search to specific collections |
+| `limit` | `number` | Maximum results (default: 50) |
+
+## Server-Side Search
+
+From routes or hooks:
+
+```ts
+handler: async ({ search }) => {
+  const results = await search.search({
+    query: "booking confirmation",
+    collections: ["posts"],
+  })
+  return results
+}
+```
+
+## Embedding-Based Search (pgvector)
+
+For semantic search using vector embeddings:
+
+```ts
+.searchable({
+  content: (record) => record.title + " " + record.body,
+  embeddings: {
+    enabled: true,
+    dimensions: 1536,
+    model: "text-embedding-3-small",
+  },
+})
+```
+
+This stores vector embeddings alongside the text index, enabling similarity-based queries that understand meaning rather than just keywords.
 
 ## Related Pages
 
-- [Collections](/docs/backend/data-modeling/collections) — Data models
+- [Collections](/docs/backend/data-modeling/collections) — Data modeling
 - [Querying](/docs/frontend/querying) — Query operators

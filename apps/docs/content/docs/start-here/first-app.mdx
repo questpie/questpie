@@ -5,10 +5,20 @@ description: Build a working CRUD API with a server route in 5 minutes.
 
 Build a working API with a collection, a server route, and an HTTP handler. This takes about 5 minutes.
 
-## 1. Define a collection
+## 1. Scaffold the project
+
+```bash
+bunx create-questpie my-app
+cd my-app
+bun install
+```
+
+This generates a project with the file-convention structure, a configured `questpie.config.ts`, and a working dev setup. See [Project Structure](/docs/start-here/project-structure) for details on every directory.
+
+## 2. Define a collection
 
 ```ts title="src/questpie/server/collections/tasks.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("tasks").fields(({ f }) => ({
 	title: f.text(255).required(),
@@ -26,7 +36,7 @@ This defines:
 - Zod validation for create/update
 - Type-safe query operators for `where`, `orderBy`
 
-## 2. Add a server route
+## 3. Add a server route
 
 ```ts title="src/questpie/server/routes/get-overdue-tasks.ts"
 import { route } from "questpie";
@@ -48,7 +58,7 @@ export default route()
 
 Routes are typed server-side logic exposed as endpoints. The `collections` object is injected through context — fully typed from your schema.
 
-## 3. Run codegen
+## 4. Run codegen
 
 ```bash
 bunx questpie generate
@@ -60,13 +70,13 @@ This discovers your files and generates:
 - `AppConfig` type for the client SDK (includes collections, globals, and routes)
 - `AppContext` module augmentation
 
-## 4. Push to database
+## 5. Push to database
 
 ```bash
 bunx questpie push
 ```
 
-## 5. Wire up the HTTP handler
+## 6. Wire up the HTTP handler
 
 For TanStack Start:
 
@@ -85,7 +95,7 @@ export const Route = createAPIFileRoute("/api/$")({
 });
 ```
 
-## 6. Test it
+## 7. Test it
 
 ```bash
 # List tasks
@@ -102,7 +112,7 @@ curl -X POST http://localhost:3000/api/get-overdue-tasks \
   -d '{}'
 ```
 
-## 7. Use the typed client
+## 8. Use the typed client
 
 ```ts title="src/lib/client.ts"
 import { createClient } from "questpie/client";

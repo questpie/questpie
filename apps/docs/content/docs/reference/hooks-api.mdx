@@ -1,57 +1,264 @@
 ---
 title: Hooks API
-description: Lifecycle hooks reference — beforeValidate, beforeChange, afterChange, beforeDelete, afterDelete.
+description: Complete lifecycle hooks reference — all hook types, contexts, and execution order.
 ---
 
-## Hook Definition
+## Overview
+
+Hooks allow you to run custom logic at specific points in the collection/global lifecycle. Each hook can be a single function or an array of functions (executed in order).
 
 ```ts
-.hooks({
-  beforeValidate?: async (ctx) => void,
-  beforeChange?: async (ctx) => void,
-  afterChange?: async (ctx) => void,
-  beforeDelete?: async (ctx) => void,
-  afterDelete?: async (ctx) => void,
-})
+collection("posts")
+  .fields(({ f }) => ({ ... }))
+  .hooks({
+    beforeValidate: ({ data, operation }) => { ... },
+    beforeChange: ({ data, operation }) => { ... },
+    afterChange: async ({ data, original, operation }) => { ... },
+    beforeRead: ({ data }) => { ... },
+    afterRead: ({ data }) => { ... },
+    beforeDelete: async ({ data }) => { ... },
+    afterDelete: async ({ data }) => { ... },
+    beforeOperation: ({ data, operation }) => { ... },
+    beforeTransition: async ({ data, fromStage, toStage }) => { ... },
+    afterTransition: async ({ data, fromStage, toStage }) => { ... },
+  })
 ```
 
-## Hook Context
+---
 
-### `beforeValidate` / `beforeChange` / `afterChange`
+## Hook Execution Order
 
-| Property        | Type                   | Description                        |
-| --------------- | ---------------------- | ---------------------------------- |
-| `data`          | `Record`               | Record data (mutable in `before*`) |
-| `operation`     | `"create" \| "update"` | Current operation                  |
-| `original`      | `Record \| undefined`  | Previous state (update only)       |
-| `collections`   | `AppCollections`       | Collection API                     |
-| `globals`       | `AppGlobals`           | Globals API                        |
-| `db`            | `Database`             | Drizzle instance                   |
-| `session`       | `Session \| null`      | Auth session                       |
-| `queue`         | `QueueClient`          | Job queue                          |
-| `email`         | `MailerService`        | Email service                      |
-| Custom services | —                      | Services from `services/`          |
-
-### `beforeDelete` / `afterDelete`
-
-| Property      | Type              | Description      |
-| ------------- | ----------------- | ---------------- |
-| `id`          | `string`          | Record ID        |
-| `collections` | `AppCollections`  | Collection API   |
-| `db`          | `Database`        | Drizzle instance |
-| `session`     | `Session \| null` | Auth session     |
-| `queue`       | `QueueClient`     | Job queue        |
-
-## Lifecycle Order
-
-### Create / Update
+### Create
 
 ```text
-beforeValidate → Schema Validation → beforeChange → DB Write → afterChange
+beforeOperation → beforeValidate → Schema Validation → beforeChange → DB INSERT → afterChange → afterRead
+```
+
+### Update
+
+```text
+beforeOperation → beforeValidate → Schema Validation → beforeChange → DB UPDATE → afterChange → afterRead
 ```
 
 ### Delete
 
 ```text
-beforeDelete → DB Delete → afterDelete
+beforeOperation → beforeDelete → DB DELETE → afterDelete
+```
+
+### Read
+
+```text
+beforeOperation → beforeRead → DB SELECT → afterRead
+```
+
+### Workflow Transition
+
+```text
+beforeTransition → Version Snapshot → afterTransition
+```
+
+---
+
+## Hook Types
+
+### `beforeOperation`
+
+Runs before any operation. Use for logging, rate limiting, or early validation.
+
+```ts
+beforeOperation: ({ data, operation, session }) => {
+  console.log(`${operation} on posts by ${session?.user?.email}`);
+}
+```
+
+| Property      | Type                                           | Description          |
+| ------------- | ---------------------------------------------- | -------------------- |
+| `data`        | `TInsert \| TUpdate \| TSelect`               | Input data           |
+| `operation`   | `"create" \| "update" \| "delete" \| "read"`  | Current operation    |
+| `session`     | `Session \| null`                              | Auth session         |
+| `db`          | `Database`                                     | Drizzle instance     |
+| `collections` | `AppCollections`                               | Collection API       |
+| `globals`     | `AppGlobals`                                   | Globals API          |
+
+### `beforeValidate`
+
+Runs before schema validation on create/update. Mutate `data` to transform input before validation.
+
+```ts
+beforeValidate: ({ data, operation }) => {
+  if (operation === "create" && !data.slug) {
+    data.slug = slugify(data.title);
+  }
+}
+```
+
+| Property    | Type                   | Description                        |
+| ----------- | ---------------------- | ---------------------------------- |
+| `data`      | `TInsert \| TUpdate`   | Mutable input data                 |
+| `operation` | `"create" \| "update"` | Current operation                  |
+
+### `beforeChange`
+
+Runs after validation, before the database write. Mutate `data` to set derived fields.
+
+```ts
+beforeChange: ({ data, operation, session }) => {
+  if (operation === "create") {
+    data.createdBy = session?.user?.id;
+  }
+}
+```
+
+| Property    | Type                   | Description                        |
+| ----------- | ---------------------- | ---------------------------------- |
+| `data`      | `TInsert \| TUpdate`   | Validated input data (mutable)     |
+| `operation` | `"create" \| "update"` | Current operation                  |
+
+### `afterChange`
+
+Runs after the database write. Use for notifications, webhooks, and side effects.
+
+```ts
+afterChange: async ({ data, original, operation, queue }) => {
+  if (operation === "update" && original) {
+    if (data.status !== original.status) {
+      await queue.statusChange.publish({ id: data.id, status: data.status });
+    }
+  }
+  if (operation === "create") {
+    await queue.welcome.publish({ userId: data.authorId });
+  }
+}
+```
+
+| Property    | Type                    | Description                             |
+| ----------- | ----------------------- | --------------------------------------- |
+| `data`      | `TSelect`               | Complete record after write             |
+| `original`  | `TSelect \| undefined`  | Previous state (update only)            |
+| `operation` | `"create" \| "update"`  | Current operation                       |
+
+### `beforeRead`
+
+Runs before read operations. Use to modify query options or add filters.
+
+```ts
+beforeRead: ({ data }) => {
+  // Modify query context before execution
+}
+```
+
+### `afterRead`
+
+Runs after any operation that returns data. Use to transform output or add computed fields.
+
+```ts
+afterRead: ({ data }) => {
+  data.displayName = `${data.firstName} ${data.lastName}`;
+  data.isNew = Date.now() - data.createdAt.getTime() < 86400000;
+}
+```
+
+| Property    | Type      | Description                      |
+| ----------- | --------- | -------------------------------- |
+| `data`      | `TSelect` | Complete record (mutable)        |
+| `operation` | `string`  | The operation that produced data |
+
+### `beforeDelete`
+
+Runs before the database delete. Throw to prevent deletion.
+
+```ts
+beforeDelete: async ({ data, db }) => {
+  const hasOrders = await db.select().from(orders)
+    .where(eq(orders.userId, data.id));
+  if (hasOrders.length > 0) {
+    throw new Error("Cannot delete user with active orders");
+  }
+}
+```
+
+| Property | Type      | Description              |
+| -------- | --------- | ------------------------ |
+| `data`   | `TSelect` | Record to be deleted     |
+
+### `afterDelete`
+
+Runs after the database delete. Use for cleanup and notifications.
+
+```ts
+afterDelete: async ({ data, queue }) => {
+  await queue.userDeleted.publish({ userId: data.id });
+}
+```
+
+| Property | Type      | Description          |
+| -------- | --------- | -------------------- |
+| `data`   | `TSelect` | Deleted record       |
+
+### `beforeTransition` / `afterTransition`
+
+Workflow hooks that run around stage transitions. Throw in `beforeTransition` to abort.
+
+```ts
+beforeTransition: async ({ data, fromStage, toStage, session }) => {
+  if (toStage === "published" && !data.content) {
+    throw new Error("Cannot publish without content");
+  }
+},
+afterTransition: async ({ data, fromStage, toStage, queue }) => {
+  if (toStage === "published") {
+    await queue.notifySubscribers.publish({ postId: data.id });
+  }
+}
+```
+
+| Property    | Type              | Description                  |
+| ----------- | ----------------- | ---------------------------- |
+| `data`      | `TSelect`         | Current record               |
+| `fromStage` | `string`          | Stage transitioning from     |
+| `toStage`   | `string`          | Stage transitioning to       |
+| `locale`    | `string \| undefined` | Current locale           |
+
+---
+
+## Common Hook Context Properties
+
+All hooks receive these properties in addition to their type-specific ones:
+
+| Property      | Type              | Description                   |
+| ------------- | ----------------- | ----------------------------- |
+| `db`          | `Database`        | Drizzle database instance     |
+| `collections` | `AppCollections`  | Typed collection API          |
+| `globals`     | `AppGlobals`      | Typed globals API             |
+| `session`     | `Session \| null` | Current auth session          |
+| `queue`       | `QueueClient`     | Job queue client              |
+| `email`       | `MailerService`   | Email service                 |
+| `kv`          | `KVStore`         | Key-value store               |
+| `logger`      | `Logger`          | Pino logger                   |
+| `app`         | `QuestpieApp`     | App instance                  |
+| Custom        | any               | Services from `services/`     |
+
+---
+
+## Multiple Hook Functions
+
+Each hook type accepts an array of functions. They execute in order:
+
+```ts
+.hooks({
+  afterChange: [
+    async ({ data }) => { /* first handler */ },
+    async ({ data }) => { /* second handler */ },
+  ],
+})
+```
+
+Multiple `.hooks()` calls on the same builder merge their handlers:
+
+```ts
+collection("posts")
+  .hooks({ afterChange: handler1 })
+  .hooks({ afterChange: handler2 })
+// Both handler1 and handler2 will run
 ```

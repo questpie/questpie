@@ -48,6 +48,14 @@ export interface DiscoveredFile {
 	 * a bundle export that aggregates them.
 	 */
 	isBundle?: boolean;
+	/**
+	 * When set, this single file should be destructured into multiple createApp keys.
+	 * Keys = property names on the exported object.
+	 * Values = createApp argument keys (state keys).
+	 *
+	 * @see DiscoverPattern.destructure
+	 */
+	destructure?: Record<string, string>;
 }
 
 // ============================================================================
@@ -121,6 +129,34 @@ export type DiscoverPattern =
 			 * ```
 			 */
 			registryKey?: string;
+			/**
+			 * Destructure a composite config file into multiple createApp keys.
+			 *
+			 * When a single file exports an object with multiple config properties
+			 * (e.g. `config/app.ts` exports `{ locale, access, hooks, context }`),
+			 * this maps each property to a createApp argument key.
+			 *
+			 * Keys = property names on the exported object.
+			 * Values = createApp argument keys (state keys).
+			 *
+			 * @example
+			 * ```ts
+			 * appConfig: {
+			 *   pattern: "config/app.ts",
+			 *   destructure: {
+			 *     locale: "locale",
+			 *     access: "defaultAccess",
+			 *     hooks: "hooks",
+			 *     context: "contextResolver",
+			 *   },
+			 * }
+			 * // Generated:
+			 * // import _appConfig from "../config/app.js";
+			 * // locale: _appConfig.locale,
+			 * // defaultAccess: _appConfig.access,
+			 * ```
+			 */
+			destructure?: Record<string, string>;
 	  };
 
 // ============================================================================

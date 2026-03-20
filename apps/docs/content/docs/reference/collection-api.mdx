@@ -1,71 +1,341 @@
 ---
 title: Collection API
-description: Collection builder methods reference.
+description: Complete reference for collection() builder methods.
 ---
 
 ## `collection(name)`
 
-```ts
-import { collection } from "#questpie";
+Creates a new collection builder. Collections map to database tables and provide typed CRUD operations.
 
-collection(name: string)
+```ts
+import { collection } from "#questpie/factories";
+
+const posts = collection("posts")
+  .fields(({ f }) => ({
+    title: f.text(255).required(),
+    content: f.richText().localized(),
+    status: f.select(["draft", "published"]),
+    author: f.relation("author_id").to("users"),
+  }))
+  .title(({ f }) => f.title)
+  .options({ timestamps: true, softDelete: true })
+  .hooks({
+    beforeChange: async ({ data, operation }) => {
+      if (operation === "create") {
+        data.slug = slugify(data.title);
+      }
+    },
+  })
+  .access({
+    read: true,
+    create: ({ session }) => !!session,
+    update: ({ session }) => session?.user?.role === "admin",
+    delete: ({ session }) => session?.user?.role === "admin",
+  });
 ```
 
-### Builder Methods
+## Builder Methods
 
-| Method          | Signature                            | Description            |
-| --------------- | ------------------------------------ | ---------------------- |
-| `.fields()`     | `(({ f }) => Record<string, Field>)` | Define data fields     |
-| `.title()`      | `(({ f }) => FieldRef)`              | Record display title   |
-| `.admin()`      | `(({ c }) => AdminConfig)`           | Admin UI metadata      |
-| `.indexes()`    | `(({ table }) => Index[])`           | Database indexes       |
-| `.list()`       | `(({ v, f }) => ListView)`           | List view config       |
-| `.form()`       | `(({ v, f }) => FormView)`           | Form view config       |
-| `.hooks()`      | `(HooksConfig)`                      | Lifecycle hooks        |
-| `.access()`     | `(AccessConfig)`                     | Access control         |
-| `.preview()`    | `(PreviewConfig)`                    | Live preview           |
-| `.options()`    | `(OptionsConfig)`                    | Timestamps, versioning |
-| `.search()`     | `(SearchConfig)`                     | Search indexing        |
-| `.searchable()` | `(string[])`                         | Searchable fields      |
+All methods are chainable and return a new builder instance (immutable pattern).
 
-### `.admin()` Options
+| Method          | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `.fields()`     | Define data fields using the field builder            |
+| `.title()`      | Set the display title field                           |
+| `.options()`    | Configure timestamps, soft delete, versioning         |
+| `.hooks()`      | Attach lifecycle hooks                                |
+| `.access()`     | Set access control rules                              |
+| `.searchable()` | Configure full-text search indexing                    |
+| `.validation()`  | Override or refine auto-generated validation schemas  |
+| `.upload()`     | Enable file upload support with storage integration   |
+| `.indexes()`    | Define database indexes and constraints               |
+| `.set()`        | Generic extension point for plugins                   |
+
+With `@questpie/admin` installed, the following extension methods are also available:
+
+| Method       | Description                          |
+| ------------ | ------------------------------------ |
+| `.admin()`   | Admin UI metadata (label, icon)      |
+| `.list()`    | Configure the list view              |
+| `.form()`    | Configure the form view              |
+| `.preview()` | Configure live preview               |
+| `.actions()` | Define custom record actions          |
+
+---
+
+## `.fields(callback)`
+
+Define collection fields using the field builder. The callback receives `{ f }` where `f` is a proxy providing all registered field factories.
 
 ```ts
-.admin(({ c }) => ({
-  label: string | Record<string, string>,
-  icon: c.icon("ph:icon-name"),
-  hidden?: boolean,
+.fields(({ f }) => ({
+  title: f.text(255).required(),
+  slug: f.text(255).unique(),
+  content: f.richText().localized(),
+  publishedAt: f.date(),
+  views: f.number().default(0),
+  featured: f.boolean().default(false),
+  tags: f.object(),
+  author: f.relation("author_id").to("users"),
+  category: f.relation("category_id").to("categories"),
 }))
 ```
 
-### `.preview()` Options
+The `f` proxy includes all built-in field types plus any custom types contributed by modules. After codegen runs, module-contributed fields (like `f.richText()` or `f.blocks()`) become available automatically.
+
+## `.title(callback)`
+
+Set which field is used as the record display title. The callback receives a field proxy where accessing a property returns its name.
 
 ```ts
-.preview({
-  enabled: boolean,
-  position?: "right" | "bottom",
-  defaultWidth?: number,
-  url: ({ record }) => string,
-})
+.title(({ f }) => f.title)
 ```
 
-### `.options()` Options
+The title field generates a computed `_title` column on every record, used for display in admin lists and relation selectors.
+
+## `.options(config)`
+
+Configure collection-level options.
 
 ```ts
 .options({
-  timestamps?: boolean,    // createdAt, updatedAt
-  versioning?: boolean,    // Content versioning
-  softDelete?: boolean,    // Soft delete
+  timestamps: true,      // Adds createdAt, updatedAt (default: true)
+  softDelete: true,      // Adds deletedAt, records are soft-deleted
+  versioning: true,      // Creates a versions table for history
 })
 ```
 
-### `.access()` Options
+### Versioning with Workflow
+
+Versioning can include a publishing workflow with stage transitions:
+
+```ts
+.options({
+  versioning: {
+    enabled: true,
+    maxVersions: 50,
+    workflow: {
+      stages: ["draft", "review", "published"],
+      initialStage: "draft",
+    },
+  },
+})
+```
+
+When `workflow` is set, versioning is automatically enabled.
+
+## `.hooks(config)`
+
+Attach lifecycle hooks. Each hook can be a single function or an array. Multiple `.hooks()` calls merge their hooks.
+
+```ts
+.hooks({
+  beforeValidate: ({ data, operation }) => {
+    if (operation === "create" && !data.slug) {
+      data.slug = slugify(data.title);
+    }
+  },
+  beforeChange: ({ data, operation, db, session }) => {
+    if (operation === "create") {
+      data.createdBy = session?.user?.id;
+    }
+  },
+  afterChange: async ({ data, original, operation, queue }) => {
+    if (operation === "update" && original?.status !== data.status) {
+      await queue.statusChange.publish({ id: data.id });
+    }
+  },
+  beforeDelete: async ({ data, db }) => {
+    // Prevent deletion if has dependencies
+    const deps = await db.select().from(orders)
+      .where(eq(orders.productId, data.id));
+    if (deps.length > 0) {
+      throw new Error("Cannot delete: has active orders");
+    }
+  },
+  afterDelete: async ({ data, queue }) => {
+    await queue.cleanup.publish({ id: data.id });
+  },
+  afterRead: ({ data }) => {
+    data.displayName = `${data.firstName} ${data.lastName}`;
+  },
+})
+```
+
+See [Hooks API](/docs/reference/hooks-api) for the full hook reference.
+
+## `.access(config)`
+
+Set access control rules. Each rule can be a boolean or a function receiving the request context.
 
 ```ts
 .access({
-  read?: boolean | ((ctx) => boolean),
-  create?: boolean | ((ctx) => boolean),
-  update?: boolean | ((ctx) => boolean),
-  delete?: boolean | ((ctx) => boolean),
+  read: true,
+  create: ({ session }) => !!session,
+  update: ({ session, id }) => {
+    if (session?.user?.role === "admin") return true;
+    return session?.user?.id === id;
+  },
+  delete: ({ session }) => session?.user?.role === "admin",
 })
+```
+
+## `.searchable(config)`
+
+Configure full-text search indexing with BM25 ranking and trigrams.
+
+```ts
+.searchable({
+  content: (record) => `${record.title} ${extractText(record.content)}`,
+  metadata: (record) => ({ status: record.status, category: record.categoryId }),
+})
+```
+
+The `content` function extracts plain text for full-text indexing. The `metadata` function provides structured data for faceted filtering.
+
+## `.validation(options)`
+
+Override or refine the auto-generated Zod validation schemas. By default, schemas are generated from field definitions automatically.
+
+```ts
+.validation({
+  exclude: { id: true, createdAt: true },
+  refine: {
+    email: (s) => s.email("Invalid email address"),
+    age: (s) => s.min(0, "Age must be positive"),
+  },
+})
+```
+
+## `.upload(options)`
+
+Enable file upload support. Automatically adds storage fields (`key`, `filename`, `mimeType`, `size`, `visibility`), extends the output type with `{ url: string }`, and registers upload HTTP routes.
+
+```ts
+collection("media")
+  .fields(({ f }) => ({
+    alt: f.text(),
+    folder: f.text(),
+  }))
+  .upload({
+    visibility: "public",       // "public" | "private"
+    maxSize: 10_000_000,        // 10 MB
+    allowedTypes: ["image/*", "application/pdf"],
+  })
+```
+
+Upload collections get additional CRUD methods: `upload()` and `uploadMany()`.
+
+## `.indexes(callback)`
+
+Define database indexes and constraints. The callback receives `{ table }` for column references.
+
+```ts
+.indexes(({ table }) => [
+  uniqueIndex().on(table.slug),
+  index().on(table.createdAt),
+  index().on(table.status, table.publishedAt),
+])
+```
+
+## `.set(key, value)`
+
+Generic extension point used by plugins to attach metadata without monkey-patching.
+
+```ts
+.set("admin", { icon: { type: "icon", props: { name: "ph:article" } } })
+.set("adminList", { view: "collection-table", columns: ["title", "status"] })
+```
+
+---
+
+## Admin Extension Methods
+
+These methods are available when `@questpie/admin` is installed.
+
+### `.admin(callback)`
+
+Set admin UI metadata for the collection.
+
+```ts
+.admin(({ c }) => ({
+  label: { en: "Blog Posts", sk: "Blogove prispevky" },
+  icon: c.icon("ph:article"),
+  hidden: false,
+}))
+```
+
+### `.list(callback)`
+
+Configure the admin list view.
+
+```ts
+.list(({ v, f }) => v.collectionTable({
+  columns: [f.title, f.status, f.author, f.createdAt],
+  defaultSort: { field: "createdAt", order: "desc" },
+  filters: [f.status, f.author],
+}))
+```
+
+### `.form(callback)`
+
+Configure the admin form view.
+
+```ts
+.form(({ v, f }) => v.collectionForm({
+  fields: [
+    f.title,
+    f.slug,
+    {
+      type: "section",
+      label: "Content",
+      fields: [f.content, f.excerpt],
+    },
+  ],
+  sidebar: {
+    position: "right",
+    fields: [f.status, f.author, f.publishedAt, f.featured],
+  },
+}))
+```
+
+### `.preview(config)`
+
+Enable live preview for the collection.
+
+```ts
+.preview({
+  enabled: true,
+  position: "right",
+  defaultWidth: 400,
+  url: ({ record }) => `/blog/${record.slug}`,
+})
+```
+
+### `.actions(config)`
+
+Define custom record actions.
+
+```ts
+.actions([
+  {
+    name: "publish",
+    label: "Publish",
+    handler: async ({ id, collections }) => {
+      await collections.posts.update(id, { status: "published" });
+    },
+  },
+])
+```
+
+---
+
+## Type Inference
+
+Collections provide type inference through the `$infer` property:
+
+```ts
+type PostSelect = typeof posts.$infer.select;
+type PostInsert = typeof posts.$infer.insert;
+type PostUpdate = typeof posts.$infer.update;
 ```
