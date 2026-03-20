@@ -1,4 +1,4 @@
-import { adminConfig } from "@questpie/admin/server";
+import { adminConfig } from "#questpie/factories";
 
 export default adminConfig({
 	branding: {
