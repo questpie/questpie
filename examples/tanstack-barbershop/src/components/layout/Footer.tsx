@@ -10,7 +10,7 @@
  * - Copyright
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 
 import { useTranslation } from "@/lib/providers/locale-provider";
 

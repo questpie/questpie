@@ -5,7 +5,7 @@
  * Supports both automatic fetch and manual selection modes.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 
 import { RichTextRenderer, type TipTapDoc } from "@questpie/admin/client";
 

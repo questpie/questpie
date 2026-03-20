@@ -11,7 +11,7 @@
  * - Highlights: Shows search term highlighted in record titles
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 

@@ -83,12 +83,14 @@ Every discovered entity gets a **key** that becomes the import variable name, ob
 
 | Scenario | Key Source | Example |
 |---|---|---|
-| `factoryFunctions` + **named export**, single match | Filename (camelCase) | `blocks/hero.ts` → `hero` |
-| `factoryFunctions` + **named exports**, multiple | Export name | Two exports → each export name |
-| `factoryFunctions` + **default export**, has string arg | **Factory string arg** (kebab→camelCase) | `views/table.ts` with `export default view("collection-table", ...)` → `collectionTable` |
+| `factoryFunctions` + **named export**, has string arg | **Factory string arg** (kebab→camelCase) | `export const x = block("hero-banner")` → `heroBanner` |
+| `factoryFunctions` + **named export**, no string arg | **Export name** | `export const heroBlock = block(dynamicVar)` → `heroBlock` |
+| `factoryFunctions` + **default export**, has string arg | **Factory string arg** (kebab→camelCase) | `export default view("collection-table", ...)` → `collectionTable` |
 | `factoryFunctions` + **default export**, no string arg | Filename (camelCase) | `views/custom.ts` with `export default view(config)` → `custom` |
 | No `factoryFunctions` | Filename (camelCase) | `fields/boolean.ts` → `boolean` |
 | Recursive category | Path segments (joined by keySeparator) | `routes/webhooks/stripe.ts` → `webhooks/stripe` |
+
+The priority is: **factory string arg** > **export name** > **filename**.
 
 #### Why factory arg over filename?
 

@@ -5,7 +5,7 @@
  * Uses Better Auth's admin plugin for invitation acceptance.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 

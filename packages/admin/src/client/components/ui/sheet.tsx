@@ -1,5 +1,5 @@
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import type * as React from "react";
 
 import { cn } from "../../lib/utils";

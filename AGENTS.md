@@ -400,7 +400,7 @@ Inside `packages/questpie`:
 ### Component Stack
 
 - **Primitives**: `@base-ui/react` (NOT @radix-ui).
-- **Icons**: `@iconify-icon/react` with Phosphor set (`ph:icon-name`). NOT lucide-react, NOT @phosphor-icons/react.
+- **Icons**: `@iconify/react` with Phosphor set (`ph:icon-name`). NOT lucide-react, NOT @phosphor-icons/react.
 - **Toast**: `sonner` — `toast.error()`, `toast.success()`.
 - **Adding components**: `bunx shadcn@latest add <name>` from `packages/admin`.
 

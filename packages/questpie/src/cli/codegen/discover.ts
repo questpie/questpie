@@ -663,14 +663,18 @@ async function processFile(
 		const results: DiscoveredFile[] = [];
 		const namedMatches = matches.filter((m) => !m.isDefault);
 		const defaultMatch = matches.find((m) => m.isDefault);
-		// For named exports: key from filename (single match) or export name (multi).
-		// For default exports: key from factory string arg if available, else filename.
+		// Key derivation priority (same for named and default exports):
+		//   1. Factory string arg (entity identity): block("hero-banner") → heroBanner
+		//   2. Export name (developer intent): export const heroBlock = block(dynamicVar) → heroBlock
+		//   3. Filename (fallback): blocks/banner.ts → banner
 		// See AGENTS.md "Codegen Key Derivation" for the full decision table.
 		const fileKey = deriveFileKey(relPath, category);
 		if (namedMatches.length > 0) {
 			// Named factory exports found — each becomes a separate entity
 			for (const m of namedMatches) {
-				const key = namedMatches.length === 1 ? fileKey : m.exportName;
+				const key = m.entityKey
+					? kebabToCamelCase(m.entityKey)
+					: m.exportName;
 				results.push({
 					absolutePath,
 					key,
@@ -683,11 +687,6 @@ async function processFile(
 			}
 		} else if (defaultMatch) {
 			// Only a default factory export — single entity.
-			// When factory has a string arg (e.g. view("collection-table")),
-			// use camelCase of factory arg as key — the factory arg is the
-			// entity's identity, the filename is just file organization.
-			// This is consistent: collection("posts") → "posts",
-			// block("hero") → "hero", view("collection-table") → "collectionTable".
 			const effectiveKey = defaultMatch.entityKey
 				? kebabToCamelCase(defaultMatch.entityKey)
 				: fileKey;

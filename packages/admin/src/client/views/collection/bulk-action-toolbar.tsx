@@ -10,7 +10,7 @@
 
 "use client";
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Table } from "@tanstack/react-table";
 import * as React from "react";

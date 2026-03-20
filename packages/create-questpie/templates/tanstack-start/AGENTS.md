@@ -462,7 +462,7 @@ OpenAPI is registered as a module in `src/questpie/server/modules.ts` via `openA
 
 ### Icons
 
-Use `@iconify-icon/react` with Phosphor icon set:
+Use `@iconify/react` with Phosphor icon set:
 
 - Prefix: `ph:` (e.g., `ph:house`, `ph:article`, `ph:gear`)
 - Weight variants: `-bold`, `-fill`, `-duotone`, `-light`, `-thin`
@@ -519,6 +519,6 @@ Always use these exact versions — check `package.json` before upgrading:
 - **Using `process.env` directly** — Use the `env` object from `src/lib/env.ts`.
 - **Using Zod v3 API** — This project uses Zod v4. Use `z.object()` etc. from `zod` (v4).
 - **Using `asChild` prop** — This project uses `@base-ui/react`, not Radix. Use `render` prop instead.
-- **Using Radix UI or Lucide icons** — Use `@base-ui/react` and `@iconify-icon/react` with `ph:` prefix.
+- **Using Radix UI or Lucide icons** — Use `@base-ui/react` and `@iconify/react` with `ph:` prefix.
 - **Adding UI config to database schema** — Admin UI config is UI-only, defined in builder chain.
 - **Importing `app` from `#questpie` in blocks/collections/hooks** — Files inside `collections/`, `globals/`, `routes/`, `hooks/`, `blocks/` are imported BY `.generated/index.ts`, so importing from it back creates circular dependencies. Use the `ctx` parameters instead.

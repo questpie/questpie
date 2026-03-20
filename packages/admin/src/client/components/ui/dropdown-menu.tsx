@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import type * as React from "react";
 
 import { cn } from "../../lib/utils";

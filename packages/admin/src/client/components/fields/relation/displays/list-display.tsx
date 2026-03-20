@@ -2,7 +2,7 @@
  * List Display - vertical list with action buttons
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 
 import { useTranslation } from "../../../../i18n/hooks";

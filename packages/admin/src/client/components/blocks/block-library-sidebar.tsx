@@ -7,7 +7,7 @@
 
 "use client";
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 
 import type { BlockCategoryConfig } from "#questpie/admin/server/augmentation.js";

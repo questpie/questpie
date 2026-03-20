@@ -81,7 +81,7 @@ function getGlobalMetaQueryKey(global: string) {
  * });
  * ```
  */
-function getGlobalMetaQueryOptions(global: string, client: any) {
+export function getGlobalMetaQueryOptions(global: string, client: any) {
 	return {
 		queryKey: getGlobalMetaQueryKey(global),
 		queryFn: async (): Promise<GlobalMeta> => {

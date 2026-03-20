@@ -4,7 +4,7 @@
  * Icon-based toolbar using Iconify icons (Phosphor set) for a clean, modern UI.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import type { Editor } from "@tiptap/core";
 import * as React from "react";
 

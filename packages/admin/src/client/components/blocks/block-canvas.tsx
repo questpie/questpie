@@ -19,7 +19,7 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 
 import { RenderProfiler } from "../../lib/render-profiler.js";

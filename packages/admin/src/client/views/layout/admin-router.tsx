@@ -13,7 +13,7 @@
  * - /admin/:customPage -> Custom pages
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 
 import type { PageDefinition } from "../../builder/page/page.js";
@@ -22,11 +22,14 @@ import type { ComponentRegistry } from "../../builder/types/field-types.js";
 import type { DashboardConfig } from "../../builder/types/ui-config.js";
 import { Card } from "../../components/ui/card.js";
 import { Skeleton } from "../../components/ui/skeleton.js";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSuspenseAdminConfig } from "../../hooks/use-admin-config";
+import { getCollectionMetaQueryOptions } from "../../hooks/use-collection-meta";
 import { useCollectionSchema } from "../../hooks/use-collection-schema";
+import { getGlobalMetaQueryOptions } from "../../hooks/use-global-meta";
 import { useGlobalSchema } from "../../hooks/use-global-schema";
 import { parsePrefillParams } from "../../hooks/use-prefill-params";
-import { useAdminStore } from "../../runtime/provider";
+import { selectClient, useAdminStore } from "../../runtime/provider";
 import { DashboardGrid } from "../dashboard/dashboard-grid";
 
 // ============================================================================
@@ -799,6 +802,21 @@ function AdminRouterInner({
 			: "";
 
 	const activeGlobalName = route.type === "global-edit" ? route.name : "";
+
+	// Prefetch collection/global metadata before the view's Suspense boundary.
+	// When TableView/FormView call useSuspenseCollectionMeta, data is already cached.
+	const queryClient = useQueryClient();
+	const client = useAdminStore(selectClient);
+	if (activeCollectionName && client) {
+		queryClient.prefetchQuery(
+			getCollectionMetaQueryOptions(activeCollectionName, client),
+		);
+	}
+	if (activeGlobalName && client) {
+		queryClient.prefetchQuery(
+			getGlobalMetaQueryOptions(activeGlobalName, client),
+		);
+	}
 
 	const { data: activeCollectionSchema } = useCollectionSchema(
 		activeCollectionName as any,

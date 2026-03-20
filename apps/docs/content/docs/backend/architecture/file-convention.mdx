@@ -18,7 +18,7 @@ Each directory maps to a category of entity:
 | `routes/` (raw) | Routes          | Default          | Filename → slash-separated path |
 | `services/`     | Services        | Default          | Filename → camelCase            |
 | `emails/`       | Email templates | Default          | Filename → camelCase            |
-| `blocks/`       | Blocks          | Named exports    | Export name                     |
+| `blocks/`       | Blocks          | Named exports    | Factory arg → export name       |
 | `messages/`     | i18n messages   | Default          | Filename → locale key           |
 | `migrations/`   | DB migrations   | Default          | Array (ordered)                 |
 | `seeds/`        | DB seeds        | Default          | Array (ordered)                 |
@@ -117,7 +117,7 @@ routes/
 1. **Scan** — Codegen walks the configured directories
 2. **Match** — Files matching the category pattern are picked up
 3. **Import** — Each file is imported and its exports are read
-4. **Key derivation** — Filename → camelCase (or export name for named exports)
+4. **Key derivation** — Factory string arg → export name → filename (camelCase)
 5. **Merge** — Project entities + module entities are merged
 6. **Emit** — Generated types and runtime wiring in `.generated/`
 

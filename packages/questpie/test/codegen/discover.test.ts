@@ -901,6 +901,7 @@ describe("multi-export factory discovery", () => {
 
 		const result = await discoverFiles(rootDir, outDir, factoryOpts);
 		const blocks = result.categories.get("blocks")!;
+		// Factory string arg has highest priority → "hero-banner" → "heroBanner"
 		expect(blocks.has("heroBanner")).toBe(true);
 	});
 
@@ -912,6 +913,7 @@ describe("multi-export factory discovery", () => {
 
 		const result = await discoverFiles(rootDir, outDir, factoryOpts);
 		const blocks = result.categories.get("blocks")!;
+		// No string arg → falls back to export name
 		expect(blocks.has("heroBlock")).toBe(true);
 	});
 
@@ -983,6 +985,7 @@ describe("multi-export factory discovery", () => {
 		await write("blocks/file1.ts", 'export const hero = block("hero");');
 		await write("blocks/file2.ts", 'export const hero2 = block("hero");');
 
+		// Both files use block("hero") → both get key "hero" → conflict
 		await expect(discoverFiles(rootDir, outDir, factoryOpts)).rejects.toThrow(
 			/duplicate blocks key "hero"/,
 		);

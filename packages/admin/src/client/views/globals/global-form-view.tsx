@@ -5,7 +5,7 @@
  * Renders global settings form with sections, tabs, sidebar, validation.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import type { GlobalSchema } from "questpie";
 import { QuestpieClientError } from "questpie/client";
 import * as React from "react";

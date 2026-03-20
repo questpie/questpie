@@ -5,7 +5,7 @@
  * When `item` prop is provided, delegates to ObjectArrayField for object items.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 

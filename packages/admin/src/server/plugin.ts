@@ -98,6 +98,18 @@ export function adminPlugin(): CodegenPlugin {
 					},
 				},
 				registries: {
+					builderFactories: {
+						block: {
+							builderClass: "BlockBuilder",
+							import: {
+								name: "BlockBuilder",
+								from: "@questpie/admin/server",
+							},
+							createMethod: "create",
+							returnType:
+								"import('@questpie/admin/server').BlockBuilder<{ name: TName }>",
+						},
+					},
 					fieldExtensions: {
 						admin: {
 							stateKey: "admin",
@@ -266,8 +278,19 @@ export function adminPlugin(): CodegenPlugin {
 					},
 				},
 				transform(ctx) {
-					// Ensure dashboard exists as empty array when no dashboard.ts found
-					if (!ctx.singles.has("dashboard")) {
+					// Ensure dashboard exists as empty array when no dashboard config found.
+					// Check both standalone singles AND destructured properties (e.g. config/admin.ts
+					// with destructure: { dashboard: "dashboard" }).
+					let hasDashboard = ctx.singles.has("dashboard");
+					if (!hasDashboard) {
+						for (const file of ctx.singles.values()) {
+							if (file.destructure && Object.values(file.destructure).includes("dashboard")) {
+								hasDashboard = true;
+								break;
+							}
+						}
+					}
+					if (!hasDashboard) {
 						ctx.addRuntimeCode("dashboard: [] as const,");
 					}
 				},
@@ -290,7 +313,7 @@ export function adminPlugin(): CodegenPlugin {
 						dir: "blocks",
 						description: "Server-side block definition",
 						template: ({ kebab, camel }) =>
-							`import { block } from "@questpie/admin/server";\n\nexport const ${camel}Block = block("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text("Title"),\n\t}));\n`,
+							`import { block } from "#questpie/factories";\n\nexport const ${camel}Block = block("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text("Title"),\n\t}));\n`,
 					},
 					view: {
 						dir: "views",

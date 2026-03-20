@@ -20,7 +20,7 @@ The QUESTPIE admin panel is a **projection of your server schema** — not the f
 
 - **React** + **Tailwind CSS v4** + **shadcn** components
 - **@base-ui/react** primitives (NOT @radix-ui)
-- **@iconify-icon/react** with Phosphor icon set (`ph:icon-name`)
+- **@iconify/react** with Phosphor icon set (`ph:icon-name`)
 - **sonner** for toasts — `toast.error()`, `toast.success()`
 - Brutalist flat design: `--radius: 0px`, no shadows
 
@@ -341,17 +341,17 @@ For the full server-side setup (context resolver, type augmentation, access rule
 
 2. **CRITICAL: Importing from `@radix-ui/*`** — use `@base-ui/react` instead.
 
-3. **HIGH: Using `@phosphor-icons/react`** — use `@iconify-icon/react` with `ph:` prefix.
+3. **HIGH: Using `@phosphor-icons/react`** — use `@iconify/react` with `ph:` prefix.
 
    ```tsx
    // WRONG
    import { CaretDown } from "@phosphor-icons/react";
    // CORRECT
-   import { Icon } from "@iconify-icon/react";
+   import { Icon } from "@iconify/react";
    <Icon icon="ph:caret-down" width={16} height={16} />;
    ```
 
-4. **HIGH: Using lucide-react icons** — use `@iconify-icon/react` with Phosphor icon set.
+4. **HIGH: Using lucide-react icons** — use `@iconify/react` with Phosphor icon set.
 
 5. **MEDIUM: Custom `<button>` or `<div>` instead of shadcn components** — use `<Button>`, `<Card>`, etc.
 

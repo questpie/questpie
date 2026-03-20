@@ -5,7 +5,7 @@
  * Automatically reads from AdminProvider context when props are not provided.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
@@ -427,7 +427,7 @@ function QuestpieSymbol({ className }: { className?: string }) {
 			strokeWidth="2"
 			strokeLinecap="square"
 			className={cn(
-				"size-8 shrink-0 text-[#0a0a0a] dark:text-white",
+				"size-6 shrink-0 text-[#0a0a0a] dark:text-white",
 				className,
 			)}
 		>

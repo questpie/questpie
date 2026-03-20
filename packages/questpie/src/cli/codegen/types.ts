@@ -466,6 +466,8 @@ export interface CodegenTargetContribution {
 		fieldExtensions?: Record<string, RegistryExtension>;
 		/** Singleton factory functions (branding, sidebar, locale, etc.). */
 		singletonFactories?: Record<string, SingletonFactory>;
+		/** Builder factory functions that need wrapped field defs (e.g. block()). */
+		builderFactories?: Record<string, BuilderFactory>;
 	};
 
 	/**
@@ -600,6 +602,7 @@ export interface ResolvedTarget {
 		globalExtensions: Record<string, RegistryExtension>;
 		fieldExtensions: Record<string, RegistryExtension>;
 		singletonFactories: Record<string, SingletonFactory>;
+		builderFactories: Record<string, BuilderFactory>;
 	};
 
 	/** Merged callback parameter definitions from all contributing plugins. */
@@ -797,6 +800,48 @@ export interface SingletonFactory {
 	 * plain config and callback form.
 	 */
 	isCallback?: boolean;
+}
+
+// ============================================================================
+// Builder Factory
+// ============================================================================
+
+/**
+ * Declaration for a builder factory function generated in factories.ts.
+ * Builder factories create builder instances that need the wrapped field defs
+ * (with extension methods like .admin(), .form()) passed at construction time.
+ *
+ * Unlike collection() and global() which are always generated, builder
+ * factories are contributed by plugins (e.g. admin contributes block()).
+ *
+ * @example
+ * ```ts
+ * // Plugin declares:
+ * builderFactories: {
+ *   block: {
+ *     builderClass: "BlockBuilder",
+ *     import: { name: "BlockBuilder", from: "@questpie/admin/server" },
+ *     createMethod: "create",
+ *   },
+ * }
+ * // Codegen generates:
+ * import { BlockBuilder } from "@questpie/admin/server";
+ * export function block<TName extends string>(name: TName) {
+ *   return BlockBuilder.create(name, _allFieldDefs);
+ * }
+ * ```
+ */
+export interface BuilderFactory {
+	/** Name of the builder class (e.g. "BlockBuilder"). */
+	builderClass: string;
+	/** Import declaration for the builder class. */
+	import: { name: string; from: string };
+	/** Static method name on the builder class that accepts (name, fieldDefs). */
+	createMethod: string;
+	/** TypeScript generic signature for the factory function. Defaults to `<TName extends string>`. */
+	genericSignature?: string;
+	/** TypeScript return type expression. Use `$CLASS` as placeholder for the builder class name. */
+	returnType?: string;
 }
 
 // ============================================================================

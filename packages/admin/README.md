@@ -326,7 +326,7 @@ import "@questpie/admin/styles/index.css";
 ## Component Stack
 
 - **Primitives**: `@base-ui/react` (NOT Radix)
-- **Icons**: `@iconify-icon/react` with Phosphor set (`ph:icon-name`)
+- **Icons**: `@iconify/react` with Phosphor set (`ph:icon-name`)
 - **Styling**: Tailwind CSS v4 + shadcn components
 - **Toast**: `sonner`
 

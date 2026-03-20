@@ -1101,11 +1101,3 @@ section {
 	}
 }
 
-iconify-icon {
-	display: inline-block;
-}
-
-iconify-icon:not([width]) {
-	width: 1em;
-	height: 1em;
-}

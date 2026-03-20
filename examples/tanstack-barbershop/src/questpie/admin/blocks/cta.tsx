@@ -5,7 +5,7 @@
  * Design: Bold background colors with contrasting text.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";

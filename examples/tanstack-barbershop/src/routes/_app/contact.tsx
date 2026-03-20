@@ -4,7 +4,7 @@
  * Displays shop location, contact info, and business hours.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import { createFileRoute } from "@tanstack/react-router";
 
 import {

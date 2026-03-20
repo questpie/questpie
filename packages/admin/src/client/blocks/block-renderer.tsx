@@ -7,7 +7,7 @@
  * @example
  * ```tsx
  * import { BlockRenderer } from "@questpie/admin/client";
- * import { blocks } from "~/admin/blocks";
+ * import { blocks } from "@/admin/blocks";
  *
  * function PageContent({ page }) {
  *   return (

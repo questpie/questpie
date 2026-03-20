@@ -264,6 +264,7 @@ export function resolveTargetGraph(
 						globalExtensions: {},
 						fieldExtensions: {},
 						singletonFactories: {},
+						builderFactories: {},
 					},
 					callbackParams: {},
 					transforms: [],
@@ -349,6 +350,12 @@ export function resolveTargetGraph(
 					Object.assign(
 						target.registries.singletonFactories,
 						reg.singletonFactories,
+					);
+				}
+				if (reg.builderFactories) {
+					Object.assign(
+						target.registries.builderFactories,
+						reg.builderFactories,
 					);
 				}
 			}
@@ -600,22 +607,33 @@ export async function runCodegen(
 		});
 	}
 
-	// 7. Write output
+	// 7. Validate generated code syntax before writing
+	// Catches stray lines, unclosed brackets, and other template bugs early.
+	const filesToWrite: Array<{ path: string; code: string }> = [];
 	const outputPath = join(outDir, outputFile);
+	filesToWrite.push({ path: outputPath, code });
+	if (moduleRegistriesCode) {
+		filesToWrite.push({
+			path: join(outDir, "registries.ts"),
+			code: moduleRegistriesCode,
+		});
+	}
+	if (factoriesCode) {
+		filesToWrite.push({
+			path: join(outDir, "factories.ts"),
+			code: factoriesCode,
+		});
+	}
+
+	for (const file of filesToWrite) {
+		validateGeneratedSyntax(file.code, file.path);
+	}
+
+	// 8. Write output
 	if (!dryRun) {
 		await mkdir(outDir, { recursive: true });
-		await writeFile(outputPath, code, "utf-8");
-
-		// Write registries.ts for module factory registry augmentations
-		if (moduleRegistriesCode) {
-			const registriesPath = join(outDir, "registries.ts");
-			await writeFile(registriesPath, moduleRegistriesCode, "utf-8");
-		}
-
-		// Always write factories.ts in root app mode
-		if (factoriesCode) {
-			const factoriesPath = join(outDir, "factories.ts");
-			await writeFile(factoriesPath, factoriesCode, "utf-8");
+		for (const file of filesToWrite) {
+			await writeFile(file.path, file.code, "utf-8");
 		}
 	}
 
@@ -625,6 +643,34 @@ export async function runCodegen(
 		outputPath,
 		discovered,
 	};
+}
+
+// ============================================================================
+// Syntax validation
+// ============================================================================
+
+/**
+ * Validate that generated TypeScript code is syntactically valid.
+ *
+ * Uses Bun's transpiler to parse the code. If parsing fails, throws a
+ * descriptive error with the offending line — much easier to debug than
+ * a runtime Vite/rolldown parse error in the browser.
+ *
+ * This catches template bugs like stray lines outside expressions,
+ * unclosed brackets, duplicate declarations, etc.
+ */
+function validateGeneratedSyntax(code: string, filePath: string): void {
+	try {
+		const transpiler = new Bun.Transpiler({ loader: "ts" });
+		transpiler.transformSync(code);
+	} catch (err: any) {
+		const msg = err?.message ?? String(err);
+		const relPath = relative(process.cwd(), filePath);
+		throw new Error(
+			`[codegen] Generated code has syntax errors in ${relPath}:\n${msg}\n\n` +
+				`This is a codegen bug — the template produced invalid TypeScript.`,
+		);
+	}
 }
 
 // ============================================================================
@@ -724,13 +770,24 @@ export async function runAllTargets(
 					extraEntities,
 				});
 
-				// Write output
+				// Validate & write output
 				const outputPath = join(targetOutDir, target.outputFile);
+				validateGeneratedSyntax(output.code, outputPath);
+				if (output.additionalFiles) {
+					for (const [relPath, content] of Object.entries(
+						output.additionalFiles,
+					)) {
+						validateGeneratedSyntax(
+							content,
+							join(targetOutDir, relPath),
+						);
+					}
+				}
+
 				if (!dryRun) {
 					await mkdir(targetOutDir, { recursive: true });
 					await writeFile(outputPath, output.code, "utf-8");
 
-					// Write additional files if provided
 					if (output.additionalFiles) {
 						for (const [relPath, content] of Object.entries(
 							output.additionalFiles,

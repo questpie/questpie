@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import { format } from "date-fns";
 import { useState } from "react";
 import { DayPicker } from "react-day-picker";

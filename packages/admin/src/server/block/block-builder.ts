@@ -311,8 +311,41 @@ export class BlockBuilder<
 > {
 	private _state: TState;
 
+	/**
+	 * Runtime field factories map. When provided (by codegen-generated factories),
+	 * includes both builtin fields AND module-contributed fields with extension
+	 * methods (e.g. `.admin()`, `.form()`). Falls back to raw builtinFields +
+	 * adminFields when not provided (direct BlockBuilder usage).
+	 */
+	private _fieldDefs?: Record<string, any>;
+
 	constructor(state: TState) {
 		this._state = state;
+	}
+
+	/**
+	 * Create a new BlockBuilder with optional pre-wrapped field defs.
+	 *
+	 * Mirrors CollectionBuilder.create() — codegen-generated factory functions
+	 * pass the merged+wrapped field map so that field extension methods
+	 * (`.admin()`, `.form()`) are available inside `.fields()` callbacks.
+	 */
+	static create<TName extends string, TFieldTypes extends Record<string, any> = AdminBlockFields>(
+		name: TName,
+		fieldDefs?: Record<string, any>,
+	): BlockBuilder<{ name: TName }, TFieldTypes> {
+		const builder = new BlockBuilder<{ name: TName }, TFieldTypes>({ name } as any);
+		if (fieldDefs) {
+			builder._fieldDefs = fieldDefs;
+		}
+		return builder;
+	}
+
+	/** Create a child builder that inherits _fieldDefs. */
+	private _child(state: any): BlockBuilder<any, TFieldMap, any> {
+		const child = new BlockBuilder<any, TFieldMap, any>(state);
+		child._fieldDefs = this._fieldDefs;
+		return child;
 	}
 
 	/**
@@ -349,14 +382,10 @@ export class BlockBuilder<
 				? configOrFn({ c: createComponentProxy(registeredComponents) })
 				: configOrFn;
 
-		return new BlockBuilder<
-			TState & { admin: AdminBlockConfig },
-			TFieldMap,
-			TData
-		>({
+		return this._child({
 			...this._state,
 			admin: config,
-		} as TState & { admin: AdminBlockConfig });
+		});
 	}
 
 	/**
@@ -383,17 +412,19 @@ export class BlockBuilder<
 		TFieldMap,
 		TData
 	> {
-		// Resolve the factory immediately (same pattern as CollectionBuilder)
-		const context = createFieldsCallbackContext({
-			...builtinFields,
-			...adminFields,
-		});
+		// Use pre-wrapped field defs when available (codegen-generated factory),
+		// otherwise fall back to raw builtinFields + adminFields.
+		const context = createFieldsCallbackContext(
+			this._fieldDefs ?? { ...builtinFields, ...adminFields },
+		);
 		const resolvedFields = factory(context as any);
 
-		return new BlockBuilder({
+		const child = new BlockBuilder({
 			...this._state,
 			fields: resolvedFields,
 		} as any);
+		child._fieldDefs = this._fieldDefs;
+		return child;
 	}
 
 	/**
@@ -423,10 +454,10 @@ export class BlockBuilder<
 		},
 	): BlockBuilder<TState & { form: { fields: FieldLayoutItem[] } }, TFieldMap, TData> {
 		const resolved = configFn({ f: createFieldNameProxy() });
-		return new BlockBuilder({
+		return this._child({
 			...this._state,
 			form: resolved,
-		} as any);
+		});
 	}
 
 	/**
@@ -445,11 +476,11 @@ export class BlockBuilder<
 		TFieldMap,
 		TData
 	> {
-		return new BlockBuilder({
+		return this._child({
 			...this._state,
 			allowChildren: true,
 			maxChildren,
-		} as TState & { allowChildren: true; maxChildren?: number });
+		});
 	}
 
 	/**
@@ -522,18 +553,18 @@ export class BlockBuilder<
 	// Implementation
 	prefetch(fnOrConfig: any): any {
 		if (typeof fnOrConfig === "function") {
-			return new BlockBuilder({
+			return this._child({
 				...this._state,
 				prefetch: fnOrConfig,
-			} as any);
+			});
 		}
 
 		const { with: withFields, loader } = fnOrConfig;
-		return new BlockBuilder({
+		return this._child({
 			...this._state,
 			prefetchWith: withFields,
 			_prefetchLoader: loader,
-		} as any);
+		});
 	}
 
 	/**

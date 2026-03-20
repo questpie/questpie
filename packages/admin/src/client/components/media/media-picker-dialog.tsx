@@ -22,7 +22,7 @@
  * ```
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 import { toast } from "sonner";
 

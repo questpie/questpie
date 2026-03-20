@@ -25,11 +25,13 @@
 		"release": "turbo run build --filter='./packages/*' && bun run scripts/publish.ts"
 	},
 	"dependencies": {
+		"@iconify/react": "^6.0.2",
 		"server-only": "^0.0.1"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "^0.5.2",
 		"@changesets/cli": "^2.29.8",
+		"@iconify/json": "^2.2.452",
 		"fumadocs-typescript": "^5.0.0",
 		"oxfmt": "^0.41.0",
 		"oxlint": "^1.56.0",

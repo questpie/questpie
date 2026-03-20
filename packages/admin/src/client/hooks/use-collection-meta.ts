@@ -106,7 +106,7 @@ function getCollectionMetaQueryKey(collection: string) {
  * });
  * ```
  */
-function getCollectionMetaQueryOptions(collection: string, client: any) {
+export function getCollectionMetaQueryOptions(collection: string, client: any) {
 	return {
 		queryKey: getCollectionMetaQueryKey(collection),
 		queryFn: async (): Promise<CollectionMeta> => {

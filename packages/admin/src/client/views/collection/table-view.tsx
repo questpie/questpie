@@ -5,7 +5,7 @@
  * This is the default list view registered in the admin view registry.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import {
 	type ColumnDef,
 	flexRender,

@@ -1,4 +1,4 @@
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import type * as React from "react";
 import { useState } from "react";
 

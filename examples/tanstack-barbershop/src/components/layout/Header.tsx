@@ -10,7 +10,7 @@
  * - CTA button (from app)
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 

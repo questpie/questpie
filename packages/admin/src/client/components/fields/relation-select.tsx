@@ -8,7 +8,7 @@
  * - Responsive: Popover on desktop, Drawer on mobile
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { QuestpieApp } from "questpie/client";
 import * as React from "react";

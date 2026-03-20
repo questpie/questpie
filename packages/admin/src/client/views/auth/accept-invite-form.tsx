@@ -2,7 +2,7 @@
  * Accept Invite Form - complete registration after receiving invitation
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useForm, useWatch } from "react-hook-form";
 

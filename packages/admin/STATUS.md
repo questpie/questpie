@@ -540,9 +540,9 @@ declare module "@questpie/admin/builder" {
 import { Admin } from "@questpie/admin/builder";
 import { AdminLayoutProvider } from "@questpie/admin/views/layout";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
-import { admin } from "~/admin/admin";
-import { appClient } from "~/lib/client";
-import { queryClient } from "~/lib/query-client";
+import { admin } from "@/admin/admin";
+import { appClient } from "@/lib/client";
+import { queryClient } from "@/lib/query-client";
 import "@questpie/admin/styles/index.css";
 
 const adminInstance = Admin.from(admin);

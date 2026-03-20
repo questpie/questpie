@@ -8,7 +8,7 @@
  * - AssetPreviewField (400px form preview)
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import type * as React from "react";
 
 import { Button } from "../../../../components/ui/button";

@@ -6,7 +6,7 @@
  * @example
  * ```ts
  * import { createTanStackAuthGuard } from "@questpie/admin/server/adapters/tanstack";
- * import { app } from "~/questpie/server/app";
+ * import { app } from "@/questpie/server/app";
  *
  * export const Route = createFileRoute("/admin")({
  *   beforeLoad: createTanStackAuthGuard({ app, loginPath: "/admin/login" }),
@@ -67,7 +67,7 @@ export interface BeforeLoadContext {
  * ```ts
  * import { createFileRoute } from "@tanstack/react-router";
  * import { createTanStackAuthGuard } from "@questpie/admin/server/adapters/tanstack";
- * import { app } from "~/questpie/server/app";
+ * import { app } from "@/questpie/server/app";
  *
  * export const Route = createFileRoute("/admin")({
  *   beforeLoad: createTanStackAuthGuard({

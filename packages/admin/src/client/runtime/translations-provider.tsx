@@ -88,7 +88,7 @@ interface TranslationsProviderProps {
  * });
  * ```
  */
-function getAdminTranslationsQueryOptions(client: any, locale: string) {
+export function getAdminTranslationsQueryOptions(client: any, locale: string) {
 	return {
 		queryKey: ["questpie", "adminTranslations", locale] as const,
 		queryFn: async () => {
@@ -128,7 +128,7 @@ function getAdminTranslationsQueryOptions(client: any, locale: string) {
  * });
  * ```
  */
-function getAdminLocalesQueryOptions(client: any) {
+export function getAdminLocalesQueryOptions(client: any) {
 	return {
 		queryKey: ["questpie", "adminLocales"] as const,
 		queryFn: async () => {

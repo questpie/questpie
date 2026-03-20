@@ -7,11 +7,11 @@ import {
 	useLocation,
 } from "@tanstack/react-router";
 
+import { authClient } from "@/lib/auth-client";
+import { client } from "@/lib/client";
+import { queryClient } from "@/lib/query-client";
+import { admin } from "@/questpie/admin/admin";
 import { AdminLayoutProvider } from "@questpie/admin/client";
-import { authClient } from "~/lib/auth-client";
-import { client } from "~/lib/client";
-import { queryClient } from "~/lib/query-client";
-import { admin } from "~/questpie/admin/admin";
 
 import adminCss from "../admin.css?url";
 

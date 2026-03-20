@@ -10,7 +10,7 @@
  * - Recursive nesting of sections/tabs
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import type * as React from "react";
 
 import type {

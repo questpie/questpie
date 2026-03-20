@@ -2,7 +2,7 @@
  * Setup Form - create first admin account
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useForm, useWatch } from "react-hook-form";
 

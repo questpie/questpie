@@ -4,7 +4,7 @@
  * Displays a single blog post with full content, author info, and live preview support.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 
 import { getBlogPost } from "@/lib/getBlogPosts.function";

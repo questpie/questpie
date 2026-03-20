@@ -14,6 +14,7 @@
  */
 
 import type {
+	BuilderFactory,
 	CallbackParamDefinition,
 	CategoryDeclaration,
 	RegistryExtension,
@@ -520,6 +521,49 @@ export function generateFactoryTemplate(
 	}
 	lines.push("}");
 	lines.push("");
+
+	// ── Builder factory functions (plugin-contributed) ─────────
+	const builderFactories = new Map<string, BuilderFactory>();
+	for (const [name, factory] of Object.entries(
+		target.registries.builderFactories,
+	)) {
+		builderFactories.set(name, factory);
+	}
+	if (builderFactories.size > 0) {
+		lines.push(
+			"// ════════════════════════════════════════════════════════════",
+		);
+		lines.push("// Builder factory functions (plugin-contributed)");
+		lines.push(
+			"// ════════════════════════════════════════════════════════════",
+		);
+		lines.push("");
+
+		for (const [name, factory] of builderFactories) {
+			// Import the builder class
+			lines.push(
+				`import { ${factory.import.name} } from "${factory.import.from}";`,
+			);
+			const generic =
+				factory.genericSignature ?? "<TName extends string>";
+			const returnType = factory.returnType
+				? factory.returnType.replace("$CLASS", factory.builderClass)
+				: `ReturnType<typeof ${factory.builderClass}.${factory.createMethod}>`;
+			lines.push("/**");
+			lines.push(
+				` * Create a typed ${name} builder with wrapped field defs.`,
+			);
+			lines.push(" */");
+			lines.push(
+				`export function ${name}${generic}(name: TName): ${returnType} {`,
+			);
+			lines.push(
+				`\treturn ${factory.builderClass}.${factory.createMethod}(name, _allFieldDefs) as any;`,
+			);
+			lines.push("}");
+			lines.push("");
+		}
+	}
 
 	// ── Singleton factory functions ────────────────────────────
 	if (singletonFactories.size > 0) {

@@ -7,7 +7,7 @@
 
 "use client";
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";

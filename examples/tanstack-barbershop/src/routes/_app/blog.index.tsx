@@ -4,7 +4,7 @@
  * Displays all published blog posts with cover images, excerpts, and metadata.
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getAllBlogPosts } from "@/lib/getBlogPosts.function";

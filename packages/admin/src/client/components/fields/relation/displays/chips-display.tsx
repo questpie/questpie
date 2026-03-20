@@ -2,7 +2,7 @@
  * Chips Display - compact badge/tag style
  */
 
-import { Icon } from "@iconify-icon/react";
+import { Icon } from "@iconify/react";
 import * as React from "react";
 
 import { useTranslation } from "../../../../i18n/hooks";

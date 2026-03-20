@@ -233,7 +233,7 @@ Important constraint:
 New setup pattern:
 
 ```ts
-import admin from "~/questpie/admin/.generated/client";
+import admin from "@/questpie/admin/.generated/client";
 
 <AdminLayoutProvider admin={admin} ... />
 ```
