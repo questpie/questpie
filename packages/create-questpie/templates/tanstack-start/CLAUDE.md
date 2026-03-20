@@ -4,14 +4,18 @@ This is a [QUESTPIE](https://questpie.com) project scaffolded with `create-quest
 
 ## Quick Reference
 
-| Command                       | Purpose                      |
-| ----------------------------- | ---------------------------- |
-| `bun dev`                     | Start dev server (port 3000) |
-| `bun build`                   | Build for production         |
-| `bun start`                   | Start production server      |
-| `bun questpie migrate`        | Run database migrations      |
-| `bun questpie migrate:create` | Generate a new migration     |
-| `docker compose up -d`        | Start PostgreSQL             |
+| Command                              | Purpose                                  |
+| ------------------------------------ | ---------------------------------------- |
+| `bun dev`                            | Start dev server (port 3000)             |
+| `bun build`                          | Build for production                     |
+| `bun start`                          | Start production server                  |
+| `bun questpie add <type> <name>`     | Scaffold a new entity (collection, seed, etc.) |
+| `bun questpie add --list`            | List all available scaffold types        |
+| `bun questpie generate`              | Regenerate .generated/index.ts           |
+| `bun questpie migrate:create`        | Generate a migration from schema diff    |
+| `bun questpie migrate`               | Run pending migrations                   |
+| `bun questpie seed`                  | Run pending seeds                        |
+| `docker compose up -d`               | Start PostgreSQL                         |
 
 ## Project Architecture
 

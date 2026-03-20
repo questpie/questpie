@@ -374,7 +374,10 @@ city: f.relation({
 ## CLI
 
 ```bash
-bun questpie migrate:generate   # Generate migration from schema changes
+bun questpie add <type> <name>  # Scaffold a new entity (collection, seed, migration, etc.)
+bun questpie add --list         # List all available scaffold types
+bun questpie generate           # Regenerate .generated/index.ts
+bun questpie migrate:generate   # Generate migration from schema diff
 bun questpie migrate            # Run pending migrations
 bun questpie migrate:down       # Rollback last batch
 bun questpie migrate:status     # Show migration status
@@ -382,7 +385,6 @@ bun questpie migrate:reset      # Rollback all migrations
 bun questpie migrate:fresh      # Reset + run all migrations
 bun questpie push               # Push schema directly (dev only)
 bun questpie seed               # Run pending seeds
-bun questpie seed:generate      # Generate a new seed file
 ```
 
 Config file (`questpie.config.ts` at project root):

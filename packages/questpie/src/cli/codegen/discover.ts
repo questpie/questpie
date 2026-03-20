@@ -663,10 +663,8 @@ async function processFile(
 		const results: DiscoveredFile[] = [];
 		const namedMatches = matches.filter((m) => !m.isDefault);
 		const defaultMatch = matches.find((m) => m.isDefault);
-		// Key derivation priority (same for named and default exports):
-		//   1. Factory string arg (entity identity): block("hero-banner") → heroBanner
-		//   2. Export name (developer intent): export const heroBlock = block(dynamicVar) → heroBlock
-		//   3. Filename (fallback): blocks/banner.ts → banner
+		// For named exports: prefer factory string arg (camelCase'd), fall back to export name.
+		// For default exports: key from factory string arg if available, else filename.
 		// See AGENTS.md "Codegen Key Derivation" for the full decision table.
 		const fileKey = deriveFileKey(relPath, category);
 		if (namedMatches.length > 0) {
