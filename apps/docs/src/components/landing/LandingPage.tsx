@@ -126,6 +126,303 @@ function Reveal({
 	);
 }
 
+/* ─── Swap Anything Section (interactive config builder) ─── */
+
+type AdapterOption = {
+	label: string;
+	fn: string;
+	code: string;
+};
+
+type AdapterCategory = {
+	key: string;
+	label: string;
+	configKey: string;
+	options: AdapterOption[];
+};
+
+const ADAPTER_CATEGORIES: AdapterCategory[] = [
+	{
+		key: "db",
+		label: "Database",
+		configKey: "db",
+		options: [
+			{
+				label: "PostgreSQL",
+				fn: "postgresAdapter",
+				code: "db: { adapter: postgresAdapter() }",
+			},
+			{
+				label: "PGlite",
+				fn: "pgliteAdapter",
+				code: "db: { adapter: pgliteAdapter() }",
+			},
+			{
+				label: "Neon",
+				fn: "neonAdapter",
+				code: "db: { adapter: neonAdapter() }",
+			},
+		],
+	},
+	{
+		key: "queue",
+		label: "Queue",
+		configKey: "queue",
+		options: [
+			{
+				label: "pg-boss",
+				fn: "pgBossAdapter",
+				code: "queue: { adapter: pgBossAdapter() }",
+			},
+			{
+				label: "CF Queues",
+				fn: "cfQueuesAdapter",
+				code: "queue: { adapter: cfQueuesAdapter() }",
+			},
+		],
+	},
+	{
+		key: "search",
+		label: "Search",
+		configKey: "search",
+		options: [
+			{
+				label: "Postgres FTS",
+				fn: "postgresSearchAdapter",
+				code: "search: postgresSearchAdapter()",
+			},
+			{
+				label: "pgvector",
+				fn: "pgvectorAdapter",
+				code: "search: pgvectorAdapter()",
+			},
+		],
+	},
+	{
+		key: "realtime",
+		label: "Realtime",
+		configKey: "realtime",
+		options: [
+			{
+				label: "PG NOTIFY",
+				fn: "pgNotifyAdapter",
+				code: "realtime: { adapter: pgNotifyAdapter() }",
+			},
+			{
+				label: "Redis Streams",
+				fn: "redisStreamsAdapter",
+				code: "realtime: { adapter: redisStreamsAdapter() }",
+			},
+		],
+	},
+	{
+		key: "storage",
+		label: "Storage",
+		configKey: "storage",
+		options: [
+			{
+				label: "S3",
+				fn: "s3Driver",
+				code: 'storage: { driver: s3Driver({ bucket: "assets" }) }',
+			},
+			{
+				label: "R2",
+				fn: "r2Driver",
+				code: 'storage: { driver: r2Driver({ bucket: "assets" }) }',
+			},
+			{
+				label: "GCS",
+				fn: "gcsDriver",
+				code: 'storage: { driver: gcsDriver({ bucket: "assets" }) }',
+			},
+			{
+				label: "Local",
+				fn: "localDriver",
+				code: 'storage: { driver: localDriver({ dir: "./uploads" }) }',
+			},
+		],
+	},
+	{
+		key: "email",
+		label: "Email",
+		configKey: "email",
+		options: [
+			{
+				label: "SMTP",
+				fn: "smtpAdapter",
+				code: "email: { adapter: smtpAdapter() }",
+			},
+			{
+				label: "Resend",
+				fn: "resendAdapter",
+				code: "email: { adapter: resendAdapter() }",
+			},
+			{
+				label: "Console",
+				fn: "consoleAdapter",
+				code: "email: { adapter: consoleAdapter() }",
+			},
+		],
+	},
+];
+
+function AdapterDropdown({
+	category,
+	selected,
+	onSelect,
+}: {
+	category: AdapterCategory;
+	selected: number;
+	onSelect: (index: number) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const current = category.options[selected];
+
+	return (
+		<span className="relative inline-block">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className="text-[var(--syntax-function)] cursor-pointer border-b border-dashed border-[var(--syntax-function)]/40 transition-colors hover:border-[var(--syntax-function)]"
+			>
+				{current.fn}
+			</button>
+			{open && (
+				<>
+					<div
+						className="fixed inset-0 z-40"
+						onClick={() => setOpen(false)}
+						onKeyDown={() => {}}
+						role="presentation"
+					/>
+					<div className="bg-card border-border absolute top-full left-0 z-50 mt-1 min-w-[160px] border py-1">
+						{category.options.map((opt, i) => (
+							<button
+								key={opt.label}
+								type="button"
+								onClick={() => {
+									onSelect(i);
+									setOpen(false);
+								}}
+								className={cn(
+									"block w-full px-3 py-1.5 text-left font-mono text-[12px] transition-colors",
+									i === selected
+										? "text-primary bg-primary/10"
+										: "text-foreground hover:bg-secondary",
+								)}
+							>
+								<span className="text-[var(--syntax-function)]">{opt.fn}</span>
+								<span className="text-muted-foreground ml-2 text-[10px]">
+									{opt.label}
+								</span>
+							</button>
+						))}
+					</div>
+				</>
+			)}
+		</span>
+	);
+}
+
+function SwapAnythingSection() {
+	const [selections, setSelections] = useState<Record<string, number>>({
+		db: 0,
+		queue: 0,
+		search: 0,
+		realtime: 0,
+		storage: 0,
+		email: 0,
+	});
+
+	const handleSelect = (key: string, index: number) => {
+		setSelections((prev) => ({ ...prev, [key]: index }));
+	};
+
+	const configLines = ADAPTER_CATEGORIES.map(
+		(cat) => cat.options[selections[cat.key]].code,
+	);
+
+	return (
+		<>
+			<SectionHeader
+				num="03"
+				title="Swap anything"
+				subtitle="Your infrastructure. Your choice. Click any adapter in the config to swap it."
+			/>
+
+			<div className="bg-border border-border grid grid-cols-1 gap-[1px] border lg:grid-cols-[1fr_1.2fr]">
+				{/* Left: adapter grid */}
+				<div className="bg-border grid grid-cols-2 gap-[1px]">
+					{ADAPTER_CATEGORIES.map((cat) => (
+						<div key={cat.key} className="bg-background p-5">
+							<div className="text-muted-foreground mb-2 font-mono text-[10px] tracking-[0.15em] uppercase">
+								{cat.label}
+							</div>
+							<div className="flex flex-wrap gap-1">
+								{cat.options.map((opt, i) => (
+									<button
+										key={opt.label}
+										type="button"
+										onClick={() => handleSelect(cat.key, i)}
+										className={cn(
+											"border px-2 py-0.5 font-mono text-[11px] transition-all",
+											selections[cat.key] === i
+												? "border-primary bg-primary/10 text-primary"
+												: "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+										)}
+									>
+										{opt.label}
+									</button>
+								))}
+							</div>
+						</div>
+					))}
+				</div>
+
+				{/* Right: live config with inline dropdowns */}
+				<div className="bg-background border-border relative border-l-0 lg:border-l">
+					<div className="text-muted-foreground/40 border-border absolute top-0 left-0 border-r border-b px-2 py-1 font-mono text-[10px] tracking-[0.2em] uppercase">
+						questpie.config.ts
+					</div>
+					<div className="text-muted-foreground overflow-x-auto p-4 pt-10 font-mono text-[13px] leading-[1.8] whitespace-pre">
+						<span className="text-[var(--syntax-function)]">runtimeConfig</span>
+						{"({\n"}
+						{ADAPTER_CATEGORIES.map((cat) => {
+							const opt = cat.options[selections[cat.key]];
+							// Split code at fn name to insert dropdown
+							const fnIdx = opt.code.indexOf(opt.fn);
+							const before = opt.code.slice(0, fnIdx);
+							const after = opt.code.slice(fnIdx + opt.fn.length);
+
+							return (
+								<span key={cat.key}>
+									{"  "}
+									{before}
+									<AdapterDropdown
+										category={cat}
+										selected={selections[cat.key]}
+										onSelect={(idx) => handleSelect(cat.key, idx)}
+									/>
+									{after}
+									{",\n"}
+								</span>
+							);
+						})}
+						{"})"}
+					</div>
+					<div className="text-muted-foreground border-border mx-4 border-t px-1 py-3 text-[11px]">
+						Click the{" "}
+						<span className="text-[var(--syntax-function)]">
+							highlighted adapters
+						</span>{" "}
+						above or the badges on the left to swap.
+					</div>
+				</div>
+			</div>
+		</>
+	);
+}
+
 /* ─── File Conventions Section (with toggle) ─── */
 
 function FileConventionsSection() {
@@ -946,89 +1243,7 @@ export function LandingPage() {
 					{/* ─── §03 SWAP ANYTHING ─── */}
 					<Reveal>
 						<section className="border-border border-t px-4 py-16 md:px-8 md:py-24">
-							<SectionHeader
-								num="03"
-								title="Swap anything"
-								subtitle="Your infrastructure. Your choice. Write your own adapter in under 50 lines."
-							/>
-
-							<div className="bg-border border-border grid grid-cols-1 gap-[1px] border lg:grid-cols-2">
-								<div className="bg-border grid grid-cols-2 gap-[1px]">
-									{[
-										[
-											"Runtime",
-											"Node.js \u00b7 Bun \u00b7 Cloudflare Workers \u00b7 Deno",
-										],
-										[
-											"Database",
-											"PostgreSQL \u00b7 PGlite \u00b7 Neon \u00b7 PlanetScale",
-										],
-										["Queue", "pg-boss \u00b7 Cloudflare Queues"],
-										[
-											"HTTP",
-											"Hono \u00b7 Elysia \u00b7 Next.js \u00b7 TanStack Start",
-										],
-										["Search", "Postgres FTS \u00b7 pgvector"],
-										["Realtime", "PG NOTIFY \u00b7 Redis Streams"],
-										[
-											"Storage",
-											"Local \u00b7 S3 \u00b7 R2 \u00b7 GCS (FlyDrive)",
-										],
-									].map(([cat, val]) => (
-										<div key={cat} className="bg-background p-6">
-											<div className="text-muted-foreground mb-2 font-mono text-[11px] tracking-[0.1em] uppercase">
-												{cat}
-											</div>
-											<div className="text-foreground text-[14px]">{val}</div>
-										</div>
-									))}
-								</div>
-								<div className="bg-background">
-									<TerminalBlock label="questpie.config.ts">
-										<span className="text-[var(--syntax-function)]">
-											runtimeConfig
-										</span>
-										{`({
-  db: { url: `}
-										<span className="text-[var(--syntax-string)]">
-											DATABASE_URL
-										</span>
-										{` },
-  queue: { adapter: `}
-										<span className="text-[var(--syntax-function)]">
-											pgBossAdapter
-										</span>
-										{`() },
-  search: `}
-										<span className="text-[var(--syntax-function)]">
-											postgresSearchAdapter
-										</span>
-										{`(),
-  realtime: { adapter: `}
-										<span className="text-[var(--syntax-function)]">
-											pgNotifyAdapter
-										</span>
-										{`() },
-  storage: { driver: `}
-										<span className="text-[var(--syntax-function)]">
-											s3Driver
-										</span>
-										{`({
-    bucket: `}
-										<span className="text-[var(--syntax-string)]">
-											"assets"
-										</span>
-										{`
-  }) },
-  email: { adapter: `}
-										<span className="text-[var(--syntax-function)]">
-											smtpAdapter
-										</span>
-										{`() },
-})`}
-									</TerminalBlock>
-								</div>
-							</div>
+							<SwapAnythingSection />
 						</section>
 					</Reveal>
 
