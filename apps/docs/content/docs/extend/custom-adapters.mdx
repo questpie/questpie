@@ -1,205 +1,863 @@
 ---
 title: Custom Adapters
-description: Create custom HTTP framework adapters and infrastructure adapters.
+description: Build your own KV, queue, search, realtime, storage, and email adapters for QUESTPIE.
 ---
 
-QUESTPIE ships with adapters for Hono, Elysia, and Next.js. You can create your own for other frameworks or build custom infrastructure adapters.
+The landing page promise is real: almost every infrastructure layer in QUESTPIE is swappable.
 
----
+This guide shows how to implement your own adapter for each built-in adapter category:
 
-## HTTP Framework Adapters
+- KV / cache
+- Queue
+- Search
+- Realtime
+- Storage
+- Email
 
-### The Generic Fetch Handler
+For every adapter type below you will find:
 
-The simplest approach is using `createFetchHandler` directly. It works with any framework that supports the standard `Request`/`Response` API:
+- the interface or base type to implement
+- a minimal working example
+- how to register it in `runtimeConfig()`
+- testing advice
+- reference implementations in the QUESTPIE repo
 
-```ts
-import { createFetchHandler } from "questpie";
-import { app } from "#questpie";
+## Before you start
 
-const handler = createFetchHandler(app, { basePath: "/api" });
+A good custom adapter should follow three rules:
 
-// Use with any framework
-const response = await handler(request);
-```
-
-This is exactly how the TanStack Start integration works -- no adapter package needed.
-
-### Custom Adapter Pattern
-
-For frameworks that don't use standard `Request`/`Response`, create an adapter that converts between formats:
-
-```ts
-import { createFetchHandler } from "questpie";
-
-export function createMyFrameworkAdapter(questpieApp, options) {
-  const handler = createFetchHandler(questpieApp, options);
-
-  return async (frameworkRequest, frameworkResponse) => {
-    // 1. Convert framework request to standard Request
-    const request = new Request(frameworkRequest.url, {
-      method: frameworkRequest.method,
-      headers: frameworkRequest.headers,
-      body: frameworkRequest.body,
-    });
-
-    // 2. Handle with QUESTPIE
-    const response = await handler(request);
-
-    // 3. Convert standard Response back to framework format
-    frameworkResponse.status(response.status);
-    for (const [key, value] of response.headers.entries()) {
-      frameworkResponse.setHeader(key, value);
-    }
-    frameworkResponse.send(await response.text());
-  };
-}
-```
-
-### Example: Express Adapter
-
-```ts
-import { createFetchHandler } from "questpie";
-import type { Request, Response } from "express";
-
-export function createExpressAdapter(questpieApp, options = {}) {
-  const handler = createFetchHandler(questpieApp, {
-    basePath: options.basePath ?? "/api",
-  });
-
-  return async (req: Request, res: Response) => {
-    const url = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
-
-    const request = new globalThis.Request(url, {
-      method: req.method,
-      headers: new Headers(req.headers as Record<string, string>),
-      body: ["GET", "HEAD"].includes(req.method) ? undefined : req.body,
-    });
-
-    const response = await handler(request);
-
-    res.status(response.status);
-    response.headers.forEach((value, key) => {
-      res.setHeader(key, value);
-    });
-    const body = await response.arrayBuffer();
-    res.end(Buffer.from(body));
-  };
-}
-```
-
-Usage:
-
-```ts
-import express from "express";
-import { app } from "#questpie";
-import { createExpressAdapter } from "./express-adapter";
-
-const server = express();
-server.all("/api/*", createExpressAdapter(app));
-server.listen(3000);
-```
+1. **Keep the adapter thin.** Translate QUESTPIE calls to your provider SDK, but do not move business logic into the adapter.
+2. **Match the contract exactly.** If an adapter method returns `Promise<void>` or `Promise<string | null>`, keep it that way.
+3. **Start with an in-memory fake.** It is the fastest way to test behavior before wiring up a real provider.
 
 ---
 
-## Infrastructure Adapters
+## KV / Cache adapters
 
-QUESTPIE uses adapters for email, queue, realtime, KV, and storage. You can create custom adapters for each.
+QUESTPIE uses KV adapters for cache-like key/value storage.
 
-### Email Adapter
-
-An email adapter implements the `MailerAdapter` interface:
+### Interface
 
 ```ts
-interface MailerAdapter {
-  send(options: {
-    to: string | string[];
-    subject: string;
-    html: string;
-    from?: string;
-  }): Promise<void>;
+export interface KVAdapter {
+	get<T = unknown>(key: string): Promise<T | null>;
+	set(key: string, value: unknown, ttl?: number): Promise<void>;
+	delete(key: string): Promise<void>;
+	has(key: string): Promise<boolean>;
+	clear(): Promise<void>;
+
+	setWithTags?(
+		key: string,
+		value: unknown,
+		tags: string[],
+		ttl?: number,
+	): Promise<void>;
+
+	invalidateByTag?(tag: string): Promise<void>;
+	invalidateByTags?(tags: string[]): Promise<void>;
 }
 ```
 
-Example custom adapter:
+### Required methods
 
-```ts
-import type { MailerAdapter } from "questpie";
+- `get(key)` — return the stored value or `null`
+- `set(key, value, ttl?)` — store any serializable value, optional TTL in seconds
+- `delete(key)` — remove a single key
+- `has(key)` — test existence while respecting expiration
+- `clear()` — wipe all keys for this adapter namespace
 
-export function sendgridAdapter(apiKey: string): MailerAdapter {
-  return {
-    async send({ to, subject, html, from }) {
-      await fetch("https://api.sendgrid.com/v3/mail/send", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: to }] }],
-          from: { email: from || "noreply@example.com" },
-          subject,
-          content: [{ type: "text/html", value: html }],
-        }),
-      });
-    },
-  };
+### Optional tag invalidation methods
+
+If your provider supports tagging, implement:
+
+- `setWithTags(key, value, tags, ttl?)`
+- `invalidateByTag(tag)`
+- `invalidateByTags(tags)`
+
+These power cache invalidation workflows. If your backend does not support tags, you can safely omit them.
+
+### Minimal example
+
+```ts title="custom-kv.adapter.ts"
+import type { KVAdapter } from "questpie/server";
+
+export class MemoryTagKVAdapter implements KVAdapter {
+	private store = new Map<string, { value: unknown; expiresAt?: number }>();
+	private tagIndex = new Map<string, Set<string>>();
+
+	async get<T = unknown>(key: string): Promise<T | null> {
+		const entry = this.store.get(key);
+		if (!entry) return null;
+
+		if (entry.expiresAt && Date.now() > entry.expiresAt) {
+			this.store.delete(key);
+			return null;
+		}
+
+		return entry.value as T;
+	}
+
+	async set(key: string, value: unknown, ttl?: number): Promise<void> {
+		const expiresAt = ttl ? Date.now() + ttl * 1000 : undefined;
+		this.store.set(key, { value, expiresAt });
+	}
+
+	async setWithTags(
+		key: string,
+		value: unknown,
+		tags: string[],
+		ttl?: number,
+	): Promise<void> {
+		await this.set(key, value, ttl);
+		for (const tag of tags) {
+			if (!this.tagIndex.has(tag)) this.tagIndex.set(tag, new Set());
+			this.tagIndex.get(tag)!.add(key);
+		}
+	}
+
+	async invalidateByTag(tag: string): Promise<void> {
+		const keys = this.tagIndex.get(tag);
+		if (!keys) return;
+		for (const key of keys) this.store.delete(key);
+		this.tagIndex.delete(tag);
+	}
+
+	async invalidateByTags(tags: string[]): Promise<void> {
+		await Promise.all(tags.map((tag) => this.invalidateByTag(tag)));
+	}
+
+	async delete(key: string): Promise<void> {
+		this.store.delete(key);
+	}
+
+	async has(key: string): Promise<boolean> {
+		return (await this.get(key)) !== null;
+	}
+
+	async clear(): Promise<void> {
+		this.store.clear();
+		this.tagIndex.clear();
+	}
 }
 ```
 
-Register in config:
+### Register in `runtimeConfig()`
 
-```ts
-email: {
-  adapter: sendgridAdapter(process.env.SENDGRID_API_KEY!),
-}
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { MemoryTagKVAdapter } from "./custom-kv.adapter";
+
+export default runtimeConfig({
+	kv: {
+		adapter: new MemoryTagKVAdapter(),
+	},
+});
 ```
 
-### Queue Adapter
+### Testing tips
 
-Queue adapters implement job publishing and processing:
+- Test TTL expiry with very short lifetimes.
+- Test `has()` after expiration, not just after `set()`.
+- If you implement tags, verify invalidation removes every linked key.
+- Reuse the patterns in `packages/questpie/test/units/kv-adapter.test.ts` when building your own adapter test suite.
 
-```ts
-interface QueueAdapter {
-  publish(jobName: string, payload: any, options?: JobOptions): Promise<void>;
-  subscribe(jobName: string, handler: (payload: any) => Promise<void>): void;
-  start(): Promise<void>;
-  stop(): Promise<void>;
-}
-```
+### Reference implementations
 
-### Realtime Adapter
-
-Realtime adapters implement event broadcasting and subscription:
-
-```ts
-interface RealtimeAdapter {
-  broadcast(channel: string, event: any): Promise<void>;
-  subscribe(channel: string, handler: (event: any) => void): () => void;
-  start(): Promise<void>;
-  stop(): Promise<void>;
-}
-```
-
-### KV Adapter
-
-KV adapters implement key-value storage:
-
-```ts
-interface KVAdapter {
-  get(key: string): Promise<string | null>;
-  set(key: string, value: string, options?: { ttl?: number }): Promise<void>;
-  delete(key: string): Promise<void>;
-}
-```
-
-### Storage Adapter
-
-Storage uses FlyDrive under the hood. Custom storage drivers follow the FlyDrive driver interface. See the [FlyDrive documentation](https://flydrive.dev) for creating custom drivers.
+- [Memory KV adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/kv/adapters/memory.ts)
+- [ioredis KV adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/kv/adapters/ioredis.ts)
+- [KV contract source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/kv/adapter.ts)
 
 ---
 
-## Related Pages
+## Queue adapters
 
-- [Config API](/docs/reference/config-api) -- Infrastructure configuration
-- [Infrastructure API](/docs/reference/infrastructure-api) -- Service runtime APIs
+Queue adapters power jobs, scheduled work, and serverless push consumers.
+
+### Interface
+
+```ts
+export interface QueueAdapter {
+	capabilities?: Partial<QueueAdapterCapabilities>;
+
+	start(): Promise<void>;
+	stop(): Promise<void>;
+
+	publish(
+		jobName: string,
+		payload: any,
+		options?: PublishOptions,
+	): Promise<string | null>;
+
+	schedule(
+		jobName: string,
+		cron: string,
+		payload: any,
+		options?: Omit<PublishOptions, "startAfter">,
+	): Promise<void>;
+
+	unschedule(jobName: string): Promise<void>;
+
+	listen?(
+		handlers: QueueHandlerMap,
+		options?: QueueListenOptions,
+	): Promise<void>;
+
+	runOnce?(
+		handlers: QueueHandlerMap,
+		options?: QueueRunOnceOptions,
+	): Promise<QueueRunOnceResult>;
+
+	createPushConsumer?(
+		args: QueuePushConsumerFactoryArgs,
+	): QueuePushConsumerHandler;
+
+	on(event: "error", handler: (error: Error) => void): void;
+}
+```
+
+### Required methods
+
+- `start()` / `stop()` — connect and disconnect the underlying provider
+- `publish(jobName, payload, options?)` — enqueue a job immediately
+- `schedule(jobName, cron, payload, options?)` — register recurring jobs
+- `unschedule(jobName)` — remove recurring jobs
+- `on("error", handler)` — surface provider errors to QUESTPIE
+
+### Optional consumer styles
+
+Pick the consumer API that matches your runtime:
+
+- `listen()` — long-running worker process
+- `runOnce()` — process one bounded batch for serverless ticks/cron jobs
+- `createPushConsumer()` — provider pushes batches to your runtime
+
+Also declare accurate `capabilities` so QUESTPIE knows which runtime paths are available.
+
+### Minimal example
+
+```ts title="custom-queue.adapter.ts"
+import type {
+	PublishOptions,
+	QueueAdapter,
+	QueueHandlerMap,
+	QueueRunOnceOptions,
+	QueueRunOnceResult,
+} from "questpie/server";
+
+export class InMemoryQueueAdapter implements QueueAdapter {
+	capabilities = {
+		longRunningConsumer: false,
+		runOnceConsumer: true,
+		pushConsumer: false,
+		scheduling: true,
+		singleton: false,
+	} as const;
+
+	private jobs: Array<{ id: string; name: string; payload: unknown }> = [];
+	private errorHandlers = new Set<(error: Error) => void>();
+
+	async start(): Promise<void> {}
+	async stop(): Promise<void> {
+		this.jobs = [];
+	}
+
+	async publish(
+		jobName: string,
+		payload: unknown,
+		_options?: PublishOptions,
+	): Promise<string> {
+		const id = crypto.randomUUID();
+		this.jobs.push({ id, name: jobName, payload });
+		return id;
+	}
+
+	async schedule(): Promise<void> {
+		// Replace this with your provider's cron registration API.
+	}
+
+	async unschedule(): Promise<void> {
+		// Replace this with your provider's cron removal API.
+	}
+
+	async runOnce(
+		handlers: QueueHandlerMap,
+		options?: QueueRunOnceOptions,
+	): Promise<QueueRunOnceResult> {
+		const max = options?.batchSize ?? 10;
+		let processed = 0;
+
+		for (const job of this.jobs.slice(0, max)) {
+			const handler = handlers[job.name];
+			if (!handler) continue;
+
+			try {
+				await handler({ id: job.id, data: job.payload });
+				processed += 1;
+			} catch (error) {
+				const normalized =
+					error instanceof Error ? error : new Error(String(error));
+				for (const onError of this.errorHandlers) onError(normalized);
+			}
+		}
+
+		this.jobs = this.jobs.slice(processed);
+		return { processed };
+	}
+
+	on(event: "error", handler: (error: Error) => void): void {
+		if (event === "error") this.errorHandlers.add(handler);
+	}
+}
+```
+
+### Register in `runtimeConfig()`
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { InMemoryQueueAdapter } from "./custom-queue.adapter";
+
+export default runtimeConfig({
+	queue: {
+		adapter: new InMemoryQueueAdapter(),
+	},
+});
+```
+
+### Testing tips
+
+- Start by testing `publish()` + `runOnce()` before implementing scheduling.
+- Verify unknown job names are ignored or reported the way you expect.
+- Test error propagation through `on("error")`.
+- If you support scheduling, confirm repeated deployments do not duplicate cron registrations.
+- Use `packages/questpie/test/utils/mocks/queue.adapter.ts` as a simple contract reference.
+
+### Reference implementations
+
+- [pg-boss queue adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/queue/adapters/pg-boss.ts)
+- [Cloudflare Queues adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/queue/adapters/cloudflare-queues.ts)
+- [Queue contract source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/queue/adapter.ts)
+
+---
+
+## Search adapters
+
+Search adapters back the high-level `app.search` API.
+
+### Interface
+
+```ts
+export interface SearchAdapter {
+	readonly name: string;
+	readonly capabilities: AdapterCapabilities;
+
+	initialize(ctx: AdapterInitContext): Promise<void>;
+	getMigrations(): AdapterMigration[];
+
+	search(options: SearchOptions): Promise<SearchResponse>;
+	index(params: IndexParams): Promise<void>;
+	remove(params: RemoveParams): Promise<void>;
+	reindex(collection: string): Promise<void>;
+	clear(): Promise<void>;
+
+	indexBatch?(params: IndexParams[]): Promise<void>;
+	getTableSchemas?(): Record<string, any>;
+	getExtensions?(): string[];
+}
+```
+
+### Required methods
+
+- `initialize(ctx)` — capture DB/app/logger references and validate configuration
+- `getMigrations()` — return SQL migrations for your adapter storage, or `[]` for external services
+- `search(options)` — execute the search query and return results
+- `index(params)` — upsert one record into the search backend
+- `remove(params)` — remove one record from the index
+- `reindex(collection)` — rebuild one collection from source data
+- `clear()` — remove all indexed data
+
+### Important note about naming
+
+The core interface uses `remove()` rather than `delete()`. If your provider SDK calls the operation “delete”, just map it internally inside `remove()`.
+
+### Minimal example
+
+```ts title="custom-search.adapter.ts"
+import type {
+	AdapterCapabilities,
+	AdapterInitContext,
+	AdapterMigration,
+	IndexParams,
+	RemoveParams,
+	SearchAdapter,
+	SearchOptions,
+	SearchResponse,
+} from "questpie/server";
+
+export class MemorySearchAdapter implements SearchAdapter {
+	readonly name = "memory-search";
+	readonly capabilities: AdapterCapabilities = {
+		lexical: true,
+		trigram: false,
+		semantic: false,
+		facets: true,
+		highlighting: false,
+	};
+
+	private docs = new Map<string, IndexParams>();
+	private ctx?: AdapterInitContext;
+
+	async initialize(ctx: AdapterInitContext): Promise<void> {
+		this.ctx = ctx;
+		ctx.logger.info("[MemorySearchAdapter] initialized");
+	}
+
+	getMigrations(): AdapterMigration[] {
+		return [];
+	}
+
+	async search(options: SearchOptions): Promise<SearchResponse> {
+		const q = options.query.toLowerCase();
+		const hits = Array.from(this.docs.values()).filter((doc) =>
+			JSON.stringify(doc.data).toLowerCase().includes(q),
+		);
+
+		return {
+			results: hits.map((doc) => ({
+				id: doc.id,
+				collection: doc.collection,
+				score: 1,
+				data: doc.data,
+			})),
+			total: hits.length,
+			facets: {},
+		};
+	}
+
+	async index(params: IndexParams): Promise<void> {
+		this.docs.set(`${params.collection}:${params.id}`, params);
+	}
+
+	async remove(params: RemoveParams): Promise<void> {
+		this.docs.delete(`${params.collection}:${params.id}`);
+	}
+
+	async reindex(): Promise<void> {
+		if (!this.ctx) throw new Error("Adapter not initialized");
+		// Production adapters usually fetch source records here.
+	}
+
+	async clear(): Promise<void> {
+		this.docs.clear();
+	}
+}
+```
+
+### Register in `runtimeConfig()`
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { MemorySearchAdapter } from "./custom-search.adapter";
+
+export default runtimeConfig({
+	search: new MemorySearchAdapter(),
+});
+```
+
+### Testing tips
+
+- Test indexing and removing the same document repeatedly.
+- Test `initialize()` separately from `search()` so startup errors are obvious.
+- If you return migrations or table schemas, run a migration generation check before shipping.
+- If you implement facets, verify empty-result searches still return stable facet shapes.
+
+### Reference implementations
+
+- [Postgres search adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/search/adapters/postgres.ts)
+- [pgvector search adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/search/adapters/pgvector.ts)
+- [Search contract source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/search/types.ts)
+
+---
+
+## Realtime adapters
+
+Realtime adapters transport change notifications from the server to the realtime service.
+
+### Interface
+
+```ts
+export interface RealtimeAdapter {
+	start(): Promise<void>;
+	stop(): Promise<void>;
+	notify(event: RealtimeChangeEvent): Promise<void>;
+	subscribe(handler: (notice: RealtimeNotice) => void): () => void;
+}
+```
+
+### Required methods
+
+- `start()` — initialize listeners/connections
+- `stop()` — close them cleanly
+- `notify(event)` — publish a change event to the backend transport
+- `subscribe(handler)` — fan inbound notices back into QUESTPIE and return an unsubscribe function
+
+### Channel lifecycle guidance
+
+QUESTPIE's contract is intentionally small. If your provider needs explicit channel or topic setup, do that inside `start()` and clean it up in `stop()`. If your provider supports per-topic subscriptions internally, your adapter can multiplex them behind the single `subscribe()` callback set.
+
+### Minimal example
+
+```ts title="custom-realtime.adapter.ts"
+import type {
+	RealtimeAdapter,
+	RealtimeChangeEvent,
+	RealtimeNotice,
+} from "questpie/server";
+
+export class InMemoryRealtimeAdapter implements RealtimeAdapter {
+	private listeners = new Set<(notice: RealtimeNotice) => void>();
+
+	async start(): Promise<void> {}
+	async stop(): Promise<void> {
+		this.listeners.clear();
+	}
+
+	async notify(event: RealtimeChangeEvent): Promise<void> {
+		const notice: RealtimeNotice = {
+			seq: event.seq,
+			resourceType: event.resourceType,
+			resource: event.resource,
+			operation: event.operation,
+		};
+
+		for (const listener of this.listeners) {
+			listener(notice);
+		}
+	}
+
+	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
+		this.listeners.add(handler);
+		return () => {
+			this.listeners.delete(handler);
+		};
+	}
+}
+```
+
+### Register in `runtimeConfig()`
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { InMemoryRealtimeAdapter } from "./custom-realtime.adapter";
+
+export default runtimeConfig({
+	realtime: {
+		adapter: new InMemoryRealtimeAdapter(),
+	},
+});
+```
+
+### Testing tips
+
+- Assert that `subscribe()` returns a working unsubscribe function.
+- Test multiple listeners receiving the same `notify()` event.
+- Verify `stop()` does not leak listeners or sockets.
+- Reuse the patterns in `packages/questpie/test/integration/realtime.test.ts` for lifecycle and delivery behavior.
+
+### Reference implementations
+
+- [pg_notify realtime adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/realtime/adapters/pg-notify.ts)
+- [Redis Streams realtime adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/realtime/adapters/redis-streams.ts)
+- [Realtime contract source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/realtime/adapter.ts)
+
+---
+
+## Storage adapters
+
+Storage is backed by [FlyDrive](https://flydrive.dev/docs/advanced/custom_drivers). QUESTPIE expects a FlyDrive `DriverContract` instance in `storage.driver`.
+
+### Relevant FlyDrive driver methods
+
+A full FlyDrive driver implements more than four methods, but these are the ones most QUESTPIE users care about first:
+
+```ts
+interface DriverContract {
+	get(key: string): Promise<string>;
+	put(
+		key: string,
+		contents: string | Uint8Array,
+		options?: WriteOptions,
+	): Promise<void>;
+	delete(key: string): Promise<void>;
+	getSignedUrl(key: string, options?: SignedURLOptions): Promise<string>;
+
+	exists(key: string): Promise<boolean>;
+	getStream(key: string): Promise<Readable>;
+	getBytes(key: string): Promise<Uint8Array>;
+	getMetaData(key: string): Promise<ObjectMetaData>;
+	getVisibility(key: string): Promise<ObjectVisibility>;
+	getUrl(key: string): Promise<string>;
+	setVisibility(key: string, visibility: ObjectVisibility): Promise<void>;
+	putStream(
+		key: string,
+		contents: Readable,
+		options?: WriteOptions,
+	): Promise<void>;
+	copy(
+		source: string,
+		destination: string,
+		options?: WriteOptions,
+	): Promise<void>;
+	move(
+		source: string,
+		destination: string,
+		options?: WriteOptions,
+	): Promise<void>;
+	deleteAll(prefix: string): Promise<void>;
+	listAll(
+		prefix: string,
+		options?: { recursive?: boolean; paginationToken?: string },
+	): Promise<{
+		paginationToken?: string;
+		objects: Iterable<DriveFile | DriveDirectory>;
+	}>;
+}
+```
+
+### Required methods
+
+Technically, FlyDrive expects the full contract above. In practice, start by implementing `put`, `get`, `delete`, and `getSignedUrl`, then fill in the remaining methods by following FlyDrive's custom driver guide.
+
+### Minimal example
+
+```ts title="custom-storage.driver.ts"
+import { DriveDirectory, DriveFile } from "flydrive";
+import type {
+	DriverContract,
+	ObjectMetaData,
+	ObjectVisibility,
+	SignedURLOptions,
+	WriteOptions,
+} from "flydrive/types";
+
+export class MemoryDriver implements DriverContract {
+	private files = new Map<string, Uint8Array>();
+
+	async exists(key: string): Promise<boolean> {
+		return this.files.has(key);
+	}
+
+	async get(key: string): Promise<string> {
+		const file = this.files.get(key);
+		if (!file) throw new Error(`Missing file: ${key}`);
+		return new TextDecoder().decode(file);
+	}
+
+	async getBytes(key: string): Promise<Uint8Array> {
+		const file = this.files.get(key);
+		if (!file) throw new Error(`Missing file: ${key}`);
+		return file;
+	}
+
+	async getStream(key: string): Promise<ReadableStream<Uint8Array>> {
+		const bytes = await this.getBytes(key);
+		return new ReadableStream({
+			start: (controller) => controller.enqueue(bytes),
+		});
+	}
+
+	async getMetaData(): Promise<ObjectMetaData> {
+		return {};
+	}
+
+	async getVisibility(): Promise<ObjectVisibility> {
+		return "public";
+	}
+
+	async getUrl(key: string): Promise<string> {
+		return `https://files.example.com/${key}`;
+	}
+
+	async getSignedUrl(
+		key: string,
+		_options?: SignedURLOptions,
+	): Promise<string> {
+		return `https://files.example.com/${key}?signed=1`;
+	}
+
+	async setVisibility(): Promise<void> {}
+
+	async put(
+		key: string,
+		contents: string | Uint8Array,
+		_options?: WriteOptions,
+	): Promise<void> {
+		this.files.set(
+			key,
+			typeof contents === "string"
+				? new TextEncoder().encode(contents)
+				: contents,
+		);
+	}
+
+	async putStream(): Promise<void> {
+		throw new Error("Implement stream uploads for production use");
+	}
+
+	async copy(source: string, destination: string): Promise<void> {
+		this.files.set(destination, await this.getBytes(source));
+	}
+
+	async move(source: string, destination: string): Promise<void> {
+		await this.copy(source, destination);
+		await this.delete(source);
+	}
+
+	async delete(key: string): Promise<void> {
+		this.files.delete(key);
+	}
+
+	async deleteAll(prefix: string): Promise<void> {
+		for (const key of this.files.keys()) {
+			if (key.startsWith(prefix)) this.files.delete(key);
+		}
+	}
+
+	async listAll(): Promise<{ objects: Iterable<DriveFile | DriveDirectory> }> {
+		return { objects: [] };
+	}
+}
+```
+
+### Register in `runtimeConfig()`
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { MemoryDriver } from "./custom-storage.driver";
+
+export default runtimeConfig({
+	storage: {
+		driver: new MemoryDriver(),
+		basePath: "/api",
+	},
+});
+```
+
+### Testing tips
+
+- Upload one file, read it back, then delete it.
+- Test both public URLs and signed URLs.
+- Verify key handling exactly as received; FlyDrive recommends **not** normalizing keys inside the driver.
+- If your backend supports pagination, test `listAll()` pagination tokens explicitly.
+
+### Reference implementations
+
+- [QUESTPIE storage driver factory](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/storage/create-driver.ts)
+- [FlyDrive custom driver guide](https://flydrive.dev/docs/advanced/custom_drivers)
+
+---
+
+## Email adapters
+
+Email adapters are the thinnest adapter type in QUESTPIE. They receive already-rendered email content and only need to send it.
+
+### Base class
+
+```ts
+export abstract class MailAdapter {
+	abstract send(options: SerializableMailOptions): Promise<void>;
+}
+```
+
+`SerializableMailOptions` already includes rendered `text`, `html`, and a resolved `from` address, so your adapter does **not** need to render templates itself. Template rendering happens before the adapter is called.
+
+### Required method
+
+- `send(options)` — send the message through your provider
+
+### Minimal example
+
+```ts title="custom-mail.adapter.ts"
+import { MailAdapter, type SerializableMailOptions } from "questpie/server";
+
+export class HttpMailAdapter extends MailAdapter {
+	constructor(private apiKey: string) {
+		super();
+	}
+
+	async send(options: SerializableMailOptions): Promise<void> {
+		const res = await fetch("https://mail.example.com/send", {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${this.apiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				from: options.from,
+				to: options.to,
+				cc: options.cc,
+				bcc: options.bcc,
+				replyTo: options.replyTo,
+				subject: options.subject,
+				text: options.text,
+				html: options.html,
+				attachments: options.attachments,
+				headers: options.headers,
+			}),
+		});
+
+		if (!res.ok) {
+			throw new Error(`Mail provider failed: ${res.status}`);
+		}
+	}
+}
+```
+
+### Register in `runtimeConfig()`
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { HttpMailAdapter } from "./custom-mail.adapter";
+
+export default runtimeConfig({
+	email: {
+		adapter: new HttpMailAdapter(process.env.MAIL_API_KEY!),
+		defaults: {
+			from: "noreply@example.com",
+		},
+	},
+});
+```
+
+### Testing tips
+
+- Mock the provider HTTP call and assert the final payload shape.
+- Verify both `text` and `html` are present.
+- Test multi-recipient values for `to`, `cc`, and `bcc`.
+- Verify adapter failures throw so jobs/hooks can retry or surface errors.
+
+### Reference implementations
+
+- [Console mail adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/mailer/adapters/console.adapter.ts)
+- [SMTP mail adapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/mailer/adapters/smtp.adapter.ts)
+- [Mail adapter base class](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/mailer/adapter.ts)
+
+---
+
+## Recommended implementation workflow
+
+If you are building a production adapter, this order usually works best:
+
+1. Implement the contract against an in-memory fake.
+2. Write adapter-only tests for success, errors, and cleanup.
+3. Wrap the real provider SDK.
+4. Register it in `runtimeConfig()`.
+5. Add one integration test that exercises the real QUESTPIE runtime path.
+
+## Related pages
+
+- [Production adapters overview](/docs/production)
+- [Queue](/docs/production/queue)
+- [Realtime infrastructure](/docs/production/realtime)
+- [Storage](/docs/production/storage)
+- [Email](/docs/production/email)
+- [Config API](/docs/reference/config-api)
