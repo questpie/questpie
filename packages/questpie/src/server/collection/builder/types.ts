@@ -397,6 +397,20 @@ export type HookContext<
 	 * Operation type (specific to hook)
 	 */
 	operation: TOperation;
+
+	// ---- Bulk metadata (present when operation is part of a batch) ----
+
+	/** True when this hook is invoked as part of a bulk operation (updateMany/deleteMany) */
+	isBatch?: boolean;
+	/** IDs of all affected records in the batch */
+	recordIds?: (string | number)[];
+	/**
+	 * All affected records in the batch.
+	 * Semantics: post-image on update, pre-image on delete.
+	 */
+	records?: TData[];
+	/** Total number of affected records in the batch */
+	count?: number;
 };
 
 /**

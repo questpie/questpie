@@ -59,6 +59,13 @@ export interface CreateHookContextParams {
 	db: any;
 	/** app instance */
 	app?: Questpie<any>;
+	/** Bulk metadata (for batch operations) */
+	bulk?: {
+		isBatch: true;
+		recordIds: (string | number)[];
+		records: any[];
+		count: number;
+	};
 }
 
 /**
@@ -76,7 +83,7 @@ export function createHookContext(
 		session: normalized.session,
 	});
 
-	return {
+	const ctx: HookContext<any, any, any> = {
 		...services,
 		data: params.data,
 		original: params.original,
@@ -84,4 +91,14 @@ export function createHookContext(
 		accessMode: normalized.accessMode,
 		operation: params.operation,
 	} as HookContext<any, any, any>;
+
+	// Attach bulk metadata if present
+	if (params.bulk) {
+		ctx.isBatch = params.bulk.isBatch;
+		ctx.recordIds = params.bulk.recordIds;
+		ctx.records = params.bulk.records;
+		ctx.count = params.bulk.count;
+	}
+
+	return ctx;
 }

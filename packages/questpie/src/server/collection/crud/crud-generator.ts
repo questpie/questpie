@@ -1577,6 +1577,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 		// 5. beforeChange hooks
 
+		// Compute bulk metadata once (available to all hook invocations)
+		const bulkMeta = isBatch
+			? {
+					isBatch: true as const,
+					recordIds: records.map((r: any) => r.id),
+					records,
+					count: records.length,
+				}
+			: undefined;
+
 		for (const existing of records) {
 			// Validate field-level write access
 			await this.validateFieldWriteAccess(
@@ -1603,6 +1613,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					operation: "update",
 					context: normalized,
 					db,
+					bulk: bulkMeta,
 				}),
 			);
 		}
@@ -1697,6 +1708,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const refetchedRecords = reFetchResult.docs;
 
 				// Create versions and run afterChange hooks
+				// Bulk metadata for afterChange: post-image records
+				const afterBulkMeta = isBatch
+					? {
+							isBatch: true as const,
+							recordIds: refetchedRecords.map((r: any) => r.id),
+							records: refetchedRecords,
+							count: refetchedRecords.length,
+						}
+					: undefined;
+
 				const afterChangePromises: Promise<void>[] = [];
 				for (const updated of refetchedRecords) {
 					const original = records.find((r) => r.id === updated.id);
@@ -1714,6 +1735,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								operation: "update",
 								context: txContext,
 								db: tx,
+								bulk: afterBulkMeta,
 							}),
 						).catch((err) => {
 							console.error(
@@ -2045,6 +2067,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				return { success: true, count: 0 };
 			}
 
+			// Compute bulk metadata (pre-image for delete)
+			const deleteBulkMeta = {
+				isBatch: true as const,
+				recordIds: records.map((r: any) => r.id),
+				records,
+				count: records.length,
+			};
+
 			// 2. Loop through beforeDelete hooks and access control
 			for (const record of records) {
 				// Check access control per record
@@ -2085,6 +2115,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						operation: "delete",
 						context,
 						db,
+						bulk: deleteBulkMeta,
 					}),
 				);
 
@@ -2143,6 +2174,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						operation: "delete",
 						context,
 						db,
+						bulk: deleteBulkMeta,
 					}),
 				);
 			}
@@ -2864,6 +2896,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		operation: "create" | "update" | "delete" | "read";
 		context: CRUDContext;
 		db: any;
+		bulk?: {
+			isBatch: true;
+			recordIds: (string | number)[];
+			records: any[];
+			count: number;
+		};
 	}): HookContext<any, any, any> {
 		return createHookContext({
 			...params,
