@@ -447,7 +447,7 @@ function SwapAnythingSection() {
 				</div>
 
 				{/* Right: live config with inline dropdowns */}
-				<div className="bg-background border-border relative overflow-visible border-l-0 lg:border-l">
+				<div className="bg-background border-border relative overflow-x-auto border-l-0 lg:overflow-visible lg:border-l">
 					<div className="text-muted-foreground/40 border-border absolute top-0 left-0 z-10 border-r border-b px-2 py-1 font-mono text-[10px] tracking-[0.2em] uppercase">
 						questpie.config.ts
 					</div>
