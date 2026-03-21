@@ -11,6 +11,7 @@ import { extractAppServices } from "#questpie/server/config/app-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 
 import { normalizeContext } from "./context.js";
+import { onAfterCommit } from "./transaction.js";
 
 /**
  * Execute hooks (single or array)
@@ -90,6 +91,7 @@ export function createHookContext(
 		locale: normalized.locale,
 		accessMode: normalized.accessMode,
 		operation: params.operation,
+		onAfterCommit,
 	} as HookContext<any, any, any>;
 
 	// Attach bulk metadata if present
