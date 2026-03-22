@@ -128,7 +128,12 @@ export type KnownComponentNames = RegistryNames<"components">;
  */
 export function extractAppServices(
 	app: any,
-	overrides?: { db?: any; session?: any; locale?: string },
+	overrides?: {
+		db?: any;
+		session?: any;
+		locale?: string;
+		scope?: import("#questpie/server/config/request-scope.js").RequestScope;
+	},
 ): Record<string, unknown> {
 	if (!app) return { db: overrides?.db };
 	const result: Record<string, unknown> = {
@@ -155,11 +160,15 @@ export function extractAppServices(
 		for (const [name, input] of Object.entries(
 			serviceDefs as Record<string, any>,
 		)) {
-			const instance = app.resolveService(name, {
-				db: result.db,
-				session: result.session,
-				locale: overrides?.locale,
-			});
+			const instance = app.resolveService(
+				name,
+				{
+					db: result.db,
+					session: result.session,
+					locale: overrides?.locale,
+				},
+				overrides?.scope,
+			);
 
 			const state =
 				input && typeof input === "object" && "state" in input

@@ -723,7 +723,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 * Resolve a service by name (singleton or create request-scoped).
 	 * @internal Used by context creation for flat service injection.
 	 */
-	resolveService(name: string, requestDeps?: Record<string, any>): any {
+	resolveService(
+		name: string,
+		requestDeps?: Record<string, any>,
+		scope?: import("#questpie/server/config/request-scope.js").RequestScope,
+	): any {
 		const def = this._serviceDefs[name];
 		if (!def) return undefined;
 
@@ -734,6 +738,19 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				);
 			}
 			return this._singletonServices[name];
+		}
+
+		// Scope-aware: memoize request-scoped services within the scope
+		if (scope) {
+			return scope.getOrCreate(name, () =>
+				this._createServiceInstance(name, def, {
+					requestDeps,
+					stack: [],
+					cacheSingleton: false,
+					lazyTriggered: false,
+					allowAsync: false,
+				}),
+			);
 		}
 
 		return this._createServiceInstance(name, def, {
