@@ -83,6 +83,14 @@ export * from "#questpie/server/config/questpie.js";
 export * from "#questpie/server/config/types.js";
 export * from "#questpie/server/errors/index.js";
 export * from "#questpie/server/fields/index.js";
+// v3 field primitives
+export { fieldType, wrapFieldComplete } from "#questpie/server/fields/field-type.js";
+export type { FieldTypeDefinition } from "#questpie/server/fields/field-type.js";
+export type {
+	FieldCommonMethods,
+	FieldWithMethods,
+} from "#questpie/server/fields/field-with-methods.js";
+export type * from "#questpie/server/fields/reactive-types.js";
 export { global } from "#questpie/server/global/builder/global-builder.js";
 export * from "#questpie/server/global/builder/index.js";
 export * from "#questpie/server/global/crud/index.js";
