@@ -58,7 +58,7 @@ describe("audit routes", () => {
 			const ctx = createTestContext();
 
 			// Create a post
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Audited Post" },
 				ctx,
 			);
@@ -110,7 +110,7 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "No Audit" },
 				ctx,
 			);
@@ -130,7 +130,7 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Paginated" },
 				ctx,
 			);
@@ -174,11 +174,11 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
-			const post1 = await setup.app.api.collections.posts.create(
+			const post1 = await setup.app.collections.posts.create(
 				{ title: "Post 1" },
 				ctx,
 			);
-			const post2 = await setup.app.api.collections.posts.create(
+			const post2 = await setup.app.collections.posts.create(
 				{ title: "Post 2" },
 				ctx,
 			);
@@ -224,7 +224,7 @@ describe("audit routes", () => {
 			const ctx = createTestContext();
 
 			// Initialize global
-			await setup.app.api.globals.settings.update({ siteName: "My Site" }, ctx);
+			await setup.app.globals.settings.update({ siteName: "My Site" }, ctx);
 
 			// Insert mock audit log entries for the global
 			await (setup.app as any).api.collections.admin_audit_log.create(

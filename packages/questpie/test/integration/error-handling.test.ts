@@ -47,7 +47,7 @@ describe("error handling", () => {
 		it("should return null for missing record", async () => {
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			const result = await setup.app.api.collections.error_test.findOne(
+			const result = await setup.app.collections.error_test.findOne(
 				{ where: { id: "00000000-0000-0000-0000-000000000000" } },
 				systemCtx,
 			);
@@ -62,7 +62,7 @@ describe("error handling", () => {
 			});
 
 			await expect(
-				setup.app.api.collections.error_test.create(
+				setup.app.collections.error_test.create(
 					{
 						id: crypto.randomUUID(),
 						title: "Test Record",
@@ -80,7 +80,7 @@ describe("error handling", () => {
 				role: "user",
 			});
 
-			const record = await setup.app.api.collections.error_test.create(
+			const record = await setup.app.collections.error_test.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test Record",
@@ -90,7 +90,7 @@ describe("error handling", () => {
 			);
 
 			await expect(
-				setup.app.api.collections.error_test.updateById(
+				setup.app.collections.error_test.updateById(
 					{
 						id: record.id,
 						data: { title: "Updated Title" },
@@ -107,7 +107,7 @@ describe("error handling", () => {
 				role: "user",
 			});
 
-			const record = await setup.app.api.collections.error_test.create(
+			const record = await setup.app.collections.error_test.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test Record",
@@ -117,7 +117,7 @@ describe("error handling", () => {
 			);
 
 			await expect(
-				setup.app.api.collections.error_test.updateById(
+				setup.app.collections.error_test.updateById(
 					{
 						id: record.id,
 						data: { status: "published" },
@@ -132,7 +132,7 @@ describe("error handling", () => {
 
 			try {
 				// Try to create without required field
-				await setup.app.api.collections.error_test.create(
+				await setup.app.collections.error_test.create(
 					{
 						id: crypto.randomUUID(),
 						title: null as any, // intentionally null to trigger constraint violation

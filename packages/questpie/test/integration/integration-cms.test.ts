@@ -155,7 +155,7 @@ describe("integration: full app workflow", () => {
 		const ctx = createTestContext();
 
 		// 1. Create an author
-		const authorsCrud = setup.app.api.collections.authors;
+		const authorsCrud = setup.app.collections.authors;
 		const author = await authorsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -174,7 +174,7 @@ describe("integration: full app workflow", () => {
 		expect(lastSent?.subject).toBe("Welcome to our platform!");
 
 		// 2. Create a draft article
-		const articlesCrud = setup.app.api.collections.articles;
+		const articlesCrud = setup.app.collections.articles;
 		const article = await articlesCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -290,7 +290,7 @@ describe("integration: full app workflow", () => {
 		const ctx = createTestContext();
 
 		// Create author and article
-		const author = await setup.app.api.collections.authors.create(
+		const author = await setup.app.collections.authors.create(
 			{
 				id: crypto.randomUUID(),
 				name: "John Smith",
@@ -299,7 +299,7 @@ describe("integration: full app workflow", () => {
 			ctx,
 		);
 
-		const article = await setup.app.api.collections.articles.create(
+		const article = await setup.app.collections.articles.create(
 			{
 				id: crypto.randomUUID(),
 				author: author.id,
@@ -310,7 +310,7 @@ describe("integration: full app workflow", () => {
 		);
 
 		// Create tags
-		const tagsCrud = setup.app.api.collections.tags;
+		const tagsCrud = setup.app.collections.tags;
 		const tag1 = await tagsCrud.create(
 			{ id: crypto.randomUUID(), name: "Architecture" },
 			ctx,
@@ -321,7 +321,7 @@ describe("integration: full app workflow", () => {
 		);
 
 		// Link tags via junction table
-		const articleTagsCrud = setup.app.api.collections.article_tags;
+		const articleTagsCrud = setup.app.collections.article_tags;
 		await articleTagsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -340,7 +340,7 @@ describe("integration: full app workflow", () => {
 		);
 
 		// Query article with tags
-		const fetchedArticle = await setup.app.api.collections.articles.findOne(
+		const fetchedArticle = await setup.app.collections.articles.findOne(
 			{
 				where: { id: article.id },
 				with: { tags: true },
@@ -369,7 +369,7 @@ describe("integration: full app workflow", () => {
 		const ctx = createTestContext();
 
 		// Create author
-		const authorsCrud = setup.app.api.collections.authors;
+		const authorsCrud = setup.app.collections.authors;
 		const author = await authorsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -380,7 +380,7 @@ describe("integration: full app workflow", () => {
 		);
 
 		// Create article with nested tag creation
-		const articlesCrud = setup.app.api.collections.articles;
+		const articlesCrud = setup.app.collections.articles;
 		const article = await articlesCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -416,7 +416,7 @@ describe("integration: full app workflow", () => {
 		expect(articleWithTags?.tags.map((t: any) => t.name)).toContain("Frontend");
 
 		// Create another article with existing tags
-		const tagsCrud = setup.app.api.collections.tags;
+		const tagsCrud = setup.app.collections.tags;
 		const reactTag = await tagsCrud.findOne({ where: { name: "React" } }, ctx);
 
 		expect(reactTag).not.toBeNull();
@@ -454,7 +454,7 @@ describe("integration: full app workflow", () => {
 		const ctx = createTestContext();
 
 		// Create multiple authors
-		const authorsCrud = setup.app.api.collections.authors;
+		const authorsCrud = setup.app.collections.authors;
 		const author1 = await authorsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -473,7 +473,7 @@ describe("integration: full app workflow", () => {
 		);
 
 		// Create articles for different authors
-		const articlesCrud = setup.app.api.collections.articles;
+		const articlesCrud = setup.app.collections.articles;
 		await articlesCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -538,7 +538,7 @@ describe("integration: full app workflow", () => {
 	});
 
 	it("handles access control with system and user modes", async () => {
-		const authorsCrud = setup.app.api.collections.authors;
+		const authorsCrud = setup.app.collections.authors;
 
 		// Create author in system mode
 		const author = await authorsCrud.create(
@@ -565,7 +565,7 @@ describe("integration: full app workflow", () => {
 		const ctx = createTestContext();
 
 		// Create author and article
-		const authorsCrud = setup.app.api.collections.authors;
+		const authorsCrud = setup.app.collections.authors;
 		const author = await authorsCrud.create(
 			{
 				id: crypto.randomUUID(),
@@ -575,7 +575,7 @@ describe("integration: full app workflow", () => {
 			ctx,
 		);
 
-		const articlesCrud = setup.app.api.collections.articles;
+		const articlesCrud = setup.app.collections.articles;
 		const article = await articlesCrud.create(
 			{
 				id: crypto.randomUUID(),

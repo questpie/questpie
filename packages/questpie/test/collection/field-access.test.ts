@@ -62,7 +62,7 @@ describe("field-level access control", () => {
 		it("system mode: all fields accessible", async () => {
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.users.create(
+			const created = await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "test@example.com",
@@ -74,7 +74,7 @@ describe("field-level access control", () => {
 				systemCtx,
 			);
 
-			const retrieved = await setup.app.api.collections.users.findOne(
+			const retrieved = await setup.app.collections.users.findOne(
 				{ where: { id: created.id } },
 				systemCtx,
 			);
@@ -94,7 +94,7 @@ describe("field-level access control", () => {
 
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.public_posts.create(
+			const created = await setup.app.collections.public_posts.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Public Post",
@@ -104,7 +104,7 @@ describe("field-level access control", () => {
 				systemCtx,
 			);
 
-			const retrieved = await setup.app.api.collections.public_posts.findOne(
+			const retrieved = await setup.app.collections.public_posts.findOne(
 				{ where: { id: created.id } },
 				userCtx,
 			);
@@ -122,7 +122,7 @@ describe("field-level access control", () => {
 
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.users.create(
+			const created = await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "test@example.com",
@@ -134,7 +134,7 @@ describe("field-level access control", () => {
 				systemCtx,
 			);
 
-			const retrieved = await setup.app.api.collections.users.findOne(
+			const retrieved = await setup.app.collections.users.findOne(
 				{ where: { id: created.id } },
 				userCtx,
 			);
@@ -155,7 +155,7 @@ describe("field-level access control", () => {
 
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.users.create(
+			const created = await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "admin@example.com",
@@ -167,7 +167,7 @@ describe("field-level access control", () => {
 				systemCtx,
 			);
 
-			const retrieved = await setup.app.api.collections.users.findOne(
+			const retrieved = await setup.app.collections.users.findOne(
 				{ where: { id: created.id } },
 				adminCtx,
 			);
@@ -192,7 +192,7 @@ describe("field-level access control", () => {
 
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.users.create(
+			const created = await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "test@example.com",
@@ -205,7 +205,7 @@ describe("field-level access control", () => {
 			);
 
 			// User context - salary should be stripped
-			const userRetrieved = await setup.app.api.collections.users.findOne(
+			const userRetrieved = await setup.app.collections.users.findOne(
 				{ where: { id: created.id } },
 				userCtx,
 			);
@@ -213,7 +213,7 @@ describe("field-level access control", () => {
 			expect(userRetrieved?.salary).toBeUndefined();
 
 			// Admin context - salary should be accessible
-			const adminRetrieved = await setup.app.api.collections.users.findOne(
+			const adminRetrieved = await setup.app.collections.users.findOne(
 				{ where: { id: created.id } },
 				adminCtx,
 			);
@@ -229,7 +229,7 @@ describe("field-level access control", () => {
 
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.collections.users.create(
+			await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "user1@example.com",
@@ -240,7 +240,7 @@ describe("field-level access control", () => {
 				systemCtx,
 			);
 
-			await setup.app.api.collections.users.create(
+			await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "user2@example.com",
@@ -251,7 +251,7 @@ describe("field-level access control", () => {
 				systemCtx,
 			);
 
-			const { docs } = await setup.app.api.collections.users.find({}, userCtx);
+			const { docs } = await setup.app.collections.users.find({}, userCtx);
 
 			expect(docs).toHaveLength(2);
 			for (const doc of docs) {
@@ -271,7 +271,7 @@ describe("field-level access control", () => {
 			});
 
 			await expect(
-				setup.app.api.collections.users.create(
+				setup.app.collections.users.create(
 					{
 						id: crypto.randomUUID(),
 						email: "test@example.com",
@@ -291,7 +291,7 @@ describe("field-level access control", () => {
 
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.users.create(
+			const created = await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "test@example.com",
@@ -302,7 +302,7 @@ describe("field-level access control", () => {
 			);
 
 			await expect(
-				setup.app.api.collections.users.updateById(
+				setup.app.collections.users.updateById(
 					{
 						id: created.id,
 						data: {
@@ -320,7 +320,7 @@ describe("field-level access control", () => {
 				role: "user",
 			});
 
-			const created = await setup.app.api.collections.public_posts.create(
+			const created = await setup.app.collections.public_posts.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Post Title",
@@ -340,7 +340,7 @@ describe("field-level access control", () => {
 				role: "admin",
 			});
 
-			const created = await setup.app.api.collections.users.create(
+			const created = await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "admin@example.com",
@@ -363,7 +363,7 @@ describe("field-level access control", () => {
 
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.users.create(
+			const created = await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "test@example.com",
@@ -375,7 +375,7 @@ describe("field-level access control", () => {
 			);
 
 			// User can update non-restricted fields
-			const updated = await setup.app.api.collections.users.updateById(
+			const updated = await setup.app.collections.users.updateById(
 				{
 					id: created.id,
 					data: {
@@ -389,7 +389,7 @@ describe("field-level access control", () => {
 			expect(updated).toBeTruthy();
 
 			// Verify with system context that restricted fields weren't changed
-			const verified = await setup.app.api.collections.users.findOne(
+			const verified = await setup.app.collections.users.findOne(
 				{ where: { id: created.id } },
 				systemCtx,
 			);
@@ -407,7 +407,7 @@ describe("field-level access control", () => {
 
 			const systemCtx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.collections.users.create(
+			await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "user1@example.com",
@@ -417,7 +417,7 @@ describe("field-level access control", () => {
 				systemCtx,
 			);
 
-			await setup.app.api.collections.users.create(
+			await setup.app.collections.users.create(
 				{
 					id: crypto.randomUUID(),
 					email: "user2@example.com",
@@ -428,7 +428,7 @@ describe("field-level access control", () => {
 			);
 
 			await expect(
-				setup.app.api.collections.users.update(
+				setup.app.collections.users.update(
 					{
 						where: {},
 						data: {

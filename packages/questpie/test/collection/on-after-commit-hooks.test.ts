@@ -83,7 +83,7 @@ describe("onAfterCommit in hook context (QUE-243)", () => {
 	});
 
 	it("onAfterCommit callback fires after create", async () => {
-		await setup.app.api.collections.articles.create(
+		await setup.app.collections.articles.create(
 			{ title: "Test" },
 			ctx,
 		);
@@ -96,14 +96,14 @@ describe("onAfterCommit in hook context (QUE-243)", () => {
 	});
 
 	it("onAfterCommit callback fires after update", async () => {
-		const created = await setup.app.api.collections.articles.create(
+		const created = await setup.app.collections.articles.create(
 			{ title: "Original" },
 			ctx,
 		);
 		events.length = 0;
 		afterCommitCounter = 0;
 
-		await setup.app.api.collections.articles.updateById(
+		await setup.app.collections.articles.updateById(
 			{ id: created.id, data: { title: "Updated" } },
 			ctx,
 		);
@@ -114,14 +114,14 @@ describe("onAfterCommit in hook context (QUE-243)", () => {
 	});
 
 	it("onAfterCommit callback fires after delete", async () => {
-		const created = await setup.app.api.collections.articles.create(
+		const created = await setup.app.collections.articles.create(
 			{ title: "ToDelete" },
 			ctx,
 		);
 		events.length = 0;
 		afterCommitCounter = 0;
 
-		await setup.app.api.collections.articles.deleteById(
+		await setup.app.collections.articles.deleteById(
 			{ id: created.id },
 			ctx,
 		);
@@ -133,11 +133,11 @@ describe("onAfterCommit in hook context (QUE-243)", () => {
 
 	it("onAfterCommit fires in order for multiple hooks", async () => {
 		// Create two records to trigger hooks sequentially
-		await setup.app.api.collections.articles.create(
+		await setup.app.collections.articles.create(
 			{ title: "First" },
 			ctx,
 		);
-		await setup.app.api.collections.articles.create(
+		await setup.app.collections.articles.create(
 			{ title: "Second" },
 			ctx,
 		);
@@ -168,7 +168,7 @@ describe("onAfterCommit in hook context (QUE-243)", () => {
 		await runTestDbMigrations(s.app);
 		const c = createTestContext(s.app);
 
-		await s.app.api.collections.items.create({ name: "test" }, c);
+		await s.app.collections.items.create({ name: "test" }, c);
 		expect(onAfterCommitType).toBe("function");
 
 		await s.cleanup();

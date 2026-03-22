@@ -97,7 +97,7 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 	// ========================================================================
 
 	it("single create: isBatch is undefined", async () => {
-		await setup.app.api.collections.articles.create(
+		await setup.app.collections.articles.create(
 			{ title: "Single" },
 			ctx,
 		);
@@ -111,14 +111,14 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 	});
 
 	it("single update by id: isBatch is undefined", async () => {
-		const created = await setup.app.api.collections.articles.create(
+		const created = await setup.app.collections.articles.create(
 			{ title: "Original" },
 			ctx,
 		);
 		captured.length = 0;
 
 		// updateById — single record, not batch
-		await setup.app.api.collections.articles.updateById(
+		await setup.app.collections.articles.updateById(
 			{ id: created.id, data: { title: "Updated" } },
 			ctx,
 		);
@@ -129,14 +129,14 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 	});
 
 	it("single delete by id: isBatch is undefined", async () => {
-		const created = await setup.app.api.collections.articles.create(
+		const created = await setup.app.collections.articles.create(
 			{ title: "ToDelete" },
 			ctx,
 		);
 		captured.length = 0;
 
 		// deleteById — single record, not batch
-		await setup.app.api.collections.articles.deleteById(
+		await setup.app.collections.articles.deleteById(
 			{ id: created.id },
 			ctx,
 		);
@@ -151,18 +151,18 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 	// ========================================================================
 
 	it("bulk update: beforeChange has isBatch=true, recordIds, records, count", async () => {
-		const a = await setup.app.api.collections.articles.create(
+		const a = await setup.app.collections.articles.create(
 			{ title: "A", category: "tech" },
 			ctx,
 		);
-		const b = await setup.app.api.collections.articles.create(
+		const b = await setup.app.collections.articles.create(
 			{ title: "B", category: "tech" },
 			ctx,
 		);
 		captured.length = 0;
 
 		// Bulk update via where clause with explicit IDs
-		await setup.app.api.collections.articles.update(
+		await setup.app.collections.articles.update(
 			{
 				where: { id: { in: [a.id, b.id] } },
 				data: { title: "Updated" },
@@ -186,17 +186,17 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 	});
 
 	it("bulk update: afterChange has post-image records", async () => {
-		const a = await setup.app.api.collections.articles.create(
+		const a = await setup.app.collections.articles.create(
 			{ title: "A", category: "tech" },
 			ctx,
 		);
-		const b = await setup.app.api.collections.articles.create(
+		const b = await setup.app.collections.articles.create(
 			{ title: "B", category: "tech" },
 			ctx,
 		);
 		captured.length = 0;
 
-		await setup.app.api.collections.articles.update(
+		await setup.app.collections.articles.update(
 			{
 				where: { id: { in: [a.id, b.id] } },
 				data: { title: "Updated" },
@@ -225,17 +225,17 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 	// ========================================================================
 
 	it("bulk delete: beforeDelete has isBatch=true, recordIds, pre-image records", async () => {
-		const a = await setup.app.api.collections.articles.create(
+		const a = await setup.app.collections.articles.create(
 			{ title: "Del-A", category: "old" },
 			ctx,
 		);
-		const b = await setup.app.api.collections.articles.create(
+		const b = await setup.app.collections.articles.create(
 			{ title: "Del-B", category: "old" },
 			ctx,
 		);
 		captured.length = 0;
 
-		await setup.app.api.collections.articles.delete(
+		await setup.app.collections.articles.delete(
 			{ where: { id: { in: [a.id, b.id] } } },
 			ctx,
 		);
@@ -257,17 +257,17 @@ describe("Bulk Hook Metadata (QUE-238)", () => {
 	});
 
 	it("bulk delete: afterDelete has same bulk metadata", async () => {
-		const a = await setup.app.api.collections.articles.create(
+		const a = await setup.app.collections.articles.create(
 			{ title: "X", category: "gone" },
 			ctx,
 		);
-		const b = await setup.app.api.collections.articles.create(
+		const b = await setup.app.collections.articles.create(
 			{ title: "Y", category: "gone" },
 			ctx,
 		);
 		captured.length = 0;
 
-		await setup.app.api.collections.articles.delete(
+		await setup.app.collections.articles.delete(
 			{ where: { id: { in: [a.id, b.id] } } },
 			ctx,
 		);

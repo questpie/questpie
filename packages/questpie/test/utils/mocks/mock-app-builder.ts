@@ -41,7 +41,7 @@ export type MockApp<TApp = any> = TApp & {
  * });
  *
  * // Use app normally
- * await app.api.collections.products.create({ name: "Widget", price: 9.99 });
+ * await app.collections.products.create({ name: "Widget", price: 9.99 });
  *
  * // Inspect mock state
  * expect(app.mocks.mailer.getSentCount()).toBe(0);

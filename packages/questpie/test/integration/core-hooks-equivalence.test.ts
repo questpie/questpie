@@ -96,7 +96,7 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 
 	describe("Realtime events", () => {
 		it("create emits 'create' event with recordId", async () => {
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Hello", status: "draft" },
 				ctx,
 			);
@@ -120,12 +120,12 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 		});
 
 		it("single update emits 'update' event with recordId", async () => {
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Original" },
 				ctx,
 			);
 
-			await setup.app.api.collections.posts.updateById(
+			await setup.app.collections.posts.updateById(
 				{ id: post.id, data: { title: "Updated" } },
 				ctx,
 			);
@@ -146,16 +146,16 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 		});
 
 		it("bulk update emits 'bulk_update' with count payload", async () => {
-			const a = await setup.app.api.collections.posts.create(
+			const a = await setup.app.collections.posts.create(
 				{ title: "A" },
 				ctx,
 			);
-			const b = await setup.app.api.collections.posts.create(
+			const b = await setup.app.collections.posts.create(
 				{ title: "B" },
 				ctx,
 			);
 
-			await setup.app.api.collections.posts.update(
+			await setup.app.collections.posts.update(
 				{
 					where: { id: { in: [a.id, b.id] } },
 					data: { title: "Bulk Updated" },
@@ -179,12 +179,12 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 		});
 
 		it("single delete emits 'delete' event", async () => {
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "To Delete" },
 				ctx,
 			);
 
-			await setup.app.api.collections.posts.deleteById(
+			await setup.app.collections.posts.deleteById(
 				{ id: post.id },
 				ctx,
 			);
@@ -201,16 +201,16 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 		});
 
 		it("bulk delete emits 'bulk_delete' with count payload", async () => {
-			const a = await setup.app.api.collections.posts.create(
+			const a = await setup.app.collections.posts.create(
 				{ title: "X" },
 				ctx,
 			);
-			const b = await setup.app.api.collections.posts.create(
+			const b = await setup.app.collections.posts.create(
 				{ title: "Y" },
 				ctx,
 			);
 
-			await setup.app.api.collections.posts.delete(
+			await setup.app.collections.posts.delete(
 				{ where: { id: { in: [a.id, b.id] } } },
 				ctx,
 			);
@@ -230,7 +230,7 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 		});
 
 		it("notify fires after commit (adapter receives notices)", async () => {
-			await setup.app.api.collections.posts.create(
+			await setup.app.collections.posts.create(
 				{ title: "Notify Test" },
 				ctx,
 			);
@@ -273,7 +273,7 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 				return originalIndex(params);
 			};
 
-			await setup.app.api.collections.posts.create(
+			await setup.app.collections.posts.create(
 				{ title: "Indexed Post" },
 				ctx,
 			);
@@ -296,12 +296,12 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 				return originalRemove(params);
 			};
 
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "To Remove" },
 				ctx,
 			);
 
-			await setup.app.api.collections.posts.deleteById(
+			await setup.app.collections.posts.deleteById(
 				{ id: post.id },
 				ctx,
 			);
@@ -322,19 +322,19 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 	describe("End-to-end CRUD flow", () => {
 		it("full lifecycle: create → update → delete produces correct event sequence", async () => {
 			// Create
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Lifecycle Test", status: "draft" },
 				ctx,
 			);
 
 			// Update
-			await setup.app.api.collections.posts.updateById(
+			await setup.app.collections.posts.updateById(
 				{ id: post.id, data: { status: "published" } },
 				ctx,
 			);
 
 			// Delete
-			await setup.app.api.collections.posts.deleteById(
+			await setup.app.collections.posts.deleteById(
 				{ id: post.id },
 				ctx,
 			);

@@ -81,7 +81,7 @@ describe("mixed localization modes", () => {
 			category: "Hair Care", // localized (server knows from schema)
 		};
 
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				name: nameEN,
 				description: descriptionEN,
@@ -103,7 +103,7 @@ describe("mixed localization modes", () => {
 		const ctxSK = createTestContext({ locale: "sk" });
 
 		// Create in EN
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				name: "Hair Gel",
 				description: {
@@ -124,7 +124,7 @@ describe("mixed localization modes", () => {
 		);
 
 		// Update SK locale
-		await setup.app.api.collections.products.updateById(
+		await setup.app.collections.products.updateById(
 			{
 				id: created.id,
 				data: {
@@ -148,7 +148,7 @@ describe("mixed localization modes", () => {
 		);
 
 		// Read in EN
-		const enProduct = await setup.app.api.collections.products.findOne(
+		const enProduct = await setup.app.collections.products.findOne(
 			{ where: { id: created.id } },
 			ctxEN,
 		);
@@ -159,7 +159,7 @@ describe("mixed localization modes", () => {
 		expect((enProduct?.metadata as any).category).toBe("Styling");
 
 		// Read in SK
-		const skProduct = await setup.app.api.collections.products.findOne(
+		const skProduct = await setup.app.collections.products.findOne(
 			{ where: { id: created.id } },
 			ctxSK,
 		);
@@ -175,7 +175,7 @@ describe("mixed localization modes", () => {
 		const ctxDE = createTestContext({ locale: "de" });
 
 		// Create in EN only
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				name: "Conditioner",
 				description: {
@@ -196,7 +196,7 @@ describe("mixed localization modes", () => {
 		);
 
 		// Read in DE (no translation) - should fallback to EN for all modes
-		const deProduct = await setup.app.api.collections.products.findOne(
+		const deProduct = await setup.app.collections.products.findOne(
 			{ where: { id: created.id } },
 			ctxDE,
 		);
@@ -212,7 +212,7 @@ describe("mixed localization modes", () => {
 	it("preserves static values in nested-mode while localizing marked fields", async () => {
 		const ctx = createTestContext({ locale: "en" });
 
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				name: "Test Product",
 				metadata: {
@@ -235,7 +235,7 @@ describe("mixed localization modes", () => {
 	it("handles null values for each mode", async () => {
 		const ctx = createTestContext({ locale: "en" });
 
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				name: "Minimal Product",
 				description: null, // null whole-mode JSONB
@@ -296,7 +296,7 @@ describe("mixed localization modes", () => {
 		};
 
 		// Create in EN
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				name: "Multi Desc",
 				description: descEN,
@@ -305,7 +305,7 @@ describe("mixed localization modes", () => {
 		);
 
 		// Add SK
-		await setup.app.api.collections.products.updateById(
+		await setup.app.collections.products.updateById(
 			{
 				id: created.id,
 				data: {
@@ -317,7 +317,7 @@ describe("mixed localization modes", () => {
 		);
 
 		// Add DE
-		await setup.app.api.collections.products.updateById(
+		await setup.app.collections.products.updateById(
 			{
 				id: created.id,
 				data: {
@@ -329,19 +329,19 @@ describe("mixed localization modes", () => {
 		);
 
 		// Verify each locale has its own structure
-		const enProduct = await setup.app.api.collections.products.findOne(
+		const enProduct = await setup.app.collections.products.findOne(
 			{ where: { id: created.id } },
 			ctxEN,
 		);
 		expect((enProduct?.description as any)?.content).toHaveLength(2); // EN has 2 paragraphs
 
-		const skProduct = await setup.app.api.collections.products.findOne(
+		const skProduct = await setup.app.collections.products.findOne(
 			{ where: { id: created.id } },
 			ctxSK,
 		);
 		expect((skProduct?.description as any)?.content).toHaveLength(1); // SK has 1 paragraph
 
-		const deProduct = await setup.app.api.collections.products.findOne(
+		const deProduct = await setup.app.collections.products.findOne(
 			{ where: { id: created.id } },
 			ctxDE,
 		);

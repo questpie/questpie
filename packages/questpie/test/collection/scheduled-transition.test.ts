@@ -52,7 +52,7 @@ describe("scheduled transitions", () => {
 		it("publishes to queue when scheduledAt is in the future", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Schedule Me" },
 				ctx,
 			);
@@ -60,7 +60,7 @@ describe("scheduled transitions", () => {
 			const futureDate = new Date(Date.now() + 60_000);
 
 			const result =
-				await setup.app.api.collections.workflow_posts.transitionStage(
+				await setup.app.collections.workflow_posts.transitionStage(
 					{ id: created.id, stage: "published", scheduledAt: futureDate },
 					ctx,
 				);
@@ -84,14 +84,14 @@ describe("scheduled transitions", () => {
 		it("executes immediately when scheduledAt is in the past", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Past Schedule" },
 				ctx,
 			);
 
 			const pastDate = new Date(Date.now() - 60_000);
 
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published", scheduledAt: pastDate },
 				ctx,
 			);
@@ -101,7 +101,7 @@ describe("scheduled transitions", () => {
 			expect(jobs.length).toBe(0);
 
 			// Verify the record is readable at the published stage
-			const published = await setup.app.api.collections.workflow_posts.findOne(
+			const published = await setup.app.collections.workflow_posts.findOne(
 				{ where: { id: created.id }, stage: "published" },
 				ctx,
 			);
@@ -112,20 +112,20 @@ describe("scheduled transitions", () => {
 		it("processes scheduled job and executes the transition", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Job Execution" },
 				ctx,
 			);
 
 			const futureDate = new Date(Date.now() + 60_000);
 
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published", scheduledAt: futureDate },
 				ctx,
 			);
 
 			// Verify record is NOT yet published
-			const beforeJob = await setup.app.api.collections.workflow_posts.findOne(
+			const beforeJob = await setup.app.collections.workflow_posts.findOne(
 				{ where: { id: created.id }, stage: "published" },
 				ctx,
 			);
@@ -135,7 +135,7 @@ describe("scheduled transitions", () => {
 			await (setup.app as any).queue.runOnce();
 
 			// Now the record should be published
-			const afterJob = await setup.app.api.collections.workflow_posts.findOne(
+			const afterJob = await setup.app.collections.workflow_posts.findOne(
 				{ where: { id: created.id }, stage: "published" },
 				ctx,
 			);
@@ -149,14 +149,14 @@ describe("scheduled transitions", () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
 			// Initialize the global
-			await setup.app.api.globals.workflow_settings.update(
+			await setup.app.globals.workflow_settings.update(
 				{ siteName: "My Site" },
 				ctx,
 			);
 
 			const futureDate = new Date(Date.now() + 60_000);
 
-			await setup.app.api.globals.workflow_settings.transitionStage(
+			await setup.app.globals.workflow_settings.transitionStage(
 				{ stage: "published", scheduledAt: futureDate },
 				ctx,
 			);
@@ -175,20 +175,20 @@ describe("scheduled transitions", () => {
 		it("processes scheduled job for global transitions", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.workflow_settings.update(
+			await setup.app.globals.workflow_settings.update(
 				{ siteName: "Scheduled Site" },
 				ctx,
 			);
 
 			const futureDate = new Date(Date.now() + 60_000);
 
-			await setup.app.api.globals.workflow_settings.transitionStage(
+			await setup.app.globals.workflow_settings.transitionStage(
 				{ stage: "published", scheduledAt: futureDate },
 				ctx,
 			);
 
 			// Verify not yet published
-			const beforeJob = await setup.app.api.globals.workflow_settings.get(
+			const beforeJob = await setup.app.globals.workflow_settings.get(
 				{ stage: "published" },
 				ctx,
 			);
@@ -198,7 +198,7 @@ describe("scheduled transitions", () => {
 			await (setup.app as any).queue.runOnce();
 
 			// Now should be published
-			const afterJob = await setup.app.api.globals.workflow_settings.get(
+			const afterJob = await setup.app.globals.workflow_settings.get(
 				{ stage: "published" },
 				ctx,
 			);
@@ -210,14 +210,14 @@ describe("scheduled transitions", () => {
 		it("validates stage exists before scheduling", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Invalid Stage" },
 				ctx,
 			);
 
 			// Immediate transition to invalid stage should throw
 			await expect(
-				setup.app.api.collections.workflow_posts.transitionStage(
+				setup.app.collections.workflow_posts.transitionStage(
 					{ id: created.id, stage: "nonexistent" },
 					ctx,
 				),
@@ -227,12 +227,12 @@ describe("scheduled transitions", () => {
 		it("does not schedule when transition is immediate (no scheduledAt)", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Immediate" },
 				ctx,
 			);
 
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			);
@@ -242,7 +242,7 @@ describe("scheduled transitions", () => {
 			expect(jobs.length).toBe(0);
 
 			// But transition should have happened immediately
-			const published = await setup.app.api.collections.workflow_posts.findOne(
+			const published = await setup.app.collections.workflow_posts.findOne(
 				{ where: { id: created.id }, stage: "published" },
 				ctx,
 			);

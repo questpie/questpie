@@ -57,7 +57,7 @@ describe("collection versioning + workflow", () => {
 		it("creates records in the initial stage (draft)", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.shorthand_posts.create(
+			const created = await setup.app.collections.shorthand_posts.create(
 				{ id: crypto.randomUUID(), title: "Shorthand Post" },
 				ctx,
 			);
@@ -65,7 +65,7 @@ describe("collection versioning + workflow", () => {
 			expect(created.title).toBe("Shorthand Post");
 
 			// Should be readable without stage (= draft)
-			const found = await setup.app.api.collections.shorthand_posts.findOne(
+			const found = await setup.app.collections.shorthand_posts.findOne(
 				{ where: { id: created.id } },
 				ctx,
 			);
@@ -75,13 +75,13 @@ describe("collection versioning + workflow", () => {
 		it("transitions from draft to published using shorthand config", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.shorthand_posts.create(
+			const created = await setup.app.collections.shorthand_posts.create(
 				{ id: crypto.randomUUID(), title: "To Publish" },
 				ctx,
 			);
 
 			const result =
-				await setup.app.api.collections.shorthand_posts.transitionStage(
+				await setup.app.collections.shorthand_posts.transitionStage(
 					{ id: created.id, stage: "published" },
 					ctx,
 				);
@@ -89,7 +89,7 @@ describe("collection versioning + workflow", () => {
 			expect(result.id).toBe(created.id);
 
 			// Should be readable from published stage
-			const published = await setup.app.api.collections.shorthand_posts.findOne(
+			const published = await setup.app.collections.shorthand_posts.findOne(
 				{ where: { id: created.id }, stage: "published" },
 				ctx,
 			);
@@ -99,13 +99,13 @@ describe("collection versioning + workflow", () => {
 		it("rejects transition to unknown stage with shorthand config", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.shorthand_posts.create(
+			const created = await setup.app.collections.shorthand_posts.create(
 				{ id: crypto.randomUUID(), title: "Bad Transition" },
 				ctx,
 			);
 
 			await expect(
-				setup.app.api.collections.shorthand_posts.transitionStage(
+				setup.app.collections.shorthand_posts.transitionStage(
 					{ id: created.id, stage: "review" },
 					ctx,
 				),
@@ -117,19 +117,19 @@ describe("collection versioning + workflow", () => {
 		it("returns versionStage for workflow-enabled collections", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Version Stage Test" },
 				ctx,
 			);
 
 			// Update to create another version
-			await setup.app.api.collections.workflow_posts.updateById(
+			await setup.app.collections.workflow_posts.updateById(
 				{ id: created.id, data: { title: "Updated Title" } },
 				ctx,
 			);
 
 			const versions =
-				await setup.app.api.collections.workflow_posts.findVersions(
+				await setup.app.collections.workflow_posts.findVersions(
 					{ id: created.id },
 					ctx,
 				);
@@ -148,19 +148,19 @@ describe("collection versioning + workflow", () => {
 		it("records correct versionStage after transition", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Track Stage" },
 				ctx,
 			);
 
 			// Transition to published
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			);
 
 			const versions =
-				await setup.app.api.collections.workflow_posts.findVersions(
+				await setup.app.collections.workflow_posts.findVersions(
 					{ id: created.id },
 					ctx,
 				);
@@ -176,13 +176,13 @@ describe("collection versioning + workflow", () => {
 		it("does not return versionStage for non-workflow collections", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.plain_versioned.create(
+			const created = await setup.app.collections.plain_versioned.create(
 				{ id: crypto.randomUUID(), title: "No Workflow" },
 				ctx,
 			);
 
 			const versions =
-				await setup.app.api.collections.plain_versioned.findVersions(
+				await setup.app.collections.plain_versioned.findVersions(
 					{ id: created.id },
 					ctx,
 				);
@@ -197,25 +197,25 @@ describe("collection versioning + workflow", () => {
 		it("find() without stage reads from main table (draft)", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Draft Content" },
 				ctx,
 			);
 
 			// Transition to published so there's a published snapshot
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			);
 
 			// Update draft after transition
-			await setup.app.api.collections.workflow_posts.updateById(
+			await setup.app.collections.workflow_posts.updateById(
 				{ id: created.id, data: { title: "Updated Draft" } },
 				ctx,
 			);
 
 			// find() without stage should return the updated draft
-			const drafts = await setup.app.api.collections.workflow_posts.find(
+			const drafts = await setup.app.collections.workflow_posts.find(
 				{ where: { id: created.id } },
 				ctx,
 			);
@@ -226,32 +226,32 @@ describe("collection versioning + workflow", () => {
 		it("find({ stage: 'published' }) reads from versions table", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Original Content" },
 				ctx,
 			);
 
 			// Transition to published
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			);
 
 			// Update draft after publishing
-			await setup.app.api.collections.workflow_posts.updateById(
+			await setup.app.collections.workflow_posts.updateById(
 				{ id: created.id, data: { title: "New Draft Version" } },
 				ctx,
 			);
 
 			// Published stage should still show the original content
-			const published = await setup.app.api.collections.workflow_posts.findOne(
+			const published = await setup.app.collections.workflow_posts.findOne(
 				{ where: { id: created.id }, stage: "published" },
 				ctx,
 			);
 			expect(published?.title).toBe("Original Content");
 
 			// Draft should show the updated content
-			const draft = await setup.app.api.collections.workflow_posts.findOne(
+			const draft = await setup.app.collections.workflow_posts.findOne(
 				{ where: { id: created.id } },
 				ctx,
 			);
@@ -261,13 +261,13 @@ describe("collection versioning + workflow", () => {
 		it("returns empty results for unpublished records when querying published stage", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.collections.workflow_posts.create(
+			await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "Never Published" },
 				ctx,
 			);
 
 			// Query published stage — should find nothing
-			const published = await setup.app.api.collections.workflow_posts.find(
+			const published = await setup.app.collections.workflow_posts.find(
 				{ stage: "published" },
 				ctx,
 			);
@@ -277,44 +277,44 @@ describe("collection versioning + workflow", () => {
 		it("publishing updates the published snapshot", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			const created = await setup.app.api.collections.workflow_posts.create(
+			const created = await setup.app.collections.workflow_posts.create(
 				{ id: crypto.randomUUID(), title: "V1" },
 				ctx,
 			);
 
 			// First publish
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			);
 
-			let published = await setup.app.api.collections.workflow_posts.findOne(
+			let published = await setup.app.collections.workflow_posts.findOne(
 				{ where: { id: created.id }, stage: "published" },
 				ctx,
 			);
 			expect(published?.title).toBe("V1");
 
 			// Update draft
-			await setup.app.api.collections.workflow_posts.updateById(
+			await setup.app.collections.workflow_posts.updateById(
 				{ id: created.id, data: { title: "V2" } },
 				ctx,
 			);
 
 			// Published still shows V1
-			published = await setup.app.api.collections.workflow_posts.findOne(
+			published = await setup.app.collections.workflow_posts.findOne(
 				{ where: { id: created.id }, stage: "published" },
 				ctx,
 			);
 			expect(published?.title).toBe("V1");
 
 			// Re-publish
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			);
 
 			// Now published shows V2
-			published = await setup.app.api.collections.workflow_posts.findOne(
+			published = await setup.app.collections.workflow_posts.findOne(
 				{ where: { id: created.id }, stage: "published" },
 				ctx,
 			);

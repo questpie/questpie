@@ -99,7 +99,7 @@ describe("global CRUD", () => {
 	it("supports globals API, versioning, and relations", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const post = await app.api.collections.posts.create(
+		const post = await app.collections.posts.create(
 			{
 				id: crypto.randomUUID(),
 				title: "Hello",
@@ -107,19 +107,19 @@ describe("global CRUD", () => {
 			ctx,
 		);
 
-		await app.api.globals.site_config.update(
+		await app.globals.site_config.update(
 			{
 				siteName: "One",
 			},
 			ctx,
 		);
-		await app.api.globals.site_config.update(
+		await app.globals.site_config.update(
 			{
 				siteName: "Two",
 			},
 			ctx,
 		);
-		await app.api.globals.site_config.update(
+		await app.globals.site_config.update(
 			{
 				siteName: "Three",
 				featuredPost: post.id, // Global FK columns use field name, not {field}Id
@@ -127,38 +127,38 @@ describe("global CRUD", () => {
 			ctx,
 		);
 
-		const versions = await app.api.globals.site_config.findVersions({}, ctx);
+		const versions = await app.globals.site_config.findVersions({}, ctx);
 		expect(versions).toHaveLength(2);
 		expect(versions[0].siteName).toBe("Two");
 
-		const fetched = await app.api.globals.site_config.get(
+		const fetched = await app.globals.site_config.get(
 			{ with: { featuredPost: true } },
 			ctx,
 		);
 		expect(fetched?.featuredPost?.title).toBe("Hello");
 
-		await app.api.globals.site_config.revertToVersion(
+		await app.globals.site_config.revertToVersion(
 			{ version: versions[0].versionNumber },
 			ctx,
 		);
 
-		const reverted = await app.api.globals.site_config.get({}, ctx);
+		const reverted = await app.globals.site_config.get({}, ctx);
 		expect(reverted?.siteName).toBe("Two");
 	});
 
 	it("reverts global versions by versionId", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		await app.api.globals.site_config.update({ siteName: "First" }, ctx);
-		await app.api.globals.site_config.update({ siteName: "Second" }, ctx);
+		await app.globals.site_config.update({ siteName: "First" }, ctx);
+		await app.globals.site_config.update({ siteName: "Second" }, ctx);
 
-		const versions = await app.api.globals.site_config.findVersions({}, ctx);
-		await app.api.globals.site_config.revertToVersion(
+		const versions = await app.globals.site_config.findVersions({}, ctx);
+		await app.globals.site_config.revertToVersion(
 			{ versionId: versions[0].versionId },
 			ctx,
 		);
 
-		const reverted = await app.api.globals.site_config.get({}, ctx);
+		const reverted = await app.globals.site_config.get({}, ctx);
 		expect(reverted?.siteName).toBe("First");
 	});
 
@@ -179,42 +179,42 @@ describe("global CRUD", () => {
 			defaultLocale: "en",
 		});
 
-		await app.api.globals.localized_config.update({ title: "Hello" }, ctxEn);
-		await app.api.globals.localized_config.update({ title: "Ahoj" }, ctxSk);
+		await app.globals.localized_config.update({ title: "Hello" }, ctxEn);
+		await app.globals.localized_config.update({ title: "Ahoj" }, ctxSk);
 
-		const sk = await app.api.globals.localized_config.get({}, ctxSk);
+		const sk = await app.globals.localized_config.get({}, ctxSk);
 		expect(sk?.title).toBe("Ahoj");
 
-		const fr = await app.api.globals.localized_config.get({}, ctxFr);
+		const fr = await app.globals.localized_config.get({}, ctxFr);
 		expect(fr?.title).toBe("Hello");
 	});
 
 	it("auto-creates globals on get", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
-		const created = await app.api.globals.auto_config.get({}, ctx);
+		const created = await app.globals.auto_config.get({}, ctx);
 		expect(created?.mode).toBe("auto");
 	});
 
 	it("auto-creates globals without update access", async () => {
 		const ctx = createTestContext({ accessMode: "user" });
-		const created = await app.api.globals.read_only_config.get({}, ctx);
+		const created = await app.globals.read_only_config.get({}, ctx);
 		expect(created?.mode).toBe("read");
 	});
 
 	it("reads global snapshots from non-initial workflow stage", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		await app.api.globals.workflow_config.update({ title: "Draft v1" }, ctx);
-		await app.api.globals.workflow_config.update(
+		await app.globals.workflow_config.update({ title: "Draft v1" }, ctx);
+		await app.globals.workflow_config.update(
 			{ title: "Published v1" },
 			createTestContext({ accessMode: "system", stage: "published" }),
 		);
-		await app.api.globals.workflow_config.update({ title: "Draft v2" }, ctx);
+		await app.globals.workflow_config.update({ title: "Draft v2" }, ctx);
 
-		const draft = await app.api.globals.workflow_config.get({}, ctx);
+		const draft = await app.globals.workflow_config.get({}, ctx);
 		expect(draft?.title).toBe("Draft v2");
 
-		const published = await app.api.globals.workflow_config.get(
+		const published = await app.globals.workflow_config.get(
 			{ stage: "published" },
 			ctx,
 		);
@@ -224,30 +224,30 @@ describe("global CRUD", () => {
 	it("enforces global workflow stage transitions", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		await app.api.globals.guarded_workflow_config.update(
+		await app.globals.guarded_workflow_config.update(
 			{ title: "Draft" },
 			ctx,
 		);
 
 		await expect(
-			app.api.globals.guarded_workflow_config.update(
+			app.globals.guarded_workflow_config.update(
 				{ title: "Invalid publish" },
 				createTestContext({ accessMode: "system", stage: "published" }),
 			),
 		).rejects.toThrow('Transition from "draft" to "published" is not allowed');
 
-		await app.api.globals.guarded_workflow_config.update(
+		await app.globals.guarded_workflow_config.update(
 			{ title: "Review" },
 			createTestContext({ accessMode: "system", stage: "review" }),
 		);
 
-		await app.api.globals.guarded_workflow_config.update(
+		await app.globals.guarded_workflow_config.update(
 			{ title: "Published" },
 			createTestContext({ accessMode: "system", stage: "published" }),
 		);
 
 		await expect(
-			app.api.globals.guarded_workflow_config.update(
+			app.globals.guarded_workflow_config.update(
 				{ title: "Back to draft" },
 				createTestContext({ accessMode: "system" }),
 			),

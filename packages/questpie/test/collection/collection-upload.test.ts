@@ -47,7 +47,7 @@ describe("collection upload URL generation", () => {
 	describe("afterRead hook URL generation", () => {
 		it("generates URL for assets when fetching directly", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.assets;
+			const assetsCrud = app.collections.assets;
 
 			// Create an asset with a key (simulating an uploaded file)
 			const asset = await assetsCrud.create(
@@ -79,7 +79,7 @@ describe("collection upload URL generation", () => {
 
 		it("generates URL for assets in find (multiple records)", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.assets;
+			const assetsCrud = app.collections.assets;
 
 			// Create multiple assets
 			await assetsCrud.create(
@@ -119,8 +119,8 @@ describe("collection upload URL generation", () => {
 
 		it("generates URL for assets when expanding relations", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.assets;
-			const servicesCrud = app.api.collections.services;
+			const assetsCrud = app.collections.assets;
+			const servicesCrud = app.collections.services;
 
 			// Create an asset
 			const asset = await assetsCrud.create(
@@ -162,7 +162,7 @@ describe("collection upload URL generation", () => {
 
 		it("URL generation handles both public and private visibility", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.assets;
+			const assetsCrud = app.collections.assets;
 
 			// Create a public asset
 			const publicAsset = await assetsCrud.create(
