@@ -24,7 +24,7 @@ import { job } from "#questpie/server/integrated/queue/job.js";
 /**
  * Schema for index records job payload
  */
-export const indexRecordsSchema = z.object({
+const indexRecordsSchema = z.object({
 	/**
 	 * Items to index - collection name and record ID pairs
 	 */
@@ -36,7 +36,7 @@ export const indexRecordsSchema = z.object({
 	),
 });
 
-export type IndexRecordsPayload = z.infer<typeof indexRecordsSchema>;
+type IndexRecordsPayload = z.infer<typeof indexRecordsSchema>;
 
 /**
  * Fields excluded from auto-generated search content
@@ -73,7 +73,7 @@ function generateAutoContent(record: any): string {
  * This job indexes records to the search service in batches.
  * It fetches all locale versions of each record and indexes them.
  */
-export const indexRecordsJob = job({
+const indexRecordsJob = job({
 	name: "index-records",
 	schema: indexRecordsSchema,
 	options: {
@@ -160,3 +160,6 @@ export const indexRecordsJob = job({
 		}
 	},
 });
+
+export { indexRecordsJob, indexRecordsSchema, type IndexRecordsPayload };
+export default indexRecordsJob;

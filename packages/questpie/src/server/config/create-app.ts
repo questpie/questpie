@@ -21,6 +21,7 @@ import {
 	mergeTranslationsConfig,
 } from "#questpie/server/i18n/translator.js";
 import { mergeAuthOptions } from "#questpie/server/integrated/auth/merge.js";
+import coreModule from "#questpie/server/modules/core/.generated/module.js";
 
 // ============================================================================
 // module() — identity function for type inference
@@ -564,7 +565,16 @@ async function createAppFromDefinition(
 	runtime: RuntimeConfig,
 ): Promise<Questpie<QuestpieConfig>> {
 	// 1. Resolve modules depth-first
-	const flatModules = resolveModules(definition.modules ?? []);
+	// Auto-prepend coreModule so its hooks/jobs are always available.
+	// Core goes first → user modules can override via last-wins merge.
+	const userModules = definition.modules ?? [];
+	const hasCoreModule = userModules.some(
+		(m) => m.name === coreModule.name,
+	);
+	const allModules = hasCoreModule
+		? userModules
+		: [coreModule as unknown as ModuleDefinition, ...userModules];
+	const flatModules = resolveModules(allModules);
 
 	// 2. Merge all module contributions
 	let merged = emptyMergedState();

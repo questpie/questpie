@@ -25,7 +25,7 @@ import { job } from "#questpie/server/integrated/queue/job.js";
 /**
  * Schema for scheduled transition job payload
  */
-export const scheduledTransitionSchema = z.discriminatedUnion("type", [
+const scheduledTransitionSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("collection"),
 		collection: z.string(),
@@ -39,7 +39,7 @@ export const scheduledTransitionSchema = z.discriminatedUnion("type", [
 	}),
 ]);
 
-export type ScheduledTransitionPayload = z.infer<
+type ScheduledTransitionPayload = z.infer<
 	typeof scheduledTransitionSchema
 >;
 
@@ -49,7 +49,7 @@ export type ScheduledTransitionPayload = z.infer<
  * Transitions a record or global to a target workflow stage.
  * Runs in system access mode (no user session).
  */
-export const scheduledTransitionJob = job({
+const scheduledTransitionJob = job({
 	name: "scheduled-transition",
 	schema: scheduledTransitionSchema,
 	options: {
@@ -86,3 +86,10 @@ export const scheduledTransitionJob = job({
 		}
 	},
 });
+
+export {
+	scheduledTransitionJob,
+	scheduledTransitionSchema,
+	type ScheduledTransitionPayload,
+};
+export default scheduledTransitionJob;
