@@ -158,13 +158,7 @@ const searchHook = {
 
 export default {
 	hooks: {
-		collections: [
-			// NOTE: realtimeHook is intentionally excluded in Phase 2.
-			// CRUD generator still emits realtime events directly.
-			// Enable realtimeHook when QUE-251/252 remove CRUD direct calls (Phase 3).
-			// realtimeHook,
-			searchHook,
-		],
+		collections: [realtimeHook, searchHook],
 		globals: [],
 	},
 };

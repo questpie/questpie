@@ -19,10 +19,8 @@ import type {
 /** Title expression for SQL queries - resolved column or SQL expression */
 type TitleExpressionSQL = SQL | Column | null;
 
-import {
-	indexToSearch,
-	removeFromSearch,
-} from "#questpie/server/collection/crud/integrations/index.js";
+// Search/realtime integrations removed (Phase 3 — QUE-251).
+// Side effects now come from core module global hooks.
 import {
 	buildLocalizedFieldRef,
 	buildOrderByClauses,
@@ -61,14 +59,11 @@ import {
 	executeGlobalCollectionTransitionHooks,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
 import {
-	appendRealtimeChange,
 	createHookContext,
 	executeHooks,
 	getDb,
 	mergeI18nRows,
 	normalizeContext,
-	notifyRealtimeChange,
-	onAfterCommit,
 	resolveFieldKey,
 	splitLocalizedFields,
 	withTransaction,
@@ -1283,8 +1278,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db,
 						}),
 					);
-
-					let changeEvent: any = null;
 					let record: any;
 					try {
 						record = await withTransaction(db, async (tx: any) => {
@@ -1410,26 +1403,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								}),
 							);
 
-							changeEvent = await this.appendRealtimeChange(
-								{
-									operation: "create",
-									recordId: createdRecord.id,
-									payload: createdRecord as Record<string, unknown>,
-								},
-								context,
-								tx,
-							);
-
 							// Queue search indexing to run after transaction commits (fire-and-forget)
-							onAfterCommit(() => {
-								this.indexToSearch(createdRecord, context).catch((err) => {
-									const logger = context.logger as
-										| { error?: (...args: unknown[]) => void }
-										| undefined;
-									logger?.error?.("[Search] Index failed:", err);
-								});
-								return Promise.resolve();
-							});
 
 							return createdRecord;
 						});
@@ -1455,8 +1429,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db,
 						}),
 					);
-
-					await this.notifyRealtimeChange(changeEvent);
 					return record;
 				},
 			);
@@ -1617,8 +1589,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}),
 			);
 		}
-
-		let changeEvent: any = null;
 		let updatedRecords: any[];
 
 		try {
@@ -1749,29 +1719,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				await Promise.allSettled(afterChangePromises);
 
 				// Realtime change
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: isBatch ? "bulk_update" : "update",
-						recordId: isBatch ? undefined : refetchedRecords[0].id,
-						payload: isBatch
-							? { count: refetchedRecords.length }
-							: (refetchedRecords[0] as Record<string, unknown>),
-					},
-					txContext,
-					tx,
-				);
 
 				// Queue search indexing to run after transaction commits (fire-and-forget)
 				for (const updated of refetchedRecords) {
-					onAfterCommit(() => {
-						this.indexToSearch(updated, normalized).catch((err) => {
-							const logger = context.logger as
-								| { error?: (...args: unknown[]) => void }
-								| undefined;
-							logger?.error?.("[Search] Index failed:", err);
-						});
-						return Promise.resolve();
-					});
 				}
 
 				return refetchedRecords;
@@ -1805,8 +1755,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}),
 			);
 		}
-
-		await this.notifyRealtimeChange(changeEvent);
 
 		return isBatch ? updatedRecords : updatedRecords[0];
 	}
@@ -1896,8 +1844,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			// Handle cascade operations BEFORE delete
 			await this.handleCascadeDeleteInternal(id, existing, context);
-
-			let changeEvent: any = null;
 			// Use transaction for delete + version
 			await withTransaction(db, async (tx: any) => {
 				// Create version BEFORE delete
@@ -1914,20 +1860,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.delete(this.table)
 						.where(eq(getColumn(this.table, "id")!, id));
 				}
-
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: "delete",
-						recordId: id,
-					},
-					context,
-					tx,
-				);
-
-				// Queue search index removal to run after transaction commits
-				onAfterCommit(async () => {
-					await this.removeFromSearch(id, context);
-				});
 
 				// Execute afterDelete hooks inside transaction (non-fatal)
 				try {
@@ -1950,8 +1882,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					);
 				}
 			});
-
-			await this.notifyRealtimeChange(changeEvent);
 
 			const result = { success: true, data: existing };
 
@@ -2122,8 +2052,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Handle cascade operations per record
 				await this.handleCascadeDeleteInternal(record.id, record, context);
 			}
-
-			let changeEvent: any = null;
 			// 3. Batched DELETE query
 			await withTransaction(db, async (tx: any) => {
 				const recordIds = records.map((r: any) => r.id);
@@ -2145,22 +2073,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.where(inArray(getColumn(this.table, "id")!, recordIds));
 				}
 
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: "bulk_delete",
-						payload: { count: records.length },
-					},
-					context,
-					tx,
-				);
-
-				// Queue search index removal to run after transaction commits
-				for (const record of records) {
-					onAfterCommit(async () => {
-						await this.removeFromSearch(record.id, context);
-					});
-				}
-			});
+				});
 
 			// 4. Loop through afterDelete hooks
 			for (const record of records) {
@@ -2178,8 +2091,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}),
 				);
 			}
-
-			await this.notifyRealtimeChange(changeEvent);
 
 			return { success: true, count: records.length };
 		};
@@ -2527,15 +2438,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Queue search indexing to run after transaction commits (fire-and-forget)
 				if (result) {
-					onAfterCommit(() => {
-						this.indexToSearch(result, normalized).catch((err) => {
-							const logger = context.logger as
-								| { error?: (...args: unknown[]) => void }
-								| undefined;
-							logger?.error?.("[Search] Index failed:", err);
-						});
-						return Promise.resolve();
-					});
 				}
 
 				return result;
@@ -2672,7 +2574,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			);
 
 			// Create version snapshot at target stage (no data mutation)
-			let changeEvent: any = null;
 			await withTransaction(db, async (tx: any) => {
 				await createVersionRecord({
 					tx,
@@ -2686,18 +2587,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					workflowStage: toStage,
 					workflowFromStage: fromStage,
 				});
-
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: "update",
-						recordId: id as string,
-						payload: {
-							workflowTransition: { from: fromStage, to: toStage },
-						},
-					},
-					normalized,
-					tx,
-				);
 
 				// Execute afterTransition hooks inside transaction (non-fatal)
 				try {
@@ -2713,8 +2602,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					);
 				}
 			});
-
-			await this.notifyRealtimeChange(changeEvent);
 
 			return existing;
 		};
@@ -3188,61 +3075,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const nestedSchemas = this.getNestedLocalizationSchemas();
 
 		return splitLocalizedFields(input, localizedFieldNames, nestedSchemas);
-	}
-
-	/**
-	 * Index record to search service
-	 * Delegates to extracted indexToSearch function
-	 */
-	private async indexToSearch(
-		record: any,
-		context: CRUDContext,
-	): Promise<void> {
-		if (!this.app) return;
-		return indexToSearch(record, context, {
-			app: this.app,
-			state: this.state,
-			getTitle: this.getTitleExpression,
-		});
-	}
-
-	/**
-	 * Append a realtime change event
-	 * Delegates to shared appendRealtimeChange utility
-	 */
-	private async appendRealtimeChange(
-		params: {
-			operation: "create" | "update" | "delete" | "bulk_update" | "bulk_delete";
-			recordId?: string | null;
-			payload?: Record<string, unknown>;
-		},
-		context: CRUDContext,
-		db: any,
-	) {
-		return appendRealtimeChange(params, context, db, this.app, this.state.name);
-	}
-
-	/**
-	 * Notify realtime subscribers of a change
-	 * Delegates to shared notifyRealtimeChange utility
-	 */
-	private async notifyRealtimeChange(change: unknown) {
-		return notifyRealtimeChange(change, this.app);
-	}
-
-	/**
-	 * Remove record from search index
-	 * Delegates to extracted removeFromSearch function
-	 */
-	private async removeFromSearch(
-		recordId: string,
-		context: CRUDContext,
-	): Promise<void> {
-		if (!this.app) return;
-		return removeFromSearch(recordId, context, {
-			app: this.app,
-			state: this.state,
-		});
 	}
 
 	/**
