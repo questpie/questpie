@@ -45,13 +45,13 @@ export function SavedViewsTab({
 	return (
 		<div className="space-y-6 py-4">
 			{/* Save Current Configuration */}
-			<div className="bg-primary/5 border-primary/20 rounded-lg border p-4">
+			<div className="bg-primary/5 border-primary/20 border p-4">
 				<p className="text-primary mb-2 block text-xs font-semibold uppercase">
 					{t("viewOptions.saveCurrentConfig")}
 				</p>
 				<div className="flex gap-2">
 					<Input
-						className="h-9 flex-1 rounded-md"
+						className="h-9 flex-1"
 						placeholder={t("viewOptions.viewNamePlaceholder")}
 						value={viewName}
 						onChange={(e) => setViewName(e.target.value)}
@@ -61,7 +61,7 @@ export function SavedViewsTab({
 						onClick={handleSave}
 						disabled={!viewName.trim()}
 						size="sm"
-						className="h-9 rounded-md px-3"
+						className="h-9 px-3"
 					>
 						<Icon icon="ph:floppy-disk" width={16} height={16} />
 					</Button>
@@ -99,7 +99,7 @@ export function SavedViewsTab({
 						<button
 							type="button"
 							key={view.id}
-							className="border-border hover:border-primary/50 bg-background group flex w-full cursor-pointer items-center justify-between rounded-lg border p-3 text-left transition-all hover:shadow-sm"
+							className="border-border hover:border-primary/50 bg-background group flex w-full cursor-pointer items-center justify-between border p-3 text-left transition-all hover:shadow-sm"
 							onClick={() => onLoadView(view)}
 						>
 							<div className="min-w-0 flex-1">

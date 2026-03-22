@@ -153,7 +153,7 @@ export function FilterBuilderSheet({
 				</SheetHeader>
 
 				<div className="flex-1 overflow-y-auto px-6">
-					<div className="border-border bg-muted mt-4 rounded-md border px-3 py-2">
+					<div className="border-border bg-muted mt-4 border px-3 py-2">
 						<div className="flex items-center justify-between gap-3">
 							<div>
 								<p className="text-sm font-medium">Realtime Updates</p>
@@ -171,7 +171,7 @@ export function FilterBuilderSheet({
 					</div>
 
 					{supportsSoftDelete && (
-						<div className="border-border bg-muted mt-3 rounded-md border px-3 py-2">
+						<div className="border-border bg-muted mt-3 border px-3 py-2">
 							<div className="flex items-center justify-between gap-3">
 								<div>
 									<p className="text-sm font-medium">
@@ -248,11 +248,11 @@ export function FilterBuilderSheet({
 						<Button
 							variant="outline"
 							onClick={handleReset}
-							className="flex-1 rounded-md"
+							className="flex-1"
 						>
 							{t("viewOptions.reset")}
 						</Button>
-						<Button onClick={handleApply} className="flex-1 rounded-md">
+						<Button onClick={handleApply} className="flex-1">
 							{t("viewOptions.apply")}
 							{hasChanges && " *"}
 						</Button>

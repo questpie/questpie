@@ -215,7 +215,7 @@ export function BlockLibrarySidebar({
 												type="button"
 												key={block.name}
 												className={cn(
-													"flex flex-col items-start gap-2 rounded-md border p-3 text-left",
+													"flex flex-col items-start gap-2 border p-3 text-left",
 													"hover:border-primary hover:bg-accent transition-colors",
 													"focus-visible:ring-primary focus:outline-none focus-visible:ring-2",
 												)}

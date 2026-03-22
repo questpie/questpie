@@ -241,7 +241,7 @@ export function ArrayField({
 
 			<div className="space-y-2">
 				{fields.length === 0 ? (
-					<div className="rounded-lg border border-dashed p-4 text-center">
+					<div className="border border-dashed p-4 text-center">
 						<p className="text-muted-foreground text-sm">
 							{resolvedPlaceholder || emptyLabel}
 						</p>

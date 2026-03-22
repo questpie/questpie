@@ -44,7 +44,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 	return (
 		<header
 			role="banner"
-			className="qa-topbar border-border bg-background relative sticky top-0 z-30 flex h-14 w-full items-center justify-between border-b px-4 md:px-6"
+			className="qa-topbar border-border bg-background/92 backdrop-blur-sm relative sticky top-0 z-50 flex h-14 w-full items-center justify-between border-b px-4 md:px-6"
 		>
 			<div className="qa-topbar__left flex items-center gap-2">
 				{/* Sidebar toggle - works for both mobile (opens sheet) and desktop (collapses) */}

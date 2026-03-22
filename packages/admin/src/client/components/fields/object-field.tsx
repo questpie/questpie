@@ -178,7 +178,7 @@ export function ObjectField({
 		// Wrap in collapsible or flat container
 		if (wrapper === "collapsible") {
 			return (
-				<div className={cn("qa-object-field border-border bg-card rounded-lg border", className)}>
+				<div className={cn("qa-object-field border-border bg-card border", className)}>
 					<button
 						type="button"
 						onClick={() => setIsCollapsed(!isCollapsed)}
@@ -218,7 +218,7 @@ export function ObjectField({
 		return (
 			<div
 				className={cn(
-					"qa-object-field border-border bg-card rounded-lg border",
+					"qa-object-field border-border bg-card border",
 					className,
 				)}
 			>

@@ -32,7 +32,7 @@ function TableSkeleton({
 	);
 
 	return (
-		<div className="rounded-md border">
+		<div className="min-w-0 overflow-x-auto border">
 			<table className="w-full text-sm">
 				<thead>
 					<tr className="border-border bg-card border-b">
@@ -120,7 +120,7 @@ export function TableDisplay({
 	}
 
 	return (
-		<div className="rounded-md border">
+		<div className="min-w-0 overflow-x-auto border">
 			<table className="w-full text-sm">
 				<thead>
 					<tr className="border-border bg-card border-b">

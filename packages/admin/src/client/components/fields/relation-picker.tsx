@@ -488,7 +488,7 @@ export function RelationPicker<T extends QuestpieApp>({
 
 			{/* Empty State - only show when not loading */}
 			{selectedIds.length === 0 && !isLoadingItems && (
-				<div className="rounded-lg border border-dashed p-4 text-center">
+				<div className="border border-dashed p-4 text-center">
 					<p className="text-muted-foreground text-sm">
 						{resolvedPlaceholder || emptyLabel}
 					</p>

@@ -58,7 +58,7 @@ export function ChipsDisplay({
 					return (
 						<div
 							key={item.id}
-							className="bg-secondary inline-flex items-center gap-1 rounded-md border py-1 pr-1 pl-2"
+							className="bg-secondary inline-flex items-center gap-1 border py-1 pr-1 pl-2"
 						>
 							{iconElement}
 							<span className="text-sm">{displayText}</span>

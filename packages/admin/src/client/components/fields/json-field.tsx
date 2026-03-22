@@ -415,5 +415,5 @@ function JsonFormEditor({
 		readOnly,
 	});
 
-	return <div className="rounded-lg border p-4">{formContent}</div>;
+	return <div className="border p-4">{formContent}</div>;
 }

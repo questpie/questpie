@@ -89,7 +89,7 @@ function ChartTooltip({
 	if (!active || !payload?.length) return null;
 
 	return (
-		<div className="border-border bg-background rounded-md border px-3 py-2 text-xs shadow-md">
+		<div className="border-border bg-background border px-3 py-2 text-xs shadow-md">
 			<p className="text-foreground font-medium">{label}</p>
 			{payload.map((entry) => (
 				<p key={String(entry.name)} className="text-muted-foreground">

@@ -222,7 +222,7 @@ export function SelectSingle<TValue extends string = string>({
 								handleClear(event as unknown as React.MouseEvent);
 							}
 						}}
-						className="hover:bg-muted -mr-1 rounded-sm p-0.5 opacity-50 hover:opacity-100"
+						className="hover:bg-muted -mr-1 p-0.5 opacity-50 hover:opacity-100"
 					>
 						<Icon icon="ph:x" className="size-3" />
 					</span>

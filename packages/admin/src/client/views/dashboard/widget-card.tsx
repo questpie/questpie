@@ -70,7 +70,7 @@ const variantStyles: Record<WidgetCardVariant, string> = {
 	default: "",
 	compact: "py-3 gap-3",
 	featured:
-		"border-primary/30 bg-gradient-to-br from-primary/5 to-transparent shadow-sm",
+		"border-primary/30 bg-gradient-to-br from-primary/5 to-transparent",
 };
 
 const variantContentStyles: Record<WidgetCardVariant, string> = {

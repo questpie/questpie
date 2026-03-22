@@ -61,7 +61,7 @@ export function DateInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"qa-date-input border-border bg-input flex h-9 w-full items-center justify-start gap-2 border px-3 py-2 text-sm",
+					"qa-date-input border-input bg-transparent font-mono flex h-9 w-full items-center justify-start gap-2 border px-3 py-2 text-sm",
 					"hover:bg-accent hover:text-accent-foreground",
 					"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
 					"disabled:cursor-not-allowed disabled:opacity-50",
@@ -99,11 +99,11 @@ export function DateInput({
 						caption_label: "text-sm font-medium",
 						nav: "absolute inset-x-0 top-0 flex items-center justify-between px-1",
 						button_previous: cn(
-							"flex size-8 items-center justify-center rounded-md",
+							"flex size-8 items-center justify-center",
 							"hover:bg-accent bg-transparent p-0 opacity-50 hover:opacity-100",
 						),
 						button_next: cn(
-							"flex size-8 items-center justify-center rounded-md",
+							"flex size-8 items-center justify-center",
 							"hover:bg-accent bg-transparent p-0 opacity-50 hover:opacity-100",
 						),
 						month_grid: "w-full border-collapse",
@@ -113,12 +113,12 @@ export function DateInput({
 						week: "flex w-full mt-2",
 						day: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-outside)]:bg-accent",
 						day_button: cn(
-							"size-9 rounded-md p-0 font-normal",
+							"size-9 p-0 font-normal",
 							"hover:bg-accent hover:text-accent-foreground",
 							"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2",
 						),
 						selected:
-							"bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-md",
+							"bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
 						today: "bg-accent text-accent-foreground",
 						outside: "text-muted-foreground opacity-50",
 						disabled: "text-muted-foreground opacity-50",
@@ -205,7 +205,7 @@ export function DateTimeInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"qa-datetime-input border-border bg-input flex h-9 w-full items-center justify-start gap-2 border px-3 py-2 text-sm",
+					"qa-datetime-input border-input bg-transparent font-mono flex h-9 w-full items-center justify-start gap-2 border px-3 py-2 text-sm",
 					"hover:bg-accent hover:text-accent-foreground",
 					"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
 					"disabled:cursor-not-allowed disabled:opacity-50",
@@ -243,11 +243,11 @@ export function DateTimeInput({
 						caption_label: "text-sm font-medium",
 						nav: "absolute inset-x-0 top-0 flex items-center justify-between px-1",
 						button_previous: cn(
-							"flex size-8 items-center justify-center rounded-md",
+							"flex size-8 items-center justify-center",
 							"hover:bg-accent bg-transparent p-0 opacity-50 hover:opacity-100",
 						),
 						button_next: cn(
-							"flex size-8 items-center justify-center rounded-md",
+							"flex size-8 items-center justify-center",
 							"hover:bg-accent bg-transparent p-0 opacity-50 hover:opacity-100",
 						),
 						month_grid: "w-full border-collapse",
@@ -257,12 +257,12 @@ export function DateTimeInput({
 						week: "flex w-full mt-2",
 						day: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-outside)]:bg-accent",
 						day_button: cn(
-							"size-9 rounded-md p-0 font-normal",
+							"size-9 p-0 font-normal",
 							"hover:bg-accent hover:text-accent-foreground",
 							"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2",
 						),
 						selected:
-							"bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-md",
+							"bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
 						today: "bg-accent text-accent-foreground",
 						outside: "text-muted-foreground opacity-50",
 						disabled: "text-muted-foreground opacity-50",
@@ -276,7 +276,7 @@ export function DateTimeInput({
 						value={timeValue}
 						onChange={handleTimeChange}
 						className={cn(
-							"border-border bg-input flex h-9 w-full border px-3 py-2 text-sm",
+							"border-input bg-transparent font-mono flex h-9 w-full border px-3 py-2 text-sm",
 							"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
 						)}
 					/>
@@ -341,7 +341,7 @@ function DateRangeInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"qa-date-range-input border-border bg-input flex h-9 w-full items-center justify-start gap-2 border px-3 py-2 text-sm",
+					"qa-date-range-input border-input bg-transparent font-mono flex h-9 w-full items-center justify-start gap-2 border px-3 py-2 text-sm",
 					"hover:bg-accent hover:text-accent-foreground",
 					"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
 					"disabled:cursor-not-allowed disabled:opacity-50",
@@ -382,11 +382,11 @@ function DateRangeInput({
 						caption_label: "text-sm font-medium",
 						nav: "absolute inset-x-0 top-0 flex items-center justify-between px-1",
 						button_previous: cn(
-							"flex size-8 items-center justify-center rounded-md",
+							"flex size-8 items-center justify-center",
 							"hover:bg-accent bg-transparent p-0 opacity-50 hover:opacity-100",
 						),
 						button_next: cn(
-							"flex size-8 items-center justify-center rounded-md",
+							"flex size-8 items-center justify-center",
 							"hover:bg-accent bg-transparent p-0 opacity-50 hover:opacity-100",
 						),
 						month_grid: "w-full border-collapse",
@@ -396,12 +396,12 @@ function DateRangeInput({
 						week: "flex w-full mt-2",
 						day: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-outside)]:bg-accent",
 						day_button: cn(
-							"size-9 rounded-md p-0 font-normal",
+							"size-9 p-0 font-normal",
 							"hover:bg-accent hover:text-accent-foreground",
 							"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2",
 						),
 						selected:
-							"bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-md",
+							"bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
 						range_start: "rounded-l-md",
 						range_end: "rounded-r-md",
 						range_middle: "bg-accent",

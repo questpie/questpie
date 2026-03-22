@@ -126,7 +126,7 @@ function MediaGridSkeleton({ columns = 4 }: { columns?: 2 | 3 | 4 | 5 }) {
 		<div className={cn("grid gap-3", gridClass)}>
 			{skeletonKeys.map((key) => (
 				<div key={key} className="space-y-2">
-					<Skeleton className="aspect-square w-full rounded-lg" />
+					<Skeleton className="aspect-square w-full" />
 					<Skeleton className="h-4 w-3/4" />
 				</div>
 			))}
@@ -170,7 +170,7 @@ function AssetItem({
 			type="button"
 			onClick={handleClick}
 			className={cn(
-				"group relative aspect-square w-full overflow-hidden rounded-lg border",
+				"group relative aspect-square w-full overflow-hidden border",
 				"focus-visible:ring-ring transition-all focus-visible:ring-2 focus-visible:outline-none",
 				selected
 					? "ring-primary border-primary ring-2"
@@ -279,7 +279,7 @@ export function MediaGrid({
 		return (
 			<div
 				className={cn(
-					"flex flex-col items-center justify-center rounded-lg border border-dashed p-12",
+					"flex flex-col items-center justify-center border border-dashed p-12",
 					"bg-muted text-muted-foreground",
 					className,
 				)}

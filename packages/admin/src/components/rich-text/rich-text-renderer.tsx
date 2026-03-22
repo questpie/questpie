@@ -59,7 +59,7 @@ const defaultStyles: RichTextStyles = {
 	heading4: "text-lg font-semibold mb-2",
 	heading5: "text-base font-semibold mb-2",
 	heading6: "text-sm font-semibold mb-2",
-	blockquote: "border-l-4 border-gray-300 pl-4 italic my-4",
+	blockquote: "border-l-4 border-border pl-4 italic my-4",
 	codeBlock: "bg-muted rounded p-4 font-mono text-sm my-4 overflow-x-auto",
 	bulletList: "list-disc list-inside mb-4",
 	orderedList: "list-decimal list-inside mb-4",

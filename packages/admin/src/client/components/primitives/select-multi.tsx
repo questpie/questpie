@@ -218,7 +218,7 @@ export function SelectMulti<TValue extends string = string>({
 			aria-invalid={ariaInvalid}
 			tabIndex={0}
 			className={cn(
-				"qa-select-multi border-border bg-input flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border px-3 py-1.5 text-sm transition-colors",
+				"qa-select-multi border-input bg-transparent font-mono flex min-h-9 w-full flex-wrap items-center gap-1 border px-3 py-1.5 text-sm transition-colors",
 				"focus-within:ring-ring focus-within:border-ring focus-within:ring-2",
 				disabled && "cursor-not-allowed opacity-50",
 				ariaInvalid && "border-destructive ring-destructive/20",
@@ -257,7 +257,7 @@ export function SelectMulti<TValue extends string = string>({
 					<button
 						type="button"
 						onClick={handleClearAll}
-						className="hover:bg-muted rounded-sm p-0.5 opacity-50 hover:opacity-100"
+						className="hover:bg-muted p-0.5 opacity-50 hover:opacity-100"
 					>
 						<Icon icon="ph:x" className="size-3" />
 					</button>
@@ -300,7 +300,7 @@ export function SelectMulti<TValue extends string = string>({
 							>
 								<div
 									className={cn(
-										"flex size-4 items-center justify-center rounded-sm border",
+										"flex size-4 items-center justify-center border",
 										isSelected
 											? "bg-primary border-primary text-primary-foreground"
 											: "border-muted-foreground/30",

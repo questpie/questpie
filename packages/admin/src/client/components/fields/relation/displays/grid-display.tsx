@@ -40,7 +40,7 @@ function GridSkeleton({
 			{skeletonKeys.map((key) => (
 				<div
 					key={key}
-					className="border-border bg-card flex items-center gap-2 rounded-md border p-2"
+					className="border-border bg-card flex items-center gap-2 border p-2"
 				>
 					<Skeleton className="size-8 shrink-0 rounded" />
 					<Skeleton className="h-4 max-w-[120px] flex-1 rounded" />
@@ -78,7 +78,7 @@ export function GridDisplay({
 				const image = getImage(item);
 
 				const gridContent = (
-					<div className="border-border bg-card hover:bg-card flex h-full items-center gap-2 rounded-md border p-2 transition-colors">
+					<div className="border-border bg-card hover:bg-card flex h-full items-center gap-2 border p-2 transition-colors">
 						{image ? (
 							<div className="bg-muted size-8 shrink-0 overflow-hidden rounded">
 								<img

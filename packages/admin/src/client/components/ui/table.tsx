@@ -6,7 +6,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
 	return (
 		<div
 			data-slot="table-container"
-			className="qa-table-container scrollbar-thin relative w-full overflow-x-auto"
+			className="qa-table-container scrollbar-thin relative min-w-0 w-full overflow-x-auto"
 		>
 			<table
 				data-slot="table"
@@ -25,7 +25,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
 		<thead
 			data-slot="table-header"
 			className={cn(
-				"qa-table__header [&_tr]:border-border bg-muted sticky top-0 z-10 [&_tr]:border-b",
+				"qa-table__header [&_tr]:border-border bg-card sticky top-0 z-10 [&_tr]:border-b",
 				className,
 			)}
 			{...props}
@@ -92,7 +92,7 @@ function TableHead({
 			data-slot="table-head"
 			data-sticky-left={isSticky ? "" : undefined}
 			className={cn(
-				"qa-table__head text-foreground bg-card h-10 min-w-[100px] px-2 text-left align-middle font-mono text-[10px] font-black tracking-[0.1em] whitespace-nowrap uppercase [&:has([role=checkbox])]:px-2",
+				"qa-table__head text-muted-foreground bg-card h-10 min-w-[100px] px-4 text-left align-middle font-mono text-[10px] font-semibold tracking-[0.08em] whitespace-nowrap uppercase [&:has([role=checkbox])]:px-2",
 				// Sticky column styles - solid background
 				isSticky && "sticky z-20 min-w-0",
 				// Only show border on last sticky column
@@ -129,7 +129,7 @@ function TableCell({
 			data-slot="table-cell"
 			data-sticky-left={isSticky ? "" : undefined}
 			className={cn(
-				"qa-table__cell min-w-[100px] p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:px-2",
+				"qa-table__cell min-w-[100px] px-4 py-2.5 align-middle whitespace-nowrap [&:has([role=checkbox])]:px-2",
 				// Sticky column styles - inherit row background for zebra/hover/selected
 				isSticky && "sticky z-10 min-w-0 bg-inherit",
 				// Only show border on last sticky column

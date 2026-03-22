@@ -209,7 +209,7 @@ export default function TimelineWidget({
 								type="button"
 								className={cn(
 									"relative flex w-full gap-3 pb-4",
-									"hover:bg-muted -mx-2 cursor-pointer rounded-md px-2 transition-colors",
+									"hover:bg-muted -mx-2 cursor-pointer px-2 transition-colors",
 									isLast && "pb-0",
 								)}
 								onClick={() => handleItemClick(item)}

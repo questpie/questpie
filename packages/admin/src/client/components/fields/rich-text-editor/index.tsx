@@ -160,7 +160,7 @@ export function RichTextEditor({
 			) : (
 				<div
 					className={cn(
-						"qp-rich-text-editor bg-input rounded-md border",
+						"qp-rich-text-editor bg-transparent border border-input",
 						disabled || readOnly ? "opacity-60" : "",
 						error ? "border-destructive" : "border-border",
 					)}
@@ -294,7 +294,7 @@ function RichTextEditorCore({
 		<>
 			<div
 				className={cn(
-					"qp-rich-text-editor bg-input rounded-md border",
+					"qp-rich-text-editor bg-transparent border border-input",
 					disabled || readOnly ? "opacity-60" : "",
 					error ? "border-destructive" : "border-border",
 				)}

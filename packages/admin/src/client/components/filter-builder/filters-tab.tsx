@@ -530,7 +530,7 @@ export function FiltersTab({
 				return (
 					<div
 						key={filter.id}
-						className="bg-muted border-border space-y-2 rounded-lg border p-3"
+						className="bg-muted border-border space-y-2 border p-3"
 					>
 						<div className="flex items-center justify-between">
 							<span className="text-muted-foreground text-xs font-semibold uppercase">
@@ -624,7 +624,7 @@ export function FiltersTab({
 			})}
 
 			{filters.length === 0 && (
-				<div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+				<div className="border-border text-muted-foreground border border-dashed p-8 text-center text-sm">
 					{t("viewOptions.noActiveFilters")}
 				</div>
 			)}
@@ -634,7 +634,7 @@ export function FiltersTab({
 					variant="outline"
 					size="sm"
 					onClick={addFilter}
-					className="flex-1 gap-2 rounded-md"
+					className="flex-1 gap-2"
 					disabled={filterableFields.length === 0}
 				>
 					<Icon icon="ph:plus" width={14} height={14} />
@@ -645,7 +645,7 @@ export function FiltersTab({
 						variant="ghost"
 						size="sm"
 						onClick={clearAllFilters}
-						className="rounded-md"
+						className=""
 					>
 						{t("viewOptions.clearAll")}
 					</Button>
