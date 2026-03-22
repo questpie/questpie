@@ -11,7 +11,7 @@ import { z } from "zod";
 import type { KnownCollectionNames } from "../../config/app-context.js";
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { belongsToOps, toManyOps } from "../operators/builtin.js";
 import type { ReferentialAction, RelationFieldMetadata } from "../types.js";
 
@@ -89,7 +89,7 @@ export function upload<TTo extends string = "assets">(
 
 	const isM2M = !!through;
 
-	return field<UploadFieldState<TTo>>({
+	return wrapFieldComplete(field<UploadFieldState<TTo>>({
 		type: "upload",
 		columnFactory: isM2M ? null : (name) => varchar(name, { length: 36 }),
 		schemaFactory: () =>
@@ -123,7 +123,7 @@ export function upload<TTo extends string = "assets">(
 				isUpload: true,
 				meta: state.extensions?.admin,
 			}) as RelationFieldMetadata,
-	});
+	}), uploadFieldType.methods, {}) as any;
 }
 
 import type { Field } from "../field-class.js";

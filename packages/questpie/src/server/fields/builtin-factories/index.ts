@@ -1,17 +1,9 @@
 /**
  * Builtin Field Factories — Barrel
  *
- * Import side effects: text.ts and number.ts patch Field.prototype
- * with chain methods (max, min, pattern, trim, etc.)
+ * Each factory returns a Proxy-wrapped Field via wrapFieldComplete.
+ * Type-specific chain methods come from the Proxy, not prototype patches.
  */
-
-// Side-effect imports: patch Field.prototype
-import "./text.js";
-import "./number.js";
-import "./date.js";
-import "./select.js";
-import "./from.js";
-import "./relation.js";
 
 export {
 	type BooleanFieldMeta,

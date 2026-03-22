@@ -15,7 +15,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field, Field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { numberOps } from "../operators/builtin.js";
 
 declare global {
@@ -102,7 +102,7 @@ export function number(
 
 	const isInt = mode === "integer" || mode === "smallint";
 
-	return field<NumberFieldState>({
+	return wrapFieldComplete(field<NumberFieldState>({
 		type: "number",
 		columnFactory,
 		schemaFactory: () => {
@@ -119,44 +119,13 @@ export function number(
 		output: true,
 		isArray: false,
 		int: isInt,
-	});
+	}), numberFieldType.methods, {}) as any;
 }
 
 // NOTE: .min() and .max() are also declared in text.ts for string fields.
 // The prototype methods below share the same property names on FieldRuntimeState,
 // so they work for both text (minLength/maxLength) and number (min/max) fields.
 // Text's .min()/.max() set minLength/maxLength, while number's set min/max.
-
-Field.prototype.min = function (n: number) {
-	// For text fields this is minLength; for number fields this is min
-	const isString = ["text", "textarea", "email", "url"].includes(
-		this._state.type,
-	);
-	return isString
-		? new Field({ ...this._state, minLength: n })
-		: new Field({ ...this._state, min: n });
-};
-
-Field.prototype.max = function (n: number) {
-	const isString = ["text", "textarea", "email", "url"].includes(
-		this._state.type,
-	);
-	return isString
-		? new Field({ ...this._state, maxLength: n })
-		: new Field({ ...this._state, max: n });
-};
-
-Field.prototype.positive = function () {
-	return new Field({ ...this._state, positive: true });
-};
-
-Field.prototype.int = function () {
-	return new Field({ ...this._state, int: true });
-};
-
-Field.prototype.step = function (n: number) {
-	return new Field({ ...this._state, step: n });
-};
 
 // ---- fieldType() definition (QUE-265) ----
 

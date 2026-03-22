@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field, Field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { stringOps } from "../operators/builtin.js";
 
 declare global {
@@ -48,7 +48,7 @@ export function text(arg?: number | { mode: "text" }): Field<TextFieldState> {
 	const isTextMode = typeof arg === "object" && arg?.mode === "text";
 	const maxLen = typeof arg === "number" ? arg : isTextMode ? undefined : 255;
 
-	return field<TextFieldState>({
+	return wrapFieldComplete(field<TextFieldState>({
 		type: "text",
 		columnFactory: (name) =>
 			isTextMode ? pgText(name) : varchar(name, { length: maxLen }),
@@ -66,25 +66,8 @@ export function text(arg?: number | { mode: "text" }): Field<TextFieldState> {
 		output: true,
 		isArray: false,
 		maxLength: maxLen,
-	});
+	}), textFieldType.methods, {}) as any;
 }
-
-// Patch prototype with text-specific methods
-Field.prototype.pattern = function (re: RegExp) {
-	return new Field({ ...this._state, pattern: re });
-};
-
-Field.prototype.trim = function () {
-	return new Field({ ...this._state, trim: true });
-};
-
-Field.prototype.lowercase = function () {
-	return new Field({ ...this._state, lowercase: true });
-};
-
-Field.prototype.uppercase = function () {
-	return new Field({ ...this._state, uppercase: true });
-};
 
 // ---- fieldType() definition (QUE-265) ----
 

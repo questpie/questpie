@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { emailOps } from "../operators/builtin.js";
 
 declare global {
@@ -38,7 +38,7 @@ export type EmailFieldState = DefaultFieldState & {
  * ```
  */
 export function email(maxLength = 255): Field<EmailFieldState> {
-	return field<EmailFieldState>({
+	return wrapFieldComplete(field<EmailFieldState>({
 		type: "email",
 		columnFactory: (name) => varchar(name, { length: maxLength }),
 		schemaFactory: () => z.string().email().max(maxLength),
@@ -51,7 +51,7 @@ export function email(maxLength = 255): Field<EmailFieldState> {
 		output: true,
 		isArray: false,
 		maxLength,
-	});
+	}), emailFieldType.methods, {}) as any;
 }
 
 import type { Field } from "../field-class.js";

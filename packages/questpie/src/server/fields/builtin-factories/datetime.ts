@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { dateOps } from "../operators/builtin.js";
 
 declare global {
@@ -48,7 +48,7 @@ interface DatetimeConfig {
 export function datetime(config?: DatetimeConfig): Field<DatetimeFieldState> {
 	const { precision = 3, withTimezone = true } = config ?? {};
 
-	return field<DatetimeFieldState>({
+	return wrapFieldComplete(field<DatetimeFieldState>({
 		type: "datetime",
 		columnFactory: (name) =>
 			timestamp(name, { precision, withTimezone, mode: "date" }),
@@ -61,7 +61,7 @@ export function datetime(config?: DatetimeConfig): Field<DatetimeFieldState> {
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	}), datetimeFieldType.methods, {}) as any;
 }
 
 import type { Field } from "../field-class.js";
@@ -86,5 +86,16 @@ export const datetimeFieldType = fieldType("datetime", {
 			output: true,
 			isArray: false,
 		};
+	},
+	methods: {
+		autoNow: (f: Field<any>) =>
+			f.derive({ hasDefault: true, defaultValue: () => new Date() }),
+		autoNowUpdate: (f: Field<any>) =>
+			f.derive({
+				hooks: {
+					...(f._state.hooks ?? {}),
+					beforeChange: () => new Date(),
+				},
+			}),
 	},
 });

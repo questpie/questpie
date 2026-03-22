@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { basicOps } from "../operators/builtin.js";
 
 declare global {
@@ -57,7 +57,7 @@ export function json(config?: {
 }): Field<JsonFieldState> {
 	const mode = config?.mode ?? "jsonb";
 
-	return field<JsonFieldState>({
+	return wrapFieldComplete(field<JsonFieldState>({
 		type: "json",
 		columnFactory: (name) => (mode === "json" ? pgJson(name) : jsonb(name)),
 		schemaFactory: () => z.any(),
@@ -69,7 +69,7 @@ export function json(config?: {
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	}), jsonFieldType.methods, {}) as any;
 }
 
 import type { Field } from "../field-class.js";

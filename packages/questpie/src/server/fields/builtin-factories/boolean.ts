@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { booleanOps } from "../operators/builtin.js";
 
 declare global {
@@ -40,7 +40,7 @@ export type BooleanFieldState = DefaultFieldState & {
  * ```
  */
 export function boolean(): Field<BooleanFieldState> {
-	return field<BooleanFieldState>({
+	return wrapFieldComplete(field<BooleanFieldState>({
 		type: "boolean",
 		columnFactory: (name) => pgBoolean(name),
 		schemaFactory: () => z.boolean(),
@@ -52,7 +52,7 @@ export function boolean(): Field<BooleanFieldState> {
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	}), booleanFieldType.methods, {}) as any;
 }
 
 import type { Field } from "../field-class.js";

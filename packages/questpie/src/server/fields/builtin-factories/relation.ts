@@ -15,7 +15,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { Field, field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { belongsToOps, multipleOps, toManyOps } from "../operators/builtin.js";
 import type {
 	InferredRelationType,
@@ -214,7 +214,7 @@ export function relation<TTo extends string>(
 		const typeNames = Object.keys(types);
 		const maxTypeLength = Math.max(...typeNames.map((t) => t.length), 50);
 
-		return field<RelationFieldState>({
+		return wrapFieldComplete(field<RelationFieldState>({
 			type: "relation",
 			columnFactory: (name) => {
 				// Returns an array of column builders — collection builder handles multi-column
@@ -237,11 +237,11 @@ export function relation<TTo extends string>(
 			isArray: false,
 			to: target,
 			metadataFactory: buildRelationMetadata,
-		}) as any;
+		}), relationFieldType.methods, {}) as any;
 	}
 
 	// Default: belongsTo
-	return field<RelationFieldState<TTo>>({
+	return wrapFieldComplete(field<RelationFieldState<TTo>>({
 		type: "relation",
 		columnFactory: (name) => varchar(name, { length: 36 }),
 		schemaFactory: () => z.string().uuid(),
@@ -255,63 +255,12 @@ export function relation<TTo extends string>(
 		isArray: false,
 		to: target,
 		metadataFactory: buildRelationMetadata,
-	});
+	}), relationFieldType.methods, {}) as any;
 }
 
 // ============================================================================
 // Chain Methods
 // ============================================================================
-
-Field.prototype.hasMany = function (config) {
-	return new Field({
-		...this._state,
-		hasMany: true,
-		foreignKey: config.foreignKey,
-		onDelete: config.onDelete,
-		relationName: config.relationName,
-		// No column for hasMany
-		columnFactory: null,
-		virtual: true,
-		operatorSet: toManyOps,
-	}) as any;
-};
-
-Field.prototype.manyToMany = function (config) {
-	return new Field({
-		...this._state,
-		hasMany: true,
-		through: config.through,
-		sourceField: config.sourceField,
-		targetField: config.targetField,
-		relationName: config.relationName,
-		// No column for manyToMany
-		columnFactory: null,
-		virtual: true,
-		operatorSet: toManyOps,
-	}) as any;
-};
-
-Field.prototype.multiple = function () {
-	return new Field({
-		...this._state,
-		multiple: true,
-		columnFactory: (name: string) => jsonb(name),
-		schemaFactory: () => z.array(z.string().uuid()),
-		operatorSet: multipleOps,
-	}) as any;
-};
-
-Field.prototype.onDelete = function (action) {
-	return new Field({ ...this._state, onDelete: action });
-};
-
-Field.prototype.onUpdate = function (action) {
-	return new Field({ ...this._state, onUpdate: action });
-};
-
-Field.prototype.relationName = function (name) {
-	return new Field({ ...this._state, relationName: name });
-};
 
 // ---- fieldType() definition (QUE-265) ----
 

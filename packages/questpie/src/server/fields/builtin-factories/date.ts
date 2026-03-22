@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field, Field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { dateOps } from "../operators/builtin.js";
 
 declare global {
@@ -37,7 +37,7 @@ export type DateFieldState = DefaultFieldState & {
  * ```
  */
 export function date(): Field<DateFieldState> {
-	return field<DateFieldState>({
+	return wrapFieldComplete(field<DateFieldState>({
 		type: "date",
 		columnFactory: (name) => pgDate(name, { mode: "string" }),
 		schemaFactory: () => z.string().date(),
@@ -49,27 +49,8 @@ export function date(): Field<DateFieldState> {
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	}), dateFieldType.methods, {}) as any;
 }
-
-Field.prototype.autoNow = function () {
-	return new Field({
-		...this._state,
-		hasDefault: true,
-		defaultValue: () => new Date(),
-	}) as any;
-};
-
-Field.prototype.autoNowUpdate = function () {
-	const existing = this._state.hooks ?? {};
-	return new Field({
-		...this._state,
-		hooks: {
-			...existing,
-			beforeChange: () => new Date(),
-		},
-	});
-};
 
 // ---- fieldType() definition (QUE-265) ----
 

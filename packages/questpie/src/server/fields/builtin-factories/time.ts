@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { dateOps } from "../operators/builtin.js";
 
 declare global {
@@ -50,7 +50,7 @@ export function time(config?: TimeConfig): Field<TimeFieldState> {
 		? /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(\.\d+)?$/
 		: /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-	return field<TimeFieldState>({
+	return wrapFieldComplete(field<TimeFieldState>({
 		type: "time",
 		columnFactory: (name) => pgTime(name, { precision }),
 		schemaFactory: () =>
@@ -67,7 +67,7 @@ export function time(config?: TimeConfig): Field<TimeFieldState> {
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	}), timeFieldType.methods, {}) as any;
 }
 
 import type { Field } from "../field-class.js";

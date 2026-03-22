@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { urlOps } from "../operators/builtin.js";
 
 declare global {
@@ -39,7 +39,7 @@ export type UrlFieldState = DefaultFieldState & {
  * ```
  */
 export function url(maxLength = 2048): Field<UrlFieldState> {
-	return field<UrlFieldState>({
+	return wrapFieldComplete(field<UrlFieldState>({
 		type: "url",
 		columnFactory: (name) => varchar(name, { length: maxLength }),
 		schemaFactory: () => z.string().url().max(maxLength),
@@ -52,7 +52,7 @@ export function url(maxLength = 2048): Field<UrlFieldState> {
 		output: true,
 		isArray: false,
 		maxLength,
-	});
+	}), urlFieldType.methods, {}) as any;
 }
 
 import type { Field } from "../field-class.js";

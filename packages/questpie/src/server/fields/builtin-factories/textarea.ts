@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { stringOps } from "../operators/builtin.js";
 
 declare global {
@@ -36,7 +36,7 @@ export type TextareaFieldState = DefaultFieldState & {
  * ```
  */
 export function textarea(): Field<TextareaFieldState> {
-	return field<TextareaFieldState>({
+	return wrapFieldComplete(field<TextareaFieldState>({
 		type: "textarea",
 		columnFactory: (name) => pgText(name),
 		schemaFactory: () => z.string(),
@@ -48,7 +48,7 @@ export function textarea(): Field<TextareaFieldState> {
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	}), textareaFieldType.methods, {}) as any;
 }
 
 // Re-export Field to avoid missing import in return type

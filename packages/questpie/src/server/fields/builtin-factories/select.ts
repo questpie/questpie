@@ -14,7 +14,7 @@ import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field, Field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { selectMultiOps, selectSingleOps } from "../operators/builtin.js";
 import type { OptionsConfig } from "../reactive.js";
 import type { SelectFieldMetadata } from "../types.js";
@@ -91,7 +91,7 @@ export function select(
 			? Math.max(...staticOpts.map((o) => String(o.value).length), 50)
 			: 255;
 
-	return field<SelectFieldState>({
+	return wrapFieldComplete(field<SelectFieldState>({
 		type: "select",
 		columnFactory: (name) => varchar(name, { length: maxLength }),
 		schemaFactory: () => {
@@ -133,39 +133,8 @@ export function select(
 				meta: state.extensions?.admin,
 			} as SelectFieldMetadata;
 		},
-	});
+	}), selectFieldType.methods, {}) as any;
 }
-
-Field.prototype.enum = function (enumName: string) {
-	const state = this._state;
-	const staticOpts = getStaticOptions(
-		(state.options ?? []) as readonly SelectOption[] | OptionsConfig,
-	);
-
-	if (staticOpts.length === 0) {
-		// Can't use enum with dynamic options
-		return new Field({ ...state, enumType: true, enumName });
-	}
-
-	const enumValues = staticOpts.map((o) => String(o.value)) as [
-		string,
-		...string[],
-	];
-
-	// Create or get cached enum
-	let enumDef = enumCache.get(enumName);
-	if (!enumDef) {
-		enumDef = pgEnum(enumName, enumValues);
-		enumCache.set(enumName, enumDef);
-	}
-
-	return new Field({
-		...state,
-		enumType: true,
-		enumName,
-		columnFactory: (name: string) => (enumDef as any)(name),
-	});
-};
 
 // ---- fieldType() definition (QUE-265) ----
 

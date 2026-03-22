@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import type { DefaultFieldState, FieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { objectOps } from "../operators/builtin.js";
 import type { NestedFieldMetadata } from "../types.js";
 
@@ -60,7 +60,7 @@ export type ObjectFieldState<TData = Record<string, unknown>> =
 export function object<TFields extends Record<string, Field<any>>>(
 	fields: TFields,
 ): Field<ObjectFieldState<InferObjectData<TFields>>> {
-	return field<ObjectFieldState<InferObjectData<TFields>>>({
+	return wrapFieldComplete(field<ObjectFieldState<InferObjectData<TFields>>>({
 		type: "object",
 		columnFactory: (name) => jsonb(name),
 		schemaFactory: () => {
@@ -105,7 +105,7 @@ export function object<TFields extends Record<string, Field<any>>>(
 			}
 			return result;
 		},
-	});
+	}), objectFieldType.methods, {}) as any;
 }
 
 import type { Field } from "../field-class.js";

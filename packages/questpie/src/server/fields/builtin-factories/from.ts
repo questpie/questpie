@@ -9,7 +9,7 @@ import { z, type ZodType } from "zod";
 
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field } from "../field-class.js";
-import { fieldType } from "../field-type.js";
+import { fieldType, wrapFieldComplete } from "../field-type.js";
 import { basicOps } from "../operators/builtin.js";
 
 export type CustomFieldState = DefaultFieldState & {
@@ -45,7 +45,7 @@ export function from(
 		? (column as (name: string) => unknown)
 		: (_name: string) => column;
 
-	return field<CustomFieldState>({
+	return wrapFieldComplete(field<CustomFieldState>({
 		type: "custom",
 		columnFactory,
 		schemaFactory: zodSchema ? () => zodSchema : () => z.unknown(),
@@ -57,14 +57,10 @@ export function from(
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	}), fromFieldType.methods, {}) as any;
 }
 
 import { Field } from "../field-class.js";
-
-Field.prototype.type = function (typeName: string) {
-	return new Field({ ...this._state, customType: typeName });
-};
 
 // ---- fieldType() definition (QUE-265) ----
 
