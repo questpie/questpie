@@ -225,6 +225,32 @@ export class Field<TState extends FieldState = FieldState> {
 	}
 
 	// ========================================================================
+	// Public Derive — for fieldType() methods
+	// ========================================================================
+
+	/**
+	 * Create a new Field with additional state, restricted to safe properties.
+	 * Used by `fieldType().methods` to modify field state without accessing
+	 * identity properties (type, columnFactory, schemaFactory, operatorSet, etc.).
+	 *
+	 * @param extra - Partial state to merge (identity properties are omitted)
+	 */
+	derive(
+		extra: Omit<
+			Partial<FieldRuntimeState>,
+			| "type"
+			| "columnFactory"
+			| "schemaFactory"
+			| "operatorSet"
+			| "innerField"
+			| "isArray"
+			| "virtual"
+		>,
+	): Field<TState> {
+		return new Field({ ...this._state, ...extra }) as unknown as Field<TState>;
+	}
+
+	// ========================================================================
 	// Builder Methods — Plugin Extensions
 	// ========================================================================
 
