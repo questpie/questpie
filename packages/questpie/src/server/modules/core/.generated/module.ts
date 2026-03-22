@@ -4,15 +4,20 @@
 
 import _job_indexRecords from "../jobs/index-records";
 import _job_scheduledTransition from "../jobs/scheduled-transition";
+import _appConfig from "../config/app";
 
 // ════════════════════════════════════════════════════════════
-// MODULE DEFINITION — static plain object
+// TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
 export interface CoreJobs {
 	indexRecords: typeof _job_indexRecords;
 	scheduledTransition: typeof _job_scheduledTransition;
 }
+
+// ════════════════════════════════════════════════════════════
+// MODULE DEFINITION — static plain object
+// ════════════════════════════════════════════════════════════
 
 const _module = {
 	name: "questpie-core" as const,
@@ -28,6 +33,9 @@ const _module = {
 	emails: {},
 	migrations: [] as const,
 	seeds: [] as const,
+	config: {
+		app: _appConfig,
+	},
 };
 
 export type CoreModule = typeof _module;
