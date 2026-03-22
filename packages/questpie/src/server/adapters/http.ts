@@ -16,6 +16,12 @@ import {
 	executeJsonRoute,
 	executeRawRoute,
 } from "../routes/execute.js";
+import { filePathToRoutePattern } from "../routes/file-path-convention.js";
+import {
+	type RouteMatch,
+	type RouteMatcher,
+	compileMatcher,
+} from "../routes/route-matcher.js";
 import { isJsonRoute, type RouteDefinition } from "../routes/types.js";
 
 // Re-export types
@@ -113,6 +119,48 @@ function buildRouteMap(
 	}
 
 	return map;
+}
+
+/**
+ * Build a compiled route matcher from route definitions.
+ * Supports [param] and [...slug] file-path conventions.
+ * Uses trie-based matcher with literal > param > wildcard priority.
+ */
+function buildCompiledRouteMap(
+	routes: Record<string, RouteDefinition> | undefined,
+): RouteMatcher<{ def: RouteDefinition; method: string }> | null {
+	if (!routes || Object.keys(routes).length === 0) return null;
+
+	const entries: [string, { def: RouteDefinition; method: string }][] = [];
+
+	for (const [key, def] of Object.entries(routes)) {
+		let path: string;
+		let method: string;
+
+		const colonIdx = key.lastIndexOf(":");
+		if (colonIdx > 0) {
+			path = key.slice(0, colonIdx);
+			method = key.slice(colonIdx + 1).toUpperCase();
+		} else {
+			path = key;
+			method = def.method;
+		}
+
+		// Convert camelCase → kebab-case, then file-path convention → route pattern
+		path = path.split("/").map(camelToKebab).join("/");
+		const pattern = filePathToRoutePattern(path);
+
+		// Combine method into pattern for per-method matching
+		// Use separate entries per method-path pair
+		entries.push([pattern, { def, method }]);
+	}
+
+	try {
+		return compileMatcher(entries);
+	} catch {
+		// Collision detected — fall back to flat map
+		return null;
+	}
 }
 
 // ============================================================================
