@@ -2464,23 +2464,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			// If scheduledAt is in the future, schedule via queue job
 			if (scheduledAt && scheduledAt.getTime() > Date.now()) {
-				const queue = this.app?.queue as
-					| Record<string, { publish?: (...args: unknown[]) => Promise<void> }>
-					| undefined;
-				if (!queue?.["scheduled-transition"]?.publish) {
-					throw ApiError.badRequest(
-						"Scheduled transitions require a queue adapter with the scheduled-transition job registered",
-					);
-				}
-				await queue["scheduled-transition"].publish(
-					{
-						type: "collection" as const,
-						collection: this.state.name,
-						recordId: id as string,
-						stage: toStage,
-					},
-					{ startAfter: scheduledAt },
+				const { scheduleCollectionTransition } = await import(
+					"#questpie/server/modules/core/workflow/schedule-transition.js"
 				);
+				await scheduleCollectionTransition(this.app?.queue, {
+					collection: this.state.name,
+					recordId: id as string,
+					stage: toStage,
+					scheduledAt,
+				});
 				// Return the existing record unchanged
 				const rows = await this.getDb(this.normalizeContext(context))
 					.select()

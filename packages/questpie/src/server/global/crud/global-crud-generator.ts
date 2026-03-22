@@ -1209,20 +1209,14 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 			// If scheduledAt is in the future, schedule via queue job
 			if (scheduledAt && scheduledAt.getTime() > Date.now()) {
-				const queue = (this.app as any)?.queue;
-				if (!queue?.["scheduled-transition"]?.publish) {
-					throw ApiError.badRequest(
-						"Scheduled transitions require a queue adapter with the scheduled-transition job registered",
-					);
-				}
-				await queue["scheduled-transition"].publish(
-					{
-						type: "global" as const,
-						global: this.state.name,
-						stage: toStage,
-					},
-					{ startAfter: scheduledAt },
+				const { scheduleGlobalTransition } = await import(
+					"#questpie/server/modules/core/workflow/schedule-transition.js"
 				);
+				await scheduleGlobalTransition((this.app as any)?.queue, {
+					global: this.state.name,
+					stage: toStage,
+					scheduledAt,
+				});
 				// Return the existing global record unchanged
 				const normalized = this.normalizeContext(context);
 				const db = this.getDb(normalized);
