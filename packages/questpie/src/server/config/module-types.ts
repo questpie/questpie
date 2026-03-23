@@ -383,7 +383,7 @@ export interface AppDefinition {
 	/** Default access rules from `access.ts`. */
 	defaultAccess?: CollectionAccess;
 
-	/** Context resolver from `context.ts`. */
+	/** @deprecated Use scoped services instead. See QUE-280. */
 	contextResolver?: ContextResolver;
 
 	/**
@@ -464,7 +464,7 @@ export interface AppConfig {
 	/** Global lifecycle hooks. */
 	hooks?: GlobalHooksState;
 
-	/** Context resolver for extending request context. */
+	/** @deprecated Use scoped services instead. See QUE-280. */
 	contextResolver?: ContextResolver;
 
 	/** I18n translations config (backend messages). */

@@ -522,8 +522,11 @@ export interface QuestpieConfig {
 	translations?: TranslationsConfig;
 
 	/**
-	 * Context resolver for extending request context.
-	 * Called on each request to add custom properties (e.g., tenantId, propertyId).
+	 * @deprecated Use scoped services instead of contextResolver.
+	 * Scoped services provide typed, lazy, per-request resolution without
+	 * a global resolver function. See QUE-297 for session/locale examples.
+	 *
+	 * Previously: Called on each request to add custom properties.
 	 * Defined via `.context()` on the builder.
 	 */
 	contextResolver?: ContextResolver;
@@ -580,20 +583,11 @@ export interface ContextExtensions {
 // ============================================================================
 
 /**
- * Interface for extending request context via module augmentation.
- * Add custom properties that will be available in all access functions, hooks, etc.
+ * @deprecated Use scoped services with namespace: null instead.
+ * Scoped services provide typed, lazy, per-request values without
+ * global augmentation. See QUE-297 for examples.
  *
- * @example
- * ```ts
- * declare global {
- *   namespace Questpie {
- *     interface QuestpieContextExtension {
- *       tenantId: string | null
- *       propertyId: string | null
- *     }
- *   }
- * }
- * ```
+ * Previously: Interface for extending request context via module augmentation.
  */
 export interface QuestpieContextExtension
 	extends Questpie.QuestpieContextExtension {}
