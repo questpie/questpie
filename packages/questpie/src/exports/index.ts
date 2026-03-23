@@ -54,6 +54,7 @@ export {
 export type {
 	ExtractModuleProp,
 	ExtractModulePropArr,
+	MergeModuleProp,
 	RegistryProp,
 	ServiceCustomNamespaceInstances,
 	ServiceDefinitionsInNamespace,

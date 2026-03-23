@@ -64,6 +64,22 @@ export type ExtractModulePropArr<
 	: {};
 
 /**
+ * Merge a named property from all modules in a tuple.
+ *
+ * Alias for `ExtractModulePropArr` with a cleaner name for generated code.
+ * Used by codegen to derive merged types:
+ *
+ * ```ts
+ * type AllCollections = MergeModuleProp<typeof _modulesArr, "collections">;
+ * type AllJobs = MergeModuleProp<typeof _modulesArr, "jobs">;
+ * ```
+ */
+export type MergeModuleProp<
+	TModules extends readonly any[],
+	K extends string,
+> = ExtractModulePropArr<TModules, K>;
+
+/**
  * Normalize a service namespace to its runtime placement namespace.
  *
  * - `undefined` and `"services"` are both default namespace (`services.*`)
