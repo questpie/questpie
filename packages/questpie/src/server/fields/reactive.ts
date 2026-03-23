@@ -1,8 +1,12 @@
 /**
- * Reactive Field System — Types + Runtime
+ * Reactive Field System — Serialization Runtime
  *
- * This module re-exports plain types from reactive-types.ts and adds
- * runtime functions (Proxy-based dependency tracking, serialization).
+ * Re-exports plain types from reactive-types.ts and provides
+ * Proxy-based dependency tracking for introspection serialization.
+ *
+ * Note: Reactive handler EXECUTION lives in admin package
+ * (server/modules/admin/routes/reactive.ts). Core only handles
+ * serialization (extractDependencies → watch arrays for introspection).
  *
  * For type-only imports (no runtime dependency), use reactive-types.ts.
  */
