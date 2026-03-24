@@ -59,7 +59,6 @@ import { smartResponse } from "./utils/response.js";
 
 const RESERVED_PREFIXES = new Set([
 	"auth",
-	"search",
 	"realtime",
 	"storage",
 	"globals",
@@ -170,7 +169,8 @@ function buildCompiledRouteMap(
  * Handle custom route dispatch for unified routes.
  * Routes are matched by path against the route map, then by HTTP method.
  *
- * URL: `/api/admin/stats` with GET → looks up path `admin/stats`, method `GET`
+ * Uses compiled trie matcher (supports :param and *wildcard) with fallback
+ * to flat map for exact matches.
  *
  * Returns `null` if no route matches (allows fallback to collection CRUD).
  */
@@ -179,24 +179,43 @@ async function handleRouteDispatch<
 >(
 	app: Questpie<TConfig>,
 	config: AdapterConfig<TConfig>,
-	routeMap: Map<string, RouteMapEntry>,
+	routeMap: Map<string, RouteMapEntry> | null,
+	compiledMatcher: RouteMatcher<{ def: RouteDefinition; method: string }> | null,
 	request: Request,
 	segments: string[],
 	context?: AdapterContext,
 ): Promise<Response | null> {
-	// Try progressively longer paths: "a", "a/b", "a/b/c" etc.
 	const path = segments.join("/");
-	const methodMap = routeMap.get(path);
-	if (!methodMap) return null;
+	let def: RouteDefinition | undefined;
+	let matchedParams: Record<string, string> = {};
 
-	const def = methodMap.get(request.method);
-	if (!def) {
-		// Path exists but method doesn't match → 405
-		return new Response("Method Not Allowed", {
-			status: 405,
-			headers: { Allow: Array.from(methodMap.keys()).join(", ") },
-		});
+	// 1. Try compiled trie matcher (supports dynamic :param segments)
+	if (compiledMatcher) {
+		const match = compiledMatcher.match(path);
+		if (match && match.handler.method === request.method) {
+			def = match.handler.def;
+			matchedParams = match.params;
+		} else if (match) {
+			// Path matched but method doesn't → 405
+			return new Response("Method Not Allowed", { status: 405 });
+		}
 	}
+
+	// 2. Fallback to flat map for exact matches
+	if (!def && routeMap) {
+		const methodMap = routeMap.get(path);
+		if (methodMap) {
+			def = methodMap.get(request.method);
+			if (!def) {
+				return new Response("Method Not Allowed", {
+					status: 405,
+					headers: { Allow: Array.from(methodMap.keys()).join(", ") },
+				});
+			}
+		}
+	}
+
+	if (!def) return null;
 
 	// Resolve context
 	const resolved = await resolveContext(app, request, config, context);
@@ -240,12 +259,19 @@ async function handleRouteDispatch<
 				def,
 				body,
 				resolved.appContext,
+				matchedParams,
 			);
 			return smartResponse(result, request);
 		}
 
 		// Raw route
-		return await executeRawRoute(app, def, request, resolved.appContext);
+		return await executeRawRoute(
+			app,
+			def,
+			request,
+			resolved.appContext,
+			matchedParams,
+		);
 	} catch (error) {
 		return handleError(error, { request, app, locale });
 	}
@@ -329,12 +355,11 @@ export const createAdapterRoutes = <
  *
  * Dispatch order:
  * 1. `/auth/*` → Better Auth
- * 2. `/search/*` → search
- * 3. `/realtime` → SSE
- * 4. `/storage/files/*` → file serving
- * 5. `/globals/:name/*` → global CRUD
- * 6. **Route map** → custom + module routes (incl. `/health`)
- * 7. `/:collection/*` → collection CRUD (fallback)
+ * 2. `/realtime` → SSE
+ * 3. `/storage/files/*` → file serving
+ * 4. `/globals/:name/*` → global CRUD
+ * 5. **Route map** → custom + module routes (health, search, etc.)
+ * 6. `/:collection/*` → collection CRUD (fallback)
  */
 export const createFetchHandler = (
 	app: unknown,
@@ -345,8 +370,11 @@ export const createFetchHandler = (
 	const basePath = normalizeBasePath(config.basePath ?? "/");
 	const storageAliasCollection = resolveStorageAliasCollection(_app, config);
 
-	// Build route map once at startup
+	// Build route maps once at startup
 	const routeMap = buildRouteMap(
+		_app.config.routes as Record<string, RouteDefinition> | undefined,
+	);
+	const compiledMatcher = buildCompiledRouteMap(
 		_app.config.routes as Record<string, RouteDefinition> | undefined,
 	);
 
@@ -390,27 +418,12 @@ export const createFetchHandler = (
 			return routes.auth(request);
 		}
 
-		// 2. Search routes: POST /search, POST /search/reindex/:collection
-		if (segments[0] === "search") {
-			if (request.method === "POST") {
-				if (segments[1] === "reindex" && segments[2]) {
-					return routes.search.reindex(
-						request,
-						{ collection: segments[2] },
-						context,
-					);
-				}
-				return routes.search.search(request, {}, context);
-			}
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// 3. Realtime route
+		// 2. Realtime route
 		if (segments[0] === "realtime") {
 			return routes.realtime.subscribe(request, {}, context);
 		}
 
-		// 4. Storage file serving
+		// 3. Storage file serving
 		if (segments[0] === "storage" && segments[1] === "files") {
 			const key = decodeURIComponent(segments.slice(2).join("/"));
 			if (!key) {
@@ -439,7 +452,7 @@ export const createFetchHandler = (
 			return errorResponse(ApiError.badRequest("Method not allowed"), request);
 		}
 
-		// 5. Global routes
+		// 4. Global routes
 		if (segments[0] === "globals") {
 			const globalName = segments[1];
 			const globalAction = segments[2];
@@ -537,12 +550,13 @@ export const createFetchHandler = (
 			return errorResponse(ApiError.badRequest("Method not allowed"), request);
 		}
 
-		// 6. Route map — custom + module routes (incl. /health)
-		if (routeMap) {
+		// 5. Route map — custom + module routes (incl. /health, /search)
+		if (compiledMatcher || routeMap) {
 			const routeResponse = await handleRouteDispatch(
 				_app,
 				config,
 				routeMap,
+				compiledMatcher,
 				request,
 				segments,
 				context,
@@ -552,7 +566,7 @@ export const createFetchHandler = (
 			}
 		}
 
-		// 7. Collection routes (fallback)
+		// 6. Collection routes (fallback)
 		const collection = segments[0];
 		const id = segments[1];
 		const action = segments[2];

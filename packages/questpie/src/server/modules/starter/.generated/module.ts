@@ -66,6 +66,7 @@ const _module = {
 	emails: {},
 	migrations: [] as const,
 	seeds: [] as const,
+	fieldTypes: {},
 	config: {
 		app: _appConfig,
 		auth: _authConfig,

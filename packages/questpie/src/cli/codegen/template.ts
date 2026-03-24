@@ -88,7 +88,7 @@ export function generateTemplate(options: TemplateOptions): string {
 
 	// Import createApp + types
 	lines.push(
-		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type AppContext, type Registry, type QueueClient, type CollectionAPI } from "questpie";',
+		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type AppContext, type Registry, type QueueClient, type CollectionAPI, type GlobalAPI } from "questpie";',
 	);
 	lines.push("");
 
@@ -469,13 +469,24 @@ export function generateTemplate(options: TemplateOptions): string {
 
 		if (contextTypeExpr) {
 			lines.push("// Context resolver return type → auto-typed handler ctx");
-			lines.push(
-				`type _ContextReturn = ${contextTypeExpr} extends (...args: any[]) => any`,
-			);
-			lines.push(
-				`\t? Awaited<ReturnType<${contextTypeExpr}>>`,
-			);
-			lines.push("\t: {};");
+
+			if (contextTypeExpr.endsWith(".context")) {
+				// Config bucket: use safe extraction that handles missing .context
+				const base = contextTypeExpr.slice(0, contextTypeExpr.lastIndexOf(".context"));
+				lines.push(
+					`type _ContextReturn = ${base} extends { context: (...args: any[]) => infer R }`,
+				);
+				lines.push("\t? Awaited<R>");
+				lines.push("\t: {};");
+			} else {
+				lines.push(
+					`type _ContextReturn = ${contextTypeExpr} extends (...args: any[]) => any`,
+				);
+				lines.push(
+					`\t? Awaited<ReturnType<${contextTypeExpr}>>`,
+				);
+				lines.push("\t: {};");
+			}
 			lines.push("declare global {");
 			lines.push("\tnamespace Questpie {");
 			lines.push(
@@ -501,7 +512,13 @@ export function generateTemplate(options: TemplateOptions): string {
 
 		// Skip App['api']['collections'] class getter indirection — map directly over AppCollections
 		lines.push(
-			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
+			"type _AppCollections = AppCollections & Record<string, any>;",
+		);
+		lines.push(
+			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], _AppCollections> };",
+		);
+		lines.push(
+			"type _GlobalsAPI = { [K in keyof AppGlobals]: GlobalAPI<AppGlobals[K], _AppCollections> };",
 		);
 		lines.push("");
 
@@ -533,7 +550,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("");
 		lines.push("\t\t\t// Entity APIs");
 		lines.push("\t\t\tcollections: _CollectionsAPI;");
-		lines.push("\t\t\tglobals: (typeof app)['api']['globals'];");
+		lines.push("\t\t\tglobals: _GlobalsAPI;");
 		lines.push("\t\t\ttables: (typeof app)['tables'];");
 		lines.push("");
 		lines.push("\t\t\t// Request-scoped");
@@ -564,7 +581,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		// Registry — ALL registryKey categories + ~-prefixed singles augmented centrally.
 		// This is the SINGLE place that augments Registry. Modules never augment it.
 		{
-			const registryEntries: string[] = [];
+			const registryMap = new Map<string, string>();
 
 			// Category registryKeys (views, components, blocks, listViews, etc.)
 			for (const [catName, decl] of allDecls) {
@@ -572,18 +589,21 @@ export function generateTemplate(options: TemplateOptions): string {
 				const regKey =
 					typeof decl.registryKey === "string" ? decl.registryKey : catName;
 				const typeName = `_Registry_${capitalize(catName)}`;
-				registryEntries.push(`\t\t\t${safeKey(regKey)}: ${typeName};`);
+				registryMap.set(regKey, `\t\t\t${safeKey(regKey)}: ${typeName};`);
 			}
 
 			// ~-prefixed registryKeys from singles (e.g. ~fieldTypes)
+			// These override category entries for the same key (deeper module extraction)
 			const tildeKeys = collectTildeRegistryKeys(
 				discoverPatterns,
 				discovered.singles,
 			);
 			for (const { singleName, registryKey } of tildeKeys) {
 				const typeName = `_AllModule${capitalize(singleName)}`;
-				registryEntries.push(`\t\t\t${safeKey(registryKey)}: ${typeName};`);
+				registryMap.set(registryKey, `\t\t\t${safeKey(registryKey)}: ${typeName};`);
 			}
+
+			const registryEntries = [...registryMap.values()];
 
 			if (registryEntries.length > 0) {
 				lines.push("");
@@ -694,7 +714,7 @@ function emitNewArchitectureRuntime(
 	}
 	const coreSingles = getCategorizedSingles(discovered.singles, allDecls);
 
-	lines.push("export const app = await createApp(");
+	lines.push("const _app = await createApp(");
 	lines.push("\t({");
 
 	// Modules
@@ -782,6 +802,9 @@ function emitNewArchitectureRuntime(
 	lines.push("\t}) satisfies AppDefinition,");
 	lines.push("\t_runtime,");
 	lines.push(");");
+	lines.push(
+		"export const app = _app as unknown as Omit<typeof _app, 'collections' | 'globals'> & { readonly collections: _CollectionsAPI; readonly globals: _GlobalsAPI };",
+	);
 	lines.push("");
 }
 

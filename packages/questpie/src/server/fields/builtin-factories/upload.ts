@@ -5,14 +5,14 @@
  * Supports single uploads (belongsTo) and many-to-many via junction table.
  */
 
-import { type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
+import { jsonb, type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { KnownCollectionNames } from "../../config/app-context.js";
 import type { DefaultFieldState } from "../field-class-types.js";
-import { field } from "../field-class.js";
+import { Field, field } from "../field-class.js";
 import { fieldType, wrapFieldComplete } from "../field-type.js";
-import { belongsToOps, toManyOps } from "../operators/builtin.js";
+import { belongsToOps, multipleOps, toManyOps } from "../operators/builtin.js";
 import type { ReferentialAction, RelationFieldMetadata } from "../types.js";
 
 declare global {
@@ -126,11 +126,19 @@ export function upload<TTo extends string = "assets">(
 	}), uploadFieldType.methods, {}) as any;
 }
 
-import type { Field } from "../field-class.js";
-
 // ---- fieldType() definition (QUE-265) ----
 
 export const uploadFieldType = fieldType("upload", {
+	methods: {
+		multiple: (f: Field<any>) =>
+			new Field({
+				...f._state,
+				multiple: true,
+				columnFactory: (name: string) => jsonb(name),
+				schemaFactory: () => z.array(z.string().uuid()),
+				operatorSet: multipleOps,
+			}),
+	},
 	create: (config?: UploadConfig) => {
 		const {
 			to = "assets",

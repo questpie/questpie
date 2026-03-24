@@ -240,7 +240,13 @@ function createBlocksState() {
 					const { app, db, locale } = getContext();
 					const blockDefs = (app as any).state?.blocks;
 					if (!blockDefs || Object.keys(blockDefs).length === 0) return value;
-					return await processBlocksDocument(doc, blockDefs, { app, db, locale });
+					return await processBlocksDocument(doc, blockDefs, {
+						app,
+						db,
+						locale,
+						collections: (app as any).collections,
+						globals: (app as any).globals,
+					});
 				} catch {
 					// getContext() fails outside request scope — return as-is
 					return value;

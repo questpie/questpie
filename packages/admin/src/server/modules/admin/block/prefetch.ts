@@ -53,6 +53,10 @@ export interface BlocksPrefetchContext {
 	db: unknown;
 	/** Current locale */
 	locale?: string;
+	/** Collection CRUD APIs (derived from app.collections) */
+	collections?: any;
+	/** Global CRUD APIs (derived from app.globals) */
+	globals?: any;
 }
 
 // ============================================================================
@@ -182,7 +186,7 @@ async function expandDeclaredFields(
 				: groupKey;
 
 			try {
-				const appApi = (ctx.app as any)?.api?.collections?.[collection];
+				const appApi = (ctx.app as any)?.collections?.[collection];
 				if (!appApi?.find) {
 					console.warn(
 						`[prefetch] Collection "${collection}" not found on app API, skipping`,

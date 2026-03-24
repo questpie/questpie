@@ -16,7 +16,7 @@ export const getBarber = createServerFn({ method: "GET" })
 
 		const ctx = await createRequestContext(data.locale);
 
-		const barber = await app.api.collections.barbers.findOne(
+		const barber = await app.collections.barbers.findOne(
 			{
 				where: draftMode
 					? { slug: data.slug }
@@ -57,7 +57,7 @@ export const getAllBarbers = createServerFn({ method: "GET" })
 	.handler(async ({ data }) => {
 		const ctx = await createRequestContext(data?.locale);
 
-		const result = await app.api.collections.barbers.find(
+		const result = await app.collections.barbers.find(
 			{
 				where: { isActive: true },
 				with: { avatar: true },

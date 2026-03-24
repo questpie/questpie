@@ -114,6 +114,7 @@ const _module = {
 	emails: {},
 	migrations: [] as const,
 	seeds: [] as const,
+	fieldTypes: {},
 	blocks: {},
 	config: {
 		admin: _adminConfig,

@@ -71,7 +71,7 @@ type AdminBlockFields = BuiltinFields & typeof adminFields;
  * ```ts
  * .prefetch(async ({ values, ctx }) => {
  *   const app = typedApp<App>(ctx.app);
- *   const res = await app.api.collections.posts.find({ limit: 5 });
+ *   const res = await app.collections.posts.find({ limit: 5 });
  *   return { posts: res.docs };
  * })
  * ```

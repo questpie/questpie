@@ -45,8 +45,8 @@ export function kebabToCamelCase(filename: string): string {
  * Prefixed with underscore + category to avoid collisions.
  */
 function toVarName(prefix: string, key: string): string {
-	// Replace dots and dashes with underscores
-	const safe = key.replace(/[.\-/]/g, "_");
+	// Replace any non-alphanumeric/underscore chars with underscores
+	const safe = key.replace(/[^a-zA-Z0-9_]/g, "_");
 	return `_${prefix}_${safe}`;
 }
 

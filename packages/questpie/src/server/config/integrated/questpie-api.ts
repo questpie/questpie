@@ -104,7 +104,7 @@ export type CollectionAPI<
 			>
 		: {});
 
-type GlobalAPI<
+export type GlobalAPI<
 	TGlobal,
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
 	TApp = AppFromCollections<TCollections>,

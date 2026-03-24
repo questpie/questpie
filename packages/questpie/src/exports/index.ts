@@ -141,4 +141,4 @@ export type {
 	ResolveRelations,
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
-export type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
+export type { CollectionAPI, GlobalAPI } from "#questpie/server/config/integrated/questpie-api.js";

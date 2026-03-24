@@ -66,6 +66,7 @@ export async function executeJsonRoute<TInput, TOutput>(
 	definition: JsonRouteDefinition<TInput, TOutput>,
 	input: unknown,
 	context?: RequestContext,
+	params?: Record<string, string>,
 ): Promise<TOutput> {
 	const parsed = definition.schema.parse(input);
 	const resolvedContext =
@@ -90,6 +91,7 @@ export async function executeJsonRoute<TInput, TOutput>(
 				...services,
 				input: parsed as TInput,
 				locale: resolvedContext.locale,
+				params: params ?? {},
 			} as any),
 	);
 
@@ -115,6 +117,7 @@ export async function executeRawRoute(
 	definition: RawRouteDefinition,
 	request: Request,
 	context?: RequestContext,
+	params?: Record<string, string>,
 ): Promise<Response> {
 	const resolvedContext =
 		context ?? (await app.createContext({ accessMode: "system" }));
@@ -138,7 +141,7 @@ export async function executeRawRoute(
 				...services,
 				request,
 				locale: resolvedContext.locale,
-				params: {},
+				params: params ?? {},
 			} as any),
 	);
 }
