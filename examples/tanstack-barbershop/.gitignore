@@ -14,7 +14,7 @@ todos.json
 uploads
 
 # Questpie codegen
-.generated/
+# .generated/
 
 # Playwright
 playwright-report/
