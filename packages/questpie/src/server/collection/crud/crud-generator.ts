@@ -2805,6 +2805,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		// System mode bypasses all access control
 		if (normalized.accessMode === "system") return true;
 
+		// Upload collections with public visibility get public read access by default
+		if (
+			operation === "read" &&
+			!this.state.access?.read &&
+			this.state.upload?.visibility === "public"
+		) {
+			return true;
+		}
+
 		// Use collection's access rule, or fall back to app defaultAccess
 		const accessRule =
 			this.state.access?.[operation] ?? this.app?.defaultAccess?.[operation];

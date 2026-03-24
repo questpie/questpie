@@ -62,7 +62,7 @@ export function TableViewSkeleton() {
 				</div>
 
 				{/* Table */}
-				<div className="rounded-md border">
+				<div className="border">
 					{/* Header row */}
 					<div className="bg-muted flex items-center gap-4 border-b p-4">
 						<Skeleton className="h-4 w-4" />
@@ -95,7 +95,7 @@ export function FormViewSkeleton() {
 				{/* Header */}
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-3">
-						<Skeleton className="h-8 w-8 rounded-md" /> {/* Back button */}
+						<Skeleton className="h-8 w-8" /> {/* Back button */}
 						<Skeleton className="h-8 w-48" />
 					</div>
 					<div className="flex items-center gap-2">

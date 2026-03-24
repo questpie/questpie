@@ -186,7 +186,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	constructor(config: TConfig) {
 		this.config = config;
 		this.defaultAccess = config.defaultAccess;
-		this.globalHooks = config.globalHooks ?? { collections: [], globals: [] };
+		const rawHooks = config.globalHooks ?? { collections: [], globals: [] };
+		this.globalHooks = {
+			collections: Array.isArray(rawHooks.collections) ? rawHooks.collections : rawHooks.collections ? [rawHooks.collections] : [],
+			globals: Array.isArray(rawHooks.globals) ? rawHooks.globals : rawHooks.globals ? [rawHooks.globals] : [],
+		};
 
 		// Initialize translator
 		this.t = createTranslator(config.translations);

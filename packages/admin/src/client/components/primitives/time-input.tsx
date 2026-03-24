@@ -48,7 +48,7 @@ export function TimeInput({
 		<div className="qa-time-input relative">
 			<div
 				className={cn(
-					"border-border bg-input flex h-9 w-full items-center gap-2 border px-3 py-2 text-sm",
+					"border-input bg-transparent font-mono flex h-9 w-full items-center gap-2 border px-3 py-2 text-sm",
 					"focus-within:ring-ring focus-within:ring-2 focus-within:ring-offset-2",
 					disabled && "cursor-not-allowed opacity-50",
 					ariaInvalid && "border-destructive",

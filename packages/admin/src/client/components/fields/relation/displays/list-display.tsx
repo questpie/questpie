@@ -26,11 +26,11 @@ function ListSkeleton({
 
 	if (editable) {
 		return (
-			<div className="border-border bg-card space-y-2 rounded-lg border p-3">
+			<div className="border-border bg-card space-y-2 border p-3">
 				{skeletonKeys.map((key) => (
 					<div
 						key={key}
-						className="border-border bg-card flex items-center gap-2 rounded-md border p-2"
+						className="border-border bg-card flex items-center gap-2 border p-2"
 					>
 						<Skeleton className="size-3.5 rounded" />
 						<Skeleton className="h-4 max-w-[200px] flex-1 rounded" />
@@ -80,11 +80,11 @@ export function ListDisplay({
 	// Editable list with cards
 	if (editable) {
 		return (
-			<div className="border-border bg-card space-y-2 rounded-lg border p-3">
+			<div className="border-border bg-card space-y-2 border p-3">
 				{items.map((item, index) => (
 					<div
 						key={item.id}
-						className="border-border bg-card flex items-center gap-2 rounded-md border p-2"
+						className="border-border bg-card flex items-center gap-2 border p-2"
 					>
 						{/* Drag Handle */}
 						{orderable && (

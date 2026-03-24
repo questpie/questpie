@@ -1,0 +1,450 @@
+---
+title: Protocol & Reliability
+description: Production reliability contract for the Preview V2 postMessage protocol. Covers versioning, sequencing, error recovery, and telemetry.
+---
+
+This document defines the wire protocol between the QuestPie admin panel and the preview iframe in Preview V2. It is the authoritative reference for implementors on both sides.
+
+## Message Envelope
+
+Every message in V2 conforms to this base shape:
+
+```ts
+interface PreviewMessage {
+  type: string;
+  sessionId: string;
+  seq: number;
+  timestamp: number;
+  protocolVersion: number;
+}
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `type` | `string` | Message discriminator. One of the types defined below. |
+| `sessionId` | `string` | Unique per preview session. Generated when the admin opens the preview panel. Used to discard stale messages from previous sessions. |
+| `seq` | `number` | Monotonically increasing sequence number. The admin increments `seq` for every message it sends. The frame increments its own independent `seq` counter. |
+| `timestamp` | `number` | `Date.now()` at send time. Used for latency telemetry, not for ordering. |
+| `protocolVersion` | `number` | Currently `2`. Used for version negotiation. |
+
+## Protocol Versioning
+
+### Version Negotiation
+
+1. The frame sends `READY` with `protocolVersion: 2`
+2. The admin checks whether it supports that version
+3. If supported, the admin responds with `INIT_SNAPSHOT` (also `protocolVersion: 2`)
+4. If not supported, the admin falls back to the highest mutually supported version
+
+The admin always controls the effective protocol version. The frame adapts to whatever version the admin uses in `INIT_SNAPSHOT`.
+
+### Backward Compatibility
+
+- A V2 admin receiving a `READY` without `protocolVersion` assumes V1 and uses the legacy refresh protocol
+- A V2 frame receiving a `PREVIEW_REFRESH` message (V1) falls back to calling `onRefresh` if one was provided
+- Future V3+ changes must remain backward compatible with V2 frames for at least one major release cycle
+
+## Origin Validation
+
+### Security Model
+
+All `postMessage` calls specify an explicit target origin. The wildcard `"*"` is never used.
+
+**Admin side:**
+```ts
+const previewOrigin = new URL(previewUrl).origin;
+iframe.contentWindow.postMessage(message, previewOrigin);
+```
+
+**Frame side:**
+```ts
+const adminOrigin = document.referrer
+  ? new URL(document.referrer).origin
+  : null;
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== adminOrigin) return;
+  if (event.data?.sessionId !== currentSessionId) return;
+  handleMessage(event.data);
+});
+```
+
+### Allowed Origins
+
+The admin derives the allowed preview origin from the collection's `.preview({ url })` config at runtime. The frame derives the allowed admin origin from `document.referrer` (set by the iframe's parent page).
+
+There is no static allowlist. Origins are validated dynamically per session.
+
+### Session Binding
+
+Messages are bound to a `sessionId`. If the frame receives a message with a `sessionId` it does not recognize (e.g., from a previous session that was not properly torn down), it discards the message silently.
+
+## Message Types
+
+### Admin to Frame
+
+#### `INIT_SNAPSHOT`
+
+Sent once after receiving `READY`. Contains the full document state.
+
+```ts
+interface InitSnapshot extends PreviewMessage {
+  type: "INIT_SNAPSHOT";
+  data: Record<string, unknown>;
+  locale?: string;
+  collectionName: string;
+}
+```
+
+- `seq` is always `0` for `INIT_SNAPSHOT`
+- `data` is the complete document as it exists in the form at the time of opening preview
+- `locale` is the current editing locale, if the collection is localized
+
+#### `PATCH_BATCH`
+
+Sent when one or more fields change in the admin form.
+
+```ts
+interface PatchBatch extends PreviewMessage {
+  type: "PATCH_BATCH";
+  patches: Patch[];
+}
+
+interface Patch {
+  path: string;
+  value: unknown;
+}
+```
+
+- `path` uses dot notation: `"title"`, `"seo.description"`, `"content._values.blockId.heading"`
+- `value` is the new value for that path. For deletions, `value` is `undefined`.
+- Multiple patches can be batched in a single message (e.g., when pasting into multiple fields or when a server reconcile updates several fields at once)
+
+#### `FOCUS_FIELD`
+
+Sent when the user focuses a field in the admin form.
+
+```ts
+interface FocusField extends PreviewMessage {
+  type: "FOCUS_FIELD";
+  fieldPath: string;
+}
+```
+
+#### `SELECT_BLOCK`
+
+Sent when the user selects a block in the admin form.
+
+```ts
+interface SelectBlock extends PreviewMessage {
+  type: "SELECT_BLOCK";
+  blockId: string;
+}
+```
+
+#### `COMMIT`
+
+Sent after a successful save. The server data is now authoritative.
+
+```ts
+interface Commit extends PreviewMessage {
+  type: "COMMIT";
+  data: Record<string, unknown>;
+}
+```
+
+The frame must replace its local patched state with `data`. This resolves any drift between optimistic patches and server-computed values.
+
+#### `FULL_RESYNC`
+
+Sent when the admin detects a desync (e.g., the frame reported a gap, or the admin reconnected after a network interruption).
+
+```ts
+interface FullResync extends PreviewMessage {
+  type: "FULL_RESYNC";
+  data: Record<string, unknown>;
+  locale?: string;
+}
+```
+
+Semantically identical to `INIT_SNAPSHOT`, but can arrive at any point in the session. The frame must reset its state and `seq` tracking.
+
+#### `ERROR`
+
+Sent when the admin encounters an error it wants to surface in the frame (e.g., validation failure, save error).
+
+```ts
+interface AdminError extends PreviewMessage {
+  type: "ERROR";
+  error: string;
+  code?: string;
+}
+```
+
+The frame may display this as a toast or banner. It does not affect protocol state.
+
+### Frame to Admin
+
+#### `READY`
+
+Sent when the frame has loaded and is ready to receive `INIT_SNAPSHOT`.
+
+```ts
+interface Ready extends PreviewMessage {
+  type: "READY";
+}
+```
+
+- `seq` is `0`
+- The admin must not send any other message before receiving `READY`
+
+#### `ACK`
+
+Acknowledges receipt of a message from the admin.
+
+```ts
+interface Ack extends PreviewMessage {
+  type: "ACK";
+  ackSeq: number;
+}
+```
+
+- `ackSeq` is the `seq` of the admin message being acknowledged
+- The frame must send `ACK` for every `INIT_SNAPSHOT`, `PATCH_BATCH`, `COMMIT`, and `FULL_RESYNC`
+- `FOCUS_FIELD`, `SELECT_BLOCK`, and `ERROR` do not require acknowledgment
+
+#### `FIELD_CLICKED`
+
+Sent when the user clicks a field element in the preview.
+
+```ts
+interface FieldClicked extends PreviewMessage {
+  type: "FIELD_CLICKED";
+  fieldPath: string;
+}
+```
+
+#### `BLOCK_CLICKED`
+
+Sent when the user clicks a block element in the preview.
+
+```ts
+interface BlockClicked extends PreviewMessage {
+  type: "BLOCK_CLICKED";
+  blockId: string;
+}
+```
+
+#### `RELATION_CLICKED`
+
+Sent when the user clicks a resolved relation in the preview.
+
+```ts
+interface RelationClicked extends PreviewMessage {
+  type: "RELATION_CLICKED";
+  fieldPath: string;
+  relationId: string;
+}
+```
+
+The admin navigates to or opens the related record for editing.
+
+#### `RENDER_ERROR`
+
+Sent when the frame encounters a rendering error while applying a patch or snapshot.
+
+```ts
+interface RenderError extends PreviewMessage {
+  type: "RENDER_ERROR";
+  error: string;
+  seq?: number;
+}
+```
+
+- If `seq` is present, it indicates which admin message caused the error
+- The admin logs the error and may trigger a `FULL_RESYNC` to attempt recovery
+
+## Session Lifecycle
+
+```
+Frame loads
+  |
+  v
+Frame -> Admin: READY (seq=0, protocolVersion=2)
+  |
+  v
+Admin -> Frame: INIT_SNAPSHOT (seq=0, full document)
+  |
+  v
+Frame -> Admin: ACK (ackSeq=0)
+  |
+  v
+[Normal operation loop]
+  |
+  Admin -> Frame: PATCH_BATCH (seq=1)
+  Frame -> Admin: ACK (ackSeq=1)
+  |
+  Admin -> Frame: PATCH_BATCH (seq=2)
+  Frame -> Admin: ACK (ackSeq=2)
+  |
+  ... (seq increments monotonically)
+  |
+[On save]
+  Admin -> Frame: COMMIT (seq=N)
+  Frame -> Admin: ACK (ackSeq=N)
+  |
+[On desync]
+  Frame -> Admin: RENDER_ERROR (seq=M, indicating gap)
+  Admin -> Frame: FULL_RESYNC (seq=N+1, resets state)
+  Frame -> Admin: ACK (ackSeq=N+1)
+  |
+[On close]
+  Admin destroys iframe. No teardown message.
+```
+
+## Sequence Numbers and Ordering
+
+### Admin Sequence Counter
+
+The admin maintains a single monotonically increasing counter per session. Every message the admin sends increments this counter. The counter resets to `0` at session start (`INIT_SNAPSHOT`).
+
+### Frame Sequence Counter
+
+The frame maintains its own independent counter for messages it sends. This counter also starts at `0` (`READY`).
+
+### Gap Detection
+
+The frame tracks the last received admin `seq`. If it receives a message with `seq > lastSeq + 1`, it has detected a gap.
+
+On gap detection:
+
+1. The frame sends `RENDER_ERROR` with a descriptive error string (e.g., `"seq gap: expected 5, got 7"`)
+2. The admin receives the error and sends `FULL_RESYNC`
+3. The frame resets its tracking to the `seq` of the `FULL_RESYNC` message
+
+The frame must not attempt to buffer or reorder messages. If a gap is detected, the only recovery path is `FULL_RESYNC`.
+
+## Backpressure
+
+### Problem
+
+The admin can produce patches faster than the frame can render them. This happens when:
+
+- The user types rapidly in a text field
+- A bulk operation changes many fields at once
+- The frame has expensive rendering logic (e.g., Markdown-to-HTML, image processing)
+
+### Mechanism
+
+The admin tracks unacknowledged messages. If the number of unacknowledged messages exceeds a threshold (`MAX_UNACKED`, default `10`), the admin pauses sending new patches.
+
+```
+Admin patch rate:  [P1] [P2] [P3] ... [P10] [PAUSE]
+Frame ACK rate:    [A1]     [A2]            [A3] ...
+                                             ^
+                                     Admin resumes on A3
+                                     (unacked drops below threshold)
+```
+
+When paused, the admin coalesces pending patches. When the frame catches up (unacked count drops below `MAX_UNACKED / 2`), the admin sends a single `PATCH_BATCH` containing all coalesced patches.
+
+This ensures the frame is never overwhelmed, at the cost of slightly increased latency during rapid edits.
+
+### Tuning
+
+The `MAX_UNACKED` threshold is not user-configurable in V2. It may become configurable in a future release based on real-world performance data.
+
+## Retry Strategy
+
+### ACK Timeout
+
+The admin expects an `ACK` within `ACK_TIMEOUT` (default: `3000ms`). If no `ACK` is received:
+
+1. **First timeout:** The admin resends the same message with the same `seq` (idempotent retry)
+2. **Second timeout:** The admin sends `FULL_RESYNC`
+3. **Third timeout:** The admin marks the preview as "disconnected" and shows a reconnect button in the UI
+
+The frame must handle duplicate `seq` numbers gracefully. If it receives a message with a `seq` it has already processed, it sends `ACK` again but does not re-apply the patch.
+
+### Frame Reconnect
+
+If the frame reloads (user navigation, crash recovery), it sends a fresh `READY`. The admin treats this as a new session: resets the `seq` counter and sends `INIT_SNAPSHOT`.
+
+## Error Recovery
+
+### RENDER_ERROR Handling
+
+When the admin receives `RENDER_ERROR`:
+
+1. Log the error with the `sessionId`, `seq`, and error string
+2. If `seq` is present and corresponds to a `PATCH_BATCH`, attempt rollback:
+   - Send a `PATCH_BATCH` that reverses the offending patches
+   - If rollback also fails, send `FULL_RESYNC`
+3. If `seq` is absent (general render failure), send `FULL_RESYNC`
+
+### Admin ERROR Propagation
+
+The admin sends `ERROR` for non-protocol errors:
+
+- Save failed (validation, network, conflict)
+- Session expired
+- Collection was deleted while previewing
+
+The frame displays the error but keeps its current state. The admin is responsible for resolving the error and sending either a `COMMIT` (if save eventually succeeds) or closing the preview.
+
+### Unrecoverable States
+
+If `FULL_RESYNC` fails three consecutive times (frame responds with `RENDER_ERROR` to each), the admin closes the preview and shows an error message suggesting the user reload the page.
+
+## Telemetry
+
+Both the admin and the frame should track the following metrics. These are emitted as structured log events, not sent to an external service by default.
+
+### Admin-Side Metrics
+
+| Metric | Type | Description |
+| --- | --- | --- |
+| `preview.patch_latency_ms` | histogram | Time from patch send to `ACK` receipt |
+| `preview.resync_count` | counter | Number of `FULL_RESYNC` messages sent per session |
+| `preview.unacked_high_watermark` | gauge | Peak number of unacknowledged messages in a session |
+| `preview.retry_count` | counter | Number of retried messages per session |
+| `preview.session_duration_ms` | histogram | Total preview session duration |
+| `preview.error_count` | counter | Number of `RENDER_ERROR` messages received per session |
+| `preview.disconnect_count` | counter | Number of times preview entered "disconnected" state |
+
+### Frame-Side Metrics
+
+| Metric | Type | Description |
+| --- | --- | --- |
+| `preview.render_time_ms` | histogram | Time from receiving `PATCH_BATCH` to completing DOM update |
+| `preview.apply_time_ms` | histogram | Time to apply patches to local state (before render) |
+| `preview.gap_count` | counter | Number of sequence gaps detected |
+| `preview.snapshot_size_bytes` | gauge | Size of `INIT_SNAPSHOT` data payload |
+
+### Accessing Telemetry
+
+```ts
+import { getPreviewMetrics } from "@questpie/admin/client";
+
+// Returns a snapshot of all metrics for the current session
+const metrics = getPreviewMetrics();
+console.log(metrics.patchLatencyP99); // 45
+console.log(metrics.resyncCount); // 0
+```
+
+Metrics are also available via the admin's developer tools panel (if enabled).
+
+## Summary of Constants
+
+| Constant | Value | Description |
+| --- | --- | --- |
+| `PROTOCOL_VERSION` | `2` | Current protocol version |
+| `MAX_UNACKED` | `10` | Backpressure threshold |
+| `ACK_TIMEOUT` | `3000ms` | Time to wait for ACK before retry |
+| `MAX_RETRIES` | `2` | Retries before FULL_RESYNC |
+| `MAX_RESYNC_FAILURES` | `3` | Consecutive FULL_RESYNC failures before disconnect |
+
+## Related Pages
+
+- [Migration Guide](/docs/workspace/live-preview/migration) -- Step-by-step migration from V1 to V2
+- [Live Preview Overview](/docs/workspace/live-preview) -- General preview setup and configuration

@@ -111,14 +111,14 @@ export default function QuickActionsWidget({
 								type="button"
 								onClick={() => handleClick(action)}
 								className={cn(
-									"flex flex-col items-center justify-center gap-2 rounded-md p-3 text-center transition-colors",
+									"flex flex-col items-center justify-center gap-2 p-3 text-center transition-colors",
 									variantStyles[action.variant],
 								)}
 							>
 								{iconElement && (
 									<div
 										className={cn(
-											"flex h-9 w-9 items-center justify-center rounded-md",
+											"flex h-9 w-9 items-center justify-center",
 											iconVariantStyles[action.variant],
 										)}
 									>
@@ -149,14 +149,14 @@ export default function QuickActionsWidget({
 							type="button"
 							onClick={() => handleClick(action)}
 							className={cn(
-								"flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors",
+								"flex w-full items-center gap-3 px-2 py-2 text-left transition-colors",
 								variantStyles[action.variant],
 							)}
 						>
 							{iconElement && (
 								<div
 									className={cn(
-										"flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
+										"flex h-8 w-8 shrink-0 items-center justify-center",
 										iconVariantStyles[action.variant],
 									)}
 								>

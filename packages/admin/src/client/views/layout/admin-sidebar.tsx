@@ -999,7 +999,7 @@ function UserFooter() {
 												<img
 													src={getFlagUrl(locale.code)}
 													alt={locale.code}
-													className="h-3 w-4 rounded-sm object-cover"
+													className="h-3 w-4 object-cover"
 													onError={(e) => {
 														e.currentTarget.style.display = "none";
 													}}
@@ -1037,7 +1037,7 @@ function UserFooter() {
 														locale.flagCountryCode ?? locale.code,
 													)}
 													alt={locale.code}
-													className="h-3 w-4 rounded-sm object-cover"
+													className="h-3 w-4 object-cover"
 													onError={(e) => {
 														e.currentTarget.style.display = "none";
 													}}

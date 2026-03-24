@@ -203,7 +203,7 @@ function SectionRenderer({
 		const defaultOpen = section.defaultCollapsed !== true;
 		return (
 			<Accordion defaultValue={defaultOpen ? [value] : []} className="w-full">
-				<AccordionItem value={value} className="rounded-lg border px-4">
+				<AccordionItem value={value} className="border px-4">
 					<AccordionTrigger className="hover:no-underline">
 						<span className="font-semibold">
 							{ctx.resolveText(section.label, "Section")}

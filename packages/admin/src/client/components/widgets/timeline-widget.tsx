@@ -202,27 +202,21 @@ export default function TimelineWidget({
 						</>
 					);
 
-					if (isClickable) {
-						return (
-							<button
-								key={item.id}
-								type="button"
-								className={cn(
-									"relative flex w-full gap-3 pb-4",
-									"hover:bg-muted -mx-2 cursor-pointer rounded-md px-2 transition-colors",
-									isLast && "pb-0",
-								)}
-								onClick={() => handleItemClick(item)}
-							>
-								{itemContent}
-							</button>
-						);
-					}
-
 					return (
 						<div
 							key={item.id}
 							className={cn("relative flex gap-3 pb-4", isLast && "pb-0")}
+							{...(isClickable
+								? {
+										role: "button",
+										tabIndex: 0,
+										onClick: () => handleItemClick(item),
+										onKeyDown: (e: React.KeyboardEvent) => {
+											if (e.key === "Enter" || e.key === " ") handleItemClick(item);
+										},
+										style: { cursor: "pointer" },
+									}
+								: {})}
 						>
 							{itemContent}
 						</div>

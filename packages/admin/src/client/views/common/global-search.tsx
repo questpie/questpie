@@ -176,7 +176,7 @@ const SearchGroup = React.memo(function SearchGroup({
 							onClick={() => onSelect(item)}
 							onMouseEnter={() => onHover(globalIndex)}
 							className={cn(
-								"flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors outline-none",
+								"flex w-full items-center gap-3 px-3 py-2.5 text-sm transition-colors outline-none",
 								isSelected
 									? "bg-accent text-accent-foreground"
 									: "hover:bg-accent hover:text-accent-foreground",

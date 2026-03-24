@@ -21,7 +21,7 @@ interface ErrorBoundaryState {
 function DefaultErrorFallback({ error }: { error: Error }) {
 	const { t } = useTranslation();
 	return (
-		<div className="border-destructive/20 bg-destructive/5 rounded-lg border p-4">
+		<div className="border-destructive/20 bg-destructive/5 border p-4">
 			<p className="text-destructive text-sm font-medium">
 				{t("error.somethingWentWrong")}
 			</p>
@@ -102,7 +102,7 @@ export function WidgetErrorBoundary({
 	return (
 		<ErrorBoundary
 			fallback={(error) => (
-				<div className="border-destructive/20 bg-destructive/5 rounded-lg border p-4">
+				<div className="border-destructive/20 bg-destructive/5 border p-4">
 					<p className="text-destructive text-sm font-medium">
 						{t("error.widgetError")}
 					</p>
@@ -148,7 +148,7 @@ function ViewErrorBoundary({
 		<ErrorBoundary
 			fallback={(error) => (
 				<div className="container">
-					<div className="border-destructive/20 bg-destructive/5 my-8 rounded-lg border p-6">
+					<div className="border-destructive/20 bg-destructive/5 my-8 border p-6">
 						<div className="flex items-start gap-4">
 							<div className="bg-destructive/10 rounded-full p-2">
 								<svg

@@ -238,7 +238,7 @@ export function AssetPreview({
 		if (isLoadingAsset) {
 			return (
 				<Skeleton
-					className={cn("aspect-square w-full rounded-lg", className)}
+					className={cn("aspect-square w-full", className)}
 				/>
 			);
 		}
@@ -260,7 +260,7 @@ export function AssetPreview({
 		const content = (
 			<div
 				className={cn(
-					"group relative aspect-square overflow-hidden rounded-lg border",
+					"group relative aspect-square overflow-hidden border",
 					"bg-muted border-border",
 					disabled && "opacity-60",
 					onClick && !disabled && "hover:border-border cursor-pointer",
@@ -357,7 +357,7 @@ export function AssetPreview({
 			return (
 				<div
 					className={cn(
-						"flex items-center gap-2 rounded-md border p-2",
+						"flex items-center gap-2 border p-2",
 						"bg-muted border-border",
 						className,
 					)}
@@ -389,7 +389,7 @@ export function AssetPreview({
 		return (
 			<div
 				className={cn(
-					"group flex items-center gap-2 rounded-md border p-2",
+					"group flex items-center gap-2 border p-2",
 					"bg-muted border-border",
 					disabled && "opacity-60",
 					onClick && !disabled && "hover:border-border cursor-pointer",
@@ -496,7 +496,7 @@ export function AssetPreview({
 		return (
 			<div
 				className={cn(
-					"overflow-hidden rounded-lg border",
+					"overflow-hidden border",
 					"bg-muted border-border",
 					className,
 				)}
@@ -527,7 +527,7 @@ export function AssetPreview({
 	return (
 		<div
 			className={cn(
-				"group relative overflow-hidden rounded-lg border",
+				"group relative overflow-hidden border",
 				"bg-muted border-border",
 				disabled && "opacity-60",
 				onClick && !disabled && "hover:border-border cursor-pointer",

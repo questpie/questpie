@@ -700,7 +700,7 @@ function SectionLayoutRenderer({
 				defaultValue={defaultOpen ? [value] : []}
 				className="w-full"
 			>
-				<AccordionItem value={value} className="rounded-lg border px-4">
+				<AccordionItem value={value} className="border px-4">
 					<AccordionTrigger className="hover:no-underline">
 						<span className="font-semibold">
 							{resolveText(section.label, "Section", formValues)}

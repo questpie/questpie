@@ -1626,7 +1626,7 @@ export default function FormView({
 		<>
 			{/* Lock banner - show when someone else is editing */}
 			{isBlocked && blockedByUser && (
-				<div className="qa-form-view__lock-banner bg-warning/10 border-warning/30 mb-4 flex items-center gap-3 rounded-lg border p-3">
+				<div className="qa-form-view__lock-banner bg-warning/10 border-warning/30 mb-4 flex items-center gap-3 border p-3">
 					{blockedByUser.image ? (
 						<img
 							src={blockedByUser.image}
@@ -1654,7 +1654,7 @@ export default function FormView({
 
 			{/* Warning banner - show when same user has document open elsewhere */}
 			{isOpenElsewhere && (
-				<div className="bg-info/10 border-info/30 mb-4 flex items-center gap-3 rounded-lg border p-3">
+				<div className="bg-info/10 border-info/30 mb-4 flex items-center gap-3 border p-3">
 					<Icon icon="ph:browser" className="text-info size-5" />
 					<p className="text-info text-sm">{t("lock.openElsewhere")}</p>
 				</div>
@@ -1940,7 +1940,7 @@ export default function FormView({
 
 						{/* Soft-deleted banner */}
 						{item?.deletedAt && (
-							<div className="qa-form-view__deleted-banner border-destructive/30 bg-destructive/5 text-destructive flex items-center gap-2 rounded-md border px-4 py-3 text-sm">
+							<div className="qa-form-view__deleted-banner border-destructive/30 bg-destructive/5 text-destructive flex items-center gap-2 border px-4 py-3 text-sm">
 								<Icon icon="ph:trash" className="size-4 shrink-0" />
 								<span>
 									{t("form.deletedBanner", {

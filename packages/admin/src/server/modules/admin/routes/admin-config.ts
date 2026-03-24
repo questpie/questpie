@@ -433,9 +433,12 @@ function mergeSidebarContributions(
 		// Process sections
 		if (contrib.sections) {
 			for (const sec of contrib.sections) {
-				if (!sectionDefs.has(sec.id)) {
-					sectionOrder.push(sec.id);
+				// Later definitions (user config) override section order
+				const existingIdx = sectionOrder.indexOf(sec.id);
+				if (existingIdx !== -1) {
+					sectionOrder.splice(existingIdx, 1);
 				}
+				sectionOrder.push(sec.id);
 				// Later wins for metadata
 				sectionDefs.set(sec.id, {
 					title: sec.title ?? sectionDefs.get(sec.id)?.title,
@@ -526,9 +529,12 @@ function mergeDashboardContributions(
 
 		if (contrib.sections) {
 			for (const sec of contrib.sections) {
-				if (!sectionDefs.has(sec.id)) {
-					sectionOrder.push(sec.id);
+				// Later definitions (user config) override section order
+				const existingIdx = sectionOrder.indexOf(sec.id);
+				if (existingIdx !== -1) {
+					sectionOrder.splice(existingIdx, 1);
 				}
+				sectionOrder.push(sec.id);
 				sectionDefs.set(sec.id, {
 					label: sec.label ?? sectionDefs.get(sec.id)?.label,
 					layout: sec.layout ?? sectionDefs.get(sec.id)?.layout,
@@ -592,13 +598,13 @@ function mergeDashboardContributions(
  * (has .sections array directly) vs contribution-based (array of contributions).
  */
 function isLegacySidebarConfig(value: unknown): value is ServerSidebarConfig {
-	return (
-		value != null &&
-		typeof value === "object" &&
-		!Array.isArray(value) &&
-		"sections" in (value as any) &&
-		Array.isArray((value as any).sections)
-	);
+	if (value == null || typeof value !== "object" || Array.isArray(value))
+		return false;
+	const obj = value as any;
+	// Legacy format has sections with nested items already grouped.
+	// Contribution format has separate sections + items arrays (items have sectionId).
+	if (Array.isArray(obj.sections) && Array.isArray(obj.items)) return false;
+	return Array.isArray(obj.sections);
 }
 
 /**
@@ -608,12 +614,13 @@ function isLegacySidebarConfig(value: unknown): value is ServerSidebarConfig {
 function isLegacyDashboardConfig(
 	value: unknown,
 ): value is ServerDashboardConfig {
-	return (
-		value != null &&
-		typeof value === "object" &&
-		!Array.isArray(value) &&
-		("items" in (value as any) || "title" in (value as any))
-	);
+	if (value == null || typeof value !== "object" || Array.isArray(value))
+		return false;
+	const obj = value as any;
+	// Contribution format has sections + items arrays (items have sectionId).
+	// Legacy format has items as processed ServerDashboardItem[] (section type items with nested items).
+	if (Array.isArray(obj.sections) && Array.isArray(obj.items)) return false;
+	return "items" in obj || "title" in obj;
 }
 
 // ============================================================================
@@ -721,10 +728,14 @@ async function processDashboardItems(
 			continue;
 		}
 
-		// 4. Strip non-serializable props, mark hasLoader
+		// 4. Strip non-serializable props, mark hasLoader, normalize label→title
 		const { loader, access, filterFn, ...serializable } = widget;
 		if (loader) {
 			serializable.hasLoader = true;
+		}
+		// Normalize: server config uses `label`, client widgets expect `title`
+		if (serializable.label && !serializable.title) {
+			serializable.title = serializable.label;
 		}
 		result.push(serializable);
 	}

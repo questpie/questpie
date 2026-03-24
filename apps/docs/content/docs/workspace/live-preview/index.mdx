@@ -146,6 +146,16 @@ The hook:
 
 The "Exit Preview" button redirects to `/api/preview?disable=true`, which clears the draft mode cookie.
 
+## Preview V2
+
+A next-generation preview system is available that replaces the save-driven refresh cycle with instant patch-based updates. See:
+
+- [Live Preview V2 Architecture](/docs/workspace/live-preview/architecture) — Target architecture and design goals
+- [Same-Tab Recipe](/docs/workspace/live-preview/same-tab-recipe) — Frontend implementation with `useQuestpiePreview`
+- [Shared Preview](/docs/workspace/live-preview/shared-preview) — Detached and multi-user preview via realtime
+- [Protocol & Reliability](/docs/workspace/live-preview/protocol) — Wire protocol, sequencing, and error recovery
+- [Migration Guide](/docs/workspace/live-preview/migration) — Upgrading from V1 to V2
+
 ## Related Pages
 
 - [Form Views](/docs/workspace/views/form-views) — Form toolbar configuration

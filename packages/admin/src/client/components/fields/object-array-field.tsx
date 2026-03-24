@@ -137,7 +137,7 @@ function ObjectArrayItemFields({
 }: ObjectArrayItemFieldsProps) {
 	if (fieldEntries.length === 0) {
 		return (
-			<div className="rounded-lg border border-dashed p-4 text-center">
+			<div className="border border-dashed p-4 text-center">
 				<p className="text-muted-foreground text-sm">
 					No fields configured for items.
 				</p>
@@ -304,7 +304,7 @@ export function ObjectArrayField({
 	};
 
 	const emptyState = (
-		<div className="rounded-lg border border-dashed p-4 text-center">
+		<div className="border border-dashed p-4 text-center">
 			<p className="text-muted-foreground text-sm">
 				{resolvedPlaceholder || emptyLabel}
 			</p>
@@ -363,7 +363,7 @@ export function ObjectArrayField({
 							return (
 								<div
 									key={field.id}
-									className="border-border bg-card rounded-lg border"
+									className="border-border bg-card border"
 								>
 									<div className="flex items-center justify-between border-b px-3 py-2">
 										<div className="flex items-center gap-2">

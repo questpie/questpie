@@ -70,7 +70,7 @@ const variantStyles: Record<WidgetCardVariant, string> = {
 	default: "",
 	compact: "py-3 gap-3",
 	featured:
-		"border-primary/30 bg-gradient-to-br from-primary/5 to-transparent shadow-sm",
+		"border-primary/30 bg-gradient-to-br from-primary/5 to-transparent",
 };
 
 const variantContentStyles: Record<WidgetCardVariant, string> = {
@@ -89,7 +89,7 @@ function WidgetCardLoading({
 	variant?: WidgetCardVariant;
 }) {
 	return (
-		<Card className={cn("flex h-full flex-col", variantStyles[variant])}>
+		<Card className={cn("flex flex-col", variantStyles[variant])}>
 			<CardHeader>
 				<Skeleton className="h-4 w-24" />
 			</CardHeader>
@@ -113,7 +113,7 @@ function WidgetCardError({
 	return (
 		<Card
 			className={cn(
-				"border-destructive/20 bg-destructive/5 flex h-full flex-col",
+				"border-destructive/20 bg-destructive/5 flex flex-col",
 				variantStyles[variant],
 			)}
 		>
@@ -177,7 +177,7 @@ export function WidgetCard({
 			return (
 				<Card
 					className={cn(
-						"flex h-full flex-col",
+						"flex flex-col",
 						variantStyles[variant],
 						className,
 					)}
@@ -207,7 +207,7 @@ export function WidgetCard({
 	return (
 		<Card
 			className={cn(
-				"qa-widget-card flex h-full flex-col",
+				"qa-widget-card flex flex-col",
 				variantStyles[variant],
 				className,
 			)}

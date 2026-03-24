@@ -536,4 +536,7 @@ export default {
 	"collectionSearch.placeholder": "Hledat záznamy...",
 	"collectionSearch.noResults": "Nenalezeny žádné odpovídající záznamy",
 	"collectionSearch.searching": "Hledání...",
+
+	// Audit
+	"audit.section.activity": "Aktivita",
 } as const;

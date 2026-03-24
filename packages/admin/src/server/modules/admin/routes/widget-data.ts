@@ -67,7 +67,7 @@ export const fetchWidgetData = route()
 		// Access dashboard config from the app's internal state
 		const stored = tryGetContext();
 		const appState = (stored?.app as any)?.state || {};
-		const dashboard = appState.dashboard;
+		const dashboard = appState.config?.admin?.dashboard ?? appState.dashboard;
 
 		if (!dashboard?.items) {
 			throw ApiError.internal("No dashboard configured");

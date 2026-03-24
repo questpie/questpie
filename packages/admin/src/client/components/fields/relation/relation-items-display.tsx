@@ -153,7 +153,7 @@ export function RelationItemsDisplay({
 	// Empty state - only show when not loading and no items
 	if (!isLoading && (!items || items.length === 0)) {
 		return (
-			<div className="rounded-lg border border-dashed p-4 text-center">
+			<div className="border border-dashed p-4 text-center">
 				<p className="text-muted-foreground text-sm">{resolvedEmptyMessage}</p>
 			</div>
 		);

@@ -214,29 +214,68 @@ avatar: f.upload({
 
 The admin renders drag-and-drop upload, image preview, file info, and remove button.
 
-## Live Preview
+## Live Preview (V2)
+
+Live Preview V2 uses a direct `postMessage` patch bus for instant same-tab feedback. Save/autosave is persistence only — NOT the live transport. Realtime (SSE/WebSocket) is reserved for detached or shared preview sessions.
+
+For full architecture details, see: `/docs/workspace/live-preview/architecture`
+
+### Server Config
 
 Add `.preview()` to a collection to enable split-screen editing:
 
 ```ts title="collections/pages.ts"
 export const pages = collection("pages")
-	.preview({
-		enabled: true,
-		position: "right",
-		defaultWidth: 50,
-		url: ({ record }) => {
-			const slug = record.slug as string;
-			return slug === "home" ? "/?preview=true" : `/${slug}?preview=true`;
-		},
-	})
 	.fields(({ f }) => ({
 		title: f.text({ required: true, localized: true }),
 		slug: f.text({ required: true }),
 		content: f.blocks({ localized: true }),
-	}));
+	}))
+	.preview({
+		url: ({ record }) => {
+			const slug = record.slug as string;
+			return slug === "home" ? "/?preview=true" : `/${slug}?preview=true`;
+		},
+		watch: ["title", "slug", "content"],
+		strategy: "hybrid", // "instant" | "server" | "hybrid"
+	});
 ```
 
-Frontend integration via `useCollectionPreview` hook from `@questpie/admin/client`.
+| Strategy    | Behavior                                                            |
+| ----------- | ------------------------------------------------------------------- |
+| `"instant"` | Patches applied locally only — fastest, no server round-trip        |
+| `"server"`  | Every change round-trips through server before preview updates      |
+| `"hybrid"`  | Local patches for instant response + server reconcile derived data  |
+
+### Frontend Integration
+
+Use `useQuestpiePreview` (replaces the old `useCollectionPreview`) with `<PreviewRoot>`, `<PreviewField>`, and `<PreviewBlock>` components:
+
+```tsx
+import { useQuestpiePreview, PreviewRoot, PreviewField } from "@questpie/admin/client";
+
+function PagePreview({ initialData }) {
+	const router = useRouter();
+	const { data } = useQuestpiePreview({
+		initialData,
+		reconcile: () => router.invalidate(),
+	});
+
+	return (
+		<PreviewRoot>
+			<h1><PreviewField path="title">{data.title}</PreviewField></h1>
+		</PreviewRoot>
+	);
+}
+```
+
+### Key Principles
+
+- Same-tab preview = direct `postMessage` patch bus (NOT save-driven reload)
+- Save/autosave = persistence only
+- Realtime = extension for detached/shared preview only
+- Each message carries `sessionId`, `seq`, `timestamp`, `protocolVersion`
+- Preview wrappers must prevent accidental navigation in the iframe
 
 ## History & Versions
 

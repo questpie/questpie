@@ -312,7 +312,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 				{/* Error overlay */}
 				{tokenError && (
 					<div className="bg-muted absolute inset-0 z-10 flex items-center justify-center">
-						<div className="bg-destructive/10 border-destructive text-destructive rounded-md border px-4 py-3 text-sm">
+						<div className="bg-destructive/10 border-destructive text-destructive border px-4 py-3 text-sm">
 							<p className="font-medium">{t("preview.previewError")}</p>
 							<p>{tokenError}</p>
 						</div>
@@ -321,7 +321,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 
 				{/* Refreshing indicator */}
 				{isRefreshing && !isLoading && (
-					<div className="bg-background absolute top-4 right-4 z-10 flex items-center gap-2 rounded-md border px-3 py-2 shadow-md">
+					<div className="bg-background absolute top-4 right-4 z-10 flex items-center gap-2 border px-3 py-2 shadow-md">
 						<Icon
 							icon="ph:spinner"
 							className="text-muted-foreground h-4 w-4 animate-spin"
@@ -377,7 +377,7 @@ function _PreviewToggleButton({
 			type="button"
 			onClick={onToggle}
 			className={cn(
-				"inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm",
+				"inline-flex items-center gap-2 px-3 py-1.5 text-sm",
 				"border transition-colors",
 				isPreviewVisible
 					? "border-primary bg-primary/10 text-primary"

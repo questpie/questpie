@@ -500,3 +500,47 @@ bunx questpie generate
 bunx questpie push
 bun dev
 ```
+
+---
+
+## 12. Live Preview (Optional)
+
+Add split-screen live preview to any collection with `.preview()`. The default same-tab flow uses a direct `postMessage` patch bus for instant feedback — no save-driven reloads.
+
+### Add Preview to a Collection
+
+```ts
+// src/questpie/server/collections/pages.ts
+import { collection } from "#questpie";
+
+export default collection("pages")
+	.fields(({ f }) => ({
+		title: f.text({ required: true }),
+		slug: f.text({ required: true }),
+		content: f.blocks(),
+	}))
+	.preview({
+		url: ({ record }) => `/${record.slug}?preview=true`,
+		watch: ["title", "slug", "content"],
+		strategy: "hybrid",
+	});
+```
+
+### Add Preview Support to the Frontend Page
+
+```tsx
+import { useQuestpiePreview, PreviewRoot, PreviewField } from "@questpie/admin/client";
+
+function PageView({ initialData }) {
+	const router = useRouter();
+	const { data } = useQuestpiePreview({ initialData, reconcile: () => router.invalidate() });
+
+	return (
+		<PreviewRoot>
+			<h1><PreviewField path="title">{data.title}</PreviewField></h1>
+		</PreviewRoot>
+	);
+}
+```
+
+The `"hybrid"` strategy is recommended as the default — it applies field patches instantly via `postMessage` while reconciling derived data (slugs, relations) through the server.

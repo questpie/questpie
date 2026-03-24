@@ -286,7 +286,7 @@ export function MediaPickerDialog({
 
 				<div className="flex flex-1 flex-col gap-4 overflow-hidden px-6 pb-6">
 					{!resolvedCollection && (
-						<div className="border-warning/40 bg-warning/5 text-warning rounded-lg border p-3 text-sm">
+						<div className="border-warning/40 bg-warning/5 text-warning border p-3 text-sm">
 							{availableUploadCollections.length > 1
 								? `Multiple upload collections are available (${availableUploadCollections.join(", ")}). Pass the collection prop to choose one.`
 								: "No upload collection is configured for media library."}
@@ -354,7 +354,7 @@ export function MediaPickerDialog({
 							{previewAsset ? (
 								<AssetPreview asset={previewAsset} variant="card" />
 							) : (
-								<div className="text-muted-foreground flex items-center justify-center rounded-lg border border-dashed p-6 text-xs">
+								<div className="text-muted-foreground flex items-center justify-center border border-dashed p-6 text-xs">
 									Select an asset to preview
 								</div>
 							)}
@@ -365,7 +365,7 @@ export function MediaPickerDialog({
 						{previewAsset ? (
 							<AssetPreview asset={previewAsset} variant="compact" />
 						) : (
-							<div className="text-muted-foreground flex items-center justify-center rounded-lg border border-dashed p-4 text-xs">
+							<div className="text-muted-foreground flex items-center justify-center border border-dashed p-4 text-xs">
 								Select an asset to preview
 							</div>
 						)}

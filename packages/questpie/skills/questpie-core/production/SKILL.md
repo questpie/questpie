@@ -447,6 +447,20 @@ queue: {
 }
 ```
 
+## Realtime and Live Preview
+
+The realtime adapter (`pgNotifyAdapter` or `redisStreamsAdapter`) is relevant for **detached or shared preview sessions** — when the preview runs in a separate browser tab, or multiple collaborators view the same preview.
+
+For the default **same-tab preview**, realtime is NOT involved. Same-tab preview uses a direct `postMessage` patch bus between the editor and the iframe — no server transport needed.
+
+| Preview mode              | Transport        | Requires realtime adapter? |
+| ------------------------- | ---------------- | -------------------------- |
+| Same-tab (default)        | `postMessage`    | No                         |
+| Detached tab              | SSE / realtime   | Yes                        |
+| Shared / multi-user       | SSE / realtime   | Yes                        |
+
+If your app only uses same-tab preview (the default), you do not need to configure a realtime adapter for preview purposes. Configure it when you need detached preview, multi-user collaboration, or other realtime features (live notifications, presence, etc.).
+
 ### MEDIUM: Missing APP_URL environment variable
 
 Auth callbacks, email links, and storage URLs all depend on `APP_URL`. Without it, OAuth redirects break and email links point to `localhost`.

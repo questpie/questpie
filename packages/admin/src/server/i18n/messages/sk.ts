@@ -745,6 +745,7 @@ export default {
 	"audit.collection.label": "Audit log",
 	"audit.collection.description":
 		"Prehľad všetkých zaznamenaných zmien a aktivity používateľov",
+	"audit.section.activity": "Aktivita",
 	"audit.sections.event": "Detail udalosti",
 	"audit.sections.user": "Používateľ",
 	"audit.sections.changes": "Zmeny",

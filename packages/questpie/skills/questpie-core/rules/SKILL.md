@@ -311,3 +311,18 @@ To reject an operation, throw an error:
 
 5. **HIGH: Wrong context usage in access rules.**
    Use the destructured `session` parameter from `AppContext`, not a standalone import. Access functions receive `({ session, db, collections })`.
+
+## Access Control for Preview Sessions
+
+Live preview sessions use token-based authentication. When a preview iframe loads, it receives a short-lived preview token that authorizes read access to the collection being previewed.
+
+### Key Points
+
+- Preview tokens are scoped to a specific collection and record — they do not grant broad access.
+- Preview does **not** bypass access rules. The token resolves to a session with the same permissions as the user who initiated the preview.
+- Access rules (`.access()`) still apply to all data fetched during preview, including prefetched relations and block data.
+- Row-level access (AccessWhere) filters are enforced even in preview context — a user cannot preview records they cannot read.
+
+### System Access and Preview
+
+Do not use `accessMode: "system"` to serve preview data. Preview requests should go through normal session-based access, with the preview token resolving to the editor's session. This ensures previewed content respects the same visibility rules as the final published page.

@@ -1,0 +1,347 @@
+---
+title: Migration Guide (V1 to V2)
+description: Step-by-step migration from refresh-based live preview to the patch-based Preview V2 protocol.
+---
+
+This guide covers migrating from the current live preview system (V1) to Preview V2. The migration is designed to be incremental -- you can run both protocols side by side during the transition.
+
+## V1 vs V2 at a Glance
+
+| Aspect | V1 (Current) | V2 (Target) |
+| --- | --- | --- |
+| Update flow | `edit -> save/autosave -> invalidate -> reload iframe` | `edit -> postMessage patch -> apply in frame` |
+| Latency | 500ms-2s (network roundtrip + render) | < 50ms (local patch apply) |
+| Frontend hook | `useCollectionPreview({ onRefresh })` | `useQuestpiePreview({ initialData, reconcile })` |
+| Protocol messages | `PREVIEW_REFRESH`, `PREVIEW_READY`, `FIELD_CLICKED`, `BLOCK_CLICKED`, `FOCUS_FIELD`, `SELECT_BLOCK` | `INIT_SNAPSHOT`, `PATCH_BATCH`, `COMMIT`, `FULL_RESYNC`, `ACK`, `RENDER_ERROR`, `READY`, `ERROR` |
+| Security | HMAC-SHA256 token + `__draft_mode` cookie | Same token flow + origin validation + session binding |
+| Config | `.preview({ enabled, url, position, defaultWidth })` | `.preview({ url, watch, strategy })` |
+
+## Phase 1: Hardening (Non-Breaking)
+
+Phase 1 ships as a patch release. No API changes, no migration required. It fixes reliability issues in V1 that also serve as prerequisites for V2.
+
+### 1.1 Origin Validation
+
+V1 uses `"*"` as the target origin in all `postMessage` calls. Phase 1 locks this down:
+
+```ts
+// Before (V1)
+iframe.postMessage({ type: "questpie:focus", fieldPath: "title" }, "*");
+
+// After (Phase 1)
+iframe.postMessage(
+  { type: "questpie:focus", fieldPath: "title" },
+  previewOrigin // derived from the configured preview URL
+);
+```
+
+On the frame side, all message handlers validate `event.origin` against the admin origin:
+
+```ts
+window.addEventListener("message", (event) => {
+  if (event.origin !== expectedAdminOrigin) return;
+  // handle message
+});
+```
+
+No action required from your code. The admin and frontend SDK handle this automatically.
+
+### 1.2 Navigation Prevention
+
+The preview iframe currently allows full navigation (link clicks, form submits). Phase 1 adds a navigation guard that intercepts clicks on `<a>` tags and `<form>` submits inside the iframe, preventing the preview from leaving the configured URL scope.
+
+### 1.3 Relation and Block Focus Fixes
+
+- Relation fields now resolve nested paths correctly (`author.name` focuses the relation field, not a top-level `name` field)
+- Block focus accounts for nested blocks (blocks inside blocks)
+- `BLOCK_CLICKED` messages include the full block path, not just the leaf block ID
+
+## Phase 2: Same-Tab Patch Preview
+
+Phase 2 replaces the refresh-based update loop with direct patches over `postMessage`. This is a **breaking change** to the frontend hook API.
+
+### 2.1 New Frontend Hook
+
+Replace `useCollectionPreview` with `useQuestpiePreview`:
+
+```tsx title="Before (V1)"
+import { useCollectionPreview } from "@questpie/admin/client";
+
+function PageComponent({ initialData }) {
+  const { data, isPreviewMode, handleFieldClick, handleBlockClick } =
+    useCollectionPreview({
+      initialData,
+      onRefresh: () => router.invalidate(),
+    });
+
+  return (
+    <h1
+      data-preview-field="title"
+      onClick={() => handleFieldClick("title")}
+    >
+      {data.title}
+    </h1>
+  );
+}
+```
+
+```tsx title="After (V2)"
+import { useQuestpiePreview } from "@questpie/admin/client";
+
+function PageComponent({ initialData }) {
+  const { data, isPreviewMode, handleFieldClick, handleBlockClick } =
+    useQuestpiePreview({
+      initialData,
+    });
+
+  return (
+    <PreviewField path="title" onClick={() => handleFieldClick("title")}>
+      <h1>{data.title}</h1>
+    </PreviewField>
+  );
+}
+```
+
+Key differences:
+
+- **No `onRefresh` callback.** The hook applies patches directly to local state. No router invalidation needed.
+- **`<PreviewField>` component.** Wraps elements that correspond to a field. Handles highlight state and click-to-focus automatically.
+- **`data` is reactive.** Patches update `data` in place (via structural sharing). Your component re-renders only for the fields that changed.
+
+### 2.2 New Components
+
+```tsx
+import {
+  PreviewRoot,
+  PreviewField,
+  PreviewBlock,
+} from "@questpie/admin/client";
+
+function PageComponent({ initialData }) {
+  const preview = useQuestpiePreview({ initialData });
+
+  return (
+    <PreviewRoot preview={preview}>
+      <PreviewField path="title">
+        <h1>{preview.data.title}</h1>
+      </PreviewField>
+
+      <PreviewField path="content">
+        {preview.data.content.map((block) => (
+          <PreviewBlock key={block.id} id={block.id}>
+            <BlockRenderer block={block} />
+          </PreviewBlock>
+        ))}
+      </PreviewField>
+    </PreviewRoot>
+  );
+}
+```
+
+- `<PreviewRoot>` -- Sets up the message listener context. Required as an ancestor of all preview components.
+- `<PreviewField path>` -- Binds to a field path. Renders a highlight ring when focused from the admin. Sends `FIELD_CLICKED` on click.
+- `<PreviewBlock id>` -- Binds to a block ID. Renders a highlight ring when selected from the admin. Sends `BLOCK_CLICKED` on click.
+
+### 2.3 Server-Side Config
+
+```ts title="Before (V1)"
+export const pages = collection("pages").preview({
+  enabled: true,
+  url: ({ draft }) => `/${draft.slug}?preview=true`,
+  position: "right",
+  defaultWidth: 50,
+});
+```
+
+```ts title="After (V2)"
+export const pages = collection("pages").preview({
+  url: ({ draft }) => `/${draft.slug}`,
+  strategy: "hybrid",
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `url` | `(ctx) => string` | -- | Preview URL builder. No longer needs `?preview=true` query param (the token flow handles draft mode). |
+| `strategy` | `"instant" \| "server" \| "hybrid"` | `"hybrid"` | `instant`: patches only. `server`: V1 refresh behavior. `hybrid`: patches + server reconcile for derived fields. Recommended default. |
+| `watch` | `string[]` | `[]` | Field paths that require server reconcile (e.g., computed slugs, relations). Only relevant for `"hybrid"` strategy. |
+
+The `enabled`, `position`, and `defaultWidth` options move to admin UI preferences (per-user, not per-collection).
+
+## Phase 3: Hybrid Reconcile
+
+Some fields cannot be previewed with client-side patches alone. Computed fields, relation expansions, and URL rewrites depend on server logic. The `"hybrid"` strategy handles this.
+
+### 3.1 How It Works
+
+1. User edits a field
+2. If the field is in the `watch` list, the admin sends the patch to the server **and** to the iframe simultaneously
+3. The iframe applies the patch immediately (optimistic update)
+4. The server returns the reconciled document (with computed fields resolved)
+5. The admin sends a `COMMIT` message with the authoritative server data
+6. The iframe replaces its local state with the server version
+
+### 3.2 Configuring Watch Fields
+
+```ts
+export const pages = collection("pages").preview({
+  url: ({ record }) => `/${record.slug}`,
+  strategy: "hybrid",
+  watch: ["slug", "author", "seo.canonicalUrl"],
+});
+```
+
+Only list fields that produce derived data on the server. Every watched field adds a server roundtrip on change.
+
+### 3.3 Reconcile Callback
+
+On `COMMIT`, the hook automatically replaces the local draft with the authoritative server data from the COMMIT message. You can provide a `reconcile` callback for side effects (e.g., refetching route-specific data):
+
+```tsx
+const preview = useQuestpiePreview({
+  initialData,
+  reconcile: async () => {
+    // Re-run the loader to pick up server-computed fields
+    await router.invalidate();
+  },
+});
+```
+
+If no `reconcile` is provided, the hook simply replaces local state with the COMMIT data. The callback is for additional side effects, not for controlling the merge.
+
+## Phased Rollout Strategy
+
+You can run V1 and V2 side by side. The protocol version is negotiated per session.
+
+### Running Both Protocols
+
+1. **Deploy the updated admin** with V2 support
+2. **Keep your existing V1 frontend code** -- it continues to work because the admin detects which protocol the frame supports
+3. **Migrate one collection at a time** by switching its strategy from `"server"` to `"instant"` or `"hybrid"`
+4. **Update the frontend hook** for that collection from `useCollectionPreview` to `useQuestpiePreview`
+
+### Version Negotiation
+
+When the iframe sends `READY`, it includes a `protocolVersion` field:
+
+```ts
+// V1 frame (existing code, no protocolVersion field)
+window.parent.postMessage({ type: "questpie:preview:ready" }, "*");
+
+// V2 frame
+window.parent.postMessage(
+  { type: "READY", protocolVersion: 2, sessionId },
+  adminOrigin
+);
+```
+
+If the admin receives a `READY` without `protocolVersion`, it falls back to V1 behavior (`PREVIEW_REFRESH` on save). If it receives `protocolVersion: 2`, it uses the patch protocol.
+
+## Breaking Changes
+
+### Removed
+
+- `onRefresh` option in the frontend hook. The V2 hook applies patches directly.
+- `PREVIEW_REFRESH` message type. Replaced by `PATCH_BATCH` and `COMMIT`.
+- `PREVIEW_READY` message type. Replaced by `READY`.
+- `?preview=true` query parameter convention. Draft mode is handled entirely by the token/cookie flow.
+
+### Renamed
+
+| V1 | V2 |
+| --- | --- |
+| `useCollectionPreview` | `useQuestpiePreview` |
+| `FIELD_CLICKED` | `FIELD_CLICKED` (unchanged) |
+| `BLOCK_CLICKED` | `BLOCK_CLICKED` (unchanged) |
+| `FOCUS_FIELD` | `FOCUS_FIELD` (unchanged) |
+| `SELECT_BLOCK` | `SELECT_BLOCK` (unchanged) |
+
+### Changed
+
+- `data` returned by the hook is now updated via patches, not via full refetch. If you were reading `data` outside React state (e.g., in event handlers), make sure you are reading the latest ref.
+- The `.preview()` config on collections has a new shape. The old options (`enabled`, `position`, `defaultWidth`) are deprecated and ignored in V2.
+
+## Risks and Fallback
+
+### Rolling Back to V1
+
+Set `strategy: "server"` on any collection to revert to V1 refresh behavior:
+
+```ts
+export const pages = collection("pages").preview({
+  url: ({ draft }) => `/${draft.slug}?preview=true`,
+  strategy: "server",
+});
+```
+
+The `"server"` strategy uses the exact same `PREVIEW_REFRESH` flow as V1. Your existing `useCollectionPreview` hook will continue to work.
+
+### Known Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| Patch ordering issues (out-of-order delivery) | Sequence numbers + gap detection trigger `FULL_RESYNC`. See [Protocol](/docs/workspace/live-preview/protocol). |
+| Complex field types (blocks, relations) produce invalid patches | `watch` fields fall back to server reconcile. Block patches use structural IDs, not array indices. |
+| Large documents cause slow patch application | Backpressure mechanism throttles patch rate. Frame can request `FULL_RESYNC` if it falls behind. |
+| Third-party frontend frameworks with opaque state | `reconcile` callback gives you full control over merge logic. |
+
+## Concrete Migration Steps
+
+### Minimum Viable Migration (Single Collection)
+
+1. **Update the collection config:**
+
+```ts
+// Before
+.preview({ enabled: true, url: ..., position: "right", defaultWidth: 50 })
+
+// After
+.preview({ url: ..., strategy: "hybrid" })
+```
+
+2. **Update the frontend page:**
+
+```tsx
+// Before
+import { useCollectionPreview } from "@questpie/admin/client";
+
+const { data } = useCollectionPreview({
+  initialData,
+  onRefresh: () => router.invalidate(),
+});
+
+// After
+import { useQuestpiePreview, PreviewRoot, PreviewField } from "@questpie/admin/client";
+
+const preview = useQuestpiePreview({ initialData });
+
+return (
+  <PreviewRoot preview={preview}>
+    <PreviewField path="title">
+      <h1>{preview.data.title}</h1>
+    </PreviewField>
+  </PreviewRoot>
+);
+```
+
+3. **Test the preview.** Open the collection form, click the preview icon, and edit a field. The change should appear in the iframe within 50ms, without a page refresh.
+
+4. **If something breaks,** switch back to `strategy: "server"` and revert the frontend hook. No data is lost.
+
+### Full Migration Checklist
+
+- [ ] Update admin package to version with V2 support
+- [ ] Audit all `.preview()` configs -- list collections and their field types
+- [ ] Identify collections with computed/relation fields -- these need `strategy: "hybrid"` with `watch`
+- [ ] Migrate collections with `strategy: "hybrid"` (default) and explicit `watch` lists for fields that need server reconcile
+- [ ] For simple collections with no derived data, optionally use `strategy: "instant"` to skip server reconcile
+- [ ] Replace all `useCollectionPreview` calls with `useQuestpiePreview`
+- [ ] Replace raw `postMessage` calls with `<PreviewField>` and `<PreviewBlock>` components
+- [ ] Remove `?preview=true` query parameters from preview URL builders
+- [ ] Run preview E2E tests against all migrated collections
+- [ ] Remove V1 frontend code once all collections are migrated
+
+## Related Pages
+
+- [Protocol & Reliability](/docs/workspace/live-preview/protocol) -- Message contract, sequencing, and error recovery
+- [Live Preview Overview](/docs/workspace/live-preview) -- General preview setup and configuration

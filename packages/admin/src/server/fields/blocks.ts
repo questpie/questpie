@@ -19,12 +19,15 @@ import {
 	field,
 	fieldType,
 	type FieldTypeDefinition,
+	getContext,
 	isNotNull,
 	isNull,
 	jsonb,
 	sql,
 } from "questpie";
 import { z } from "zod";
+
+import { processBlocksDocument } from "../block/prefetch.js";
 
 // ============================================================================
 // Blocks Data Schema
@@ -228,6 +231,22 @@ function createBlocksState() {
 			writeOnly: state.output === false ? true : undefined,
 			meta: state.extensions?.admin as any,
 		}),
+		hooks: {
+			afterRead: async (value: unknown) => {
+				if (!value || typeof value !== "object") return value;
+				const doc = value as BlocksDocument;
+				if (!doc._tree || !doc._values) return value;
+				try {
+					const { app, db, locale } = getContext();
+					const blockDefs = (app as any).state?.blocks;
+					if (!blockDefs || Object.keys(blockDefs).length === 0) return value;
+					return await processBlocksDocument(doc, blockDefs, { app, db, locale });
+				} catch {
+					// getContext() fails outside request scope — return as-is
+					return value;
+				}
+			},
+		},
 		notNull: false,
 		hasDefault: false,
 		localized: false,

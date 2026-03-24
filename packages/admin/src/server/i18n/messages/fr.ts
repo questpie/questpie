@@ -549,4 +549,7 @@ export default {
 	"collectionSearch.placeholder": "Rechercher enregistrements...",
 	"collectionSearch.noResults": "Aucun enregistrement correspondant trouvé",
 	"collectionSearch.searching": "Recherche en cours...",
+
+	// Audit
+	"audit.section.activity": "Activité",
 } as const;

@@ -89,7 +89,7 @@ function ChartTooltip({
 	if (!active || !payload?.length) return null;
 
 	return (
-		<div className="border-border bg-background rounded-md border px-3 py-2 text-xs shadow-md">
+		<div className="border-border bg-background border px-3 py-2 text-xs shadow-md">
 			<p className="text-foreground font-medium">{label}</p>
 			{payload.map((entry) => (
 				<p key={String(entry.name)} className="text-muted-foreground">
@@ -193,7 +193,7 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 
 	// Empty state content
 	const emptyContent = (
-		<div className="text-muted-foreground flex h-48 items-center justify-center">
+		<div className="text-muted-foreground flex h-24 items-center justify-center">
 			<p className="text-sm">No data available</p>
 		</div>
 	);

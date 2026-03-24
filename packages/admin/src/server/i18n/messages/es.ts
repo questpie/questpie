@@ -546,4 +546,7 @@ export default {
 	"collectionSearch.placeholder": "Buscar registros...",
 	"collectionSearch.noResults": "No se encontraron registros coincidentes",
 	"collectionSearch.searching": "Buscando...",
+
+	// Audit
+	"audit.section.activity": "Actividad",
 } as const;

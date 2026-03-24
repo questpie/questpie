@@ -32,6 +32,7 @@ const config = defineConfig({
 	},
 	resolve: {
 		tsconfigPaths: true,
+		dedupe: ["drizzle-orm"],
 	},
 	build: {
 		rollupOptions: {

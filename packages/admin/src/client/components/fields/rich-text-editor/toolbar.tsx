@@ -166,7 +166,7 @@ export function RichTextToolbar({
 			{features.heading && (
 				<ToolbarGroup>
 					<select
-						className="border-border bg-input h-6 rounded-sm border px-2 text-xs"
+						className="border-input bg-transparent h-6 border px-2 text-xs"
 						value={headingValue}
 						onChange={(event) => onHeadingChange(event.target.value)}
 						disabled={!isEditable}

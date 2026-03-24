@@ -76,21 +76,22 @@ export default adminConfig({
 			},
 		],
 	},
-	dashboard: {
-		sections: [{ id: "activity", label: { key: "audit.section.activity" } }],
-		items: [
-			{
-				sectionId: "activity",
-				id: "audit-recent-activity",
-				type: "timeline",
-				label: { key: "audit.widget.recentActivity.title" },
-				maxItems: 10,
-				showTimestamps: true,
-				timestampFormat: "relative",
-				emptyMessage: { key: "audit.widget.recentActivity.empty" },
-				span: 2,
-				loader: createAuditTimelineLoader(10),
-			},
-		],
-	},
 });
+
+/**
+ * Audit timeline dashboard widget factory.
+ *
+ * Use in your `adminConfig({ dashboard: { items: [...] } })`:
+ * ```ts
+ * import { createAuditTimelineWidget } from "@questpie/admin/server";
+ *
+ * adminConfig({
+ *   dashboard: {
+ *     items: [
+ *       createAuditTimelineWidget({ sectionId: "activity", span: 2 }),
+ *     ],
+ *   },
+ * });
+ * ```
+ */
+export { createAuditTimelineLoader };

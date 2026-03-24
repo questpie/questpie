@@ -546,4 +546,7 @@ export default {
 	"collectionSearch.placeholder": "Datensätze durchsuchen...",
 	"collectionSearch.noResults": "Keine passenden Datensätze gefunden",
 	"collectionSearch.searching": "Suche läuft...",
+
+	// Audit
+	"audit.section.activity": "Aktivität",
 } as const;

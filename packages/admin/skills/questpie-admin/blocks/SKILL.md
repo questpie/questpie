@@ -272,3 +272,34 @@ function PageRenderer({ page }) {
 5. **MEDIUM: Forgetting `.prefetch()` for upload fields** — without prefetch, `values.backgroundImage` is just an ID string. Add `{ with: { backgroundImage: true } }` to get the full asset record with `url`.
 
 6. **LOW: Missing `category` in `.admin()`** — blocks without a category won't be grouped in the block picker, making it harder to find them.
+
+## Blocks in Live Preview
+
+When a collection has `.preview()` configured, blocks participate in the live preview patch bus.
+
+### PreviewBlock Wrapper
+
+Use `<PreviewBlock>` in your frontend to mark block regions for live preview focus and patch targeting:
+
+```tsx
+import { PreviewBlock } from "@questpie/admin/client";
+
+function PageRenderer({ blocks, previewData }) {
+	return blocks.map((block) => {
+		const Renderer = renderers[block.type];
+		return (
+			<PreviewBlock key={block.id} id={block.id}>
+				<Renderer values={block.values} data={block.data} />
+			</PreviewBlock>
+		);
+	});
+}
+```
+
+When the editor focuses a block, `<PreviewBlock>` highlights it in the preview. Patches target individual blocks by ID for granular updates.
+
+### Block Prefetch and Server Reconcile
+
+In `"hybrid"` preview strategy, blocks with functional `.prefetch()` trigger a server reconcile when their field values change. For example, a "featured posts" block with a `limit` field will re-run its prefetch handler on the server to fetch updated data, while simple field changes (title, subtitle) apply instantly via the local patch bus.
+
+Blocks with declarative prefetch (`{ with: { image: true } }`) resolve relations during reconcile — the preview shows the image URL immediately after the server round-trip completes, not just the asset ID.

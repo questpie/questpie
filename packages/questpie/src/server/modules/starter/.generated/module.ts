@@ -20,6 +20,7 @@ import _msg_en from "../messages/en";
 
 // ── Singles ────────────────────────────────────────────────
 import _appConfig from "../config/app";
+import _authConfig from "../config/auth";
 import _fields from "../fields";
 
 // ════════════════════════════════════════════════════════════
@@ -67,6 +68,7 @@ const _module = {
 	seeds: [] as const,
 	config: {
 		app: _appConfig,
+		auth: _authConfig,
 	},
 	fields: _fields,
 };

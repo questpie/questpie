@@ -293,7 +293,7 @@ function VersionsList({
 							version.versionId ??
 							`${version.versionNumber ?? "unknown"}-${index}`
 						}
-						className="rounded-md border p-3"
+						className="border p-3"
 					>
 						<div className="flex items-start justify-between gap-3">
 							<div className="min-w-0">

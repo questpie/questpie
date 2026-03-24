@@ -402,3 +402,41 @@ export const logs = collection("logs")
 4. **MEDIUM: Missing `sectionId` on sidebar items** — every item must reference an existing section ID.
 
 5. **LOW: Not setting `defaultSort`** — records appear in database insertion order which is usually not what users expect.
+
+## Form Views and Live Preview
+
+Form views connect to the Live Preview V2 system when the collection has `.preview()` configured. The form editor becomes the source of `postMessage` patches — every field change emits a patch through the bus, giving the preview iframe instant updates.
+
+### Enabling Preview on a Collection
+
+Add `.preview()` to the collection definition:
+
+```ts
+export const pages = collection("pages")
+	.fields(({ f }) => ({
+		title: f.text({ required: true, localized: true }),
+		slug: f.text({ required: true }),
+		content: f.blocks({ localized: true }),
+	}))
+	.preview({
+		url: ({ record }) => `/${record.slug}?preview=true`,
+		watch: ["title", "slug", "content"],
+		strategy: "hybrid",
+	});
+```
+
+### Preview Strategy Options
+
+| Strategy    | Use case                                                              |
+| ----------- | --------------------------------------------------------------------- |
+| `"instant"` | Simple pages with no derived fields — fastest, pure client patches    |
+| `"server"`  | Complex forms where every change needs server validation/computation  |
+| `"hybrid"`  | Default recommendation — instant local patches + server reconcile for slugs, relations, computed fields |
+
+### How It Works
+
+1. The form view detects `.preview()` config and opens a split-screen layout
+2. Field edits emit patches via `postMessage` to the preview iframe
+3. The preview page receives patches through `useQuestpiePreview` and updates in place
+4. Save/autosave persists to the database but is NOT the live transport
+5. In `"hybrid"` mode, derived data (slugs, expanded relations) reconciles via server round-trip

@@ -90,8 +90,8 @@ interface DashboardGridProps {
 // ============================================================================
 
 /**
- * Grid column classes for different column counts
- * Uses container queries (@container) for responsive behavior
+ * Grid column classes for different column counts.
+ * Uses CSS grid with auto rows — each widget takes its natural height.
  */
 const gridClasses: Record<number, string> = {
 	1: "grid-cols-1",
@@ -104,9 +104,7 @@ const gridClasses: Record<number, string> = {
 };
 
 /**
- * Span classes for widget column spanning
- * - span:1 widgets can be 2x2 on @xs (half width each)
- * - span:2+ widgets are full width on mobile/tablet, then expand at larger breakpoints
+ * Span classes for widget column spanning.
  */
 const spanClasses: Record<number, string> = {
 	1: "col-span-1",
@@ -137,14 +135,9 @@ function getGridClass(columns: number): string {
 function getSpanClass(span: number | undefined): string {
 	if (!span || span <= 1) return "col-span-1";
 	if (spanClasses[span]) return spanClasses[span];
-
-	// Generate responsive classes for spans not in the map (7-11)
-	// Progressive collapse: full span at lg+, 3 at md, 2 at xs, 1 on mobile
 	if (span >= 7 && span <= 11) {
 		return `col-span-1 @xs:col-span-2 @md:col-span-3 @lg:col-span-${span}`;
 	}
-
-	// Fallback for any other value
 	return `col-span-${Math.min(span, 12)}`;
 }
 
@@ -344,7 +337,7 @@ function LayoutItemRenderer({
 				? ({ ...item, realtime: dashboardRealtime } as AnyWidgetConfig)
 				: item;
 		return (
-			<div className={cn("h-full min-h-0", spanClass, item.className)}>
+			<div className={cn(spanClass, item.className)}>
 				<DashboardWidget
 					config={widgetConfig}
 					basePath={basePath}
@@ -427,7 +420,7 @@ function SectionRenderer({
 		<div
 			className={cn(
 				"@container",
-				layout === "grid" && "grid items-stretch gap-4",
+				layout === "grid" && "grid items-start gap-4",
 				layout === "grid" && getGridClass(columns),
 				layout === "stack" && "flex flex-col gap-4",
 			)}
@@ -603,7 +596,7 @@ function TabContentRenderer({
 	return (
 		<div
 			className={cn(
-				"@container grid items-stretch gap-4",
+				"@container grid items-start gap-4",
 				getGridClass(columns),
 			)}
 		>
@@ -722,7 +715,7 @@ export function DashboardGrid({
 
 			<div
 				className={cn(
-					"qa-dashboard__grid grid items-stretch gap-4",
+					"qa-dashboard__grid grid items-start gap-4",
 					getGridClass(columns),
 				)}
 			>

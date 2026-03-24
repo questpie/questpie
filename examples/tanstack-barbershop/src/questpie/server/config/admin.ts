@@ -122,7 +122,6 @@ export default adminConfig({
 		sections: [
 			{
 				id: "today",
-				label: { en: "Today", sk: "Dnes" },
 				layout: "grid",
 				columns: 4,
 			},

@@ -732,6 +732,7 @@ export default {
 	"audit.collection.label": "Audit Log",
 	"audit.collection.description":
 		"Browse all recorded changes and user activity",
+	"audit.section.activity": "Activity",
 	"audit.sections.event": "Event Details",
 	"audit.sections.user": "User",
 	"audit.sections.changes": "Changes",

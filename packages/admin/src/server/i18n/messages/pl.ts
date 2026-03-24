@@ -537,4 +537,7 @@ export default {
 	"collectionSearch.placeholder": "Szukaj rekordów...",
 	"collectionSearch.noResults": "Nie znaleziono pasujących rekordów",
 	"collectionSearch.searching": "Wyszukiwanie...",
+
+	// Audit
+	"audit.section.activity": "Aktywność",
 } as const;

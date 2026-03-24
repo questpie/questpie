@@ -69,7 +69,7 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
 	return (
 		<div data-slot="command-input-wrapper" className="p-1 pb-0">
-			<InputGroup className="bg-input h-8!">
+			<InputGroup className="h-8!">
 				<CommandPrimitive.Input
 					data-slot="command-input"
 					className={cn(
@@ -184,7 +184,7 @@ function CommandShortcut({
 		<span
 			data-slot="command-shortcut"
 			className={cn(
-				"text-muted-foreground group-data-selected/command-item:text-foreground ml-auto text-[0.625rem] tracking-widest",
+				"text-muted-foreground group-data-selected/command-item:text-foreground ml-auto font-mono text-[0.625rem] tracking-widest",
 				className,
 			)}
 			{...props}
