@@ -17,6 +17,8 @@ import {
 	type DefaultFieldState,
 	type Field,
 	field,
+	fieldType,
+	type FieldTypeDefinition,
 	isNotNull,
 	isNull,
 	jsonb,
@@ -191,10 +193,14 @@ export type BlocksFieldState = DefaultFieldState & {
  * sections: f.blocks().required()
  * ```
  */
-export function blocks(): Field<BlocksFieldState> {
-	return field<BlocksFieldState>({
-		type: "blocks",
-		columnFactory: (name) => jsonb(name) as any,
+/**
+ * Blocks field runtime state factory.
+ * Shared between the legacy `blocks()` function and the new `blocksFieldType`.
+ */
+function createBlocksState() {
+	return {
+		type: "blocks" as const,
+		columnFactory: (name: string) => jsonb(name) as any,
 		schemaFactory: () => {
 			const blockNodeSchema: z.ZodType<BlockNode> = z.lazy(() =>
 				z.object({
@@ -212,7 +218,7 @@ export function blocks(): Field<BlocksFieldState> {
 			jsonbCast: null,
 			column: getBlocksOperators().column,
 		} as any,
-		metadataFactory: (state) => ({
+		metadataFactory: (state: any) => ({
 			type: "blocks" as const,
 			label: state.label,
 			description: state.description,
@@ -229,5 +235,19 @@ export function blocks(): Field<BlocksFieldState> {
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	};
 }
+
+export function blocks(): Field<BlocksFieldState> {
+	return field<BlocksFieldState>(createBlocksState());
+}
+
+/**
+ * Blocks field type definition (v3 API).
+ *
+ * Use this with the `fieldType()` discovery system instead of the
+ * legacy `blocks()` factory function.
+ */
+export const blocksFieldType: FieldTypeDefinition<"blocks", []> = fieldType("blocks", {
+	create: createBlocksState as any,
+});

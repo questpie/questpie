@@ -35,14 +35,14 @@ export type {
 	BlockValues,
 } from "./blocks.js";
 // Export field factories
-export { type BlocksFieldState, blocks } from "./blocks.js";
+export { type BlocksFieldState, blocks, blocksFieldType } from "./blocks.js";
 export type {
 	RichTextFeature,
 	RichTextFieldMeta,
 	TipTapDocument,
 	TipTapNode,
 } from "./rich-text.js";
-export { type RichTextFieldState, richText } from "./rich-text.js";
+export { type RichTextFieldState, richText, richTextFieldType } from "./rich-text.js";
 
 // Import V2 factories for adminFields record
 import { blocks } from "./blocks.js";
