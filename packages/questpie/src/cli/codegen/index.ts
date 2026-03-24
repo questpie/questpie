@@ -838,7 +838,7 @@ export async function runAllTargets(
  * stripping the .ts extension.
  */
 function computeRelativeImport(fromDir: string, toFile: string): string {
-	let rel = relative(fromDir, toFile);
+	let rel = relative(fromDir, toFile).replaceAll("\\", "/");
 	// Remove .ts extension
 	rel = rel.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "");
 	if (!rel.startsWith(".")) {
