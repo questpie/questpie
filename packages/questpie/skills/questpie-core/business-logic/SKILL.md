@@ -542,8 +542,8 @@ export default email({
 2. **HIGH: Not using `export default` on route/job/service/email files.**
    Codegen discovery requires `export default`. Named exports are not discovered.
 
-3. **MEDIUM: Accessing `app.api` without context.**
-   For server-side calls to the collection API, you must create a context first: `const ctx = await app.createContext({ accessMode: "system" })`. Then pass it: `app.api.collections.posts.find({}, ctx)`.
+3. **MEDIUM: Accessing `app.collections`/`app.globals` without context.**
+   For server-side calls to the collection API, you must create a context first: `const ctx = await app.createContext({ accessMode: "system" })`. Then pass it: `app.collections.posts.find({}, ctx)`.
 
 4. **MEDIUM: Defining job handlers without queue configuration.**
    Jobs require a queue adapter in production config. Without it, `queue.jobName.publish()` calls will fail at runtime. Configure via `runtimeConfig({ queue: { adapter: pgBossAdapter(...) } })`.

@@ -148,8 +148,8 @@ export function extractAppServices(
 		logger: app.logger,
 		search: app.search,
 		realtime: app.realtime,
-		collections: app.api?.collections,
-		globals: app.api?.globals,
+		collections: app.collections,
+		globals: app.globals,
 		t: app.t,
 	};
 

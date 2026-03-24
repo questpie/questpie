@@ -34,14 +34,14 @@ export default route()
 
 ### 2. App Instance (scripts, seeds, external)
 
-Outside handlers, use `app.api.collections.*` and pass an explicit context as the second argument:
+Outside handlers, use `app.collections.*` and pass an explicit context as the second argument:
 
 ```ts
 import { app } from "#questpie";
 
 const ctx = await app.createContext({ accessMode: "system", locale: "en" });
 
-const result = await app.api.collections.posts.find(
+const result = await app.collections.posts.find(
 	{ where: { status: "published" }, limit: 10 },
 	ctx,
 );
@@ -164,8 +164,8 @@ const updated = await globals.siteSettings.update({
 Via app instance:
 
 ```ts
-const settings = await app.api.globals.siteSettings.get({}, ctx);
-await app.api.globals.siteSettings.update(
+const settings = await app.globals.siteSettings.get({}, ctx);
+await app.globals.siteSettings.update(
 	{ data: { siteName: "New Name" } },
 	ctx,
 );
@@ -300,17 +300,17 @@ const assets = await client.collections.assets.uploadMany(files, {
 
 ## Common Mistakes
 
-### CRITICAL: Missing context in app.api calls
+### CRITICAL: Missing context in app.collections calls
 
-When using `app.api.collections.*` outside handlers, you MUST pass a context. Without it, the call has no session, no locale, and no access mode.
+When using `app.collections.*` outside handlers, you MUST pass a context. Without it, the call has no session, no locale, and no access mode.
 
 ```ts
 // WRONG -- no context
-const posts = await app.api.collections.posts.find({});
+const posts = await app.collections.posts.find({});
 
 // CORRECT -- explicit context
 const ctx = await app.createContext({ accessMode: "system" });
-const posts = await app.api.collections.posts.find({}, ctx);
+const posts = await app.collections.posts.find({}, ctx);
 ```
 
 Inside handlers (route handlers, hooks, jobs), context is injected automatically -- use `collections.*` directly.
@@ -354,7 +354,7 @@ export default route()
 	.get()
 	.handler(async ({ app }) => {
 		const ctx = await app.createContext({ accessMode: "system" });
-		return app.api.collections.posts.find({}, ctx); // bypasses access control!
+		return app.collections.posts.find({}, ctx); // bypasses access control!
 	});
 
 // CORRECT -- use injected collections (respects session access rules)

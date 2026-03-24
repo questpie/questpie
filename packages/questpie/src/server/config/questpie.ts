@@ -155,7 +155,27 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 	public migrations: QuestpieMigrationsAPI<TConfig>;
 	public seeds: QuestpieSeedsAPI<TConfig>;
-	public api: QuestpieApi<TConfig>;
+	private _api: QuestpieApi<TConfig>;
+
+	/**
+	 * Access collections CRUD operations.
+	 * @example
+	 * await app.collections.users.create({ email: '...' }, context)
+	 * await app.collections.posts.find({ where: { status: 'published' } })
+	 */
+	public get collections(): QuestpieApi<TConfig>["collections"] {
+		return this._api.collections;
+	}
+
+	/**
+	 * Access globals CRUD operations.
+	 * @example
+	 * await app.globals.settings.get()
+	 * await app.globals.settings.update({ siteName: 'New name' })
+	 */
+	public get globals(): QuestpieApi<TConfig>["globals"] {
+		return this._api.globals;
+	}
 
 	/** Direct access to collection CRUD APIs (shorthand for app.collections) */
 	get collections(): QuestpieApi<TConfig>["collections"] {
@@ -321,7 +341,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		this.migrations = new QuestpieMigrationsAPI(this);
 		this.seeds = new QuestpieSeedsAPI(this);
-		this.api = new QuestpieAPI(this) as QuestpieApi<TConfig>;
+		this._api = new QuestpieAPI(this) as QuestpieApi<TConfig>;
 		this._resolveServiceDefs();
 
 		// In development, track this instance in globalThis so that HMR module

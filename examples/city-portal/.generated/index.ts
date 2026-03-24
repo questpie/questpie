@@ -73,8 +73,8 @@ declare module "questpie" {
 		realtime: _AppInternal["realtime"];
 
 		// Entity APIs
-		collections: _AppInternal["api"]["collections"];
-		globals: _AppInternal["api"]["globals"];
+		collections: _AppInternal["collections"];
+		globals: _AppInternal["globals"];
 
 		// Request-scoped
 		session: Awaited<
@@ -95,7 +95,6 @@ declare module "questpie" {
  */
 export interface App extends AppContext {
 	readonly config: QuestpieConfig;
-	readonly api: _AppInternal["api"];
 	readonly auth: _AppInternal["auth"];
 	waitForInit(): Promise<void>;
 	destroy(): Promise<void>;

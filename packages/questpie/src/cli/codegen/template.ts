@@ -542,7 +542,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		const servicesCat = discovered.categories.get("services");
 		const hasServices = !!servicesCat;
 
-		// Skip App['api']['collections'] class getter indirection — map directly over AppCollections
+		// Skip App['collections'] class getter indirection — map directly over AppCollections
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
@@ -576,7 +576,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("");
 		lines.push("\t\t\t// Entity APIs");
 		lines.push("\t\t\tcollections: _CollectionsAPI;");
-		lines.push("\t\t\tglobals: App['api']['globals'];");
+		lines.push("\t\t\tglobals: App['globals'];");
 		lines.push("\t\t\ttables: App['tables'];");
 		lines.push("");
 		lines.push("\t\t\t// Request-scoped");
