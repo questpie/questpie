@@ -93,7 +93,7 @@ async function scanDir(
 				!IGNORE_FILES.has(name) &&
 				!isPrivateFile(name)
 			) {
-				results.push(relative(base, fullPath));
+				results.push(relative(base, fullPath).replaceAll("\\", "/"));
 			}
 		}
 	}
@@ -646,6 +646,7 @@ async function processFile(
 	relPath: string,
 	category: DiscoveryCategory,
 ): Promise<DiscoveredFile[]> {
+	relPath = relPath.replaceAll("\\", "/");
 	const absolutePath = join(rootDir, relPath);
 	const importPath = relativeImport(outDir, absolutePath);
 
@@ -729,7 +730,7 @@ async function processFile(
  * Strips the .ts extension and ensures it starts with "../".
  */
 function relativeImport(fromDir: string, toFile: string): string {
-	let rel = relative(fromDir, toFile);
+	let rel = relative(fromDir, toFile).replaceAll("\\", "/");
 	// Remove extension
 	rel = rel.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "");
 	// Ensure it starts with ./ or ../

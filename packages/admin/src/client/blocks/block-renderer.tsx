@@ -72,7 +72,8 @@ export function BlockRenderer({
 	 * Recursively render a block node.
 	 */
 	function renderBlock(node: BlockNode): React.ReactNode {
-		const renderFn = renderers[node.type];
+		const key = node.type.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+		const renderFn = renderers[key];
 
 		if (!renderFn) {
 			if (process.env.NODE_ENV !== "production") {
