@@ -44,7 +44,7 @@ my-app/
 ├── src/
 │   ├── questpie/
 │   │   ├── server/
-│   │   │   ├── questpie.config.ts # runtimeConfig({ plugins: [adminPlugin()], ... })
+│   │   │   ├── questpie.config.ts # runtimeConfig({ db, app, ... })
 │   │   │   ├── modules.ts          # [adminModule, ...] as const
 │   │   │   ├── auth.ts            # Auth config (satisfies AuthConfig)
 │   │   │   ├── .generated/        # Codegen output (app + App type)

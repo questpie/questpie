@@ -16,13 +16,11 @@ import {
 } from "questpie";
 
 import { messages } from "@/questpie/server/i18n";
-import { adminPlugin } from "@questpie/admin/plugin";
 
 const DATABASE_URL =
 	process.env.DATABASE_URL || "postgres://localhost/barbershop";
 
 export default runtimeConfig({
-	plugins: [adminPlugin()],
 	app: {
 		url: process.env.APP_URL || "http://localhost:3000",
 	},
