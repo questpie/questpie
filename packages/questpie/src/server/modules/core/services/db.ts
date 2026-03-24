@@ -1,16 +1,14 @@
-/**
- * Database singleton service definition.
- * Replaces direct drizzle initialization in Questpie constructor.
- */
 import { service } from "#questpie/server/services/define-service.js";
 
-export default service()
-	.lifecycle("singleton")
-	.namespace(null)
-	.create((ctx: any) => {
-		// DB is initialized by the constructor before services.
-		// Return the existing instance.
-		const app = ctx.app;
-		if (app?.db) return app.db;
-		throw new Error("[Core] Database not initialized");
-	});
+/**
+ * Database service — exposes the Drizzle client from the app instance.
+ *
+ * Namespace: null (top-level in AppContext as `db`).
+ * Already bootstrapped by the Questpie constructor; this definition
+ * registers it formally so it flows through the module service system.
+ */
+export default service({
+	namespace: null,
+	lifecycle: "singleton",
+	create: ({ db }) => db,
+});

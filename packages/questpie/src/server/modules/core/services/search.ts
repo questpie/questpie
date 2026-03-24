@@ -1,13 +1,12 @@
-/**
- * Search singleton service definition.
- */
 import { service } from "#questpie/server/services/define-service.js";
 
-export default service()
-	.lifecycle("singleton")
-	.namespace(null)
-	.create((ctx: any) => {
-		const app = ctx.app;
-		if (app?.search) return app.search;
-		throw new Error("[Core] Search not initialized");
-	});
+/**
+ * Search service — exposes the SearchService instance.
+ *
+ * Namespace: null (top-level in AppContext as `search`).
+ */
+export default service({
+	namespace: null,
+	lifecycle: "singleton",
+	create: ({ search }) => search,
+});

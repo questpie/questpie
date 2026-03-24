@@ -1,14 +1,12 @@
-/**
- * Globals API singleton service definition.
- * Provides typed CRUD access to all registered globals.
- */
 import { service } from "#questpie/server/services/define-service.js";
 
-export default service()
-	.lifecycle("singleton")
-	.namespace(null)
-	.create((ctx: any) => {
-		const app = ctx.app;
-		if (app?.globals) return app.globals;
-		return {};
-	});
+/**
+ * Globals API service — exposes the typed CRUD API for globals.
+ *
+ * Namespace: null (top-level in AppContext as `globals`).
+ */
+export default service({
+	namespace: null,
+	lifecycle: "singleton",
+	create: ({ globals }) => globals,
+});

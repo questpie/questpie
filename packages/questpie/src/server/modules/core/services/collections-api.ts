@@ -1,14 +1,12 @@
-/**
- * Collections API singleton service definition.
- * Provides typed CRUD access to all registered collections.
- */
 import { service } from "#questpie/server/services/define-service.js";
 
-export default service()
-	.lifecycle("singleton")
-	.namespace(null)
-	.create((ctx: any) => {
-		const app = ctx.app;
-		if (app?.collections) return app.collections;
-		return {};
-	});
+/**
+ * Collections API service — exposes the typed CRUD API for collections.
+ *
+ * Namespace: null (top-level in AppContext as `collections`).
+ */
+export default service({
+	namespace: null,
+	lifecycle: "singleton",
+	create: ({ collections }) => collections,
+});

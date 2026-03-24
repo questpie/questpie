@@ -1,14 +1,12 @@
-/**
- * I18n translator singleton service definition.
- */
 import { service } from "#questpie/server/services/define-service.js";
 
-export default service()
-	.lifecycle("singleton")
-	.namespace(null)
-	.create((ctx: any) => {
-		const app = ctx.app;
-		if (app?.t) return app.t;
-		// Fallback: identity function
-		return (key: string) => key;
-	});
+/**
+ * i18n translator service — exposes the `t()` function.
+ *
+ * Namespace: null (top-level in AppContext as `t`).
+ */
+export default service({
+	namespace: null,
+	lifecycle: "singleton",
+	create: ({ t }) => t,
+});

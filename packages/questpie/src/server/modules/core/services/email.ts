@@ -1,14 +1,12 @@
-/**
- * Email singleton service definition.
- * Replaces direct MailerService initialization in Questpie constructor.
- */
 import { service } from "#questpie/server/services/define-service.js";
 
-export default service()
-	.lifecycle("singleton")
-	.namespace(null)
-	.create((ctx: any) => {
-		const app = ctx.app;
-		if (app?.email) return app.email;
-		throw new Error("[Core] Email service not initialized");
-	});
+/**
+ * Email service — exposes the MailerService instance.
+ *
+ * Namespace: null (top-level in AppContext as `email`).
+ */
+export default service({
+	namespace: null,
+	lifecycle: "singleton",
+	create: ({ email }) => email,
+});
