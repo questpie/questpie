@@ -30,7 +30,7 @@ import type {
 	SidebarContribution,
 	SidebarItemDef,
 } from "../../../augmentation.js";
-import { introspectBlocks } from "../../../block/introspection.js";
+import { introspectBlocks } from "../block/introspection.js";
 import {
 	resolveDashboardCallback,
 	resolveSidebarCallback,
