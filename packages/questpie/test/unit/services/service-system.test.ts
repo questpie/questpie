@@ -191,14 +191,48 @@ describe("service system", () => {
 		}
 	});
 
-	it("throws when request-scoped service uses custom namespace", async () => {
+	it("app object exposes only singleton infrastructure, not user services", async () => {
+		const myService = service()
+			.lifecycle("singleton")
+			.namespace("services")
+			.create(() => ({ ok: true }));
+
+		const { app, cleanup } = await createServiceApp({ myService });
+		try {
+			// The app object itself should NOT have user services as properties.
+			// User services are only accessible via ctx (extractAppServices).
+			expect(app).not.toHaveProperty("services");
+			expect(app).not.toHaveProperty("myService");
+
+			// Infrastructure singletons ARE on app
+			expect(app).toHaveProperty("db");
+			expect(app).toHaveProperty("queue");
+			expect(app).toHaveProperty("email");
+			expect(app).toHaveProperty("storage");
+			expect(app).toHaveProperty("kv");
+			expect(app).toHaveProperty("logger");
+			expect(app).toHaveProperty("search");
+			expect(app).toHaveProperty("realtime");
+			expect(app).toHaveProperty("collections");
+			expect(app).toHaveProperty("globals");
+
+			// Services appear on ctx, not app
+			const ctx = extractAppServices(app);
+			expect(ctx).toHaveProperty("services");
+			expect((ctx.services as any).myService).toEqual({ ok: true });
+		} finally {
+			await cleanup();
+		}
+	});
+
+	it("throws when request-scoped service uses non-default namespace", async () => {
 		const invalid = service()
 			.lifecycle("request")
 			.namespace("analytics")
 			.create(() => ({}));
 
 		await expect(createServiceApp({ invalid })).rejects.toThrow(
-			"only singleton services may use custom namespaces",
+			"only singleton services may use non-default namespaces",
 		);
 	});
 

@@ -585,8 +585,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			email: this.email,
 			auth: this.auth,
 			app: this,
-			collections: this.api?.collections,
-			globals: this.api?.globals,
+			collections: this.collections,
+			globals: this.globals,
 			t: this.t,
 		} as Record<string, unknown>;
 
