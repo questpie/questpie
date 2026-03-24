@@ -87,7 +87,7 @@ describe("global many-to-many relations", () => {
 
 		// Manually create junction records (since global CRUD doesn't support many-to-many mutations yet)
 		const settingsId = (settings as any).id;
-		await (app as any).api.collections.candle_settings_images.create(
+		await (app as any).collections.candle_settings_images.create(
 			{
 				id: crypto.randomUUID(),
 				candleSettings: settingsId, // FK column key is field name with unified API
@@ -96,7 +96,7 @@ describe("global many-to-many relations", () => {
 			},
 			ctx,
 		);
-		await (app as any).api.collections.candle_settings_images.create(
+		await (app as any).collections.candle_settings_images.create(
 			{
 				id: crypto.randomUUID(),
 				candleSettings: settingsId,
@@ -148,7 +148,7 @@ describe("global many-to-many relations", () => {
 		);
 
 		// Create junction record
-		await (app as any).api.collections.candle_settings_images.create(
+		await (app as any).collections.candle_settings_images.create(
 			{
 				id: crypto.randomUUID(),
 				candleSettings: (settings as any).id,
@@ -429,7 +429,7 @@ describe("global many-to-many relations", () => {
 			);
 
 			// Manually update junction with order
-			await (app as any).api.collections.candle_settings_images.update(
+			await (app as any).collections.candle_settings_images.update(
 				{
 					where: {
 						AND: [
@@ -445,7 +445,7 @@ describe("global many-to-many relations", () => {
 			// Verify extra field is preserved
 			const junctionRecords = await (
 				app as any
-			).api.collections.candle_settings_images.find(
+			).collections.candle_settings_images.find(
 				{ where: { candleSettings: (settings as any).id } },
 				ctx,
 			);

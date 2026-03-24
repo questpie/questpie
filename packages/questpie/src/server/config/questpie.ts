@@ -177,15 +177,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		return this._api.globals;
 	}
 
-	/** Direct access to collection CRUD APIs (shorthand for app.collections) */
-	get collections(): QuestpieApi<TConfig>["collections"] {
-		return this.api.collections;
-	}
-
-	/** Direct access to global CRUD APIs (shorthand for app.globals) */
-	get globals(): QuestpieApi<TConfig>["globals"] {
-		return this.api.globals;
-	}
 
 	public db: DrizzleClientFromQuestpieConfig<TConfig>;
 

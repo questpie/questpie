@@ -64,7 +64,7 @@ describe("audit routes", () => {
 			);
 
 			// Insert mock audit log entries
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "create",
 					resourceType: "collection",
@@ -75,7 +75,7 @@ describe("audit routes", () => {
 				},
 				ctx,
 			);
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "update",
 					resourceType: "collection",
@@ -137,7 +137,7 @@ describe("audit routes", () => {
 
 			// Insert 3 audit entries
 			for (let i = 1; i <= 3; i++) {
-				await (setup.app as any).api.collections.admin_audit_log.create(
+				await (setup.app as any).collections.admin_audit_log.create(
 					{
 						action: "update",
 						resourceType: "collection",
@@ -184,7 +184,7 @@ describe("audit routes", () => {
 			);
 
 			// Create audit entries for both posts
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "create",
 					resourceType: "collection",
@@ -194,7 +194,7 @@ describe("audit routes", () => {
 				},
 				ctx,
 			);
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "create",
 					resourceType: "collection",
@@ -227,7 +227,7 @@ describe("audit routes", () => {
 			await setup.app.globals.settings.update({ siteName: "My Site" }, ctx);
 
 			// Insert mock audit log entries for the global
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "update",
 					resourceType: "global",
@@ -286,7 +286,7 @@ describe("audit routes", () => {
 
 			// Insert 3 audit entries
 			for (let i = 1; i <= 3; i++) {
-				await (setup.app as any).api.collections.admin_audit_log.create(
+				await (setup.app as any).collections.admin_audit_log.create(
 					{
 						action: "update",
 						resourceType: "global",

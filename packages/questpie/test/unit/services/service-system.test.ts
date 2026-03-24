@@ -232,7 +232,7 @@ describe("service system", () => {
 			.create(() => ({}));
 
 		await expect(createServiceApp({ invalid })).rejects.toThrow(
-			"only singleton services may use non-default namespaces",
+			"only singleton services may use custom namespaces",
 		);
 	});
 

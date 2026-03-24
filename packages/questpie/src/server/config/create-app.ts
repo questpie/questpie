@@ -21,6 +21,7 @@ import {
 	mergeTranslationsConfig,
 } from "#questpie/server/i18n/translator.js";
 import { mergeAuthOptions } from "#questpie/server/integrated/auth/merge.js";
+import coreModule from "#questpie/server/modules/core/.generated/module.js";
 
 // ============================================================================
 // module() — identity function for type inference
@@ -593,8 +594,15 @@ async function createAppFromDefinition(
 	const hasRootEntities = Object.keys(rootEntities).some(
 		(k) => rootEntities[k] !== undefined,
 	);
+	// Auto-prepend coreModule so its hooks/jobs are always available.
+	// Dedup: if user already listed coreModule, keep theirs (last-write-wins).
+	const userModules = defModules ?? [];
+	const hasCoreAlready = userModules.some(
+		(m) => m.name === coreModule.name,
+	);
 	const allModules = [
-		...(defModules ?? []),
+		...(hasCoreAlready ? [] : [coreModule as unknown as ModuleDefinition]),
+		...userModules,
 		...(hasRootEntities
 			? [{ name: "__user", ...rootEntities } as ModuleDefinition]
 			: []),
