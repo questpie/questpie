@@ -187,7 +187,11 @@ export function extractAppServices(
 			}
 
 			if (namespace === null) {
-				result[name] = instance;
+				// Don't override already-set context values (db, session, locale, etc.)
+				// These are managed by createContext() / extractAppServices() directly.
+				if (!(name in result)) {
+					result[name] = instance;
+				}
 				continue;
 			}
 

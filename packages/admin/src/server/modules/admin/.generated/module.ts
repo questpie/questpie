@@ -115,6 +115,7 @@ const _module = {
 	migrations: [] as const,
 	seeds: [] as const,
 	blocks: {},
+	fieldTypes: {},
 	config: {
 		admin: _adminConfig,
 	},

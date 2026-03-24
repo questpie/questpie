@@ -487,7 +487,7 @@ export async function runCodegen(
 			"realtime",
 			"storage/",
 			"globals/",
-			"health",
+			// "health" removed — extracted to core module route (QUE-273)
 		];
 		for (const [routeKey] of routesMap) {
 			for (const reserved of RESERVED_PREFIXES) {

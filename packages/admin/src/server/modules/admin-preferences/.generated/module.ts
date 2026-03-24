@@ -39,6 +39,7 @@ const _module = {
 	views: {},
 	components: {},
 	blocks: {},
+	fieldTypes: {},
 };
 
 export type AdminPreferencesModule = typeof _module;
