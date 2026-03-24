@@ -4,9 +4,8 @@
     text { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 20px; letter-spacing: -0.05em; }
   </style>
   <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="square">
-    <path d="M10 2H2v20h8" />
-    <path d="M14 2h8v8" />
-    <rect x="13" y="13" width="10" height="10" fill="#B700FF" stroke="none" />
+    <path d="M22 10V2H2V22H10"/>
+    <path d="M23 13H13V23H23V13Z" fill="#B700FF" stroke="none"/>
   </g>
   <text x="36" y="18.5" fill="#ffffff">QUESTPIE</text>
 </svg>

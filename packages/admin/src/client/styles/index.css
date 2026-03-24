@@ -99,7 +99,7 @@
 	--accent-foreground: oklch(0.145 0 0);
 	--secondary: oklch(0.955 0 0);
 	--secondary-foreground: oklch(0.269 0 0);
-	--primary: oklch(0.598 0.302 310.7);
+	--primary: oklch(0.541 0.281 303.5);
 	--primary-foreground: oklch(1 0 0);
 	--destructive: oklch(0.637 0.237 25);
 	--destructive-foreground: oklch(1 0 0);
@@ -110,12 +110,12 @@
 	--info: oklch(0.6 0.16 240);
 	--info-foreground: oklch(1 0 0);
 	--border: oklch(0.922 0 0);
-	--ring: oklch(0.598 0.302 310.7);
+	--ring: oklch(0.541 0.281 303.5);
 	--radius: 0px;
 	--grid-opacity: 0.025;
 
 	/* Chart Colors */
-	--chart-1: oklch(0.598 0.302 310.7);
+	--chart-1: oklch(0.541 0.281 303.5);
 	--chart-2: oklch(0.7 0.2 155);
 	--chart-3: oklch(0.6 0.16 240);
 	--chart-4: oklch(0.7 0.16 65);
@@ -133,12 +133,12 @@
 	/* Sidebar */
 	--sidebar: oklch(0.975 0 0);
 	--sidebar-foreground: oklch(0.269 0 0);
-	--sidebar-primary: oklch(0.598 0.302 310.7);
+	--sidebar-primary: oklch(0.541 0.281 303.5);
 	--sidebar-primary-foreground: oklch(1 0 0);
 	--sidebar-accent: oklch(0.955 0 0);
 	--sidebar-accent-foreground: oklch(0.269 0 0);
 	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.598 0.302 310.7);
+	--sidebar-ring: oklch(0.541 0.281 303.5);
 }
 
 /* Dark theme (.dark class) */
@@ -159,7 +159,7 @@
 	--destructive-foreground: oklch(1 0 0);
 	--border: oklch(0.371 0 0);
 	--input: oklch(0.371 0 0);
-	--ring: oklch(0.598 0.302 310.7);
+	--ring: oklch(0.541 0.281 303.5);
 	--success: oklch(0.765 0.219 155);
 	--success-foreground: oklch(1 0 0);
 	--warning: oklch(0.793 0.155 82);
@@ -169,7 +169,7 @@
 	--grid-opacity: 0.06;
 
 	/* Chart Colors */
-	--chart-1: oklch(0.598 0.302 310.7);
+	--chart-1: oklch(0.541 0.281 303.5);
 	--chart-2: oklch(0.765 0.219 155);
 	--chart-3: oklch(0.77 0.119 222);
 	--chart-4: oklch(0.793 0.155 82);
@@ -178,12 +178,12 @@
 	/* Sidebar */
 	--sidebar: oklch(0.205 0 0);
 	--sidebar-foreground: oklch(0.922 0 0);
-	--sidebar-primary: oklch(0.598 0.302 310.7);
+	--sidebar-primary: oklch(0.541 0.281 303.5);
 	--sidebar-primary-foreground: oklch(1 0 0);
 	--sidebar-accent: oklch(0.269 0 0);
 	--sidebar-accent-foreground: oklch(0.922 0 0);
 	--sidebar-border: oklch(0.371 0 0);
-	--sidebar-ring: oklch(0.598 0.302 310.7);
+	--sidebar-ring: oklch(0.541 0.281 303.5);
 }
 
 @theme inline {
