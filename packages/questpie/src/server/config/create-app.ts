@@ -567,10 +567,18 @@ function extractRuntimeExtensions(
  * @see RFC-MODULE-ARCHITECTURE §9.1 (Root App — .generated/index.ts)
  */
 export async function createApp(
+	definition: { modules: ModuleDefinition[] },
+	runtime: RuntimeConfig,
+): Promise<Questpie<QuestpieConfig>>;
+export async function createApp(
 	definition: AppDefinition,
 	runtime: RuntimeConfig,
+): Promise<Questpie<QuestpieConfig>>;
+export async function createApp(
+	definition: AppDefinition | { modules: ModuleDefinition[] },
+	runtime: RuntimeConfig,
 ): Promise<Questpie<QuestpieConfig>> {
-	return createAppFromDefinition(definition, runtime);
+	return createAppFromDefinition(definition as AppDefinition, runtime);
 }
 
 // ============================================================================
