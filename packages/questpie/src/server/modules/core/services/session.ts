@@ -1,11 +1,10 @@
 /**
- * Session scoped service — resolves current user session per request scope.
+ * Session scoped service — resolves current user session per request.
  *
- * - With request: resolves from auth API via request headers
- * - Without request (job/script): returns null
+ * - With request: async resolves via auth API (returns Promise<Session | null>)
+ * - Without request (job/script): returns null (sync)
  *
- * This is the first scoped service with namespace: null — it appears
- * as `ctx.session` in handler contexts.
+ * Callers use `await ctx.session` when in HTTP scope.
  */
 import { service } from "#questpie/server/services/define-service.js";
 
@@ -13,12 +12,10 @@ export default service()
 	.lifecycle("request")
 	.namespace(null)
 	.create((ctx: any) => {
-		// In a request scope with auth, resolve session from headers
 		if (ctx.request && ctx.auth?.api?.getSession) {
-			// Note: this is sync — actual async resolution happens eagerly
-			// at createContext() time via RequestScope.set()
-			return null; // Placeholder — real resolution wired by HTTP adapter
+			return ctx.auth.api.getSession({ headers: ctx.request.headers }).then(
+				(result: any) => result ?? null,
+			).catch(() => null);
 		}
-		// Job/script scope: no session
 		return null;
 	});
