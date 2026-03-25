@@ -36,10 +36,10 @@ const _module = {
 	emails: {},
 	migrations: [] as const,
 	seeds: [] as const,
+	fieldTypes: {},
 	views: {},
 	components: {},
 	blocks: {},
-	fieldTypes: {},
 };
 
 export type AdminPreferencesModule = typeof _module;

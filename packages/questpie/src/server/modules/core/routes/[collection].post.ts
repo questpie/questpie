@@ -1,19 +1,16 @@
 /**
- * Collection findOne route.
+ * Collection create route.
  *
- * GET /[collection]/[id] — findOne
+ * POST /[collection] — create
  */
 
 import { createCollectionRoutes } from "#questpie/server/adapters/routes/collections.js";
 import { route } from "#questpie/server/routes/define-route.js";
 
 export default route()
-	.get()
+	.post()
 	.raw()
 	.handler(async ({ app, request, params }) => {
 		const routes = createCollectionRoutes(app);
-		return routes.findOne(request, {
-			collection: params.collection,
-			id: params.id,
-		});
+		return routes.create(request, { collection: params.collection });
 	});

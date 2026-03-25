@@ -478,33 +478,9 @@ export async function runCodegen(
 		}
 	}
 
-	// 2c. Check for reserved path collisions in route keys
-	const routesMap = discovered.categories.get("routes");
-	if (routesMap) {
-		const RESERVED_PREFIXES = [
-			"auth/",
-			"search",
-			"realtime",
-			"storage/",
-			"globals/",
-			// "health" removed — extracted to core module route (QUE-273)
-		];
-		for (const [routeKey] of routesMap) {
-			for (const reserved of RESERVED_PREFIXES) {
-				if (
-					routeKey === reserved ||
-					routeKey.startsWith(
-						reserved.endsWith("/") ? reserved : reserved + "/",
-					)
-				) {
-					throw new Error(
-						`[codegen] Route key "${routeKey}" collides with reserved path prefix "${reserved}". ` +
-							`Rename the route file to avoid conflicts with built-in HTTP handlers.`,
-					);
-				}
-			}
-		}
-	}
+	// Route collision check removed — all routes (auth, search, realtime, etc.)
+	// are now core module route definitions, not reserved HTTP adapter prefixes.
+	// The trie-based matcher handles priority: literal > param > wildcard.
 
 	// 3. Build codegen context for transforms
 	const extraImports: Array<{ name: string; path: string }> = [];

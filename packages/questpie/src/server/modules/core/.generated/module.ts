@@ -7,7 +7,37 @@ import _job_indexRecords from "../jobs/index-records";
 import _job_scheduledTransition from "../jobs/scheduled-transition";
 
 // ── Routes ────────────────────────────────────────────
+import _route_collection from "../routes/[collection]";
+import _route_collection_PATCH from "../routes/[collection].patch";
+import _route_collection_POST from "../routes/[collection].post";
+import _route_collection_id from "../routes/[collection]/[id]";
+import _route_collection_id_DELETE from "../routes/[collection]/[id].delete";
+import _route_collection_id_PATCH from "../routes/[collection]/[id].patch";
+import _route_collection_id_audit from "../routes/[collection]/[id]/audit";
+import _route_collection_id_restore from "../routes/[collection]/[id]/restore";
+import _route_collection_id_revert from "../routes/[collection]/[id]/revert";
+import _route_collection_id_transition from "../routes/[collection]/[id]/transition";
+import _route_collection_id_versions from "../routes/[collection]/[id]/versions";
+import _route_collection_count from "../routes/[collection]/count";
+import _route_collection_deleteMany from "../routes/[collection]/delete-many";
+import _route_collection_files_spread_key from "../routes/[collection]/files/[...key]";
+import _route_collection_meta from "../routes/[collection]/meta";
+import _route_collection_schema from "../routes/[collection]/schema";
+import _route_collection_upload from "../routes/[collection]/upload";
+import _route_auth_spread_path from "../routes/auth/[...path]";
+import _route_globals_name from "../routes/globals/[name]";
+import _route_globals_name_PATCH from "../routes/globals/[name].patch";
+import _route_globals_name_audit from "../routes/globals/[name]/audit";
+import _route_globals_name_meta from "../routes/globals/[name]/meta";
+import _route_globals_name_revert from "../routes/globals/[name]/revert";
+import _route_globals_name_schema from "../routes/globals/[name]/schema";
+import _route_globals_name_transition from "../routes/globals/[name]/transition";
+import _route_globals_name_versions from "../routes/globals/[name]/versions";
 import _route_health from "../routes/health";
+import _route_realtime from "../routes/realtime";
+import _route_search from "../routes/search";
+import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
+import _route_storage_files_spread_key from "../routes/storage/files/[...key]";
 
 // ── Services ────────────────────────────────────────────
 import _svc_auth from "../services/auth";
@@ -38,7 +68,37 @@ export interface CoreJobs {
 }
 
 export interface CoreRoutes {
+	"[collection]": typeof _route_collection;
+	"[collection]:PATCH": typeof _route_collection_PATCH;
+	"[collection]:POST": typeof _route_collection_POST;
+	"[collection]/[id]": typeof _route_collection_id;
+	"[collection]/[id]:DELETE": typeof _route_collection_id_DELETE;
+	"[collection]/[id]:PATCH": typeof _route_collection_id_PATCH;
+	"[collection]/[id]/audit": typeof _route_collection_id_audit;
+	"[collection]/[id]/restore": typeof _route_collection_id_restore;
+	"[collection]/[id]/revert": typeof _route_collection_id_revert;
+	"[collection]/[id]/transition": typeof _route_collection_id_transition;
+	"[collection]/[id]/versions": typeof _route_collection_id_versions;
+	"[collection]/count": typeof _route_collection_count;
+	"[collection]/deleteMany": typeof _route_collection_deleteMany;
+	"[collection]/files/[...key]": typeof _route_collection_files_spread_key;
+	"[collection]/meta": typeof _route_collection_meta;
+	"[collection]/schema": typeof _route_collection_schema;
+	"[collection]/upload": typeof _route_collection_upload;
+	"auth/[...path]": typeof _route_auth_spread_path;
+	"globals/[name]": typeof _route_globals_name;
+	"globals/[name]:PATCH": typeof _route_globals_name_PATCH;
+	"globals/[name]/audit": typeof _route_globals_name_audit;
+	"globals/[name]/meta": typeof _route_globals_name_meta;
+	"globals/[name]/revert": typeof _route_globals_name_revert;
+	"globals/[name]/schema": typeof _route_globals_name_schema;
+	"globals/[name]/transition": typeof _route_globals_name_transition;
+	"globals/[name]/versions": typeof _route_globals_name_versions;
 	health: typeof _route_health;
+	realtime: typeof _route_realtime;
+	search: typeof _route_search;
+	"search/reindex/[collection]": typeof _route_search_reindex_collection;
+	"storage/files/[...key]": typeof _route_storage_files_spread_key;
 }
 
 export interface CoreServices {
@@ -69,7 +129,37 @@ const _module = {
 		scheduledTransition: _job_scheduledTransition,
 	} as CoreJobs,
 	routes: {
+		"[collection]": _route_collection,
+		"[collection]:PATCH": _route_collection_PATCH,
+		"[collection]:POST": _route_collection_POST,
+		"[collection]/[id]": _route_collection_id,
+		"[collection]/[id]:DELETE": _route_collection_id_DELETE,
+		"[collection]/[id]:PATCH": _route_collection_id_PATCH,
+		"[collection]/[id]/audit": _route_collection_id_audit,
+		"[collection]/[id]/restore": _route_collection_id_restore,
+		"[collection]/[id]/revert": _route_collection_id_revert,
+		"[collection]/[id]/transition": _route_collection_id_transition,
+		"[collection]/[id]/versions": _route_collection_id_versions,
+		"[collection]/count": _route_collection_count,
+		"[collection]/deleteMany": _route_collection_deleteMany,
+		"[collection]/files/[...key]": _route_collection_files_spread_key,
+		"[collection]/meta": _route_collection_meta,
+		"[collection]/schema": _route_collection_schema,
+		"[collection]/upload": _route_collection_upload,
+		"auth/[...path]": _route_auth_spread_path,
+		"globals/[name]": _route_globals_name,
+		"globals/[name]:PATCH": _route_globals_name_PATCH,
+		"globals/[name]/audit": _route_globals_name_audit,
+		"globals/[name]/meta": _route_globals_name_meta,
+		"globals/[name]/revert": _route_globals_name_revert,
+		"globals/[name]/schema": _route_globals_name_schema,
+		"globals/[name]/transition": _route_globals_name_transition,
+		"globals/[name]/versions": _route_globals_name_versions,
 		health: _route_health,
+		realtime: _route_realtime,
+		search: _route_search,
+		"search/reindex/[collection]": _route_search_reindex_collection,
+		"storage/files/[...key]": _route_storage_files_spread_key,
 	} as CoreRoutes,
 	services: {
 		auth: _svc_auth,

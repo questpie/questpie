@@ -17,7 +17,9 @@ function resolveStorageCollection(app: any): {
 	collection?: string;
 	error?: string;
 } {
-	const configuredCollection = app.config?.storage?.collection;
+	// Check adapter config first (from createFetchHandler), then app config
+	const adapterCollection = (app as any)._adapterConfig?.storage?.collection;
+	const configuredCollection = adapterCollection || app.config?.storage?.collection;
 	if (configuredCollection) {
 		return { collection: configuredCollection };
 	}

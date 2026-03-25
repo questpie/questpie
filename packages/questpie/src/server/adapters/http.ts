@@ -1,31 +1,26 @@
 /**
- * HTTP Adapter
+ * HTTP Adapter — Thin Dispatcher
  *
- * Creates fetch handlers for the app HTTP API.
- * All custom routes are served at flat URLs (no /rpc/ or /routes/ prefixes).
+ * All routes (auth, search, realtime, storage, globals, collections, custom)
+ * are compiled into a single trie-based matcher at startup.
+ * Dispatch: parse URL → match → resolve context → execute → respond.
  *
+ * @see QUE-273 (route migration to core module)
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
-import { extractAppServices } from "../config/app-context.js";
 import type { Questpie } from "../config/questpie.js";
 import type { QuestpieConfig } from "../config/types.js";
 import { ApiError } from "../errors/index.js";
 import {
-	evaluateRouteAccess,
 	executeJsonRoute,
 	executeRawRoute,
 } from "../routes/execute.js";
 import { filePathToRoutePattern } from "../routes/file-path-convention.js";
-import {
-	type RouteMatch,
-	type RouteMatcher,
-	compileMatcher,
-} from "../routes/route-matcher.js";
-// RouteMatch is imported for type-level use (e.g., buildCompiledRouteMap return)
+import { compileMatcher, type RouteMatcher } from "../routes/route-matcher.js";
 import { isJsonRoute, type RouteDefinition } from "../routes/types.js";
 
-// Re-export types
+// Re-export types for backwards compatibility
 export type {
 	AdapterBaseContext,
 	AdapterConfig,
@@ -34,99 +29,32 @@ export type {
 	FetchHandler,
 	UploadFile,
 } from "./types.js";
-
-// Re-export utilities for backwards compatibility
 export { createAdapterContext } from "./utils/context.js";
 export { handleError } from "./utils/response.js";
 
-// Import types and utilities
-import {
-	createAuthRoute,
-	createCollectionRoutes,
-	createGlobalRoutes,
-	createRealtimeRoutes,
-	createSearchRoutes,
-	createStorageRoutes,
-} from "./routes/index.js";
-import type { AdapterConfig, AdapterContext, AdapterRoutes } from "./types.js";
+import type { AdapterConfig, AdapterContext } from "./types.js";
 import { resolveContext } from "./utils/context.js";
 import { handleError, normalizeBasePath } from "./utils/index.js";
 import { parseRouteBody } from "./utils/request.js";
 import { smartResponse } from "./utils/response.js";
 
 // ============================================================================
-// Reserved path prefixes — custom routes cannot use these
+// Route compilation
 // ============================================================================
 
-const RESERVED_PREFIXES = new Set([
-	"auth",
-	"search",
-	"realtime",
-	"storage",
-	"globals",
-]);
-
-// ============================================================================
-// Route lookup map (built once at startup)
-// ============================================================================
-
-type RouteMapEntry = Map<string, RouteDefinition>;
-
-/**
- * Build a lookup map from flat route keys to `Map<path, Map<method, RouteDefinition>>`.
- *
- * Route key formats:
- * - `"admin/stats"` → path = `admin/stats`, method from definition
- * - `"admin/stats:GET"` → path = `admin/stats`, method = `GET` (override)
- */
 /**
  * Convert camelCase key segments to kebab-case for URL paths.
- * e.g. "admin/getStats" → "admin/get-stats", "createBooking" → "create-booking"
  */
 function camelToKebab(str: string): string {
 	return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
-function buildRouteMap(
-	routes: Record<string, RouteDefinition> | undefined,
-): Map<string, RouteMapEntry> | null {
-	if (!routes || Object.keys(routes).length === 0) return null;
-
-	const map = new Map<string, RouteMapEntry>();
-
-	for (const [key, def] of Object.entries(routes)) {
-		let path: string;
-		let method: string;
-
-		const colonIdx = key.lastIndexOf(":");
-		if (colonIdx > 0) {
-			path = key.slice(0, colonIdx);
-			method = key.slice(colonIdx + 1).toUpperCase();
-		} else {
-			path = key;
-			method = def.method;
-		}
-
-		// Convert camelCase segments to kebab-case for URL paths
-		path = path.split("/").map(camelToKebab).join("/");
-
-		let methodMap = map.get(path);
-		if (!methodMap) {
-			methodMap = new Map();
-			map.set(path, methodMap);
-		}
-		methodMap.set(method, def);
-	}
-
-	return map;
-}
-
 /**
- * Build a compiled route matcher from route definitions.
+ * Compile all route definitions into a trie-based matcher.
  * Supports [param] and [...slug] file-path conventions.
- * Uses trie-based matcher with literal > param > wildcard priority.
+ * Groups multiple methods on the same path pattern.
  */
-function buildCompiledRouteMap(
+function compileRoutes(
 	routes: Record<string, RouteDefinition> | undefined,
 ): RouteMatcher<RouteDefinition> | null {
 	if (!routes || Object.keys(routes).length === 0) return null;
@@ -146,213 +74,46 @@ function buildCompiledRouteMap(
 			method = def.method;
 		}
 
-		// Convert camelCase → kebab-case, then file-path convention → route pattern
+		// camelCase → kebab-case, file-path convention → route pattern
 		path = path.split("/").map(camelToKebab).join("/");
 		const pattern = filePathToRoutePattern(path);
 
-		// Use 3-tuple: [pattern, method, handler] for method-grouped matching
 		entries.push([pattern, method, def]);
 	}
 
 	try {
 		return compileMatcher(entries);
-	} catch {
-		// Collision detected — fall back to flat map
+	} catch (err) {
+		console.error("[HTTP] Route compilation failed:", err);
 		return null;
 	}
 }
-
-// ============================================================================
-// Unified route dispatch
-// ============================================================================
-
-/**
- * Handle custom route dispatch for unified routes.
- * Routes are matched by path against the route map, then by HTTP method.
- *
- * URL: `/api/admin/stats` with GET → looks up path `admin/stats`, method `GET`
- *
- * Returns `null` if no route matches (allows fallback to collection CRUD).
- */
-async function handleRouteDispatch<
-	TConfig extends QuestpieConfig = QuestpieConfig,
->(
-	app: Questpie<TConfig>,
-	config: AdapterConfig<TConfig>,
-	routeMap: Map<string, RouteMapEntry>,
-	request: Request,
-	segments: string[],
-	context?: AdapterContext,
-): Promise<Response | null> {
-	// Try progressively longer paths: "a", "a/b", "a/b/c" etc.
-	const path = segments.join("/");
-	const methodMap = routeMap.get(path);
-	if (!methodMap) return null;
-
-	const def = methodMap.get(request.method);
-	if (!def) {
-		// Path exists but method doesn't match → 405
-		return new Response("Method Not Allowed", {
-			status: 405,
-			headers: { Allow: Array.from(methodMap.keys()).join(", ") },
-		});
-	}
-
-	// Resolve context
-	const resolved = await resolveContext(app, request, config, context);
-	const locale = resolved.appContext.locale ?? "en";
-
-	// Check access
-	const services = extractAppServices(app, {
-		db: resolved.appContext.db ?? app.db,
-		session: resolved.appContext.session,
-	});
-
-	const hasAccess = await evaluateRouteAccess(def.access, {
-		...services,
-		locale,
-		request,
-	});
-
-	if (!hasAccess) {
-		return handleError(
-			ApiError.forbidden({
-				operation: "read",
-				resource: "route",
-				reason: "Access denied",
-			}),
-			{ request, app, locale },
-		);
-	}
-
-	try {
-		if (isJsonRoute(def)) {
-			const body = await parseRouteBody(request);
-			if (body === null) {
-				return handleError(ApiError.badRequest("Invalid JSON body"), {
-					request,
-					app,
-					locale,
-				});
-			}
-			const result = await executeJsonRoute(
-				app,
-				def,
-				body,
-				resolved.appContext,
-			);
-			return smartResponse(result, request);
-		}
-
-		// Raw route
-		return await executeRawRoute(app, def, request, resolved.appContext);
-	} catch (error) {
-		return handleError(error, { request, app, locale });
-	}
-}
-
-// ============================================================================
-// Storage alias resolution
-// ============================================================================
-
-function resolveStorageAliasCollection(
-	app: Questpie<any>,
-	config: AdapterConfig,
-): { collection?: string; error?: string } {
-	const configuredCollection = config.storage?.collection;
-	if (
-		typeof configuredCollection === "string" &&
-		configuredCollection.trim().length > 0
-	) {
-		return { collection: configuredCollection.trim() };
-	}
-
-	const uploadCollections = Object.entries(app.getCollections())
-		.filter(([, collection]) => Boolean((collection as any)?.state?.upload))
-		.map(([name]) => name);
-
-	if (uploadCollections.length === 1) {
-		return { collection: uploadCollections[0] };
-	}
-
-	if (uploadCollections.length === 0) {
-		return {
-			error:
-				"No upload-enabled collection is registered for /storage/files alias route.",
-		};
-	}
-
-	return {
-		error:
-			`Multiple upload-enabled collections found (${uploadCollections.join(", ")}). ` +
-			"Set adapter config `storage.collection` to choose one for /storage/files.",
-	};
-}
-
-// ============================================================================
-// Adapter route creation
-// ============================================================================
-
-/**
- * Create all adapter routes
- */
-export const createAdapterRoutes = <
-	TConfig extends QuestpieConfig = QuestpieConfig,
->(
-	app: Questpie<TConfig>,
-	config: AdapterConfig<TConfig> = {},
-): AdapterRoutes => {
-	const authRoute = createAuthRoute(app);
-	const collectionRoutes = createCollectionRoutes(app, config);
-	const globalRoutes = createGlobalRoutes(app, config);
-	const storageRoutes = createStorageRoutes(app, config);
-	const realtimeRoutes = createRealtimeRoutes(app, config);
-	const searchRoutes = createSearchRoutes(app, config);
-
-	return {
-		auth: authRoute,
-		collectionUpload: storageRoutes.collectionUpload,
-		collectionServe: storageRoutes.collectionServe,
-		realtime: realtimeRoutes,
-		collections: collectionRoutes,
-		globals: globalRoutes,
-		search: searchRoutes,
-	};
-};
 
 // ============================================================================
 // Main fetch handler
 // ============================================================================
 
 /**
- * Create the main fetch handler with URL routing.
+ * Create the main fetch handler.
  *
- * Dispatch order:
- * 1. `/auth/*` → Better Auth
- * 2. `/search/*` → search
- * 3. `/realtime` → SSE
- * 4. `/storage/files/*` → file serving
- * 5. `/globals/:name/*` → global CRUD
- * 6. **Route map** → custom + module routes (incl. `/health`)
- * 7. `/:collection/*` → collection CRUD (fallback)
+ * All routes (built-in + custom) are dispatched through a single
+ * trie-based matcher. No hardcoded if/else chains.
  */
 export const createFetchHandler = (
 	app: unknown,
 	config: AdapterConfig = {},
 ) => {
 	const _app = app as Questpie<any>;
-	const routes = createAdapterRoutes(_app, config);
 	const basePath = normalizeBasePath(config.basePath ?? "/");
-	const storageAliasCollection = resolveStorageAliasCollection(_app, config);
 
-	// Build route map once at startup
-	const routeMap = buildRouteMap(
+	// Store adapter config on app so route handlers can access it
+	// (e.g., search.reindexAccess, storage.collection)
+	(_app as any)._adapterConfig = config;
+
+	// Compile ALL routes (core module + custom module routes) into one matcher
+	const matcher = compileRoutes(
 		_app.config.routes as Record<string, RouteDefinition> | undefined,
 	);
-
-	const errorResponse = (error: unknown, request: Request): Response => {
-		return handleError(error, { request, app: _app });
-	};
 
 	return async (
 		request: Request,
@@ -361,334 +122,95 @@ export const createFetchHandler = (
 		const url = new URL(request.url);
 		const pathname = url.pathname;
 
+		// Base path check
 		const matchesBase =
 			basePath === "/"
 				? true
 				: pathname === basePath || pathname.startsWith(`${basePath}/`);
-		if (!matchesBase) {
-			return null;
-		}
+		if (!matchesBase) return null;
 
 		const relativePath =
 			basePath === "/" ? pathname : pathname.slice(basePath.length);
 		let segments = relativePath.split("/").filter(Boolean);
 
-		if (segments.length === 0) {
-			return errorResponse(ApiError.notFound("Route"), request);
-		}
-
+		// Legacy /questpie/ prefix stripping
 		if (segments[0] === "questpie") {
 			segments = segments.slice(1);
 		}
 
 		if (segments.length === 0) {
-			return errorResponse(ApiError.notFound("Route"), request);
-		}
-
-		// 1. Auth routes
-		if (segments[0] === "auth") {
-			return routes.auth(request);
-		}
-
-		// 2. Search routes: POST /search, POST /search/reindex/:collection
-		if (segments[0] === "search") {
-			if (request.method === "POST") {
-				if (segments[1] === "reindex" && segments[2]) {
-					return routes.search.reindex(
-						request,
-						{ collection: segments[2] },
-						context,
-					);
-				}
-				return routes.search.search(request, {}, context);
-			}
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// 3. Realtime route
-		if (segments[0] === "realtime") {
-			return routes.realtime.subscribe(request, {}, context);
-		}
-
-		// 4. Storage file serving
-		if (segments[0] === "storage" && segments[1] === "files") {
-			const key = decodeURIComponent(segments.slice(2).join("/"));
-			if (!key) {
-				return errorResponse(
-					ApiError.badRequest("File key not specified"),
-					request,
-				);
-			}
-			if (request.method === "GET") {
-				if (!storageAliasCollection.collection) {
-					return errorResponse(
-						ApiError.badRequest(
-							storageAliasCollection.error ||
-								"Storage collection alias is not configured",
-						),
-						request,
-					);
-				}
-
-				return routes.collectionServe(
-					request,
-					{ collection: storageAliasCollection.collection, key },
-					context,
-				);
-			}
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// 5. Global routes
-		if (segments[0] === "globals") {
-			const globalName = segments[1];
-			const globalAction = segments[2];
-			if (!globalName) {
-				return errorResponse(
-					ApiError.badRequest("Global not specified"),
-					request,
-				);
-			}
-
-			if (globalAction === "schema") {
-				if (request.method === "GET") {
-					return routes.globals.schema(
-						request,
-						{ global: globalName },
-						context,
-					);
-				}
-				return errorResponse(
-					ApiError.badRequest("Method not allowed"),
-					request,
-				);
-			}
-
-			if (globalAction === "meta") {
-				if (request.method === "GET") {
-					return routes.globals.meta(request, { global: globalName }, context);
-				}
-				return errorResponse(
-					ApiError.badRequest("Method not allowed"),
-					request,
-				);
-			}
-
-			if (globalAction === "audit") {
-				if (request.method === "GET") {
-					return routes.globals.audit(request, { global: globalName }, context);
-				}
-				return errorResponse(
-					ApiError.badRequest("Method not allowed"),
-					request,
-				);
-			}
-
-			if (globalAction === "versions") {
-				if (request.method === "GET") {
-					return routes.globals.versions(
-						request,
-						{ global: globalName },
-						context,
-					);
-				}
-				return errorResponse(
-					ApiError.badRequest("Method not allowed"),
-					request,
-				);
-			}
-
-			if (globalAction === "revert") {
-				if (request.method === "POST") {
-					return routes.globals.revert(
-						request,
-						{ global: globalName },
-						context,
-					);
-				}
-				return errorResponse(
-					ApiError.badRequest("Method not allowed"),
-					request,
-				);
-			}
-
-			if (globalAction === "transition") {
-				if (request.method === "POST") {
-					return routes.globals.transition(
-						request,
-						{ global: globalName },
-						context,
-					);
-				}
-				return errorResponse(
-					ApiError.badRequest("Method not allowed"),
-					request,
-				);
-			}
-
-			if (request.method === "GET") {
-				return routes.globals.get(request, { global: globalName }, context);
-			}
-
-			if (request.method === "PATCH") {
-				return routes.globals.update(request, { global: globalName }, context);
-			}
-
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// 6. Route map — custom + module routes (incl. /health)
-		if (routeMap) {
-			const routeResponse = await handleRouteDispatch(
-				_app,
-				config,
-				routeMap,
+			return handleError(ApiError.notFound("Route"), {
 				request,
-				segments,
-				context,
-			);
-			if (routeResponse !== null) {
-				return routeResponse;
-			}
+				app: _app,
+			});
 		}
 
-		// 7. Collection routes (fallback)
-		const collection = segments[0];
-		const id = segments[1];
-		const action = segments[2];
+		// Match against compiled trie
+		if (matcher) {
+			const path = segments.join("/");
+			const match = matcher.match(path);
 
-		// Collection upload: POST /:collection/upload
-		if (id === "upload") {
-			if (request.method === "POST") {
-				return routes.collectionUpload(request, { collection }, context);
-			}
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
+			if (match) {
+				const def = match.methods.get(request.method);
 
-		// Collection file serving: GET /:collection/files/:key
-		if (id === "files" && segments[2]) {
-			const key = decodeURIComponent(segments.slice(2).join("/"));
-			if (request.method === "GET") {
-				return routes.collectionServe(request, { collection, key }, context);
-			}
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
+				if (!def) {
+					// Path matches but method doesn't → 405
+					return new Response("Method Not Allowed", {
+						status: 405,
+						headers: {
+							Allow: Array.from(match.methods.keys()).join(", "),
+						},
+					});
+				}
 
-		// Collection meta: GET /:collection/meta
-		if (id === "meta") {
-			if (request.method === "GET") {
-				return routes.collections.meta(request, { collection }, context);
-			}
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// Collection schema: GET /:collection/schema
-		if (id === "schema") {
-			if (request.method === "GET") {
-				return routes.collections.schema(request, { collection }, context);
-			}
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// Collection count: GET /:collection/count
-		if (id === "count") {
-			if (request.method === "GET") {
-				return routes.collections.count(request, { collection }, context);
-			}
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// Batch delete: POST /:collection/delete-many
-		if (id === "delete-many") {
-			if (request.method === "POST") {
-				return routes.collections.deleteMany(request, { collection }, context);
-			}
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// Collection list, create, and batch update
-		if (!id) {
-			if (request.method === "GET") {
-				return routes.collections.find(request, { collection }, context);
-			}
-
-			if (request.method === "POST") {
-				return routes.collections.create(request, { collection }, context);
-			}
-
-			if (request.method === "PATCH") {
-				return routes.collections.updateMany(request, { collection }, context);
-			}
-
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// Collection restore
-		if (action === "restore") {
-			if (request.method === "POST") {
-				return routes.collections.restore(request, { collection, id }, context);
-			}
-
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// Collection audit history
-		if (action === "audit") {
-			if (request.method === "GET") {
-				return routes.collections.audit(request, { collection, id }, context);
-			}
-
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// Collection versions history
-		if (action === "versions") {
-			if (request.method === "GET") {
-				return routes.collections.versions(
+				// Resolve session, locale, and create app context
+				const resolved = await resolveContext(
+					_app,
 					request,
-					{ collection, id },
+					config,
 					context,
 				);
+
+				try {
+					if (isJsonRoute(def)) {
+						const body = await parseRouteBody(request);
+						if (body === null) {
+							return handleError(
+								ApiError.badRequest("Invalid JSON body"),
+								{ request, app: _app },
+							);
+						}
+						const result = await executeJsonRoute(
+							_app,
+							def,
+							body,
+							resolved.appContext,
+						);
+						return smartResponse(result, request);
+					}
+
+					// Raw route — pass matched params through
+					return await executeRawRoute(
+						_app,
+						def,
+						request,
+						resolved.appContext,
+						match.params,
+					);
+				} catch (error) {
+					return handleError(error, {
+						request,
+						app: _app,
+						locale: resolved.appContext.locale,
+					});
+				}
 			}
-
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
 		}
 
-		// Collection version revert
-		if (action === "revert") {
-			if (request.method === "POST") {
-				return routes.collections.revert(request, { collection, id }, context);
-			}
-
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// Collection workflow transition
-		if (action === "transition") {
-			if (request.method === "POST") {
-				return routes.collections.transition(
-					request,
-					{ collection, id },
-					context,
-				);
-			}
-
-			return errorResponse(ApiError.badRequest("Method not allowed"), request);
-		}
-
-		// Collection single record operations
-		if (request.method === "GET") {
-			return routes.collections.findOne(request, { collection, id }, context);
-		}
-
-		if (request.method === "PATCH") {
-			return routes.collections.update(request, { collection, id }, context);
-		}
-
-		if (request.method === "DELETE") {
-			return routes.collections.remove(request, { collection, id }, context);
-		}
-
-		return errorResponse(ApiError.badRequest("Method not allowed"), request);
+		// No route matched → 404
+		return handleError(ApiError.notFound("Route"), {
+			request,
+			app: _app,
+		});
 	};
 };

@@ -1,18 +1,18 @@
 /**
- * Collection findOne route.
+ * Collection remove route.
  *
- * GET /[collection]/[id] — findOne
+ * DELETE /[collection]/[id] — remove
  */
 
 import { createCollectionRoutes } from "#questpie/server/adapters/routes/collections.js";
 import { route } from "#questpie/server/routes/define-route.js";
 
 export default route()
-	.get()
+	.delete()
 	.raw()
 	.handler(async ({ app, request, params }) => {
 		const routes = createCollectionRoutes(app);
-		return routes.findOne(request, {
+		return routes.remove(request, {
 			collection: params.collection,
 			id: params.id,
 		});

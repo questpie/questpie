@@ -45,8 +45,13 @@ export function kebabToCamelCase(filename: string): string {
  * Prefixed with underscore + category to avoid collisions.
  */
 function toVarName(prefix: string, key: string): string {
-	// Replace dots and dashes with underscores
-	const safe = key.replace(/[.\-/]/g, "_");
+	// Replace non-identifier chars with underscores
+	// Handles parameterized route filenames like [collection], [...key]
+	const safe = key
+		.replace(/\.\.\./g, "spread_")
+		.replace(/[^a-zA-Z0-9_]/g, "_")
+		.replace(/_+/g, "_")
+		.replace(/^_|_$/g, "");
 	return `_${prefix}_${safe}`;
 }
 
@@ -619,11 +624,24 @@ function deriveFileKey(relPath: string, category: DiscoveryCategory): string {
 		}
 
 		const sep = category.keySeparator ?? ".";
-		const segments = innerPath
-			.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "")
-			.split("/")
-			.map(kebabToCamelCase);
-		return segments.join(sep);
+		const stripped = innerPath.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "");
+
+		// Detect HTTP method suffix on the last segment:
+		// [collection].patch → key "[collection]:PATCH"
+		// globals/[name].delete → key "globals/[name]:DELETE"
+		const methodSuffixRe = /\.(get|post|put|patch|delete)$/i;
+		const methodMatch = stripped.match(methodSuffixRe);
+		const withoutMethod = methodMatch
+			? stripped.slice(0, -methodMatch[0].length)
+			: stripped;
+
+		const segments = withoutMethod.split("/").map(kebabToCamelCase);
+		const key = segments.join(sep);
+
+		if (methodMatch) {
+			return `${key}:${methodMatch[1].toUpperCase()}`;
+		}
+		return key;
 	}
 	// Simple: filename → camelCase key
 	return kebabToCamelCase(basename(relPath));

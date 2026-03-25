@@ -1,16 +1,16 @@
 /**
- * Global get route.
+ * Global update route.
  *
- * GET /globals/[name] — get global value
+ * PATCH /globals/[name] — update global value
  */
 
 import { createGlobalRoutes } from "#questpie/server/adapters/routes/globals.js";
 import { route } from "#questpie/server/routes/define-route.js";
 
 export default route()
-	.get()
+	.patch()
 	.raw()
 	.handler(async ({ app, request, params }) => {
 		const routes = createGlobalRoutes(app);
-		return routes.get(request, { global: params.name });
+		return routes.update(request, { global: params.name });
 	});

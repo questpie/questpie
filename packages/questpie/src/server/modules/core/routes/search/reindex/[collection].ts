@@ -11,7 +11,7 @@ export default route()
 	.post()
 	.raw()
 	.handler(async ({ app, request, params }) => {
-		const routes = createSearchRoutes(app);
+		const routes = createSearchRoutes(app, (app as any)._adapterConfig);
 		return routes.reindex(request, {
 			collection: params.collection,
 		});

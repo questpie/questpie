@@ -1,19 +1,16 @@
 /**
- * Collection findOne route.
+ * Collection updateMany route.
  *
- * GET /[collection]/[id] — findOne
+ * PATCH /[collection] — updateMany
  */
 
 import { createCollectionRoutes } from "#questpie/server/adapters/routes/collections.js";
 import { route } from "#questpie/server/routes/define-route.js";
 
 export default route()
-	.get()
+	.patch()
 	.raw()
 	.handler(async ({ app, request, params }) => {
 		const routes = createCollectionRoutes(app);
-		return routes.findOne(request, {
-			collection: params.collection,
-			id: params.id,
-		});
+		return routes.updateMany(request, { collection: params.collection });
 	});
