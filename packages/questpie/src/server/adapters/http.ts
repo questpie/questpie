@@ -31,6 +31,7 @@ export type {
 } from "./types.js";
 export { createAdapterContext } from "./utils/context.js";
 export { handleError } from "./utils/response.js";
+export { createAdapterRoutes } from "./compat.js";
 
 import type { AdapterConfig, AdapterContext } from "./types.js";
 import { resolveContext } from "./utils/context.js";
