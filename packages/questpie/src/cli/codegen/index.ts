@@ -269,7 +269,6 @@ export function resolveTargetGraph(
 					callbackParams: {},
 					transforms: [],
 					scaffolds: {},
-					runtimeFieldImports: [],
 				};
 				targets.set(targetId, target);
 			} else {
@@ -382,11 +381,6 @@ export function resolveTargetGraph(
 			// Merge scaffolds
 			if (contribution.scaffolds) {
 				Object.assign(target.scaffolds, contribution.scaffolds);
-			}
-
-			// Collect runtime field imports
-			if (contribution.runtimeFieldImports) {
-				target.runtimeFieldImports.push(...contribution.runtimeFieldImports);
 			}
 
 			// Collect transform functions

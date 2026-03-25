@@ -551,19 +551,6 @@ export interface CodegenTargetContribution {
 	 */
 	scaffolds?: Record<string, ScaffoldConfig>;
 
-	/**
-	 * Runtime field factory imports contributed by this plugin.
-	 *
-	 * @deprecated Use `categories.fieldTypes.factoryImports` instead.
-	 * This property is still read for backward compatibility but will
-	 * be removed in a future version.
-	 */
-	runtimeFieldImports?: Array<{
-		/** Named export to import (e.g. "adminFields") */
-		name: string;
-		/** Package/path to import from (e.g. "@questpie/admin/server") */
-		from: string;
-	}>;
 }
 
 // ============================================================================
@@ -654,12 +641,6 @@ export interface ResolvedTarget {
 
 	/** Merged scaffold templates from all contributing plugins. */
 	scaffolds: Record<string, ScaffoldConfig>;
-
-	/**
-	 * Merged runtime field imports from all contributing plugins.
-	 * @deprecated Use `categories.fieldTypes.factoryImports` instead.
-	 */
-	runtimeFieldImports: Array<{ name: string; from: string }>;
 }
 
 // ============================================================================

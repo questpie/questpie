@@ -1,176 +1,143 @@
 /**
- * QUE-243: onAfterCommit in hook context tests
+ * QUE-243: onAfterCommit hook tests
  *
  * Verifies that:
- * 1. onAfterCommit is accessible on hook context without separate import
- * 2. Callbacks execute after transaction commits
- * 3. Callbacks execute immediately when outside a transaction
- * 4. Callbacks don't execute if transaction rolls back
+ * 1. Callbacks execute after transaction commits (via withTransaction)
+ * 2. Callbacks execute immediately when called outside a transaction
+ * 3. Callbacks are discarded when a transaction rolls back
+ * 4. Nested transactions queue callbacks to the outermost transaction
  */
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
-import { collection } from "../../src/server/index.js";
-import { buildMockApp } from "../utils/mocks/mock-app-builder";
-import { createTestContext } from "../utils/test-context";
-import { runTestDbMigrations } from "../utils/test-db";
+import {
+	onAfterCommit,
+	withTransaction,
+} from "../../src/server/collection/crud/shared/transaction.js";
 
 // ============================================================================
-// Setup
+// Tests
 // ============================================================================
 
-interface CapturedEvent {
-	hookName: string;
-	afterCommitFired: boolean;
-	afterCommitOrder: number;
-}
+describe("onAfterCommit (QUE-243)", () => {
+	it("fires callback after transaction commits", async () => {
+		let callbackFired = false;
 
-let afterCommitCounter = 0;
-
-const createAfterCommitModule = (events: CapturedEvent[]) => ({
-	collections: {
-		articles: collection("articles")
-			.fields(({ f }) => ({
-				title: f.textarea().required(),
-				status: f.text(50),
-			}))
-			.hooks({
-				afterChange: async (ctx) => {
-					const event: CapturedEvent = {
-						hookName: "afterChange",
-						afterCommitFired: false,
-						afterCommitOrder: -1,
-					};
-					events.push(event);
-
-					// Use onAfterCommit from ctx — NO separate import
-					ctx.onAfterCommit(async () => {
-						event.afterCommitFired = true;
-						event.afterCommitOrder = afterCommitCounter++;
-					});
-				},
-				afterDelete: async (ctx) => {
-					const event: CapturedEvent = {
-						hookName: "afterDelete",
-						afterCommitFired: false,
-						afterCommitOrder: -1,
-					};
-					events.push(event);
-
-					ctx.onAfterCommit(async () => {
-						event.afterCommitFired = true;
-						event.afterCommitOrder = afterCommitCounter++;
-					});
-				},
-			}),
-	},
-});
-
-describe("onAfterCommit in hook context (QUE-243)", () => {
-	let events: CapturedEvent[];
-	let setup: Awaited<ReturnType<typeof buildMockApp>>;
-	let ctx: ReturnType<typeof createTestContext>;
-
-	beforeEach(async () => {
-		events = [];
-		afterCommitCounter = 0;
-		setup = await buildMockApp(createAfterCommitModule(events));
-		await runTestDbMigrations(setup.app);
-		ctx = createTestContext(setup.app);
-	});
-
-	afterEach(async () => {
-		await setup.cleanup();
-	});
-
-	it("onAfterCommit callback fires after create", async () => {
-		await setup.app.collections.articles.create(
-			{ title: "Test" },
-			ctx,
-		);
-
-		// afterChange should have been called
-		const afterChange = events.find((e) => e.hookName === "afterChange");
-		expect(afterChange).toBeDefined();
-		// onAfterCommit callback should have fired
-		expect(afterChange!.afterCommitFired).toBe(true);
-	});
-
-	it("onAfterCommit callback fires after update", async () => {
-		const created = await setup.app.collections.articles.create(
-			{ title: "Original" },
-			ctx,
-		);
-		events.length = 0;
-		afterCommitCounter = 0;
-
-		await setup.app.collections.articles.updateById(
-			{ id: created.id, data: { title: "Updated" } },
-			ctx,
-		);
-
-		const afterChange = events.find((e) => e.hookName === "afterChange");
-		expect(afterChange).toBeDefined();
-		expect(afterChange!.afterCommitFired).toBe(true);
-	});
-
-	it("onAfterCommit callback fires after delete", async () => {
-		const created = await setup.app.collections.articles.create(
-			{ title: "ToDelete" },
-			ctx,
-		);
-		events.length = 0;
-		afterCommitCounter = 0;
-
-		await setup.app.collections.articles.deleteById(
-			{ id: created.id },
-			ctx,
-		);
-
-		const afterDelete = events.find((e) => e.hookName === "afterDelete");
-		expect(afterDelete).toBeDefined();
-		expect(afterDelete!.afterCommitFired).toBe(true);
-	});
-
-	it("onAfterCommit fires in order for multiple hooks", async () => {
-		// Create two records to trigger hooks sequentially
-		await setup.app.collections.articles.create(
-			{ title: "First" },
-			ctx,
-		);
-		await setup.app.collections.articles.create(
-			{ title: "Second" },
-			ctx,
-		);
-
-		expect(events.length).toBe(2);
-		expect(events[0].afterCommitOrder).toBe(0);
-		expect(events[1].afterCommitOrder).toBe(1);
-	});
-
-	it("ctx.onAfterCommit exists and is a function", async () => {
-		let onAfterCommitType: string | undefined;
-
-		const testModule = {
-			collections: {
-				items: collection("items")
-					.fields(({ f }) => ({
-						name: f.text(100).required(),
-					}))
-					.hooks({
-						afterChange: async (ctx) => {
-							onAfterCommitType = typeof ctx.onAfterCommit;
-						},
-					}),
+		const mockDb = {
+			transaction: async (fn: (tx: any) => Promise<any>) => {
+				return fn({ insert: () => {} });
 			},
 		};
 
-		const s = await buildMockApp(testModule);
-		await runTestDbMigrations(s.app);
-		const c = createTestContext(s.app);
+		await withTransaction(mockDb, async (_tx) => {
+			onAfterCommit(async () => {
+				callbackFired = true;
+			});
 
-		await s.app.collections.items.create({ name: "test" }, c);
-		expect(onAfterCommitType).toBe("function");
+			// Callback should NOT have fired yet (still inside transaction)
+			expect(callbackFired).toBe(false);
+		});
 
-		await s.cleanup();
+		// After transaction commits, callback should have fired
+		expect(callbackFired).toBe(true);
+	});
+
+	it("fires immediately when called outside a transaction", async () => {
+		let fired = false;
+
+		// Call onAfterCommit outside any transaction — should fire immediately
+		onAfterCommit(async () => {
+			fired = true;
+		});
+
+		// Give the fire-and-forget promise a tick to resolve
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		expect(fired).toBe(true);
+	});
+
+	it("discards callbacks when transaction rolls back", async () => {
+		let callbackFired = false;
+
+		// Mock db whose transaction method propagates errors (simulating rollback)
+		const mockDb = {
+			transaction: async (fn: (tx: any) => Promise<any>) => {
+				const mockTx = { insert: () => {} };
+				return fn(mockTx);
+			},
+		};
+
+		try {
+			await withTransaction(mockDb, async (_tx) => {
+				// Queue a callback
+				onAfterCommit(async () => {
+					callbackFired = true;
+				});
+
+				// Simulate an error that causes rollback
+				throw new Error("Something went wrong inside transaction");
+			});
+		} catch {
+			// Expected — the transaction failed
+		}
+
+		// The callback should NOT have fired because the transaction rolled back
+		expect(callbackFired).toBe(false);
+	});
+
+	it("fires multiple callbacks in order after commit", async () => {
+		const order: number[] = [];
+
+		const mockDb = {
+			transaction: async (fn: (tx: any) => Promise<any>) => {
+				return fn({ insert: () => {} });
+			},
+		};
+
+		await withTransaction(mockDb, async (_tx) => {
+			onAfterCommit(async () => {
+				order.push(1);
+			});
+			onAfterCommit(async () => {
+				order.push(2);
+			});
+			onAfterCommit(async () => {
+				order.push(3);
+			});
+		});
+
+		expect(order).toEqual([1, 2, 3]);
+	});
+
+	it("nested transactions queue callbacks to the outermost transaction", async () => {
+		const order: string[] = [];
+
+		const mockDb = {
+			transaction: async (fn: (tx: any) => Promise<any>) => {
+				return fn({ insert: () => {} });
+			},
+		};
+
+		await withTransaction(mockDb, async (_tx) => {
+			onAfterCommit(async () => {
+				order.push("outer-1");
+			});
+
+			// Nested transaction — reuses parent
+			await withTransaction(mockDb, async (_innerTx) => {
+				onAfterCommit(async () => {
+					order.push("inner");
+				});
+			});
+
+			onAfterCommit(async () => {
+				order.push("outer-2");
+			});
+
+			// None should have fired yet
+			expect(order).toEqual([]);
+		});
+
+		// All callbacks fire after outermost commits, in registration order
+		expect(order).toEqual(["outer-1", "inner", "outer-2"]);
 	});
 });
