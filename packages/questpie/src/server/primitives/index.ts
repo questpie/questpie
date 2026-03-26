@@ -1,40 +1,15 @@
 /**
- * Primitives — Builder Definitions
+ * Primitives — Intentional re-export facade.
  *
- * Re-exports all builder/definition primitives that define the schema:
- * - Collection builder (structure, fields, versioning, workflow)
- * - Global builder (structure, fields)
- * - Field system (field class, field types, operators)
- * - Route builder (define-route, route-builder)
- * - Service definitions (define-service)
- * - Seed definitions (define-seed)
- * - Migration definitions (define-migration)
+ * This barrel provides a clean public API surface for the core primitive
+ * factories. The original implementations remain in their canonical locations;
+ * this file simply gathers them under a single import path.
  *
- * These are the "what" — they describe the data model and API surface.
- * For runtime execution, see `orchestrator/`.
+ * Do NOT move the source files here — this indirection is by design.
  */
-
-// ── Collection Builder ──────────────────────────────────────
-export * from "../collection/builder/index.js";
-
-// ── Global Builder ──────────────────────────────────────────
-export * from "../global/builder/index.js";
-
-// ── Field System ────────────────────────────────────────────
-export * from "../fields/index.js";
-
-// ── Route Builder ───────────────────────────────────────────
-export * from "../routes/index.js";
-
-// ── Service Definitions ─────────────────────────────────────
-export * from "../services/define-service.js";
-
-// ── Seed Definitions ────────────────────────────────────────
-export * from "../seed/index.js";
-
-// ── Migration Definitions ───────────────────────────────────
-export * from "../migration/index.js";
-
-// ── Builder Utilities ───────────────────────────────────────
-export * from "../utils/builder-extensions.js";
-export * from "../utils/callback-proxies.js";
+export { collection } from "#questpie/server/collection/builder/collection-builder.js";
+export { global } from "#questpie/server/global/builder/global-builder.js";
+export { Field, field } from "#questpie/server/fields/field-class.js";
+export { route } from "#questpie/server/routes/define-route.js";
+export { service } from "#questpie/server/services/define-service.js";
+export { module } from "#questpie/server/config/create-app.js";
