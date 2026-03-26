@@ -66,7 +66,7 @@ export const fetchWidgetData = route()
 	.handler(async (ctx) => {
 		// Access dashboard config from the app's internal state
 		const stored = tryGetContext();
-		const appState = (stored?.app as any)?.state || {};
+		const appState = getAppState(stored?.app) || {};
 		const dashboard = appState.config?.admin?.dashboard ?? appState.dashboard;
 
 		if (!dashboard?.items) {

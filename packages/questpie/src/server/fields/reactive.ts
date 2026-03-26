@@ -1,25 +1,9 @@
 /**
  * Reactive Field System — Runtime Functions
  *
- * Re-exports all types from reactive-types.ts.
- * Contains runtime functions for dependency tracking and serialization.
+ * Types are in reactive-types.ts.
+ * This file contains only runtime functions for dependency tracking and serialization.
  */
-
-// Re-export all types
-export type {
-	OptionsConfig,
-	OptionsContext,
-	OptionsHandler,
-	OptionsResult,
-	ReactiveAdminMeta,
-	ReactiveConfig,
-	ReactiveContext,
-	ReactiveHandler,
-	ReactiveServerContext,
-	SerializedOptionsConfig,
-	SerializedReactiveConfig,
-	TrackingResult,
-} from "./reactive-types.js";
 
 import type {
 	OptionsConfig,

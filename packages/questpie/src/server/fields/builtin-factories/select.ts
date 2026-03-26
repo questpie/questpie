@@ -15,7 +15,7 @@ import type { I18nText } from "#questpie/shared/i18n/types.js";
 import type { DefaultFieldState } from "../field-class-types.js";
 import { field, Field } from "../field-class.js";
 import { selectMultiOps, selectSingleOps } from "../operators/builtin.js";
-import type { OptionsConfig } from "../reactive.js";
+import type { OptionsConfig } from "../reactive-types.js";
 import type { SelectFieldMetadata } from "../types.js";
 
 declare global {

@@ -22,9 +22,11 @@ import {
 	extractDependencies,
 	getDebounce,
 	isReactiveConfig,
-	type SerializedOptionsConfig,
-	type SerializedReactiveConfig,
 } from "#questpie/server/fields/reactive.js";
+import type {
+	SerializedOptionsConfig,
+	SerializedReactiveConfig,
+} from "#questpie/server/fields/reactive-types.js";
 import type {
 	FieldLocation,
 	FieldMetadata,

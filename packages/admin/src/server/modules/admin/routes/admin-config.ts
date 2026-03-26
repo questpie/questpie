@@ -554,7 +554,7 @@ function mergeDashboardContributions(
 				items: items.map(
 					({ sectionId: _sid, position: _pos, ...rest }) => rest as any,
 				),
-			} as any);
+			} as Record<string, any>);
 		}
 	}
 
@@ -563,7 +563,7 @@ function mergeDashboardContributions(
 		description: description,
 		columns,
 		realtime,
-		actions: allActions.length > 0 ? (allActions as any) : undefined,
+		actions: allActions.length > 0 ? allActions as unknown[] : undefined,
 		items: dashboardItems.length > 0 ? dashboardItems : undefined,
 	};
 }
@@ -575,7 +575,7 @@ function mergeDashboardContributions(
 function isLegacySidebarConfig(value: unknown): value is ServerSidebarConfig {
 	if (value == null || typeof value !== "object" || Array.isArray(value))
 		return false;
-	const obj = value as any;
+	const obj = value as Record<string, any>;
 	// Legacy format has sections with nested items already grouped.
 	// Contribution format has separate sections + items arrays (items have sectionId).
 	if (Array.isArray(obj.sections) && Array.isArray(obj.items)) return false;
@@ -591,7 +591,7 @@ function isLegacyDashboardConfig(
 ): value is ServerDashboardConfig {
 	if (value == null || typeof value !== "object" || Array.isArray(value))
 		return false;
-	const obj = value as any;
+	const obj = value as Record<string, any>;
 	// Contribution format has sections + items arrays (items have sectionId).
 	// Legacy format has items as processed ServerDashboardItem[] (section type items with nested items).
 	if (Array.isArray(obj.sections) && Array.isArray(obj.items)) return false;
@@ -647,7 +647,7 @@ async function processDashboardItems(
 				accessCtx,
 			);
 			if (filtered.length > 0) {
-				result.push({ ...item, items: filtered } as any);
+				result.push({ ...item, items: filtered } as Record<string, any>);
 			}
 			continue;
 		}
@@ -664,7 +664,7 @@ async function processDashboardItems(
 					return { ...tab, items: filtered };
 				}),
 			);
-			result.push({ ...item, tabs } as any);
+			result.push({ ...item, tabs } as Record<string, any>);
 			continue;
 		}
 
@@ -699,7 +699,7 @@ async function processDashboardItems(
 				return true;
 			});
 			const { loader, access, ...serializable } = widget;
-			result.push({ ...serializable, actions } as any);
+			result.push({ ...serializable, actions } as Record<string, any>);
 			continue;
 		}
 

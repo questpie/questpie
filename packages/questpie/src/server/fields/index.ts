@@ -53,26 +53,30 @@ export type {
 	FieldState,
 } from "./field-class-types.js";
 
-// Reactive field system
+// Reactive field system — types
+export type {
+	OptionsConfig,
+	OptionsContext,
+	OptionsHandler,
+	OptionsResult,
+	ReactiveAdminMeta,
+	ReactiveConfig,
+	ReactiveContext,
+	ReactiveHandler,
+	ReactiveServerContext,
+	SerializedOptionsConfig,
+	SerializedReactiveConfig,
+	TrackingResult,
+} from "./reactive-types.js";
+
+// Reactive field system — runtime
 export {
 	extractDependencies,
 	getDebounce,
 	getHandler,
 	isReactiveConfig,
-	type OptionsConfig,
-	type OptionsContext,
-	type OptionsHandler,
-	type OptionsResult,
-	type ReactiveAdminMeta,
-	type ReactiveConfig,
-	type ReactiveContext,
-	type ReactiveHandler,
-	type ReactiveServerContext,
-	type SerializedOptionsConfig,
-	type SerializedReactiveConfig,
 	serializeOptionsConfig,
 	serializeReactiveConfig,
-	type TrackingResult,
 	trackDependencies,
 	trackDepsFunction,
 } from "./reactive.js";

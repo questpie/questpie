@@ -150,12 +150,12 @@ export function generateFactoryTemplate(
 	// These are spread-merged with builtinFields to create _allFieldDefs, which is
 	// passed to CollectionBuilder.create() / GlobalBuilder.create() so that
 	// .fields(({ f }) => ...) callbacks have access to ALL field types at runtime.
-	const runtimeFieldImports = target.runtimeFieldImports;
-	if (runtimeFieldImports.length > 0 || userFieldsImportPath) {
+	const fieldContributions = target.fieldContributions;
+	if (fieldContributions.length > 0 || userFieldsImportPath) {
 		lines.push(
-			"// ── Runtime Field Imports ──────────────────────────────────",
+			"// ── Field Contributions ──────────────────────────────────",
 		);
-		for (const { name, from } of runtimeFieldImports) {
+		for (const { name, from } of fieldContributions) {
 			lines.push(`import { ${name} } from "${from}";`);
 		}
 		if (userFieldsImportPath) {
@@ -178,7 +178,7 @@ export function generateFactoryTemplate(
 	// Build merged field defs constant — builtinFields + plugin fields + user fields
 	{
 		const spreads = ["...builtinFields"];
-		for (const { name } of runtimeFieldImports) {
+		for (const { name } of fieldContributions) {
 			spreads.push(`...${name}`);
 		}
 		if (userFieldsImportPath) {

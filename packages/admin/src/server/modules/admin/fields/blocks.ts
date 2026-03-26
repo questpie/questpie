@@ -25,7 +25,7 @@ import {
 } from "questpie";
 import { z } from "zod";
 
-import { processBlocksDocument } from "../block/prefetch.js";
+import { processBlocksDocument } from "../../../block/prefetch.js";
 
 // ============================================================================
 // Blocks Data Schema

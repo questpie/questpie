@@ -158,7 +158,7 @@ export {
 	type RichTextFieldMeta,
 	type TipTapDocument,
 	type TipTapNode,
-} from "../server/fields/index.js";
+} from "../server/modules/admin/fields/index.js";
 // Main admin module - the complete backend for admin panel
 export {
 	type AdminModule,

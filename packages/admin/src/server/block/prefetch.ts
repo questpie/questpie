@@ -36,7 +36,7 @@
  * ```
  */
 
-import type { BlocksDocument } from "../fields/blocks.js";
+import type { BlocksDocument } from "../modules/admin/fields/blocks.js";
 import type {
 	AnyBlockDefinition,
 	BlockPrefetchContext,

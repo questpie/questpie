@@ -311,7 +311,7 @@ export function adminPlugin(): CodegenPlugin {
 				// These are imported in the codegen-generated factories.ts and
 				// spread-merged with builtinFields so collection/global builders
 				// can use f.richText(), f.blocks() etc. at runtime.
-				runtimeFieldImports: [
+				fieldContributions: [
 					{ name: "adminFields", from: "@questpie/admin/server" },
 				],
 			},

@@ -535,7 +535,7 @@ export interface CodegenTargetContribution {
 	 *
 	 * @example
 	 * ```ts
-	 * runtimeFieldImports: [
+	 * fieldContributions: [
 	 *   { name: "adminFields", from: "@questpie/admin/server" },
 	 * ]
 	 * // Generated in factories.ts:
@@ -543,7 +543,7 @@ export interface CodegenTargetContribution {
 	 * // const _allFieldDefs = { ...builtinFields, ...adminFields };
 	 * ```
 	 */
-	runtimeFieldImports?: Array<{
+	fieldContributions?: Array<{
 		/** Named export to import (e.g. "adminFields") */
 		name: string;
 		/** Package/path to import from (e.g. "@questpie/admin/server") */
@@ -641,7 +641,7 @@ export interface ResolvedTarget {
 	scaffolds: Record<string, ScaffoldConfig>;
 
 	/** Merged runtime field imports from all contributing plugins. */
-	runtimeFieldImports: Array<{ name: string; from: string }>;
+	fieldContributions: Array<{ name: string; from: string }>;
 }
 
 // ============================================================================

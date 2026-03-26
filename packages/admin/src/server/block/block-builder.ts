@@ -49,7 +49,7 @@ import type {
 	AdminConfigContext,
 	FieldLayoutItem,
 } from "../augmentation.js";
-import { adminFields } from "../fields/index.js";
+import { adminFields } from "../modules/admin/fields/index.js";
 
 /**
  * Combined field types available in block field definitions.
