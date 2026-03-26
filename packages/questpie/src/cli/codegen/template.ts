@@ -698,6 +698,8 @@ function emitNewArchitectureRuntime(
 	lines.push("\t({");
 
 	// Modules
+	// TODO(QUE-285): Replace `as any` with proper MergeModuleProp<> typing once
+	// the template emits a concrete modules-tuple type that the utility can consume.
 	lines.push(`\t\tmodules: ${modulesFile.varName} as any,`);
 
 	// ── Emit all categories ──────────────────────────────────────

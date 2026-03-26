@@ -93,12 +93,13 @@ export const createAdapterContext = async <
 		? await config.extendContext({ request, app, context: baseContext })
 		: undefined;
 
-	// 2. Apply app-level context resolver (from config/app.ts context property)
-	// This is where custom headers like x-tenant-id are extracted
+	// 2. Apply app-level context extension (from config.app.context in the user's config/app.ts).
+	// This replaced the old `contextResolver` concept — the function signature is the same,
+	// but it now lives under config.app.context (see QuestpieAppConfig.context).
 	let cmsExtension: Record<string, any> | undefined;
-	const contextResolver = (app.state as any)?.config?.app?.context;
-	if (typeof contextResolver === "function") {
-		cmsExtension = await contextResolver({
+	const appContextFn = (app.state as any)?.config?.app?.context;
+	if (typeof appContextFn === "function") {
+		cmsExtension = await appContextFn({
 			request,
 			session: sessionData,
 			db: app.db,
