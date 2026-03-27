@@ -213,10 +213,10 @@ describe("service system", () => {
 
 		const { app, cleanup } = await createServiceApp({ requestOnly });
 		try {
-			const ctxA = extractAppServices(app, {
+			const ctxA = app.extractContext( {
 				session: { user: { id: "user-a" }, session: {} } as any,
 			});
-			const ctxB = extractAppServices(app, {
+			const ctxB = app.extractContext( {
 				session: { user: { id: "user-b" }, session: {} } as any,
 			});
 

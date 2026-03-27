@@ -25,7 +25,7 @@ describe("queue runtime api", () => {
 
 		const queue = createQueueClient(jobs, adapter, {
 			createContext: async () => ({ db: {} }),
-			getApp: () => ({ name: "app" }),
+			getApp: () => ({ name: "app", extractContext: (o: any) => ({ app: { name: "app" }, db: o?.db ?? {}, session: o?.session ?? null, services: {} }) }),
 		});
 
 		await queue.listen({ gracefulShutdown: false, teamSize: 2, batchSize: 2 });
@@ -124,7 +124,7 @@ describe("queue runtime api", () => {
 
 		const queue = createQueueClient(jobs, adapter, {
 			createContext: async () => ({ db: {} }),
-			getApp: () => ({ name: "app" }),
+			getApp: () => ({ name: "app", extractContext: (o: any) => ({ app: { name: "app" }, db: o?.db ?? {}, session: o?.session ?? null, services: {} }) }),
 		});
 
 		await queue.registerSchedules({ jobs: ["registrationA"] });
@@ -170,7 +170,7 @@ describe("queue runtime api", () => {
 			new PublishOnlyAdapter(),
 			{
 				createContext: async () => ({ db: {} }),
-				getApp: () => ({ name: "app" }),
+				getApp: () => ({ name: "app", extractContext: (o: any) => ({ app: { name: "app" }, db: o?.db ?? {}, session: o?.session ?? null, services: {} }) }),
 			},
 		);
 
@@ -239,7 +239,15 @@ describe("queue runtime api", () => {
 			adapter,
 			{
 				createContext: async () => ({ db: {} }),
-				getApp: () => ({ kind: "runtime" }),
+				getApp: () => ({
+					kind: "runtime",
+					extractContext: (overrides: any) => ({
+						app: { kind: "runtime" },
+						db: overrides?.db ?? {},
+						session: overrides?.session ?? null,
+						services: {},
+					}),
+				}),
 			},
 		);
 
@@ -276,7 +284,7 @@ describe("queue runtime api", () => {
 			new MockQueueAdapter(),
 			{
 				createContext: async () => ({ db: {} }),
-				getApp: () => ({ name: "app" }),
+				getApp: () => ({ name: "app", extractContext: (o: any) => ({ app: { name: "app" }, db: o?.db ?? {}, session: o?.session ?? null, services: {} }) }),
 			},
 		);
 
