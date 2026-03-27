@@ -19,4 +19,4 @@ uploads
 # Playwright
 playwright-report/
 test-results/
-e2e/.auth/examples/tanstack-barbershop/tmp/
+e2e/.auth/

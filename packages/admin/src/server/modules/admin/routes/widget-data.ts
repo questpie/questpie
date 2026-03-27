@@ -8,8 +8,6 @@
 import { ApiError, route, tryGetContext } from "questpie";
 import { z } from "zod";
 
-import { getAppState } from "./route-context.js";
-
 import type { ServerDashboardItem } from "../../../augmentation.js";
 
 // ============================================================================
@@ -23,14 +21,14 @@ import type { ServerDashboardItem } from "../../../augmentation.js";
 function findWidgetById(items: ServerDashboardItem[], id: string): any | null {
 	for (const item of items) {
 		if (item.type === "section") {
-			const found = findWidgetById((item as Record<string, any>).items || [], id);
+			const found = findWidgetById((item as any).items || [], id);
 			if (found) return found;
 		} else if (item.type === "tabs") {
-			for (const tab of (item as Record<string, any>).tabs || []) {
+			for (const tab of (item as any).tabs || []) {
 				const found = findWidgetById(tab.items || [], id);
 				if (found) return found;
 			}
-		} else if ((item as Record<string, any>).id === id) {
+		} else if ((item as any).id === id) {
 			return item;
 		}
 	}
@@ -68,7 +66,7 @@ export const fetchWidgetData = route()
 	.handler(async (ctx) => {
 		// Access dashboard config from the app's internal state
 		const stored = tryGetContext();
-		const appState = getAppState(stored?.app) || {};
+		const appState = (stored?.app as any)?.state || {};
 		const dashboard = appState.config?.admin?.dashboard ?? appState.dashboard;
 
 		if (!dashboard?.items) {

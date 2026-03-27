@@ -257,7 +257,7 @@ export const ComponentRenderer = React.memo(function ComponentRenderer({
 
 		if (typeof iconName === "string") {
 			const { name: _name, ...rest } = iconProps;
-			return <Icon ssr icon={iconName} {...rest} {...additionalProps} />;
+			return <Icon icon={iconName} {...rest} {...additionalProps} />;
 		}
 	}
 

@@ -96,7 +96,7 @@ export function ToolbarButton({
 			{...rest}
 		>
 			{iconName ? (
-				<Icon ssr icon={`${iconName}${iconSuffix}`} width={16} height={16} />
+				<Icon icon={`${iconName}${iconSuffix}`} width={16} height={16} />
 			) : (
 				children
 			)}
@@ -166,7 +166,7 @@ export function RichTextToolbar({
 			{features.heading && (
 				<ToolbarGroup>
 					<select
-						className="border-input h-6 border bg-transparent px-2 text-xs"
+						className="border-input bg-transparent h-6 border px-2 text-xs"
 						value={headingValue}
 						onChange={(event) => onHeadingChange(event.target.value)}
 						disabled={!isEditable}

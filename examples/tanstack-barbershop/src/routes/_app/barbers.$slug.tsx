@@ -146,7 +146,7 @@ function BarberProfilePage() {
 										href={`mailto:${previewBarber.email}`}
 										className="hover:text-highlight flex items-center gap-2 font-medium transition-colors"
 									>
-										<Icon ssr icon="ph:envelope-simple" className="size-5" />
+										<Icon icon="ph:envelope-simple" className="size-5" />
 										{previewBarber.email}
 									</a>
 								</PreviewField>
@@ -158,7 +158,7 @@ function BarberProfilePage() {
 										href={`tel:${previewBarber.phone}`}
 										className="hover:text-highlight flex items-center gap-2 font-medium transition-colors"
 									>
-										<Icon ssr icon="ph:phone" className="size-5" />
+										<Icon icon="ph:phone" className="size-5" />
 										{previewBarber.phone}
 									</a>
 								</PreviewField>
@@ -187,7 +187,7 @@ function BarberProfilePage() {
 													</h3>
 													<div className="text-muted-foreground mt-1 flex items-center gap-4 text-sm">
 														<span className="flex items-center gap-1.5">
-															<Icon ssr icon="ph:clock" className="size-4" />
+															<Icon icon="ph:clock" className="size-4" />
 															{service.duration} min
 														</span>
 														<span className="text-highlight font-bold">

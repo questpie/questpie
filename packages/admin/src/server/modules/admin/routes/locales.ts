@@ -8,8 +8,6 @@
 import { route } from "questpie";
 import { z } from "zod";
 
-import { asAdminCtx } from "./route-context.js";
-
 // ============================================================================
 // Type Helpers
 // ============================================================================
@@ -61,7 +59,7 @@ const getContentLocales = route()
 	.schema(getContentLocalesSchema)
 	.outputSchema(getContentLocalesOutputSchema)
 	.handler(async (ctx) => {
-		const app = asAdminCtx(ctx).app;
+		const app = (ctx as any).app;
 		const localeConfig = app.config.locale;
 
 		// If no locale config, return sensible defaults

@@ -61,7 +61,7 @@ export function DateInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"qa-date-input border-input flex h-9 w-full items-center justify-start gap-2 border bg-transparent px-3 py-2 font-mono text-sm",
+					"qa-date-input border-input bg-transparent font-mono flex h-9 w-full items-center justify-start gap-2 border px-3 py-2 text-sm",
 					"hover:bg-accent hover:text-accent-foreground",
 					"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
 					"disabled:cursor-not-allowed disabled:opacity-50",
@@ -69,7 +69,7 @@ export function DateInput({
 					className,
 				)}
 			>
-				<Icon ssr icon="ph:calendar-blank" className="size-4" />
+				<Icon icon="ph:calendar-blank" className="size-4" />
 				<span className="flex-1 text-left">
 					{value ? format(value, dateFormat) : resolveText(placeholder)}
 				</span>
@@ -205,7 +205,7 @@ export function DateTimeInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"qa-datetime-input border-input flex h-9 w-full items-center justify-start gap-2 border bg-transparent px-3 py-2 font-mono text-sm",
+					"qa-datetime-input border-input bg-transparent font-mono flex h-9 w-full items-center justify-start gap-2 border px-3 py-2 text-sm",
 					"hover:bg-accent hover:text-accent-foreground",
 					"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
 					"disabled:cursor-not-allowed disabled:opacity-50",
@@ -213,7 +213,7 @@ export function DateTimeInput({
 					className,
 				)}
 			>
-				<Icon ssr icon="ph:calendar-blank" className="size-4" />
+				<Icon icon="ph:calendar-blank" className="size-4" />
 				<span className="flex-1 text-left">
 					{value ? format(value, dateFormat) : resolveText(placeholder)}
 				</span>
@@ -276,7 +276,7 @@ export function DateTimeInput({
 						value={timeValue}
 						onChange={handleTimeChange}
 						className={cn(
-							"border-input flex h-9 w-full border bg-transparent px-3 py-2 font-mono text-sm",
+							"border-input bg-transparent font-mono flex h-9 w-full border px-3 py-2 text-sm",
 							"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
 						)}
 					/>
@@ -341,7 +341,7 @@ function DateRangeInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"qa-date-range-input border-input flex h-9 w-full items-center justify-start gap-2 border bg-transparent px-3 py-2 font-mono text-sm",
+					"qa-date-range-input border-input bg-transparent font-mono flex h-9 w-full items-center justify-start gap-2 border px-3 py-2 text-sm",
 					"hover:bg-accent hover:text-accent-foreground",
 					"focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
 					"disabled:cursor-not-allowed disabled:opacity-50",
@@ -349,7 +349,7 @@ function DateRangeInput({
 					className,
 				)}
 			>
-				<Icon ssr icon="ph:calendar-blank" className="size-4" />
+				<Icon icon="ph:calendar-blank" className="size-4" />
 				<span className="flex-1 text-left">{displayValue()}</span>
 				{(value.start || value.end) && !disabled && (
 					<Icon

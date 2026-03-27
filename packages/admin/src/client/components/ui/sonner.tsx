@@ -14,11 +14,11 @@ export interface AdminToasterProps extends ToasterProps {
 
 // Custom icons using Phosphor iconify icons
 const toastIcons = {
-	success: <Icon ssr icon="ph:check-circle-fill" className="size-5" />,
-	info: <Icon ssr icon="ph:info-fill" className="size-5" />,
-	warning: <Icon ssr icon="ph:warning-fill" className="size-5" />,
-	error: <Icon ssr icon="ph:x-circle-fill" className="size-5" />,
-	loading: <Icon ssr icon="ph:spinner" className="size-5 animate-spin" />,
+	success: <Icon icon="ph:check-circle-fill" className="size-5" />,
+	info: <Icon icon="ph:info-fill" className="size-5" />,
+	warning: <Icon icon="ph:warning-fill" className="size-5" />,
+	error: <Icon icon="ph:x-circle-fill" className="size-5" />,
+	loading: <Icon icon="ph:spinner" className="size-5 animate-spin" />,
 };
 
 const Toaster = ({ theme = "system", ...props }: AdminToasterProps) => {

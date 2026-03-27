@@ -104,7 +104,7 @@ export function Footer({
 					{/* Brand */}
 					<div className="space-y-4">
 						<div className="flex items-center gap-2 text-xl font-bold">
-							<Icon ssr icon="ph:scissors-bold" className="size-6" />
+							<Icon icon="ph:scissors-bold" className="size-6" />
 							<span>{shopName}</span>
 						</div>
 						{tagline && (
@@ -124,7 +124,7 @@ export function Footer({
 											className="text-muted-foreground hover:text-foreground transition-colors"
 											aria-label={social.platform}
 										>
-											<Icon ssr icon={iconName} className="size-5" />
+											<Icon icon={iconName} className="size-5" />
 										</a>
 									);
 								})}
@@ -191,11 +191,7 @@ export function Footer({
 						<div className="space-y-3 text-sm">
 							{fullAddress && (
 								<div className="text-muted-foreground flex items-start gap-3">
-									<Icon
-										ssr
-										icon="ph:map-pin"
-										className="mt-0.5 size-4 shrink-0"
-									/>
+									<Icon icon="ph:map-pin" className="mt-0.5 size-4 shrink-0" />
 									<span>{fullAddress}</span>
 								</div>
 							)}
@@ -204,7 +200,7 @@ export function Footer({
 									href={`tel:${contactPhone.replace(/\s/g, "")}`}
 									className="text-muted-foreground hover:text-foreground flex items-center gap-3 transition-colors"
 								>
-									<Icon ssr icon="ph:phone" className="size-4 shrink-0" />
+									<Icon icon="ph:phone" className="size-4 shrink-0" />
 									<span>{contactPhone}</span>
 								</a>
 							)}
@@ -213,11 +209,7 @@ export function Footer({
 									href={`mailto:${contactEmail}`}
 									className="text-muted-foreground hover:text-foreground flex items-center gap-3 transition-colors"
 								>
-									<Icon
-										ssr
-										icon="ph:envelope-simple"
-										className="size-4 shrink-0"
-									/>
+									<Icon icon="ph:envelope-simple" className="size-4 shrink-0" />
 									<span>{contactEmail}</span>
 								</a>
 							)}

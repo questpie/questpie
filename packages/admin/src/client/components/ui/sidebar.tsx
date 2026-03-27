@@ -267,7 +267,7 @@ function SidebarTrigger({
 			}}
 			{...props}
 		>
-			<Icon ssr icon="ph:sidebar" />
+			<Icon icon="ph:sidebar" />
 			<span className="sr-only">Toggle Sidebar</span>
 		</Button>
 	);
@@ -303,7 +303,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
 		<main
 			data-slot="sidebar-inset"
 			className={cn(
-				"qa-sidebar-inset border-border relative flex min-w-0 flex-1 flex-col border-l md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+				"qa-sidebar-inset relative flex min-w-0 flex-1 flex-col border-l border-border md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
 				className,
 			)}
 			{...props}

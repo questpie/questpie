@@ -14,7 +14,6 @@
  */
 
 import { Icon } from "@iconify/react";
-import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 
 import type { PageDefinition } from "../../builder/page/page.js";
@@ -23,6 +22,7 @@ import type { ComponentRegistry } from "../../builder/types/field-types.js";
 import type { DashboardConfig } from "../../builder/types/ui-config.js";
 import { Card } from "../../components/ui/card.js";
 import { Skeleton } from "../../components/ui/skeleton.js";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSuspenseAdminConfig } from "../../hooks/use-admin-config";
 import { getCollectionMetaQueryOptions } from "../../hooks/use-collection-meta";
 import { useCollectionSchema } from "../../hooks/use-collection-schema";
@@ -357,7 +357,7 @@ function isDynamicImportLoader(
 function ViewLoadingState() {
 	return (
 		<div className="text-muted-foreground flex h-64 items-center justify-center">
-			<Icon ssr icon="ph:spinner-gap" className="size-6 animate-spin" />
+			<Icon icon="ph:spinner-gap" className="size-6 animate-spin" />
 		</div>
 	);
 }
@@ -622,7 +622,7 @@ function RestrictedAccess({
 						onClick={() => navigate(basePath)}
 						className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors"
 					>
-						<Icon ssr icon="ph:arrow-left" className="h-4 w-4" />
+						<Icon icon="ph:arrow-left" className="h-4 w-4" />
 						Back to Dashboard
 					</button>
 				</div>
@@ -700,7 +700,7 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 	if (loading) {
 		return (
 			<div className="text-muted-foreground flex h-64 items-center justify-center">
-				<Icon ssr icon="ph:spinner-gap" className="size-6 animate-spin" />
+				<Icon icon="ph:spinner-gap" className="size-6 animate-spin" />
 			</div>
 		);
 	}

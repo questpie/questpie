@@ -48,14 +48,14 @@ export function TimeInput({
 		<div className="qa-time-input relative">
 			<div
 				className={cn(
-					"border-input flex h-9 w-full items-center gap-2 border bg-transparent px-3 py-2 font-mono text-sm",
+					"border-input bg-transparent font-mono flex h-9 w-full items-center gap-2 border px-3 py-2 text-sm",
 					"focus-within:ring-ring focus-within:ring-2 focus-within:ring-offset-2",
 					disabled && "cursor-not-allowed opacity-50",
 					ariaInvalid && "border-destructive",
 					className,
 				)}
 			>
-				<Icon ssr icon="ph:clock" className="text-muted-foreground size-4" />
+				<Icon icon="ph:clock" className="text-muted-foreground size-4" />
 				<input
 					type="time"
 					id={id}
@@ -80,7 +80,7 @@ export function TimeInput({
 						className="text-muted-foreground hover:text-foreground"
 						tabIndex={-1}
 					>
-						<Icon ssr icon="ph:x" className="size-4" />
+						<Icon icon="ph:x" className="size-4" />
 					</button>
 				)}
 			</div>

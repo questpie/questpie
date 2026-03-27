@@ -176,7 +176,7 @@ export function JsonField({
 										disabled={disabled}
 										title={t("field.codeEditor")}
 									>
-										<Icon ssr icon="ph:code-bold" />
+										<Icon icon="ph:code-bold" />
 									</Button>
 									<Button
 										type="button"
@@ -186,7 +186,7 @@ export function JsonField({
 										disabled={disabled}
 										title={t("field.formEditor")}
 									>
-										<Icon ssr icon="ph:list-bullets-bold" />
+										<Icon icon="ph:list-bullets-bold" />
 									</Button>
 								</div>
 							)}
@@ -351,7 +351,7 @@ function JsonCodeEditor({
 				{/* Parse error indicator */}
 				{parseError && (
 					<div className="text-destructive absolute top-2 right-2 flex items-center gap-1 text-xs">
-						<Icon ssr icon="ph:warning-circle-fill" className="size-3" />
+						<Icon icon="ph:warning-circle-fill" className="size-3" />
 						{parseError}
 					</div>
 				)}

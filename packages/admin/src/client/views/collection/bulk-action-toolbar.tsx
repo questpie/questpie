@@ -395,7 +395,7 @@ export function BulkActionToolbar<TItem = any>({
 									disabled={isSelectingAll}
 								>
 									{t("common.selectAll").split(" ")[0]}
-									<Icon ssr icon="ph:caret-down" className="size-3" />
+									<Icon icon="ph:caret-down" className="size-3" />
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="center" side="top" sideOffset={8}>
 									<DropdownMenuItem
@@ -434,7 +434,7 @@ export function BulkActionToolbar<TItem = any>({
 										disabled={isLoading}
 									>
 										{t("common.actions")}
-										<Icon ssr icon="ph:caret-down" className="size-3" />
+										<Icon icon="ph:caret-down" className="size-3" />
 									</DropdownMenuTrigger>
 									<DropdownMenuContent align="center" side="top" sideOffset={8}>
 										{regularActions.map((action) => {
@@ -485,7 +485,7 @@ export function BulkActionToolbar<TItem = any>({
 								onClick={() => table.resetRowSelection()}
 								className="size-7 shrink-0"
 							>
-								<Icon ssr icon="ph:x" className="size-4" />
+								<Icon icon="ph:x" className="size-4" />
 								<span className="sr-only">
 									{t("collection.clearSelection")}
 								</span>

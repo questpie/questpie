@@ -11,6 +11,7 @@ import type {
 	CollectionAccess,
 } from "#questpie/server/collection/builder/types.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
+import { extractAppServices } from "#questpie/server/config/app-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import type {
 	FieldAccess,
@@ -71,7 +72,7 @@ export async function executeAccessRule(
 
 	// Function rule
 	if (typeof rule === "function") {
-		const services = context.app.extractContext( {
+		const services = extractAppServices(context.app, {
 			db: context.db,
 			session: context.session,
 		});

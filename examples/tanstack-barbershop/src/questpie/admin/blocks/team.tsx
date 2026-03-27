@@ -144,7 +144,6 @@ export function TeamRenderer({ values, data }: BlockProps<"team">) {
 						>
 							{t("blocks.team.viewAll")}
 							<Icon
-								ssr
 								icon="ph:arrow-right"
 								className="size-4 transition-transform group-hover:translate-x-1"
 							/>

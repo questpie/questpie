@@ -341,15 +341,12 @@ function AdapterDropdown({
 					</DropdownMenuItem>
 				))}
 				<DropdownMenuSeparator />
-				<DropdownMenuItem
-					className="rounded-none px-3 py-1.5 font-mono text-[11px]"
-					render={
-						<Link
-							to="/docs/$"
-							params={{ _splat: `extend/custom-adapters/${category.key}` }}
-						/>
-					}
-				>
+				<DropdownMenuItem className="rounded-none px-3 py-1.5 font-mono text-[11px]" render={
+					<Link
+						to="/docs/$"
+						params={{ _splat: `extend/custom-adapters/${category.key}` }}
+					/>
+				}>
 					<Icon ssr icon="ph:code" width={12} height={12} />
 					Write your own
 				</DropdownMenuItem>
@@ -427,7 +424,6 @@ function SwapAnythingSection() {
 							<Icon ssr icon="ph:code" width={14} height={14} />
 							Write your own adapter
 							<Icon
-								ssr
 								icon="ph:arrow-right"
 								width={12}
 								height={12}
@@ -696,7 +692,9 @@ function FileConventionsSection() {
 				<div className="bg-background flex flex-col justify-center p-6">
 					<div className="space-y-4">
 						{groups.map((group) => (
-							<div key={group.label}>
+							<div
+								key={group.label}
+							>
 								<div className="mb-2 flex items-center gap-1.5">
 									<Icon
 										ssr
@@ -742,7 +740,9 @@ function FileConventionsSection() {
 							</div>
 						))}
 						{/* Codegen output indicator */}
-						<div className="border-border border-t pt-3">
+						<div
+							className="border-border border-t pt-3"
+						>
 							<div className="text-muted-foreground flex items-center gap-2 font-mono text-[11px]">
 								<Icon
 									ssr
@@ -784,8 +784,9 @@ function AdminShowcaseSection() {
 			codeLabel: "collections/posts.ts",
 			code: (
 				<>
-					<span className="text-primary font-semibold">collection</span>(
-					<span className="text-[var(--syntax-string)]">"posts"</span>){`\n  .`}
+					<span className="text-primary font-semibold">collection</span>
+					(<span className="text-[var(--syntax-string)]">"posts"</span>)
+					{`\n  .`}
 					<span className="text-[var(--syntax-function)]">admin</span>
 					{`(({ c }) => ({
     label: `}
@@ -905,7 +906,10 @@ function AdminShowcaseSection() {
 			code: (
 				<>
 					<span className="text-primary font-semibold">global</span>(
-					<span className="text-[var(--syntax-string)]">"site_settings"</span>)
+					<span className="text-[var(--syntax-string)]">
+						"site_settings"
+					</span>
+					)
 					{`\n  .`}
 					<span className="text-[var(--syntax-function)]">fields</span>
 					{`(({ f }) => ({
@@ -929,7 +933,9 @@ function AdminShowcaseSection() {
 			mockup: (
 				<div className="flex flex-1 flex-col">
 					<div className="border-border bg-card flex h-10 items-center justify-between border-b px-4">
-						<div className="font-mono text-[12px] font-bold">Site Settings</div>
+						<div className="font-mono text-[12px] font-bold">
+							Site Settings
+						</div>
 						<button
 							type="button"
 							className="border-primary text-primary bg-primary/10 flex items-center gap-1 border px-2 py-0.5 font-mono text-[10px] uppercase"
@@ -977,7 +983,7 @@ function AdminShowcaseSection() {
 							</div>
 						</div>
 						<div className="border-border w-40 border-l p-3">
-							<div className="text-muted-foreground mb-3 font-mono text-[9px] tracking-wider uppercase">
+							<div className="text-muted-foreground mb-3 font-mono text-[9px] uppercase tracking-wider">
 								Version history
 							</div>
 							<div className="space-y-2">
@@ -1019,7 +1025,8 @@ function AdminShowcaseSection() {
 			codeLabel: "config/admin.ts",
 			code: (
 				<>
-					<span className="text-primary font-semibold">export default</span>{" "}
+					<span className="text-primary font-semibold">export default</span>
+					{" "}
 					<span className="text-[var(--syntax-function)]">adminConfig</span>
 					{`({
   sidebar: {
@@ -1107,21 +1114,31 @@ function AdminShowcaseSection() {
 									Posts
 								</li>
 								<li className="text-muted-foreground flex items-center gap-2">
-									<Icon ssr icon="ph:users" width={14} height={14} />
+									<Icon
+										ssr
+										icon="ph:users"
+										width={14}
+										height={14}
+									/>
 									Users
 								</li>
 							</ul>
 							<div className="border-border border-t pt-3">
 								<ul className="space-y-3 pl-1 font-mono text-[12px]">
 									<li className="text-muted-foreground flex items-center gap-2">
-										<Icon ssr icon="ph:gear" width={14} height={14} />
+										<Icon
+											ssr
+											icon="ph:gear"
+											width={14}
+											height={14}
+										/>
 										Settings
 									</li>
 								</ul>
 							</div>
 						</div>
 						<div className="flex-1 p-4">
-							<div className="mb-4 font-mono text-[11px] font-bold tracking-wider uppercase">
+							<div className="mb-4 font-mono text-[11px] font-bold uppercase tracking-wider">
 								Quick actions
 							</div>
 							<div className="mb-5 flex flex-wrap gap-2">
@@ -1129,7 +1146,12 @@ function AdminShowcaseSection() {
 									type="button"
 									className="border-border text-foreground flex items-center gap-1.5 border px-3 py-1.5 font-mono text-[11px]"
 								>
-									<Icon ssr icon="ph:plus" width={12} height={12} />
+									<Icon
+										ssr
+										icon="ph:plus"
+										width={12}
+										height={12}
+									/>
 									Create Post
 								</button>
 							</div>
@@ -1138,7 +1160,10 @@ function AdminShowcaseSection() {
 									{ label: "Total posts", value: "142" },
 									{ label: "Published", value: "89" },
 								].map((s) => (
-									<div key={s.label} className="border-border border p-3">
+									<div
+										key={s.label}
+										className="border-border border p-3"
+									>
 										<div className="text-muted-foreground font-mono text-[9px] uppercase">
 											{s.label}
 										</div>
@@ -1194,7 +1219,10 @@ function AdminShowcaseSection() {
 			<div className="bg-border border-border grid grid-cols-1 gap-[1px] border lg:grid-cols-2">
 				{/* Left: code */}
 				<div className="bg-background">
-					<TerminalBlock label={current.codeLabel} key={`code-${activeTab}`}>
+					<TerminalBlock
+						label={current.codeLabel}
+						key={`code-${activeTab}`}
+					>
 						<div className="admin-step-content">{current.code}</div>
 					</TerminalBlock>
 				</div>
@@ -1204,7 +1232,7 @@ function AdminShowcaseSection() {
 					className="bg-background flex flex-col"
 					key={`mockup-${activeTab}`}
 				>
-					<div className="border-border admin-step-content flex flex-1 flex-col border">
+					<div className="border-border flex flex-1 flex-col border admin-step-content">
 						{current.mockup}
 					</div>
 				</div>
@@ -1237,8 +1265,9 @@ function EndToEndTypesSection() {
 	const snippets: ReactNode[] = [
 		// Step 0: Field def
 		<>
-			<span className="text-primary font-semibold">collection</span>(
-			<span className="text-[var(--syntax-string)]">"posts"</span>){`\n  .`}
+			<span className="text-primary font-semibold">collection</span>
+			(<span className="text-[var(--syntax-string)]">"posts"</span>)
+			{`\n  .`}
 			<span className="text-[var(--syntax-function)]">fields</span>
 			{`(({ f }) => ({
     title:   f.`}
@@ -1264,8 +1293,8 @@ function EndToEndTypesSection() {
 			{` },
     ]),
     author:  f.`}
-			<span className="text-[var(--syntax-function)]">relation</span>(
-			<span className="text-[var(--syntax-string)]">"users"</span>).
+			<span className="text-[var(--syntax-function)]">relation</span>
+			(<span className="text-[var(--syntax-string)]">"users"</span>).
 			<span className="text-[var(--syntax-function)]">required</span>
 			{`(),
   }))`}
@@ -1278,21 +1307,20 @@ function EndToEndTypesSection() {
 			{"\n"}
 			<span className="text-primary font-semibold">import</span>
 			{" _coll_posts "}
-			<span className="text-primary font-semibold">from</span>{" "}
-			<span className="text-[var(--syntax-string)]">
-				"../collections/posts"
-			</span>
+			<span className="text-primary font-semibold">from</span>
+			{" "}
+			<span className="text-[var(--syntax-string)]">"../collections/posts"</span>
 			{"\n"}
 			<span className="text-primary font-semibold">import</span>
 			{" _coll_users "}
-			<span className="text-primary font-semibold">from</span>{" "}
-			<span className="text-[var(--syntax-string)]">
-				"../collections/users"
-			</span>
+			<span className="text-primary font-semibold">from</span>
+			{" "}
+			<span className="text-[var(--syntax-string)]">"../collections/users"</span>
 			{"\n"}
 			<span className="text-primary font-semibold">import</span>
 			{" _job_newsletter "}
-			<span className="text-primary font-semibold">from</span>{" "}
+			<span className="text-primary font-semibold">from</span>
+			{" "}
 			<span className="text-[var(--syntax-string)]">"../jobs/newsletter"</span>
 			{"\n\n"}
 			<span className="text-primary font-semibold">export interface</span>
@@ -1852,21 +1880,11 @@ const SCHEMA_TILES: SchemaTile[] = [
 		label: "generated — REST",
 		snippet: (
 			<>
-				<span className={fn}>GET</span>
-				{`  /api/collections/posts\n`}
-				<span className={fn}>GET</span>
-				{`  /api/collections/posts/`}
-				<span className={num}>:id</span>
-				{`\n`}
-				<span className={fn}>POST</span>
-				{` /api/collections/posts\n`}
-				<span className={fn}>PUT</span>
-				{`  /api/collections/posts/`}
-				<span className={num}>:id</span>
-				{`\n`}
-				<span className={fn}>DEL</span>
-				{`  /api/collections/posts/`}
-				<span className={num}>:id</span>
+				<span className={fn}>GET</span>{`  /api/collections/posts\n`}
+				<span className={fn}>GET</span>{`  /api/collections/posts/`}<span className={num}>:id</span>{`\n`}
+				<span className={fn}>POST</span>{` /api/collections/posts\n`}
+				<span className={fn}>PUT</span>{`  /api/collections/posts/`}<span className={num}>:id</span>{`\n`}
+				<span className={fn}>DEL</span>{`  /api/collections/posts/`}<span className={num}>:id</span>
 			</>
 		),
 	},
@@ -1877,29 +1895,16 @@ const SCHEMA_TILES: SchemaTile[] = [
 		label: "routes/featured.ts",
 		snippet: (
 			<>
-				<span className={kw}>import</span>
-				{" { route } "}
-				<span className={kw}>from</span> <span className={str}>"questpie"</span>
+				<span className={kw}>import</span>{" { route } "}<span className={kw}>from</span>{" "}<span className={str}>"questpie"</span>
 				{"\n\n"}
 				<span className={kw}>export default</span>{" "}
-				<span className={fn}>route</span>
-				{`()
-  .`}
-				<span className={fn}>get</span>
-				{`()
-  .`}
-				<span className={fn}>schema</span>
-				{`(z.object({
+				<span className={fn}>route</span>{`()
+  .`}<span className={fn}>get</span>{`()
+  .`}<span className={fn}>schema</span>{`(z.object({
     tag: z.string().optional(),
   }))
-  .`}
-				<span className={fn}>handler</span>
-				{`(async ({ input, db }) => {
-    `}
-				<span className={kw}>return</span>
-				{` db.posts.`}
-				<span className={fn}>findMany</span>
-				{`({
+  .`}<span className={fn}>handler</span>{`(async ({ input, db }) => {
+    `}<span className={kw}>return</span>{` db.posts.`}<span className={fn}>findMany</span>{`({
       where: { tag: input.tag },
     })
   })`}
@@ -1914,21 +1919,12 @@ const SCHEMA_TILES: SchemaTile[] = [
 		snippet: (
 			<>
 				{"client.collections.posts."}
-				<span className={fn}>subscribe</span>
-				{`({
-  where: { status: { eq: `}
-				<span className={str}>"published"</span>
-				{` } },
+				<span className={fn}>subscribe</span>{`({
+  where: { status: { eq: `}<span className={str}>"published"</span>{` } },
   on: {
-    `}
-				<span className={fn}>created</span>
-				{`: (doc) => addToList(doc),
-    `}
-				<span className={fn}>updated</span>
-				{`: (doc) => updateInList(doc),
-    `}
-				<span className={fn}>deleted</span>
-				{`: (id)  => removeFromList(id),
+    `}<span className={fn}>created</span>{`: (doc) => addToList(doc),
+    `}<span className={fn}>updated</span>{`: (doc) => updateInList(doc),
+    `}<span className={fn}>deleted</span>{`: (id)  => removeFromList(id),
   },
 })`}
 			</>
@@ -1941,37 +1937,17 @@ const SCHEMA_TILES: SchemaTile[] = [
 		label: "client.ts",
 		snippet: (
 			<>
-				<span className={kw}>const</span>
-				{" { docs } = "}
-				<span className={kw}>await</span>
+				<span className={kw}>const</span>{" { docs } = "}<span className={kw}>await</span>
 				{" client.collections.posts."}
-				<span className={fn}>find</span>
-				{`({
-  where: { status: { eq: `}
-				<span className={str}>"published"</span>
-				{` } },
-  with: { author: `}
-				<span className={kw}>true</span>
-				{` },
-  locale: `}
-				<span className={str}>"sk"</span>
-				{`,
+				<span className={fn}>find</span>{`({
+  where: { status: { eq: `}<span className={str}>"published"</span>{` } },
+  with: { author: `}<span className={kw}>true</span>{` },
+  locale: `}<span className={str}>"sk"</span>{`,
 });
 
-docs[`}
-				<span className={num}>0</span>
-				{`].title   `}
-				<span className="text-muted-foreground/60">{" → string"}</span>
-				{`
-docs[`}
-				<span className={num}>0</span>
-				{`].author  `}
-				<span className="text-muted-foreground/60">{" → User"}</span>
-				{`
-docs[`}
-				<span className={num}>0</span>
-				{`].content `}
-				<span className="text-muted-foreground/60">{" → TiptapDoc"}</span>
+docs[`}<span className={num}>0</span>{`].title   `}<span className="text-muted-foreground/60">{" → string"}</span>{`
+docs[`}<span className={num}>0</span>{`].author  `}<span className="text-muted-foreground/60">{" → User"}</span>{`
+docs[`}<span className={num}>0</span>{`].content `}<span className="text-muted-foreground/60">{" → TiptapDoc"}</span>
 			</>
 		),
 	},
@@ -1983,33 +1959,16 @@ docs[`}
 		snippet: (
 			<>
 				<span className={kw}>collection</span>
-				{"("}
-				<span className={str}>"posts"</span>
-				{")"}
+				{"("}<span className={str}>"posts"</span>{")"}
 				{"\n  ."}
-				<span className={fn}>admin</span>
-				{`(({ c }) => ({
-    label: `}
-				<span className={str}>"Posts"</span>
-				{`,
-    icon: c.icon(`}
-				<span className={str}>"ph:article"</span>
-				{`),
+				<span className={fn}>admin</span>{`(({ c }) => ({
+    label: `}<span className={str}>"Posts"</span>{`,
+    icon: c.icon(`}<span className={str}>"ph:article"</span>{`),
   }))
-  .`}
-				<span className={fn}>list</span>
-				{`(({ v }) => v.collectionTable({
-    columns: [`}
-				<span className={str}>"title"</span>
-				{`, `}
-				<span className={str}>"status"</span>
-				{`, `}
-				<span className={str}>"author"</span>
-				{`],
+  .`}<span className={fn}>list</span>{`(({ v }) => v.collectionTable({
+    columns: [`}<span className={str}>"title"</span>{`, `}<span className={str}>"status"</span>{`, `}<span className={str}>"author"</span>{`],
   }))
-  .`}
-				<span className={fn}>form</span>
-				{`(({ v, f }) => v.collectionForm({
+  .`}<span className={fn}>form</span>{`(({ v, f }) => v.collectionForm({
     fields: [f.title, f.content],
     sidebar: { fields: [f.status, f.author] },
   }))`}
@@ -2023,31 +1982,15 @@ docs[`}
 		label: "runtime — zod",
 		snippet: (
 			<>
-				<span className={kw}>const</span>
-				{" postsSchema = z."}
-				<span className={fn}>object</span>
-				{`({
-  title:   z.`}
-				<span className={fn}>string</span>
-				{`().max(`}
-				<span className={num}>255</span>
-				{`),
-  content: `}
-				<span className={fn}>tiptapDocSchema</span>
-				{`.optional(),
-  status:  z.`}
-				<span className={fn}>enum</span>
-				{`([`}
-				<span className={str}>"draft"</span>
-				{`, `}
-				<span className={str}>"published"</span>
-				{`]),
-  author:  z.`}
-				<span className={fn}>number</span>
-				{`().int(),
-  cover:   z.`}
-				<span className={fn}>number</span>
-				{`().int().optional(),
+				<span className={kw}>const</span>{" postsSchema = z."}
+				<span className={fn}>object</span>{`({
+  title:   z.`}<span className={fn}>string</span>{`().max(`}<span className={num}>255</span>{`),
+  content: `}<span className={fn}>tiptapDocSchema</span>{`.optional(),
+  status:  z.`}<span className={fn}>enum</span>{`([`}
+				<span className={str}>"draft"</span>{`, `}
+				<span className={str}>"published"</span>{`]),
+  author:  z.`}<span className={fn}>number</span>{`().int(),
+  cover:   z.`}<span className={fn}>number</span>{`().int().optional(),
 })`}
 			</>
 		),
@@ -2060,41 +2003,21 @@ docs[`}
 		snippet: (
 			<>
 				<span className={kw}>collection</span>
-				{"("}
-				<span className={str}>"posts"</span>
-				{")"}
+				{"("}<span className={str}>"posts"</span>{")"}
 				{"\n  ."}
-				<span className={fn}>fields</span>
-				{"(...)"}
+				<span className={fn}>fields</span>{"(...)"}
 				{"\n  ."}
-				<span className={fn}>access</span>
-				{`({
-    `}
-				<span className={fn}>read</span>
-				{`:   `}
-				<span className={kw}>true</span>
-				{`,
-    `}
-				<span className={fn}>create</span>
-				{`: ({ session }) =>
+				<span className={fn}>access</span>{`({
+    `}<span className={fn}>read</span>{`:   `}<span className={kw}>true</span>{`,
+    `}<span className={fn}>create</span>{`: ({ session }) =>
       !!session,
-    `}
-				<span className={fn}>update</span>
-				{`: ({ session, doc }) =>
+    `}<span className={fn}>update</span>{`: ({ session, doc }) =>
       doc.authorId === session?.user?.id,
-    `}
-				<span className={fn}>delete</span>
-				{`: ({ session }) =>
-      session?.user?.role === `}
-				<span className={str}>"admin"</span>
-				{`,
-    `}
-				<span className={fn}>fields</span>
-				{`: {
+    `}<span className={fn}>delete</span>{`: ({ session }) =>
+      session?.user?.role === `}<span className={str}>"admin"</span>{`,
+    `}<span className={fn}>fields</span>{`: {
       status: ({ session }) =>
-        session?.user?.role === `}
-				<span className={str}>"editor"</span>
-				{`,
+        session?.user?.role === `}<span className={str}>"editor"</span>{`,
     },
   })`}
 			</>
@@ -2108,21 +2031,13 @@ docs[`}
 		snippet: (
 			<>
 				<span className={kw}>collection</span>
-				{"("}
-				<span className={str}>"posts"</span>
-				{")"}
+				{"("}<span className={str}>"posts"</span>{")"}
 				{"\n  ."}
-				<span className={fn}>fields</span>
-				{"(...)"}
+				<span className={fn}>fields</span>{"(...)"}
 				{"\n  ."}
-				<span className={fn}>options</span>
-				{`({
-    versioning: `}
-				<span className={kw}>true</span>
-				{`,
-    timestamps: `}
-				<span className={kw}>true</span>
-				{`,
+				<span className={fn}>options</span>{`({
+    versioning: `}<span className={kw}>true</span>{`,
+    timestamps: `}<span className={kw}>true</span>{`,
   })`}
 			</>
 		),
@@ -2135,25 +2050,12 @@ docs[`}
 		snippet: (
 			<>
 				<span className={kw}>collection</span>
-				{"("}
-				<span className={str}>"posts"</span>
-				{")"}
+				{"("}<span className={str}>"posts"</span>{")"}
 				{"\n  ."}
-				<span className={fn}>fields</span>
-				{`(({ f }) => ({
-    title:   f.`}
-				<span className={fn}>text</span>
-				{`().`}
-				<span className={fn}>localized</span>
-				{`(),
-    content: f.`}
-				<span className={fn}>richText</span>
-				{`().`}
-				<span className={fn}>localized</span>
-				{`(),
-    status:  f.`}
-				<span className={fn}>select</span>
-				{`([...]),
+				<span className={fn}>fields</span>{`(({ f }) => ({
+    title:   f.`}<span className={fn}>text</span>{`().`}<span className={fn}>localized</span>{`(),
+    content: f.`}<span className={fn}>richText</span>{`().`}<span className={fn}>localized</span>{`(),
+    status:  f.`}<span className={fn}>select</span>{`([...]),
   }))`}
 			</>
 		),
@@ -2166,31 +2068,16 @@ docs[`}
 		snippet: (
 			<>
 				<span className={kw}>collection</span>
-				{"("}
-				<span className={str}>"posts"</span>
-				{")"}
+				{"("}<span className={str}>"posts"</span>{")"}
 				{"\n  ."}
-				<span className={fn}>fields</span>
-				{`(({ f }) => ({
-    cover: f.`}
-				<span className={fn}>upload</span>
-				{`({
-      to: `}
-				<span className={str}>"assets"</span>
-				{`,
-      mimeTypes: [`}
-				<span className={str}>"image/*"</span>
-				{`],
+				<span className={fn}>fields</span>{`(({ f }) => ({
+    cover: f.`}<span className={fn}>upload</span>{`({
+      to: `}<span className={str}>"assets"</span>{`,
+      mimeTypes: [`}<span className={str}>"image/*"</span>{`],
     }),
-    pdf:   f.`}
-				<span className={fn}>upload</span>
-				{`({
-      to: `}
-				<span className={str}>"documents"</span>
-				{`,
-      mimeTypes: [`}
-				<span className={str}>"application/pdf"</span>
-				{`],
+    pdf:   f.`}<span className={fn}>upload</span>{`({
+      to: `}<span className={str}>"documents"</span>{`,
+      mimeTypes: [`}<span className={str}>"application/pdf"</span>{`],
     }),
   }))`}
 			</>
@@ -2213,7 +2100,9 @@ function OneSchemaSection() {
 			<div className="bg-border border-border grid grid-cols-1 gap-[1px] border lg:grid-cols-12">
 				<div className="bg-background lg:col-span-5">
 					<TerminalBlock label={activeTile.label} key={`s01-${activeTileIdx}`}>
-						<div className="admin-step-content">{activeTile.snippet}</div>
+						<div className="admin-step-content">
+							{activeTile.snippet}
+						</div>
 					</TerminalBlock>
 				</div>
 				<div className="bg-border grid grid-cols-1 gap-[1px] sm:grid-cols-2 lg:col-span-7">
@@ -2251,145 +2140,35 @@ const DX_CARDS = [
 	{
 		label: "WATCH",
 		lines: [
-			{
-				content: (
-					<>
-						<span className="text-primary">$</span> questpie dev
-					</>
-				),
-				delay: 0,
-			},
-			{
-				content: (
-					<>
-						<span className="text-[var(--status-success)]">&#10003;</span>{" "}
-						Watching...
-					</>
-				),
-				delay: 300,
-			},
-			{
-				content: (
-					<>
-						<span className="text-[var(--status-success)]">&#10003;</span>{" "}
-						server (23 collections)
-					</>
-				),
-				delay: 600,
-			},
-			{
-				content: (
-					<>
-						<span className="text-[var(--status-success)]">&#10003;</span>{" "}
-						admin-client (15 blocks)
-					</>
-				),
-				delay: 900,
-			},
+			{ content: <><span className="text-primary">$</span> questpie dev</>, delay: 0 },
+			{ content: <><span className="text-[var(--status-success)]">&#10003;</span> Watching...</>, delay: 300 },
+			{ content: <><span className="text-[var(--status-success)]">&#10003;</span> server (23 collections)</>, delay: 600 },
+			{ content: <><span className="text-[var(--status-success)]">&#10003;</span> admin-client (15 blocks)</>, delay: 900 },
 		],
 	},
 	{
 		label: "SCAFFOLD",
 		lines: [
-			{
-				content: (
-					<>
-						<span className="text-primary">$</span> questpie add collection
-						products
-					</>
-				),
-				delay: 0,
-			},
-			{
-				content: (
-					<>
-						<span className="text-[var(--status-success)]">&#10003;</span>{" "}
-						Created collections/products.ts
-					</>
-				),
-				delay: 300,
-			},
-			{
-				content: (
-					<>
-						<span className="text-[var(--status-success)]">&#10003;</span>{" "}
-						Regenerated types
-					</>
-				),
-				delay: 600,
-			},
+			{ content: <><span className="text-primary">$</span> questpie add collection products</>, delay: 0 },
+			{ content: <><span className="text-[var(--status-success)]">&#10003;</span> Created collections/products.ts</>, delay: 300 },
+			{ content: <><span className="text-[var(--status-success)]">&#10003;</span> Regenerated types</>, delay: 600 },
 		],
 	},
 	{
 		label: "VALIDATE",
 		lines: [
-			{
-				content: (
-					<span className="text-destructive">
-						&#10007; Server defines blocks/hero
-					</span>
-				),
-				delay: 0,
-			},
-			{
-				content: (
-					<span className="text-destructive">{"  "}but no renderer found</span>
-				),
-				delay: 300,
-			},
-			{
-				content: (
-					<span className="text-primary">
-						&rarr; Create admin/blocks/hero.tsx
-					</span>
-				),
-				delay: 600,
-				blink: true,
-			},
+			{ content: <span className="text-destructive">&#10007; Server defines blocks/hero</span>, delay: 0 },
+			{ content: <span className="text-destructive">{"  "}but no renderer found</span>, delay: 300 },
+			{ content: <span className="text-primary">&rarr; Create admin/blocks/hero.tsx</span>, delay: 600, blink: true },
 		],
 	},
 	{
 		label: "REALTIME",
 		lines: [
-			{
-				content: (
-					<>
-						{`client.realtime.`}
-						<span className="text-[var(--syntax-function)]">subscribe</span>
-						{`(`}
-					</>
-				),
-				delay: 0,
-			},
-			{
-				content: (
-					<>
-						{`  { resource: `}
-						<span className="text-[var(--syntax-string)]">"posts"</span>
-						{` },`}
-					</>
-				),
-				delay: 300,
-			},
-			{
-				content: (
-					<>
-						{`  (event) => `}
-						<span className="text-[var(--syntax-function)]">updateUI</span>
-						{`(event)`}
-					</>
-				),
-				delay: 600,
-			},
-			{
-				content: (
-					<>
-						{`);`}
-						<span className="text-primary animate-pulse">|</span>
-					</>
-				),
-				delay: 900,
-			},
+			{ content: <>{`client.realtime.`}<span className="text-[var(--syntax-function)]">subscribe</span>{`(`}</>, delay: 0 },
+			{ content: <>{`  { resource: `}<span className="text-[var(--syntax-string)]">"posts"</span>{` },`}</>, delay: 300 },
+			{ content: <>{`  (event) => `}<span className="text-[var(--syntax-function)]">updateUI</span>{`(event)`}</>, delay: 600 },
+			{ content: <>{`);`}<span className="animate-pulse text-primary">|</span></>, delay: 900 },
 		],
 	},
 ] as const;
@@ -2555,7 +2334,9 @@ export function LandingPage() {
       doc.authorId === session?.user?.id,
   })
   .`}
-									<span className="text-[var(--syntax-function)]">options</span>
+									<span className="text-[var(--syntax-function)]">
+										options
+									</span>
 									{`({ versioning: `}
 									<span className="text-primary font-semibold">true</span>
 									{` })`}
@@ -2681,9 +2462,7 @@ export function LandingPage() {
 												<div
 													key={lineIdx}
 													className="dx-line"
-													style={{
-														transitionDelay: `${line.delay + cardIdx * 200}ms`,
-													}}
+													style={{ transitionDelay: `${line.delay + cardIdx * 200}ms` }}
 												>
 													{line.content}
 													{lineIdx < card.lines.length - 1 && "\n"}

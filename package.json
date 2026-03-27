@@ -12,7 +12,6 @@
 		"clean:artifacts": "bunx rimraf --glob './**/{dist,build,out,.next}'",
 		"clean:lock": "bunx rimraf --glob ./**/bun.lock",
 		"clean:nm": "bunx rimraf --glob ./**/node_modules",
-		"validate": "bun run ./scripts/validate.ts",
 		"dev": "turbo run dev",
 		"lint": "oxlint",
 		"lint:fix": "oxlint --fix",

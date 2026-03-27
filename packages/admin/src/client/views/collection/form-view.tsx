@@ -366,7 +366,7 @@ const AutosaveIndicator = React.memo(function AutosaveIndicator({
 	if (isSaving) {
 		return (
 			<Badge variant="secondary" className="gap-1.5">
-				<Icon ssr icon="ph:spinner-gap" className="size-3 animate-spin" />
+				<Icon icon="ph:spinner-gap" className="size-3 animate-spin" />
 				{t("autosave.saving")}
 			</Badge>
 		);
@@ -375,7 +375,7 @@ const AutosaveIndicator = React.memo(function AutosaveIndicator({
 	if (isDirty) {
 		return (
 			<Badge variant="outline" className="gap-1.5">
-				<Icon ssr icon="ph:clock-counter-clockwise" className="size-3" />
+				<Icon icon="ph:clock-counter-clockwise" className="size-3" />
 				{t("autosave.unsavedChanges")}
 			</Badge>
 		);
@@ -384,7 +384,7 @@ const AutosaveIndicator = React.memo(function AutosaveIndicator({
 	if (lastSaved) {
 		return (
 			<Badge variant="secondary" className="text-muted-foreground gap-1.5">
-				<Icon ssr icon="ph:check" className="size-3" />
+				<Icon icon="ph:check" className="size-3" />
 				{t("autosave.saved")} {formatTimeAgo(lastSaved)}
 			</Badge>
 		);
@@ -415,12 +415,12 @@ const SaveSubmitButton = React.memo(function SaveSubmitButton({
 		>
 			{isSubmittingNow ? (
 				<>
-					<Icon ssr icon="ph:spinner-gap" className="size-4 animate-spin" />
+					<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
 					{t("common.loading")}
 				</>
 			) : (
 				<>
-					<Icon ssr icon="ph:check" width={16} height={16} />
+					<Icon icon="ph:check" width={16} height={16} />
 					{t("common.save")}
 				</>
 			)}
@@ -1635,7 +1635,7 @@ export default function FormView({
 						/>
 					) : (
 						<div className="bg-warning/20 flex size-8 items-center justify-center rounded-full">
-							<Icon ssr icon="ph:user" className="text-warning size-4" />
+							<Icon icon="ph:user" className="text-warning size-4" />
 						</div>
 					)}
 					<div className="min-w-0 flex-1">
@@ -1648,14 +1648,14 @@ export default function FormView({
 							{t("lock.blockedDescription")}
 						</p>
 					</div>
-					<Icon ssr icon="ph:lock-simple" className="text-warning size-5" />
+					<Icon icon="ph:lock-simple" className="text-warning size-5" />
 				</div>
 			)}
 
 			{/* Warning banner - show when same user has document open elsewhere */}
 			{isOpenElsewhere && (
 				<div className="bg-info/10 border-info/30 mb-4 flex items-center gap-3 border p-3">
-					<Icon ssr icon="ph:browser" className="text-info size-5" />
+					<Icon icon="ph:browser" className="text-info size-5" />
 					<p className="text-info text-sm">{t("lock.openElsewhere")}</p>
 				</div>
 			)}
@@ -1735,7 +1735,7 @@ export default function FormView({
 									{/* Workflow stage badge */}
 									{workflowEnabled && currentStage && (
 										<Badge variant="outline" className="gap-1.5">
-											<Icon ssr icon="ph:git-branch" className="size-3" />
+											<Icon icon="ph:git-branch" className="size-3" />
 											{currentStageLabel}
 										</Badge>
 									)}
@@ -1798,7 +1798,7 @@ export default function FormView({
 										onClick={() => setIsLivePreviewOpen(true)}
 										title={t("preview.livePreview")}
 									>
-										<Icon ssr icon="ph:eye" className="size-4" />
+										<Icon icon="ph:eye" className="size-4" />
 										<span className="sr-only">{t("preview.livePreview")}</span>
 									</Button>
 								)}
@@ -1836,11 +1836,7 @@ export default function FormView({
 													/>
 												}
 											>
-												<Icon
-													ssr
-													icon="ph:arrows-left-right"
-													className="size-4"
-												/>
+												<Icon icon="ph:arrows-left-right" className="size-4" />
 												{t("workflow.transition")}
 											</DropdownMenuTrigger>
 											<DropdownMenuContent align="end">
@@ -1895,11 +1891,7 @@ export default function FormView({
 												/>
 											}
 										>
-											<Icon
-												ssr
-												icon="ph:dots-three-vertical"
-												className="size-4"
-											/>
+											<Icon icon="ph:dots-three-vertical" className="size-4" />
 											<span className="sr-only">{t("common.moreActions")}</span>
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="end">
@@ -1949,7 +1941,7 @@ export default function FormView({
 						{/* Soft-deleted banner */}
 						{item?.deletedAt && (
 							<div className="qa-form-view__deleted-banner border-destructive/30 bg-destructive/5 text-destructive flex items-center gap-2 border px-4 py-3 text-sm">
-								<Icon ssr icon="ph:trash" className="size-4 shrink-0" />
+								<Icon icon="ph:trash" className="size-4 shrink-0" />
 								<span>
 									{t("form.deletedBanner", {
 										date: formatDate(item.deletedAt),
@@ -1980,11 +1972,7 @@ export default function FormView({
 				<DialogContent showCloseButton={false}>
 					<DialogHeader>
 						<DialogTitle className="flex items-center gap-2">
-							<Icon
-								ssr
-								icon="ph:warning-fill"
-								className="text-warning size-5"
-							/>
+							<Icon icon="ph:warning-fill" className="text-warning size-5" />
 							{t("confirm.localeChange")}
 						</DialogTitle>
 						<DialogDescription>
@@ -2074,7 +2062,7 @@ export default function FormView({
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle className="flex items-center gap-2">
-							<Icon ssr icon="ph:arrows-left-right" className="size-5" />
+							<Icon icon="ph:arrows-left-right" className="size-5" />
 							{t("workflow.transitionTo", {
 								stage: transitionTarget?.label ?? transitionTarget?.name ?? "",
 							})}
@@ -2145,11 +2133,7 @@ export default function FormView({
 							className="gap-2"
 						>
 							{transitionMutation.isPending && (
-								<Icon
-									ssr
-									icon="ph:spinner-gap"
-									className="size-4 animate-spin"
-								/>
+								<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
 							)}
 							{transitionSchedule
 								? t("workflow.scheduleLabel")

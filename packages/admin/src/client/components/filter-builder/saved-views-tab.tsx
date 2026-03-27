@@ -63,7 +63,7 @@ export function SavedViewsTab({
 						size="sm"
 						className="h-9 px-3"
 					>
-						<Icon ssr icon="ph:floppy-disk" width={16} height={16} />
+						<Icon icon="ph:floppy-disk" width={16} height={16} />
 					</Button>
 				</div>
 				<p className="text-muted-foreground mt-2 text-xs">
@@ -84,7 +84,7 @@ export function SavedViewsTab({
 
 				{isLoading && (
 					<div className="text-muted-foreground flex justify-center p-4">
-						<Icon ssr icon="ph:spinner-gap" className="size-5 animate-spin" />
+						<Icon icon="ph:spinner-gap" className="size-5 animate-spin" />
 					</div>
 				)}
 
@@ -138,7 +138,7 @@ export function SavedViewsTab({
 									}}
 									className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
 								>
-									<Icon ssr icon="ph:trash" width={14} height={14} />
+									<Icon icon="ph:trash" width={14} height={14} />
 								</Button>
 								<Icon
 									icon="ph:arrow-right"

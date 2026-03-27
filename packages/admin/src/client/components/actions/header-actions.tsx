@@ -148,7 +148,7 @@ export function HeaderActions<TItem = any>({
 					<DropdownMenuTrigger
 						render={<Button variant="outline" size="icon" className="size-9" />}
 					>
-						<Icon ssr icon="ph:dots-three-vertical" className="size-4" />
+						<Icon icon="ph:dots-three-vertical" className="size-4" />
 						<span className="sr-only">More actions</span>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">

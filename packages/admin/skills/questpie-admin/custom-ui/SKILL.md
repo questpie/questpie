@@ -251,9 +251,9 @@ When building custom admin UI, use these patterns:
 import { Icon } from "@iconify/react";
 
 // Phosphor icon set with ph: prefix
-<Icon ssr icon="ph:house" width={20} height={20} />
-<Icon ssr icon="ph:caret-down-bold" width={16} height={16} />  // bold weight
-<Icon ssr icon="ph:heart-fill" width={16} height={16} />        // fill weight
+<Icon icon="ph:house" width={20} height={20} />
+<Icon icon="ph:caret-down-bold" width={16} height={16} />  // bold weight
+<Icon icon="ph:heart-fill" width={16} height={16} />        // fill weight
 ```
 
 ### Toasts

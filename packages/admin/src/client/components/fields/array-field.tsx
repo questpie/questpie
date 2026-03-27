@@ -277,7 +277,7 @@ export function ArrayField({
 											title={t("field.moveUp")}
 											aria-label={t("field.moveUp")}
 										>
-											<Icon ssr icon="ph:caret-up" className="h-3 w-3" />
+											<Icon icon="ph:caret-up" className="h-3 w-3" />
 										</Button>
 										<Button
 											type="button"
@@ -289,7 +289,7 @@ export function ArrayField({
 											title={t("field.moveDown")}
 											aria-label={t("field.moveDown")}
 										>
-											<Icon ssr icon="ph:caret-down" className="h-3 w-3" />
+											<Icon icon="ph:caret-down" className="h-3 w-3" />
 										</Button>
 									</div>
 								)}
@@ -304,7 +304,7 @@ export function ArrayField({
 										title={t("common.remove")}
 										aria-label={t("field.removeItem")}
 									>
-										<Icon ssr icon="ph:trash" className="h-3 w-3" />
+										<Icon icon="ph:trash" className="h-3 w-3" />
 									</Button>
 								)}
 							</div>
@@ -320,7 +320,7 @@ export function ArrayField({
 					onClick={handleAdd}
 					disabled={disabled}
 				>
-					<Icon ssr icon="ph:plus" className="h-4 w-4" />
+					<Icon icon="ph:plus" className="h-4 w-4" />
 					{addLabel}
 				</Button>
 			)}

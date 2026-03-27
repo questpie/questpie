@@ -90,7 +90,7 @@ export function ServicesRenderer({ values, data }: BlockProps<"services">) {
 									<div className="text-muted-foreground flex items-center gap-4 text-sm">
 										{values.showDuration && (
 											<span className="flex items-center gap-1.5">
-												<Icon ssr icon="ph:clock-bold" className="size-4" />
+												<Icon icon="ph:clock-bold" className="size-4" />
 												{service.duration} min
 											</span>
 										)}
@@ -122,7 +122,6 @@ export function ServicesRenderer({ values, data }: BlockProps<"services">) {
 						>
 							{t("blocks.services.viewAll")}
 							<Icon
-								ssr
 								icon="ph:arrow-right"
 								className="size-4 transition-transform group-hover:translate-x-1"
 							/>

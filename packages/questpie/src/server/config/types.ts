@@ -85,13 +85,13 @@ import type { drizzle as drizzleBun } from "drizzle-orm/bun-sql";
 import type { drizzle as drizzlePgLite } from "drizzle-orm/pglite";
 import type { DriverContract } from "flydrive/types";
 
-import type { MailerConfig } from "../modules/core/integrated/mailer/index.js";
-import type { QueueConfig as BaseQueueConfig } from "../modules/core/integrated/queue/types.js";
-import type { RealtimeConfig } from "../modules/core/integrated/realtime/index.js";
+import type { MailerConfig } from "../integrated/mailer/index.js";
+import type { QueueConfig as BaseQueueConfig } from "../integrated/queue/types.js";
+import type { RealtimeConfig } from "../integrated/realtime/index.js";
 import type {
 	SearchAdapter,
 	SearchConfig,
-} from "../modules/core/integrated/search/index.js";
+} from "../integrated/search/index.js";
 import type { Migration } from "../migration/types.js";
 import type { SeedCategory, SeedsConfig } from "../seed/types.js";
 
@@ -443,12 +443,12 @@ export interface QuestpieConfig {
 	/**
 	 * Logger configuration
 	 */
-	logger?: import("../modules/core/integrated/logger").LoggerConfig;
+	logger?: import("../integrated/logger").LoggerConfig;
 
 	/**
 	 * KV store configuration
 	 */
-	kv?: import("../modules/core/integrated/kv").KVConfig;
+	kv?: import("../integrated/kv").KVConfig;
 
 	/**
 	 * Migration configuration
@@ -569,8 +569,27 @@ export interface ContextExtensions {
 }
 
 // ============================================================================
-// Context Resolver
+// Context Extension System
 // ============================================================================
+
+/**
+ * Interface for extending request context via module augmentation.
+ * Add custom properties that will be available in all access functions, hooks, etc.
+ *
+ * @example
+ * ```ts
+ * declare global {
+ *   namespace Questpie {
+ *     interface QuestpieContextExtension {
+ *       tenantId: string | null
+ *       propertyId: string | null
+ *     }
+ *   }
+ * }
+ * ```
+ */
+export interface QuestpieContextExtension
+	extends Questpie.QuestpieContextExtension {}
 
 /**
  * Parameters passed to the context resolver function.

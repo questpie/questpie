@@ -77,7 +77,7 @@ function BlogIndexPage() {
 								)}
 								{post.readingTime && (
 									<span className="flex items-center gap-1">
-										<Icon ssr icon="ph:clock" className="size-3.5" />
+										<Icon icon="ph:clock" className="size-3.5" />
 										{post.readingTime} min read
 									</span>
 								)}

@@ -9,6 +9,7 @@
  */
 
 import type { AppContext } from "#questpie/server/config/app-context.js";
+import { extractAppServices } from "#questpie/server/config/app-context.js";
 
 /**
  * Create a `createContext()` function bound to the given app instance.
@@ -35,7 +36,7 @@ export function createContextFactory(
 		const reqCtx = await app.createContext({
 			accessMode: options?.accessMode ?? "system",
 		});
-		const services = app.extractContext( {
+		const services = extractAppServices(app, {
 			db: app.db,
 			session: reqCtx.session,
 		});

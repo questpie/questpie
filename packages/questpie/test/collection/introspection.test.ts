@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import {
 	type CollectionSchema,
+	extractFormReactiveConfigs,
 	type FieldSchema,
 	introspectCollection,
 	introspectCollections,
@@ -593,3 +594,107 @@ describe("collection introspection", () => {
 });
 
 // ============================================================================
+// Pure Function Tests (no database needed)
+// ============================================================================
+
+describe("extractFormReactiveConfigs", () => {
+	it("returns empty map for null/undefined config", () => {
+		expect(extractFormReactiveConfigs(null)).toEqual({});
+		expect(extractFormReactiveConfigs(undefined)).toEqual({});
+		expect(extractFormReactiveConfigs({})).toEqual({});
+	});
+
+	it("extracts reactive config from fields array", () => {
+		const config = {
+			fields: [
+				{ field: "slug", compute: { deps: ["title"], debounce: 300 } },
+				{ field: "reason", hidden: { deps: ["status"] } },
+				"simple_field", // plain string — no reactive
+			],
+		};
+		const result = extractFormReactiveConfigs(config);
+		expect(result.slug).toBeDefined();
+		expect(result.slug.compute).toBeDefined();
+		expect(result.slug.compute?.watch).toEqual(["title"]);
+		expect(result.slug.compute?.debounce).toBe(300);
+
+		expect(result.reason).toBeDefined();
+		expect(result.reason.hidden).toBeDefined();
+		expect(result.reason.hidden?.watch).toEqual(["status"]);
+
+		// Plain strings should not appear
+		expect(result.simple_field).toBeUndefined();
+	});
+
+	it("extracts reactive config from sections", () => {
+		const config = {
+			fields: [
+				{
+					type: "section",
+					label: "Details",
+					fields: [{ field: "slug", compute: { deps: ["title"] } }],
+				},
+			],
+		};
+		const result = extractFormReactiveConfigs(config);
+		expect(result.slug).toBeDefined();
+		expect(result.slug.compute?.watch).toEqual(["title"]);
+	});
+
+	it("extracts reactive config from tabs", () => {
+		const config = {
+			fields: [
+				{
+					type: "tabs",
+					tabs: [
+						{
+							id: "main",
+							label: "Main",
+							fields: [{ field: "status", readOnly: { deps: ["published"] } }],
+						},
+					],
+				},
+			],
+		};
+		const result = extractFormReactiveConfigs(config);
+		expect(result.status).toBeDefined();
+		expect(result.status.readOnly?.watch).toEqual(["published"]);
+	});
+
+	it("extracts reactive config from sidebar", () => {
+		const config = {
+			sidebar: {
+				fields: [{ field: "visibility", disabled: { deps: ["status"] } }],
+			},
+		};
+		const result = extractFormReactiveConfigs(config);
+		expect(result.visibility).toBeDefined();
+		expect(result.visibility.disabled?.watch).toEqual(["status"]);
+	});
+
+	it("ignores boolean reactive values (static)", () => {
+		const config = {
+			fields: [
+				{ field: "hidden_field", hidden: true },
+				{ field: "readonly_field", readOnly: false },
+			],
+		};
+		const result = extractFormReactiveConfigs(config);
+		// Static boolean values are not reactive — should not appear
+		expect(result.hidden_field).toBeUndefined();
+		expect(result.readonly_field).toBeUndefined();
+	});
+
+	it("merges reactive configs from multiple locations", () => {
+		const config = {
+			fields: [{ field: "slug", compute: { deps: ["title"] } }],
+			sidebar: {
+				fields: [{ field: "slug", hidden: { deps: ["status"] } }],
+			},
+		};
+		const result = extractFormReactiveConfigs(config);
+		// Should have both compute and hidden
+		expect(result.slug.compute?.watch).toEqual(["title"]);
+		expect(result.slug.hidden?.watch).toEqual(["status"]);
+	});
+});

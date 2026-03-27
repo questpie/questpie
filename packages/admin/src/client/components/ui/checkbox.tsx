@@ -29,12 +29,12 @@ function Checkbox({
 					showIndeterminate && "hidden",
 				)}
 			>
-				<Icon ssr icon="ph:check" />
+				<Icon icon="ph:check" />
 			</CheckboxPrimitive.Indicator>
 			{/* Manual indicator for indeterminate state */}
 			{showIndeterminate && (
 				<span className="grid place-content-center text-current [&>svg]:size-3.5">
-					<Icon ssr icon="ph:minus" />
+					<Icon icon="ph:minus" />
 				</span>
 			)}
 		</CheckboxPrimitive.Root>

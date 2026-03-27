@@ -44,7 +44,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 	return (
 		<header
 			role="banner"
-			className="qa-topbar border-border bg-background/92 relative sticky top-0 z-50 flex h-14 w-full items-center justify-between border-b px-4 backdrop-blur-sm md:px-6"
+			className="qa-topbar border-border bg-background/92 backdrop-blur-sm relative sticky top-0 z-50 flex h-14 w-full items-center justify-between border-b px-4 md:px-6"
 		>
 			<div className="qa-topbar__left flex items-center gap-2">
 				{/* Sidebar toggle - works for both mobile (opens sheet) and desktop (collapses) */}
@@ -161,7 +161,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 					aria-label={t("ui.searchPlaceholder")}
 				>
 					<span className="flex items-center gap-2">
-						<Icon ssr icon="ph:magnifying-glass" />
+						<Icon icon="ph:magnifying-glass" />
 						<span className="hidden md:inline">
 							{t("ui.searchPlaceholder")}
 						</span>
@@ -194,15 +194,15 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 						/>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem onClick={() => setTheme("light")}>
-								<Icon ssr icon="ph:sun" className="mr-2 size-4" />
+								<Icon icon="ph:sun" className="mr-2 size-4" />
 								{t("ui.themeLight")}
 							</DropdownMenuItem>
 							<DropdownMenuItem onClick={() => setTheme("dark")}>
-								<Icon ssr icon="ph:moon" className="mr-2 size-4" />
+								<Icon icon="ph:moon" className="mr-2 size-4" />
 								{t("ui.themeDark")}
 							</DropdownMenuItem>
 							<DropdownMenuItem onClick={() => setTheme("system")}>
-								<Icon ssr icon="ph:monitor" className="mr-2 size-4" />
+								<Icon icon="ph:monitor" className="mr-2 size-4" />
 								{t("ui.themeSystem")}
 							</DropdownMenuItem>
 						</DropdownMenuContent>

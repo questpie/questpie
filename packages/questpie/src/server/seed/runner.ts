@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { extractAppServices } from "#questpie/server/config/app-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 
 import type {
@@ -112,7 +113,7 @@ export class SeedRunner {
 		this.log(`🌱 Running ${pending.length} seed(s)...`);
 
 		const reqCtx = await this.app.createContext({ accessMode: "system" });
-		const baseServices = this.app.extractContext( {
+		const baseServices = extractAppServices(this.app, {
 			db: this.app.db,
 			session: (reqCtx as any).session,
 		});
@@ -180,7 +181,7 @@ export class SeedRunner {
 				// Note: We can't fully replace app.db inside a transaction,
 				// so validate mode has limitations — it validates the seed function
 				// doesn't throw, but some side effects (storage, email) won't be rolled back.
-				const txServices = this.app.extractContext( {
+				const txServices = extractAppServices(this.app, {
 					db: tx,
 					session: (reqCtx as any).session,
 				});
@@ -261,7 +262,7 @@ export class SeedRunner {
 		this.log(`🔄 Undoing ${toUndo.length} seed(s)...`);
 
 		const reqCtx = await this.app.createContext({ accessMode: "system" });
-		const baseServices = this.app.extractContext( {
+		const baseServices = extractAppServices(this.app, {
 			db: this.app.db,
 			session: (reqCtx as any).session,
 		});

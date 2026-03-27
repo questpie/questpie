@@ -71,7 +71,7 @@ export function ChipsDisplay({
 									onClick={() => actions.onEdit?.(item)}
 									aria-label={t("field.editItem")}
 								>
-									<Icon ssr icon="ph:pencil" className="size-3" />
+									<Icon icon="ph:pencil" className="size-3" />
 								</Button>
 							)}
 							{actions?.onRemove && (
@@ -83,7 +83,7 @@ export function ChipsDisplay({
 									onClick={() => actions.onRemove?.(item)}
 									aria-label={t("field.removeItem")}
 								>
-									<Icon ssr icon="ph:x" className="size-3" />
+									<Icon icon="ph:x" className="size-3" />
 								</Button>
 							)}
 						</div>
@@ -105,7 +105,7 @@ export function ChipsDisplay({
 							>
 								{iconElement}
 								{displayText}
-								<Icon ssr icon="ph:pencil" className="size-3" />
+								<Icon icon="ph:pencil" className="size-3" />
 							</Badge>
 						</button>
 					);

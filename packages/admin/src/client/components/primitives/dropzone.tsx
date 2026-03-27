@@ -385,7 +385,6 @@ export function Dropzone({
 							</div>
 						) : (
 							<Icon
-								ssr
 								icon="ph:cloud-arrow-up"
 								className={cn(
 									"size-10 transition-colors",

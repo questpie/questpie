@@ -218,7 +218,7 @@ export function SelectMulti<TValue extends string = string>({
 			aria-invalid={ariaInvalid}
 			tabIndex={0}
 			className={cn(
-				"qa-select-multi border-input flex min-h-9 w-full flex-wrap items-center gap-1 border bg-transparent px-3 py-1.5 font-mono text-sm transition-colors",
+				"qa-select-multi border-input bg-transparent font-mono flex min-h-9 w-full flex-wrap items-center gap-1 border px-3 py-1.5 text-sm transition-colors",
 				"focus-within:ring-ring focus-within:border-ring focus-within:ring-2",
 				disabled && "cursor-not-allowed opacity-50",
 				ariaInvalid && "border-destructive ring-destructive/20",
@@ -240,7 +240,7 @@ export function SelectMulti<TValue extends string = string>({
 									onClick={(e) => handleRemove(val, e)}
 									className="hover:bg-muted-foreground/20 rounded-full p-0.5"
 								>
-									<Icon ssr icon="ph:x" className="size-2.5" />
+									<Icon icon="ph:x" className="size-2.5" />
 								</button>
 							)}
 						</Badge>
@@ -259,10 +259,10 @@ export function SelectMulti<TValue extends string = string>({
 						onClick={handleClearAll}
 						className="hover:bg-muted p-0.5 opacity-50 hover:opacity-100"
 					>
-						<Icon ssr icon="ph:x" className="size-3" />
+						<Icon icon="ph:x" className="size-3" />
 					</button>
 				)}
-				<Icon ssr icon="ph:plus" className="size-3.5 opacity-50" />
+				<Icon icon="ph:plus" className="size-3.5 opacity-50" />
 			</div>
 		</div>
 	);
@@ -306,9 +306,7 @@ export function SelectMulti<TValue extends string = string>({
 											: "border-muted-foreground/30",
 									)}
 								>
-									{isSelected && (
-										<Icon ssr icon="ph:check" className="size-3" />
-									)}
+									{isSelected && <Icon icon="ph:check" className="size-3" />}
 								</div>
 								{option.icon}
 								<span className="truncate">{resolveText(option.label)}</span>

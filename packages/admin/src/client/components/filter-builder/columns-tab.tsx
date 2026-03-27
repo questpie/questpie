@@ -68,7 +68,7 @@ function SortableColumnItem({
 				{...attributes}
 				{...listeners}
 			>
-				<Icon ssr icon="ph:dots-six-vertical-bold" width={16} height={16} />
+				<Icon icon="ph:dots-six-vertical-bold" width={16} height={16} />
 			</button>
 			<label className="flex flex-1 cursor-pointer items-center gap-3">
 				<Checkbox checked={isVisible} onCheckedChange={onToggle} />

@@ -180,7 +180,7 @@ export function AcceptInvitePage({
 			>
 				<div className="space-y-4">
 					<Alert variant="destructive">
-						<Icon ssr icon="ph:warning-circle" />
+						<Icon icon="ph:warning-circle" />
 						<AlertDescription>
 							{invitationError?.message || t("auth.invalidOrExpiredInvitation")}
 						</AlertDescription>

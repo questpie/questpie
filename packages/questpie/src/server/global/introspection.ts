@@ -9,9 +9,10 @@ import { z } from "zod";
 
 import { buildFieldBasedSchema } from "#questpie/server/collection/builder/field-schema-builder.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
-import type {
-	FieldReactiveSchema,
-	IntrospectionOptions,
+import {
+	extractFieldReactiveConfig,
+	extractFormReactiveConfigs,
+	type FieldReactiveSchema,
 } from "#questpie/server/collection/introspection.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
@@ -30,7 +31,7 @@ import type {
 import {
 	extractWorkflowFromVersioning,
 	resolveWorkflowConfig,
-} from "#questpie/server/modules/core/workflow/config.js";
+} from "#questpie/server/workflow/config.js";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 // ============================================================================
@@ -298,10 +299,12 @@ export async function introspectGlobal(
 	global: Global<GlobalBuilderState>,
 	context: CRUDContext,
 	app?: unknown,
-	options?: IntrospectionOptions,
 ): Promise<GlobalSchema> {
 	const { state } = global;
 	const fieldDefinitions = state.fieldDefinitions || {};
+	const formReactiveByField = extractFormReactiveConfigs(
+		(state as any).adminForm,
+	);
 
 	// Evaluate global-level access
 	const access = await evaluateGlobalAccess(state, context, app);
@@ -321,8 +324,11 @@ export async function introspectGlobal(
 			// Field doesn't support JSON Schema generation
 		}
 
-		// Reactive enrichment provided by plugins (e.g. admin)
-		const reactive = options?.enrichField?.(fieldDef, name, state as any);
+		// Extract reactive configuration from form config + dynamic field options
+		const reactive = extractFieldReactiveConfig(
+			fieldDef,
+			formReactiveByField[name],
+		);
 
 		fields[name] = {
 			name,
@@ -437,7 +443,9 @@ async function evaluateGlobalAccess(
 	const { access } = state;
 	const appDefaultAccess = (app as any)?.defaultAccess;
 
-	const services = (app as any).extractContext( {
+	const { extractAppServices } =
+		await import("#questpie/server/config/app-context.js");
+	const services = extractAppServices(app, {
 		db: context.db,
 		session: context.session,
 	});

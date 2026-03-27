@@ -275,11 +275,7 @@ export function AssetThumbnail({
 					{...interactiveProps}
 				>
 					<div className="bg-muted flex size-10 items-center justify-center rounded border">
-						<Icon
-							ssr
-							icon={fileIcon}
-							className="text-muted-foreground size-5"
-						/>
+						<Icon icon={fileIcon} className="text-muted-foreground size-5" />
 					</div>
 				</div>
 			);
@@ -320,11 +316,7 @@ export function AssetThumbnail({
 						</video>
 					) : (
 						<div className="flex flex-col items-center justify-center gap-4 p-12">
-							<Icon
-								ssr
-								icon={fileIcon}
-								className="text-muted-foreground size-20"
-							/>
+							<Icon icon={fileIcon} className="text-muted-foreground size-20" />
 							<p className="text-muted-foreground text-sm">
 								{filename || "Video"}
 							</p>
@@ -336,7 +328,7 @@ export function AssetThumbnail({
 			{/* Audio Preview */}
 			{isAudioType && (
 				<div className="flex flex-col items-center justify-center gap-4 p-8">
-					<Icon ssr icon={fileIcon} className="text-muted-foreground size-16" />
+					<Icon icon={fileIcon} className="text-muted-foreground size-16" />
 					{showControls && (
 						<audio
 							src={url}
@@ -358,7 +350,7 @@ export function AssetThumbnail({
 			{/* Other File Types */}
 			{!isImageType && !isVideoType && !isAudioType && (
 				<div className="flex flex-col items-center justify-center gap-4 p-12">
-					<Icon ssr icon={fileIcon} className="text-muted-foreground size-20" />
+					<Icon icon={fileIcon} className="text-muted-foreground size-20" />
 					<p className="text-muted-foreground text-sm">{filename || "File"}</p>
 				</div>
 			)}
@@ -372,7 +364,7 @@ export function AssetThumbnail({
 					nativeButton={false}
 					render={<a href={url} target="_blank" rel="noopener noreferrer" />}
 				>
-					<Icon ssr icon="ph:arrow-square-out-bold" />
+					<Icon icon="ph:arrow-square-out-bold" />
 				</Button>
 			</div>
 		</div>

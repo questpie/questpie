@@ -6,6 +6,7 @@
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
+import { extractAppServices } from "#questpie/server/config/app-context.js";
 import {
 	type RequestContext,
 	runWithContext,
@@ -71,7 +72,7 @@ export async function executeJsonRoute<TInput, TOutput>(
 	const resolvedContext =
 		context ?? (await app.createContext({ accessMode: "system" }));
 
-	const services = app.extractContext( {
+	const services = extractAppServices(app, {
 		db: resolvedContext.db ?? app.db,
 		session: resolvedContext.session,
 	});
@@ -133,7 +134,7 @@ export async function executeRawRoute(
 	const resolvedContext =
 		context ?? (await app.createContext({ accessMode: "system" }));
 
-	const services = app.extractContext( {
+	const services = extractAppServices(app, {
 		db: resolvedContext.db ?? app.db,
 		session: resolvedContext.session,
 	});

@@ -69,7 +69,8 @@ interface WidgetCardProps {
 const variantStyles: Record<WidgetCardVariant, string> = {
 	default: "",
 	compact: "py-3 gap-3",
-	featured: "border-primary/30 bg-gradient-to-br from-primary/5 to-transparent",
+	featured:
+		"border-primary/30 bg-gradient-to-br from-primary/5 to-transparent",
 };
 
 const variantContentStyles: Record<WidgetCardVariant, string> = {
@@ -123,7 +124,7 @@ function WidgetCardError({
 				{onRetry && (
 					<CardAction>
 						<Button variant="ghost" size="icon-xs" onClick={onRetry}>
-							<Icon ssr icon="ph:arrow-clockwise" className="h-3.5 w-3.5" />
+							<Icon icon="ph:arrow-clockwise" className="h-3.5 w-3.5" />
 						</Button>
 					</CardAction>
 				)}
@@ -175,7 +176,11 @@ export function WidgetCard({
 		if (loadingSkeleton) {
 			return (
 				<Card
-					className={cn("flex flex-col", variantStyles[variant], className)}
+					className={cn(
+						"flex flex-col",
+						variantStyles[variant],
+						className,
+					)}
 				>
 					<CardHeader>
 						<Skeleton className="h-4 w-24" />
@@ -298,11 +303,7 @@ export function WidgetCard({
 										onClick={onExpand}
 										title={t("ui.expand")}
 									>
-										<Icon
-											ssr
-											icon="ph:arrows-out-simple"
-											className="h-3.5 w-3.5"
-										/>
+										<Icon icon="ph:arrows-out-simple" className="h-3.5 w-3.5" />
 									</Button>
 								)}
 							</div>

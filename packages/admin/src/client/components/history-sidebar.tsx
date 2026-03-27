@@ -170,7 +170,7 @@ function ActivityTimeline({
 	if (isLoading) {
 		return (
 			<div className="text-muted-foreground flex items-center justify-center py-12">
-				<Icon ssr icon="ph:spinner-gap" className="size-5 animate-spin" />
+				<Icon icon="ph:spinner-gap" className="size-5 animate-spin" />
 			</div>
 		);
 	}
@@ -267,7 +267,7 @@ function VersionsList({
 	if (isLoading) {
 		return (
 			<div className="text-muted-foreground flex items-center justify-center py-12">
-				<Icon ssr icon="ph:spinner-gap" className="size-5 animate-spin" />
+				<Icon icon="ph:spinner-gap" className="size-5 animate-spin" />
 			</div>
 		);
 	}

@@ -22,12 +22,12 @@ export function LLMCopyButton({ markdownUrl }: { markdownUrl: string }) {
 		>
 			{copied ? (
 				<>
-					<Icon ssr icon="ph:check" className="size-3.5" />
+					<Icon icon="ph:check" className="size-3.5" />
 					Copied
 				</>
 			) : (
 				<>
-					<Icon ssr icon="ph:copy" className="size-3.5" />
+					<Icon icon="ph:copy" className="size-3.5" />
 					Copy for AI
 				</>
 			)}

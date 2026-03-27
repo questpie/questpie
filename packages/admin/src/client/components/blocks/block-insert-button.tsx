@@ -75,7 +75,7 @@ export function BlockInsertButton({
 				{/* Add button that appears on hover */}
 				<div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center justify-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
 					<div className="bg-primary text-primary-foreground pointer-events-auto flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-xs shadow-sm">
-						<Icon ssr icon="ph:plus-bold" width={10} height={10} />
+						<Icon icon="ph:plus-bold" width={10} height={10} />
 						<span>{t("common.add")}</span>
 					</div>
 				</div>
@@ -96,7 +96,7 @@ export function BlockInsertButton({
 			>
 				{/* Add button */}
 				<div className="border-border bg-background text-muted-foreground group-hover:border-foreground group-hover:text-foreground relative z-10 flex h-5 w-5 items-center justify-center rounded-full border transition-all">
-					<Icon ssr icon="ph:plus" className="h-3 w-3" />
+					<Icon icon="ph:plus" className="h-3 w-3" />
 				</div>
 
 				{/* Label */}
@@ -116,7 +116,7 @@ export function BlockInsertButton({
 			className={cn("w-full border-dashed", className)}
 			onClick={handleOpen}
 		>
-			<Icon ssr icon="ph:plus" className="mr-2 h-4 w-4" />
+			<Icon icon="ph:plus" className="mr-2 h-4 w-4" />
 			{t("blocks.add")}
 		</Button>
 	);

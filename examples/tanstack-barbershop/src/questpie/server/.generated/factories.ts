@@ -5,7 +5,7 @@
 // ── Core Imports ───────────────────────────────────────────
 import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, Field } from "questpie";
 
-// ── Field Contributions ──────────────────────────────────
+// ── Runtime Field Imports ──────────────────────────────────
 import { adminFields } from "@questpie/admin/server";
 
 const _fieldExt: Record<string, { stateKey: string; resolve: (v: any) => any }> = {

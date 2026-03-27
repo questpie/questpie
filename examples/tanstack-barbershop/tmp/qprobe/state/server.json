@@ -1,9 +1,0 @@
-{
-  "name": "server",
-  "cmd": "bun dev",
-  "pid": 55554,
-  "port": 3000,
-  "ready": "ready in",
-  "timeout": 60000,
-  "startedAt": "2026-03-27T15:23:48.934Z"
-}

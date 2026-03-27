@@ -289,7 +289,7 @@ function LivePreviewContent({
 			{open && (
 				<div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
 					<div className="flex items-center gap-2">
-						<Icon ssr icon="ph:eye" className="text-muted-foreground h-4 w-4" />
+						<Icon icon="ph:eye" className="text-muted-foreground h-4 w-4" />
 						<span className="font-medium">{t("preview.livePreview")}</span>
 					</div>
 
@@ -319,13 +319,13 @@ function LivePreviewContent({
 							className="gap-1.5"
 							title={t("preview.exitTooltip")}
 						>
-							<Icon ssr icon="ph:sign-out" className="h-4 w-4" />
+							<Icon icon="ph:sign-out" className="h-4 w-4" />
 							<span className="hidden sm:inline">
 								{t("preview.exitPreview")}
 							</span>
 						</Button>
 						<Button variant="ghost" size="icon" onClick={onClose}>
-							<Icon ssr icon="ph:x" className="h-4 w-4" />
+							<Icon icon="ph:x" className="h-4 w-4" />
 							<span className="sr-only">{t("common.close")}</span>
 						</Button>
 					</div>

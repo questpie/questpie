@@ -167,7 +167,6 @@ export default function QuickActionsWidget({
 								{action.label}
 							</span>
 							<Icon
-								ssr
 								icon="ph:arrow-right"
 								className="text-muted-foreground h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100"
 							/>

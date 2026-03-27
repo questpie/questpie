@@ -361,7 +361,7 @@ export function RelationSelect<T extends QuestpieApp>({
 								aria-label={t("collection.edit", { name: labelText })}
 								className="rounded-none border-l-0"
 							>
-								<Icon ssr icon="ph:pencil" className="h-4 w-4" />
+								<Icon icon="ph:pencil" className="h-4 w-4" />
 							</Button>
 						)}
 
@@ -376,7 +376,7 @@ export function RelationSelect<T extends QuestpieApp>({
 							aria-label={createLabel}
 							className="rounded-l-none border-l-0"
 						>
-							<Icon ssr icon="ph:plus" className="h-4 w-4" />
+							<Icon icon="ph:plus" className="h-4 w-4" />
 						</Button>
 					</div>
 				)}

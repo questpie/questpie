@@ -22,10 +22,10 @@ bun add -d @questpie/vite-plugin-iconify @iconify/json
 import { iconifyPreload } from "@questpie/vite-plugin-iconify";
 
 export default defineConfig({
-	plugins: [
-		iconifyPreload(),
-		// ... other plugins
-	],
+  plugins: [
+    iconifyPreload(),
+    // ... other plugins
+  ],
 });
 ```
 
@@ -39,28 +39,28 @@ That's it. Use `@iconify/react` as normal:
 ```tsx
 import { Icon } from "@iconify/react";
 
-<Icon ssr icon="ph:check" width={16} height={16} />
-<Icon ssr icon="mdi:home" />
-<Icon ssr icon="tabler:star-filled" />
+<Icon icon="ph:check" width={16} height={16} />
+<Icon icon="mdi:home" />
+<Icon icon="tabler:star-filled" />
 ```
 
 ## Options
 
 ```ts
 iconifyPreload({
-	// Glob patterns for files to scan (default: src/**/*.{ts,tsx,js,jsx})
-	scan: ["src/**/*.{ts,tsx}", "packages/admin/src/**/*.{ts,tsx}"],
+  // Glob patterns for files to scan (default: src/**/*.{ts,tsx,js,jsx})
+  scan: ["src/**/*.{ts,tsx}", "packages/admin/src/**/*.{ts,tsx}"],
 
-	// Always include these icons (for truly dynamic icon names)
-	include: ["ph:spinner", "ph:spinner-gap"],
-});
+  // Always include these icons (for truly dynamic icon names)
+  include: ["ph:spinner", "ph:spinner-gap"],
+})
 ```
 
 ## How icon detection works
 
 The plugin scans for string literals matching the pattern `"prefix:icon-name"` in your source files. This covers:
 
-- `<Icon ssr icon="ph:check" />` — JSX props
+- `<Icon icon="ph:check" />` — JSX props
 - `icon: "ph:article"` — object literals (e.g. server config)
 - `c.icon("ph:layout")` — function arguments
 - `"mdi:home"` — any string literal
@@ -74,14 +74,14 @@ The plugin scans for string literals matching the pattern `"prefix:icon-name"` i
 ```tsx
 // unplugin-icons — requires import per icon
 import IconCheck from "~icons/ph/check";
-<IconCheck />;
+<IconCheck />
 ```
 
 This plugin keeps the standard `@iconify/react` string-based API:
 
 ```tsx
 // @questpie/vite-plugin-iconify — string-based, no imports
-<Icon ssr icon="ph:check" />
+<Icon icon="ph:check" />
 ```
 
 String-based icon names are essential when icons come from server config, database fields, or any runtime source. This just gives us option to preload the icons we know we'll use, while still allowing dynamic usage when needed.

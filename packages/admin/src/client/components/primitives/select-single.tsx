@@ -224,10 +224,10 @@ export function SelectSingle<TValue extends string = string>({
 						}}
 						className="hover:bg-muted -mr-1 p-0.5 opacity-50 hover:opacity-100"
 					>
-						<Icon ssr icon="ph:x" className="size-3" />
+						<Icon icon="ph:x" className="size-3" />
 					</span>
 				)}
-				<Icon ssr icon="ph:caret-up-down" className="size-3.5 opacity-50" />
+				<Icon icon="ph:caret-up-down" className="size-3.5 opacity-50" />
 			</div>
 		</Button>
 	);

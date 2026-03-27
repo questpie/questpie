@@ -63,7 +63,7 @@ function BarbersPage() {
 								<div className="absolute right-0 bottom-0 left-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-6 transition-transform duration-500 group-hover:translate-y-0">
 									<span className="inline-flex items-center gap-2 font-bold text-white">
 										{t("barbers.viewProfile")}{" "}
-										<Icon ssr icon="ph:arrow-right" className="size-4" />
+										<Icon icon="ph:arrow-right" className="size-4" />
 									</span>
 								</div>
 							</div>

@@ -85,7 +85,7 @@ export function NumberInput({
 					disabled={disabled || (min !== undefined && (value ?? 0) <= min)}
 					tabIndex={-1}
 				>
-					<Icon ssr icon="ph:minus" className="size-3" />
+					<Icon icon="ph:minus" className="size-3" />
 				</Button>
 				<Input
 					id={id}
@@ -117,7 +117,7 @@ export function NumberInput({
 					disabled={disabled || (max !== undefined && (value ?? 0) >= max)}
 					tabIndex={-1}
 				>
-					<Icon ssr icon="ph:plus" className="size-3" />
+					<Icon icon="ph:plus" className="size-3" />
 				</Button>
 			</div>
 		);

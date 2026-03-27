@@ -88,7 +88,7 @@ function BlogPostPage() {
 						)}
 						{previewPost.readingTime && (
 							<span className="flex items-center gap-1.5">
-								<Icon ssr icon="ph:clock" className="size-4" />
+								<Icon icon="ph:clock" className="size-4" />
 								{previewPost.readingTime} min read
 							</span>
 						)}

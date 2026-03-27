@@ -160,7 +160,7 @@ export function LocaleSwitcher({
 				onClick={(e) => e.stopPropagation()}
 			>
 				{content}
-				<Icon ssr icon="ph:caret-down" className="size-2.5" />
+				<Icon icon="ph:caret-down" className="size-2.5" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="start" className="min-w-[140px]">
 				{localeOptions.map((locale) => (
@@ -189,7 +189,7 @@ export function LocaleSwitcher({
 							</span>
 						)}
 						{locale.code === resolvedValue && (
-							<Icon ssr icon="ph:check" className="ml-auto size-3" />
+							<Icon icon="ph:check" className="ml-auto size-3" />
 						)}
 					</DropdownMenuItem>
 				))}

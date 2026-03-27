@@ -210,7 +210,7 @@ function AssetItem({
 					)}
 				>
 					{selected && (
-						<Icon ssr icon="ph:check-bold" className="size-3 text-white" />
+						<Icon icon="ph:check-bold" className="size-3 text-white" />
 					)}
 				</div>
 			)}

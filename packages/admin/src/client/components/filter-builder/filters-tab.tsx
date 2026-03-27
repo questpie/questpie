@@ -542,7 +542,7 @@ export function FiltersTab({
 								onClick={() => removeFilter(filter.id)}
 								className="text-muted-foreground hover:text-destructive"
 							>
-								<Icon ssr icon="ph:trash" width={14} height={14} />
+								<Icon icon="ph:trash" width={14} height={14} />
 							</Button>
 						</div>
 						<div className="grid grid-cols-2 gap-2">
@@ -637,7 +637,7 @@ export function FiltersTab({
 					className="flex-1 gap-2"
 					disabled={filterableFields.length === 0}
 				>
-					<Icon ssr icon="ph:plus" width={14} height={14} />
+					<Icon icon="ph:plus" width={14} height={14} />
 					{t("viewOptions.addFilter")}
 				</Button>
 				{filters.length > 0 && (

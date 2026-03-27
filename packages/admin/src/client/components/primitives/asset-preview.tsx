@@ -236,7 +236,11 @@ export function AssetPreview({
 	if (variant === "thumbnail") {
 		// Show skeleton when loading and no actual asset data
 		if (isLoadingAsset) {
-			return <Skeleton className={cn("aspect-square w-full", className)} />;
+			return (
+				<Skeleton
+					className={cn("aspect-square w-full", className)}
+				/>
+			);
 		}
 
 		const isInteractive = onClick && !disabled && asset.id;
@@ -286,7 +290,6 @@ export function AssetPreview({
 					<div className="bg-background absolute inset-0 flex items-center justify-center">
 						<div className="relative">
 							<Icon
-								ssr
 								icon="ph:spinner-gap"
 								className="text-muted-foreground size-6 animate-spin"
 							/>
@@ -310,7 +313,7 @@ export function AssetPreview({
 								nativeButton={false}
 								render={<a href={href} onClick={(e) => e.stopPropagation()} />}
 							>
-								<Icon ssr icon="ph:arrow-square-out-bold" />
+								<Icon icon="ph:arrow-square-out-bold" />
 							</Button>
 						)}
 						{onEdit && (
@@ -323,7 +326,7 @@ export function AssetPreview({
 									onEdit();
 								}}
 							>
-								<Icon ssr icon="ph:pencil-bold" />
+								<Icon icon="ph:pencil-bold" />
 							</Button>
 						)}
 						{onRemove && (
@@ -336,7 +339,7 @@ export function AssetPreview({
 									onRemove();
 								}}
 							>
-								<Icon ssr icon="ph:trash-bold" />
+								<Icon icon="ph:trash-bold" />
 							</Button>
 						)}
 					</div>
@@ -401,7 +404,7 @@ export function AssetPreview({
 						className="text-muted-foreground hover:text-foreground -ml-1 cursor-grab touch-none active:cursor-grabbing"
 						{...dragHandleProps}
 					>
-						<Icon ssr icon="ph:dots-six-vertical-bold" className="size-4" />
+						<Icon icon="ph:dots-six-vertical-bold" className="size-4" />
 					</button>
 				)}
 
@@ -451,7 +454,7 @@ export function AssetPreview({
 								nativeButton={false}
 								render={<a href={href} onClick={(e) => e.stopPropagation()} />}
 							>
-								<Icon ssr icon="ph:arrow-square-out-bold" />
+								<Icon icon="ph:arrow-square-out-bold" />
 							</Button>
 						)}
 						{onEdit && (
@@ -464,7 +467,7 @@ export function AssetPreview({
 									onEdit();
 								}}
 							>
-								<Icon ssr icon="ph:pencil-bold" />
+								<Icon icon="ph:pencil-bold" />
 							</Button>
 						)}
 						{onRemove && (
@@ -478,7 +481,7 @@ export function AssetPreview({
 								}}
 								className="text-destructive hover:text-destructive"
 							>
-								<Icon ssr icon="ph:x-bold" />
+								<Icon icon="ph:x-bold" />
 							</Button>
 						)}
 					</div>
@@ -539,7 +542,7 @@ export function AssetPreview({
 					className="text-muted-foreground hover:text-foreground absolute top-2 left-2 z-10 cursor-grab touch-none rounded p-1 active:cursor-grabbing"
 					{...dragHandleProps}
 				>
-					<Icon ssr icon="ph:dots-six-vertical-bold" className="size-4" />
+					<Icon icon="ph:dots-six-vertical-bold" className="size-4" />
 				</button>
 			)}
 
@@ -601,7 +604,7 @@ export function AssetPreview({
 							onRemove();
 						}}
 					>
-						<Icon ssr icon="ph:x-bold" />
+						<Icon icon="ph:x-bold" />
 					</Button>
 				)}
 			</div>
@@ -632,7 +635,7 @@ export function AssetPreview({
 									<a href={href} onClick={(e) => e.stopPropagation()} />
 								}
 							>
-								<Icon ssr icon="ph:arrow-square-out-bold" />
+								<Icon icon="ph:arrow-square-out-bold" />
 							</Button>
 						)}
 						{onEdit && (
@@ -645,7 +648,7 @@ export function AssetPreview({
 									onEdit();
 								}}
 							>
-								<Icon ssr icon="ph:pencil-bold" />
+								<Icon icon="ph:pencil-bold" />
 							</Button>
 						)}
 					</div>

@@ -194,7 +194,6 @@ function BookingPage() {
 					<div className="flex justify-center">
 						<div className="bg-highlight/10 flex size-24 items-center justify-center rounded-full">
 							<Icon
-								ssr
 								icon="ph:check-circle-fill"
 								className="text-highlight size-16"
 							/>
@@ -251,7 +250,7 @@ function BookingPage() {
 							onClick={handleBack}
 							className="gap-2 text-xs font-bold tracking-widest uppercase"
 						>
-							<Icon ssr icon="ph:arrow-left" className="size-4" />{" "}
+							<Icon icon="ph:arrow-left" className="size-4" />{" "}
 							{t("booking.back")}
 						</Button>
 					)}
@@ -416,7 +415,7 @@ function BookingPage() {
 										className="bg-highlight hover:bg-highlight/90 text-highlight-foreground h-14 px-12 font-bold tracking-widest uppercase"
 									>
 										{t("booking.next")}{" "}
-										<Icon ssr icon="ph:arrow-right" className="ml-2" />
+										<Icon icon="ph:arrow-right" className="ml-2" />
 									</Button>
 								</div>
 							</div>

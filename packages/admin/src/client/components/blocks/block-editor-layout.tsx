@@ -113,7 +113,7 @@ export function BlockEditorLayout({
 						className="mt-4"
 						onClick={handleOpenSidebar}
 					>
-						<Icon ssr icon="ph:plus" className="mr-2 h-4 w-4" />
+						<Icon icon="ph:plus" className="mr-2 h-4 w-4" />
 						Add block
 					</Button>
 				</div>

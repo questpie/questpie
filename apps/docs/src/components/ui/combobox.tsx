@@ -45,7 +45,7 @@ function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
 			className={cn(className)}
 			{...props}
 		>
-			<Icon ssr icon="ph:x" className="pointer-events-none" />
+			<Icon icon="ph:x" className="pointer-events-none" />
 		</ComboboxPrimitive.Clear>
 	);
 }
@@ -155,7 +155,7 @@ function ComboboxItem({
 					<span className="pointer-events-none absolute right-2 flex items-center justify-center" />
 				}
 			>
-				<Icon ssr icon="ph:check" className="pointer-events-none" />
+				<Icon icon="ph:check" className="pointer-events-none" />
 			</ComboboxPrimitive.ItemIndicator>
 		</ComboboxPrimitive.Item>
 	);
@@ -257,7 +257,7 @@ function ComboboxChip({
 					className="-ml-1 opacity-50 hover:opacity-100"
 					data-slot="combobox-chip-remove"
 				>
-					<Icon ssr icon="ph:x" className="pointer-events-none" />
+					<Icon icon="ph:x" className="pointer-events-none" />
 				</ComboboxPrimitive.ChipRemove>
 			)}
 		</ComboboxPrimitive.Chip>

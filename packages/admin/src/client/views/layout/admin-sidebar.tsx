@@ -423,16 +423,13 @@ function QuestpieSymbol({ className }: { className?: string }) {
 			xmlns="http://www.w3.org/2000/svg"
 			viewBox="0 0 24 24"
 			fill="none"
-			className={cn("size-6 shrink-0", className)}
+			className={cn(
+				"size-6 shrink-0",
+				className,
+			)}
 		>
 			<title>QUESTPIE</title>
-			<path
-				d="M22 10V2H2V22H10"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="square"
-				className="text-[#0a0a0a] dark:text-white"
-			/>
+			<path d="M22 10V2H2V22H10" stroke="currentColor" strokeWidth="2" strokeLinecap="square" className="text-[#0a0a0a] dark:text-white" />
 			<path d="M23 13H13V23H23V13Z" fill="#B700FF" />
 		</svg>
 	);
@@ -939,7 +936,7 @@ function UserFooter() {
 							)}
 						>
 							<div className="qa-sidebar__user-avatar bg-sidebar-primary/10 text-sidebar-primary border-sidebar-primary/20 flex size-8 shrink-0 items-center justify-center border">
-								<Icon ssr icon="ph:user-bold" className="size-4" />
+								<Icon icon="ph:user-bold" className="size-4" />
 							</div>
 							{!collapsed && (
 								<>
@@ -978,14 +975,14 @@ function UserFooter() {
 							<DropdownMenuSeparator />
 							{/* My Account - link to user detail */}
 							<DropdownMenuItem onClick={handleMyAccount}>
-								<Icon ssr icon="ph:user-circle" className="size-4" />
+								<Icon icon="ph:user-circle" className="size-4" />
 								{t("auth.myAccount")}
 							</DropdownMenuItem>
 							{/* UI Language Switcher */}
 							{hasMultipleUiLocales && (
 								<DropdownMenuSub>
 									<DropdownMenuSubTrigger>
-										<Icon ssr icon="ph:globe" />
+										<Icon icon="ph:globe" />
 										{t("locale.uiLanguage")}
 									</DropdownMenuSubTrigger>
 
@@ -1022,7 +1019,7 @@ function UserFooter() {
 							{hasMultipleContentLocales && (
 								<DropdownMenuSub>
 									<DropdownMenuSubTrigger>
-										<Icon ssr icon="ph:translate" />
+										<Icon icon="ph:translate" />
 										{t("locale.contentLanguage")}
 									</DropdownMenuSubTrigger>
 									<DropdownMenuSubContent>
@@ -1060,7 +1057,7 @@ function UserFooter() {
 							)}
 							<DropdownMenuSeparator />
 							<DropdownMenuItem variant="destructive" onClick={handleLogout}>
-								<Icon ssr icon="ph:sign-out" className="size-4" />
+								<Icon icon="ph:sign-out" className="size-4" />
 								{t("auth.logout")}
 							</DropdownMenuItem>
 						</DropdownMenuContent>

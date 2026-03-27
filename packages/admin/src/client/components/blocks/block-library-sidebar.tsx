@@ -181,7 +181,6 @@ export function BlockLibrarySidebar({
 					{categories.length === 0 ? (
 						<div className="flex flex-col items-center justify-center py-12 text-center">
 							<Icon
-								ssr
 								icon="ph:cube"
 								className="text-muted-foreground/50 mb-4 h-12 w-12"
 							/>

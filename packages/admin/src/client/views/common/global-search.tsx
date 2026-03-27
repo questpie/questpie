@@ -456,7 +456,6 @@ export function GlobalSearch({
 					<div className="flex shrink-0 items-center gap-1">
 						{isSearching && (
 							<Icon
-								ssr
 								icon="ph:spinner"
 								className="text-muted-foreground h-4 w-4 animate-spin"
 							/>
@@ -512,11 +511,7 @@ export function GlobalSearch({
 						<div className="text-muted-foreground py-8 text-center text-sm">
 							{isSearching ? (
 								<div className="flex items-center justify-center gap-2">
-									<Icon
-										ssr
-										icon="ph:spinner"
-										className="h-4 w-4 animate-spin"
-									/>
+									<Icon icon="ph:spinner" className="h-4 w-4 animate-spin" />
 									<span>{t("globalSearch.searching")}</span>
 								</div>
 							) : (

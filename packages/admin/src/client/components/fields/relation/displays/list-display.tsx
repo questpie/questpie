@@ -93,7 +93,7 @@ export function ListDisplay({
 								className="text-muted-foreground hover:text-foreground cursor-grab"
 								aria-label={t("field.dragToReorder")}
 							>
-								<Icon ssr icon="ph:dots-six-vertical" className="h-4 w-4" />
+								<Icon icon="ph:dots-six-vertical" className="h-4 w-4" />
 							</button>
 						)}
 
@@ -120,7 +120,7 @@ export function ListDisplay({
 								title={t("common.edit")}
 								aria-label={t("field.editItem")}
 							>
-								<Icon ssr icon="ph:pencil" className="h-3 w-3" />
+								<Icon icon="ph:pencil" className="h-3 w-3" />
 							</Button>
 						)}
 
@@ -135,7 +135,7 @@ export function ListDisplay({
 								title={t("common.remove")}
 								aria-label={t("field.removeItem")}
 							>
-								<Icon ssr icon="ph:x" className="h-3 w-3" />
+								<Icon icon="ph:x" className="h-3 w-3" />
 							</Button>
 						)}
 					</div>
@@ -163,7 +163,7 @@ export function ListDisplay({
 							>
 								{smallIconElement}
 								{displayText}
-								<Icon ssr icon="ph:pencil" className="size-3" />
+								<Icon icon="ph:pencil" className="size-3" />
 							</button>
 						</li>
 					);
@@ -180,7 +180,7 @@ export function ListDisplay({
 							>
 								{smallIconElement}
 								{displayText}
-								<Icon ssr icon="ph:arrow-right" className="size-3" />
+								<Icon icon="ph:arrow-right" className="size-3" />
 							</CollectionEditLink>
 						</li>
 					);

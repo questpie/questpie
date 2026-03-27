@@ -241,22 +241,18 @@ export const pages = collection("pages")
 	});
 ```
 
-| Strategy    | Behavior                                                           |
-| ----------- | ------------------------------------------------------------------ |
-| `"instant"` | Patches applied locally only — fastest, no server round-trip       |
-| `"server"`  | Every change round-trips through server before preview updates     |
-| `"hybrid"`  | Local patches for instant response + server reconcile derived data |
+| Strategy    | Behavior                                                            |
+| ----------- | ------------------------------------------------------------------- |
+| `"instant"` | Patches applied locally only — fastest, no server round-trip        |
+| `"server"`  | Every change round-trips through server before preview updates      |
+| `"hybrid"`  | Local patches for instant response + server reconcile derived data  |
 
 ### Frontend Integration
 
 Use `useQuestpiePreview` (replaces the old `useCollectionPreview`) with `<PreviewRoot>`, `<PreviewField>`, and `<PreviewBlock>` components:
 
 ```tsx
-import {
-	useQuestpiePreview,
-	PreviewRoot,
-	PreviewField,
-} from "@questpie/admin/client";
+import { useQuestpiePreview, PreviewRoot, PreviewField } from "@questpie/admin/client";
 
 function PagePreview({ initialData }) {
 	const router = useRouter();
@@ -267,9 +263,7 @@ function PagePreview({ initialData }) {
 
 	return (
 		<PreviewRoot>
-			<h1>
-				<PreviewField path="title">{data.title}</PreviewField>
-			</h1>
+			<h1><PreviewField path="title">{data.title}</PreviewField></h1>
 		</PreviewRoot>
 	);
 }
@@ -393,7 +387,7 @@ For the full server-side setup (context resolver, type augmentation, access rule
    import { CaretDown } from "@phosphor-icons/react";
    // CORRECT
    import { Icon } from "@iconify/react";
-   <Icon ssr icon="ph:caret-down" width={16} height={16} />;
+   <Icon icon="ph:caret-down" width={16} height={16} />;
    ```
 
 4. **HIGH: Using lucide-react icons** — use `@iconify/react` with Phosphor icon set.

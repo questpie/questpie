@@ -170,7 +170,7 @@ function MenuItems({
 				<>
 					<SubMenu>
 						<SubMenuTrigger>
-							<Icon ssr icon="ph:arrow-up" className="h-4 w-4" />
+							<Icon icon="ph:arrow-up" className="h-4 w-4" />
 							{t("blocks.addAbove")}
 						</SubMenuTrigger>
 						<SubMenuContent>
@@ -184,7 +184,7 @@ function MenuItems({
 					</SubMenu>
 					<SubMenu>
 						<SubMenuTrigger>
-							<Icon ssr icon="ph:arrow-down" className="h-4 w-4" />
+							<Icon icon="ph:arrow-down" className="h-4 w-4" />
 							{t("blocks.addBelow")}
 						</SubMenuTrigger>
 						<SubMenuContent>
@@ -199,7 +199,7 @@ function MenuItems({
 					{canHaveChildren && (
 						<SubMenu>
 							<SubMenuTrigger>
-								<Icon ssr icon="ph:plus" className="h-4 w-4" />
+								<Icon icon="ph:plus" className="h-4 w-4" />
 								{t("blocks.addChild")}
 							</SubMenuTrigger>
 							<SubMenuContent>
@@ -218,7 +218,7 @@ function MenuItems({
 
 			{/* Duplicate */}
 			<MenuItem onClick={handleDuplicate}>
-				<Icon ssr icon="ph:copy" className="h-4 w-4" />
+				<Icon icon="ph:copy" className="h-4 w-4" />
 				{t("common.duplicate")}
 			</MenuItem>
 
@@ -226,7 +226,7 @@ function MenuItems({
 
 			{/* Delete */}
 			<MenuItem variant="destructive" onClick={handleRemove}>
-				<Icon ssr icon="ph:trash" className="h-4 w-4" />
+				<Icon icon="ph:trash" className="h-4 w-4" />
 				{t("common.delete")}
 			</MenuItem>
 		</>
@@ -288,7 +288,7 @@ export function BlockItemDropdownMenu({
 					/>
 				}
 			>
-				<Icon ssr icon="ph:dots-three-vertical" className="h-4 w-4" />
+				<Icon icon="ph:dots-three-vertical" className="h-4 w-4" />
 				<span className="sr-only">Block actions</span>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">

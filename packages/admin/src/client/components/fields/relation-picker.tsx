@@ -481,7 +481,7 @@ export function RelationPicker<T extends QuestpieApp>({
 						title={createLabel}
 						aria-label={createLabel}
 					>
-						<Icon ssr icon="ph:plus" className="h-4 w-4" />
+						<Icon icon="ph:plus" className="h-4 w-4" />
 					</Button>
 				</div>
 			)}

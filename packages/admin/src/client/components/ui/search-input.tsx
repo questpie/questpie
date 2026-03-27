@@ -110,7 +110,7 @@ export function SearchInput({
 							size="icon-xs"
 							className="text-muted-foreground hover:text-foreground"
 						>
-							<Icon ssr icon="ph:x" className="size-3" />
+							<Icon icon="ph:x" className="size-3" />
 						</InputGroupButton>
 					)}
 					{showShortcut && <Kbd>{shortcut}</Kbd>}
