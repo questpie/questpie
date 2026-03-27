@@ -35,6 +35,7 @@ import {
 	resolveDashboardCallback,
 	resolveSidebarCallback,
 } from "../../../proxy-factories.js";
+import { adminConfigDTOSchema } from "../dto/admin-config.dto.js";
 import {
 	type App,
 	getAccessContext,
@@ -757,22 +758,8 @@ async function processDashboardItems(
 
 const getAdminConfigSchema = z.object({}).optional();
 
-// Output schema — uses z.record(z.string(), z.any()) for complex nested configs
-// instead of z.unknown() to signal that these are structured objects, not opaque blobs
-const getAdminConfigOutputSchema = z.object({
-	dashboard: z.record(z.string(), z.any()).optional(),
-	sidebar: z.object({ sections: z.array(z.record(z.string(), z.any())) }).optional(),
-	branding: z.record(z.string(), z.any()).optional(),
-	blocks: z.record(z.string(), z.record(z.string(), z.any())).optional(),
-	collections: z.record(z.string(), z.record(z.string(), z.any())).optional(),
-	globals: z.record(z.string(), z.record(z.string(), z.any())).optional(),
-	uploads: z
-		.object({
-			collections: z.array(z.string()),
-			defaultCollection: z.string().optional(),
-		})
-		.optional(),
-});
+// Output schema — typed DTO schema with discriminated shapes
+const getAdminConfigOutputSchema = adminConfigDTOSchema;
 
 // ============================================================================
 // Functions
