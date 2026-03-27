@@ -148,6 +148,15 @@ export interface GlobalGlobalHookContext<TData = any> {
 	search: any;
 	/** Realtime service */
 	realtime: any;
+
+	/**
+	 * Queue a callback to run after the current transaction commits.
+	 * If called outside a transaction, the callback runs immediately (fire-and-forget).
+	 *
+	 * Use this for side effects that should only happen when data is durable:
+	 * dispatching jobs, sending emails, search indexing, webhook calls.
+	 */
+	onAfterCommit: (callback: () => Promise<void>) => void;
 }
 
 /**

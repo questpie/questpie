@@ -27,14 +27,17 @@ import {
 } from "#questpie/server/collection/crud/relation-resolvers/index.js";
 import { resolveFieldKey } from "#questpie/server/collection/crud/shared/field-resolver.js";
 import {
-	appendRealtimeChange,
+	executeGlobalGlobalHooks,
+	executeGlobalGlobalTransitionHooks,
+} from "#questpie/server/collection/crud/shared/global-hooks.js";
+import {
 	executeAccessRule,
 	extractNestedLocalizationSchemas,
 	getDb,
 	getRestrictedReadFields,
 	mergeI18nRows,
 	normalizeContext,
-	notifyRealtimeChange,
+	onAfterCommit,
 	splitLocalizedFields,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/index.js";
@@ -257,37 +260,6 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			db,
 			originalDocument,
 		});
-	}
-
-	/**
-	 * Append a realtime change event
-	 * Delegates to shared appendRealtimeChange utility
-	 */
-	private async appendRealtimeChange(
-		params: {
-			operation: "create" | "update" | "delete" | "bulk_update" | "bulk_delete";
-			recordId?: string | null;
-			payload?: Record<string, unknown>;
-		},
-		context: CRUDContext,
-		db: any,
-	) {
-		return appendRealtimeChange(
-			params,
-			context,
-			db,
-			this.app,
-			this.state.name,
-			"global",
-		);
-	}
-
-	/**
-	 * Notify realtime subscribers of a change
-	 * Delegates to shared notifyRealtimeChange utility
-	 */
-	private async notifyRealtimeChange(change: unknown) {
-		return notifyRealtimeChange(change, this.app);
 	}
 
 	/**
@@ -700,7 +672,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				existing,
 			);
 
-			await this.executeHooks(
+			await this.executeHooksWithGlobal(
+				"beforeChange",
 				this.state.hooks?.beforeChange,
 				this.createHookContext({
 					data: existing,
@@ -710,7 +683,6 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				}),
 			);
 
-			let changeEvent: any = null;
 			const updatedRecord = await withTransaction(db, async (tx: any) => {
 				const { localized, nonLocalized } =
 					this.splitLocalizedFields(regularFields);
@@ -827,7 +799,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						db: tx,
 					}),
 				);
-				await this.executeHooks(
+				await this.executeHooksWithGlobal(
+					"afterChange",
 					this.state.hooks?.afterChange,
 					this.createHookContext({
 						data: updatedRecord,
@@ -835,15 +808,6 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						context: normalized,
 						db: tx,
 					}),
-				);
-
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: existing ? "update" : "create",
-						recordId: baseRecord.id,
-					},
-					normalized,
-					tx,
 				);
 
 				return updatedRecord;
@@ -864,7 +828,6 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				);
 			}
 
-			await this.notifyRealtimeChange(changeEvent);
 			return updatedRecord;
 		};
 	}
@@ -1036,7 +999,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				}),
 			);
 
-			await this.executeHooks(
+			await this.executeHooksWithGlobal(
+				"beforeChange",
 				this.state.hooks?.beforeChange,
 				this.createHookContext({
 					data: existing,
@@ -1164,7 +1128,8 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						db: tx,
 					}),
 				);
-				await this.executeHooks(
+				await this.executeHooksWithGlobal(
+					"afterChange",
 					this.state.hooks?.afterChange,
 					this.createHookContext({
 						data: updatedRecord,
@@ -1282,13 +1247,13 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			} as GlobalTransitionHookContext;
 
 			// Execute beforeTransition hooks (throw to abort)
-			await this.executeTransitionHooks(
+			await this.executeTransitionHooksWithGlobal(
+				"beforeTransition",
 				this.state.hooks?.beforeTransition,
 				transitionCtx,
 			);
 
 			// Create version snapshot at target stage (no data mutation)
-			let changeEvent: any = null;
 			await withTransaction(db, async (tx: any) => {
 				await createVersionRecord({
 					tx,
@@ -1302,26 +1267,14 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					workflowStage: toStage,
 					workflowFromStage: fromStage,
 				});
-
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: "update",
-						payload: {
-							workflowTransition: { from: fromStage, to: toStage },
-						},
-					},
-					normalized,
-					tx,
-				);
 			});
 
 			// Execute afterTransition hooks
-			await this.executeTransitionHooks(
+			await this.executeTransitionHooksWithGlobal(
+				"afterTransition",
 				this.state.hooks?.afterTransition,
 				transitionCtx,
 			);
-
-			await this.notifyRealtimeChange(changeEvent);
 
 			return existing;
 		};
@@ -1576,6 +1529,77 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		const hookArray = Array.isArray(hooks) ? hooks : [hooks];
 		for (const hook of hookArray) {
 			await hook(ctx);
+		}
+	}
+
+	/**
+	 * Execute global-specific hooks AND global global hooks (from core module).
+	 * Follows the same ordering as collection CRUD:
+	 * - `before*` → global hooks first, then entity-specific hooks
+	 * - `after*`  → entity-specific hooks first, then global hooks
+	 */
+	private async executeHooksWithGlobal(
+		hookName: "beforeChange" | "afterChange",
+		entityHooks: GlobalHookFunction | GlobalHookFunction[] | undefined,
+		ctx: GlobalHookContext,
+	) {
+		const globalEntries = this.app?.globalHooks?.globals;
+		const isBefore = hookName.startsWith("before");
+
+		// Enrich context with onAfterCommit for global hooks
+		const enrichedCtx = { ...ctx, onAfterCommit } as any;
+
+		if (isBefore) {
+			// Global before* first, then entity-specific
+			await executeGlobalGlobalHooks(
+				globalEntries,
+				hookName,
+				this.state.name,
+				enrichedCtx,
+			);
+			await this.executeHooks(entityHooks, ctx);
+		} else {
+			// Entity-specific first, then global after*
+			await this.executeHooks(entityHooks, ctx);
+			await executeGlobalGlobalHooks(
+				globalEntries,
+				hookName,
+				this.state.name,
+				enrichedCtx,
+			);
+		}
+	}
+
+	/**
+	 * Execute transition hooks AND global global transition hooks.
+	 * Follows the same ordering as collection CRUD:
+	 * - `beforeTransition` → global hooks first, then entity-specific hooks
+	 * - `afterTransition`  → entity-specific hooks first, then global hooks
+	 */
+	private async executeTransitionHooksWithGlobal(
+		hookName: "beforeTransition" | "afterTransition",
+		entityHooks: any | any[] | undefined,
+		ctx: GlobalTransitionHookContext,
+	) {
+		const globalEntries = this.app?.globalHooks?.globals;
+		const isBefore = hookName === "beforeTransition";
+
+		if (isBefore) {
+			await executeGlobalGlobalTransitionHooks(
+				globalEntries,
+				hookName,
+				this.state.name,
+				ctx as any,
+			);
+			await this.executeTransitionHooks(entityHooks, ctx);
+		} else {
+			await this.executeTransitionHooks(entityHooks, ctx);
+			await executeGlobalGlobalTransitionHooks(
+				globalEntries,
+				hookName,
+				this.state.name,
+				ctx as any,
+			);
 		}
 	}
 
