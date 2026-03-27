@@ -8,7 +8,7 @@ import {
 	buildStorageFileUrl,
 	generateSignedUrlToken,
 	verifySignedUrlToken,
-} from "../../src/server/integrated/storage/signed-url.js";
+} from "../../src/server/modules/core/integrated/storage/signed-url.js";
 
 describe("signed-url", () => {
 	const testSecret = "test-secret-key-12345";

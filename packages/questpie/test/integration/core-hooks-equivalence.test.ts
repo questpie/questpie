@@ -23,7 +23,7 @@ import {
 	type RealtimeAdapter,
 	type RealtimeChangeEvent,
 } from "../../src/server/index.js";
-import { scheduledTransitionJob } from "../../src/server/workflow/index.js";
+import { scheduledTransitionJob } from "../../src/server/modules/core/workflow/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";

@@ -6,7 +6,7 @@ import { collection } from "../../src/server/index.js";
 import {
 	createPostgresSearchAdapter,
 	type PostgresSearchAdapter,
-} from "../../src/server/integrated/search/adapters/postgres.js";
+} from "../../src/server/modules/core/integrated/search/adapters/postgres.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";

@@ -9,7 +9,7 @@ import {
 	type InferEmailTemplateContext,
 	type EmailResult,
 	type EmailHandlerArgs,
-} from "../../../src/server/integrated/mailer/template.js";
+} from "../../../src/server/modules/core/integrated/mailer/template.js";
 
 describe("email() factory", () => {
 	it("returns the definition unchanged", () => {

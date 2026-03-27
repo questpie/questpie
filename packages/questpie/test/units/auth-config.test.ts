@@ -4,7 +4,7 @@ import type { BetterAuthOptions } from "better-auth";
 import { admin, bearer } from "better-auth/plugins";
 
 import { authConfig } from "../../src/server/config/factories.js";
-import { mergeAuthOptions } from "../../src/server/integrated/auth/merge.js";
+import { mergeAuthOptions } from "../../src/server/modules/core/integrated/auth/merge.js";
 
 describe("authConfig", () => {
 	test("should return the same options object passed in", () => {

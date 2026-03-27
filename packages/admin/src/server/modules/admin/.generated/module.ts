@@ -24,6 +24,7 @@ import { actionFunctions as _route_executeAction } from "../routes/execute-actio
 import { localeFunctions as _route_locales } from "../routes/locales";
 import { previewFunctions as _route_preview } from "../routes/preview";
 import { reactiveFunctions as _route_reactive } from "../routes/reactive";
+import { getApp as _route_routeHelpers } from "../routes/route-helpers";
 import { setupFunctions as _route_setup } from "../routes/setup";
 import { translationFunctions as _route_translations } from "../routes/translations";
 import { widgetDataFunctions as _route_widgetData } from "../routes/widget-data";
@@ -57,7 +58,7 @@ export interface AdminCollections {
 	verification: typeof _coll_verification;
 }
 
-export type AdminRoutes = typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
+export type AdminRoutes = { routeHelpers: typeof _route_routeHelpers } & typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
 
 export interface AdminViews {
 	collectionForm: typeof _view_collectionForm;
@@ -94,6 +95,7 @@ const _module = {
 		..._route_locales,
 		..._route_preview,
 		..._route_reactive,
+		routeHelpers: _route_routeHelpers,
 		..._route_setup,
 		..._route_translations,
 		..._route_widgetData,
