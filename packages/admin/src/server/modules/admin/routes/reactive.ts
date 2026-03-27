@@ -358,7 +358,7 @@ function getReactiveHandler(
 	type: "collection" | "global" = "collection",
 ): ((ctx: ReactiveContext) => any) | null {
 	const entity = getEntity(app, entityName, type);
-	const formConfig = (entity.state as any).adminForm;
+	const formConfig = getEntityState(entity).adminForm;
 
 	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
 	if (!fieldEntry) {

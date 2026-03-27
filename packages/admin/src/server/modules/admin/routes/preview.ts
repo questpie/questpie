@@ -331,7 +331,7 @@ const getPreviewUrl = route()
 		}
 
 		// Get preview config from collection state
-		const previewConfig = (collection.state as any).adminPreview as
+		const previewConfig = getEntityState(collection).adminPreview as
 			| PreviewConfig
 			| undefined;
 
