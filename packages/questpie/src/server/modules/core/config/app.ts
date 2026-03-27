@@ -14,6 +14,7 @@
 import type {
 	GlobalCollectionHookContext,
 	GlobalCollectionTransitionHookContext,
+	GlobalGlobalHookContext,
 } from "#questpie/server/config/global-hooks-types.js";
 import {
 	TransitionScheduledError,
@@ -193,12 +194,78 @@ const scheduledTransitionHook = {
 };
 
 // ============================================================================
+// Global (globals) hooks
+// ============================================================================
+
+/**
+ * Realtime hook for globals — appends changes to log + broadcasts after commit.
+ * Globals only have afterChange (no delete operation).
+ */
+const globalRealtimeHook = {
+	afterChange: async (ctx: GlobalGlobalHookContext) => {
+		if (!ctx.realtime) return;
+
+		ctx.onAfterCommit(async () => {
+			try {
+				const change = await ctx.realtime.appendChange({
+					resourceType: "global",
+					resource: ctx.global,
+					operation: "update",
+					recordId: ctx.data?.id ?? null,
+					locale: ctx.locale ?? null,
+					payload: ctx.data as Record<string, unknown>,
+				});
+				if (change) {
+					await ctx.realtime.notify(change);
+				}
+			} catch {
+				// Realtime log table may not exist yet
+			}
+		});
+	},
+};
+
+/**
+ * Search indexing hook for globals — schedules async index after change.
+ */
+const globalSearchHook = {
+	afterChange: async (ctx: GlobalGlobalHookContext) => {
+		if (!ctx.search) return;
+		const recordId = ctx.data?.id;
+		if (!recordId) return;
+
+		ctx.onAfterCommit(async () => {
+			try {
+				const scheduled = ctx.search.scheduleIndex(
+					ctx.global,
+					String(recordId),
+				);
+				if (!scheduled) {
+					const title = ctx.data?._title || ctx.data?.id;
+					await ctx.search.index({
+						collection: ctx.global,
+						recordId: String(recordId),
+						locale: ctx.locale ?? "en",
+						title: String(title),
+					});
+				}
+			} catch (err) {
+				ctx.logger.error(
+					`[Core] Search index failed for global ${ctx.global}:${recordId}:`,
+					err,
+				);
+			}
+		});
+	},
+};
+
+// ============================================================================
 // Export
 // ============================================================================
 
 export default {
 	hooks: {
 		collections: [realtimeHook, searchHook, scheduledTransitionHook],
-		globals: [],
+		globals: [globalRealtimeHook, globalSearchHook],
 	},
 };
