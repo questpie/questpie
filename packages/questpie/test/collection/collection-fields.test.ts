@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import type { JsonValue } from "../../src/server/fields/builtin/json.js";
+import type { JsonValue } from "../../src/server/fields/builtin-factories/json.js";
 import { collection } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";

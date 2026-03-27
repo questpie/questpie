@@ -5,9 +5,9 @@
  * Usage: f.text(255).required(), f.number().min(0), etc.
  */
 
-import type { BuiltinFields } from "./builtin/defaults.js";
+import type { BuiltinFields } from "./builtin-factories/index.js";
 
-export type { BuiltinFields } from "./builtin/defaults.js";
+export type { BuiltinFields } from "./builtin-factories/index.js";
 
 import type { FieldState } from "./field-class-types.js";
 import type { Field } from "./field-class.js";

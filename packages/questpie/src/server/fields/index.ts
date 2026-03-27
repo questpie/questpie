@@ -37,7 +37,7 @@ export {
 	type InferFieldsFromFactory,
 } from "./builder.js";
 // Built-in fields map (used by codegen-generated factories to construct merged field defs)
-export { builtinFields } from "./builtin/defaults.js";
+export { builtinFields } from "./builtin-factories/index.js";
 // Built-in field factories
 export * from "./builtin-factories/index.js";
 // Field builder class

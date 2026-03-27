@@ -59,3 +59,50 @@ export {
 	upload,
 } from "./upload.js";
 export { type UrlFieldMeta, type UrlFieldState, url } from "./url.js";
+
+// ============================================================================
+// Builtin Fields Map
+// ============================================================================
+
+import { boolean } from "./boolean.js";
+import { date } from "./date.js";
+import { datetime } from "./datetime.js";
+import { email } from "./email.js";
+import { from } from "./from.js";
+import { json } from "./json.js";
+import { number } from "./number.js";
+import { object } from "./object.js";
+import { relation } from "./relation.js";
+import { select } from "./select.js";
+import { text } from "./text.js";
+import { textarea } from "./textarea.js";
+import { time } from "./time.js";
+import { upload } from "./upload.js";
+import { url } from "./url.js";
+
+/**
+ * All builtin field factories as a single map.
+ * Used by codegen-generated factories and the field builder proxy.
+ */
+export const builtinFields = {
+	text,
+	textarea,
+	email,
+	url,
+	number,
+	boolean,
+	date,
+	datetime,
+	time,
+	select,
+	upload,
+	relation,
+	object,
+	json,
+	from,
+} as const;
+
+/**
+ * Type for the builtin fields map.
+ */
+export type BuiltinFields = typeof builtinFields;

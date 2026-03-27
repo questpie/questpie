@@ -33,7 +33,7 @@ import {
 import {
 	type BuiltinFields,
 	builtinFields,
-} from "#questpie/server/fields/builtin/defaults.js";
+} from "#questpie/server/fields/builtin-factories/index.js";
 import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 import type { SearchableConfig } from "#questpie/server/integrated/search/index.js";
 import type { Override } from "#questpie/shared/type-utils.js";
