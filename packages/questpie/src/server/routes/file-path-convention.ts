@@ -38,19 +38,26 @@ export function filePathToRoutePattern(fileKey: string): string {
 }
 
 /**
- * Convert a route pattern back to a file-path convention (inverse).
- * Useful for error messages and debugging.
+ * Convert a route matcher pattern back to a file-based route key (inverse of filePathToRoutePattern).
+ *
+ * @param pattern - Route pattern (e.g., "users/:id/posts")
+ * @returns File-based route key (e.g., "users/[id]/posts")
  */
 export function routePatternToFilePath(pattern: string): string {
 	return pattern
 		.split("/")
 		.map((segment) => {
+			// Wildcard: *slug → [...slug]
 			if (segment.startsWith("*")) {
-				return `[...${segment.slice(1)}]`;
+				const name = segment.slice(1);
+				return `[...${name}]`;
 			}
+			// Parameterized: :id → [id]
 			if (segment.startsWith(":")) {
-				return `[${segment.slice(1)}]`;
+				const name = segment.slice(1);
+				return `[${name}]`;
 			}
+			// Literal: as-is
 			return segment;
 		})
 		.join("/");
