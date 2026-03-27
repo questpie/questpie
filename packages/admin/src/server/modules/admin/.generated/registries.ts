@@ -21,13 +21,10 @@ interface _RegComponents {
 	icon: typeof _comp_icon;
 }
 
-import type _fields from "../fields";
-type _FieldTypes = typeof _fields;
 
 declare global {
 	namespace Questpie {
 		interface ViewsRegistry extends _RegViews {}
 		interface ComponentsRegistry extends _RegComponents {}
-		interface FieldTypesMap extends _FieldTypes {}
 	}
 }

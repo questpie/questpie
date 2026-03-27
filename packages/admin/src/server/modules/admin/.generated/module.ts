@@ -39,7 +39,6 @@ import _comp_icon from "../components/icon";
 
 // ── Singles ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
-import _fields from "../fields";
 
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
@@ -118,7 +117,6 @@ const _module = {
 	config: {
 		admin: _adminConfig,
 	},
-	fields: _fields,
 };
 
 export type AdminModule = typeof _module;
