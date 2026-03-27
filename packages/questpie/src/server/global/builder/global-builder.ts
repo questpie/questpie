@@ -8,7 +8,7 @@ import {
 import {
 	type BuiltinFields,
 	builtinFields,
-} from "#questpie/server/fields/builtin-factories/index.js";
+} from "#questpie/server/modules/core/fields/index.js";
 import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 import { Global } from "#questpie/server/global/builder/global.js";
 import type {

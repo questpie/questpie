@@ -6,4 +6,4 @@ export {
 	scheduledTransitionJob,
 	scheduledTransitionSchema,
 	type ScheduledTransitionPayload,
-} from "#questpie/server/modules/core/jobs/scheduled-transition.js";
+} from "../jobs/scheduled-transition.js";

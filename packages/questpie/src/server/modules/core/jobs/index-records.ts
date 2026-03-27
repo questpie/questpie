@@ -19,7 +19,7 @@
 import { z } from "zod";
 
 import type { Questpie } from "#questpie/server/config/questpie.js";
-import { job } from "#questpie/server/integrated/queue/job.js";
+import { job } from "../integrated/queue/job.js";
 
 /**
  * Schema for index records job payload

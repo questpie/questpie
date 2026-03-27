@@ -16,7 +16,7 @@ import type {
 	FieldAccess as FieldDefinitionAccess,
 	FieldLocation,
 } from "#questpie/server/fields/types.js";
-import type { SearchableConfig } from "#questpie/server/integrated/search/index.js";
+import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/index.js";
 
 /**
  * Title expression type - field name (key from fields or virtuals)

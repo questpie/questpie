@@ -1,6 +1,6 @@
 import { admin, bearer } from "better-auth/plugins";
 
-import { auth } from "#questpie/server/integrated/auth/merge.js";
+import { auth } from "#questpie/server/modules/core/integrated/auth/merge.js";
 
 auth({
 	baseURL: process.env.BETTER_AUTH_URL,

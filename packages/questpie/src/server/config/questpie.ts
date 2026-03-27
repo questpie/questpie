@@ -36,22 +36,22 @@ import {
 	GlobalBuilder,
 } from "#questpie/server/global/builder/index.js";
 import { createTranslator } from "#questpie/server/i18n/translator.js";
-import { KVService } from "#questpie/server/integrated/kv/index.js";
-import { LoggerService } from "#questpie/server/integrated/logger/index.js";
-import { MailerService } from "#questpie/server/integrated/mailer/index.js";
+import { KVService } from "#questpie/server/modules/core/integrated/kv/index.js";
+import { LoggerService } from "#questpie/server/modules/core/integrated/logger/index.js";
+import { MailerService } from "#questpie/server/modules/core/integrated/mailer/index.js";
 import {
 	createQueueClient,
 	type QueueClient,
-} from "#questpie/server/integrated/queue/index.js";
+} from "#questpie/server/modules/core/integrated/queue/index.js";
 import {
 	questpieRealtimeLogTable,
 	RealtimeService,
-} from "#questpie/server/integrated/realtime/index.js";
+} from "#questpie/server/modules/core/integrated/realtime/index.js";
 import {
 	createSearchService,
 	type SearchService,
-} from "#questpie/server/integrated/search/index.js";
-import { createDiskDriver } from "#questpie/server/integrated/storage/create-driver.js";
+} from "#questpie/server/modules/core/integrated/search/index.js";
+import { createDiskDriver } from "#questpie/server/modules/core/integrated/storage/create-driver.js";
 import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
 import {
 	ServiceBuilder,

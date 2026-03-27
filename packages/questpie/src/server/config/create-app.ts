@@ -20,7 +20,7 @@ import {
 	mergeMessagesIntoConfig,
 	mergeTranslationsConfig,
 } from "#questpie/server/i18n/translator.js";
-import { mergeAuthOptions } from "#questpie/server/integrated/auth/merge.js";
+import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
 import coreModule from "#questpie/server/modules/core/.generated/module.js";
 
 // ============================================================================

@@ -106,7 +106,7 @@ import {
 	extractWorkflowFromVersioning,
 	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
-} from "#questpie/server/workflow/config.js";
+} from "#questpie/server/modules/core/workflow/config.js";
 
 export class CRUDGenerator<TState extends CollectionBuilderState> {
 	private readonly workflowConfig: ResolvedWorkflowConfig | undefined;
