@@ -131,7 +131,7 @@ function isPolymorphicTarget(target: RelationTarget): boolean {
 }
 
 function buildRelationMetadata(
-	state: import("../field-class-types.js").FieldRuntimeState,
+	state: import("../../../fields/field-class-types.js").FieldRuntimeState,
 ): RelationFieldMetadata {
 	const to = state.to as RelationTarget;
 	const targetCollection =
