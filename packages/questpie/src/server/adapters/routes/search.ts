@@ -17,7 +17,7 @@ import type {
 	CollectionAccessFilter,
 	PopulatedSearchResponse,
 	SearchMeta,
-} from "../../integrated/search/types.js";
+} from "../../modules/core/integrated/search/types.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { parseRouteBody } from "../utils/request.js";

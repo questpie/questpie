@@ -85,13 +85,13 @@ import type { drizzle as drizzleBun } from "drizzle-orm/bun-sql";
 import type { drizzle as drizzlePgLite } from "drizzle-orm/pglite";
 import type { DriverContract } from "flydrive/types";
 
-import type { MailerConfig } from "../integrated/mailer/index.js";
-import type { QueueConfig as BaseQueueConfig } from "../integrated/queue/types.js";
-import type { RealtimeConfig } from "../integrated/realtime/index.js";
+import type { MailerConfig } from "../modules/core/integrated/mailer/index.js";
+import type { QueueConfig as BaseQueueConfig } from "../modules/core/integrated/queue/types.js";
+import type { RealtimeConfig } from "../modules/core/integrated/realtime/index.js";
 import type {
 	SearchAdapter,
 	SearchConfig,
-} from "../integrated/search/index.js";
+} from "../modules/core/integrated/search/index.js";
 import type { Migration } from "../migration/types.js";
 import type { SeedCategory, SeedsConfig } from "../seed/types.js";
 
@@ -443,12 +443,12 @@ export interface QuestpieConfig {
 	/**
 	 * Logger configuration
 	 */
-	logger?: import("../integrated/logger").LoggerConfig;
+	logger?: import("../modules/core/integrated/logger").LoggerConfig;
 
 	/**
 	 * KV store configuration
 	 */
-	kv?: import("../integrated/kv").KVConfig;
+	kv?: import("../modules/core/integrated/kv").KVConfig;
 
 	/**
 	 * Migration configuration

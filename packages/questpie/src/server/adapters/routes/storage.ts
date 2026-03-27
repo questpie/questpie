@@ -7,7 +7,7 @@
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig, StorageVisibility } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
-import { verifySignedUrlToken } from "../../integrated/storage/signed-url.js";
+import { verifySignedUrlToken } from "../../modules/core/integrated/storage/signed-url.js";
 import type { AdapterConfig, AdapterContext, UploadFile } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { resolveUploadFile } from "../utils/request.js";
