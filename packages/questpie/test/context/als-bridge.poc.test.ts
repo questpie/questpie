@@ -25,7 +25,7 @@ import {
 	type ServiceDef,
 	Scope,
 	ScopedContainer,
-} from "./scoped-container.js";
+} from "../../src/server/services/scoped-container.js";
 
 // ============================================================================
 // 1. Minimal ALS bridge implementation (what Phase 5 will build)
