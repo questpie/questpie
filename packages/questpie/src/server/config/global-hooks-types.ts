@@ -34,6 +34,10 @@ export interface GlobalCollectionHookContext<TData = any, TOriginal = any> {
 	search: any;
 	/** Realtime service */
 	realtime: any;
+	/** Collection CRUD APIs */
+	collections: Record<string, any>;
+	/** Global CRUD APIs */
+	globals: Record<string, any>;
 
 	// ---- Bulk metadata (present when operation is part of a batch) ----
 
@@ -92,6 +96,10 @@ export interface GlobalCollectionTransitionHookContext<TData = any> {
 	search: any;
 	/** Realtime service */
 	realtime: any;
+	/** Collection CRUD APIs */
+	collections: Record<string, any>;
+	/** Global CRUD APIs */
+	globals: Record<string, any>;
 }
 
 /**
@@ -148,6 +156,14 @@ export interface GlobalGlobalHookContext<TData = any> {
 	search: any;
 	/** Realtime service */
 	realtime: any;
+	/** Collection CRUD APIs */
+	collections: Record<string, any>;
+	/** Global CRUD APIs */
+	globals: Record<string, any>;
+	/** Collection CRUD APIs */
+	collections: Record<string, any>;
+	/** Global CRUD APIs */
+	globals: Record<string, any>;
 
 	/**
 	 * Queue a callback to run after the current transaction commits.
@@ -190,6 +206,10 @@ export interface GlobalGlobalTransitionHookContext<TData = any> {
 	search: any;
 	/** Realtime service */
 	realtime: any;
+	/** Collection CRUD APIs */
+	collections: Record<string, any>;
+	/** Global CRUD APIs */
+	globals: Record<string, any>;
 }
 
 /**
