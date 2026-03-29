@@ -160,10 +160,6 @@ export interface GlobalGlobalHookContext<TData = any> {
 	collections: Record<string, any>;
 	/** Global CRUD APIs */
 	globals: Record<string, any>;
-	/** Collection CRUD APIs */
-	collections: Record<string, any>;
-	/** Global CRUD APIs */
-	globals: Record<string, any>;
 
 	/**
 	 * Queue a callback to run after the current transaction commits.

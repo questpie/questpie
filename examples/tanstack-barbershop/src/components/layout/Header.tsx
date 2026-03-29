@@ -121,6 +121,7 @@ export function Header({
 					{/* Locale Switcher */}
 					<DropdownMenu>
 						<DropdownMenuTrigger
+							nativeButton={false}
 							render={
 								<Button
 									variant="ghost"
@@ -235,6 +236,7 @@ export function Header({
 									</span>
 									<DropdownMenu>
 										<DropdownMenuTrigger
+											nativeButton={false}
 											render={<Button variant="outline" size="sm" />}
 										>
 											<Icon icon="ph:globe" className="mr-2 size-4" />

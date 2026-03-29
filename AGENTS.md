@@ -409,8 +409,8 @@ Inside `packages/questpie`:
 base-ui uses `render` prop, NOT `asChild`:
 
 ```tsx
-// ✅ Correct
-<DialogTrigger render={<Button>Open</Button>} />
+// ✅ Correct — render prop + nativeButton={false} when render is not a <button>
+<DialogTrigger nativeButton={false} render={<Button>Open</Button>} />
 
 // ❌ Wrong — asChild is Radix, not base-ui
 <DialogTrigger asChild><Button>Open</Button></DialogTrigger>
