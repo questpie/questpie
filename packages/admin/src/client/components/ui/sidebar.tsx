@@ -238,7 +238,7 @@ function Sidebar({
 				<div
 					data-sidebar="sidebar"
 					data-slot="sidebar-inner"
-					className="qa-sidebar bg-sidebar border-sidebar-border flex size-full flex-col border-r group-data-[variant=floating]:border group-data-[variant=floating]:shadow-lg"
+					className="qa-sidebar bg-sidebar border-sidebar-border flex size-full flex-col group-data-[variant=floating]:border group-data-[variant=floating]:shadow-lg"
 				>
 					{children}
 				</div>
@@ -303,7 +303,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
 		<main
 			data-slot="sidebar-inset"
 			className={cn(
-				"qa-sidebar-inset relative flex min-w-0 flex-1 flex-col border-l border-border md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+				"qa-sidebar-inset border-border relative flex min-w-0 flex-1 flex-col md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
 				className,
 			)}
 			{...props}

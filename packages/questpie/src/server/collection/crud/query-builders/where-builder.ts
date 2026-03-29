@@ -627,7 +627,7 @@ export function buildBelongsToExistsClause(
 		return undefined;
 	}
 
-	const relatedCrud = app.api.collections[relation.collection];
+	const relatedCrud = app.collections[relation.collection];
 	const relatedTable = relatedCrud["~internalRelatedTable"];
 	const relatedState = relatedCrud["~internalState"];
 
@@ -719,7 +719,7 @@ export function buildHasManyExistsClause(
 
 	if (!app || relation.fields) return undefined;
 
-	const relatedCrud = app.api.collections[relation.collection];
+	const relatedCrud = app.collections[relation.collection];
 	const relatedTable = relatedCrud["~internalRelatedTable"];
 	const relatedState = relatedCrud["~internalState"];
 	const reverseRelationName = relation.relationName;
@@ -799,8 +799,8 @@ export function buildManyToManyExistsClause(
 
 	if (!app || !relation.through) return undefined;
 
-	const relatedCrud = app.api.collections[relation.collection];
-	const junctionCrud = app.api.collections[relation.through];
+	const relatedCrud = app.collections[relation.collection];
+	const junctionCrud = app.collections[relation.through];
 	const relatedTable = relatedCrud["~internalRelatedTable"];
 	const junctionTable = junctionCrud["~internalRelatedTable"];
 	const relatedState = relatedCrud["~internalState"];

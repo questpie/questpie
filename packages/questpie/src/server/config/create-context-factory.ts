@@ -40,6 +40,6 @@ export function createContextFactory(
 			db: app.db,
 			session: reqCtx.session,
 		});
-		return { ...services, locale: reqCtx.locale } as unknown as AppContext;
+		return { ...services, locale: reqCtx.locale } as AppContext;
 	};
 }

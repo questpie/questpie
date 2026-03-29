@@ -10,17 +10,7 @@ import { eq, sql } from "drizzle-orm";
 import { route, type Questpie } from "questpie";
 import { z } from "zod";
 
-// ============================================================================
-// Type Helpers
-// ============================================================================
-
-/**
- * Helper to get typed app from handler context.
- * Used internally for better IDE support without affecting the public API.
- */
-function getApp(ctx: any): Questpie<any> {
-	return ctx.app as Questpie<any>;
-}
+import { getApp } from "./route-helpers.js";
 
 // ============================================================================
 // Schema Definitions

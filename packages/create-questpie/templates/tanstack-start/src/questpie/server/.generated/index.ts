@@ -91,8 +91,8 @@ declare module "questpie" {
 		realtime: App["realtime"];
 
 		// Entity APIs
-		collections: App["api"]["collections"];
-		globals: App["api"]["globals"];
+		collections: App["collections"];
+		globals: App["globals"];
 
 		// Request-scoped
 		session: Awaited<ReturnType<App["auth"]["api"]["getSession"]>> | null;

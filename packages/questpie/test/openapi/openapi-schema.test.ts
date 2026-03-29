@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { generateOpenApiSpec } from "../../../openapi/src/generator/index.js";
-import { collection, global } from "../../src/server/index.js";
+import { collection, global } from "../../src/exports/index.js";
 
 describe("OpenAPI schema generation", () => {
 	describe("collection schemas", () => {

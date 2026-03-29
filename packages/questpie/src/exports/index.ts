@@ -54,6 +54,7 @@ export {
 export type {
 	ExtractModuleProp,
 	ExtractModulePropArr,
+	MergeModuleProp,
 	RegistryProp,
 	ServiceCustomNamespaceInstances,
 	ServiceDefinitionsInNamespace,
@@ -82,24 +83,147 @@ export type { AppStateConfig, ResolvedAppStateConfig } from "#questpie/server/co
 export * from "#questpie/server/config/questpie.js";
 export * from "#questpie/server/config/types.js";
 export * from "#questpie/server/errors/index.js";
-export * from "#questpie/server/fields/index.js";
+// Field builder system (expanded from fields/index.ts barrel)
+export {
+	type BuiltinFields,
+	createFieldBuilder,
+	createFieldsCallbackContext,
+	extractFieldDefinitions,
+	type FieldBuilderProxy,
+	type FieldInputs,
+	type FieldOutputs,
+	type FieldsCallbackContext,
+	type FieldValues,
+	type InferFieldsFromFactory,
+} from "#questpie/server/fields/builder.js";
+export * from "#questpie/server/modules/core/fields/index.js";
+export { Field, field } from "#questpie/server/fields/field-class.js";
+export type {
+	ArrayFieldState,
+	DefaultFieldState,
+	ExtractInputType,
+	ExtractSelectType,
+	ExtractWhereType,
+	FieldRuntimeState,
+	FieldState,
+} from "#questpie/server/fields/field-class-types.js";
+export {
+	extractDependencies,
+	getDebounce,
+	isReactiveConfig,
+	type OptionsConfig,
+	type OptionsContext,
+	type OptionsHandler,
+	type OptionsResult,
+	type ReactiveAdminMeta,
+	type ReactiveConfig,
+	type ReactiveContext,
+	type ReactiveHandler,
+	type ReactiveServerContext,
+	type SerializedOptionsConfig,
+	type SerializedReactiveConfig,
+	type TrackingResult,
+	trackDependencies,
+	trackDepsFunction,
+} from "#questpie/server/fields/reactive.js";
+export type {
+	ContextualOperators,
+	FieldAccessContext,
+	FieldHookContext,
+	FieldHooks,
+	FieldMetadata,
+	FieldMetadataBase,
+	FieldType,
+	FieldTypeRegistry,
+	JoinBuilder,
+	NestedFieldMetadata,
+	OperatorFn,
+	OperatorMap,
+	QueryContext,
+	RelationFieldMetadata,
+	SelectFieldMetadata,
+	SelectModifier,
+} from "#questpie/server/fields/types.js";
+// v3 field primitives
+export { fieldType, wrapFieldComplete } from "#questpie/server/fields/field-type.js";
+export type { FieldTypeDefinition } from "#questpie/server/fields/field-type.js";
+export type {
+	FieldCommonMethods,
+	FieldWithMethods,
+} from "#questpie/server/fields/field-with-methods.js";
+export type * from "#questpie/server/fields/reactive-types.js";
 export { global } from "#questpie/server/global/builder/global-builder.js";
-export * from "#questpie/server/global/builder/index.js";
-export * from "#questpie/server/global/crud/index.js";
+// Global builder (expanded from global/builder/index.ts barrel)
+export {
+	type AdminFormViewSchema as AdminGlobalFormViewSchema,
+	type AdminGlobalSchema,
+	type GlobalAccessInfo,
+	type GlobalAccessResult,
+	type GlobalFieldAccessInfo,
+	type GlobalFieldSchema,
+	type GlobalSchema,
+	introspectGlobal,
+	introspectGlobals,
+} from "#questpie/server/global/introspection.js";
+export type { GlobalFieldsOf, GlobalStateOf } from "#questpie/server/global/builder/extensions.js";
+export * from "#questpie/server/global/builder/global.js";
+export * from "#questpie/server/global/builder/global-builder.js";
+export * from "#questpie/server/global/builder/types.js";
+export * from "#questpie/server/global/crud/global-crud-generator.js";
+export * from "#questpie/server/global/crud/types.js";
 export * from "#questpie/server/i18n/types.js";
-export { auth } from "#questpie/server/integrated/auth/merge.js";
-export * from "#questpie/server/integrated/auth/index.js";
-export * from "#questpie/server/integrated/mailer/adapters/index.js";
-export * from "#questpie/server/integrated/mailer/index.js";
-export { email } from "#questpie/server/integrated/mailer/template.js";
-export * from "#questpie/server/integrated/queue/index.js";
-export { job } from "#questpie/server/integrated/queue/job.js";
-export * from "#questpie/server/integrated/realtime/index.js";
-export * from "#questpie/server/integrated/search/index.js";
-export * from "#questpie/server/integrated/storage/signed-url.js";
+export { auth } from "#questpie/server/modules/core/integrated/auth/merge.js";
+export * from "#questpie/server/modules/core/integrated/auth/types.js";
+export * from "#questpie/server/modules/core/integrated/mailer/adapters/console.adapter.js";
+export * from "#questpie/server/modules/core/integrated/mailer/adapters/smtp.adapter.js";
+export * from "#questpie/server/modules/core/integrated/mailer/adapter.js";
+export * from "#questpie/server/modules/core/integrated/mailer/service.js";
+export {
+	email,
+	type EmailHandlerArgs,
+	type EmailResult,
+	type EmailTemplateDefinition,
+	type EmailTemplateNames,
+	type GetEmailTemplate,
+	type InferEmailTemplateContext,
+	type InferEmailTemplateInput,
+} from "#questpie/server/modules/core/integrated/mailer/template.js";
+export * from "#questpie/server/modules/core/integrated/mailer/types.js";
+export * from "#questpie/server/modules/core/integrated/queue/adapter.js";
+export * from "#questpie/server/modules/core/integrated/queue/adapters/cloudflare-queues.js";
+export * from "#questpie/server/modules/core/integrated/queue/adapters/pg-boss.js";
+export * from "#questpie/server/modules/core/integrated/queue/job.js";
+export * from "#questpie/server/modules/core/integrated/queue/service.js";
+export * from "#questpie/server/modules/core/integrated/queue/types.js";
+export * from "#questpie/server/modules/core/integrated/queue/worker.js";
+export * from "#questpie/server/modules/core/integrated/queue/workflow.js";
+export * from "#questpie/server/modules/core/integrated/realtime/adapter.js";
+export * from "#questpie/server/modules/core/integrated/realtime/adapters/pg-notify.js";
+export * from "#questpie/server/modules/core/integrated/realtime/adapters/redis-streams.js";
+export * from "#questpie/server/modules/core/integrated/realtime/collection.js";
+export * from "#questpie/server/modules/core/integrated/realtime/service.js";
+export * from "#questpie/server/modules/core/integrated/realtime/types.js";
+// Search adapters
+export * from "#questpie/server/modules/core/integrated/search/adapters/pgvector.js";
+export * from "#questpie/server/modules/core/integrated/search/adapters/postgres.js";
+// Search module
+export * from "#questpie/server/modules/core/integrated/search/collection.js";
+export * from "#questpie/server/modules/core/integrated/search/facet-utils.js";
+export * from "#questpie/server/modules/core/integrated/search/jobs/index-records.job.js";
+export * from "#questpie/server/modules/core/integrated/search/providers/index.js";
+export { createSearchService, SearchServiceWrapper } from "#questpie/server/modules/core/integrated/search/service.js";
+export * from "#questpie/server/modules/core/integrated/search/types.js";
+export * from "#questpie/server/modules/core/integrated/storage/signed-url.js";
+export type { KVConfig } from "#questpie/server/modules/core/integrated/kv/types.js";
+export type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
 export { migration } from "#questpie/server/migration/define-migration.js";
-export * from "#questpie/server/migration/index.js";
-export * from "#questpie/server/modules/starter/index.js";
+export * from "#questpie/server/migration/generator.js";
+export * from "#questpie/server/migration/operation-snapshot.js";
+export * from "#questpie/server/migration/runner.js";
+export * from "#questpie/server/migration/types.js";
+export * from "#questpie/server/modules/starter/.generated/module.js";
+export { default as starterModule } from "#questpie/server/modules/starter/.generated/module.js";
+export { type CoreMessageKey, coreBackendMessages } from "#questpie/server/modules/starter/_messages.js";
 export { route } from "#questpie/server/routes/define-route.js";
 export * from "#questpie/server/routes/index.js";
 export { seed } from "#questpie/server/seed/define-seed.js";

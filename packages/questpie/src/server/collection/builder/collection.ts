@@ -49,7 +49,7 @@ import type { FieldSelect } from "#questpie/server/fields/field-types.js";
 import {
 	extractWorkflowFromVersioning,
 	resolveWorkflowConfig,
-} from "#questpie/server/workflow/config.js";
+} from "#questpie/server/modules/core/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type { Prettify } from "#questpie/shared/type-utils.js";
 

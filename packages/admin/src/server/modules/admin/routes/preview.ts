@@ -15,6 +15,7 @@ import { z } from "zod";
 import { getPreviewSecret } from "#questpie/admin/shared/preview-utils.js";
 
 import type { PreviewConfig } from "../../../augmentation.js";
+import { getApp, getSession, getCollectionState } from "./route-helpers.js";
 
 // ============================================================================
 // Token Utilities
@@ -110,7 +111,7 @@ export function createPreviewFunctions(secret: string) {
 		.outputSchema(mintPreviewTokenOutputSchema)
 		.handler(async (ctx) => {
 			const { input } = ctx;
-			const session = (ctx as any).session;
+			const session = getSession(ctx);
 			// Require authenticated admin session
 			if (!session) {
 				throw ApiError.unauthorized("Admin session required");
@@ -311,14 +312,14 @@ const getPreviewUrl = route()
 	.outputSchema(getPreviewUrlOutputSchema)
 	.handler(async (ctx) => {
 		const { input } = ctx;
-		const session = (ctx as any).session;
+		const session = getSession(ctx);
 		// Require authenticated admin session
 		if (!session) {
 			return { url: null, error: "Unauthorized: Admin session required" };
 		}
 
 		const { collection: collectionName, record, locale } = input;
-		const app = (ctx as any).app as Questpie<any>;
+		const app = getApp(ctx);
 
 		// Get collection from app
 		const collections = app.getCollections();
@@ -329,7 +330,7 @@ const getPreviewUrl = route()
 		}
 
 		// Get preview config from collection state
-		const previewConfig = (collection.state as any).adminPreview as
+		const previewConfig = getCollectionState(collection).adminPreview as
 			| PreviewConfig
 			| undefined;
 

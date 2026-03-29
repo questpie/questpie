@@ -41,7 +41,7 @@ export type MockApp<TApp = any> = TApp & {
  * });
  *
  * // Use app normally
- * await app.api.collections.products.create({ name: "Widget", price: 9.99 });
+ * await app.collections.products.create({ name: "Widget", price: 9.99 });
  *
  * // Inspect mock state
  * expect(app.mocks.mailer.getSentCount()).toBe(0);
@@ -67,12 +67,11 @@ export async function buildMockApp(
 	const dbConfig = runtimeOverrides.db ?? { pglite: testDb };
 
 	// Normalize module definition — move flat config keys into config bucket
-	const { locale, contextResolver, hooks, defaultAccess, auth, config: existingConfig, ...moduleDef } = definition as any;
+	const { locale, hooks, defaultAccess, auth, config: existingConfig, ...moduleDef } = definition as any;
 
 	// Build config bucket from flat keys + any existing config
 	const appConfigPart: Record<string, unknown> = {};
 	if (locale) appConfigPart.locale = locale;
-	if (contextResolver) appConfigPart.context = contextResolver;
 	if (hooks) appConfigPart.hooks = hooks;
 	if (defaultAccess) appConfigPart.access = defaultAccess;
 

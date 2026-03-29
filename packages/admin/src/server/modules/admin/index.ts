@@ -17,11 +17,23 @@
  */
 
 // ── Generated module ──────────────────────────────────────────────────────────
-export type { AdminCollections, AdminModule } from "./.generated/module.js";
-export { default as adminModule } from "./.generated/module.js";
+export type { AdminCollections } from "./.generated/module.js";
+import _generatedModule from "./.generated/module.js";
+import { adminPlugin } from "../../plugin.js";
+
+/**
+ * Admin module with codegen plugin attached.
+ *
+ * The `plugin` field lets `extractPluginsFromModules` auto-discover the admin
+ * codegen plugin from modules.ts, eliminating the need for users to manually
+ * add `plugins: [adminPlugin()]` in their questpie.config.ts.
+ */
+export const adminModule = Object.assign(_generatedModule, {
+	plugin: adminPlugin(),
+});
+export type AdminModule = typeof adminModule;
 
 // ── Admin route bundle — derived from generated module (no manual duplication) ─
-import adminModule from "./.generated/module.js";
 
 /**
  * Admin routes — flat spread of all admin route definitions.

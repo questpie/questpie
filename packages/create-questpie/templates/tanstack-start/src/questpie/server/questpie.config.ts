@@ -9,10 +9,8 @@
 import { ConsoleAdapter, runtimeConfig } from "questpie";
 
 import { env } from "@/lib/env.js";
-import { adminPlugin } from "@questpie/admin/plugin";
 
 export default runtimeConfig({
-	plugins: [adminPlugin()],
 	app: { url: env.APP_URL },
 	db: { url: env.DATABASE_URL },
 	storage: { basePath: "/api" },

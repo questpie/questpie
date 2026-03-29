@@ -266,7 +266,7 @@ export async function applyBelongsToRelations(
 
 		const foreignKeyField = fieldKeys[0];
 		const referenceKey = relation.references?.[0] || "id";
-		const relatedCrud = app.api.collections[relation.collection];
+		const relatedCrud = app.collections[relation.collection];
 
 		if (operations.connect) {
 			if (Array.isArray(operations.connect)) {
@@ -629,7 +629,7 @@ export async function processNestedRelations(
 			const reverseRelationName = relation.relationName;
 			if (!reverseRelationName) continue;
 
-			const relatedCrud = app.api.collections[relation.collection];
+			const relatedCrud = app.collections[relation.collection];
 			const reverseRelation =
 				relatedCrud["~internalState"].relations?.[reverseRelationName];
 			if (!reverseRelation?.fields || reverseRelation.fields.length === 0)
@@ -654,8 +654,8 @@ export async function processNestedRelations(
 
 			if (!sourceField || !targetField) continue;
 
-			const junctionCrud = app.api.collections[relation.through];
-			const relatedCrud = app.api.collections[relation.collection];
+			const junctionCrud = app.collections[relation.through];
+			const relatedCrud = app.collections[relation.collection];
 
 			await processManyToManyNestedOperations(
 				parentRecord,

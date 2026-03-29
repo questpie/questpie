@@ -8,7 +8,7 @@ import {
 	openApiModule,
 	openApiRoute,
 } from "../../../openapi/src/server.js";
-import { collection, global } from "../../src/server/index.js";
+import { collection, global } from "../../src/exports/index.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

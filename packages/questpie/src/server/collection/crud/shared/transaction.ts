@@ -67,14 +67,14 @@
  *
  *     return withTransaction(db, async (tx) => {
  *       // Create order
- *       const order = await app.api.collections.orders.create(
+ *       const order = await app.collections.orders.create(
  *         { cartId: input.cartId, status: "pending" },
  *         { db: tx }
  *       );
  *
  *       // Deduct inventory (nested CRUD - reuses same transaction)
  *       for (const item of order.items) {
- *         await app.api.collections.products.updateById(
+ *         await app.collections.products.updateById(
  *           { id: item.productId, data: { stock: sql`stock - ${item.qty}` } },
  *           { db: tx }
  *         );

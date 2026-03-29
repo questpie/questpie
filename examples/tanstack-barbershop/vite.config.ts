@@ -7,7 +7,7 @@ import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
-const config = defineConfig({
+const config = defineConfig(({ mode }) => ({
 	plugins: [
 		iconifyPreload({
 			scan: [
@@ -19,20 +19,30 @@ const config = defineConfig({
 		nitro({
 			preset: "bun",
 		}) as any,
-		// this is the plugin that enables path aliases
 		tailwindcss(),
 		tanstackStart(),
 		viteReact(),
-		babel({
-			presets: [reactCompilerPreset()],
-		}),
+		// React Compiler is slow in dev — only enable for production builds
+		...(mode === "development"
+			? []
+			: [babel({ presets: [reactCompilerPreset()] })]),
 	],
 	optimizeDeps: {
 		exclude: ["bun", "drizzle-kit"],
+		include: [
+			"react",
+			"react-dom",
+			"react/jsx-runtime",
+			"react/jsx-dev-runtime",
+			"@iconify/react",
+			"@tanstack/react-query",
+			"@tanstack/react-router",
+			"zod",
+		],
 	},
 	resolve: {
 		tsconfigPaths: true,
-		dedupe: ["drizzle-orm"],
+		dedupe: ["drizzle-orm", "react", "react-dom"],
 	},
 	build: {
 		rollupOptions: {
@@ -45,6 +55,6 @@ const config = defineConfig({
 			],
 		},
 	},
-});
+}));
 
 export default config;

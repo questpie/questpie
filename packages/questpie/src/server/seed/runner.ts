@@ -152,7 +152,7 @@ export class SeedRunner {
 
 				this.log(`  ✅ Seed completed: ${seed.id}`);
 			} catch (error) {
-				console.error(`  ❌ Seed failed: ${seed.id}`, error);
+				this.log(`  ❌ Seed failed: ${seed.id} — ${error instanceof Error ? error.message : String(error)}`);
 				throw error;
 			}
 		}

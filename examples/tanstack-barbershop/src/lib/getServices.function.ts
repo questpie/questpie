@@ -8,7 +8,7 @@ export const getAllServices = createServerFn({ method: "GET" })
 	.handler(async ({ data }) => {
 		const ctx = await createRequestContext(data?.locale);
 
-		const result = await app.api.collections.services.find(
+		const result = await app.collections.services.find(
 			{
 				where: { isActive: true },
 				orderBy: { price: "asc" },

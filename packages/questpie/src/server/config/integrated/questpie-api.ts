@@ -14,7 +14,7 @@ import type { QuestpieConfig } from "#questpie/server/config/types.js";
 import type {
 	GlobalCRUD,
 	GlobalSelectFromApp,
-} from "#questpie/server/global/crud/index.js";
+} from "#questpie/server/global/crud/types.js";
 import type {
 	AnyCollectionOrBuilder,
 	CollectionInsert,
@@ -124,8 +124,8 @@ export class QuestpieAPI<TConfig extends QuestpieConfig = QuestpieConfig> {
 	/**
 	 * Access collections CRUD operations
 	 * @example
-	 * await app.api.collections.users.create({ email: '...' }, context)
-	 * await app.api.collections.posts.find({ where: { status: 'published' } })
+	 * await app.collections.users.create({ email: '...' }, context)
+	 * await app.collections.posts.find({ where: { status: 'published' } })
 	 */
 	public get collections(): {
 		[K in keyof TConfig["collections"]]: CollectionAPI<

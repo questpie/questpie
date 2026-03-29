@@ -24,7 +24,7 @@
  *
  * ```typescript
  * // Inside a function handler — session comes from the request ALS scope
- * const posts = await app.api.collections.posts.find({ accessMode: "user" });
+ * const posts = await app.collections.posts.find({ accessMode: "user" });
  * // ↑ session auto-merged from ALS, no need to pass it explicitly
  * ```
  *
@@ -33,7 +33,7 @@
  * // HTTP adapter sets context via runWithContext for the entire request
  * await runWithContext({ locale: "sk", session, accessMode: "user" }, async () => {
  *   // All nested CRUD calls inherit locale + session automatically
- *   const posts = await app.api.collections.posts.find();
+ *   const posts = await app.collections.posts.find();
  *   // posts fetched with locale: "sk", session from request
  * });
  * ```

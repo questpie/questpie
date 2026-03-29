@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { collection } from "../../src/server/index.js";
+import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -89,7 +89,7 @@ describe("schema-based nested localization", () => {
 		const ctx = createTestContext({ locale: "en" });
 
 		// Client sends PLAIN data - no $i18n wrappers needed!
-		const created = await setup.app.api.collections.barbers.create(
+		const created = await setup.app.collections.barbers.create(
 			{
 				name: "John Doe",
 				bio: "Experienced barber",
@@ -127,7 +127,7 @@ describe("schema-based nested localization", () => {
 		expect(created.bio).toBe("Experienced barber");
 
 		// Read back - should get merged content
-		const found = await setup.app.api.collections.barbers.findOne(
+		const found = await setup.app.collections.barbers.findOne(
 			{ where: { id: created.id } },
 			ctx,
 		);
@@ -152,7 +152,7 @@ describe("schema-based nested localization", () => {
 		const ctxSk = createTestContext({ locale: "sk" });
 
 		// Create in English
-		const created = await setup.app.api.collections.barbers.create(
+		const created = await setup.app.collections.barbers.create(
 			{
 				name: "John Doe",
 				bio: "English bio",
@@ -180,7 +180,7 @@ describe("schema-based nested localization", () => {
 		);
 
 		// Update with Slovak locale - only localized fields change
-		await setup.app.api.collections.barbers.updateById(
+		await setup.app.collections.barbers.updateById(
 			{
 				id: created.id,
 				data: {
@@ -210,7 +210,7 @@ describe("schema-based nested localization", () => {
 		);
 
 		// Read in English - should get English values
-		const foundEn = await setup.app.api.collections.barbers.findOne(
+		const foundEn = await setup.app.collections.barbers.findOne(
 			{ where: { id: created.id } },
 			ctxEn,
 		);
@@ -221,7 +221,7 @@ describe("schema-based nested localization", () => {
 		expect(foundEn?.socialLinks?.[0]?.description).toBe("English description");
 
 		// Read in Slovak - should get Slovak values
-		const foundSk = await setup.app.api.collections.barbers.findOne(
+		const foundSk = await setup.app.collections.barbers.findOne(
 			{ where: { id: created.id } },
 			ctxSk,
 		);
@@ -245,7 +245,7 @@ describe("schema-based nested localization", () => {
 		const ctxSk = createTestContext({ locale: "sk" });
 
 		// Create only in English
-		const created = await setup.app.api.collections.barbers.create(
+		const created = await setup.app.collections.barbers.create(
 			{
 				name: "Jane Doe",
 				bio: "English bio only",
@@ -260,7 +260,7 @@ describe("schema-based nested localization", () => {
 		);
 
 		// Read in Slovak - should fallback to English
-		const foundSk = await setup.app.api.collections.barbers.findOne(
+		const foundSk = await setup.app.collections.barbers.findOne(
 			{ where: { id: created.id } },
 			ctxSk,
 		);
@@ -273,7 +273,7 @@ describe("schema-based nested localization", () => {
 		const ctx = createTestContext({ locale: "en" });
 
 		// Create with initial data
-		const created = await setup.app.api.collections.barbers.create(
+		const created = await setup.app.collections.barbers.create(
 			{
 				name: "Bob",
 				workingHours: {
@@ -293,7 +293,7 @@ describe("schema-based nested localization", () => {
 		);
 
 		// Update only monday note
-		await setup.app.api.collections.barbers.updateById(
+		await setup.app.collections.barbers.updateById(
 			{
 				id: created.id,
 				data: {
@@ -315,7 +315,7 @@ describe("schema-based nested localization", () => {
 		);
 
 		// Verify update
-		const found = await setup.app.api.collections.barbers.findOne(
+		const found = await setup.app.collections.barbers.findOne(
 			{ where: { id: created.id } },
 			ctx,
 		);

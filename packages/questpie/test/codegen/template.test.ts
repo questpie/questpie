@@ -196,13 +196,13 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("emits AppConfig type", () => {
 		expect(code).toContain("export type AppConfig = {");
-		expect(code).toContain("collections: AppCollections;");
-		expect(code).toContain("globals: AppGlobals;");
+		expect(code).toContain("collections: AppCollections & Record<string, any>;");
+		expect(code).toContain("globals: AppGlobals & Record<string, any>;");
 	});
 
 	it("emits createApp call with modules", () => {
 		expect(code).toContain("export const app = await createApp(");
-		expect(code).toContain("modules: _modules as any");
+		expect(code).toContain("modules: _modules as ModuleDefinition[]");
 	});
 
 	it("emits createContext helper", () => {
@@ -749,7 +749,7 @@ describe("generateTemplate — plugin singles", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Core singles (locale, hooks, access, contextResolver)
+// Core singles (locale, hooks, access)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateTemplate — core singles", () => {
@@ -772,27 +772,6 @@ describe("generateTemplate — core singles", () => {
 		});
 
 		expect(code).toContain("locale: _locale as any,");
-	});
-
-	it("emits contextResolver single in createApp", () => {
-		const result = minimalResult();
-		result.singles.set(
-			"contextResolver",
-			makeFile("contextResolver", {
-				varName: "_contextResolver",
-				importPath: "../context",
-				exportType: "default",
-			}),
-		);
-
-		const code = generateTemplate({
-			configImportPath: "../questpie.config",
-			discovered: result,
-			categories: coreCategories(),
-			singletonFactories: coreSingletonFactories(),
-		});
-
-		expect(code).toContain("contextResolver: _contextResolver as any,");
 	});
 });
 

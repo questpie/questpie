@@ -8,7 +8,7 @@ import {
 	questpieRealtimeLogTable,
 	type RealtimeAdapter,
 	type RealtimeChangeEvent,
-} from "../../src/server/index.js";
+} from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -215,15 +215,15 @@ describe("realtime", () => {
 			const ctxEn = createTestContext({ locale: "en", defaultLocale: "en" });
 			const ctxSk = createTestContext({ locale: "sk", defaultLocale: "en" });
 
-			const created = await setup.app.api.collections.posts.create(
+			const created = await setup.app.collections.posts.create(
 				{ title: "Hello", slug: "hello" },
 				ctxEn,
 			);
-			await setup.app.api.collections.posts.updateById(
+			await setup.app.collections.posts.updateById(
 				{ id: created.id, data: { title: "Ahoj" } },
 				ctxSk,
 			);
-			await setup.app.api.collections.posts.deleteById(
+			await setup.app.collections.posts.deleteById(
 				{ id: created.id },
 				ctxEn,
 			);
@@ -264,20 +264,20 @@ describe("realtime", () => {
 			await runTestDbMigrations(setup.app);
 			const ctx = createTestContext();
 
-			const first = await setup.app.api.collections.posts.create(
+			const first = await setup.app.collections.posts.create(
 				{ title: "One", slug: "one" },
 				ctx,
 			);
-			const second = await setup.app.api.collections.posts.create(
+			const second = await setup.app.collections.posts.create(
 				{ title: "Two", slug: "two" },
 				ctx,
 			);
 
-			await setup.app.api.collections.posts.update(
+			await setup.app.collections.posts.update(
 				{ where: { id: { in: [first.id, second.id] } }, data: { slug: "new" } },
 				ctx,
 			);
-			await setup.app.api.collections.posts.delete(
+			await setup.app.collections.posts.delete(
 				{ where: { id: { in: [first.id, second.id] } } },
 				ctx,
 			);
@@ -315,7 +315,7 @@ describe("realtime", () => {
 				events.push(event),
 			);
 
-			await setup.app.api.collections.posts.create(
+			await setup.app.collections.posts.create(
 				{ title: "Hello", status: "published" },
 				ctx,
 			);
@@ -380,7 +380,7 @@ describe("realtime", () => {
 				{ resourceType: "collection", resource: "messages" },
 			);
 
-			await setup.app.api.collections.messages.create(
+			await setup.app.collections.messages.create(
 				{ chatId: "chat1", content: "Hello chat1" },
 				ctx,
 			);
@@ -390,7 +390,7 @@ describe("realtime", () => {
 			expect(chat2Events.length).toBe(0);
 			expect(allEvents.length).toBe(1);
 
-			await setup.app.api.collections.messages.create(
+			await setup.app.collections.messages.create(
 				{ chatId: "chat2", content: "Hello chat2" },
 				ctx,
 			);
@@ -435,7 +435,7 @@ describe("realtime", () => {
 			);
 
 			// Wrong status
-			await setup.app.api.collections.posts.create(
+			await setup.app.collections.posts.create(
 				{ status: "draft", authorId: "author1", title: "Draft" },
 				ctx,
 			);
@@ -443,7 +443,7 @@ describe("realtime", () => {
 			expect(events.length).toBe(0);
 
 			// Wrong author
-			await setup.app.api.collections.posts.create(
+			await setup.app.collections.posts.create(
 				{ status: "published", authorId: "author2", title: "By Author 2" },
 				ctx,
 			);
@@ -451,7 +451,7 @@ describe("realtime", () => {
 			expect(events.length).toBe(0);
 
 			// Both match
-			await setup.app.api.collections.posts.create(
+			await setup.app.collections.posts.create(
 				{
 					status: "published",
 					authorId: "author1",
@@ -494,7 +494,7 @@ describe("realtime", () => {
 				},
 			);
 
-			await setup.app.api.collections.posts.create(
+			await setup.app.collections.posts.create(
 				{ title: "Matches OR", status: "draft", authorId: "author-1" },
 				ctx,
 			);
@@ -532,7 +532,7 @@ describe("realtime", () => {
 				},
 			);
 
-			await setup.app.api.collections.posts.create(
+			await setup.app.collections.posts.create(
 				{ title: "Draft", status: "draft" },
 				ctx,
 			);
@@ -573,7 +573,7 @@ describe("realtime", () => {
 			);
 
 			// Create incomplete task
-			await setup.app.api.collections.tasks.create(
+			await setup.app.collections.tasks.create(
 				{ title: "Todo", completed: false },
 				ctx,
 			);
@@ -581,7 +581,7 @@ describe("realtime", () => {
 			expect(completedEvents.length).toBe(0);
 
 			// Create completed task
-			await setup.app.api.collections.tasks.create(
+			await setup.app.collections.tasks.create(
 				{ title: "Done", completed: true },
 				ctx,
 			);
@@ -619,14 +619,14 @@ describe("realtime", () => {
 				},
 			);
 
-			await setup.app.api.collections.products.create(
+			await setup.app.collections.products.create(
 				{ name: "Product A", categoryId: 2 },
 				ctx,
 			);
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			expect(category1Events.length).toBe(0);
 
-			await setup.app.api.collections.products.create(
+			await setup.app.collections.products.create(
 				{ name: "Product B", categoryId: 1 },
 				ctx,
 			);
@@ -663,8 +663,8 @@ describe("realtime", () => {
 				{ resourceType: "collection", resource: "*" },
 			);
 
-			await setup.app.api.collections.posts.create({ title: "Post 1" }, ctx);
-			await setup.app.api.collections.comments.create(
+			await setup.app.collections.posts.create({ title: "Post 1" }, ctx);
+			await setup.app.collections.comments.create(
 				{ content: "Comment 1" },
 				ctx,
 			);
@@ -703,7 +703,7 @@ describe("realtime", () => {
 				},
 			);
 
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Published post", status: "published" },
 				ctx,
 			);
@@ -712,7 +712,7 @@ describe("realtime", () => {
 
 			filteredEvents.length = 0;
 
-			await setup.app.api.collections.posts.updateById(
+			await setup.app.collections.posts.updateById(
 				{ id: post.id, data: { status: "draft" } },
 				ctx,
 			);
@@ -748,7 +748,7 @@ describe("realtime", () => {
 				},
 			);
 
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "To delete", status: "published" },
 				ctx,
 			);
@@ -757,7 +757,7 @@ describe("realtime", () => {
 
 			filteredEvents.length = 0;
 
-			await setup.app.api.collections.posts.deleteById({ id: post.id }, ctx);
+			await setup.app.collections.posts.deleteById({ id: post.id }, ctx);
 			await new Promise((resolve) => setTimeout(resolve, 100));
 
 			expect(filteredEvents.length).toBe(1);
@@ -809,11 +809,11 @@ describe("realtime", () => {
 			expect(initial.event).toBe("snapshot");
 
 			const ctx = createTestContext();
-			const user = await setup.app.api.collections.users.create(
+			const user = await setup.app.collections.users.create(
 				{ name: "Alice" },
 				ctx,
 			);
-			await setup.app.api.collections.messages.create(
+			await setup.app.collections.messages.create(
 				{ chatId: "chat1", content: "Hello", user: user.id }, // FK column key is field name with unified API
 				ctx,
 			);
@@ -825,7 +825,7 @@ describe("realtime", () => {
 			expect(snapshot.data.data.docs[0].user.name).toBe("Alice");
 
 			// Update the user - should trigger refresh
-			await setup.app.api.collections.users.updateById(
+			await setup.app.collections.users.updateById(
 				{ id: user.id, data: { name: "Alice Smith" } },
 				ctx,
 			);
@@ -868,15 +868,15 @@ describe("realtime", () => {
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
-			const user = await setup.app.api.collections.users.create(
+			const user = await setup.app.collections.users.create(
 				{ name: "Bob" },
 				ctx,
 			);
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Post 1", user: user.id }, // FK column key is field name with unified API
 				ctx,
 			);
-			const comment = await setup.app.api.collections.comments.create(
+			const comment = await setup.app.collections.comments.create(
 				{ content: "Nice post!", post: post.id }, // FK column key is field name with unified API
 				ctx,
 			);
@@ -897,7 +897,7 @@ describe("realtime", () => {
 			events.length = 0;
 
 			// Update comment directly
-			await setup.app.api.collections.comments.updateById(
+			await setup.app.collections.comments.updateById(
 				{ id: comment.id, data: { content: "Updated comment" } },
 				ctx,
 			);
@@ -907,7 +907,7 @@ describe("realtime", () => {
 			events.length = 0;
 
 			// Update post (first level relation)
-			await setup.app.api.collections.posts.updateById(
+			await setup.app.collections.posts.updateById(
 				{ id: post.id, data: { title: "Updated Post" } },
 				ctx,
 			);
@@ -917,7 +917,7 @@ describe("realtime", () => {
 			events.length = 0;
 
 			// Update user (deeply nested relation)
-			await setup.app.api.collections.users.updateById(
+			await setup.app.collections.users.updateById(
 				{ id: user.id, data: { name: "Bob Builder" } },
 				ctx,
 			);
@@ -950,11 +950,11 @@ describe("realtime", () => {
 			await runTestDbMigrations(setup.app);
 
 			const ctx = createTestContext();
-			const category = await setup.app.api.collections.categories.create(
+			const category = await setup.app.collections.categories.create(
 				{ name: "Electronics" },
 				ctx,
 			);
-			await setup.app.api.collections.products.create(
+			await setup.app.collections.products.create(
 				{ name: "Phone", category: category.id }, // FK column key is field name with unified API
 				ctx,
 			);
@@ -974,7 +974,7 @@ describe("realtime", () => {
 			events.length = 0;
 
 			// Update category should trigger product subscriber
-			await setup.app.api.collections.categories.updateById(
+			await setup.app.collections.categories.updateById(
 				{ id: category.id, data: { name: "Consumer Electronics" } },
 				ctx,
 			);
@@ -1021,7 +1021,7 @@ describe("realtime", () => {
 			expect(initial.event).toBe("snapshot");
 
 			const ctx = createTestContext();
-			await setup.app.api.globals.settings.update({ title: "New Title" }, ctx);
+			await setup.app.globals.settings.update({ title: "New Title" }, ctx);
 
 			let updatedSnapshot = await reader.readSnapshot();
 			while (updatedSnapshot.data.data?.title !== "New Title") {
@@ -1069,11 +1069,11 @@ describe("realtime", () => {
 			expect(initial.event).toBe("snapshot");
 
 			const ctx = createTestContext();
-			const category = await setup.app.api.collections.categories.create(
+			const category = await setup.app.collections.categories.create(
 				{ name: "Tech" },
 				ctx,
 			);
-			await setup.app.api.globals.settings.update(
+			await setup.app.globals.settings.update(
 				{ siteName: "My Site", defaultCategory: category.id },
 				ctx,
 			);
@@ -1085,7 +1085,7 @@ describe("realtime", () => {
 			expect(snapshot.data.data.defaultCategory.name).toBe("Tech");
 
 			// Update category should trigger settings refresh
-			await setup.app.api.collections.categories.updateById(
+			await setup.app.collections.categories.updateById(
 				{ id: category.id, data: { name: "Technology" } },
 				ctx,
 			);
@@ -1186,7 +1186,7 @@ describe("realtime", () => {
 			});
 
 			// Pending order for customer 1 - should trigger all 3
-			await setup.app.api.collections.orders.create(
+			await setup.app.collections.orders.create(
 				{ status: "pending", customerId: "c1", total: 100 },
 				ctx,
 			);
@@ -1197,7 +1197,7 @@ describe("realtime", () => {
 			expect(allEvents.length).toBe(1);
 
 			// Completed order for customer 2 - should trigger only all
-			await setup.app.api.collections.orders.create(
+			await setup.app.collections.orders.create(
 				{ status: "completed", customerId: "c2", total: 200 },
 				ctx,
 			);
@@ -1235,7 +1235,7 @@ describe("realtime", () => {
 				resource: "items",
 			});
 
-			await setup.app.api.collections.items.create({ name: "Item 1" }, ctx);
+			await setup.app.collections.items.create({ name: "Item 1" }, ctx);
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			expect(events.length).toBe(1);
 
@@ -1243,7 +1243,7 @@ describe("realtime", () => {
 			unsub?.();
 
 			// Should not receive this event
-			await setup.app.api.collections.items.create({ name: "Item 2" }, ctx);
+			await setup.app.collections.items.create({ name: "Item 2" }, ctx);
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			expect(events.length).toBe(1); // Still 1
 		});
@@ -1272,8 +1272,8 @@ describe("realtime", () => {
 				where: {},
 			});
 
-			await setup.app.api.collections.logs.create({ message: "Log 1" }, ctx);
-			await setup.app.api.collections.logs.create({ message: "Log 2" }, ctx);
+			await setup.app.collections.logs.create({ message: "Log 1" }, ctx);
+			await setup.app.collections.logs.create({ message: "Log 2" }, ctx);
 			await new Promise((resolve) => setTimeout(resolve, 100));
 
 			expect(events.length).toBe(2);
@@ -1316,7 +1316,7 @@ describe("realtime", () => {
 				if (unsub) unsubscribers.push(unsub);
 			}
 
-			await setup.app.api.collections.messages.create(
+			await setup.app.collections.messages.create(
 				{ roomId: targetRoom, content: "hello" },
 				ctx,
 			);
@@ -1362,7 +1362,7 @@ describe("realtime", () => {
 			});
 
 			const ctx = createTestContext();
-			await setup.app.api.collections.items.create({ name: "new" }, ctx);
+			await setup.app.collections.items.create({ name: "new" }, ctx);
 			await new Promise((resolve) => setTimeout(resolve, 150));
 
 			const logs = await setup.app.db
@@ -1405,7 +1405,7 @@ describe("realtime", () => {
 			);
 
 			const ctx = createTestContext();
-			await setup.app.api.collections.items.create(
+			await setup.app.collections.items.create(
 				{ name: "after-subscribe" },
 				ctx,
 			);
@@ -1457,7 +1457,7 @@ describe("realtime", () => {
 
 			// First create some data as admin
 			const adminCtx = createTestContext({ accessMode: "user", role: "admin" });
-			await setup.app.api.collections.secrets.create(
+			await setup.app.collections.secrets.create(
 				{ content: "Secret content", level: "high" },
 				adminCtx,
 			);
@@ -1579,7 +1579,7 @@ describe("realtime", () => {
 			);
 
 			// Create document with all fields
-			await setup.app.api.collections.documents.create(
+			await setup.app.collections.documents.create(
 				{
 					title: "Public Title",
 					content: "Public content",
@@ -1711,15 +1711,15 @@ describe("realtime", () => {
 			const ctx = createTestContext();
 
 			// Create multiple records rapidly
-			await setup.app.api.collections.counters.create(
+			await setup.app.collections.counters.create(
 				{ name: "A", value: 1 },
 				ctx,
 			);
-			await setup.app.api.collections.counters.create(
+			await setup.app.collections.counters.create(
 				{ name: "B", value: 2 },
 				ctx,
 			);
-			await setup.app.api.collections.counters.create(
+			await setup.app.collections.counters.create(
 				{ name: "C", value: 3 },
 				ctx,
 			);

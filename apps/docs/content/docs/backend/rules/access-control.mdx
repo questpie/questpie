@@ -67,7 +67,7 @@ Server-side code can bypass access control using `accessMode: "system"`:
 
 ```ts
 const ctx = await app.createContext({ accessMode: "system" });
-const allPosts = await app.api.collections.posts.find({}, ctx);
+const allPosts = await app.collections.posts.find({}, ctx);
 // No access checks — useful for server-side scripts, jobs, seeds
 ```
 

@@ -13,7 +13,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
 
 import { createApp, module } from "../../src/exports/index.js";
-import { collection } from "../../src/server/index.js";
+import { collection } from "../../src/exports/index.js";
 import type { Migration } from "../../src/server/migration/types.js";
 import { MockKVAdapter } from "../utils/mocks/kv.adapter";
 import { MockLogger } from "../utils/mocks/logger.adapter";

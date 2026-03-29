@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { job } from "#questpie/server/integrated/queue/job.js";
+import { job } from "#questpie/server/modules/core/integrated/queue/job.js";
 
 /**
  * Realtime outbox cleanup job.

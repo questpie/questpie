@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { z } from "zod";
 
-import { collection, job } from "../../src/server/index.js";
-import { isNullish } from "../../src/shared/utils/index.js";
+import { collection, job } from "../../src/exports/index.js";
+import { isNullish } from "../../src/shared/utils/data-utils.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -187,7 +187,7 @@ describe("collection-hooks", () => {
 		});
 
 		it("executes hooks in correct order on create", async () => {
-			await setup.app.api.collections.articles.create({
+			await setup.app.collections.articles.create({
 				title: "My First Article",
 			});
 
@@ -195,7 +195,7 @@ describe("collection-hooks", () => {
 		});
 
 		it("transforms data in beforeChange hook", async () => {
-			const result = await setup.app.api.collections.articles.create({
+			const result = await setup.app.collections.articles.create({
 				title: "Hello World Article",
 			});
 
@@ -203,7 +203,7 @@ describe("collection-hooks", () => {
 		});
 
 		it("publishes job in afterChange hook", async () => {
-			const result = await setup.app.api.collections.articles.create({
+			const result = await setup.app.collections.articles.create({
 				title: "Test",
 			});
 
@@ -212,12 +212,12 @@ describe("collection-hooks", () => {
 		});
 
 		it("executes hooks on update", async () => {
-			const created = await setup.app.api.collections.articles.create({
+			const created = await setup.app.collections.articles.create({
 				title: "Original",
 			});
 
 			hookCallOrder.length = 0;
-			await setup.app.api.collections.articles.update({
+			await setup.app.collections.articles.update({
 				where: { id: created!.id },
 				data: { title: "Updated" },
 			});
@@ -239,13 +239,13 @@ describe("collection-hooks", () => {
 		});
 
 		it("provides original record in afterChange", async () => {
-			const created = await setup.app.api.collections.articles.create({
+			const created = await setup.app.collections.articles.create({
 				title: "Test",
 				status: "draft",
 			});
 
 			// Update to published - hook should send email
-			await setup.app.api.collections.articles.update({
+			await setup.app.collections.articles.update({
 				where: { id: created!.id },
 				data: { status: "published" },
 			});
@@ -268,16 +268,16 @@ describe("collection-hooks", () => {
 		});
 
 		it("executes beforeDelete and afterDelete", async () => {
-			const created = await setup.app.api.collections.articles.create({
+			const created = await setup.app.collections.articles.create({
 				title: "To Delete",
 			});
 
-			await setup.app.api.collections.articles.delete({
+			await setup.app.collections.articles.delete({
 				where: { id: created!.id },
 			});
 
 			// Verify deletion worked
-			const found = await setup.app.api.collections.articles.findOne({
+			const found = await setup.app.collections.articles.findOne({
 				where: { id: created!.id },
 			});
 			expect(found).toBeNull();
@@ -298,14 +298,14 @@ describe("collection-hooks", () => {
 
 		it("throws error from beforeChange hook", async () => {
 			expect(
-				setup.app.api.collections.articles.create({
+				setup.app.collections.articles.create({
 					title: "forbidden",
 				}),
 			).rejects.toThrow("Forbidden title");
 		});
 
 		it("allows valid records", async () => {
-			const result = await setup.app.api.collections.articles.create({
+			const result = await setup.app.collections.articles.create({
 				title: "allowed",
 			});
 
@@ -329,7 +329,7 @@ describe("collection-hooks", () => {
 		});
 
 		it("shares data between beforeChange and afterChange", async () => {
-			const result = await setup.app.api.collections.articles.create({
+			const result = await setup.app.collections.articles.create({
 				title: "Enriched Article",
 			});
 

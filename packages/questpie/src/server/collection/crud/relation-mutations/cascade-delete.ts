@@ -109,7 +109,7 @@ async function checkRestrictViolation(
 	const reverseRelationName = relation.relationName;
 	if (!reverseRelationName) return;
 
-	const relatedCrud = app.api.collections[relation.collection];
+	const relatedCrud = app.collections[relation.collection];
 	if (!relatedCrud) return;
 
 	const reverseRelation =
@@ -153,7 +153,7 @@ async function cascadeDeleteHasMany(
 	const reverseRelationName = relation.relationName;
 	if (!reverseRelationName) return;
 
-	const relatedCrud = app.api.collections[relation.collection];
+	const relatedCrud = app.collections[relation.collection];
 	const reverseRelation =
 		relatedCrud["~internalState"].relations?.[reverseRelationName];
 	if (!reverseRelation?.fields || reverseRelation.fields.length === 0) return;
@@ -211,7 +211,7 @@ async function cascadeDeleteManyToMany(
 
 	if (!sourceField || !relation.through) return;
 
-	const junctionCrud = app.api.collections[relation.through];
+	const junctionCrud = app.collections[relation.through];
 
 	const { docs: junctionRecords } = await junctionCrud.find(
 		{

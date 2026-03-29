@@ -36,6 +36,7 @@ const _module = {
 	emails: {},
 	migrations: [] as const,
 	seeds: [] as const,
+	fieldTypes: {},
 	views: {},
 	components: {},
 	blocks: {},

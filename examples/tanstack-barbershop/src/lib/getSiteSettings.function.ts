@@ -4,7 +4,7 @@ import { app } from "#questpie";
 import { createRequestContext } from "@/lib/server-helpers";
 
 export type SiteSettingsData = Awaited<
-	ReturnType<typeof app.api.globals.site_settings.get>
+	ReturnType<typeof app.globals.site_settings.get>
 >;
 
 export const getSiteSettings = createServerFn({ method: "GET" })
@@ -12,7 +12,7 @@ export const getSiteSettings = createServerFn({ method: "GET" })
 	.handler(async ({ data }) => {
 		const ctx = await createRequestContext(data?.locale);
 
-		const settings = await app.api.globals.site_settings.get(
+		const settings = await app.globals.site_settings.get(
 			{ with: { logo: true } },
 			ctx,
 		);

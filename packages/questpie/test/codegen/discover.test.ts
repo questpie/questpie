@@ -297,6 +297,17 @@ describe("discoverFiles", () => {
 		expect(collections.has("posts")).toBe(true);
 	});
 
+	it("ignores private directories starting with _ in recursive categories", async () => {
+		await write("routes/_internal/get-stats.ts");
+		await write("routes/public/get-users.ts");
+
+		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
+		const routes = cat(result, "routes");
+		expect(routes.size).toBe(1);
+		expect(routes.has("public/getUsers")).toBe(true);
+		expect(routes.has("_internal/getStats")).toBe(false);
+	});
+
 	// ── Globals ───────────────────────────────────────────────────────────────
 
 	it("discovers globals", async () => {
@@ -450,6 +461,23 @@ describe("discoverFiles", () => {
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		expect(cat(result, "collections").has("articles")).toBe(true);
+	});
+
+	it("ignores private feature directories starting with _", async () => {
+		await write(
+			"features/_internal/collections/secret.ts",
+			"export const secret = collection('secret');",
+		);
+		await write(
+			"features/blog/collections/articles.ts",
+			"export const articles = collection('articles');",
+		);
+
+		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
+		const collections = cat(result, "collections");
+		expect(collections.size).toBe(1);
+		expect(collections.has("articles")).toBe(true);
+		expect(collections.has("secret")).toBe(false);
 	});
 
 	it("merges by-type and by-feature layout collections", async () => {
@@ -606,6 +634,17 @@ describe("discoverFiles — mergeStrategy spread", () => {
 		expect(files).toHaveLength(2);
 		expect(files[0].varName).toBe("_sidebar_admin");
 		expect(files[1].varName).toBe("_sidebar_audit");
+	});
+
+	it("ignores private feature directories for spread files", async () => {
+		await write("features/_internal/sidebar.ts");
+		await write("features/admin/sidebar.ts");
+
+		const result = await discoverFiles(rootDir, outDir, spreadOpts);
+		const files = result.spreads.get("sidebar")!;
+
+		expect(files).toHaveLength(1);
+		expect(files[0].varName).toBe("_sidebar_admin");
 	});
 
 	it("produces empty spreads map when no files match", async () => {

@@ -21,7 +21,7 @@ import { collection } from "questpie";
  * });
  *
  * // Access preferences
- * const prefs = await app.api.collections.admin_preferences.findOne({
+ * const prefs = await app.collections.admin_preferences.findOne({
  *   where: { userId: currentUser.id, key: "viewState:posts" }
  * });
  * ```

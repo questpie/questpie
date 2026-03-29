@@ -260,7 +260,7 @@ export function AdminLayout({
 				{/* Max-width container for ultrawide monitors - centered with subtle side borders */}
 				<SidebarProvider
 					defaultOpen={!sidebarCollapsedProp}
-					className="qa-admin-layout__sidebar-wrapper mx-auto h-svh max-w-[1920px] overflow-hidden"
+					className="qa-admin-layout__sidebar-wrapper border-border mx-auto h-svh max-w-[1920px] overflow-hidden border-x"
 				>
 					{/* Sidebar */}
 					<AdminSidebar

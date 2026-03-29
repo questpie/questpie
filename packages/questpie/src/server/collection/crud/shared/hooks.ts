@@ -11,6 +11,7 @@ import { extractAppServices } from "#questpie/server/config/app-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 
 import { normalizeContext } from "./context.js";
+import { onAfterCommit } from "./transaction.js";
 
 /**
  * Execute hooks (single or array)
@@ -59,6 +60,13 @@ export interface CreateHookContextParams {
 	db: any;
 	/** app instance */
 	app?: Questpie<any>;
+	/** Bulk metadata (for batch operations) */
+	bulk?: {
+		isBatch: true;
+		recordIds: (string | number)[];
+		records: any[];
+		count: number;
+	};
 }
 
 /**
@@ -76,12 +84,23 @@ export function createHookContext(
 		session: normalized.session,
 	});
 
-	return {
+	const ctx: HookContext<any, any, any> = {
 		...services,
 		data: params.data,
 		original: params.original,
 		locale: normalized.locale,
 		accessMode: normalized.accessMode,
 		operation: params.operation,
+		onAfterCommit,
 	} as HookContext<any, any, any>;
+
+	// Attach bulk metadata if present
+	if (params.bulk) {
+		ctx.isBatch = params.bulk.isBatch;
+		ctx.recordIds = params.bulk.recordIds;
+		ctx.records = params.bulk.records;
+		ctx.count = params.bulk.count;
+	}
+
+	return ctx;
 }

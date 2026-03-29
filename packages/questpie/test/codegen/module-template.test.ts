@@ -454,6 +454,28 @@ describe("generateModuleTemplate — singles", () => {
 	});
 });
 
+describe("generateModuleTemplate — plugin single", () => {
+	const result = emptyResult();
+	result.singles.set(
+		"plugin",
+		makeFile("plugin", { varName: "_plugin", importPath: "../plugin" }),
+	);
+
+	const { code: output } = generateModuleTemplate({
+		moduleName: "questpie-test",
+		discovered: result,
+		categoryMeta: new Map(),
+	});
+
+	it("emits plugin import", () => {
+		expect(output).toContain('import _plugin from "../plugin";');
+	});
+
+	it("emits plugin as direct property in module object", () => {
+		expect(output).toContain("plugin: _plugin,");
+	});
+});
+
 describe("generateModuleTemplate — config bucket singles", () => {
 	const result = emptyResult();
 	result.singles.set(

@@ -181,7 +181,7 @@ declare global {
 
 			// Entity APIs
 			collections: _CollectionsAPI;
-			globals: App['api']['globals'];
+			globals: App['globals'];
 			tables: App['tables'];
 
 			// Request-scoped

@@ -14,10 +14,7 @@ import type {
 } from "#questpie/server/collection/builder/types.js";
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { BaseRequestContext } from "#questpie/server/config/context.js";
-import type {
-	AccessMode,
-	QuestpieContextExtension,
-} from "#questpie/server/config/types.js";
+import type { AccessMode } from "#questpie/server/config/types.js";
 import type { FieldAccess } from "#questpie/server/fields/types.js";
 
 /**
@@ -25,7 +22,7 @@ import type { FieldAccess } from "#questpie/server/fields/types.js";
  * Returns a scope ID based on the request context.
  */
 export type GlobalScopeResolver = (
-	ctx: BaseRequestContext & QuestpieContextExtension,
+	ctx: BaseRequestContext,
 ) => string | null | undefined;
 
 /**

@@ -16,7 +16,7 @@
  * ```
  */
 
-import { type Questpie, route } from "questpie";
+import { route } from "questpie";
 import { z } from "zod";
 
 import type {
@@ -26,9 +26,14 @@ import type {
 	ServerActionResult,
 	ServerActionsConfig,
 } from "../../../augmentation.js";
-
-// Type alias for the app app
-type App = Questpie<any>;
+import {
+	type App,
+	getApp,
+	getAppState,
+	getDb,
+	getSession,
+	getLocale,
+} from "./route-helpers.js";
 
 /**
  * Request to execute an action
@@ -68,8 +73,8 @@ export function getActionsConfig(
 	builtin: string[];
 	custom: Array<Omit<ServerActionDefinition, "handler">>;
 } | null {
-	const state = (app as any).state as any;
-	const collection = state.collections?.[collectionSlug];
+	const appState = getAppState(app) as Record<string, any>;
+	const collection = appState.collections?.[collectionSlug];
 
 	if (!collection) {
 		return null;
@@ -134,8 +139,8 @@ export async function executeAction(
 		locale,
 	} = request;
 
-	const state = (app as any).state as any;
-	const collection = state.collections?.[collectionSlug];
+	const appState = getAppState(app) as Record<string, any>;
+	const collection = appState.collections?.[collectionSlug];
 
 	if (!collection) {
 		return {
@@ -160,7 +165,7 @@ export async function executeAction(
 		"transition",
 	];
 
-	if (builtinActions.includes(actionId as any)) {
+	if ((builtinActions as string[]).includes(actionId)) {
 		return executeBuiltinAction(app, {
 			collectionSlug,
 			actionId,
@@ -201,14 +206,15 @@ export async function executeAction(
 
 	// Execute custom action handler
 	try {
+		const appRec = app as Record<string, any>;
 		const context: ServerActionContext = {
 			data: data || {},
 			itemId,
 			itemIds,
-			auth: (app as any).auth,
-			collections: (app as any).api?.collections,
-			globals: (app as any).api?.globals,
-			db: (app as any).db,
+			auth: appRec.auth,
+			collections: appRec.api?.collections,
+			globals: appRec.api?.globals,
+			db: appRec.db,
 			session,
 			locale,
 		};
@@ -250,9 +256,10 @@ async function executeBuiltinAction(
 	},
 ): Promise<ExecuteActionResponse> {
 	const { collectionSlug, actionId, itemId, itemIds, data } = params;
-	const collectionCrud = (app as any).api?.collections?.[collectionSlug];
+	const appRec = app as Record<string, any>;
+	const collectionCrud = appRec.api?.collections?.[collectionSlug];
 	const crudContext = {
-		db: (app as any).db,
+		db: appRec.db,
 		session: params.session,
 		locale: params.locale,
 	};
@@ -260,7 +267,7 @@ async function executeBuiltinAction(
 	try {
 		switch (actionId) {
 			case "create": {
-				const result = await (app as any).create(collectionSlug, data || {});
+				const result = await appRec.create(collectionSlug, data || {});
 				return {
 					success: true,
 					result: {
@@ -284,7 +291,7 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				await (app as any).update(collectionSlug, itemId, data || {});
+				await appRec.update(collectionSlug, itemId, data || {});
 				return {
 					success: true,
 					result: {
@@ -305,7 +312,7 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				await (app as any).delete(collectionSlug, itemId);
+				await appRec.delete(collectionSlug, itemId);
 				return {
 					success: true,
 					result: {
@@ -333,7 +340,7 @@ async function executeBuiltinAction(
 				}
 				// Delete items in parallel
 				await Promise.all(
-					itemIds.map((id) => (app as any).delete(collectionSlug, id)),
+					itemIds.map((id) => appRec.delete(collectionSlug, id)),
 				);
 				return {
 					success: true,
@@ -356,8 +363,8 @@ async function executeBuiltinAction(
 					};
 				}
 
-				if (typeof (app as any).restore === "function") {
-					await (app as any).restore(collectionSlug, itemId);
+				if (typeof appRec.restore === "function") {
+					await appRec.restore(collectionSlug, itemId);
 				} else if (collectionCrud?.restoreById) {
 					await collectionCrud.restoreById({ id: itemId }, crudContext);
 				} else {
@@ -398,9 +405,9 @@ async function executeBuiltinAction(
 					};
 				}
 
-				if (typeof (app as any).restore === "function") {
+				if (typeof appRec.restore === "function") {
 					await Promise.all(
-						itemIds.map((id) => (app as any).restore(collectionSlug, id)),
+						itemIds.map((id) => appRec.restore(collectionSlug, id)),
 					);
 				} else if (collectionCrud?.restoreById) {
 					await Promise.all(
@@ -440,7 +447,7 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				const original = await (app as any).findById(collectionSlug, itemId);
+				const original = await appRec.findById(collectionSlug, itemId);
 				if (!original) {
 					return {
 						success: false,
@@ -452,7 +459,7 @@ async function executeBuiltinAction(
 				}
 				// Remove id and timestamps for duplication
 				const { id, createdAt, updatedAt, ...duplicateData } = original;
-				const duplicated = await (app as any).create(
+				const duplicated = await appRec.create(
 					collectionSlug,
 					duplicateData,
 				);
@@ -557,7 +564,7 @@ async function executeBuiltinAction(
 function isFieldDefinition(
 	field: ServerActionFormField,
 ): field is { state: any; getMetadata(): any; toZodSchema(): unknown } {
-	return typeof (field as any).getMetadata === "function";
+	return typeof (field as unknown as Record<string, unknown>).getMetadata === "function";
 }
 
 /**
@@ -565,7 +572,7 @@ function isFieldDefinition(
  */
 function isFieldRequired(field: ServerActionFormField): boolean {
 	if (isFieldDefinition(field)) {
-		return !!(field as any)._state?.notNull;
+		return !!((field as unknown as Record<string, any>)._state?.notNull);
 	}
 	return !!field.required;
 }
@@ -601,7 +608,7 @@ const executeActionRequestSchema = z.object({
 
 const executeActionResponseSchema = z.object({
 	success: z.boolean(),
-	result: z.unknown().optional(),
+	result: z.record(z.string(), z.any()).optional(),
 	error: z.string().optional(),
 });
 
@@ -612,7 +619,7 @@ const getActionsConfigRequestSchema = z.object({
 const getActionsConfigResponseSchema = z
 	.object({
 		builtin: z.array(z.string()),
-		custom: z.array(z.unknown()),
+		custom: z.array(z.record(z.string(), z.any())),
 	})
 	.nullable();
 
@@ -638,8 +645,8 @@ export const executeActionFn = route()
 	.schema(executeActionRequestSchema)
 	.outputSchema(executeActionResponseSchema)
 	.handler(async (ctx) => {
-		const app = (ctx as any).app as App;
-		const session = (ctx as any).session;
+		const app = getApp(ctx);
+		const session = getSession(ctx);
 		return executeAction(app, ctx.input, session);
 	});
 
@@ -652,7 +659,7 @@ export const getActionsConfigFn = route()
 	.schema(getActionsConfigRequestSchema)
 	.outputSchema(getActionsConfigResponseSchema)
 	.handler((ctx) => {
-		const app = (ctx as any).app as App;
+		const app = getApp(ctx);
 		return getActionsConfig(app, ctx.input.collection);
 	});
 

@@ -9,8 +9,8 @@
 
 import { z } from "zod";
 
-import { job } from "#questpie/server/integrated/queue/job.js";
-import type { JobDefinition } from "#questpie/server/integrated/queue/types.js";
+import { job } from "#questpie/server/modules/core/integrated/queue/job.js";
+import type { JobDefinition } from "#questpie/server/modules/core/integrated/queue/types.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import type {
 	JsonRouteDefinition,

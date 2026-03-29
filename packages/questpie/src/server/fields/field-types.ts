@@ -17,9 +17,9 @@ import type {
 	CollectionOptions,
 	UploadOptions,
 } from "#questpie/server/collection/builder/types.js";
-import { datetime } from "#questpie/server/fields/builtin-factories/datetime.js";
-import { number } from "#questpie/server/fields/builtin-factories/number.js";
-import { text } from "#questpie/server/fields/builtin-factories/text.js";
+import { datetime } from "#questpie/server/modules/core/fields/datetime.js";
+import { number } from "#questpie/server/modules/core/fields/number.js";
+import { text } from "#questpie/server/modules/core/fields/text.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 import type {

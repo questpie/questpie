@@ -5,7 +5,8 @@
  * The `page()` factory returns a plain frozen object.
  */
 
-import type { MaybeLazyComponent } from "../types/common";
+import type { I18nText } from "../../i18n/types";
+import type { IconComponent, MaybeLazyComponent } from "../types/common";
 
 /**
  * Page definition — a plain frozen object describing a custom admin page.
@@ -15,7 +16,28 @@ export interface PageDefinition<TName extends string = string> {
 	readonly component: MaybeLazyComponent;
 	readonly path?: string;
 	readonly showInNav?: boolean;
+	/** Display label for navigation. Falls back to formatted page name. */
+	readonly label?: I18nText;
+	/** Icon for navigation sidebar. */
+	readonly icon?: IconComponent;
+	/** Navigation group this page belongs to. */
+	readonly group?: string;
+	/** Sort order within the navigation group (default: 0). */
+	readonly order?: number;
 }
+
+/**
+ * Options accepted by the `page()` factory (everything except `name`).
+ */
+type PageOptions = {
+	component: MaybeLazyComponent;
+	showInNav?: boolean;
+	path?: string;
+	label?: I18nText;
+	icon?: IconComponent;
+	group?: string;
+	order?: number;
+};
 
 /**
  * Create a custom page as a plain frozen object.
@@ -32,17 +54,18 @@ export interface PageDefinition<TName extends string = string> {
  * });
  * ```
  */
-export function page<
-	TName extends string,
-	TComponent extends MaybeLazyComponent,
->(
+export function page<TName extends string>(
 	name: TName,
-	config: { component: TComponent; showInNav?: boolean; path?: string },
+	config: PageOptions,
 ): PageDefinition<TName> {
 	return Object.freeze({
 		name,
 		component: config.component,
 		path: config.path,
 		showInNav: config.showInNav,
+		label: config.label,
+		icon: config.icon,
+		group: config.group,
+		order: config.order,
 	});
 }

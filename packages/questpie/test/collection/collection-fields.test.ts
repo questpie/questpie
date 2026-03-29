@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import type { JsonValue } from "../../src/server/fields/builtin/json.js";
-import { collection } from "../../src/server/index.js";
+import type { JsonValue } from "../../src/server/modules/core/fields/json.js";
+import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -34,9 +34,9 @@ describe("collection field types", () => {
 	describe("text field (varchar 255)", () => {
 		it("stores and retrieves short text", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Short Title",
@@ -46,7 +46,7 @@ describe("collection field types", () => {
 
 			expect(created.title).toBe("Short Title");
 
-			const found = await setup.app.api.collections.content.findOne(
+			const found = await setup.app.collections.content.findOne(
 				{ where: { id: created.id } },
 				ctx,
 			);
@@ -55,10 +55,10 @@ describe("collection field types", () => {
 
 		it("enforces not null constraint", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
 			await expect(
-				setup.app.api.collections.content.create(
+				setup.app.collections.content.create(
 					{
 						id: crypto.randomUUID(),
 						// title missing
@@ -70,9 +70,9 @@ describe("collection field types", () => {
 
 		it("handles empty string", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "",
@@ -87,11 +87,11 @@ describe("collection field types", () => {
 	describe("textarea field (text)", () => {
 		it("stores and retrieves long text", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
 			const longText = "A".repeat(1000);
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -105,9 +105,9 @@ describe("collection field types", () => {
 
 		it("handles null values", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -121,11 +121,11 @@ describe("collection field types", () => {
 
 		it("handles multiline text", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
 			const multiline = "Line 1\nLine 2\nLine 3";
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -141,7 +141,7 @@ describe("collection field types", () => {
 	describe("richText field (JSON)", () => {
 		it("stores and retrieves rich text JSON", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
 			const richContent = {
 				type: "doc",
@@ -153,7 +153,7 @@ describe("collection field types", () => {
 				],
 			};
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -167,9 +167,9 @@ describe("collection field types", () => {
 
 		it("handles null rich text", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -183,7 +183,7 @@ describe("collection field types", () => {
 
 		it("preserves complex nested structures", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
 			const complex: JsonValue = {
 				blocks: [
@@ -197,7 +197,7 @@ describe("collection field types", () => {
 				metadata: { version: 1 },
 			};
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -213,9 +213,9 @@ describe("collection field types", () => {
 	describe("checkbox field (boolean)", () => {
 		it("stores and retrieves boolean true", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -229,9 +229,9 @@ describe("collection field types", () => {
 
 		it("stores and retrieves boolean false", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -245,9 +245,9 @@ describe("collection field types", () => {
 
 		it("uses default value when not provided", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -262,9 +262,9 @@ describe("collection field types", () => {
 	describe("number field (integer)", () => {
 		it("stores and retrieves integers", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -278,9 +278,9 @@ describe("collection field types", () => {
 
 		it("handles zero", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -294,9 +294,9 @@ describe("collection field types", () => {
 
 		it("handles negative numbers", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -310,9 +310,9 @@ describe("collection field types", () => {
 
 		it("uses default value", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -327,11 +327,11 @@ describe("collection field types", () => {
 	describe("timestamp field", () => {
 		it("stores and retrieves dates", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
 			const now = new Date();
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -346,9 +346,9 @@ describe("collection field types", () => {
 
 		it("handles null timestamps", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -362,11 +362,11 @@ describe("collection field types", () => {
 
 		it("handles ISO string dates", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
 			const isoDate = "2024-01-01T12:00:00Z";
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -382,9 +382,9 @@ describe("collection field types", () => {
 	describe("field updates", () => {
 		it("updates single field", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Original Title",
@@ -393,7 +393,7 @@ describe("collection field types", () => {
 				ctx,
 			);
 
-			await setup.app.api.collections.content.update(
+			await setup.app.collections.content.update(
 				{
 					where: { id: created.id },
 					data: { viewCount: 100 },
@@ -401,7 +401,7 @@ describe("collection field types", () => {
 				ctx,
 			);
 
-			const updated = await setup.app.api.collections.content.findOne(
+			const updated = await setup.app.collections.content.findOne(
 				{ where: { id: created.id } },
 				ctx,
 			);
@@ -411,9 +411,9 @@ describe("collection field types", () => {
 
 		it("updates multiple fields", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Original",
@@ -423,7 +423,7 @@ describe("collection field types", () => {
 				ctx,
 			);
 
-			await setup.app.api.collections.content.update(
+			await setup.app.collections.content.update(
 				{
 					where: { id: created.id },
 					data: {
@@ -435,7 +435,7 @@ describe("collection field types", () => {
 				ctx,
 			);
 
-			const updated = await setup.app.api.collections.content.findOne(
+			const updated = await setup.app.collections.content.findOne(
 				{ where: { id: created.id } },
 				ctx,
 			);
@@ -446,9 +446,9 @@ describe("collection field types", () => {
 
 		it("clears optional field with null", async () => {
 			const ctx = createTestContext();
-			// Use app.api.collections.content directly
+			// Use app.collections.content directly
 
-			const created = await setup.app.api.collections.content.create(
+			const created = await setup.app.collections.content.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Test",
@@ -457,7 +457,7 @@ describe("collection field types", () => {
 				ctx,
 			);
 
-			await setup.app.api.collections.content.update(
+			await setup.app.collections.content.update(
 				{
 					where: { id: created.id },
 					data: { description: null },
@@ -465,7 +465,7 @@ describe("collection field types", () => {
 				ctx,
 			);
 
-			const updated = await setup.app.api.collections.content.findOne(
+			const updated = await setup.app.collections.content.findOne(
 				{ where: { id: created.id } },
 				ctx,
 			);

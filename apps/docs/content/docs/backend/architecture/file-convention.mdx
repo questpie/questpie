@@ -45,7 +45,7 @@ Some configs are single files, not directories:
 | `locale.ts`          | `locale({...})`                                   | Content locales                                      |
 | `hooks.ts`           | `export default { collections, globals }`         | Global lifecycle hooks (applied across all entities) |
 | `access.ts`          | `export default { read, create, update, delete }` | Default access rules for all entities                |
-| `context.ts`         | `export default contextResolver(...)`             | Custom context resolution (e.g., tenant scoping)     |
+| `config/app.ts`      | `export default appConfig({...})`                 | App-level config (context, locale, tenant scoping)   |
 | `fields.ts`          | `export default { ...customFields }`              | Custom field type definitions                        |
 | `sidebar.ts`         | `sidebar({...})`                                  | Admin sidebar                                        |
 | `dashboard.ts`       | `dashboard({...})`                                | Admin dashboard                                      |

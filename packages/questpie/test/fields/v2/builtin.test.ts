@@ -24,7 +24,7 @@ import {
 	json,
 	object,
 	from,
-} from "#questpie/server/fields/builtin-factories/index.js";
+} from "#questpie/server/modules/core/fields/index.js";
 import { Field } from "#questpie/server/fields/field-class.js";
 
 // ============================================================================

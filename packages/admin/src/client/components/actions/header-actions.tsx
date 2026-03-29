@@ -146,6 +146,7 @@ export function HeaderActions<TItem = any>({
 			{visibleSecondary.length > 0 && (
 				<DropdownMenu>
 					<DropdownMenuTrigger
+						nativeButton={false}
 						render={<Button variant="outline" size="icon" className="size-9" />}
 					>
 						<Icon icon="ph:dots-three-vertical" className="size-4" />
