@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "@questpie/admin/client/styles/index.css";
 
-/* Scan admin package for Tailwind classes */
+/* Scan admin package for Tailwind classes.
+   Two paths cover both bun monorepo (local symlink) and hoisted root (npm/Windows). */
 @source "../node_modules/@questpie/admin/";
+@source "../../../node_modules/@questpie/admin/";
