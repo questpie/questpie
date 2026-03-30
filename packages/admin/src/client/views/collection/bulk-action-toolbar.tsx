@@ -385,6 +385,7 @@ export function BulkActionToolbar<TItem = any>({
 							{/* Select dropdown */}
 							<DropdownMenu>
 								<DropdownMenuTrigger
+									nativeButton={false}
 									render={
 										<Button
 											variant="ghost"
@@ -424,6 +425,7 @@ export function BulkActionToolbar<TItem = any>({
 							{visibleActions.length > 0 && (
 								<DropdownMenu>
 									<DropdownMenuTrigger
+										nativeButton={false}
 										render={
 											<Button
 												variant="outline"

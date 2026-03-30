@@ -274,9 +274,16 @@ export function useActions<TItem = any>({
 	// Merge provided config with defaults
 	const actions: Required<ActionsConfig<TItem>> = React.useMemo(
 		() => ({
-			header: actionsConfig?.header ??
-				defaultActions.header ?? { primary: [], secondary: [] },
-			bulk: actionsConfig?.bulk ?? defaultActions.bulk ?? [],
+			header:
+				actionsConfig?.header &&
+				((actionsConfig.header as any).primary?.length > 0 ||
+					(actionsConfig.header as any).secondary?.length > 0)
+					? actionsConfig.header
+					: (defaultActions.header ?? { primary: [], secondary: [] }),
+			bulk:
+				actionsConfig?.bulk && actionsConfig.bulk.length > 0
+					? actionsConfig.bulk
+					: (defaultActions.bulk ?? []),
 		}),
 		[actionsConfig, defaultActions],
 	);
