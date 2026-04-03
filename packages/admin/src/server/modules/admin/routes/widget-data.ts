@@ -18,18 +18,19 @@ import type { ServerDashboardItem } from "../../../augmentation.js";
  * Find a widget by ID in the dashboard tree (searches raw server config
  * which still has loader attached).
  */
-function findWidgetById(items: ServerDashboardItem[], id: string): any | null {
+function findWidgetById(items: ServerDashboardItem[], id: string): Record<string, any> | null {
 	for (const item of items) {
+		const rec = item as unknown as Record<string, any>;
 		if (item.type === "section") {
-			const found = findWidgetById((item as any).items || [], id);
+			const found = findWidgetById((rec.items as ServerDashboardItem[]) || [], id);
 			if (found) return found;
 		} else if (item.type === "tabs") {
-			for (const tab of (item as any).tabs || []) {
+			for (const tab of (rec.tabs as Array<{ items: ServerDashboardItem[] }>) || []) {
 				const found = findWidgetById(tab.items || [], id);
 				if (found) return found;
 			}
-		} else if ((item as any).id === id) {
-			return item;
+		} else if (rec.id === id) {
+			return rec;
 		}
 	}
 	return null;
@@ -66,7 +67,7 @@ export const fetchWidgetData = route()
 	.handler(async (ctx) => {
 		// Access dashboard config from the app's internal state
 		const stored = tryGetContext();
-		const appState = (stored?.app as any)?.state || {};
+		const appState = ((stored?.app as Record<string, any>)?.state || {}) as Record<string, any>;
 		const dashboard = appState.config?.admin?.dashboard ?? appState.dashboard;
 
 		if (!dashboard?.items) {

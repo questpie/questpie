@@ -6,7 +6,7 @@
  * 1. Imports the runtime config, modules, and all discovered entities
  * 2. Emits type interfaces using typeof references (zero inference cost)
  * 3. Calls createApp(definition, runtime) to create the app instance
- * 4. Exports the app and composed App type
+ * 4. Exports the app instance and composed types
  *
  * All category-specific behavior (imports, types, runtime emission) is driven
  * by CategoryDeclaration metadata from plugins. Categories without explicit
@@ -88,7 +88,7 @@ export function generateTemplate(options: TemplateOptions): string {
 
 	// Import createApp + types
 	lines.push(
-		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type Questpie, type AppContext, type Registry, type QuestpieConfig, type QueueClient, type CollectionAPI } from "questpie";',
+		'import { createApp, createContextFactory, extractAppServices, type AppDefinition, type ModuleDefinition, type AppContext, type Registry, type QueueClient, type CollectionAPI } from "questpie";',
 	);
 	lines.push("");
 
@@ -447,88 +447,6 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("");
 	}
 
-	// ── Context resolver return type auto-propagation ────────────
-	// If a context resolver is discovered (via appConfig.context or standalone context.ts),
-	// emit a type that extracts its return type and augments QuestpieContextExtension.
-	// This makes custom context properties available on all handler `ctx` parameters.
-	{
-		const appConfigFile = discovered.singles.get("appConfig");
-		const contextFile = discovered.singles.get("contextResolver");
-		let contextTypeExpr: string | null = null;
-
-		if (appConfigFile?.configKey) {
-			// Config bucket: context is a property of the appConfig export
-			contextTypeExpr = `typeof ${appConfigFile.varName}.context`;
-		} else if (appConfigFile?.destructure && "context" in appConfigFile.destructure) {
-			// Legacy destructure: context is a property of the appConfig export
-			contextTypeExpr = `typeof ${appConfigFile.varName}.context`;
-		} else if (contextFile) {
-			// Standalone context.ts
-			contextTypeExpr = `typeof ${contextFile.varName}`;
-		}
-
-		if (contextTypeExpr) {
-			lines.push("// Context resolver return type → auto-typed handler ctx");
-			lines.push(
-				`type _ContextReturn = ${contextTypeExpr} extends (...args: any[]) => any`,
-			);
-			lines.push(
-				`\t? Awaited<ReturnType<${contextTypeExpr}>>`,
-			);
-			lines.push("\t: {};");
-			lines.push("declare global {");
-			lines.push("\tnamespace Questpie {");
-			lines.push(
-				"\t\tinterface QuestpieContextExtension extends _ContextReturn {}",
-			);
-			lines.push("\t}");
-			lines.push("}");
-			lines.push("");
-		}
-	}
-
-	// ── App — the full Questpie<> app type ──────────────────────
-	{
-		const stateMembers: string[] = [];
-
-		for (const [catName] of discovered.categories) {
-			const decl = allDecls.get(catName);
-			const include = decl ? decl.includeInAppState !== false : true;
-			if (!include) continue;
-			const appTypeName = deriveAppTypeName(catName, decl);
-			stateMembers.push(`\t${catName}: ${appTypeName};`);
-		}
-
-		// Messages — special ~messageKeys member
-		const messagesMap = discovered.categories.get("messages");
-		if (messagesMap && messagesMap.size > 0) {
-			stateMembers.push('\t"~messageKeys": AppMessageKeys;');
-		}
-
-		lines.push("/**");
-		lines.push(" * The fully-typed app instance type.");
-		lines.push(
-			" * Use `typeof app` or this alias when you need to reference the app type.",
-		);
-		lines.push(" *");
-		lines.push(
-			" * **Note:** Do NOT import `app` inside framework-defined files (collections,",
-		);
-		lines.push(
-			" * globals, routes, hooks, blocks) — it creates circular dependencies with",
-		);
-		lines.push(
-			" * the generated index. Use the context parameters provided to handlers instead.",
-		);
-		lines.push(" */");
-		lines.push("export type App = Questpie<QuestpieConfig & {");
-		for (const member of stateMembers) {
-			lines.push(member);
-		}
-		lines.push("}>;");
-		lines.push("");
-	}
-
 	// ── AppContext augmentation — auto-types ALL handlers ──────
 	{
 		const emailsCat = discovered.categories.get("emails");
@@ -560,27 +478,27 @@ export function generateTemplate(options: TemplateOptions): string {
 			lines.push("\t\tinterface AppContext {");
 		}
 		lines.push("\t\t\t// Infrastructure");
-		lines.push("\t\t\tdb: App['db'];");
+		lines.push("\t\t\tdb: (typeof app)['db'];");
 		if (hasEmails) {
 			lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
 		} else {
-			lines.push("\t\t\temail: App['email'];");
+			lines.push("\t\t\temail: (typeof app)['email'];");
 		}
 		lines.push("\t\t\tqueue: QueueClient<AppJobs>;");
-		lines.push("\t\t\tstorage: App['storage'];");
-		lines.push("\t\t\tkv: App['kv'];");
-		lines.push("\t\t\tlogger: App['logger'];");
-		lines.push("\t\t\tsearch: App['search'];");
-		lines.push("\t\t\trealtime: App['realtime'];");
+		lines.push("\t\t\tstorage: (typeof app)['storage'];");
+		lines.push("\t\t\tkv: (typeof app)['kv'];");
+		lines.push("\t\t\tlogger: (typeof app)['logger'];");
+		lines.push("\t\t\tsearch: (typeof app)['search'];");
+		lines.push("\t\t\trealtime: (typeof app)['realtime'];");
 		lines.push("");
 		lines.push("\t\t\t// Entity APIs");
 		lines.push("\t\t\tcollections: _CollectionsAPI;");
-		lines.push("\t\t\tglobals: App['api']['globals'];");
-		lines.push("\t\t\ttables: App['tables'];");
+		lines.push("\t\t\tglobals: (typeof app)['api']['globals'];");
+		lines.push("\t\t\ttables: (typeof app)['tables'];");
 		lines.push("");
 		lines.push("\t\t\t// Request-scoped");
 		lines.push(
-			"\t\t\tsession: App['auth'] extends { api: { getSession: (...args: any[]) => Promise<infer TSession> } } ? NonNullable<TSession> | null : null;",
+			"\t\t\tsession: (typeof app)['auth'] extends { api: { getSession: (...args: any[]) => Promise<infer TSession> } } ? NonNullable<TSession> | null : null;",
 		);
 		if (hasMessages) {
 			lines.push(
@@ -739,8 +657,9 @@ function emitNewArchitectureRuntime(
 	lines.push("export const app = await createApp(");
 	lines.push("\t({");
 
-	// Modules
-	lines.push(`\t\tmodules: ${modulesFile.varName} as any,`);
+	// Modules — cast to ModuleDefinition[] to satisfy AppDefinition while
+	// preserving the concrete tuple type for MergeModuleProp<> in the type section.
+	lines.push(`\t\tmodules: ${modulesFile.varName} as ModuleDefinition[],`);
 
 	// ── Emit all categories ──────────────────────────────────────
 	for (const [catName, fileMap] of discovered.categories) {
@@ -823,7 +742,7 @@ function emitNewArchitectureRuntime(
 
 	lines.push("\t}) satisfies AppDefinition,");
 	lines.push("\t_runtime,");
-	lines.push(") as unknown as App;");
+	lines.push(");");
 	lines.push("");
 }
 
@@ -922,6 +841,7 @@ function getCategorizedSingles(
 
 	for (const [key, file] of singles) {
 		if (key === "modules") continue; // handled separately
+		if (key === "plugin") continue; // codegen-only, not passed to createApp
 		if (coreSingleKeys.has(key)) {
 			core.push(file);
 		} else {

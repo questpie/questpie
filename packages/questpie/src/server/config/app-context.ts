@@ -33,8 +33,6 @@ declare global {
 	namespace Questpie {
 		interface AppContext {}
 		interface Registry {}
-		interface QuestpieContextExtension {}
-
 		/**
 		 * Augmentable interface for view record types.
 		 * Populated by each module's codegen output to provide autocomplete on `v.*` proxies.
@@ -120,7 +118,12 @@ export type KnownComponentNames = RegistryNames<"components">;
 
 /**
  * Extract flat AppContext services from a Questpie app instance.
- * Used by all context creation functions (hooks, access, routes, jobs).
+ * Used internally by context creation functions (hooks, access, routes, jobs).
+ *
+ * @deprecated Prefer `createContext()` from your generated index — it returns a fully
+ * typed `AppContext` and handles service resolution automatically.
+ * `extractAppServices` remains for internal framework use but should not be called
+ * directly in user code.
  *
  * @param app - Questpie app instance (typed as `any` to avoid circular deps)
  * @param overrides - Optional overrides (e.g. db from transaction, session from request)
@@ -128,9 +131,14 @@ export type KnownComponentNames = RegistryNames<"components">;
  */
 export function extractAppServices(
 	app: any,
-	overrides?: { db?: any; session?: any; locale?: string },
-): Record<string, unknown> {
-	if (!app) return { db: overrides?.db };
+	overrides?: {
+		db?: any;
+		session?: any;
+		locale?: string;
+		scope?: import("#questpie/server/config/request-scope.js").RequestScope;
+	},
+): AppContext {
+	if (!app) return { db: overrides?.db } as AppContext;
 	const result: Record<string, unknown> = {
 		app,
 		db: overrides?.db ?? app.db,
@@ -143,8 +151,8 @@ export function extractAppServices(
 		logger: app.logger,
 		search: app.search,
 		realtime: app.realtime,
-		collections: app.api?.collections,
-		globals: app.api?.globals,
+		collections: app.collections,
+		globals: app.globals,
 		t: app.t,
 	};
 
@@ -155,11 +163,15 @@ export function extractAppServices(
 		for (const [name, input] of Object.entries(
 			serviceDefs as Record<string, any>,
 		)) {
-			const instance = app.resolveService(name, {
-				db: result.db,
-				session: result.session,
-				locale: overrides?.locale,
-			});
+			const instance = app.resolveService(
+				name,
+				{
+					db: result.db,
+					session: result.session,
+					locale: overrides?.locale,
+				},
+				overrides?.scope,
+			);
 
 			const state =
 				input && typeof input === "object" && "state" in input
@@ -173,7 +185,11 @@ export function extractAppServices(
 			}
 
 			if (namespace === null) {
-				result[name] = instance;
+				// Don't override already-set context values (db, session, locale, etc.)
+				// These are managed by createContext() / extractAppServices() directly.
+				if (!(name in result)) {
+					result[name] = instance;
+				}
 				continue;
 			}
 
@@ -187,5 +203,5 @@ export function extractAppServices(
 		result.services = services;
 	}
 
-	return result;
+	return result as unknown as AppContext;
 }

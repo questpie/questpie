@@ -124,17 +124,20 @@ export async function executeGlobalGlobalHooks(
 
 	const isBefore = hookName === "beforeChange";
 
+	// Enrich context with global name for global hooks
+	const enrichedCtx = { ...ctx, global: globalName };
+
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, globalName)) continue;
 
 		if (isBefore) {
-			await hookFn(ctx);
+			await hookFn(enrichedCtx);
 		} else {
 			try {
-				await hookFn(ctx);
+				await hookFn(enrichedCtx);
 			} catch (err) {
-				ctx.logger.error(
+				enrichedCtx.logger.error(
 					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,
 				);
@@ -159,17 +162,20 @@ export async function executeGlobalGlobalTransitionHooks(
 
 	const isBefore = hookName === "beforeTransition";
 
+	// Enrich context with global name for global hooks
+	const enrichedCtx = { ...ctx, global: globalName };
+
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, globalName)) continue;
 
 		if (isBefore) {
-			await hookFn(ctx);
+			await hookFn(enrichedCtx);
 		} else {
 			try {
-				await hookFn(ctx);
+				await hookFn(enrichedCtx);
 			} catch (err) {
-				ctx.logger.error(
+				enrichedCtx.logger.error(
 					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,
 				);

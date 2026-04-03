@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { Session, User } from "better-auth/types";
 
-import type { AccessMode, QuestpieContextExtension } from "./types.js";
+import type { AccessMode } from "./types.js";
 
 // ============================================================================
 // Type Inference Utilities
@@ -294,30 +294,20 @@ export interface BaseRequestContext {
 }
 
 /**
- * Full request context including user-defined extensions.
+ * Full request context.
  *
- * Extend via module augmentation:
- * ```ts
- * declare module 'questpie' {
- *   interface QuestpieContextExtension {
- *     tenantId: string | null
- *   }
- * }
- * ```
- *
- * Then in access functions:
+ * In access functions:
  * ```ts
  * .access({
  *   read: ({ ctx }) => {
- *     ctx.tenantId // ✅ Typed as string | null
+ *     ctx.session // ✅ Typed
  *   }
  * })
  * ```
  */
-export type RequestContext = BaseRequestContext &
-	QuestpieContextExtension & {
-		/**
-		 * Allow additional properties for backwards compatibility.
-		 */
-		[key: string]: unknown;
-	};
+export type RequestContext = BaseRequestContext & {
+	/**
+	 * Allow additional properties for backwards compatibility.
+	 */
+	[key: string]: unknown;
+};

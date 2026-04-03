@@ -1,13 +1,5 @@
 import { appConfig } from "questpie";
 
-declare global {
-    namespace Questpie {
-        interface QuestpieContextExtension {
-            cityId: string | null;
-        }
-    }
-}
-
 export default appConfig({
     locale: {
         locales: [{ code: "en", label: "English", fallback: true, flagCountryCode: "gb" }],

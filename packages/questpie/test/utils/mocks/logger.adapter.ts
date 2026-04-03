@@ -1,4 +1,4 @@
-import type { LoggerAdapter } from "../../../src/server/integrated/logger/types.js";
+import type { LoggerAdapter } from "../../../src/server/modules/core/integrated/logger/types.js";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 

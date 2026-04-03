@@ -300,23 +300,6 @@ export type OperatorsToWhereInput<TOps extends OperatorMap> = {
 // ============================================================================
 
 /**
- * Base metadata interface - shared across all field types.
- *
- * NOTE: This is NOT used directly! Each field type defines its own meta interface
- * that can be augmented by external packages.
- *
- * Pattern:
- * 1. Field defines: `interface TextFieldMeta {}`
- * 2. Admin augments: `interface TextFieldMeta { admin?: { placeholder?: string } }`
- * 3. Field config uses: `meta?: TextFieldMeta`
- *
- * This allows type-safe, field-specific admin configuration.
- *
- * @deprecated Use field-specific meta interfaces (TextFieldMeta, BooleanFieldMeta, etc.)
- */
-export type FieldMetadataMeta = {};
-
-/**
  * Base metadata exposed for introspection.
  * Contains only data-relevant information - NO UI/admin config.
  * Admin package uses this to auto-generate UI, then applies its own overrides.
@@ -363,7 +346,7 @@ export interface FieldMetadataBase {
 	 * Extensible metadata for external packages.
 	 * Augmented by packages like @questpie/admin to add UI configuration.
 	 */
-	meta?: FieldMetadataMeta;
+	meta?: Record<string, unknown>;
 }
 
 /**

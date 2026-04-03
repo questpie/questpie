@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import { collection, global } from "../../src/server/index.js";
+import { collection, global } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -58,13 +58,13 @@ describe("audit routes", () => {
 			const ctx = createTestContext();
 
 			// Create a post
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Audited Post" },
 				ctx,
 			);
 
 			// Insert mock audit log entries
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "create",
 					resourceType: "collection",
@@ -75,7 +75,7 @@ describe("audit routes", () => {
 				},
 				ctx,
 			);
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "update",
 					resourceType: "collection",
@@ -110,7 +110,7 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "No Audit" },
 				ctx,
 			);
@@ -130,14 +130,14 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Paginated" },
 				ctx,
 			);
 
 			// Insert 3 audit entries
 			for (let i = 1; i <= 3; i++) {
-				await (setup.app as any).api.collections.admin_audit_log.create(
+				await (setup.app as any).collections.admin_audit_log.create(
 					{
 						action: "update",
 						resourceType: "collection",
@@ -174,17 +174,17 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
-			const post1 = await setup.app.api.collections.posts.create(
+			const post1 = await setup.app.collections.posts.create(
 				{ title: "Post 1" },
 				ctx,
 			);
-			const post2 = await setup.app.api.collections.posts.create(
+			const post2 = await setup.app.collections.posts.create(
 				{ title: "Post 2" },
 				ctx,
 			);
 
 			// Create audit entries for both posts
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "create",
 					resourceType: "collection",
@@ -194,7 +194,7 @@ describe("audit routes", () => {
 				},
 				ctx,
 			);
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "create",
 					resourceType: "collection",
@@ -224,10 +224,10 @@ describe("audit routes", () => {
 			const ctx = createTestContext();
 
 			// Initialize global
-			await setup.app.api.globals.settings.update({ siteName: "My Site" }, ctx);
+			await setup.app.globals.settings.update({ siteName: "My Site" }, ctx);
 
 			// Insert mock audit log entries for the global
-			await (setup.app as any).api.collections.admin_audit_log.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "update",
 					resourceType: "global",
@@ -286,7 +286,7 @@ describe("audit routes", () => {
 
 			// Insert 3 audit entries
 			for (let i = 1; i <= 3; i++) {
-				await (setup.app as any).api.collections.admin_audit_log.create(
+				await (setup.app as any).collections.admin_audit_log.create(
 					{
 						action: "update",
 						resourceType: "global",

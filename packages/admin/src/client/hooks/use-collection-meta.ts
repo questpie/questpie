@@ -75,6 +75,7 @@ export function useCollectionMeta<K extends ResolvedCollectionNames>(
 		staleTime: 5 * 60 * 1000, // 5 minutes
 		gcTime: 30 * 60 * 1000, // 30 minutes (formerly cacheTime)
 		...queryOptions,
+		enabled: !!collection && (queryOptions?.enabled ?? true),
 	});
 }
 

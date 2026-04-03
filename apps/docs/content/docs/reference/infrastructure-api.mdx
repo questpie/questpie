@@ -325,6 +325,6 @@ The app instance provides access to the full runtime for scripts and advanced us
 const ctx = await app.createContext({ accessMode: "system", locale: "en" });
 
 // Use the collection API directly
-const posts = await app.api.collections.posts.find({}, ctx);
-const settings = await app.api.globals.siteSettings.get(ctx);
+const posts = await app.collections.posts.find({}, ctx);
+const settings = await app.globals.siteSettings.get(ctx);
 ```

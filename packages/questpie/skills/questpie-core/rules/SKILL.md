@@ -97,7 +97,7 @@ Server-side code can bypass all access checks:
 
 ```ts
 const ctx = await app.createContext({ accessMode: "system" });
-const allPosts = await app.api.collections.posts.find({}, ctx);
+const allPosts = await app.collections.posts.find({}, ctx);
 ```
 
 HTTP requests always use session-based access. System mode is for background jobs, seeds, and internal server logic only.

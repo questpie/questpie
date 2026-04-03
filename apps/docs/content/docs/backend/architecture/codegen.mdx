@@ -115,7 +115,7 @@ export const client = createClient<AppConfig>({
 import { app, createContext } from "#questpie";
 
 const ctx = await createContext({ accessMode: "system" });
-const posts = await app.api.collections.posts.find({}, ctx);
+const posts = await app.collections.posts.find({}, ctx);
 ```
 
 ### Typed admin hooks

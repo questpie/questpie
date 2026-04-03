@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { collection } from "../../src/server/index.js";
+import { collection } from "../../src/exports/index.js";
 
 describe("Type-Safe Hooks", () => {
 	test("hooks should have proper type inference", () => {

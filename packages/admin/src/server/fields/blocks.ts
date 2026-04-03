@@ -17,6 +17,8 @@ import {
 	type DefaultFieldState,
 	type Field,
 	field,
+	fieldType,
+	type FieldTypeDefinition,
 	getContext,
 	isNotNull,
 	isNull,
@@ -194,10 +196,14 @@ export type BlocksFieldState = DefaultFieldState & {
  * sections: f.blocks().required()
  * ```
  */
-export function blocks(): Field<BlocksFieldState> {
-	return field<BlocksFieldState>({
-		type: "blocks",
-		columnFactory: (name) => jsonb(name) as any,
+/**
+ * Blocks field runtime state factory.
+ * Shared between the legacy `blocks()` function and the new `blocksFieldType`.
+ */
+function createBlocksState() {
+	return {
+		type: "blocks" as const,
+		columnFactory: (name: string) => jsonb(name) as any,
 		schemaFactory: () => {
 			const blockNodeSchema: z.ZodType<BlockNode> = z.lazy(() =>
 				z.object({
@@ -215,7 +221,7 @@ export function blocks(): Field<BlocksFieldState> {
 			jsonbCast: null,
 			column: getBlocksOperators().column,
 		} as any,
-		metadataFactory: (state) => ({
+		metadataFactory: (state: any) => ({
 			type: "blocks" as const,
 			label: state.label,
 			description: state.description,
@@ -234,7 +240,13 @@ export function blocks(): Field<BlocksFieldState> {
 					const { app, db, locale } = getContext();
 					const blockDefs = (app as any).state?.blocks;
 					if (!blockDefs || Object.keys(blockDefs).length === 0) return value;
-					return await processBlocksDocument(doc, blockDefs, { app, db, locale });
+					return await processBlocksDocument(doc, blockDefs, {
+						app,
+						db,
+						locale,
+						collections: (app as any).collections,
+						globals: (app as any).globals,
+					});
 				} catch {
 					// getContext() fails outside request scope — return as-is
 					return value;
@@ -248,5 +260,19 @@ export function blocks(): Field<BlocksFieldState> {
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	};
 }
+
+export function blocks(): Field<BlocksFieldState> {
+	return field<BlocksFieldState>(createBlocksState());
+}
+
+/**
+ * Blocks field type definition (v3 API).
+ *
+ * Use this with the `fieldType()` discovery system instead of the
+ * legacy `blocks()` factory function.
+ */
+export const blocksFieldType: FieldTypeDefinition<"blocks", []> = fieldType("blocks", {
+	create: createBlocksState as any,
+});

@@ -72,6 +72,16 @@ export type {
 // ============================================================================
 
 /**
+ * Unparameterised client type used throughout the admin library.
+ *
+ * The admin package is app-agnostic — it cannot know the concrete `TApp` at
+ * build time. This alias replaces the raw `QuestpieClient<any>` escape hatch
+ * with a single, intentional definition that documents the trade-off and
+ * provides a future narrowing point.
+ */
+export type AnyQuestpieClient = QuestpieClient<any>;
+
+/**
  * Extract collection names from a QuestpieApp config
  */
 export type CollectionNames<TApp extends QuestpieApp> =
@@ -92,7 +102,7 @@ export type CollectionItem<
 	TName extends CollectionNames<TApp>,
 > =
 	Awaited<
-		ReturnType<QuestpieClient<any>["collections"][TName]["find"]>
+		ReturnType<AnyQuestpieClient["collections"][TName]["find"]>
 	> extends { docs: Array<infer TItem> }
 		? TItem
 		: never;

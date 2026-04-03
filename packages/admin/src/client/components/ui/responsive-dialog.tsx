@@ -118,6 +118,7 @@ function ResponsiveDialogTrigger({
 	return (
 		<DialogPrimitive.Trigger
 			className={className}
+			nativeButton={!asChild}
 			render={asChild ? (children as React.ReactElement) : undefined}
 			{...props}
 		>
@@ -261,6 +262,7 @@ function ResponsiveDialogClose({
 	return (
 		<DialogPrimitive.Close
 			className={className}
+			nativeButton={!asChild}
 			render={asChild ? (children as React.ReactElement) : undefined}
 			{...props}
 		>

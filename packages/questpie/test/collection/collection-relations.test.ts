@@ -8,7 +8,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { collection } from "../../src/server/index.js";
+import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -248,8 +248,8 @@ describe("collection relations", () => {
 	describe("one-to-one relations", () => {
 		it("creates and resolves one-to-one relation (belongsTo side)", async () => {
 			const ctx = createTestContext();
-			const usersCrud = app.api.collections.users;
-			const profilesCrud = app.api.collections.profiles;
+			const usersCrud = app.collections.users;
+			const profilesCrud = app.collections.profiles;
 
 			const user = await usersCrud.create(
 				{
@@ -282,8 +282,8 @@ describe("collection relations", () => {
 
 		it("filters by one-to-one relation", async () => {
 			const ctx = createTestContext();
-			const usersCrud = app.api.collections.users;
-			const profilesCrud = app.api.collections.profiles;
+			const usersCrud = app.collections.users;
+			const profilesCrud = app.collections.profiles;
 
 			const user1 = await usersCrud.create(
 				{
@@ -345,9 +345,9 @@ describe("collection relations", () => {
 	describe("deep nesting", () => {
 		it("loads 3 levels of nested relations (author -> posts -> comments)", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
-			const commentsCrud = app.api.collections.comments;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
+			const commentsCrud = app.collections.comments;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Author A" },
@@ -405,9 +405,9 @@ describe("collection relations", () => {
 
 		it("handles self-referential deep nesting (comments -> replies -> replies)", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
-			const commentsCrud = app.api.collections.comments;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
+			const commentsCrud = app.collections.comments;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Author B" },
@@ -480,8 +480,8 @@ describe("collection relations", () => {
 	describe("partial field selection", () => {
 		it("loads only selected columns from related collection", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Author C" },
@@ -539,8 +539,8 @@ describe("collection relations", () => {
 	describe("limit, offset, orderBy on relations", () => {
 		it("applies limit and orderBy to hasMany relation", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Prolific Author" },
@@ -599,8 +599,8 @@ describe("collection relations", () => {
 
 		it("applies offset to skip records in hasMany relation", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Another Author" },
@@ -664,8 +664,8 @@ describe("collection relations", () => {
 	describe("advanced aggregations", () => {
 		it("supports _sum, _avg, _min, _max aggregations", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Stats Author" },
@@ -732,8 +732,8 @@ describe("collection relations", () => {
 
 		it("supports aggregations with where filters", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Filtered Stats Author" },
@@ -799,8 +799,8 @@ describe("collection relations", () => {
 	describe("nested mutations - plain array of IDs", () => {
 		it("creates record with M:N relation using plain array of IDs", async () => {
 			const ctx = createTestContext();
-			const articlesCrud = app.api.collections.articles;
-			const tagsCrud = app.api.collections.articleTags;
+			const articlesCrud = app.collections.articles;
+			const tagsCrud = app.collections.articleTags;
 
 			// Create tags first
 			const tag1 = await tagsCrud.create(
@@ -837,8 +837,8 @@ describe("collection relations", () => {
 
 		it("updates record with M:N relation using plain array of IDs", async () => {
 			const ctx = createTestContext();
-			const articlesCrud = app.api.collections.articles;
-			const tagsCrud = app.api.collections.articleTags;
+			const articlesCrud = app.collections.articles;
+			const tagsCrud = app.collections.articleTags;
 
 			// Create tags
 			const tag1 = await tagsCrud.create(
@@ -896,8 +896,8 @@ describe("collection relations", () => {
 	describe("nested mutations - connect", () => {
 		it("connects existing records in many-to-many relation", async () => {
 			const ctx = createTestContext();
-			const articlesCrud = app.api.collections.articles;
-			const tagsCrud = app.api.collections.articleTags;
+			const articlesCrud = app.collections.articles;
+			const tagsCrud = app.collections.articleTags;
 			// Create tags first
 			const tag1 = await tagsCrud.create(
 				{ id: crypto.randomUUID(), name: "JavaScript" },
@@ -942,8 +942,8 @@ describe("collection relations", () => {
 	describe("nested mutations - connectOrCreate", () => {
 		it("creates new record if it doesn't exist, otherwise connects", async () => {
 			const ctx = createTestContext();
-			const articlesCrud = app.api.collections.articles;
-			const tagsCrud = app.api.collections.articleTags;
+			const articlesCrud = app.collections.articles;
+			const tagsCrud = app.collections.articleTags;
 
 			// Create one existing tag
 			const existingTag = await tagsCrud.create(
@@ -997,8 +997,8 @@ describe("collection relations", () => {
 	describe("nested mutations - combined operations", () => {
 		it("handles create + connect in single mutation", async () => {
 			const ctx = createTestContext();
-			const articlesCrud = app.api.collections.articles;
-			const tagsCrud = app.api.collections.articleTags;
+			const articlesCrud = app.collections.articles;
+			const tagsCrud = app.collections.articleTags;
 
 			// Create one existing tag
 			const existingTag = await tagsCrud.create(
@@ -1041,8 +1041,8 @@ describe("collection relations", () => {
 	describe("cascade delete", () => {
 		it("cascades delete to hasMany related records", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Author to Delete" },
@@ -1088,9 +1088,9 @@ describe("collection relations", () => {
 
 		it("cascades through multiple levels (author -> posts -> comments)", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
-			const commentsCrud = app.api.collections.comments;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
+			const commentsCrud = app.collections.comments;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Author Multi-Cascade" },
@@ -1136,8 +1136,8 @@ describe("collection relations", () => {
 	describe("set null on delete", () => {
 		it("sets foreign key to null when referenced record is deleted", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Main Author" },
@@ -1182,8 +1182,8 @@ describe("collection relations", () => {
 	describe("restrict delete", () => {
 		it("prevents delete when related records exist (onDelete: restrict)", async () => {
 			const ctx = createTestContext();
-			const categoriesCrud = app.api.collections.restrictedCategories;
-			const productsCrud = app.api.collections.restrictedProducts;
+			const categoriesCrud = app.collections.restrictedCategories;
+			const productsCrud = app.collections.restrictedProducts;
 
 			const category = await categoriesCrud.create(
 				{ id: crypto.randomUUID(), name: "Protected Category" },
@@ -1221,8 +1221,8 @@ describe("collection relations", () => {
 	describe("edge cases", () => {
 		it("handles null foreign keys gracefully", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
-			const postsCrud = app.api.collections.posts;
+			const authorsCrud = app.collections.authors;
+			const postsCrud = app.collections.posts;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Author Null Test" },
@@ -1254,7 +1254,7 @@ describe("collection relations", () => {
 
 		it("handles empty collections in hasMany relations", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
+			const authorsCrud = app.collections.authors;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Author No Posts" },
@@ -1272,7 +1272,7 @@ describe("collection relations", () => {
 
 		it("handles aggregations on empty collections", async () => {
 			const ctx = createTestContext();
-			const authorsCrud = app.api.collections.authors;
+			const authorsCrud = app.collections.authors;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Author Empty Aggregation" },
@@ -1316,9 +1316,9 @@ describe("collection relations", () => {
 	describe("multiple relations", () => {
 		it("loads multiple different relation types in single query", async () => {
 			const ctx = createTestContext();
-			const postsCrud = app.api.collections.posts;
-			const authorsCrud = app.api.collections.authors;
-			const commentsCrud = app.api.collections.comments;
+			const postsCrud = app.collections.posts;
+			const authorsCrud = app.collections.authors;
+			const commentsCrud = app.collections.comments;
 
 			const author = await authorsCrud.create(
 				{ id: crypto.randomUUID(), name: "Main Author" },
@@ -1385,8 +1385,8 @@ describe("collection relations", () => {
 	describe("filtering and relation quantifiers", () => {
 		it("resolves belongsTo and hasMany relations", async () => {
 			const ctx = createTestContext();
-			const categoriesCrud = app.api.collections.categories;
-			const productsCrud = app.api.collections.products;
+			const categoriesCrud = app.collections.categories;
+			const productsCrud = app.collections.products;
 
 			const category = await categoriesCrud.create(
 				{ id: crypto.randomUUID(), name: "Category A" },
@@ -1426,8 +1426,8 @@ describe("collection relations", () => {
 
 		it("supports hasMany aggregation counts", async () => {
 			const ctx = createTestContext();
-			const categoriesCrud = app.api.collections.categories;
-			const productsCrud = app.api.collections.products;
+			const categoriesCrud = app.collections.categories;
+			const productsCrud = app.collections.products;
 
 			const category = await categoriesCrud.create(
 				{ id: crypto.randomUUID(), name: "Category B" },
@@ -1461,8 +1461,8 @@ describe("collection relations", () => {
 
 		it("creates many-to-many links with nested create", async () => {
 			const ctx = createTestContext();
-			const categoriesCrud = app.api.collections.categories;
-			const productsCrud = app.api.collections.products;
+			const categoriesCrud = app.collections.categories;
+			const productsCrud = app.collections.products;
 
 			const category = await categoriesCrud.create(
 				{ id: crypto.randomUUID(), name: "Category C" },
@@ -1491,10 +1491,10 @@ describe("collection relations", () => {
 
 		it("filters across relations and nested relations", async () => {
 			const ctx = createTestContext();
-			const categoriesCrud = app.api.collections.categories;
-			const productsCrud = app.api.collections.products;
-			const tagsCrud = app.api.collections.tags;
-			const categoryTagsCrud = app.api.collections.categoryTags;
+			const categoriesCrud = app.collections.categories;
+			const productsCrud = app.collections.products;
+			const tagsCrud = app.collections.tags;
+			const categoryTagsCrud = app.collections.categoryTags;
 
 			const categoryA = await categoriesCrud.create(
 				{ id: crypto.randomUUID(), name: "Trololo" },
@@ -1565,8 +1565,8 @@ describe("collection relations", () => {
 
 		it("filters by M:N relation using ID (reverse relation pattern)", async () => {
 			const ctx = createTestContext();
-			const articlesCrud = app.api.collections.articles;
-			const tagsCrud = app.api.collections.articleTags;
+			const articlesCrud = app.collections.articles;
+			const tagsCrud = app.collections.articleTags;
 
 			// Create tags
 			const tag1 = await tagsCrud.create(
@@ -1640,10 +1640,10 @@ describe("collection relations", () => {
 
 		it("supports relation quantifiers and isNot", async () => {
 			const ctx = createTestContext();
-			const categoriesCrud = app.api.collections.categories;
-			const productsCrud = app.api.collections.products;
-			const tagsCrud = app.api.collections.tags;
-			const categoryTagsCrud = app.api.collections.categoryTags;
+			const categoriesCrud = app.collections.categories;
+			const productsCrud = app.collections.products;
+			const tagsCrud = app.collections.tags;
+			const categoryTagsCrud = app.collections.categoryTags;
 
 			const categoryA = await categoriesCrud.create(
 				{ id: crypto.randomUUID(), name: "Trololo" },
@@ -1778,8 +1778,8 @@ describe("collection relations", () => {
 	describe("string field format in relations", () => {
 		it("resolves belongsTo relation using field: string format", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.test_assets;
-			const servicesCrud = app.api.collections.services;
+			const assetsCrud = app.collections.test_assets;
+			const servicesCrud = app.collections.services;
 
 			// Create an asset
 			const asset = await assetsCrud.create(
@@ -1817,8 +1817,8 @@ describe("collection relations", () => {
 
 		it("resolves belongsTo relation in find (multiple records)", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.test_assets;
-			const servicesCrud = app.api.collections.services;
+			const assetsCrud = app.collections.test_assets;
+			const servicesCrud = app.collections.services;
 
 			// Create assets
 			const asset1 = await assetsCrud.create(
@@ -1892,7 +1892,7 @@ describe("collection relations", () => {
 
 		it("handles null FK gracefully with string field format", async () => {
 			const ctx = createTestContext();
-			const servicesCrud = app.api.collections.services;
+			const servicesCrud = app.collections.services;
 
 			// Create service without image
 			const service = await servicesCrud.create(
@@ -1916,8 +1916,8 @@ describe("collection relations", () => {
 
 		it("filters by related collection using string field format", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.test_assets;
-			const servicesCrud = app.api.collections.services;
+			const assetsCrud = app.collections.test_assets;
+			const servicesCrud = app.collections.services;
 
 			// Create assets with unique filenames for this test
 			const uniqueFilename = `filter-test-${crypto.randomUUID().slice(0, 8)}.svg`;

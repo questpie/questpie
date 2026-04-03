@@ -269,6 +269,12 @@ import type { CollectionInfer } from "questpie";
 import type { QuestpieApp, QuestpieClient } from "questpie/client";
 
 /**
+ * Unparameterised client type used throughout the admin library.
+ * @see AnyQuestpieClient in builder/index.ts for rationale.
+ */
+export type AnyQuestpieClient = QuestpieClient<any>;
+
+/**
  * Extract collection names from a QuestpieApp config
  */
 export type CollectionNames<TApp extends QuestpieApp> =
@@ -290,7 +296,7 @@ export type CollectionItem<
 	TName extends CollectionNames<TApp>,
 > =
 	Awaited<
-		ReturnType<QuestpieClient<any>["collections"][TName]["find"]>
+		ReturnType<AnyQuestpieClient["collections"][TName]["find"]>
 	> extends { docs: Array<infer TItem> }
 		? TItem
 		: never;
@@ -391,7 +397,7 @@ export {
 	useFocusOptional,
 	useIsBlockFocused,
 	useIsFieldFocused,
-} from "#questpie/admin/client/context/focus-context.js";
+} from "#questpie/admin/client/contexts/focus-context.js";
 // I18n types
 export type {
 	I18nContext,

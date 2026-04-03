@@ -16,7 +16,7 @@ import type {
 	FieldAccess as FieldDefinitionAccess,
 	FieldLocation,
 } from "#questpie/server/fields/types.js";
-import type { SearchableConfig } from "#questpie/server/integrated/search/index.js";
+import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 
 /**
  * Title expression type - field name (key from fields or virtuals)
@@ -397,6 +397,29 @@ export type HookContext<
 	 * Operation type (specific to hook)
 	 */
 	operation: TOperation;
+
+	// ---- Bulk metadata (present when operation is part of a batch) ----
+
+	/** True when this hook is invoked as part of a bulk operation (updateMany/deleteMany) */
+	isBatch?: boolean;
+	/** IDs of all affected records in the batch */
+	recordIds?: (string | number)[];
+	/**
+	 * All affected records in the batch.
+	 * Semantics: post-image on update, pre-image on delete.
+	 */
+	records?: TData[];
+	/** Total number of affected records in the batch */
+	count?: number;
+
+	/**
+	 * Queue a callback to run after the current transaction commits.
+	 * If called outside a transaction, the callback runs immediately (fire-and-forget).
+	 *
+	 * Use this for side effects that should only happen when data is durable:
+	 * dispatching jobs, sending emails, search indexing, webhook calls.
+	 */
+	onAfterCommit: (callback: () => Promise<void>) => void;
 };
 
 /**
@@ -555,10 +578,14 @@ export type AfterDeleteHook<TSelect = any> = HookFunction<
 export type TransitionHookContext<TData = any> = AppContext & {
 	/** Record being transitioned */
 	data: TData;
+	/** Record ID (string or number) */
+	recordId: string | number;
 	/** Stage the record is transitioning from */
 	fromStage: string;
 	/** Stage the record is transitioning to */
 	toStage: string;
+	/** When set, the transition should be scheduled for this future date instead of executing immediately */
+	scheduledAt?: Date;
 	/** Current locale */
 	locale?: string;
 };

@@ -5,7 +5,7 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
-import type { QuestpieClient } from "questpie/client";
+import type { AnyQuestpieClient } from "../builder";
 
 import type {
 	RegisteredCMS,
@@ -130,7 +130,7 @@ export function useCollectionItem<K extends ResolvedCollectionNames>(
 	collection: K,
 	id: string,
 	options?: Omit<
-		Parameters<QuestpieClient<any>["collections"][K & string]["findOne"]>[0],
+		Parameters<AnyQuestpieClient["collections"][K & string]["findOne"]>[0],
 		"where"
 	> & {
 		localeFallback?: boolean;

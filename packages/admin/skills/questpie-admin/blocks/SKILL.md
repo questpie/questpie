@@ -254,7 +254,7 @@ function PageRenderer({ page }) {
    // WRONG — importing app creates circular dependency
    import { app } from "#questpie";
    .prefetch(async ({ values, ctx }) => {
-     const posts = await app.api.collections.posts.find({});
+     const posts = await app.collections.posts.find({});
    })
 
    // CORRECT — use ctx.collections directly

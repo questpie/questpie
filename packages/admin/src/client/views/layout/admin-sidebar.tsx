@@ -423,13 +423,16 @@ function QuestpieSymbol({ className }: { className?: string }) {
 			xmlns="http://www.w3.org/2000/svg"
 			viewBox="0 0 24 24"
 			fill="none"
-			className={cn(
-				"size-6 shrink-0",
-				className,
-			)}
+			className={cn("size-6 shrink-0", className)}
 		>
 			<title>QUESTPIE</title>
-			<path d="M22 10V2H2V22H10" stroke="currentColor" strokeWidth="2" strokeLinecap="square" className="text-[#0a0a0a] dark:text-white" />
+			<path
+				d="M22 10V2H2V22H10"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="square"
+				className="text-[#0a0a0a] dark:text-white"
+			/>
 			<path d="M23 13H13V23H23V13Z" fill="#B700FF" />
 		</svg>
 	);
@@ -1151,10 +1154,7 @@ export function AdminSidebar({
 	);
 
 	return (
-		<Sidebar
-			collapsible="icon"
-			className={cn("qa-sidebar border-l", className)}
-		>
+		<Sidebar collapsible="icon" className={cn("qa-sidebar", className)}>
 			{/* Brand Header */}
 			<SidebarHeader className="qa-sidebar__header border-sidebar-border border-b p-2">
 				<SidebarMenu>

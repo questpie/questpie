@@ -15,12 +15,12 @@ import {
 
 import { sql } from "drizzle-orm";
 
-import { collection } from "../../src/server/index.js";
+import { collection } from "../../src/exports/index.js";
 import {
 	createPostgresSearchAdapter,
 	type PostgresSearchAdapter,
-} from "../../src/server/integrated/search/adapters/postgres.js";
-import type { CollectionAccessFilter } from "../../src/server/integrated/search/types.js";
+} from "../../src/server/modules/core/integrated/search/adapters/postgres.js";
+import type { CollectionAccessFilter } from "../../src/server/modules/core/integrated/search/types.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../utils/test-db";
 

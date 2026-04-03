@@ -20,7 +20,8 @@ import {
 	mergeMessagesIntoConfig,
 	mergeTranslationsConfig,
 } from "#questpie/server/i18n/translator.js";
-import { mergeAuthOptions } from "#questpie/server/integrated/auth/merge.js";
+import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
+import coreModule from "#questpie/server/modules/core/.generated/module.js";
 
 // ============================================================================
 // module() — identity function for type inference
@@ -566,10 +567,18 @@ function extractRuntimeExtensions(
  * @see RFC-MODULE-ARCHITECTURE §9.1 (Root App — .generated/index.ts)
  */
 export async function createApp(
+	definition: { modules: ModuleDefinition[] },
+	runtime: RuntimeConfig,
+): Promise<Questpie<QuestpieConfig>>;
+export async function createApp(
 	definition: AppDefinition,
 	runtime: RuntimeConfig,
+): Promise<Questpie<QuestpieConfig>>;
+export async function createApp(
+	definition: AppDefinition | { modules: ModuleDefinition[] },
+	runtime: RuntimeConfig,
 ): Promise<Questpie<QuestpieConfig>> {
-	return createAppFromDefinition(definition, runtime);
+	return createAppFromDefinition(definition as AppDefinition, runtime);
 }
 
 // ============================================================================
@@ -585,20 +594,36 @@ async function createAppFromDefinition(
 	definition: AppDefinition,
 	runtime: RuntimeConfig,
 ): Promise<Questpie<QuestpieConfig>> {
-	// 1. Resolve modules depth-first
-	const flatModules = resolveModules(definition.modules ?? []);
+	// 1. Extract root-level entities into an implicit __user module.
+	//    This wraps user-provided collections/globals/etc. into a proper module
+	//    so they participate in the same merge pipeline as all other modules.
+	//    The __user module is appended last → user entities override module contributions.
+	const { modules: defModules, ...rootEntities } = definition;
+	const hasRootEntities = Object.keys(rootEntities).some(
+		(k) => rootEntities[k] !== undefined,
+	);
+	// Auto-prepend coreModule so its hooks/jobs are always available.
+	// Dedup: if user already listed coreModule, keep theirs (last-write-wins).
+	const userModules = defModules ?? [];
+	const hasCoreAlready = userModules.some(
+		(m) => m.name === coreModule.name,
+	);
+	const allModules = [
+		...(hasCoreAlready ? [] : [coreModule as unknown as ModuleDefinition]),
+		...userModules,
+		...(hasRootEntities
+			? [{ name: "__user", ...rootEntities } as ModuleDefinition]
+			: []),
+	];
 
-	// 2. Merge all module contributions
+	// 2. Resolve modules depth-first
+	const flatModules = resolveModules(allModules);
+
+	// 3. Merge all module contributions (including __user)
 	let merged = emptyMergedState();
 	for (const mod of flatModules) {
 		merged = mergeModuleIntoState(merged, mod);
 	}
-
-	// 3. Merge user entities on top (user always wins over modules)
-	// All keys flow through: known keys use MERGE_FNS, extensions use auto-detect.
-	// Definition-only keys (locale, contextResolver, emailTemplates) pass through
-	// merged state but are filtered from extension state by CONFIG_CONSUMED_KEYS.
-	merged = mergeModuleIntoState(merged, { name: "user", ...definition });
 
 	// 4. Convert messages to translations config
 	const mergedTranslations = mergeMessagesIntoConfig(
@@ -651,7 +676,6 @@ async function createAppFromDefinition(
 		autoMigrate: runtime.autoMigrate,
 		autoSeed: runtime.autoSeed,
 		translations: finalTranslations,
-		contextResolver: appCfg.context,
 		globalHooks: appCfg.hooks,
 		defaultAccess: appCfg.access,
 		services:

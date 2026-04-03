@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { collection } from "../../src/server/index.js";
+import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -61,7 +61,7 @@ describe("upload + through (many-to-many)", () => {
 
 	describe("metadata inference", () => {
 		it("should infer manyToMany relation type for upload with through", async () => {
-			const postsCrud = app.api.collections.posts;
+			const postsCrud = app.collections.posts;
 			const state = postsCrud["~internalState"];
 			const relations = state.relations;
 
@@ -74,7 +74,7 @@ describe("upload + through (many-to-many)", () => {
 		});
 
 		it("should not create a column for upload with through", async () => {
-			const postsCrud = app.api.collections.posts;
+			const postsCrud = app.collections.posts;
 			const table = postsCrud["~internalRelatedTable"];
 
 			// gallery should not be a column (it's a many-to-many via junction)
@@ -85,8 +85,8 @@ describe("upload + through (many-to-many)", () => {
 	describe("CRUD operations", () => {
 		it("should create post with gallery via set", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.assets;
-			const postsCrud = app.api.collections.posts;
+			const assetsCrud = app.collections.assets;
+			const postsCrud = app.collections.posts;
 
 			// Create assets
 			const asset1 = await assetsCrud.create(
@@ -123,7 +123,7 @@ describe("upload + through (many-to-many)", () => {
 			);
 
 			// Verify junction records were created
-			const junctionCrud = app.api.collections.post_assets;
+			const junctionCrud = app.collections.post_assets;
 			const junctions = await junctionCrud.find(
 				{ where: { post: { eq: post.id } } },
 				ctx,
@@ -136,8 +136,8 @@ describe("upload + through (many-to-many)", () => {
 
 		it("should expand gallery with with clause", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.assets;
-			const postsCrud = app.api.collections.posts;
+			const assetsCrud = app.collections.assets;
+			const postsCrud = app.collections.posts;
 
 			// Create assets
 			const asset1 = await assetsCrud.create(
@@ -175,8 +175,8 @@ describe("upload + through (many-to-many)", () => {
 
 		it("should update gallery via set", async () => {
 			const ctx = createTestContext();
-			const assetsCrud = app.api.collections.assets;
-			const postsCrud = app.api.collections.posts;
+			const assetsCrud = app.collections.assets;
+			const postsCrud = app.collections.posts;
 
 			// Create assets
 			const asset1 = await assetsCrud.create(
@@ -234,7 +234,7 @@ describe("upload + through (many-to-many)", () => {
 			);
 
 			// Verify new junction state
-			const junctionCrud = app.api.collections.post_assets;
+			const junctionCrud = app.collections.post_assets;
 			const junctions = await junctionCrud.find(
 				{ where: { post: { eq: post.id } } },
 				ctx,

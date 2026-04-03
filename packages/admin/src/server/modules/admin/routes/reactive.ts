@@ -14,16 +14,7 @@ import type {
 import { ApiError, type Questpie, route } from "questpie";
 import { z } from "zod";
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Get typed app from context.
- */
-function getApp(ctx: any): Questpie<any> {
-	return ctx.app as Questpie<any>;
-}
+import { getApp, buildServerContext } from "./route-helpers.js";
 
 /**
  * Build ReactiveContext from request data.
@@ -356,7 +347,7 @@ function getReactiveHandler(
 	type: "collection" | "global" = "collection",
 ): ((ctx: ReactiveContext) => any) | null {
 	const entity = getEntity(app, entityName, type);
-	const formConfig = (entity.state as any).adminForm;
+	const formConfig = (entity.state as unknown as Record<string, unknown>).adminForm;
 
 	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
 	if (!fieldEntry) {
@@ -540,12 +531,7 @@ export const batchReactive = route()
 		} = ctx.input;
 
 		// Build server context (req is not available in function handlers)
-		const serverCtx: ReactiveServerContext = {
-			db: (ctx as any).db,
-			user: (ctx as any).session?.user ?? null,
-			req: new Request("http://localhost"), // Placeholder - not used in handlers
-			locale: (ctx as any).locale ?? "en",
-		};
+		const serverCtx: ReactiveServerContext = buildServerContext(ctx);
 
 		const results = await Promise.all(
 			requests.map(async (request) => {
@@ -643,12 +629,7 @@ export const fieldOptions = route()
 		} = ctx.input;
 
 		// Build server context (req is not available in function handlers)
-		const serverCtx: ReactiveServerContext = {
-			db: (ctx as any).db,
-			user: (ctx as any).session?.user ?? null,
-			req: new Request("http://localhost"), // Placeholder - not used in handlers
-			locale: (ctx as any).locale ?? "en",
-		};
+		const serverCtx: ReactiveServerContext = buildServerContext(ctx);
 
 		try {
 			// Get field definition

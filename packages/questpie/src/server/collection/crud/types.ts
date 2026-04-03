@@ -1465,7 +1465,7 @@ export interface CRUD<
 	 *
 	 * @example
 	 * ```ts
-	 * const asset = await app.api.collections.media.upload(file, context);
+	 * const asset = await app.collections.media.upload(file, context);
 	 * console.log(asset.url); // Typed URL
 	 * ```
 	 */
@@ -1482,7 +1482,7 @@ export interface CRUD<
 	 *
 	 * @example
 	 * ```ts
-	 * const assets = await app.api.collections.media.uploadMany(files, context);
+	 * const assets = await app.collections.media.uploadMany(files, context);
 	 * ```
 	 */
 	uploadMany?(

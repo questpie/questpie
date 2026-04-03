@@ -179,11 +179,11 @@ All project configuration lives in `config/` inside the server directory:
 | File | Factory | Contains |
 |------|---------|----------|
 | `config/auth.ts` | `authConfig()` from `"questpie"` | Better Auth options (email/password, social providers, plugins) |
-| `config/app.ts` | `appConfig()` from `"questpie"` | `locale`, `access` (defaultAccess), `hooks`, `context` (contextResolver) |
+| `config/app.ts` | `appConfig()` from `"questpie"` | `locale`, `access` (defaultAccess), `hooks`, `context` |
 | `config/admin.ts` | `adminConfig()` from `"@questpie/admin/server"` | `sidebar`, `dashboard`, `branding`, `locale` (adminLocale) |
 | `config/openapi.ts` | `openApiConfig()` from `"@questpie/openapi"` | OpenAPI spec info, Scalar UI options |
 
-The `appConfig` pattern uses `destructure` on `DiscoverPattern` — a single file maps its properties to multiple createApp keys. Context resolver return type is auto-propagated to `Questpie.QuestpieContextExtension`.
+The `appConfig` pattern uses `destructure` on `DiscoverPattern` — a single file maps its properties to multiple createApp keys.
 
 ### Module Plugin Auto-Extraction
 
@@ -409,8 +409,8 @@ Inside `packages/questpie`:
 base-ui uses `render` prop, NOT `asChild`:
 
 ```tsx
-// ✅ Correct
-<DialogTrigger render={<Button>Open</Button>} />
+// ✅ Correct — render prop + nativeButton={false} when render is not a <button>
+<DialogTrigger nativeButton={false} render={<Button>Open</Button>} />
 
 // ❌ Wrong — asChild is Radix, not base-ui
 <DialogTrigger asChild><Button>Open</Button></DialogTrigger>

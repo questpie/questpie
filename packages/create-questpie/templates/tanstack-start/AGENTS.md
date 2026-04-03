@@ -64,7 +64,7 @@ Key documentation pages:
 src/
   questpie/
     server/              ← WHAT: data contracts and behavior
-      questpie.config.ts ← App config: runtimeConfig({ plugins: [adminPlugin()], ... })
+      questpie.config.ts ← App config: runtimeConfig({ db, app, ... })
       modules.ts         ← Module dependencies (adminModule, openApiModule, etc.)
       config/            ← Typed configuration files
         auth.ts          ← authConfig({...}) — Better Auth options
@@ -112,7 +112,7 @@ src/
 
 ### Key Files
 
-- **`src/questpie/server/questpie.config.ts`** — App config: `runtimeConfig({ plugins: [adminPlugin()], db, app, ... })`.
+- **`src/questpie/server/questpie.config.ts`** — App config: `runtimeConfig({ db, app, ... })`.
 - **`src/questpie/server/modules.ts`** — Module dependencies: `export default [adminModule, openApiModule] as const`.
 - **`src/questpie/server/config/auth.ts`** — Auth config via `authConfig()` factory.
 - **`src/questpie/server/config/app.ts`** — App config (locale, access, hooks, context) via `appConfig()` factory.

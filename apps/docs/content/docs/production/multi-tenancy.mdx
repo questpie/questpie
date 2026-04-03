@@ -11,21 +11,14 @@ The pattern: **HTTP header carries a scope ID → server extracts it into typed 
 
 The `context.ts` file convention extracts custom properties from each incoming request. Place it in `src/questpie/server/context.ts` and codegen discovers it automatically.
 
-```ts title="src/questpie/server/context.ts"
-import { context } from "#questpie/factories";
+```ts title="src/questpie/server/config/app.ts"
+import { appConfig } from "questpie";
 
-// Type your custom context properties
-declare global {
-	namespace Questpie {
-		interface QuestpieContextExtension {
-			workspaceId: string | null;
-		}
-	}
-}
-
-export default context(async ({ request, session, db }) => {
-	const workspaceId = request.headers.get("x-selected-workspace");
-	return { workspaceId: workspaceId || null };
+export default appConfig({
+	context: async ({ request, session, db }) => {
+		const workspaceId = request.headers.get("x-selected-workspace");
+		return { workspaceId: workspaceId || null };
+	},
 });
 ```
 

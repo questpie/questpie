@@ -5,7 +5,7 @@ import {
 	extractNestedLocalizationSchemas,
 } from "../../src/server/collection/crud/shared/field-extraction.js";
 import { splitByNestedSchema } from "../../src/server/collection/crud/shared/nested-i18n-split.js";
-import { collection } from "../../src/server/index.js";
+import { collection } from "../../src/exports/index.js";
 
 /**
  * Unit tests for nested localization schema extraction and splitting.

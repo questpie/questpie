@@ -85,6 +85,16 @@ export function adminPlugin(): CodegenPlugin {
 						extractFromModules: true,
 						typeEmit: "standard",
 					},
+					// Contribute field factory imports to the core fieldTypes category.
+					// The factory template uses these to import and spread-merge
+					// adminFields (richText, blocks) into _allFieldDefs.
+					fieldTypes: {
+						dirs: ["fields"],
+						prefix: "ftype",
+						factoryImports: [
+							{ name: "adminFields", from: "@questpie/admin/server" },
+						],
+					},
 				},
 				discover: {
 					adminConfig: { pattern: "config/admin.ts", configKey: "admin" },
@@ -307,13 +317,6 @@ export function adminPlugin(): CodegenPlugin {
 							`import { component } from "@questpie/admin/server";\n\nexport const ${camel}Component = component("${kebab}", {\n\t// TODO: configure component props\n});\n`,
 					},
 				},
-				// Runtime field factories contributed by the admin module.
-				// These are imported in the codegen-generated factories.ts and
-				// spread-merged with builtinFields so collection/global builders
-				// can use f.richText(), f.blocks() etc. at runtime.
-				runtimeFieldImports: [
-					{ name: "adminFields", from: "@questpie/admin/server" },
-				],
 			},
 
 			// ── admin-client target ──────────────────────────────────

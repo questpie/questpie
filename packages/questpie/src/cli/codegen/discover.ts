@@ -45,8 +45,13 @@ export function kebabToCamelCase(filename: string): string {
  * Prefixed with underscore + category to avoid collisions.
  */
 function toVarName(prefix: string, key: string): string {
-	// Replace dots and dashes with underscores
-	const safe = key.replace(/[.\-/]/g, "_");
+	// Replace non-identifier chars with underscores
+	// Handles parameterized route filenames like [collection], [...key]
+	const safe = key
+		.replace(/\.\.\./g, "spread_")
+		.replace(/[^a-zA-Z0-9_]/g, "_")
+		.replace(/_+/g, "_")
+		.replace(/^_|_$/g, "");
 	return `_${prefix}_${safe}`;
 }
 
@@ -57,8 +62,8 @@ function toVarName(prefix: string, key: string): string {
 const TS_EXTENSIONS = new Set([".ts", ".tsx", ".mts"]);
 const IGNORE_FILES = new Set(["index.ts", "index.mts", "index.tsx"]);
 
-/** Files starting with _ are considered private/utility and skipped. */
-function isPrivateFile(name: string): boolean {
+/** Path entries starting with _ are considered private/utility and skipped. */
+function isPrivatePathEntry(name: string): boolean {
 	return name.startsWith("_");
 }
 
@@ -81,9 +86,12 @@ async function scanDir(
 	for (const entry of entries) {
 		const name = String(entry.name);
 		const fullPath = join(dir, name);
-		if (entry.isDirectory() && recursive) {
-			const nested = await scanDir(fullPath, base, true);
-			results.push(...nested);
+		if (entry.isDirectory()) {
+			if (isPrivatePathEntry(name)) continue;
+			if (recursive) {
+				const nested = await scanDir(fullPath, base, true);
+				results.push(...nested);
+			}
 		} else if (entry.isFile()) {
 			const ext = extname(name);
 			if (
@@ -91,7 +99,7 @@ async function scanDir(
 				!name.endsWith(".d.ts") &&
 				!name.endsWith(".d.mts") &&
 				!IGNORE_FILES.has(name) &&
-				!isPrivateFile(name)
+				!isPrivatePathEntry(name)
 			) {
 				results.push(relative(base, fullPath).replaceAll("\\", "/"));
 			}
@@ -177,6 +185,7 @@ async function discoverFeatures(
 	for (const fDir of featureDirs) {
 		if (!fDir.isDirectory()) continue;
 		const featureName = String(fDir.name);
+		if (isPrivatePathEntry(featureName)) continue;
 		for (const dir of category.dirs) {
 			const scanPath = join(featuresDir, featureName, dir);
 			const files = await scanDir(scanPath, scanPath, category.recursive);
@@ -488,6 +497,7 @@ async function discoverSpreadFile(
 	for (const fDir of featureDirs) {
 		if (!fDir.isDirectory()) continue;
 		const featureName = String(fDir.name);
+		if (isPrivatePathEntry(featureName)) continue;
 		const featureSuffix = kebabToCamelCase(`${featureName}.ts`); // strips fake .ts, converts kebab
 
 		for (const filename of candidates) {
@@ -565,6 +575,7 @@ async function discoverDirectoryPattern(
 	for (const fDir of featureDirs) {
 		if (!fDir.isDirectory()) continue;
 		const fDirName = String(fDir.name);
+		if (isPrivatePathEntry(fDirName)) continue;
 		const featureScanPath = join(featuresDir, fDirName, baseDir);
 		const featureFiles = await scanDir(
 			featureScanPath,
@@ -619,11 +630,24 @@ function deriveFileKey(relPath: string, category: DiscoveryCategory): string {
 		}
 
 		const sep = category.keySeparator ?? ".";
-		const segments = innerPath
-			.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "")
-			.split("/")
-			.map(kebabToCamelCase);
-		return segments.join(sep);
+		const stripped = innerPath.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "");
+
+		// Detect HTTP method suffix on the last segment:
+		// [collection].patch → key "[collection]:PATCH"
+		// globals/[name].delete → key "globals/[name]:DELETE"
+		const methodSuffixRe = /\.(get|post|put|patch|delete)$/i;
+		const methodMatch = stripped.match(methodSuffixRe);
+		const withoutMethod = methodMatch
+			? stripped.slice(0, -methodMatch[0].length)
+			: stripped;
+
+		const segments = withoutMethod.split("/").map(kebabToCamelCase);
+		const key = segments.join(sep);
+
+		if (methodMatch) {
+			return `${key}:${methodMatch[1].toUpperCase()}`;
+		}
+		return key;
 	}
 	// Simple: filename → camelCase key
 	return kebabToCamelCase(basename(relPath));

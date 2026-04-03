@@ -130,9 +130,18 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						includeInAppState: false,
 						extractFromModules: false,
 					},
+					fieldTypes: {
+						dirs: ["fields"],
+						prefix: "ftype",
+						factoryFunctions: ["fieldType"],
+						registryKey: "~fieldTypes",
+						includeInAppState: false,
+						extractFromModules: true,
+					},
 				},
 				discover: {
 					modules: "modules.ts",
+					plugin: "plugin.ts",
 					fields: { pattern: "fields.ts", registryKey: "~fieldTypes" },
 					authConfig: { pattern: "config/auth.ts", configKey: "auth" },
 					appConfig: { pattern: "config/app.ts", configKey: "app" },
@@ -261,7 +270,6 @@ export function resolveTargetGraph(
 					callbackParams: {},
 					transforms: [],
 					scaffolds: {},
-					runtimeFieldImports: [],
 				};
 				targets.set(targetId, target);
 			} else {
@@ -307,9 +315,23 @@ export function resolveTargetGraph(
 				target.moduleRoot = contribution.moduleRoot;
 			}
 
-			// Merge categories
+			// Merge categories (deep per category key — arrays are concatenated)
 			if (contribution.categories) {
-				Object.assign(target.categories, contribution.categories);
+				for (const [catKey, catDecl] of Object.entries(contribution.categories)) {
+					const existing = target.categories[catKey];
+					if (existing) {
+						// Collect array fields before Object.assign overwrites them
+						const prevFactoryImports = existing.factoryImports;
+						// Shallow merge scalar/object properties
+						Object.assign(existing, catDecl);
+						// Concatenate array properties
+						if (catDecl.factoryImports && prevFactoryImports) {
+							existing.factoryImports = [...prevFactoryImports, ...catDecl.factoryImports];
+						}
+					} else {
+						target.categories[catKey] = catDecl;
+					}
+				}
 			}
 
 			// Merge discover patterns
@@ -360,11 +382,6 @@ export function resolveTargetGraph(
 			// Merge scaffolds
 			if (contribution.scaffolds) {
 				Object.assign(target.scaffolds, contribution.scaffolds);
-			}
-
-			// Collect runtime field imports
-			if (contribution.runtimeFieldImports) {
-				target.runtimeFieldImports.push(...contribution.runtimeFieldImports);
 			}
 
 			// Collect transform functions
@@ -456,33 +473,9 @@ export async function runCodegen(
 		}
 	}
 
-	// 2c. Check for reserved path collisions in route keys
-	const routesMap = discovered.categories.get("routes");
-	if (routesMap) {
-		const RESERVED_PREFIXES = [
-			"auth/",
-			"search",
-			"realtime",
-			"storage/",
-			"globals/",
-			"health",
-		];
-		for (const [routeKey] of routesMap) {
-			for (const reserved of RESERVED_PREFIXES) {
-				if (
-					routeKey === reserved ||
-					routeKey.startsWith(
-						reserved.endsWith("/") ? reserved : reserved + "/",
-					)
-				) {
-					throw new Error(
-						`[codegen] Route key "${routeKey}" collides with reserved path prefix "${reserved}". ` +
-							`Rename the route file to avoid conflicts with built-in HTTP handlers.`,
-					);
-				}
-			}
-		}
-	}
+	// Route collision check removed — all routes (auth, search, realtime, etc.)
+	// are now core module route definitions, not reserved HTTP adapter prefixes.
+	// The trie-based matcher handles priority: literal > param > wildcard.
 
 	// 3. Build codegen context for transforms
 	const extraImports: Array<{ name: string; path: string }> = [];

@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 import { job } from "questpie";
 import { z } from "zod";
 
+import { AUDIT_LOG_COLLECTION } from "../collections/audit-log.js";
+
 /**
  * Audit log cleanup job.
  * Runs daily (via cron) to delete entries older than the configured retention period.
@@ -19,7 +21,7 @@ export const auditCleanupJob = job({
 		cutoff.setDate(cutoff.getDate() - payload.retentionDays);
 
 		const result = await db.execute(
-			sql`DELETE FROM admin_audit_log WHERE created_at < ${cutoff}`,
+			sql`DELETE FROM ${sql.identifier(AUDIT_LOG_COLLECTION)} WHERE created_at < ${cutoff}`,
 		);
 
 		const deletedCount =

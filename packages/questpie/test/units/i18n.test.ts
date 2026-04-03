@@ -3,14 +3,16 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod/v4";
 
 import { ApiError } from "../../src/server/errors/index.js";
+import { allBackendMessagesEN } from "../../src/server/i18n/messages.js";
 import {
-	allBackendMessagesEN,
 	createTranslator,
-	createZodErrorMap,
 	mergeTranslationsConfig,
-	type TranslationsConfig,
+} from "../../src/server/i18n/translator.js";
+import type { TranslationsConfig } from "../../src/server/i18n/types.js";
+import {
+	createZodErrorMap,
 	type ZodIssue,
-} from "../../src/server/i18n/index.js";
+} from "../../src/server/i18n/zod-error-map.js";
 
 describe("i18n", () => {
 	describe("createTranslator", () => {

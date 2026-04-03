@@ -13,13 +13,10 @@ import {
 	SmtpAdapter,
 } from "questpie";
 
-import { adminPlugin } from "@questpie/admin/plugin";
-
 const DATABASE_URL =
 	process.env.DATABASE_URL || "postgres://localhost/cityportal";
 
 export default runtimeConfig({
-	plugins: [adminPlugin()],
 	app: {
 		url: process.env.APP_URL || "http://localhost:3001",
 	},

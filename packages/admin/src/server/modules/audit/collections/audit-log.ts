@@ -8,6 +8,13 @@ import type {
 } from "../../../augmentation.js";
 
 /**
+ * The collection slug used by the audit log.
+ * Exported so hooks and jobs can reference the collection dynamically
+ * instead of hardcoding the name.
+ */
+export const AUDIT_LOG_COLLECTION = "admin_audit_log" as const;
+
+/**
  * Audit Log Collection
  *
  * Stores audit trail entries for all mutations across collections and globals.
@@ -18,7 +25,7 @@ import type {
  * - update: disallowed
  * - read: allowed (for admin UI display)
  */
-export const auditLogCollection = collection("admin_audit_log")
+export const auditLogCollection = collection(AUDIT_LOG_COLLECTION)
 	.fields(({ f }) => ({
 		/** Action performed: create, update, delete, transition, custom */
 		action: f.text(50).required().label("Action"),

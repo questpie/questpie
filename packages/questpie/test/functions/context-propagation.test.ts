@@ -17,7 +17,7 @@ import {
 	runWithContext,
 	tryGetContext,
 } from "../../src/server/config/context.js";
-import { route } from "../../src/server/index.js";
+import { route } from "../../src/exports/index.js";
 import { executeJsonRoute } from "../../src/server/routes/execute.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 

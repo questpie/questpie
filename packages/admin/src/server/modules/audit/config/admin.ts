@@ -3,6 +3,7 @@ import type {
 	WidgetFetchContext,
 } from "../../../augmentation.js";
 import { adminConfig } from "../../../augmentation.js";
+import { AUDIT_LOG_COLLECTION } from "../collections/audit-log.js";
 
 // ============================================================================
 // Dashboard helpers
@@ -30,7 +31,7 @@ const ACTION_VARIANTS: Record<
  */
 function createAuditTimelineLoader(maxItems: number) {
 	return async (ctx: WidgetFetchContext) => {
-		const result = await (ctx.collections as any).admin_audit_log.find({
+		const result = await (ctx.collections as any)[AUDIT_LOG_COLLECTION].find({
 			limit: maxItems,
 			sort: { createdAt: "desc" },
 			accessMode: "system",
@@ -70,7 +71,7 @@ export default adminConfig({
 			{
 				sectionId: "administration",
 				type: "collection",
-				collection: "admin_audit_log",
+				collection: AUDIT_LOG_COLLECTION,
 				icon: { type: "icon", props: { name: "ph:clipboard-text" } },
 			},
 		],

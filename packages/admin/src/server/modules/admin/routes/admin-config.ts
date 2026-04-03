@@ -30,11 +30,21 @@ import type {
 	SidebarContribution,
 	SidebarItemDef,
 } from "../../../augmentation.js";
-import { introspectBlocks } from "../../../block/introspection.js";
+import { introspectBlocks } from "../block/introspection.js";
 import {
 	resolveDashboardCallback,
 	resolveSidebarCallback,
 } from "../../../proxy-factories.js";
+import { adminConfigDTOSchema } from "../dto/admin-config.dto.js";
+import {
+	type App,
+	getAccessContext,
+	getAdminConfig as getAdminCfg,
+	getApp,
+	getAppState,
+	getCollectionState,
+	getGlobalState,
+} from "./route-helpers.js";
 
 // ============================================================================
 // Type Helpers
@@ -61,13 +71,6 @@ type AdminConfigItemMeta = {
 	workflow?: WorkflowMeta;
 };
 
-/**
- * Helper to get typed app from handler context.
- */
-function getApp(ctx: any): Questpie<any> {
-	return ctx.app as Questpie<any>;
-}
-
 // ============================================================================
 // Access Control Helpers
 // ============================================================================
@@ -83,11 +86,11 @@ function getApp(ctx: any): Questpie<any> {
  */
 async function hasReadAccess(
 	readRule: unknown,
-	ctx: { app: unknown; session?: any; db: any; locale?: string },
+	ctx: { app: App; session?: any; db: any; locale?: string },
 ): Promise<boolean> {
 	// Fall back to app defaultAccess.read if no explicit rule
 	const effectiveRule =
-		readRule ?? (ctx.app as Questpie<any>)?.defaultAccess?.read;
+		readRule ?? ctx.app?.defaultAccess?.read;
 
 	if (effectiveRule === true) return true;
 	if (effectiveRule === false) return false;
@@ -115,7 +118,7 @@ async function hasReadAccess(
 /**
  * Extract workflow metadata from a collection/global state.
  */
-function extractWorkflowMeta(state: any): WorkflowMeta | undefined {
+function extractWorkflowMeta(state: Record<string, any>): WorkflowMeta | undefined {
 	// Workflow is nested under versioning
 	const versioning = state?.options?.versioning;
 	const workflow =
@@ -154,13 +157,13 @@ function extractWorkflowMeta(state: any): WorkflowMeta | undefined {
  * Extract admin metadata from all registered collections.
  */
 function extractCollectionsMeta(
-	app: Questpie<any>,
+	app: App,
 ): Record<string, AdminConfigItemMeta> {
 	const result: Record<string, AdminConfigItemMeta> = {};
 	const collections = app.getCollections();
 
 	for (const [name, collection] of Object.entries(collections)) {
-		const state = (collection as any).state;
+		const state = getCollectionState(collection);
 		const admin: AdminCollectionConfig | undefined = state?.admin;
 		const workflow = extractWorkflowMeta(state);
 		if (admin) {
@@ -185,13 +188,13 @@ function extractCollectionsMeta(
  * Extract admin metadata from all registered globals.
  */
 function extractGlobalsMeta(
-	app: Questpie<any>,
+	app: App,
 ): Record<string, AdminConfigItemMeta> {
 	const result: Record<string, AdminConfigItemMeta> = {};
 	const globals = app.getGlobals();
 
 	for (const [name, global] of Object.entries(globals)) {
-		const state = (global as any).state;
+		const state = getGlobalState(global);
 		const admin: AdminGlobalConfig | undefined = state?.admin;
 		const workflow = extractWorkflowMeta(state);
 		if (admin) {
@@ -324,10 +327,11 @@ function filterSidebarConfig(
 			.map((s) => ({
 				...s,
 				items: (s.items ?? []).filter((item) => {
+					const rec = item as unknown as Record<string, unknown>;
 					if (item.type === "collection")
-						return accessibleCollections.has((item as any).collection);
+						return accessibleCollections.has(rec.collection as string);
 					if (item.type === "global")
-						return accessibleGlobals.has((item as any).global);
+						return accessibleGlobals.has(rec.global as string);
 					return true; // pages, links, dividers always pass
 				}),
 			}))
@@ -349,8 +353,9 @@ function collectSidebarReferences(config: ServerSidebarConfig): {
 
 	function collectFromSection(section: ServerSidebarSection): void {
 		for (const item of section.items ?? []) {
-			if (item.type === "collection") collections.add((item as any).collection);
-			else if (item.type === "global") globals.add((item as any).global);
+			const rec = item as unknown as Record<string, unknown>;
+			if (item.type === "collection") collections.add(rec.collection as string);
+			else if (item.type === "global") globals.add(rec.global as string);
 		}
 		for (const subSection of section.sections ?? []) {
 			collectFromSection(subSection);
@@ -600,7 +605,7 @@ function mergeDashboardContributions(
 function isLegacySidebarConfig(value: unknown): value is ServerSidebarConfig {
 	if (value == null || typeof value !== "object" || Array.isArray(value))
 		return false;
-	const obj = value as any;
+	const obj = value as Record<string, unknown>;
 	// Legacy format has sections with nested items already grouped.
 	// Contribution format has separate sections + items arrays (items have sectionId).
 	if (Array.isArray(obj.sections) && Array.isArray(obj.items)) return false;
@@ -616,7 +621,7 @@ function isLegacyDashboardConfig(
 ): value is ServerDashboardConfig {
 	if (value == null || typeof value !== "object" || Array.isArray(value))
 		return false;
-	const obj = value as any;
+	const obj = value as Record<string, unknown>;
 	// Contribution format has sections + items arrays (items have sectionId).
 	// Legacy format has items as processed ServerDashboardItem[] (section type items with nested items).
 	if (Array.isArray(obj.sections) && Array.isArray(obj.items)) return false;
@@ -635,16 +640,17 @@ function assignWidgetIds(items: ServerDashboardItem[]): void {
 	let counter = 0;
 	function walk(items: ServerDashboardItem[]) {
 		for (const item of items) {
+			const rec = item as unknown as Record<string, unknown>;
 			if (item.type === "section") {
-				walk((item as any).items || []);
+				walk((rec.items as unknown as ServerDashboardItem[]) || []);
 			} else if (item.type === "tabs") {
-				for (const tab of (item as any).tabs || []) {
+				for (const tab of (rec.tabs as Array<{ items: ServerDashboardItem[] }>) || []) {
 					walk(tab.items || []);
 				}
 			} else {
 				// Widget — assign ID if missing
-				if (!(item as any).id) {
-					(item as any).id = `__auto_${item.type}_${counter++}`;
+				if (!rec.id) {
+					rec.id = `__auto_${item.type}_${counter++}`;
 				}
 			}
 		}
@@ -659,48 +665,51 @@ function assignWidgetIds(items: ServerDashboardItem[]): void {
 async function processDashboardItems(
 	items: ServerDashboardItem[],
 	accessibleCollections: Set<string>,
-	accessCtx: { app: unknown; session?: any; db: any; locale?: string },
+	accessCtx: { app: App; session?: any; db: any; locale?: string },
 ): Promise<ServerDashboardItem[]> {
 	const result: ServerDashboardItem[] = [];
 
 	for (const item of items) {
+		const rec = item as unknown as Record<string, unknown>;
+
 		// Recurse into sections
 		if (item.type === "section") {
 			const filtered = await processDashboardItems(
-				(item as any).items || [],
+				(rec.items as unknown as ServerDashboardItem[]) || [],
 				accessibleCollections,
 				accessCtx,
 			);
 			if (filtered.length > 0) {
-				result.push({ ...item, items: filtered } as any);
+				result.push({ ...item, items: filtered } as unknown as ServerDashboardItem);
 			}
 			continue;
 		}
 
 		// Recurse into tabs
 		if (item.type === "tabs") {
+			const rawTabs = (rec.tabs as Array<Record<string, unknown>>) || [];
 			const tabs = await Promise.all(
-				((item as any).tabs || []).map(async (tab: any) => {
+				rawTabs.map(async (tab) => {
 					const filtered = await processDashboardItems(
-						tab.items || [],
+						(tab.items as unknown as ServerDashboardItem[]) || [],
 						accessibleCollections,
 						accessCtx,
 					);
 					return { ...tab, items: filtered };
 				}),
 			);
-			result.push({ ...item, tabs } as any);
+			result.push({ ...item, tabs } as unknown as ServerDashboardItem);
 			continue;
 		}
 
-		// Widget processing
-		const widget = item as any;
+		// Widget processing — use Record for dynamic property access
+		const widget = rec;
 
 		// 1. Check per-widget access
 		if (widget.access !== undefined) {
 			const widgetAccessResult =
 				typeof widget.access === "function"
-					? await widget.access({
+					? await (widget.access as Function)({
 							app: accessCtx.app,
 							db: accessCtx.db,
 							session: accessCtx.session,
@@ -711,33 +720,33 @@ async function processDashboardItems(
 		}
 
 		// 2. Check collection access for collection-bound widgets
-		if (widget.collection && !accessibleCollections.has(widget.collection)) {
+		if (widget.collection && !accessibleCollections.has(widget.collection as string)) {
 			continue;
 		}
 
 		// 3. Filter quickActions' individual actions by collection access
 		if (widget.type === "quickActions") {
-			const actions = (widget.actions || []).filter((action: any) => {
+			const actions = ((widget.actions as Array<Record<string, any>>) || []).filter((action) => {
 				if (action.action?.type === "create") {
 					return accessibleCollections.has(action.action.collection);
 				}
 				return true;
 			});
 			const { loader, access, ...serializable } = widget;
-			result.push({ ...serializable, actions } as any);
+			result.push({ ...serializable, actions } as unknown as ServerDashboardItem);
 			continue;
 		}
 
-		// 4. Strip non-serializable props, mark hasLoader, normalize label→title
+		// 4. Strip non-serializable props, mark hasLoader, normalize label->title
 		const { loader, access, filterFn, ...serializable } = widget;
 		if (loader) {
-			serializable.hasLoader = true;
+			(serializable as Record<string, unknown>).hasLoader = true;
 		}
 		// Normalize: server config uses `label`, client widgets expect `title`
 		if (serializable.label && !serializable.title) {
-			serializable.title = serializable.label;
+			(serializable as Record<string, unknown>).title = serializable.label;
 		}
-		result.push(serializable);
+		result.push(serializable as unknown as ServerDashboardItem);
 	}
 
 	return result;
@@ -749,21 +758,8 @@ async function processDashboardItems(
 
 const getAdminConfigSchema = z.object({}).optional();
 
-// Output schema is flexible since dashboard/sidebar configs are complex
-const getAdminConfigOutputSchema = z.object({
-	dashboard: z.unknown().optional(),
-	sidebar: z.unknown().optional(),
-	branding: z.unknown().optional(),
-	blocks: z.record(z.string(), z.unknown()).optional(),
-	collections: z.record(z.string(), z.unknown()).optional(),
-	globals: z.record(z.string(), z.unknown()).optional(),
-	uploads: z
-		.object({
-			collections: z.array(z.string()),
-			defaultCollection: z.string().optional(),
-		})
-		.optional(),
-});
+// Output schema — typed DTO schema with discriminated shapes
+const getAdminConfigOutputSchema = adminConfigDTOSchema;
 
 // ============================================================================
 // Functions
@@ -799,30 +795,25 @@ const getAdminConfig = route()
 	.outputSchema(getAdminConfigOutputSchema)
 	.handler(async (ctx) => {
 		const app = getApp(ctx);
-		const state = (app as any).state || {};
-		const adminCfg = state.config?.admin || {};
+		const appState = getAppState(app);
+		const adminCfg = getAdminCfg(app);
+		const accessCtx = getAccessContext(ctx);
 
 		// 1. Compute accessible collections and globals
 		const collections = app.getCollections();
 		const globals = app.getGlobals();
-		const accessCtx = {
-			app: app,
-			session: (ctx as any).session,
-			db: (ctx as any).db,
-			locale: (ctx as any).locale,
-		};
 
 		const [accessibleCollections, accessibleGlobals] = await Promise.all([
 			Promise.all(
 				Object.entries(collections).map(async ([name, col]) =>
-					(await hasReadAccess((col as any).state?.access?.read, accessCtx))
+					(await hasReadAccess(getCollectionState(col).access?.read, accessCtx))
 						? name
 						: null,
 				),
 			).then((names) => new Set(names.filter(Boolean) as string[])),
 			Promise.all(
 				Object.entries(globals).map(async ([name, g]) =>
-					(await hasReadAccess((g as any).state?.access?.read, accessCtx))
+					(await hasReadAccess(getGlobalState(g).access?.read, accessCtx))
 						? name
 						: null,
 				),
@@ -856,7 +847,7 @@ const getAdminConfig = route()
 			.filter(
 				([name, collection]) =>
 					accessibleCollections.has(name) &&
-					Boolean((collection as any)?.state?.upload),
+					Boolean(getCollectionState(collection).upload),
 			)
 			.map(([name]) => name);
 
@@ -962,8 +953,8 @@ const getAdminConfig = route()
 		}
 
 		// 5. Blocks: unchanged (not access-controlled)
-		if (state.blocks && Object.keys(state.blocks).length > 0) {
-			response.blocks = introspectBlocks(state.blocks);
+		if (appState.blocks && Object.keys(appState.blocks).length > 0) {
+			response.blocks = introspectBlocks(appState.blocks as Record<string, any>);
 		}
 
 		// 6. Return filtered metadata

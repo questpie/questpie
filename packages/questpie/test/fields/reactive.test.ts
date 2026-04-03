@@ -18,7 +18,6 @@ import { describe, expect, test } from "bun:test";
 import {
 	extractDependencies,
 	getDebounce,
-	getHandler,
 	isReactiveConfig,
 	type ReactiveConfig,
 	type ReactiveContext,
@@ -336,31 +335,8 @@ describe("extractDependencies", () => {
 });
 
 // ============================================================================
-// getHandler Tests
+// getHandler — moved to @questpie/admin (server/fields/reactive-runtime.ts)
 // ============================================================================
-
-describe("getHandler", () => {
-	test("should return function directly for short syntax", () => {
-		const fn = (ctx: ReactiveContext) => ctx.data.value;
-		const config: ReactiveConfig<any> = fn;
-
-		const handler = getHandler(config);
-
-		expect(handler).toBe(fn);
-	});
-
-	test("should return handler property for full syntax", () => {
-		const fn = (ctx: ReactiveContext) => ctx.data.value;
-		const config: ReactiveConfig<any> = {
-			handler: fn,
-			deps: ["value"],
-		};
-
-		const handler = getHandler(config);
-
-		expect(handler).toBe(fn);
-	});
-});
 
 // ============================================================================
 // getDebounce Tests

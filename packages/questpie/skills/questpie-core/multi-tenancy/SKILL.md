@@ -21,7 +21,7 @@ Client                          Server
 ──────                          ──────
 ScopeProvider                   context.ts (file convention)
   ↓ stores scopeId                ↓ extracts header → typed context
-ScopePicker (UI)                QuestpieContextExtension (types)
+ScopePicker (UI)                appConfig({ context }) (types)
   ↓ user selects scope            ↓ available in every handler
 useScopedFetch()                access rules / hooks
   ↓ injects HTTP header           ↓ filter data by scope
@@ -97,24 +97,7 @@ export default context(async ({ request, session, db }) => {
 
 The object you return is merged into the request context and becomes available in **every** handler, hook, and access rule.
 
-## Step 3: Type the Context Extension
-
-Use module augmentation so your custom context properties are type-safe everywhere:
-
-```ts
-// src/questpie/server/context.ts (same file, add at the top)
-declare global {
-	namespace Questpie {
-		interface QuestpieContextExtension {
-			workspaceId: string | null;
-		}
-	}
-}
-```
-
-Now `ctx.workspaceId` is typed as `string | null` in all access functions, hooks, and handlers.
-
-## Step 4: Filter Data with Access Rules
+## Step 3: Filter Data with Access Rules
 
 Use the typed context in access rules and hooks to enforce data isolation:
 
@@ -336,7 +319,7 @@ export default service({
 
 ### HIGH: Forgetting module augmentation
 
-Without `declare global { namespace Questpie { interface QuestpieContextExtension { ... } } }`, your custom context properties won't be typed. TypeScript won't error, but `ctx.workspaceId` will be `unknown`.
+Without a `context` function in `appConfig()`, your custom context properties won't be available in handlers. Make sure to define `context` in your `config/app.ts`.
 
 ### HIGH: Not filtering in access rules
 

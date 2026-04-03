@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { z } from "zod";
 
-import { MailerService } from "../../../src/server/integrated/mailer/service.js";
-import { email } from "../../../src/server/integrated/mailer/template.js";
+import { MailerService } from "../../../src/server/modules/core/integrated/mailer/service.js";
+import { email } from "../../../src/server/modules/core/integrated/mailer/template.js";
 import { MockMailAdapter } from "../../utils/mocks/mailer.adapter.js";
 
 // -- Fixtures ------------------------------------------------------------------

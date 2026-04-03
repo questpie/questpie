@@ -17,7 +17,7 @@ export const getPage = createServerFn({ method: "GET" })
 		const isDraft = isDraftMode(cookieHeader);
 		const ctx = await createRequestContext();
 
-		const page = await app.api.collections.pages.findOne(
+		const page = await app.collections.pages.findOne(
 			{
 				where: isDraft
 					? { slug: data.slug }

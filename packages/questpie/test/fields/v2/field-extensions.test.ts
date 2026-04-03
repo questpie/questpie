@@ -14,11 +14,11 @@ import type { DefaultFieldState } from "#questpie/server/fields/field-class-type
 import { Field, field } from "#questpie/server/fields/field-class.js";
 import { stringOps } from "#questpie/server/fields/operators/builtin.js";
 import { wrapBuilderWithExtensions } from "#questpie/server/utils/builder-extensions.js";
-import { text } from "#questpie/server/fields/builtin-factories/text.js";
-import { object } from "#questpie/server/fields/builtin-factories/object.js";
-import { select } from "#questpie/server/fields/builtin-factories/select.js";
-import { relation } from "#questpie/server/fields/builtin-factories/relation.js";
-import { upload } from "#questpie/server/fields/builtin-factories/upload.js";
+import { text } from "#questpie/server/modules/core/fields/text.js";
+import { object } from "#questpie/server/modules/core/fields/object.js";
+import { select } from "#questpie/server/modules/core/fields/select.js";
+import { relation } from "#questpie/server/modules/core/fields/relation.js";
+import { upload } from "#questpie/server/modules/core/fields/upload.js";
 
 // ============================================================================
 // Helpers

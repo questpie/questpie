@@ -22,7 +22,8 @@
 		"questpie:generate": "turbo run questpie:generate",
 		"changeset": "changeset",
 		"version": "changeset version",
-		"release": "turbo run build --filter='./packages/*' && bun run scripts/publish.ts"
+		"release": "turbo run build --filter='./packages/*' && bun run scripts/publish.ts",
+		"validate": "bun run scripts/validate.ts"
 	},
 	"dependencies": {
 		"@iconify/react": "^6.0.2",

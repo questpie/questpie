@@ -41,10 +41,10 @@ Both server and admin are fully code-generated from file conventions. No manual 
 ```typescript
 // questpie.config.ts
 import { runtimeConfig } from "questpie";
-import { adminPlugin } from "@questpie/admin/plugin";
+
 
 export default runtimeConfig({
-	plugins: [adminPlugin()],
+
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 });
@@ -160,10 +160,10 @@ Server configuration uses the top-level `runtimeConfig()` factory. Modules are r
 ```typescript
 // questpie.config.ts
 import { runtimeConfig } from "questpie";
-import { adminPlugin } from "@questpie/admin/plugin";
+
 
 export default runtimeConfig({
-	plugins: [adminPlugin()],
+
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 });
@@ -252,7 +252,7 @@ const backendMessages = {
 } as const;
 
 export default runtimeConfig({
-	plugins: [adminPlugin()],
+
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 	// Configure content locales
@@ -279,10 +279,10 @@ Admin UI translations are configured server-side via `.adminLocale()` and fetche
 ```typescript
 // questpie.config.ts
 import { runtimeConfig } from "questpie";
-import { adminPlugin } from "@questpie/admin/plugin";
+
 
 export default runtimeConfig({
-	plugins: [adminPlugin()],
+
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 	adminLocale: {

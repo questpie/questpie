@@ -55,7 +55,7 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
-import type { QuestpieClient } from "questpie/client";
+import type { AnyQuestpieClient } from "../../builder";
 import type * as React from "react";
 
 import { Admin, type AdminInput } from "../../builder/admin";
@@ -91,7 +91,7 @@ interface AdminLayoutProviderProps extends AdminLayoutSharedProps {
 	/**
 	 * API client for data fetching
 	 */
-	client: QuestpieClient<any>;
+	client: AnyQuestpieClient;
 
 	/**
 	 * Auth client for authentication (created via createAdminAuthClient)

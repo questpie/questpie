@@ -76,6 +76,7 @@ export function useCollectionSchema<K extends ResolvedCollectionNames>(
 		staleTime: 5 * 60 * 1000, // 5 minutes
 		gcTime: 30 * 60 * 1000, // 30 minutes
 		...queryOptions,
+		enabled: !!collection && (queryOptions?.enabled ?? true),
 	});
 }
 

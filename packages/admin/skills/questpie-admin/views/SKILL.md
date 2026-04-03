@@ -287,7 +287,7 @@ export default dashboard({
   showTimestamps: true,
   timestampFormat: "relative",
   loader: async ({ app }) => {
-    const res = await app.api.collections.appointments.find({
+    const res = await app.collections.appointments.find({
       limit: 8,
       orderBy: { updatedAt: "desc" },
     });

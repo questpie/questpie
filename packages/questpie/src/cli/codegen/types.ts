@@ -154,7 +154,6 @@ export type DiscoverPattern =
 			 *     locale: "locale",
 			 *     access: "defaultAccess",
 			 *     hooks: "hooks",
-			 *     context: "contextResolver",
 			 *   },
 			 * }
 			 * // Generated:
@@ -400,6 +399,37 @@ export interface CategoryDeclaration {
 		/** Interface name to augment. */
 		interface: string;
 	};
+
+	/**
+	 * Runtime imports for the generated `factories.ts`.
+	 *
+	 * When a category contributes runtime values that need to be imported
+	 * and spread-merged in factories.ts (e.g., field types from a plugin),
+	 * declare them here. The factory template imports each named export
+	 * and spreads it into the merged field defs.
+	 *
+	 * Replaces the deprecated `runtimeFieldImports` on `CodegenTargetContribution`.
+	 *
+	 * @example
+	 * ```ts
+	 * fieldTypes: {
+	 *   dirs: ["fields"],
+	 *   prefix: "ftype",
+	 *   factoryImports: [
+	 *     { name: "adminFields", from: "@questpie/admin/server" },
+	 *   ],
+	 * }
+	 * // Generated in factories.ts:
+	 * // import { adminFields } from "@questpie/admin/server";
+	 * // const _rawFieldDefs = { ...builtinFields, ...adminFields };
+	 * ```
+	 */
+	factoryImports?: Array<{
+		/** Named export to import (e.g. "adminFields") */
+		name: string;
+		/** Package/path to import from (e.g. "@questpie/admin/server") */
+		from: string;
+	}>;
 }
 
 // ============================================================================
@@ -520,35 +550,6 @@ export interface CodegenTargetContribution {
 	 */
 	scaffolds?: Record<string, ScaffoldConfig>;
 
-	/**
-	 * Runtime field factory imports contributed by this plugin.
-	 *
-	 * When a plugin provides additional field types (e.g. richText, blocks),
-	 * it declares how to import them at runtime so the codegen-generated
-	 * `factories.ts` can construct a merged field map for collection/global
-	 * builders.
-	 *
-	 * These imports are spread-merged with `builtinFields` and passed to
-	 * `CollectionBuilder.create()` / `GlobalBuilder.create()` so that
-	 * `.fields(({ f }) => ...)` callbacks have access to all field types
-	 * at runtime — not just the 15 built-in ones.
-	 *
-	 * @example
-	 * ```ts
-	 * runtimeFieldImports: [
-	 *   { name: "adminFields", from: "@questpie/admin/server" },
-	 * ]
-	 * // Generated in factories.ts:
-	 * // import { adminFields } from "@questpie/admin/server";
-	 * // const _allFieldDefs = { ...builtinFields, ...adminFields };
-	 * ```
-	 */
-	runtimeFieldImports?: Array<{
-		/** Named export to import (e.g. "adminFields") */
-		name: string;
-		/** Package/path to import from (e.g. "@questpie/admin/server") */
-		from: string;
-	}>;
 }
 
 // ============================================================================
@@ -639,9 +640,6 @@ export interface ResolvedTarget {
 
 	/** Merged scaffold templates from all contributing plugins. */
 	scaffolds: Record<string, ScaffoldConfig>;
-
-	/** Merged runtime field imports from all contributing plugins. */
-	runtimeFieldImports: Array<{ name: string; from: string }>;
 }
 
 // ============================================================================

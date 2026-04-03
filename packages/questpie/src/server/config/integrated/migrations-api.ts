@@ -6,11 +6,13 @@ import type { QuestpieConfig } from "#questpie/server/config/types.js";
 import {
 	DrizzleMigrationGenerator,
 	type GenerateMigrationOptions,
-	type GenerateMigrationResult,
-	MigrationRunner,
-	type MigrationStatus,
-	type RunMigrationsOptions,
-} from "#questpie/server/migration/index.js";
+} from "#questpie/server/migration/generator.js";
+import { MigrationRunner } from "#questpie/server/migration/runner.js";
+import type {
+	GenerateMigrationResult,
+	MigrationStatus,
+	RunMigrationsOptions,
+} from "#questpie/server/migration/types.js";
 
 /**
  * Programmatic migration API

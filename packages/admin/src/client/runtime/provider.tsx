@@ -6,7 +6,6 @@
  */
 
 import type { QueryClient } from "@tanstack/react-query";
-import type { QuestpieClient } from "questpie/client";
 import { DEFAULT_LOCALE } from "questpie/shared";
 import {
 	createContext,
@@ -21,8 +20,7 @@ import {
 } from "react";
 import { createStore, useStore } from "zustand";
 
-// The admin client uses QuestpieClient<any> since the concrete App type
-// is project-specific and comes from .generated/index.ts at the app level.
+import type { AnyQuestpieClient } from "../builder";
 import { Admin, type AdminInput } from "../builder/admin";
 import { I18nProvider } from "../i18n/hooks";
 import { adminMessages } from "../i18n/messages";
@@ -84,7 +82,7 @@ function setContentLocaleCookie(locale: string): void {
 export interface AdminState {
 	// Core values (from props)
 	admin: Admin;
-	client: QuestpieClient<any>;
+	client: AnyQuestpieClient;
 	authClient: any | null;
 	basePath: string;
 	navigate: (path: string) => void;
@@ -110,7 +108,7 @@ export type AdminStore = ReturnType<typeof createAdminStore>;
 
 interface CreateAdminStoreProps {
 	admin: Admin;
-	client: QuestpieClient<any>;
+	client: AnyQuestpieClient;
 	authClient: any | null;
 	basePath: string;
 	navigate: (path: string) => void;
@@ -175,7 +173,7 @@ export interface AdminProviderProps {
 	/**
 	 * The API client for data fetching
 	 */
-	client: QuestpieClient<any>;
+	client: AnyQuestpieClient;
 
 	/**
 	 * The auth client for authentication (created via createAdminAuthClient)
@@ -605,7 +603,7 @@ function useAdminStoreRaw(): AdminStore | null {
 export const selectAdmin = (s: AdminState) => s.admin;
 
 /** Select client instance */
-export const selectClient = (s: AdminState): QuestpieClient<any> => s.client;
+export const selectClient = (s: AdminState): AnyQuestpieClient => s.client;
 
 /** Select auth client instance */
 export const selectAuthClient = (s: AdminState) => s.authClient;

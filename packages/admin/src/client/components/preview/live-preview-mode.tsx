@@ -18,7 +18,7 @@ import {
 	parsePreviewFieldPath,
 	scrollFieldIntoView,
 	useFocus,
-} from "../../context/focus-context.js";
+} from "../../contexts/focus-context.js";
 import { useIsMobile } from "../../hooks/use-media-query.js";
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";

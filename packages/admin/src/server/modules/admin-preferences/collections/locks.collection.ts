@@ -16,7 +16,7 @@ import { collection } from "questpie";
  * @example
  * ```ts
  * // Acquire lock when opening document
- * await app.api.collections.admin_locks.create({
+ * await app.collections.admin_locks.create({
  *   resourceType: "collection",
  *   resource: "posts",
  *   resourceId: "123",
@@ -26,13 +26,13 @@ import { collection } from "questpie";
  * });
  *
  * // Heartbeat to keep lock alive
- * await app.api.collections.admin_locks.update({
+ * await app.collections.admin_locks.update({
  *   id: lockId,
  *   data: { expiresAt: new Date(Date.now() + 60000) },
  * });
  *
  * // Release lock when closing document
- * await app.api.collections.admin_locks.delete({ id: lockId });
+ * await app.collections.admin_locks.delete({ id: lockId });
  * ```
  */
 export const locksCollection = collection("admin_locks")
