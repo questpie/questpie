@@ -2,13 +2,15 @@
  * Publish script that:
  * 1. Applies publishConfig overrides (exports, main, etc.)
  * 2. Converts workspace:* to actual versions
- * 3. Runs changeset publish (npm with provenance/trusted publishing)
+ * 3. Publishes packages in topological order (leaf deps first)
  * 4. Restores original package.json files
  *
  * This is needed because:
  * - changeset publish uses npm which doesn't understand workspace:* protocol
  * - npm doesn't apply publishConfig overrides like bun publish does
  * - bun publish understands both but doesn't support --provenance (trusted publishing)
+ * - npm publish resolves dependencies during pack, so inter-workspace deps
+ *   must already be on the registry → we publish in dependency order
  */
 
 import { exec } from "node:child_process";
@@ -24,6 +26,7 @@ const PACKAGES_DIR = path.join(ROOT_DIR, "packages");
 interface PackageJson {
 	name: string;
 	version: string;
+	private?: boolean;
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
 	peerDependencies?: Record<string, string>;
@@ -31,9 +34,9 @@ interface PackageJson {
 	[key: string]: unknown;
 }
 
-// Get all package versions from the monorepo
-function getWorkspaceVersions(): Map<string, string> {
-	const versions = new Map<string, string>();
+// Get all package.json data from the monorepo
+function getPackages(): Map<string, { dir: string; pkg: PackageJson }> {
+	const packages = new Map<string, { dir: string; pkg: PackageJson }>();
 	const entries = fs.readdirSync(PACKAGES_DIR, { withFileTypes: true });
 
 	for (const entry of entries) {
@@ -42,12 +45,24 @@ function getWorkspaceVersions(): Map<string, string> {
 		const packageJsonPath = path.join(PACKAGES_DIR, entry.name, "package.json");
 		if (!fs.existsSync(packageJsonPath)) continue;
 
-		const packageJson: PackageJson = JSON.parse(
+		const pkg: PackageJson = JSON.parse(
 			fs.readFileSync(packageJsonPath, "utf-8"),
 		);
-		versions.set(packageJson.name, packageJson.version);
+		if (pkg.private) continue;
+		packages.set(pkg.name, { dir: path.join(PACKAGES_DIR, entry.name), pkg });
 	}
 
+	return packages;
+}
+
+// Get all package versions from the monorepo
+function getWorkspaceVersions(
+	packages: Map<string, { dir: string; pkg: PackageJson }>,
+): Map<string, string> {
+	const versions = new Map<string, string>();
+	for (const [name, { pkg }] of packages) {
+		versions.set(name, pkg.version);
+	}
 	return versions;
 }
 
@@ -64,9 +79,6 @@ function replaceWorkspaceVersions(
 		if (version.startsWith("workspace:")) {
 			const actualVersion = versions.get(name);
 			if (actualVersion) {
-				// workspace:* -> ^actualVersion
-				// workspace:^ -> ^actualVersion
-				// workspace:~ -> ~actualVersion
 				if (version === "workspace:*" || version === "workspace:^") {
 					result[name] = `^${actualVersion}`;
 				} else if (version === "workspace:~") {
@@ -89,32 +101,61 @@ function replaceWorkspaceVersions(
 	return result;
 }
 
-// Get all package.json paths
-function getPackageJsonPaths(): string[] {
-	const paths: string[] = [];
-	const entries = fs.readdirSync(PACKAGES_DIR, { withFileTypes: true });
+// Topological sort — returns packages in publish order (leaf deps first)
+function topoSort(
+	packages: Map<string, { dir: string; pkg: PackageJson }>,
+): string[] {
+	const names = new Set(packages.keys());
+	const visited = new Set<string>();
+	const order: string[] = [];
 
-	for (const entry of entries) {
-		if (!entry.isDirectory()) continue;
+	function visit(name: string) {
+		if (visited.has(name)) return;
+		visited.add(name);
 
-		const packageJsonPath = path.join(PACKAGES_DIR, entry.name, "package.json");
-		if (fs.existsSync(packageJsonPath)) {
-			paths.push(packageJsonPath);
+		const entry = packages.get(name);
+		if (!entry) return;
+
+		// Visit all workspace dependencies first
+		for (const deps of [
+			entry.pkg.dependencies,
+			entry.pkg.peerDependencies,
+		]) {
+			if (!deps) continue;
+			for (const dep of Object.keys(deps)) {
+				if (names.has(dep)) visit(dep);
+			}
 		}
+
+		order.push(name);
 	}
 
-	return paths;
+	for (const name of names) visit(name);
+	return order;
+}
+
+// Check if a package version is already published on npm
+async function isPublished(name: string, version: string): Promise<boolean> {
+	try {
+		await execAsync(`npm view "${name}@${version}" version`, {
+			env: { ...process.env },
+		});
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 async function main() {
 	console.log("🔄 Preparing packages for publish...\n");
 
-	const versions = getWorkspaceVersions();
-	const packageJsonPaths = getPackageJsonPaths();
+	const packages = getPackages();
+	const versions = getWorkspaceVersions(packages);
 	const originals = new Map<string, string>();
 
 	// Save originals and apply transformations
-	for (const packageJsonPath of packageJsonPaths) {
+	for (const [name, { dir }] of packages) {
+		const packageJsonPath = path.join(dir, "package.json");
 		const original = fs.readFileSync(packageJsonPath, "utf-8");
 		originals.set(packageJsonPath, original);
 
@@ -123,11 +164,10 @@ async function main() {
 
 		let modified = false;
 
-		// 1. Apply publishConfig overrides (like bun publish does)
+		// 1. Apply publishConfig overrides
 		if (packageJson.publishConfig) {
 			console.log("  Applying publishConfig overrides:");
 			for (const [key, value] of Object.entries(packageJson.publishConfig)) {
-				// Skip npm-specific fields that aren't overrides
 				if (key === "access" || key === "registry" || key === "tag") continue;
 				console.log(`    ${key}`);
 				packageJson[key] = value;
@@ -165,8 +205,6 @@ async function main() {
 			}
 		}
 
-		// Note: we don't convert devDependencies as they're not included in published packages
-
 		if (modified) {
 			fs.writeFileSync(
 				packageJsonPath,
@@ -178,37 +216,69 @@ async function main() {
 		}
 	}
 
-	console.log("🚀 Running changeset publish...\n");
+	// Determine publish order
+	const publishOrder = topoSort(packages);
+	console.log(
+		`\n📋 Publish order: ${publishOrder.map((n) => n.replace("@questpie/", "")).join(" → ")}\n`,
+	);
 
-	let publishSuccess = false;
+	// Publish packages sequentially in topological order
+	console.log("🚀 Publishing packages...\n");
 
-	try {
-		const { stdout, stderr } = await execAsync("bunx changeset publish", {
-			cwd: ROOT_DIR,
-			env: { ...process.env },
-		});
+	const published: string[] = [];
+	const failed: string[] = [];
 
-		if (stdout) console.log(stdout);
-		if (stderr) console.error(stderr);
+	for (const name of publishOrder) {
+		const entry = packages.get(name)!;
+		const version = entry.pkg.version;
 
-		console.log("\n✅ Publish completed successfully");
-		publishSuccess = true;
-	} catch (error: any) {
-		console.error("\n❌ Publish failed:", error.message);
-		if (error.stdout) console.log("stdout:", error.stdout);
-		if (error.stderr) console.error("stderr:", error.stderr);
-	} finally {
-		// Always restore originals
-		console.log("\n🔄 Restoring original package.json files...");
-		for (const [packageJsonPath, original] of originals) {
-			fs.writeFileSync(packageJsonPath, original);
+		// Skip if already published
+		if (await isPublished(name, version)) {
+			console.log(`⏭️  ${name}@${version} — already on npm, skipping`);
+			published.push(name);
+			continue;
 		}
-		console.log("✅ Restored");
+
+		console.log(`📤 Publishing ${name}@${version}...`);
+
+		try {
+			const { stdout, stderr } = await execAsync(
+				`npm publish --access public --provenance`,
+				{
+					cwd: entry.dir,
+					env: { ...process.env },
+				},
+			);
+			if (stdout) console.log(`  ${stdout.trim()}`);
+			if (stderr && !stderr.includes("npm warn")) {
+				console.error(`  ${stderr.trim()}`);
+			}
+			console.log(`  ✅ ${name}@${version} published\n`);
+			published.push(name);
+		} catch (error: any) {
+			console.error(`  ❌ ${name}@${version} failed`);
+			if (error.stderr) console.error(`  ${error.stderr.trim()}`);
+			failed.push(name);
+		}
 	}
 
-	if (!publishSuccess) {
+	// Restore originals
+	console.log("\n🔄 Restoring original package.json files...");
+	for (const [packageJsonPath, original] of originals) {
+		fs.writeFileSync(packageJsonPath, original);
+	}
+	console.log("✅ Restored\n");
+
+	// Summary
+	if (published.length > 0) {
+		console.log(`✅ Published: ${published.join(", ")}`);
+	}
+	if (failed.length > 0) {
+		console.error(`❌ Failed: ${failed.join(", ")}`);
 		process.exit(1);
 	}
+
+	console.log("\n🎉 All packages published successfully!");
 }
 
 main().catch((error) => {
