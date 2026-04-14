@@ -27,7 +27,7 @@ export interface SocialLink {
 	url: string;
 }
 
-export interface FooterLink {
+interface FooterLink {
 	label: string;
 	href: string;
 	isExternal?: boolean;
@@ -43,7 +43,7 @@ export interface BusinessHours {
 	sunday: { isOpen: boolean; start: string; end: string };
 }
 
-export interface FooterProps {
+interface FooterProps {
 	shopName?: string;
 	tagline?: string;
 	footerLinks?: FooterLink[];

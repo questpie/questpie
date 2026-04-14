@@ -19,7 +19,7 @@ export type WorkingHours = {
 	sunday?: DaySchedule | null;
 };
 
-export type SocialLink = {
+type SocialLink = {
 	platform: "instagram" | "facebook" | "twitter" | "linkedin" | "tiktok";
 	url: string;
 };

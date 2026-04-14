@@ -45,7 +45,9 @@ export default route()
 			"friday",
 			"saturday",
 		] as const;
-		const dateObj = new Date(date);
+		// Parse "yyyy-MM-dd" manually to avoid UTC midnight interpretation
+		const [year, month, day] = date.split("-").map(Number);
+		const dateObj = new Date(year, month - 1, day);
 		const dayKey = dayNames[dateObj.getDay()];
 		const workingHours = barber.workingHours as Record<string, any> | null;
 		const daySchedule = workingHours?.[dayKey];

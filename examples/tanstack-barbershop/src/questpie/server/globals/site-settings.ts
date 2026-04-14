@@ -2,24 +2,24 @@ import { global } from "#questpie/factories";
 
 import type { WorkingHours } from "../collections/barbers";
 
-export type NavItem = {
+type NavItem = {
 	label: string;
 	href: string;
 	isExternal?: boolean;
 };
 
-export type FooterLink = {
+type FooterLink = {
 	label: string;
 	href: string;
 	isExternal?: boolean;
 };
 
-export type SocialLink = {
+type SocialLink = {
 	platform: "instagram" | "facebook" | "twitter" | "tiktok" | "youtube";
 	url: string;
 };
 
-export type BookingSettings = {
+type BookingSettings = {
 	minAdvanceHours: number;
 	maxAdvanceDays: number;
 	slotDurationMinutes: number;

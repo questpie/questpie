@@ -15,5 +15,3 @@ export const client = createClient<AppConfig>({
 			: process.env.APP_URL || "http://localhost:3000",
 	basePath: "/api",
 });
-
-export type AppClient = typeof client;

@@ -15,4 +15,3 @@ export const authClient = createAdminAuthClient<AppConfig>({
 	basePath: "/api/auth",
 });
 
-export type AuthClient = typeof authClient;

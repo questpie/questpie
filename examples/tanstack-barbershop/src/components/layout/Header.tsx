@@ -36,13 +36,13 @@ import {
 import { useTheme } from "@/lib/providers/theme-provider";
 
 // Types matching site-settings global
-export interface NavItem {
+interface NavItem {
 	label: string;
 	href: string;
 	isExternal?: boolean;
 }
 
-export interface HeaderProps {
+interface HeaderProps {
 	shopName?: string;
 	logo?: string; // Asset URL
 	navigation?: NavItem[];
