@@ -22,6 +22,11 @@ const execAsync = promisify(exec);
 
 const ROOT_DIR = path.join(import.meta.dirname, "..");
 const PACKAGES_DIR = path.join(ROOT_DIR, "packages");
+const PUBLISH_SUMMARY_PATH = path.join(
+	ROOT_DIR,
+	".changeset",
+	"publish-summary.json",
+);
 
 interface PackageJson {
 	name: string;
@@ -32,6 +37,17 @@ interface PackageJson {
 	peerDependencies?: Record<string, string>;
 	publishConfig?: Record<string, unknown>;
 	[key: string]: unknown;
+}
+
+interface PublishedPackageSummary {
+	name: string;
+	version: string;
+	dir: string;
+}
+
+interface PublishSummary {
+	packages: PublishedPackageSummary[];
+	generatedAt: string;
 }
 
 // Get all package.json data from the monorepo
@@ -148,6 +164,7 @@ async function isPublished(name: string, version: string): Promise<boolean> {
 
 async function main() {
 	console.log("🔄 Preparing packages for publish...\n");
+	fs.rmSync(PUBLISH_SUMMARY_PATH, { force: true });
 
 	const packages = getPackages();
 	const versions = getWorkspaceVersions(packages);
@@ -225,7 +242,8 @@ async function main() {
 	// Publish packages sequentially in topological order
 	console.log("🚀 Publishing packages...\n");
 
-	const published: string[] = [];
+	const publishedNow: PublishedPackageSummary[] = [];
+	const skipped: string[] = [];
 	const failed: string[] = [];
 
 	for (const name of publishOrder) {
@@ -235,7 +253,7 @@ async function main() {
 		// Skip if already published
 		if (await isPublished(name, version)) {
 			console.log(`⏭️  ${name}@${version} — already on npm, skipping`);
-			published.push(name);
+			skipped.push(name);
 			continue;
 		}
 
@@ -254,7 +272,11 @@ async function main() {
 				console.error(`  ${stderr.trim()}`);
 			}
 			console.log(`  ✅ ${name}@${version} published\n`);
-			published.push(name);
+			publishedNow.push({
+				name,
+				version,
+				dir: path.relative(ROOT_DIR, entry.dir),
+			});
 		} catch (error: any) {
 			console.error(`  ❌ ${name}@${version} failed`);
 			if (error.stderr) console.error(`  ${error.stderr.trim()}`);
@@ -269,9 +291,26 @@ async function main() {
 	}
 	console.log("✅ Restored\n");
 
+	if (publishedNow.length > 0) {
+		const summary: PublishSummary = {
+			packages: publishedNow,
+			generatedAt: new Date().toISOString(),
+		};
+		fs.writeFileSync(
+			PUBLISH_SUMMARY_PATH,
+			JSON.stringify(summary, null, "\t") + "\n",
+		);
+		console.log(`📝 Wrote publish summary to ${PUBLISH_SUMMARY_PATH}`);
+	}
+
 	// Summary
-	if (published.length > 0) {
-		console.log(`✅ Published: ${published.join(", ")}`);
+	if (publishedNow.length > 0) {
+		console.log(
+			`✅ Published: ${publishedNow.map(({ name }) => name).join(", ")}`,
+		);
+	}
+	if (skipped.length > 0) {
+		console.log(`⏭️  Already published: ${skipped.join(", ")}`);
 	}
 	if (failed.length > 0) {
 		console.error(`❌ Failed: ${failed.join(", ")}`);
