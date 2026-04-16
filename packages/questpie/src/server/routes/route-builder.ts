@@ -21,6 +21,7 @@ import type { z } from "zod";
 
 import type {
 	HttpMethod,
+	JsonRouteParams,
 	JsonRouteDefinition,
 	JsonRouteHandlerArgs,
 	RawRouteDefinition,
@@ -66,6 +67,7 @@ interface BuilderConfig {
  * Default method: POST
  */
 export class RouteBuilder<
+	TParams extends JsonRouteParams = JsonRouteParams,
 	_TMethod extends NoMethod | HasMethod = NoMethod,
 	TMode extends NoMode | JsonMode | RawMode = NoMode,
 	TSchema extends NoSchema | HasSchema = NoSchema,
@@ -88,23 +90,23 @@ export class RouteBuilder<
 		return arr.includes(m) ? arr : [...arr, m];
 	}
 
-	get(): RouteBuilder<HasMethod<"GET">, TMode, TSchema> {
+	get(): RouteBuilder<TParams, HasMethod<"GET">, TMode, TSchema> {
 		return new RouteBuilder({ ...this._config, method: this._addMethod("GET") });
 	}
 
-	post(): RouteBuilder<HasMethod<"POST">, TMode, TSchema> {
+	post(): RouteBuilder<TParams, HasMethod<"POST">, TMode, TSchema> {
 		return new RouteBuilder({ ...this._config, method: this._addMethod("POST") });
 	}
 
-	put(): RouteBuilder<HasMethod<"PUT">, TMode, TSchema> {
+	put(): RouteBuilder<TParams, HasMethod<"PUT">, TMode, TSchema> {
 		return new RouteBuilder({ ...this._config, method: this._addMethod("PUT") });
 	}
 
-	delete(): RouteBuilder<HasMethod<"DELETE">, TMode, TSchema> {
+	delete(): RouteBuilder<TParams, HasMethod<"DELETE">, TMode, TSchema> {
 		return new RouteBuilder({ ...this._config, method: this._addMethod("DELETE") });
 	}
 
-	patch(): RouteBuilder<HasMethod<"PATCH">, TMode, TSchema> {
+	patch(): RouteBuilder<TParams, HasMethod<"PATCH">, TMode, TSchema> {
 		return new RouteBuilder({ ...this._config, method: this._addMethod("PATCH") });
 	}
 
@@ -114,7 +116,7 @@ export class RouteBuilder<
 	 * Mark this route as raw — handler receives `(request, ctx)` and returns `Response`.
 	 * Cannot be combined with `.schema()`.
 	 */
-	raw(): RouteBuilder<_TMethod, RawMode, NoSchema> {
+	raw(): RouteBuilder<TParams, _TMethod, RawMode, NoSchema> {
 		return new RouteBuilder({
 			...this._config,
 			mode: "raw",
@@ -131,7 +133,7 @@ export class RouteBuilder<
 	 */
 	schema<TInput>(
 		schema: z.ZodSchema<TInput>,
-	): RouteBuilder<_TMethod, JsonMode, HasSchema<TInput>> {
+	): RouteBuilder<TParams, _TMethod, JsonMode, HasSchema<TInput>> {
 		return new RouteBuilder({ ...this._config, mode: "json", schema });
 	}
 
@@ -140,8 +142,24 @@ export class RouteBuilder<
 	 */
 	outputSchema<TOutput>(
 		schema: z.ZodSchema<TOutput>,
-	): RouteBuilder<_TMethod, TMode, TSchema> {
+	): RouteBuilder<TParams, _TMethod, TMode, TSchema> {
 		return new RouteBuilder({ ...this._config, outputSchema: schema }) as any;
+	}
+
+	/**
+	 * Declare the URL params shape available to the handler.
+	 *
+	 * This is the source-level path to exact params safety. Codegen can infer
+	 * route params for generated `AppRoutes`, but it cannot retroactively type
+	 * the handler inside this source file from the filename alone.
+	 */
+	params<TNextParams extends JsonRouteParams>(): RouteBuilder<
+		TNextParams,
+		_TMethod,
+		TMode,
+		TSchema
+	> {
+		return new RouteBuilder({ ...this._config }) as any;
 	}
 
 	// ── Access ──────────────────────────────────────────────────
@@ -149,7 +167,7 @@ export class RouteBuilder<
 	/**
 	 * Set access control for this route.
 	 */
-	access(access: RouteAccess): RouteBuilder<_TMethod, TMode, TSchema> {
+	access(access: RouteAccess): RouteBuilder<TParams, _TMethod, TMode, TSchema> {
 		return new RouteBuilder({ ...this._config, access }) as any;
 	}
 
@@ -165,20 +183,20 @@ export class RouteBuilder<
 	 */
 	handler(
 		handler: TMode extends RawMode
-			? (args: RawRouteHandlerArgs) => Response | Promise<Response>
+			? (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>
 			: TSchema extends HasSchema<infer TInput>
-				? (args: JsonRouteHandlerArgs<TInput>) => any
-				: (args: RawRouteHandlerArgs) => Response | Promise<Response>,
+				? (args: JsonRouteHandlerArgs<TInput, TParams>) => any
+				: (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>,
 	): TMode extends RawMode
-		? RawRouteDefinition
+		? RawRouteDefinition<TParams>
 		: TSchema extends HasSchema<infer TInput>
-			? JsonRouteDefinition<TInput, any>
-			: RawRouteDefinition {
+			? JsonRouteDefinition<TInput, any, TParams>
+			: RawRouteDefinition<TParams> {
 		const method = this._config.method ?? "POST";
 
 		if (this._config.mode === "json" || this._config.schema) {
 			// JSON route
-			const def: JsonRouteDefinition = {
+			const def: JsonRouteDefinition<any, any, TParams> = {
 				__brand: "route",
 				mode: "json",
 				method,
@@ -191,7 +209,7 @@ export class RouteBuilder<
 		}
 
 		// Raw route (default)
-		const def: RawRouteDefinition = {
+		const def: RawRouteDefinition<TParams> = {
 			__brand: "route",
 			mode: "raw",
 			method,

@@ -295,11 +295,15 @@ describe("generateModuleTemplate — routes with slash-separated keys", () => {
 
 	it("emits flat type interface with camelCase slash keys", () => {
 		expect(output).toContain("export interface TestRoutes {");
-		expect(output).toContain('"admin/stats": typeof _route_admin_stats;');
 		expect(output).toContain(
-			'"admin/users/export": typeof _route_admin_users_export;',
+			'"admin/stats": RouteWithParams<typeof _route_admin_stats, RouteParamsFromKey<"admin/stats">>;',
 		);
-		expect(output).toContain("getConfig: typeof _route_getConfig;");
+		expect(output).toContain(
+			'"admin/users/export": RouteWithParams<typeof _route_admin_users_export, RouteParamsFromKey<"admin/users/export">>;',
+		);
+		expect(output).toContain(
+			'getConfig: RouteWithParams<typeof _route_getConfig, RouteParamsFromKey<"getConfig">>;',
+		);
 	});
 });
 
@@ -332,7 +336,9 @@ describe("generateModuleTemplate — bundle routes", () => {
 	it("includes all entries in type (intersection for bundles)", () => {
 		// When bundles are present, type is emitted as intersection, not interface
 		expect(output).toContain("export type TestRoutes =");
-		expect(output).toContain("getConfig: typeof _route_getConfig");
+		expect(output).toContain(
+			'getConfig: RouteWithParams<typeof _route_getConfig, RouteParamsFromKey<"getConfig">>',
+		);
 		expect(output).toContain("typeof _route_setup");
 	});
 });

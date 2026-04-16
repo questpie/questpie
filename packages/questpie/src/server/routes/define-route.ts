@@ -7,6 +7,7 @@
  */
 
 import { RouteBuilder } from "./route-builder.js";
+import type { JsonRouteParams } from "./types.js";
 
 /**
  * Define a route.
@@ -19,6 +20,6 @@ import { RouteBuilder } from "./route-builder.js";
  *   .handler(({ input }) => ({ ok: true }));
  * ```
  */
-export function route(): RouteBuilder {
+export function route<TParams extends JsonRouteParams = JsonRouteParams>(): RouteBuilder<TParams> {
 	return new RouteBuilder();
 }

@@ -321,3 +321,65 @@ describe("Route via HTTP — locale propagates from request into handler ALS", (
 		expect(locales.has("de")).toBe(true);
 	});
 });
+
+describe("Route via HTTP — custom app context extensions reach JSON handlers", () => {
+	const installApp = route()
+		.post()
+		.schema(z.object({}))
+		.outputSchema(
+			z.object({
+				appId: z.string(),
+				method: z.string(),
+				organizationId: z.string().nullable(),
+			}),
+		)
+		.handler(async (ctx) => {
+			return {
+				appId: ctx.params.appId,
+				method: ctx.request.method,
+				organizationId: (ctx as { organizationId?: string | null })
+					.organizationId ?? null,
+			};
+		});
+
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+
+	beforeEach(async () => {
+		setup = await buildMockApp({
+			routes: {
+				"apps/[appId]/install": installApp,
+			},
+			config: {
+				app: {
+					context: async ({ request }) => ({
+						organizationId: request.headers.get("x-org"),
+					}),
+				},
+			},
+		});
+	});
+
+	afterEach(async () => {
+		await setup.cleanup();
+	});
+
+	it("passes request, params, and app-level context extensions into JSON handlers", async () => {
+		const handler = createFetchHandler(setup.app);
+
+		const response = await handler(
+			new Request("http://localhost/apps/app_123/install", {
+				method: "POST",
+				headers: { "x-org": "org_456" },
+				body: JSON.stringify({}),
+			}),
+		);
+
+		expect(response?.status).toBe(200);
+		const body = await response?.json();
+		expect(body).toEqual({
+			appId: "app_123",
+			method: "POST",
+			organizationId: "org_456",
+		});
+	});
+});

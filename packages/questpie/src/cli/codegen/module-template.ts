@@ -179,6 +179,13 @@ export function generateModuleTemplate(
 		);
 		lines.push("");
 
+		if (categoriesNeedingTypes.has("routes")) {
+			lines.push(
+				'import type { RouteParamsFromKey, RouteWithParams } from "questpie";',
+			);
+			lines.push("");
+		}
+
 		// Always emit simple interfaces (no sub-module extends).
 		//
 		// Why not `extends _SubCollections`:
@@ -198,7 +205,11 @@ export function generateModuleTemplate(
 			const fileMap = discovered.categories.get(catName)!;
 			const typeName = `${typePrefix}${catName.charAt(0).toUpperCase() + catName.slice(1)}`;
 
-			emitSimpleTypeInterface(lines, typeName, fileMap);
+			if (catName === "routes") {
+				emitSimpleRouteTypeInterface(lines, typeName, fileMap);
+			} else {
+				emitSimpleTypeInterface(lines, typeName, fileMap);
+			}
 		}
 	}
 
@@ -556,6 +567,42 @@ function emitSimpleTypeInterface(
 		if (leafFiles.length > 0) {
 			parts.push(
 				`{ ${leafFiles.map((f) => `${safeKey(f.key)}: typeof ${f.varName}`).join("; ")} }`,
+			);
+		}
+		for (const bundle of bundleFiles) {
+			parts.push(`typeof ${bundle.varName}`);
+		}
+		lines.push(`export type ${typeName} = ${parts.join(" & ")};`);
+	}
+	lines.push("");
+}
+
+function emitSimpleRouteTypeInterface(
+	lines: string[],
+	typeName: string,
+	fileMap: Map<string, DiscoveredFile>,
+): void {
+	const leafFiles = sortedValues(fileMap).filter((f) => !f.isBundle);
+	const bundleFiles = sortedValues(fileMap).filter((f) => f.isBundle);
+
+	if (bundleFiles.length === 0) {
+		lines.push(`export interface ${typeName} {`);
+		for (const file of leafFiles) {
+			lines.push(
+				`\t${safeKey(file.key)}: RouteWithParams<typeof ${file.varName}, RouteParamsFromKey<${JSON.stringify(file.key)}>>;`,
+			);
+		}
+		lines.push("}");
+	} else {
+		const parts: string[] = [];
+		if (leafFiles.length > 0) {
+			parts.push(
+				`{ ${leafFiles
+					.map(
+						(f) =>
+							`${safeKey(f.key)}: RouteWithParams<typeof ${f.varName}, RouteParamsFromKey<${JSON.stringify(f.key)}>>`,
+					)
+					.join("; ")} }`,
 			);
 		}
 		for (const bundle of bundleFiles) {

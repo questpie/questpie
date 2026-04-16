@@ -88,7 +88,7 @@ export function generateTemplate(options: TemplateOptions): string {
 
 	// Import createApp + types
 	lines.push(
-		'import { createApp, createContextFactory, type AppDefinition, type CollectionAPI, type InferSessionFromAuthConfig, type QueueClient } from "questpie";',
+		'import { createApp, createContextFactory, type AnyCollectionOrBuilder, type AnyGlobalOrBuilder, type AppDefinition, type CollectionAPI, type DrizzleClientFromQuestpieConfig, type InferContextExtensionsFromAppConfig, type InferSessionFromAuthConfig, type MailerService, type Questpie, type QuestpieConfig, type QueueClient, type RouteParamsFromKey, type RouteWithParams, type TablesFromConfig } from "questpie";',
 	);
 	lines.push("");
 
@@ -213,8 +213,21 @@ export function generateTemplate(options: TemplateOptions): string {
 		"type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;",
 	);
 	lines.push('type _ModuleConfig = _MP<"config">;');
+	const appConfigFile = discovered.singles.get("appConfig");
 	const authConfigFile = discovered.singles.get("authConfig");
 	const authFile = authConfigFile ?? discovered.singles.get("auth");
+	if (appConfigFile) {
+		lines.push(
+			`type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof ${appConfigFile.varName};`,
+		);
+	} else {
+		lines.push(
+			'type _AppAppConfig = _ModuleConfig extends { app: infer TApp } ? TApp : {};',
+		);
+	}
+	lines.push(
+		"type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;",
+	);
 	if (authFile) {
 		lines.push(
 			`type _AppAuthConfig = (_ModuleConfig extends { auth: infer TAuth } ? TAuth : {}) & typeof ${authFile.varName};`,
@@ -379,7 +392,11 @@ export function generateTemplate(options: TemplateOptions): string {
 
 		switch (typeEmit) {
 			case "standard": {
-				emitTypeInterface(lines, appTypeName, moduleTypeName, fileMap);
+				if (catName === "routes") {
+					emitRouteTypeInterface(lines, appTypeName, moduleTypeName, fileMap);
+				} else {
+					emitTypeInterface(lines, appTypeName, moduleTypeName, fileMap);
+				}
 				break;
 			}
 			case "services": {
@@ -478,6 +495,36 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
+		lines.push(
+			"type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;",
+		);
+		lines.push(
+			"type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;",
+		);
+		lines.push(
+			'type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {',
+		);
+		lines.push("\tapp: (typeof _runtime)[\"app\"];");
+		lines.push("\tdb: (typeof _runtime)[\"db\"];");
+		lines.push("\tcollections: _AppCollectionDefinitions;");
+		lines.push("\tglobals: _AppGlobalDefinitions;");
+		lines.push("\tauth: _AppAuthConfig;");
+		lines.push("};");
+		lines.push(
+			"type _AppQuestpie = Questpie<_AppQuestpieConfig>;",
+		);
+		lines.push(
+			"type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;",
+		);
+		lines.push(
+			"type _AppGlobalsAPI = _AppQuestpie[\"globals\"];",
+		);
+		lines.push(
+			"type _AppStorage = _AppQuestpie[\"storage\"];",
+		);
+		lines.push(
+			"type _AppTables = TablesFromConfig<_AppQuestpieConfig>;",
+		);
 		lines.push("");
 
 		lines.push(
@@ -487,29 +534,29 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("\tnamespace Questpie {");
 		if (hasServices) {
 			lines.push(
-				"\t\tinterface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces {",
+				"\t\tinterface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {",
 			);
 		} else {
-			lines.push("\t\tinterface AppContext {");
+			lines.push("\t\tinterface AppContext extends _AppContextExtensions {");
 		}
 		lines.push("\t\t\t// Infrastructure");
-		lines.push("\t\t\tdb: (typeof app)['db'];");
+		lines.push("\t\t\tdb: _AppDb;");
 		if (hasEmails) {
 			lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
 		} else {
-			lines.push("\t\t\temail: (typeof app)['email'];");
+			lines.push("\t\t\temail: _AppQuestpie[\"email\"];");
 		}
 		lines.push("\t\t\tqueue: QueueClient<AppJobs>;");
-		lines.push("\t\t\tstorage: (typeof app)['storage'];");
-		lines.push("\t\t\tkv: (typeof app)['kv'];");
-		lines.push("\t\t\tlogger: (typeof app)['logger'];");
-		lines.push("\t\t\tsearch: (typeof app)['search'];");
-		lines.push("\t\t\trealtime: (typeof app)['realtime'];");
+		lines.push("\t\t\tstorage: _AppStorage;");
+		lines.push("\t\t\tkv: _AppQuestpie[\"kv\"];");
+		lines.push("\t\t\tlogger: _AppQuestpie[\"logger\"];");
+		lines.push("\t\t\tsearch: _AppQuestpie[\"search\"];");
+		lines.push("\t\t\trealtime: _AppQuestpie[\"realtime\"];");
 		lines.push("");
 		lines.push("\t\t\t// Entity APIs");
 		lines.push("\t\t\tcollections: _CollectionsAPI;");
-		lines.push("\t\t\tglobals: (typeof app)['globals'];");
-		lines.push("\t\t\ttables: (typeof app)['tables'];");
+		lines.push("\t\t\tglobals: _AppGlobalsAPI;");
+		lines.push("\t\t\ttables: _AppTables;");
 		lines.push("");
 		lines.push("\t\t\t// Request-scoped");
 		lines.push("\t\t\tsession: _AppSession;");
@@ -895,6 +942,31 @@ function emitTypeInterface(
 		lines.push(`export type ${typeName} = ${moduleTypeName} & {`);
 		for (const file of sortedValues(fileMap)) {
 			lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+		}
+		lines.push("};");
+	} else {
+		lines.push(`export type ${typeName} = ${moduleTypeName};`);
+	}
+	lines.push("");
+}
+
+/**
+ * Emit a routes type interface that preserves exact params on generated keys.
+ */
+function emitRouteTypeInterface(
+	lines: string[],
+	typeName: string,
+	moduleTypeName: string,
+	fileMap: Map<string, DiscoveredFile>,
+): void {
+	const hasUser = fileMap.size > 0;
+	lines.push("/** All routes in the app (modules + user, user overrides) */");
+	if (hasUser) {
+		lines.push(`export type ${typeName} = ${moduleTypeName} & {`);
+		for (const file of sortedValues(fileMap)) {
+			lines.push(
+				`\t${safeKey(file.key)}: RouteWithParams<typeof ${file.varName}, RouteParamsFromKey<${JSON.stringify(file.key)}>>;`,
+			);
 		}
 		lines.push("};");
 	} else {

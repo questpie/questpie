@@ -50,6 +50,16 @@ function camelToKebab(str: string): string {
 	return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
+function routeKeySegmentToPatternSegment(segment: string): string {
+	if (
+		(segment.startsWith("[") && segment.endsWith("]")) ||
+		(segment.startsWith("[...") && segment.endsWith("]"))
+	) {
+		return segment;
+	}
+	return camelToKebab(segment);
+}
+
 /**
  * Compile all route definitions into a trie-based matcher.
  * Supports [param] and [...slug] file-path conventions.
@@ -75,8 +85,8 @@ function compileRoutes(
 			methods = Array.isArray(def.method) ? def.method : [def.method];
 		}
 
-		// camelCase → kebab-case, file-path convention → route pattern
-		path = path.split("/").map(camelToKebab).join("/");
+		// camelCase → kebab-case for literal segments only, then apply file convention.
+		path = path.split("/").map(routeKeySegmentToPatternSegment).join("/");
 		const pattern = filePathToRoutePattern(path);
 
 		for (const method of methods) {
@@ -188,6 +198,8 @@ export const createFetchHandler = (
 							def,
 							body,
 							resolved.appContext,
+							request,
+							match.params,
 						);
 						return smartResponse(result, request);
 					}

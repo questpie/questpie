@@ -16,6 +16,7 @@ import { ApiError } from "#questpie/server/errors/index.js";
 
 import type {
 	JsonRouteDefinition,
+	JsonRouteParams,
 	RawRouteDefinition,
 	RouteAccess,
 	RouteAccessRule,
@@ -62,11 +63,17 @@ export const evaluateRouteAccess = async (
  * - Validates output if `outputSchema` is set
  * - Default `accessMode: "system"`
  */
-export async function executeJsonRoute<TInput, TOutput>(
+export async function executeJsonRoute<
+	TInput,
+	TOutput,
+	TParams extends JsonRouteParams,
+>(
 	app: Questpie<any>,
-	definition: JsonRouteDefinition<TInput, TOutput>,
+	definition: JsonRouteDefinition<TInput, TOutput, TParams>,
 	input: unknown,
 	context?: RequestContext,
+	request?: Request,
+	params?: TParams,
 ): Promise<TOutput> {
 	const parsed = definition.schema.parse(input);
 	const resolvedContext =
@@ -81,6 +88,8 @@ export async function executeJsonRoute<TInput, TOutput>(
 	const allowed = await evaluateRouteAccess(definition.access, {
 		...services,
 		locale: resolvedContext.locale,
+		request,
+		params,
 	});
 	if (!allowed) {
 		throw ApiError.forbidden({
@@ -102,8 +111,12 @@ export async function executeJsonRoute<TInput, TOutput>(
 		() =>
 			definition.handler({
 				...services,
+				...resolvedContext,
+				app,
 				input: parsed as TInput,
+				request: request ?? new Request("http://questpie.local/"),
 				locale: resolvedContext.locale,
+				params: (params ?? {}) as TParams,
 			} as any),
 	);
 
@@ -126,7 +139,7 @@ export async function executeJsonRoute<TInput, TOutput>(
  */
 export async function executeRawRoute(
 	app: Questpie<any>,
-	definition: RawRouteDefinition,
+	definition: RawRouteDefinition<any>,
 	request: Request,
 	context?: RequestContext,
 	params?: Record<string, string>,
@@ -144,6 +157,7 @@ export async function executeRawRoute(
 		...services,
 		locale: resolvedContext.locale,
 		request,
+		params,
 	});
 	if (!allowed) {
 		throw ApiError.forbidden({
@@ -165,6 +179,7 @@ export async function executeRawRoute(
 		() =>
 			definition.handler({
 				...services,
+				...resolvedContext,
 				app,
 				request,
 				locale: resolvedContext.locale,

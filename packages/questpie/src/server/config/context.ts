@@ -30,6 +30,24 @@ type SessionMarker<TAuthConfig> = TAuthConfig extends {
 	: never;
 
 /**
+ * Infer custom request-context extensions from `config/app.ts`.
+ *
+ * This extracts the return shape of `appConfig({ context })` so generated
+ * `AppContext` can expose those request-scoped properties without relying on
+ * `typeof app`.
+ */
+export type InferContextExtensionsFromAppConfig<TAppConfig> =
+	TAppConfig extends {
+		context?: infer TContext;
+	}
+		? TContext extends (...args: any[]) => infer TResult
+			? Awaited<TResult> extends Record<string, any>
+				? Awaited<TResult>
+				: {}
+			: {}
+		: {};
+
+/**
  * Infer the Session type from a Better Auth config object.
  *
  * Used by generated code to avoid recursive `typeof app` references while still

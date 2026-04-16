@@ -13,9 +13,12 @@ import { job } from "#questpie/server/modules/core/integrated/queue/job.js";
 import type { JobDefinition } from "#questpie/server/modules/core/integrated/queue/types.js";
 import { route } from "#questpie/server/routes/define-route.js";
 import type {
+	InferRouteParams,
 	JsonRouteDefinition,
+	RouteParamsFromKey,
 	RawRouteDefinition,
 	RouteDefinition,
+	RouteWithParams,
 } from "#questpie/server/routes/types.js";
 import { isJsonRoute, isRawRoute } from "#questpie/server/routes/types.js";
 
@@ -150,6 +153,49 @@ const rawRoute = route()
 
 type RawRouteType = typeof rawRoute;
 type _rawIsRawRoute = Expect<Extends<RawRouteType, RawRouteDefinition>>;
+
+const rawRouteWithTypedParams = route()
+	.params<RouteParamsFromKey<"apps/[appId]/install">>()
+	.post()
+	.raw()
+	.handler(async ({ params }) => {
+		const appId: string = params.appId;
+		return new Response(appId);
+	});
+
+type RawRouteWithTypedParamsType = typeof rawRouteWithTypedParams;
+type _rawRouteParams = Expect<
+	Equal<
+		InferRouteParams<RawRouteWithTypedParamsType>,
+		{ appId: string }
+	>
+>;
+
+const jsonRouteWithRequestAndParams = route<RouteParamsFromKey<"pairing/[tokenId]">>()
+	.post()
+	.schema(z.object({ ok: z.boolean() }))
+	.handler(async ({ input, request, params }) => {
+		const requestUrl: string = request.url;
+		const tokenId: string = params.tokenId;
+		return { ok: input.ok, requestUrl, tokenId };
+	});
+
+type JsonRouteWithRequestAndParamsType = typeof jsonRouteWithRequestAndParams;
+type _jsonRouteParams = Expect<
+	Equal<
+		InferRouteParams<JsonRouteWithRequestAndParamsType>,
+		{ tokenId: string }
+	>
+>;
+
+type _wrappedRouteParams = Expect<
+	Equal<
+		InferRouteParams<
+			RouteWithParams<typeof rawRoute, RouteParamsFromKey<"apps/[appId]/install">>
+		>,
+		{ appId: string }
+	>
+>;
 
 // ============================================================================
 // job() - Background jobs type tests
