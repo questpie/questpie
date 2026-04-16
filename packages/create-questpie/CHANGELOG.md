@@ -1,5 +1,11 @@
 # create-questpie
 
+## 2.0.1
+
+### Patch Changes
+
+- [`fca6096`](https://github.com/questpie/questpie/commit/fca60967ee1c2b6b8fb439230e663daea60b0465) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Align v3 docs, generated app types, and the create-questpie starter template with the current file-convention and app API behavior.
+
 ## 2.0.0
 
 ### Major Changes

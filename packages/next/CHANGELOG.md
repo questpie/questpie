@@ -1,5 +1,12 @@
 # @questpie/next
 
+## 3.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`fca6096`](https://github.com/questpie/questpie/commit/fca60967ee1c2b6b8fb439230e663daea60b0465), [`3e8e7e1`](https://github.com/questpie/questpie/commit/3e8e7e1f1b5b7fe05c58fd582d0ee6ced05c6411)]:
+  - questpie@3.0.1
+
 ## 3.0.0
 
 ### Major Changes
