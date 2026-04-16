@@ -399,6 +399,36 @@
         "vite": ">=6",
       },
     },
+    "packages/workflows": {
+      "name": "@questpie/workflows",
+      "version": "3.0.0",
+      "dependencies": {
+        "@questpie/admin": "workspace:*",
+        "questpie": "workspace:*",
+      },
+      "devDependencies": {
+        "@tanstack/react-query": "^5.79.0",
+        "@types/react": "^19.2.0",
+        "@types/react-dom": "^19.2.0",
+        "bun-types": "latest",
+        "drizzle-orm": "1.0.0-beta.6-4414a19",
+        "tsdown": "^0.18.3",
+      },
+      "peerDependencies": {
+        "@questpie/admin": "^3.0.0",
+        "drizzle-orm": "1.0.0-beta.6-4414a19",
+        "questpie": "^3.0.0",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
+        "zod": "^4.2.1",
+      },
+      "optionalPeers": [
+        "@questpie/admin",
+        "drizzle-orm",
+        "react",
+        "react-dom",
+      ],
+    },
   },
   "packages": {
     "@acemir/cssom": ["@acemir/cssom@0.9.31", "", {}, "sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA=="],
@@ -946,6 +976,8 @@
     "@questpie/tanstack-query": ["@questpie/tanstack-query@workspace:packages/tanstack-query"],
 
     "@questpie/vite-plugin-iconify": ["@questpie/vite-plugin-iconify@workspace:packages/vite-plugin-iconify"],
+
+    "@questpie/workflows": ["@questpie/workflows@workspace:packages/workflows"],
 
     "@radix-ui/number": ["@radix-ui/number@1.1.1", "", {}, "sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g=="],
 
