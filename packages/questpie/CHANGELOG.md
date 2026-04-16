@@ -1,5 +1,13 @@
 # questpie
 
+## 3.0.1
+
+### Patch Changes
+
+- [`fca6096`](https://github.com/questpie/questpie/commit/fca60967ee1c2b6b8fb439230e663daea60b0465) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Align v3 docs, generated app types, and the create-questpie starter template with the current file-convention and app API behavior.
+
+- [`3e8e7e1`](https://github.com/questpie/questpie/commit/3e8e7e1f1b5b7fe05c58fd582d0ee6ced05c6411) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fix codegen discovery and generated app typing so typed collection exports, auth-backed session inference, and module tuples work without app-side hacks or manual generated-file edits.
+
 ## 3.0.0
 
 ### Major Changes
