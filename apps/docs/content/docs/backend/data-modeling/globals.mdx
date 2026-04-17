@@ -42,9 +42,33 @@ Globals share most methods with collections:
 | `.form(({ v, f }) => v.globalForm({...}))` | Form layout                |
 | `.hooks({...})`                            | Lifecycle hooks            |
 | `.access({...})`                           | Read/update access control |
-| `.options({...})`                          | Timestamps, versioning     |
+| `.options({...})`                          | Schema, timestamps, versioning |
 
 Globals do **not** support `.list()`, `.indexes()`, `.title()`, or `.preview()` since there's only ever one record.
+
+### `.options()`
+
+```ts
+.options({
+  schema: "web",     // optional Postgres schema (default: public)
+  timestamps: true,
+  versioning: true,
+})
+```
+
+#### `schema`
+
+Places the global's tables (main, i18n, versions, i18n_versions) under a named
+Postgres schema instead of `public`. `migrate:generate` prepends
+`CREATE SCHEMA IF NOT EXISTS "<name>";` when the schema is first introduced.
+
+```ts
+global("site-settings")
+  .fields(({ f }) => ({ title: f.text(255) }))
+  .options({ schema: "web" });
+```
+
+When unset, tables live in `public` — backward-compatible.
 
 ## Server-Side API
 

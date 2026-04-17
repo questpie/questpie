@@ -105,6 +105,24 @@ export interface UploadOptions {
  */
 export interface CollectionOptions {
 	/**
+	 * Postgres schema name to place this collection's tables in.
+	 *
+	 * When unset (default), tables live in the `public` schema — current behavior.
+	 * When set (e.g. `"auth"`), all four tables for this collection
+	 * (main, i18n, versions, i18n_versions) are created via
+	 * `pgSchema(name).table(...)`, and migrations emit
+	 * `CREATE SCHEMA IF NOT EXISTS "name"` before the first table lands there.
+	 *
+	 * Cross-schema relations are supported — FK constraints render as
+	 * `REFERENCES "other_schema"."table"("id")`.
+	 *
+	 * @example
+	 * ```ts
+	 * collection("user").options({ schema: "auth" })
+	 * ```
+	 */
+	schema?: string;
+	/**
 	 * Whether to automatically add `createdAt` and `updatedAt` timestamp fields
 	 * @default true
 	 */

@@ -11,6 +11,7 @@ import {
 	char,
 	index,
 	integer,
+	pgSchema,
 	pgTable,
 	smallint,
 	text,
@@ -279,6 +280,16 @@ export class Global<TState extends GlobalBuilderState> {
 		return crud.generate() as any;
 	}
 
+	/**
+	 * Resolve the table builder for this global.
+	 * When `options.schema` is set, returns `pgSchema(name).table`; otherwise `pgTable`.
+	 */
+	private getTableBuilder(): typeof pgTable {
+		const schemaName = this.state.options?.schema;
+		if (!schemaName) return pgTable;
+		return pgSchema(schemaName).table as unknown as typeof pgTable;
+	}
+
 	private generateMainTable(): PgTable {
 		const tableName = this.state.name;
 		const columns: Record<string, any> = {};
@@ -306,14 +317,16 @@ export class Global<TState extends GlobalBuilderState> {
 			Object.assign(columns, Collection.timestampsCols());
 		}
 
+		const tableBuilder = this.getTableBuilder();
+
 		// Add unique index on scope_id for scoped globals
 		if (isScoped) {
-			return pgTable(tableName, columns as any, (t) => ({
+			return tableBuilder(tableName, columns as any, (t) => ({
 				scopeIdx: uniqueIndex(`${tableName}_scope_idx`).on(t.scopeId),
 			}));
 		}
 
-		return pgTable(tableName, columns as any);
+		return tableBuilder(tableName, columns as any);
 	}
 
 	private generateI18nTable(): PgTable | null {
@@ -341,7 +354,8 @@ export class Global<TState extends GlobalBuilderState> {
 			}
 		}
 
-		return pgTable(tableName, columns as any, (t) => ({
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => ({
 			parentLocaleIdx: uniqueIndex().on(t.parentId, t.locale),
 		}));
 	}
@@ -389,7 +403,8 @@ export class Global<TState extends GlobalBuilderState> {
 			Object.assign(columns, Collection.timestampsCols());
 		}
 
-		return pgTable(tableName, columns as any, (t) => ({
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => ({
 			recordVersionIdx: index().on(t.id, t.versionNumber),
 			recordStageVersionIdx: index().on(t.id, t.versionStage, t.versionNumber),
 			versionCreatedAtIdx: index().on(t.versionCreatedAt),
@@ -424,7 +439,8 @@ export class Global<TState extends GlobalBuilderState> {
 			}
 		}
 
-		return pgTable(tableName, columns as any, (t) => ({
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => ({
 			parentVersionLocaleIdx: uniqueIndex().on(
 				t.parentId,
 				t.versionNumber,

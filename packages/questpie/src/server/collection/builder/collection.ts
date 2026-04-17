@@ -16,6 +16,7 @@ import {
 	index,
 	integer,
 	jsonb,
+	pgSchema,
 	pgTable,
 	serial,
 	smallint,
@@ -837,6 +838,20 @@ export class Collection<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Resolve the table builder for this collection.
+	 * When `options.schema` is set, returns `pgSchema(name).table`; otherwise `pgTable`.
+	 *
+	 * Both signatures accept `(name, columns, extraConfig?)` and behave identically —
+	 * only the resulting table's `schema` metadata differs, which Drizzle/drizzle-kit
+	 * use to emit the correct `CREATE SCHEMA` and qualified table/FK names.
+	 */
+	private getTableBuilder(): typeof pgTable {
+		const schemaName = this.state.options?.schema;
+		if (!schemaName) return pgTable;
+		return pgSchema(schemaName).table as unknown as typeof pgTable;
+	}
+
+	/**
 	 * Generate the main Drizzle table
 	 */
 	private generateMainTable(
@@ -884,7 +899,8 @@ export class Collection<TState extends CollectionBuilderState> {
 		}
 
 		// Create final table with constraints
-		const table = pgTable(tableName, columns as any, (t) => {
+		const tableBuilder = this.getTableBuilder();
+		const table = tableBuilder(tableName, columns as any, (t) => {
 			const constraints: Record<string, any> = {};
 
 			// User-defined indexes
@@ -966,7 +982,8 @@ export class Collection<TState extends CollectionBuilderState> {
 			// nested mode: skip, uses _localized column
 		}
 
-		return pgTable(tableName, columns as any, (t) => ({
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => ({
 			parentLocaleIdx: uniqueIndex().on(t.parentId, t.locale),
 		}));
 	}
@@ -1023,7 +1040,8 @@ export class Collection<TState extends CollectionBuilderState> {
 		}
 		*/
 
-		return pgTable(tableName, columns as any, (t) => [
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => [
 			index().on(t.id, t.versionNumber),
 			index().on(t.id, t.versionStage, t.versionNumber),
 			index().on(t.versionCreatedAt),
@@ -1077,7 +1095,8 @@ export class Collection<TState extends CollectionBuilderState> {
 			}
 		}
 
-		return pgTable(tableName, columns as any, (t) => [
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => [
 			uniqueIndex().on(t.parentId, t.versionNumber, t.locale),
 			index().on(t.parentId, t.versionNumber),
 		]) as any;

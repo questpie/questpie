@@ -40,7 +40,7 @@ Collections use a chainable builder API. Each method adds a layer:
 | `.hooks({...})`                                 | Lifecycle hooks                     |
 | `.access({...})`                                | Access control rules                |
 | `.preview({...})`                               | Live preview config                 |
-| `.options({...})`                               | Timestamps, versioning, soft delete |
+| `.options({...})`                               | Schema, timestamps, versioning, soft delete |
 
 ### `.title()`
 
@@ -94,11 +94,36 @@ Configure collection-level behavior:
 
 ```ts
 .options({
-  timestamps: true,   // adds createdAt, updatedAt
+  schema: "auth",      // optional Postgres schema (default: public)
+  timestamps: true,    // adds createdAt, updatedAt
   versioning: true,    // track content versions
   softDelete: true,    // mark as deleted instead of removing
 })
 ```
+
+#### `schema`
+
+Places the collection's tables under a named Postgres schema instead of `public`.
+Applies to all four tables: main, i18n, versions, and i18n_versions.
+
+```ts
+collection("user")
+  .fields(({ f }) => ({ email: f.text(255).required() }))
+  .options({ schema: "auth" });
+```
+
+Generated DDL:
+
+```sql
+CREATE SCHEMA IF NOT EXISTS "auth";
+CREATE TABLE "auth"."user" (...);
+```
+
+Cross-schema relations render as `REFERENCES "other_schema"."table"("id")` —
+useful when multiple QUESTPIE apps share one Postgres instance and partition
+tables by schema (`auth.*`, `web.*`, `brain.*`).
+
+When unset, tables live in `public` — fully backward-compatible.
 
 ## CRUD Operations
 

@@ -30,6 +30,20 @@ export type GlobalScopeResolver = (
  */
 export interface GlobalOptions {
 	/**
+	 * Postgres schema name to place this global's tables in.
+	 *
+	 * When unset (default), tables live in the `public` schema. When set,
+	 * main/i18n/versions/i18n_versions tables are created via
+	 * `pgSchema(name).table(...)`, and migrations emit
+	 * `CREATE SCHEMA IF NOT EXISTS "name"` before the first table lands there.
+	 *
+	 * @example
+	 * ```ts
+	 * global("site-settings").options({ schema: "web" })
+	 * ```
+	 */
+	schema?: string;
+	/**
 	 * Whether to automatically add `createdAt` and `updatedAt` timestamp fields.
 	 * @default true
 	 */
