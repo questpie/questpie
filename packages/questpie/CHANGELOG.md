@@ -1,5 +1,13 @@
 # questpie
 
+## 3.0.3
+
+### Patch Changes
+
+- [`e40fc20`](https://github.com/questpie/questpie/commit/e40fc200dbd604e2ad8147b4dd1711d11b968b91) Thanks [@drepkovsky](https://github.com/drepkovsky)! - `.drizzle()` escape hatch now propagates the column's `$type<T>()` to the field's inferred `data` type. If the returned column has a narrower typed data, the field picks it up; columns still typed as `unknown` leave the existing field `data` in place.
+
+- [`acfc1c0`](https://github.com/questpie/questpie/commit/acfc1c0b94a2cde684d17ae50b2c4c2278d8705c) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add `schema?: string` option to collections and globals for placing tables under a named Postgres schema instead of `public`. Applies to all four table variants (main, i18n, versions, i18n_versions). `migrate:generate` emits `CREATE SCHEMA IF NOT EXISTS "<name>";` for new schemas and cross-schema relations render as `REFERENCES "other_schema"."table"("id")`. Unset (default) stays on `public` — fully backward-compatible.
+
 ## 3.0.2
 
 ### Patch Changes
