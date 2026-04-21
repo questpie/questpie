@@ -24,6 +24,10 @@ interface CollectionValidationResult {
 	errorMap: ZodErrorMapFn;
 }
 
+interface UseCollectionValidationOptions {
+	enabled?: boolean;
+}
+
 /**
  * Get a ready-to-use resolver for react-hook-form
  *
@@ -48,12 +52,19 @@ interface CollectionValidationResult {
  */
 export function useCollectionValidation<
 	TFieldValues extends FieldValues = FieldValues,
->(collection: string): Resolver<TFieldValues> | undefined {
-	const { fields } = useCollectionFields(collection);
+>(
+	collection: string,
+	options: UseCollectionValidationOptions = {},
+): Resolver<TFieldValues> | undefined {
+	const enabled = options.enabled ?? true;
+	const { fields } = useCollectionFields(collection, {
+		schemaQueryOptions: { enabled },
+	});
 	const schema = useMemo(() => {
-		if (!fields || Object.keys(fields).length === 0) return undefined;
+		if (!enabled || !fields || Object.keys(fields).length === 0)
+			return undefined;
 		return createFormSchema(fields);
-	}, [fields]);
+	}, [enabled, fields]);
 	const errorMap = useValidationErrorMap();
 
 	const resolver: Resolver<TFieldValues> = useCallback(
@@ -85,7 +96,7 @@ export function useCollectionValidation<
 		[schema, errorMap],
 	);
 
-	return schema ? resolver : undefined;
+	return enabled && schema ? resolver : undefined;
 }
 
 /**

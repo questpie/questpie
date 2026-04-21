@@ -559,7 +559,11 @@ export default function FormView({
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const isEditMode = !!id;
-	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
+	const {
+		fields: resolvedFields,
+		schema,
+		isLoading: isFieldsLoading,
+	} = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
 	});
 	const resolvedFormConfig = React.useMemo(
@@ -782,10 +786,19 @@ export default function FormView({
 		React.useState<Date | null>(null);
 
 	// Get validation resolver - prefer server validation (AJV with JSON Schema) over client validation
-	const clientResolver = useCollectionValidation(collection);
+	const validationMode = isEditMode ? "update" : "create";
+	const hasServerValidationSchema =
+		validationMode === "update"
+			? !!schema?.validation?.update
+			: !!schema?.validation?.insert;
+	const shouldBuildClientResolver =
+		!isFieldsLoading && !hasServerValidationSchema;
+	const clientResolver = useCollectionValidation(collection, {
+		enabled: shouldBuildClientResolver,
+	});
 	const resolver = usePreferServerValidation(
 		collection,
-		{ mode: isEditMode ? "update" : "create" },
+		{ mode: validationMode, schema },
 		clientResolver,
 	);
 
@@ -996,6 +1009,15 @@ export default function FormView({
 		setLocaleChangeDialog({ open: false, pendingLocale: null });
 	}, [form]);
 
+	const handleLocaleDialogOpenChange = React.useCallback(
+		(open: boolean) => {
+			if (!open) {
+				handleLocaleChangeCancel();
+			}
+		},
+		[handleLocaleChangeCancel],
+	);
+
 	const onSubmit = React.useEffectEvent(async (data: any) => {
 		const savePromise = async () => {
 			if (isEditMode && id) {
@@ -1101,7 +1123,7 @@ export default function FormView({
 		resolvedFormConfig as any
 	)?.actions;
 
-	const { serverActions } = useServerActions({ collection });
+	const { serverActions } = useServerActions({ collection, schema });
 
 	const scopedServerFormActions = React.useMemo(
 		() =>
@@ -1488,6 +1510,42 @@ export default function FormView({
 		}
 	};
 
+	const handleConfirmActionOpenChange = React.useCallback((open: boolean) => {
+		if (!open) {
+			setConfirmAction(null);
+		}
+	}, []);
+
+	const handleActionDialogOpenChange = React.useCallback((open: boolean) => {
+		if (!open) {
+			setDialogAction(null);
+		}
+	}, []);
+
+	const handleRevertDialogOpenChange = React.useCallback((open: boolean) => {
+		if (!open) {
+			setPendingRevertVersion(null);
+		}
+	}, []);
+
+	const handleWorkflowDialogOpenChange = React.useCallback((open: boolean) => {
+		if (!open) {
+			setTransitionTarget(null);
+			setTransitionSchedule(false);
+			setTransitionScheduledAt(null);
+		}
+	}, []);
+
+	const workflowTransitionTriggerRender = React.useMemo(
+		() => <Button type="button" variant="outline" className="gap-2" />,
+		[],
+	);
+
+	const secondaryActionsTriggerRender = React.useMemo(
+		() => <Button variant="outline" size="icon" className="size-9" />,
+		[],
+	);
+
 	// Format date helper
 	const formatDate = (date: string | Date) => {
 		return new Date(date).toLocaleDateString(undefined, {
@@ -1513,7 +1571,10 @@ export default function FormView({
 	// Refresh lock on form activity (debounced) - keeps lock alive while user is editing
 	const lockRefreshTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 	React.useEffect(() => {
-		if (!isEditMode || isBlocked) return;
+		if (!isEditMode || isBlocked || isLoading) return;
+
+		const target = formElementRef.current;
+		if (!target) return;
 
 		const scheduleLockRefresh = () => {
 			if (lockRefreshTimerRef.current) {
@@ -1524,8 +1585,7 @@ export default function FormView({
 			}, 1000);
 		};
 
-		const events = ["input", "change", "keydown", "pointerdown"] as const;
-		const target = formElementRef.current ?? document;
+		const events = ["input", "change"] as const;
 
 		for (const event of events) {
 			target.addEventListener(event, scheduleLockRefresh, {
@@ -1547,7 +1607,7 @@ export default function FormView({
 				clearTimeout(lockRefreshTimerRef.current);
 			}
 		};
-	}, [isEditMode, isBlocked, refreshLock]);
+	}, [isEditMode, isBlocked, isLoading, refreshLock]);
 
 	// Generate preview URL via server RPC (url function runs server-side)
 	const { data: previewUrl = null } = useQuery({
@@ -1604,9 +1664,9 @@ export default function FormView({
 		);
 	}
 
-	// Show skeleton until form data is ready (edit mode only)
-	// This prevents race conditions where form fields render before data is loaded
-	if (isEditMode && isLoading) {
+	// Keep skeleton visible until the backing document and field schema are both ready.
+	// This avoids mounting an empty form and then immediately re-hydrating it.
+	if ((isEditMode && isLoading) || isFieldsLoading) {
 		return <FormViewSkeleton />;
 	}
 
@@ -1826,16 +1886,10 @@ export default function FormView({
 									isEditMode &&
 									id &&
 									allowedTransitions.length > 0 && (
-										<DropdownMenu>
-											<DropdownMenuTrigger
-												render={
-													<Button
-														type="button"
-														variant="outline"
-														className="gap-2"
-													/>
-												}
-											>
+									<DropdownMenu>
+										<DropdownMenuTrigger
+											render={workflowTransitionTriggerRender}
+										>
 												<Icon icon="ph:arrows-left-right" className="size-4" />
 												{t("workflow.transition")}
 											</DropdownMenuTrigger>
@@ -1883,13 +1937,7 @@ export default function FormView({
 								{visibleSecondaryActions.length > 0 && (
 									<DropdownMenu>
 										<DropdownMenuTrigger
-											render={
-												<Button
-													variant="outline"
-													size="icon"
-													className="size-9"
-												/>
-											}
+											render={secondaryActionsTriggerRender}
 										>
 											<Icon icon="ph:dots-three-vertical" className="size-4" />
 											<span className="sr-only">{t("common.moreActions")}</span>
@@ -1963,38 +2011,38 @@ export default function FormView({
 			</FormProvider>
 
 			{/* Locale Change Confirmation Dialog */}
-			<Dialog
-				open={localeChangeDialog.open}
-				onOpenChange={(open) => {
-					if (!open) handleLocaleChangeCancel();
-				}}
-			>
-				<DialogContent showCloseButton={false}>
-					<DialogHeader>
-						<DialogTitle className="flex items-center gap-2">
-							<Icon icon="ph:warning-fill" className="text-warning size-5" />
-							{t("confirm.localeChange")}
-						</DialogTitle>
-						<DialogDescription>
-							{t("confirm.localeChangeDescription")}
-						</DialogDescription>
-					</DialogHeader>
-					<DialogFooter>
-						<Button variant="outline" onClick={handleLocaleChangeCancel}>
-							{t("confirm.localeChangeStay")}
-						</Button>
-						<Button variant="destructive" onClick={handleLocaleChangeConfirm}>
-							{t("confirm.localeChangeDiscard")}
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+			{localeChangeDialog.open && (
+				<Dialog
+					open={localeChangeDialog.open}
+					onOpenChange={handleLocaleDialogOpenChange}
+				>
+					<DialogContent showCloseButton={false}>
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<Icon icon="ph:warning-fill" className="text-warning size-5" />
+								{t("confirm.localeChange")}
+							</DialogTitle>
+							<DialogDescription>
+								{t("confirm.localeChangeDescription")}
+							</DialogDescription>
+						</DialogHeader>
+						<DialogFooter>
+							<Button variant="outline" onClick={handleLocaleChangeCancel}>
+								{t("confirm.localeChangeStay")}
+							</Button>
+							<Button variant="destructive" onClick={handleLocaleChangeConfirm}>
+								{t("confirm.localeChangeDiscard")}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+			)}
 
 			{/* Action Confirmation Dialog */}
 			{confirmAction?.confirmation && (
 				<ConfirmationDialog
 					open={!!confirmAction}
-					onOpenChange={(open) => !open && setConfirmAction(null)}
+					onOpenChange={handleConfirmActionOpenChange}
 					config={confirmAction.confirmation}
 					onConfirm={handleConfirm}
 					loading={actionLoading}
@@ -2005,7 +2053,7 @@ export default function FormView({
 			{dialogAction && (
 				<ActionDialog
 					open={!!dialogAction}
-					onOpenChange={(open) => !open && setDialogAction(null)}
+					onOpenChange={handleActionDialogOpenChange}
 					action={dialogAction}
 					collection={collection}
 					item={transformedItem}
@@ -2013,135 +2061,133 @@ export default function FormView({
 				/>
 			)}
 
-			<HistorySidebar
-				open={isHistoryOpen}
-				onOpenChange={setIsHistoryOpen}
-				auditEntries={auditData ?? []}
-				isLoadingAudit={auditLoading}
-				versions={(versionsData ?? []) as any[]}
-				isLoadingVersions={versionsLoading}
-				isReverting={revertVersionMutation.isPending}
-				onRevert={async (version) => {
-					handleRevertVersion(version);
-				}}
-				showVersionsTab={!!schema?.options?.versioning}
-			/>
+			{isHistoryOpen && (
+				<HistorySidebar
+					open={isHistoryOpen}
+					onOpenChange={setIsHistoryOpen}
+					auditEntries={auditData ?? []}
+					isLoadingAudit={auditLoading}
+					versions={(versionsData ?? []) as any[]}
+					isLoadingVersions={versionsLoading}
+					isReverting={revertVersionMutation.isPending}
+					onRevert={async (version) => {
+						handleRevertVersion(version);
+					}}
+					showVersionsTab={!!schema?.options?.versioning}
+				/>
+			)}
 
-			<ConfirmationDialog
-				open={!!pendingRevertVersion}
-				onOpenChange={(open) => {
-					if (!open) setPendingRevertVersion(null);
-				}}
-				config={{
-					title: t("version.revertConfirmTitle"),
-					description: t("version.revertConfirmDescription", {
-						number:
-							pendingRevertVersion?.versionNumber ??
-							pendingRevertVersion?.versionId ??
-							"-",
-					}),
-					confirmLabel: t("version.revert"),
-					cancelLabel: t("common.cancel"),
-					destructive: false,
-				}}
-				onConfirm={confirmRevertVersion}
-				loading={revertVersionMutation.isPending}
-			/>
+			{pendingRevertVersion && (
+				<ConfirmationDialog
+					open={!!pendingRevertVersion}
+					onOpenChange={handleRevertDialogOpenChange}
+					config={{
+						title: t("version.revertConfirmTitle"),
+						description: t("version.revertConfirmDescription", {
+							number:
+								pendingRevertVersion?.versionNumber ??
+								pendingRevertVersion?.versionId ??
+								"-",
+						}),
+						confirmLabel: t("version.revert"),
+						cancelLabel: t("common.cancel"),
+						destructive: false,
+					}}
+					onConfirm={confirmRevertVersion}
+					loading={revertVersionMutation.isPending}
+				/>
+			)}
 
 			{/* Workflow Transition Confirmation Dialog */}
-			<Dialog
-				open={!!transitionTarget}
-				onOpenChange={(open) => {
-					if (!open) {
-						setTransitionTarget(null);
-						setTransitionSchedule(false);
-						setTransitionScheduledAt(null);
-					}
-				}}
-			>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle className="flex items-center gap-2">
-							<Icon icon="ph:arrows-left-right" className="size-5" />
-							{t("workflow.transitionTo", {
-								stage: transitionTarget?.label ?? transitionTarget?.name ?? "",
-							})}
-						</DialogTitle>
-						<DialogDescription>
-							{t("workflow.transitionDescription", {
-								from: currentStageLabel,
-								to: transitionTarget?.label ?? transitionTarget?.name ?? "",
-							})}
-						</DialogDescription>
-					</DialogHeader>
+			{transitionTarget && (
+				<Dialog
+					open={!!transitionTarget}
+					onOpenChange={handleWorkflowDialogOpenChange}
+				>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<Icon icon="ph:arrows-left-right" className="size-5" />
+								{t("workflow.transitionTo", {
+									stage: transitionTarget?.label ?? transitionTarget?.name ?? "",
+								})}
+							</DialogTitle>
+							<DialogDescription>
+								{t("workflow.transitionDescription", {
+									from: currentStageLabel,
+									to: transitionTarget?.label ?? transitionTarget?.name ?? "",
+								})}
+							</DialogDescription>
+						</DialogHeader>
 
-					{/* Optional scheduling */}
-					<div className="space-y-3 py-2">
-						<div className="flex items-center gap-2">
-							<Checkbox
-								checked={transitionSchedule}
-								onCheckedChange={(val) => {
-									setTransitionSchedule(!!val);
-									if (!val) setTransitionScheduledAt(null);
-								}}
-								id="transition-schedule"
-							/>
-							<Label
-								htmlFor="transition-schedule"
-								className="cursor-pointer text-sm"
-							>
-								{t("workflow.scheduleLabel")}
-							</Label>
+						{/* Optional scheduling */}
+						<div className="space-y-3 py-2">
+							<div className="flex items-center gap-2">
+								<Checkbox
+									checked={transitionSchedule}
+									onCheckedChange={(val) => {
+										setTransitionSchedule(!!val);
+										if (!val) setTransitionScheduledAt(null);
+									}}
+									id="transition-schedule"
+								/>
+								<Label
+									htmlFor="transition-schedule"
+									className="cursor-pointer text-sm"
+								>
+									{t("workflow.scheduleLabel")}
+								</Label>
+							</div>
+
+							{transitionSchedule && (
+								<div className="space-y-1.5 pl-6">
+									<Label className="text-muted-foreground text-xs">
+										{t("workflow.scheduledAt")}
+									</Label>
+									<DateTimeInput
+										value={transitionScheduledAt}
+										onChange={setTransitionScheduledAt}
+										minDate={new Date()}
+									/>
+									<p className="text-muted-foreground text-xs">
+										{t("workflow.scheduledDescription")}
+									</p>
+								</div>
+							)}
 						</div>
 
-						{transitionSchedule && (
-							<div className="space-y-1.5 pl-6">
-								<Label className="text-muted-foreground text-xs">
-									{t("workflow.scheduledAt")}
-								</Label>
-								<DateTimeInput
-									value={transitionScheduledAt}
-									onChange={setTransitionScheduledAt}
-									minDate={new Date()}
-								/>
-								<p className="text-muted-foreground text-xs">
-									{t("workflow.scheduledDescription")}
-								</p>
-							</div>
-						)}
-					</div>
-
-					<DialogFooter>
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => {
-								setTransitionTarget(null);
-								setTransitionSchedule(false);
-								setTransitionScheduledAt(null);
-							}}
-						>
-							{t("common.cancel")}
-						</Button>
-						<Button
-							type="button"
-							onClick={confirmTransition}
-							disabled={
-								transitionMutation.isPending ||
-								(transitionSchedule && !transitionScheduledAt)
-							}
-							className="gap-2"
-						>
-							{transitionMutation.isPending && (
-								<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
-							)}
-							{transitionSchedule
-								? t("workflow.scheduleLabel")
-								: t("workflow.transition")}
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => {
+									setTransitionTarget(null);
+									setTransitionSchedule(false);
+									setTransitionScheduledAt(null);
+								}}
+							>
+								{t("common.cancel")}
+							</Button>
+							<Button
+								type="button"
+								onClick={confirmTransition}
+								disabled={
+									transitionMutation.isPending ||
+									(transitionSchedule && !transitionScheduledAt)
+								}
+								className="gap-2"
+							>
+								{transitionMutation.isPending && (
+									<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
+								)}
+								{transitionSchedule
+									? t("workflow.scheduleLabel")
+									: t("workflow.transition")}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+			)}
 		</>
 	);
 

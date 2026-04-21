@@ -73,6 +73,14 @@ export function RelationCell({
 		[],
 	);
 
+	const handleSheetOpenChange = React.useCallback((open: boolean) => {
+		setSheetOpen(open);
+		if (!open) {
+			setSheetItemId(undefined);
+			setSheetCollection(undefined);
+		}
+	}, []);
+
 	if (value === null || value === undefined) {
 		return <span className="text-muted-foreground">-</span>;
 	}
@@ -164,7 +172,7 @@ export function RelationCell({
 						collection={sheetCollection}
 						itemId={sheetItemId}
 						open={sheetOpen}
-						onOpenChange={setSheetOpen}
+						onOpenChange={handleSheetOpenChange}
 					/>
 				)}
 			</>
@@ -189,7 +197,7 @@ export function RelationCell({
 					collection={sheetCollection}
 					itemId={sheetItemId}
 					open={sheetOpen}
-					onOpenChange={setSheetOpen}
+					onOpenChange={handleSheetOpenChange}
 				/>
 			)}
 		</>
@@ -236,6 +244,14 @@ function ReverseRelationCell({
 		[],
 	);
 
+	const handleSheetOpenChange = React.useCallback((open: boolean) => {
+		setSheetOpen(open);
+		if (!open) {
+			setSheetItemId(undefined);
+			setSheetCollection(undefined);
+		}
+	}, []);
+
 	if (value === null || value === undefined) {
 		return <span className="text-muted-foreground">-</span>;
 	}
@@ -277,7 +293,7 @@ function ReverseRelationCell({
 							collection={sheetCollection}
 							itemId={sheetItemId}
 							open={sheetOpen}
-							onOpenChange={setSheetOpen}
+							onOpenChange={handleSheetOpenChange}
 						/>
 					)}
 				</>
@@ -350,7 +366,7 @@ function ReverseRelationCell({
 						collection={sheetCollection}
 						itemId={sheetItemId}
 						open={sheetOpen}
-						onOpenChange={setSheetOpen}
+						onOpenChange={handleSheetOpenChange}
 					/>
 				)}
 			</>

@@ -353,9 +353,11 @@ export function HistorySidebar({
 	const { t } = useTranslation();
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
+		<Sheet open={open} onOpenChange={onOpenChange} modal={false}>
 			<SheetContent
 				side="right"
+				animated={false}
+				showOverlay={false}
 				className="qa-history-sidebar flex flex-col p-0 sm:max-w-xl"
 			>
 				<SheetHeader className="border-b px-6 py-5">

@@ -9,6 +9,7 @@
 "use client";
 
 import * as React from "react";
+import type { CollectionSchema } from "questpie/client";
 
 import type { FieldDefinition } from "../builder/field/field";
 import type {
@@ -225,6 +226,8 @@ function mapServerAction(
 interface UseServerActionsOptions {
 	/** Collection name */
 	collection: string;
+	/** Optional already-fetched schema to avoid another observer */
+	schema?: CollectionSchema;
 }
 
 interface UseServerActionsReturn {
@@ -246,10 +249,18 @@ interface UseServerActionsReturn {
  */
 export function useServerActions({
 	collection,
+	schema: schemaOverride,
 }: UseServerActionsOptions): UseServerActionsReturn {
 	const admin = useAdminStore(selectAdmin);
 	const client = useAdminStore(selectClient);
-	const { data: schema, isPending } = useCollectionSchema(collection);
+	const { data: queriedSchema, isPending: isSchemaPending } = useCollectionSchema(
+		collection,
+		{
+			enabled: !schemaOverride,
+		},
+	);
+	const schema = schemaOverride ?? queriedSchema;
+	const isPending = schemaOverride ? false : isSchemaPending;
 
 	const serverActions = React.useMemo(() => {
 		const actionsConfig = schema?.admin?.actions;

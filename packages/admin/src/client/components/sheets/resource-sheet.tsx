@@ -129,9 +129,11 @@ export function ResourceSheet(props: ResourceSheetProps) {
 	);
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
+		<Sheet open={open} onOpenChange={onOpenChange} modal={false}>
 			<SheetContent
 				side={side}
+				animated={false}
+				showOverlay={false}
 				className="qa-resource-sheet overflow-y-auto p-6 pt-12"
 			>
 				{/* LocaleScopeProvider isolates locale changes in nested forms */}

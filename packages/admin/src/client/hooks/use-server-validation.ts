@@ -11,6 +11,7 @@
 import { ajvResolver } from "@hookform/resolvers/ajv";
 import type { Options as AjvOptions, JSONSchemaType } from "ajv";
 import type { Questpie } from "questpie";
+import type { CollectionSchema } from "questpie/client";
 import { useMemo } from "react";
 import type { FieldValues, Resolver } from "react-hook-form";
 
@@ -80,6 +81,8 @@ interface UseServerValidationOptions {
 	mode?: ValidationMode;
 	/** Whether to enable validation (defaults to true) */
 	enabled?: boolean;
+	/** Optional already-fetched schema to avoid creating another query observer */
+	schema?: CollectionSchema;
 }
 
 /**
@@ -166,15 +169,20 @@ function useServerValidation<
 	collection: K,
 	options: UseServerValidationOptions = {},
 ): ServerValidationResult<TFieldValues> {
-	const { mode = "create", enabled = true } = options;
+	const { mode = "create", enabled = true, schema: schemaOverride } = options;
+	const shouldFetchSchema = enabled && !schemaOverride;
 
 	const {
-		data: schema,
-		isLoading,
-		error,
+		data: queriedSchema,
+		isLoading: queriedIsLoading,
+		error: queriedError,
 	} = useCollectionSchema(collection, {
-		enabled,
+		enabled: shouldFetchSchema,
 	});
+
+	const schema = schemaOverride ?? queriedSchema;
+	const isLoading = schemaOverride ? false : queriedIsLoading;
+	const error = schemaOverride ? null : (queriedError as Error | null | undefined);
 
 	const result = useMemo((): ServerValidationResult<TFieldValues> => {
 		// Get the appropriate JSON Schema based on mode
