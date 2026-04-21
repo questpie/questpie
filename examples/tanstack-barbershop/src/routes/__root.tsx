@@ -1,6 +1,6 @@
 import "virtual:iconify-preload";
-
 import { createRootRoute } from "@tanstack/react-router";
+
 export const Route = createRootRoute({
 	head: () => ({
 		meta: [
@@ -15,6 +15,15 @@ export const Route = createRootRoute({
 				title: "TanStack Start Starter",
 			},
 		],
+		scripts:
+			process.env.NODE_ENV !== "production"
+				? [
+						{
+							crossOrigin: "anonymous",
+							src: "//unpkg.com/react-scan/dist/auto.global.js",
+						},
+					]
+				: [],
 	}),
 	notFoundComponent: () => (
 		<main className="container px-6 py-24 text-center">
