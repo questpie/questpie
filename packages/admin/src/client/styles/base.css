@@ -142,6 +142,11 @@
 	--sidebar-active-background: var(--sidebar-accent);
 	--sidebar-active-foreground: var(--sidebar-accent-foreground);
 	--sidebar-active-indicator: var(--sidebar-primary);
+	--sidebar-submenu: color-mix(
+		in oklch,
+		var(--sidebar-accent) 45%,
+		var(--sidebar)
+	);
 
 	/* Chrome text personality — presets override to add uppercase/tracking */
 	--chrome-text-transform: none;
@@ -189,6 +194,11 @@
 	--sidebar-active-background: var(--sidebar-accent);
 	--sidebar-active-foreground: var(--sidebar-accent-foreground);
 	--sidebar-active-indicator: var(--sidebar-primary);
+	--sidebar-submenu: color-mix(
+		in oklch,
+		var(--sidebar-accent) 45%,
+		var(--sidebar)
+	);
 }
 
 @theme inline {

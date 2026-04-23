@@ -100,12 +100,12 @@ export function LocaleSwitcher({
 	}
 
 	const baseClassName = cn(
-		"bg-muted text-muted-foreground inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
+		"item-surface border-border bg-secondary text-secondary-foreground inline-flex min-h-5 items-center gap-1 px-2 py-0.5 text-xs font-medium",
 		className,
 	);
 	const interactiveClassName = cn(
 		baseClassName,
-		"hover:bg-muted focus:ring-ring cursor-pointer transition-colors focus:ring-1 focus:outline-none",
+		"hover:bg-accent hover:text-accent-foreground focus:ring-ring cursor-pointer transition-colors focus:ring-1 focus:outline-none",
 	);
 	const ariaLabel = `Switch locale (current: ${nameLabel})`;
 
