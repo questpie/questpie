@@ -79,6 +79,7 @@ import type {
 	Extras,
 	FindManyOptions,
 	FindOneOptionsBase,
+	GroupedPaginatedResult,
 	GroupByOptions,
 	FindVersionsOptions,
 	OrderBy,
@@ -291,7 +292,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const restoreById = this.wrapWithAppContext(this.createRestore());
 
 		const crud: CRUD = {
-			find,
+			find: find as CRUD["find"],
 			findOne,
 			count: this.wrapWithAppContext(this.createCount()),
 			create: this.wrapWithAppContext(this.createCreate()),
@@ -412,7 +413,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		options: FindManyOptions | FindOneOptionsBase,
 		context: CRUDContext,
 		mode: "many" | "one",
-	): Promise<PaginatedResult<T> | T | null> {
+	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T | null> {
 		// Normalize context FIRST to ensure locale defaults are applied
 		const normalized = this.normalizeContext({
 			...context,
@@ -980,20 +981,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const hasNextPage = page < totalPages;
 				const prevPage = hasPrevPage ? page - 1 : null;
 				const nextPage = hasNextPage ? page + 1 : null;
-				const groupedDocs = groupByOptions
-					? (groupRows ?? []).map((group) => ({
-							key: this.getGroupKey(group.value),
-							value: group.value,
-							count: group.count,
-							docs: (rows as T[]).filter(
-								(row: any) =>
-									this.getGroupKey(row[groupByOptions.field]) ===
-									this.getGroupKey(group.value),
-							),
-						}))
-					: undefined;
-
-				return {
+				const baseResult = {
 					docs: rows as T[],
 					totalDocs,
 					limit,
@@ -1004,16 +992,27 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					hasNextPage,
 					prevPage,
 					nextPage,
-					...(groupByOptions
-						? {
-								groupBy: {
-									field: groupByOptions.field,
-									order: groupByOptions.order,
-								},
-								groups: groupedDocs,
-								totalGroups: totalGroups ?? 0,
-							}
-						: {}),
+				};
+
+				if (!groupByOptions) return baseResult;
+
+				return {
+					...baseResult,
+					groupBy: {
+						field: groupByOptions.field,
+						order: groupByOptions.order,
+					},
+					groups: (groupRows ?? []).map((group) => ({
+						key: this.getGroupKey(group.value),
+						value: group.value,
+						count: group.count,
+						docs: (rows as T[]).filter(
+							(row: any) =>
+								this.getGroupKey(row[groupByOptions.field]) ===
+								this.getGroupKey(group.value),
+						),
+					})),
+					totalGroups: totalGroups ?? 0,
 				};
 			},
 		);
@@ -1026,9 +1025,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		return async (
 			options: FindManyOptions = {},
 			context: CRUDContext = {},
-		): Promise<PaginatedResult<any>> => {
+		): Promise<PaginatedResult<any> | GroupedPaginatedResult<any>> => {
 			return this._executeFind(options, context, "many") as Promise<
-				PaginatedResult<any>
+				PaginatedResult<any> | GroupedPaginatedResult<any>
 			>;
 		};
 	}

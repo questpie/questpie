@@ -1259,15 +1259,40 @@ export interface PaginatedResult<T> {
 	hasNextPage: boolean;
 	prevPage: number | null;
 	nextPage: number | null;
-	groupBy?: { field: string; order: "asc" | "desc" };
-	groups?: Array<{
+	groupBy?: never;
+	groups?: never;
+	totalGroups?: never;
+}
+
+export interface GroupedPaginatedResult<T, TValue = unknown> extends Omit<
+	PaginatedResult<T>,
+	"groupBy" | "groups" | "totalGroups"
+> {
+	groupBy: { field: string; order: "asc" | "desc" };
+	groups: Array<{
 		key: string;
-		value: unknown;
+		value: TValue;
 		count: number;
 		docs: T[];
 	}>;
-	totalGroups?: number;
+	totalGroups: number;
 }
+
+type GroupFieldFromQuery<TQuery> = TQuery extends { groupBy: infer TGroupBy }
+	? TGroupBy extends string
+		? TGroupBy
+		: TGroupBy extends { field: infer TField }
+			? TField
+			: never
+	: never;
+
+type GroupValueFromQuery<TSelect, TQuery> =
+	Extract<
+		GroupFieldFromQuery<TQuery>,
+		keyof TSelect
+	> extends infer TField extends keyof TSelect
+		? TSelect[TField]
+		: unknown;
 
 /**
  * Type Helper for Partial Selection
@@ -1377,6 +1402,17 @@ export type ApplyQuery<
 					RelationResult<TRelations, TQuery>
 >;
 
+export type FindResult<
+	TSelect,
+	TRelations,
+	TQuery extends Record<string, any> | undefined | boolean,
+> = [GroupFieldFromQuery<TQuery>] extends [never]
+	? PaginatedResult<ApplyQuery<TSelect, TRelations, TQuery>>
+	: GroupedPaginatedResult<
+			ApplyQuery<TSelect, TRelations, TQuery>,
+			GroupValueFromQuery<TSelect, TQuery>
+		>;
+
 /**
  * CRUD operations interface
  * Clear naming: find/findOne for reads, updateById/update for updates, deleteById/delete for deletes
@@ -1395,7 +1431,7 @@ export interface CRUD<
 	find<TQuery extends FindManyOptions<TSelect, TRelations>>(
 		options?: TQuery,
 		context?: CRUDContext,
-	): Promise<PaginatedResult<ApplyQuery<TSelect, TRelations, TQuery>>>;
+	): Promise<FindResult<TSelect, TRelations, TQuery>>;
 
 	/**
 	 * Find single record matching query

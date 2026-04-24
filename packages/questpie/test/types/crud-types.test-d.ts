@@ -10,10 +10,13 @@
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 import type {
 	Columns,
+	FindResult,
 	FindManyOptions,
 	FindOneOptions,
+	GroupedPaginatedResult,
 	NestedRelationMutation,
 	OrderBy,
+	PaginatedResult,
 	Where,
 	WhereOperators,
 } from "#questpie/server/collection/crud/types.js";
@@ -184,6 +187,27 @@ const _optionsLocale: PostFindOptions = {
 const _optionsDeleted: PostFindOptions = {
 	includeDeleted: true,
 };
+
+const _optionsGrouped: PostFindOptions = {
+	groupBy: { field: "title", order: "asc" },
+};
+
+type UngroupedFindResult = FindResult<PostSelect, {}, { limit: 10 }>;
+type _ungroupedFindResult = Expect<
+	Equal<UngroupedFindResult, PaginatedResult<PostSelect>>
+>;
+
+type GroupedFindResult = FindResult<
+	PostSelect,
+	{},
+	{ groupBy: { field: "title"; order: "asc" } }
+>;
+type _groupedFindResult = Expect<
+	Equal<GroupedFindResult, GroupedPaginatedResult<PostSelect, string>>
+>;
+type _groupedFindValue = Expect<
+	Equal<NonNullable<GroupedFindResult["groups"]>[number]["value"], string>
+>;
 
 // ============================================================================
 // FindOneOptions tests

@@ -27,9 +27,9 @@ import type {
 	ApplyQuery,
 	CreateInputBase,
 	CreateInputWithRelations,
+	FindResult,
 	FindManyOptions,
 	FindOneOptionsBase,
-	PaginatedResult,
 	UpdateInput,
 	Where,
 	With,
@@ -298,12 +298,10 @@ type CollectionAPI<
 	>(
 		options?: TQuery,
 	) => Promise<
-		PaginatedResult<
-			ApplyQuery<
-				CollectionSelect<TCollection>,
-				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
-				TQuery
-			>
+		FindResult<
+			CollectionSelect<TCollection>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+			TQuery
 		>
 	>;
 

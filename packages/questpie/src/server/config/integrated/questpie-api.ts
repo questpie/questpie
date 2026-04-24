@@ -5,9 +5,9 @@ import type {
 	CollectionSelectFromApp,
 	CRUD,
 	CRUDContext,
+	FindResult,
 	FindOneOptions,
 	FindOptions,
-	PaginatedResult,
 } from "#questpie/server/collection/crud/index.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
@@ -80,7 +80,7 @@ type CollectionCRUD<
 	find<TQuery extends FindOptions<TCollection, TApp>>(
 		options?: TQuery,
 		context?: CRUDContext,
-	): Promise<PaginatedResult<ApplyQuery<TSelect, TRelations, TQuery>>>;
+	): Promise<FindResult<TSelect, TRelations, TQuery>>;
 
 	findOne<TQuery extends FindOneOptions<TCollection, TApp>>(
 		options?: TQuery,
