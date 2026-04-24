@@ -864,6 +864,17 @@ export interface FindManyOptionsBase<TFields = any, TRelations = any> {
 	 * Workflow stage to read from.
 	 */
 	stage?: string;
+	/**
+	 * Group results by a top-level field. When enabled, limit/offset paginate
+	 * groups, and the returned result includes group metadata with whole-result
+	 * counts for each group on the current page.
+	 */
+	groupBy?: (keyof TFields & string) | GroupByOptions<keyof TFields & string>;
+}
+
+export interface GroupByOptions<TField extends string = string> {
+	field: TField;
+	order?: "asc" | "desc";
 }
 
 export type FindManyOptions<
@@ -884,6 +895,7 @@ type FindOptionsShared<TSelect, TRelations> = {
 	localeFallback?: boolean;
 	includeDeleted?: boolean;
 	stage?: string;
+	groupBy?: (keyof TSelect & string) | GroupByOptions<keyof TSelect & string>;
 };
 
 export type FindOptions<TCollection, TApp> = FindOptionsShared<
@@ -1247,6 +1259,14 @@ export interface PaginatedResult<T> {
 	hasNextPage: boolean;
 	prevPage: number | null;
 	nextPage: number | null;
+	groupBy?: { field: string; order: "asc" | "desc" };
+	groups?: Array<{
+		key: string;
+		value: unknown;
+		count: number;
+		docs: T[];
+	}>;
+	totalGroups?: number;
 }
 
 /**

@@ -1,7 +1,9 @@
 import {
 	and,
+	asc,
 	type Column,
 	count,
+	desc,
 	eq,
 	inArray,
 	type SQL,
@@ -77,6 +79,7 @@ import type {
 	Extras,
 	FindManyOptions,
 	FindOneOptionsBase,
+	GroupByOptions,
 	FindVersionsOptions,
 	OrderBy,
 	PaginatedResult,
@@ -381,6 +384,22 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		});
 	}
 
+	private normalizeGroupBy(
+		groupBy: FindManyOptions["groupBy"] | undefined,
+	): (GroupByOptions & { order: "asc" | "desc" }) | undefined {
+		if (!groupBy) return undefined;
+		if (typeof groupBy === "string") return { field: groupBy, order: "asc" };
+		if (!groupBy.field) return undefined;
+		return {
+			field: groupBy.field,
+			order: groupBy.order === "desc" ? "desc" : "asc",
+		};
+	}
+
+	private getGroupKey(value: unknown): string {
+		return value === null || value === undefined ? "__empty" : String(value);
+	}
+
 	/**
 	 * Internal find execution - shared logic for find and findOne
 	 * Reduces code duplication between the two methods
@@ -463,6 +482,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					!!this.workflowConfig &&
 					!!readStage &&
 					readStage !== this.workflowConfig.initialStage;
+				const groupByOptions =
+					mode === "many"
+						? this.normalizeGroupBy((options as FindManyOptions).groupBy)
+						: undefined;
+
+				if (groupByOptions && useStageVersions) {
+					throw ApiError.badRequest(
+						"Grouped find is not supported for workflow stage reads yet",
+					);
+				}
 
 				// Get total count only for 'many' mode (pagination)
 				let totalDocs = 0;
@@ -754,6 +783,112 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					whereClauses.push(searchFilter);
 				}
 
+				let groupRows: Array<{ value: unknown; count: number }> | undefined;
+				let totalGroups: number | undefined;
+				let groupColumn: Column | undefined;
+
+				if (groupByOptions) {
+					const column = getColumn(readTable, groupByOptions.field);
+					if (!column) {
+						throw ApiError.badRequest(
+							`Cannot group ${this.state.name} by unknown field "${groupByOptions.field}"`,
+						);
+					}
+
+					groupColumn = column;
+					let totalGroupsQuery = db
+						.select({ count: sql<number>`count(distinct ${column})::int` })
+						.from(readTable);
+					let groupsQuery = db
+						.select({ value: column, count: count() })
+						.from(readTable);
+
+					if (useI18n && i18nCurrentTable) {
+						totalGroupsQuery = totalGroupsQuery.leftJoin(
+							i18nCurrentTable,
+							and(
+								eq(
+									getColumn(i18nCurrentTable, "parentId")!,
+									getColumn(readTable, "id")!,
+								),
+								eq(getColumn(i18nCurrentTable, "locale")!, normalized.locale!),
+							),
+						);
+						groupsQuery = groupsQuery.leftJoin(
+							i18nCurrentTable,
+							and(
+								eq(
+									getColumn(i18nCurrentTable, "parentId")!,
+									getColumn(readTable, "id")!,
+								),
+								eq(getColumn(i18nCurrentTable, "locale")!, normalized.locale!),
+							),
+						);
+
+						if (needsFallback && i18nFallbackTable) {
+							totalGroupsQuery = totalGroupsQuery.leftJoin(
+								i18nFallbackTable,
+								and(
+									eq(
+										getColumn(i18nFallbackTable, "parentId")!,
+										getColumn(readTable, "id")!,
+									),
+									eq(
+										getColumn(i18nFallbackTable, "locale")!,
+										normalized.defaultLocale!,
+									),
+								),
+							);
+							groupsQuery = groupsQuery.leftJoin(
+								i18nFallbackTable,
+								and(
+									eq(
+										getColumn(i18nFallbackTable, "parentId")!,
+										getColumn(readTable, "id")!,
+									),
+									eq(
+										getColumn(i18nFallbackTable, "locale")!,
+										normalized.defaultLocale!,
+									),
+								),
+							);
+						}
+					}
+
+					if (whereClauses.length > 0) {
+						totalGroupsQuery = totalGroupsQuery.where(and(...whereClauses));
+						groupsQuery = groupsQuery.where(and(...whereClauses));
+					}
+
+					const manyOptions = options as FindManyOptions;
+					const groupLimit = manyOptions.limit ?? totalDocs;
+					const groupOffset = manyOptions.offset ?? 0;
+					const totalGroupRows = await totalGroupsQuery;
+					totalGroups = totalGroupRows[0]?.count ?? 0;
+					groupsQuery = groupsQuery
+						.groupBy(column)
+						.orderBy(
+							groupByOptions.order === "desc" ? desc(column) : asc(column),
+						);
+					if (groupLimit !== undefined) {
+						groupsQuery = groupsQuery.limit(groupLimit);
+					}
+					if (groupOffset !== undefined) {
+						groupsQuery = groupsQuery.offset(groupOffset);
+					}
+
+					const selectedGroupRows = await groupsQuery;
+					groupRows = selectedGroupRows;
+					const groupValues = selectedGroupRows.map(
+						(row: { value: unknown }) => row.value,
+					);
+					if (groupValues.length === 0) {
+						whereClauses.push(sql`1 = 0`);
+					} else {
+						whereClauses.push(inArray(column, groupValues as any[]));
+					}
+				}
+
 				if (whereClauses.length > 0) {
 					query = query.where(and(...whereClauses));
 				}
@@ -777,10 +912,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					query = query.limit(1);
 				} else {
 					const manyOptions = options as FindManyOptions;
-					if (manyOptions.limit !== undefined) {
+					if (!groupByOptions && manyOptions.limit !== undefined) {
 						query = query.limit(manyOptions.limit);
 					}
-					if (manyOptions.offset !== undefined) {
+					if (!groupByOptions && manyOptions.offset !== undefined) {
 						query = query.offset(manyOptions.offset);
 					}
 				}
@@ -835,8 +970,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Construct paginated result for 'many' mode
 				const manyOptions = options as FindManyOptions;
-				const limit = manyOptions.limit ?? totalDocs;
-				const totalPages = limit > 0 ? Math.ceil(totalDocs / limit) : 1;
+				const paginatedTotal = groupByOptions ? (totalGroups ?? 0) : totalDocs;
+				const limit = manyOptions.limit ?? paginatedTotal;
+				const totalPages = limit > 0 ? Math.ceil(paginatedTotal / limit) : 1;
 				const offset = manyOptions.offset ?? 0;
 				const page = limit > 0 ? Math.floor(offset / limit) + 1 : 1;
 				const pagingCounter = (page - 1) * limit + 1;
@@ -844,6 +980,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const hasNextPage = page < totalPages;
 				const prevPage = hasPrevPage ? page - 1 : null;
 				const nextPage = hasNextPage ? page + 1 : null;
+				const groupedDocs = groupByOptions
+					? (groupRows ?? []).map((group) => ({
+							key: this.getGroupKey(group.value),
+							value: group.value,
+							count: group.count,
+							docs: (rows as T[]).filter(
+								(row: any) =>
+									this.getGroupKey(row[groupByOptions.field]) ===
+									this.getGroupKey(group.value),
+							),
+						}))
+					: undefined;
 
 				return {
 					docs: rows as T[],
@@ -856,6 +1004,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					hasNextPage,
 					prevPage,
 					nextPage,
+					...(groupByOptions
+						? {
+								groupBy: {
+									field: groupByOptions.field,
+									order: groupByOptions.order,
+								},
+								groups: groupedDocs,
+								totalGroups: totalGroups ?? 0,
+							}
+						: {}),
 				};
 			},
 		);

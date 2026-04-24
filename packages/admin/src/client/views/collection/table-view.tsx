@@ -546,6 +546,10 @@ function TableViewInner({
 			options.includeDeleted = !!viewState.config.includeDeleted;
 		}
 
+		if (viewState.config.groupBy) {
+			options.groupBy = { field: viewState.config.groupBy };
+		}
+
 		// Add field expansion if needed
 		if (hasFieldsToExpand(expandedFields)) {
 			options.with = expandedFields;
@@ -1067,6 +1071,32 @@ function TableViewInner({
 
 		const groupField = groupableFields.find((field) => field.name === groupBy);
 		const collapsedGroups = new Set(viewState.config.collapsedGroups ?? []);
+		const serverGroups = !isSearching ? listData?.groups : undefined;
+		if (serverGroups?.length) {
+			const rowsById = new Map(rows.map((row) => [row.id, row]));
+			return serverGroups.flatMap((group: any) => {
+				const label = stringifyGroupValue(group.value, groupField, resolveText);
+				const groupKey = `${groupBy}:${label}`;
+				const collapsed = collapsedGroups.has(groupKey);
+				const groupRows = (group.docs ?? [])
+					.map((doc: any) => rowsById.get(String(doc.id)))
+					.filter(Boolean);
+
+				return [
+					{
+						type: "group" as const,
+						key: groupKey,
+						label,
+						count: group.count,
+						collapsed,
+					},
+					...(collapsed
+						? []
+						: groupRows.map((row: any) => ({ type: "row" as const, row }))),
+				];
+			});
+		}
+
 		const groups = new Map<
 			string,
 			{ label: string; rows: typeof rows; sortIndex: number }
@@ -1116,6 +1146,8 @@ function TableViewInner({
 		viewState.config.groupBy,
 		viewState.config.collapsedGroups,
 		groupableFields,
+		isSearching,
+		listData?.groups,
 		resolveText,
 	]);
 
@@ -1461,7 +1493,7 @@ function TableViewInner({
 							))}
 						</TableHeader>
 						<TableBody>
-							{groupedRowModel.map((entry) => {
+							{groupedRowModel.map((entry: any) => {
 								if (entry.type === "group") {
 									return (
 										<TableRow key={entry.key} className="hover:bg-transparent">
@@ -1512,88 +1544,96 @@ function TableViewInner({
 											isRowDeleted && "opacity-50",
 										)}
 									>
-										{row.getVisibleCells().map((cell, cellIndex) => {
-											// First column (checkbox) is sticky at left=0, width ~36px
-											// Second column (title) is sticky at left=36px
-											const stickyLeft =
-												cellIndex === 0 ? 0 : cellIndex === 1 ? 36 : undefined;
-											// Only show border on the last sticky column (title)
-											const showStickyBorder = false;
-											// Checkbox column gets compact styling
-											const isCheckboxCol = cellIndex === 0;
+										{row
+											.getVisibleCells()
+											.map((cell: any, cellIndex: number) => {
+												// First column (checkbox) is sticky at left=0, width ~36px
+												// Second column (title) is sticky at left=36px
+												const stickyLeft =
+													cellIndex === 0
+														? 0
+														: cellIndex === 1
+															? 36
+															: undefined;
+												// Only show border on the last sticky column (title)
+												const showStickyBorder = false;
+												// Checkbox column gets compact styling
+												const isCheckboxCol = cellIndex === 0;
 
-											// Title column (index 1) is clickable
-											const isTitleCol = cellIndex === 1;
+												// Title column (index 1) is clickable
+												const isTitleCol = cellIndex === 1;
 
-											return (
-												<TableCell
-													key={cell.id}
-													stickyLeft={stickyLeft}
-													showStickyBorder={showStickyBorder}
-													className={
-														isCheckboxCol ? "w-9 min-w-9 px-1.5" : undefined
-													}
-												>
-													{isTitleCol ? (
-														<div className="flex items-center gap-2">
-															<button
-																type="button"
-																onClick={() => handleRowClick(row.original)}
-																className="decoration-muted-foreground/50 hover:decoration-foreground cursor-pointer text-left underline underline-offset-2 transition-colors"
-															>
-																{flexRender(
-																	cell.column.columnDef.cell,
-																	cell.getContext(),
+												return (
+													<TableCell
+														key={cell.id}
+														stickyLeft={stickyLeft}
+														showStickyBorder={showStickyBorder}
+														className={
+															isCheckboxCol ? "w-9 min-w-9 px-1.5" : undefined
+														}
+													>
+														{isTitleCol ? (
+															<div className="flex items-center gap-2">
+																<button
+																	type="button"
+																	onClick={() => handleRowClick(row.original)}
+																	className="decoration-muted-foreground/50 hover:decoration-foreground cursor-pointer text-left underline underline-offset-2 transition-colors"
+																>
+																	{flexRender(
+																		cell.column.columnDef.cell,
+																		cell.getContext(),
+																	)}
+																</button>
+																{isRowDeleted && (
+																	<span className="text-destructive bg-destructive/10 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs">
+																		<Icon icon="ph:trash" className="size-3" />
+																		{t("common.deleted")}
+																	</span>
 																)}
-															</button>
-															{isRowDeleted && (
-																<span className="text-destructive bg-destructive/10 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs">
-																	<Icon icon="ph:trash" className="size-3" />
-																	{t("common.deleted")}
-																</span>
-															)}
-															{isDocLocked(row.id) &&
-																(() => {
-																	const lock = getLock(row.id);
-																	const user = lock ? getLockUser(lock) : null;
-																	return (
-																		<span
-																			className="text-muted-foreground bg-muted inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
-																			title={
-																				user?.name ??
-																				user?.email ??
-																				"Someone is editing"
-																			}
-																		>
-																			{user?.image ? (
-																				<img
-																					src={user.image}
-																					alt=""
-																					className="size-4 rounded-full"
-																				/>
-																			) : (
-																				<Icon
-																					icon="ph:pencil-simple"
-																					className="size-3"
-																				/>
-																			)}
-																			<span className="max-w-20 truncate">
-																				{user?.name?.split(" ")[0] ??
-																					t("table.editing")}
+																{isDocLocked(row.id) &&
+																	(() => {
+																		const lock = getLock(row.id);
+																		const user = lock
+																			? getLockUser(lock)
+																			: null;
+																		return (
+																			<span
+																				className="text-muted-foreground bg-muted inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
+																				title={
+																					user?.name ??
+																					user?.email ??
+																					"Someone is editing"
+																				}
+																			>
+																				{user?.image ? (
+																					<img
+																						src={user.image}
+																						alt=""
+																						className="size-4 rounded-full"
+																					/>
+																				) : (
+																					<Icon
+																						icon="ph:pencil-simple"
+																						className="size-3"
+																					/>
+																				)}
+																				<span className="max-w-20 truncate">
+																					{user?.name?.split(" ")[0] ??
+																						t("table.editing")}
+																				</span>
 																			</span>
-																		</span>
-																	);
-																})()}
-														</div>
-													) : (
-														flexRender(
-															cell.column.columnDef.cell,
-															cell.getContext(),
-														)
-													)}
-												</TableCell>
-											);
-										})}
+																		);
+																	})()}
+															</div>
+														) : (
+															flexRender(
+																cell.column.columnDef.cell,
+																cell.getContext(),
+															)
+														)}
+													</TableCell>
+												);
+											})}
 									</TableRow>
 								);
 							})}
