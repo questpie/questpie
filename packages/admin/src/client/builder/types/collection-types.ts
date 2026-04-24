@@ -177,6 +177,17 @@ export interface ListViewConfig<TFieldNames extends string = string> {
 	pageSizeOptions?: number[];
 
 	/**
+	 * Client-side grouping options for the current fetched page.
+	 * Counts are page-local until a server aggregate API exists.
+	 */
+	grouping?: {
+		fields: TFieldNames[];
+		defaultField?: TFieldNames;
+		defaultCollapsed?: boolean;
+		showCounts?: boolean;
+	};
+
+	/**
 	 * Actions configuration for list view
 	 */
 	actions?: ActionsConfig;

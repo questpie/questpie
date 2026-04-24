@@ -102,6 +102,17 @@ export interface ListViewConfig {
 	searchable?: string[];
 	/** Filterable fields */
 	filterable?: string[];
+	/** Client-side grouping options for the current fetched page */
+	grouping?: {
+		/** Fields users can group by */
+		fields: string[];
+		/** Initial grouping field */
+		defaultField?: string;
+		/** Whether groups start collapsed */
+		defaultCollapsed?: boolean;
+		/** Show page-local item counts in group headers */
+		showCounts?: boolean;
+	};
 	/** Actions configuration */
 	actions?: {
 		header?: { primary?: ActionReference[]; secondary?: ActionReference[] };

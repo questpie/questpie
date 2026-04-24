@@ -220,6 +220,7 @@ function mapListSchemaToConfig(list?: {
 	defaultSort?: { field: string; direction: "asc" | "desc" };
 	searchable?: string[];
 	filterable?: string[];
+	grouping?: ListViewConfig["grouping"];
 	actions?: unknown;
 }): ListViewConfig | undefined {
 	if (!list) return undefined;
@@ -231,10 +232,49 @@ function mapListSchemaToConfig(list?: {
 		config.searchFields = list.searchable as any;
 		config.searchable = true;
 	}
+	if (list.grouping?.fields?.length) config.grouping = list.grouping;
 
 	config.actions = mapListActionsToDefinitions(list.actions);
 
 	return config;
+}
+
+function stringifyGroupValue(
+	value: unknown,
+	field?: AvailableField,
+	resolveText?: (value: any, fallback?: string) => string,
+): string {
+	if (value === null || value === undefined || value === "") return "No value";
+	if (Array.isArray(value)) {
+		return value.length > 0
+			? value
+					.map((item) => stringifyGroupValue(item, field, resolveText))
+					.join(", ")
+			: "No value";
+	}
+
+	const options = field?.options?.options;
+	if (options) {
+		const option = flattenOptions(options).find(
+			(item) => String(item.value) === String(value),
+		);
+		if (option) {
+			return (
+				resolveText?.(option.label, String(option.value)) ??
+				String(option.label)
+			);
+		}
+	}
+
+	if (typeof value === "object") {
+		const record = value as Record<string, unknown>;
+		const displayValue =
+			record.title ?? record.name ?? record.label ?? record.id;
+		return (
+			resolveText?.(displayValue, "Object") ?? String(displayValue ?? "Object")
+		);
+	}
+	return String(value);
 }
 
 /**
@@ -475,12 +515,14 @@ function TableViewInner({
 			}),
 		[resolvedFields, resolvedListConfig?.columns, collectionMeta],
 	);
+	const groupingConfig = resolvedListConfig?.grouping;
+	const defaultGroupBy = groupingConfig?.defaultField ?? null;
 
 	// View state (filters, sort, visible columns, realtime) - with database persistence
 	// Uses Suspense internally for loading preferences
 	const viewState = useViewState(
 		defaultColumns,
-		{ realtime: resolvedRealtime },
+		{ realtime: resolvedRealtime, groupBy: defaultGroupBy },
 		collection,
 		user?.id,
 	);
@@ -762,6 +804,12 @@ function TableViewInner({
 	const availableFields: AvailableField[] = useMemo(() => {
 		return getAllAvailableFields(resolvedFields, { meta: collectionMeta });
 	}, [resolvedFields, collectionMeta]);
+	const groupableFields = useMemo(() => {
+		const groupableNames = groupingConfig?.fields ?? [];
+		if (groupableNames.length === 0) return [];
+		const groupableSet = new Set(groupableNames);
+		return availableFields.filter((field) => groupableSet.has(field.name));
+	}, [availableFields, groupingConfig?.fields]);
 
 	// Filter columns based on visibleColumns from view state
 	// Includes checkbox selection column as first column
@@ -968,6 +1016,7 @@ function TableViewInner({
 	const hasActiveFilters = viewState.config.filters.length > 0;
 	const hasViewOptionsState =
 		hasActiveFilters ||
+		!!viewState.config.groupBy ||
 		viewState.config.visibleColumns.length !== defaultColumns.length ||
 		!!viewState.config.includeDeleted;
 	const clearFilters = () => {
@@ -988,6 +1037,60 @@ function TableViewInner({
 			rowSelection,
 		},
 	});
+
+	const tableRows = table.getRowModel().rows;
+	const groupedRowModel = useMemo(() => {
+		const rows = tableRows;
+		const groupBy = viewState.config.groupBy;
+		if (!groupBy) {
+			return rows.map((row) => ({ type: "row" as const, row }));
+		}
+
+		const groupField = groupableFields.find((field) => field.name === groupBy);
+		const fieldLabel = resolveText((groupField as any)?.label, groupBy);
+		const collapsedGroups = new Set(viewState.config.collapsedGroups ?? []);
+		const groups = new Map<string, { label: string; rows: typeof rows }>();
+
+		for (const row of rows) {
+			const valueLabel = stringifyGroupValue(
+				(row.original as any)?.[groupBy],
+				groupField,
+				resolveText,
+			);
+			const groupKey = `${groupBy}:${valueLabel}`;
+			const group = groups.get(groupKey);
+			if (group) {
+				group.rows.push(row);
+				continue;
+			}
+			groups.set(groupKey, {
+				label: `${fieldLabel}: ${valueLabel}`,
+				rows: [row],
+			});
+		}
+
+		return Array.from(groups.entries()).flatMap(([key, group]) => {
+			const collapsed = collapsedGroups.has(key);
+			return [
+				{
+					type: "group" as const,
+					key,
+					label: group.label,
+					count: group.rows.length,
+					collapsed,
+				},
+				...(collapsed
+					? []
+					: group.rows.map((row) => ({ type: "row" as const, row }))),
+			];
+		});
+	}, [
+		tableRows,
+		viewState.config.groupBy,
+		viewState.config.collapsedGroups,
+		groupableFields,
+		resolveText,
+	]);
 
 	// Handlers
 	const handleSaveView = (name: string, config: ViewConfiguration) => {
@@ -1248,7 +1351,7 @@ function TableViewInner({
 				/>
 
 				{/* Table */}
-				<div className="qa-table-view__table-wrapper bg-card border-border min-w-0 overflow-x-auto rounded-md border shadow-xs">
+				<div className="qa-table-view__table-wrapper border-border/60 min-w-0 border-y">
 					<Table
 						aria-label={resolveText(
 							(config as any)?.label ?? schema?.admin?.config?.label,
@@ -1331,7 +1434,42 @@ function TableViewInner({
 							))}
 						</TableHeader>
 						<TableBody>
-							{table.getRowModel().rows.map((row) => {
+							{groupedRowModel.map((entry) => {
+								if (entry.type === "group") {
+									return (
+										<TableRow key={entry.key} className="hover:bg-transparent">
+											<TableCell
+												colSpan={table.getVisibleLeafColumns().length}
+												className="bg-background text-muted-foreground sticky top-8 z-20 py-2 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase"
+											>
+												<button
+													type="button"
+													className="hover:text-foreground flex items-center gap-2 transition-colors"
+													onClick={() =>
+														viewState.toggleCollapsedGroup(entry.key)
+													}
+												>
+													<Icon
+														icon={
+															entry.collapsed
+																? "ph:caret-right"
+																: "ph:caret-down"
+														}
+														className="size-3.5"
+													/>
+													<span>{entry.label}</span>
+													{groupingConfig?.showCounts !== false && (
+														<span className="text-muted-foreground/70 tabular-nums">
+															{entry.count}
+														</span>
+													)}
+												</button>
+											</TableCell>
+										</TableRow>
+									);
+								}
+
+								const row = entry.row;
 								const isRowDeleted = !!(row.original as any)?.deletedAt;
 								return (
 									<TableRow
@@ -1596,6 +1734,8 @@ function TableViewInner({
 					onConfigChange={viewState.setConfig}
 					isOpen={isSheetOpen}
 					onOpenChange={setIsSheetOpen}
+					groupableFields={groupableFields}
+					defaultGroupBy={defaultGroupBy}
 					savedViews={savedViewsData?.docs ?? []}
 					savedViewsLoading={savedViewsLoading}
 					onSaveView={handleSaveView}

@@ -626,11 +626,16 @@ export default {
 	"viewOptions.showDeleted": "Zobraziť vymazané",
 	"viewOptions.showDeletedDescription":
 		"Zahrnúť soft-delete záznamy do tohto zobrazenia.",
+	"viewOptions.groupBy": "Zoskupiť podľa",
+	"viewOptions.groupByDescription":
+		"Zoskupí aktuálnu stránku podľa nakonfigurovaného poľa.",
+	"viewOptions.noGrouping": "Bez zoskupenia",
 
 	// Saved Views Tab
 	"viewOptions.saveCurrentConfig": "Uložiť aktuálnu konfiguráciu",
 	"viewOptions.viewNamePlaceholder": "Názov zobrazenia...",
-	"viewOptions.saveDescription": "Uloží aktuálne stĺpce, filtre a zoradenie.",
+	"viewOptions.saveDescription":
+		"Uloží aktuálne stĺpce, filtre, zoskupenie a zoradenie.",
 	"viewOptions.noChangesToSave": "Žiadne filtre ani zmeny stĺpcov na uloženie.",
 	"viewOptions.noSavedViews": "Zatiaľ žiadne uložené zobrazenia.",
 	"viewOptions.filtersCount": {

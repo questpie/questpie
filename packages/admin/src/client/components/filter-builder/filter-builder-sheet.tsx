@@ -3,6 +3,13 @@ import { useState } from "react";
 import { useTranslation } from "../../i18n/hooks.js";
 import { Button } from "../ui/button.js";
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "../ui/select.js";
+import {
 	Sheet,
 	SheetContent,
 	SheetFooter,
@@ -15,6 +22,7 @@ import { ColumnsTab } from "./columns-tab.js";
 import { FiltersTab } from "./filters-tab.js";
 import { SavedViewsTab } from "./saved-views-tab.js";
 import type {
+	AvailableField,
 	FilterBuilderProps,
 	FilterRule,
 	SavedView,
@@ -60,6 +68,12 @@ function viewConfigEqual(a: ViewConfiguration, b: ViewConfiguration): boolean {
 		filtersEqual(a.filters, b.filters) &&
 		sortConfigEqual(a.sortConfig, b.sortConfig) &&
 		arraysEqual(a.visibleColumns, b.visibleColumns, (x, y) => x === y) &&
+		a.groupBy === b.groupBy &&
+		arraysEqual(
+			a.collapsedGroups ?? [],
+			b.collapsedGroups ?? [],
+			(x, y) => x === y,
+		) &&
 		a.realtime === b.realtime &&
 		a.includeDeleted === b.includeDeleted
 	);
@@ -86,6 +100,12 @@ interface FilterBuilderSheetProps extends FilterBuilderProps {
 
 	/** Whether collection supports soft delete */
 	supportsSoftDelete?: boolean;
+
+	/** Fields available for page-local grouping */
+	groupableFields?: AvailableField[];
+
+	/** Default grouping field from list config */
+	defaultGroupBy?: string | null;
 }
 
 export function FilterBuilderSheet({
@@ -101,6 +121,8 @@ export function FilterBuilderSheet({
 	onSaveView,
 	onDeleteView,
 	supportsSoftDelete = false,
+	groupableFields = [],
+	defaultGroupBy = null,
 }: FilterBuilderSheetProps) {
 	const resolvedSavedViews = savedViews ?? EMPTY_SAVED_VIEWS;
 	const { t } = useTranslation();
@@ -134,6 +156,8 @@ export function FilterBuilderSheet({
 			filters: [],
 			sortConfig: null,
 			visibleColumns: defaultColumns ?? availableFields.map((f) => f.name),
+			groupBy: defaultGroupBy,
+			collapsedGroups: [],
 			realtime: undefined,
 			includeDeleted: false,
 		};
@@ -187,6 +211,45 @@ export function FilterBuilderSheet({
 										setLocalConfig({ ...localConfig, includeDeleted: checked })
 									}
 								/>
+							</div>
+						</div>
+					)}
+
+					{groupableFields.length > 0 && (
+						<div className="border-border-subtle bg-surface-low mt-3 rounded-xl border p-3">
+							<div className="space-y-3">
+								<div>
+									<p className="text-sm font-medium">
+										{t("viewOptions.groupBy")}
+									</p>
+									<p className="text-muted-foreground text-xs">
+										{t("viewOptions.groupByDescription")}
+									</p>
+								</div>
+								<Select
+									value={localConfig.groupBy ?? "__none"}
+									onValueChange={(value) =>
+										setLocalConfig({
+											...localConfig,
+											groupBy: value === "__none" ? null : value,
+											collapsedGroups: [],
+										})
+									}
+								>
+									<SelectTrigger className="h-9 w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="__none">
+											{t("viewOptions.noGrouping")}
+										</SelectItem>
+										{groupableFields.map((field) => (
+											<SelectItem key={field.name} value={field.name}>
+												{field.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 						</div>
 					)}

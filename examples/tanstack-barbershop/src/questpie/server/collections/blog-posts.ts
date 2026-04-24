@@ -48,6 +48,11 @@ export const blogPosts = collection("blog_posts")
 			columns: [f.title, f.status, f.publishedAt, f.readingTime, f.author],
 			searchable: [f.title, f.tags],
 			defaultSort: { field: f.publishedAt, direction: "desc" },
+			grouping: {
+				fields: [f.status, f.author],
+				defaultField: f.status,
+				showCounts: true,
+			},
 		}),
 	)
 	.form(({ v, f }) =>

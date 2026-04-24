@@ -157,6 +157,13 @@ export interface AdminListViewSchema {
 	searchable?: string[];
 	/** Filterable fields */
 	filterable?: string[];
+	/** Client-side grouping options for the current fetched page */
+	grouping?: {
+		fields: string[];
+		defaultField?: string;
+		defaultCollapsed?: boolean;
+		showCounts?: boolean;
+	};
 	/** Actions configuration */
 	actions?: {
 		header?: { primary?: unknown[]; secondary?: unknown[] };
@@ -967,6 +974,7 @@ function extractAdminConfig(
 			defaultSort: stateAny.adminList.defaultSort,
 			searchable: stateAny.adminList.searchable,
 			filterable: stateAny.adminList.filterable,
+			grouping: stateAny.adminList.grouping,
 			actions: serializeListActions(stateAny.adminList.actions),
 		};
 	}

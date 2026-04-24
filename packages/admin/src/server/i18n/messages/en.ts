@@ -612,6 +612,10 @@ export default {
 	"viewOptions.showDeleted": "Show deleted",
 	"viewOptions.showDeletedDescription":
 		"Include soft-deleted records in this view.",
+	"viewOptions.groupBy": "Group by",
+	"viewOptions.groupByDescription":
+		"Group the current page by a configured field.",
+	"viewOptions.noGrouping": "No grouping",
 
 	// Versions
 	"version.history": "Version history",
@@ -637,7 +641,7 @@ export default {
 	"viewOptions.saveCurrentConfig": "Save Current Configuration",
 	"viewOptions.viewNamePlaceholder": "View Name...",
 	"viewOptions.saveDescription":
-		"Saves current columns, filters, and sort order.",
+		"Saves current columns, filters, grouping, and sort order.",
 	"viewOptions.noChangesToSave": "No filters or column changes to save.",
 	"viewOptions.noSavedViews": "No saved views yet.",
 	"viewOptions.filtersCount": {

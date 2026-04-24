@@ -40,6 +40,7 @@ export function SavedViewsTab({
 	const hasActiveConfig =
 		currentConfig.filters.length > 0 ||
 		currentConfig.sortConfig !== null ||
+		(currentConfig.groupBy ?? null) !== null ||
 		currentConfig.visibleColumns.length > 0;
 
 	return (

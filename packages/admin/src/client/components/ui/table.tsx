@@ -25,7 +25,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
 		<thead
 			data-slot="table-header"
 			className={cn(
-				"qa-table__header [&_tr]:border-border bg-card sticky top-0 z-10 [&_tr]:border-b",
+				"qa-table__header [&_tr]:border-border/60 bg-background sticky top-0 z-10 [&_tr]:border-b",
 				className,
 			)}
 			{...props}
@@ -48,7 +48,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
 		<tfoot
 			data-slot="table-footer"
 			className={cn(
-				"qa-table__footer bg-card border-border border-t font-medium [&>tr]:last:border-b-0",
+				"qa-table__footer bg-background border-border/60 border-t font-medium [&>tr]:last:border-b-0",
 				className,
 			)}
 			{...props}
@@ -61,10 +61,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
 		<tr
 			data-slot="table-row"
 			className={cn(
-				// Alternating row colors (zebra striping) with solid backgrounds
-				// Using group/row for sticky cells to match
-				// Fixed height for consistent row appearance
-				"qa-table__row group/row bg-background hover:bg-muted data-[state=selected]:bg-accent border-border h-9 border-b transition-colors",
+				"qa-table__row group/row hover:bg-muted/40 data-[state=selected]:bg-muted border-border/60 h-9 border-b bg-transparent transition-colors",
 				className,
 			)}
 			{...props}
@@ -92,8 +89,7 @@ function TableHead({
 			data-slot="table-head"
 			data-sticky-left={isSticky ? "" : undefined}
 			className={cn(
-				"qa-table__head font-chrome text-muted-foreground bg-card chrome-meta h-9 min-w-[100px] px-4 text-left align-middle text-xs font-medium whitespace-nowrap [&:has([role=checkbox])]:px-2",
-				// Sticky column styles - solid background
+				"qa-table__head font-chrome text-muted-foreground bg-background chrome-meta h-8 min-w-[100px] px-3 text-left align-middle text-[11px] font-medium whitespace-nowrap [&:has([role=checkbox])]:px-2",
 				isSticky && "sticky z-20 min-w-0",
 				// Only show border on last sticky column
 				showStickyBorder &&
@@ -129,9 +125,9 @@ function TableCell({
 			data-slot="table-cell"
 			data-sticky-left={isSticky ? "" : undefined}
 			className={cn(
-				"qa-table__cell min-w-[100px] px-4 py-1.5 align-middle whitespace-nowrap [&:has([role=checkbox])]:px-2",
-				// Sticky column styles - inherit row background for zebra/hover/selected
-				isSticky && "sticky z-10 min-w-0 bg-inherit",
+				"qa-table__cell min-w-[100px] px-3 py-1.5 align-middle whitespace-nowrap [&:has([role=checkbox])]:px-2",
+				isSticky &&
+					"group-hover/row:bg-muted/40 group-data-[state=selected]/row:bg-muted bg-background sticky z-10 min-w-0",
 				// Only show border on last sticky column
 				showStickyBorder &&
 					"after:bg-border after:absolute after:top-0 after:right-0 after:bottom-0 after:w-px",
