@@ -15,7 +15,12 @@ import type { FieldInstance } from "../../builder/field/field.js";
 import { useResolveText, useTranslation } from "../../i18n/hooks.js";
 import { selectAdmin, useAdminStore } from "../../runtime/provider.js";
 import { buildFieldDefinitionsFromMetadata } from "../../utils/build-field-definitions-from-schema.js";
-import { FieldLayoutRenderer, type FieldLayoutContext } from "../layout/field-layout-renderer.js";
+import { useLazyComponent } from "../../utils/use-lazy-component.js";
+import {
+	FieldLayoutRenderer,
+	type FieldLayoutContext,
+} from "../layout/field-layout-renderer.js";
+import { Spinner } from "../ui/spinner.js";
 
 // ============================================================================
 // Types
@@ -126,9 +131,16 @@ function BlockField({ name, blockId, definition }: BlockFieldProps) {
 	const scopedName = `content._values.${blockId}.${name}`;
 
 	// Check if field has a registered component
-	const FieldComponent = definition.component as
-		| React.ComponentType<any>
-		| undefined;
+	const { Component: FieldComponent, loading: componentLoading } =
+		useLazyComponent(definition.component);
+
+	if (componentLoading) {
+		return (
+			<div className="flex items-center justify-center p-4">
+				<Spinner className="size-5" />
+			</div>
+		);
+	}
 
 	// All fields should have a registered component (registry-first)
 	if (!FieldComponent) {

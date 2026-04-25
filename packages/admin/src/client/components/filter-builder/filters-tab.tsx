@@ -503,7 +503,7 @@ export function FiltersTab({
 						label,
 					};
 				});
-			} catch (_error) {
+			} catch {
 				return [];
 			}
 		},
@@ -624,9 +624,9 @@ export function FiltersTab({
 			})}
 
 			{filters.length === 0 && (
-				<div className="panel-surface text-muted-foreground border-dashed p-8 text-center text-sm">
+				<p className="text-muted-foreground py-2 text-sm">
 					{t("viewOptions.noActiveFilters")}
-				</div>
+				</p>
 			)}
 
 			<div className="flex gap-2">

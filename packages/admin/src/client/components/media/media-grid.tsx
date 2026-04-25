@@ -277,7 +277,7 @@ export function MediaGrid({
 		return (
 			<div
 				className={cn(
-					"panel-surface flex flex-col items-center justify-center border-dashed p-12",
+					"flex flex-col items-center justify-center p-8",
 					"text-muted-foreground",
 					className,
 				)}

@@ -9,11 +9,11 @@ import { useAdminStore } from "../runtime/provider.js";
  * Note: This hook requires the `adminModule` to be used in your app setup.
  * If admin_saved_views collection is not available, returns empty array.
  */
-export function useSavedViews(collectionName: string) {
+export function useSavedViews(collectionName: string, userId?: string) {
 	const client = useAdminStore((s) => s.client);
 
 	return useQuery({
-		queryKey: ["admin_saved_views", collectionName],
+		queryKey: ["admin_saved_views", collectionName, userId],
 		queryFn: async (): Promise<{ docs: SavedView[] }> => {
 			// Check if the collection exists on the client
 			const collections = client?.collections as
@@ -23,9 +23,8 @@ export function useSavedViews(collectionName: string) {
 				return { docs: [] };
 			}
 
-			const result = await collections.admin_saved_views.find({
-				where: { collectionName },
-			});
+			const where = userId ? { collectionName, userId } : { collectionName };
+			const result = await collections.admin_saved_views.find({ where });
 			return { docs: (result?.docs ?? []) as SavedView[] };
 		},
 		enabled: !!client,
@@ -35,7 +34,7 @@ export function useSavedViews(collectionName: string) {
 /**
  * Hook to save a new view
  */
-export function useSaveView(collectionName: string) {
+export function useSaveView(collectionName: string, userId?: string) {
 	const client = useAdminStore((s) => s.client);
 	const queryClient = useQueryClient();
 
@@ -57,47 +56,13 @@ export function useSaveView(collectionName: string) {
 			return collections.admin_saved_views.create({
 				...data,
 				collectionName,
-				userId: data.userId || "anonymous",
+				userId: data.userId || userId || "anonymous",
 				isDefault: false,
 			});
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
-				queryKey: ["admin_saved_views", collectionName],
-			});
-		},
-	});
-}
-
-/**
- * Hook to update an existing view
- */
-function useUpdateSavedView(collectionName: string) {
-	const client = useAdminStore((s) => s.client);
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		mutationFn: async ({
-			id,
-			data,
-		}: {
-			id: string;
-			data: Partial<SavedView>;
-		}) => {
-			const collections = client?.collections as
-				| Record<string, any>
-				| undefined;
-			if (!collections?.admin_saved_views) {
-				throw new Error(
-					"admin_saved_views collection not available. Make sure to use the adminModule in your app setup.",
-				);
-			}
-
-			return collections.admin_saved_views.update({ id, data });
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["admin_saved_views", collectionName],
+				queryKey: ["admin_saved_views", collectionName, userId],
 			});
 		},
 	});
@@ -106,7 +71,7 @@ function useUpdateSavedView(collectionName: string) {
 /**
  * Hook to delete a view
  */
-export function useDeleteSavedView(collectionName: string) {
+export function useDeleteSavedView(collectionName: string, userId?: string) {
 	const client = useAdminStore((s) => s.client);
 	const queryClient = useQueryClient();
 
@@ -125,7 +90,7 @@ export function useDeleteSavedView(collectionName: string) {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
-				queryKey: ["admin_saved_views", collectionName],
+				queryKey: ["admin_saved_views", collectionName, userId],
 			});
 		},
 	});

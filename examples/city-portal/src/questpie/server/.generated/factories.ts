@@ -34,6 +34,7 @@ const _allFieldDefs = Object.fromEntries(
 // ── Plugin Imports ─────────────────────────────────────────
 import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy } from "@questpie/admin/server";
 import { type AppConfigInput, type AuthConfig, createFieldNameProxy } from "questpie";
+import { type OpenApiModuleConfig } from "@questpie/openapi";
 
 // ════════════════════════════════════════════════════════════
 // Type extraction — driven by CategoryDeclaration
@@ -146,7 +147,7 @@ const _globExt: Record<string, { stateKey: string; resolve: (v: any) => any }> =
  * import { collection } from "#questpie/factories";
  *
  * export default collection("posts")
- *   .fields(({ f }) => ({ title: f.text({ required: true }) }))
+ *   .fields(({ f }) => ({ title: f.text(255).required() }))
  *   .admin(({ c }) => ({ icon: c.icon("ph:article") }))
  *   .list(({ v, f }) => v.collectionTable({ columns: [f.title] }))
  * ```
@@ -188,3 +189,6 @@ export function authConfig<T extends AuthConfig>(config: T): T { return config; 
 export function adminConfig<T extends AdminConfigInput>(config: T): T;
 export function adminConfig<T extends (...args: any[]) => AdminConfigInput>(cb: T): T;
 export function adminConfig(v: any): any { return v; }
+
+/** Typed factory for openapi config. */
+export function openapi<T extends OpenApiModuleConfig>(config: T): T { return config; }

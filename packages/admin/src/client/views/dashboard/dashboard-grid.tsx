@@ -324,8 +324,6 @@ interface LayoutItemRendererProps {
 
 function LayoutItemRenderer({
 	item,
-	index,
-	columns,
 	basePath,
 	navigate,
 	widgetRegistry,
@@ -689,7 +687,7 @@ export function DashboardGrid({
 					navigate={navigate}
 					resolveText={resolveText}
 				/>
-				<div className="border-border bg-card flex h-64 items-center justify-center rounded-lg border border-dashed">
+				<div className="flex h-48 items-center justify-center">
 					<div className="text-center">
 						<p className="text-muted-foreground font-medium">
 							{t("dashboard.noWidgets")}

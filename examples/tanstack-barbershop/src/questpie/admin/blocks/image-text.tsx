@@ -13,7 +13,7 @@ import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
 
-export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
+export function ImageTextRenderer({ values, data }: BlockProps<"image-text">) {
 	const imageUrl = (data?.image?.url as string | undefined) || values.image;
 
 	const aspectClass = {

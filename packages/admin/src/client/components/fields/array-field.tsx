@@ -243,7 +243,7 @@ export function ArrayField({
 
 			<div className="space-y-2">
 				{fields.length === 0 ? (
-					<div className="panel-surface border-dashed p-4 text-center">
+					<div className="py-2">
 						<p className="text-muted-foreground text-sm text-pretty">
 							{resolvedPlaceholder || emptyLabel}
 						</p>

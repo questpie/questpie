@@ -157,7 +157,20 @@ export function BulkActionToolbar<TItem = any>({
 	// Don't render if nothing selected AND no active filters (after all hooks)
 	const hasFilters = filterCount > 0;
 	const hasSelection = selectedCount > 0;
-	if (!hasSelection && !hasFilters) return null;
+	const isVisible = hasSelection || hasFilters;
+	const [shouldRender, setShouldRender] = React.useState(isVisible);
+
+	React.useEffect(() => {
+		if (isVisible) {
+			setShouldRender(true);
+			return;
+		}
+
+		const timeout = window.setTimeout(() => setShouldRender(false), 180);
+		return () => window.clearTimeout(timeout);
+	}, [isVisible]);
+
+	if (!shouldRender) return null;
 
 	// Execute bulk action handler
 	const executeBulkAction = async (action: ActionDefinition<TItem>) => {
@@ -320,8 +333,11 @@ export function BulkActionToolbar<TItem = any>({
 	return (
 		<>
 			{/* Fixed toolbar at bottom of screen */}
-			<div className="qa-bulk-toolbar animate-in slide-in-from-bottom-4 fade-in fixed bottom-6 left-1/2 z-50 max-w-[calc(100%-2rem)] -translate-x-1/2 duration-200 sm:max-w-none">
-				<div className="qa-bulk-toolbar__bar bg-background border-border flex items-center gap-2 overflow-x-auto rounded-full border px-3 py-2 shadow-lg sm:gap-3 sm:px-4 sm:py-2.5">
+			<div
+				data-state={isVisible ? "open" : "closed"}
+				className="qa-bulk-toolbar fixed bottom-6 left-1/2 z-50 max-w-[calc(100%-2rem)] -translate-x-1/2 transition-[opacity,translate,scale] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-enter)] data-[state=closed]:pointer-events-none data-[state=closed]:translate-y-2 data-[state=closed]:scale-[0.98] data-[state=closed]:opacity-0 data-[state=open]:translate-y-0 data-[state=open]:scale-100 data-[state=open]:opacity-100 motion-reduce:transition-none sm:max-w-none"
+			>
+				<div className="qa-bulk-toolbar__bar bg-background border-border flex items-center gap-2 overflow-x-auto rounded-full border px-3 py-2 shadow-lg transition-[gap,padding] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] sm:gap-3 sm:px-4 sm:py-2.5">
 					{/* Filter segment - shows when filters are active */}
 					{hasFilters && (
 						<>

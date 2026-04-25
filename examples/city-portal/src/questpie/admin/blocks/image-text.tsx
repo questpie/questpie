@@ -6,7 +6,7 @@ import { RichTextRenderer } from "@questpie/admin/client";
 
 import type { BlockProps } from "../.generated/client";
 
-export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
+export function ImageTextRenderer({ values, data }: BlockProps<"image-text">) {
 	const imageUrl = (data?.image as any)?.url || values.image;
 	const isImageLeft = values.imagePosition !== "right";
 

@@ -184,24 +184,23 @@ export type AppViews = _ModuleViews;
 export type AppComponents = _ModuleComponents;
 
 /** All blocks in the app (modules + user, user overrides) */
-export type AppBlocks = _ModuleBlocks & {
-	bookingCta: typeof _bloc_bookingCta;
-	columns: typeof _bloc_columns;
-	contactInfo: typeof _bloc_contactInfo;
-	cta: typeof _bloc_cta;
-	divider: typeof _bloc_divider;
-	gallery: typeof _bloc_gallery;
-	heading: typeof _bloc_heading;
-	hero: typeof _bloc_hero;
-	hours: typeof _bloc_hours;
-	imageText: typeof _bloc_imageText;
-	reviews: typeof _bloc_reviews;
-	services: typeof _bloc_services;
-	spacer: typeof _bloc_spacer;
-	stats: typeof _bloc_stats;
-	team: typeof _bloc_team;
-	text: typeof _bloc_text;
-};
+export type AppBlocks = _ModuleBlocks
+	& { [K in typeof _bloc_bookingCta.state.name]: typeof _bloc_bookingCta }
+	& { [K in typeof _bloc_columns.state.name]: typeof _bloc_columns }
+	& { [K in typeof _bloc_contactInfo.state.name]: typeof _bloc_contactInfo }
+	& { [K in typeof _bloc_cta.state.name]: typeof _bloc_cta }
+	& { [K in typeof _bloc_divider.state.name]: typeof _bloc_divider }
+	& { [K in typeof _bloc_gallery.state.name]: typeof _bloc_gallery }
+	& { [K in typeof _bloc_heading.state.name]: typeof _bloc_heading }
+	& { [K in typeof _bloc_hero.state.name]: typeof _bloc_hero }
+	& { [K in typeof _bloc_hours.state.name]: typeof _bloc_hours }
+	& { [K in typeof _bloc_imageText.state.name]: typeof _bloc_imageText }
+	& { [K in typeof _bloc_reviews.state.name]: typeof _bloc_reviews }
+	& { [K in typeof _bloc_services.state.name]: typeof _bloc_services }
+	& { [K in typeof _bloc_spacer.state.name]: typeof _bloc_spacer }
+	& { [K in typeof _bloc_stats.state.name]: typeof _bloc_stats }
+	& { [K in typeof _bloc_team.state.name]: typeof _bloc_team }
+	& { [K in typeof _bloc_text.state.name]: typeof _bloc_text };
 
 export type AppRouteKeys = "getAvailableTimeSlots" | "getRevenueStats" | "getActiveBarbers" | "createBooking";
 
@@ -318,22 +317,22 @@ export const app = await createApp(
 		migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix],
 		seeds: [_seed_blogPosts_seed, _seed_demoData_seed, _seed_siteSettings_seed],
 		blocks: {
-			bookingCta: _bloc_bookingCta,
-			columns: _bloc_columns,
-			contactInfo: _bloc_contactInfo,
-			cta: _bloc_cta,
-			divider: _bloc_divider,
-			gallery: _bloc_gallery,
-			heading: _bloc_heading,
-			hero: _bloc_hero,
-			hours: _bloc_hours,
-			imageText: _bloc_imageText,
-			reviews: _bloc_reviews,
-			services: _bloc_services,
-			spacer: _bloc_spacer,
-			stats: _bloc_stats,
-			team: _bloc_team,
-			text: _bloc_text,
+			[_bloc_bookingCta.state.name]: _bloc_bookingCta,
+			[_bloc_columns.state.name]: _bloc_columns,
+			[_bloc_contactInfo.state.name]: _bloc_contactInfo,
+			[_bloc_cta.state.name]: _bloc_cta,
+			[_bloc_divider.state.name]: _bloc_divider,
+			[_bloc_gallery.state.name]: _bloc_gallery,
+			[_bloc_heading.state.name]: _bloc_heading,
+			[_bloc_hero.state.name]: _bloc_hero,
+			[_bloc_hours.state.name]: _bloc_hours,
+			[_bloc_imageText.state.name]: _bloc_imageText,
+			[_bloc_reviews.state.name]: _bloc_reviews,
+			[_bloc_services.state.name]: _bloc_services,
+			[_bloc_spacer.state.name]: _bloc_spacer,
+			[_bloc_stats.state.name]: _bloc_stats,
+			[_bloc_team.state.name]: _bloc_team,
+			[_bloc_text.state.name]: _bloc_text,
 		},
 		config: {
 			app: _appConfig as any,

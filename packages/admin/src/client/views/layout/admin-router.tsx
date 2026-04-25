@@ -30,6 +30,9 @@ import { useCollectionSchema } from "../../hooks/use-collection-schema";
 import { getGlobalMetaQueryOptions } from "../../hooks/use-global-meta";
 import { useGlobalSchema } from "../../hooks/use-global-schema";
 import { parsePrefillParams } from "../../hooks/use-prefill-params";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
+import type { I18nText } from "../../i18n/types";
+import { formatLabel } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime/provider";
 import { DashboardGrid } from "../dashboard/dashboard-grid";
 import { AdminViewHeader } from "./admin-view-layout";
@@ -154,6 +157,7 @@ interface RouterConfig {
 	globals: Record<string, GlobalRouterConfig>;
 	pages: Record<string, PageDefinition<string>>;
 	views: Record<string, any>;
+	brandingName?: I18nText;
 	dashboardConfig?: DashboardConfig;
 	DashboardComponent?: React.ComponentType;
 }
@@ -219,6 +223,7 @@ function useRouterConfig(props: {
 		globals: serverGlobals,
 		pages: props.pages ?? storePages,
 		views: storeViews,
+		brandingName: serverConfig?.branding?.name,
 		dashboardConfig: mergedDashboard,
 		DashboardComponent: props.DashboardComponent,
 	};
@@ -275,6 +280,32 @@ function matchRoute(
 	}
 
 	return { type: "not-found" };
+}
+
+function formatDocumentTitle(pageTitle: string, appTitle: string): string {
+	const title = pageTitle.trim();
+	const app = appTitle.trim() || "Admin";
+
+	if (!title || title === app) return app;
+	return `${title} | ${app}`;
+}
+
+function setDocumentMetaDescription(description: string): void {
+	const content = description.trim();
+	if (!content) return;
+
+	let meta = document.querySelector<HTMLMetaElement>(
+		'meta[name="description"]',
+	);
+
+	if (!meta) {
+		meta = document.createElement("meta");
+		meta.name = "description";
+		meta.setAttribute("data-questpie-admin", "true");
+		document.head.appendChild(meta);
+	}
+
+	meta.content = content;
 }
 
 /**
@@ -620,6 +651,7 @@ function RestrictedAccess({
 }
 
 function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
+	const component = config.component;
 	const [Component, setComponent] = React.useState<React.ComponentType | null>(
 		null,
 	);
@@ -631,8 +663,8 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 
 		async function load() {
 			try {
-				if (typeof config.component === "function") {
-					const result = (config.component as () => any)();
+				if (typeof component === "function") {
+					const result = (component as () => any)();
 					let isThenable = false;
 					if (result != null) {
 						if (typeof result.then === "function") {
@@ -652,12 +684,12 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 						}
 					} else {
 						if (mounted) {
-							setComponent(() => config.component as React.ComponentType);
+							setComponent(() => component as React.ComponentType);
 						}
 					}
-				} else if (config.component) {
+				} else if (component) {
 					if (mounted) {
-						setComponent(() => config.component as React.ComponentType);
+						setComponent(() => component as React.ComponentType);
 					}
 				}
 				if (mounted) {
@@ -683,7 +715,7 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 		return () => {
 			mounted = false;
 		};
-	}, [config.component]);
+	}, [component]);
 
 	if (loading) {
 		return (
@@ -767,6 +799,7 @@ function AdminRouterInner({
 		globals,
 		pages,
 		views,
+		brandingName,
 		dashboardConfig,
 		DashboardComponent,
 	} = useRouterConfig({
@@ -820,33 +853,110 @@ function AdminRouterInner({
 		},
 	);
 
-	// Focus management + document.title on route change
+	const { t } = useTranslation();
+	const resolveText = useResolveText();
+
+	// Keep browser chrome readable for every admin route.
+	React.useEffect(() => {
+		const appTitle = resolveText(brandingName, "Admin");
+		let pageTitle = t("dashboard.title");
+		let metaDescription = pageTitle;
+
+		const resolveResourceLabel = (
+			config: Record<string, any> | undefined,
+			schemaConfig: Record<string, any> | undefined,
+			fallback: string,
+		) =>
+			resolveText(
+				config?.label ?? config?.meta?.label ?? schemaConfig?.label,
+				formatLabel(fallback),
+			);
+
+		const resolveResourceDescription = (
+			config: Record<string, any> | undefined,
+			schemaConfig: Record<string, any> | undefined,
+		) =>
+			resolveText(
+				config?.description ??
+					config?.meta?.description ??
+					schemaConfig?.description,
+			).trim();
+
+		switch (route.type) {
+			case "dashboard": {
+				pageTitle = resolveText(dashboardConfig?.title, t("dashboard.title"));
+				metaDescription =
+					resolveText(dashboardConfig?.description).trim() || pageTitle;
+				break;
+			}
+			case "collection-list": {
+				const config = collections[route.name];
+				const schemaConfig = (activeCollectionSchema as any)?.admin?.config;
+				const label = resolveResourceLabel(config, schemaConfig, route.name);
+				pageTitle = label;
+				metaDescription =
+					resolveResourceDescription(config, schemaConfig) ||
+					t("collection.list", { name: label });
+				break;
+			}
+			case "collection-create": {
+				const config = collections[route.name];
+				const schemaConfig = (activeCollectionSchema as any)?.admin?.config;
+				const label = resolveResourceLabel(config, schemaConfig, route.name);
+				pageTitle = `${label}: ${t("common.create")}`;
+				metaDescription =
+					resolveResourceDescription(config, schemaConfig) ||
+					t("collection.create", { name: label });
+				break;
+			}
+			case "collection-edit": {
+				const config = collections[route.name];
+				const schemaConfig = (activeCollectionSchema as any)?.admin?.config;
+				const label = resolveResourceLabel(config, schemaConfig, route.name);
+				pageTitle = `${label}: ${t("common.edit")}`;
+				metaDescription =
+					resolveResourceDescription(config, schemaConfig) ||
+					t("collection.edit", { name: label });
+				break;
+			}
+			case "global-edit": {
+				const config = globals[route.name];
+				const schemaConfig = (activeGlobalSchema as any)?.admin?.config;
+				const label = resolveResourceLabel(config, schemaConfig, route.name);
+				pageTitle = label;
+				metaDescription =
+					resolveResourceDescription(config, schemaConfig) || label;
+				break;
+			}
+			case "page": {
+				pageTitle = resolveText(route.config.label, formatLabel(route.name));
+				metaDescription = pageTitle;
+				break;
+			}
+			case "not-found": {
+				pageTitle = t("error.notFound");
+				metaDescription = pageTitle;
+				break;
+			}
+		}
+
+		document.title = formatDocumentTitle(pageTitle, appTitle);
+		setDocumentMetaDescription(metaDescription || pageTitle);
+	}, [
+		activeCollectionSchema,
+		activeGlobalSchema,
+		brandingName,
+		collections,
+		dashboardConfig,
+		globals,
+		resolveText,
+		route,
+		t,
+	]);
+
+	// Focus management on route change
 	const routeKey = segments.join("/");
 	React.useEffect(() => {
-		// Build document title from route
-		let pageTitle = "Admin";
-		switch (route.type) {
-			case "dashboard":
-				pageTitle = "Dashboard";
-				break;
-			case "collection-list":
-				pageTitle = `${route.name} — List`;
-				break;
-			case "collection-create":
-				pageTitle = `${route.name} — Create`;
-				break;
-			case "collection-edit":
-				pageTitle = `${route.name} — Edit`;
-				break;
-			case "global-edit":
-				pageTitle = `${route.name} — Settings`;
-				break;
-			case "page":
-				pageTitle = route.name;
-				break;
-		}
-		document.title = pageTitle;
-
 		// Move focus to main content area on route change for screen readers
 		const main = document.getElementById("main-content");
 		if (main) {
@@ -855,7 +965,7 @@ function AdminRouterInner({
 				main.focus({ preventScroll: true });
 			});
 		}
-	}, [routeKey, route]);
+	}, [routeKey]);
 
 	// Dashboard
 	if (route.type === "dashboard") {

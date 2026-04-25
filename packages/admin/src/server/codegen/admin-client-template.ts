@@ -208,9 +208,18 @@ function generateCategoryEntries(
 			if (keyProp) {
 				return `[${f.varName}.${keyProp}]: ${f.varName}`;
 			}
+			if (catDecl?.keyFromSource === "basename") {
+				return `${JSON.stringify(getSourceBasename(f))}: ${f.varName}`;
+			}
 			return `${JSON.stringify(f.key)}: ${f.varName}`;
 		})
 		.join(", ");
+}
+
+function getSourceBasename(file: DiscoveredFile): string {
+	const source = file.source.replaceAll("\\", "/");
+	const filename = source.split("/").pop() ?? file.key;
+	return filename.replace(/\.[^.]+$/, "");
 }
 
 /**

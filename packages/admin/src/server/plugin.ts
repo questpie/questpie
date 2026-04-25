@@ -80,6 +80,7 @@ export function adminPlugin(): CodegenPlugin {
 						dirs: ["blocks"],
 						prefix: "bloc",
 						factoryFunctions: ["block"],
+						keyFromProperty: "state.name",
 						registryKey: true,
 						includeInAppState: true,
 						extractFromModules: true,
@@ -331,6 +332,7 @@ export function adminPlugin(): CodegenPlugin {
 					blocks: {
 						dirs: ["blocks"],
 						prefix: "block",
+						keyFromSource: "basename",
 						registryKey: false,
 						includeInAppState: false,
 						extractFromModules: false,
@@ -406,7 +408,7 @@ export function adminPlugin(): CodegenPlugin {
 							`type { ${varName} }`,
 							`../../server/blocks/${kebab}`,
 						);
-						entries.push(`${JSON.stringify(key)}: typeof ${varName}`);
+						entries.push(`${JSON.stringify(kebab)}: typeof ${varName}`);
 					}
 
 					// Emit _ServerBlocks map + BlockProps<T> helper

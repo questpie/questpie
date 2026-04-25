@@ -14,7 +14,7 @@ import type { BlockProps } from "../.generated/client";
 export function ContactInfoRenderer({
 	values,
 	data,
-}: BlockProps<"contactInfo">) {
+}: BlockProps<"contact-info">) {
 	const { t } = useTranslation();
 	const contactPhone = data?.contactPhone as string | undefined;
 	const contactEmail = data?.contactEmail as string | undefined;

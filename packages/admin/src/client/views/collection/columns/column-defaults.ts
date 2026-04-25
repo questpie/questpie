@@ -25,26 +25,6 @@ const SYSTEM_FIELDS = new Set([
 	"updatedBy",
 ]);
 
-/**
- * Field types that are typically not shown by default in list view
- * (too complex or take up too much space)
- */
-const EXCLUDED_DEFAULT_FIELD_TYPES = new Set([
-	"relation",
-	"reverseRelation",
-	"upload",
-	"uploadMany",
-	"json",
-	"object",
-	"richText",
-	"textarea",
-]);
-
-/**
- * Maximum number of content fields to show by default
- */
-const MAX_DEFAULT_CONTENT_FIELDS = 4;
-
 // ============================================================================
 // Default Column Computation
 // ============================================================================
@@ -101,7 +81,7 @@ export function computeDefaultColumns(
 	const contentFields: string[] = [];
 	const systemFields: string[] = [];
 
-	for (const [key, fieldDef] of Object.entries(fields)) {
+	for (const key of Object.keys(fields)) {
 		// Skip the title field if we're already showing it
 		if (useTitleField && key === titleFieldName) continue;
 
@@ -117,7 +97,7 @@ export function computeDefaultColumns(
 
 	// Add createdAt at the end if timestamps enabled (from meta or field existence)
 	const hasTimestamps = options?.meta?.timestamps ?? !!fields.createdAt;
-	if (hasTimestamps && fields.createdAt && !defaultCols.includes("createdAt")) {
+	if (hasTimestamps && !defaultCols.includes("createdAt")) {
 		defaultCols.push("createdAt");
 	}
 

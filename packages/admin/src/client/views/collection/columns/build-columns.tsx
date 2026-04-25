@@ -148,19 +148,6 @@ export function buildColumns<TData extends Record<string, unknown>>(
 	const fields = config?.fields ?? {};
 	const listConfig = config?.list;
 
-	const isLocalizedField = (
-		field: string,
-		definition?: FieldInstance,
-	): boolean => {
-		const fieldOptions = (definition?.["~options"] ?? {}) as Record<
-			string,
-			any
-		>;
-		return fieldOptions.localized !== undefined
-			? !!fieldOptions.localized
-			: (meta?.localizedFields?.includes(field) ?? false);
-	};
-
 	// Determine title column based on meta
 	// If meta says title is a real "field", use that field instead of _title
 	const titleFieldName = meta?.title?.fieldName;
@@ -175,6 +162,10 @@ export function buildColumns<TData extends Record<string, unknown>>(
 		// Build ALL columns for all fields (used when user can toggle visibility)
 		// Include title column (real field or _title) first, then all other fields
 		const allFields = Object.keys(fields);
+		if (meta?.timestamps) {
+			if (!allFields.includes("createdAt")) allFields.push("createdAt");
+			if (!allFields.includes("updatedAt")) allFields.push("updatedAt");
+		}
 		// If title is a real field, don't duplicate it
 		const otherFields =
 			titleColumn === "_title"
@@ -203,9 +194,6 @@ export function buildColumns<TData extends Record<string, unknown>>(
 
 		// Special handling for _title virtual field (computed by backend)
 		if (fieldName === "_title") {
-			const titleIsLocalized = titleFieldName
-				? isLocalizedField(titleFieldName, fields[titleFieldName])
-				: false;
 			// Determine the label for _title column
 			// For virtual titles, use the virtual field's label instead of generic "Title"
 			let titleLabel: I18nText = "Title";
@@ -233,9 +221,9 @@ export function buildColumns<TData extends Record<string, unknown>>(
 			return columnDef;
 		}
 
-		const fieldType = fieldDef?.name ?? "text";
+		const fieldType =
+			fieldDef?.name ?? (meta?.timestamps ? "datetime" : "text");
 		const fieldOptions = (fieldDef?.["~options"] ?? {}) as Record<string, any>;
-		const isLocalized = isLocalizedField(fieldName, fieldDef);
 
 		// ========== SIMPLIFIED CELL RESOLUTION ==========
 		// Priority chain - just 3 lines!

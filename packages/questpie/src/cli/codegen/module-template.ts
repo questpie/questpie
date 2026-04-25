@@ -161,9 +161,6 @@ export function generateModuleTemplate(
 		const typeEmit = decl?.typeEmit ?? "standard";
 		// Skip categories that don't produce meaningful named types for modules
 		if (typeEmit === "none" || typeEmit === "messages") continue;
-		// Skip keyFromProperty categories — file-derived keys would mismatch
-		// runtime keys, so the named type would be wrong. Use typeof instead.
-		if (decl?.keyFromProperty) continue;
 		categoriesNeedingTypes.add(catName);
 	}
 
@@ -203,12 +200,13 @@ export function generateModuleTemplate(
 		//   maximum length"). Named interfaces give TypeScript a stable anchor.
 		for (const catName of categoriesNeedingTypes) {
 			const fileMap = discovered.categories.get(catName)!;
+			const decl = categoryMeta.get(catName);
 			const typeName = `${typePrefix}${catName.charAt(0).toUpperCase() + catName.slice(1)}`;
 
 			if (catName === "routes") {
 				emitSimpleRouteTypeInterface(lines, typeName, fileMap);
 			} else {
-				emitSimpleTypeInterface(lines, typeName, fileMap);
+				emitSimpleTypeInterface(lines, typeName, fileMap, decl);
 			}
 		}
 	}
@@ -550,9 +548,27 @@ function emitSimpleTypeInterface(
 	lines: string[],
 	typeName: string,
 	fileMap: Map<string, DiscoveredFile>,
+	decl: CategoryDeclaration | undefined,
 ): void {
 	const leafFiles = sortedValues(fileMap).filter((f) => !f.isBundle);
 	const bundleFiles = sortedValues(fileMap).filter((f) => f.isBundle);
+
+	if (decl?.keyFromProperty) {
+		lines.push(`export type ${typeName} =`);
+		const parts = [
+			...leafFiles.map(
+				(file) =>
+					`{ [K in typeof ${file.varName}.${decl.keyFromProperty}]: typeof ${file.varName} }`,
+			),
+			...bundleFiles.map((bundle) => `typeof ${bundle.varName}`),
+		];
+		for (const [index, part] of parts.entries()) {
+			const suffix = index === parts.length - 1 ? ";" : " &";
+			lines.push(`\t${part}${suffix}`);
+		}
+		lines.push("");
+		return;
+	}
 
 	if (bundleFiles.length === 0) {
 		// No bundles — simple interface

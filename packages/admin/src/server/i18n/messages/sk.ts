@@ -623,6 +623,9 @@ export default {
 	"viewOptions.savedViews": "Uložené zobrazenia",
 	"viewOptions.apply": "Použiť",
 	"viewOptions.reset": "Obnoviť",
+	"viewOptions.realtime": "Realtime aktualizácie",
+	"viewOptions.realtimeDescription":
+		"Automaticky obnoví tabuľku, keď sa zmenia dáta.",
 	"viewOptions.showDeleted": "Zobraziť vymazané",
 	"viewOptions.showDeletedDescription":
 		"Zahrnúť soft-delete záznamy do tohto zobrazenia.",
@@ -630,6 +633,7 @@ export default {
 	"viewOptions.groupByDescription":
 		"Zoskupí aktuálnu stránku podľa nakonfigurovaného poľa.",
 	"viewOptions.noGrouping": "Bez zoskupenia",
+	"viewOptions.sort": "Zoradenie",
 
 	// Saved Views Tab
 	"viewOptions.saveCurrentConfig": "Uložiť aktuálnu konfiguráciu",

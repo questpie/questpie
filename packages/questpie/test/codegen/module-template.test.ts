@@ -628,7 +628,7 @@ describe("generateModuleTemplate — extra module properties", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// keyFromProperty — skips named type interface
+// keyFromProperty — runtime-keyed type alias
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateModuleTemplate — keyFromProperty", () => {
@@ -659,8 +659,11 @@ describe("generateModuleTemplate — keyFromProperty", () => {
 		expect(output).toContain("[_view_table.name]: _view_table,");
 	});
 
-	it("does not emit named type interface for keyFromProperty categories", () => {
-		expect(output).not.toContain("export interface AdminViews");
+	it("emits a runtime-keyed type alias for keyFromProperty categories", () => {
+		expect(output).toContain("export type AdminViews =");
+		expect(output).toContain(
+			"{ [K in typeof _view_table.name]: typeof _view_table };",
+		);
 	});
 
 	it("does NOT emit Registry augmentation (handled by root template)", () => {

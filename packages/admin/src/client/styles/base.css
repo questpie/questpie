@@ -97,8 +97,8 @@
 	--primary-foreground: #ffffff;
 	--destructive: #ff5f6d;
 	--destructive-foreground: #1c0b0f;
-	--success: #222222;
-	--success-foreground: #ececec;
+	--success: #4ade80;
+	--success-foreground: #062d16;
 	--warning: #222222;
 	--warning-foreground: #ececec;
 	--info: #222222;
@@ -193,8 +193,8 @@
 	--primary-foreground: #ffffff;
 	--destructive: #d92d3a;
 	--destructive-foreground: #ffffff;
-	--success: #f0f0f0;
-	--success-foreground: #1c1c1c;
+	--success: #16a34a;
+	--success-foreground: #ffffff;
 	--warning: #f0f0f0;
 	--warning-foreground: #1c1c1c;
 	--info: #f0f0f0;

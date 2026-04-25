@@ -13,7 +13,10 @@ import {
 	block,
 	BlockBuilder,
 } from "#questpie/admin/server/block/block-builder.js";
-import { introspectBlock, introspectBlocks } from "#questpie/admin/server/block/introspection.js";
+import {
+	introspectBlock,
+	introspectBlocks,
+} from "#questpie/admin/server/block/introspection.js";
 
 // ============================================================================
 // BlockBuilder.form()
@@ -222,6 +225,21 @@ describe("Block introspection — form layout", () => {
 		expect(schemas.hero.form).toBeDefined();
 		expect(schemas.hero.form?.fields).toEqual(["title"]);
 		expect(schemas.simple.form).toBeUndefined();
+	});
+
+	test("batch introspection keys blocks by runtime name", () => {
+		const imageTextBlock = block("image-text")
+			.fields(({ f }) => ({
+				title: f.text(),
+			}))
+			.build();
+
+		const schemas = introspectBlocks({
+			imageText: imageTextBlock,
+		});
+
+		expect(schemas["image-text"]?.name).toBe("image-text");
+		expect(schemas.imageText).toBeUndefined();
 	});
 
 	test("introspection preserves complex layout structure", () => {

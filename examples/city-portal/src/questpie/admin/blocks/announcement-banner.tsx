@@ -6,7 +6,7 @@ import type { BlockProps } from "../.generated/client";
 
 export function AnnouncementBannerRenderer({
 	data,
-}: BlockProps<"announcementBanner">) {
+}: BlockProps<"announcement-banner">) {
 	const announcements = (data as any)?.announcements || [];
 
 	if (announcements.length === 0) return null;

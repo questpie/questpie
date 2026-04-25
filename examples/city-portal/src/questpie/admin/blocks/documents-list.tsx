@@ -7,7 +7,7 @@ import type { BlockProps } from "../.generated/client";
 export function DocumentsListRenderer({
 	values,
 	data,
-}: BlockProps<"documentsList">) {
+}: BlockProps<"documents-list">) {
 	const documents = (data as any)?.documents || [];
 
 	return (

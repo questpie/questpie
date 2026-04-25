@@ -9,7 +9,7 @@ import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
 
-export function BookingCtaRenderer({ values }: BlockProps<"bookingCta">) {
+export function BookingCtaRenderer({ values }: BlockProps<"booking-cta">) {
 	// Build booking URL with query params
 	const params = new URLSearchParams();
 	if (values.serviceId) params.set("service", values.serviceId);

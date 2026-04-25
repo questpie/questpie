@@ -18,6 +18,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
 import { useState } from "react";
 
+import { cn } from "#questpie/admin/client/lib/utils.js";
+
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { Checkbox } from "../ui/checkbox";
 import type { AvailableField } from "./types.js";
@@ -58,9 +60,10 @@ function SortableColumnItem({
 		<div
 			ref={setNodeRef}
 			style={style}
-			className={`hover:bg-muted hover:border-border flex items-center gap-2 border border-transparent p-2.5 transition-colors ${
-				isDragging ? "bg-muted opacity-50" : ""
-			}`}
+			className={cn(
+				"border-border-subtle bg-surface-low hover:border-border-strong hover:bg-surface-high flex items-center gap-2 rounded-md border p-2.5 transition-[background-color,border-color,opacity]",
+				isDragging && "opacity-75",
+			)}
 		>
 			<button
 				type="button"
@@ -216,9 +219,9 @@ export function ColumnsTab({
 				</SortableContext>
 			</DndContext>
 			{orderedFields.length === 0 && (
-				<div className="text-muted-foreground p-8 text-center text-sm">
+				<p className="text-muted-foreground py-2 text-sm">
 					{t("viewOptions.noFieldsAvailable")}
-				</div>
+				</p>
 			)}
 		</div>
 	);

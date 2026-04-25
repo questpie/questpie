@@ -72,7 +72,8 @@ export function BlockRenderer({
 	 * Recursively render a block node.
 	 */
 	function renderBlock(node: BlockNode): React.ReactNode {
-		const renderFn = renderers[node.type];
+		const renderFn =
+			renderers[node.type] ?? renderers[kebabToCamelCase(node.type)];
 
 		if (!renderFn) {
 			if (process.env.NODE_ENV !== "production") {
@@ -149,4 +150,8 @@ export function BlockRenderer({
 	}
 
 	return <div className={className}>{content._tree.map(renderBlock)}</div>;
+}
+
+function kebabToCamelCase(value: string): string {
+	return value.replace(/-([a-z])/g, (_, char: string) => char.toUpperCase());
 }

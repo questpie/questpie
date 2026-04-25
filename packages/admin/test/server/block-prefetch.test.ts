@@ -208,6 +208,37 @@ describe("processBlocksDocument - Declarative Expansion", () => {
 		expect(result?._data?.["team-1"]).toEqual({ barbers: [] });
 	});
 
+	test("should resolve block definitions by runtime name", async () => {
+		const imageTextBlock = {
+			name: "image-text",
+			state: {
+				name: "image-text",
+				prefetch: async () => ({ image: { id: "asset-1" } }),
+				fields: {},
+			},
+			getFieldMetadata: () => ({}),
+			executePrefetch: async () => ({ image: { id: "asset-1" } }),
+		};
+
+		const blocksDoc: BlocksDocument = {
+			_tree: [{ id: "image-text-1", type: "image-text", children: [] }],
+			_values: { "image-text-1": {} },
+		};
+
+		const result = await processBlocksDocument(
+			blocksDoc,
+			{ imageText: imageTextBlock },
+			{
+				app: {} as any,
+				db: {},
+			},
+		);
+
+		expect(result?._data?.["image-text-1"]).toEqual({
+			image: { id: "asset-1" },
+		});
+	});
+
 	test("should handle nested blocks", async () => {
 		const nestedBlockDefs = {
 			...mockBlockDefinitions,

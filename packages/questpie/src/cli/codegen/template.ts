@@ -395,7 +395,7 @@ export function generateTemplate(options: TemplateOptions): string {
 				if (catName === "routes") {
 					emitRouteTypeInterface(lines, appTypeName, moduleTypeName, fileMap);
 				} else {
-					emitTypeInterface(lines, appTypeName, moduleTypeName, fileMap);
+					emitTypeInterface(lines, appTypeName, moduleTypeName, fileMap, decl);
 				}
 				break;
 			}
@@ -934,16 +934,28 @@ function emitTypeInterface(
 	typeName: string,
 	moduleTypeName: string,
 	fileMap: Map<string, DiscoveredFile>,
+	decl: CategoryDeclaration | undefined,
 ): void {
 	const label = typeName.replace(/^App/, "").toLowerCase();
 	const hasUser = fileMap.size > 0;
 	lines.push(`/** All ${label} in the app (modules + user, user overrides) */`);
 	if (hasUser) {
-		lines.push(`export type ${typeName} = ${moduleTypeName} & {`);
-		for (const file of sortedValues(fileMap)) {
-			lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+		if (decl?.keyFromProperty) {
+			lines.push(`export type ${typeName} = ${moduleTypeName}`);
+			const files = sortedValues(fileMap);
+			for (const [index, file] of files.entries()) {
+				const suffix = index === files.length - 1 ? ";" : "";
+				lines.push(
+					`	& { [K in typeof ${file.varName}.${decl.keyFromProperty}]: typeof ${file.varName} }${suffix}`,
+				);
+			}
+		} else {
+			lines.push(`export type ${typeName} = ${moduleTypeName} & {`);
+			for (const file of sortedValues(fileMap)) {
+				lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+			}
+			lines.push("};");
 		}
-		lines.push("};");
 	} else {
 		lines.push(`export type ${typeName} = ${moduleTypeName};`);
 	}

@@ -1,14 +1,10 @@
-import { useState } from "react";
+import { Icon } from "@iconify/react";
+import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
 
 import { useTranslation } from "../../i18n/hooks.js";
+import { SelectSingle } from "../primitives/select-single.js";
 import { Button } from "../ui/button.js";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "../ui/select.js";
 import {
 	Sheet,
 	SheetContent,
@@ -29,6 +25,8 @@ import type {
 	SortConfig,
 	ViewConfiguration,
 } from "./types.js";
+
+const NO_GROUPING_VALUE = "__none";
 
 function arraysEqual<T>(a: T[], b: T[], eq: (x: T, y: T) => boolean): boolean {
 	return a.length === b.length && a.every((v, i) => eq(v, b[i]));
@@ -81,6 +79,46 @@ function viewConfigEqual(a: ViewConfiguration, b: ViewConfiguration): boolean {
 
 // Module-level constant for empty array to avoid recreating on each render
 const EMPTY_SAVED_VIEWS: SavedView[] = [];
+
+function normalizeSavedViewConfig(
+	config: ViewConfiguration,
+): ViewConfiguration {
+	return {
+		filters: config.filters ?? [],
+		sortConfig: config.sortConfig ?? null,
+		visibleColumns: config.visibleColumns ?? [],
+		groupBy: config.groupBy ?? null,
+		collapsedGroups: [],
+		realtime: config.realtime,
+		includeDeleted: config.includeDeleted ?? false,
+		pagination: {
+			page: 1,
+			pageSize: config.pagination?.pageSize ?? 25,
+		},
+	};
+}
+
+function ViewOptionRow({
+	title,
+	description,
+	control,
+}: {
+	title: string;
+	description: string;
+	control: ReactNode;
+}) {
+	return (
+		<div className="border-border-subtle flex items-center justify-between gap-4 border-b py-3 last:border-b-0">
+			<div className="min-w-0">
+				<p className="text-sm font-medium">{title}</p>
+				<p className="text-muted-foreground mt-0.5 text-xs text-pretty">
+					{description}
+				</p>
+			</div>
+			<div className="shrink-0">{control}</div>
+		</div>
+	);
+}
 
 interface FilterBuilderSheetProps extends FilterBuilderProps {
 	/** Default columns from .list() config or auto-detection, used for reset */
@@ -139,11 +177,11 @@ export function FilterBuilderSheet({
 	}
 
 	const handleLoadView = (view: SavedView) => {
-		setLocalConfig(view.configuration);
+		setLocalConfig(normalizeSavedViewConfig(view.configuration));
 	};
 
 	const handleSaveView = (name: string) => {
-		onSaveView?.(name, localConfig);
+		onSaveView?.(name, normalizeSavedViewConfig(localConfig));
 	};
 
 	const handleApply = () => {
@@ -165,6 +203,21 @@ export function FilterBuilderSheet({
 	};
 
 	const hasChanges = !viewConfigEqual(localConfig, currentConfig);
+	const groupByOptions = useMemo(
+		() => [
+			{
+				value: NO_GROUPING_VALUE,
+				label: t("viewOptions.noGrouping"),
+				icon: <Icon icon="ph:stack-simple" className="size-4 opacity-60" />,
+			},
+			...groupableFields.map((field) => ({
+				value: field.name,
+				label: field.label,
+				icon: <Icon icon="ph:rows" className="size-4 opacity-60" />,
+			})),
+		],
+		[groupableFields, t],
+	);
 
 	return (
 		<Sheet open={isOpen} onOpenChange={onOpenChange}>
@@ -177,89 +230,73 @@ export function FilterBuilderSheet({
 				</SheetHeader>
 
 				<div className="flex-1 overflow-y-auto px-6">
-					<div className="border-border-subtle bg-surface-low mt-4 rounded-xl border p-3">
-						<div className="flex items-center justify-between gap-3">
-							<div>
-								<p className="text-sm font-medium">Realtime Updates</p>
-								<p className="text-muted-foreground text-xs">
-									Auto-refresh this table when data changes.
-								</p>
-							</div>
-							<Switch
-								checked={localConfig.realtime ?? true}
-								onCheckedChange={(checked) =>
-									setLocalConfig({ ...localConfig, realtime: checked })
-								}
-							/>
-						</div>
-					</div>
-
-					{supportsSoftDelete && (
-						<div className="border-border-subtle bg-surface-low mt-3 rounded-xl border p-3">
-							<div className="flex items-center justify-between gap-3">
-								<div>
-									<p className="text-sm font-medium">
-										{t("viewOptions.showDeleted")}
-									</p>
-									<p className="text-muted-foreground text-xs">
-										{t("viewOptions.showDeletedDescription")}
-									</p>
-								</div>
+					<div className="mt-4">
+						<ViewOptionRow
+							title={t("viewOptions.realtime")}
+							description={t("viewOptions.realtimeDescription")}
+							control={
 								<Switch
-									checked={localConfig.includeDeleted ?? false}
+									checked={localConfig.realtime ?? true}
 									onCheckedChange={(checked) =>
-										setLocalConfig({ ...localConfig, includeDeleted: checked })
+										setLocalConfig({ ...localConfig, realtime: checked })
 									}
 								/>
-							</div>
-						</div>
-					)}
+							}
+						/>
 
-					{groupableFields.length > 0 && (
-						<div className="border-border-subtle bg-surface-low mt-3 rounded-xl border p-3">
-							<div className="space-y-3">
-								<div>
-									<p className="text-sm font-medium">
-										{t("viewOptions.groupBy")}
-									</p>
-									<p className="text-muted-foreground text-xs">
-										{t("viewOptions.groupByDescription")}
-									</p>
-								</div>
-								<Select
-									value={localConfig.groupBy ?? "__none"}
-									onValueChange={(value) =>
-										setLocalConfig({
-											...localConfig,
-											groupBy: value === "__none" ? null : value,
-											collapsedGroups: [],
-											pagination: {
-												...(localConfig.pagination ?? { pageSize: 25 }),
-												page: 1,
-											},
-										})
-									}
-								>
-									<SelectTrigger className="h-9 w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="__none">
-											{t("viewOptions.noGrouping")}
-										</SelectItem>
-										{groupableFields.map((field) => (
-											<SelectItem key={field.name} value={field.name}>
-												{field.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-						</div>
-					)}
+						{supportsSoftDelete && (
+							<ViewOptionRow
+								title={t("viewOptions.showDeleted")}
+								description={t("viewOptions.showDeletedDescription")}
+								control={
+									<Switch
+										checked={localConfig.includeDeleted ?? false}
+										onCheckedChange={(checked) =>
+											setLocalConfig({
+												...localConfig,
+												includeDeleted: checked,
+											})
+										}
+									/>
+								}
+							/>
+						)}
+
+						{groupableFields.length > 0 && (
+							<ViewOptionRow
+								title={t("viewOptions.groupBy")}
+								description={t("viewOptions.groupByDescription")}
+								control={
+									<SelectSingle
+										id="view-options-group-by"
+										value={localConfig.groupBy ?? NO_GROUPING_VALUE}
+										onChange={(value) => {
+											const nextGroupBy =
+												!value || value === NO_GROUPING_VALUE ? null : value;
+											setLocalConfig({
+												...localConfig,
+												groupBy: nextGroupBy,
+												collapsedGroups: [],
+												pagination: {
+													...(localConfig.pagination ?? { pageSize: 25 }),
+													page: 1,
+												},
+											});
+										}}
+										options={groupByOptions}
+										clearable={false}
+										emptyMessage={t("viewOptions.noFieldsAvailable")}
+										placeholder={t("viewOptions.noGrouping")}
+										drawerTitle={t("viewOptions.groupBy")}
+										className="h-9 w-48"
+									/>
+								}
+							/>
+						)}
+					</div>
 
 					<Tabs defaultValue="columns" className="mt-4">
-						<TabsList variant="line" className="w-full">
+						<TabsList className="w-full">
 							<TabsTrigger value="columns" className="flex-1">
 								{t("viewOptions.columns")}
 							</TabsTrigger>

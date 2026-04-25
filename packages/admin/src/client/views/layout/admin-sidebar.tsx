@@ -536,7 +536,7 @@ function isRouteActive(
  * Menu button styles - QUESTPIE design: clean, technical look
  */
 const menuButtonStyles = cn(
-	"item-surface font-chrome flex w-full items-center gap-2 px-2 py-2 text-[13px] font-medium transition-[background-color,color,border-color,transform] duration-150 ease-out active:scale-[0.96]",
+	"item-surface font-chrome flex w-full items-center gap-2 px-2 py-2 text-[13px] font-medium transition-[background-color,color,border-color,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
 	"text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground",
 	"focus-visible:ring-sidebar-ring focus-visible:ring-1 focus-visible:outline-none",
 	"group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2",
@@ -1272,7 +1272,7 @@ export function AdminSidebar({
 		<LinkComponent
 			to={basePath}
 			className={cn(
-				"qa-sidebar__brand flex items-center gap-2 rounded-md p-2 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.96]",
+				"qa-sidebar__brand flex items-center gap-2 rounded-md p-2 transition-[background-color,color,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
 				"hover:bg-sidebar-accent",
 				collapsed && "justify-center",
 			)}
@@ -1317,7 +1317,7 @@ export function AdminSidebar({
 										<LinkComponent
 											to={basePath}
 											className={cn(
-												"flex items-center gap-2 rounded-md p-2 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.96]",
+												"flex items-center gap-2 rounded-md p-2 transition-[background-color,color,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
 												"hover:bg-sidebar-accent",
 												"justify-center",
 											)}
@@ -1348,7 +1348,7 @@ export function AdminSidebar({
 					>
 						<span className="h-3 w-0.5 rounded-full bg-current opacity-55" />
 					</Button>
-					<div className="floating-surface ml-1 flex scale-95 items-center gap-1 p-1 opacity-0 transition-[opacity,transform] duration-150 ease-out group-focus-within/peek:scale-100 group-focus-within/peek:opacity-100 group-hover/peek:scale-100 group-hover/peek:opacity-100">
+					<div className="floating-surface ml-1 flex scale-95 items-center gap-1 p-1 opacity-0 transition-[opacity,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-enter)] group-focus-within/peek:scale-100 group-focus-within/peek:opacity-100 group-hover/peek:scale-100 group-hover/peek:opacity-100 motion-reduce:scale-100 motion-reduce:transition-none">
 						<SidebarTrigger
 							className="text-muted-foreground hover:bg-muted hover:text-foreground"
 							aria-label="Expand sidebar"

@@ -609,6 +609,9 @@ export default {
 	"viewOptions.savedViews": "Saved Views",
 	"viewOptions.apply": "Apply",
 	"viewOptions.reset": "Reset",
+	"viewOptions.realtime": "Realtime updates",
+	"viewOptions.realtimeDescription":
+		"Auto-refresh this table when data changes.",
 	"viewOptions.showDeleted": "Show deleted",
 	"viewOptions.showDeletedDescription":
 		"Include soft-deleted records in this view.",
@@ -616,6 +619,7 @@ export default {
 	"viewOptions.groupByDescription":
 		"Group the current page by a configured field.",
 	"viewOptions.noGrouping": "No grouping",
+	"viewOptions.sort": "Sort",
 
 	// Versions
 	"version.history": "Version history",

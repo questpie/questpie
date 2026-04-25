@@ -4,7 +4,7 @@
 
 import type { BlockProps } from "../.generated/client";
 
-export function LatestNewsRenderer({ values, data }: BlockProps<"latestNews">) {
+export function LatestNewsRenderer({ values, data }: BlockProps<"latest-news">) {
 	const news = (data as any)?.news || [];
 
 	return (

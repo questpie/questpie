@@ -43,7 +43,7 @@ import type { teamBlock } from "../../server/blocks/team";
 import type { textBlock } from "../../server/blocks/text";
 
 const admin = {
-	blocks: { ..._modules.blocks, "bookingCta": _block_bookingCta, "columns": _block_columns, "contactInfo": _block_contactInfo, "cta": _block_cta, "divider": _block_divider, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "hours": _block_hours, "imageText": _block_imageText, "reviews": _block_reviews, "services": _block_services, "spacer": _block_spacer, "stats": _block_stats, "team": _block_team, "text": _block_text },
+	blocks: { ..._modules.blocks, "booking-cta": _block_bookingCta, "columns": _block_columns, "contact-info": _block_contactInfo, "cta": _block_cta, "divider": _block_divider, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "hours": _block_hours, "image-text": _block_imageText, "reviews": _block_reviews, "services": _block_services, "spacer": _block_spacer, "stats": _block_stats, "team": _block_team, "text": _block_text },
 	views: { ..._modules.views },
 	components: { ..._modules.components },
 	fields: { ..._modules.fields },
@@ -51,7 +51,7 @@ const admin = {
 	widgets: { ..._modules.widgets },
 };
 
-type _ServerBlocks = { "bookingCta": typeof bookingCtaBlock; "columns": typeof columnsBlock; "contactInfo": typeof contactInfoBlock; "cta": typeof ctaBlock; "divider": typeof dividerBlock; "gallery": typeof galleryBlock; "heading": typeof headingBlock; "hero": typeof heroBlock; "hours": typeof hoursBlock; "imageText": typeof imageTextBlock; "reviews": typeof reviewsBlock; "services": typeof servicesBlock; "spacer": typeof spacerBlock; "stats": typeof statsBlock; "team": typeof teamBlock; "text": typeof textBlock };
+type _ServerBlocks = { "booking-cta": typeof bookingCtaBlock; "columns": typeof columnsBlock; "contact-info": typeof contactInfoBlock; "cta": typeof ctaBlock; "divider": typeof dividerBlock; "gallery": typeof galleryBlock; "heading": typeof headingBlock; "hero": typeof heroBlock; "hours": typeof hoursBlock; "image-text": typeof imageTextBlock; "reviews": typeof reviewsBlock; "services": typeof servicesBlock; "spacer": typeof spacerBlock; "stats": typeof statsBlock; "team": typeof teamBlock; "text": typeof textBlock };
 
 export type BlockProps<T extends keyof _ServerBlocks> = BlockRendererProps<
 	InferBlockValues<_ServerBlocks[T]["state"]>,

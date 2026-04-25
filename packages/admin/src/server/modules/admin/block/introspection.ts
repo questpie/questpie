@@ -139,7 +139,8 @@ export function introspectBlocks(
 	const schemas: Record<string, BlockSchema> = {};
 
 	for (const [name, blockDef] of Object.entries(blocks)) {
-		schemas[name] = introspectBlock(blockDef);
+		const schema = introspectBlock(blockDef);
+		schemas[schema.name || name] = schema;
 	}
 
 	return schemas;

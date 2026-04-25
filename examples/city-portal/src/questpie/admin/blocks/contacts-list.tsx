@@ -7,7 +7,7 @@ import type { BlockProps } from "../.generated/client";
 export function ContactsListRenderer({
 	values,
 	data,
-}: BlockProps<"contactsList">) {
+}: BlockProps<"contacts-list">) {
 	const contacts = (data as any)?.contacts || [];
 
 	return (

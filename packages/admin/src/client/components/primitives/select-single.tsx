@@ -30,6 +30,7 @@ import { flattenOptions } from "./types";
 
 // Module-level constant for empty options to avoid recreating on each render
 const EMPTY_OPTIONS: SelectOptions<string> = [];
+const SEARCH_OPTION_THRESHOLD = 8;
 
 interface SelectSingleProps<
 	TValue extends string = string,
@@ -55,6 +56,8 @@ interface SelectSingleProps<
 	loading?: boolean;
 	/** Empty state message */
 	emptyMessage?: string;
+	/** Show search input in popup. "auto" shows it for async or larger option lists. */
+	searchable?: boolean | "auto";
 	/** Title for mobile drawer */
 	drawerTitle?: string;
 	/**
@@ -78,7 +81,7 @@ interface SelectSingleProps<
  * SelectSingle - Single select component with search
  *
  * Features:
- * - Always searchable
+ * - Searchable when async or option list is large
  * - Responsive: Popover on desktop, Drawer on mobile
  * - Supports static and async options
  * - Keyboard navigation
@@ -105,6 +108,7 @@ export function SelectSingle<TValue extends string = string>({
 	clearable = true,
 	loading: externalLoading = false,
 	emptyMessage = "No options found",
+	searchable = "auto",
 	placeholder = "Select...",
 	disabled,
 	className,
@@ -164,9 +168,16 @@ export function SelectSingle<TValue extends string = string>({
 		);
 		return Array.from(mergedMap.values());
 	}, [loadOptions, dynamicOptions, flatStaticOptions]);
+	const showSearchInput =
+		searchable === "auto"
+			? !!loadOptions || allOptions.length > SEARCH_OPTION_THRESHOLD
+			: searchable;
 
 	// Filter options by search (for static options)
 	const filteredOptions = useMemo(() => {
+		if (!showSearchInput) {
+			return allOptions;
+		}
 		if (loadOptions) {
 			return allOptions; // Dynamic options are already filtered by server
 		}
@@ -176,7 +187,7 @@ export function SelectSingle<TValue extends string = string>({
 		return allOptions.filter((opt: SelectOption<TValue>) =>
 			resolveText(opt.label).toLowerCase().includes(search.toLowerCase()),
 		);
-	}, [allOptions, search, loadOptions, resolveText]);
+	}, [allOptions, search, loadOptions, resolveText, showSearchInput]);
 
 	// Get label for a value — falls back to selectedLabel, then raw value string
 	const getLabel = useCallback(
@@ -281,12 +292,14 @@ export function SelectSingle<TValue extends string = string>({
 	);
 
 	const CommandContent = (
-		<Command shouldFilter={!loadOptions}>
-			<CommandInput
-				placeholder="Search..."
-				value={search}
-				onValueChange={setSearch}
-			/>
+		<Command shouldFilter={showSearchInput && !loadOptions}>
+			{showSearchInput && (
+				<CommandInput
+					placeholder="Search..."
+					value={search}
+					onValueChange={setSearch}
+				/>
+			)}
 			<CommandList id={listboxId}>
 				{showLoading && (
 					<div className="flex items-center justify-center py-6">

@@ -76,6 +76,23 @@ interface ExpansionTarget {
 	nestedWith?: Record<string, unknown>;
 }
 
+function normalizeBlockDefinitions(
+	blockDefinitions: Record<string, AnyBlockDefinition>,
+): Record<string, AnyBlockDefinition> {
+	const normalized: Record<string, AnyBlockDefinition> = {};
+
+	for (const [key, blockDef] of Object.entries(blockDefinitions)) {
+		normalized[key] = blockDef;
+
+		const runtimeName = blockDef.state?.name ?? blockDef.name;
+		if (runtimeName) {
+			normalized[runtimeName] = blockDef;
+		}
+	}
+
+	return normalized;
+}
+
 /**
  * Expand relation/upload fields declared in `prefetchWith`.
  *
@@ -287,11 +304,14 @@ export async function processBlocksDocument(
 	};
 	collectNodes(blocks._tree);
 
+	const normalizedBlockDefinitions =
+		normalizeBlockDefinitions(blockDefinitions);
+
 	// Step 1: Expand declared `with` fields (batch across all blocks)
 	const expandedData = await expandDeclaredFields(
 		allNodes,
 		blocks._values,
-		blockDefinitions,
+		normalizedBlockDefinitions,
 		ctx,
 	);
 
@@ -299,7 +319,7 @@ export async function processBlocksDocument(
 	const prefetchedData = await executePrefetchFunctions(
 		allNodes,
 		blocks._values,
-		blockDefinitions,
+		normalizedBlockDefinitions,
 		ctx,
 		expandedData,
 	);

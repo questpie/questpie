@@ -354,7 +354,7 @@ export function MediaPickerDialog({
 							{previewAsset ? (
 								<AssetPreview asset={previewAsset} variant="card" />
 							) : (
-								<div className="panel-surface text-muted-foreground flex items-center justify-center border-dashed p-6 text-sm">
+								<div className="text-muted-foreground flex min-h-24 items-center justify-center p-4 text-sm">
 									Select an asset to preview
 								</div>
 							)}
@@ -365,7 +365,7 @@ export function MediaPickerDialog({
 						{previewAsset ? (
 							<AssetPreview asset={previewAsset} variant="compact" />
 						) : (
-							<div className="panel-surface text-muted-foreground flex items-center justify-center border-dashed p-4 text-sm">
+							<div className="text-muted-foreground flex min-h-16 items-center justify-center p-2 text-sm">
 								Select an asset to preview
 							</div>
 						)}
