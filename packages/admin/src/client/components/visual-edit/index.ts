@@ -54,6 +54,18 @@ export {
 	type BlockInspectorBodyProps,
 } from "./block-inspector-body.js";
 export {
+	DocumentInspectorBody,
+	type DocumentInspectorBodyProps,
+} from "./document-inspector-body.js";
+export {
+	groupFieldsForDocument,
+	hasExplicitGroups,
+	DEFAULT_DOCUMENT_GROUP_KEY,
+	type DocumentFieldEntry,
+	type DocumentFieldGroup,
+	type GroupFieldsForDocumentArgs,
+} from "./group-fields.js";
+export {
 	defaultPatchStrategy,
 	resolvePatchStrategy,
 	resolveVisualEditMeta,
