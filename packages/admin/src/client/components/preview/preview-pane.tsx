@@ -13,6 +13,7 @@ import * as React from "react";
 
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
+import { useInitSnapshotBuffer } from "./use-init-snapshot-buffer.js";
 import type {
 	AdminToPreviewMessage,
 	PreviewToAdminMessage,
@@ -156,18 +157,15 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			completed: 0,
 			lastLogAt: 0,
 		});
-		// Buffer for the most recent INIT_SNAPSHOT payload — replayed on
-		// every PREVIEW_READY received from the iframe so:
+		// Buffer the most recent INIT_SNAPSHOT payload — extracted
+		// into `useInitSnapshotBuffer` for unit-testability. Replays
+		// on every PREVIEW_READY so:
 		//   1. an INIT_SNAPSHOT sent before the iframe is ready isn't lost
 		//   2. an iframe reload (e.g. via NAVIGATE_PREVIEW or back/forward)
 		//      re-receives the latest snapshot without the parent having
 		//      to re-mint it
-		const lastInitSnapshotRef = React.useRef<{
-			snapshot: Record<string, unknown>;
-			schemaVersion?: string;
-			locale?: string;
-			stage?: string;
-		} | null>(null);
+		// (sendBufferedInitSnapshot is wired up below once
+		// `sendToPreview` is in scope.)
 
 		const {
 			data: previewUrl,
@@ -260,6 +258,34 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			[targetOrigin, url],
 		);
 
+		// Buffer + replay for INIT_SNAPSHOT — see use-init-snapshot-buffer.ts
+		// for the contract. The buffered hook reads `isReady` via a ref so
+		// it can stay stable across renders (otherwise the imperative handle
+		// below would rebuild on every isReady flip).
+		const sendInitToPreview = React.useCallback(
+			(buffered: {
+				snapshot: Record<string, unknown>;
+				schemaVersion?: string;
+				locale?: string;
+				stage?: string;
+			}) => {
+				sendToPreview({
+					type: "INIT_SNAPSHOT",
+					snapshot: buffered.snapshot,
+					schemaVersion: buffered.schemaVersion,
+					locale: buffered.locale,
+					stage: buffered.stage,
+				});
+			},
+			[sendToPreview],
+		);
+		const initSnapshotBuffer = useInitSnapshotBuffer<{
+			snapshot: Record<string, unknown>;
+			schemaVersion?: string;
+			locale?: string;
+			stage?: string;
+		}>({ isReady, send: sendInitToPreview });
+
 		const requestRefresh = React.useCallback(() => {
 			if (!isReady) {
 				return;
@@ -304,20 +330,10 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					}
 				},
 				sendInitSnapshot: (snapshot, extras) => {
-					// Buffer regardless of ready state so:
-					//   - if the iframe isn't ready yet, the next
-					//     PREVIEW_READY replays this snapshot
-					//   - if the iframe later reloads, the new
-					//     PREVIEW_READY re-receives it
-					lastInitSnapshotRef.current = {
-						snapshot,
-						schemaVersion: extras?.schemaVersion,
-						locale: extras?.locale,
-						stage: extras?.stage,
-					};
-					if (!isReady) return;
-					sendToPreview({
-						type: "INIT_SNAPSHOT",
+					// Buffer + send (or buffer-only if not ready). The
+					// hook handles the replay-on-PREVIEW_READY path so
+					// pre-ready and post-reload cases both recover.
+					initSnapshotBuffer.setBuffered({
 						snapshot,
 						schemaVersion: extras?.schemaVersion,
 						locale: extras?.locale,
@@ -350,7 +366,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					});
 				},
 			}),
-			[isReady, requestRefresh, sendToPreview],
+			[isReady, requestRefresh, sendToPreview, initSnapshotBuffer],
 		);
 
 		// Listen for messages from preview
@@ -383,17 +399,9 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 						setIsRefreshing(false);
 						// Replay the most recent INIT_SNAPSHOT — covers
 						// the bridge-fired-before-ready race AND the
-						// iframe-reload re-init case.
-						const buffered = lastInitSnapshotRef.current;
-						if (buffered) {
-							sendToPreview({
-								type: "INIT_SNAPSHOT",
-								snapshot: buffered.snapshot,
-								schemaVersion: buffered.schemaVersion,
-								locale: buffered.locale,
-								stage: buffered.stage,
-							});
-						}
+						// iframe-reload re-init case. `replay()` is a
+						// no-op when the buffer is empty.
+						initSnapshotBuffer.replay();
 						// Fire the consumer-provided onReady AFTER the
 						// buffered replay so the consumer can override
 						// the buffer with a fresher payload (e.g. the
@@ -447,7 +455,13 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 
 			window.addEventListener("message", handleMessage);
 			return () => window.removeEventListener("message", handleMessage);
-		}, [isValidOrigin, onFieldClick, onBlockClick, sendToPreview]);
+		}, [
+			isValidOrigin,
+			onFieldClick,
+			onBlockClick,
+			sendToPreview,
+			initSnapshotBuffer,
+		]);
 
 		// Send selected block updates
 		React.useEffect(() => {
