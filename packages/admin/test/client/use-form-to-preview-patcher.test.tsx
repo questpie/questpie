@@ -384,3 +384,69 @@ describe("useFormToPreviewPatcher — nested objects", () => {
 		]);
 	});
 });
+
+describe("useFormToPreviewPatcher — baseline reset (post-COMMIT)", () => {
+	let formRef: UseFormReturn<any>;
+	const onForm = (form: UseFormReturn<any>) => {
+		formRef = form;
+	};
+
+	it("resets the snapshot + seq when baseline changes mid-edit", async () => {
+		const previewRef = makePreviewRef();
+		const fields = {
+			title: fieldInstance("text"),
+			description: fieldInstance("textarea"),
+		};
+
+		const { rerender } = render(
+			<Harness
+				defaultValues={{ title: "A" }}
+				fields={fields}
+				previewRef={previewRef}
+				baseline={{ title: "A" }}
+				debounceMs={5}
+				onForm={onForm}
+			/>,
+		);
+
+		// First edit produces seq=1, set title=B against baseline A.
+		await act(async () => {
+			formRef.setValue("title", "B");
+			await flushDebounce();
+		});
+
+		expect(previewRef.mocks.sendPatchBatch).toHaveBeenCalledTimes(1);
+		expect(previewRef.mocks.sendPatchBatch.mock.calls[0]![0]).toBe(1);
+
+		// Simulate post-COMMIT refetch: a new baseline arrives carrying
+		// the saved title plus a brand-new field. The patcher should
+		// reset its internal snapshot + seq to 0; the next form change
+		// emits seq=1 again, diffed against the new baseline.
+		rerender(
+			<Harness
+				defaultValues={{ title: "A" }}
+				fields={fields}
+				previewRef={previewRef}
+				baseline={{ title: "B", description: "old" }}
+				debounceMs={5}
+				onForm={onForm}
+			/>,
+		);
+
+		await act(async () => {
+			formRef.setValue("description", "new");
+			await flushDebounce();
+		});
+
+		expect(previewRef.mocks.sendPatchBatch).toHaveBeenCalledTimes(2);
+		const [seq, ops] =
+			previewRef.mocks.sendPatchBatch.mock.calls[1]!;
+		// seq resets after baseline change.
+		expect(seq).toBe(1);
+		// Diff is computed against the NEW baseline — only the
+		// description change is emitted, not a stale title=B op.
+		expect(ops).toEqual([
+			{ op: "set", path: "description", value: "new" },
+		]);
+	});
+});
