@@ -357,6 +357,23 @@ SSE-powered live updates are enabled by default. Collection lists and dashboard 
 .list(({ v }) => v.collectionTable({ realtime: false }))
 ```
 
+## Live Preview
+
+Two preview modes ship out of the box:
+
+- **`collection-form` (default)** — the legacy split-screen iframe view. Toggle with the eye icon in the form header (or `?preview=true`). Full reload on save / autosave.
+- **`visual-edit-form` (opt-in)** — the **Visual Edit Workspace**: a 2-pane layout with a contextual right inspector and patch-based iframe updates. Click any field in the canvas to open it in the inspector; edits land in the iframe without a save round-trip; saves / reverts / stage transitions sync via `COMMIT` / `FULL_RESYNC` messages. Per-field `visualEdit.group` / `order` / `inspector` / `patchStrategy` / `hidden` metadata tunes how each field appears.
+
+```ts
+// Opt a collection into the workspace
+.preview({ url: ({ record }) => `/${record.slug}` })
+.form(({ v }) => v.visualEditForm({
+  fields: [/* ... */],
+}))
+```
+
+See [Live Preview docs](https://questpie.com/docs/workspace/live-preview) for the full guide, [Visual Edit Workspace](https://questpie.com/docs/workspace/live-preview/visual-edit) for the workspace-specific flow, and [Protocol & Reliability](https://questpie.com/docs/workspace/live-preview/protocol) for the wire format.
+
 ## URL-Synced Panels
 
 Admin keeps major panel states in URL search params so links are shareable and browser navigation works as expected.
@@ -376,6 +393,21 @@ import {
 	AdminRouter,
 	createTypedHooks,
 	BlockRenderer,
+	// Live preview (frontend integration)
+	useCollectionPreview,
+	PreviewField,
+	PreviewProvider,
+	BlockScopeProvider,
+	// Visual Edit Workspace (admin-side primitives)
+	VisualEditFormHost,
+	VisualEditWorkspace,
+	VisualInspectorPanel,
+	useVisualEdit,
+	useVisualEditPreviewBridge,
+	useFormToPreviewPatcher,
+	// V2 protocol helpers
+	diffSnapshot,
+	applyPatchBatch,
 } from "@questpie/admin/client";
 
 // Server (admin module + server factories/config)
