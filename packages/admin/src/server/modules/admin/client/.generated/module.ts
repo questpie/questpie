@@ -6,6 +6,7 @@
 import _view_collectionForm from "../views/collection-form";
 import _view_collectionTable from "../views/collection-table";
 import _view_globalForm from "../views/global-form";
+import _view_visualEditForm from "../views/visual-edit-form";
 
 // ── Components ────────────────────────────────────────────
 import _comp_badge from "../components/badge";
@@ -107,6 +108,7 @@ const _module = {
 		[_view_collectionForm.name]: _view_collectionForm,
 		[_view_collectionTable.name]: _view_collectionTable,
 		[_view_globalForm.name]: _view_globalForm,
+		[_view_visualEditForm.name]: _view_visualEditForm,
 	},
 	components: {
 		badge: _comp_badge,
