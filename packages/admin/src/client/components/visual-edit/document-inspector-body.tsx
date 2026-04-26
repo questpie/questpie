@@ -103,7 +103,7 @@ export function DocumentInspectorBody({
 	}
 
 	const showGroupHeaders = hasExplicitGroups(groups);
-	const collection = collectionProp ?? (controller as any).collection;
+	const collection = collectionProp ?? controller.collection;
 
 	const labelFor = (group: DocumentFieldGroup) => {
 		if (renderGroupLabel) return renderGroupLabel(group.key);

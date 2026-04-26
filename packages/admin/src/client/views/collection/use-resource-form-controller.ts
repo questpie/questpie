@@ -107,6 +107,10 @@ export type ResourceFormControllerWorkflow = {
 export type ResourceFormController = {
 	/** react-hook-form instance — defaults match `transformedItem ?? defaultValues ?? {}` */
 	form: UseFormReturn<any>;
+	/** Collection name the controller is bound to */
+	collection: string;
+	/** Item id when editing, undefined when creating */
+	id: string | undefined;
 	/** Whether we are editing an existing record (id is set) */
 	isEditMode: boolean;
 	/** Validation mode passed to the server validation hook */
@@ -348,6 +352,8 @@ export function useResourceFormController({
 
 	return {
 		form,
+		collection,
+		id,
 		isEditMode,
 		validationMode,
 		fields,
