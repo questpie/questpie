@@ -1,460 +1,291 @@
 ---
 title: Protocol & Reliability
-description: Production reliability contract for the Preview V2 postMessage protocol. Covers versioning, sequencing, error recovery, and telemetry.
+description: Wire-level reference for the postMessage protocol between the QuestPie admin and the preview iframe.
 ---
 
-This document defines the wire protocol between the QuestPie admin panel and the preview iframe in Preview V2. It is the authoritative reference for implementors on both sides.
+This document is the authoritative wire reference for what flows between the admin and the preview iframe today. The TypeScript source of truth lives in `packages/admin/src/client/preview/types.ts` — every shape on this page mirrors a type exported from there.
 
-<Callout type="info">
-	The Preview V2 protocol is implemented end-to-end. Admin-side plumbing is
-	exposed through `VisualEditFormHost` / `useVisualEditPreviewBridge` (see
-	[Visual Edit Workspace](./visual-edit)), and `useCollectionPreview` on the
-	iframe side already handles `INIT_SNAPSHOT` / `PATCH_BATCH` / `COMMIT` /
-	`FULL_RESYNC` alongside the V1 `PREVIEW_REFRESH` flow.
-</Callout>
-
-## Message Envelope
-
-Every message in V2 conforms to this base shape:
-
-```ts
-interface PreviewMessage {
-	type: string;
-	sessionId: string;
-	seq: number;
-	timestamp: number;
-	protocolVersion: number;
-}
-```
-
-| Field             | Type     | Description                                                                                                                                              |
-| ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `type`            | `string` | Message discriminator. One of the types defined below.                                                                                                   |
-| `sessionId`       | `string` | Unique per preview session. Generated when the admin opens the preview panel. Used to discard stale messages from previous sessions.                     |
-| `seq`             | `number` | Monotonically increasing sequence number. The admin increments `seq` for every message it sends. The frame increments its own independent `seq` counter. |
-| `timestamp`       | `number` | `Date.now()` at send time. Used for latency telemetry, not for ordering.                                                                                 |
-| `protocolVersion` | `number` | Currently `2`. Used for version negotiation.                                                                                                             |
-
-## Protocol Versioning
-
-### Version Negotiation
-
-1. The frame sends `READY` with `protocolVersion: 2`
-2. The admin checks whether it supports that version
-3. If supported, the admin responds with `INIT_SNAPSHOT` (also `protocolVersion: 2`)
-4. If not supported, the admin falls back to the highest mutually supported version
-
-The admin always controls the effective protocol version. The frame adapts to whatever version the admin uses in `INIT_SNAPSHOT`.
-
-### Backward Compatibility
-
-- A V2 admin receiving a `READY` without `protocolVersion` assumes V1 and uses the legacy refresh protocol
-- A V2 frame receiving a `PREVIEW_REFRESH` message (V1) falls back to calling `onRefresh` if one was provided
-- Future V3+ changes must remain backward compatible with V2 frames for at least one major release cycle
+For the high-level user story (when to enable, how the workspace consumes it, per-field tuning), see [Visual Edit Workspace](./visual-edit). This page is for implementors building custom iframe code or extending the protocol.
 
 ## Origin Validation
 
-### Security Model
+Every postMessage is sent with an **explicit target origin** — never `"*"` — and validated on receipt against the resolved peer origin.
 
-All `postMessage` calls specify an explicit target origin. The wildcard `"*"` is never used.
+**Admin side** (`PreviewPane`):
 
-**Admin side:**
+- Resolves the iframe's origin once from the configured preview URL via `new URL(url, window.location.href).origin`.
+- Drops outbound messages and warns in dev when the origin can't be resolved.
+- Wraps `iframe.contentWindow.postMessage(message, targetOrigin)` in a `try`/`catch` so a non-serializable payload (`DataCloneError`) is logged in dev and swallowed in production.
 
-```ts
-const previewOrigin = new URL(previewUrl).origin;
-iframe.contentWindow.postMessage(message, previewOrigin);
-```
+**Iframe side** (`useCollectionPreview`):
 
-**Frame side:**
+- Resolves the admin origin once from `document.referrer`.
+- Drops inbound messages whose `event.origin` doesn't match.
+- When `document.referrer` is empty (e.g. opened directly), accepts only same-origin parents — never silently trusts an unknown frame.
 
-```ts
-const adminOrigin = document.referrer
-	? new URL(document.referrer).origin
-	: null;
+There is no `sessionId` on the wire; the admin tab's lifetime IS the session.
 
-window.addEventListener("message", (event) => {
-	if (event.origin !== adminOrigin) return;
-	if (event.data?.sessionId !== currentSessionId) return;
-	handleMessage(event.data);
-});
-```
+## Message Envelope
 
-### Allowed Origins
+Each message is a **plain object literal** with a `type` discriminant — there is no shared base shape. Concrete payloads are listed below; `type` is exhaustively covered by `AdminToPreviewMessage` and `PreviewToAdminMessage` in `types.ts`.
 
-The admin derives the allowed preview origin from the collection's `.preview({ url })` config at runtime. The frame derives the allowed admin origin from `document.referrer` (set by the iframe's parent page).
+The validators `isAdminToPreviewMessage` / `isPreviewToAdminMessage` accept any object whose `type` matches a known string. Future additions only need to register their string in the validator's set and the union type — there's no version negotiation handshake.
 
-There is no static allowlist. Origins are validated dynamically per session.
+## Sequence Numbers
 
-### Session Binding
+Only `PATCH_BATCH` carries a sequence number (`seq`). Every other message is unsequenced.
 
-Messages are bound to a `sessionId`. If the frame receives a message with a `sessionId` it does not recognize (e.g., from a previous session that was not properly torn down), it discards the message silently.
+- The admin's patcher (`useFormToPreviewPatcher`) maintains a monotonic counter, incremented per emitted batch. The counter resets to `0` whenever the patcher's `baseline` reference changes (post-COMMIT refetch, locale switch, …).
+- The iframe (`useCollectionPreview`) keeps a `lastSeqRef`; batches with `seq <= lastSeqRef` are dropped. `INIT_SNAPSHOT`, `COMMIT`, and `FULL_RESYNC` reset `lastSeqRef` to `-1`, so the very next batch is always accepted.
 
-## Message Types
+## Admin → Iframe
 
-### Admin to Frame
+### `PREVIEW_REFRESH`
 
-#### `INIT_SNAPSHOT`
-
-Sent once after receiving `READY`. Contains the full document state.
+V1 fallback that asks the iframe to re-run its loader.
 
 ```ts
-interface InitSnapshot extends PreviewMessage {
-	type: "INIT_SNAPSHOT";
-	data: Record<string, unknown>;
-	locale?: string;
-	collectionName: string;
-}
+type PreviewRefreshMessage = {
+  type: "PREVIEW_REFRESH";
+  changedField?: string; // dev-only hint
+};
 ```
 
-- `seq` is always `0` for `INIT_SNAPSHOT`
-- `data` is the complete document as it exists in the form at the time of opening preview
-- `locale` is the current editing locale, if the collection is localized
+The iframe `await`s the consumer's `onRefresh` callback then replies with `REFRESH_COMPLETE`.
 
-#### `PATCH_BATCH`
+### `INIT_SNAPSHOT`
 
-Sent when one or more fields change in the admin form.
+Seeds the iframe's local draft with a full record.
 
 ```ts
-interface PatchBatch extends PreviewMessage {
-	type: "PATCH_BATCH";
-	patches: Patch[];
-}
-
-interface Patch {
-	path: string;
-	value: unknown;
-}
+type InitSnapshotMessage = {
+  type: "INIT_SNAPSHOT";
+  snapshot: Record<string, unknown>;
+  schemaVersion?: string;
+  locale?: string;
+  stage?: string;
+};
 ```
 
-- `path` uses dot notation: `"title"`, `"seo.description"`, `"content._values.blockId.heading"`
-- `value` is the new value for that path. For deletions, `value` is `undefined`.
-- Multiple patches can be batched in a single message (e.g., when pasting into multiple fields or when a server reconcile updates several fields at once)
+- `PreviewPane` buffers the most recent payload and replays it on every `PREVIEW_READY` it receives, so this can be sent before the iframe is ready or before the iframe reloads.
+- The Visual Edit bridge sends two flavours: the canonical `controller.transformedItem` whenever the loaded record changes, and the **current `react-hook-form` values** on every `PREVIEW_READY` (so unsaved edits survive an iframe reload).
 
-#### `FOCUS_FIELD`
+### `PATCH_BATCH`
 
-Sent when the user focuses a field in the admin form.
+Mutates the iframe's local draft.
 
 ```ts
-interface FocusField extends PreviewMessage {
-	type: "FOCUS_FIELD";
-	fieldPath: string;
-}
+type PreviewPatchOp =
+  | { op: "set"; path: string; value: unknown }
+  | { op: "remove"; path: string };
+
+type PatchBatchMessage = {
+  type: "PATCH_BATCH";
+  seq: number;
+  ops: PreviewPatchOp[];
+};
 ```
 
-#### `SELECT_BLOCK`
+- `path` is dot-notation (`"title"`, `"meta.seo.title"`, `"items.2.label"`, `"content._values.abc.title"`); numeric segments index arrays.
+- Generated by `diffSnapshot(before, after)` — recursive over plain objects, atomic over arrays. A change to `meta.seo.title` emits a single `set meta.seo.title = "X"` op rather than replacing the whole `meta` subtree.
+- The iframe applies via `applyPatchBatch` and acks with `PATCH_APPLIED`.
 
-Sent when the user selects a block in the admin form.
+### `COMMIT`
+
+Marks the local draft as saved.
 
 ```ts
-interface SelectBlock extends PreviewMessage {
-	type: "SELECT_BLOCK";
-	blockId: string;
-}
+type CommitMessage = {
+  type: "COMMIT";
+  timestamp: number;
+  snapshot?: Record<string, unknown>;
+};
 ```
 
-#### `COMMIT`
+- When `snapshot` is provided, the iframe replaces its draft with it (use this when the server may have changed derived data — slug, computed fields, relation joins).
+- When `snapshot` is omitted, the iframe drops the local draft and re-runs `onRefresh`.
 
-Sent after a successful save. The server data is now authoritative.
+### `FULL_RESYNC`
+
+Discards the iframe's local draft and triggers a re-fetch.
 
 ```ts
-interface Commit extends PreviewMessage {
-	type: "COMMIT";
-	data: Record<string, unknown>;
-}
+type FullResyncMessage = {
+  type: "FULL_RESYNC";
+  reason?: "revert" | "locale-switch" | "stage-switch" | "desync" | "manual";
+};
 ```
 
-The frame must replace its local patched state with `data`. This resolves any drift between optimistic patches and server-computed values.
+The bridge fires this with the right `reason` for delete (`manual`), restore + revertVersion (`revert`), workflow transition (`stage-switch`).
 
-#### `FULL_RESYNC`
+### `FOCUS_FIELD`
 
-Sent when the admin detects a desync (e.g., the frame reported a gap, or the admin reconnected after a network interruption).
+Highlights a field in the iframe.
 
 ```ts
-interface FullResync extends PreviewMessage {
-	type: "FULL_RESYNC";
-	data: Record<string, unknown>;
-	locale?: string;
-}
+type FocusFieldMessage = {
+  type: "FOCUS_FIELD";
+  fieldPath: string;
+};
 ```
 
-Semantically identical to `INIT_SNAPSHOT`, but can arrive at any point in the session. The frame must reset its state and `seq` tracking.
+The iframe sets `focusedField` and scrolls the matching `data-preview-field="…"` element into view.
 
-#### `ERROR`
+### `SELECT_BLOCK`
 
-Sent when the admin encounters an error it wants to surface in the frame (e.g., validation failure, save error).
+Sets the iframe's selected-block state.
 
 ```ts
-interface AdminError extends PreviewMessage {
-	type: "ERROR";
-	error: string;
-	code?: string;
-}
+type SelectBlockMessage = {
+  type: "SELECT_BLOCK";
+  blockId: string;
+};
 ```
 
-The frame may display this as a toast or banner. It does not affect protocol state.
+### `SELECT_TARGET`
 
-### Frame to Admin
-
-#### `READY`
-
-Sent when the frame has loaded and is ready to receive `INIT_SNAPSHOT`.
+Newer, kind-aware selection forwarding from the workspace.
 
 ```ts
-interface Ready extends PreviewMessage {
-	type: "READY";
-}
+type SelectTargetMessage = {
+  type: "SELECT_TARGET";
+  fieldPath: string | null;
+  kind?: string;
+  blockId?: string;
+};
 ```
 
-- `seq` is `0`
-- The admin must not send any other message before receiving `READY`
+The iframe maps this to `focusedField` (and updates `selectedBlockId` when `blockId` is set). Unifies the `FOCUS_FIELD` + `SELECT_BLOCK` use case for the Visual Edit Workspace.
 
-#### `ACK`
+### `NAVIGATE_PREVIEW`
 
-Acknowledges receipt of a message from the admin.
+Asks the iframe to navigate to a URL.
 
 ```ts
-interface Ack extends PreviewMessage {
-	type: "ACK";
-	ackSeq: number;
-}
+type NavigatePreviewMessage = {
+  type: "NAVIGATE_PREVIEW";
+  url: string;
+};
 ```
 
-- `ackSeq` is the `seq` of the admin message being acknowledged
-- The frame must send `ACK` for every `INIT_SNAPSHOT`, `PATCH_BATCH`, `COMMIT`, and `FULL_RESYNC`
-- `FOCUS_FIELD`, `SELECT_BLOCK`, and `ERROR` do not require acknowledgment
+- Same-origin URLs only — the iframe rejects cross-origin URLs and warns in dev.
+- Uses `window.location.replace` (not `href`) so the iframe never accumulates a back-button stack.
 
-#### `FIELD_CLICKED`
+## Iframe → Admin
 
-Sent when the user clicks a field element in the preview.
+### `PREVIEW_READY`
+
+Sent by `useCollectionPreview` whenever its message-listener effect runs (initial mount and after a hard reload).
 
 ```ts
-interface FieldClicked extends PreviewMessage {
-	type: "FIELD_CLICKED";
-	fieldPath: string;
-}
+type PreviewReadyMessage = { type: "PREVIEW_READY" };
 ```
 
-#### `BLOCK_CLICKED`
+`PreviewPane` reacts by replaying the buffered `INIT_SNAPSHOT` and firing the consumer's `onReady` callback. The Visual Edit host uses `onReady` to re-seed the iframe with current form values.
 
-Sent when the user clicks a block element in the preview.
+### `REFRESH_COMPLETE`
+
+Acks `PREVIEW_REFRESH` after `onRefresh` resolves.
 
 ```ts
-interface BlockClicked extends PreviewMessage {
-	type: "BLOCK_CLICKED";
-	blockId: string;
-}
+type RefreshCompleteMessage = {
+  type: "REFRESH_COMPLETE";
+  timestamp: number;
+};
 ```
 
-#### `RELATION_CLICKED`
+### `FIELD_CLICKED`
 
-Sent when the user clicks a resolved relation in the preview.
+Sent when a `<PreviewField>` is clicked.
 
 ```ts
-interface RelationClicked extends PreviewMessage {
-	type: "RELATION_CLICKED";
-	fieldPath: string;
-	relationId: string;
-}
+type FieldClickedMessage = {
+  type: "FIELD_CLICKED";
+  fieldPath: string;
+  blockId?: string;
+  fieldType?: "regular" | "block" | "relation";
+};
 ```
 
-The admin navigates to or opens the related record for editing.
+The workspace routes this through `mapPreviewClickToSelection` to derive a `VisualEditSelection`.
 
-#### `RENDER_ERROR`
-
-Sent when the frame encounters a rendering error while applying a patch or snapshot.
+### `BLOCK_CLICKED`
 
 ```ts
-interface RenderError extends PreviewMessage {
-	type: "RENDER_ERROR";
-	error: string;
-	seq?: number;
-}
+type BlockClickedMessage = {
+  type: "BLOCK_CLICKED";
+  blockId: string;
+};
 ```
 
-- If `seq` is present, it indicates which admin message caused the error
-- The admin logs the error and may trigger a `FULL_RESYNC` to attempt recovery
+### `PATCH_APPLIED`
 
-## Session Lifecycle
-
-```
-Frame loads
-  |
-  v
-Frame -> Admin: READY (seq=0, protocolVersion=2)
-  |
-  v
-Admin -> Frame: INIT_SNAPSHOT (seq=0, full document)
-  |
-  v
-Frame -> Admin: ACK (ackSeq=0)
-  |
-  v
-[Normal operation loop]
-  |
-  Admin -> Frame: PATCH_BATCH (seq=1)
-  Frame -> Admin: ACK (ackSeq=1)
-  |
-  Admin -> Frame: PATCH_BATCH (seq=2)
-  Frame -> Admin: ACK (ackSeq=2)
-  |
-  ... (seq increments monotonically)
-  |
-[On save]
-  Admin -> Frame: COMMIT (seq=N)
-  Frame -> Admin: ACK (ackSeq=N)
-  |
-[On desync]
-  Frame -> Admin: RENDER_ERROR (seq=M, indicating gap)
-  Admin -> Frame: FULL_RESYNC (seq=N+1, resets state)
-  Frame -> Admin: ACK (ackSeq=N+1)
-  |
-[On close]
-  Admin destroys iframe. No teardown message.
-```
-
-## Sequence Numbers and Ordering
-
-### Admin Sequence Counter
-
-The admin maintains a single monotonically increasing counter per session. Every message the admin sends increments this counter. The counter resets to `0` at session start (`INIT_SNAPSHOT`).
-
-### Frame Sequence Counter
-
-The frame maintains its own independent counter for messages it sends. This counter also starts at `0` (`READY`).
-
-### Gap Detection
-
-The frame tracks the last received admin `seq`. If it receives a message with `seq > lastSeq + 1`, it has detected a gap.
-
-On gap detection:
-
-1. The frame sends `RENDER_ERROR` with a descriptive error string (e.g., `"seq gap: expected 5, got 7"`)
-2. The admin receives the error and sends `FULL_RESYNC`
-3. The frame resets its tracking to the `seq` of the `FULL_RESYNC` message
-
-The frame must not attempt to buffer or reorder messages. If a gap is detected, the only recovery path is `FULL_RESYNC`.
-
-## Backpressure
-
-### Problem
-
-The admin can produce patches faster than the frame can render them. This happens when:
-
-- The user types rapidly in a text field
-- A bulk operation changes many fields at once
-- The frame has expensive rendering logic (e.g., Markdown-to-HTML, image processing)
-
-### Mechanism
-
-The admin tracks unacknowledged messages. If the number of unacknowledged messages exceeds a threshold (`MAX_UNACKED`, default `10`), the admin pauses sending new patches.
-
-```
-Admin patch rate:  [P1] [P2] [P3] ... [P10] [PAUSE]
-Frame ACK rate:    [A1]     [A2]            [A3] ...
-                                             ^
-                                     Admin resumes on A3
-                                     (unacked drops below threshold)
-```
-
-When paused, the admin coalesces pending patches. When the frame catches up (unacked count drops below `MAX_UNACKED / 2`), the admin sends a single `PATCH_BATCH` containing all coalesced patches.
-
-This ensures the frame is never overwhelmed, at the cost of slightly increased latency during rapid edits.
-
-### Tuning
-
-The `MAX_UNACKED` threshold is not user-configurable in V2. It may become configurable in a future release based on real-world performance data.
-
-## Retry Strategy
-
-### ACK Timeout
-
-The admin expects an `ACK` within `ACK_TIMEOUT` (default: `3000ms`). If no `ACK` is received:
-
-1. **First timeout:** The admin resends the same message with the same `seq` (idempotent retry)
-2. **Second timeout:** The admin sends `FULL_RESYNC`
-3. **Third timeout:** The admin marks the preview as "disconnected" and shows a reconnect button in the UI
-
-The frame must handle duplicate `seq` numbers gracefully. If it receives a message with a `seq` it has already processed, it sends `ACK` again but does not re-apply the patch.
-
-### Frame Reconnect
-
-If the frame reloads (user navigation, crash recovery), it sends a fresh `READY`. The admin treats this as a new session: resets the `seq` counter and sends `INIT_SNAPSHOT`.
-
-## Error Recovery
-
-### RENDER_ERROR Handling
-
-When the admin receives `RENDER_ERROR`:
-
-1. Log the error with the `sessionId`, `seq`, and error string
-2. If `seq` is present and corresponds to a `PATCH_BATCH`, attempt rollback:
-   - Send a `PATCH_BATCH` that reverses the offending patches
-   - If rollback also fails, send `FULL_RESYNC`
-3. If `seq` is absent (general render failure), send `FULL_RESYNC`
-
-### Admin ERROR Propagation
-
-The admin sends `ERROR` for non-protocol errors:
-
-- Save failed (validation, network, conflict)
-- Session expired
-- Collection was deleted while previewing
-
-The frame displays the error but keeps its current state. The admin is responsible for resolving the error and sending either a `COMMIT` (if save eventually succeeds) or closing the preview.
-
-### Unrecoverable States
-
-If `FULL_RESYNC` fails three consecutive times (frame responds with `RENDER_ERROR` to each), the admin closes the preview and shows an error message suggesting the user reload the page.
-
-## Telemetry
-
-Both the admin and the frame should track the following metrics. These are emitted as structured log events, not sent to an external service by default.
-
-### Admin-Side Metrics
-
-| Metric                           | Type      | Description                                            |
-| -------------------------------- | --------- | ------------------------------------------------------ |
-| `preview.patch_latency_ms`       | histogram | Time from patch send to `ACK` receipt                  |
-| `preview.resync_count`           | counter   | Number of `FULL_RESYNC` messages sent per session      |
-| `preview.unacked_high_watermark` | gauge     | Peak number of unacknowledged messages in a session    |
-| `preview.retry_count`            | counter   | Number of retried messages per session                 |
-| `preview.session_duration_ms`    | histogram | Total preview session duration                         |
-| `preview.error_count`            | counter   | Number of `RENDER_ERROR` messages received per session |
-| `preview.disconnect_count`       | counter   | Number of times preview entered "disconnected" state   |
-
-### Frame-Side Metrics
-
-| Metric                        | Type      | Description                                                |
-| ----------------------------- | --------- | ---------------------------------------------------------- |
-| `preview.render_time_ms`      | histogram | Time from receiving `PATCH_BATCH` to completing DOM update |
-| `preview.apply_time_ms`       | histogram | Time to apply patches to local state (before render)       |
-| `preview.gap_count`           | counter   | Number of sequence gaps detected                           |
-| `preview.snapshot_size_bytes` | gauge     | Size of `INIT_SNAPSHOT` data payload                       |
-
-### Accessing Telemetry
+Optional ack for a `PATCH_BATCH`.
 
 ```ts
-import { getPreviewMetrics } from "@questpie/admin/client";
-
-// Returns a snapshot of all metrics for the current session
-const metrics = getPreviewMetrics();
-console.log(metrics.patchLatencyP99); // 45
-console.log(metrics.resyncCount); // 0
+type PatchAppliedMessage = {
+  type: "PATCH_APPLIED";
+  seq: number;
+  applied: number;
+  timestamp: number;
+};
 ```
 
-Metrics are also available via the admin's developer tools panel (if enabled).
+The admin doesn't currently subscribe to this; it's exposed for telemetry / dropped-batch detection in third-party tooling.
 
-## Summary of Constants
+### `RESYNC_REQUEST`
 
-| Constant              | Value    | Description                                        |
-| --------------------- | -------- | -------------------------------------------------- |
-| `PROTOCOL_VERSION`    | `2`      | Current protocol version                           |
-| `MAX_UNACKED`         | `10`     | Backpressure threshold                             |
-| `ACK_TIMEOUT`         | `3000ms` | Time to wait for ACK before retry                  |
-| `MAX_RETRIES`         | `2`      | Retries before FULL_RESYNC                         |
-| `MAX_RESYNC_FAILURES` | `3`      | Consecutive FULL_RESYNC failures before disconnect |
+Reserved for the iframe to ask for a fresh `INIT_SNAPSHOT`.
+
+```ts
+type ResyncRequestMessage = {
+  type: "RESYNC_REQUEST";
+  reason?: "stale-seq" | "missing-snapshot" | "manual";
+};
+```
+
+`useCollectionPreview` doesn't currently fire this — the patcher handles missing-snapshot edge cases by falling back to `initialDataRef` when applying patches without a draft. Reserved for future protocol extensions.
+
+## Lifecycle
+
+A typical session:
+
+```
+[admin] mints preview token (1h TTL) ─┐
+                                      ▼
+[admin] iframe src = /api/preview?token=…
+                          │
+                          ▼ (iframe loads)
+[iframe] PREVIEW_READY ──────────────►
+                                      │
+[admin] INIT_SNAPSHOT (canonical) ◄──┘
+                          │
+                          ▼ (user types in inspector)
+[admin] PATCH_BATCH(seq=1, [set title=A])
+[iframe] PATCH_APPLIED(seq=1)
+                          │
+                          ▼ (user saves)
+[admin] mutation.update succeeds
+[admin] COMMIT(snapshot=saved record)
+                          │
+                          ▼ (user navigates iframe)
+[iframe] page reloads → PREVIEW_READY ──►
+[admin] PreviewPane replays buffered INIT_SNAPSHOT (canonical)
+[admin] bridge re-seeds with form values via onReady
+[iframe] back at the right state
+```
+
+## Reliability Properties
+
+The protocol is designed for **idempotent convergence** rather than strict request-response semantics:
+
+- **Iframe reloads** never lose state. `PREVIEW_READY` triggers a buffered-snapshot replay AND a form-values re-seed; the next `PATCH_BATCH` applies on top of the freshest state. Convergence is guaranteed because every `set` op is idempotent.
+- **Stale batches** are dropped via `seq` comparison — a delayed `PATCH_BATCH(seq=3)` arriving after `seq=5` is ignored.
+- **Race between flush and unmount** is benign: the patcher checks `previewRef.current` at flush time and bails if null. The form-values bridge re-fires on the next ready event, so no data is permanently lost.
+- **Non-serializable payloads** never crash the workspace: postMessage is wrapped in `try`/`catch` on both sides, with dev-mode `console.error` and production-mode silent-swallow. The admin's inspector error boundary catches misbehaving field renders.
 
 ## Related Pages
 
-- [Migration Guide](/docs/workspace/live-preview/migration) -- Step-by-step migration from V1 to V2
-- [Live Preview Overview](/docs/workspace/live-preview) -- General preview setup and configuration
+- [Visual Edit Workspace](./visual-edit) — user-facing guide to enabling and configuring the workspace.
+- [Live Preview overview](./index) — the high-level live preview feature.
+- [Architecture](./architecture) — broader live-preview architecture notes.
