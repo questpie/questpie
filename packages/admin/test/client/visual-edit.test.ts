@@ -14,6 +14,13 @@ import {
 	parseBlockValuePath,
 } from "#questpie/admin/client/preview/block-paths";
 import {
+	applyPatchBatch,
+	applyPatchBatchImmutable,
+	applyRemove,
+	applySet,
+	parsePath,
+} from "#questpie/admin/client/preview/patch";
+import {
 	mapPreviewBlockClickToSelection,
 	mapPreviewClickToSelection,
 } from "#questpie/admin/client/components/visual-edit/click-router";
@@ -209,5 +216,109 @@ describe("mapPreviewBlockClickToSelection", () => {
 			blocksPath: "page.body",
 			blockId: "abc",
 		});
+	});
+});
+
+describe("parsePath", () => {
+	it("returns numeric segments as numbers", () => {
+		expect(parsePath("items.2.label")).toEqual(["items", 2, "label"]);
+	});
+
+	it("treats non-numeric segments as strings", () => {
+		expect(parsePath("meta.seo.title")).toEqual([
+			"meta",
+			"seo",
+			"title",
+		]);
+	});
+
+	it("returns an empty array for the empty path", () => {
+		expect(parsePath("")).toEqual([]);
+	});
+});
+
+describe("applySet", () => {
+	it("sets a top-level key", () => {
+		const obj = applySet({}, "title", "Hello");
+		expect(obj).toEqual({ title: "Hello" });
+	});
+
+	it("creates intermediate object containers", () => {
+		const obj = applySet({}, "meta.seo.title", "T");
+		expect(obj).toEqual({ meta: { seo: { title: "T" } } });
+	});
+
+	it("creates intermediate array containers when next segment is numeric", () => {
+		const obj: Record<string, unknown> = applySet({}, "items.0.label", "A");
+		expect(obj).toEqual({ items: [{ label: "A" }] });
+		expect(Array.isArray((obj as any).items)).toBe(true);
+	});
+
+	it("overwrites existing primitive values", () => {
+		const obj = applySet({ a: 1 }, "a", 2);
+		expect(obj).toEqual({ a: 2 });
+	});
+
+	it("handles deeply nested block paths", () => {
+		const obj = applySet({}, "content._values.abc.title", "Hi");
+		expect(obj).toEqual({
+			content: { _values: { abc: { title: "Hi" } } },
+		});
+	});
+});
+
+describe("applyRemove", () => {
+	it("removes a top-level key", () => {
+		const obj = applyRemove({ a: 1, b: 2 }, "a");
+		expect(obj).toEqual({ b: 2 });
+	});
+
+	it("removes a nested key", () => {
+		const obj = applyRemove(
+			{ meta: { seo: { title: "T" } } },
+			"meta.seo.title",
+		);
+		expect(obj).toEqual({ meta: { seo: {} } });
+	});
+
+	it("is a no-op when intermediate path is missing", () => {
+		const obj = applyRemove({ a: 1 }, "b.c.d");
+		expect(obj).toEqual({ a: 1 });
+	});
+});
+
+describe("applyPatchBatch", () => {
+	it("applies a sequence of set ops in order", () => {
+		const obj = applyPatchBatch(
+			{},
+			[
+				{ op: "set", path: "title", value: "Hello" },
+				{ op: "set", path: "meta.seo", value: { title: "M" } },
+			],
+		);
+		expect(obj).toEqual({ title: "Hello", meta: { seo: { title: "M" } } });
+	});
+
+	it("supports remove after set", () => {
+		const obj = applyPatchBatch(
+			{},
+			[
+				{ op: "set", path: "title", value: "Hello" },
+				{ op: "remove", path: "title" },
+			],
+		);
+		expect(obj).toEqual({});
+	});
+});
+
+describe("applyPatchBatchImmutable", () => {
+	it("does not mutate the input", () => {
+		const before = { title: "Old" };
+		const after = applyPatchBatchImmutable(before, [
+			{ op: "set", path: "title", value: "New" },
+		]);
+		expect(before).toEqual({ title: "Old" });
+		expect(after).toEqual({ title: "New" });
+		expect(after).not.toBe(before);
 	});
 });

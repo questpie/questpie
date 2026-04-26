@@ -9,6 +9,7 @@
 
 import * as React from "react";
 
+import { applyPatchBatchImmutable } from "./patch.js";
 import type { AdminToPreviewMessage } from "./types.js";
 
 // ============================================================================
@@ -26,10 +27,21 @@ export type UseCollectionPreviewOptions<TData> = {
 };
 
 export type UseCollectionPreviewResult<TData> = {
-	/** Current data (from initialData, refreshed via onRefresh) */
+	/**
+	 * Current data — either the live local draft (after `INIT_SNAPSHOT`
+	 * + `PATCH_BATCH`) or `initialData` when no snapshot has arrived
+	 * yet. This is what consumer pages should read from.
+	 */
 	data: TData;
 	/** Whether we're in preview mode (inside admin iframe) */
 	isPreviewMode: boolean;
+	/**
+	 * `true` once the admin has sent an `INIT_SNAPSHOT` and the
+	 * preview is driving its local draft from patches. Until then,
+	 * `data` mirrors `initialData` and `PREVIEW_REFRESH` controls
+	 * updates.
+	 */
+	isDraftActive: boolean;
 	/** Currently selected block ID */
 	selectedBlockId: string | null;
 	/** Focused field path */
@@ -101,6 +113,14 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 	);
 	const [focusedField, setFocusedField] = React.useState<string | null>(null);
 
+	// Local draft store: populated by `INIT_SNAPSHOT`, mutated by
+	// `PATCH_BATCH`, swapped by `COMMIT`, cleared by `FULL_RESYNC`.
+	// `null` means "no draft active yet — fall back to initialData".
+	const [draftData, setDraftData] = React.useState<TData | null>(null);
+	// Track the last patch batch we applied so we can ignore stale
+	// out-of-order deliveries.
+	const lastSeqRef = React.useRef<number>(-1);
+
 	// Check if we're in an iframe (preview mode)
 	const isPreviewMode = React.useMemo(() => {
 		if (typeof window === "undefined") return false;
@@ -141,6 +161,13 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 	React.useEffect(() => {
 		onRefreshRef.current = onRefresh;
 	}, [onRefresh]);
+
+	// Mirror initialData in a ref so the patch handler always sees
+	// the latest value when applying ops on top of the draft.
+	const initialDataRef = React.useRef(initialData);
+	React.useEffect(() => {
+		initialDataRef.current = initialData;
+	}, [initialData]);
 
 	// Set up postMessage listener
 	React.useEffect(() => {
@@ -193,6 +220,78 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 					}, 150);
 					break;
 				}
+
+				case "SELECT_TARGET":
+					setFocusedField(message.fieldPath);
+					if (message.blockId) {
+						setSelectedBlockId(message.blockId);
+					}
+					break;
+
+				case "INIT_SNAPSHOT":
+					lastSeqRef.current = -1;
+					setDraftData(message.snapshot as TData);
+					break;
+
+				case "PATCH_BATCH": {
+					if (typeof message.seq === "number") {
+						if (message.seq <= lastSeqRef.current) break;
+						lastSeqRef.current = message.seq;
+					}
+					setDraftData((prev) => {
+						const base = prev ?? (initialDataRef.current as TData);
+						return applyPatchBatchImmutable(
+							base as Record<string, unknown>,
+							message.ops ?? [],
+						) as TData;
+					});
+					sendToAdmin({
+						type: "PATCH_APPLIED",
+						seq: message.seq,
+						applied: message.ops?.length ?? 0,
+						timestamp: Date.now(),
+					});
+					break;
+				}
+
+				case "COMMIT": {
+					lastSeqRef.current = -1;
+					if (message.snapshot) {
+						setDraftData(message.snapshot as TData);
+					} else {
+						// No snapshot — drop the draft so the next render
+						// re-uses `initialData` (which loader/SSR will have
+						// refreshed).
+						setDraftData(null);
+					}
+					await onRefreshRef.current();
+					break;
+				}
+
+				case "FULL_RESYNC":
+					lastSeqRef.current = -1;
+					setDraftData(null);
+					await onRefreshRef.current();
+					break;
+
+				case "NAVIGATE_PREVIEW": {
+					try {
+						const target = new URL(message.url, window.location.href);
+						if (target.origin !== window.location.origin) {
+							if (process.env.NODE_ENV !== "production") {
+								console.warn(
+									"[useCollectionPreview] Refusing cross-origin NAVIGATE_PREVIEW:",
+									message.url,
+								);
+							}
+							break;
+						}
+						window.location.href = target.toString();
+					} catch {
+						// Invalid URL — ignore.
+					}
+					break;
+				}
 			}
 		};
 
@@ -228,8 +327,9 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 	);
 
 	return {
-		data: initialData,
+		data: draftData ?? initialData,
 		isPreviewMode,
+		isDraftActive: draftData !== null,
 		selectedBlockId,
 		focusedField,
 		handleFieldClick,

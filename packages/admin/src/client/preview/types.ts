@@ -36,13 +36,120 @@ export type FocusFieldMessage = {
 	fieldPath: string;
 };
 
+// ----------------------------------------------------------------------------
+// Visual Edit Workspace (Phase 3) — patch-based preview protocol
+// ----------------------------------------------------------------------------
+
+/**
+ * Operation in a {@link PatchBatchMessage}. Mirrors the JSON-Patch
+ * shape but stays minimal — preview consumers only need set/remove
+ * to drive most field updates.
+ */
+export type PreviewPatchOp =
+	| {
+			op: "set";
+			/** Form-field path (e.g. `title`, `content._values.abc.title`) */
+			path: string;
+			/** New value — JSON-serialisable */
+			value: unknown;
+	  }
+	| {
+			op: "remove";
+			path: string;
+	  };
+
+/**
+ * Initialise the preview's local draft store with the canonical
+ * record snapshot. Sent once after `PREVIEW_READY`.
+ */
+export type InitSnapshotMessage = {
+	type: "INIT_SNAPSHOT";
+	/** Full record at the current stage/locale, JSON-serialisable */
+	snapshot: Record<string, unknown>;
+	/** Schema version hint so preview can refuse mismatched updates */
+	schemaVersion?: string;
+	/** Locale the snapshot was taken in */
+	locale?: string;
+	/** Workflow stage the snapshot was taken in */
+	stage?: string;
+};
+
+/**
+ * Apply one or more patch operations to the preview's local draft.
+ * Patch ops should be idempotent — out-of-order delivery is allowed
+ * thanks to the monotonic `seq`.
+ */
+export type PatchBatchMessage = {
+	type: "PATCH_BATCH";
+	/** Monotonic sequence number; preview ignores stale batches */
+	seq: number;
+	/** Ordered list of operations to apply atomically */
+	ops: PreviewPatchOp[];
+};
+
+/**
+ * Mark the current draft as committed (saved on the server). The
+ * preview should swap its local draft for the canonical snapshot.
+ */
+export type CommitMessage = {
+	type: "COMMIT";
+	/** Server timestamp of the saved version */
+	timestamp: number;
+	/** Optional refreshed snapshot — admin sends one when commit
+	 * changes derived data the preview can't compute locally
+	 * (slug, computed fields, relation joins). */
+	snapshot?: Record<string, unknown>;
+};
+
+/**
+ * Force the preview to discard its local draft and re-fetch the
+ * canonical record. Used after revert, locale/stage switch, or
+ * desync detection.
+ */
+export type FullResyncMessage = {
+	type: "FULL_RESYNC";
+	/** Reason hint for telemetry / dev console */
+	reason?: "revert" | "locale-switch" | "stage-switch" | "desync" | "manual";
+};
+
+/**
+ * Tell the preview which target the inspector currently has
+ * selected. Lets the preview render the same outline that the
+ * legacy `FOCUS_FIELD` did, but for arbitrary selection kinds.
+ */
+export type SelectTargetMessage = {
+	type: "SELECT_TARGET";
+	/** Form-field path of the selected target, or `null` for idle */
+	fieldPath: string | null;
+	/** Selection kind hint (`field`, `block`, `block-field`, …) */
+	kind?: string;
+	/** Block id when the selection sits inside a block */
+	blockId?: string;
+};
+
+/**
+ * Navigate the preview to a different URL inside the same origin.
+ * Used by the toolbar's URL-bar / "open page" affordance.
+ */
+export type NavigatePreviewMessage = {
+	type: "NAVIGATE_PREVIEW";
+	/** Target URL (must be same-origin) */
+	url: string;
+};
+
 /**
  * All messages from Admin to Preview.
  */
 export type AdminToPreviewMessage =
 	| PreviewRefreshMessage
 	| SelectBlockMessage
-	| FocusFieldMessage;
+	| FocusFieldMessage
+	| InitSnapshotMessage
+	| PatchBatchMessage
+	| CommitMessage
+	| FullResyncMessage
+	| SelectTargetMessage
+	| NavigatePreviewMessage;
 
 // ============================================================================
 // Preview -> Admin Messages
@@ -88,13 +195,40 @@ export type RefreshCompleteMessage = {
 };
 
 /**
+ * Preview ack for a {@link PatchBatchMessage}. Lets the admin track
+ * which patches actually landed and detect dropped batches.
+ */
+export type PatchAppliedMessage = {
+	type: "PATCH_APPLIED";
+	/** Mirror of the batch's `seq` */
+	seq: number;
+	/** Number of operations applied — informational */
+	applied: number;
+	/** Timestamp of completion */
+	timestamp: number;
+};
+
+/**
+ * Preview is requesting a full resync — it detected its local draft
+ * is out of sync (e.g. it received a patch with an older seq than
+ * the last committed snapshot).
+ */
+export type ResyncRequestMessage = {
+	type: "RESYNC_REQUEST";
+	/** Reason hint for telemetry / dev console */
+	reason?: "stale-seq" | "missing-snapshot" | "manual";
+};
+
+/**
  * All messages from Preview to Admin.
  */
 export type PreviewToAdminMessage =
 	| PreviewReadyMessage
 	| FieldClickedMessage
 	| BlockClickedMessage
-	| RefreshCompleteMessage;
+	| RefreshCompleteMessage
+	| PatchAppliedMessage
+	| ResyncRequestMessage;
 
 // ============================================================================
 // Preview Configuration
@@ -139,6 +273,27 @@ export type PreviewConfig = {
 // Type Guards
 // ============================================================================
 
+const ADMIN_TO_PREVIEW_TYPES = new Set<string>([
+	"PREVIEW_REFRESH",
+	"SELECT_BLOCK",
+	"FOCUS_FIELD",
+	"INIT_SNAPSHOT",
+	"PATCH_BATCH",
+	"COMMIT",
+	"FULL_RESYNC",
+	"SELECT_TARGET",
+	"NAVIGATE_PREVIEW",
+]);
+
+const PREVIEW_TO_ADMIN_TYPES = new Set<string>([
+	"PREVIEW_READY",
+	"FIELD_CLICKED",
+	"BLOCK_CLICKED",
+	"REFRESH_COMPLETE",
+	"PATCH_APPLIED",
+	"RESYNC_REQUEST",
+]);
+
 /**
  * Check if a message is from admin to preview.
  */
@@ -147,11 +302,7 @@ export function isAdminToPreviewMessage(
 ): data is AdminToPreviewMessage {
 	if (!data || typeof data !== "object") return false;
 	const msg = data as { type?: string };
-	return (
-		msg.type === "PREVIEW_REFRESH" ||
-		msg.type === "SELECT_BLOCK" ||
-		msg.type === "FOCUS_FIELD"
-	);
+	return typeof msg.type === "string" && ADMIN_TO_PREVIEW_TYPES.has(msg.type);
 }
 
 /**
@@ -162,10 +313,5 @@ export function isPreviewToAdminMessage(
 ): data is PreviewToAdminMessage {
 	if (!data || typeof data !== "object") return false;
 	const msg = data as { type?: string };
-	return (
-		msg.type === "PREVIEW_READY" ||
-		msg.type === "FIELD_CLICKED" ||
-		msg.type === "BLOCK_CLICKED" ||
-		msg.type === "REFRESH_COMPLETE"
-	);
+	return typeof msg.type === "string" && PREVIEW_TO_ADMIN_TYPES.has(msg.type);
 }
