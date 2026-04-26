@@ -18,11 +18,14 @@ Add the Visual Edit Workspace — an opt-in 2-pane editing experience with a liv
 - New patch-based protocol (`INIT_SNAPSHOT`, `PATCH_BATCH`, `COMMIT`, `FULL_RESYNC`, `SELECT_TARGET`, `NAVIGATE_PREVIEW`, `PATCH_APPLIED`, `RESYNC_REQUEST`) replaces the previous full-refresh-only protocol while staying backwards compatible with the V1 `PREVIEW_REFRESH` flow.
 - `useFormToPreviewPatcher` debounces react-hook-form changes, generates minimal patch ops via the recursive `diffSnapshot` helper (nested objects descend; arrays stay atomic), and routes each op through its field's resolved `visualEdit.patchStrategy` (`"patch"` for scalars, `"refresh"` for relations/uploads/blocks/computed, `"deferred"` to drop).
 - `useVisualEditPreviewBridge` translates controller mutation results into the V2 ladder: `INIT_SNAPSHOT` on item load, `COMMIT` on save success (deduped by data reference), `FULL_RESYNC` on delete/restore/revert/transition with a precise `reason` code, `SELECT_TARGET` mirroring the inspector's selection.
-- `PreviewPane` buffers the latest `INIT_SNAPSHOT` and replays it on every `PREVIEW_READY` it receives, so an iframe reload (NAVIGATE_PREVIEW or hard refresh) re-seeds without parent-side intervention.
+- `PreviewPane` buffers the latest `INIT_SNAPSHOT` and replays it on every `PREVIEW_READY` it receives, so an iframe reload (NAVIGATE_PREVIEW or hard refresh) re-seeds without parent-side intervention. A new `onReady` prop fires after the buffered replay so the workspace bridge can re-seed with **current `react-hook-form` values** — preserving unsaved edits across iframe reloads (the patcher would otherwise diff against a stale snapshot).
+- `useCollectionPreview` now handles every V2 message on the iframe side: `INIT_SNAPSHOT` seeds the local draft, `PATCH_BATCH` applies ops with stale-seq guarding, `COMMIT` swaps or drops the draft, `FULL_RESYNC` resets state, `SELECT_TARGET` updates focus state. `NAVIGATE_PREVIEW` honors same-origin only and uses `location.replace` so the iframe never traps the user with a back-button stack.
 
 **Per-field tuning**
 
 - Optional `visualEdit` field metadata (`inspector`, `patchStrategy`, `hidden`, `group`, `order`) lets fields tune how they appear in the workspace without disturbing the legacy form view. `visualEdit.inspector` swaps the field's component for a registered override; the override receives `fieldName`, `fieldPath`, `collection`, `fieldDef`, `registry`, and `allCollectionsConfig`, runs inside `FormProvider`, and falls back to `FieldRenderer` when the registry can't resolve the type.
+- Server-side `visualEdit` overrides on nested object fields are now honored: a deep `visualEdit.inspector` (e.g. on `meta.seo.title`) wins over a shallower ancestor's override via `resolveNestedVisualEditMeta` walking `metadata.nestedFields`.
+- Server-emitted `visualEdit` metadata is read from the correct path (`fieldSchema.metadata.meta.admin.visualEdit`) — earlier iterations had this as `fieldSchema.admin.visualEdit`, which silently never matched introspection output.
 
 **Production hardening**
 
@@ -39,8 +42,9 @@ Add the Visual Edit Workspace — an opt-in 2-pane editing experience with a liv
 **Workspace example + DX**
 
 - Barbershop example's `pages` collection wired up end-to-end with `v.visualEditForm` + `visualEdit.group` field metadata.
-- New docs page in the Live Preview section walks through enabling the workspace, the selection model, the V2 patch protocol, and the per-field `visualEdit` block.
+- New docs page in the Live Preview section walks through enabling the workspace, the selection model, the V2 patch protocol, and the per-field `visualEdit` block. The protocol page is rewritten to faithfully document the wire format that ships, and the architecture / same-tab / shared-preview / migration pages now flag themselves as design notes that point readers at the canonical exports.
+- The full visual-edit + V2 surface is now re-exported from `@questpie/admin/client` (`VisualEditFormHost`, `VisualEditWorkspace`, `useFormToPreviewPatcher`, `useVisualEditPreviewBridge`, `BlockInspectorBody`, `DocumentInspectorBody`, `diffSnapshot`, `applyPatchBatch`, every public type, and the V2 message-type union) so consumers can build against documented APIs without reaching into internal paths.
 
 **Test coverage**
 
-- Bun's test runner now boots `happy-dom` + `@testing-library/react` via a preload, unlocking real component tests. The visual-edit module ships with 348+ tests across pure helpers (path utilities, recursive diff, group fields, click router, patch ops, block operations, keyboard predicate, visualEdit meta), components (`InspectorErrorBoundary`, `VisualEditProvider`, `VisualInspectorPanel`), and hook integrations (`useFormToPreviewPatcher`, `useVisualEditPreviewBridge`, `useDeselectOnEscape`).
+- Bun's test runner now boots `happy-dom` + `@testing-library/react` via a preload, unlocking real component tests. The visual-edit module ships with 374+ tests across pure helpers (path utilities, recursive diff, group fields, click router, patch ops, block operations, keyboard predicate, visualEdit meta + nested resolution, strategy map), components (`InspectorErrorBoundary`, `VisualEditProvider`, `VisualInspectorPanel`), and hook integrations (`useFormToPreviewPatcher` incl. baseline-reset and null-ref edge cases, `useVisualEditPreviewBridge` incl. iframe-reload re-seed, `useCollectionPreview` covering every V2 message handler from the iframe side, `useDeselectOnEscape`).
