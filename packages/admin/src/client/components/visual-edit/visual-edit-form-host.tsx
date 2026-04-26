@@ -35,7 +35,7 @@ import { hasGroupedDocumentMetadata } from "./group-fields.js";
 import type { VisualEditSelection } from "./types.js";
 import { useFormToPreviewPatcher } from "./use-form-to-preview-patcher.js";
 import { useVisualEditPreviewBridge } from "./use-visual-edit-preview-bridge.js";
-import { resolveVisualEditMeta } from "./visual-edit-meta.js";
+import { resolveNestedVisualEditMeta } from "./visual-edit-meta.js";
 import { VisualEditProvider } from "./visual-edit-context.js";
 import { VisualEditWorkspaceContent } from "./visual-edit-workspace.js";
 import { VisualInspectorPanel } from "./visual-inspector-panel.js";
@@ -205,10 +205,17 @@ export function VisualEditFormHost({
 			// registry. The override receives the same context the
 			// default renderer would, plus the resolved field path so a
 			// single component can handle nested targets too.
+			//
+			// `resolveNestedVisualEditMeta` walks `metadata.nestedFields`
+			// for object/array/blocks paths so a deeper override (e.g.
+			// on `meta.seo.title`) wins over a shallower ancestor.
 			const fieldSchema = controller.schema?.fields?.[fieldName];
-			const inspectorOverride = resolveVisualEditMeta({
+			const dot = fieldPath.indexOf(".");
+			const relativePath = dot < 0 ? "" : fieldPath.slice(dot + 1);
+			const inspectorOverride = resolveNestedVisualEditMeta({
 				fieldDef,
 				fieldSchema: fieldSchema as any,
+				relativePath,
 			})?.inspector;
 			if (inspectorOverride) {
 				return (

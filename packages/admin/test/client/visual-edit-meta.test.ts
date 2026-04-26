@@ -8,9 +8,42 @@ import type { FieldInstance } from "#questpie/admin/client/builder/field/field";
 import {
 	buildStrategyMap,
 	defaultPatchStrategy,
+	resolveNestedVisualEditMeta,
 	resolvePatchStrategy,
 	resolveVisualEditMeta,
 } from "#questpie/admin/client/components/visual-edit/visual-edit-meta";
+
+/**
+ * Construct a top-level FieldSchema-shaped object — what
+ * `controller.schema.fields[name]` looks like at runtime.
+ * Wraps the metadata under `.metadata`.
+ */
+function fieldSchema(opts: {
+	type?: string;
+	visualEdit?: Record<string, unknown>;
+	nestedFields?: Record<string, unknown>;
+}) {
+	return { metadata: nestedMetadata(opts) } as any;
+}
+
+/**
+ * Construct a nested FieldMetadata-shaped object — what nested
+ * children look like under `metadata.nestedFields[name]`. No
+ * extra `.metadata` wrap; the metadata fields are at the root.
+ */
+function nestedMetadata(opts: {
+	type?: string;
+	visualEdit?: Record<string, unknown>;
+	nestedFields?: Record<string, unknown>;
+}) {
+	return {
+		type: opts.type,
+		meta: opts.visualEdit
+			? { admin: { visualEdit: opts.visualEdit } }
+			: undefined,
+		nestedFields: opts.nestedFields,
+	} as any;
+}
 
 function fieldInstance(
 	name: string,
@@ -38,10 +71,10 @@ describe("resolveVisualEditMeta", () => {
 			fieldDef: fieldInstance("text", {
 				admin: { visualEdit: { patchStrategy: "deferred" } },
 			}),
-			fieldSchema: {
-				admin: { visualEdit: { patchStrategy: "patch" } },
-				metadata: { type: "text" },
-			},
+			fieldSchema: fieldSchema({
+				type: "text",
+				visualEdit: { patchStrategy: "patch" },
+			}),
 		});
 		expect(meta?.patchStrategy).toBe("patch");
 	});
@@ -75,10 +108,7 @@ describe("resolveVisualEditMeta", () => {
 		} as const;
 		const meta = resolveVisualEditMeta({
 			fieldDef: fieldInstance("text"),
-			fieldSchema: {
-				admin: { visualEdit: { inspector } },
-				metadata: { type: "text" },
-			},
+			fieldSchema: fieldSchema({ type: "text", visualEdit: { inspector } }),
 		});
 		expect(meta?.inspector).toBe(inspector);
 	});
@@ -90,10 +120,10 @@ describe("resolveVisualEditMeta", () => {
 			fieldDef: fieldInstance("text", {
 				admin: { visualEdit: { inspector: clientInspector } },
 			}),
-			fieldSchema: {
-				admin: { visualEdit: { inspector: serverInspector } },
-				metadata: { type: "text" },
-			},
+			fieldSchema: fieldSchema({
+				type: "text",
+				visualEdit: { inspector: serverInspector },
+			}),
 		});
 		expect(meta?.inspector).toBe(serverInspector);
 	});
@@ -244,12 +274,137 @@ describe("buildStrategyMap", () => {
 			},
 			schema: {
 				fields: {
-					title: {
-						admin: { visualEdit: { patchStrategy: "refresh" } },
-					} as any,
+					title: fieldSchema({
+						type: "text",
+						visualEdit: { patchStrategy: "refresh" },
+					}),
 				},
 			},
 		});
 		expect(map.title).toBe("refresh");
+	});
+});
+
+describe("resolveNestedVisualEditMeta", () => {
+	it("falls through to the top-level visualEdit when relativePath is empty", () => {
+		const inspector = { type: "x", props: {} } as const;
+		const meta = resolveNestedVisualEditMeta({
+			fieldSchema: fieldSchema({
+				type: "object",
+				visualEdit: { inspector },
+			}),
+			relativePath: "",
+		});
+		expect(meta?.inspector).toBe(inspector);
+	});
+
+	it("returns the deepest nested visualEdit when present", () => {
+		const outer = { type: "outer", props: {} } as const;
+		const inner = { type: "inner", props: {} } as const;
+		const meta = resolveNestedVisualEditMeta({
+			fieldSchema: fieldSchema({
+				type: "object",
+				visualEdit: { inspector: outer },
+				nestedFields: {
+					seo: nestedMetadata({
+						type: "object",
+						visualEdit: { inspector: inner },
+					}),
+				},
+			}),
+			relativePath: "seo",
+		});
+		expect(meta?.inspector).toBe(inner);
+	});
+
+	it("returns the deepest visualEdit across multiple levels", () => {
+		const inner = { type: "deep", props: {} } as const;
+		const meta = resolveNestedVisualEditMeta({
+			fieldSchema: fieldSchema({
+				type: "object",
+				nestedFields: {
+					seo: nestedMetadata({
+						type: "object",
+						nestedFields: {
+							title: nestedMetadata({
+								type: "text",
+								visualEdit: { inspector: inner },
+							}),
+						},
+					}),
+				},
+			}),
+			relativePath: "seo.title",
+		});
+		expect(meta?.inspector).toBe(inner);
+	});
+
+	it("falls back to a shallower override when the deeper segment has none", () => {
+		const outer = { type: "outer", props: {} } as const;
+		const meta = resolveNestedVisualEditMeta({
+			fieldSchema: fieldSchema({
+				type: "object",
+				visualEdit: { inspector: outer },
+				nestedFields: {
+					seo: nestedMetadata({
+						type: "object",
+						nestedFields: {
+							title: nestedMetadata({ type: "text" }),
+						},
+					}),
+				},
+			}),
+			relativePath: "seo.title",
+		});
+		expect(meta?.inspector).toBe(outer);
+	});
+
+	it("halts the descent at numeric segments (array indices)", () => {
+		const outer = { type: "outer", props: {} } as const;
+		const beyond = { type: "beyond", props: {} } as const;
+		const meta = resolveNestedVisualEditMeta({
+			fieldSchema: fieldSchema({
+				type: "array",
+				visualEdit: { inspector: outer },
+				nestedFields: {
+					// `5` is the numeric segment that should halt walking
+					"5": nestedMetadata({
+						type: "object",
+						visualEdit: { inspector: beyond },
+					}),
+				},
+			}),
+			relativePath: "5",
+		});
+		// The walk halts at the numeric segment; the overall result
+		// is the top-level (outer) inspector.
+		expect(meta?.inspector).toBe(outer);
+	});
+
+	it("returns undefined when neither schema nor field has visualEdit", () => {
+		const meta = resolveNestedVisualEditMeta({
+			fieldSchema: fieldSchema({ type: "object" }),
+			relativePath: "seo.title",
+		});
+		expect(meta).toBeUndefined();
+	});
+
+	it("falls back to fieldDef ~options when no schema visualEdit anywhere on the path", () => {
+		const inspector = { type: "x", props: {} } as const;
+		const meta = resolveNestedVisualEditMeta({
+			fieldDef: {
+				name: "object",
+				component: () => null,
+				"~options": { admin: { visualEdit: { inspector } } },
+			} as unknown as FieldInstance,
+			fieldSchema: fieldSchema({
+				type: "object",
+				nestedFields: {
+					seo: nestedMetadata({ type: "text" }),
+				},
+			}),
+			relativePath: "seo",
+		});
+		expect(meta?.inspector).toBe(inspector);
 	});
 });

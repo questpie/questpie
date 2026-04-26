@@ -4,12 +4,21 @@
  * Pure resolvers that extract a field's `visualEdit` config from
  * the runtime sources the inspector has access to:
  *
- * 1. Server introspection (`schema.fields[name].admin.visualEdit`)
- * 2. Client-side `FieldInstance.~options.admin.visualEdit`
+ * 1. Server introspection — `schema.fields[name].metadata.meta.admin.visualEdit`
+ *    (the introspection pipe stashes the field's admin extensions
+ *    under `metadata.meta`; see
+ *    `packages/admin/src/client/utils/build-field-definitions-from-schema.ts`
+ *    for the canonical read path).
+ * 2. Client-side `FieldInstance.~options.admin.visualEdit`.
  *
- * Server wins when both are present (introspection is the source
- * of truth). Returns `undefined` when no visualEdit metadata was
- * supplied — callers should fall back to default rendering.
+ * For nested object fields, the resolver walks
+ * `metadata.nestedFields[…]` so a deep override (e.g. on
+ * `meta.seo.title`) wins over a shallower ancestor's override.
+ *
+ * Server introspection wins over client-side options when both
+ * are present at the same depth. Returns `undefined` when no
+ * visualEdit metadata was supplied — callers should fall back to
+ * default rendering.
  */
 
 import type { FieldInstance } from "../../builder/field/field.js";
@@ -21,34 +30,101 @@ import type {
 
 export type ResolvedVisualEditMeta = VisualEditFieldMeta;
 
-type FieldSchemaLike = {
-	admin?: { visualEdit?: VisualEditFieldMeta };
-	metadata?: { type?: string };
-} | null | undefined;
+/**
+ * Loose shape mirroring `FieldMetadata` (server introspection,
+ * nested level). Nested fields under `nestedFields` are recorded
+ * at the metadata level — they don't go through `FieldSchema`
+ * again — so the walker reads/descends through this shape.
+ */
+type FieldMetadataLike =
+	| {
+			type?: string;
+			meta?: { admin?: { visualEdit?: VisualEditFieldMeta } };
+			nestedFields?: Record<string, FieldMetadataLike>;
+	  }
+	| null
+	| undefined;
+
+/**
+ * Loose shape mirroring `FieldSchema` (server introspection,
+ * top level): wraps `FieldMetadataLike` under `metadata`.
+ */
+type FieldSchemaLike =
+	| {
+			metadata?: FieldMetadataLike;
+	  }
+	| null
+	| undefined;
 
 type FieldInstanceLike = FieldInstance | undefined;
 
 // ============================================================================
-// Lookup
+// Visual edit lookup
 // ============================================================================
 
 /**
- * Pull the `visualEdit` block off whichever source defines one.
- * Server introspection wins; client `~options.admin` is the
- * fallback so projects that haven't enabled introspection still
- * pick up the override.
+ * Read the `visualEdit` block from a single FieldSchema (no
+ * descent). Server introspection wins over client `~options`.
  */
 export function resolveVisualEditMeta(args: {
 	fieldDef?: FieldInstanceLike;
 	fieldSchema?: FieldSchemaLike;
 }): ResolvedVisualEditMeta | undefined {
-	const fromSchema = args.fieldSchema?.admin?.visualEdit;
+	const fromSchema =
+		args.fieldSchema?.metadata?.meta?.admin?.visualEdit;
 	if (fromSchema) return fromSchema;
 
 	const options = args.fieldDef?.["~options"] as
 		| { admin?: { visualEdit?: VisualEditFieldMeta } }
 		| undefined;
 	return options?.admin?.visualEdit;
+}
+
+/**
+ * Walk an object/array field's `metadata.nestedFields` along a
+ * dot-notation `path` and return the deepest `visualEdit` block
+ * found. Numeric segments (array indices) halt the descent —
+ * arrays expose their items shape under a different key, so
+ * descending past an index is unsafe.
+ *
+ * Falls back to the top-level field's `visualEdit` when no
+ * deeper override is present.
+ *
+ * @param fieldDef    — top-level FieldInstance (used as fallback
+ *                      source for `visualEdit` when the schema
+ *                      provides nothing)
+ * @param fieldSchema — schema for the same top-level field
+ * @param relativePath — path *under* the top-level field
+ *                       (`""` for the field root, `"seo.title"`
+ *                       for a deep path inside `meta`)
+ */
+export function resolveNestedVisualEditMeta(args: {
+	fieldDef?: FieldInstanceLike;
+	fieldSchema?: FieldSchemaLike;
+	relativePath?: string;
+}): ResolvedVisualEditMeta | undefined {
+	let deepest = resolveVisualEditMeta({
+		fieldDef: args.fieldDef,
+		fieldSchema: args.fieldSchema,
+	});
+
+	const segments = (args.relativePath ?? "")
+		.split(".")
+		.filter((s) => s.length > 0);
+	if (segments.length === 0) return deepest;
+
+	// Top level reads .metadata; subsequent levels are
+	// FieldMetadataLike themselves (no .metadata wrapping).
+	let cursor: FieldMetadataLike | undefined = args.fieldSchema?.metadata;
+	for (const segment of segments) {
+		if (/^\d+$/.test(segment)) break;
+		const nested = cursor?.nestedFields?.[segment];
+		if (!nested) break;
+		cursor = nested;
+		const nextMeta = nested?.meta?.admin?.visualEdit;
+		if (nextMeta) deepest = nextMeta;
+	}
+	return deepest;
 }
 
 // ============================================================================
@@ -86,8 +162,7 @@ export function defaultPatchStrategy(args: {
 	fieldDef?: FieldInstanceLike;
 	fieldSchema?: FieldSchemaLike;
 }): VisualEditPatchStrategy {
-	const type =
-		args.fieldSchema?.metadata?.type ?? args.fieldDef?.name;
+	const type = args.fieldSchema?.metadata?.type ?? args.fieldDef?.name;
 	if (type && REFRESH_FIELD_TYPES.has(type)) return "refresh";
 
 	const options = args.fieldDef?.["~options"] as

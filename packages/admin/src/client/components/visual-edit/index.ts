@@ -78,6 +78,7 @@ export {
 export {
 	buildStrategyMap,
 	defaultPatchStrategy,
+	resolveNestedVisualEditMeta,
 	resolvePatchStrategy,
 	resolveVisualEditMeta,
 	type ResolvedVisualEditMeta,

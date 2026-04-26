@@ -206,7 +206,9 @@ describe("groupFieldsForDocument — schema overrides", () => {
 			schema: {
 				fields: {
 					title: {
-						admin: { visualEdit: { group: "server" } },
+						metadata: {
+							meta: { admin: { visualEdit: { group: "server" } } },
+						},
 					} as any,
 				},
 			} as any,
@@ -244,7 +246,11 @@ describe("hasGroupedDocumentMetadata", () => {
 				fields: { a: field("text") },
 				schema: {
 					fields: {
-						a: { admin: { visualEdit: { group: "seo" } } } as any,
+						a: {
+							metadata: {
+								meta: { admin: { visualEdit: { group: "seo" } } },
+							},
+						} as any,
 					},
 				} as any,
 			}),
