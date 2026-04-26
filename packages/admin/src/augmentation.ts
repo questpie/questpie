@@ -66,9 +66,11 @@ import type { ComponentReference } from "./server/augmentation/common.js";
  * - `"patch"` (default for scalar/object fields): mutate the
  *   preview's local draft via `PATCH_BATCH` so edits land
  *   without re-running the loader.
- * - `"refresh"` (default for relations, uploads, blocks, slug,
- *   computed): emit `PREVIEW_REFRESH` after the controller
- *   commits — the loader picks up the new value.
+ * - `"refresh"` (default for relations, uploads, blocks, and
+ *   fields with a server-side `compute` handler): emit
+ *   `PREVIEW_REFRESH` after the controller commits — the loader
+ *   picks up the new value. Set explicitly on slug-style fields
+ *   whose value is server-derived.
  * - `"deferred"`: don't propagate live; rely on `COMMIT` after
  *   the user saves. Useful for fields that are only meaningful
  *   at the database level (e.g. cron expressions).
@@ -110,9 +112,12 @@ export interface VisualEditFieldMeta {
 	 * How the workspace should propagate this field's changes to
 	 * the preview iframe. Defaults are kind-aware:
 	 * - scalar fields → `"patch"`
-	 * - relation/upload/blocks/slug/computed → `"refresh"`
+	 * - relation/upload/blocks → `"refresh"`
+	 * - fields with a server `compute` handler → `"refresh"`
 	 *
 	 * Set explicitly to override or to mark a field as deferred.
+	 * Slug-style fields with server-derived values should opt
+	 * into `"refresh"` themselves.
 	 */
 	patchStrategy?: VisualEditPatchStrategy;
 

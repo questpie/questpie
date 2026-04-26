@@ -55,12 +55,22 @@ export function resolveVisualEditMeta(args: {
 // Defaults
 // ============================================================================
 
-const REFRESH_FIELD_TYPES = new Set<string>([
-	"relation",
-	"upload",
-	"blocks",
-	"slug",
-]);
+/**
+ * Field types whose form value alone is NOT enough to update the
+ * preview — the iframe needs the loader to re-resolve them. The
+ * patcher routes these through `PREVIEW_REFRESH` instead of
+ * `PATCH_BATCH`.
+ *
+ * - `relation` — the form holds ids; the iframe needs joined data.
+ * - `upload` — the form holds asset ids; the iframe needs the
+ *   resolved file metadata (url, dimensions, alt).
+ * - `blocks` — the iframe re-runs `prefetch()` for any block whose
+ *   values changed.
+ *
+ * Plugins or projects can grow this set per-field by setting
+ * `visualEdit.patchStrategy: "refresh"` on the field's metadata.
+ */
+const REFRESH_FIELD_TYPES = new Set<string>(["relation", "upload", "blocks"]);
 
 /**
  * Default patch strategy for a field type. Scalar/object/text

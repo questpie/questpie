@@ -122,7 +122,7 @@ f.text({
 | Key             | Default                                  | Effect                                                                                                                                  |
 | --------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `inspector`     | `undefined`                              | Component reference rendered instead of the default field component.                                                                    |
-| `patchStrategy` | `"patch"` for scalars, `"refresh"` for relations / uploads / blocks / slug / computed | How changes propagate to the preview. Override when a custom field has a known compute pattern. |
+| `patchStrategy` | `"patch"` for scalars, `"refresh"` for relations / uploads / blocks / fields with a server `compute` handler | How changes propagate to the preview. Override when a custom field has a known compute pattern (e.g. set `"refresh"` on a slug field whose value is server-derived). |
 | `hidden`        | `false`                                  | Hide the field from the document inspector body. Canvas click targets still work.                                                       |
 | `group`         | `BaseAdminMeta.group`                    | Pin the field to a specific group in the document inspector — workspace-only override.                                                  |
 | `order`         | declaration order                        | Display order inside the resolved group.                                                                                                |
