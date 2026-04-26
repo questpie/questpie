@@ -145,6 +145,26 @@ Set `visualEdit.inspector` to a registered component reference and the workspace
 
 If the registered component type isn't found in the admin's component registry, the workspace falls back to the default `FieldRenderer` so the field stays editable. Server-side `visualEdit.inspector` (set via the introspected schema) wins over the client-side `~options.admin.visualEdit.inspector` so plugins can pin a custom inspector centrally.
 
+#### Nested-path overrides
+
+`visualEdit.inspector` is also resolved at **nested-path granularity** for object fields. Setting an override on a leaf inside an object — e.g. `meta.seo.title` — wins over a shallower ancestor's override:
+
+```ts title="collections/pages.ts"
+.fields(({ f, c }) => ({
+  meta: f.object({
+    seo: f.object({
+      title: f.text().set("admin", {
+        visualEdit: {
+          inspector: c.component("seo-title-inspector"),
+        },
+      }),
+    }),
+  }),
+}));
+```
+
+When the user clicks `meta.seo.title` in the canvas, the workspace walks the schema's `metadata.nestedFields` tree and renders the `seo-title-inspector` component. Selecting `meta` itself or `meta.seo` falls back to whichever shallower override is set, or the default `FieldRenderer` if none is. Numeric path segments (array indices) halt the descent — array fields keep their item shape under a dedicated key and arrays are atomic by design.
+
 ### Grouped Document Inspector
 
 The Document inspector body auto-switches based on what your fields configure:
