@@ -109,10 +109,13 @@ function PageComponent({ initialData }) {
 
 The hook:
 
-- Detects preview mode via `window.self !== window.top`
-- Listens for `PREVIEW_REFRESH` messages and calls `onRefresh`
-- Tracks `selectedBlockId` and `focusedField` from admin focus events
-- Provides click handlers that send `FIELD_CLICKED` / `BLOCK_CLICKED` messages back to the admin
+- Detects preview mode via `window.self !== window.top`.
+- **V1**: listens for `PREVIEW_REFRESH` messages and calls `onRefresh`.
+- **V2**: applies `PATCH_BATCH` ops to a local draft store, seeds the draft from `INIT_SNAPSHOT`, swaps or drops the draft on `COMMIT`, resets state on `FULL_RESYNC`, updates focus on `SELECT_TARGET`, and accepts same-origin `NAVIGATE_PREVIEW` (via `location.replace` so the back-button stack stays clean). The merged data flows back through `data`; the V2-only `isDraftActive` flag tells you whether the iframe is showing a local draft or the canonical record.
+- Tracks `selectedBlockId` and `focusedField` from admin focus events (`FOCUS_FIELD`, `SELECT_BLOCK`, `SELECT_TARGET`).
+- Provides click handlers that send `FIELD_CLICKED` / `BLOCK_CLICKED` messages back to the admin.
+
+There is no V1/V2 toggle on the iframe side — the same hook handles both protocols transparently. Opting a collection into the [Visual Edit Workspace](./visual-edit) does not require any changes to your frontend page.
 
 ## Exit Preview Mode
 
