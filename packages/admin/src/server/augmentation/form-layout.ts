@@ -324,8 +324,27 @@ export interface PreviewConfig {
 	url?: (ctx: { record: Record<string, unknown>; locale?: string }) => string;
 	/** Preview panel position */
 	position?: "left" | "right" | "bottom";
-	/** Default panel width (percentage) */
+	/**
+	 * Default preview pane size (percentage of the workspace, 0–100).
+	 * @default 50
+	 */
+	defaultSize?: number;
+	/**
+	 * Minimum preview pane size (percentage of the workspace, 0–100).
+	 * @default 30
+	 */
+	minSize?: number;
+	/**
+	 * Alias for {@link PreviewConfig.defaultSize}. Kept for ergonomic
+	 * parity with admin layouts that already speak in `width`. When both
+	 * are provided, `defaultSize` wins.
+	 */
 	defaultWidth?: number;
+	/**
+	 * Alias for {@link PreviewConfig.minSize}. When both are provided,
+	 * `minSize` wins.
+	 */
+	minWidth?: number;
 }
 
 // ============================================================================

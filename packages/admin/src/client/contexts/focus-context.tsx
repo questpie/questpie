@@ -10,6 +10,8 @@
 
 import * as React from "react";
 
+import { parseBlockValuePath } from "../preview/block-paths.js";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -201,11 +203,10 @@ export function parsePreviewFieldPath(
 		};
 	}
 
-	// Check if it's a block field path (content._values.{id}.{field})
-	const blockMatch = path.match(/^content\._values\.([^.]+)(?:\.(.+))?$/);
-	if (blockMatch) {
-		const [, blockId, fieldPath] = blockMatch;
-		return { type: "block", blockId, fieldPath };
+	// Check if it's a block field path ({blocksPath}._values.{id}.{field})
+	const parsed = parseBlockValuePath(path);
+	if (parsed) {
+		return { type: "block", blockId: parsed.blockId, fieldPath: parsed.fieldPath };
 	}
 
 	// Legacy block path format (content.blocks.{id}.{field})
@@ -234,12 +235,13 @@ export function parsePreviewFieldPath(
  * Extract relative field path from a full path given a block ID
  * Examples:
  * - extractRelativeField("content._values.abc123.title", "abc123") → "title"
+ * - extractRelativeField("page.body._values.abc123.title", "abc123") → "title"
  * - extractRelativeField("title", "abc123") → "title"
  */
 function extractRelativeField(path: string, blockId: string): string {
-	const prefix = `content._values.${blockId}.`;
-	if (path.startsWith(prefix)) {
-		return path.slice(prefix.length);
+	const parsed = parseBlockValuePath(path);
+	if (parsed && parsed.blockId === blockId) {
+		return parsed.fieldPath ?? "";
 	}
 	return path;
 }

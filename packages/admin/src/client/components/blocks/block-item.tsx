@@ -20,6 +20,7 @@ import {
 	useBlockEditorActions,
 	useBlockSchema,
 	useBlockValues,
+	useBlocksPath,
 	useIsBlockExpanded,
 } from "./block-editor-context.js";
 import { BlockFieldsRenderer } from "./block-fields-renderer.js";
@@ -70,6 +71,7 @@ export const BlockItem = React.memo(function BlockItem({
 	const blockSchema = useBlockSchema(block.type);
 	const values = useBlockValues(block.id);
 	const isExpanded = useIsBlockExpanded(block.id);
+	const blocksPath = useBlocksPath();
 	const isUnknownType = !blockSchema;
 	const canHaveChildren = blockSchema?.allowChildren ?? false;
 
@@ -231,7 +233,11 @@ export const BlockItem = React.memo(function BlockItem({
 				{/* Body with inline fields - only when expanded */}
 				{isExpanded && blockSchema && (
 					<CardContent className={cn("p-3", !isRoot && "py-2")}>
-						<BlockFieldsRenderer blockId={block.id} blockSchema={blockSchema} />
+						<BlockFieldsRenderer
+							blockId={block.id}
+							blockSchema={blockSchema}
+							blocksPath={blocksPath}
+						/>
 					</CardContent>
 				)}
 

@@ -13,6 +13,7 @@ import { useStore } from "zustand";
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
 
 import type { BlockContent, BlockNode } from "../../blocks/types.js";
+import { defaultBlocksPath } from "../../preview/block-paths.js";
 import type { InsertPosition } from "./utils/tree-utils.js";
 
 // ============================================================================
@@ -39,6 +40,11 @@ export type BlockEditorState = {
 	allowedBlocks: string[] | null;
 	/** Current locale for editing */
 	locale: string;
+	/**
+	 * Form path of the surrounding blocks field (e.g. `"content"`).
+	 * Used to scope per-block field names as `${blocksPath}._values.${blockId}.${fieldName}`.
+	 */
+	blocksPath: string;
 };
 
 /**
@@ -129,7 +135,18 @@ function useBlockEditorState(): BlockEditorState {
 		blocks: state.blocks,
 		allowedBlocks: state.allowedBlocks,
 		locale: state.locale,
+		blocksPath: state.blocksPath,
 	}));
+}
+
+/**
+ * Hook to access the blocks-field form path (e.g. `"content"`).
+ *
+ * Falls back to the default `"content"` path if the editor was constructed
+ * without an explicit `blocksPath` prop.
+ */
+export function useBlocksPath(): string {
+	return useBlockEditorStore((state) => state.blocksPath ?? defaultBlocksPath());
 }
 
 /**

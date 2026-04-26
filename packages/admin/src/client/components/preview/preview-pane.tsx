@@ -137,21 +137,35 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			[url, allowedOrigins],
 		);
 
-		// Send message to preview iframe
+		// Resolve the preview iframe origin once and re-use it for every
+		// outbound message. Wildcard (`"*"`) targets are never used: if the
+		// origin cannot be determined we drop the message rather than leak
+		// admin state to an unknown frame.
+		const targetOrigin = React.useMemo<string | null>(() => {
+			try {
+				const parsed = new URL(url, window.location.href);
+				return parsed.origin;
+			} catch {
+				return null;
+			}
+		}, [url]);
+
 		const sendToPreview = React.useCallback(
 			(message: AdminToPreviewMessage) => {
 				const iframe = iframeRef.current;
 				if (!iframe?.contentWindow) return;
-
-				try {
-					const targetOrigin = new URL(url).origin;
-					iframe.contentWindow.postMessage(message, targetOrigin);
-				} catch {
-					// If URL parsing fails, use wildcard (less secure)
-					iframe.contentWindow.postMessage(message, "*");
+				if (!targetOrigin) {
+					if (process.env.NODE_ENV !== "production") {
+						console.warn(
+							"[PreviewPane] Skipping postMessage — could not resolve preview origin from URL:",
+							url,
+						);
+					}
+					return;
 				}
+				iframe.contentWindow.postMessage(message, targetOrigin);
 			},
-			[url],
+			[targetOrigin, url],
 		);
 
 		const requestRefresh = React.useCallback(() => {

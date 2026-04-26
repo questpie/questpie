@@ -13,6 +13,10 @@ import type { BlockSchema } from "#questpie/admin/server/block/index.js";
 
 import type { FieldInstance } from "../../builder/field/field.js";
 import { useResolveText, useTranslation } from "../../i18n/hooks.js";
+import {
+	blockValuePath,
+	defaultBlocksPath,
+} from "../../preview/block-paths.js";
 import { selectAdmin, useAdminStore } from "../../runtime/provider.js";
 import { buildFieldDefinitionsFromMetadata } from "../../utils/build-field-definitions-from-schema.js";
 import { useLazyComponent } from "../../utils/use-lazy-component.js";
@@ -31,6 +35,11 @@ type BlockFieldsRendererProps = {
 	blockId: string;
 	/** Block schema containing field definitions */
 	blockSchema: BlockSchema;
+	/**
+	 * Form path of the surrounding blocks field (e.g. `"content"`). Defaults to
+	 * `"content"` for backwards compatibility with existing collection forms.
+	 */
+	blocksPath?: string;
 };
 
 // ============================================================================
@@ -40,6 +49,7 @@ type BlockFieldsRendererProps = {
 export function BlockFieldsRenderer({
 	blockId,
 	blockSchema,
+	blocksPath = defaultBlocksPath(),
 }: BlockFieldsRendererProps) {
 	const { t } = useTranslation();
 	const admin = useAdminStore(selectAdmin);
@@ -77,6 +87,7 @@ export function BlockFieldsRenderer({
 						key={`${blockId}:${fieldName}`}
 						name={fieldName}
 						blockId={blockId}
+						blocksPath={blocksPath}
 						definition={fieldDef}
 					/>
 				);
@@ -99,6 +110,7 @@ export function BlockFieldsRenderer({
 					key={`${blockId}:${fieldName}`}
 					name={fieldName}
 					blockId={blockId}
+					blocksPath={blocksPath}
 					definition={fieldDef}
 				/>
 			))}
@@ -113,10 +125,11 @@ export function BlockFieldsRenderer({
 type BlockFieldProps = {
 	name: string;
 	blockId: string;
+	blocksPath: string;
 	definition: FieldInstance;
 };
 
-function BlockField({ name, blockId, definition }: BlockFieldProps) {
+function BlockField({ name, blockId, blocksPath, definition }: BlockFieldProps) {
 	const resolveText = useResolveText();
 	const options = (definition["~options"] || {}) as Record<string, any>;
 	const fieldType = definition.name;
@@ -128,7 +141,7 @@ function BlockField({ name, blockId, definition }: BlockFieldProps) {
 
 	// Scope the field name to the block's values in the parent form
 	// This ensures block fields don't conflict with collection-level fields
-	const scopedName = `content._values.${blockId}.${name}`;
+	const scopedName = blockValuePath(blocksPath, blockId, name);
 
 	// Check if field has a registered component
 	const { Component: FieldComponent, loading: componentLoading } =

@@ -146,6 +146,10 @@ export function PreviewField({
 	const isFocused = focusedField === fullPath;
 
 	const handleClick = (e: React.MouseEvent) => {
+		// Prevent native navigation when the wrapped element is a link or
+		// submit button — clicking an editable field in preview should never
+		// load a new page inside the iframe.
+		e.preventDefault();
 		e.stopPropagation();
 		if (onClick) {
 			onClick(fullPath, {
@@ -210,6 +214,9 @@ export function StandalonePreviewField({
 	}
 
 	const handleClick = (e: React.MouseEvent) => {
+		// Same rationale as PreviewField — keep the iframe pinned to the
+		// preview page even if the wrapped element is a link.
+		e.preventDefault();
 		e.stopPropagation();
 		onFieldClick(fullPath, {
 			blockId: blockScope?.blockId,

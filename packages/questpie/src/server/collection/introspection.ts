@@ -993,16 +993,35 @@ function extractAdminConfig(
 		};
 	}
 
-	// Extract preview config (.preview())
+	// Extract preview config (.preview()).
+	//
+	// `defaultWidth` / `minWidth` are accepted as aliases for `defaultSize` /
+	// `minSize` so users authoring `preview({ defaultWidth: 60 })` see the
+	// preview pane respect their value. The canonical `*Size` keys take
+	// precedence when both forms are provided.
 	if (stateAny.adminPreview) {
+		const adminPreview = stateAny.adminPreview as {
+			enabled?: boolean;
+			position?: "left" | "right" | "bottom";
+			defaultWidth?: number;
+			minWidth?: number;
+			defaultSize?: number;
+			minSize?: number;
+			url?: unknown;
+		};
+
+		const defaultSize = adminPreview.defaultSize ?? adminPreview.defaultWidth;
+		const minSize = adminPreview.minSize ?? adminPreview.minWidth;
+
 		result.preview = {
-			enabled: stateAny.adminPreview.enabled,
-			position: stateAny.adminPreview.position,
-			defaultWidth: stateAny.adminPreview.defaultWidth,
-			defaultSize: stateAny.adminPreview.defaultSize,
-			minSize: stateAny.adminPreview.minSize,
+			enabled: adminPreview.enabled,
+			position: adminPreview.position,
+			// Mirror both spellings for older clients that read `defaultWidth`.
+			defaultWidth: defaultSize,
+			defaultSize,
+			minSize,
 			// Don't include the url function - just indicate it exists
-			hasUrlBuilder: typeof stateAny.adminPreview.url === "function",
+			hasUrlBuilder: typeof adminPreview.url === "function",
 		};
 	}
 

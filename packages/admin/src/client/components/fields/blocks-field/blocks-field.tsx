@@ -111,6 +111,7 @@ export function BlocksField({
 						onChange={handleChange}
 						blocks={filteredBlocks}
 						allowedBlocks={allowedBlocks}
+						blocksPath={name}
 					>
 						<BlockEditorLayout />
 					</BlockEditorProvider>

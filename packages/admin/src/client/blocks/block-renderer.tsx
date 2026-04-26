@@ -22,6 +22,7 @@
 
 import type * as React from "react";
 
+import { defaultBlocksPath } from "../preview/block-paths.js";
 import { BlockScopeProvider } from "../preview/block-scope-context.js";
 import type { BlockContent, BlockNode } from "./types";
 
@@ -50,6 +51,11 @@ export type BlockRendererProps = {
 	onBlockClick?: (blockId: string) => void;
 	/** Custom class name for the container */
 	className?: string;
+	/**
+	 * Form path of the surrounding blocks field (e.g. `"content"` or
+	 * `"page.body"`). Defaults to `"content"` for backwards compatibility.
+	 */
+	blocksPath?: string;
 };
 
 /**
@@ -66,6 +72,7 @@ export function BlockRenderer({
 	selectedBlockId,
 	onBlockClick,
 	className,
+	blocksPath = defaultBlocksPath(),
 }: BlockRendererProps) {
 	const resolvedData = data ?? EMPTY_DATA;
 	/**
@@ -103,7 +110,7 @@ export function BlockRenderer({
 
 		const BlockComponent = renderFn;
 		const blockElement = (
-			<BlockScopeProvider blockId={node.id} basePath="content._values">
+			<BlockScopeProvider blockId={node.id} blocksPath={blocksPath}>
 				<BlockComponent
 					id={node.id}
 					type={node.type}

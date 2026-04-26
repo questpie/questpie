@@ -13,6 +13,7 @@ import { createStore } from "zustand";
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
 
 import type { BlockContent, BlockNode } from "../../blocks/types.js";
+import { defaultBlocksPath } from "../../preview/block-paths.js";
 import {
 	type BlockEditorActions,
 	BlockEditorContextProvider,
@@ -42,6 +43,12 @@ type BlockEditorProviderProps = {
 	allowedBlocks?: string[];
 	/** Current locale */
 	locale?: string;
+	/**
+	 * Form path of the surrounding blocks field (e.g. `"content"` or `"page.body"`).
+	 * Defaults to `"content"`. Block fields rendered inside this provider scope
+	 * to `${blocksPath}._values.${blockId}.${fieldName}`.
+	 */
+	blocksPath?: string;
 	/** Children */
 	children: React.ReactNode;
 };
@@ -56,6 +63,7 @@ export function BlockEditorProvider({
 	blocks,
 	allowedBlocks,
 	locale = "en",
+	blocksPath = defaultBlocksPath(),
 	children,
 }: BlockEditorProviderProps) {
 	const onChangeRef = React.useRef(onChange);
@@ -266,6 +274,7 @@ export function BlockEditorProvider({
 				blocks,
 				allowedBlocks: initialAllowedBlocks,
 				locale,
+				blocksPath,
 				actions,
 			};
 		}),
@@ -298,10 +307,14 @@ export function BlockEditorProvider({
 			patch.locale = locale;
 		}
 
+		if (state.blocksPath !== blocksPath) {
+			patch.blocksPath = blocksPath;
+		}
+
 		if (Object.keys(patch).length > 0) {
 			store.setState(patch);
 		}
-	}, [value, blocks, allowedBlocks, locale, store]);
+	}, [value, blocks, allowedBlocks, locale, blocksPath, store]);
 
 	return (
 		<BlockEditorContextProvider value={store}>

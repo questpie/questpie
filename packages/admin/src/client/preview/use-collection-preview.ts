@@ -81,6 +81,17 @@ export type UseCollectionPreviewResult<TData> = {
  * }
  * ```
  */
+function resolveAdminOrigin(): string | null {
+	if (typeof document === "undefined") return null;
+	const referrer = document.referrer;
+	if (!referrer) return null;
+	try {
+		return new URL(referrer).origin;
+	} catch {
+		return null;
+	}
+}
+
 export function useCollectionPreview<TData extends Record<string, unknown>>({
 	initialData,
 	onRefresh,
@@ -101,6 +112,30 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 		}
 	}, []);
 
+	// Resolve the admin origin from document.referrer once. If unresolved we
+	// drop messages rather than broadcasting admin state with a wildcard.
+	const adminOrigin = React.useMemo<string | null>(() => {
+		if (!isPreviewMode) return null;
+		return resolveAdminOrigin();
+	}, [isPreviewMode]);
+
+	const sendToAdmin = React.useCallback(
+		(message: Record<string, unknown>) => {
+			if (!isPreviewMode) return;
+			if (typeof window === "undefined") return;
+			if (!adminOrigin) {
+				if (process.env.NODE_ENV !== "production") {
+					console.warn(
+						"[useCollectionPreview] Skipping postMessage — could not resolve admin origin from document.referrer.",
+					);
+				}
+				return;
+			}
+			window.parent.postMessage(message, adminOrigin);
+		},
+		[adminOrigin, isPreviewMode],
+	);
+
 	// Keep onRefresh in a ref to avoid stale closures while maintaining stable reference
 	const onRefreshRef = React.useRef(onRefresh);
 	React.useEffect(() => {
@@ -112,14 +147,21 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 		if (!isPreviewMode) return;
 
 		// Signal that preview is ready
-		window.parent.postMessage({ type: "PREVIEW_READY" }, "*");
+		sendToAdmin({ type: "PREVIEW_READY" });
 
 		const handleMessage = async (
 			event: MessageEvent<AdminToPreviewMessage>,
 		) => {
-			// In production, validate origin here
-			const message = event.data;
+			// Reject messages from unexpected origins. If we never resolved the
+			// admin origin, accept only same-origin parents to avoid silently
+			// trusting arbitrary frames in V2 patch flows.
+			if (adminOrigin) {
+				if (event.origin !== adminOrigin) return;
+			} else if (event.origin !== window.location.origin) {
+				return;
+			}
 
+			const message = event.data;
 			if (!message || typeof message !== "object" || !message.type) {
 				return;
 			}
@@ -127,13 +169,10 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 			switch (message.type) {
 				case "PREVIEW_REFRESH": {
 					await onRefreshRef.current();
-					window.parent.postMessage(
-						{
-							type: "REFRESH_COMPLETE",
-							timestamp: Date.now(),
-						},
-						"*",
-					);
+					sendToAdmin({
+						type: "REFRESH_COMPLETE",
+						timestamp: Date.now(),
+					});
 					break;
 				}
 
@@ -159,7 +198,7 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 
 		window.addEventListener("message", handleMessage);
 		return () => window.removeEventListener("message", handleMessage);
-	}, [isPreviewMode]);
+	}, [adminOrigin, isPreviewMode, sendToAdmin]);
 
 	// Field click handler
 	const handleFieldClick = React.useCallback(
@@ -170,29 +209,22 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 				fieldType?: "regular" | "block" | "relation";
 			},
 		) => {
-			if (isPreviewMode) {
-				window.parent.postMessage(
-					{
-						type: "FIELD_CLICKED",
-						fieldPath,
-						blockId: context?.blockId,
-						fieldType: context?.fieldType,
-					},
-					"*",
-				);
-			}
+			sendToAdmin({
+				type: "FIELD_CLICKED",
+				fieldPath,
+				blockId: context?.blockId,
+				fieldType: context?.fieldType,
+			});
 		},
-		[isPreviewMode],
+		[sendToAdmin],
 	);
 
 	// Block click handler
 	const handleBlockClick = React.useCallback(
 		(blockId: string) => {
-			if (isPreviewMode) {
-				window.parent.postMessage({ type: "BLOCK_CLICKED", blockId }, "*");
-			}
+			sendToAdmin({ type: "BLOCK_CLICKED", blockId });
 		},
-		[isPreviewMode],
+		[sendToAdmin],
 	);
 
 	return {

@@ -22,6 +22,10 @@ import {
 import { useIsMobile } from "../../hooks/use-media-query.js";
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
+import {
+	blockValuePath,
+	defaultBlocksPath,
+} from "../../preview/block-paths.js";
 import { Button } from "../ui/button.js";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { PreviewPane, type PreviewPaneRef } from "./preview-pane.js";
@@ -198,15 +202,15 @@ function LivePreviewContent({
 		if (focusState.type === "field") {
 			previewRef.current.sendFocusToPreview(focusState.fieldPath);
 		} else if (focusState.type === "block") {
-			// Send full block field path
-			if (focusState.fieldPath) {
-				const fullPath = `content._values.${focusState.blockId}.${focusState.fieldPath}`;
-				previewRef.current.sendFocusToPreview(fullPath);
-			} else {
-				// Just the block itself
-				const fullPath = `content._values.${focusState.blockId}`;
-				previewRef.current.sendFocusToPreview(fullPath);
-			}
+			// V1 assumes the canonical blocks-field name; the V2 workspace
+			// will thread the real `blocksPath` through here once the form
+			// controller is extracted.
+			const fullPath = blockValuePath(
+				defaultBlocksPath(),
+				focusState.blockId,
+				focusState.fieldPath || undefined,
+			);
+			previewRef.current.sendFocusToPreview(fullPath);
 		}
 	}, [focusState, previewRef, open]);
 
@@ -452,9 +456,11 @@ export function LivePreviewMode({
 		} else if (state.type === "block") {
 			// Wait for block form to render before scrolling
 			setTimeout(() => {
-				const fullPath = state.fieldPath
-					? `content._values.${state.blockId}.${state.fieldPath}`
-					: `content._values.${state.blockId}`;
+				const fullPath = blockValuePath(
+					defaultBlocksPath(),
+					state.blockId,
+					state.fieldPath || undefined,
+				);
 				scrollFieldIntoView(fullPath);
 			}, 150);
 		}
