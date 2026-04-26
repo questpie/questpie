@@ -2,18 +2,17 @@
  * useFormToPreviewPatcher
  *
  * Bridges react-hook-form value changes to the preview iframe via
- * `PATCH_BATCH`. Watches the form, debounces, computes a shallow
- * diff at the top level against the last-sent snapshot, splits the
- * changed paths into "patch" vs "refresh" buckets according to
- * each field's resolved `visualEdit.patchStrategy`, and dispatches
- * accordingly.
+ * `PATCH_BATCH`. Watches the form, debounces, computes a recursive
+ * diff against the last-sent snapshot via `diffSnapshot`, splits
+ * the changed paths into "patch" vs "refresh" buckets according
+ * to the top-level field's resolved `visualEdit.patchStrategy`,
+ * and dispatches accordingly.
  *
- * Top-level shallow diff is intentional for the V1 patcher: it
- * keeps the implementation small, covers ~95% of real fields
- * (title, slug, body strings, booleans, arrays of ids), and stays
- * compatible with `applyPatchBatch` on the preview side. A future
- * V2 can add recursive diffing for deep object/meta fields without
- * breaking the wire format.
+ * Recursive diffing means a change to `meta.seo.title` becomes a
+ * single `set meta.seo.title = "X"` op rather than replacing the
+ * whole `meta` subtree. Arrays remain atomic — the helper sends a
+ * full `set` for any array change, so `applyPatchBatch` on the
+ * preview side just slots the new array in.
  */
 
 "use client";
@@ -25,6 +24,7 @@ import type { CollectionSchema } from "questpie/client";
 
 import type { FieldInstance } from "../../builder/field/field.js";
 import type { PreviewPaneRef } from "../preview/preview-pane.js";
+import { diffSnapshot } from "../../preview/diff.js";
 import type { PreviewPatchOp } from "../../preview/types.js";
 import { resolvePatchStrategy } from "./visual-edit-meta.js";
 
@@ -121,47 +121,46 @@ export function useFormToPreviewPatcher({
 			if (!ref || !snapshot) return;
 
 			const current = form.getValues() as Record<string, unknown>;
-			const ops: PreviewPatchOp[] = [];
-			let needsRefresh = false;
-			const refreshFields: string[] = [];
+			// Compute a full recursive diff once, then bucket each op by
+			// the top-level field's resolved patch strategy. Top-level
+			// is the right granularity for strategy because `visualEdit`
+			// metadata lives on the field root — nested ops inherit the
+			// root's strategy.
+			const diff = diffSnapshot(snapshot, current);
+			if (diff.length === 0) return;
 
-			// Snapshot keys + current keys (current may have brand-new fields
-			// when the user types into a previously-empty path).
-			const keys = new Set<string>([
-				...Object.keys(snapshot),
-				...Object.keys(current),
-			]);
+			const patchOps: PreviewPatchOp[] = [];
+			const refreshFields = new Set<string>();
 
-			for (const key of keys) {
-				if (key.startsWith("_")) continue; // skip hidden form internals
-				const before = snapshot[key];
-				const after = current[key];
-				if (Object.is(before, after)) continue;
-				if (shallowEqual(before, after)) continue;
-
-				const strategy = strategyByField[key] ?? "patch";
+			for (const op of diff) {
+				const root = topLevelKey(op.path);
+				if (root.startsWith("_")) continue; // hidden form internals
+				const strategy = strategyByField[root] ?? "patch";
 				if (strategy === "deferred") continue;
-
 				if (strategy === "refresh") {
-					needsRefresh = true;
-					refreshFields.push(key);
-				} else {
-					ops.push({ op: "set", path: key, value: after });
+					refreshFields.add(root);
+					continue;
 				}
-
-				snapshot[key] = after;
+				patchOps.push(op);
 			}
 
-			if (ops.length > 0) {
+			// Mirror the diff into the snapshot regardless of strategy
+			// so the next flush diffs against current state, not a
+			// stale baseline. Refresh-strategy fields still need to
+			// land in the snapshot — they just travel via a different
+			// channel (PREVIEW_REFRESH).
+			snapshotRef.current = current;
+
+			if (patchOps.length > 0) {
 				seqRef.current += 1;
-				ref.sendPatchBatch(seqRef.current, ops);
+				ref.sendPatchBatch(seqRef.current, patchOps);
 			}
 
-			if (needsRefresh) {
+			if (refreshFields.size > 0) {
 				if (process.env.NODE_ENV !== "production") {
 					console.debug(
 						"[VisualEdit] field changed with refresh strategy — triggering preview refresh:",
-						refreshFields,
+						Array.from(refreshFields),
 					);
 				}
 				ref.triggerRefresh();
@@ -185,42 +184,11 @@ export function useFormToPreviewPatcher({
 // ============================================================================
 
 /**
- * Shallow equal for diff filtering. Returns `true` when the two
- * values are observably equivalent at the top level — same
- * primitive, same array contents (by `Object.is`), or same object
- * keys with `Object.is` values. Anything deeper falls through and
- * reports a diff so we don't drop legitimate changes.
+ * Extract the top-level form-field name from a patch path. This is
+ * the granularity at which `visualEdit.patchStrategy` is resolved
+ * — nested ops inherit the root's strategy.
  */
-function shallowEqual(a: unknown, b: unknown): boolean {
-	if (Object.is(a, b)) return true;
-	if (
-		typeof a !== "object" ||
-		typeof b !== "object" ||
-		a === null ||
-		b === null
-	) {
-		return false;
-	}
-	if (Array.isArray(a) || Array.isArray(b)) {
-		if (!Array.isArray(a) || !Array.isArray(b)) return false;
-		if (a.length !== b.length) return false;
-		for (let i = 0; i < a.length; i += 1) {
-			if (!Object.is(a[i], b[i])) return false;
-		}
-		return true;
-	}
-	const ka = Object.keys(a as Record<string, unknown>);
-	const kb = Object.keys(b as Record<string, unknown>);
-	if (ka.length !== kb.length) return false;
-	for (const key of ka) {
-		if (
-			!Object.is(
-				(a as Record<string, unknown>)[key],
-				(b as Record<string, unknown>)[key],
-			)
-		) {
-			return false;
-		}
-	}
-	return true;
+function topLevelKey(path: string): string {
+	const dot = path.indexOf(".");
+	return dot < 0 ? path : path.slice(0, dot);
 }
