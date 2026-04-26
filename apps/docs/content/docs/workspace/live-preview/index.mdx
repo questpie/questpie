@@ -41,12 +41,15 @@ export const pages = collection("pages")
 
 ### Preview Options
 
-| Option         | Type                            | Default   | Description                                           |
-| -------------- | ------------------------------- | --------- | ----------------------------------------------------- |
-| `enabled`      | `boolean`                       | `true`    | Enable/disable preview                                |
-| `url`          | `(ctx) => string`               | —         | URL builder function (receives `{ record, locale? }`) |
-| `position`     | `"left" \| "right" \| "bottom"` | `"right"` | Preview panel position                                |
-| `defaultWidth` | `number`                        | `50`      | Panel width as percentage                             |
+| Option         | Type                            | Default   | Description                                                                            |
+| -------------- | ------------------------------- | --------- | -------------------------------------------------------------------------------------- |
+| `enabled`      | `boolean`                       | `true`    | Enable/disable preview                                                                 |
+| `url`          | `(ctx) => string`               | —         | URL builder function (receives `{ record, locale? }`)                                  |
+| `position`     | `"left" \| "right" \| "bottom"` | `"right"` | Preview panel position                                                                 |
+| `defaultSize`  | `number`                        | `50`      | Default preview pane size as a percentage (0–100)                                      |
+| `minSize`      | `number`                        | `30`      | Minimum preview pane size as a percentage (0–100)                                      |
+| `defaultWidth` | `number`                        | —         | Alias for `defaultSize`. When both are present `defaultSize` wins                      |
+| `minWidth`     | `number`                        | —         | Alias for `minSize`. When both are present `minSize` wins                              |
 
 ## Draft Mode & Token Security
 
