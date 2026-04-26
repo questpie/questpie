@@ -24,6 +24,7 @@ import type { ComponentRegistry } from "../../builder/index.js";
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import { FieldRenderer } from "../../views/collection/field-renderer.js";
+import { Spinner } from "../ui/spinner.js";
 import {
 	type DocumentFieldGroup,
 	DEFAULT_DOCUMENT_GROUP_KEY,
@@ -79,6 +80,17 @@ export function DocumentInspectorBody({
 			}),
 		[controller.fields, controller.schema],
 	);
+
+	// Distinguish "still loading" from "no fields to display" so the
+	// inspector doesn't flash a misleading empty-state during initial
+	// schema fetch.
+	if (controller.isFieldsLoading && groups.length === 0) {
+		return (
+			<div className="flex items-center justify-center py-8">
+				<Spinner className="size-5" />
+			</div>
+		);
+	}
 
 	if (groups.length === 0) {
 		return (
