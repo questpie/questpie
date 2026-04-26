@@ -5,10 +5,12 @@ description: Production reliability contract for the Preview V2 postMessage prot
 
 This document defines the wire protocol between the QuestPie admin panel and the preview iframe in Preview V2. It is the authoritative reference for implementors on both sides.
 
-<Callout type="warn">
-	This is a Preview V2 protocol design note. The current implemented preview
-	client API uses `useCollectionPreview`, `PreviewProvider`, and `PreviewField`;
-	the V2 hook/component names in this section are not exported yet.
+<Callout type="info">
+	The Preview V2 protocol is implemented end-to-end. Admin-side plumbing is
+	exposed through `VisualEditFormHost` / `useVisualEditPreviewBridge` (see
+	[Visual Edit Workspace](./visual-edit)), and `useCollectionPreview` on the
+	iframe side already handles `INIT_SNAPSHOT` / `PATCH_BATCH` / `COMMIT` /
+	`FULL_RESYNC` alongside the V1 `PREVIEW_REFRESH` flow.
 </Callout>
 
 ## Message Envelope

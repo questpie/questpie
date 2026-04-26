@@ -1,0 +1,147 @@
+---
+title: Visual Edit Workspace
+description: Opt-in 2-pane editing surface — preview canvas on the left, contextual inspector on the right. Built on the patch-based preview protocol.
+---
+
+The **Visual Edit Workspace** is an alternative form view for collections that have live preview enabled. Instead of the legacy "form on the left, iframe on the right" layout that refreshes on save, the workspace lets editors click directly in the preview to focus a field, edit it in a contextual inspector, and see the change land in the iframe via field-level patches — no full reload.
+
+It is purely opt-in. The default `collection-form` view is untouched; existing preview integrations keep working.
+
+## When To Use It
+
+Pick the workspace when:
+
+- You want editors to click on a heading/image/block in the rendered page and edit it without scrolling around in a form.
+- You want field-level updates (typing a title, toggling a boolean) to land in the preview without re-running the loader.
+- You want save/revert/stage transitions to keep the preview perfectly in sync without ad-hoc refresh logic.
+
+Stick with the default `collection-form` when:
+
+- The collection has no live preview, or
+- The form is small enough that the legacy split view feels right.
+
+## Enabling It
+
+Add `.preview()` to the collection (the workspace requires a preview URL builder), then opt in via the form view:
+
+```ts title="collections/pages.ts"
+import { collection } from "#questpie/factories";
+
+export const pages = collection("pages")
+	.fields(({ f }) => ({
+		title: f.text().required().localized(),
+		slug: f.text().required(),
+		content: f.blocks().localized(),
+	}))
+	.admin(({ c }) => ({
+		label: { en: "Pages" },
+		icon: c.icon("ph:file-text"),
+	}))
+	.preview({
+		enabled: true,
+		url: ({ record }) => `/${record.slug}?preview=true`,
+		defaultSize: 60,
+		minSize: 30,
+	})
+	.form({ view: "visual-edit-form" });
+```
+
+The `view` key resolves through the standard view registry, so any project-level overrides work the same way they do for `collection-form`.
+
+## Layout
+
+| Region              | Default size | Notes                                                                                                                                                   |
+| ------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Canvas (left)**   | 68%          | Full preview iframe. Reuses `PreviewPane` and the same origin-strict postMessage transport as the legacy live preview.                                  |
+| **Inspector (right)** | 32%        | Render-prop router. Selects the body based on the current `VisualEditSelection`. Mobile collapses both regions into tabs.                               |
+
+The default sizes come from `PreviewConfig.defaultSize` / `minSize` (with `defaultWidth` / `minWidth` accepted as aliases). If both sets are present, the explicit `*Size` keys win.
+
+## Selection Model
+
+The inspector renders one of seven modes, picked from the active selection:
+
+| Selection kind | Inspector body                                                                                                  |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| `idle`         | **Document** — non-visual fields, SEO/meta, slug, status. Defaults to `AutoFormFields` for the collection.      |
+| `field`        | A single field rendered through the existing `FieldRenderer`.                                                   |
+| `block`        | The selected block's fields plus duplicate / remove actions.                                                    |
+| `block-field`  | A specific field inside a block, scoped to `${blocksPath}._values.${blockId}.${fieldName}`.                     |
+| `relation`     | Single relation field — clicking the related record opens the standard `ResourceSheet` flow.                    |
+| `array`        | Whole-array editor (reorder, add).                                                                              |
+| `array-item`   | One item inside an array field, indexed.                                                                        |
+
+Clicks in the canvas are routed through `mapPreviewClickToSelection` — the same helper used by the legacy `parsePreviewFieldPath` — so block paths, relation hints, and bare field paths all translate consistently.
+
+## Patch Protocol (V2)
+
+The workspace drives the preview iframe through the V2 postMessage protocol, not full reloads. See [Protocol & Reliability](./protocol) for the wire spec; the high-level flow is:
+
+1. **Mount.** Iframe sends `PREVIEW_READY`. Admin replies with `INIT_SNAPSHOT` (the canonical record at the current locale/stage).
+2. **Edit.** Each react-hook-form change becomes a `PATCH_BATCH` with a monotonic `seq` and a list of `set` / `remove` ops.
+3. **Save.** Mutation success triggers `COMMIT` — the preview swaps its local draft for the saved snapshot.
+4. **Revert / restore / transition.** Triggers `FULL_RESYNC` — the preview discards its draft and re-runs the loader.
+
+Iframes built with `useCollectionPreview` get all of this for free: the hook keeps a local draft store, applies patches with `applyPatchBatch`, and exposes the merged data through `data` on the result.
+
+## Per-Field Tuning (`visualEdit`)
+
+Fields can opt into workspace-specific overrides without touching the legacy form view:
+
+```ts
+f.text({
+	meta: {
+		admin: {
+			visualEdit: {
+				patchStrategy: "patch", // "patch" | "refresh" | "deferred"
+				hidden: ({ data }) => !data.published,
+				group: "seo",
+				order: 2,
+			},
+		},
+	},
+});
+```
+
+| Key             | Default                                  | Effect                                                                                                                                  |
+| --------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `inspector`     | `undefined`                              | Component reference rendered instead of the default field component.                                                                    |
+| `patchStrategy` | `"patch"` for scalars, `"refresh"` for relations / uploads / blocks / slug / computed | How changes propagate to the preview. Override when a custom field has a known compute pattern. |
+| `hidden`        | `false`                                  | Hide the field from the document inspector body. Canvas click targets still work.                                                       |
+| `group`         | `BaseAdminMeta.group`                    | Pin the field to a specific group in the document inspector — workspace-only override.                                                  |
+| `order`         | declaration order                        | Display order inside the resolved group.                                                                                                |
+
+Fields without a `visualEdit` block fall back to the type-driven default; the resolver lives in `@questpie/admin/client` (`resolveVisualEditMeta`, `resolvePatchStrategy`).
+
+## Anatomy
+
+The workspace primitives are exposed from `@questpie/admin/client`:
+
+```ts
+import {
+	VisualEditFormHost, // <- highest-level: controller + provider + bridge + workspace
+	VisualEditWorkspace, // <- 2-pane shell with selection provider
+	VisualEditWorkspaceContent, // <- shell without provider (host owns one)
+	VisualInspectorPanel, // <- right-pane router
+	BlockInspectorBody, // <- default renderBlock implementation
+	useVisualEdit, // <- selection state hook
+	useVisualEditController, // <- ResourceFormController in workspace context
+	useVisualEditPreviewBridge, // <- save -> COMMIT, revert -> FULL_RESYNC
+	mapPreviewClickToSelection,
+	mapPreviewBlockClickToSelection,
+	resolveVisualEditMeta,
+	resolvePatchStrategy,
+} from "@questpie/admin/client";
+```
+
+Most projects only need to register the view (`.form({ view: "visual-edit-form" })`); the host wires every primitive together with sensible defaults. Drop down to the lower-level pieces only when you need to host the workspace inside a custom layout.
+
+## Migrating From Legacy Live Preview
+
+The classic live preview keeps working. To migrate a collection:
+
+1. Confirm `.preview({ url: ... })` is set.
+2. Add `.form({ view: "visual-edit-form" })`.
+3. (Optional) Add `visualEdit` blocks to per-field metadata for fields that need a custom patch strategy or grouping.
+
+No frontend code changes required — `useCollectionPreview` already handles both V1 (`PREVIEW_REFRESH`) and V2 (`INIT_SNAPSHOT` + `PATCH_BATCH` + `COMMIT`) transparently.

@@ -3,6 +3,7 @@
 	"pages": [
 		"index",
 		"architecture",
+		"visual-edit",
 		"same-tab-recipe",
 		"shared-preview",
 		"protocol",
