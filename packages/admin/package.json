@@ -49,8 +49,8 @@
 		"dev": "tsdown --watch",
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"test": "bun test test/",
-		"test:watch": "bun test --watch test/",
+		"test": "bun test --preload ./test/setup-dom.ts test/",
+		"test:watch": "bun test --preload ./test/setup-dom.ts --watch test/",
 		"questpie:generate": "bun x questpie generate --verbose"
 	},
 	"dependencies": {
@@ -104,11 +104,15 @@
 	"devDependencies": {
 		"@rollup/plugin-babel": "^6.1.0",
 		"@tanstack/db": "^0.1.1",
+		"@testing-library/dom": "^10.4.0",
+		"@testing-library/react": "^16.3.0",
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
 		"babel-plugin-react-compiler": "^1.0.0",
+		"@happy-dom/global-registrator": "^15.10.2",
 		"bun-types": "latest",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
+		"happy-dom": "^15.10.2",
 		"shadcn": "^3.6.1",
 		"tinyglobby": "^0.2.15",
 		"tsdown": "^0.18.3",
