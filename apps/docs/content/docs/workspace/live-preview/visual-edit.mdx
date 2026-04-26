@@ -84,6 +84,18 @@ The workspace drives the preview iframe through the V2 postMessage protocol, not
 
 Iframes built with `useCollectionPreview` get all of this for free: the hook keeps a local draft store, applies patches with `applyPatchBatch`, and exposes the merged data through `data` on the result.
 
+### Minimal Patches (Recursive Diff)
+
+`PATCH_BATCH` payloads are produced by `diffSnapshot` — a recursive diff that descends into plain objects but treats arrays as atomic. Editing `meta.seo.title` in the inspector emits a single `set meta.seo.title = "X"` op rather than replacing the whole `meta` subtree on the wire. Arrays send a full `set` (with the new array as the value) so block reorders, tag updates, and similar operations stay correct without per-index shuffling.
+
+| Change                       | Wire op                                         |
+| ---------------------------- | ----------------------------------------------- |
+| Edit `title`                 | `{ op: "set", path: "title", value: "..." }`   |
+| Edit `meta.seo.title`        | `{ op: "set", path: "meta.seo.title", value: "..." }` |
+| Add `meta.kicker`            | `{ op: "set", path: "meta.kicker", value: "..." }` |
+| Remove `meta.kicker`         | `{ op: "remove", path: "meta.kicker" }`         |
+| Reorder `tags: ["a", "b"]` to `["b", "a"]` | `{ op: "set", path: "tags", value: ["b", "a"] }` |
+
 ## Per-Field Tuning (`visualEdit`)
 
 Fields can opt into workspace-specific overrides without touching the legacy form view:
@@ -113,6 +125,54 @@ f.text({
 
 Fields without a `visualEdit` block fall back to the type-driven default; the resolver lives in `@questpie/admin/client` (`resolveVisualEditMeta`, `resolvePatchStrategy`).
 
+### Grouped Document Inspector
+
+The default Document inspector body uses `AutoFormFields`, so a collection's existing `.form({ fields: [...] })` layout (sections, tabs) carries straight into the workspace. When you want a flatter, group-driven view instead — useful when the workspace's inspector is doing most of the editing and the Document panel is just SEO/meta/status — pass `DocumentInspectorBody` to `renderDocument`:
+
+```tsx title="custom-pages-form.tsx"
+import {
+	DocumentInspectorBody,
+	VisualEditFormHost,
+} from "@questpie/admin/client";
+
+export default function CustomPagesForm(props) {
+	return (
+		<VisualEditFormHost
+			{...props}
+			renderDocument={() => <DocumentInspectorBody />}
+		/>
+	);
+}
+```
+
+`DocumentInspectorBody` reads the fields off the active controller, resolves each one's `visualEdit.group` / `order` / `hidden` (with server metadata winning), and renders each group with the same `FieldRenderer` the rest of the inspector uses. Fields with `visualEdit.hidden === true` are dropped; reactive `hidden` handlers defer to the field component itself.
+
+```ts title="collections/pages.ts"
+export const pages = collection("pages")
+	.fields(({ f }) => ({
+		title: f.text().required().localized().meta({
+			admin: { visualEdit: { group: "content", order: 1 } },
+		}),
+		slug: f.text().required().meta({
+			admin: { visualEdit: { group: "url", order: 1 } },
+		}),
+		seoTitle: f.text().meta({
+			admin: { visualEdit: { group: "seo", order: 1 } },
+		}),
+		seoDescription: f.textarea().meta({
+			admin: { visualEdit: { group: "seo", order: 2 } },
+		}),
+		// No `visualEdit.group` — falls through to the default group
+		status: f.select(["draft", "published"]).default("draft"),
+	}))
+	.preview({ url: ({ record }) => `/${record.slug}` })
+	.form({ view: "visual-edit-form" });
+```
+
+When no field opts into a non-default group, group headers are skipped — the inspector renders a flat field list, matching the legacy "AutoFormFields without sections" appearance.
+
+If you need the underlying grouping data without the rendered output (e.g. to drive a custom layout), reach for the pure helper `groupFieldsForDocument` from `@questpie/admin/client`.
+
 ## Anatomy
 
 The workspace primitives are exposed from `@questpie/admin/client`:
@@ -124,11 +184,14 @@ import {
 	VisualEditWorkspaceContent, // <- shell without provider (host owns one)
 	VisualInspectorPanel, // <- right-pane router
 	BlockInspectorBody, // <- default renderBlock implementation
+	DocumentInspectorBody, // <- opt-in grouped document body
 	useVisualEdit, // <- selection state hook
 	useVisualEditController, // <- ResourceFormController in workspace context
 	useVisualEditPreviewBridge, // <- save -> COMMIT, revert -> FULL_RESYNC
+	useFormToPreviewPatcher, // <- RHF -> PATCH_BATCH dispatcher
 	mapPreviewClickToSelection,
 	mapPreviewBlockClickToSelection,
+	groupFieldsForDocument, // <- pure helper backing DocumentInspectorBody
 	resolveVisualEditMeta,
 	resolvePatchStrategy,
 } from "@questpie/admin/client";
