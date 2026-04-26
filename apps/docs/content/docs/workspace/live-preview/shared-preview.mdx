@@ -5,9 +5,15 @@ description: Detached and multi-user preview using QUESTPIE realtime channels.
 
 The [same-tab recipe](/docs/workspace/live-preview/same-tab-recipe) covers the default case: admin and preview in a split-screen iframe communicating over `postMessage`. This page covers the advanced case where preview runs in a separate browser tab, a shared URL, or across multiple users -- using QUESTPIE realtime as the transport.
 
-<Callout type="warn">
-	This page describes the planned Preview V2 shared-preview design. The current
-	client package exports `useCollectionPreview`, not `useQuestpiePreview`.
+<Callout type="info">
+	The patch-based V2 transport ships today via the
+	[Visual Edit Workspace](./visual-edit) and `useCollectionPreview` for the
+	in-iframe case. The realtime / shared-preview transport described on this
+	page is a **design note** for an advanced use case (multi-user, detached
+	tab, mobile device preview) that isn't wired up to a turn-key admin
+	primitive yet. Read it for the design intent; the illustrative API name
+	`useQuestpiePreview` would map to a realtime-channel-aware variant of
+	`useCollectionPreview`.
 </Callout>
 
 ## When to Use Realtime

@@ -5,11 +5,18 @@ description: Step-by-step migration from refresh-based live preview to the patch
 
 This guide covers migrating from the current live preview system (V1) to Preview V2. The migration is designed to be incremental -- you can run both protocols side by side during the transition.
 
-<Callout type="warn">
-	Preview V2 is planned architecture, not the current exported client API. Today
-	`@questpie/admin/client` exports `useCollectionPreview`, `PreviewProvider`,
-	`PreviewField`, `StandalonePreviewField`, and `BlockScopeProvider`; it does
-	not export `useQuestpiePreview`, `PreviewRoot`, or `PreviewBlock` yet.
+<Callout type="info">
+	Preview V2 ships today as the **Visual Edit Workspace** — opt in per
+	collection with `.form(({ v }) => v.visualEditForm({...}))` and the
+	workspace's bridge + patcher handle the V2 transport automatically.
+	`useCollectionPreview` already understands V2 messages (`INIT_SNAPSHOT`,
+	`PATCH_BATCH`, `COMMIT`, `FULL_RESYNC`) alongside the V1
+	`PREVIEW_REFRESH` flow. The export names in the snippets below
+	(`useQuestpiePreview`, `PreviewRoot`, `PreviewBlock`) are illustrative —
+	the shipped names are `VisualEditFormHost`, `VisualEditWorkspace`,
+	`useCollectionPreview`, `PreviewProvider`, `PreviewField`,
+	`BlockScopeProvider`. See [Visual Edit Workspace](./visual-edit) for the
+	turn-key flow.
 </Callout>
 
 ## V1 vs V2 at a Glance

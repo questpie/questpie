@@ -5,10 +5,15 @@ description: Frontend implementation recipe for same-tab split-screen preview us
 
 This page documents the planned Preview V2 same-tab API. The admin panel opens a split-screen with your frontend in an iframe on the right. Changes flow as field-level patches over `postMessage` -- no server round-trip, no polling.
 
-<Callout type="warn">
-	Preview V2 is not exported by the current `@questpie/admin/client` package
-	yet. Use [Live Preview](/docs/workspace/live-preview) for the implemented
-	`useCollectionPreview` API.
+<Callout type="info">
+	Preview V2 ships today as the **Visual Edit Workspace**. For the standard
+	collection-edit flow you don't need the lower-level recipe on this page —
+	enable `.form(({ v }) => v.visualEditForm({...}))` and the workspace
+	handles the wire transport for you. See
+	[Visual Edit Workspace](./visual-edit). Read this page when you need a
+	**custom iframe runtime** that consumes the patch protocol directly. The
+	illustrative API names below (`useQuestpiePreview`, `PreviewRoot`) map to
+	the shipped `useCollectionPreview` + `PreviewProvider` exports.
 </Callout>
 
 ## Minimal Page Example

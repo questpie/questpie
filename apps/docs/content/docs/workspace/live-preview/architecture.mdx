@@ -7,12 +7,16 @@ Live Preview V2 replaces the current `edit -> save/autosave -> invalidate -> rel
 
 This page documents the target architecture. For the current preview system, see [Live Preview](/docs/workspace/live-preview).
 
-<Callout type="warn">
-	This page is a design note for the planned Preview V2 API. The current
-	`@questpie/admin/client` exports are `useCollectionPreview`,
-	`PreviewProvider`, `PreviewField`, `StandalonePreviewField`, and
-	`BlockScopeProvider`; it does not export `useQuestpiePreview`, `PreviewRoot`,
-	or `PreviewBlock` yet.
+<Callout type="info">
+	Preview V2 ships today as the **Visual Edit Workspace** — see
+	[Visual Edit Workspace](./visual-edit) for the user-facing flow and
+	[Protocol & Reliability](./protocol) for the wire format. The shipped
+	exports are `VisualEditFormHost`, `VisualEditWorkspace`,
+	`VisualInspectorPanel`, `useCollectionPreview`, `PreviewProvider`,
+	`PreviewField`, and `BlockScopeProvider`. This page is an architecture
+	note that uses illustrative API names (`useQuestpiePreview`, `PreviewRoot`,
+	`PreviewBlock`) — read it for the design intent, but consult
+	[Visual Edit Workspace](./visual-edit) for the real export names.
 </Callout>
 
 ## Design Goals
