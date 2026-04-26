@@ -58,26 +58,13 @@ import {
 import { EmptyState } from "../../components/ui/empty-state";
 import { Label } from "../../components/ui/label";
 import {
-	useCollectionValidation,
-	usePreferServerValidation,
 	useSearchParamToggle,
 	useSidebarSearchParam,
 } from "../../hooks";
 import { useCollectionAuditHistory } from "../../hooks/use-audit-history";
-import {
-	useCollectionCreate,
-	useCollectionDelete,
-	useCollectionItem,
-	useCollectionRestore,
-	useCollectionRevertVersion,
-	useCollectionUpdate,
-	useCollectionVersions,
-} from "../../hooks/use-collection";
-import { useCollectionFields } from "../../hooks/use-collection-fields";
-import { getLockUser, useLock } from "../../hooks/use-locks";
+import { useCollectionVersions } from "../../hooks/use-collection";
 import { useReactiveFields } from "../../hooks/use-reactive-fields";
 import { useServerActions } from "../../hooks/use-server-actions";
-import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { RenderProfiler } from "../../lib/render-profiler.js";
 import {
@@ -88,12 +75,9 @@ import {
 	useSafeContentLocales,
 	useScopedLocale,
 } from "../../runtime";
-import {
-	detectManyToManyRelations,
-	hasManyToManyRelations,
-} from "../../utils/detect-relations";
 import { AdminViewHeader } from "../layout/admin-view-layout";
 import { AutoFormFields } from "./auto-form-fields";
+import { useResourceFormController } from "./use-resource-form-controller";
 import { FormViewSkeleton } from "./view-skeletons";
 
 // ============================================================================
@@ -106,26 +90,6 @@ const QUERY_KEY_PREFIX = ["questpie", "collections"] as const;
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/**
- * Extract reactive configs from collection schema fields.
- * Used to determine which fields have server-side reactive behaviors.
- */
-function extractReactiveConfigs(
-	schema: CollectionSchema | undefined,
-): Record<string, FieldReactiveSchema> {
-	if (!schema?.fields) return {};
-
-	const configs: Record<string, FieldReactiveSchema> = {};
-
-	for (const [fieldName, fieldDef] of Object.entries(schema.fields)) {
-		if (fieldDef.reactive) {
-			configs[fieldName] = fieldDef.reactive;
-		}
-	}
-
-	return configs;
-}
 
 /**
  * Component that manages reactive field states.
@@ -561,36 +525,55 @@ export default function FormView({
 }: FormViewProps): React.ReactElement {
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
-	const isEditMode = !!id;
+	const controller = useResourceFormController({
+		collection,
+		id,
+		config,
+		viewConfig,
+		defaultValues: defaultValuesProp,
+	});
 	const {
+		form,
+		isEditMode,
+		validationMode,
 		fields: resolvedFields,
 		schema,
-		isLoading: isFieldsLoading,
-	} = useCollectionFields(collection, {
-		fallbackFields: (config as any)?.fields,
-	});
-	const resolvedFormConfig = React.useMemo(
-		() =>
-			viewConfig ??
-			(config?.form as any)?.["~config"] ??
-			(config?.form as any) ??
-			(schema?.admin?.form as any),
-		[viewConfig, config?.form, schema?.admin?.form],
-	);
-	const formConfigBridge = React.useMemo(() => {
-		if (!resolvedFormConfig) return config;
-
-		return {
-			...(config ?? {}),
-			form: resolvedFormConfig,
-		};
-	}, [config, resolvedFormConfig]);
-
-	// Extract reactive configs from schema for server-side reactive handlers
-	const reactiveConfigs = React.useMemo(
-		() => extractReactiveConfigs(schema),
-		[schema],
-	);
+		isFieldsLoading,
+		resolvedFormConfig,
+		formConfigBridge,
+		reactiveConfigs,
+		withRelations,
+		item,
+		transformedItem,
+		isItemLoading: isLoading,
+		itemError,
+		lock,
+		mutations,
+		workflow,
+	} = controller;
+	const {
+		isBlocked,
+		blockedBy,
+		isOpenElsewhere,
+		blockedByUser,
+		refresh: refreshLock,
+	} = lock;
+	const {
+		create: createMutation,
+		update: updateMutation,
+		remove: deleteMutation,
+		restore: restoreMutation,
+		revertVersion: revertVersionMutation,
+		transition: transitionMutation,
+	} = mutations;
+	const {
+		config: workflowConfig,
+		enabled: workflowEnabled,
+		currentStage,
+		currentStageConfig,
+		currentStageLabel,
+		allowedTransitions,
+	} = workflow;
 
 	// Preview configuration from introspected schema (server-side .preview() config)
 	// Note: url function cannot be serialized, so we use hasUrlBuilder flag + RPC
@@ -632,69 +615,7 @@ export default function FormView({
 		}
 	}, [isEditMode, id, isHistoryOpen, setIsHistoryOpen]);
 
-	// Auto-detect M:N relations that need to be included when fetching
-	const withRelations = React.useMemo(
-		() => detectManyToManyRelations({ fields: resolvedFields, schema }),
-		[resolvedFields, schema],
-	);
-
-	// Fetch item if in edit mode (include relations if specified)
-	const {
-		data: item,
-		isLoading,
-		error: itemError,
-	} = useCollectionItem(
-		collection as any,
-		id ?? "",
-		hasManyToManyRelations(withRelations)
-			? { with: withRelations, localeFallback: false }
-			: { localeFallback: false },
-		{ enabled: isEditMode },
-	);
-
-	// Document locking - acquire lock when editing, show blocked state if someone else is editing
-	const {
-		isBlocked,
-		blockedBy,
-		isOpenElsewhere,
-		refresh: refreshLock,
-	} = useLock({
-		resourceType: "collection",
-		resource: collection,
-		resourceId: id ?? "",
-		autoAcquire: isEditMode,
-	});
-	const blockedByUser = blockedBy ? getLockUser(blockedBy) : null;
-
-	// Transform loaded item - convert relation arrays of objects to arrays of IDs
-	// Backend returns: { services: [{ id: "...", name: "..." }] }
-	// Form needs: { services: ["id1", "id2"] }
-	const transformedItem = React.useMemo(() => {
-		if (!item || !hasManyToManyRelations(withRelations)) return item;
-
-		const result = { ...item } as any;
-		for (const key of Object.keys(withRelations)) {
-			const value = result[key];
-			if (
-				Array.isArray(value) &&
-				value.length > 0 &&
-				typeof value[0] === "object" &&
-				value[0]?.id
-			) {
-				// Transform array of objects to array of IDs
-				result[key] = value.map((v: any) => v.id);
-			}
-		}
-		return result;
-	}, [item, withRelations]);
-
-	// Mutations
-	const createMutation = useCollectionCreate(collection as any);
-	const updateMutation = useCollectionUpdate(collection as any);
-	const deleteMutation = useCollectionDelete(collection as any);
-	const restoreMutation = useCollectionRestore(collection as any);
-	const revertVersionMutation = useCollectionRevertVersion(collection as any);
-
+	// History sidebar state
 	const [pendingRevertVersion, setPendingRevertVersion] =
 		React.useState<any>(null);
 
@@ -718,68 +639,9 @@ export default function FormView({
 		);
 
 	// ========================================================================
-	// Workflow — stage badge, transition dropdown, scheduling
+	// Workflow — transition dialog state (controller owns the stage data)
 	// ========================================================================
 
-	const workflowConfig = schema?.options?.workflow as
-		| {
-				enabled: boolean;
-				initialStage: string;
-				stages: Array<{
-					name: string;
-					label?: string;
-					description?: string;
-					transitions?: string[];
-				}>;
-		  }
-		| undefined;
-	const workflowEnabled = !!workflowConfig?.enabled;
-
-	/**
-	 * Lightweight versions query (limit: 1) just to read the current
-	 * `versionStage`. Runs whenever workflow is enabled and we have an item id.
-	 * The full 50-version query is still lazy-loaded behind the History sidebar.
-	 */
-	const { data: latestVersionData } = useCollectionVersions(
-		collection as any,
-		id ?? "",
-		{ limit: 1 },
-		{ enabled: workflowEnabled && isEditMode && !!id },
-	);
-
-	const currentStage =
-		(latestVersionData as any)?.[0]?.versionStage ??
-		workflowConfig?.initialStage ??
-		null;
-
-	const currentStageConfig = React.useMemo(
-		() => workflowConfig?.stages?.find((s) => s.name === currentStage) ?? null,
-		[workflowConfig?.stages, currentStage],
-	);
-
-	const currentStageLabel = currentStageConfig?.label ?? currentStage ?? "";
-
-	/**
-	 * Allowed transitions from the current stage.
-	 * If the stage defines explicit `transitions`, only those are reachable.
-	 * Otherwise fall back to all other stages (unrestricted).
-	 */
-	const allowedTransitions = React.useMemo(() => {
-		if (!workflowConfig?.stages || !currentStage) return [];
-		const stageNames = currentStageConfig?.transitions;
-		if (stageNames && stageNames.length > 0) {
-			return stageNames
-				.map((name) => workflowConfig.stages.find((s) => s.name === name))
-				.filter(Boolean) as typeof workflowConfig.stages;
-		}
-		// Unrestricted — all stages except the current one
-		return workflowConfig.stages.filter((s) => s.name !== currentStage);
-	}, [workflowConfig, currentStage, currentStageConfig]);
-
-	// Transition mutation
-	const transitionMutation = useTransitionStage(collection);
-
-	// Dialog state for workflow transitions
 	const [transitionTarget, setTransitionTarget] = React.useState<{
 		name: string;
 		label?: string;
@@ -787,29 +649,6 @@ export default function FormView({
 	const [transitionSchedule, setTransitionSchedule] = React.useState(false);
 	const [transitionScheduledAt, setTransitionScheduledAt] =
 		React.useState<Date | null>(null);
-
-	// Get validation resolver - prefer server validation (AJV with JSON Schema) over client validation
-	const validationMode = isEditMode ? "update" : "create";
-	const hasServerValidationSchema =
-		validationMode === "update"
-			? !!schema?.validation?.update
-			: !!schema?.validation?.insert;
-	const shouldBuildClientResolver =
-		!isFieldsLoading && !hasServerValidationSchema;
-	const clientResolver = useCollectionValidation(collection, {
-		enabled: shouldBuildClientResolver,
-	});
-	const resolver = usePreferServerValidation(
-		collection,
-		{ mode: validationMode, schema },
-		clientResolver,
-	);
-
-	const form = useForm({
-		defaultValues: (transformedItem ?? defaultValuesProp ?? {}) as any,
-		resolver,
-		mode: "onBlur",
-	});
 
 	/**
 	 * Execute the confirmed workflow transition (immediate or scheduled).
@@ -2024,7 +1863,7 @@ export default function FormView({
 						{/* Main Content - Form Fields */}
 						<FormFieldsContent
 							collection={collection}
-							config={formConfigBridge}
+							config={formConfigBridge as any}
 							registry={registry}
 							allCollectionsConfig={allCollectionsConfig}
 						/>
