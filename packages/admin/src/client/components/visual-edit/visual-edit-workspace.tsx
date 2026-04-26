@@ -137,6 +137,17 @@ export type VisualEditWorkspaceProps = {
 	className?: string;
 };
 
+/**
+ * 2-pane Visual Edit Workspace shell — preview canvas on the
+ * left, inspector on the right (collapses to tabs on mobile).
+ * Mounts a `VisualEditProvider` internally and wires preview
+ * clicks through to the selection state machine.
+ *
+ * For the full opinionated wiring (form controller, bridge,
+ * patcher, renderer defaults), reach for `VisualEditFormHost`
+ * instead. Use this primitive directly when you need the layout
+ * but want to drive the inspector / form / bridge yourself.
+ */
 export function VisualEditWorkspace({
 	previewUrl,
 	allowedOrigins,

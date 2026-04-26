@@ -67,6 +67,30 @@ export type UseFormToPreviewPatcherArgs = {
 // Hook
 // ============================================================================
 
+/**
+ * Watch a `react-hook-form` instance for value changes and emit
+ * `PATCH_BATCH` messages to a `PreviewPane` so the iframe's
+ * local draft stays in sync with the form without round-tripping
+ * through the database.
+ *
+ * Each flush:
+ *
+ * 1. computes `diffSnapshot(snapshot, current)` — recursive over
+ *    plain objects, atomic over arrays
+ * 2. buckets the resulting ops by the top-level field's resolved
+ *    `visualEdit.patchStrategy`:
+ *    - `"patch"` → queued in the next `PATCH_BATCH`
+ *    - `"refresh"` → triggers a single `PREVIEW_REFRESH` for the
+ *      batch (relations, uploads, blocks, server compute)
+ *    - `"deferred"` → dropped until commit
+ * 3. ships the batch with a monotonic `seq` and updates the
+ *    snapshot reference.
+ *
+ * Mounted automatically by `VisualEditFormHost`. Reach for it
+ * directly only when hosting the workspace in a custom layout.
+ *
+ * Must run inside a `<FormProvider>` (it uses `useFormContext`).
+ */
 export function useFormToPreviewPatcher({
 	previewRef,
 	fields,

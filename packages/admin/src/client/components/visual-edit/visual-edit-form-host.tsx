@@ -125,6 +125,32 @@ export type VisualEditFormHostProps = ResourceFormControllerOptions & {
 // Component
 // ============================================================================
 
+/**
+ * Top-level Visual Edit Workspace primitive — wraps everything a
+ * collection edit page needs to drive the V2 patch protocol:
+ *
+ * - mounts `useResourceFormController` for the form / mutations
+ *   / locking / workflow stage
+ * - mounts `FormProvider` so field components inside the inspector
+ *   share react-hook-form state
+ * - mounts `VisualEditProvider` for selection state + click
+ *   routing from the canvas
+ * - wires `useVisualEditPreviewBridge` (INIT_SNAPSHOT, COMMIT,
+ *   FULL_RESYNC, SELECT_TARGET, iframe-reload re-seed) and
+ *   `useFormToPreviewPatcher` (form-change → PATCH_BATCH)
+ * - renders `VisualEditWorkspaceContent` with sensible defaults
+ *   for `renderDocument` (auto-switches between `AutoFormFields`
+ *   and grouped `DocumentInspectorBody` based on field
+ *   metadata), `renderField` (FieldRenderer + visualEdit.inspector
+ *   override), and `renderBlock` (`BlockInspectorBody`)
+ *
+ * Most consumers only need to register the view via
+ * `.form(({ v }) => v.visualEditForm({...}))` and never touch
+ * this component directly. Reach for it when you're hosting the
+ * workspace in a custom layout.
+ *
+ * @see {@link https://questpie.com/docs/workspace/live-preview/visual-edit}
+ */
 export function VisualEditFormHost({
 	collection,
 	id,

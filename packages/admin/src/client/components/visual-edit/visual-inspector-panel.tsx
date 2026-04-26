@@ -56,6 +56,27 @@ export type VisualInspectorPanelProps = {
 // Component
 // ============================================================================
 
+/**
+ * Right-pane router for the Visual Edit Workspace. Reads the
+ * current `VisualEditSelection` from the surrounding provider
+ * and dispatches to the matching render-prop slot:
+ *
+ * - `idle` → `renderDocument()`
+ * - `field` / `relation` / `array` → `renderField(fieldPath)`
+ * - `block` → `renderBlock({ blocksPath, blockId })`
+ * - `block-field` → `renderField(<blocksPath>._values.<id>.<field>)`
+ * - `array-item` → `renderField(<fieldPath>.<index>)`
+ *
+ * Header shows a kind-aware icon + title and a back-to-document
+ * button for non-idle selections. The body is wrapped in
+ * `InspectorErrorBoundary` keyed on the selection's resolved
+ * field path, so a misbehaving renderer doesn't unmount the
+ * workspace.
+ *
+ * `VisualEditFormHost` passes opinionated defaults for every
+ * slot. Use this component directly when you want full control
+ * over the inspector body.
+ */
 export function VisualInspectorPanel({
 	className,
 	renderDocument,
