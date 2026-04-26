@@ -509,6 +509,25 @@ city: f.relation("cities").label("City").admin({
 }),
 ```
 
+## Visual Edit Workspace
+
+Patch-based 2-pane editing surface (canvas iframe + contextual right inspector) layered on top of the existing live-preview shell. Opt-in per collection via `v.visualEditForm({...})`; the legacy `collection-form` view continues to work unchanged.
+
+- **Canonical RFC**: `RFC-VISUAL-EDIT-WORKSPACE.md` (root) — the design intent.
+- **Task checklist**: `TASKS-VISUAL-EDIT-WORKSPACE.md` (root) — phased implementation breakdown.
+- **User docs**: `apps/docs/content/docs/workspace/live-preview/` — `visual-edit.mdx` (user-facing guide), `protocol.mdx` (wire-level reference), `migration.mdx` (V1 → V2 upgrade), plus the index/architecture/same-tab-recipe/shared-preview pages.
+- **Public surface**: re-exported from `@questpie/admin/client` — never reach into `client/components/visual-edit/` or `client/components/preview/` paths from outside the admin package.
+
+Key conventions when working on or near this surface:
+
+- **V1 fallback stays alive.** `useCollectionPreview` handles every V2 message (`INIT_SNAPSHOT`, `PATCH_BATCH`, `COMMIT`, `FULL_RESYNC`, `SELECT_TARGET`, `NAVIGATE_PREVIEW`) **and** legacy `PREVIEW_REFRESH`/`FOCUS_FIELD`/`SELECT_BLOCK`. Don't break the V1 path when extending V2.
+- **Origin validation everywhere.** `postMessage` is always sent with an explicit target origin (never `"*"`) and validated on receipt. Wrap both sides in `try/catch` so a non-serializable payload (function, class, blob) logs in dev and is swallowed in production.
+- **Patch strategy lives on the field.** `visualEdit.patchStrategy` defaults to `"patch"` for scalars and `"refresh"` for relations / uploads / blocks / computed fields. Set `"refresh"` on slug-style fields whose value is server-derived; set `"deferred"` to skip live-preview updates entirely.
+- **`visualEdit` field metadata** is read from `fieldSchema.metadata.meta.admin.visualEdit` (server introspection path) — earlier iterations had this wrong. Use `resolveVisualEditMeta` / `resolveNestedVisualEditMeta` from `@questpie/admin/client`.
+- **DocumentInspectorBody auto-switch.** The grouped layout activates only when at least one field declares `visualEdit.group`. Without it, the workspace falls through to `AutoFormFields` so existing sections/tabs carry over untouched.
+- **Iframe-reload recovery is two-layered.** `PreviewPane` buffers the latest `INIT_SNAPSHOT` and replays it on every `PREVIEW_READY`; the workspace bridge additionally re-seeds with current `react-hook-form` values via `onReady`. Keep both layers intact.
+- **Block-field paths flow through `blockValuePath`** so nested blocks always resolve to flat `_values` paths regardless of depth. Never hand-roll `${blocksPath}._values.${blockId}.${field}` strings.
+
 ## References
 
 - Core package README: `packages/questpie/README.md`
