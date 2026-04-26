@@ -27,6 +27,7 @@ import {
 	type ResourceFormControllerOptions,
 	useResourceFormController,
 } from "../../views/collection/use-resource-form-controller.js";
+import { ComponentRenderer } from "../component-renderer.js";
 import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import { BlockInspectorBody } from "./block-inspector-body.js";
 import { DocumentInspectorBody } from "./document-inspector-body.js";
@@ -34,6 +35,7 @@ import { hasGroupedDocumentMetadata } from "./group-fields.js";
 import type { VisualEditSelection } from "./types.js";
 import { useFormToPreviewPatcher } from "./use-form-to-preview-patcher.js";
 import { useVisualEditPreviewBridge } from "./use-visual-edit-preview-bridge.js";
+import { resolveVisualEditMeta } from "./visual-edit-meta.js";
 import { VisualEditProvider } from "./visual-edit-context.js";
 import { VisualEditWorkspaceContent } from "./visual-edit-workspace.js";
 import { VisualInspectorPanel } from "./visual-inspector-panel.js";
@@ -198,6 +200,40 @@ export function VisualEditFormHost({
 			if (!fieldDef) {
 				return <UnknownFieldFallback fieldPath={fieldPath} />;
 			}
+			// Honour `visualEdit.inspector` overrides — server-defined
+			// component reference resolved through the admin component
+			// registry. The override receives the same context the
+			// default renderer would, plus the resolved field path so a
+			// single component can handle nested targets too.
+			const fieldSchema = controller.schema?.fields?.[fieldName];
+			const inspectorOverride = resolveVisualEditMeta({
+				fieldDef,
+				fieldSchema: fieldSchema as any,
+			})?.inspector;
+			if (inspectorOverride) {
+				return (
+					<ComponentRenderer
+						reference={inspectorOverride}
+						additionalProps={{
+							fieldName,
+							fieldPath,
+							collection,
+							fieldDef,
+							registry,
+							allCollectionsConfig,
+						}}
+						fallback={
+							<FieldRenderer
+								fieldName={fieldName}
+								fieldDef={fieldDef}
+								collection={collection}
+								registry={registry}
+								allCollectionsConfig={allCollectionsConfig as any}
+							/>
+						}
+					/>
+				);
+			}
 			return (
 				<FieldRenderer
 					fieldName={fieldName}
@@ -208,7 +244,13 @@ export function VisualEditFormHost({
 				/>
 			);
 		},
-		[allCollectionsConfig, collection, controller.fields, registry],
+		[
+			allCollectionsConfig,
+			collection,
+			controller.fields,
+			controller.schema,
+			registry,
+		],
 	);
 
 	const defaultRenderBlock = React.useCallback(

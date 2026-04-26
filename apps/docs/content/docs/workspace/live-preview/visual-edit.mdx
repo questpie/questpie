@@ -125,6 +125,22 @@ f.text({
 
 Fields without a `visualEdit` block fall back to the type-driven default; the resolver lives in `@questpie/admin/client` (`resolveVisualEditMeta`, `resolvePatchStrategy`).
 
+### Custom Inspector Component
+
+Set `visualEdit.inspector` to a registered component reference and the workspace will render it inside the right pane instead of the field's default component. The override receives the same context the default `FieldRenderer` would (`fieldName`, `fieldPath`, `collection`, `fieldDef`, `registry`, `allCollectionsConfig`) plus the resolved field path, so a single component can target nested selections too:
+
+```ts title="collections/articles.ts"
+.fields(({ f, c }) => ({
+	body: f.richText().set("admin", {
+		visualEdit: {
+			inspector: c.component("rich-text-inspector", { variant: "compact" }),
+		},
+	}),
+}));
+```
+
+If the registered component type isn't found in the admin's component registry, the workspace falls back to the default `FieldRenderer` so the field stays editable. Server-side `visualEdit.inspector` (set via the introspected schema) wins over the client-side `~options.admin.visualEdit.inspector` so plugins can pin a custom inspector centrally.
+
 ### Grouped Document Inspector
 
 The Document inspector body auto-switches based on what your fields configure:

@@ -55,6 +55,47 @@ describe("resolveVisualEditMeta", () => {
 		expect(meta?.group).toBe("seo");
 		expect(meta?.order).toBe(2);
 	});
+
+	it("surfaces the inspector component reference from client options", () => {
+		const inspector = { type: "rich-text-inspector", props: {} } as const;
+		const meta = resolveVisualEditMeta({
+			fieldDef: fieldInstance("text", {
+				admin: { visualEdit: { inspector } },
+			}),
+			fieldSchema: { metadata: { type: "text" } },
+		});
+		expect(meta?.inspector).toBe(inspector);
+	});
+
+	it("surfaces the inspector component reference from server schema", () => {
+		const inspector = {
+			type: "rich-text-inspector",
+			props: { variant: "compact" },
+		} as const;
+		const meta = resolveVisualEditMeta({
+			fieldDef: fieldInstance("text"),
+			fieldSchema: {
+				admin: { visualEdit: { inspector } },
+				metadata: { type: "text" },
+			},
+		});
+		expect(meta?.inspector).toBe(inspector);
+	});
+
+	it("server inspector override wins over client", () => {
+		const clientInspector = { type: "client-inspector", props: {} } as const;
+		const serverInspector = { type: "server-inspector", props: {} } as const;
+		const meta = resolveVisualEditMeta({
+			fieldDef: fieldInstance("text", {
+				admin: { visualEdit: { inspector: clientInspector } },
+			}),
+			fieldSchema: {
+				admin: { visualEdit: { inspector: serverInspector } },
+				metadata: { type: "text" },
+			},
+		});
+		expect(meta?.inspector).toBe(serverInspector);
+	});
 });
 
 describe("defaultPatchStrategy", () => {
