@@ -157,15 +157,6 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			completed: 0,
 			lastLogAt: 0,
 		});
-		// Buffer the most recent INIT_SNAPSHOT payload — extracted
-		// into `useInitSnapshotBuffer` for unit-testability. Replays
-		// on every PREVIEW_READY so:
-		//   1. an INIT_SNAPSHOT sent before the iframe is ready isn't lost
-		//   2. an iframe reload (e.g. via NAVIGATE_PREVIEW or back/forward)
-		//      re-receives the latest snapshot without the parent having
-		//      to re-mint it
-		// (sendBufferedInitSnapshot is wired up below once
-		// `sendToPreview` is in scope.)
 
 		const {
 			data: previewUrl,
@@ -258,10 +249,15 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			[targetOrigin, url],
 		);
 
-		// Buffer + replay for INIT_SNAPSHOT — see use-init-snapshot-buffer.ts
-		// for the contract. The buffered hook reads `isReady` via a ref so
-		// it can stay stable across renders (otherwise the imperative handle
-		// below would rebuild on every isReady flip).
+		// Buffer + replay for INIT_SNAPSHOT. Replays on every PREVIEW_READY so:
+		//   1. an INIT_SNAPSHOT sent before the iframe is ready isn't lost
+		//   2. an iframe reload (e.g. NAVIGATE_PREVIEW or browser back/forward)
+		//      re-receives the latest snapshot without the parent re-minting it
+		//
+		// See `use-init-snapshot-buffer.ts` for the contract. The hook reads
+		// `isReady` via a ref so its `setBuffered` / `replay` identities stay
+		// stable across renders (otherwise the imperative handle below would
+		// rebuild on every isReady flip).
 		const sendInitToPreview = React.useCallback(
 			(buffered: {
 				snapshot: Record<string, unknown>;
