@@ -43,7 +43,7 @@ Add the Visual Edit Workspace — an opt-in 2-pane editing experience with a liv
 
 - Barbershop example's `pages` collection wired up end-to-end with `v.visualEditForm` + `visualEdit.group` field metadata.
 - New docs page in the Live Preview section walks through enabling the workspace, the selection model, the V2 patch protocol, and the per-field `visualEdit` block. The protocol page is rewritten to faithfully document the wire format that ships, and the architecture / same-tab / shared-preview / migration pages now flag themselves as design notes that point readers at the canonical exports.
-- The full visual-edit + V2 surface is now re-exported from `@questpie/admin/client` (`VisualEditFormHost`, `VisualEditWorkspace`, `useFormToPreviewPatcher`, `useVisualEditPreviewBridge`, `BlockInspectorBody`, `DocumentInspectorBody`, `diffSnapshot`, `applyPatchBatch`, every public type, and the V2 message-type union) so consumers can build against documented APIs without reaching into internal paths.
+- The full visual-edit + V2 surface is now re-exported from `@questpie/admin/client` (`VisualEditFormHost`, `VisualEditWorkspace`, `useFormToPreviewPatcher`, `useVisualEditPreviewBridge`, `BlockInspectorBody`, `DocumentInspectorBody`, `diffSnapshot`, `applyPatchBatch`, `useInitSnapshotBuffer`, every public type, and the V2 message-type union) so consumers can build against documented APIs without reaching into internal paths.
 
 **Test coverage**
 

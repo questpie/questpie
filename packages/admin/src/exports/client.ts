@@ -235,6 +235,16 @@ export {
 	type VisualInspectorPanelProps,
 } from "#questpie/admin/client/components/visual-edit/index.js";
 
+// Admin-side preview hardening primitive — generic buffer + replay
+// hook used by `PreviewPane` to keep the most recent INIT_SNAPSHOT
+// payload around for replay on every iframe ready event. Exposed so
+// plugin authors building custom preview panes can reuse the pattern.
+export {
+	useInitSnapshotBuffer,
+	type UseInitSnapshotBufferArgs,
+	type UseInitSnapshotBufferResult,
+} from "#questpie/admin/client/components/preview/use-init-snapshot-buffer.js";
+
 // ============================================================================
 // AUTH PAGES
 // Pre-built authentication pages

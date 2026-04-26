@@ -1,9 +1,20 @@
 /**
  * Visual Edit Workspace barrel.
  *
- * Phase 2 surface — re-exports the selection model, the workspace
- * shell, and the inspector router. Wiring into the admin views
- * registry happens once Phase 3 (patch protocol) is in place.
+ * Re-exports the full public surface of the workspace:
+ *
+ * - Selection model (`VisualEditSelection`, helpers, click router).
+ * - Workspace shell (`VisualEditWorkspace`, `VisualEditFormHost`,
+ *   `VisualInspectorPanel`).
+ * - Inspector bodies (`DocumentInspectorBody`, `BlockInspectorBody`)
+ *   plus their grouping helpers and `visualEdit` meta resolution.
+ * - V2 patch-protocol bridges (`useFormToPreviewPatcher`,
+ *   `useVisualEditPreviewBridge`).
+ * - Production-hardening primitives (`InspectorErrorBoundary`,
+ *   `useDeselectOnEscape`, `isEditableElement`).
+ *
+ * The same surface is re-exported from `@questpie/admin/client` so
+ * downstream consumers don't need to reach into `client/components/`.
  */
 
 export type {
