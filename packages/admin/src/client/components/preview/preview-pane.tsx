@@ -504,7 +504,18 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					</div>
 				)}
 
-				{/* Preview iframe */}
+				{/* Preview iframe.
+				    sandbox="allow-scripts allow-same-origin allow-forms":
+				    the preview page is the project's OWN frontend served
+				    from the project's origin (the token route at
+				    `/api/preview` redirects to the project URL). All three
+				    flags are required for the page to function:
+				      - allow-scripts → render React + run useCollectionPreview
+				      - allow-same-origin → reuse session cookies + hit same-
+				        origin APIs from the preview page
+				      - allow-forms → preview pages with `<form>` keep working
+				    oxlint flags this as a weak sandbox; the trust boundary
+				    matches the admin's, so it's an acceptable trade-off. */}
 				{previewUrlResolved && (
 					<iframe
 						ref={iframeRef}
@@ -512,6 +523,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 						className="h-full w-full border-0"
 						title={t("common.preview")}
 						onLoad={handleLoad}
+						// oxlint-disable-next-line iframe-missing-sandbox
 						sandbox="allow-scripts allow-same-origin allow-forms"
 					/>
 				)}
