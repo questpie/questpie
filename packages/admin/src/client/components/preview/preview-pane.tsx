@@ -27,8 +27,53 @@ const DEV_TELEMETRY = process.env.NODE_ENV === "development";
 // ============================================================================
 
 export type PreviewPaneRef = {
+	/** Force the preview to re-run its loader (`PREVIEW_REFRESH`). */
 	triggerRefresh: () => void;
+	/** Highlight a field in the preview iframe (`FOCUS_FIELD`). */
 	sendFocusToPreview: (fieldPath: string) => void;
+	/**
+	 * Seed the preview's local draft with a fresh snapshot
+	 * (`INIT_SNAPSHOT`). Sent once per resource load — usually
+	 * after `PREVIEW_READY`.
+	 */
+	sendInitSnapshot: (
+		snapshot: Record<string, unknown>,
+		extras?: { schemaVersion?: string; locale?: string; stage?: string },
+	) => void;
+	/**
+	 * Apply a patch batch to the preview's local draft
+	 * (`PATCH_BATCH`). The caller owns the monotonic `seq`.
+	 */
+	sendPatchBatch: (
+		seq: number,
+		ops: Array<
+			| { op: "set"; path: string; value: unknown }
+			| { op: "remove"; path: string }
+		>,
+	) => void;
+	/**
+	 * Tell the preview the active record was just saved
+	 * (`COMMIT`). Pass an optional refreshed snapshot when the
+	 * server may have changed derived data the preview can't
+	 * compute locally (slug, computed, joins).
+	 */
+	sendCommit: (snapshot?: Record<string, unknown>) => void;
+	/**
+	 * Tell the preview to discard its local draft and re-run the
+	 * loader (`FULL_RESYNC`). Used after revert / locale or stage
+	 * switch / desync.
+	 */
+	sendFullResync: (
+		reason?: "revert" | "locale-switch" | "stage-switch" | "desync" | "manual",
+	) => void;
+	/**
+	 * Forward the current Visual Edit selection to the preview
+	 * (`SELECT_TARGET`). Pass `null` for idle.
+	 */
+	sendSelectTarget: (
+		fieldPath: string | null,
+		extras?: { kind?: string; blockId?: string },
+	) => void;
 };
 
 type PreviewPaneProps = {
@@ -210,6 +255,41 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					if (isReady) {
 						sendToPreview({ type: "FOCUS_FIELD", fieldPath });
 					}
+				},
+				sendInitSnapshot: (snapshot, extras) => {
+					if (!isReady) return;
+					sendToPreview({
+						type: "INIT_SNAPSHOT",
+						snapshot,
+						schemaVersion: extras?.schemaVersion,
+						locale: extras?.locale,
+						stage: extras?.stage,
+					});
+				},
+				sendPatchBatch: (seq, ops) => {
+					if (!isReady) return;
+					sendToPreview({ type: "PATCH_BATCH", seq, ops });
+				},
+				sendCommit: (snapshot) => {
+					if (!isReady) return;
+					sendToPreview({
+						type: "COMMIT",
+						timestamp: Date.now(),
+						snapshot,
+					});
+				},
+				sendFullResync: (reason) => {
+					if (!isReady) return;
+					sendToPreview({ type: "FULL_RESYNC", reason });
+				},
+				sendSelectTarget: (fieldPath, extras) => {
+					if (!isReady) return;
+					sendToPreview({
+						type: "SELECT_TARGET",
+						fieldPath,
+						kind: extras?.kind,
+						blockId: extras?.blockId,
+					});
 				},
 			}),
 			[isReady, requestRefresh, sendToPreview],

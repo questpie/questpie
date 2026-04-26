@@ -149,7 +149,7 @@ export function VisualEditWorkspace({
 			initialSelection={initialSelection}
 			onSelectionChange={onSelectionChange}
 		>
-			<WorkspaceLayout
+			<VisualEditWorkspaceContent
 				previewUrl={previewUrl}
 				allowedOrigins={allowedOrigins}
 				renderInspector={renderInspector}
@@ -160,6 +160,45 @@ export function VisualEditWorkspace({
 				className={className}
 			/>
 		</VisualEditProvider>
+	);
+}
+
+/**
+ * Workspace content without the `VisualEditProvider`. Use this when
+ * you need to mount the provider yourself (e.g. so a sibling effect
+ * can `useVisualEdit()` to read or react to the active selection).
+ *
+ * Most consumers want `VisualEditWorkspace` instead, which wraps
+ * this with the provider.
+ */
+export type VisualEditWorkspaceContentProps = Omit<
+	VisualEditWorkspaceProps,
+	"initialSelection" | "onSelectionChange"
+>;
+
+export function VisualEditWorkspaceContent({
+	previewUrl,
+	allowedOrigins,
+	renderInspector,
+	defaultInspectorSize = 32,
+	minInspectorSize = 24,
+	defaultBlocksPath,
+	previewRef: externalPreviewRef,
+	className,
+}: VisualEditWorkspaceContentProps) {
+	const fallbackPreviewRef = React.useRef<PreviewPaneRef>(null);
+	const previewRef = externalPreviewRef ?? fallbackPreviewRef;
+	return (
+		<WorkspaceLayout
+			previewUrl={previewUrl}
+			allowedOrigins={allowedOrigins}
+			renderInspector={renderInspector}
+			defaultInspectorSize={defaultInspectorSize}
+			minInspectorSize={minInspectorSize}
+			defaultBlocksPath={defaultBlocksPath}
+			previewRef={previewRef}
+			className={className}
+		/>
 	);
 }
 

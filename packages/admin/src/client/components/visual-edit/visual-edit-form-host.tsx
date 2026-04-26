@@ -30,7 +30,9 @@ import {
 import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import { BlockInspectorBody } from "./block-inspector-body.js";
 import type { VisualEditSelection } from "./types.js";
-import { VisualEditWorkspace } from "./visual-edit-workspace.js";
+import { useVisualEditPreviewBridge } from "./use-visual-edit-preview-bridge.js";
+import { VisualEditProvider } from "./visual-edit-context.js";
+import { VisualEditWorkspaceContent } from "./visual-edit-workspace.js";
 import { VisualInspectorPanel } from "./visual-inspector-panel.js";
 
 // ============================================================================
@@ -191,30 +193,56 @@ export function VisualEditFormHost({
 		[],
 	);
 
+	const fallbackPreviewRef = React.useRef<PreviewPaneRef>(null);
+	const effectivePreviewRef = previewRef ?? fallbackPreviewRef;
+
 	return (
 		<VisualEditControllerContext.Provider value={controller}>
 			<FormProvider {...controller.form}>
-				<VisualEditWorkspace
-					previewUrl={previewUrl}
-					allowedOrigins={allowedOrigins}
-					defaultBlocksPath={defaultBlocksPath}
+				<VisualEditProvider
 					initialSelection={initialSelection}
 					onSelectionChange={onSelectionChange}
-					defaultInspectorSize={defaultInspectorSize}
-					minInspectorSize={minInspectorSize}
-					previewRef={previewRef}
-					className={className}
-					renderInspector={() => (
-						<VisualInspectorPanel
-							renderDocument={renderDocument ?? defaultRenderDocument}
-							renderField={renderField ?? defaultRenderField}
-							renderBlock={renderBlock ?? defaultRenderBlock}
-						/>
-					)}
-				/>
+				>
+					<PreviewBridge
+						controller={controller}
+						previewRef={effectivePreviewRef}
+					/>
+					<VisualEditWorkspaceContent
+						previewUrl={previewUrl}
+						allowedOrigins={allowedOrigins}
+						defaultBlocksPath={defaultBlocksPath}
+						defaultInspectorSize={defaultInspectorSize}
+						minInspectorSize={minInspectorSize}
+						previewRef={effectivePreviewRef}
+						className={className}
+						renderInspector={() => (
+							<VisualInspectorPanel
+								renderDocument={renderDocument ?? defaultRenderDocument}
+								renderField={renderField ?? defaultRenderField}
+								renderBlock={renderBlock ?? defaultRenderBlock}
+							/>
+						)}
+					/>
+				</VisualEditProvider>
 			</FormProvider>
 		</VisualEditControllerContext.Provider>
 	);
+}
+
+/**
+ * Null-rendering child that runs the preview bridge inside the
+ * `VisualEditProvider` so it has access to both the controller
+ * and the active selection.
+ */
+function PreviewBridge({
+	controller,
+	previewRef,
+}: {
+	controller: ResourceFormController;
+	previewRef: React.RefObject<PreviewPaneRef | null>;
+}) {
+	useVisualEditPreviewBridge({ controller, previewRef });
+	return null;
 }
 
 // ============================================================================

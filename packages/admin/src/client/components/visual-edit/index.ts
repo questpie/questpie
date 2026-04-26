@@ -25,8 +25,14 @@ export {
 } from "./visual-inspector-panel.js";
 export {
 	VisualEditWorkspace,
+	VisualEditWorkspaceContent,
+	type VisualEditWorkspaceContentProps,
 	type VisualEditWorkspaceProps,
 } from "./visual-edit-workspace.js";
+export {
+	useVisualEditPreviewBridge,
+	type UseVisualEditPreviewBridgeArgs,
+} from "./use-visual-edit-preview-bridge.js";
 export {
 	mapPreviewClickToSelection,
 	mapPreviewBlockClickToSelection,
