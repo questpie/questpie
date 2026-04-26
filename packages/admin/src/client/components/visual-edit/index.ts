@@ -60,6 +60,7 @@ export {
 export {
 	groupFieldsForDocument,
 	hasExplicitGroups,
+	hasGroupedDocumentMetadata,
 	DEFAULT_DOCUMENT_GROUP_KEY,
 	type DocumentFieldEntry,
 	type DocumentFieldGroup,

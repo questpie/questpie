@@ -29,6 +29,8 @@ import {
 } from "../../views/collection/use-resource-form-controller.js";
 import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import { BlockInspectorBody } from "./block-inspector-body.js";
+import { DocumentInspectorBody } from "./document-inspector-body.js";
+import { hasGroupedDocumentMetadata } from "./group-fields.js";
 import type { VisualEditSelection } from "./types.js";
 import { useFormToPreviewPatcher } from "./use-form-to-preview-patcher.js";
 import { useVisualEditPreviewBridge } from "./use-visual-edit-preview-bridge.js";
@@ -150,16 +152,38 @@ export function VisualEditFormHost({
 		defaultValues,
 	});
 
+	// Auto-switch the document body: any field with explicit
+	// `visualEdit.group` flips the default to `DocumentInspectorBody`
+	// so projects that have set up grouping metadata get it without
+	// extra wiring. Projects that haven't keep `AutoFormFields`,
+	// preserving any sections/tabs they configured on the form layout.
+	const useGroupedDocumentBody = React.useMemo(
+		() =>
+			hasGroupedDocumentMetadata({
+				fields: controller.fields,
+				schema: controller.schema,
+			}),
+		[controller.fields, controller.schema],
+	);
+
 	const defaultRenderDocument = React.useCallback(
-		() => (
-			<AutoFormFields
-				collection={collection as any}
-				config={controller.formConfigBridge as any}
-				registry={registry}
-				allCollectionsConfig={allCollectionsConfig as any}
-			/>
-		),
+		() =>
+			useGroupedDocumentBody ? (
+				<DocumentInspectorBody
+					collection={collection}
+					registry={registry}
+					allCollectionsConfig={allCollectionsConfig}
+				/>
+			) : (
+				<AutoFormFields
+					collection={collection as any}
+					config={controller.formConfigBridge as any}
+					registry={registry}
+					allCollectionsConfig={allCollectionsConfig as any}
+				/>
+			),
 		[
+			useGroupedDocumentBody,
 			collection,
 			controller.formConfigBridge,
 			registry,

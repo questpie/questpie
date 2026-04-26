@@ -127,7 +127,14 @@ Fields without a `visualEdit` block fall back to the type-driven default; the re
 
 ### Grouped Document Inspector
 
-The default Document inspector body uses `AutoFormFields`, so a collection's existing `.form({ fields: [...] })` layout (sections, tabs) carries straight into the workspace. When you want a flatter, group-driven view instead — useful when the workspace's inspector is doing most of the editing and the Document panel is just SEO/meta/status — pass `DocumentInspectorBody` to `renderDocument`:
+The Document inspector body auto-switches based on what your fields configure:
+
+- **No `visualEdit.group` anywhere** — defaults to `AutoFormFields`, so a collection's existing `.form({ fields: [...] })` layout (sections, tabs) carries straight into the workspace.
+- **At least one field declares `visualEdit.group`** — defaults to the grouped `DocumentInspectorBody`, which reads each field's `visualEdit.group` / `order` / `hidden` (server metadata wins over client) and renders each group through the same `FieldRenderer` the rest of the inspector uses.
+
+The trigger is intentionally narrow: only `visualEdit.group` flips the default. `visualEdit.order` / `patchStrategy` / `hidden` on their own don't switch the body so legacy projects can use those keys without losing their existing layout.
+
+If you want the grouped body unconditionally — or want to render a fully custom Document body — pass `renderDocument` explicitly:
 
 ```tsx title="custom-pages-form.tsx"
 import {
@@ -145,7 +152,7 @@ export default function CustomPagesForm(props) {
 }
 ```
 
-`DocumentInspectorBody` reads the fields off the active controller, resolves each one's `visualEdit.group` / `order` / `hidden` (with server metadata winning), and renders each group with the same `FieldRenderer` the rest of the inspector uses. Fields with `visualEdit.hidden === true` are dropped; reactive `hidden` handlers defer to the field component itself.
+Fields with `visualEdit.hidden === true` are dropped from the grouped body; reactive `hidden` handlers defer to the field component itself.
 
 ```ts title="collections/pages.ts"
 export const pages = collection("pages")
@@ -192,6 +199,7 @@ import {
 	mapPreviewClickToSelection,
 	mapPreviewBlockClickToSelection,
 	groupFieldsForDocument, // <- pure helper backing DocumentInspectorBody
+	hasGroupedDocumentMetadata, // <- smart-default trigger for the host
 	resolveVisualEditMeta,
 	resolvePatchStrategy,
 } from "@questpie/admin/client";

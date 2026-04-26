@@ -134,3 +134,31 @@ export function hasExplicitGroups(groups: DocumentFieldGroup[]): boolean {
 	}
 	return false;
 }
+
+/**
+ * `true` when at least one field carries an explicit
+ * `visualEdit.group` in either the server schema or the client
+ * `~options.admin`. The Visual Edit Workspace uses this signal
+ * to auto-switch its default Document body from the legacy
+ * `AutoFormFields` to the grouped `DocumentInspectorBody`.
+ *
+ * Only `visualEdit.group` triggers — `BaseAdminMeta.group` does
+ * not, because legacy projects may have set it without intending
+ * to switch document layout.
+ */
+export function hasGroupedDocumentMetadata({
+	fields,
+	schema,
+}: GroupFieldsForDocumentArgs): boolean {
+	for (const [name, field] of Object.entries(fields)) {
+		const fieldSchema = schema?.fields?.[name];
+		const visualEdit = resolveVisualEditMeta({
+			fieldDef: field,
+			fieldSchema: fieldSchema as any,
+		});
+		if (typeof visualEdit?.group === "string" && visualEdit.group.length > 0) {
+			return true;
+		}
+	}
+	return false;
+}

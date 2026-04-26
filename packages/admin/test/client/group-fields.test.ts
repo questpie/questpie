@@ -9,6 +9,7 @@ import {
 	DEFAULT_DOCUMENT_GROUP_KEY,
 	groupFieldsForDocument,
 	hasExplicitGroups,
+	hasGroupedDocumentMetadata,
 } from "#questpie/admin/client/components/visual-edit/group-fields";
 
 function field(
@@ -211,5 +212,74 @@ describe("groupFieldsForDocument — schema overrides", () => {
 			} as any,
 		});
 		expect(result.map((g) => g.key)).toEqual(["server"]);
+	});
+});
+
+describe("hasGroupedDocumentMetadata", () => {
+	it("returns false when no field opts into visualEdit.group", () => {
+		expect(
+			hasGroupedDocumentMetadata({
+				fields: {
+					a: field("text"),
+					b: field("text", { admin: { group: "legacy" } }),
+				},
+			}),
+		).toBe(false);
+	});
+
+	it("returns true when a client field declares visualEdit.group", () => {
+		expect(
+			hasGroupedDocumentMetadata({
+				fields: {
+					a: field("text"),
+					b: field("text", { admin: { visualEdit: { group: "seo" } } }),
+				},
+			}),
+		).toBe(true);
+	});
+
+	it("returns true when a server field declares visualEdit.group", () => {
+		expect(
+			hasGroupedDocumentMetadata({
+				fields: { a: field("text") },
+				schema: {
+					fields: {
+						a: { admin: { visualEdit: { group: "seo" } } } as any,
+					},
+				} as any,
+			}),
+		).toBe(true);
+	});
+
+	it("ignores empty-string group keys", () => {
+		expect(
+			hasGroupedDocumentMetadata({
+				fields: {
+					a: field("text", { admin: { visualEdit: { group: "" } } }),
+				},
+			}),
+		).toBe(false);
+	});
+
+	it("does not trigger on visualEdit.order alone", () => {
+		expect(
+			hasGroupedDocumentMetadata({
+				fields: {
+					a: field("text", { admin: { visualEdit: { order: 1 } } }),
+				},
+			}),
+		).toBe(false);
+	});
+
+	it("does not trigger on visualEdit.patchStrategy alone", () => {
+		expect(
+			hasGroupedDocumentMetadata({
+				fields: {
+					a: field("text", {
+						admin: { visualEdit: { patchStrategy: "refresh" } },
+					}),
+				},
+			}),
+		).toBe(false);
 	});
 });
