@@ -450,3 +450,56 @@ describe("useFormToPreviewPatcher — baseline reset (post-COMMIT)", () => {
 		]);
 	});
 });
+
+describe("useFormToPreviewPatcher — defensive guards", () => {
+	let formRef: UseFormReturn<any>;
+	const onForm = (form: UseFormReturn<any>) => {
+		formRef = form;
+	};
+
+	it("is a no-op when previewRef.current is null at flush time", async () => {
+		// Simulates the workspace tearing down mid-debounce — the
+		// preview pane's ref unmounts and goes null while a patch is
+		// still pending. The flush should bail without throwing.
+		const previewRef: { current: PreviewPaneRef | null } = {
+			current: null,
+		};
+		render(
+			<Harness
+				defaultValues={{ title: "Old" }}
+				fields={{ title: fieldInstance("text") }}
+				previewRef={previewRef}
+				debounceMs={5}
+				onForm={onForm}
+			/>,
+		);
+
+		// The form change runs, the debounce timer fires, the flush
+		// reads `previewRef.current` (null), bails. No throw, no
+		// patch sent. The next render with a real ref should also
+		// not retroactively flush — patches are not buffered on the
+		// admin side.
+		await act(async () => {
+			formRef.setValue("title", "New");
+			await flushDebounce();
+		});
+
+		// Promote ref to a real one mid-test; subsequent changes
+		// should now produce ops, but the previously-flushed change
+		// is permanently lost (admin-side buffering is the
+		// PreviewPane's job, not the patcher's).
+		const real = makePreviewRef();
+		previewRef.current = real.current;
+
+		await act(async () => {
+			formRef.setValue("title", "Newer");
+			await flushDebounce();
+		});
+
+		expect(real.mocks.sendPatchBatch).toHaveBeenCalledTimes(1);
+		const [, ops] = real.mocks.sendPatchBatch.mock.calls[0]!;
+		expect(ops).toEqual([
+			{ op: "set", path: "title", value: "Newer" },
+		]);
+	});
+});
