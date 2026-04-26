@@ -102,21 +102,19 @@ Iframes built with `useCollectionPreview` get all of this for free: the hook kee
 
 ## Per-Field Tuning (`visualEdit`)
 
-Fields can opt into workspace-specific overrides without touching the legacy form view:
+Fields can opt into workspace-specific overrides without touching the legacy form view. Use `.set("admin", { visualEdit: { ... } })` on any field — the same pattern you'd use for any other admin metadata:
 
-```ts
-f.text({
-	meta: {
-		admin: {
-			visualEdit: {
-				patchStrategy: "patch", // "patch" | "refresh" | "deferred"
-				hidden: ({ data }) => !data.published,
-				group: "seo",
-				order: 2,
-			},
-		},
-	},
-});
+```ts title="collections/pages.ts"
+.fields(({ f }) => ({
+  metaTitle: f.text().localized().set("admin", {
+    visualEdit: {
+      patchStrategy: "patch", // "patch" | "refresh" | "deferred"
+      hidden: ({ data }) => !data.published,
+      group: "seo",
+      order: 2,
+    },
+  }),
+}));
 ```
 
 | Key             | Default                                  | Effect                                                                                                                                  |
