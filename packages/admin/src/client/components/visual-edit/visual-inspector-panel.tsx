@@ -18,6 +18,7 @@ import * as React from "react";
 
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
+import { blockValuePath } from "../../preview/block-paths.js";
 import { Button } from "../ui/button.js";
 import { InspectorErrorBoundary } from "./inspector-error-boundary.js";
 import { selectionFieldPath } from "./types.js";
@@ -195,14 +196,21 @@ function InspectorBody({
 						})
 					) : (
 						<FieldPlaceholder
-							fieldPath={`${selection.blocksPath}._values.${selection.blockId}`}
+							fieldPath={blockValuePath(
+								selection.blocksPath,
+								selection.blockId,
+							)}
 						/>
 					)}
 				</div>
 			);
 
 		case "block-field": {
-			const fullPath = `${selection.blocksPath}._values.${selection.blockId}.${selection.fieldPath}`;
+			const fullPath = blockValuePath(
+				selection.blocksPath,
+				selection.blockId,
+				selection.fieldPath,
+			);
 			return (
 				<div className="p-3">
 					{renderField ? (

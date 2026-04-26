@@ -7,7 +7,7 @@
  * RFC: docs/RFC-VISUAL-EDIT-WORKSPACE.md
  */
 
-import type { BlockPathParts } from "../../preview/block-paths.js";
+import { blockValuePath, type BlockPathParts } from "../../preview/block-paths.js";
 
 export type {
 	BlockPathParts,
@@ -77,9 +77,13 @@ export function selectionFieldPath(
 		case "field":
 			return selection.fieldPath;
 		case "block":
-			return `${selection.blocksPath}._values.${selection.blockId}`;
+			return blockValuePath(selection.blocksPath, selection.blockId);
 		case "block-field":
-			return `${selection.blocksPath}._values.${selection.blockId}.${selection.fieldPath}`;
+			return blockValuePath(
+				selection.blocksPath,
+				selection.blockId,
+				selection.fieldPath,
+			);
 		case "relation":
 			return selection.fieldPath;
 		case "array":
