@@ -54,6 +54,90 @@
 
 import type { ReactiveConfig } from "questpie";
 
+import type { ComponentReference } from "./server/augmentation/common.js";
+
+// ============================================================================
+// Visual Edit Workspace contract
+// ============================================================================
+
+/**
+ * Patch strategy for a field inside the Visual Edit Workspace.
+ *
+ * - `"patch"` (default for scalar/object fields): mutate the
+ *   preview's local draft via `PATCH_BATCH` so edits land
+ *   without re-running the loader.
+ * - `"refresh"` (default for relations, uploads, blocks, slug,
+ *   computed): emit `PREVIEW_REFRESH` after the controller
+ *   commits — the loader picks up the new value.
+ * - `"deferred"`: don't propagate live; rely on `COMMIT` after
+ *   the user saves. Useful for fields that are only meaningful
+ *   at the database level (e.g. cron expressions).
+ */
+export type VisualEditPatchStrategy = "patch" | "refresh" | "deferred";
+
+/**
+ * Optional Visual Edit Workspace metadata for a field.
+ *
+ * Plugins and projects can override how a field shows up inside
+ * the workspace's right-pane inspector — the legacy form view is
+ * unaffected. All keys are optional; the workspace falls back to
+ * the field's existing component when nothing is configured.
+ *
+ * @example
+ * ```ts
+ * f.text({
+ *   meta: {
+ *     admin: {
+ *       visualEdit: {
+ *         inspector: c.component("rich-text-inspector"),
+ *         patchStrategy: "patch",
+ *         hidden: ({ data }) => !data.published,
+ *       },
+ *     },
+ *   },
+ * })
+ * ```
+ */
+export interface VisualEditFieldMeta {
+	/**
+	 * Component reference rendered inside the inspector instead of
+	 * the default field component. The component receives the same
+	 * props the legacy field renderer passes.
+	 */
+	inspector?: ComponentReference;
+
+	/**
+	 * How the workspace should propagate this field's changes to
+	 * the preview iframe. Defaults are kind-aware:
+	 * - scalar fields → `"patch"`
+	 * - relation/upload/blocks/slug/computed → `"refresh"`
+	 *
+	 * Set explicitly to override or to mark a field as deferred.
+	 */
+	patchStrategy?: VisualEditPatchStrategy;
+
+	/**
+	 * Hide the field from the document inspector body. Click
+	 * targets in the canvas still work — useful for read-only
+	 * fields that are only inspected via the preview.
+	 */
+	hidden?: boolean | ReactiveConfig<boolean>;
+
+	/**
+	 * Pin the field to a specific group in the Document inspector
+	 * panel — overrides the shared `group` on `BaseAdminMeta` for
+	 * the workspace only. Useful when you want different grouping
+	 * in the workspace vs. the legacy form layout.
+	 */
+	group?: string;
+
+	/**
+	 * Display order inside the resolved group. Lower values come
+	 * first; ties fall back to declaration order.
+	 */
+	order?: number;
+}
+
 // ============================================================================
 // Shared Admin Options (common across field types)
 // ============================================================================
@@ -187,6 +271,20 @@ export interface BaseAdminMeta {
 	 * Enable filtering by this field.
 	 */
 	filterable?: boolean;
+
+	/**
+	 * Optional Visual Edit Workspace metadata. Lets a field opt
+	 * into a custom inspector component, override the default
+	 * patch strategy, or pin itself to a specific document group
+	 * — all without touching the legacy form view.
+	 *
+	 * Defaults to `undefined`: the workspace renders the field's
+	 * existing component with `patchStrategy = "patch"` for
+	 * scalars and `"refresh"` for relations/uploads/blocks.
+	 *
+	 * @see VisualEditFieldMeta
+	 */
+	visualEdit?: VisualEditFieldMeta;
 }
 
 // ============================================================================

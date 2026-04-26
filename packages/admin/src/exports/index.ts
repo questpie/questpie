@@ -30,6 +30,8 @@ export type {
 	TextFieldAdminMeta,
 	TimeFieldAdminMeta,
 	UploadFieldAdminMeta,
+	VisualEditFieldMeta,
+	VisualEditPatchStrategy,
 } from "../augmentation.js";
 
 // Re-export everything from client

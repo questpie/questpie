@@ -43,3 +43,9 @@ export {
 	BlockInspectorBody,
 	type BlockInspectorBodyProps,
 } from "./block-inspector-body.js";
+export {
+	defaultPatchStrategy,
+	resolvePatchStrategy,
+	resolveVisualEditMeta,
+	type ResolvedVisualEditMeta,
+} from "./visual-edit-meta.js";
