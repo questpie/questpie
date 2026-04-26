@@ -95,6 +95,22 @@ type PreviewPaneProps = {
 	className?: string;
 	/** Allowed preview origins (for security) */
 	allowedOrigins?: string[];
+	/**
+	 * Fires every time the preview iframe sends `PREVIEW_READY`.
+	 *
+	 * Used by the Visual Edit Workspace to re-seed the iframe's
+	 * local draft with current form values whenever the iframe
+	 * reloads (e.g. via `NAVIGATE_PREVIEW` or a hard refresh).
+	 * Without this, the patcher's snapshot reference can diverge
+	 * from the iframe's draft state — the iframe gets a stale
+	 * canonical snapshot replayed by `PreviewPane`'s buffer,
+	 * while the patcher's next batch only carries the diff
+	 * against its own snapshot.
+	 *
+	 * Called *after* the buffered INIT_SNAPSHOT replay, so
+	 * consumers can override the buffer with a fresher payload.
+	 */
+	onReady?: () => void;
 };
 
 // ============================================================================
@@ -116,9 +132,14 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			onBlockClick,
 			className,
 			allowedOrigins,
+			onReady,
 		},
 		ref,
 	) => {
+		const onReadyRef = React.useRef(onReady);
+		React.useEffect(() => {
+			onReadyRef.current = onReady;
+		}, [onReady]);
 		const { t } = useTranslation();
 		const client = useAdminStore(selectClient);
 		const iframeRef = React.useRef<HTMLIFrameElement>(null);
@@ -373,6 +394,12 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 								stage: buffered.stage,
 							});
 						}
+						// Fire the consumer-provided onReady AFTER the
+						// buffered replay so the consumer can override
+						// the buffer with a fresher payload (e.g. the
+						// Visual Edit bridge re-seeding with current
+						// form values after an iframe reload).
+						onReadyRef.current?.();
 						break;
 					}
 

@@ -270,6 +270,14 @@ export function VisualEditFormHost({
 	const fallbackPreviewRef = React.useRef<PreviewPaneRef>(null);
 	const effectivePreviewRef = previewRef ?? fallbackPreviewRef;
 
+	// Counter incremented on every PREVIEW_READY the iframe sends.
+	// Threaded into the bridge so it can re-seed with current form
+	// values whenever the iframe reloads.
+	const [readyTick, setReadyTick] = React.useState(0);
+	const handlePreviewReady = React.useCallback(() => {
+		setReadyTick((value) => value + 1);
+	}, []);
+
 	return (
 		<VisualEditControllerContext.Provider value={controller}>
 			<FormProvider {...controller.form}>
@@ -280,6 +288,7 @@ export function VisualEditFormHost({
 					<PreviewBridge
 						controller={controller}
 						previewRef={effectivePreviewRef}
+						readyTick={readyTick}
 					/>
 					<VisualEditWorkspaceContent
 						previewUrl={previewUrl}
@@ -288,6 +297,7 @@ export function VisualEditFormHost({
 						defaultInspectorSize={defaultInspectorSize}
 						minInspectorSize={minInspectorSize}
 						previewRef={effectivePreviewRef}
+						onPreviewReady={handlePreviewReady}
 						className={className}
 						renderInspector={() => (
 							<VisualInspectorPanel
@@ -312,11 +322,13 @@ export function VisualEditFormHost({
 function PreviewBridge({
 	controller,
 	previewRef,
+	readyTick,
 }: {
 	controller: ResourceFormController;
 	previewRef: React.RefObject<PreviewPaneRef | null>;
+	readyTick: number;
 }) {
-	useVisualEditPreviewBridge({ controller, previewRef });
+	useVisualEditPreviewBridge({ controller, previewRef, readyTick });
 	useFormToPreviewPatcher({
 		previewRef,
 		fields: controller.fields,

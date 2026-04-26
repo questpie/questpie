@@ -10,6 +10,7 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import * as React from "react";
 import { act, cleanup, render } from "@testing-library/react";
+import { FormProvider, useForm } from "react-hook-form";
 
 import type { PreviewPaneRef } from "#questpie/admin/client/components/preview/preview-pane";
 import type { ResourceFormController } from "#questpie/admin/client/views/collection/use-resource-form-controller";
@@ -420,5 +421,189 @@ describe("useVisualEditPreviewBridge — SELECT_TARGET forwarding", () => {
 		const [path, extras] = calls[calls.length - 1]!;
 		expect(path).toBe("content._values.abc.title");
 		expect(extras).toEqual({ kind: "block-field", blockId: "abc" });
+	});
+});
+
+// ---------------------------------------------------------------------------
+// readyTick re-seed (iframe reload recovery)
+// ---------------------------------------------------------------------------
+
+function FormBridgeProbe({
+	controller,
+	previewRef,
+	readyTick,
+	defaultValues,
+}: {
+	controller: ResourceFormController;
+	previewRef: { current: PreviewPaneRef | null };
+	readyTick: number;
+	defaultValues: Record<string, unknown>;
+}) {
+	const form = useForm({ defaultValues });
+	return (
+		<VisualEditProvider>
+			<FormProvider {...form}>
+				<FormBridgeUser
+					controller={controller}
+					previewRef={previewRef}
+					readyTick={readyTick}
+				/>
+			</FormProvider>
+		</VisualEditProvider>
+	);
+}
+
+function FormBridgeUser({
+	controller,
+	previewRef,
+	readyTick,
+}: {
+	controller: ResourceFormController;
+	previewRef: { current: PreviewPaneRef | null };
+	readyTick: number;
+}) {
+	useVisualEditPreviewBridge({
+		controller,
+		previewRef: previewRef as React.RefObject<PreviewPaneRef | null>,
+		readyTick,
+	});
+	return null;
+}
+
+describe("useVisualEditPreviewBridge — readyTick re-seed", () => {
+	it("does NOT re-seed on the initial mount (readyTick === 0)", () => {
+		const previewRef = makePreviewRef();
+		render(
+			<FormBridgeProbe
+				controller={makeController({
+					transformedItem: { id: "1", title: "Snap" },
+				})}
+				previewRef={previewRef}
+				readyTick={0}
+				defaultValues={{ id: "1", title: "Form" }}
+			/>,
+		);
+
+		// The transformedItem effect fires once at mount.
+		// The readyTick=0 path is a no-op, so we should see exactly
+		// one INIT_SNAPSHOT carrying the canonical record (Snap),
+		// not the form values (Form).
+		expect(previewRef.mocks.sendInitSnapshot).toHaveBeenCalledTimes(1);
+		expect(
+			previewRef.mocks.sendInitSnapshot.mock.calls[0]![0],
+		).toEqual({ id: "1", title: "Snap" });
+	});
+
+	it("re-seeds with current FORM VALUES when readyTick increments", () => {
+		const previewRef = makePreviewRef();
+		// Stable controller + defaultValues references across rerenders
+		// so the transformedItem effect only fires once. Each
+		// readyTick bump should add exactly one re-seed call.
+		const controller = makeController({
+			transformedItem: { id: "1", title: "Old" },
+		});
+		const defaultValues = { id: "1", title: "Old" };
+
+		const { rerender } = render(
+			<FormBridgeProbe
+				controller={controller}
+				previewRef={previewRef}
+				readyTick={0}
+				defaultValues={defaultValues}
+			/>,
+		);
+
+		// Initial INIT_SNAPSHOT carries the canonical baseline.
+		expect(previewRef.mocks.sendInitSnapshot).toHaveBeenCalledTimes(1);
+
+		// Tick simulates the iframe reloading and sending PREVIEW_READY.
+		// The bridge should now re-fire INIT_SNAPSHOT carrying the
+		// current form values (which equal defaultValues here, since
+		// no field edit has happened in this test).
+		rerender(
+			<FormBridgeProbe
+				controller={controller}
+				previewRef={previewRef}
+				readyTick={1}
+				defaultValues={defaultValues}
+			/>,
+		);
+
+		expect(previewRef.mocks.sendInitSnapshot).toHaveBeenCalledTimes(2);
+		const [snapshot] =
+			previewRef.mocks.sendInitSnapshot.mock.calls[1]!;
+		expect(snapshot).toEqual({ id: "1", title: "Old" });
+	});
+
+	it("re-seeds again on every subsequent readyTick increment", () => {
+		const previewRef = makePreviewRef();
+		const controller = makeController({
+			transformedItem: { id: "1", title: "T" },
+		});
+		const defaultValues = { id: "1", title: "T" };
+
+		const { rerender } = render(
+			<FormBridgeProbe
+				controller={controller}
+				previewRef={previewRef}
+				readyTick={0}
+				defaultValues={defaultValues}
+			/>,
+		);
+
+		const sentBefore = previewRef.mocks.sendInitSnapshot.mock.calls.length;
+
+		rerender(
+			<FormBridgeProbe
+				controller={controller}
+				previewRef={previewRef}
+				readyTick={1}
+				defaultValues={defaultValues}
+			/>,
+		);
+		rerender(
+			<FormBridgeProbe
+				controller={controller}
+				previewRef={previewRef}
+				readyTick={2}
+				defaultValues={defaultValues}
+			/>,
+		);
+
+		// One re-seed per increment, on top of the initial mount.
+		expect(previewRef.mocks.sendInitSnapshot).toHaveBeenCalledTimes(
+			sentBefore + 2,
+		);
+	});
+
+	it("skips the re-seed when previewRef.current is null", () => {
+		const previewRef: { current: PreviewPaneRef | null } = {
+			current: null,
+		};
+		const { rerender } = render(
+			<FormBridgeProbe
+				controller={makeController({
+					transformedItem: { id: "1", title: "T" },
+				})}
+				previewRef={previewRef}
+				readyTick={0}
+				defaultValues={{ id: "1", title: "T" }}
+			/>,
+		);
+
+		rerender(
+			<FormBridgeProbe
+				controller={makeController({
+					transformedItem: { id: "1", title: "T" },
+				})}
+				previewRef={previewRef}
+				readyTick={1}
+				defaultValues={{ id: "1", title: "T" }}
+			/>,
+		);
+
+		// Real ref never installed — nothing to assert against, just
+		// verify no throw + cleanup happens.
+		expect(previewRef.current).toBeNull();
 	});
 });

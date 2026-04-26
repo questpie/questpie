@@ -22,6 +22,7 @@
 "use client";
 
 import * as React from "react";
+import { useFormContext } from "react-hook-form";
 
 import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import type { ResourceFormController } from "../../views/collection/use-resource-form-controller.js";
@@ -43,6 +44,19 @@ export type UseVisualEditPreviewBridgeArgs = {
 	 * controller exposed; pass explicitly to override.
 	 */
 	locale?: string;
+	/**
+	 * Counter that the host increments on every `PREVIEW_READY`
+	 * the iframe sends. The bridge uses each tick to re-seed the
+	 * iframe with the *current form values* (not just the
+	 * canonical baseline) so unsaved edits survive an iframe
+	 * reload — without this, the patcher's snapshot would diverge
+	 * from the iframe's draft.
+	 *
+	 * Defaults to `0`. The very first mount tick is a no-op
+	 * because the existing transformedItem effect already seeds
+	 * the iframe.
+	 */
+	readyTick?: number;
 };
 
 // ============================================================================
@@ -53,8 +67,14 @@ export function useVisualEditPreviewBridge({
 	controller,
 	previewRef,
 	locale,
+	readyTick = 0,
 }: UseVisualEditPreviewBridgeArgs): void {
 	const { selection } = useVisualEdit();
+	// Form context is mounted by `VisualEditFormHost`; we read it
+	// here to re-seed the iframe with current form values on
+	// reload. Hook returns `null` outside a `FormProvider`, in
+	// which case the re-seed effect skips silently.
+	const form = useFormContext();
 
 	// 1) Seed the preview's local draft whenever the canonical item
 	//    snapshot changes. The transformedItem already has M:N
@@ -74,6 +94,23 @@ export function useVisualEditPreviewBridge({
 			{ locale },
 		);
 	}, [controller.transformedItem, locale, previewRef]);
+
+	// 1b) Re-seed with current FORM VALUES on every iframe ready
+	//     event after the initial mount. Without this, the
+	//     PreviewPane's buffered INIT_SNAPSHOT would replay the
+	//     pre-edit canonical record — the patcher's next batch
+	//     only carries the diff against its own snapshot, leaving
+	//     the iframe missing earlier edits. Using form values as
+	//     the seed keeps both sides converged after iframe reload.
+	React.useEffect(() => {
+		if (readyTick === 0) return;
+		const ref = previewRef.current;
+		if (!ref) return;
+		if (!form) return;
+		const values = form.getValues() as Record<string, unknown> | undefined;
+		if (!values || Object.keys(values).length === 0) return;
+		ref.sendInitSnapshot(values, { locale });
+	}, [readyTick, form, previewRef, locale]);
 
 	// 2) Wire mutation success → COMMIT / FULL_RESYNC. Each mutation
 	//    keeps its own watcher so we can pick the right protocol

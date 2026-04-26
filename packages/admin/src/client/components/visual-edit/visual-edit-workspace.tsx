@@ -126,6 +126,13 @@ export type VisualEditWorkspaceProps = {
 	defaultBlocksPath?: string;
 	/** Optional preview ref (refresh hooks etc.) */
 	previewRef?: React.RefObject<PreviewPaneRef | null>;
+	/**
+	 * Fires every time the preview iframe sends `PREVIEW_READY`.
+	 * Forwarded as `onReady` to the underlying `PreviewPane`.
+	 * The Visual Edit form host uses this to re-seed the iframe
+	 * with current form values after an iframe reload.
+	 */
+	onPreviewReady?: () => void;
 	/** Custom class name applied to the workspace root */
 	className?: string;
 };
@@ -140,6 +147,7 @@ export function VisualEditWorkspace({
 	onSelectionChange,
 	defaultBlocksPath,
 	previewRef: externalPreviewRef,
+	onPreviewReady,
 	className,
 }: VisualEditWorkspaceProps) {
 	const fallbackPreviewRef = React.useRef<PreviewPaneRef>(null);
@@ -158,6 +166,7 @@ export function VisualEditWorkspace({
 				minInspectorSize={minInspectorSize}
 				defaultBlocksPath={defaultBlocksPath}
 				previewRef={previewRef}
+				onPreviewReady={onPreviewReady}
 				className={className}
 			/>
 		</VisualEditProvider>
@@ -185,6 +194,7 @@ export function VisualEditWorkspaceContent({
 	minInspectorSize = 24,
 	defaultBlocksPath,
 	previewRef: externalPreviewRef,
+	onPreviewReady,
 	className,
 }: VisualEditWorkspaceContentProps) {
 	const fallbackPreviewRef = React.useRef<PreviewPaneRef>(null);
@@ -198,6 +208,7 @@ export function VisualEditWorkspaceContent({
 			minInspectorSize={minInspectorSize}
 			defaultBlocksPath={defaultBlocksPath}
 			previewRef={previewRef}
+			onPreviewReady={onPreviewReady}
 			className={className}
 		/>
 	);
@@ -211,7 +222,11 @@ type WorkspaceLayoutProps = Required<
 > &
 	Pick<
 		VisualEditWorkspaceProps,
-		"previewUrl" | "allowedOrigins" | "className" | "defaultBlocksPath"
+		| "previewUrl"
+		| "allowedOrigins"
+		| "className"
+		| "defaultBlocksPath"
+		| "onPreviewReady"
 	> & {
 		previewRef: React.RefObject<PreviewPaneRef | null>;
 	};
@@ -224,6 +239,7 @@ function WorkspaceLayout({
 	minInspectorSize,
 	defaultBlocksPath,
 	previewRef,
+	onPreviewReady,
 	className,
 }: WorkspaceLayoutProps) {
 	const { t } = useTranslation();
@@ -334,6 +350,7 @@ function WorkspaceLayout({
 							allowedOrigins={allowedOrigins}
 							onFieldClick={handlePreviewFieldClick}
 							onBlockClick={handlePreviewBlockClick}
+							onReady={onPreviewReady}
 							className="h-full"
 						/>
 					) : (
