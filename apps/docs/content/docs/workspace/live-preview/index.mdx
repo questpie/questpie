@@ -60,34 +60,11 @@ Preview URLs go through a token-based security flow:
 
 ## Field Focus Sync
 
-Clicking a field in the form highlights it in the preview, and vice versa. This uses a bidirectional `postMessage` protocol between the admin iframe and your frontend:
+Clicking a field in the form highlights it in the preview, and vice versa. This uses a bidirectional `postMessage` protocol between the admin iframe and the frontend.
 
-### Admin to Preview
+In day-to-day usage you don't write the wire payloads yourself — `useCollectionPreview` and `PreviewField` handle them — but the message shapes are stable and documented in [Protocol & Reliability](./protocol). The relevant types include `FOCUS_FIELD` (admin → preview), `FIELD_CLICKED` and `BLOCK_CLICKED` (preview → admin), and the V2 patch / commit / resync messages used by the [Visual Edit Workspace](./visual-edit).
 
-When you focus a field in the form, the admin sends:
-
-```ts
-iframe.postMessage({ type: "FOCUS_FIELD", fieldPath: "title" }, "*");
-```
-
-### Preview to Admin
-
-Add click handlers in your frontend that send messages back:
-
-```ts
-window.parent.postMessage({ type: "FIELD_CLICKED", fieldPath: "title" }, "*");
-```
-
-The admin will scroll to and focus the corresponding form field.
-
-### Block Focus
-
-For block content, the field path includes the block ID:
-
-```ts
-// Clicking a specific block's field
-window.parent.postMessage({ type: "BLOCK_CLICKED", blockId: "abc-123" }, "*");
-```
+Both directions resolve a single canonical peer origin and validate `event.origin` on receipt — wildcards are never used. See the protocol page for the security model.
 
 ## Frontend Integration
 
@@ -138,15 +115,16 @@ The hook:
 
 The "Exit Preview" button redirects to `/api/preview?disable=true`, which clears the draft mode cookie.
 
-## Preview V2
+## Visual Edit Workspace (V2)
 
-A next-generation preview system is planned to replace the save-driven refresh cycle with instant patch-based updates. These pages are design notes, not the currently exported client API:
+The patch-based V2 protocol is implemented and shipped as the **Visual Edit Workspace** — an opt-in alternative to the default `collection-form` view. The workspace adds a contextual right-pane inspector and drives the iframe through field-level patches instead of full reloads. Enable it per collection with `.form(({ v }) => v.visualEditForm({...}))`.
 
-- [Live Preview V2 Architecture](/docs/workspace/live-preview/architecture) — Target architecture and design goals
-- [Same-Tab Recipe](/docs/workspace/live-preview/same-tab-recipe) — Planned frontend implementation
-- [Shared Preview](/docs/workspace/live-preview/shared-preview) — Detached and multi-user preview via realtime
-- [Protocol & Reliability](/docs/workspace/live-preview/protocol) — Wire protocol, sequencing, and error recovery
-- [Migration Guide](/docs/workspace/live-preview/migration) — Upgrading from V1 to V2
+- [Visual Edit Workspace](./visual-edit) — Enabling the workspace, selection model, per-field tuning.
+- [Protocol & Reliability](./protocol) — Wire-level reference for the message types both sides exchange today.
+- [Architecture](./architecture) — Higher-level architecture notes for the live-preview surface.
+- [Same-Tab Recipe](./same-tab-recipe) — Frontend integration guide for hosting the preview at the same origin as the admin.
+- [Shared Preview](./shared-preview) — Multi-user / detached preview design notes.
+- [Migration Guide](./migration) — Upgrading existing live-preview integrations.
 
 ## Related Pages
 
