@@ -379,6 +379,28 @@ Inside `packages/questpie`:
 - Migration output is silenced in tests via `QUESTPIE_MIGRATIONS_SILENT=1`.
 - Tests use `@electric-sql/pglite` for in-process PostgreSQL.
 
+#### Admin component tests
+
+`packages/admin` adds a DOM layer on top of bun:test. The test script preloads `test/setup-dom.ts`, which boots `happy-dom` via `@happy-dom/global-registrator` and registers `window` / `document` / `MutationObserver` etc. on the global scope. Pure-helper tests stay unaffected because the registrar only fills in missing globals.
+
+```bash
+bun --filter @questpie/admin run test
+```
+
+Component tests follow these conventions:
+
+- File extension: `.test.tsx` for tests that render React; `.test.ts` for pure-helper tests.
+- Imports: `@testing-library/react` (`render`, `renderHook`, `act`, `cleanup`, `screen`, `fireEvent`).
+- Wrappers: tests pull in only the providers they need — `I18nProvider` (with `createSimpleI18n` and explicit `messages` so `t()` returns user-visible strings), `VisualEditProvider`, `FormProvider`, `QueryClientProvider`. Avoid mounting the full `AdminProvider` — its dependencies (Zustand store, runtime client, navigation) are usually irrelevant.
+- Selection / form tests use `renderHook` for hook-only checks and `render` + `screen` queries for component-level assertions.
+- For listener-based hooks (`useDeselectOnEscape`, `useCollectionPreview`), dispatch real events on `document` / `window` (`new KeyboardEvent`, `new MessageEvent`) and clean up via `afterEach`.
+
+Common gotchas:
+
+- The default `t()` adapter returns the message key when no message exists — pass realistic `messages` to wrappers when assertions read displayed text.
+- `useCollectionPreview` needs `window.self !== window.top` to install its listener; tests override `window.top` and `document.referrer` via `Object.defineProperty(..., { configurable: true })` and restore on cleanup.
+- happy-dom throws `SecurityError` for cross-origin `postMessage` calls; tests stub `window.parent.postMessage` so the production try/catch's dev-mode `console.error` doesn't leak into test output.
+
 ### Changesets & Publishing
 
 - **Changesets** for versioning: `bun changeset` to create, `bun run version` to apply.
