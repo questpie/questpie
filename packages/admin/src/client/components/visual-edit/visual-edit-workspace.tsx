@@ -24,6 +24,7 @@ import {
 	mapPreviewBlockClickToSelection,
 	mapPreviewClickToSelection,
 } from "./click-router.js";
+import { useDeselectOnEscape } from "./keyboard.js";
 import {
 	VisualEditProvider,
 	useVisualEdit,
@@ -230,7 +231,15 @@ function WorkspaceLayout({
 	const [activeTab, setActiveTab] = React.useState<"canvas" | "inspector">(
 		"canvas",
 	);
-	const { select } = useVisualEdit();
+	const { select, clear, selection } = useVisualEdit();
+
+	// Escape clears the active selection — but only when focus
+	// isn't inside an editable element, so typing in a field
+	// component doesn't accidentally deselect the field.
+	useDeselectOnEscape({
+		onDeselect: clear,
+		disabled: selection.kind === "idle",
+	});
 
 	const { inspectorPercent, containerRef, handleMouseDown } =
 		useResizableInspector(defaultInspectorSize, minInspectorSize, !isMobile);
