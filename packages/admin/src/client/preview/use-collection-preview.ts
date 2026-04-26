@@ -151,7 +151,19 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 				}
 				return;
 			}
-			window.parent.postMessage(message, adminOrigin);
+			try {
+				window.parent.postMessage(message, adminOrigin);
+			} catch (err) {
+				// Non-serializable payload (function/class/blob).
+				// Loud in dev, swallowed in production so a single
+				// bad message doesn't break the rest of the session.
+				if (process.env.NODE_ENV !== "production") {
+					console.error(
+						`[useCollectionPreview] postMessage failed for type=${(message as { type?: string })?.type}:`,
+						err,
+					);
+				}
+			}
 		},
 		[adminOrigin, isPreviewMode],
 	);
@@ -286,7 +298,10 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 							}
 							break;
 						}
-						window.location.href = target.toString();
+						// Use `replace` instead of `href` so the user
+						// doesn't end up with a back-button trap inside
+						// the preview iframe — the admin owns navigation.
+						window.location.replace(target.toString());
 					} catch {
 						// Invalid URL — ignore.
 					}

@@ -38,6 +38,10 @@ export {
 	type UseFormToPreviewPatcherArgs,
 } from "./use-form-to-preview-patcher.js";
 export {
+	InspectorErrorBoundary,
+	type InspectorErrorBoundaryProps,
+} from "./inspector-error-boundary.js";
+export {
 	mapPreviewClickToSelection,
 	mapPreviewBlockClickToSelection,
 	type PreviewClickContext,

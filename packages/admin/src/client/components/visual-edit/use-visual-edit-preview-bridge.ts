@@ -56,20 +56,19 @@ export function useVisualEditPreviewBridge({
 }: UseVisualEditPreviewBridgeArgs): void {
 	const { selection } = useVisualEdit();
 
-	// 1) Seed the preview's local draft once an item snapshot is
-	//    available. The transformedItem already has M:N relations
-	//    flattened to id arrays so the preview gets exactly what the
-	//    form sees.
-	const seededIdRef = React.useRef<unknown>(undefined);
+	// 1) Seed the preview's local draft whenever the canonical item
+	//    snapshot changes. The transformedItem already has M:N
+	//    relations flattened to id arrays so the preview gets
+	//    exactly what the form sees.
+	//
+	//    The PreviewPane buffers the latest INIT_SNAPSHOT and
+	//    replays it on every PREVIEW_READY, so it's safe to fire
+	//    this even before the iframe is ready or after an iframe
+	//    reload — the snapshot will land on the new ready event.
 	React.useEffect(() => {
 		const ref = previewRef.current;
 		if (!ref) return;
 		if (!controller.transformedItem) return;
-		// Re-seed when the loaded record changes (different id, a
-		// revert, a locale switch). Fall through cheaply otherwise.
-		const itemId = (controller.transformedItem as { id?: unknown })?.id;
-		if (itemId !== undefined && seededIdRef.current === itemId) return;
-		seededIdRef.current = itemId;
 		ref.sendInitSnapshot(
 			controller.transformedItem as Record<string, unknown>,
 			{ locale },

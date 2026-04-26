@@ -135,6 +135,18 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			completed: 0,
 			lastLogAt: 0,
 		});
+		// Buffer for the most recent INIT_SNAPSHOT payload — replayed on
+		// every PREVIEW_READY received from the iframe so:
+		//   1. an INIT_SNAPSHOT sent before the iframe is ready isn't lost
+		//   2. an iframe reload (e.g. via NAVIGATE_PREVIEW or back/forward)
+		//      re-receives the latest snapshot without the parent having
+		//      to re-mint it
+		const lastInitSnapshotRef = React.useRef<{
+			snapshot: Record<string, unknown>;
+			schemaVersion?: string;
+			locale?: string;
+			stage?: string;
+		} | null>(null);
 
 		const {
 			data: previewUrl,
@@ -208,7 +220,21 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					}
 					return;
 				}
-				iframe.contentWindow.postMessage(message, targetOrigin);
+				try {
+					iframe.contentWindow.postMessage(message, targetOrigin);
+				} catch (err) {
+					// `DataCloneError` lands here when a payload contains
+					// a non-serializable value (function, class instance,
+					// blob, etc.). We surface it loudly in dev and swallow
+					// in production so a single misshapen field doesn't
+					// take the workspace down.
+					if (process.env.NODE_ENV !== "production") {
+						console.error(
+							`[PreviewPane] postMessage failed for type=${(message as { type?: string })?.type}:`,
+							err,
+						);
+					}
+				}
 			},
 			[targetOrigin, url],
 		);
@@ -257,6 +283,17 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					}
 				},
 				sendInitSnapshot: (snapshot, extras) => {
+					// Buffer regardless of ready state so:
+					//   - if the iframe isn't ready yet, the next
+					//     PREVIEW_READY replays this snapshot
+					//   - if the iframe later reloads, the new
+					//     PREVIEW_READY re-receives it
+					lastInitSnapshotRef.current = {
+						snapshot,
+						schemaVersion: extras?.schemaVersion,
+						locale: extras?.locale,
+						stage: extras?.stage,
+					};
 					if (!isReady) return;
 					sendToPreview({
 						type: "INIT_SNAPSHOT",
@@ -309,7 +346,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 				}
 
 				switch (event.data.type) {
-					case "PREVIEW_READY":
+					case "PREVIEW_READY": {
 						isReadyRef.current = true;
 						isRefreshingRef.current = false;
 						pendingRefreshRef.current = false;
@@ -323,7 +360,21 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 						setIsReady(true);
 						setIframeLoading(false);
 						setIsRefreshing(false);
+						// Replay the most recent INIT_SNAPSHOT — covers
+						// the bridge-fired-before-ready race AND the
+						// iframe-reload re-init case.
+						const buffered = lastInitSnapshotRef.current;
+						if (buffered) {
+							sendToPreview({
+								type: "INIT_SNAPSHOT",
+								snapshot: buffered.snapshot,
+								schemaVersion: buffered.schemaVersion,
+								locale: buffered.locale,
+								stage: buffered.stage,
+							});
+						}
 						break;
+					}
 
 					case "REFRESH_COMPLETE":
 						if (refreshMetricsRef.current.startedAt) {

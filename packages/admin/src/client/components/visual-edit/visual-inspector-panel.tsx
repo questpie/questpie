@@ -19,6 +19,8 @@ import * as React from "react";
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import { Button } from "../ui/button.js";
+import { InspectorErrorBoundary } from "./inspector-error-boundary.js";
+import { selectionFieldPath } from "./types.js";
 import { useVisualEdit } from "./visual-edit-context.js";
 
 // ============================================================================
@@ -108,13 +110,22 @@ export function VisualInspectorPanel({
 				)}
 			</div>
 
-			{/* Body */}
+			{/* Body — wrapped in an error boundary so a misbehaving
+			    field component can't unmount the whole workspace.
+			    The boundary resets when the user picks a different
+			    selection so each target gets a fresh render. */}
 			<div className="min-h-0 flex-1 overflow-y-auto">
-				<InspectorBody
-					renderDocument={renderDocument}
-					renderField={renderField}
-					renderBlock={renderBlock}
-				/>
+				<InspectorErrorBoundary
+					resetKey={
+						selectionFieldPath(selection) ?? `kind:${selection.kind}`
+					}
+				>
+					<InspectorBody
+						renderDocument={renderDocument}
+						renderField={renderField}
+						renderBlock={renderBlock}
+					/>
+				</InspectorErrorBoundary>
 			</div>
 		</aside>
 	);
