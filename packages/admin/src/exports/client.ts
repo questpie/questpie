@@ -115,7 +115,7 @@ export {
 // Live preview system for headless frontend integration
 // ============================================================================
 
-// Preview message types
+// Preview message types — V1
 export type {
 	AdminToPreviewMessage,
 	BlockClickedMessage,
@@ -128,15 +128,43 @@ export type {
 	RefreshCompleteMessage,
 	SelectBlockMessage,
 } from "#questpie/admin/client/preview/index.js";
-// Frontend preview components
+// Preview message types — V2 protocol
+export type {
+	CommitMessage,
+	FullResyncMessage,
+	InitSnapshotMessage,
+	NavigatePreviewMessage,
+	PatchAppliedMessage,
+	PatchBatchMessage,
+	PreviewPatchOp,
+	ResyncRequestMessage,
+	SelectTargetMessage,
+} from "#questpie/admin/client/preview/index.js";
+// Frontend preview components + helpers
 export {
+	applyPatchBatch,
+	applyPatchBatchImmutable,
+	applyRemove,
+	applySet,
+	BLOCKS_TREE_SEGMENT,
+	BLOCKS_VALUES_SEGMENT,
+	type BlockPathParts,
 	type BlockScopeContextValue,
 	// Block scope for field resolution
 	BlockScopeProvider,
 	type BlockScopeProviderProps,
+	// Block path utilities
+	blockTreePath,
+	blockValuePath,
+	defaultBlocksPath,
+	// Snapshot diff (admin -> iframe patch generation)
+	diffSnapshot,
 	// Message type guards
 	isAdminToPreviewMessage,
 	isPreviewToAdminMessage,
+	parseBlockValuePath,
+	type PathSegment,
+	parsePath,
 	PreviewBanner,
 	type PreviewBannerProps,
 	PreviewField,
@@ -150,6 +178,62 @@ export {
 	usePreviewContext,
 	useResolveFieldPath,
 } from "#questpie/admin/client/preview/index.js";
+
+// ============================================================================
+// VISUAL EDIT WORKSPACE
+// Patch-based 2-pane editing surface (RFC: docs/RFC-VISUAL-EDIT-WORKSPACE.md)
+// ============================================================================
+
+export {
+	BlockInspectorBody,
+	type BlockInspectorBodyProps,
+	buildStrategyMap,
+	DEFAULT_DOCUMENT_GROUP_KEY,
+	defaultPatchStrategy,
+	type DocumentFieldEntry,
+	type DocumentFieldGroup,
+	DocumentInspectorBody,
+	type DocumentInspectorBodyProps,
+	type GroupFieldsForDocumentArgs,
+	groupFieldsForDocument,
+	hasExplicitGroups,
+	hasGroupedDocumentMetadata,
+	InspectorErrorBoundary,
+	type InspectorErrorBoundaryProps,
+	isEditableElement,
+	type MapPreviewClickArgs,
+	mapPreviewBlockClickToSelection,
+	mapPreviewClickToSelection,
+	type ParsedBlockPath,
+	type PreviewClickContext,
+	type ResolvedVisualEditMeta,
+	resolveNestedVisualEditMeta,
+	resolvePatchStrategy,
+	resolveVisualEditMeta,
+	selectionFieldPath,
+	type UseDeselectOnEscapeOptions,
+	useDeselectOnEscape,
+	type UseFormToPreviewPatcherArgs,
+	useFormToPreviewPatcher,
+	type UseVisualEditPreviewBridgeArgs,
+	useVisualEdit,
+	useVisualEditController,
+	useVisualEditControllerOptional,
+	useVisualEditOptional,
+	useVisualEditPreviewBridge,
+	type VisualEditContextValue,
+	VisualEditFormHost,
+	type VisualEditFormHostProps,
+	VisualEditProvider,
+	type VisualEditProviderProps,
+	type VisualEditSelection,
+	VisualEditWorkspace,
+	VisualEditWorkspaceContent,
+	type VisualEditWorkspaceContentProps,
+	type VisualEditWorkspaceProps,
+	VisualInspectorPanel,
+	type VisualInspectorPanelProps,
+} from "#questpie/admin/client/components/visual-edit/index.js";
 
 // ============================================================================
 // AUTH PAGES
