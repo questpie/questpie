@@ -26,7 +26,7 @@ import type { FieldInstance } from "../../builder/field/field.js";
 import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import { diffSnapshot } from "../../preview/diff.js";
 import type { PreviewPatchOp } from "../../preview/types.js";
-import { resolvePatchStrategy } from "./visual-edit-meta.js";
+import { buildStrategyMap } from "./visual-edit-meta.js";
 
 // ============================================================================
 // Args
@@ -96,18 +96,10 @@ export function useFormToPreviewPatcher({
 
 	// Resolve patch strategies once per field set. Strategies don't
 	// depend on values so memoising here keeps the watch cheap.
-	const strategyByField = React.useMemo<Record<string, string>>(() => {
-		if (!fields) return {};
-		const map: Record<string, string> = {};
-		for (const [name, fieldDef] of Object.entries(fields)) {
-			const fieldSchema = schema?.fields?.[name];
-			map[name] = resolvePatchStrategy({
-				fieldDef,
-				fieldSchema: fieldSchema as any,
-			});
-		}
-		return map;
-	}, [fields, schema]);
+	const strategyByField = React.useMemo(
+		() => buildStrategyMap({ fields, schema }),
+		[fields, schema],
+	);
 
 	React.useEffect(() => {
 		if (disabled) return;

@@ -109,3 +109,35 @@ export function resolvePatchStrategy(args: {
 	const meta = resolveVisualEditMeta(args);
 	return meta?.patchStrategy ?? defaultPatchStrategy(args);
 }
+
+// ============================================================================
+// Strategy map
+// ============================================================================
+
+type SchemaLike = {
+	fields?: Record<string, FieldSchemaLike>;
+};
+
+/**
+ * Build a `{ [fieldName]: patchStrategy }` map for every field in
+ * the collection. Pure, allocation-only, safe to call on every
+ * render — but the patcher memoises the result so it only runs
+ * when fields/schema references change.
+ *
+ * Returned entries always carry a concrete strategy
+ * ({@link VisualEditPatchStrategy}), so consumers can default to
+ * `"patch"` for unknown keys without re-resolving.
+ */
+export function buildStrategyMap(args: {
+	fields: Record<string, FieldInstanceLike> | undefined;
+	schema: SchemaLike | undefined;
+}): Record<string, VisualEditPatchStrategy> {
+	const result: Record<string, VisualEditPatchStrategy> = {};
+	if (!args.fields) return result;
+
+	for (const [name, fieldDef] of Object.entries(args.fields)) {
+		const fieldSchema = args.schema?.fields?.[name];
+		result[name] = resolvePatchStrategy({ fieldDef, fieldSchema });
+	}
+	return result;
+}

@@ -76,6 +76,7 @@ export {
 	type GroupFieldsForDocumentArgs,
 } from "./group-fields.js";
 export {
+	buildStrategyMap,
 	defaultPatchStrategy,
 	resolvePatchStrategy,
 	resolveVisualEditMeta,

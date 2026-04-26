@@ -6,6 +6,7 @@ import { describe, expect, it } from "bun:test";
 
 import type { FieldInstance } from "#questpie/admin/client/builder/field/field";
 import {
+	buildStrategyMap,
 	defaultPatchStrategy,
 	resolvePatchStrategy,
 	resolveVisualEditMeta,
@@ -187,5 +188,68 @@ describe("resolvePatchStrategy", () => {
 				fieldSchema: { metadata: { type: "relation" } },
 			}),
 		).toBe("refresh");
+	});
+});
+
+describe("buildStrategyMap", () => {
+	it("returns an empty map when fields is undefined", () => {
+		expect(buildStrategyMap({ fields: undefined, schema: undefined })).toEqual(
+			{},
+		);
+	});
+
+	it("returns an empty map when fields is empty", () => {
+		expect(buildStrategyMap({ fields: {}, schema: undefined })).toEqual({});
+	});
+
+	it("resolves the strategy for every field", () => {
+		const map = buildStrategyMap({
+			fields: {
+				title: fieldInstance("text"),
+				author: fieldInstance("relation"),
+				cover: fieldInstance("upload"),
+				body: fieldInstance("blocks"),
+			},
+			schema: undefined,
+		});
+		expect(map).toEqual({
+			title: "patch",
+			author: "refresh",
+			cover: "refresh",
+			body: "refresh",
+		});
+	});
+
+	it("honours per-field visualEdit.patchStrategy overrides", () => {
+		const map = buildStrategyMap({
+			fields: {
+				title: fieldInstance("text", {
+					admin: { visualEdit: { patchStrategy: "deferred" } },
+				}),
+				author: fieldInstance("relation", {
+					admin: { visualEdit: { patchStrategy: "patch" } },
+				}),
+			},
+			schema: undefined,
+		});
+		expect(map).toEqual({ title: "deferred", author: "patch" });
+	});
+
+	it("threads the schema through to resolvePatchStrategy (server wins)", () => {
+		const map = buildStrategyMap({
+			fields: {
+				title: fieldInstance("text", {
+					admin: { visualEdit: { patchStrategy: "patch" } },
+				}),
+			},
+			schema: {
+				fields: {
+					title: {
+						admin: { visualEdit: { patchStrategy: "refresh" } },
+					} as any,
+				},
+			},
+		});
+		expect(map.title).toBe("refresh");
 	});
 });
