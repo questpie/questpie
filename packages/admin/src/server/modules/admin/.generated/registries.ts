@@ -6,11 +6,13 @@
 import type _view_collectionForm from "../views/form";
 import type _view_collectionTable from "../views/table";
 import type _view_globalForm from "../views/global-form";
+import type _view_visualEditForm from "../views/visual-edit-form";
 
 interface _RegViews {
 	collectionForm: typeof _view_collectionForm;
 	collectionTable: typeof _view_collectionTable;
 	globalForm: typeof _view_globalForm;
+	visualEditForm: typeof _view_visualEditForm;
 }
 
 import type _comp_badge from "../components/badge";

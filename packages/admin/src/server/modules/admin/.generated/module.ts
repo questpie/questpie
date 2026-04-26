@@ -33,6 +33,7 @@ import { widgetDataFunctions as _route_widgetData } from "../routes/widget-data"
 import _view_collectionForm from "../views/form";
 import _view_collectionTable from "../views/table";
 import _view_globalForm from "../views/global-form";
+import _view_visualEditForm from "../views/visual-edit-form";
 
 // ── Components ────────────────────────────────────────────
 import _comp_badge from "../components/badge";
@@ -46,6 +47,8 @@ import _plugin from "../plugin";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
+import type { RouteParamsFromKey, RouteWithParams } from "questpie";
+
 export interface AdminCollections {
 	account: typeof _coll_account;
 	admin_locks: typeof _coll_admin_locks;
@@ -58,12 +61,13 @@ export interface AdminCollections {
 	verification: typeof _coll_verification;
 }
 
-export type AdminRoutes = { routeHelpers: typeof _route_routeHelpers } & typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
+export type AdminRoutes = { routeHelpers: RouteWithParams<typeof _route_routeHelpers, RouteParamsFromKey<"routeHelpers">> } & typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
 
 export interface AdminViews {
 	collectionForm: typeof _view_collectionForm;
 	collectionTable: typeof _view_collectionTable;
 	globalForm: typeof _view_globalForm;
+	visualEditForm: typeof _view_visualEditForm;
 }
 
 export interface AdminComponents {
@@ -104,6 +108,7 @@ const _module = {
 		collectionForm: _view_collectionForm,
 		collectionTable: _view_collectionTable,
 		globalForm: _view_globalForm,
+		visualEditForm: _view_visualEditForm,
 	} as AdminViews,
 	components: {
 		badge: _comp_badge,

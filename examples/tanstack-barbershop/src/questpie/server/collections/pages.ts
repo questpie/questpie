@@ -9,32 +9,45 @@ export const pages = collection("pages")
 			.text(255)
 			.label({ en: "Title", sk: "Názov" })
 			.required()
-			.localized(),
+			.localized()
+			.set("admin", { visualEdit: { group: "content", order: 1 } }),
 		slug: f
 			.text(255)
 			.label({ en: "Slug", sk: "Slug" })
 			.required()
 			// Allow user to provide slug manually, but auto-generate if empty
-			.inputOptional(),
+			.inputOptional()
+			.set("admin", { visualEdit: { group: "url", order: 1 } }),
 		description: f
 			.textarea()
 			.label({ en: "Description", sk: "Popis" })
-			.localized(),
-		content: f.blocks().label({ en: "Content", sk: "Obsah" }).localized(),
-		// SEO fields - hidden until page is published
+			.localized()
+			.set("admin", { visualEdit: { group: "content", order: 2 } }),
+		content: f
+			.blocks()
+			.label({ en: "Content", sk: "Obsah" })
+			.localized()
+			// Blocks always refresh-strategy by default; the workspace's
+			// canvas + block inspector is the primary editor for content,
+			// so hide the field from the Document body to keep it clean.
+			.set("admin", { visualEdit: { hidden: true } }),
+		// SEO fields — workspace renders them grouped under "seo".
 		metaTitle: f
 			.text(255)
 			.label({ en: "Meta Title", sk: "Meta názov" })
-			.localized(),
+			.localized()
+			.set("admin", { visualEdit: { group: "seo", order: 1 } }),
 		metaDescription: f
 			.textarea()
 			.label({ en: "Meta Description", sk: "Meta popis" })
-			.localized(),
+			.localized()
+			.set("admin", { visualEdit: { group: "seo", order: 2 } }),
 		isPublished: f
 			.boolean()
 			.label({ en: "Published", sk: "Publikované" })
 			.default(false)
-			.required(),
+			.required()
+			.set("admin", { visualEdit: { group: "publish", order: 1 } }),
 	}))
 	.indexes(({ table }) => [uniqueIndex("pages_slug_unique").on(table.slug)])
 	.title(({ f }) => f.title)
@@ -53,8 +66,13 @@ export const pages = collection("pages")
 		},
 	})
 	.list(({ v }) => v.collectionTable({}))
+	// Opt the Pages collection into the Visual Edit Workspace.
+	// The canvas drives block edits; the right inspector renders the
+	// Document body grouped by `visualEdit.group` ("content", "url",
+	// "seo", "publish") set on each field above. Swap to
+	// `v.collectionForm` to fall back to the legacy split-form view.
 	.form(({ v, f }) =>
-		v.collectionForm({
+		v.visualEditForm({
 			sidebar: {
 				position: "right",
 				fields: [

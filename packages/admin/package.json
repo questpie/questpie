@@ -108,6 +108,7 @@
 		"@types/react-dom": "^19.2.0",
 		"babel-plugin-react-compiler": "^1.0.0",
 		"bun-types": "latest",
+		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"shadcn": "^3.6.1",
 		"tinyglobby": "^0.2.15",
 		"tsdown": "^0.18.3",
