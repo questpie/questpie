@@ -43,10 +43,10 @@ export const pages = collection("pages")
 		defaultSize: 60,
 		minSize: 30,
 	})
-	.form({ view: "visual-edit-form" });
+	.form(({ v }) => v.visualEditForm({}));
 ```
 
-The `view` key resolves through the standard view registry, so any project-level overrides work the same way they do for `collection-form`.
+`v.visualEditForm` is the typed factory for the workspace's view registry entry — the same pattern as `v.collectionForm`. Pass `fields` / `sidebar` to customize the layout used when the workspace falls back to `AutoFormFields` (i.e. no field declares `visualEdit.group`).
 
 ## Layout
 
@@ -195,23 +195,23 @@ Fields with `visualEdit.hidden === true` are dropped from the grouped body; reac
 ```ts title="collections/pages.ts"
 export const pages = collection("pages")
 	.fields(({ f }) => ({
-		title: f.text().required().localized().meta({
-			admin: { visualEdit: { group: "content", order: 1 } },
+		title: f.text().required().localized().set("admin", {
+			visualEdit: { group: "content", order: 1 },
 		}),
-		slug: f.text().required().meta({
-			admin: { visualEdit: { group: "url", order: 1 } },
+		slug: f.text().required().set("admin", {
+			visualEdit: { group: "url", order: 1 },
 		}),
-		seoTitle: f.text().meta({
-			admin: { visualEdit: { group: "seo", order: 1 } },
+		seoTitle: f.text().set("admin", {
+			visualEdit: { group: "seo", order: 1 },
 		}),
-		seoDescription: f.textarea().meta({
-			admin: { visualEdit: { group: "seo", order: 2 } },
+		seoDescription: f.textarea().set("admin", {
+			visualEdit: { group: "seo", order: 2 },
 		}),
 		// No `visualEdit.group` — falls through to the default group
 		status: f.select(["draft", "published"]).default("draft"),
 	}))
 	.preview({ url: ({ record }) => `/${record.slug}` })
-	.form({ view: "visual-edit-form" });
+	.form(({ v }) => v.visualEditForm({}));
 ```
 
 When no field opts into a non-default group, group headers are skipped — the inspector renders a flat field list, matching the legacy "AutoFormFields without sections" appearance.
@@ -243,14 +243,14 @@ import {
 } from "@questpie/admin/client";
 ```
 
-Most projects only need to register the view (`.form({ view: "visual-edit-form" })`); the host wires every primitive together with sensible defaults. Drop down to the lower-level pieces only when you need to host the workspace inside a custom layout.
+Most projects only need to register the view (`.form(({ v }) => v.visualEditForm({}))`); the host wires every primitive together with sensible defaults. Drop down to the lower-level pieces only when you need to host the workspace inside a custom layout.
 
 ## Migrating From Legacy Live Preview
 
 The classic live preview keeps working. To migrate a collection:
 
 1. Confirm `.preview({ url: ... })` is set.
-2. Add `.form({ view: "visual-edit-form" })`.
+2. Switch the form view from `v.collectionForm({ ... })` to `v.visualEditForm({ ... })`. The same `fields` / `sidebar` config carries over.
 3. (Optional) Add `visualEdit` blocks to per-field metadata for fields that need a custom patch strategy or grouping.
 
 No frontend code changes required — `useCollectionPreview` already handles both V1 (`PREVIEW_REFRESH`) and V2 (`INIT_SNAPSHOT` + `PATCH_BATCH` + `COMMIT`) transparently.
