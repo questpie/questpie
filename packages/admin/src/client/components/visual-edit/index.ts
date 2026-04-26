@@ -33,3 +33,9 @@ export {
 	type PreviewClickContext,
 	type MapPreviewClickArgs,
 } from "./click-router.js";
+export {
+	VisualEditFormHost,
+	useVisualEditController,
+	useVisualEditControllerOptional,
+	type VisualEditFormHostProps,
+} from "./visual-edit-form-host.js";
