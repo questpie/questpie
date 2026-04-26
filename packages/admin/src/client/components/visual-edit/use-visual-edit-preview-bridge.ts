@@ -14,9 +14,16 @@
  * 4. When the active selection changes, forward
  *    `SELECT_TARGET` so the preview can mirror the inspector's
  *    outline.
+ * 5. On every iframe ready event (`readyTick`), re-seed the
+ *    preview with current `react-hook-form` values so unsaved
+ *    edits survive an iframe reload.
  *
  * The hook is a no-op until the preview becomes ready and the
- * caller passes a `previewRef`.
+ * caller passes a `previewRef`. Step (5) additionally requires a
+ * `<FormProvider>` in the tree — `useFormContext` returns `null`
+ * outside one, in which case the re-seed effect skips silently.
+ * `<VisualEditFormHost>` mounts the provider automatically; bare
+ * uses of this hook should ensure the form context is available.
  */
 
 "use client";
