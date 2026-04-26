@@ -27,3 +27,9 @@ export {
 	VisualEditWorkspace,
 	type VisualEditWorkspaceProps,
 } from "./visual-edit-workspace.js";
+export {
+	mapPreviewClickToSelection,
+	mapPreviewBlockClickToSelection,
+	type PreviewClickContext,
+	type MapPreviewClickArgs,
+} from "./click-router.js";

@@ -20,7 +20,14 @@ import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { PreviewPane, type PreviewPaneRef } from "../preview/preview-pane.js";
-import { VisualEditProvider } from "./visual-edit-context.js";
+import {
+	mapPreviewBlockClickToSelection,
+	mapPreviewClickToSelection,
+} from "./click-router.js";
+import {
+	VisualEditProvider,
+	useVisualEdit,
+} from "./visual-edit-context.js";
 import type { VisualEditSelection } from "./types.js";
 
 // ============================================================================
@@ -110,6 +117,12 @@ export type VisualEditWorkspaceProps = {
 	 * Selection change observer. Called for every `select`/`clear`.
 	 */
 	onSelectionChange?: (selection: VisualEditSelection) => void;
+	/**
+	 * Default `blocksPath` used when a preview click only carries a
+	 * `blockId` hint (no fully-scoped path). Defaults to the canonical
+	 * `content` blocks-field name.
+	 */
+	defaultBlocksPath?: string;
 	/** Optional preview ref (refresh hooks etc.) */
 	previewRef?: React.RefObject<PreviewPaneRef | null>;
 	/** Custom class name applied to the workspace root */
@@ -124,115 +137,191 @@ export function VisualEditWorkspace({
 	minInspectorSize = 24,
 	initialSelection,
 	onSelectionChange,
+	defaultBlocksPath,
 	previewRef: externalPreviewRef,
 	className,
 }: VisualEditWorkspaceProps) {
-	const { t } = useTranslation();
-	const isMobile = useIsMobile();
 	const fallbackPreviewRef = React.useRef<PreviewPaneRef>(null);
 	const previewRef = externalPreviewRef ?? fallbackPreviewRef;
-	const [activeTab, setActiveTab] = React.useState<"canvas" | "inspector">(
-		"canvas",
-	);
-
-	const { inspectorPercent, containerRef, handleMouseDown } =
-		useResizableInspector(defaultInspectorSize, minInspectorSize, !isMobile);
 
 	return (
 		<VisualEditProvider
 			initialSelection={initialSelection}
 			onSelectionChange={onSelectionChange}
 		>
+			<WorkspaceLayout
+				previewUrl={previewUrl}
+				allowedOrigins={allowedOrigins}
+				renderInspector={renderInspector}
+				defaultInspectorSize={defaultInspectorSize}
+				minInspectorSize={minInspectorSize}
+				defaultBlocksPath={defaultBlocksPath}
+				previewRef={previewRef}
+				className={className}
+			/>
+		</VisualEditProvider>
+	);
+}
+
+type WorkspaceLayoutProps = Required<
+	Pick<
+		VisualEditWorkspaceProps,
+		"renderInspector" | "defaultInspectorSize" | "minInspectorSize"
+	>
+> &
+	Pick<
+		VisualEditWorkspaceProps,
+		"previewUrl" | "allowedOrigins" | "className" | "defaultBlocksPath"
+	> & {
+		previewRef: React.RefObject<PreviewPaneRef | null>;
+	};
+
+function WorkspaceLayout({
+	previewUrl,
+	allowedOrigins,
+	renderInspector,
+	defaultInspectorSize,
+	minInspectorSize,
+	defaultBlocksPath,
+	previewRef,
+	className,
+}: WorkspaceLayoutProps) {
+	const { t } = useTranslation();
+	const isMobile = useIsMobile();
+	const [activeTab, setActiveTab] = React.useState<"canvas" | "inspector">(
+		"canvas",
+	);
+	const { select } = useVisualEdit();
+
+	const { inspectorPercent, containerRef, handleMouseDown } =
+		useResizableInspector(defaultInspectorSize, minInspectorSize, !isMobile);
+
+	const handlePreviewFieldClick = React.useCallback(
+		(
+			fieldPath: string,
+			context?: {
+				blockId?: string;
+				fieldType?: "regular" | "block" | "relation";
+			},
+		) => {
+			select(
+				mapPreviewClickToSelection({
+					fieldPath,
+					context,
+					fallbackBlocksPath: defaultBlocksPath,
+				}),
+			);
+			if (isMobile) {
+				setActiveTab("inspector");
+			}
+		},
+		[defaultBlocksPath, isMobile, select],
+	);
+
+	const handlePreviewBlockClick = React.useCallback(
+		(blockId: string) => {
+			select(
+				mapPreviewBlockClickToSelection({
+					blockId,
+					fallbackBlocksPath: defaultBlocksPath,
+				}),
+			);
+			if (isMobile) {
+				setActiveTab("inspector");
+			}
+		},
+		[defaultBlocksPath, isMobile, select],
+	);
+
+	return (
+		<div
+			data-visual-edit-workspace
+			className={cn(
+				"bg-background flex h-full min-h-0 w-full flex-col",
+				className,
+			)}
+		>
+			{isMobile && (
+				<div className="flex shrink-0 items-center justify-center border-b px-2 py-2">
+					<Tabs
+						value={activeTab}
+						onValueChange={(value) =>
+							setActiveTab(value as "canvas" | "inspector")
+						}
+					>
+						<TabsList className="h-8">
+							<TabsTrigger value="canvas" className="px-3 text-xs">
+								{t("preview.canvasTab", { defaultValue: "Preview" })}
+							</TabsTrigger>
+							<TabsTrigger value="inspector" className="px-3 text-xs">
+								{t("preview.inspectorTab", { defaultValue: "Inspector" })}
+							</TabsTrigger>
+						</TabsList>
+					</Tabs>
+				</div>
+			)}
+
 			<div
-				data-visual-edit-workspace
-				className={cn(
-					"bg-background flex h-full min-h-0 w-full flex-col",
-					className,
-				)}
+				ref={!isMobile ? containerRef : undefined}
+				className={cn("min-h-0 flex-1", !isMobile && "flex flex-row")}
 			>
-				{isMobile && (
-					<div className="flex shrink-0 items-center justify-center border-b px-2 py-2">
-						<Tabs
-							value={activeTab}
-							onValueChange={(value) =>
-								setActiveTab(value as "canvas" | "inspector")
-							}
-						>
-							<TabsList className="h-8">
-								<TabsTrigger value="canvas" className="px-3 text-xs">
-									{t("preview.canvasTab", { defaultValue: "Preview" })}
-								</TabsTrigger>
-								<TabsTrigger value="inspector" className="px-3 text-xs">
-									{t("preview.inspectorTab", { defaultValue: "Inspector" })}
-								</TabsTrigger>
-							</TabsList>
-						</Tabs>
-					</div>
+				{/* Canvas */}
+				<div
+					className={cn(
+						"bg-muted min-h-0 min-w-0",
+						isMobile
+							? cn("h-full", activeTab !== "canvas" && "hidden")
+							: "h-full",
+					)}
+					style={
+						!isMobile
+							? { width: `${100 - inspectorPercent}%` }
+							: undefined
+					}
+				>
+					{previewUrl ? (
+						<PreviewPane
+							ref={previewRef}
+							url={previewUrl}
+							allowedOrigins={allowedOrigins}
+							onFieldClick={handlePreviewFieldClick}
+							onBlockClick={handlePreviewBlockClick}
+							className="h-full"
+						/>
+					) : (
+						<CanvasPlaceholder />
+					)}
+				</div>
+
+				{/* Resize handle (desktop only) */}
+				{!isMobile && (
+					<button
+						type="button"
+						aria-label={t("preview.resizePane", {
+							defaultValue: "Resize inspector",
+						})}
+						onMouseDown={handleMouseDown}
+						onClick={(event) => event.preventDefault()}
+						className="bg-border hover:bg-border-strong w-1 shrink-0 cursor-col-resize appearance-none border-0 p-0 transition-colors"
+					/>
 				)}
 
+				{/* Inspector */}
 				<div
-					ref={!isMobile ? containerRef : undefined}
 					className={cn(
-						"min-h-0 flex-1",
-						!isMobile && "flex flex-row",
+						"min-h-0 min-w-0",
+						isMobile
+							? cn("h-full", activeTab !== "inspector" && "hidden")
+							: "h-full",
 					)}
+					style={
+						!isMobile ? { width: `${inspectorPercent}%` } : undefined
+					}
 				>
-					{/* Canvas */}
-					<div
-						className={cn(
-							"bg-muted min-h-0 min-w-0",
-							isMobile
-								? cn("h-full", activeTab !== "canvas" && "hidden")
-								: "h-full",
-						)}
-						style={
-							!isMobile
-								? { width: `${100 - inspectorPercent}%` }
-								: undefined
-						}
-					>
-						{previewUrl ? (
-							<PreviewPane
-								ref={previewRef}
-								url={previewUrl}
-								allowedOrigins={allowedOrigins}
-								className="h-full"
-							/>
-						) : (
-							<CanvasPlaceholder />
-						)}
-					</div>
-
-					{/* Resize handle (desktop only) */}
-					{!isMobile && (
-						<button
-							type="button"
-							aria-label={t("preview.resizePane", {
-								defaultValue: "Resize inspector",
-							})}
-							onMouseDown={handleMouseDown}
-							onClick={(event) => event.preventDefault()}
-							className="bg-border hover:bg-border-strong w-1 shrink-0 cursor-col-resize appearance-none border-0 p-0 transition-colors"
-						/>
-					)}
-
-					{/* Inspector */}
-					<div
-						className={cn(
-							"min-h-0 min-w-0",
-							isMobile
-								? cn("h-full", activeTab !== "inspector" && "hidden")
-								: "h-full",
-						)}
-						style={
-							!isMobile ? { width: `${inspectorPercent}%` } : undefined
-						}
-					>
-						{renderInspector()}
-					</div>
+					{renderInspector()}
 				</div>
 			</div>
-		</VisualEditProvider>
+		</div>
 	);
 }
 
