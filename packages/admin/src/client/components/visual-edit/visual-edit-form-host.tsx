@@ -28,6 +28,7 @@ import {
 	useResourceFormController,
 } from "../../views/collection/use-resource-form-controller.js";
 import type { PreviewPaneRef } from "../preview/preview-pane.js";
+import { BlockInspectorBody } from "./block-inspector-body.js";
 import type { VisualEditSelection } from "./types.js";
 import { VisualEditWorkspace } from "./visual-edit-workspace.js";
 import { VisualInspectorPanel } from "./visual-inspector-panel.js";
@@ -183,6 +184,13 @@ export function VisualEditFormHost({
 		[allCollectionsConfig, collection, controller.fields, registry],
 	);
 
+	const defaultRenderBlock = React.useCallback(
+		({ blocksPath, blockId }: { blocksPath: string; blockId: string }) => (
+			<BlockInspectorBody blocksPath={blocksPath} blockId={blockId} />
+		),
+		[],
+	);
+
 	return (
 		<VisualEditControllerContext.Provider value={controller}>
 			<FormProvider {...controller.form}>
@@ -200,7 +208,7 @@ export function VisualEditFormHost({
 						<VisualInspectorPanel
 							renderDocument={renderDocument ?? defaultRenderDocument}
 							renderField={renderField ?? defaultRenderField}
-							renderBlock={renderBlock}
+							renderBlock={renderBlock ?? defaultRenderBlock}
 						/>
 					)}
 				/>

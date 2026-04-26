@@ -39,3 +39,7 @@ export {
 	useVisualEditControllerOptional,
 	type VisualEditFormHostProps,
 } from "./visual-edit-form-host.js";
+export {
+	BlockInspectorBody,
+	type BlockInspectorBodyProps,
+} from "./block-inspector-body.js";
