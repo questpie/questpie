@@ -34,6 +34,10 @@ export {
 	type UseVisualEditPreviewBridgeArgs,
 } from "./use-visual-edit-preview-bridge.js";
 export {
+	useFormToPreviewPatcher,
+	type UseFormToPreviewPatcherArgs,
+} from "./use-form-to-preview-patcher.js";
+export {
 	mapPreviewClickToSelection,
 	mapPreviewBlockClickToSelection,
 	type PreviewClickContext,

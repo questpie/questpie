@@ -30,6 +30,7 @@ import {
 import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import { BlockInspectorBody } from "./block-inspector-body.js";
 import type { VisualEditSelection } from "./types.js";
+import { useFormToPreviewPatcher } from "./use-form-to-preview-patcher.js";
 import { useVisualEditPreviewBridge } from "./use-visual-edit-preview-bridge.js";
 import { VisualEditProvider } from "./visual-edit-context.js";
 import { VisualEditWorkspaceContent } from "./visual-edit-workspace.js";
@@ -230,9 +231,10 @@ export function VisualEditFormHost({
 }
 
 /**
- * Null-rendering child that runs the preview bridge inside the
- * `VisualEditProvider` so it has access to both the controller
- * and the active selection.
+ * Null-rendering child that runs the preview bridge AND the
+ * form-to-patch dispatcher inside the `VisualEditProvider` (for
+ * the bridge's selection access) and inside `FormProvider` (for
+ * the patcher's `useFormContext`).
  */
 function PreviewBridge({
 	controller,
@@ -242,6 +244,15 @@ function PreviewBridge({
 	previewRef: React.RefObject<PreviewPaneRef | null>;
 }) {
 	useVisualEditPreviewBridge({ controller, previewRef });
+	useFormToPreviewPatcher({
+		previewRef,
+		fields: controller.fields,
+		schema: controller.schema,
+		baseline: controller.transformedItem as
+			| Record<string, unknown>
+			| undefined,
+		disabled: !controller.isEditMode,
+	});
 	return null;
 }
 
