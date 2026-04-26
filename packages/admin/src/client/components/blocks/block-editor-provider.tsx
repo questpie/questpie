@@ -12,21 +12,21 @@ import { createStore } from "zustand";
 
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
 
-import type { BlockContent, BlockNode } from "../../blocks/types.js";
+import {
+	addBlockToContent,
+	duplicateBlockInContent,
+	moveBlockInContent,
+	removeBlockFromContent,
+	updateBlockValuesInContent,
+} from "../../blocks/block-operations.js";
+import type { BlockContent } from "../../blocks/types.js";
 import { defaultBlocksPath } from "../../preview/block-paths.js";
 import {
 	type BlockEditorActions,
 	BlockEditorContextProvider,
 	type BlockEditorStore,
 } from "./block-editor-context.js";
-import {
-	duplicateBlockInTree,
-	getAllBlockIds,
-	getDefaultValues,
-	insertBlockInTree,
-	removeBlockFromTree,
-	reorderBlockInTree,
-} from "./utils/tree-utils.js";
+import { getAllBlockIds } from "./utils/tree-utils.js";
 
 // ============================================================================
 // Props
@@ -104,40 +104,29 @@ export function BlockEditorProvider({
 					set({ expandedBlockIds: new Set() });
 				},
 
-				// CRUD
+				// CRUD — all delegate to the pure helpers in
+				// `blocks/block-operations.ts` so the Visual Edit Workspace
+				// can perform the same edits without spinning up this store.
 				addBlock: (type, position) => {
 					const state = get();
-					const blockDef = state.blocks[type];
-					if (!blockDef) {
+					const result = addBlockToContent(
+						state.content,
+						state.blocks,
+						type,
+						position,
+					);
+					if (!result) {
 						if (process.env.NODE_ENV !== "production") {
 							console.warn(`Block type "${type}" not found`);
 						}
 						return;
 					}
 
-					const newBlock: BlockNode = {
-						id: crypto.randomUUID(),
-						type,
-						children: [],
-					};
-
-					const newValues = getDefaultValues(
-						blockDef.fields as Record<
-							string,
-							{ "~options"?: { defaultValue?: unknown } }
-						>,
-					);
-
-					const nextContent: BlockContent = {
-						_tree: insertBlockInTree(state.content._tree, newBlock, position),
-						_values: { ...state.content._values, [newBlock.id]: newValues },
-					};
-
-					onChangeRef.current(nextContent);
+					onChangeRef.current(result.content);
 
 					set((prev) => ({
-						content: nextContent,
-						selectedBlockId: newBlock.id,
+						content: result.content,
+						selectedBlockId: result.blockId,
 						isLibraryOpen: false,
 						insertPosition: null,
 						expandedBlockIds: position.parentId
@@ -148,20 +137,8 @@ export function BlockEditorProvider({
 
 				removeBlock: (id) => {
 					const state = get();
-					const { newTree, removedIds } = removeBlockFromTree(
-						state.content._tree,
-						id,
-					);
-
-					const newValues = { ...state.content._values };
-					for (const removedId of removedIds) {
-						delete newValues[removedId];
-					}
-
-					const nextContent: BlockContent = {
-						_tree: newTree,
-						_values: newValues,
-					};
+					const { content: nextContent, removedIds } =
+						removeBlockFromContent(state.content, id);
 
 					onChangeRef.current(nextContent);
 
@@ -189,16 +166,10 @@ export function BlockEditorProvider({
 
 				duplicateBlock: (id) => {
 					const state = get();
-					const { newTree, newIds, newValues } = duplicateBlockInTree(
-						state.content._tree,
-						state.content._values,
+					const { content: nextContent, newIds } = duplicateBlockInContent(
+						state.content,
 						id,
 					);
-
-					const nextContent: BlockContent = {
-						_tree: newTree,
-						_values: { ...state.content._values, ...newValues },
-					};
 
 					onChangeRef.current(nextContent);
 
@@ -212,15 +183,12 @@ export function BlockEditorProvider({
 				// Reorder (same-parent only)
 				moveBlock: (_id, parentId, fromIndex, toIndex) => {
 					const state = get();
-					const nextContent: BlockContent = {
-						...state.content,
-						_tree: reorderBlockInTree(
-							state.content._tree,
-							parentId,
-							fromIndex,
-							toIndex,
-						),
-					};
+					const nextContent = moveBlockInContent(
+						state.content,
+						parentId,
+						fromIndex,
+						toIndex,
+					);
 
 					onChangeRef.current(nextContent);
 					set({ content: nextContent });
@@ -229,13 +197,11 @@ export function BlockEditorProvider({
 				// Values
 				updateBlockValues: (id, newValues) => {
 					const state = get();
-					const nextContent: BlockContent = {
-						...state.content,
-						_values: {
-							...state.content._values,
-							[id]: { ...state.content._values[id], ...newValues },
-						},
-					};
+					const nextContent = updateBlockValuesInContent(
+						state.content,
+						id,
+						newValues,
+					);
 
 					onChangeRef.current(nextContent);
 					set({ content: nextContent });
