@@ -103,8 +103,24 @@ export type VisualEditPatchStrategy = "patch" | "refresh" | "deferred";
 export interface VisualEditFieldMeta {
 	/**
 	 * Component reference rendered inside the inspector instead of
-	 * the default field component. The component receives the same
-	 * props the legacy field renderer passes.
+	 * the default field component.
+	 *
+	 * The override receives:
+	 *
+	 * - `fieldName` — the resolved top-level field name
+	 * - `fieldPath` — the full selection path (e.g. `meta.seo.title`,
+	 *   `items.0.label`); use this when the override needs to read or
+	 *   write a deeply-nested value via `useFormContext()`
+	 * - `collection` — the active collection name
+	 * - `fieldDef` — the same `FieldInstance` `FieldRenderer` would receive
+	 * - `registry` — optional component registry override
+	 * - `allCollectionsConfig` — passed through for embedded fields
+	 *
+	 * The override is rendered inside `FormProvider`, so any RHF hook
+	 * (`useFormContext`, `useWatch`, `useController`, …) works
+	 * directly. If the registered component type isn't found in the
+	 * admin registry, the workspace falls back to the default
+	 * `FieldRenderer` so the field stays editable.
 	 */
 	inspector?: ComponentReference;
 
