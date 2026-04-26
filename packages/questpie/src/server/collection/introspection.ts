@@ -304,12 +304,20 @@ export interface AdminPreviewSchema {
 	enabled?: boolean;
 	/** Preview panel position */
 	position?: "left" | "right" | "bottom";
-	/** Default panel width (percentage) */
+	/**
+	 * Default panel width (percentage). Alias of `defaultSize` mirrored
+	 * server-side so older clients keep working unchanged.
+	 */
 	defaultWidth?: number;
 	/** Default preview pane size (percentage, 0-100) */
 	defaultSize?: number;
 	/** Minimum preview pane size (percentage, 0-100) */
 	minSize?: number;
+	/**
+	 * Minimum panel width (percentage). Alias of `minSize` mirrored
+	 * server-side so older clients keep working unchanged.
+	 */
+	minWidth?: number;
 	/** URL template or pattern (actual URL generation happens server-side) */
 	hasUrlBuilder?: boolean;
 }
@@ -1016,9 +1024,11 @@ function extractAdminConfig(
 		result.preview = {
 			enabled: adminPreview.enabled,
 			position: adminPreview.position,
-			// Mirror both spellings for older clients that read `defaultWidth`.
+			// Mirror both spellings for older clients that read the
+			// `*Width` aliases.
 			defaultWidth: defaultSize,
 			defaultSize,
+			minWidth: minSize,
 			minSize,
 			// Don't include the url function - just indicate it exists
 			hasUrlBuilder: typeof adminPreview.url === "function",
