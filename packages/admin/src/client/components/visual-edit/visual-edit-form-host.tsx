@@ -89,8 +89,13 @@ export type VisualEditFormHostProps = ResourceFormControllerOptions & {
 	/** Other collection configs — needed when the doc embeds others */
 	allCollectionsConfig?: Record<string, unknown>;
 	/**
-	 * Override the inspector's Document body. Defaults to
-	 * `AutoFormFields` rendering the full document layout.
+	 * Override the inspector's Document body. The default
+	 * auto-switches based on field metadata: when at least one field
+	 * declares `visualEdit.group`, the host renders the grouped
+	 * `DocumentInspectorBody`; otherwise it falls through to
+	 * `AutoFormFields` so any sections / tabs the legacy form view
+	 * configured carry into the workspace untouched. Provide this
+	 * prop to force a specific body unconditionally.
 	 */
 	renderDocument?: () => React.ReactNode;
 	/**
