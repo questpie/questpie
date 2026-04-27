@@ -355,6 +355,34 @@ describe("useVisualEditPreviewBridge — FULL_RESYNC after side effects", () => 
 
 		expect(previewRef.mocks.sendFullResync).toHaveBeenCalledTimes(1);
 	});
+
+	it("re-fires the resync when isSuccess flips back to true after a reset", () => {
+		// React-Query mutation lifecycle:
+		//   idle → success → idle → success (second invocation)
+		// When `isSuccess` flips to `false` (mutation reset), the
+		// bridge clears `seenRef`. The next `true` should fire
+		// `FULL_RESYNC` again — a second remove must produce a
+		// second resync, otherwise the iframe stays stale.
+		const previewRef = makePreviewRef();
+		const idle = makeController({});
+		const success = makeController({
+			mutations: { remove: { isSuccess: true } },
+		});
+
+		const { rerender } = render(
+			<Harness controller={idle} previewRef={previewRef} />,
+		);
+		rerender(<Harness controller={success} previewRef={previewRef} />);
+		expect(previewRef.mocks.sendFullResync).toHaveBeenCalledTimes(1);
+
+		// Reset (mutation goes idle).
+		rerender(<Harness controller={idle} previewRef={previewRef} />);
+		expect(previewRef.mocks.sendFullResync).toHaveBeenCalledTimes(1);
+
+		// Second success — should fire again.
+		rerender(<Harness controller={success} previewRef={previewRef} />);
+		expect(previewRef.mocks.sendFullResync).toHaveBeenCalledTimes(2);
+	});
 });
 
 describe("useVisualEditPreviewBridge — SELECT_TARGET forwarding", () => {
