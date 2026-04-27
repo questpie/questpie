@@ -404,4 +404,28 @@ describe("applyPatchBatchImmutable", () => {
 		expect(after).toEqual({ title: "New" });
 		expect(after).not.toBe(before);
 	});
+
+	it("deep-clones nested containers so mutations don't leak", () => {
+		// `structuredClone` is the contract — nested objects + arrays
+		// in the result must NOT share references with the input. The
+		// patcher relies on this when handing the result to react-
+		// hook-form so subsequent edits don't surprise consumers
+		// holding the original ref.
+		const before = {
+			meta: { seo: { title: "T" } },
+			tags: ["a", "b"],
+		};
+		const after = applyPatchBatchImmutable(before, [
+			{ op: "set", path: "meta.seo.title", value: "New" },
+		]);
+
+		expect(after.meta).not.toBe(before.meta);
+		expect(after.meta).toEqual({ seo: { title: "New" } });
+		// Untouched arrays still get a fresh container under
+		// structuredClone semantics.
+		expect(after.tags).not.toBe(before.tags);
+		expect(after.tags).toEqual(["a", "b"]);
+		// And the original is untouched.
+		expect(before.meta.seo.title).toBe("T");
+	});
 });
