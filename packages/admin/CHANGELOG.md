@@ -1,5 +1,19 @@
 # @questpie/admin
 
+## 3.0.5
+
+### Patch Changes
+
+- [`325599e`](https://github.com/questpie/questpie/commit/325599e70089bcdeb632d0e389614e6738a514cb) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Expand bundled localization coverage across core and admin.
+
+  - Add bundled validation translations for `cs`, `de`, `es`, `fr`, `pl`, and `pt`.
+  - Extract backend/runtime errors, upload/storage, search, realtime, versioning, and database field errors into translatable messages.
+  - Complete admin UI, server action, setup, preview, table, widget, and layout message catalogs for all bundled locales.
+
+- Updated dependencies [[`325599e`](https://github.com/questpie/questpie/commit/325599e70089bcdeb632d0e389614e6738a514cb)]:
+  - questpie@3.0.5
+  - @questpie/tanstack-query@3.0.5
+
 ## 3.0.4
 
 ### Patch Changes
