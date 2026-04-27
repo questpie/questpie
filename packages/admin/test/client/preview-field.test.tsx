@@ -26,6 +26,7 @@ import { BlockScopeProvider } from "#questpie/admin/client/preview/block-scope-c
 import {
 	PreviewField,
 	PreviewProvider,
+	StandalonePreviewField,
 	usePreviewContext,
 } from "#questpie/admin/client/preview/preview-field";
 
@@ -212,6 +213,101 @@ describe("PreviewField — in preview mode", () => {
 
 		expect(ev.defaultPrevented).toBe(true);
 		// Outer click never fires because of stopPropagation.
+		expect(outerOnClick).not.toHaveBeenCalled();
+	});
+});
+
+describe("StandalonePreviewField — context-free variant", () => {
+	// Same shape as PreviewField but takes isPreviewMode +
+	// onFieldClick directly as props. Useful when a consumer can't
+	// (or doesn't want to) wrap with `PreviewProvider`.
+	it("renders the bare component when not in preview mode", () => {
+		render(
+			<StandalonePreviewField
+				field="title"
+				as="h1"
+				isPreviewMode={false}
+				onFieldClick={() => {}}
+			>
+				Hello
+			</StandalonePreviewField>,
+		);
+		const heading = screen.getByText("Hello");
+		expect(heading.tagName).toBe("H1");
+		expect(heading.hasAttribute("data-preview-field")).toBe(false);
+	});
+
+	it("attaches preview attributes + click handler in preview mode", () => {
+		const onFieldClick = mock(() => {});
+		render(
+			<StandalonePreviewField
+				field="title"
+				isPreviewMode={true}
+				onFieldClick={onFieldClick}
+			>
+				Hello
+			</StandalonePreviewField>,
+		);
+		const node = screen.getByText("Hello");
+		expect(node.getAttribute("data-preview-field")).toBe("title");
+		expect(node.getAttribute("data-field-type")).toBe("regular");
+
+		fireEvent.click(node);
+		expect(onFieldClick).toHaveBeenCalledTimes(1);
+		const [path, ctx] = onFieldClick.mock.calls[0]!;
+		expect(path).toBe("title");
+		expect(ctx).toEqual({ blockId: undefined, fieldType: "regular" });
+	});
+
+	it("integrates with BlockScopeProvider — composes the scoped path", () => {
+		// Even without `PreviewProvider`, the standalone variant
+		// still reads `BlockScopeProvider` so frontend pages can
+		// compose block-scoped paths consistently across both
+		// flavours.
+		const onFieldClick = mock(() => {});
+		render(
+			<BlockScopeProvider blockId="abc" blocksPath="page.body">
+				<StandalonePreviewField
+					field="title"
+					isPreviewMode={true}
+					onFieldClick={onFieldClick}
+				>
+					Hello
+				</StandalonePreviewField>
+			</BlockScopeProvider>,
+		);
+		const node = screen.getByText("Hello");
+		expect(node.getAttribute("data-preview-field")).toBe(
+			"page.body._values.abc.title",
+		);
+		expect(node.getAttribute("data-block-id")).toBe("abc");
+
+		fireEvent.click(node);
+		const [path, ctx] = onFieldClick.mock.calls[0]!;
+		expect(path).toBe("page.body._values.abc.title");
+		expect(ctx?.blockId).toBe("abc");
+	});
+
+	it("prevents default + stops propagation on click", () => {
+		const onFieldClick = mock(() => {});
+		const outerOnClick = mock(() => {});
+		render(
+			<div onClick={outerOnClick}>
+				<StandalonePreviewField
+					field="title"
+					as="a"
+					isPreviewMode={true}
+					onFieldClick={onFieldClick}
+				>
+					Hello
+				</StandalonePreviewField>
+			</div>,
+		);
+		const link = screen.getByText("Hello");
+		const ev = new MouseEvent("click", { bubbles: true, cancelable: true });
+		link.dispatchEvent(ev);
+
+		expect(ev.defaultPrevented).toBe(true);
 		expect(outerOnClick).not.toHaveBeenCalled();
 	});
 });
