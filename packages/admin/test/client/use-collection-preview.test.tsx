@@ -32,6 +32,7 @@ let originalReferrerDescriptor: PropertyDescriptor | undefined;
 let originalLocationReplace: typeof window.location.replace;
 let originalParentPostMessage: typeof window.parent.postMessage;
 let originalConsoleError: typeof console.error;
+let originalConsoleWarn: typeof console.warn;
 
 beforeEach(() => {
 	// Force `window.self !== window.top` so the hook treats the
@@ -73,6 +74,8 @@ beforeEach(() => {
 	// behaviour, not console output.
 	originalConsoleError = console.error;
 	console.error = () => {};
+	originalConsoleWarn = console.warn;
+	console.warn = () => {};
 });
 
 afterEach(() => {
@@ -87,6 +90,7 @@ afterEach(() => {
 	(window.location as { replace: (url: string) => void }).replace =
 		originalLocationReplace;
 	console.error = originalConsoleError;
+	console.warn = originalConsoleWarn;
 	cleanup();
 });
 
@@ -520,5 +524,67 @@ describe("useCollectionPreview — PREVIEW_REFRESH (V1 fallback)", () => {
 		});
 
 		expect(onRefresh).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("useCollectionPreview — origin resolution fallback", () => {
+	// When `document.referrer` is empty (e.g., the iframe was opened
+	// directly or via a meta-refresh that strips the referrer), the
+	// hook can't pin an admin origin. The contract is:
+	//
+	//   accept only same-origin parents (window.location.origin)
+	//
+	// rather than silently trusting any frame. Lock that down so a
+	// future refactor doesn't widen the trust surface.
+	it("accepts same-origin messages when document.referrer is empty", async () => {
+		// Override the global referrer mock from `beforeEach` for this
+		// test only; the afterEach restoration reverts both descriptors.
+		Object.defineProperty(document, "referrer", {
+			configurable: true,
+			get: () => "",
+		});
+
+		const onRefresh = mock(() => Promise.resolve());
+		renderHook(() =>
+			useCollectionPreview({ initialData: {}, onRefresh }),
+		);
+
+		// Dispatch a message claiming to come from the page's own origin.
+		// happy-dom sets `window.location.origin` to "http://localhost:3000"
+		// per `setup-dom.ts`.
+		await act(async () => {
+			dispatchAdminMessage(
+				{ type: "PREVIEW_REFRESH" },
+				window.location.origin,
+			);
+			await flushAsync();
+		});
+
+		expect(onRefresh).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects cross-origin messages when document.referrer is empty", async () => {
+		Object.defineProperty(document, "referrer", {
+			configurable: true,
+			get: () => "",
+		});
+
+		const onRefresh = mock(() => Promise.resolve());
+		renderHook(() =>
+			useCollectionPreview({ initialData: {}, onRefresh }),
+		);
+
+		// Same payload, but origin claims to be a different domain.
+		// Without a resolved adminOrigin, the same-origin guard kicks
+		// in and the message must be silently dropped.
+		await act(async () => {
+			dispatchAdminMessage(
+				{ type: "PREVIEW_REFRESH" },
+				"http://attacker.example.com",
+			);
+			await flushAsync();
+		});
+
+		expect(onRefresh).not.toHaveBeenCalled();
 	});
 });
