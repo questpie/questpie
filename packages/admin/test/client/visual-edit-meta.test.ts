@@ -181,6 +181,26 @@ describe("defaultPatchStrategy", () => {
 			}),
 		).toBe("refresh");
 	});
+
+	it("returns 'patch' when neither schema nor fieldDef is provided", () => {
+		// The patcher passes whatever it has from the resolver; if the
+		// caller doesn't have either source the safest default is
+		// patch (preserves V2's optimistic-update path) — refresh
+		// would silently reload the iframe on every edit of the
+		// orphan field.
+		expect(defaultPatchStrategy({})).toBe("patch");
+	});
+
+	it("returns 'patch' when type is unknown (neither schema nor fieldDef.name match REFRESH set)", () => {
+		// `fieldInstance("custom-type")` exercises the branch where
+		// the `type` is truthy but not in REFRESH_FIELD_TYPES — the
+		// scalar default applies.
+		expect(
+			defaultPatchStrategy({
+				fieldDef: fieldInstance("custom-scalar"),
+			}),
+		).toBe("patch");
+	});
 });
 
 describe("resolvePatchStrategy", () => {
