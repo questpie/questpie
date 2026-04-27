@@ -281,11 +281,33 @@ function PageRenderer({ page }) {
 
 ## Blocks in Live Preview
 
-When a collection has `.preview()` configured, blocks can participate in preview focus by combining `BlockScopeProvider` with `PreviewField`.
+When a collection has `.preview()` configured, blocks can participate in preview focus by composing `<BlockScopeProvider>` (which scopes field paths inside a block) with `<PreviewField>` (which sends the focus / click messages).
 
-### BlockScopeProvider Wrapper
+### Recommended: `BlockRenderer`
 
-Use `BlockScopeProvider` in your frontend to scope field paths inside a block:
+`BlockRenderer` is the canonical frontend component for rendering a block tree. It walks `_tree`, looks up renderers by type (with kebab → camel fallback), and wraps each block in `<BlockScopeProvider>` automatically — so any `<PreviewField>` inside the renderer auto-resolves to the canonical `${blocksPath}._values.${blockId}.${fieldName}` path:
+
+```tsx
+import { BlockRenderer } from "@questpie/admin/client";
+import { renderers } from "@/admin/blocks";
+
+function PageContent({ page }) {
+	return (
+		<BlockRenderer
+			content={page.content}
+			renderers={renderers}
+			data={page.blockData}
+			blocksPath="content" // default; override when `.blocks()` lives under a non-default path
+		/>
+	);
+}
+```
+
+For workspace-side editor mode, pass `onBlockClick` and `selectedBlockId` so the rendered tree wraps each block in an interactive container with `data-block-id` / `data-block-type` attributes.
+
+### Manual `BlockScopeProvider` (advanced)
+
+When you need finer control over the rendering loop (e.g. SSR with a custom layout), wrap each block manually:
 
 ```tsx
 import { BlockScopeProvider } from "@questpie/admin/client";
@@ -302,6 +324,6 @@ function PageRenderer({ blocks, previewData }) {
 }
 ```
 
-`PreviewField` components inside the provider resolve paths like `content._values.{blockId}.title`.
+`<PreviewField>` components inside the provider resolve paths like `content._values.{blockId}.title` through `useResolveFieldPath` → `blockValuePath`.
 
 Blocks with declarative prefetch (`{ with: { image: true } }`) resolve relations during reconcile — the preview shows the image URL immediately after the server round-trip completes, not just the asset ID.
