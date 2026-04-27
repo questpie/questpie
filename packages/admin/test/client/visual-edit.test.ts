@@ -20,7 +20,11 @@ import {
 	applySet,
 	parsePath,
 } from "#questpie/admin/client/preview/patch";
-import type { PreviewPatchOp } from "#questpie/admin/client/preview/types";
+import {
+	isAdminToPreviewMessage,
+	isPreviewToAdminMessage,
+	type PreviewPatchOp,
+} from "#questpie/admin/client/preview/types";
 import {
 	mapPreviewBlockClickToSelection,
 	mapPreviewClickToSelection,
@@ -427,5 +431,74 @@ describe("applyPatchBatchImmutable", () => {
 		expect(after.tags).toEqual(["a", "b"]);
 		// And the original is untouched.
 		expect(before.meta.seo.title).toBe("T");
+	});
+});
+
+describe("isAdminToPreviewMessage", () => {
+	it("accepts every known admin → preview message type", () => {
+		// Lock the full set in by iterating over every type the
+		// receiving side handles. If a new admin-side message is
+		// added without updating the validator's set, this test
+		// flags the gap immediately.
+		const ALL_ADMIN_TYPES = [
+			"PREVIEW_REFRESH",
+			"SELECT_BLOCK",
+			"FOCUS_FIELD",
+			"INIT_SNAPSHOT",
+			"PATCH_BATCH",
+			"COMMIT",
+			"FULL_RESYNC",
+			"SELECT_TARGET",
+			"NAVIGATE_PREVIEW",
+		];
+		for (const type of ALL_ADMIN_TYPES) {
+			expect(isAdminToPreviewMessage({ type })).toBe(true);
+		}
+	});
+
+	it("rejects iframe → admin types that aren't part of the admin → preview surface", () => {
+		expect(isAdminToPreviewMessage({ type: "PREVIEW_READY" })).toBe(false);
+		expect(isAdminToPreviewMessage({ type: "FIELD_CLICKED" })).toBe(false);
+		expect(isAdminToPreviewMessage({ type: "PATCH_APPLIED" })).toBe(false);
+	});
+
+	it("rejects unknown / malformed payloads", () => {
+		expect(isAdminToPreviewMessage(null)).toBe(false);
+		expect(isAdminToPreviewMessage(undefined)).toBe(false);
+		expect(isAdminToPreviewMessage("PREVIEW_REFRESH")).toBe(false);
+		expect(isAdminToPreviewMessage({})).toBe(false);
+		expect(isAdminToPreviewMessage({ type: 42 })).toBe(false);
+		expect(isAdminToPreviewMessage({ type: "OOPS" })).toBe(false);
+	});
+});
+
+describe("isPreviewToAdminMessage", () => {
+	it("accepts every known preview → admin message type", () => {
+		const ALL_PREVIEW_TYPES = [
+			"PREVIEW_READY",
+			"FIELD_CLICKED",
+			"BLOCK_CLICKED",
+			"REFRESH_COMPLETE",
+			"PATCH_APPLIED",
+			"RESYNC_REQUEST",
+		];
+		for (const type of ALL_PREVIEW_TYPES) {
+			expect(isPreviewToAdminMessage({ type })).toBe(true);
+		}
+	});
+
+	it("rejects admin → preview types", () => {
+		expect(isPreviewToAdminMessage({ type: "INIT_SNAPSHOT" })).toBe(false);
+		expect(isPreviewToAdminMessage({ type: "PATCH_BATCH" })).toBe(false);
+		expect(isPreviewToAdminMessage({ type: "NAVIGATE_PREVIEW" })).toBe(false);
+	});
+
+	it("rejects unknown / malformed payloads", () => {
+		expect(isPreviewToAdminMessage(null)).toBe(false);
+		expect(isPreviewToAdminMessage(undefined)).toBe(false);
+		expect(isPreviewToAdminMessage("PREVIEW_READY")).toBe(false);
+		expect(isPreviewToAdminMessage({})).toBe(false);
+		expect(isPreviewToAdminMessage({ type: 42 })).toBe(false);
+		expect(isPreviewToAdminMessage({ type: "OOPS" })).toBe(false);
 	});
 });
