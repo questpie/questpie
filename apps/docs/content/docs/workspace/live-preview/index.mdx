@@ -3,7 +3,14 @@ title: Live Preview
 description: Edit content side-by-side with a live preview of your frontend.
 ---
 
-Live Preview opens a fullscreen overlay with your form on the left and an iframe showing your frontend on the right. The current implementation refreshes the iframe after save/autosave events.
+Live Preview opens a fullscreen overlay with your frontend in an iframe so editors can see content updates as they work.
+
+Two views ship out of the box:
+
+- **`collection-form` (default)** — split-screen form on the left, iframe on the right. The iframe refreshes after save / autosave events. This is what every collection gets without further config.
+- **`visual-edit-form` (opt-in)** — the [Visual Edit Workspace](./visual-edit): canvas iframe on the left, contextual right inspector. Edits land in the iframe via field-level patches without a save round-trip. Enable per collection with `.form(({ v }) => v.visualEditForm({}))`.
+
+This page covers the default split-screen flow and the configuration both views share. For the patch-based workspace flow, see [Visual Edit Workspace](./visual-edit) and [Protocol & Reliability](./protocol).
 
 ## How It Works
 
@@ -121,16 +128,14 @@ There is no V1/V2 toggle on the iframe side — the same hook handles both proto
 
 The "Exit Preview" button redirects to `/api/preview?disable=true`, which clears the draft mode cookie.
 
-## Visual Edit Workspace (V2)
-
-The patch-based V2 protocol is implemented and shipped as the **Visual Edit Workspace** — an opt-in alternative to the default `collection-form` view. The workspace adds a contextual right-pane inspector and drives the iframe through field-level patches instead of full reloads. Enable it per collection with `.form(({ v }) => v.visualEditForm({...}))`.
+## More on Live Preview
 
 - [Visual Edit Workspace](./visual-edit) — Enabling the workspace, selection model, per-field tuning.
 - [Protocol & Reliability](./protocol) — Wire-level reference for the message types both sides exchange today.
-- [Architecture](./architecture) — Higher-level architecture notes for the live-preview surface.
+- [Migration Guide](./migration) — Upgrading existing live-preview integrations to the workspace.
+- [Architecture](./architecture) — Design-intent architecture notes for the live-preview surface.
 - [Same-Tab Recipe](./same-tab-recipe) — Frontend integration guide for hosting the preview at the same origin as the admin.
-- [Shared Preview](./shared-preview) — Multi-user / detached preview design notes.
-- [Migration Guide](./migration) — Upgrading existing live-preview integrations.
+- [Shared Preview](./shared-preview) — Design notes for multi-user / detached preview transports.
 
 ## Related Pages
 
