@@ -2,8 +2,10 @@
  * Block operations unit tests
  *
  * Covers the pure helpers in `client/blocks/block-operations.ts`
- * that drive both the legacy `BlockEditorProvider` and the upcoming
- * Visual Edit Workspace blocks panel.
+ * that drive both the legacy `BlockEditorProvider` and the Visual
+ * Edit Workspace's `BlockInspectorBody`. Plus the `isBlockContent`
+ * type guard, which BlockInspectorBody uses to gate its form-value
+ * read against a fresh `EMPTY_BLOCK_CONTENT`.
  */
 
 import { describe, expect, it } from "bun:test";
@@ -15,7 +17,11 @@ import {
 	removeBlockFromContent,
 	updateBlockValuesInContent,
 } from "#questpie/admin/client/blocks/block-operations";
-import type { BlockContent } from "#questpie/admin/client/blocks/types";
+import {
+	EMPTY_BLOCK_CONTENT,
+	isBlockContent,
+	type BlockContent,
+} from "#questpie/admin/client/blocks/types";
 
 // ============================================================================
 // Fixtures
@@ -229,5 +235,44 @@ describe("updateBlockValuesInContent", () => {
 
 		const next = updateBlockValuesInContent(seeded, "a", { title: "Hi" });
 		expect(next._values.a).toEqual({ title: "Hi" });
+	});
+});
+
+describe("isBlockContent", () => {
+	it("accepts the canonical empty constant", () => {
+		expect(isBlockContent(EMPTY_BLOCK_CONTENT)).toBe(true);
+	});
+
+	it("accepts a populated tree + values pair", () => {
+		expect(
+			isBlockContent({
+				_tree: [{ id: "a", type: "hero", children: [] }],
+				_values: { a: { title: "x" } },
+			}),
+		).toBe(true);
+	});
+
+	it("rejects null and undefined", () => {
+		expect(isBlockContent(null)).toBe(false);
+		expect(isBlockContent(undefined)).toBe(false);
+	});
+
+	it("rejects primitives", () => {
+		expect(isBlockContent("content")).toBe(false);
+		expect(isBlockContent(0)).toBe(false);
+		expect(isBlockContent(true)).toBe(false);
+	});
+
+	it("rejects empty objects (no _tree / _values)", () => {
+		expect(isBlockContent({})).toBe(false);
+	});
+
+	it("rejects when _tree is not an array", () => {
+		expect(isBlockContent({ _tree: "oops", _values: {} })).toBe(false);
+	});
+
+	it("rejects when _values is null or non-object", () => {
+		expect(isBlockContent({ _tree: [], _values: null })).toBe(false);
+		expect(isBlockContent({ _tree: [], _values: "oops" })).toBe(false);
 	});
 });
