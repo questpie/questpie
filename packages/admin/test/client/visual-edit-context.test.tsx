@@ -9,6 +9,8 @@
  *   - `onSelectionChange` invocation
  *   - `useVisualEdit()` throws outside the provider
  *   - `useVisualEditOptional()` returns null outside the provider
+ *   - `useVisualEditController()` throws outside the host
+ *   - `useVisualEditControllerOptional()` returns null outside the host
  */
 
 import { describe, expect, it, mock } from "bun:test";
@@ -20,6 +22,10 @@ import {
 	useVisualEdit,
 	useVisualEditOptional,
 } from "#questpie/admin/client/components/visual-edit/visual-edit-context";
+import {
+	useVisualEditController,
+	useVisualEditControllerOptional,
+} from "#questpie/admin/client/components/visual-edit/visual-edit-form-host";
 import type { VisualEditSelection } from "#questpie/admin/client/components/visual-edit/types";
 
 function wrapWith(
@@ -202,6 +208,33 @@ describe("useVisualEdit / useVisualEditOptional — outside provider", () => {
 
 	it("useVisualEditOptional returns null outside a provider", () => {
 		const { result } = renderHook(() => useVisualEditOptional());
+		expect(result.current).toBeNull();
+		cleanup();
+	});
+});
+
+describe("useVisualEditController / Optional — outside host", () => {
+	it("useVisualEditController throws outside <VisualEditFormHost>", () => {
+		// Mirrors the loud-misuse semantics of `useVisualEdit`: the
+		// strict variant throws rather than silently returning a
+		// stub controller that would mask wiring bugs in user code.
+		const originalError = console.error;
+		console.error = () => {};
+		try {
+			expect(() => renderHook(() => useVisualEditController())).toThrow(
+				/must be used inside <VisualEditFormHost>/,
+			);
+		} finally {
+			console.error = originalError;
+			cleanup();
+		}
+	});
+
+	it("useVisualEditControllerOptional returns null outside <VisualEditFormHost>", () => {
+		// The soft variant exists for primitives that opt into
+		// workspace context but still render inside the legacy form
+		// view — they need to render either way.
+		const { result } = renderHook(() => useVisualEditControllerOptional());
 		expect(result.current).toBeNull();
 		cleanup();
 	});
