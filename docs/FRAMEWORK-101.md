@@ -1953,9 +1953,12 @@ collection("posts").preview({
   enabled: true,
   url: ({ record, locale }) => `/blog/${record.slug}?locale=${locale}`,
   position: "right",        // "left" | "right" | "bottom"
-  defaultWidth: 50,         // percentage
+  defaultSize: 50,          // percentage of the workspace; `defaultWidth` accepted as alias
+  minSize: 30,              // percentage; `minWidth` accepted as alias
 })
 ```
+
+The same `.preview()` config drives both shipped form views (`collection-form` default split-screen + `visual-edit-form` opt-in workspace). Switch views with `.form(({ v }) => v.visualEditForm({...}))`.
 
 ### `.actions()` — Server Actions
 
@@ -2071,7 +2074,8 @@ export const colorPicker = field("color", {
 | View | Kind | Description |
 |---|---|---|
 | `collection-table` | `list` | Default table view for collection lists |
-| `collection-form` | `form` | Default form view for collection editing |
+| `collection-form` | `form` | Default form view for collection editing (split-screen with iframe; refresh on save) |
+| `visual-edit-form` | `form` | Opt-in canvas + inspector workspace; field-level patches over the V2 protocol |
 | `global-form` | `form` | Default form view for globals |
 
 Register custom views:
