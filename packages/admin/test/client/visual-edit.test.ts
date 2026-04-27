@@ -203,6 +203,36 @@ describe("mapPreviewClickToSelection", () => {
 		});
 	});
 
+	it("uses defaultBlocksPath() when blockId hint is set but no fallback is provided", () => {
+		expect(
+			mapPreviewClickToSelection({
+				fieldPath: "title",
+				context: { blockId: "abc" },
+			}),
+		).toEqual({
+			kind: "block-field",
+			blocksPath: "content",
+			blockId: "abc",
+			fieldPath: "title",
+		});
+	});
+
+	it("returns a relation selection without targetCollection when context is incomplete", () => {
+		// `targetCollection` is optional; passing only `fieldType: "relation"`
+		// should still short-circuit to the relation branch — the workspace
+		// renders a generic relation editor when the collection is unknown.
+		expect(
+			mapPreviewClickToSelection({
+				fieldPath: "author",
+				context: { fieldType: "relation" },
+			}),
+		).toEqual({
+			kind: "relation",
+			fieldPath: "author",
+			targetCollection: undefined,
+		});
+	});
+
 	it("handles nested paths inside blocks", () => {
 		expect(
 			mapPreviewClickToSelection({
