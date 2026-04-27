@@ -222,9 +222,12 @@ The admin renders drag-and-drop upload, image preview, file info, and remove but
 
 ## Live Preview
 
-Live Preview uses a split-screen iframe. The current implementation refreshes the iframe after save/autosave and uses `postMessage` for field/block focus sync.
+Live Preview ships two views out of the box:
 
-Preview V2 patch-based docs are design notes until `useQuestpiePreview`, `PreviewRoot`, and `PreviewBlock` are exported.
+- **`collection-form` (default)** — split-screen form on the left, iframe on the right. The iframe refreshes after save / autosave and uses `postMessage` for field / block focus sync.
+- **`visual-edit-form` (opt-in)** — the **Visual Edit Workspace**: canvas iframe on the left, contextual right inspector. Edits land in the iframe via field-level `PATCH_BATCH` patches without a save round-trip; saves / reverts / stage transitions sync via `COMMIT` / `FULL_RESYNC`. Enable per collection with `.form(({ v }) => v.visualEditForm({}))`.
+
+Both views share the same `.preview({ url, defaultSize?, minSize? })` config and the same iframe-side `useCollectionPreview` hook — opting a collection into the workspace requires zero frontend page changes. The full visual-edit + V2 surface (`VisualEditFormHost`, `VisualEditWorkspace`, `VisualInspectorPanel`, `useFormToPreviewPatcher`, `useVisualEditPreviewBridge`, `BlockInspectorBody`, `DocumentInspectorBody`, `diffSnapshot`, `applyPatchBatch`, `useInitSnapshotBuffer`, every public type) is re-exported from `@questpie/admin/client`.
 
 ### Server Config
 
