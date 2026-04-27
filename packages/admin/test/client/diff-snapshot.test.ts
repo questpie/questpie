@@ -25,6 +25,10 @@ describe("diffSnapshot — empty inputs", () => {
 		expect(diffSnapshot({}, {})).toEqual([]);
 	});
 
+	it("returns no ops when both inputs are undefined", () => {
+		expect(diffSnapshot(undefined, undefined)).toEqual([]);
+	});
+
 	it("treats missing/undefined `before` as a fresh insert", () => {
 		expect(diffSnapshot(undefined, { a: 1, b: 2 })).toEqual([
 			{ op: "set", path: "a", value: 1 },
@@ -107,6 +111,37 @@ describe("diffSnapshot — recursion", () => {
 		const before = { tags: ["a", "b"] };
 		const after = { tags: ["a", "b"] };
 		expect(diffSnapshot(before, after)).toEqual([]);
+	});
+
+	it("emits a full set when an object becomes a primitive", () => {
+		// Object → primitive cannot recurse — fall through to a top-level
+		// set so the iframe replaces the whole subtree.
+		const before = { meta: { seo: { title: "T" } } };
+		const after = { meta: "n/a" };
+		expect(diffSnapshot(before, after)).toEqual([
+			{ op: "set", path: "meta", value: "n/a" },
+		]);
+	});
+
+	it("emits a full set when a primitive becomes an object", () => {
+		const before = { meta: "n/a" };
+		const after = { meta: { seo: { title: "T" } } };
+		expect(diffSnapshot(before, after)).toEqual([
+			{ op: "set", path: "meta", value: { seo: { title: "T" } } },
+		]);
+	});
+
+	it("treats class instances as opaque atomic values", () => {
+		// Class instances (Date, Map, Set, …) fail `isPlainObject`'s
+		// prototype check, so the diff treats them like primitives —
+		// a single `set` rather than recursing into private fields.
+		// (In practice form data is JSON-serialized and Date values
+		// arrive as ISO strings, but lock the behaviour in regardless.)
+		const a = new Date("2026-01-01T00:00:00Z");
+		const b = new Date("2026-02-01T00:00:00Z");
+		expect(diffSnapshot({ when: a }, { when: b })).toEqual([
+			{ op: "set", path: "when", value: b },
+		]);
 	});
 });
 
