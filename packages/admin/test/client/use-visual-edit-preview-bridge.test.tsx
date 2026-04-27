@@ -652,4 +652,40 @@ describe("useVisualEditPreviewBridge — readyTick re-seed", () => {
 		// No FormProvider → re-seed effect bails on `if (!form) return`.
 		expect(previewRef.mocks.sendInitSnapshot).not.toHaveBeenCalled();
 	});
+
+	it("skips the re-seed when form values are empty (create mode)", () => {
+		// In create mode, transformedItem is undefined and the user
+		// may not have typed anything yet. `form.getValues()` returns
+		// `{}`. The bridge bails on the `Object.keys(values).length
+		// === 0` guard rather than spamming the iframe with an
+		// empty INIT_SNAPSHOT that would clobber whatever shell the
+		// preview page renders for empty drafts.
+		const previewRef = makePreviewRef();
+		const controller = makeController({ transformedItem: undefined });
+
+		const { rerender } = render(
+			<FormBridgeProbe
+				controller={controller}
+				previewRef={previewRef}
+				readyTick={0}
+				defaultValues={{}}
+			/>,
+		);
+
+		// transformedItem === undefined → no canonical seed.
+		expect(previewRef.mocks.sendInitSnapshot).not.toHaveBeenCalled();
+
+		rerender(
+			<FormBridgeProbe
+				controller={controller}
+				previewRef={previewRef}
+				readyTick={1}
+				defaultValues={{}}
+			/>,
+		);
+
+		// Empty form values → re-seed effect bails on the
+		// `Object.keys(values).length === 0` guard.
+		expect(previewRef.mocks.sendInitSnapshot).not.toHaveBeenCalled();
+	});
 });
