@@ -397,11 +397,13 @@ export const posts = collection("posts")
 | `.merge(other)` | Combine two builders |
 | `.admin({...})` | Admin panel metadata (label, icon, group) |
 | `.list({...})` | List view config |
-| `.form({...})` | Form view config |
-| `.preview({...})` | Live preview config |
+| `.form({...})` | Form view config — pick `v.collectionForm` (default split-screen) or `v.visualEditForm` (opt-in canvas+inspector workspace) |
+| `.preview({...})` | Live preview config (URL builder + sizing) |
 | `.actions({...})` | Custom server actions |
 
 > `.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()` are added by the admin plugin — they're not available without `@questpie/admin`.
+
+> **Live Preview** has two views out of the box: `collection-form` (default — refreshes on save) and `visual-edit-form` (opt-in — patch-based field-level updates with a contextual right-pane inspector). Enable the workspace per collection via `.form(({ v }) => v.visualEditForm({...}))`. See `apps/docs/content/docs/workspace/live-preview/visual-edit.mdx` for the workspace guide and `protocol.mdx` for the wire format.
 
 ---
 
