@@ -530,12 +530,15 @@ Always use these exact versions — check `package.json` before upgrading:
 
 ## Live Preview
 
-QUESTPIE supports live preview with a split-screen editor. The current implementation refreshes the preview iframe after save/autosave and uses `postMessage` for field/block focus sync.
+QUESTPIE supports live preview with a split-screen editor. Two views ship out of the box:
+
+- **`collection-form` (default)** — split-screen form on the left, iframe on the right; the iframe refreshes after save / autosave and uses `postMessage` for field / block focus sync.
+- **`visual-edit-form` (opt-in)** — the **Visual Edit Workspace**: canvas iframe on the left, contextual right inspector. Edits land via field-level `PATCH_BATCH` patches without a save round-trip. Enable per collection with `.form(({ v }) => v.visualEditForm({}))`. Both views share the `.preview()` config and the iframe-side `useCollectionPreview` hook below — opting in requires no frontend changes.
 
 ### Key Principles
 
-- **Same-tab preview** = iframe refresh after save/autosave plus `postMessage` focus events
-- **Frontend hook** = `useCollectionPreview({ initialData, onRefresh })`
+- **Same-tab preview** = iframe refresh after save/autosave plus `postMessage` focus events (V1) or field-level patches (V2)
+- **Frontend hook** = `useCollectionPreview({ initialData, onRefresh })` — handles V1 + V2 messages transparently
 - **Field focus** = `PreviewProvider` + `PreviewField`
 - **Block field paths** = `BlockScopeProvider` + `PreviewField`
 
@@ -599,18 +602,25 @@ function PageComponent({ initialData }) {
 
 #### Protocol
 
-The implemented preview messages are simple `postMessage` events:
+`useCollectionPreview` handles the legacy `PREVIEW_REFRESH` flow plus the workspace's V2 patch protocol transparently:
 
-| Field             | Description                             |
-| ----------------- | --------------------------------------- |
-| `PREVIEW_READY`   | Preview iframe tells admin it is ready  |
-| `PREVIEW_REFRESH` | Admin asks iframe to refresh data       |
-| `FIELD_CLICKED`   | Preview asks admin to focus a field     |
-| `BLOCK_CLICKED`   | Preview asks admin to select a block    |
-| `FOCUS_FIELD`     | Admin asks preview to highlight a field |
-| `SELECT_BLOCK`    | Admin asks preview to highlight a block |
+| Message            | Direction         | Purpose                                                   |
+| ------------------ | ----------------- | --------------------------------------------------------- |
+| `PREVIEW_READY`    | preview → admin   | Preview iframe tells admin it is ready                    |
+| `PREVIEW_REFRESH`  | admin → preview   | (V1) Admin asks iframe to re-run its loader               |
+| `FIELD_CLICKED`    | preview → admin   | Preview asks admin to focus a field                       |
+| `BLOCK_CLICKED`    | preview → admin   | Preview asks admin to select a block                      |
+| `FOCUS_FIELD`      | admin → preview   | Admin asks preview to highlight a field                   |
+| `SELECT_BLOCK`     | admin → preview   | Admin asks preview to highlight a block                   |
+| `INIT_SNAPSHOT`    | admin → preview   | (V2) Seeds the iframe's local draft with a full record    |
+| `PATCH_BATCH`      | admin → preview   | (V2) Applies set / remove ops to the local draft          |
+| `COMMIT`           | admin → preview   | (V2) Mark the local draft as saved (drop or swap)         |
+| `FULL_RESYNC`      | admin → preview   | (V2) Discard the draft and re-run the loader              |
+| `SELECT_TARGET`    | admin → preview   | (V2) Forward the workspace's current selection            |
+| `NAVIGATE_PREVIEW` | admin → preview   | (V2) Ask the iframe to navigate (same-origin, `replace`)  |
+
+For the wire format, see the QUESTPIE [Protocol & Reliability](https://questpie.com/docs/workspace/live-preview/protocol) docs.
 
 ### Anti-Patterns (Preview)
 
-- **Using V2-only APIs in this template** — `useQuestpiePreview`, `PreviewRoot`, and `PreviewBlock` are not exported yet.
 - **Importing `app` inside previewed collection/block files** — use handler `ctx` values to avoid generated-app cycles.
