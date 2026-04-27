@@ -46,7 +46,13 @@ Branding name, sidebar, dashboard, and admin locale are configured via `config/a
 import { adminConfig } from "#questpie/factories";
 
 export default adminConfig({
-	branding: { name: "My Admin" },
+	branding: {
+		name: "My Admin",
+		// Optional — see "Whitelabeling" below
+		logo: "/brand/logo.svg",
+		tagline: "Powered by My Co.",
+		favicon: "/brand/favicon.ico",
+	},
 	sidebar: {
 		sections: [
 			{
@@ -265,6 +271,98 @@ Import the admin base stylesheet and scan the admin package:
 ```
 
 `index.css` is an alias for `base.css`; import `base.css` directly when you want explicit control.
+
+## Whitelabeling
+
+There are two layers, deliberately separated:
+
+| Layer        | Configured in                                   | Covers                                       |
+| ------------ | ----------------------------------------------- | -------------------------------------------- |
+| **Content**  | `config/admin.ts` → `branding`                  | Name, logo, tagline, favicon                 |
+| **Theme**    | Your app's `admin.css`                          | Colors, fonts, radii, shadows, motion        |
+| **Chrome**   | Files in `questpie/admin/components/` (see below) | Sidebar brand, nav item, auth layout       |
+
+### Branding (config-driven)
+
+```ts
+// config/admin.ts
+export default adminConfig({
+	branding: {
+		name: "Acme Studio",
+		// String, or { src, srcDark } for separate light/dark images,
+		// or a server ComponentReference for an inline SVG.
+		logo: { src: "/brand/logo-light.svg", srcDark: "/brand/logo-dark.svg" },
+		// Replaces the "Built with QUESTPIE" footer on auth pages.
+		// Omit to render no footer text at all.
+		tagline: "Studio admin",
+		favicon: "/brand/favicon.ico",
+	},
+});
+```
+
+The logo also accepts an `I18nText` for `name`/`tagline` (`{ en: "...", sk: "..." }`)
+and the same locale-map / translation-key shape used elsewhere in the admin.
+
+### Theming (CSS override)
+
+The admin exposes every visual token as a CSS custom property in `base.css`. To
+rebrand colors, fonts, or shape, override them in your app's `admin.css`
+**after** the base import — source order ensures your overrides win:
+
+```css
+/* admin.css */
+@import "tailwindcss";
+@import "@questpie/admin/client/styles/base.css";
+
+/* Optional: load a brand font */
+@import url("https://fonts.googleapis.com/css2?family=Caveat+Brush&display=swap");
+
+:root,
+.light {
+	--primary: oklch(0.65 0.2 25);
+	--ring: oklch(0.65 0.2 25);
+	--font-heading: "Caveat Brush", system-ui, sans-serif;
+	--surface-radius: 0.5rem;
+}
+
+.dark {
+	--primary: oklch(0.78 0.18 25); /* lifted L for dark surfaces */
+	--ring: oklch(0.78 0.18 25);
+}
+```
+
+`OKLCH` is recommended because the admin's derived hover/focus states use
+`color-mix(in oklch, …)` — values stay perceptually consistent. HEX and `rgb()`
+work too; `hsl()` is discouraged (no P3 gamut). See the full token list in
+`@questpie/admin/client/styles/base.css`; common knobs:
+
+- Colors: `--primary`, `--background`, `--foreground`, `--surface`, `--border`,
+  `--ring`, `--accent`, `--destructive`, `--success`, …
+- Sidebar: `--sidebar`, `--sidebar-accent`, `--sidebar-active-background`, …
+- Typography: `--font-sans`, `--font-mono`, `--font-chrome`, `--font-heading`
+- Shape: `--control-radius`, `--surface-radius`, `--floating-radius`
+
+### Zero-FOUC favicon (optional, TanStack Start)
+
+By default the favicon is applied client-side after the admin config loads.
+For SSR-clean favicons, fetch your config in the route loader and add a link
+yourself:
+
+```tsx
+// routes/admin.tsx
+export const Route = createFileRoute("/admin")({
+	loader: async ({ context }) => ({ config: await context.client.routes.getAdminConfig() }),
+	head: ({ loaderData }) => ({
+		links: [
+			{ rel: "stylesheet", href: adminCss },
+			...(loaderData?.config?.branding?.favicon
+				? [{ rel: "icon", href: loaderData.config.branding.favicon }]
+				: []),
+		],
+	}),
+	component: AdminLayout,
+});
+```
 
 ## Chrome Overrides (File-First)
 

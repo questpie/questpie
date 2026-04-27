@@ -10,12 +10,11 @@ import * as React from "react";
 import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
-	selectBrandName,
 	selectClient,
 	selectNavigate,
 	useAdminStore,
 } from "../../runtime/provider";
-import { AuthDefaultLogo, AuthLayout } from "../auth/auth-layout";
+import { AuthLayout } from "../auth/auth-layout";
 import { SetupForm, type SetupFormValues } from "../auth/setup-form";
 
 export interface SetupPageProps {
@@ -82,7 +81,6 @@ export function SetupPage({
 	const client = useAdminStore(selectClient);
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
-	const brandName = useAdminStore(selectBrandName);
 
 	const [error, setError] = React.useState<string | null>(null);
 
@@ -127,7 +125,7 @@ export function SetupPage({
 		<AuthLayout
 			title={title ?? t("auth.createFirstAdmin")}
 			description={description ?? t("auth.createAccountDescription")}
-			logo={logo ?? <AuthDefaultLogo brandName={brandName} />}
+			logo={logo}
 			className="qa-setup-page"
 			footer={
 				showLoginLink && (

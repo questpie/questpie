@@ -178,9 +178,18 @@ export {
 } from "#questpie/admin/client/components/component-renderer.js";
 export { AcceptInviteForm } from "#questpie/admin/client/views/auth/accept-invite-form.js";
 export {
+	AuthDefaultLogo,
 	AuthLayout,
 	type AuthLayoutProps,
 } from "#questpie/admin/client/views/auth/auth-layout.js";
+export {
+	BrandLogoMark,
+	type BrandLogoMarkProps,
+} from "#questpie/admin/client/components/brand-logo.js";
+export type {
+	BrandingConfig,
+	BrandLogoConfig,
+} from "#questpie/admin/client/types/admin-config.js";
 export { ForgotPasswordForm } from "#questpie/admin/client/views/auth/forgot-password-form.js";
 // Auth forms (for custom layouts)
 export { LoginForm } from "#questpie/admin/client/views/auth/login-form.js";
@@ -218,6 +227,12 @@ export {
 } from "#questpie/admin/client/hooks/use-collection.js";
 // User hooks
 export { useCurrentUser } from "#questpie/admin/client/hooks/use-current-user.js";
+// Branding hook
+export {
+	type BrandSnapshot,
+	useBrand,
+	useBrandSnapshotRef,
+} from "#questpie/admin/client/hooks/use-brand.js";
 // Field options hook
 export {
 	type OptionItem,

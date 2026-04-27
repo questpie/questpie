@@ -13,7 +13,9 @@
 import * as React from "react";
 
 import type { MaybeLazyComponent } from "../../builder/types/common.js";
+import { BrandLogoMark } from "../../components/brand-logo.js";
 import { Card, CardContent } from "../../components/ui/card";
+import { useBrand } from "../../hooks/use-brand.js";
 import { cn } from "../../lib/utils";
 import { useAdminStoreRaw } from "../../runtime/provider.js";
 import { useLazyComponent } from "../../utils/use-lazy-component.js";
@@ -42,21 +44,14 @@ export type AuthLayoutProps = {
 	className?: string;
 };
 
-function AuthBrandMark({
-	className,
-	decorative = false,
-}: {
-	className?: string;
-	decorative?: boolean;
-}) {
+function AuthBrandMark({ className }: { className?: string }) {
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
 			viewBox="0 0 24 24"
 			fill="none"
 			className={cn("text-foreground size-16 shrink-0", className)}
-			aria-hidden={decorative ? true : undefined}
-			aria-label={decorative ? undefined : "QUESTPIE"}
+			aria-hidden
 		>
 			<path
 				d="M2 2H22V10"
@@ -78,7 +73,7 @@ function AuthBrandMark({
 export function AuthDefaultLogo({ brandName }: { brandName: string }) {
 	return (
 		<div className="qa-auth-layout__default-logo flex max-w-full min-w-0 items-center gap-3 text-left">
-			<AuthBrandMark className="size-9" decorative />
+			<AuthBrandMark className="size-9" />
 			<div className="min-w-0">
 				<div className="text-foreground truncate text-sm font-semibold tracking-tight">
 					{brandName}
@@ -95,6 +90,26 @@ function AuthLogo({
 	logo?: React.ReactNode;
 	className?: string;
 }) {
+	const brand = useBrand();
+	const resolved =
+		logo ??
+		(brand.logo ? (
+			<div className="qa-auth-layout__default-logo flex max-w-full min-w-0 items-center gap-3 text-left">
+				<BrandLogoMark
+					logo={brand.logo}
+					alt={brand.name}
+					className="size-9"
+				/>
+				<div className="min-w-0">
+					<div className="text-foreground truncate text-sm font-semibold tracking-tight">
+						{brand.name}
+					</div>
+				</div>
+			</div>
+		) : (
+			<AuthDefaultLogo brandName={brand.name} />
+		));
+
 	return (
 		<div
 			className={cn(
@@ -102,7 +117,7 @@ function AuthLogo({
 				className,
 			)}
 		>
-			{logo ?? <AuthDefaultLogo brandName="QUESTPIE" />}
+			{resolved}
 		</div>
 	);
 }
@@ -114,14 +129,17 @@ function AuthLayoutBuiltIn({
 	children,
 	className,
 }: AuthLayoutProps) {
+	const { tagline } = useBrand();
 	return (
 		<div className="qa-auth-layout bg-background text-foreground relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-8 sm:px-8">
 			<div className="qa-auth-layout__shell grid w-full max-w-4xl items-center gap-10 lg:grid-cols-[minmax(220px,280px)_minmax(360px,384px)] lg:gap-16">
 				<aside className="qa-auth-layout__brand flex flex-col items-center justify-center gap-8">
 					<AuthLogo logo={logo} className="max-w-[calc(100vw-2.5rem)]" />
-					<p className="text-muted-foreground hidden text-xs tracking-[0.14em] uppercase lg:block">
-						Built with QUESTPIE
-					</p>
+					{tagline && (
+						<p className="qa-auth-layout__tagline text-muted-foreground hidden text-xs tracking-[0.14em] uppercase lg:block">
+							{tagline}
+						</p>
+					)}
 				</aside>
 
 				<main className="qa-auth-layout__form-panel flex items-center justify-center">
@@ -142,9 +160,11 @@ function AuthLayoutBuiltIn({
 								{footer}
 							</div>
 						)}
-						<div className="text-muted-foreground text-center text-[11px] tracking-[0.14em] uppercase lg:hidden">
-							Built with QUESTPIE
-						</div>
+						{tagline && (
+							<div className="qa-auth-layout__tagline qa-auth-layout__tagline--mobile text-muted-foreground text-center text-[11px] tracking-[0.14em] uppercase lg:hidden">
+								{tagline}
+							</div>
+						)}
 					</div>
 				</main>
 			</div>

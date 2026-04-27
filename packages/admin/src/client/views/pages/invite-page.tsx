@@ -9,8 +9,7 @@ import * as React from "react";
 
 import { useAuthClient } from "../../hooks/use-auth";
 import { useTranslation } from "../../i18n/hooks";
-import { selectBrandName, useAdminStore } from "../../runtime/provider";
-import { AuthDefaultLogo, AuthLayout } from "../auth/auth-layout";
+import { AuthLayout } from "../auth/auth-layout";
 import { InviteForm, type InviteFormValues } from "../auth/invite-form";
 
 interface InvitePageProps {
@@ -82,7 +81,6 @@ export function InvitePage({
 }: InvitePageProps) {
 	const { t } = useTranslation();
 	const authClient = useAuthClient();
-	const brandName = useAdminStore(selectBrandName);
 
 	const resolvedRoles = roles ?? [
 		{ value: "admin", label: t("defaults.users.fields.role.options.admin") },
@@ -129,7 +127,7 @@ export function InvitePage({
 		<AuthLayout
 			title={title ?? t("auth.inviteUser")}
 			description={description ?? t("auth.inviteUserDescription")}
-			logo={logo ?? <AuthDefaultLogo brandName={brandName} />}
+			logo={logo}
 			className="qa-invite-page"
 		>
 			<InviteForm

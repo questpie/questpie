@@ -450,13 +450,35 @@ export interface ServerDashboardConfig {
 // ============================================================================
 
 /**
- * Branding configuration for the admin panel.
+ * Brand logo. Either a URL string (same image both modes), an object with
+ * separate light/dark sources, or a server-registered component reference
+ * (e.g. an SVG component you ship in your own package).
+ */
+export type BrandLogo =
+	| string
+	| {
+			src: string;
+			srcDark?: string;
+			alt?: string;
+			width?: number;
+			height?: number;
+	  }
+	| ComponentReference;
+
+/**
+ * Branding configuration for the admin panel. Covers content only — name,
+ * logo, tagline, favicon. Visual tokens (colors, fonts, radius, shadows)
+ * are customized via `admin.css` overrides; see the admin theming docs.
  */
 export interface ServerBrandingConfig {
-	/** Admin panel name */
+	/** Admin panel name. Shown in sidebar header, document title, auth pages. */
 	name?: I18nText;
-	/** Logo configuration */
-	logo?: unknown;
+	/** Logo. Renders next to the brand name in the sidebar and on auth pages. */
+	logo?: BrandLogo;
+	/** Optional sub-headline rendered on auth pages. Replaces "Built with QUESTPIE". */
+	tagline?: I18nText;
+	/** Favicon URL. Injected as `<link rel="icon">` during SSR head render. */
+	favicon?: string;
 }
 
 // ============================================================================

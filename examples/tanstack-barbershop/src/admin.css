@@ -1,12 +1,25 @@
 @import "tailwindcss";
-/* @import "tw-animate-css"; */
-/* @import "shadcn/tailwind.css"; */
 @import "@questpie/admin/client/styles/base.css";
-
-
-
+@import url("https://fonts.googleapis.com/css2?family=Caveat+Brush&display=swap");
 
 /* Scan admin package for Tailwind classes.
    Two paths cover both bun monorepo (local symlink) and hoisted root (npm/Windows). */
 @source "../node_modules/@questpie/admin/";
 @source "../../../node_modules/@questpie/admin/";
+
+/* Smoke-test brand overrides — drives a pink primary + brush heading font.
+   Demonstrates that visual whitelabeling is purely CSS; nothing in admin
+   config needs to change. */
+:root,
+.light {
+	--primary: oklch(0.65 0.2 25);
+	--ring: oklch(0.65 0.2 25);
+	--sidebar-primary: oklch(0.65 0.2 25);
+	--font-heading: "Caveat Brush", system-ui, sans-serif;
+}
+
+.dark {
+	--primary: oklch(0.78 0.18 25);
+	--ring: oklch(0.78 0.18 25);
+	--sidebar-primary: oklch(0.78 0.18 25);
+}
