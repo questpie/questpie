@@ -194,8 +194,26 @@ From the barbershop — barbers collection with sidebar, grid layout, sections, 
 )
 ```
 
+## Visual Edit Workspace
+
+When a collection has `.preview()` enabled, you can swap the legacy split-screen view for the **Visual Edit Workspace** — a canvas + contextual right-pane inspector that drives the iframe with field-level patches:
+
+```ts
+.form(({ v, f }) =>
+  v.visualEditForm({
+    sidebar: { /* same shape as collectionForm */ },
+    fields: [/* same shape as collectionForm */],
+  })
+);
+```
+
+`v.visualEditForm` accepts the same `fields` / `sidebar` config as `v.collectionForm` — the workspace falls through to that layout in the document inspector body when no field declares `visualEdit.group`. Per-field tuning (`visualEdit.group`, `order`, `hidden`, `inspector`, `patchStrategy`) goes on the field's `admin` metadata.
+
+See [Visual Edit Workspace](/docs/workspace/live-preview/visual-edit) for the workspace guide and [Migration Guide](/docs/workspace/live-preview/migration) for the V1 → V2 upgrade path.
+
 ## Related Pages
 
 - [List Views](/docs/workspace/views/list-views) — Table configuration
 - [Visibility](/docs/workspace/visibility) — Reactive visibility rules
 - [Fields](/docs/backend/data-modeling/fields) — Field types
+- [Live Preview](/docs/workspace/live-preview) — Preview overview + V1/V2 protocol
