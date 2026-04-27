@@ -1166,6 +1166,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					session: normalized.session,
 					locale: normalized.locale,
 					row: existing,
+					request:
+						((context as any).req as Request | undefined) ??
+						((context as any).request as Request | undefined),
 				});
 				// Globals only support boolean access rules
 				if (result !== true) {
@@ -1601,6 +1604,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			locale: normalized.locale,
 			row,
 			input,
+			request:
+				((context as any).req as Request | undefined) ??
+				((context as any).request as Request | undefined),
 		});
 		// Globals only support boolean access rules (not AccessWhere)
 		return result === true;

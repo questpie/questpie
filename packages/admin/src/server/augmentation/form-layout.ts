@@ -253,6 +253,16 @@ export interface FormFieldLayoutItem<TData = any> {
 	readOnly?: boolean | FormReactiveConfig<TData, boolean>;
 	disabled?: boolean | FormReactiveConfig<TData, boolean>;
 	compute?: FormReactiveConfig<TData, any>;
+	/**
+	 * Extra props forwarded to the field component (escape hatch for
+	 * component-specific config like relation `filter`).
+	 *
+	 * @example
+	 * ```ts
+	 * { field: f.counselorId, props: { filter: () => ({ role: "admin" }) } }
+	 * ```
+	 */
+	props?: Record<string, any>;
 }
 
 /**

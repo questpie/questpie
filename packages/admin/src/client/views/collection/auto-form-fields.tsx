@@ -352,6 +352,7 @@ function renderFields({
 				allCollectionsConfig={allCollectionsConfig}
 				entityMeta={entityMeta}
 				className={cn(item.className, spanClass)}
+				extraProps={(item as { props?: Record<string, any> }).props}
 				renderEmbeddedFields={({
 					embeddedCollection,
 					embeddedCollectionConfig,
@@ -460,6 +461,11 @@ function FieldLayoutItems({
 					className={
 						typeof item === "object" && "className" in item
 							? item.className
+							: undefined
+					}
+					extraProps={
+						typeof item === "object" && "props" in item
+							? (item as { props?: Record<string, any> }).props
 							: undefined
 					}
 					renderEmbeddedFields={({

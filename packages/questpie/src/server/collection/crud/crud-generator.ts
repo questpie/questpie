@@ -2698,6 +2698,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					session: normalized.session,
 					locale: normalized.locale,
 					row: existing,
+					request:
+						((context as any).req as Request | undefined) ??
+						((context as any).request as Request | undefined),
 				});
 				if (canTransition === false) {
 					throw ApiError.forbidden({
@@ -3021,6 +3024,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			locale: normalized.locale,
 			row,
 			input,
+			request:
+				((context as any).req as Request | undefined) ??
+				((context as any).request as Request | undefined),
 		});
 	}
 

@@ -30,6 +30,8 @@ export interface AccessRuleEvaluationContext {
 	locale?: string;
 	row?: any;
 	input?: any;
+	/** Incoming HTTP request when called via an HTTP adapter */
+	request?: Request;
 }
 
 /**
@@ -81,6 +83,7 @@ export async function executeAccessRule(
 			data: context.row,
 			input: context.input,
 			locale: context.locale,
+			request: context.request,
 		} as AccessContext);
 
 		return result;
@@ -318,6 +321,17 @@ export async function validateFieldsWriteAccess(
 			fieldName === "createdAt" ||
 			fieldName === "updatedAt" ||
 			fieldName === "deletedAt"
+		) {
+			continue;
+		}
+
+		// Skip no-op writes on update: forms (especially admin) re-submit
+		// readOnly fields with their original value. Denying these breaks
+		// every form save even though nothing actually changed.
+		if (
+			operation === "update" &&
+			existingRow &&
+			Object.is(data[fieldName], (existingRow as any)[fieldName])
 		) {
 			continue;
 		}

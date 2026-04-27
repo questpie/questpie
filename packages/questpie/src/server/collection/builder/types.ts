@@ -432,6 +432,20 @@ export type AccessContext<TData = any> = AppContext & {
 	input?: unknown;
 	/** Current locale */
 	locale?: string;
+	/**
+	 * Incoming HTTP request (when access is invoked via an HTTP adapter).
+	 * Use to differentiate admin vs frontend calls by URL, header, etc.
+	 *
+	 * @example
+	 * ```ts
+	 * read: ({ session, request }) => {
+	 *   const isAdmin = request?.url.includes("/admin/api/");
+	 *   if (isAdmin && isMasterCounselor(session?.user)) return true;
+	 *   return { createdById: session?.user?.id };
+	 * }
+	 * ```
+	 */
+	request?: Request;
 };
 
 /**

@@ -41,6 +41,8 @@ interface FieldRendererProps {
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
 	className?: string;
+	/** Extra props forwarded to the field component (escape hatch). */
+	extraProps?: Record<string, any>;
 	/**
 	 * Callback to render embedded collection fields.
 	 * Required for embedded fields to work (handles recursive AutoFormFields).
@@ -272,6 +274,7 @@ export function FieldRenderer({
 	renderEmbeddedFields,
 	className,
 	entityMeta: entityMetaProp,
+	extraProps,
 }: FieldRendererProps) {
 	const form = useFormContext() as any;
 	// Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
@@ -399,6 +402,9 @@ export function FieldRenderer({
 		label: resolveText(rawComponentProps.label, "", formValues),
 		description: resolveText(rawComponentProps.description, "", formValues),
 		placeholder: resolveText(rawComponentProps.placeholder, "", formValues),
+		// Forward layout-level escape-hatch props (e.g. relation `filter`).
+		// Spread last so they override component defaults but NOT computed/value/onChange semantics above.
+		...(extraProps ?? {}),
 	};
 
 	// Render content based on priority

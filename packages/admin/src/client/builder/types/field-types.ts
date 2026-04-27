@@ -665,6 +665,17 @@ export interface FieldLayoutItemWithReactive<
 > extends FieldReactiveConfig<TData> {
 	field: string;
 	className?: string;
+	/**
+	 * Extra props forwarded to the field component. Use for component-specific
+	 * configuration that doesn't have a dedicated layout key (e.g. relation
+	 * field's `filter`, custom render functions).
+	 *
+	 * @example
+	 * ```ts
+	 * { field: f.counselorId, props: { filter: () => ({ role: "admin" }) } }
+	 * ```
+	 */
+	props?: Record<string, any>;
 }
 
 /**

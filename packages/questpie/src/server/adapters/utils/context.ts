@@ -109,10 +109,13 @@ export const createAdapterContext = async <
 	}
 
 	// Merge all extensions into context
+	// Pass `request` through so access functions can branch on URL/headers
+	// (e.g. distinguish admin vs frontend calls).
 	const appContext = await app.createContext({
 		...baseContext,
 		...(adapterExtension ?? {}),
 		...(cmsExtension ?? {}),
+		request,
 	});
 
 	return {
