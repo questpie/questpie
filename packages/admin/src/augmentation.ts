@@ -26,20 +26,12 @@
  * })
  * ```
  *
- * For type-safe `meta.admin` property, users should add module augmentation
- * in their project's types file:
- *
- * ```ts
- * // types/questpie.d.ts
- * import type { TextFieldAdminMeta } from "@questpie/admin";
- *
- * declare module "questpie" {
- *   interface TextFieldMeta {
- *     admin?: TextFieldAdminMeta;
- *   }
- *   // ... other field types
- * }
- * ```
+ * Type-safety for `meta.admin` is automatic — importing anything
+ * from `@questpie/admin` (server or client) pulls in this file,
+ * which declares `interface TextFieldMeta { admin?: TextFieldAdminMeta }`
+ * (and the equivalents for every field kind) on the
+ * `Questpie` namespace. Projects don't need to author their own
+ * `declare module "questpie"` augmentation.
  */
 
 import type { ReactiveConfig } from "questpie";
