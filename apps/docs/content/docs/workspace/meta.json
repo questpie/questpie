@@ -5,11 +5,11 @@
 		"setup",
 		"views",
 		"blocks",
+		"live-preview",
 		"actions",
 		"branding",
 		"filters",
 		"media",
-		"visibility",
-		"live-preview"
+		"visibility"
 	]
 }
