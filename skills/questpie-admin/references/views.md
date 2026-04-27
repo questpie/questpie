@@ -404,7 +404,12 @@ export const logs = collection("logs")
 
 ## Form Views and Live Preview
 
-Form views connect to the Live Preview V2 system when the collection has `.preview()` configured. The form editor becomes the source of `postMessage` patches — every field change emits a patch through the bus, giving the preview iframe instant updates.
+Form views connect to the Live Preview system when the collection has `.preview()` configured. Two views ship out of the box:
+
+- **`collection-form` (default)** — split-screen form on the left, iframe on the right. Save / autosave triggers `PREVIEW_REFRESH` so the iframe re-runs its loader. Every collection with `.preview()` gets this without further wiring.
+- **`visual-edit-form` (opt-in)** — the **Visual Edit Workspace**: canvas iframe on the left, contextual right inspector. Each field change becomes a field-level `PATCH_BATCH` message — the iframe applies the patch to a local draft store, no save round-trip. Saves / reverts / stage transitions sync via `COMMIT` / `FULL_RESYNC`. Enable per collection with `.form(({ v }) => v.visualEditForm({}))`.
+
+Both views share the `.preview()` config and the iframe-side `useCollectionPreview` hook — opting a collection into the workspace requires zero frontend page changes.
 
 ### Enabling Preview on a Collection
 
@@ -420,14 +425,14 @@ export const pages = collection("pages")
 	.preview({
 		enabled: true,
 		position: "right",
-		defaultWidth: 50,
+		defaultSize: 50,
 		url: ({ record }) => `/${record.slug}?preview=true`,
 	});
 ```
 
 ### How It Works
 
-1. The form view detects `.preview()` config and opens a split-screen layout
-2. Save/autosave sends a `PREVIEW_REFRESH` message to the preview iframe
-3. The preview page handles refreshes through `useCollectionPreview({ initialData, onRefresh })`
-4. `PreviewProvider` and `PreviewField` wire field focus and click-to-focus messages
+1. The form view detects `.preview()` config and opens the configured layout (split-screen for V1, canvas+inspector for V2).
+2. **V1**: save / autosave sends a `PREVIEW_REFRESH` message to the preview iframe; the iframe re-runs its loader. **V2**: each field change emits a `PATCH_BATCH` message; saves trigger `COMMIT`; deletes / reverts trigger `FULL_RESYNC`.
+3. The preview page handles every message through `useCollectionPreview({ initialData, onRefresh })` — V1 + V2 messages are dispatched transparently by the same hook.
+4. `PreviewProvider` and `PreviewField` wire field focus and click-to-focus messages back to the admin (`FIELD_CLICKED`, `BLOCK_CLICKED`).
