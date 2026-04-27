@@ -165,6 +165,6 @@ export function useResolveFieldPath(fieldName: string): string {
 		if (!scope) {
 			return fieldName;
 		}
-		return `${scope.fieldPrefix}.${fieldName}`;
+		return blockValuePath(scope.blocksPath, scope.blockId, fieldName);
 	}, [scope, fieldName]);
 }
