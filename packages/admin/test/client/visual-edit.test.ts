@@ -65,6 +65,27 @@ describe("block-paths", () => {
 		expect(parseBlockValuePath("")).toBeNull();
 	});
 
+	it("rejects degenerate block paths", () => {
+		// Empty rest after the marker — no blockId at all.
+		expect(parseBlockValuePath("content._values.")).toBeNull();
+		// Empty blockId between two consecutive dots after the marker.
+		expect(parseBlockValuePath("content._values..title")).toBeNull();
+		// Missing leading blocksPath segment — would otherwise round-trip
+		// to `{ blocksPath: "", blockId: "abc" }` which the patcher can't
+		// resolve back through the form tree.
+		expect(parseBlockValuePath("._values.abc.title")).toBeNull();
+	});
+
+	it("treats a trailing dot after blockId as an empty fieldPath", () => {
+		// `content._values.abc.` is permissive on purpose: the blockId is
+		// well-formed, the empty fieldPath just means "select the block
+		// root" — same as `content._values.abc`.
+		expect(parseBlockValuePath("content._values.abc.")).toEqual({
+			blocksPath: "content",
+			blockId: "abc",
+		});
+	});
+
 	it("exposes the canonical default blocks path", () => {
 		expect(defaultBlocksPath()).toBe("content");
 	});
