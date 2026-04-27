@@ -137,9 +137,24 @@ export interface DashboardConfigDTO {
 // Branding DTO
 // ============================================================================
 
+export type BrandLogoDTO =
+	| string
+	| {
+			src: string;
+			srcDark?: string;
+			alt?: string;
+			width?: number;
+			height?: number;
+	  }
+	| ComponentReferenceDTO;
+
+export type I18nTextDTO = string | Record<string, string>;
+
 export interface BrandingConfigDTO {
-	name?: Record<string, string>;
-	logo?: ComponentReferenceDTO;
+	name?: I18nTextDTO;
+	logo?: BrandLogoDTO;
+	tagline?: I18nTextDTO;
+	favicon?: string;
 }
 
 // ============================================================================
@@ -307,6 +322,30 @@ const dashboardConfigSchema = z.object({
 	items: z.array(z.record(z.string(), z.any())).optional(),
 });
 
+const brandLogoSchema = z.union([
+	z.string(),
+	z.object({
+		src: z.string(),
+		srcDark: z.string().optional(),
+		alt: z.string().optional(),
+		width: z.number().optional(),
+		height: z.number().optional(),
+	}),
+	componentReferenceSchema,
+]);
+
+const i18nTextSchema = z.union([
+	z.string(),
+	z.record(z.string(), z.string()),
+]);
+
+const brandingConfigSchema = z.object({
+	name: i18nTextSchema.optional(),
+	logo: brandLogoSchema.optional(),
+	tagline: i18nTextSchema.optional(),
+	favicon: z.string().optional(),
+});
+
 /**
  * Zod schema for the complete AdminConfigDTO.
  * Can be used as the outputSchema for the getAdminConfig route.
@@ -314,7 +353,7 @@ const dashboardConfigSchema = z.object({
 export const adminConfigDTOSchema = z.object({
 	dashboard: dashboardConfigSchema.optional(),
 	sidebar: sidebarConfigSchema.optional(),
-	branding: z.record(z.string(), z.any()).optional(),
+	branding: brandingConfigSchema.optional(),
 	blocks: z.record(z.string(), z.record(z.string(), z.any())).optional(),
 	collections: z.record(z.string(), collectionMetaSchema).optional(),
 	globals: z.record(z.string(), collectionMetaSchema).optional(),

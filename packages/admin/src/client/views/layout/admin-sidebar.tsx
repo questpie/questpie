@@ -11,6 +11,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import type { MaybeLazyComponent } from "../../builder/types/common.js";
+import { BrandLogoMark } from "../../components/brand-logo";
 import { ComponentRenderer } from "../../components/component-renderer";
 import { Button } from "../../components/ui/button";
 import {
@@ -68,6 +69,7 @@ import type {
 	NavigationGroup,
 	NavigationItem,
 } from "../../runtime/routes";
+import type { BrandLogoConfig } from "../../types/admin-config";
 import { getFlagUrl } from "../../utils/locale-to-flag";
 import { useLazyComponent } from "../../utils/use-lazy-component.js";
 
@@ -353,9 +355,11 @@ function useServerNavigation(): NavigationGroup[] | undefined {
 function useSidebarProps(props: { brandName?: string }): {
 	navigation: NavigationGroup[];
 	brandName: string;
+	brandLogo: BrandLogoConfig | null;
 } {
 	const storeNavigation = useAdminStore((s) => s.navigation);
 	const storeBrandName = useAdminStore((s) => s.brandName);
+	const storeBrandLogo = useAdminStore((s) => s.brandLogo);
 
 	// Server-driven navigation is the primary source of truth.
 	// Everything (dashboard, collections, globals, links) should be
@@ -366,6 +370,7 @@ function useSidebarProps(props: { brandName?: string }): {
 	return {
 		navigation: serverNavigation ?? storeNavigation ?? [],
 		brandName: props.brandName ?? storeBrandName ?? "Admin",
+		brandLogo: storeBrandLogo,
 	};
 }
 
@@ -1193,8 +1198,8 @@ export function AdminSidebar({
 	showThemeToggle,
 	useActiveProps = true,
 }: AdminSidebarProps): React.ReactElement {
-	// Resolve navigation from server config, brandName from props or store
-	const { navigation, brandName } = useSidebarProps({
+	// Resolve navigation from server config, brandName/brandLogo from store
+	const { navigation, brandName, brandLogo } = useSidebarProps({
 		brandName: brandNameProp,
 	});
 	const { t } = useTranslation();
@@ -1252,7 +1257,11 @@ export function AdminSidebar({
 	const renderBuiltInBrand = React.useCallback(
 		(isCollapsed: boolean) => (
 			<>
-				<QuestpieSymbol />
+				<BrandLogoMark
+					logo={brandLogo}
+					alt={brandName}
+					fallback={<QuestpieSymbol />}
+				/>
 				{!isCollapsed && (
 					<div className="grid flex-1 text-left leading-tight">
 						<span className="qa-sidebar__brand-name font-chrome truncate text-sm font-medium">
@@ -1262,7 +1271,7 @@ export function AdminSidebar({
 				)}
 			</>
 		),
-		[brandName],
+		[brandLogo, brandName],
 	);
 
 	const renderBrandContent = React.useCallback(

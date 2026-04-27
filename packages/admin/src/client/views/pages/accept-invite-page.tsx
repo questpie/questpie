@@ -16,7 +16,6 @@ import { useAuthClient } from "../../hooks/use-auth";
 import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
-	selectBrandName,
 	selectNavigate,
 	useAdminStore,
 } from "../../runtime/provider";
@@ -24,7 +23,7 @@ import {
 	AcceptInviteForm,
 	type AcceptInviteFormValues,
 } from "../auth/accept-invite-form";
-import { AuthDefaultLogo, AuthLayout } from "../auth/auth-layout";
+import { AuthLayout } from "../auth/auth-layout";
 
 interface AcceptInvitePageProps {
 	/**
@@ -113,7 +112,6 @@ export function AcceptInvitePage({
 	const authClient = useAuthClient();
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
-	const brandName = useAdminStore(selectBrandName);
 
 	const {
 		data: invitationData,
@@ -179,7 +177,7 @@ export function AcceptInvitePage({
 			<AuthLayout
 				title={t("auth.validatingInvitation")}
 				description={t("auth.pleaseWait")}
-				logo={logo ?? <AuthDefaultLogo brandName={brandName} />}
+				logo={logo}
 			>
 				<AcceptInvitePageSkeleton />
 			</AuthLayout>
@@ -191,7 +189,7 @@ export function AcceptInvitePage({
 			<AuthLayout
 				title={t("auth.invalidInvitation")}
 				description={t("auth.invalidInvitationDescription")}
-				logo={logo ?? <AuthDefaultLogo brandName={brandName} />}
+				logo={logo}
 			>
 				<div className="space-y-4">
 					<Alert variant="destructive">
@@ -219,7 +217,7 @@ export function AcceptInvitePage({
 		<AuthLayout
 			title={title ?? t("auth.completeRegistration")}
 			description={description ?? t("auth.createAccountDescription")}
-			logo={logo ?? <AuthDefaultLogo brandName={brandName} />}
+			logo={logo}
 			className="qa-accept-invite-page"
 		>
 			<AcceptInviteForm

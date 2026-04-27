@@ -14,11 +14,10 @@ import { useSetupStatus } from "../../hooks/use-setup-status";
 import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
-	selectBrandName,
 	selectNavigate,
 	useAdminStore,
 } from "../../runtime/provider";
-import { AuthDefaultLogo, AuthLayout } from "../auth/auth-layout";
+import { AuthLayout } from "../auth/auth-layout";
 import { LoginForm, type LoginFormValues } from "../auth/login-form";
 
 export interface LoginPageProps {
@@ -95,7 +94,6 @@ export function LoginPage({
 	const authClient = useAuthClient();
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
-	const brandName = useAdminStore(selectBrandName);
 
 	const [error, setError] = React.useState<string | null>(null);
 
@@ -154,7 +152,7 @@ export function LoginPage({
 		<AuthLayout
 			title={title ?? t("auth.signIn")}
 			description={description ?? t("auth.signInDescription")}
-			logo={logo ?? <AuthDefaultLogo brandName={brandName} />}
+			logo={logo}
 			className="qa-login-page"
 		>
 			<LoginForm
