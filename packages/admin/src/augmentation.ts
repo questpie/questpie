@@ -6,33 +6,23 @@
  *
  * @example Usage in field definition (server-side):
  * ```ts
- * f.text({
- *   label: "Title",
- *   meta: {
- *     admin: {
- *       placeholder: "Enter title...",
- *       showCounter: true,
- *     }
- *   }
+ * f.text(255).label("Title").admin({
+ *   placeholder: "Enter title...",
+ *   showCounter: true,
  * })
  * ```
  *
  * @example Reactive field states:
  * ```ts
- * f.text({
- *   label: "Slug",
- *   meta: {
- *     admin: {
- *       // Reactive compute - auto-generate slug from title
- *       compute: ({ data }) => slugify(data.title),
+ * f.text(255).label("Slug").admin({
+ *   // Reactive compute - auto-generate slug from title
+ *   compute: ({ data }) => slugify(data.title),
  *
- *       // Reactive hidden - show only when advanced mode is on
- *       hidden: ({ data }) => !data.showAdvanced,
+ *   // Reactive hidden - show only when advanced mode is on
+ *   hidden: ({ data }) => !data.showAdvanced,
  *
- *       // Reactive readOnly - lock after published
- *       readOnly: ({ data }) => data.status === 'published',
- *     }
- *   }
+ *   // Reactive readOnly - lock after published
+ *   readOnly: ({ data }) => data.status === 'published',
  * })
  * ```
  *
@@ -87,17 +77,15 @@ export type VisualEditPatchStrategy = "patch" | "refresh" | "deferred";
  *
  * @example
  * ```ts
- * f.text({
- *   meta: {
- *     admin: {
- *       visualEdit: {
- *         inspector: c.component("rich-text-inspector"),
- *         patchStrategy: "patch",
- *         hidden: ({ data }) => !data.published,
- *       },
+ * .fields(({ f, c }) => ({
+ *   body: f.richText().set("admin", {
+ *     visualEdit: {
+ *       inspector: c.component("rich-text-inspector"),
+ *       patchStrategy: "patch",
+ *       hidden: ({ data }) => !data.published,
  *     },
- *   },
- * })
+ *   }),
+ * }));
  * ```
  */
 export interface VisualEditFieldMeta {
