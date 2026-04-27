@@ -144,6 +144,37 @@ describe("VisualEditProvider — onSelectionChange", () => {
 		cleanup();
 	});
 
+	it("fires for clear() even when already idle (no idempotency dedupe)", () => {
+		// Useful for the Esc-to-deselect path: pressing Esc while
+		// the workspace is already in Document mode should still
+		// fire onSelectionChange so the bridge re-sends
+		// SELECT_TARGET(null) — this keeps the iframe and the
+		// inspector in sync if either side drifted. Lock in the
+		// "clear always notifies" semantic so a future "skip when
+		// already idle" optimisation doesn't break it.
+		const onSelectionChange = mock(() => {});
+		const { result } = renderHook(() => useVisualEdit(), {
+			wrapper: wrapWith({
+				// Already idle by default — no initialSelection.
+				onSelectionChange,
+			}),
+		});
+
+		act(() => {
+			result.current.clear();
+		});
+		act(() => {
+			result.current.clear();
+		});
+
+		// Two clears, two fires.
+		expect(onSelectionChange).toHaveBeenCalledTimes(2);
+		for (const call of onSelectionChange.mock.calls) {
+			expect(call[0]).toEqual({ kind: "idle" });
+		}
+		cleanup();
+	});
+
 	it("uses the latest onSelectionChange via internal ref (callback identity changes don't lose updates)", () => {
 		const first = mock(() => {});
 		const second = mock(() => {});
