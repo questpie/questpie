@@ -34,8 +34,15 @@ import {
 import type { VisualEditSelection } from "./types.js";
 
 // ============================================================================
-// Resize hook (kept local for now — will be promoted to a shared
-// `useResizablePane` once the live preview also consumes it).
+// Resize hook
+//
+// Workspace-local sibling of `useResizablePane` in
+// `live-preview-mode.tsx`. They are intentional parallels rather
+// than a shared hook: the workspace's right pane is the inspector
+// (its width is what the user wants to control), the legacy view's
+// right pane is the preview iframe. Different mental model →
+// different variable names → easier to read at the call site than a
+// generic helper would be.
 // ============================================================================
 
 function useResizableInspector(
