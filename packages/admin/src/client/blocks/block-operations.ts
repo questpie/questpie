@@ -6,9 +6,10 @@
  * the matching `_values` update so the result is always a coherent
  * `BlockContent` snapshot — `_tree` and `_values` stay in sync.
  *
- * Used by `BlockEditorProvider` (today) and by the Visual Edit
- * Workspace's Blocks panel (Phase 4) so add/duplicate/remove/reorder
- * follow exactly the same code path regardless of UI surface.
+ * Used by both `BlockEditorProvider` (inline block editor) and the
+ * Visual Edit Workspace's block inspector (`BlockInspectorBody`) so
+ * add/duplicate/remove/reorder follow exactly the same code path
+ * regardless of UI surface.
  */
 
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";

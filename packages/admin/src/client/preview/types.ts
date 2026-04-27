@@ -37,7 +37,7 @@ export type FocusFieldMessage = {
 };
 
 // ----------------------------------------------------------------------------
-// Visual Edit Workspace (Phase 3) — patch-based preview protocol
+// Visual Edit Workspace V2 — patch-based preview protocol
 // ----------------------------------------------------------------------------
 
 /**
