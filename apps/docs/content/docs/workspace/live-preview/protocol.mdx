@@ -170,6 +170,7 @@ type NavigatePreviewMessage = {
 
 - Same-origin URLs only — the iframe rejects cross-origin URLs and warns in dev.
 - Uses `window.location.replace` (not `href`) so the iframe never accumulates a back-button stack.
+- Fired from the parent via `previewRef.current?.sendNavigatePreview(url)` on `PreviewPaneRef`. Cross-origin and back-button-stack guarantees stay on the iframe side, so callers don't need to pre-validate the URL.
 
 ## Iframe → Admin
 
