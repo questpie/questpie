@@ -497,4 +497,39 @@ describe("useFormToPreviewPatcher — defensive guards", () => {
 			{ op: "set", path: "title", value: "Newer" },
 		]);
 	});
+
+	it("drops underscore-prefixed top-level keys (form internals)", async () => {
+		// react-hook-form (and our own form-state machinery) reserves
+		// `_`-prefixed top-level paths for internal bookkeeping. The
+		// patcher MUST NOT mirror those into the iframe's draft —
+		// they're meaningless on the iframe side and could carry
+		// unsanitised internal state.
+		const previewRef = makePreviewRef();
+		render(
+			<Harness
+				defaultValues={{ title: "Old", _internal: "x" }}
+				fields={{
+					title: fieldInstance("text"),
+					_internal: fieldInstance("text"),
+				}}
+				previewRef={previewRef}
+				debounceMs={5}
+				onForm={onForm}
+			/>,
+		);
+
+		await act(async () => {
+			// Mutate both keys in the same debounce window.
+			formRef.setValue("title", "New");
+			formRef.setValue("_internal", "leaked");
+			await flushDebounce();
+		});
+
+		// Patches the visible field; silently drops `_internal`.
+		expect(previewRef.mocks.sendPatchBatch).toHaveBeenCalledTimes(1);
+		const [, ops] = previewRef.mocks.sendPatchBatch.mock.calls[0]!;
+		expect(ops).toEqual([
+			{ op: "set", path: "title", value: "New" },
+		]);
+	});
 });
