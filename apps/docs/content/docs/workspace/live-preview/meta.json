@@ -2,11 +2,11 @@
 	"title": "Live Preview",
 	"pages": [
 		"index",
-		"architecture",
 		"visual-edit",
-		"same-tab-recipe",
-		"shared-preview",
 		"protocol",
-		"migration"
+		"migration",
+		"same-tab-recipe",
+		"architecture",
+		"shared-preview"
 	]
 }
