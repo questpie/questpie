@@ -218,11 +218,14 @@ function BookingWizard() {
 | Computed form fields                     | `barbers.ts` form → slug from name             |
 | Multi-language (i18n)                    | Labels, content, admin UI                      |
 | Access control                           | `site-settings.ts` → admin-only update         |
-| Live preview                             | `barbers.ts`, `pages.ts` → preview URL         |
+| Live preview (legacy split view)         | `barbers.ts` → `.preview()` + `v.collectionForm` |
+| Visual Edit Workspace (V2)               | `pages.ts` → `.preview()` + `v.visualEditForm` with `visualEdit.group` field metadata |
 
 ## Related Pages
 
 - [First App](/docs/start-here/first-app) — Minimal getting started
 - [Collections](/docs/backend/data-modeling/collections) — Collection API
 - [Routes](/docs/backend/business-logic/routes) — Typed JSON route handlers
+- [Live Preview](/docs/workspace/live-preview) — Preview overview (V1 split view + V2 workspace)
+- [Visual Edit Workspace](/docs/workspace/live-preview/visual-edit) — Pages collection's editing surface
 - [Dashboard](/docs/workspace/views/dashboard) — Dashboard widgets
