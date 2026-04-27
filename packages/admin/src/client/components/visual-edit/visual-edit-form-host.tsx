@@ -139,11 +139,11 @@ export type VisualEditFormHostProps = ResourceFormControllerOptions & {
 	 * Imperative handle to the underlying `PreviewPane`. Lets a
 	 * parent call `triggerRefresh()`, dispatch V2 messages
 	 * (`sendInitSnapshot` / `sendPatchBatch` / `sendCommit` /
-	 * `sendFullResync` / `sendSelectTarget`), or send the legacy
-	 * `sendFocusToPreview` without re-rendering the host. The
-	 * built-in workspace bridge already wires save / revert /
-	 * select-target through this ref; provide your own when you
-	 * need to fire messages from outside the host.
+	 * `sendFullResync` / `sendSelectTarget` / `sendNavigatePreview`),
+	 * or send the legacy `sendFocusToPreview` without re-rendering
+	 * the host. The built-in workspace bridge already wires save /
+	 * revert / select-target through this ref; provide your own
+	 * when you need to fire messages from outside the host.
 	 */
 	previewRef?: React.RefObject<PreviewPaneRef | null>;
 	/** Custom class name applied to the workspace root */

@@ -75,6 +75,14 @@ export type PreviewPaneRef = {
 		fieldPath: string | null,
 		extras?: { kind?: string; blockId?: string },
 	) => void;
+	/**
+	 * Ask the preview iframe to navigate to a URL
+	 * (`NAVIGATE_PREVIEW`). The iframe enforces same-origin and
+	 * uses `location.replace` so navigation doesn't trap the user
+	 * in a deep back-button stack — see the protocol page for the
+	 * full reliability contract.
+	 */
+	sendNavigatePreview: (url: string) => void;
 };
 
 type PreviewPaneProps = {
@@ -360,6 +368,10 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 						kind: extras?.kind,
 						blockId: extras?.blockId,
 					});
+				},
+				sendNavigatePreview: (url) => {
+					if (!isReady) return;
+					sendToPreview({ type: "NAVIGATE_PREVIEW", url });
 				},
 			}),
 			[isReady, requestRefresh, sendToPreview, initSnapshotBuffer],
