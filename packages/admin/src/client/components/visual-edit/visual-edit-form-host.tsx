@@ -121,11 +121,30 @@ export type VisualEditFormHostProps = ResourceFormControllerOptions & {
 	initialSelection?: VisualEditSelection;
 	/** Selection observer — fires for every `select`/`clear` */
 	onSelectionChange?: (selection: VisualEditSelection) => void;
-	/** Default inspector size, percentage 0–100 */
+	/**
+	 * Default inspector pane size as a percentage (0–100). When
+	 * omitted, the workspace defaults to 32 (canvas:inspector ≈
+	 * 68:32). Reads `previewSchema.defaultSize` upstream when the
+	 * collection's `.preview()` config sets it.
+	 */
 	defaultInspectorSize?: number;
-	/** Minimum inspector size, percentage 0–100 */
+	/**
+	 * Minimum inspector pane size as a percentage (0–100). When
+	 * omitted, the workspace defaults to 24. Reads
+	 * `previewSchema.minSize` upstream when the collection's
+	 * `.preview()` config sets it.
+	 */
 	minInspectorSize?: number;
-	/** External preview ref (refresh hooks etc.) */
+	/**
+	 * Imperative handle to the underlying `PreviewPane`. Lets a
+	 * parent call `triggerRefresh()`, dispatch V2 messages
+	 * (`sendInitSnapshot` / `sendPatchBatch` / `sendCommit` /
+	 * `sendFullResync` / `sendSelectTarget`), or send the legacy
+	 * `sendFocusToPreview` without re-rendering the host. The
+	 * built-in workspace bridge already wires save / revert /
+	 * select-target through this ref; provide your own when you
+	 * need to fire messages from outside the host.
+	 */
 	previewRef?: React.RefObject<PreviewPaneRef | null>;
 	/** Custom class name applied to the workspace root */
 	className?: string;
