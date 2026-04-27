@@ -234,23 +234,24 @@ export const renderers = {
 
 ### Frontend Rendering
 
-Use block renderers on the public frontend:
+Use the shipped `BlockRenderer` to render the block tree on the public frontend. `page.content` is a `BlockContent` struct (`{ _tree, _values }`) — `BlockRenderer` walks the tree, looks up renderers (with kebab → camel fallback), and wraps each block in `<BlockScopeProvider>`:
 
 ```tsx title="components/page-renderer.tsx"
+import { BlockRenderer } from "@questpie/admin/client";
 import { renderers } from "@/questpie/admin/blocks";
 
 function PageRenderer({ page }) {
 	return (
-		<div>
-			{page.content?.map((block, i) => {
-				const Renderer = renderers[block.type];
-				if (!Renderer) return null;
-				return <Renderer key={i} values={block.values} data={block.data} />;
-			})}
-		</div>
+		<BlockRenderer
+			content={page.content}
+			renderers={renderers}
+			data={page.blockData}
+		/>
 	);
 }
 ```
+
+For a manual loop with custom layout wrappers, see "Blocks in Live Preview" earlier in this doc.
 
 ## Common Mistakes
 
