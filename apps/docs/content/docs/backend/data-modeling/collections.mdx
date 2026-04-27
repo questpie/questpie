@@ -83,10 +83,13 @@ Enable live preview for frontend rendering:
 .preview({
   enabled: true,
   position: "right",
-  defaultWidth: 50,
+  defaultSize: 50,    // `defaultWidth` accepted as alias
+  minSize: 30,        // `minWidth` accepted as alias
   url: ({ record }) => `/barbers/${record.slug}?preview=true`,
 })
 ```
+
+The same `.preview()` config drives both shipped form views — `v.collectionForm` (default split-screen, refreshes on save) and `v.visualEditForm` (opt-in canvas + inspector workspace, field-level patches without a save round-trip). Switch views with `.form(({ v }) => v.visualEditForm({...}))`. See the [Live Preview docs](/docs/workspace/live-preview) for the full guide.
 
 ### `.options()`
 
@@ -237,7 +240,7 @@ export const barbers = collection("barbers")
 	.preview({
 		enabled: true,
 		position: "right",
-		defaultWidth: 50,
+		defaultSize: 50,
 		url: ({ record }) => `/barbers/${record.slug}?preview=true`,
 	})
 	.list(({ v }) => v.collectionTable({}))
