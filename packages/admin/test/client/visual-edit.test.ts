@@ -20,6 +20,7 @@ import {
 	applySet,
 	parsePath,
 } from "#questpie/admin/client/preview/patch";
+import type { PreviewPatchOp } from "#questpie/admin/client/preview/types";
 import {
 	mapPreviewBlockClickToSelection,
 	mapPreviewClickToSelection,
@@ -316,6 +317,14 @@ describe("applySet", () => {
 			content: { _values: { abc: { title: "Hi" } } },
 		});
 	});
+
+	it("is a no-op for an empty path", () => {
+		// Empty path means "no segment to write to"; the snapshot
+		// should round-trip unchanged so callers can pass through
+		// optional paths without guarding.
+		const obj = applySet({ a: 1 }, "", "ignored");
+		expect(obj).toEqual({ a: 1 });
+	});
 });
 
 describe("applyRemove", () => {
@@ -334,6 +343,11 @@ describe("applyRemove", () => {
 
 	it("is a no-op when intermediate path is missing", () => {
 		const obj = applyRemove({ a: 1 }, "b.c.d");
+		expect(obj).toEqual({ a: 1 });
+	});
+
+	it("is a no-op for an empty path", () => {
+		const obj = applyRemove({ a: 1 }, "");
 		expect(obj).toEqual({ a: 1 });
 	});
 });
@@ -359,6 +373,24 @@ describe("applyPatchBatch", () => {
 			],
 		);
 		expect(obj).toEqual({});
+	});
+
+	it("is a no-op for an empty ops list", () => {
+		const obj = applyPatchBatch({ a: 1 }, []);
+		expect(obj).toEqual({ a: 1 });
+	});
+
+	it("stops on the first unknown op so the snapshot doesn't drift", () => {
+		// Unknown op type is treated as a sentinel — anything after
+		// it is dropped. The snapshot retains the ops applied before
+		// the bad one, but the rest are skipped.
+		const obj = applyPatchBatch({}, [
+			{ op: "set", path: "title", value: "Hello" },
+			// @ts-expect-error — intentional unknown op for the safety test
+			{ op: "patch", path: "title" },
+			{ op: "set", path: "later", value: "ignored" },
+		] as PreviewPatchOp[]);
+		expect(obj).toEqual({ title: "Hello" });
 	});
 });
 
