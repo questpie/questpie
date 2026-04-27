@@ -987,7 +987,15 @@ function UserFooter({
 							)}
 						>
 							<div className="qa-sidebar__user-avatar border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground flex size-8 shrink-0 items-center justify-center rounded-md border">
-								<Icon icon="ph:user-bold" className="size-4" />
+								{user.image ? (
+									<img
+										src={user.image}
+										alt=""
+										className="image-outline size-full rounded-md object-cover"
+									/>
+								) : (
+									<Icon icon="ph:user-bold" className="size-4" />
+								)}
 							</div>
 							{!collapsed && (
 								<>

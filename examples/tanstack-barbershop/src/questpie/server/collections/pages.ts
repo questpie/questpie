@@ -87,8 +87,6 @@ export const pages = collection("pages")
 				{
 					type: "section",
 					label: { en: "Page Info", sk: "Informácie o stránke" },
-					layout: "grid",
-					columns: 2,
 					fields: [f.title, f.description],
 				},
 				{

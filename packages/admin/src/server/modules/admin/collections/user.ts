@@ -25,7 +25,7 @@ const adminUserCollection = collection("user")
 	}))
 	.list(({ v, f, a }) =>
 		v.collectionTable({
-			columns: [f.name, f.email, f.role, f.banned],
+			columns: [f.avatar, f.name, f.email, f.role, f.banned],
 			searchable: [f.name, f.email],
 			defaultSort: { field: f.name, direction: "asc" },
 			actions: {
@@ -38,7 +38,7 @@ const adminUserCollection = collection("user")
 		v.collectionForm({
 			sidebar: {
 				position: "right",
-				fields: [f.image, f.role, f.emailVerified],
+				fields: [f.avatar, f.role, f.emailVerified],
 			},
 			fields: [
 				{

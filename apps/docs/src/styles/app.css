@@ -601,6 +601,7 @@
 	border-radius: var(--control-radius-inner) !important;
 	transition-property: background-color, border-color, color, opacity;
 	transition-duration: var(--motion-duration-base);
+	margin-bottom: 2px;
 	transition-timing-function: var(--motion-ease-standard);
 }
 

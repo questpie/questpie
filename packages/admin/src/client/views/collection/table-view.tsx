@@ -36,6 +36,7 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 import { Suspense, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { createActionRegistryProxy } from "../../builder/types/action-registry";
 import type {
@@ -49,13 +50,17 @@ import type {
 import { ActionButton } from "../../components/actions/action-button";
 import { ActionDialog } from "../../components/actions/action-dialog";
 import { HeaderActions } from "../../components/actions/header-actions";
+import { sanitizeFilename } from "../../components/fields/field-utils";
 import { FilterBuilderSheet } from "../../components/filter-builder/filter-builder-sheet";
 import type {
 	AvailableField,
 	ViewConfiguration,
 } from "../../components/filter-builder/types";
 import { LocaleSwitcher } from "../../components/locale-switcher";
+import { AssetPreview } from "../../components/primitives/asset-preview";
+import { Dropzone } from "../../components/primitives/dropzone";
 import { flattenOptions } from "../../components/primitives/types";
+import { ResourceSheet } from "../../components/sheets";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -68,6 +73,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "../../components/ui/select";
+import {
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetFooter,
+	SheetHeader,
+	SheetTitle,
+} from "../../components/ui/sheet";
 import {
 	Table,
 	TableBody,
@@ -104,6 +117,8 @@ import {
 	useServerActions,
 } from "../../hooks/use-server-actions";
 import { useSidebarSearchParam } from "../../hooks/use-sidebar-search-param";
+import { type Asset, useUpload } from "../../hooks/use-upload";
+import { useUploadCollection } from "../../hooks/use-upload-collection";
 import { useViewState } from "../../hooks/use-view-state";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
@@ -145,6 +160,164 @@ const REORDER_DROP_ANIMATION = {
 	duration: REORDER_DROP_DURATION,
 	easing: REORDER_MOVE_EASING,
 };
+
+function UploadCollectionButton({
+	collection,
+	onUploaded,
+}: {
+	collection: string;
+	onUploaded?: () => void | Promise<void>;
+}) {
+	const { t } = useTranslation();
+	const [open, setOpen] = React.useState(false);
+
+	return (
+		<>
+			<Button
+				variant="default"
+				size="sm"
+				className="gap-2"
+				onClick={() => setOpen(true)}
+			>
+				<Icon icon="ph:cloud-arrow-up" className="size-3.5" />
+				{t("common.upload")}
+			</Button>
+			<UploadCollectionSheet
+				open={open}
+				onOpenChange={setOpen}
+				collection={collection}
+				onUploaded={onUploaded}
+			/>
+		</>
+	);
+}
+
+function UploadCollectionSheet({
+	open,
+	onOpenChange,
+	collection,
+	onUploaded,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	collection: string;
+	onUploaded?: () => void | Promise<void>;
+}) {
+	const { t } = useTranslation();
+	const { uploadMany, isUploading, progress } = useUpload();
+	const [uploadedAssets, setUploadedAssets] = React.useState<Asset[]>([]);
+	const [editAssetId, setEditAssetId] = React.useState<string | null>(null);
+
+	React.useEffect(() => {
+		if (!open) {
+			setUploadedAssets([]);
+			setEditAssetId(null);
+		}
+	}, [open]);
+
+	const handleValidationError = React.useCallback(
+		(errors: { message: string }[]) => {
+			for (const validationError of errors) {
+				toast.error(validationError.message);
+			}
+		},
+		[],
+	);
+
+	const handleDrop = React.useCallback(
+		async (files: File[]) => {
+			if (files.length === 0 || isUploading) return;
+
+			const sanitizedFiles = files.map(
+				(file) =>
+					new File([file], sanitizeFilename(file.name), {
+						type: file.type,
+						lastModified: file.lastModified,
+					}),
+			);
+
+			try {
+				const uploaded = await uploadMany(sanitizedFiles, { to: collection });
+				setUploadedAssets((current) => [...uploaded, ...current]);
+				toast.success(t("upload.bulkSuccess", { count: uploaded.length }));
+				await onUploaded?.();
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : t("upload.error"));
+			}
+		},
+		[collection, isUploading, onUploaded, t, uploadMany],
+	);
+
+	return (
+		<Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+			<SheetContent
+				side="right"
+				showOverlay={false}
+				className="qa-upload-sheet w-full p-0 data-[side=right]:sm:max-w-xl"
+			>
+				<SheetHeader className="border-b px-6 py-5">
+					<SheetTitle>{t("upload.bulkTitle")}</SheetTitle>
+					<SheetDescription>{t("upload.bulkDescription")}</SheetDescription>
+				</SheetHeader>
+
+				<div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+					<Dropzone
+						onDrop={handleDrop}
+						multiple
+						loading={isUploading}
+						progress={isUploading ? progress : undefined}
+						label={t("upload.dropzone")}
+						hint={t("upload.bulkHint")}
+						onValidationError={handleValidationError}
+					/>
+
+					{uploadedAssets.length > 0 && (
+						<div className="space-y-3">
+							<p className="text-muted-foreground font-chrome chrome-meta text-xs font-medium">
+								{t("upload.uploadedCount", { count: uploadedAssets.length })}
+							</p>
+							<div className="grid gap-2">
+								{uploadedAssets.map((asset) => (
+									<AssetPreview
+										key={asset.id}
+										asset={asset}
+										variant="compact"
+										onEdit={() => setEditAssetId(asset.id)}
+									/>
+								))}
+							</div>
+						</div>
+					)}
+				</div>
+
+				<SheetFooter className="border-t px-6 py-4">
+					<Button
+						variant="outline"
+						onClick={() => onOpenChange(false)}
+						disabled={isUploading}
+					>
+						{t("common.close")}
+					</Button>
+				</SheetFooter>
+
+				{editAssetId && (
+					<ResourceSheet
+						type="collection"
+						collection={collection}
+						itemId={editAssetId}
+						open={!!editAssetId}
+						onOpenChange={(nextOpen) => {
+							if (!nextOpen) setEditAssetId(null);
+						}}
+						onSave={() => {
+							onUploaded?.();
+						}}
+					/>
+				)}
+			</SheetContent>
+		</Sheet>
+	);
+}
 
 function getColumnSizeStyle(width: number): React.CSSProperties {
 	return { width, minWidth: width, maxWidth: width };
@@ -596,6 +769,7 @@ function TableViewInner({
 	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
 	});
+	const { collections: uploadCollections } = useUploadCollection();
 	const schemaListConfig = mapListSchemaToConfig(schema?.admin?.list as any);
 	const resolvedListConfig =
 		viewConfig ??
@@ -657,6 +831,9 @@ function TableViewInner({
 		collection,
 		actionsConfig: mergedActionsConfig,
 	});
+	const canUploadToCollection =
+		uploadCollections.includes(collection) &&
+		schema?.access?.operations?.create?.allowed === true;
 
 	// Build columns from config - buildAllColumns enables showing any field user selects
 	const columns = useMemo(
@@ -1859,6 +2036,14 @@ function TableViewInner({
 										{t("viewOptions.title")}
 									</TooltipContent>
 								</Tooltip>
+							)}
+							{canUploadToCollection && (
+								<UploadCollectionButton
+									collection={collection}
+									onUploaded={() =>
+										actionHelpers.invalidateCollection(collection)
+									}
+								/>
 							)}
 							{headerActions}
 							{((actions.header.primary?.length ?? 0) > 0 ||
