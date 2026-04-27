@@ -153,6 +153,43 @@ const categories = collection("categories").fields(({ f }) => ({
 	name: f.text().required(),
 }));
 
+// Preview configuration fixtures — exercise the alias-coalescing
+// path on the introspector (`defaultSize ?? defaultWidth`,
+// `minSize ?? minWidth`) plus the symmetric mirror so older clients
+// reading `defaultWidth` / `minWidth` keep working.
+//
+// `.preview()` is a codegen-extension method added by the admin
+// module; the questpie test rig doesn't include that codegen, so
+// we attach the state directly via the underlying `.set()` plug-in
+// extension point with the same `adminPreview` state key the admin
+// codegen would have used.
+const previewWithAliases = collection("preview_aliases")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+		slug: f.text().required(),
+	}))
+	.set("adminPreview", {
+		enabled: true,
+		position: "right" as const,
+		// Author with the legacy aliases only — schema must surface
+		// canonical keys via the coalescing pass.
+		defaultWidth: 60,
+		minWidth: 25,
+		url: ({ record }: { record: { slug: string } }) => `/${record.slug}`,
+	});
+
+const previewWithCanonical = collection("preview_canonical")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+	}))
+	.set("adminPreview", {
+		enabled: true,
+		// Author with canonical keys only.
+		defaultSize: 40,
+		minSize: 20,
+		url: ({ record }: { record: { id: string } }) => `/${record.id}`,
+	});
+
 // ============================================================================
 // Test Suite
 // ============================================================================
@@ -175,6 +212,8 @@ describe("collection introspection", () => {
 				tags,
 				with_field_relations,
 				categories,
+				previewWithAliases,
+				previewWithCanonical,
 			},
 		});
 		await runTestDbMigrations(setup.app);
@@ -376,6 +415,63 @@ describe("collection introspection", () => {
 				(s) => s.name === "published",
 			);
 			expect(publishedStage?.transitions).toEqual([]);
+		});
+	});
+
+	// ========================================================================
+	// Preview Configuration
+	// ========================================================================
+
+	describe("preview config", () => {
+		it("coalesces defaultWidth/minWidth aliases onto canonical keys", async () => {
+			const ctx = createTestContext();
+			const schema = await introspectCollection(
+				previewWithAliases as any,
+				ctx,
+				setup.app,
+			);
+			expect(schema.admin?.preview).toBeDefined();
+			expect(schema.admin?.preview?.enabled).toBe(true);
+			expect(schema.admin?.preview?.position).toBe("right");
+			// Aliases authored on the server should surface as the
+			// canonical keys after coalescing.
+			expect(schema.admin?.preview?.defaultSize).toBe(60);
+			expect(schema.admin?.preview?.minSize).toBe(25);
+		});
+
+		it("mirrors canonical defaultSize/minSize back to the *Width aliases", async () => {
+			// Older clients that read `defaultWidth` / `minWidth` should
+			// keep working when a project authors the canonical keys.
+			const ctx = createTestContext();
+			const schema = await introspectCollection(
+				previewWithCanonical as any,
+				ctx,
+				setup.app,
+			);
+			expect(schema.admin?.preview?.defaultSize).toBe(40);
+			expect(schema.admin?.preview?.minSize).toBe(20);
+			// Mirror — both *Width aliases reflect the resolved values.
+			expect(schema.admin?.preview?.defaultWidth).toBe(40);
+			expect(schema.admin?.preview?.minWidth).toBe(20);
+		});
+
+		it("indicates a url builder is present without leaking the function", async () => {
+			const ctx = createTestContext();
+			const schema = await introspectCollection(
+				previewWithAliases as any,
+				ctx,
+				setup.app,
+			);
+			expect(schema.admin?.preview?.hasUrlBuilder).toBe(true);
+			// The schema is JSON-serialisable; no `url: () => …` leaks
+			// through.
+			expect((schema.admin?.preview as Record<string, unknown> | undefined)?.url).toBeUndefined();
+		});
+
+		it("returns no preview when the collection didn't call .preview()", async () => {
+			const ctx = createTestContext();
+			const schema = await introspectCollection(simple as any, ctx, setup.app);
+			expect(schema.admin?.preview).toBeUndefined();
 		});
 	});
 
