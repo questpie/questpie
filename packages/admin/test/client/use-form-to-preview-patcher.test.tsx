@@ -347,6 +347,56 @@ describe("useFormToPreviewPatcher — disabled flag", () => {
 
 		expect(previewRef.mocks.sendPatchBatch).not.toHaveBeenCalled();
 	});
+
+	it("re-subscribes when disabled flips back to false", async () => {
+		// Pin the disabled-flip recovery: a workspace that toggles
+		// the patcher off (e.g., during a long-running save) must
+		// recover the live-edit flow when disabled clears. Without
+		// the test, a future memoisation refactor could pin the
+		// subscription identity and miss the re-subscribe.
+		const previewRef = makePreviewRef();
+		const fields = { title: fieldInstance("text") };
+
+		const { rerender } = render(
+			<Harness
+				defaultValues={{ title: "Old" }}
+				fields={fields}
+				previewRef={previewRef}
+				debounceMs={5}
+				disabled
+				onForm={onForm}
+			/>,
+		);
+
+		// Sanity check: patcher is silent while disabled.
+		await act(async () => {
+			formRef.setValue("title", "Mid");
+			await flushDebounce();
+		});
+		expect(previewRef.mocks.sendPatchBatch).not.toHaveBeenCalled();
+
+		// Flip disabled back to false.
+		rerender(
+			<Harness
+				defaultValues={{ title: "Old" }}
+				fields={fields}
+				previewRef={previewRef}
+				debounceMs={5}
+				disabled={false}
+				onForm={onForm}
+			/>,
+		);
+
+		// Now the next change should produce a patch.
+		await act(async () => {
+			formRef.setValue("title", "New");
+			await flushDebounce();
+		});
+
+		expect(previewRef.mocks.sendPatchBatch).toHaveBeenCalledTimes(1);
+		const [, ops] = previewRef.mocks.sendPatchBatch.mock.calls[0]!;
+		expect(ops).toEqual([{ op: "set", path: "title", value: "New" }]);
+	});
 });
 
 describe("useFormToPreviewPatcher — nested objects", () => {
