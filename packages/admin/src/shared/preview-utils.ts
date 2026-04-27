@@ -16,14 +16,28 @@
 export const DRAFT_MODE_COOKIE = "__draft_mode";
 
 /**
- * URL prefix used by the admin SPA for its own API calls.
- * Public/frontend clients hit `/api/...`, the admin hits `/admin/api/...`.
+ * Header injected by `createAdminClient` (and `withAdminRequestHeader`) on
+ * every admin SPA request. Inspected by {@link isAdminRequest} so access
+ * rules can branch on caller intent without depending on URL structure.
+ */
+export const ADMIN_REQUEST_HEADER = "x-questpie-admin";
+
+/**
+ * URL prefix used by the admin SPA when mounted at the conventional
+ * `/admin` path. Kept for reference and as a fallback signal for setups
+ * that pre-date the header-based detection.
  */
 export const ADMIN_API_PREFIX = "/admin/api/";
 
 /**
- * Whether the given request originates from the admin panel API
- * (vs the public frontend API).
+ * Whether the given request originates from the admin panel.
+ *
+ * Detection strategy (in order):
+ * 1. Presence of the `X-Questpie-Admin` request header — the canonical
+ *    signal, injected by `createAdminClient` / `withAdminRequestHeader`.
+ * 2. URL path starts with {@link ADMIN_API_PREFIX} — fallback for clients
+ *    that don't inject the header (e.g. pre-3.0.6 admin SDK consumers, or
+ *    direct `curl` calls to `/admin/api/...`).
  *
  * Use inside collection/global `.access()` rules to grant admin-only
  * scope (e.g. master counselor sees everything in the admin, but stays
@@ -43,11 +57,45 @@ export const ADMIN_API_PREFIX = "/admin/api/";
  */
 export function isAdminRequest(request?: Request | null): boolean {
 	if (!request) return false;
+	if (request.headers?.get?.(ADMIN_REQUEST_HEADER)) return true;
 	try {
 		return new URL(request.url).pathname.startsWith(ADMIN_API_PREFIX);
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Wrap a `fetch` implementation so every outbound request carries the
+ * `X-Questpie-Admin` header. Used internally by
+ * `createAdminClient` — apps building a custom admin client (or using
+ * an alternate HTTP layer) can compose the wrapper themselves.
+ *
+ * @param baseFetch - The fetch implementation to wrap. Defaults to
+ *   `globalThis.fetch`.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from "questpie/client";
+ * import { withAdminRequestHeader } from "@questpie/admin/shared";
+ *
+ * export const adminCmsClient = createClient<AppConfig>({
+ *   baseURL: window.location.origin,
+ *   basePath: "/api",
+ *   fetch: withAdminRequestHeader(),
+ * });
+ * ```
+ */
+export function withAdminRequestHeader(
+	baseFetch: typeof fetch = globalThis.fetch,
+): typeof fetch {
+	return ((input, init) => {
+		const headers = new Headers(init?.headers);
+		if (!headers.has(ADMIN_REQUEST_HEADER)) {
+			headers.set(ADMIN_REQUEST_HEADER, "1");
+		}
+		return baseFetch(input, { ...init, headers });
+	}) as typeof fetch;
 }
 
 // ============================================================================

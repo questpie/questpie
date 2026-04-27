@@ -23,7 +23,19 @@ Access functions receive `request`, no-op field writes are allowed, global forms
 
 - `GlobalFormView` now auto-detects M:N relations via `detectManyToManyRelations` (parity with `CollectionFormView`) and requests them via `useGlobal(name, { with: ... })`. Upload-through and `relation().multiple()` fields on globals are now visible in the form instead of silently empty. Loaded relation arrays of objects are normalized to arrays of ids before the form resets, matching collection-form behavior.
 
-- New shared exports `isAdminRequest(request)` and `ADMIN_API_PREFIX` from `@questpie/admin/shared` — companion helper for the new access-rule `request` arg, so apps don't reinvent the URL-prefix check:
+- New `createAdminClient<TApp>()` factory exported from `@questpie/admin/client` — wraps `createClient` and auto-injects an `X-Questpie-Admin: 1` request header on every outbound call. Use this for the client passed to `<AdminLayoutProvider client={...}>`; keep the public/frontend client as plain `createClient` (it must not inject the admin header).
+
+  ```ts
+  import { createAdminClient } from "@questpie/admin/client";
+  import type { AppConfig } from "#questpie";
+
+  export const adminCmsClient = createAdminClient<AppConfig>({
+    baseURL: typeof window !== "undefined" ? window.location.origin : process.env.APP_URL!,
+    basePath: "/api",
+  });
+  ```
+
+- New shared exports `isAdminRequest(request)`, `ADMIN_REQUEST_HEADER`, `ADMIN_API_PREFIX`, and `withAdminRequestHeader(fetch?)` from `@questpie/admin/shared`. `isAdminRequest` is the canonical access-rule guard — it checks the `X-Questpie-Admin` header first (set by `createAdminClient`), then falls back to the legacy `/admin/api/` URL prefix for back-compat:
 
   ```ts
   import { isAdminRequest } from "@questpie/admin/shared";

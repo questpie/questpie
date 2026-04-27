@@ -47,6 +47,8 @@ export {
 	type AppAdmin,
 	type InferAdminCMS,
 } from "#questpie/admin/client/builder/admin.js";
+// Admin-flavored CMS client (auto-injects X-Questpie-Admin request header)
+export { createAdminClient } from "#questpie/admin/client/create-admin-client.js";
 // Typed hooks factory
 export {
 	createTypedHooks,
