@@ -15,6 +15,41 @@
  */
 export const DRAFT_MODE_COOKIE = "__draft_mode";
 
+/**
+ * URL prefix used by the admin SPA for its own API calls.
+ * Public/frontend clients hit `/api/...`, the admin hits `/admin/api/...`.
+ */
+export const ADMIN_API_PREFIX = "/admin/api/";
+
+/**
+ * Whether the given request originates from the admin panel API
+ * (vs the public frontend API).
+ *
+ * Use inside collection/global `.access()` rules to grant admin-only
+ * scope (e.g. master counselor sees everything in the admin, but stays
+ * scoped to their own data on the frontend).
+ *
+ * @example
+ * ```ts
+ * import { isAdminRequest } from "@questpie/admin/shared";
+ *
+ * .access({
+ *   read: ({ session, request }) => {
+ *     if (isAdminRequest(request) && isAdmin(session?.user)) return true;
+ *     return { createdById: session?.user?.id };
+ *   },
+ * })
+ * ```
+ */
+export function isAdminRequest(request?: Request | null): boolean {
+	if (!request) return false;
+	try {
+		return new URL(request.url).pathname.startsWith(ADMIN_API_PREFIX);
+	} catch {
+		return false;
+	}
+}
+
 // ============================================================================
 // Browser-Safe Utilities
 // ============================================================================
