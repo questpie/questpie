@@ -607,4 +607,49 @@ describe("useVisualEditPreviewBridge — readyTick re-seed", () => {
 		// verify no throw + cleanup happens.
 		expect(previewRef.current).toBeNull();
 	});
+
+	it("skips the re-seed when no FormProvider is in the tree", () => {
+		// `useFormContext` returns null outside a `FormProvider`. The
+		// bridge JSDoc says the re-seed effect "skips silently" in
+		// that case — pin the contract so a refactor that drops the
+		// `if (!form) return;` guard would surface immediately. The
+		// canonical-snapshot path (effect 1) still fires through
+		// `transformedItem` since it doesn't depend on form context.
+		const previewRef = makePreviewRef();
+		const item = { id: "1", title: "T" };
+		const controller = makeController({ transformedItem: item });
+
+		// Render `FormBridgeUser` directly (NO FormProvider in the
+		// tree). transformedItem still seeds on mount, but the
+		// readyTick re-seed must bail.
+		const { rerender } = render(
+			<VisualEditProvider>
+				<FormBridgeUser
+					controller={controller}
+					previewRef={previewRef}
+					readyTick={0}
+				/>
+			</VisualEditProvider>,
+		);
+
+		// transformedItem effect fires once on mount (canonical seed).
+		expect(previewRef.mocks.sendInitSnapshot).toHaveBeenCalledTimes(1);
+		previewRef.mocks.sendInitSnapshot.mockClear();
+
+		// Increment readyTick — the re-seed effect should bail because
+		// `useFormContext()` returns null. The bridge shouldn't crash
+		// either.
+		rerender(
+			<VisualEditProvider>
+				<FormBridgeUser
+					controller={controller}
+					previewRef={previewRef}
+					readyTick={1}
+				/>
+			</VisualEditProvider>,
+		);
+
+		// No FormProvider → re-seed effect bails on `if (!form) return`.
+		expect(previewRef.mocks.sendInitSnapshot).not.toHaveBeenCalled();
+	});
 });
