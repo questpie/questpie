@@ -1,5 +1,5 @@
-import { index } from "drizzle-orm/pg-core";
 import { collection } from "questpie";
+import { index } from "questpie/drizzle-pg-core";
 
 import type {
 	AdminCollectionConfig,

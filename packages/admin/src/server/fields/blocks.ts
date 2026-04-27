@@ -11,7 +11,6 @@
  * This field type is only available when using the `adminModule`.
  */
 
-import type { PgJsonbBuilder } from "drizzle-orm/pg-core";
 import {
 	type ContextualOperators,
 	type DefaultFieldState,
@@ -25,6 +24,7 @@ import {
 	jsonb,
 	sql,
 } from "questpie";
+import type { PgJsonbBuilder } from "questpie/drizzle-pg-core";
 import { z } from "zod";
 
 import { processBlocksDocument } from "../block/prefetch.js";
@@ -273,6 +273,9 @@ export function blocks(): Field<BlocksFieldState> {
  * Use this with the `fieldType()` discovery system instead of the
  * legacy `blocks()` factory function.
  */
-export const blocksFieldType: FieldTypeDefinition<"blocks", []> = fieldType("blocks", {
-	create: createBlocksState as any,
-});
+export const blocksFieldType: FieldTypeDefinition<"blocks", []> = fieldType(
+	"blocks",
+	{
+		create: createBlocksState as any,
+	},
+);

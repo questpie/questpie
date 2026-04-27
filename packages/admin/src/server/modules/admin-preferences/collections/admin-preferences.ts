@@ -1,5 +1,5 @@
-import { uniqueIndex } from "drizzle-orm/pg-core";
 import { collection } from "questpie";
+import { uniqueIndex } from "questpie/drizzle-pg-core";
 
 /**
  * Admin Preferences Collection

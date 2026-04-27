@@ -6,8 +6,8 @@
  * need an existing admin to create the first invitation.
  */
 
-import { eq, sql } from "drizzle-orm";
 import { route, type Questpie } from "questpie";
+import { eq, sql } from "questpie/drizzle";
 import { z } from "zod";
 
 import { getApp } from "./route-helpers.js";

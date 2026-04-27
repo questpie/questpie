@@ -1,5 +1,5 @@
-import { sql } from "drizzle-orm";
 import { job } from "questpie";
+import { sql } from "questpie/drizzle";
 import { z } from "zod";
 
 import { AUDIT_LOG_COLLECTION } from "../collections/audit-log.js";
