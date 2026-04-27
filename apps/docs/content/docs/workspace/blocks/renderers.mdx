@@ -65,25 +65,27 @@ Register them with the admin client or use them for frontend rendering.
 
 ## Frontend Rendering
 
-Use block renderers on the public frontend to render page content:
+`page.content` is a `BlockContent` struct — `{ _tree, _values }`, not a flat array of blocks. The shipped `BlockRenderer` component walks the tree, looks up renderers by type (with kebab → camel fallback so `team-grid` resolves to `teamGrid`), and wraps each block in `<BlockScopeProvider>` automatically so any `<PreviewField>` inside auto-resolves to the canonical `${blocksPath}._values.${blockId}.${fieldName}` path:
 
 ```tsx title="components/page-renderer.tsx"
+import { BlockRenderer } from "@questpie/admin/client";
 import { renderers } from "@/questpie/admin/blocks";
 
 function PageRenderer({ page }) {
 	return (
-		<div>
-			{page.content?.map((block, i) => {
-				const Renderer = renderers[block.type];
-				if (!Renderer) return null;
-				return <Renderer key={i} values={block.values} data={block.data} />;
-			})}
-		</div>
+		<BlockRenderer
+			content={page.content}
+			renderers={renderers}
+			data={page.blockData} // optional prefetched data per block id
+		/>
 	);
 }
 ```
+
+For finer-grained control (custom layout wrappers, SSR hydration boundaries, etc.) you can iterate `content._tree` and wrap blocks in `<BlockScopeProvider>` yourself — see the [admin skill reference](https://github.com/questpie/questpie/blob/main/skills/questpie-admin/references/blocks.md) for the manual loop pattern.
 
 ## Related Pages
 
 - [Defining Blocks](/docs/workspace/blocks/defining-blocks) — Server-side definitions
 - [Prefetch](/docs/workspace/blocks/prefetch) — Loading relation data
+- [Visual Edit Workspace](/docs/workspace/live-preview/visual-edit) — Block-aware editing surface
