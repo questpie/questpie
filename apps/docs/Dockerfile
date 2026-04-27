@@ -31,6 +31,9 @@ COPY --from=pruner /app/out/full/ .
 # Install dependencies
 RUN bun install --frozen-lockfile
 
+# Build workspace dependencies first (vite-plugin-iconify dist/ is gitignored)
+RUN bun run --filter @questpie/vite-plugin-iconify build
+
 # Build docs app
 WORKDIR /app/apps/docs
 ENV DISABLE_PRERENDER=true
