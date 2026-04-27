@@ -394,6 +394,8 @@ function AdminLayout() {
 }
 ```
 
+The admin ships two form views out of the box: the default `collection-form` (split-screen with iframe; refreshes on save) and the opt-in `visual-edit-form` — the **Visual Edit Workspace**, a canvas + contextual inspector layout that drives the iframe with field-level patches over `postMessage` for instant updates without a save round-trip. Enable per collection with `.form(({ v }) => v.visualEditForm({...}))`. See the [Live Preview docs](https://questpie.com/docs/workspace/live-preview) for the full guide.
+
 ## CLI Reference
 
 ```bash
