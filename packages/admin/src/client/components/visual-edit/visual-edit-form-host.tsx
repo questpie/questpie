@@ -100,8 +100,9 @@ export type VisualEditFormHostProps = ResourceFormControllerOptions & {
 	 */
 	renderField?: (fieldPath: string) => React.ReactNode;
 	/**
-	 * Override the inspector's whole-block body. Phase 4 plugs the
-	 * Blocks panel here; until then a placeholder is shown.
+	 * Override the inspector's whole-block body. Defaults to
+	 * `BlockInspectorBody`, which renders the selected block's
+	 * fields plus duplicate / remove actions.
 	 */
 	renderBlock?: (args: {
 		blocksPath: string;
@@ -374,12 +375,13 @@ function PreviewBridge({
 /**
  * Resolve the top-level field name from a form-field path. For
  * non-block / non-array paths the name is the first dot segment;
- * for block paths the inspector currently bottoms out at the
- * block's value root and lets the block renderer take over.
+ * for block paths the inspector bottoms out at the block's value
+ * root and lets the block renderer take over.
  *
- * Phase 7 keeps this intentionally simple — Phase 6's
- * `visualEdit` field contract will let nested fields supply their
- * own renderer override.
+ * Nested-field overrides for object fields go through
+ * `resolveNestedVisualEditMeta`, which walks the schema's
+ * `metadata.nestedFields` to find a deeper `visualEdit.inspector`;
+ * this helper just feeds it the right top-level entry point.
  */
 function topLevelFieldName(fieldPath: string): string {
 	const dot = fieldPath.indexOf(".");

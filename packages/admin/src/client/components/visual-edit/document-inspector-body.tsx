@@ -11,9 +11,12 @@
  * matches today's `AutoFormFields` shape closely enough that
  * projects can swap this in without a layout regression.
  *
- * Not the default for `VisualEditFormHost.renderDocument` yet —
- * consumers opt in by passing it explicitly. Keeps the change
- * additive while the grouping API matures.
+ * `VisualEditFormHost` auto-selects this component as the default
+ * `renderDocument` when at least one field declares
+ * `visualEdit.group` (see `hasGroupedDocumentMetadata`). When no
+ * field opts in, the host keeps `AutoFormFields` so existing
+ * sections / tabs carry over untouched. Consumers can also pass
+ * `renderDocument` explicitly to force this body unconditionally.
  */
 
 "use client";

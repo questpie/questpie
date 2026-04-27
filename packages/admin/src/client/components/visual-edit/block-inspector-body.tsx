@@ -8,8 +8,8 @@
  * inspector.
  *
  * Add/duplicate/remove/reorder are driven by the same pure
- * operations the inline `BlockEditorProvider` uses (Phase 4 prep),
- * so behaviour is identical regardless of the surface.
+ * operations the inline `BlockEditorProvider` uses, so behaviour
+ * is identical regardless of the surface.
  */
 
 "use client";

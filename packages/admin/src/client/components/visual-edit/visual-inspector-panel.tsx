@@ -3,12 +3,15 @@
  *
  * Right-pane router for the Visual Edit Workspace. Reads the current
  * selection from `VisualEditProvider` and renders the corresponding
- * inspector mode.
+ * inspector mode: a Document body for `idle`, a single field via
+ * `renderField` for `field` / `block-field` / `relation` / `array` /
+ * `array-item`, and a block body via `renderBlock` for `block`.
  *
- * Phase 2 MVP: header + empty modes for every selection kind. Field
- * rendering, block field rendering, relations, and array/array-item
- * editors are filled in over phases 2c–4 as the underlying
- * primitives are wired up.
+ * `renderField` and `renderBlock` are render-prop hooks so callers can
+ * swap in their own implementations; the typical entry point
+ * (`VisualEditFormHost`) wires `FieldRenderer` and `BlockInspectorBody`
+ * by default. Each rendered body runs inside an `InspectorErrorBoundary`
+ * so a misbehaving field component can't unmount the workspace.
  */
 
 "use client";

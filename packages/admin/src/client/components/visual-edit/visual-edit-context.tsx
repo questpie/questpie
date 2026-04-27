@@ -10,8 +10,9 @@
  * - It exposes `select(...)` rather than per-kind setters so future
  *   selection kinds can be added without breaking the consumer.
  *
- * Phase 2 just establishes the contract — wiring into preview clicks
- * and `useResourceFormController` happens in later phases.
+ * The provider establishes the contract — preview clicks land here
+ * via `mapPreviewClickToSelection` and the workspace bridge mirrors
+ * the active selection to the iframe through `SELECT_TARGET`.
  */
 
 "use client";

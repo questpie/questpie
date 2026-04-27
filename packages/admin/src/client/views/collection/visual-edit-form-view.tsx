@@ -3,20 +3,23 @@
  *
  * View-registry adapter that surfaces the Visual Edit Workspace
  * (`VisualEditFormHost`) under the same `kind: "form"` contract
- * the legacy `FormView` uses. Once registered, projects can opt
- * into the workspace per-collection with:
+ * the legacy `FormView` uses. Once registered, projects opt into
+ * the workspace per-collection with:
  *
  * ```ts
- * c.collection("pages").admin().form({ view: "visual-edit" })
+ * collection("pages").form(({ v }) => v.visualEditForm({}));
  * ```
  *
  * The component intentionally mirrors `FormView`'s prop shape so
  * the runtime resolver can swap one for the other based purely on
- * the `view` key.
+ * the registered view's name.
  *
- * Phase 8 wires the public surface; richer behaviours (autosave,
- * locale dialog, action toolbar) are still owned by `FormView`
- * and will migrate over in follow-up phases.
+ * Form-state, mutations, locking, and validation are shared with
+ * `FormView` through `useResourceFormController`. Richer
+ * behaviours that are still legacy-only (autosave, locale dialog,
+ * action toolbar) live in `FormView` for now; consumers needing
+ * them can render `FormView` alongside the workspace via
+ * `VisualEditFormHost`'s extension points.
  */
 
 "use client";

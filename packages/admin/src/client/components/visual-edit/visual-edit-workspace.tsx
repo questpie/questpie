@@ -4,10 +4,12 @@
  * Two-pane layout for the Visual Edit experience: preview canvas on
  * the left, inspector on the right (mobile collapses to tabs).
  *
- * Phase 2 MVP keeps the layout decoupled from the data layer — the
- * caller passes `renderInspector` (typically the configured
- * `VisualInspectorPanel`) and an iframe URL. Selection plumbing,
- * patch protocol, and form integration land in subsequent phases.
+ * The component is intentionally decoupled from the data layer —
+ * the caller passes `renderInspector` (typically the configured
+ * `VisualInspectorPanel`) and an iframe URL. Selection state,
+ * patch protocol, and form integration are layered on top by
+ * `VisualEditFormHost` (the typical entry point); use this
+ * component directly only when you need a custom shell.
  */
 
 "use client";
