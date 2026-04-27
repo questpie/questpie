@@ -34,6 +34,7 @@ function makePreviewRef() {
 		sendCommit: mock(() => {}),
 		sendFullResync: mock(() => {}),
 		sendSelectTarget: mock(() => {}),
+		sendNavigatePreview: mock(() => {}),
 	};
 	return {
 		current: mocks as unknown as PreviewPaneRef,

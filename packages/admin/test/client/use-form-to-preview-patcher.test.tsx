@@ -45,6 +45,7 @@ function makePreviewRef(): {
 		sendCommit: ReturnType<typeof mock>;
 		sendFullResync: ReturnType<typeof mock>;
 		sendSelectTarget: ReturnType<typeof mock>;
+		sendNavigatePreview: ReturnType<typeof mock>;
 	};
 } {
 	const mocks = {
@@ -55,6 +56,7 @@ function makePreviewRef(): {
 		sendCommit: mock(() => {}),
 		sendFullResync: mock(() => {}),
 		sendSelectTarget: mock(() => {}),
+		sendNavigatePreview: mock(() => {}),
 	};
 	return {
 		current: mocks as unknown as PreviewPaneRef,
