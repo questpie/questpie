@@ -197,6 +197,7 @@ describe("PreviewField — in preview mode", () => {
 				focusedField={null}
 				onFieldClick={onFieldClick}
 			>
+				{/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- test scaffold for stopPropagation, not a real interactive element */}
 				<div onClick={outerOnClick}>
 					<PreviewField field="title" as="a">
 						Hello
@@ -292,6 +293,7 @@ describe("StandalonePreviewField — context-free variant", () => {
 		const onFieldClick = mock(() => {});
 		const outerOnClick = mock(() => {});
 		render(
+			// oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- test scaffold for stopPropagation, not a real interactive element
 			<div onClick={outerOnClick}>
 				<StandalonePreviewField
 					field="title"
