@@ -408,6 +408,60 @@ describe("useCollectionPreview — SELECT_TARGET / FOCUS_FIELD", () => {
 
 		expect(result.current.selectedBlockId).toBe("abc");
 	});
+
+	it("clears focusedField on SELECT_TARGET with null path (idle)", () => {
+		const onRefresh = mock(() => Promise.resolve());
+		const { result } = renderHook(() =>
+			useCollectionPreview({ initialData: {}, onRefresh }),
+		);
+
+		// Seed a focus first.
+		act(() => {
+			dispatchAdminMessage({ type: "FOCUS_FIELD", fieldPath: "title" });
+		});
+		expect(result.current.focusedField).toBe("title");
+
+		// Idle SELECT_TARGET should clear it.
+		act(() => {
+			dispatchAdminMessage({
+				type: "SELECT_TARGET",
+				fieldPath: null,
+				kind: "idle",
+			});
+		});
+
+		expect(result.current.focusedField).toBeNull();
+	});
+
+	it("preserves selectedBlockId when SELECT_TARGET arrives without a blockId", () => {
+		// Lock in the design choice: selecting a non-block field after
+		// a block has been highlighted does NOT clear the block. The
+		// canvas can show both a focused field AND a block outline at
+		// the same time. This matches V1's FOCUS_FIELD behaviour.
+		const onRefresh = mock(() => Promise.resolve());
+		const { result } = renderHook(() =>
+			useCollectionPreview({ initialData: {}, onRefresh }),
+		);
+
+		act(() => {
+			dispatchAdminMessage({ type: "SELECT_BLOCK", blockId: "abc" });
+		});
+		expect(result.current.selectedBlockId).toBe("abc");
+
+		// Move focus to a regular field; bridge sends SELECT_TARGET
+		// without a `blockId` extra.
+		act(() => {
+			dispatchAdminMessage({
+				type: "SELECT_TARGET",
+				fieldPath: "title",
+				kind: "field",
+			});
+		});
+
+		expect(result.current.focusedField).toBe("title");
+		// Block selection persists by design.
+		expect(result.current.selectedBlockId).toBe("abc");
+	});
 });
 
 describe("useCollectionPreview — NAVIGATE_PREVIEW", () => {
