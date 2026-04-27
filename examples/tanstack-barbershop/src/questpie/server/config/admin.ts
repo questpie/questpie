@@ -9,6 +9,9 @@ import { adminConfig, type WidgetFetchContext } from "@questpie/admin/server";
 export default adminConfig({
 	branding: {
 		name: { en: "Barbershop Control", sk: "Riadenie barbershopu" },
+		logo: { src: "/logo192.png" },
+		tagline: { en: "Run your shop", sk: "Riaď svoj salón" },
+		favicon: "/favicon.ico",
 	},
 	locale: {
 		locales: ["en", "sk"],

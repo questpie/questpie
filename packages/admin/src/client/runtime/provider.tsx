@@ -530,6 +530,19 @@ function resolveBrandText(value: unknown, fallback: string): string {
 	return fallback;
 }
 
+function applyFavicon(href: string | null) {
+	if (typeof document === "undefined" || !href) return;
+	const FAVICON_ID = "qa-brand-favicon";
+	let link = document.getElementById(FAVICON_ID) as HTMLLinkElement | null;
+	if (!link) {
+		link = document.createElement("link");
+		link.id = FAVICON_ID;
+		link.rel = "icon";
+		document.head.appendChild(link);
+	}
+	link.href = href;
+}
+
 function BrandingSync() {
 	const store = useContext(AdminStoreContext);
 	useEffect(() => {
@@ -555,7 +568,9 @@ function BrandingSync() {
 						: null;
 				}
 				if (branding.favicon !== undefined) {
-					next.brandFavicon = branding.favicon ?? null;
+					const favicon = branding.favicon ?? null;
+					next.brandFavicon = favicon;
+					applyFavicon(favicon);
 				}
 				if (Object.keys(next).length > 0) {
 					store.setState(next);

@@ -58,6 +58,7 @@
    --font-sans           Default for all UI body text and content
    --font-mono           Technical content: code, kbd, IDs, timestamps
    --font-chrome         UI chrome (buttons, labels, inputs, tabs, badges)
+   --font-heading        Headings (h1-h6); defaults to var(--font-sans)
 
    -- Spacing ------------------------------------------------
    --spacing-card        Internal card/panel padding (default: 16px)
@@ -139,6 +140,7 @@
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
 	--font-chrome: var(--font-sans);
+	--font-heading: var(--font-sans);
 
 	/* Spacing Scale */
 	--spacing-section: 1.5rem;
@@ -236,6 +238,7 @@
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
 	--font-chrome: var(--font-sans);
+	--font-heading: var(--font-heading);
 
 	/* Radius: Autopilot neutral-soft ladder */
 	--radius-xs: 4px;
@@ -744,6 +747,7 @@
 	h4,
 	h5,
 	h6 {
+		font-family: var(--font-heading);
 		letter-spacing: -0.02em;
 		text-wrap: balance;
 	}
