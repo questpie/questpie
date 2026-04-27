@@ -99,9 +99,13 @@ export type VisualEditFormHostProps = ResourceFormControllerOptions & {
 	 */
 	renderDocument?: () => React.ReactNode;
 	/**
-	 * Override the inspector's per-field body. Defaults to
-	 * `FieldRenderer` resolving the field by name through the
-	 * controller's fields registry.
+	 * Override the inspector's per-field body. The default routes
+	 * through `FieldRenderer` resolved by name from the controller's
+	 * fields registry, but first checks for a per-field
+	 * `visualEdit.inspector` override (resolved at nested-path
+	 * granularity via `resolveNestedVisualEditMeta`) and renders
+	 * that registered component instead when present. Provide this
+	 * prop to bypass both defaults and render a fully custom body.
 	 */
 	renderField?: (fieldPath: string) => React.ReactNode;
 	/**
