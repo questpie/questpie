@@ -7,7 +7,7 @@
 
 import { Icon } from "@iconify/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CollectionSchema, FieldReactiveSchema } from "questpie/client";
+import type { FieldReactiveSchema } from "questpie/client";
 import { QuestpieClientError } from "questpie/client";
 import * as React from "react";
 import { FormProvider, useForm, useFormState } from "react-hook-form";
@@ -535,14 +535,11 @@ export default function FormView({
 	const {
 		form,
 		isEditMode,
-		validationMode,
-		fields: resolvedFields,
 		schema,
 		isFieldsLoading,
 		resolvedFormConfig,
 		formConfigBridge,
 		reactiveConfigs,
-		withRelations,
 		item,
 		transformedItem,
 		isItemLoading: isLoading,
@@ -553,7 +550,6 @@ export default function FormView({
 	} = controller;
 	const {
 		isBlocked,
-		blockedBy,
 		isOpenElsewhere,
 		blockedByUser,
 		refresh: refreshLock,
@@ -567,10 +563,8 @@ export default function FormView({
 		transition: transitionMutation,
 	} = mutations;
 	const {
-		config: workflowConfig,
 		enabled: workflowEnabled,
 		currentStage,
-		currentStageConfig,
 		currentStageLabel,
 		allowedTransitions,
 	} = workflow;
@@ -800,7 +794,7 @@ export default function FormView({
 		}
 	}, [
 		contentLocale,
-		form.getValues,
+		form,
 		setContentLocale,
 		localeChangeDialog.open,
 		isEditMode,
@@ -1253,7 +1247,7 @@ export default function FormView({
 							let errorBody: Record<string, unknown> = {};
 							try {
 								errorBody = await response.json();
-							} catch (_parseErr) {
+							} catch {
 								// ignore parse errors
 							}
 							let errorMessage: string;
