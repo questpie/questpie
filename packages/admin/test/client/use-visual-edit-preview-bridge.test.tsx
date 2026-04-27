@@ -234,6 +234,43 @@ describe("useVisualEditPreviewBridge — COMMIT after save", () => {
 		expect(previewRef.mocks.sendCommit).toHaveBeenCalledTimes(1);
 	});
 
+	it("fires COMMIT again on a second save with a fresh data reference", () => {
+		// Each save mutation produces a new `data` reference; the
+		// bridge dedupes against `lastSeenRef`, so consecutive saves
+		// with structurally-equal-but-distinct refs MUST each fire
+		// their own COMMIT. Without this, a save → save flow would
+		// leave the iframe stuck on the first canonical snapshot.
+		const previewRef = makePreviewRef();
+		const firstSave = { id: "1", title: "First" };
+		const secondSave = { id: "1", title: "Second" };
+
+		const { rerender } = render(
+			<Harness
+				controller={makeController({
+					transformedItem: { id: "1", title: "Old" },
+					mutations: { update: { isSuccess: true, data: firstSave } },
+				})}
+				previewRef={previewRef}
+			/>,
+		);
+		expect(previewRef.mocks.sendCommit).toHaveBeenCalledTimes(1);
+		expect(previewRef.mocks.sendCommit.mock.calls[0]![0]).toEqual(firstSave);
+
+		// Second save with a brand-new data reference.
+		rerender(
+			<Harness
+				controller={makeController({
+					transformedItem: { id: "1", title: "Old" },
+					mutations: { update: { isSuccess: true, data: secondSave } },
+				})}
+				previewRef={previewRef}
+			/>,
+		);
+
+		expect(previewRef.mocks.sendCommit).toHaveBeenCalledTimes(2);
+		expect(previewRef.mocks.sendCommit.mock.calls[1]![0]).toEqual(secondSave);
+	});
+
 	it("fires COMMIT when create mutation succeeds", () => {
 		const previewRef = makePreviewRef();
 		const created = { id: "1", title: "Created" };
