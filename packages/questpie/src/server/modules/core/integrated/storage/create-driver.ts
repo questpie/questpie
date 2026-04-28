@@ -5,12 +5,8 @@ import type { DriverContract } from "flydrive/types";
 
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 
-import { buildStorageFileUrl, generateSignedUrlToken } from "./signed-url.js";
+import { makeProxyUrlBuilder } from "./drivers/factory.js";
 
-const DEFAULT_BASE_PATH = "/";
-
-const resolveBasePath = (config: QuestpieConfig) =>
-	config.storage?.basePath || DEFAULT_BASE_PATH;
 const DEFAULT_LOCATION = "./uploads";
 
 /**
@@ -27,43 +23,26 @@ export function getStorageLocation(config: QuestpieConfig): string | null {
 
 /**
  * Creates the storage driver.
- * - Custom `driver` → use it (cloud)
+ * - Custom `driver` (DriverContract or factory) → use it (cloud)
  * - Otherwise → FSDriver with `location` (local)
  */
 export const createDiskDriver = (config: QuestpieConfig): DriverContract => {
 	if (config.storage?.driver) {
-		return config.storage.driver;
+		return typeof config.storage.driver === "function"
+			? config.storage.driver(config)
+			: config.storage.driver;
 	}
 
 	const location = getStorageLocation(config)!;
-	const secret = config.secret || "questpie-default-secret";
-	const expiration = config.storage?.signedUrlExpiration || 3600;
-
-	const basePath = resolveBasePath(config);
+	const proxy = makeProxyUrlBuilder(config);
 
 	return new FSDriver({
 		location,
 		visibility: "public",
 		urlBuilder: {
-			async generateURL(key) {
-				return buildStorageFileUrl(config.app.url, basePath, key);
-			},
-			async generateSignedURL(key, _filePath, options) {
-				const tokenExpiration = options?.expiresIn
-					? Math.floor(
-							(typeof options.expiresIn === "string"
-								? parseInt(options.expiresIn, 10)
-								: options.expiresIn) / 1000,
-						)
-					: expiration;
-
-				const token = await generateSignedUrlToken(
-					key,
-					secret,
-					tokenExpiration,
-				);
-				return buildStorageFileUrl(config.app.url, basePath, key, token);
-			},
+			generateURL: (key) => proxy.generateURL(key),
+			generateSignedURL: (key, _filePath, options) =>
+				proxy.generateSignedURL(key, options?.expiresIn),
 		},
 	});
 };

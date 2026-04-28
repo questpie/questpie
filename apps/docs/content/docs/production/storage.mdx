@@ -1,9 +1,13 @@
 ---
 title: Storage
-description: File storage with Flydrive — S3, local filesystem, and upload configuration.
+description: File storage with Flydrive — local filesystem, S3, Cloudflare R2, and Google Cloud Storage.
 ---
 
-QUESTPIE uses [Flydrive](https://flydrive.dev/) for file storage. It uses local filesystem storage by default and accepts any custom FlyDrive driver instance for S3, R2, GCS, and other backends.
+QUESTPIE wraps [Flydrive](https://flydrive.dev/) for file storage. Local
+filesystem is the default; for production use one of the recipes below.
+
+For end-to-end details on how files are served, signed, and cached — see
+[Storage Flow](/docs/production/storage-flow).
 
 ## Configuration
 
@@ -11,56 +15,221 @@ QUESTPIE uses [Flydrive](https://flydrive.dev/) for file storage. It uses local 
 export default runtimeConfig({
 	storage: {
 		basePath: "/api",
+		// driver: ...                  // see recipes below
+		// defaultVisibility: "public", // "public" | "private"
+		// signedUrlExpiration: 3600,   // seconds — for private files
 	},
 });
 ```
 
-## Upload Fields
+## Upload fields
 
-Define upload fields on collections:
+Define an upload field on a collection to wire it to your storage:
 
 ```ts
 avatar: f.upload({
-  to: "assets",
-  mimeTypes: ["image/*"],
-  maxSize: 5_000_000,
+	to: "assets",
+	mimeTypes: ["image/*"],
+	maxSize: 5_000_000,
 }),
 ```
 
-## Storage Backends
+## Storage backends
 
-### Local (Development)
+### Local filesystem (default)
 
-Files stored on local filesystem. Default for development.
+No driver needed — QUESTPIE serves from `./uploads` (override with
+`storage.location`). Best for development.
 
-### S3 or S3-Compatible (Production)
+### Cloudflare R2
 
-```ts
-import { S3Driver } from "flydrive/drivers/s3";
+Use the `R2Driver` from `questpie/storage`. It applies R2-specific defaults
+(`region: "auto"`, `forcePathStyle: true`, `supportsACL: false`) and points
+the storage proxy at your app automatically — no `urlBuilder` override
+required.
+
+```ts title="questpie.config.ts"
+import { R2Driver } from "questpie/storage";
 
 export default runtimeConfig({
+	app: { url: process.env.APP_URL! },
+	secret: process.env.SECRET!,
 	storage: {
-		basePath: "/api",
-		driver: new S3Driver({
-			bucket: process.env.S3_BUCKET,
-			region: process.env.S3_REGION,
-			accessKeyId: process.env.S3_ACCESS_KEY,
-			secretAccessKey: process.env.S3_SECRET_KEY,
+		driver: R2Driver({
+			bucket: process.env.R2_BUCKET!,
+			endpoint: process.env.R2_ENDPOINT!,
+			credentials: {
+				accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+				secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+			},
+			visibility: "public",
+			// optional — serve public files from your r2.dev or custom domain,
+			// bypassing the QUESTPIE proxy. Private files still go through the
+			// proxy regardless, so visibility is enforced.
+			publicUrl: process.env.R2_PUBLIC_URL,
 		}),
 	},
 });
 ```
 
-## Client Upload
+#### Why a wrapper for R2 specifically
+
+flydrive's raw `S3Driver` does not apply any of these conventions, and its
+default `getUrl()` returns the S3 API endpoint URL — which on R2 is
+unsigned and not publicly readable, returning HTTP 400 even when the bucket
+has public access enabled. `R2Driver` fixes both problems.
+
+### AWS S3
+
+Use the raw flydrive `S3Driver` with `makeProxyUrlBuilder` from
+`questpie/storage` to point public/signed URLs at the QUESTPIE proxy:
+
+```ts title="questpie.config.ts"
+import { S3Driver, makeProxyUrlBuilder } from "questpie/storage";
+
+export default runtimeConfig({
+	app: { url: process.env.APP_URL! },
+	secret: process.env.SECRET!,
+	storage: {
+		driver: (config) => {
+			const proxy = makeProxyUrlBuilder(config, {
+				// optional CDN/CloudFront domain — public files served directly
+				publicUrl: process.env.S3_PUBLIC_URL,
+			});
+			return new S3Driver({
+				bucket: process.env.S3_BUCKET!,
+				region: process.env.S3_REGION!,
+				credentials: {
+					accessKeyId: process.env.S3_ACCESS_KEY_ID!,
+					secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
+				},
+				visibility: "public",
+				urlBuilder: {
+					generateURL: (key) => proxy.generateURL(key),
+					generateSignedURL: (key, _opts, _client, expiresIn) =>
+						proxy.generateSignedURL(key, expiresIn),
+				},
+			});
+		},
+	},
+});
+```
+
+`storage.driver` accepts either a `DriverContract` instance or a factory
+`(config) => DriverContract`. The factory form gives the closure access to
+your resolved app config (`app.url`, `secret`, `storage.basePath`,
+`storage.signedUrlExpiration`) — that's what makes `makeProxyUrlBuilder`
+work without you piping those values around manually.
+
+### Google Cloud Storage
+
+Same shape as S3 — flydrive's GCS `urlBuilder` signature is slightly
+different but the proxy helper covers it:
+
+```ts title="questpie.config.ts"
+import { GCSDriver, makeProxyUrlBuilder } from "questpie/storage";
+
+export default runtimeConfig({
+	app: { url: process.env.APP_URL! },
+	secret: process.env.SECRET!,
+	storage: {
+		driver: (config) => {
+			const proxy = makeProxyUrlBuilder(config, {
+				publicUrl: process.env.GCS_PUBLIC_URL,
+			});
+			return new GCSDriver({
+				bucket: process.env.GCS_BUCKET!,
+				keyFilename: process.env.GCS_KEY_FILE,
+				visibility: "public",
+				urlBuilder: {
+					generateURL: (key) => proxy.generateURL(key),
+					generateSignedURL: (key) => proxy.generateSignedURL(key),
+				},
+			});
+		},
+	},
+});
+```
+
+## Migrating from raw flydrive imports
+
+If you're currently importing flydrive drivers directly:
+
+```diff title="questpie.config.ts"
+- import { S3Driver } from "flydrive/drivers/s3";
++ import { S3Driver, makeProxyUrlBuilder } from "questpie/storage";
+
+  export default runtimeConfig({
++   app:    { url: process.env.APP_URL! },
++   secret: process.env.SECRET!,
+    storage: {
+-     driver: new S3Driver({
+-       bucket: process.env.S3_BUCKET!,
+-       region: process.env.S3_REGION!,
+-       credentials: { ... },
+-       visibility: "public",
+-     }),
++     driver: (config) => {
++       const proxy = makeProxyUrlBuilder(config);
++       return new S3Driver({
++         bucket: process.env.S3_BUCKET!,
++         region: process.env.S3_REGION!,
++         credentials: { ... },
++         visibility: "public",
++         urlBuilder: {
++           generateURL: (key) => proxy.generateURL(key),
++           generateSignedURL: (key, _opts, _client, expiresIn) =>
++             proxy.generateSignedURL(key, expiresIn),
++         },
++       });
++     },
+    },
+  });
+```
+
+For Cloudflare R2 the migration is shorter — drop the manual S3 conventions
+and use `R2Driver` directly:
+
+```diff title="questpie.config.ts"
+- import { S3Driver } from "flydrive/drivers/s3";
++ import { R2Driver } from "questpie/storage";
+
+  export default runtimeConfig({
+    storage: {
+-     driver: new S3Driver({
+-       bucket: process.env.R2_BUCKET!,
+-       endpoint: process.env.R2_ENDPOINT!,
+-       region: "auto",
+-       forcePathStyle: true,
+-       supportsACL: false,
+-       credentials: { ... },
+-       visibility: "public",
+-       urlBuilder: { /* manual proxy override */ },
+-     }),
++     driver: R2Driver({
++       bucket:   process.env.R2_BUCKET!,
++       endpoint: process.env.R2_ENDPOINT!,
++       credentials: { ... },
++       visibility: "public",
++     }),
+    },
+  });
+```
+
+The raw `new S3Driver({ … })` form still works — wrappers and helpers are
+purely additive.
+
+## Client upload
 
 ```ts
-// Upload a file
 const asset = await client.collections.assets.upload(file, {
 	onProgress: (progress) => console.log(`${progress}%`),
 });
 ```
 
-## Related Pages
+## Related pages
 
-- [Media](/docs/workspace/media) — Admin media management
-- [Fields](/docs/backend/data-modeling/fields) — Upload field type
+- [Storage Flow](/docs/production/storage-flow) — proxy lifecycle, tokens, caching
+- [Storage Adapter](/docs/extend/custom-adapters/storage) — write a custom driver
+- [Media](/docs/workspace/media) — admin media management
+- [Fields](/docs/backend/data-modeling/fields) — upload field type

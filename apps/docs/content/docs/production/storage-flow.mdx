@@ -1,0 +1,154 @@
+---
+title: Storage Flow
+description: How file storage works end-to-end — visibility, the proxy route, signed tokens, and how asset.url is computed.
+---
+
+This page documents what happens between "user uploads a file" and "browser
+loads `<img src={asset.url}>`". Read it if you are configuring a custom
+storage driver, debugging a 401 on private files, or wondering why `asset.url`
+points at your app and not directly at the bucket.
+
+## Visibility model
+
+Every uploaded file has a visibility — `"public"` or `"private"` — stored on
+the asset record (the `visibility` column added by `.upload()`). When a record
+has no explicit value, the framework falls back to `storage.defaultVisibility`
+in your config (default `"public"`).
+
+| Visibility  | Cache headers                              | Requires token? |
+| ----------- | ------------------------------------------ | --------------- |
+| `"public"`  | `Cache-Control: public, max-age=31536000, immutable` | no    |
+| `"private"` | `Cache-Control: private, no-cache`         | yes (`?token=`) |
+
+The visibility on the record is the source of truth. `setVisibility()` is
+called automatically by the upload `afterChange` hook when you change the
+`visibility` field, so the storage backend (S3 ACL, R2 visibility flag, FS
+metadata) stays in sync.
+
+## The proxy route — `GET /storage/files/:key`
+
+Every file served through QUESTPIE goes through a single route registered at
+`packages/questpie/src/server/modules/core/routes/storage/files/[...key].ts`.
+
+### Request lifecycle
+
+1. **Resolve the upload collection.** The route picks the configured
+   `storage.collection`, or — if there's exactly one collection with
+   `.upload()` — that one. Multiple upload collections without an explicit
+   pick is an error (the route returns 400 with a list of candidates).
+
+2. **Look up the asset record by key.** `findOne({ where: { key } })` on the
+   resolved collection. Visibility is read from `record.visibility`, falling
+   back to `storage.defaultVisibility`.
+
+3. **Verify the signed token if private.** For `"private"` records the route
+   reads `?token=<base64url>`, decodes it, verifies the HMAC-SHA256 signature
+   against `config.secret`, and rejects:
+   - missing token → 401 `upload.tokenRequired`
+   - bad signature → 401 `upload.tokenInvalid`
+   - expired payload → 401 `upload.tokenInvalid`
+   - token's `key` ≠ requested key → 401 `upload.tokenMismatch`
+
+4. **Read bytes from the driver.** `await driver.getBytes(key)` loads the full
+   file into memory as a `Uint8Array`. Metadata (`contentType`) is fetched
+   separately via `driver.getMetaData(key)`.
+
+5. **Respond with bytes + headers.** The route returns:
+
+   | Header                   | Value                                                              |
+   | ------------------------ | ------------------------------------------------------------------ |
+   | `Content-Type`           | from driver metadata, falling back to `record.mimeType`            |
+   | `Content-Length`         | byte length                                                        |
+   | `Accept-Ranges`          | `bytes`                                                            |
+   | `Cache-Control`          | `public, max-age=31536000, immutable` or `private, no-cache`       |
+   | `Content-Disposition`    | `inline; filename="…"` (sanitised) when `record.filename` is set   |
+   | `Content-Security-Policy` | `script-src 'none'` for SVG (defuses embedded `<script>`)         |
+
+   HTTP `Range` requests are honoured: a `Range: bytes=…-…` header makes the
+   route return `206 Partial Content` with `Content-Range`. Useful for video
+   and audio seeking. Out-of-range requests get a `416`.
+
+## Token format
+
+`generateSignedUrlToken(key, secret, expirationSeconds)` produces:
+
+```
+base64url(JSON.stringify({
+  key:     "uploads/abc.pdf",
+  expires: 1717428000,            // unix seconds
+  sig:     base64url(HMAC-SHA256(secret, JSON({key, expires})))
+}))
+```
+
+- `expires` is unix seconds, default `Date.now() + storage.signedUrlExpiration`
+  (defaults to 3600 — one hour).
+- `sig` is computed over the canonical `JSON.stringify({key, expires})` —
+  field ordering matters and must match `verifySignedUrlToken`.
+- `secret` is `config.secret`. **If it's not set, private files cannot be
+  served** — the route returns 500 with a configuration error. Always set
+  `secret` in production.
+
+The token is opaque to the storage backend — verification happens entirely in
+QUESTPIE.
+
+## How `asset.url` is computed
+
+`asset.url` is **not** a stored database column. It's added on-the-fly in the
+upload `afterRead` hook on the collection (see
+`packages/questpie/src/server/collection/builder/collection-builder.ts`).
+Every read recomputes it:
+
+```ts
+// roughly:
+afterRead: ({ data, app }) => {
+  if (data.visibility === "private") {
+    data.url = await app.storage.use().getSignedUrl(data.key);
+  } else {
+    data.url = await app.storage.use().getUrl(data.key);
+  }
+};
+```
+
+Two consequences:
+
+1. **Signed URLs are always fresh.** Tokens carry their own expiration but
+   the URL field never goes stale because it's regenerated on every fetch.
+2. **The driver's `urlBuilder` is the only source of truth for URLs.** Configure
+   it once and every collection that uses `.upload()` produces the right URLs.
+
+## Cost & performance trade-off
+
+The proxy route reads the whole file into memory through `driver.getBytes()`
+before responding — no streaming, no zero-copy.
+
+- **Fine for**: images, PDFs, text, JSON, audio thumbnails, anything under a
+  few megabytes. Memory is bounded by request concurrency × file size, which
+  is usually tiny in practice. Browser cache + a CDN in front of the app
+  push the actual cost close to zero after the first hit.
+- **Bad for**: 50 MB+ video, large archives, anything that benefits from
+  range-streaming under heavy concurrent load. For those, set `publicUrl` on
+  the wrapper drivers (or write a custom `urlBuilder.generateURL`) so public
+  files are served straight from the CDN, bypassing the proxy. Private files
+  still need the proxy regardless — there's no other way to enforce
+  visibility.
+
+The `Cache-Control: immutable` header on public files makes browsers and CDNs
+treat them as forever-cacheable. Pair it with content-hashed keys (which is
+what the upload pipeline does by default) and you'll rarely hit the proxy at
+all in production.
+
+## What lives where
+
+| Concern                              | File                                                                              |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| Proxy route handler                  | `packages/questpie/src/server/modules/core/routes/storage/files/[...key].ts`      |
+| Visibility check + token verify      | `packages/questpie/src/server/adapters/routes/storage.ts`                          |
+| Token generation/verification        | `packages/questpie/src/server/modules/core/integrated/storage/signed-url.ts`       |
+| Default FSDriver factory             | `packages/questpie/src/server/modules/core/integrated/storage/create-driver.ts`    |
+| `R2Driver` wrapper, proxy URL helper | `packages/questpie/src/server/modules/core/integrated/storage/drivers/`            |
+| Upload `afterRead` hook              | `packages/questpie/src/server/collection/builder/collection-builder.ts`            |
+
+## Related
+
+- [Storage](/docs/production/storage) — driver configuration recipes
+- [Storage Adapter](/docs/extend/custom-adapters/storage) — writing a custom driver

@@ -5,6 +5,7 @@
 		"migrations",
 		"authentication",
 		"storage",
+		"storage-flow",
 		"email",
 		"queue",
 		"search",
