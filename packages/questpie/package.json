@@ -27,6 +27,7 @@
 		"./drizzle": "./src/exports/drizzle.ts",
 		"./drizzle-pg-core": "./src/exports/drizzle-pg-core.ts",
 		"./shared": "./src/exports/shared.ts",
+		"./storage": "./src/exports/storage.ts",
 		"./*": "./*"
 	},
 	"publishConfig": {
@@ -38,6 +39,7 @@
 			"./drizzle": "./dist/drizzle.mjs",
 			"./drizzle-pg-core": "./dist/drizzle-pg-core.mjs",
 			"./shared": "./dist/shared.mjs",
+			"./storage": "./dist/storage.mjs",
 			"./*": "./*"
 		}
 	},
@@ -63,6 +65,8 @@
 		"zod": "^4.2.1"
 	},
 	"devDependencies": {
+		"@aws-sdk/client-s3": "^3.840.0",
+		"@aws-sdk/s3-request-presigner": "^3.840.0",
 		"@electric-sql/pglite": "^0.3.14",
 		"@types/html-to-text": "^9.0.4",
 		"@types/nodemailer": "^7.0.5",

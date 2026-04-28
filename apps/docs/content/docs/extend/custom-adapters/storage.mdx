@@ -5,6 +5,10 @@ description: Implement a custom file storage driver for QUESTPIE using FlyDrive.
 
 Storage in QUESTPIE is backed by [FlyDrive](https://flydrive.dev). To use a custom cloud provider (S3, R2, GCS, Azure Blob, etc.), you provide a FlyDrive `DriverContract` instance. FlyDrive already ships drivers for popular providers -- you only need to write a custom driver if your provider is not supported.
 
+For end-to-end details on how QUESTPIE serves files, signs URLs, and computes
+`asset.url` see [Storage Flow](/docs/production/storage-flow). For provider
+recipes (R2, S3, GCS) see [Storage](/docs/production/storage).
+
 ## Interface
 
 QUESTPIE expects a FlyDrive `DriverContract`. The full interface:
@@ -65,28 +69,20 @@ interface DriverContract {
 
 ## Using an existing FlyDrive driver
 
-For most cloud providers, you do not need to write a driver at all. Install the FlyDrive package for your provider and pass it directly:
+For most cloud providers, you do not need to write a driver at all. Use the
+`questpie/storage` entry, which re-exports FlyDrive's `S3Driver`, `FSDriver`,
+`GCSDriver` and adds:
 
-```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
-import { S3Driver } from "flydrive/drivers/s3";
+- **`R2Driver(options)`** — a wrapper for Cloudflare R2 that applies R2-specific
+  conventions (`region: "auto"`, `forcePathStyle: true`, `supportsACL: false`)
+  and points the storage proxy at your app automatically.
+- **`makeProxyUrlBuilder(config, { publicUrl? })`** — utility that produces
+  `generateURL` / `generateSignedURL` resolvers wired to the QUESTPIE storage
+  proxy. Plug it into any flydrive driver's `urlBuilder`.
 
-export default runtimeConfig({
-	// ...
-	storage: {
-		driver: new S3Driver({
-			credentials: {
-				accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-				secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-			},
-			region: process.env.AWS_REGION!,
-			bucket: process.env.S3_BUCKET!,
-		}),
-	},
-});
-```
-
-FlyDrive ships drivers for S3, R2 (Cloudflare), GCS (Google Cloud Storage), and local filesystem. See the [FlyDrive drivers documentation](https://flydrive.dev/docs/drivers) for the full list.
+See the [Storage page](/docs/production/storage) for full recipes. The raw
+flydrive imports also still work (`import { S3Driver } from "flydrive/drivers/s3"`)
+if you want to manage the urlBuilder yourself.
 
 ## Writing a custom driver
 

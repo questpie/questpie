@@ -310,20 +310,36 @@ export interface StorageLocalConfig extends StorageBaseConfig {
 }
 
 /**
+ * Factory that produces a flydrive driver from the resolved app config.
+ *
+ * Used by the `questpie/storage` wrapper drivers so they can default
+ * `urlBuilder` to the storage proxy without the user having to pipe
+ * `app.url` / `secret` into the driver options manually.
+ */
+export type StorageDriverFactory = (config: QuestpieConfig) => DriverContract;
+
+/**
  * Custom driver storage configuration (S3, R2, GCS, etc.).
  * Cloud providers serve files directly - no local file serving.
  */
 export interface StorageDriverConfig extends StorageBaseConfig {
 	/**
-	 * Custom FlyDrive driver instance.
+	 * Custom FlyDrive driver instance, or a factory produced by one of the
+	 * wrappers from `questpie/storage`.
 	 *
-	 * @example
+	 * @example raw flydrive driver
 	 * ```ts
 	 * import { S3Driver } from "flydrive/drivers/s3";
 	 * storage: { driver: new S3Driver({ ... }) }
 	 * ```
+	 *
+	 * @example questpie wrapper
+	 * ```ts
+	 * import { R2Driver } from "questpie/storage";
+	 * storage: { driver: R2Driver({ bucket: ..., credentials: ... }) }
+	 * ```
 	 */
-	driver: DriverContract;
+	driver: DriverContract | StorageDriverFactory;
 	location?: never;
 }
 
