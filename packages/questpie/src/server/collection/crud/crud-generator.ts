@@ -66,6 +66,7 @@ import {
 	getDb,
 	mergeI18nRows,
 	normalizeContext,
+	normalizeJsonbInput,
 	resolveFieldKey,
 	splitLocalizedFields,
 	withTransaction,
@@ -1399,6 +1400,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						nestedRelations,
 					));
 
+					// Decode any pre-stringified jsonb values before any hook or write
+					// path observes them — see normalizeJsonbInput.
+					regularFields = normalizeJsonbInput(
+						regularFields,
+						this.state.fieldDefinitions,
+					);
+
 					// Validate field-level write access (on regular fields only)
 					await this.validateFieldWriteAccess(
 						regularFields,
@@ -1692,6 +1700,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		// This prevents the validation schema from stripping relation fields
 		let { regularFields, nestedRelations } =
 			this.separateNestedRelationsInternal(data);
+
+		// Decode any pre-stringified jsonb values before any hook or write
+		// path observes them. Drizzle stringifies jsonb values itself; if a
+		// caller (legacy seed, RPC, etc.) passes an already-encoded JSON
+		// string for a jsonb column, double-encoding stores a jsonb string
+		// instead of the intended array/object.
+		regularFields = normalizeJsonbInput(
+			regularFields,
+			this.state.fieldDefinitions,
+		);
 
 		// 4. Global Validation (Zod)
 		if (this.state.validation?.updateSchema) {

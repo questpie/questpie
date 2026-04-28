@@ -18,6 +18,7 @@ import {
 	getRestrictedReadFields,
 	mergeI18nRows,
 	normalizeContext,
+	normalizeJsonbInput,
 	onAfterCommit,
 	splitLocalizedFields,
 	withTransaction,
@@ -348,6 +349,33 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		return rows[0] || null;
 	}
 
+	/**
+	 * Acquire a transaction-scoped Postgres advisory lock keyed on the global's
+	 * table name. Serializes auto-create attempts across concurrent processes so
+	 * we never end up with two singleton rows for the same global.
+	 *
+	 * Released automatically on COMMIT/ROLLBACK. No-op (with a warning) on DBs
+	 * that do not implement `pg_advisory_xact_lock` — the subsequent existence
+	 * re-check is the actual correctness guard.
+	 */
+	private async acquireAutoCreateLock(tx: any): Promise<void> {
+		const lockKey = `questpie:global:${this.state.name}`;
+		try {
+			await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			// Only swallow the "function does not exist" case — anything else
+			// (permission errors, connection errors, …) must surface so we don't
+			// silently mask a broken DB configuration in production.
+			if (!/pg_advisory_xact_lock|does not exist/i.test(message)) {
+				throw error;
+			}
+			console.warn(
+				`[questpie] pg_advisory_xact_lock unavailable; auto-create for global "${this.state.name}" falls back to existence re-check only. Underlying error: ${message}`,
+			);
+		}
+	}
+
 	private createGet() {
 		return async (
 			options: GlobalGetOptions = {},
@@ -395,6 +423,16 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 				if (!baseRow) {
 					baseRow = await withTransaction(db, async (tx: any) => {
+						// Serialize concurrent auto-creates: take the lock first, then
+						// re-check existence inside the locked transaction. Without this
+						// two boot-time fetches can both see "0 rows" and both INSERT.
+						await this.acquireAutoCreateLock(tx);
+
+						const existingAfterLock = await this.getCurrentRow(tx, normalized);
+						if (existingAfterLock) {
+							return existingAfterLock;
+						}
+
 						const insertValues: Record<string, any> = {};
 						if (isScoped) {
 							insertValues.scopeId = scopeId ?? null;
@@ -469,21 +507,34 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 				if (!row) {
 					row = await withTransaction(db, async (tx: any) => {
-						// Auto-create with scope_id if scoped
-						const insertValues: Record<string, any> = {};
-						if (isScoped) {
-							insertValues.scopeId = scopeId ?? null;
-						}
+						// Serialize concurrent auto-creates: take the lock first, then
+						// re-check existence inside the locked transaction. Without this
+						// two boot-time fetches can both see "0 rows" and both INSERT.
+						await this.acquireAutoCreateLock(tx);
 
-						const [inserted] = await tx
-							.insert(this.table)
-							.values(insertValues)
-							.returning();
-						if (!inserted) {
-							throw ApiError.internal("Failed to auto-create global record");
-						}
+						const existingAfterLock = await this.getCurrentRow(tx, normalized);
 
-						await this.createVersion(tx, inserted, "create", normalized);
+						let baseRecord = existingAfterLock;
+						if (!baseRecord) {
+							// Auto-create with scope_id if scoped
+							const insertValues: Record<string, any> = {};
+							if (isScoped) {
+								insertValues.scopeId = scopeId ?? null;
+							}
+
+							const [inserted] = await tx
+								.insert(this.table)
+								.values(insertValues)
+								.returning();
+							if (!inserted) {
+								throw ApiError.internal(
+									"Failed to auto-create global record",
+								);
+							}
+
+							await this.createVersion(tx, inserted, "create", normalized);
+							baseRecord = inserted;
+						}
 
 						const {
 							query: createdQuery,
@@ -491,7 +542,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 							needsFallback: createdNeedsFallback,
 						} = this.buildSelectQuery(tx, normalized, options.columns);
 						let createdRows = await createdQuery
-							.where(eq((this.table as any).id, inserted.id))
+							.where(eq((this.table as any).id, baseRecord.id))
 							.limit(1);
 
 						// Application-side i18n merge
@@ -506,7 +557,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 							});
 						}
 
-						return createdRows[0] || inserted;
+						return createdRows[0] || baseRecord;
 					});
 				}
 			}
@@ -615,6 +666,16 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			// Separate nested relation operations from regular fields
 			let { regularFields, nestedRelations } =
 				this.separateNestedRelationsInternal(data);
+
+			// Decode any pre-stringified jsonb values before any hook or write
+			// path observes them. Drizzle stringifies jsonb values itself; if a
+			// caller (legacy seed, RPC, etc.) passes an already-encoded JSON
+			// string for a jsonb column, double-encoding stores a jsonb string
+			// instead of the intended array/object.
+			regularFields = normalizeJsonbInput(
+				regularFields,
+				this.state.fieldDefinitions,
+			);
 
 			// Validate field-level write access
 			await this.validateFieldWriteAccess(
