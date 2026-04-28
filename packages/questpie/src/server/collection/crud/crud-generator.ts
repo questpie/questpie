@@ -414,6 +414,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		options: FindManyOptions | FindOneOptionsBase,
 		context: CRUDContext,
 		mode: "many" | "one",
+		findOptions?: { skipOutputHooks?: boolean },
 	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T | null> {
 		// Normalize context FIRST to ensure locale defaults are applied
 		const normalized = this.normalizeContext({
@@ -938,16 +939,24 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					await this.resolveRelations(rows, options.with, normalized);
 				}
 
-				// Filter fields and run output hooks in parallel per row
+				// Filter fields and run output hooks in parallel per row.
+				// `skipOutputHooks` is set by `_executeUpdate`'s in-tx refetch to
+				// avoid recursing into other collections (e.g. blocks prefetch)
+				// while a tx is open — those calls would inherit `db: tx` and
+				// serialize through the open tx connection, deadlocking under
+				// parallel load. Output hooks + afterRead are re-run by the
+				// caller after the tx commits.
 				await Promise.all(
 					rows.map(async (row: any) => {
 						await this.filterFieldsForRead(row, normalized);
-						await this.runFieldOutputHooks(row, "read", normalized, db);
+						if (!findOptions?.skipOutputHooks) {
+							await this.runFieldOutputHooks(row, "read", normalized, db);
+						}
 					}),
 				);
 
 				// Execute afterRead hooks in parallel per row
-				if (this.state.hooks?.afterRead) {
+				if (this.state.hooks?.afterRead && !findOptions?.skipOutputHooks) {
 					await Promise.all(
 						rows.map((row: any) =>
 							this.executeHooks(
@@ -1841,7 +1850,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					);
 				}
 
-				// Re-fetch updated records with full state (i18n, virtuals, title, etc.)
+				// Re-fetch updated records WITHOUT field output hooks / afterRead.
+				// Field output hooks run AFTER the transaction commits — running
+				// them inside the tx caused inner CRUD calls (e.g. blocks prefetch
+				// hitting other collections) to inherit `db: tx` via context
+				// propagation, serializing every parallel inner query through the
+				// tx connection. Bun SQL can deadlock when many parallel queries
+				// queue behind an open tx, leaving the response un-read and the
+				// connection stuck `idle in transaction`.
 				const reFetchResult = (await this._executeFind(
 					{ where: { id: { in: recordIds } }, includeDeleted: true },
 					{
@@ -1850,6 +1866,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						stage: this.workflowConfig?.initialStage,
 					},
 					"many",
+					{ skipOutputHooks: true },
 				)) as PaginatedResult<any>;
 
 				const refetchedRecords = reFetchResult.docs;

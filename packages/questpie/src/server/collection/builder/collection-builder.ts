@@ -953,7 +953,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			...other.state.access,
 		};
 
+		// Spread both states first to preserve extension-set keys (admin, adminList,
+		// adminForm, adminActions, adminPreview, etc.) added via .set() — without this
+		// they are lost on merge. Then override the explicit merged keys below.
 		const mergedState = {
+			...this.state,
+			...other.state,
 			name: this.state.name,
 			fields: { ...this.state.fields, ...other.state.fields },
 			virtuals: {
