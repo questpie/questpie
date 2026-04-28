@@ -1369,14 +1369,15 @@ export default function FormView({
 
 					setActionLoading(true);
 					toast.promise(
-						deleteMutation.mutateAsync(itemId).finally(() => {
+						deleteMutation.mutateAsync({ id: itemId }).finally(() => {
 							setActionLoading(false);
 						}),
 						{
 							loading: t("toast.deleting"),
 							success: () => {
-								// Navigate back to list on delete
-								navigate(`${basePath}/collections/${collection}`);
+								storeNavigate(
+									`${storeBasePath || basePath}/collections/${collection}`,
+								);
 								return t("toast.deleteSuccess");
 							},
 							error: (err) => err.message || t("toast.deleteFailed"),

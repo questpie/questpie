@@ -353,7 +353,11 @@ export function mergeServerActions<TItem = any>(
 			primary: headerActions as ActionDefinition<TItem>[],
 			secondary: headerSecondary as ActionDefinition<TItem>[],
 		},
-		row: rowActions as ActionDefinition<TItem>[],
-		bulk: bulkActions,
+		...("row" in localActions || rowActions.length > 0
+			? { row: rowActions as ActionDefinition<TItem>[] }
+			: {}),
+		...("bulk" in localActions || bulkActions.length > 0
+			? { bulk: bulkActions }
+			: {}),
 	};
 }
