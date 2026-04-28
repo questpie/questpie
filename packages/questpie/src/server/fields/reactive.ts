@@ -22,6 +22,8 @@ export type {
 	OptionsResult,
 	OptionsConfig,
 	ReactiveAdminMeta,
+	ReactivePropPlaceholder,
+	ReactivePropValue,
 	SerializedReactiveConfig,
 	SerializedOptionsConfig,
 	TrackingResult,
@@ -30,6 +32,9 @@ export type {
 import type {
 	ReactiveContext,
 	ReactiveConfig,
+	ReactiveHandler,
+	ReactivePropPlaceholder,
+	ReactivePropValue,
 	TrackingResult,
 } from "./reactive-types.js";
 
@@ -159,4 +164,124 @@ export function isReactiveConfig(value: unknown): value is ReactiveConfig<any> {
 		return typeof (value as any).handler === "function";
 	}
 	return false;
+}
+
+// ============================================================================
+// Reactive Prop Values (per-field-instance escape hatch)
+// ============================================================================
+
+/**
+ * True if the value is a function or `{ handler }` config — i.e. a value
+ * that needs to be evaluated server-side and replaced with a placeholder
+ * before being shipped to the client.
+ */
+function isReactivePropDynamic(
+	value: unknown,
+): value is
+	| ReactiveHandler<unknown>
+	| { handler: ReactiveHandler<unknown>; deps?: unknown; debounce?: number } {
+	if (typeof value === "function") return true;
+	if (typeof value !== "object" || value === null) return false;
+	const obj = value as { handler?: unknown };
+	return typeof obj.handler === "function";
+}
+
+/**
+ * True if the value is a `ReactivePropPlaceholder` (i.e. came back from the
+ * wire after introspection serialized a function value). Used by the client
+ * to decide whether a `props.<key>` value needs RPC resolution or can be
+ * used directly.
+ */
+export function isReactivePropPlaceholder(
+	value: unknown,
+): value is ReactivePropPlaceholder {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as { "~reactive"?: unknown })["~reactive"] === "prop"
+	);
+}
+
+/**
+ * Serialize a single prop value. Static values pass through unchanged.
+ * Function / `{ handler, deps, debounce }` values become a
+ * `ReactivePropPlaceholder` carrying just the dependency list and debounce —
+ * the handler stays on the server and is evaluated on demand by the
+ * `/admin/reactive` `prop` endpoint.
+ */
+export function serializeReactivePropValue<T>(
+	value: ReactivePropValue<T> | undefined,
+): unknown {
+	if (value === undefined) return undefined;
+	if (!isReactivePropDynamic(value)) return value;
+
+	const config: ReactiveConfig<unknown> =
+		typeof value === "function"
+			? (value as ReactiveHandler<unknown>)
+			: (value as {
+					handler: ReactiveHandler<unknown>;
+					deps?: string[] | ((ctx: ReactiveContext) => any[]);
+					debounce?: number;
+				});
+	const watch = extractDependencies(config);
+	const debounce = getDebounce(config);
+	const placeholder: ReactivePropPlaceholder = {
+		"~reactive": "prop",
+		watch,
+		...(debounce !== undefined ? { debounce } : {}),
+	};
+	return placeholder;
+}
+
+/**
+ * Walk a `props` object and serialize every value through
+ * `serializeReactivePropValue`. Returns a new object with dynamic values
+ * replaced by placeholders; `undefined` if the input had no entries to
+ * serialize (caller can skip emitting the key in that case).
+ */
+export function serializeReactivePropsRecord(
+	props: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+	if (!props || typeof props !== "object") return undefined;
+	const out: Record<string, unknown> = {};
+	let any = false;
+	for (const [key, value] of Object.entries(props)) {
+		if (value === undefined) continue;
+		out[key] = serializeReactivePropValue(value as ReactivePropValue<unknown>);
+		any = true;
+	}
+	return any ? out : undefined;
+}
+
+/**
+ * Recursively walk an admin form layout (`fields`, sections, tabs, sidebar)
+ * and replace each `props` record with its serialized form. The input is
+ * treated as opaque — anything we don't recognise as a layout container is
+ * returned untouched. We never mutate the input.
+ */
+export function serializeFormLayoutProps<T>(layout: T): T {
+	if (Array.isArray(layout)) {
+		return layout.map((item) => serializeFormLayoutProps(item)) as unknown as T;
+	}
+	if (!layout || typeof layout !== "object") return layout;
+	const obj = layout as Record<string, unknown>;
+	const result: Record<string, unknown> = { ...obj };
+	if (obj.props && typeof obj.props === "object" && !Array.isArray(obj.props)) {
+		const serialized = serializeReactivePropsRecord(
+			obj.props as Record<string, unknown>,
+		);
+		if (serialized !== undefined) {
+			result.props = serialized;
+		}
+	}
+	for (const key of ["fields", "tabs", "sections", "items"] as const) {
+		const value = obj[key];
+		if (Array.isArray(value)) {
+			result[key] = value.map((item) => serializeFormLayoutProps(item));
+		}
+	}
+	if (obj.sidebar && typeof obj.sidebar === "object") {
+		result.sidebar = serializeFormLayoutProps(obj.sidebar);
+	}
+	return result as T;
 }

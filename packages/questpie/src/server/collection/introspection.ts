@@ -26,6 +26,7 @@ import {
 	extractDependencies,
 	getDebounce,
 	isReactiveConfig,
+	serializeFormLayoutProps,
 } from "#questpie/server/fields/reactive.js";
 import type {
 	FieldLocation,
@@ -988,8 +989,10 @@ function extractAdminConfig(
 	if (stateAny.adminForm) {
 		result.form = {
 			view: stateAny.adminForm.view,
-			fields: stateAny.adminForm.fields,
-			sidebar: stateAny.adminForm.sidebar,
+			fields: serializeFormLayoutProps(stateAny.adminForm.fields),
+			sidebar: stateAny.adminForm.sidebar
+				? serializeFormLayoutProps(stateAny.adminForm.sidebar)
+				: undefined,
 		};
 	}
 

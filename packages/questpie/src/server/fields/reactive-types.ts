@@ -95,6 +95,40 @@ export interface SerializedReactiveConfig {
 	debounce?: number;
 }
 
+// ============================================================================
+// Reactive Prop Values (per-field-instance escape hatch)
+// ============================================================================
+
+/**
+ * Reactive prop placeholder — what the wire sees in place of a function value
+ * for an arbitrary field-component prop (e.g. relation `filter`).
+ *
+ * The function itself stays on the server; the client receives this descriptor
+ * and resolves the actual value by calling `/admin/reactive` with
+ * `{ type: "prop", field, propPath, formData }`.
+ *
+ * The `~reactive` discriminator is intentionally namespaced to avoid colliding
+ * with ordinary JSON shapes that callers might legitimately store under a
+ * `props` key (e.g. `{ filter: { role: "admin" } }`).
+ */
+export interface ReactivePropPlaceholder extends SerializedReactiveConfig {
+	"~reactive": "prop";
+}
+
+/**
+ * Reactive prop value — supports static JSON, raw handler function, or a full
+ * config (handler + deps + debounce). Handler / config get serialized to a
+ * `ReactivePropPlaceholder` during introspection.
+ */
+export type ReactivePropValue<TReturn = unknown> =
+	| TReturn
+	| ReactiveHandler<TReturn>
+	| {
+			handler: ReactiveHandler<TReturn>;
+			deps?: string[] | ((ctx: ReactiveContext) => any[]);
+			debounce?: number;
+	  };
+
 export interface SerializedOptionsConfig {
 	watch: string[];
 	searchable: boolean;

@@ -14,6 +14,7 @@ import {
 	extractFormReactiveConfigs,
 	type FieldReactiveSchema,
 } from "#questpie/server/collection/introspection.js";
+import { serializeFormLayoutProps } from "#questpie/server/fields/reactive.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 import type {
@@ -423,8 +424,10 @@ function extractAdminConfig(
 	if (stateAny.adminForm) {
 		result.form = {
 			view: stateAny.adminForm.view,
-			fields: stateAny.adminForm.fields,
-			sidebar: stateAny.adminForm.sidebar,
+			fields: serializeFormLayoutProps(stateAny.adminForm.fields),
+			sidebar: stateAny.adminForm.sidebar
+				? serializeFormLayoutProps(stateAny.adminForm.sidebar)
+				: undefined,
 		};
 	}
 

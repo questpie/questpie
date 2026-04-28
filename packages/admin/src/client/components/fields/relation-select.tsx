@@ -66,9 +66,18 @@ export interface RelationSelectProps<_T extends QuestpieApp> {
 	locale?: string;
 
 	/**
-	 * Filter options based on form values
+	 * Pre-resolved filter for the relation `find()` call. Used as-is for the
+	 * `where` clause. Reactive (function) filters from layout `props.filter`
+	 * are evaluated by `FieldRenderer`'s `useReactiveProps` before reaching
+	 * this component, so by the time we see `filter` here it's plain JSON
+	 * (or `undefined`).
+	 *
+	 * Legacy `(formValues) => any` callers are still tolerated — we invoke
+	 * them with `{}` for backward compatibility, but new code should rely on
+	 * the layout-level `props` shape and let introspection serialize the
+	 * function for us.
 	 */
-	filter?: (formValues: any) => any;
+	filter?: Record<string, unknown> | ((formValues: any) => any);
 
 	/**
 	 * Is the field required
@@ -145,6 +154,14 @@ export function RelationSelect<T extends QuestpieApp>({
 	const targetConfig = serverConfig?.collections?.[targetCollection];
 	const collectionIconRef = (targetConfig as any)?.icon;
 
+	// Resolve filter once: by the time we get here `filter` is either plain
+	// JSON (resolved by FieldRenderer's useReactiveProps) or a legacy callable
+	// passed in by a custom renderer. Normalize to a `where` clause value.
+	const resolvedFilter = React.useMemo<unknown>(
+		() => (typeof filter === "function" ? (filter as any)({}) : filter),
+		[filter],
+	);
+
 	// Load options from server with search
 	const loadOptions = React.useCallback(
 		async (search: string): Promise<SelectOption<string>[]> => {
@@ -162,8 +179,8 @@ export function RelationSelect<T extends QuestpieApp>({
 				}
 
 				// Add custom filter if provided
-				if (filter) {
-					options.where = filter({});
+				if (resolvedFilter) {
+					options.where = resolvedFilter;
 				}
 
 				const response = await (client as any).collections[
@@ -208,7 +225,7 @@ export function RelationSelect<T extends QuestpieApp>({
 		[
 			client,
 			targetCollection,
-			filter,
+			resolvedFilter,
 			renderOption,
 			collectionIconRef,
 			locale,
@@ -327,7 +344,7 @@ export function RelationSelect<T extends QuestpieApp>({
 									limit: 50,
 									locale,
 									search,
-									where: filter ? filter({}) : undefined,
+									where: resolvedFilter ?? undefined,
 								},
 							])
 						}
@@ -391,7 +408,7 @@ export function RelationSelect<T extends QuestpieApp>({
 								limit: 50,
 								locale,
 								search,
-								where: filter ? filter({}) : undefined,
+								where: resolvedFilter ?? undefined,
 							},
 						])
 					}

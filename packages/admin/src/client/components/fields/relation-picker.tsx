@@ -75,9 +75,16 @@ export interface RelationPickerProps<_T extends QuestpieApp> {
 	locale?: string;
 
 	/**
-	 * Filter options based on form values
+	 * Pre-resolved filter for the relation `find()` call. Used as-is for the
+	 * `where` clause. Reactive (function) filters from layout `props.filter`
+	 * are evaluated by `FieldRenderer`'s `useReactiveProps` before reaching
+	 * this component, so by the time we see `filter` here it's plain JSON
+	 * (or `undefined`).
+	 *
+	 * Legacy `(formValues) => any` callers are still tolerated — we invoke
+	 * them with `{}` for backward compatibility.
 	 */
-	filter?: (formValues: any) => any;
+	filter?: Record<string, unknown> | ((formValues: any) => any);
 
 	/**
 	 * Is the field required
@@ -241,6 +248,14 @@ export function RelationPicker<T extends QuestpieApp>({
 		placeholderData: (prev) => prev,
 	});
 
+	// Resolve filter once: by the time we get here `filter` is either plain
+	// JSON (resolved by FieldRenderer's useReactiveProps) or a legacy callable
+	// passed in by a custom renderer.
+	const resolvedFilter = React.useMemo<unknown>(
+		() => (typeof filter === "function" ? (filter as any)({}) : filter),
+		[filter],
+	);
+
 	// Load options from server with search
 	const loadOptions = React.useCallback(
 		async (search: string): Promise<SelectOption<string>[]> => {
@@ -257,8 +272,8 @@ export function RelationPicker<T extends QuestpieApp>({
 				}
 
 				// Add custom filter if provided
-				if (filter) {
-					options.where = filter({});
+				if (resolvedFilter) {
+					options.where = resolvedFilter;
 				}
 
 				const response = await (client as any).collections[
@@ -307,7 +322,7 @@ export function RelationPicker<T extends QuestpieApp>({
 		[
 			client,
 			targetCollection,
-			filter,
+			resolvedFilter,
 			selectedIds,
 			renderOption,
 			collectionIconRef,
@@ -457,7 +472,7 @@ export function RelationPicker<T extends QuestpieApp>({
 									{
 										limit: 50,
 										search,
-										where: filter ? filter({}) : undefined,
+										where: resolvedFilter ?? undefined,
 										selectedIds,
 									},
 								])

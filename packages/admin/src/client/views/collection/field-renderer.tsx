@@ -13,6 +13,7 @@ import type { FieldInstance } from "../../builder/field/field";
 import { Skeleton } from "../../components/ui/skeleton";
 import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useFieldHooks } from "../../hooks/use-field-hooks";
+import { useReactiveProps } from "../../hooks/use-reactive-prop";
 import { useResolveText } from "../../i18n/hooks";
 import { useScopedLocale } from "../../runtime";
 import {
@@ -380,6 +381,16 @@ export function FieldRenderer({
 	// Build props and resolve I18nText labels to strings
 	const rawComponentProps = buildComponentProps(context);
 
+	// Resolve any `ReactivePropPlaceholder` entries in extraProps via
+	// /admin/reactive (single batched call). Static entries pass through.
+	// The field component never has to know about placeholders.
+	const { props: resolvedExtraProps } = useReactiveProps({
+		entity: collection,
+		entityType: mode,
+		field: fullFieldName,
+		props: extraProps,
+	});
+
 	// For computed fields, use computed value instead of form value
 	const fieldValue = isComputed
 		? computedValue
@@ -403,8 +414,10 @@ export function FieldRenderer({
 		description: resolveText(rawComponentProps.description, "", formValues),
 		placeholder: resolveText(rawComponentProps.placeholder, "", formValues),
 		// Forward layout-level escape-hatch props (e.g. relation `filter`).
-		// Spread last so they override component defaults but NOT computed/value/onChange semantics above.
-		...(extraProps ?? {}),
+		// Spread last so they override component defaults but NOT
+		// computed/value/onChange semantics above. Function-valued props were
+		// already resolved server-side via useReactiveProps above.
+		...resolvedExtraProps,
 	};
 
 	// Render content based on priority

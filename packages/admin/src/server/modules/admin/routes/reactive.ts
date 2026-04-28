@@ -377,6 +377,49 @@ function getReactiveHandler(
 }
 
 /**
+ * Get a reactive prop handler from a layout entry's `props.<propPath>`.
+ *
+ * The wire-side counterpart is the `ReactivePropPlaceholder` shape that
+ * introspection emits in place of function-valued layout props (e.g. a
+ * relation field's `filter`). This resolves the original function on the
+ * live server state so we can evaluate it with current form data.
+ */
+function getReactivePropHandler(
+	app: Questpie<any>,
+	entityName: string,
+	fieldPath: string,
+	propPath: string,
+	type: "collection" | "global" = "collection",
+): ((ctx: ReactiveContext) => any) | null {
+	const entity = getEntity(app, entityName, type);
+	const formConfig = (entity.state as unknown as Record<string, unknown>)
+		.adminForm;
+
+	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
+	if (!fieldEntry) return null;
+
+	const props = fieldEntry.props as Record<string, unknown> | undefined;
+	if (!props || typeof props !== "object") return null;
+
+	const propValue = props[propPath];
+	if (propValue === undefined || propValue === null) return null;
+
+	if (typeof propValue === "function") {
+		return propValue as (ctx: ReactiveContext) => any;
+	}
+
+	if (
+		typeof propValue === "object" &&
+		"handler" in (propValue as Record<string, unknown>) &&
+		typeof (propValue as { handler?: unknown }).handler === "function"
+	) {
+		return (propValue as { handler: (ctx: ReactiveContext) => any }).handler;
+	}
+
+	return null;
+}
+
+/**
  * Get options handler from field config.
  */
 function getOptionsHandler(
@@ -406,7 +449,13 @@ const reactiveRequestSchema = z.object({
 	field: z.string(),
 
 	/** Type of reactive operation */
-	type: z.enum(["hidden", "readOnly", "disabled", "compute"]),
+	type: z.enum(["hidden", "readOnly", "disabled", "compute", "prop"]),
+
+	/**
+	 * Required when `type === "prop"` — identifies which key inside the
+	 * field's layout `props` record should be evaluated (e.g. "filter").
+	 */
+	propPath: z.string().optional(),
 
 	/** Current form data */
 	formData: z.record(z.string(), z.unknown()).optional(),
@@ -449,7 +498,10 @@ const reactiveResultSchema = z.object({
 	field: z.string(),
 
 	/** Type of reactive operation */
-	type: z.enum(["hidden", "readOnly", "disabled", "compute"]),
+	type: z.enum(["hidden", "readOnly", "disabled", "compute", "prop"]),
+
+	/** Echo of the prop key when type === "prop" */
+	propPath: z.string().optional(),
 
 	/** Computed value */
 	value: z.unknown(),
@@ -538,6 +590,7 @@ export const batchReactive = route()
 				const {
 					field,
 					type,
+					propPath,
 					formData,
 					siblingData,
 					prevData,
@@ -553,25 +606,47 @@ export const batchReactive = route()
 				> | null;
 
 				try {
-					// Get field definition
+					// Get field definition (validates the path exists)
 					getFieldDefinition(app, entityName, field, entityType);
 
-					// Get reactive handler
-					const handler = getReactiveHandler(
-						app,
-						entityName,
-						field,
-						type,
-						entityType,
-					);
+					// Resolve the right handler for this request type
+					let handler: ((ctx: ReactiveContext) => any) | null;
+					if (type === "prop") {
+						if (!propPath) {
+							return {
+								field,
+								type,
+								value: undefined as unknown,
+								error: "propPath is required when type === 'prop'",
+							};
+						}
+						handler = getReactivePropHandler(
+							app,
+							entityName,
+							field,
+							propPath,
+							entityType,
+						);
+					} else {
+						handler = getReactiveHandler(
+							app,
+							entityName,
+							field,
+							type,
+							entityType,
+						);
+					}
 
 					if (!handler) {
 						// No handler found - skip
+						const what =
+							type === "prop" ? `prop '${propPath}'` : `${type} handler`;
 						return {
 							field,
 							type,
+							...(propPath ? { propPath } : {}),
 							value: undefined as unknown,
-							error: `No ${type} handler found for field '${field}'`,
+							error: `No ${what} found for field '${field}'`,
 						};
 					}
 
@@ -590,6 +665,7 @@ export const batchReactive = route()
 					return {
 						field,
 						type,
+						...(propPath ? { propPath } : {}),
 						value,
 					};
 				} catch (error) {
@@ -597,6 +673,7 @@ export const batchReactive = route()
 					return {
 						field,
 						type,
+						...(propPath ? { propPath } : {}),
 						value: undefined as unknown,
 						error: error instanceof Error ? error.message : String(error),
 					};

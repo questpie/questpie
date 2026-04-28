@@ -13,6 +13,8 @@ import type {
 	OptionsContext,
 	ReactiveConfig,
 	ReactiveHandler,
+	ReactivePropPlaceholder,
+	ReactivePropValue,
 	SerializedOptionsConfig,
 	SerializedReactiveConfig,
 } from "questpie";
@@ -94,3 +96,12 @@ export function serializeOptionsConfig(
 		paginated: true, // Options handlers always support pagination
 	};
 }
+
+// Re-export reactive prop serialization helpers (live in core since the
+// wire-level placeholder contract does too).
+export {
+	isReactivePropPlaceholder,
+	serializeFormLayoutProps,
+	serializeReactivePropsRecord,
+	serializeReactivePropValue,
+} from "questpie";
