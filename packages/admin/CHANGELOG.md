@@ -1,5 +1,18 @@
 # @questpie/admin
 
+## 3.0.9
+
+### Patch Changes
+
+- [`20477e2`](https://github.com/questpie/questpie/commit/20477e2d52f3282d9d8ac53ff7b36a0f30a06889) Thanks [@drepkovsky](https://github.com/drepkovsky)! - fix(admin): server action handling
+
+  - Add missing `"server"` handler type to form view's action execution (server actions like redirect were silently ignored)
+  - Handle `external: true` on redirect actions across all execution paths (form view, action button, row actions, form submit)
+
+- Updated dependencies []:
+  - questpie@3.0.9
+  - @questpie/tanstack-query@3.0.9
+
 ## 3.0.8
 
 ### Patch Changes
