@@ -68,7 +68,11 @@ async function applyServerActionEffects(
 	}
 
 	if (result.type === "redirect" && result.url) {
-		ctx.helpers.navigate(result.url);
+		if ((result as any).external) {
+			window.open(result.url, "_blank");
+		} else {
+			ctx.helpers.navigate(result.url);
+		}
 	}
 }
 

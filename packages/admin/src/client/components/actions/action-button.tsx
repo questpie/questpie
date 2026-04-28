@@ -245,7 +245,11 @@ export function ActionButton<TItem = any>({
 						helpers.navigate(result.effects.redirect);
 					}
 					if (result?.type === "redirect" && result.url) {
-						helpers.navigate(result.url);
+						if (result.external) {
+							window.open(result.url, "_blank");
+						} else {
+							helpers.navigate(result.url);
+						}
 					}
 					if (result?.effects?.closeModal) {
 						helpers.closeDialog();

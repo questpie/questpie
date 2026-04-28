@@ -1462,6 +1462,67 @@ export default function FormView({
 				}
 				break;
 			}
+			case "server": {
+				const serverHandler = handler as {
+					type: "server";
+					actionId: string;
+					collection: string;
+				};
+				setActionLoading(true);
+				try {
+					const routes = (client as any)?.routes;
+					if (!routes?.executeAction) {
+						throw new Error(t("error.serverActionFailed"));
+					}
+					const response = await routes.executeAction({
+						collection: serverHandler.collection,
+						actionId: serverHandler.actionId,
+						itemId: transformedItem?.id || id,
+					});
+					if (!response?.success || response.result?.type === "error") {
+						throw new Error(
+							response?.error ??
+								response?.result?.toast?.message ??
+								t("error.serverActionFailed"),
+						);
+					}
+					const result = response.result;
+					if (result?.toast?.message) {
+						toast.success(result.toast.message);
+					} else {
+						toast.success(t("toast.actionSuccess"));
+					}
+					if (result?.effects?.invalidate === true) {
+						await actionHelpers.invalidateAll();
+					} else if (Array.isArray(result?.effects?.invalidate)) {
+						for (const col of result.effects.invalidate) {
+							await actionHelpers.invalidateCollection(col);
+						}
+					}
+					if (result?.effects?.redirect) {
+						storeNavigate(result.effects.redirect);
+					}
+					if (result?.type === "redirect" && result.url) {
+						if (result.external) {
+							window.open(result.url, "_blank");
+						} else {
+							storeNavigate(result.url);
+						}
+					}
+					if (result?.effects?.closeModal) {
+						actionHelpers.closeDialog();
+					}
+				} catch (error) {
+					toast.error(
+						error instanceof Error
+							? error.message
+							: t("error.actionFailed"),
+					);
+				} finally {
+					setActionLoading(false);
+				}
+				break;
+			}
 		}
 		setConfirmAction(null);
 	};
