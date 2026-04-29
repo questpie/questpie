@@ -1,5 +1,5 @@
-import { service } from "#questpie/server/services/define-service.js";
 import { createSearchService } from "#questpie/server/modules/core/integrated/search/service.js";
+import { service } from "#questpie/server/services/define-service.js";
 
 /**
  * Search service — creates the SearchService from app config.
@@ -11,20 +11,14 @@ export default service({
 	namespace: null,
 	lifecycle: "singleton",
 	create: ({ app }) => {
-		const search = createSearchService(
-			app.config.search,
-			app.db,
-			app.logger,
-		);
+		const search = createSearchService(app.config.search, app.db, app.logger);
 
 		// Initialize search adapter asynchronously (lazy init on first use)
 		search.initialize().catch((err: unknown) => {
-			app.logger.error(
-				"[QUESTPIE] Failed to initialize search adapter:",
-				err,
-			);
+			app.logger.error("[QUESTPIE] Failed to initialize search adapter:", err);
 		});
 
 		return search;
 	},
+	dispose: (instance) => instance.destroy(),
 });
