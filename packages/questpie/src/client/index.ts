@@ -73,6 +73,17 @@ type LocaleOptions = {
 	stage?: string;
 };
 
+export type CollectionTransitionStageInput = {
+	id: string;
+	stage: string;
+	scheduledAt?: string | Date;
+};
+
+export type GlobalTransitionStageInput = {
+	stage: string;
+	scheduledAt?: string | Date;
+};
+
 /**
  * Upload error with additional context
  */
@@ -409,7 +420,7 @@ type CollectionAPI<
 	 * Transition a record to a different workflow stage (no data mutation)
 	 */
 	transitionStage: (
-		params: { id: string; stage: string },
+		params: CollectionTransitionStageInput,
 		options?: LocaleOptions,
 	) => Promise<CollectionSelect<TCollection>>;
 
@@ -596,7 +607,7 @@ type GlobalAPI<
 	 * Transition global to a different workflow stage (no data mutation)
 	 */
 	transitionStage: (
-		params: { stage: string },
+		params: GlobalTransitionStageInput,
 		options?: {
 			locale?: string;
 			localeFallback?: boolean;
@@ -1030,7 +1041,7 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				transitionStage: async (
-					{ id, stage }: { id: string; stage: string },
+					{ id, stage, scheduledAt }: CollectionTransitionStageInput,
 					options: LocaleOptions = {},
 				) => {
 					const queryString = qs.stringify(options, {
@@ -1038,9 +1049,20 @@ export function createClient<TApp extends QuestpieApp>(
 						arrayFormat: "brackets",
 					});
 					const path = `${apiBasePath}/${collectionName}/${id}/transition${queryString ? `?${queryString}` : ""}`;
+					const body = {
+						stage,
+						...(scheduledAt !== undefined
+							? {
+									scheduledAt:
+										scheduledAt instanceof Date
+											? scheduledAt.toISOString()
+											: scheduledAt,
+								}
+							: {}),
+					};
 					return request(path, {
 						method: "POST",
-						body: JSON.stringify({ stage }),
+						body: JSON.stringify(body),
 					});
 				},
 
@@ -1342,7 +1364,7 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 
 				transitionStage: async (
-					params: { stage: string },
+					params: GlobalTransitionStageInput,
 					options: {
 						locale?: string;
 						localeFallback?: boolean;
@@ -1359,7 +1381,17 @@ export function createClient<TApp extends QuestpieApp>(
 						`${apiBasePath}/globals/${globalName}/transition${queryString ? `?${queryString}` : ""}`,
 						{
 							method: "POST",
-							body: JSON.stringify(params),
+							body: JSON.stringify({
+								stage: params.stage,
+								...(params.scheduledAt !== undefined
+									? {
+											scheduledAt:
+												params.scheduledAt instanceof Date
+													? params.scheduledAt.toISOString()
+													: params.scheduledAt,
+										}
+									: {}),
+							}),
 						},
 					);
 				},

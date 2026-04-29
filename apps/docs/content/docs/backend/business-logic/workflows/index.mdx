@@ -119,6 +119,42 @@ The workflow engine uses **replay-based execution**. When a workflow runs, each 
 - Non-deterministic operations (like API calls) always return the same result on replay
 - Failures at any point can be retried without side effects
 
+## Instance Lifecycle
+
+Each workflow trigger creates an instance in `wf_instance`. The engine owns the status transitions:
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending: trigger()
+  pending --> running: wf-execute
+  running --> suspended: sleep / waitForEvent / invoke
+  suspended --> running: wf-resume
+  running --> completed: handler returns
+  running --> failed: unhandled error
+  pending --> cancelled: cancel()
+  running --> cancelled: cancel()
+  suspended --> cancelled: cancel()
+  pending --> timed_out: maintenance timeout
+  running --> timed_out: maintenance timeout
+  suspended --> timed_out: maintenance timeout
+  failed --> pending: retry()
+  timed_out --> pending: retry()
+  completed --> [*]
+  cancelled --> [*]
+```
+
+| Status      | Meaning                                                      |
+| ----------- | ------------------------------------------------------------ |
+| `pending`   | Instance was created and queued for execution                |
+| `running`   | `wf-execute` is currently executing or replaying it          |
+| `suspended` | Execution paused at `sleep`, `waitForEvent`, or child invoke |
+| `completed` | Handler returned successfully                                |
+| `failed`    | Handler or step failed after retries/compensation            |
+| `cancelled` | User/API cancelled the active instance                       |
+| `timed_out` | Maintenance marked the instance past its timeout boundary    |
+
+`cancel()` only affects `pending`, `running`, and `suspended` instances. `retry()` moves `failed` and `timed_out` instances back to `pending` and queues execution again.
+
 ## System Collections
 
 The module automatically creates four collections:

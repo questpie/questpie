@@ -1,20 +1,20 @@
 ---
 title: CRUD API
-description: Collection CRUD operations — find, findOne, create, update, delete, count.
+description: Collection CRUD operations — find, findOne, create, update, delete, count, versions, and workflow transitions.
 ---
 
-All collections expose these CRUD operations on both server and client.
+Collections expose typed CRUD operations on the server runtime and through `questpie/client`. Server code receives collection APIs from handler context; client code calls the generated client.
 
 ## `find(options)`
 
 ```ts
 const result = await collections.posts.find({
-  where?: { ... },
-  orderBy?: { field: "asc" | "desc" },
-  limit?: number,
-  offset?: number,
-  with?: { relation: true },
-  select?: { field: true },
+	where: { status: "published" },
+	orderBy: { createdAt: "desc" },
+	limit: 20,
+	offset: 0,
+	with: { author: true },
+	stage: "published",
 });
 ```
 
@@ -24,43 +24,60 @@ const result = await collections.posts.find({
 
 ```ts
 const record = await collections.posts.findOne({
-  where: { id: "abc" },
-  with?: { ... },
-  select?: { ... },
+	where: { id: "post_123" },
+	with: { author: true },
+	stage: "published",
 });
 ```
 
 **Returns:** `T | null`
 
+When versioning workflow is enabled, `stage` reads the latest version snapshot for that stage. Omit it to read the working stage.
+
 ## `create(data)`
 
 ```ts
-const record = await collections.posts.create({
-	title: "Hello",
-	body: "World",
-	status: "draft",
-});
+const record = await collections.posts.create(
+	{
+		title: "Hello",
+		body: "World",
+	},
+	{ stage: "draft" },
+);
 ```
 
 **Returns:** `T` (created record)
 
-## `update(options)`
+## `updateById(options)`
 
 ```ts
-const record = await collections.posts.update({
-	where: { id: "abc" },
-	data: { status: "published" },
-});
+const record = await collections.posts.updateById(
+	{
+		id: "post_123",
+		data: { title: "Updated title" },
+	},
+	{ stage: "draft" },
+);
 ```
 
 **Returns:** `T` (updated record)
 
-## `delete(options)`
+On the client SDK, the same operation is exposed as `update({ id, data })`:
 
 ```ts
-await collections.posts.delete({
-	where: { id: "abc" },
-});
+const updated = await client.collections.posts.update(
+	{
+		id: "post_123",
+		data: { title: "Updated title" },
+	},
+	{ stage: "draft" },
+);
+```
+
+## `deleteById(options)`
+
+```ts
+await collections.posts.deleteById({ id: "post_123" });
 ```
 
 ## `count(options)`
@@ -73,34 +90,93 @@ const count = await collections.posts.count({
 
 **Returns:** `number`
 
-## `updateMany(options)`
+## `update(options)`
 
 ```ts
-await collections.posts.updateMany({
+await collections.posts.update({
 	where: { status: "draft" },
-	data: { status: "archived" },
+	data: { title: "Needs review" },
 });
 ```
 
-## `deleteMany(options)`
+Server `update()` updates every record matching `where`. On the client SDK this operation is named `updateMany()`.
+
+## `delete(options)`
 
 ```ts
-await collections.posts.deleteMany({
+await collections.posts.delete({
 	where: { status: "archived" },
 });
 ```
 
-## Client API
+Server `delete()` deletes every record matching `where`. On the client SDK this operation is named `deleteMany()`.
 
-Same methods available on `client.collections.*`:
+## `findVersions(options)`
 
 ```ts
-const posts = await client.collections.posts.find({ ... });
-const post = await client.collections.posts.findOne({ ... });
-const created = await client.collections.posts.create({ ... });
-const updated = await client.collections.posts.update({ id: "abc", data: { ... } });
-await client.collections.posts.delete({ id: "abc" });
-const count = await client.collections.posts.count({ ... });
+const versions = await collections.posts.findVersions({
+	id: "post_123",
+	limit: 20,
+});
+```
+
+**Returns:** version rows with `versionId`, `versionNumber`, `versionOperation`, `versionUserId`, and `versionCreatedAt`.
+
+## `revertToVersion(options)`
+
+```ts
+const restored = await collections.posts.revertToVersion({
+	id: "post_123",
+	version: 4,
+});
+```
+
+Pass `versionId` instead of `version` when you already have the version row ID.
+
+## `transitionStage(options)`
+
+```ts
+const published = await collections.posts.transitionStage({
+	id: "post_123",
+	stage: "published",
+});
+```
+
+To schedule a future transition:
+
+```ts
+await collections.posts.transitionStage({
+	id: "post_123",
+	stage: "published",
+	scheduledAt: new Date("2026-05-01T09:00:00Z"),
+});
+```
+
+`transitionStage()` requires `versioning.workflow`, validates the target stage and transition graph, checks `access.transition` with fallback to `access.update`, runs transition hooks, and creates a version snapshot without mutating the working row.
+
+## Client API
+
+The client SDK mirrors the same resource behavior with browser-friendly method names:
+
+```ts
+const posts = await client.collections.posts.find({ stage: "published" });
+const post = await client.collections.posts.findOne({
+	where: { id: "post_123" },
+});
+const created = await client.collections.posts.create({ title: "Hello" });
+const updated = await client.collections.posts.update({
+	id: "post_123",
+	data: { title: "Updated title" },
+});
+await client.collections.posts.delete({ id: "post_123" });
+const count = await client.collections.posts.count({
+	where: { status: "published" },
+});
+await client.collections.posts.transitionStage({
+	id: "post_123",
+	stage: "published",
+	scheduledAt: "2026-05-01T09:00:00.000Z",
+});
 ```
 
 ## Upload Methods
@@ -109,10 +185,14 @@ For upload collections:
 
 ```ts
 const asset = await client.collections.assets.upload(file, {
-  onProgress?: (percent: number) => void,
+	onProgress: (percent) => {
+		console.log(percent);
+	},
 });
 
 const assets = await client.collections.assets.uploadMany(files, {
-  onProgress?: (percent: number) => void,
+	onProgress: (percent, fileIndex) => {
+		console.log(percent, fileIndex);
+	},
 });
 ```

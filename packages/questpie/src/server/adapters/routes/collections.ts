@@ -375,7 +375,7 @@ export async function collectionTransition(
 	}
 
 	try {
-		const payload = body as { stage: string; scheduledAt?: string };
+		const payload = body as { stage?: unknown; scheduledAt?: unknown };
 		if (!payload.stage || typeof payload.stage !== "string") {
 			throw ApiError.badRequest(
 				"Missing required field: stage",
@@ -385,12 +385,23 @@ export async function collectionTransition(
 			);
 		}
 
-		const opts: { id: any; stage: string; scheduledAt?: Date } = {
-			id: params.id as any,
+		const opts: { id: string; stage: string; scheduledAt?: Date } = {
+			id: params.id,
 			stage: payload.stage,
 		};
 
-		if (payload.scheduledAt) {
+		if (payload.scheduledAt !== undefined) {
+			if (
+				typeof payload.scheduledAt !== "string" &&
+				!(payload.scheduledAt instanceof Date)
+			) {
+				throw ApiError.badRequest(
+					"Invalid scheduledAt date",
+					undefined,
+					"error.invalidDateField",
+					{ field: "scheduledAt" },
+				);
+			}
 			const date = new Date(payload.scheduledAt);
 			if (Number.isNaN(date.getTime())) {
 				throw ApiError.badRequest(

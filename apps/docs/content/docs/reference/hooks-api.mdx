@@ -220,12 +220,15 @@ afterTransition: async ({ data, fromStage, toStage, queue }) => {
 }
 ```
 
-| Property    | Type                  | Description              |
-| ----------- | --------------------- | ------------------------ |
-| `data`      | `TSelect`             | Current record           |
-| `fromStage` | `string`              | Stage transitioning from |
-| `toStage`   | `string`              | Stage transitioning to   |
-| `locale`    | `string \| undefined` | Current locale           |
+| Property      | Type                  | Description                |
+| ------------- | --------------------- | -------------------------- |
+| `data`        | `TSelect`             | Current record             |
+| `recordId`    | `string \| number`    | Collection record ID       |
+| `fromStage`   | `string`              | Stage transitioning from   |
+| `toStage`     | `string`              | Stage transitioning to     |
+| `scheduledAt` | `Date \| undefined`   | Future transition time     |
+| `locale`      | `string \| undefined` | Current locale             |
+| `accessMode`  | `"system" \| "user"`  | Access mode for transition |
 
 ---
 

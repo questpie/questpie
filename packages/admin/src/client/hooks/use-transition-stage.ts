@@ -4,8 +4,8 @@
  * Provides a mutation for transitioning collection/global records between
  * workflow stages. Supports optional scheduled transitions via `scheduledAt`.
  *
- * Uses direct fetch (same pattern as audit fetcher) because the generated
- * client SDK does not yet expose the `scheduledAt` parameter.
+ * Uses direct fetch because the hook accepts runtime collection/global names
+ * from admin metadata, while the generated client SDK is keyed by app types.
  *
  * @example
  * ```tsx
@@ -31,9 +31,8 @@ import {
 	useMutation,
 	useQueryClient,
 } from "@tanstack/react-query";
-import * as React from "react";
 
-import { selectClient, useAdminStore } from "../runtime";
+import { selectBasePath, useAdminStore } from "../runtime";
 
 // ============================================================================
 // Types
@@ -83,19 +82,14 @@ export function useTransitionStage(
 	options?: UseTransitionStageOptions,
 ) {
 	const mode = options?.mode ?? "collection";
-	const client = useAdminStore(selectClient);
+	const basePath = useAdminStore(selectBasePath);
 	const queryClient = useQueryClient();
-
-	const basePath = React.useMemo(
-		() => (client as any).getBasePath?.() ?? "",
-		[client],
-	);
 
 	return useMutation<TransitionStageResult, Error, TransitionStageParams>({
 		mutationFn: async (params) => {
 			const body: Record<string, unknown> = { stage: params.stage };
 
-			if (params.scheduledAt) {
+			if (params.scheduledAt !== undefined) {
 				body.scheduledAt =
 					params.scheduledAt instanceof Date
 						? params.scheduledAt.toISOString()

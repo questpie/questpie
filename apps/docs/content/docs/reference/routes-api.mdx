@@ -169,6 +169,39 @@ await queue.sendWelcomeEmail.publish({
 
 ---
 
+## Built-In Resource Routes
+
+QUESTPIE's core module also registers collection and global resource routes under the API base path configured in `createFetchHandler()`.
+
+| Method   | Path                          | Purpose                               |
+| -------- | ----------------------------- | ------------------------------------- |
+| `GET`    | `/:collection`                | Find collection records               |
+| `GET`    | `/:collection/:id`            | Find one collection record            |
+| `POST`   | `/:collection`                | Create a collection record            |
+| `PATCH`  | `/:collection/:id`            | Update a collection record            |
+| `DELETE` | `/:collection/:id`            | Delete a collection record            |
+| `GET`    | `/:collection/:id/versions`   | Read record version history           |
+| `POST`   | `/:collection/:id/revert`     | Revert a record to a previous version |
+| `POST`   | `/:collection/:id/transition` | Transition a record workflow stage    |
+| `GET`    | `/globals/:name`              | Read a global                         |
+| `PATCH`  | `/globals/:name`              | Update a global                       |
+| `GET`    | `/globals/:name/versions`     | Read global version history           |
+| `POST`   | `/globals/:name/revert`       | Revert a global to a previous version |
+| `POST`   | `/globals/:name/transition`   | Transition a global workflow stage    |
+
+Transition bodies use the same shape for collections and globals:
+
+```ts
+type TransitionBody = {
+	stage: string;
+	scheduledAt?: string;
+};
+```
+
+Use an ISO datetime for `scheduledAt` when scheduling a future transition. Query parameters such as `locale`, `localeFallback`, and `stage` are parsed on routes that read or write localized/workflow data.
+
+---
+
 ## `service(options)`
 
 Define reusable services that are injected into handler contexts.

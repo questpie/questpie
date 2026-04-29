@@ -127,6 +127,8 @@ Versioning can include a publishing workflow with stage transitions:
 
 When `workflow` is set, versioning is automatically enabled.
 
+For stage reads, `transitionStage()`, scheduled transitions, and admin toolbar behavior, see [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow).
+
 ## `.hooks(config)`
 
 Attach lifecycle hooks. Each hook can be a single function or an array. Multiple `.hooks()` calls merge their hooks.
@@ -179,9 +181,12 @@ Set access control rules. Each rule can be a boolean or a function receiving the
     if (session?.user?.role === "admin") return true;
     return session?.user?.id === id;
   },
+  transition: ({ session }) => session?.user?.role === "editor",
   delete: ({ session }) => session?.user?.role === "admin",
 })
 ```
+
+`transition` controls workflow stage transitions. If it is omitted, workflow transitions fall back to the `update` rule.
 
 ## `.searchable(config)`
 
