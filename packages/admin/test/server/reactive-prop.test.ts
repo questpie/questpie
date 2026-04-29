@@ -36,8 +36,21 @@ const advice_threads = collection("advice_threads")
 	.fields(({ f }) => ({
 		subject: f.text().required(),
 		team: f.text(),
-		counselorId: f.relation("users"),
+		// Field-level admin meta — filter as a function. Should be picked
+		// up by the introspection walker AND by the reactive endpoint when
+		// no layout-level override exists.
+		counselorId: f
+			.relation("users")
+			.set("admin", {
+				filter: ({ data }: any) => ({
+					team: data.team,
+					role: "field-default",
+				}),
+			}),
 		mentorId: f.relation("users"),
+		// A field with NO admin filter — used to verify the layout override
+		// path independently of any field-level config.
+		reviewerId: f.relation("users"),
 	}))
 	.set("adminForm", {
 		view: "collection-form",
@@ -47,9 +60,9 @@ const advice_threads = collection("advice_threads")
 			{
 				field: "counselorId",
 				props: {
-					// Dynamic — depends on form data
+					// Layout-level override — wins over field-level above.
 					filter: ({ data }: any) => ({ team: data.team, role: "admin" }),
-					// Static — should not require a network call
+					// Static — should not require a network call.
 					placeholder: "Pick an admin",
 				},
 			},
@@ -64,6 +77,10 @@ const advice_threads = collection("advice_threads")
 					},
 				},
 			},
+			// reviewerId rendered without any layout override → resolution
+			// should fall back to its field-level admin meta (none here →
+			// no handler available).
+			"reviewerId",
 		],
 	});
 
@@ -111,6 +128,85 @@ describe("/admin/reactive — prop type", () => {
 		expect(r.type).toBe("prop");
 		expect(r.propPath).toBe("filter");
 		expect(r.value).toEqual({ team: "blue", role: "admin" });
+	});
+
+	it("falls back to field-level `.admin({ filter })` when no layout override", async () => {
+		// reviewerId has no layout `props`, so resolution must land on the
+		// field's own admin meta. reviewerId itself has no filter; counselorId
+		// has both, layout wins. Build a fresh collection where the only
+		// source is field-level so we get a deterministic answer.
+		const cleanup = setup.cleanup;
+		await cleanup();
+
+		const fieldOnlyUsers = collection("users").fields(({ f }) => ({
+			name: f.text().required(),
+			role: f.text(),
+		}));
+		const fieldOnlyThreads = collection("threads").fields(({ f }) => ({
+			authorId: f
+				.relation("users")
+				.set("admin", {
+					filter: ({ data }: any) => ({ scope: data.subject ?? "default" }),
+				}),
+			subject: f.text(),
+		}));
+
+		setup = await buildMockApp({
+			collections: { users: fieldOnlyUsers, threads: fieldOnlyThreads },
+		});
+		await runTestDbMigrations(setup.app);
+
+		const result = await reactiveFunctions.batchReactive.handler(
+			makeRouteCtx(setup.app, {
+				collection: "threads",
+				type: "collection",
+				formData: { subject: "billing" },
+				requests: [{ field: "authorId", type: "prop", propPath: "filter" }],
+			}),
+		);
+
+		const r = result.results[0]!;
+		expect(r.error).toBeUndefined();
+		expect(r.value).toEqual({ scope: "billing" });
+	});
+
+	it("layout `props.filter` overrides field-level `.admin({ filter })`", async () => {
+		// counselorId has BOTH a field-level filter (role: "field-default")
+		// and a layout-level filter (role: "admin"). The layout override
+		// must win so per-instance customisation is possible.
+		const result = await reactiveFunctions.batchReactive.handler(
+			makeRouteCtx(setup.app, {
+				collection: "advice_threads",
+				type: "collection",
+				formData: { team: "purple" },
+				requests: [
+					{ field: "counselorId", type: "prop", propPath: "filter" },
+				],
+			}),
+		);
+
+		const r = result.results[0]!;
+		expect(r.error).toBeUndefined();
+		expect(r.value).toEqual({ team: "purple", role: "admin" });
+	});
+
+	it("returns no-handler error when neither layout nor field defines the prop", async () => {
+		// reviewerId has no admin meta at all — neither field nor layout
+		// supplies a handler. Should error per-request, not 500 the batch.
+		const result = await reactiveFunctions.batchReactive.handler(
+			makeRouteCtx(setup.app, {
+				collection: "advice_threads",
+				type: "collection",
+				formData: {},
+				requests: [
+					{ field: "reviewerId", type: "prop", propPath: "filter" },
+				],
+			}),
+		);
+
+		const r = result.results[0]!;
+		expect(r.value).toBeUndefined();
+		expect(r.error).toContain("filter");
 	});
 
 	it("evaluates a `{ handler, deps }` config prop", async () => {
@@ -166,7 +262,7 @@ describe("/admin/reactive — prop type", () => {
 		expect(r.error).toContain("placeholder");
 	});
 
-	it("introspection emits ReactivePropPlaceholder in place of function-valued props", async () => {
+	it("introspection emits ReactivePropPlaceholder in place of function-valued layout props", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 		const collectionDef = (setup.app as any).getCollections()
 			.advice_threads;
@@ -195,6 +291,25 @@ describe("/admin/reactive — prop type", () => {
 		expect(isReactivePropPlaceholder(mentor.props.filter)).toBe(true);
 		expect(mentor.props.filter.watch).toEqual(["team"]); // explicit deps
 		expect(mentor.props.filter.debounce).toBe(200);
+	});
+
+	it("introspection emits ReactivePropPlaceholder in place of function-valued field-level admin meta", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+		const collectionDef = (setup.app as any).getCollections()
+			.advice_threads;
+		const schema = await introspectCollection(
+			collectionDef,
+			{ session: ctx.session, db: setup.app.db, locale: "en" },
+			setup.app as any,
+		);
+
+		// Field-level `.set("admin", { filter: fn })` lands on
+		// `metadata.meta.filter` — should now be a placeholder.
+		const counselorMeta = (schema as any).fields?.counselorId?.metadata
+			?.meta;
+		expect(counselorMeta).toBeDefined();
+		expect(isReactivePropPlaceholder(counselorMeta.filter)).toBe(true);
+		expect(counselorMeta.filter.watch).toContain("team");
 	});
 
 	it("co-exists with classical (hidden/compute) reactive types in one batch", async () => {

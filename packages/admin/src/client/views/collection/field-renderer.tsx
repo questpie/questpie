@@ -163,9 +163,10 @@ function computeDynamicDependencyPaths({
 /**
  * Render field using FieldDefinition.field.component
  *
- * This is the primary rendering method. Field components receive:
- * - Base props (name, value, onChange, label, etc.) from componentProps
- * - Field-specific options from FieldDefinition["~options"]
+ * The caller has already merged field-instance options + layout `extraProps`
+ * + base props (label/value/onChange/…) into `componentProps` and resolved
+ * any `ReactivePropPlaceholder`s via `useReactiveProps`. The component just
+ * receives the final flat record.
  */
 function renderDefinitionComponent({
 	context,
@@ -179,15 +180,12 @@ function renderDefinitionComponent({
 	const Component = context.component;
 	if (!Component) return null;
 
-	// Get field-specific options from FieldDefinition
-	const options = stripFieldUiOptions(getFieldOptions(context.fieldDef));
-
 	// For blocks field, inject the blocks registry from admin state
 	if (context.type === "blocks" && blocks) {
-		return <Component {...componentProps} {...options} blocks={blocks} />;
+		return <Component {...componentProps} blocks={blocks} />;
 	}
 
-	return <Component {...componentProps} {...options} />;
+	return <Component {...componentProps} />;
 }
 
 /**
@@ -212,8 +210,11 @@ function renderEmbeddedField({
 }) {
 	if (context.type !== "embedded") return null;
 
-	const options = stripFieldUiOptions(getFieldOptions(context.fieldDef));
-	const embeddedCollection = options.collection;
+	// `componentProps` already includes resolved field-instance options merged
+	// with layout extraProps (see FieldRenderer body). Pull out `collection`
+	// for the embedded routing — it's part of the merged record.
+	const embeddedCollection = (componentProps as Record<string, unknown>)
+		.collection as string | undefined;
 
 	if (!embeddedCollection) {
 		return renderConfigError(
@@ -237,7 +238,6 @@ function renderEmbeddedField({
 	return (
 		<EmbeddedComponent
 			{...componentProps}
-			{...options}
 			value={context.fieldValue || []}
 			collection={embeddedCollection}
 			renderFields={(index: number) =>
@@ -381,14 +381,26 @@ export function FieldRenderer({
 	// Build props and resolve I18nText labels to strings
 	const rawComponentProps = buildComponentProps(context);
 
-	// Resolve any `ReactivePropPlaceholder` entries in extraProps via
-	// /admin/reactive (single batched call). Static entries pass through.
-	// The field component never has to know about placeholders.
-	const { props: resolvedExtraProps } = useReactiveProps({
+	// Merge field-instance admin meta (e.g. `f.relation(...).admin({ filter })`)
+	// with layout-level escape-hatch `extraProps` from the form layout. Layout
+	// wins over field-level so per-instance overrides are possible.
+	const mergedFieldProps = React.useMemo(
+		() => ({
+			...stripFieldUiOptions(getFieldOptions(fieldDef)),
+			...(extraProps ?? {}),
+		}),
+		[fieldDef, extraProps],
+	);
+
+	// Resolve any `ReactivePropPlaceholder` entries (from EITHER source) via
+	// /admin/reactive in a single batched call. Static entries pass through
+	// synchronously without touching the network. Field components never see
+	// placeholders.
+	const { props: resolvedFieldProps } = useReactiveProps({
 		entity: collection,
 		entityType: mode,
 		field: fullFieldName,
-		props: extraProps,
+		props: mergedFieldProps,
 	});
 
 	// For computed fields, use computed value instead of form value
@@ -400,6 +412,10 @@ export function FieldRenderer({
 
 	const componentProps = {
 		...rawComponentProps,
+		// Field-instance + layout props (placeholders already resolved). Spread
+		// before our base overrides so framework-controlled keys
+		// (value/onChange/readOnly/label/...) always win.
+		...resolvedFieldProps,
 		// Use computed value if field is computed
 		value: fieldValue,
 		// Use handleChange from hooks instead of context.updateValue
@@ -413,11 +429,6 @@ export function FieldRenderer({
 		label: resolveText(rawComponentProps.label, "", formValues),
 		description: resolveText(rawComponentProps.description, "", formValues),
 		placeholder: resolveText(rawComponentProps.placeholder, "", formValues),
-		// Forward layout-level escape-hatch props (e.g. relation `filter`).
-		// Spread last so they override component defaults but NOT
-		// computed/value/onChange semantics above. Function-valued props were
-		// already resolved server-side via useReactiveProps above.
-		...resolvedExtraProps,
 	};
 
 	// Render content based on priority

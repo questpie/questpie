@@ -377,12 +377,36 @@ function getReactiveHandler(
 }
 
 /**
- * Get a reactive prop handler from a layout entry's `props.<propPath>`.
+ * Coerce a `function | { handler }` config-like value to the underlying
+ * handler function. Returns `null` for static values.
+ */
+function unwrapHandler(
+	value: unknown,
+): ((ctx: ReactiveContext) => any) | null {
+	if (typeof value === "function") {
+		return value as (ctx: ReactiveContext) => any;
+	}
+	if (
+		value !== null &&
+		typeof value === "object" &&
+		"handler" in (value as Record<string, unknown>) &&
+		typeof (value as { handler?: unknown }).handler === "function"
+	) {
+		return (value as { handler: (ctx: ReactiveContext) => any }).handler;
+	}
+	return null;
+}
+
+/**
+ * Get a reactive prop handler. Resolution chain (first hit wins):
  *
- * The wire-side counterpart is the `ReactivePropPlaceholder` shape that
- * introspection emits in place of function-valued layout props (e.g. a
- * relation field's `filter`). This resolves the original function on the
- * live server state so we can evaluate it with current form data.
+ *  1. **Layout-level** `state.adminForm.fields[*].props[propPath]`
+ *     (per-instance `.form()` override)
+ *  2. **Field-level** `state.fieldDefinitions[fieldPath]._state.extensions.admin[propPath]`
+ *     (default attached to the field via `f.<x>().admin({ ... })`)
+ *
+ * The wire-side counterpart is the `ReactivePropPlaceholder` introspection
+ * emits for function values in either location.
  */
 function getReactivePropHandler(
 	app: Questpie<any>,
@@ -391,29 +415,30 @@ function getReactivePropHandler(
 	propPath: string,
 	type: "collection" | "global" = "collection",
 ): ((ctx: ReactiveContext) => any) | null {
+	// 1. Layout-level — per-instance `.form()` override.
 	const entity = getEntity(app, entityName, type);
 	const formConfig = (entity.state as unknown as Record<string, unknown>)
 		.adminForm;
-
 	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
-	if (!fieldEntry) return null;
-
-	const props = fieldEntry.props as Record<string, unknown> | undefined;
-	if (!props || typeof props !== "object") return null;
-
-	const propValue = props[propPath];
-	if (propValue === undefined || propValue === null) return null;
-
-	if (typeof propValue === "function") {
-		return propValue as (ctx: ReactiveContext) => any;
+	if (fieldEntry) {
+		const props = fieldEntry.props as Record<string, unknown> | undefined;
+		if (props && typeof props === "object") {
+			const layoutHandler = unwrapHandler(props[propPath]);
+			if (layoutHandler) return layoutHandler;
+		}
 	}
 
-	if (
-		typeof propValue === "object" &&
-		"handler" in (propValue as Record<string, unknown>) &&
-		typeof (propValue as { handler?: unknown }).handler === "function"
-	) {
-		return (propValue as { handler: (ctx: ReactiveContext) => any }).handler;
+	// 2. Field-level — `f.<x>().admin({ [propPath]: ... })` default.
+	let fieldDef: { _state?: { extensions?: { admin?: Record<string, unknown> } } };
+	try {
+		fieldDef = getFieldDefinition(app, entityName, fieldPath, type);
+	} catch {
+		return null;
+	}
+	const adminMeta = fieldDef._state?.extensions?.admin;
+	if (adminMeta && typeof adminMeta === "object") {
+		const fieldHandler = unwrapHandler(adminMeta[propPath]);
+		if (fieldHandler) return fieldHandler;
 	}
 
 	return null;

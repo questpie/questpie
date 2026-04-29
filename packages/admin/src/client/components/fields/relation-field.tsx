@@ -55,9 +55,13 @@ type RelationFieldProps<T extends QuestpieApp> = {
 	locale?: string;
 
 	/**
-	 * Filter options based on form values
+	 * Pre-resolved `where` clause for the relation `find()` call. Reactive
+	 * filters from `f.relation(...).admin({ filter })` or layout
+	 * `props.filter` are resolved by `FieldRenderer` against the live form
+	 * via `/admin/reactive` before they reach this component — by the time
+	 * `filter` lands here it's plain JSON.
 	 */
-	filter?: (formValues: any) => any;
+	filter?: Record<string, unknown>;
 
 	/**
 	 * Is the field required

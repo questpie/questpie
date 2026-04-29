@@ -66,18 +66,13 @@ export interface RelationSelectProps<_T extends QuestpieApp> {
 	locale?: string;
 
 	/**
-	 * Pre-resolved filter for the relation `find()` call. Used as-is for the
-	 * `where` clause. Reactive (function) filters from layout `props.filter`
-	 * are evaluated by `FieldRenderer`'s `useReactiveProps` before reaching
-	 * this component, so by the time we see `filter` here it's plain JSON
-	 * (or `undefined`).
-	 *
-	 * Legacy `(formValues) => any` callers are still tolerated — we invoke
-	 * them with `{}` for backward compatibility, but new code should rely on
-	 * the layout-level `props` shape and let introspection serialize the
-	 * function for us.
+	 * Pre-resolved `where` clause for the relation `find()` call. Reactive
+	 * filters (`f.relation(...).admin({ filter: ({ data }) => ({...}) })` or
+	 * layout-level `props.filter`) are resolved by `FieldRenderer` against
+	 * the live form via `/admin/reactive` before they reach this component —
+	 * so by the time `filter` lands here it's plain JSON.
 	 */
-	filter?: Record<string, unknown> | ((formValues: any) => any);
+	filter?: Record<string, unknown>;
 
 	/**
 	 * Is the field required
@@ -154,14 +149,6 @@ export function RelationSelect<T extends QuestpieApp>({
 	const targetConfig = serverConfig?.collections?.[targetCollection];
 	const collectionIconRef = (targetConfig as any)?.icon;
 
-	// Resolve filter once: by the time we get here `filter` is either plain
-	// JSON (resolved by FieldRenderer's useReactiveProps) or a legacy callable
-	// passed in by a custom renderer. Normalize to a `where` clause value.
-	const resolvedFilter = React.useMemo<unknown>(
-		() => (typeof filter === "function" ? (filter as any)({}) : filter),
-		[filter],
-	);
-
 	// Load options from server with search
 	const loadOptions = React.useCallback(
 		async (search: string): Promise<SelectOption<string>[]> => {
@@ -178,9 +165,9 @@ export function RelationSelect<T extends QuestpieApp>({
 					options.search = search;
 				}
 
-				// Add custom filter if provided
-				if (resolvedFilter) {
-					options.where = resolvedFilter;
+				// Add custom filter if provided (already resolved by FieldRenderer)
+				if (filter) {
+					options.where = filter;
 				}
 
 				const response = await (client as any).collections[
@@ -225,7 +212,7 @@ export function RelationSelect<T extends QuestpieApp>({
 		[
 			client,
 			targetCollection,
-			resolvedFilter,
+			filter,
 			renderOption,
 			collectionIconRef,
 			locale,
@@ -344,7 +331,7 @@ export function RelationSelect<T extends QuestpieApp>({
 									limit: 50,
 									locale,
 									search,
-									where: resolvedFilter ?? undefined,
+									where: filter ?? undefined,
 								},
 							])
 						}
@@ -408,7 +395,7 @@ export function RelationSelect<T extends QuestpieApp>({
 								limit: 50,
 								locale,
 								search,
-								where: resolvedFilter ?? undefined,
+								where: filter ?? undefined,
 							},
 						])
 					}

@@ -14,7 +14,10 @@ import {
 	extractFormReactiveConfigs,
 	type FieldReactiveSchema,
 } from "#questpie/server/collection/introspection.js";
-import { serializeFormLayoutProps } from "#questpie/server/fields/reactive.js";
+import {
+	serializeFormLayoutProps,
+	serializeReactivePropsRecord,
+} from "#questpie/server/fields/reactive.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 import type {
@@ -314,6 +317,12 @@ export async function introspectGlobal(
 	const fields: Record<string, GlobalFieldSchema> = {};
 	for (const [name, fieldDef] of Object.entries(fieldDefinitions)) {
 		const metadata = fieldDef.getMetadata();
+		// Serialize function-valued admin meta into `ReactivePropPlaceholder`.
+		if (metadata.meta && typeof metadata.meta === "object") {
+			metadata.meta = serializeReactivePropsRecord(
+				metadata.meta as Record<string, unknown>,
+			) as typeof metadata.meta;
+		}
 		const fieldAccess = await evaluateGlobalFieldAccess(fieldDef, context, app);
 
 		// Generate field-level JSON Schema if possible
