@@ -4,20 +4,23 @@
 
 import type { BlockProps } from "../.generated/client";
 
-export function LatestNewsRenderer({ values, data }: BlockProps<"latestNews">) {
+export function LatestNewsRenderer({
+	values,
+	data,
+}: BlockProps<"latest-news">) {
 	const news = (data as any)?.news || [];
 
 	return (
-		<section className="py-16 px-6">
+		<section className="px-6 py-16">
 			<div className="container mx-auto">
 				{values.title && (
-					<h2 className="text-3xl font-bold tracking-tight mb-8">
+					<h2 className="mb-8 text-3xl font-bold tracking-tight">
 						{values.title}
 					</h2>
 				)}
 
 				{news.length === 0 && (
-					<p className="text-muted-foreground text-center py-8">
+					<p className="text-muted-foreground py-8 text-center">
 						No news articles available.
 					</p>
 				)}
@@ -26,28 +29,28 @@ export function LatestNewsRenderer({ values, data }: BlockProps<"latestNews">) {
 					className={
 						values.layout === "list"
 							? "space-y-4"
-							: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+							: "grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
 					}
 				>
 					{news.map((article: any) => (
 						<article
 							key={article.id}
-							className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+							className="overflow-hidden rounded-lg border transition-shadow hover:shadow-md"
 						>
 							<div className="p-6">
 								{article.category && (
-									<span className="text-xs font-medium text-primary uppercase tracking-wide">
+									<span className="text-primary text-xs font-medium tracking-wide uppercase">
 										{article.category}
 									</span>
 								)}
-								<h3 className="font-semibold mt-1 mb-2">{article.title}</h3>
+								<h3 className="mt-1 mb-2 font-semibold">{article.title}</h3>
 								{article.excerpt && (
-									<p className="text-sm text-muted-foreground line-clamp-2">
+									<p className="text-muted-foreground line-clamp-2 text-sm">
 										{article.excerpt}
 									</p>
 								)}
 								{article.publishedAt && (
-									<time className="text-xs text-muted-foreground mt-3 block">
+									<time className="text-muted-foreground mt-3 block text-xs">
 										{new Date(article.publishedAt).toLocaleDateString("en-GB", {
 											day: "numeric",
 											month: "long",

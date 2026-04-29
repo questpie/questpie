@@ -15,6 +15,7 @@ import {
 } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
 import type { GlobalMeta } from "questpie/client";
+
 import type { RegisteredCMS, RegisteredGlobalNames } from "../builder/registry";
 import { selectClient, useAdminStore } from "../runtime";
 
@@ -80,7 +81,7 @@ function getGlobalMetaQueryKey(global: string) {
  * });
  * ```
  */
-function getGlobalMetaQueryOptions(global: string, client: any) {
+export function getGlobalMetaQueryOptions(global: string, client: any) {
 	return {
 		queryKey: getGlobalMetaQueryKey(global),
 		queryFn: async (): Promise<GlobalMeta> => {

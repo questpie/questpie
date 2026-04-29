@@ -26,6 +26,7 @@ export default {
 	"common.yes": "Yes",
 	"common.no": "No",
 	"common.ok": "OK",
+	"common.done": "Done",
 	"common.apply": "Apply",
 	"common.reset": "Reset",
 	"common.clear": "Clear",
@@ -40,8 +41,10 @@ export default {
 	"common.view": "View",
 	"common.open": "Open",
 	"common.retry": "Retry",
+	"common.backToList": "Back to list",
 	"common.submit": "Submit",
 	"common.deleted": "Deleted",
+	"common.noValue": "No value",
 
 	// Navigation
 	"nav.dashboard": "Dashboard",
@@ -52,12 +55,37 @@ export default {
 	"nav.logout": "Log out",
 	"nav.home": "Home",
 	"nav.back": "Back",
+	"nav.breadcrumb": "Breadcrumb",
+	"nav.adminNavigation": "Admin navigation",
 
 	// Dashboard
 	"dashboard.title": "Dashboard",
 	"dashboard.welcome": "Welcome back",
 	"dashboard.recentActivity": "Recent Activity",
 	"dashboard.quickActions": "Quick Actions",
+	"dashboard.noWidgets": "No widgets configured",
+	"dashboard.noWidgetsDescription":
+		"Add widgets to your dashboard configuration to display data here.",
+	"dashboard.systemStatus": "System Status",
+	"dashboard.welcomeDescription":
+		"Select a collection from the sidebar to manage your content.",
+
+	// Widgets
+	"widget.quickActions.emptyTitle": "No actions configured",
+	"widget.quickActions.emptyDescription": "There are no shortcuts to display.",
+	"widget.chart.emptyTitle": "No chart data",
+	"widget.chart.emptyDescription": "There are no values for this range.",
+	"widget.recentItems.emptyTitle": "No recent items",
+	"widget.recentItems.emptyDescription": "There are no recent records to show.",
+	"widget.value.emptyTitle": "No value to display",
+	"widget.value.emptyDescription": "There is no value for this card yet.",
+	"widget.progress.emptyTitle": "No progress data",
+	"widget.progress.emptyDescription": "There is no target value to display.",
+	"widget.timeline.emptyTitle": "No activity yet",
+	"widget.timeline.emptyDescription": "There are no events to display.",
+	"widget.table.emptyTitle": "No rows to show",
+	"widget.table.emptyDescription":
+		"There are no records for the current criteria.",
 
 	// Collections
 	"collection.create": "Create {{name}}",
@@ -100,6 +128,59 @@ export default {
 		one: "Restored {{success}} item, {{failed}} failed",
 		other: "Restored {{success}} items, {{failed}} failed",
 	},
+	"collection.orderSaved": "Order saved",
+	"collection.orderSaveFailed": "Could not save order",
+	"collection.reorderMode": "Reorder mode",
+	"collection.sortedByField": "Sorted by {{field}} {{direction}}.",
+	"collection.reorderEnableOrderable": "Enable orderable before reordering",
+	"collection.reorderAddOrderField":
+		"Add a numeric order field before reordering",
+	"collection.reorderClearSearch": "Clear search to reorder",
+	"collection.reorderRemoveGrouping": "Remove grouping to reorder",
+	"collection.reorderClearFilters": "Clear filters to reorder",
+	"collection.reorderShowOnePage": "Show one page of items to reorder",
+	"collection.reorderExitMode": "Exit reorder mode",
+	"collection.reorderItems": "Reorder items",
+	"collection.reorderSwitchSort": "Switch to {{field}} sort and reorder",
+	"collection.reorderUnavailable": "Reorder unavailable: {{reason}}",
+	"collection.reorderEnterMode": "Enter reorder mode",
+
+	// Actions
+	"action.collectionNotFound": 'Collection "{{collection}}" not found',
+	"action.notFound":
+		'Action "{{action}}" not found on collection "{{collection}}"',
+	"action.executionFailed": "Action execution failed",
+	"action.itemCreated": "Item created successfully",
+	"action.itemIdRequired.save": "Item ID is required for save action",
+	"action.itemSaved": "Item saved successfully",
+	"action.itemIdRequired.delete": "Item ID is required for delete action",
+	"action.itemDeleted": "Item deleted successfully",
+	"action.itemIdsRequired.bulkDelete":
+		"Item IDs are required for bulk delete action",
+	"action.itemsDeleted": {
+		one: "{{count}} item deleted successfully",
+		other: "{{count}} items deleted successfully",
+	},
+	"action.itemIdRequired.restore": "Item ID is required for restore action",
+	"action.restoreUnsupported": "Restore is not supported for this collection",
+	"action.itemRestored": "Item restored successfully",
+	"action.itemIdsRequired.bulkRestore":
+		"Item IDs are required for bulk restore action",
+	"action.itemsRestored": {
+		one: "{{count}} item restored successfully",
+		other: "{{count}} items restored successfully",
+	},
+	"action.itemIdRequired.duplicate": "Item ID is required for duplicate action",
+	"action.itemNotFound": "Item not found",
+	"action.itemDuplicated": "Item duplicated successfully",
+	"action.itemIdRequired.transition":
+		"Item ID is required for transition action",
+	"action.targetStageRequired":
+		"Target stage is required for transition action",
+	"action.workflowUnsupported":
+		"Workflow transitions are not supported for this collection",
+	"action.unknownBuiltin": "Unknown built-in action: {{action}}",
+	"action.fieldRequired": 'Field "{{field}}" is required',
 
 	// Relations
 	"relation.select": "Select {{name}}",
@@ -123,6 +204,21 @@ export default {
 	"blocks.addAbove": "Add above",
 	"blocks.addBelow": "Add below",
 	"blocks.addChild": "Add child block",
+	"blocks.add": "Add block",
+	"blocks.addTo": "Add to {{parent}}",
+	"blocks.addFirst": "Add your first block to get started",
+	"blocks.unknownType":
+		'Unknown block type "{{type}}". This block type is not registered.',
+	"blocks.searchPlaceholder": "Search blocks...",
+	"blocks.uncategorized": "Other",
+	"blocks.noEditableFields": "This block has no editable fields.",
+	"blocks.emptyTitle": "No blocks yet",
+	"blocks.libraryDescription": "Select a block type to add to your content",
+	"blocks.noSearchResults": "No blocks found",
+	"blocks.tryDifferentSearch": "Try a different search term",
+	"blocks.noDefinitions": "No block definitions registered",
+	"blocks.noDefinitionsHint":
+		"Register blocks with .blocks() in your admin configuration",
 
 	// Forms
 	"form.id": "ID",
@@ -197,7 +293,59 @@ export default {
 	"auth.setupDescription": "Create your first admin account to get started.",
 	"auth.profile": "Profile",
 	"auth.myAccount": "My account",
+	"auth.user": "User",
 	"auth.logoutFailed": "Failed to log out. Please try again.",
+	"auth.forgotPasswordTitle": "Forgot password",
+	"auth.forgotPasswordDescription":
+		"Enter your email to receive a password reset link",
+	"auth.checkYourEmail": "Check your email",
+	"auth.resetLinkSentDescription":
+		"We've sent a password reset link to your email address. Please check your inbox and follow the instructions.",
+	"auth.backToLogin": "Back to login",
+	"auth.forgotPasswordFormDescription":
+		"Enter your email address and we'll send you a link to reset your password.",
+	"auth.rememberYourPassword": "Remember your password?",
+	"auth.resetPasswordSuccess": "Password reset successful",
+	"auth.resetPasswordSuccessDescription":
+		"Your password has been reset successfully. You can now sign in with your new password.",
+	"auth.enterNewPassword": "Enter your new password below.",
+	"auth.createAccountDescription": "Create your account to get started",
+	"auth.inviteEmailLabel": "Email Address",
+	"auth.inviteEmailDescription":
+		"An invitation link will be sent to this email",
+	"auth.inviteRole": "Role",
+	"auth.inviteSelectRole": "Select a role",
+	"auth.inviteRoleDescription":
+		"The role determines what permissions the user will have",
+	"auth.inviteMessage": "Personal Message (Optional)",
+	"auth.inviteMessagePlaceholder":
+		"Add a personal message to the invitation...",
+	"auth.inviteMessageDescription":
+		"This message will be included in the invitation email",
+	"auth.sendingInvitation": "Sending invitation...",
+	"auth.sendInvitation": "Send Invitation",
+	"auth.inviteSentSuccess": "Invitation sent successfully",
+	"auth.signInDescription": "Enter your credentials to access the admin panel",
+	"auth.inviteUser": "Invite User",
+	"auth.inviteUserDescription": "Send an invitation to add a new user",
+	"auth.inviteSentTo": "Invitation sent to {{email}}",
+	"auth.completeRegistration": "Complete Registration",
+	"auth.validatingInvitation": "Validating Invitation",
+	"auth.pleaseWait": "Please wait...",
+	"auth.invalidInvitation": "Invalid Invitation",
+	"auth.invalidInvitationDescription":
+		"This invitation link is no longer valid",
+	"auth.invalidOrExpiredInvitation": "Invalid or expired invitation",
+	"auth.invitationExpiredMessage":
+		"The invitation may have expired or already been used. Please contact your administrator for a new invitation.",
+	"auth.goToLogin": "Go to Login",
+	"auth.invalidLink": "Invalid Link",
+	"auth.invalidLinkDescription":
+		"The password reset link is invalid or has expired.",
+	"auth.requestNewResetLink": "Please request a new password reset link.",
+	"auth.setupAlreadyCompleted":
+		"Setup already completed - admin users exist in the system",
+	"auth.failedToCreateUserAccount": "Failed to create user account",
 
 	// Errors
 	"error.notFound": "Not found",
@@ -209,9 +357,53 @@ export default {
 	"error.unknown": "An unknown error occurred",
 	"error.timeout": "Request timed out. Please try again.",
 	"error.conflict": "A conflict occurred. Please refresh and try again.",
+	"error.somethingWentWrong": "Something went wrong",
+	"error.unexpectedError": "An unexpected error occurred",
+	"error.failedToLoad": "Failed to load",
+	"error.failedToLoadView": "Failed to load {{viewType}}",
+	"error.failedToLoadViewFor": "Failed to load {{viewType}} for {{collection}}",
+	"error.widgetError": "Widget Error",
+	"error.unknownWidget": "Unknown Widget",
+	"error.widgetTypeNotRecognized": 'Widget type "{{type}}" is not recognized.',
+	"error.componentNotFound": "Component not found",
+	"error.failedToLoadComponent": "Failed to load component",
+	"error.pageNotFound": "Page Not Found",
+	"error.pageNotFoundDescription": "The page you're looking for doesn't exist.",
+	"error.accessRestricted": "Access Restricted",
+	"error.accessRestrictedDescription":
+		"You don't have permission to access this page. Contact your administrator if you believe this is an error.",
+	"error.accessRestrictedResourceDescription":
+		'The {{type}} "{{name}}" is not available in the admin panel. It may be hidden or you do not have permission to access it.',
+	"error.tryAgain": "Try again",
+	"error.backToDashboard": "Back to Dashboard",
+	"error.noUploadCollection": "No upload collection is configured.",
+	"error.multipleUploadCollections":
+		"Multiple upload collections are available ({{collections}}). Specify which collection to use.",
+	"error.autosaveFailed": "Autosave failed",
+	"error.actionFailed": "Action failed",
+	"error.serverActionFailed": "Server action failed",
+	"error.failedToLoadOptions": "Failed to load options",
+	"error.failedToLoadAssets": "Failed to load assets",
+	"error.failedToLoadSelectedItems": "Failed to load selected items",
+	"error.invalidCredentials": "Invalid credentials",
+	"error.failedToSendResetEmail": "Failed to send reset email",
+	"error.failedToResetPassword": "Failed to reset password",
+	"error.failedToCreateAccount": "Failed to create account",
+	"error.failedToCreateAdminAccount": "Failed to create admin account",
+	"error.failedToSendInvitation": "Failed to send invitation",
+	"error.anErrorOccurred": "An error occurred",
+	"error.uploadFailed": "Upload failed",
+	"error.failedToGeneratePreviewToken": "Failed to generate preview token",
+	"error.missingFieldComponent":
+		"No component registered for field type: {{type}}",
+	"error.selectAtLeastOne": "Please select at least one asset",
+	"error.maxItemsAllowed": "Maximum {{max}} items allowed",
+	"error.unregisteredViewDescription":
+		'View "{{viewId}}" is not registered in the admin view registry.',
 
 	// Table
 	"table.rowsPerPage": "Rows per page",
+	"table.show": "Show",
 	"table.of": "of",
 	"table.noResults": "No results",
 	"table.selectAll": "Select all",
@@ -227,6 +419,10 @@ export default {
 	"table.columns": "Columns",
 	"table.hideColumn": "Hide column",
 	"table.showColumn": "Show column",
+	"table.noItemsInCollection": "No items found in this collection",
+	"table.emptyDescription": "Records will appear here once they are created.",
+	"table.pagination": "Pagination",
+	"table.editing": "Editing",
 
 	// Upload
 	"upload.dropzone": "Drop files here or click to upload",
@@ -267,6 +463,17 @@ export default {
 	"editor.underline": "Underline",
 	"editor.strikethrough": "Strikethrough",
 	"editor.heading": "Heading {{level}}",
+	"editor.richTextToolbar": "Rich text toolbar",
+	"editor.blockType": "Block type",
+	"editor.selectionBlockType": "Selection block type",
+	"editor.paragraph": "Paragraph",
+	"editor.textBlocks": "Text blocks",
+	"editor.headings": "Headings",
+	"editor.blocks": "Blocks",
+	"editor.formatting": "Formatting",
+	"editor.moreFormatting": "More formatting",
+	"editor.alignment": "Alignment",
+	"editor.insert": "Insert",
 	"editor.link": "Insert link",
 	"editor.image": "Insert image",
 	"editor.list": "List",
@@ -300,6 +507,18 @@ export default {
 	"editor.chooseFile": "Choose file",
 	"editor.uploading": "Uploading...",
 	"editor.browseLibrary": "Browse library",
+	"editor.startWriting": "Start writing...",
+	"editor.pasteOrTypeLink": "Paste or type a link...",
+	"editor.paragraphDescription": "Start with plain text",
+	"editor.heading1Description": "Large section heading",
+	"editor.heading2Description": "Medium section heading",
+	"editor.heading3Description": "Small section heading",
+	"editor.bulletListDescription": "Create a bulleted list",
+	"editor.orderedListDescription": "Create an ordered list",
+	"editor.quoteDescription": "Capture a quote",
+	"editor.codeBlockDescription": "Insert code snippet",
+	"editor.dividerDescription": "Insert a horizontal rule",
+	"editor.tableDescription": "Insert a 3x3 table",
 
 	// Toasts
 	"toast.success": "Success",
@@ -350,6 +569,18 @@ export default {
 		"You have unsaved changes. Switching content language will discard your changes and load the content in the new language.",
 	"confirm.localeChangeStay": "Stay",
 	"confirm.localeChangeDiscard": "Discard & switch",
+	"confirm.deleteSelected": "Delete Selected",
+	"confirm.deleteSelectedTitle": "Delete selected items?",
+	"confirm.deleteSelectedDescription":
+		"This action cannot be undone. All selected items will be permanently deleted.",
+	"confirm.deleteAll": "Delete All",
+	"confirm.restoreTitle": "Restore item?",
+	"confirm.restoreDescription":
+		"This item will become visible in normal list views again.",
+	"confirm.restore": "Restore",
+	"confirm.deleteItemTitle": "Delete item?",
+	"confirm.deleteItemDescription":
+		"This action cannot be undone. The item will be permanently deleted.",
 
 	// Status
 	"status.draft": "Draft",
@@ -366,6 +597,12 @@ export default {
 	"date.selectDate": "Select date",
 	"date.selectTime": "Select time",
 	"date.clear": "Clear date",
+
+	// Date/Time inputs
+	"input.selectDate": "Select date",
+	"input.selectDateTime": "Select date and time",
+	"input.selectDateRange": "Select date range",
+	"input.selectTime": "Select time",
 
 	// Accessibility
 	"a11y.openMenu": "Open menu",
@@ -482,9 +719,17 @@ export default {
 	"viewOptions.savedViews": "Saved Views",
 	"viewOptions.apply": "Apply",
 	"viewOptions.reset": "Reset",
+	"viewOptions.realtime": "Realtime updates",
+	"viewOptions.realtimeDescription":
+		"Auto-refresh this table when data changes.",
 	"viewOptions.showDeleted": "Show deleted",
 	"viewOptions.showDeletedDescription":
 		"Include soft-deleted records in this view.",
+	"viewOptions.groupBy": "Group by",
+	"viewOptions.groupByDescription":
+		"Group the current page by a configured field.",
+	"viewOptions.noGrouping": "No grouping",
+	"viewOptions.sort": "Sort",
 
 	// Versions
 	"version.history": "Version history",
@@ -510,7 +755,7 @@ export default {
 	"viewOptions.saveCurrentConfig": "Save Current Configuration",
 	"viewOptions.viewNamePlaceholder": "View Name...",
 	"viewOptions.saveDescription":
-		"Saves current columns, filters, and sort order.",
+		"Saves current columns, filters, grouping, and sort order.",
 	"viewOptions.noChangesToSave": "No filters or column changes to save.",
 	"viewOptions.noSavedViews": "No saved views yet.",
 	"viewOptions.filtersCount": {
@@ -540,6 +785,8 @@ export default {
 		other: "{{count}} filters active",
 	},
 	"viewOptions.clearFilters": "Clear filters",
+	"viewOptions.noResultsDescription":
+		"No records match the active filters. Adjust or clear them to see more results.",
 
 	// Filter Operators
 	"filter.contains": "Contains",
@@ -564,10 +811,30 @@ export default {
 	"preview.show": "Preview",
 	"preview.hide": "Hide Preview",
 	"preview.title": "Preview",
+	"preview.mode": "Preview Mode",
 	"preview.livePreview": "Live Preview",
 	"preview.fullscreen": "Fullscreen",
 	"preview.close": "Close preview",
 	"preview.loading": "Loading preview...",
+	"preview.exitPreview": "Exit Preview",
+	"preview.exitTooltip": "Exit preview mode and clear draft cookie",
+	"preview.loadingPreview": "Loading preview...",
+	"preview.previewError": "Preview Error",
+	"preview.refreshing": "Refreshing...",
+	"preview.showPreview": "Show Preview",
+	"preview.hidePreview": "Hide Preview",
+	"preview.pathRequired": "Path is required",
+	"preview.collectionNameRequired": "Collection name is required",
+	"preview.adminSessionRequired": "Admin session required",
+	"preview.invalidTokenFormat": "Invalid token format",
+	"preview.invalidSignature": "Invalid signature",
+	"preview.invalidPayload": "Invalid payload",
+	"preview.tokenExpired": "Token expired",
+	"preview.invalidPath": "Invalid path",
+	"preview.collectionNotFound": 'Collection "{{collection}}" not found',
+	"preview.noUrlConfigured": "No preview URL configured for this collection",
+	"preview.disabledForCollection": "Preview is disabled for this collection",
+	"preview.generateUrlFailed": "Failed to generate preview URL: {{message}}",
 
 	// Autosave
 	"autosave.saving": "Saving...",
@@ -577,6 +844,10 @@ export default {
 	"autosave.secondsAgo": { one: "{{count}}s ago", other: "{{count}}s ago" },
 	"autosave.minutesAgo": { one: "{{count}}m ago", other: "{{count}}m ago" },
 	"autosave.hoursAgo": { one: "{{count}}h ago", other: "{{count}}h ago" },
+	"time.justNow": "just now",
+	"time.minutesAgoShort": { one: "{{count}}m ago", other: "{{count}}m ago" },
+	"time.hoursAgoShort": { one: "{{count}}h ago", other: "{{count}}h ago" },
+	"time.daysAgoShort": { one: "{{count}}d ago", other: "{{count}}d ago" },
 
 	// Global Search
 	"globalSearch.placeholder":
@@ -594,12 +865,15 @@ export default {
 	// Collection Search
 	"collectionSearch.placeholder": "Search records...",
 	"collectionSearch.noResults": "No matching records found",
+	"collectionSearch.noResultsDescription":
+		"Try a different search term or clear the search to return to the full list.",
 	"collectionSearch.searching": "Searching...",
 
 	// Audit Log
 	"audit.collection.label": "Audit Log",
 	"audit.collection.description":
 		"Browse all recorded changes and user activity",
+	"audit.section.activity": "Activity",
 	"audit.sections.event": "Event Details",
 	"audit.sections.user": "User",
 	"audit.sections.changes": "Changes",
@@ -609,6 +883,8 @@ export default {
 	// History Sidebar
 	"history.title": "History",
 	"history.description": "Changes and activity for this record",
+	"history.versionDescription":
+		"Browse version snapshots and inspect field-level diffs.",
 	"history.tabActivity": "Activity",
 	"history.tabVersions": "Versions",
 	"history.empty": "No activity recorded",
@@ -617,6 +893,27 @@ export default {
 		other: "Show changes ({{count}})",
 	},
 	"history.hideChanges": "Hide changes",
+	"history.changedFields": {
+		one: "{{count}} field changed",
+		other: "{{count}} fields changed",
+	},
+	"history.moreFields": { one: "{{count}} more", other: "{{count}} more" },
+	"history.changeAdded": "Added",
+	"history.changeRemoved": "Removed",
+	"history.changeChanged": "Changed",
+	"history.diffAgainstVersion": "Diff against version {{number}}",
+	"history.initialSnapshot": "Initial snapshot",
+	"history.noFieldChanges": "No field-level changes in this snapshot.",
+	"history.before": "Before",
+	"history.after": "After",
+	"history.stage": "Stage",
+	"history.systemUser": "System",
+	"history.itemsCount": { one: "{{count}} item", other: "{{count}} items" },
+	"history.blocksCount": { one: "{{count}} block", other: "{{count}} blocks" },
+	"history.objectWithKeys": {
+		one: "Object with {{count}} key",
+		other: "Object with {{count}} keys",
+	},
 
 	// Workflow
 	"workflow.transition": "Transition",
@@ -641,4 +938,55 @@ export default {
 	"lock.openElsewhere":
 		"You have this document open in another tab. Changes will sync automatically.",
 	"lock.cannotSave": "Cannot save - document is locked by another user",
+
+	// UI
+	"ui.toggleSidebar": "Toggle Sidebar",
+	"ui.expandSidebar": "Expand sidebar",
+	"ui.skipToMainContent": "Skip to main content",
+	"ui.processing": "Processing...",
+	"ui.commandPalette": "Command Palette",
+	"ui.commandPaletteDescription": "Search for a command to run...",
+	"ui.searchPlaceholder": "Search...",
+	"ui.expand": "Expand",
+	"ui.toggleTheme": "Toggle theme",
+	"ui.themeLight": "Light",
+	"ui.themeDark": "Dark",
+	"ui.themeSystem": "System",
+
+	// Dropzone
+	"dropzone.label": "Drop files here or click to browse",
+	"dropzone.invalidType": '"{{name}}" is not an accepted file type',
+	"dropzone.tooLarge": '"{{name}}" exceeds maximum size of {{maxSize}}',
+	"dropzone.uploading": "Uploading...",
+	"dropzone.typeImages": "Images",
+	"dropzone.typeVideos": "Videos",
+	"dropzone.typeAudio": "Audio",
+	"dropzone.typePDF": "PDF",
+
+	// Media
+	"media.browseLibrary": "Browse Media Library",
+	"media.allFiles": "All Files",
+	"media.images": "Images",
+	"media.videos": "Videos",
+	"media.audio": "Audio",
+	"media.documents": "Documents",
+	"media.searchPlaceholder": "Search by filename...",
+	"media.noAssets": "No assets found",
+
+	// Field actions
+	"field.moveUp": "Move up",
+	"field.moveDown": "Move down",
+	"field.dragToReorder": "Drag to reorder",
+	"field.editItem": "Edit item",
+	"field.removeItem": "Remove item",
+	"field.noItems": "No items",
+	"field.codeEditor": "Code editor",
+	"field.formEditor": "Form editor",
+	"field.section": "Section",
+
+	// Cells
+	"cell.file": { one: "{{count}} file", other: "{{count}} files" },
+	"cell.item": { one: "{{count}} item", other: "{{count}} items" },
+	"cell.more": "+{{count}} more",
+	"cell.blocks": "Blocks",
 } as const;

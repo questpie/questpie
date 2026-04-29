@@ -4,9 +4,10 @@
  * Displays city announcements with category badges and validity dates.
  */
 
-import { RichTextRenderer } from "@questpie/admin/client";
 import { createFileRoute } from "@tanstack/react-router";
+
 import { getAnnouncementsList } from "@/lib/server-functions";
+import { RichTextRenderer } from "@questpie/admin/client";
 
 const categoryStyles: Record<string, string> = {
 	notice: "bg-blue-50 border-blue-200 text-blue-900",
@@ -44,7 +45,7 @@ function AnnouncementsListing() {
 	return (
 		<div className="container mx-auto px-4 py-12">
 			<div className="mb-8">
-				<h1 className="text-4xl font-bold tracking-tight mb-2">
+				<h1 className="mb-2 text-4xl font-bold tracking-tight">
 					Announcements
 				</h1>
 				<p className="text-muted-foreground">
@@ -53,30 +54,30 @@ function AnnouncementsListing() {
 			</div>
 
 			{announcements.length === 0 ? (
-				<div className="text-center py-16">
+				<div className="py-16 text-center">
 					<p className="text-muted-foreground text-lg">
 						No active announcements at this time.
 					</p>
 				</div>
 			) : (
-				<div className="space-y-4 max-w-4xl">
+				<div className="max-w-4xl space-y-4">
 					{announcements.map((announcement: any) => (
 						<div
 							key={announcement.id}
-							className={`border rounded-lg p-5 ${
+							className={`rounded-lg border p-5 ${
 								categoryStyles[announcement.category] || categoryStyles.notice
 							}`}
 						>
 							<div className="flex items-start justify-between gap-4">
 								<div className="flex-1">
-									<div className="flex items-center gap-2 mb-2">
+									<div className="mb-2 flex items-center gap-2">
 										{announcement.isPinned && (
-											<span className="text-xs font-bold uppercase bg-foreground/10 px-2 py-0.5 rounded">
+											<span className="bg-foreground/10 rounded px-2 py-0.5 text-xs font-bold uppercase">
 												Pinned
 											</span>
 										)}
 										<span
-											className={`text-xs font-medium px-2 py-0.5 rounded capitalize ${
+											className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${
 												categoryBadgeStyles[announcement.category] ||
 												categoryBadgeStyles.notice
 											}`}
@@ -85,24 +86,24 @@ function AnnouncementsListing() {
 										</span>
 									</div>
 
-									<h3 className="font-semibold text-lg mb-2">
+									<h3 className="mb-2 text-lg font-semibold">
 										{announcement.title}
 									</h3>
 
 									{announcement.content && (
-										<div className="text-sm opacity-90 prose prose-sm max-w-none">
+										<div className="prose prose-sm max-w-none text-sm opacity-90">
 											<RichTextRenderer content={announcement.content} />
 										</div>
 									)}
 
 									{announcement.referenceNumber && (
-										<p className="text-xs mt-3 opacity-75">
+										<p className="mt-3 text-xs opacity-75">
 											Ref: {announcement.referenceNumber}
 										</p>
 									)}
 								</div>
 
-								<div className="text-right text-xs whitespace-nowrap opacity-75 flex-shrink-0">
+								<div className="flex-shrink-0 text-right text-xs whitespace-nowrap opacity-75">
 									{announcement.validFrom && (
 										<p>
 											From:{" "}

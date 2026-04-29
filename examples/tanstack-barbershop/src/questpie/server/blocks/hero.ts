@@ -1,4 +1,5 @@
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
+
 import { sections } from "./_categories";
 
 export const heroBlock = block("hero")
@@ -9,11 +10,7 @@ export const heroBlock = block("hero")
 		order: 1,
 	}))
 	.fields(({ f }) => ({
-		title: f
-			.text()
-			.label({ en: "Title", sk: "Nadpis" })
-			.localized()
-			.required(),
+		title: f.text().label({ en: "Title", sk: "Nadpis" }).localized().required(),
 		subtitle: f
 			.textarea()
 			.label({ en: "Subtitle", sk: "Podnadpis" })

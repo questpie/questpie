@@ -1,5 +1,6 @@
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import { Icon } from "@iconify/react";
+
 import { cn } from "../../lib/utils";
 
 function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
@@ -7,7 +8,7 @@ function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
 		<AccordionPrimitive.Root
 			data-slot="accordion"
 			className={cn(
-				"qa-accordion overflow-hidden border border-border bg-card flex w-full flex-col",
+				"qa-accordion border-border bg-card flex w-full flex-col overflow-hidden border",
 				className,
 			)}
 			{...props}
@@ -20,7 +21,7 @@ function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
 		<AccordionPrimitive.Item
 			data-slot="accordion-item"
 			className={cn(
-				"qa-accordion__item data-open:bg-muted not-last:border-b border-border transition-colors",
+				"qa-accordion__item data-open:bg-muted border-border transition-colors not-last:border-b",
 				className,
 			)}
 			{...props}
@@ -38,7 +39,7 @@ function AccordionTrigger({
 			<AccordionPrimitive.Trigger
 				data-slot="accordion-trigger"
 				className={cn(
-					"qa-accordion__trigger **:data-[slot=accordion-trigger-icon]:text-muted-foreground gap-4 px-4 py-3 text-left text-sm font-medium hover:bg-muted **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-center justify-between transition-all outline-none disabled:pointer-events-none disabled:opacity-50",
+					"qa-accordion__trigger **:data-[slot=accordion-trigger-icon]:text-muted-foreground hover:bg-muted group/accordion-trigger relative flex min-h-10 flex-1 items-center justify-between gap-4 px-4 py-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] outline-none active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 motion-reduce:transition-none motion-reduce:active:scale-100",
 					className,
 				)}
 				{...props}
@@ -47,7 +48,7 @@ function AccordionTrigger({
 				<Icon
 					icon="ph:caret-down"
 					data-slot="accordion-trigger-icon"
-					className="pointer-events-none shrink-0 transition-transform duration-200 group-aria-expanded/accordion-trigger:rotate-180"
+					className="pointer-events-none shrink-0 transition-transform duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] group-aria-expanded/accordion-trigger:rotate-180 motion-reduce:transition-none"
 				/>
 			</AccordionPrimitive.Trigger>
 		</AccordionPrimitive.Header>
@@ -62,12 +63,12 @@ function AccordionContent({
 	return (
 		<AccordionPrimitive.Panel
 			data-slot="accordion-content"
-			className="qa-accordion__content data-open:animate-accordion-down data-closed:animate-accordion-up overflow-hidden"
+			className="qa-accordion__content overflow-hidden"
 			{...props}
 		>
 			<div
 				className={cn(
-					"px-4 pt-0 pb-4 text-sm [&_a]:hover:text-foreground h-(--accordion-panel-height) data-ending-style:h-0 data-starting-style:h-0 [&_a]:underline [&_a]:underline-offset-3 [&_p:not(:last-child)]:mb-4",
+					"[&_a]:hover:text-foreground h-(--accordion-panel-height) px-4 pt-0 pb-4 text-sm opacity-100 transition-[height,opacity] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-enter)] data-ending-style:h-0 data-ending-style:opacity-0 data-starting-style:h-0 data-starting-style:opacity-0 motion-reduce:transition-none [&_a]:underline [&_a]:underline-offset-3 [&_p:not(:last-child)]:mb-4",
 					className,
 				)}
 			>

@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
 import type { generateDrizzleJson } from "drizzle-kit/api-postgres";
+
 import { OperationSnapshotManager } from "./operation-snapshot.js";
 import type { GenerateMigrationResult, OperationSnapshot } from "./types.js";
 
@@ -54,9 +56,8 @@ export class DrizzleMigrationGenerator {
 		options: DrizzleMigrationGeneratorOptions,
 	): Promise<GenerateMigrationResult> {
 		// Import drizzle-kit API dynamically
-		const { generateDrizzleJson, generateMigration } = await import(
-			"drizzle-kit/api-postgres"
-		);
+		const { generateDrizzleJson, generateMigration } =
+			await import("drizzle-kit/api-postgres");
 
 		// Create migrations directory if it doesn't exist
 		if (!existsSync(options.migrationDir)) {
@@ -119,9 +120,23 @@ export class DrizzleMigrationGenerator {
 		);
 
 		// Post-process SQL to add IF EXISTS to constraint drops for safety
-		const processedSqlUp = this.addIfExistsToConstraintDrops(sqlStatementsUp);
-		const processedSqlDown =
+		let processedSqlUp = this.addIfExistsToConstraintDrops(sqlStatementsUp);
+		let processedSqlDown =
 			this.addIfExistsToConstraintDrops(sqlStatementsDown);
+
+		// Emit CREATE/DROP SCHEMA for non-public schemas. drizzle-kit qualifies
+		// tables with their schema but does not emit the schema DDL itself — we
+		// derive it here from the snapshot diff.
+		processedSqlUp = this.prependCreateSchemaStatements(
+			processedSqlUp,
+			previousSnapshot,
+			newSnapshot,
+		);
+		processedSqlDown = this.appendDropSchemaStatements(
+			processedSqlDown,
+			newSnapshot,
+			previousSnapshot,
+		);
 
 		// Skip if no SQL changes (even if there are operations)
 		if (processedSqlUp.length === 0 && processedSqlDown.length === 0) {
@@ -352,5 +367,69 @@ export default migration({
 			}
 			return statement;
 		});
+	}
+
+	/**
+	 * Collect the set of non-public Postgres schemas referenced by tables in
+	 * a Drizzle snapshot's DDL. Used to emit `CREATE SCHEMA IF NOT EXISTS`.
+	 */
+	private collectNonPublicSchemas(snapshot: DrizzleSnapshotJSON): Set<string> {
+		const ddl = (snapshot as { ddl?: Array<{ entityType: string; schema?: string }> }).ddl ?? [];
+		const schemas = new Set<string>();
+		for (const entity of ddl) {
+			if (entity.entityType !== "tables") continue;
+			const name = entity.schema;
+			if (!name || name === "public") continue;
+			schemas.add(name);
+		}
+		return schemas;
+	}
+
+	/**
+	 * Prepend `CREATE SCHEMA IF NOT EXISTS "<name>";` for each non-public schema
+	 * that appears in the new snapshot but not the previous one.
+	 *
+	 * `IF NOT EXISTS` makes the statement idempotent, so it is safe even when the
+	 * schema was pre-created out-of-band. We still gate on "new only" so that
+	 * schema creation lands in the migration that first needs it (visible in PR
+	 * diffs), rather than being re-emitted on every migration.
+	 */
+	private prependCreateSchemaStatements(
+		statements: string[],
+		previousSnapshot: DrizzleSnapshotJSON,
+		newSnapshot: DrizzleSnapshotJSON,
+	): string[] {
+		const prevSchemas = this.collectNonPublicSchemas(previousSnapshot);
+		const nextSchemas = this.collectNonPublicSchemas(newSnapshot);
+		const toCreate = [...nextSchemas].filter((s) => !prevSchemas.has(s));
+		if (toCreate.length === 0) return statements;
+		const createStmts = toCreate
+			.sort()
+			.map((name) => `CREATE SCHEMA IF NOT EXISTS "${name}";`);
+		return [...createStmts, ...statements];
+	}
+
+	/**
+	 * Append `DROP SCHEMA IF EXISTS "<name>" CASCADE;` to the down migration for
+	 * every schema this migration introduced (present in new but not in prev).
+	 *
+	 * Mirrors `prependCreateSchemaStatements`: the migration that created the
+	 * schema is also the one that drops it on rollback. `IF EXISTS` and
+	 * `CASCADE` keep it safe even if the schema was already removed out-of-band
+	 * or still contains downstream objects.
+	 */
+	private appendDropSchemaStatements(
+		statements: string[],
+		newSnapshot: DrizzleSnapshotJSON,
+		previousSnapshot: DrizzleSnapshotJSON,
+	): string[] {
+		const nextSchemas = this.collectNonPublicSchemas(newSnapshot);
+		const prevSchemas = this.collectNonPublicSchemas(previousSnapshot);
+		const toDrop = [...nextSchemas].filter((s) => !prevSchemas.has(s));
+		if (toDrop.length === 0) return statements;
+		const dropStmts = toDrop
+			.sort()
+			.map((name) => `DROP SCHEMA IF EXISTS "${name}" CASCADE;`);
+		return [...statements, ...dropStmts];
 	}
 }

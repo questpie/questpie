@@ -1,3 +1,17 @@
+import {
+	createFileRoute,
+	HeadContent,
+	Link,
+	Outlet,
+	Scripts,
+	useLocation,
+} from "@tanstack/react-router";
+import { useMemo } from "react";
+
+import { authClient } from "@/lib/auth-client";
+import { client } from "@/lib/client";
+import { queryClient } from "@/lib/query-client";
+import admin from "@/questpie/admin/.generated/client";
 /**
  * Admin Layout Route
  *
@@ -9,19 +23,6 @@ import {
 	ScopePicker,
 	ScopeProvider,
 } from "@questpie/admin/client";
-import {
-	createFileRoute,
-	HeadContent,
-	Link,
-	Outlet,
-	Scripts,
-	useLocation,
-} from "@tanstack/react-router";
-import { useMemo } from "react";
-import { authClient } from "~/lib/auth-client";
-import { client } from "~/lib/client";
-import { queryClient } from "~/lib/query-client";
-import admin from "~/questpie/admin/.generated/client";
 
 import adminCss from "../admin.css?url";
 
@@ -31,14 +32,21 @@ function AdminLink({
 	className,
 	children,
 	activeProps,
+	activeOptions,
 }: {
 	to: string;
 	className?: string;
 	children: React.ReactNode;
 	activeProps?: { className?: string };
+	activeOptions?: { exact?: boolean };
 }) {
 	return (
-		<Link to={to} className={className} activeProps={activeProps}>
+		<Link
+			to={to}
+			className={className}
+			activeProps={activeProps}
+			activeOptions={activeOptions}
+		>
 			{children}
 		</Link>
 	);
@@ -58,7 +66,7 @@ function AdminLayout() {
 	// Create city selector slot for the sidebar
 	const afterBrandSlot = useMemo(
 		() => (
-			<div className="px-3 py-2 border-b">
+			<div className="border-b px-3 py-2">
 				<ScopePicker
 					collection="cities"
 					labelField="name"

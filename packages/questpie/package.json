@@ -1,7 +1,6 @@
 {
 	"name": "questpie",
-	"version": "2.0.0",
-	"type": "module",
+	"version": "3.1.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -11,8 +10,37 @@
 		"questpie": "./dist/cli.mjs"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"skills"
 	],
+	"type": "module",
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"imports": {
+		"#questpie/*": "./src/*"
+	},
+	"exports": {
+		".": "./src/exports/index.ts",
+		"./cli": "./src/exports/cli.ts",
+		"./client": "./src/exports/client.ts",
+		"./drizzle": "./src/exports/drizzle.ts",
+		"./drizzle-pg-core": "./src/exports/drizzle-pg-core.ts",
+		"./shared": "./src/exports/shared.ts",
+		"./*": "./*"
+	},
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			".": "./dist/index.mjs",
+			"./cli": "./dist/cli.mjs",
+			"./client": "./dist/client.mjs",
+			"./drizzle": "./dist/drizzle.mjs",
+			"./drizzle-pg-core": "./dist/drizzle-pg-core.mjs",
+			"./shared": "./dist/shared.mjs",
+			"./*": "./*"
+		}
+	},
 	"scripts": {
 		"build": "tsdown",
 		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test",
@@ -80,32 +108,5 @@
 		"pg-boss": {
 			"optional": true
 		}
-	},
-	"imports": {
-		"#questpie/*": "./src/*"
-	},
-	"publishConfig": {
-		"access": "public",
-		"exports": {
-			".": "./dist/index.mjs",
-			"./cli": "./dist/cli.mjs",
-			"./client": "./dist/client.mjs",
-			"./drizzle": "./dist/drizzle.mjs",
-			"./drizzle-pg-core": "./dist/drizzle-pg-core.mjs",
-			"./shared": "./dist/shared.mjs",
-			"./*": "./*"
-		}
-	},
-	"main": "./dist/index.mjs",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.mts",
-	"exports": {
-		".": "./src/exports/index.ts",
-		"./cli": "./src/exports/cli.ts",
-		"./client": "./src/exports/client.ts",
-		"./drizzle": "./src/exports/drizzle.ts",
-		"./drizzle-pg-core": "./src/exports/drizzle-pg-core.ts",
-		"./shared": "./src/exports/shared.ts",
-		"./*": "./*"
 	}
 }

@@ -48,6 +48,21 @@ export interface DiscoveredFile {
 	 * a bundle export that aggregates them.
 	 */
 	isBundle?: boolean;
+	/**
+	 * When set, this single file should be destructured into multiple createApp keys.
+	 * Keys = property names on the exported object.
+	 * Values = createApp argument keys (state keys).
+	 *
+	 * @see DiscoverPattern.destructure
+	 * @deprecated Use `configKey` instead — maps the whole file to one key in the `config` bucket.
+	 */
+	destructure?: Record<string, string>;
+
+	/**
+	 * When set, the file is emitted as a whole-object entry under `config.<configKey>`
+	 * instead of being destructured into flat keys.
+	 */
+	configKey?: string;
 }
 
 // ============================================================================
@@ -121,6 +136,47 @@ export type DiscoverPattern =
 			 * ```
 			 */
 			registryKey?: string;
+			/**
+			 * Destructure a composite config file into multiple createApp keys.
+			 *
+			 * When a single file exports an object with multiple config properties
+			 * (e.g. `config/app.ts` exports `{ locale, access, hooks, context }`),
+			 * this maps each property to a createApp argument key.
+			 *
+			 * Keys = property names on the exported object.
+			 * Values = createApp argument keys (state keys).
+			 *
+			 * @example
+			 * ```ts
+			 * appConfig: {
+			 *   pattern: "config/app.ts",
+			 *   destructure: {
+			 *     locale: "locale",
+			 *     access: "defaultAccess",
+			 *     hooks: "hooks",
+			 *   },
+			 * }
+			 * // Generated:
+			 * // import _appConfig from "../config/app.js";
+			 * // locale: _appConfig.locale,
+			 * // defaultAccess: _appConfig.access,
+			 * ```
+			 * @deprecated Use `configKey` instead.
+			 */
+			destructure?: Record<string, string>;
+
+			/**
+			 * When set, the discovered file is emitted as `config.<configKey>` in the
+			 * createApp definition. Each config file = one key in the config bucket.
+			 * Modules can contribute the same config key — merged per sub-key strategy.
+			 *
+			 * @example
+			 * ```ts
+			 * appConfig: { pattern: "config/app.ts", configKey: "app" }
+			 * // Generated: config: { app: _appConfig }
+			 * ```
+			 */
+			configKey?: string;
 	  };
 
 // ============================================================================
@@ -264,6 +320,20 @@ export interface CategoryDeclaration {
 	 */
 	keyFromProperty?: string;
 
+	/**
+	 * When set, use the discovered source path as the object key.
+	 *
+	 * This is useful for client-side convention files that mirror a server runtime
+	 * name but do not export a runtime object with that name attached.
+	 *
+	 * @example
+	 * ```ts
+	 * blocks: { dirs: ["blocks"], keyFromSource: "basename" }
+	 * // blocks/image-text.tsx → "image-text": _block_imageText
+	 * ```
+	 */
+	keyFromSource?: "basename";
+
 	// ── Multi-export discovery ────────────────────────────────
 
 	/**
@@ -285,10 +355,10 @@ export interface CategoryDeclaration {
 	 * 2. Cross-reference with export statements (`export const`, `export { }`,
 	 *    `export default`)
 	 *
-	 * Entity key derivation priority:
-	 * 1. Factory call's first string argument: `block("hero")` → `"hero"`
-	 * 2. Fallback to export name: `export const heroBlock = block(var)` → `"heroBlock"`
-	 * 3. For default exports, fallback to filename
+	 * Entity key is ALWAYS derived from the filename, never from the factory
+	 * call's string argument. For single-factory files (1 export), the key
+	 * equals `deriveFileKey(filename)`. For multi-export files, the export
+	 * name is used as fallback.
 	 *
 	 * @example ["collection"] — for collections category
 	 * @example ["block"] — for blocks category
@@ -343,6 +413,37 @@ export interface CategoryDeclaration {
 		/** Interface name to augment. */
 		interface: string;
 	};
+
+	/**
+	 * Runtime imports for the generated `factories.ts`.
+	 *
+	 * When a category contributes runtime values that need to be imported
+	 * and spread-merged in factories.ts (e.g., field types from a plugin),
+	 * declare them here. The factory template imports each named export
+	 * and spreads it into the merged field defs.
+	 *
+	 * Replaces the deprecated `runtimeFieldImports` on `CodegenTargetContribution`.
+	 *
+	 * @example
+	 * ```ts
+	 * fieldTypes: {
+	 *   dirs: ["fields"],
+	 *   prefix: "ftype",
+	 *   factoryImports: [
+	 *     { name: "adminFields", from: "@questpie/admin/server" },
+	 *   ],
+	 * }
+	 * // Generated in factories.ts:
+	 * // import { adminFields } from "@questpie/admin/server";
+	 * // const _rawFieldDefs = { ...builtinFields, ...adminFields };
+	 * ```
+	 */
+	factoryImports?: Array<{
+		/** Named export to import (e.g. "adminFields") */
+		name: string;
+		/** Package/path to import from (e.g. "@questpie/admin/server") */
+		from: string;
+	}>;
 }
 
 // ============================================================================
@@ -426,8 +527,12 @@ export interface CodegenTargetContribution {
 		collectionExtensions?: Record<string, RegistryExtension>;
 		/** Extension methods for global() factory. */
 		globalExtensions?: Record<string, RegistryExtension>;
+		/** Extension methods for Field instances (e.g. .admin(), .form()). */
+		fieldExtensions?: Record<string, RegistryExtension>;
 		/** Singleton factory functions (branding, sidebar, locale, etc.). */
 		singletonFactories?: Record<string, SingletonFactory>;
+		/** Builder factory functions that need wrapped field defs (e.g. block()). */
+		builderFactories?: Record<string, BuilderFactory>;
 	};
 
 	/**
@@ -458,36 +563,6 @@ export interface CodegenTargetContribution {
 	 * creates files in ALL matching targets (they write to different roots).
 	 */
 	scaffolds?: Record<string, ScaffoldConfig>;
-
-	/**
-	 * Runtime field factory imports contributed by this plugin.
-	 *
-	 * When a plugin provides additional field types (e.g. richText, blocks),
-	 * it declares how to import them at runtime so the codegen-generated
-	 * `factories.ts` can construct a merged field map for collection/global
-	 * builders.
-	 *
-	 * These imports are spread-merged with `builtinFields` and passed to
-	 * `CollectionBuilder.create()` / `GlobalBuilder.create()` so that
-	 * `.fields(({ f }) => ...)` callbacks have access to all field types
-	 * at runtime — not just the 15 built-in ones.
-	 *
-	 * @example
-	 * ```ts
-	 * runtimeFieldImports: [
-	 *   { name: "adminFields", from: "@questpie/admin/server" },
-	 * ]
-	 * // Generated in factories.ts:
-	 * // import { adminFields } from "@questpie/admin/server";
-	 * // const _allFieldDefs = { ...builtinFields, ...adminFields };
-	 * ```
-	 */
-	runtimeFieldImports?: Array<{
-		/** Named export to import (e.g. "adminFields") */
-		name: string;
-		/** Package/path to import from (e.g. "@questpie/admin/server") */
-		from: string;
-	}>;
 }
 
 // ============================================================================
@@ -560,7 +635,9 @@ export interface ResolvedTarget {
 	registries: {
 		collectionExtensions: Record<string, RegistryExtension>;
 		globalExtensions: Record<string, RegistryExtension>;
+		fieldExtensions: Record<string, RegistryExtension>;
 		singletonFactories: Record<string, SingletonFactory>;
+		builderFactories: Record<string, BuilderFactory>;
 	};
 
 	/** Merged callback parameter definitions from all contributing plugins. */
@@ -576,9 +653,6 @@ export interface ResolvedTarget {
 
 	/** Merged scaffold templates from all contributing plugins. */
 	scaffolds: Record<string, ScaffoldConfig>;
-
-	/** Merged runtime field imports from all contributing plugins. */
-	runtimeFieldImports: Array<{ name: string; from: string }>;
 }
 
 // ============================================================================
@@ -758,6 +832,48 @@ export interface SingletonFactory {
 	 * plain config and callback form.
 	 */
 	isCallback?: boolean;
+}
+
+// ============================================================================
+// Builder Factory
+// ============================================================================
+
+/**
+ * Declaration for a builder factory function generated in factories.ts.
+ * Builder factories create builder instances that need the wrapped field defs
+ * (with extension methods like .admin(), .form()) passed at construction time.
+ *
+ * Unlike collection() and global() which are always generated, builder
+ * factories are contributed by plugins (e.g. admin contributes block()).
+ *
+ * @example
+ * ```ts
+ * // Plugin declares:
+ * builderFactories: {
+ *   block: {
+ *     builderClass: "BlockBuilder",
+ *     import: { name: "BlockBuilder", from: "@questpie/admin/server" },
+ *     createMethod: "create",
+ *   },
+ * }
+ * // Codegen generates:
+ * import { BlockBuilder } from "@questpie/admin/server";
+ * export function block<TName extends string>(name: TName) {
+ *   return BlockBuilder.create(name, _allFieldDefs);
+ * }
+ * ```
+ */
+export interface BuilderFactory {
+	/** Name of the builder class (e.g. "BlockBuilder"). */
+	builderClass: string;
+	/** Import declaration for the builder class. */
+	import: { name: string; from: string };
+	/** Static method name on the builder class that accepts (name, fieldDefs). */
+	createMethod: string;
+	/** TypeScript generic signature for the factory function. Defaults to `<TName extends string>`. */
+	genericSignature?: string;
+	/** TypeScript return type expression. Use `$CLASS` as placeholder for the builder class name. */
+	returnType?: string;
 }
 
 // ============================================================================

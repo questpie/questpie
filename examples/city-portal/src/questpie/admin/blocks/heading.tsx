@@ -26,7 +26,7 @@ export function HeadingRenderer({ values }: BlockProps<"heading">) {
 	return (
 		<section className="px-6 py-8">
 			<Tag
-				className={`font-bold tracking-tight text-foreground ${sizeClass} ${alignClass}`}
+				className={`text-foreground font-bold tracking-tight ${sizeClass} ${alignClass}`}
 			>
 				{values.text || "Heading"}
 			</Tag>

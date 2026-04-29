@@ -7,7 +7,7 @@
  * ## Context Propagation
  *
  * `normalizeContext()` automatically inherits `locale`, `accessMode`, `session`,
- * and `stage` from the current `runWithContext` scope (via AsyncLocalStorage)
+ * `db`, and `stage` from the current `runWithContext` scope (via AsyncLocalStorage)
  * when not explicitly provided. This enables implicit context propagation in
  * nested API calls without manual threading.
  *
@@ -24,7 +24,7 @@
  *
  * ```typescript
  * // Inside a function handler — session comes from the request ALS scope
- * const posts = await app.api.collections.posts.find({ accessMode: "user" });
+ * const posts = await app.collections.posts.find({ accessMode: "user" });
  * // ↑ session auto-merged from ALS, no need to pass it explicitly
  * ```
  *
@@ -33,7 +33,7 @@
  * // HTTP adapter sets context via runWithContext for the entire request
  * await runWithContext({ locale: "sk", session, accessMode: "user" }, async () => {
  *   // All nested CRUD calls inherit locale + session automatically
- *   const posts = await app.api.collections.posts.find();
+ *   const posts = await app.collections.posts.find();
  *   // posts fetched with locale: "sk", session from request
  * });
  * ```
@@ -88,6 +88,7 @@ export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
 		// Cast needed: StoredContext.session is `unknown` (generic ALS store),
 		// but here we know it matches the CRUD session shape.
 		session: context.session ?? (stored?.session as CRUDContext["session"]),
+		db: context.db ?? stored?.db,
 		accessMode: context.accessMode ?? storedAccessMode ?? "system",
 		locale:
 			context.locale ??

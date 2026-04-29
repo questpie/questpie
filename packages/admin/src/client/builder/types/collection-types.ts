@@ -3,6 +3,7 @@
  */
 
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
 import type { I18nText } from "../../i18n/types.js";
 import type { Admin } from "../admin";
 import type { FieldDefinition } from "../field/field";
@@ -135,6 +136,17 @@ export interface ListViewConfig<TFieldNames extends string = string> {
 	};
 
 	/**
+	 * Enables reorder mode for this list.
+	 * Requires a numeric field named `order` on the collection.
+	 */
+	orderable?:
+		| boolean
+		| {
+				direction?: "asc" | "desc";
+				step?: number;
+		  };
+
+	/**
 	 * Enable search
 	 * @default true
 	 */
@@ -174,6 +186,17 @@ export interface ListViewConfig<TFieldNames extends string = string> {
 	 * @default [10, 25, 50, 100]
 	 */
 	pageSizeOptions?: number[];
+
+	/**
+	 * Client-side grouping options for the current fetched page.
+	 * Counts are page-local until a server aggregate API exists.
+	 */
+	grouping?: {
+		fields: TFieldNames[];
+		defaultField?: TFieldNames;
+		defaultCollapsed?: boolean;
+		showCounts?: boolean;
+	};
 
 	/**
 	 * Actions configuration for list view

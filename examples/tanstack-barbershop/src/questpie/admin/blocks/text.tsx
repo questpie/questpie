@@ -6,6 +6,7 @@
  */
 
 import { RichTextRenderer, type TipTapDoc } from "@questpie/admin/client";
+
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
 
@@ -48,7 +49,7 @@ export function TextRenderer({ values }: BlockProps<"text">) {
 		<section className={cn("px-6", paddingClass)}>
 			<div
 				className={cn(
-					"mx-auto prose prose-neutral dark:prose-invert",
+					"prose prose-neutral dark:prose-invert mx-auto",
 					"prose-headings:font-bold prose-headings:tracking-tight",
 					"prose-p:text-muted-foreground prose-p:leading-relaxed",
 					"prose-a:text-highlight prose-a:no-underline hover:prose-a:underline",

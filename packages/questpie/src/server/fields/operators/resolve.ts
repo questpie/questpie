@@ -9,7 +9,13 @@
 
 import { sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import type { ContextualOperators, OperatorFn, OperatorMap, QueryContext } from "../types.js";
+
+import type {
+	ContextualOperators,
+	OperatorFn,
+	OperatorMap,
+	QueryContext,
+} from "../types.js";
 import type { JsonbCast, OperatorSetDefinition } from "./types.js";
 
 /**

@@ -3,34 +3,34 @@ title: Sidebar
 description: Configure the admin sidebar — sections, collection items, global items, and external links.
 ---
 
-# Sidebar
-
-The sidebar controls admin navigation. Configure it with `sidebar.ts` — define sections and items.
+The sidebar controls admin navigation. Configure it in `config/admin.ts` — define sections and items under the `sidebar` key.
 
 ## Basic Setup
 
-```ts title="sidebar.ts"
-import { sidebar } from "#questpie";
+```ts title="config/admin.ts"
+import { adminConfig } from "#questpie/factories";
 
-export default sidebar({
-  sections: [
-    { id: "overview", title: { en: "Overview" } },
-    { id: "content", title: { en: "Content" } },
-  ],
-  items: [
-    {
-      sectionId: "overview",
-      type: "link",
-      label: { en: "Dashboard" },
-      href: "/admin",
-      icon: { type: "icon", props: { name: "ph:house" } },
-    },
-    {
-      sectionId: "content",
-      type: "collection",
-      collection: "posts",
-    },
-  ],
+export default adminConfig({
+	sidebar: {
+		sections: [
+			{ id: "overview", title: { en: "Overview" } },
+			{ id: "content", title: { en: "Content" } },
+		],
+		items: [
+			{
+				sectionId: "overview",
+				type: "link",
+				label: { en: "Dashboard" },
+				href: "/admin",
+				icon: { type: "icon", props: { name: "ph:house" } },
+			},
+			{
+				sectionId: "content",
+				type: "collection",
+				collection: "posts",
+			},
+		],
+	},
 });
 ```
 
@@ -40,11 +40,11 @@ Sections group sidebar items:
 
 ```ts
 sections: [
-  { id: "overview", title: { en: "Overview", sk: "Prehľad" } },
-  { id: "operations", title: { en: "Operations", sk: "Prevádzka" } },
-  { id: "content", title: { en: "Content", sk: "Obsah" } },
-  { id: "team", title: { en: "Team", sk: "Tím" } },
-]
+	{ id: "overview", title: { en: "Overview", sk: "Prehľad" } },
+	{ id: "operations", title: { en: "Operations", sk: "Prevádzka" } },
+	{ id: "content", title: { en: "Content", sk: "Obsah" } },
+	{ id: "team", title: { en: "Team", sk: "Tím" } },
+];
 ```
 
 ## Item Types
@@ -84,48 +84,104 @@ Custom link with icon:
 
 From the barbershop:
 
-```ts title="sidebar.ts"
-import { sidebar } from "#questpie";
+```ts title="config/admin.ts"
+import { adminConfig } from "#questpie/factories";
 
-export default sidebar({
-  sections: [
-    { id: "overview", title: { en: "Overview" } },
-    { id: "operations", title: { en: "Operations" } },
-    { id: "content", title: { en: "Content" } },
-    { id: "team", title: { en: "Team" } },
-    { id: "external", title: { en: "External" } },
-    { id: "administration", title: { en: "Administration" } },
-  ],
-  items: [
-    // Overview
-    {
-      sectionId: "overview",
-      type: "link",
-      label: { en: "Dashboard" },
-      href: "/admin",
-      icon: { type: "icon", props: { name: "ph:house" } },
-    },
-    { sectionId: "overview", type: "global", global: "siteSettings" },
-    // Operations
-    { sectionId: "operations", type: "collection", collection: "appointments" },
-    { sectionId: "operations", type: "collection", collection: "reviews" },
-    // Content
-    { sectionId: "content", type: "collection", collection: "pages" },
-    { sectionId: "content", type: "collection", collection: "services" },
-    // Team
-    { sectionId: "team", type: "collection", collection: "barbers" },
-    // External
-    {
-      sectionId: "external",
-      type: "link",
-      label: { en: "Open Website" },
-      href: "/",
-      external: true,
-      icon: { type: "icon", props: { name: "ph:arrow-square-out" } },
-    },
-  ],
+export default adminConfig({
+	sidebar: {
+		sections: [
+			{ id: "overview", title: { en: "Overview" } },
+			{ id: "operations", title: { en: "Operations" } },
+			{ id: "content", title: { en: "Content" } },
+			{ id: "team", title: { en: "Team" } },
+			{ id: "external", title: { en: "External" } },
+			{ id: "administration", title: { en: "Administration" } },
+		],
+		items: [
+			{
+				sectionId: "overview",
+				type: "link",
+				label: { en: "Dashboard" },
+				href: "/admin",
+				icon: { type: "icon", props: { name: "ph:house" } },
+			},
+			{ sectionId: "overview", type: "global", global: "siteSettings" },
+			{
+				sectionId: "operations",
+				type: "collection",
+				collection: "appointments",
+			},
+			{ sectionId: "operations", type: "collection", collection: "reviews" },
+			{ sectionId: "content", type: "collection", collection: "pages" },
+			{ sectionId: "content", type: "collection", collection: "services" },
+			{ sectionId: "team", type: "collection", collection: "barbers" },
+			{
+				sectionId: "external",
+				type: "link",
+				label: { en: "Open Website" },
+				href: "/",
+				external: true,
+				icon: { type: "icon", props: { name: "ph:arrow-square-out" } },
+			},
+		],
+	},
 });
 ```
+
+## Chrome Overrides
+
+To customize sidebar chrome without modifying your app shell, use file-first component overrides.
+
+### Brand area
+
+Replace the logo + name area:
+
+```tsx title="questpie/admin/components/admin-sidebar-brand.tsx"
+import type { AdminSidebarBrandProps } from "@questpie/admin/client";
+
+export default function SidebarBrand({
+	name,
+	collapsed,
+}: AdminSidebarBrandProps) {
+	return (
+		<div className="flex items-center gap-2">
+			<img src="/logo.svg" alt={name} className="size-6 shrink-0" />
+			{!collapsed && <span className="font-bold">{name}</span>}
+		</div>
+	);
+}
+```
+
+### Nav item rendering
+
+Replace every navigation item row:
+
+```tsx title="questpie/admin/components/admin-sidebar-nav-item.tsx"
+import type { AdminSidebarNavItemProps } from "@questpie/admin/client";
+
+export default function NavItem({
+	item,
+	isActive,
+	collapsed,
+}: AdminSidebarNavItemProps) {
+	return (
+		<a
+			href={item.href}
+			className={`flex items-center gap-2 px-3 py-2 text-sm ${isActive ? "font-bold" : ""}`}
+		>
+			{!collapsed && (
+				<span>
+					{typeof item.label === "string" ? item.label : item.label.en}
+				</span>
+			)}
+		</a>
+	);
+}
+```
+
+Both overrides follow the same three-tier priority: **runtime prop** > **file-first** > **built-in**.
+
+Use a normal React component as the default export for these files. `React.lazy(...)` is fine too. Do **not** default-export a raw `() => import("...")` loader function for reserved sidebar overrides.
 
 ## Module Contributions
 
@@ -134,5 +190,5 @@ Modules can contribute sidebar items. The `adminModule` adds an "Administration"
 ## Related Pages
 
 - [Dashboard](/docs/workspace/views/dashboard) — Dashboard widgets
-- [Branding](/docs/workspace/branding) — App name and logo
+- [Branding](/docs/workspace/branding) — App name and brand chrome
 - [Setup](/docs/workspace/setup) — Admin setup

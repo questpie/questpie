@@ -6,6 +6,7 @@
 
 import type { FieldInstance } from "../../../builder/field/field";
 import type { ListViewConfig } from "../../../builder/types/collection-types";
+import type { I18nText } from "../../../i18n/types";
 
 /**
  * Options for building columns
@@ -89,7 +90,7 @@ export type ColumnField = {
 	/** Field name */
 	name: string;
 	/** Display label */
-	label: string;
+	label: I18nText;
 	/** Field type */
 	type: string;
 	/** Whether this is a system field */

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import type { DiscoverFilesOptions } from "../../src/cli/codegen/discover.js";
 import {
 	detectExportType,
@@ -296,6 +297,17 @@ describe("discoverFiles", () => {
 		expect(collections.has("posts")).toBe(true);
 	});
 
+	it("ignores private directories starting with _ in recursive categories", async () => {
+		await write("routes/_internal/get-stats.ts");
+		await write("routes/public/get-users.ts");
+
+		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
+		const routes = cat(result, "routes");
+		expect(routes.size).toBe(1);
+		expect(routes.has("public/getUsers")).toBe(true);
+		expect(routes.has("_internal/getStats")).toBe(false);
+	});
+
 	// ── Globals ───────────────────────────────────────────────────────────────
 
 	it("discovers globals", async () => {
@@ -395,19 +407,19 @@ describe("discoverFiles", () => {
 
 	// ── Auth ──────────────────────────────────────────────────────────────────
 
-	it("discovers auth.ts as a single file", async () => {
-		await write("auth.ts", "export default {};");
+	it("discovers config/auth.ts as authConfig single file", async () => {
+		await write("config/auth.ts", "export default {};");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		const authSingle = result.singles.get("auth");
+		const authSingle = result.singles.get("authConfig");
 		expect(authSingle).not.toBeUndefined();
-		expect(authSingle!.key).toBe("auth");
-		expect(authSingle!.varName).toBe("_auth");
+		expect(authSingle!.key).toBe("authConfig");
+		expect(authSingle!.varName).toBe("_authConfig");
 		expect(authSingle!.exportType).toBe("default");
 	});
 
-	it("does not treat auth.ts as a collection/job/etc.", async () => {
-		await write("auth.ts", "export default {};");
+	it("does not treat config/auth.ts as a collection/job/etc.", async () => {
+		await write("config/auth.ts", "export default {};");
 		await write(
 			"collections/posts.ts",
 			"export const posts = collection('posts');",
@@ -415,7 +427,7 @@ describe("discoverFiles", () => {
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		expect(cat(result, "collections").size).toBe(1);
-		expect(result.singles.has("auth")).toBe(true);
+		expect(result.singles.has("authConfig")).toBe(true);
 	});
 
 	// ── Singles (modules, locale, hooks, access, context) ────────────────────
@@ -430,25 +442,13 @@ describe("discoverFiles", () => {
 		expect(file.exportType).toBe("default");
 	});
 
-	it("discovers locale.ts as a single", async () => {
-		await write("locale.ts", "export default {};");
+	it("discovers config/app.ts as appConfig single with configKey", async () => {
+		await write("config/app.ts", "export default {};");
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		expect(result.singles.has("locale")).toBe(true);
-	});
-
-	it("discovers context.ts as contextResolver single", async () => {
-		await write("context.ts", "export default {};");
-
-		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		expect(result.singles.has("contextResolver")).toBe(true);
-	});
-
-	it("discovers access.ts as defaultAccess single", async () => {
-		await write("access.ts", "export default {};");
-
-		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		expect(result.singles.has("defaultAccess")).toBe(true);
+		expect(result.singles.has("appConfig")).toBe(true);
+		const file = result.singles.get("appConfig")!;
+		expect(file.configKey).toBe("app");
 	});
 
 	// ── Feature layout ────────────────────────────────────────────────────────
@@ -461,6 +461,23 @@ describe("discoverFiles", () => {
 
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		expect(cat(result, "collections").has("articles")).toBe(true);
+	});
+
+	it("ignores private feature directories starting with _", async () => {
+		await write(
+			"features/_internal/collections/secret.ts",
+			"export const secret = collection('secret');",
+		);
+		await write(
+			"features/blog/collections/articles.ts",
+			"export const articles = collection('articles');",
+		);
+
+		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
+		const collections = cat(result, "collections");
+		expect(collections.size).toBe(1);
+		expect(collections.has("articles")).toBe(true);
+		expect(collections.has("secret")).toBe(false);
 	});
 
 	it("merges by-type and by-feature layout collections", async () => {
@@ -617,6 +634,17 @@ describe("discoverFiles — mergeStrategy spread", () => {
 		expect(files).toHaveLength(2);
 		expect(files[0].varName).toBe("_sidebar_admin");
 		expect(files[1].varName).toBe("_sidebar_audit");
+	});
+
+	it("ignores private feature directories for spread files", async () => {
+		await write("features/_internal/sidebar.ts");
+		await write("features/admin/sidebar.ts");
+
+		const result = await discoverFiles(rootDir, outDir, spreadOpts);
+		const files = result.spreads.get("sidebar")!;
+
+		expect(files).toHaveLength(1);
+		expect(files[0].varName).toBe("_sidebar_admin");
 	});
 
 	it("produces empty spreads map when no files match", async () => {
@@ -910,6 +938,7 @@ describe("multi-export factory discovery", () => {
 
 		const result = await discoverFiles(rootDir, outDir, factoryOpts);
 		const blocks = result.categories.get("blocks")!;
+		// Factory string arg has highest priority → "hero-banner" → "heroBanner"
 		expect(blocks.has("heroBanner")).toBe(true);
 	});
 
@@ -921,7 +950,36 @@ describe("multi-export factory discovery", () => {
 
 		const result = await discoverFiles(rootDir, outDir, factoryOpts);
 		const blocks = result.categories.get("blocks")!;
+		// No string arg → falls back to export name
 		expect(blocks.has("heroBlock")).toBe(true);
+	});
+
+	it("discovers typed named factory exports", async () => {
+		await write(
+			"blocks/typed.ts",
+			'export const hero: ReturnType<typeof block> = block("hero");',
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.has("hero")).toBe(true);
+		expect(blocks.get("hero")!.namedExportName).toBe("hero");
+	});
+
+	it("discovers typed default-exported factory variables", async () => {
+		await write(
+			"blocks/typed-default.ts",
+			[
+				"type Builder = (value: string) => ReturnType<typeof block>;",
+				'const hero: ReturnType<Builder> = block("hero");',
+				"export default hero;",
+			].join("\n"),
+		);
+
+		const result = await discoverFiles(rootDir, outDir, factoryOpts);
+		const blocks = result.categories.get("blocks")!;
+		expect(blocks.has("hero")).toBe(true);
+		expect(blocks.get("hero")!.exportType).toBe("default");
 	});
 
 	it("discovers default inline factory export", async () => {
@@ -992,6 +1050,7 @@ describe("multi-export factory discovery", () => {
 		await write("blocks/file1.ts", 'export const hero = block("hero");');
 		await write("blocks/file2.ts", 'export const hero2 = block("hero");');
 
+		// Both files use block("hero") → both get key "hero" → conflict
 		await expect(discoverFiles(rootDir, outDir, factoryOpts)).rejects.toThrow(
 			/duplicate blocks key "hero"/,
 		);

@@ -3,20 +3,21 @@ title: Content Localization
 description: Edit localized content with locale switching in the admin panel.
 ---
 
-# Content Localization
+When your collections or globals have localized fields, the admin panel shows a **content locale switcher** that lets editors work on each language independently.
 
-When your collections have localized fields, the admin panel shows a **locale switcher** that lets editors work on each language independently.
+Content locale is separate from admin UI locale. Switching content locale changes localized field values only; switching UI locale changes labels, buttons, menus, and messages.
 
 ## How It Works
 
 1. Mark fields as `.localized()` in your collection definition
-2. Configure content locales in your runtime config
-3. The admin shows a locale switcher in the form toolbar
+2. Configure content locales in `config/app.ts`
+3. The admin shows a content locale switcher in the form toolbar and sidebar language menu
 4. Editors switch locales to edit each translation
 
 ## Locale Switcher
 
 The switcher appears automatically when localized fields exist. It shows:
+
 - Country flag (auto-detected from locale code, or custom mapped)
 - Locale code (e.g. "EN", "SK")
 - Locale name (if configured)
@@ -25,26 +26,28 @@ The switcher appears automatically when localized fields exist. It shows:
 
 The switcher adapts based on the number of locales:
 
-| Locales | UI |
-|---|---|
-| 1 | Hidden (no switching needed) |
-| 2-3 | Inline toggle buttons |
-| 4+ | Dropdown menu |
+| Locales | UI                           |
+| ------- | ---------------------------- |
+| 1       | Hidden (no switching needed) |
+| 2-3     | Inline toggle buttons        |
+| 4+      | Dropdown menu                |
 
 ### Custom Flag Mapping
 
-By default, flags are resolved from locale codes (e.g. `en` → US flag, `sk` → SK flag). Override with `flagCountryCode`:
+By default, flags are resolved from locale codes (e.g. `en` -> US flag, `sk` -> SK flag). Override with `flagCountryCode`:
 
-```ts title="questpie.config.ts"
-export default runtimeConfig({
-  localization: {
-    defaultLocale: "en",
-    locales: [
-      { code: "en", label: { en: "English" }, flagCountryCode: "gb" },
-      { code: "sk", label: { en: "Slovak" } },
-      { code: "cs", label: { en: "Czech" }, flagCountryCode: "cz" },
-    ],
-  },
+```ts title="config/app.ts"
+import { appConfig } from "questpie";
+
+export default appConfig({
+	locale: {
+		locales: [
+			{ code: "en", label: "English", flagCountryCode: "gb" },
+			{ code: "sk", label: "Slovak" },
+			{ code: "cs", label: "Czech", flagCountryCode: "cz" },
+		],
+		defaultLocale: "en",
+	},
 });
 ```
 
@@ -53,26 +56,45 @@ export default runtimeConfig({
 Only fields marked with `.localized()` change when switching locales. Non-localized fields remain the same across all locales.
 
 ```ts title="collections/pages.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
-export const pages = collection("pages")
-  .fields(({ f }) => ({
-    title: f.text().required().localized(),     // Changes per locale
-    slug: f.text().required(),                   // Same across locales
-    content: f.blocks().localized(),             // Changes per locale
-    publishedAt: f.datetime(),                   // Same across locales
-  }));
+export const pages = collection("pages").fields(({ f }) => ({
+	title: f.text().required().localized(), // Changes per locale
+	slug: f.text().required(), // Same across locales
+	content: f.blocks().localized(), // Changes per locale
+	publishedAt: f.datetime(), // Same across locales
+}));
 ```
 
 ## Locale Scope
 
 The admin tracks the current content locale separately from the UI locale. When an editor switches from "EN" to "SK":
+
 - Only the localized field values change
 - The admin UI language stays the same
 - API calls include the `locale` parameter automatically
+- Dirty forms show a confirmation before discarding unsaved localized values
+
+## UI Language
+
+UI language is configured in `config/admin.ts`, not `config/app.ts`:
+
+```ts title="config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+
+export default adminConfig({
+	locale: {
+		locales: ["en", "sk"],
+		defaultLocale: "en",
+	},
+});
+```
+
+Use UI language for admin chrome, labels, validation text, and message keys. Use content language for record values.
 
 ## Related Pages
 
-- [Localization](/docs/backend/data-modeling/localization) — Server-side localization setup
+- [Localized Fields](/docs/backend/data-modeling/localization) — Server-side localization setup
+- [UI Language & Messages](/docs/workspace/ui-language-and-messages) — Admin interface locale and translation keys
 - [Fields](/docs/backend/data-modeling/fields) — Field types and `.localized()`
 - [Form Views](/docs/workspace/views/form-views) — Form layout and toolbar

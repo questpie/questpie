@@ -1,7 +1,6 @@
 {
 	"name": "@questpie/next",
-	"version": "2.0.0",
-	"type": "module",
+	"version": "3.1.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -10,6 +9,21 @@
 	"files": [
 		"dist"
 	],
+	"type": "module",
+	"main": "./dist/server.mjs",
+	"module": "./dist/server.mjs",
+	"types": "./dist/server.d.mts",
+	"exports": {
+		".": "./src/server.ts",
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			".": "./dist/server.mjs",
+			"./package.json": "./package.json"
+		}
+	},
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit"
@@ -22,20 +36,6 @@
 		"tsdown": "^0.18.3"
 	},
 	"peerDependencies": {
-		"questpie": "^2.0.0"
-	},
-	"exports": {
-		".": "./src/server.ts",
-		"./package.json": "./package.json"
-	},
-	"publishConfig": {
-		"access": "public",
-		"exports": {
-			".": "./dist/server.mjs",
-			"./package.json": "./package.json"
-		}
-	},
-	"main": "./dist/server.mjs",
-	"module": "./dist/server.mjs",
-	"types": "./dist/server.d.mts"
+		"questpie": "^3.0.0"
+	}
 }

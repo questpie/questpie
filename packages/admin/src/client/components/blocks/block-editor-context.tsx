@@ -9,7 +9,9 @@
 import * as React from "react";
 import type { StoreApi } from "zustand";
 import { useStore } from "zustand";
+
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
+
 import type { BlockContent, BlockNode } from "../../blocks/types.js";
 import type { InsertPosition } from "./utils/tree-utils.js";
 

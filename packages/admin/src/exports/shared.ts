@@ -6,9 +6,11 @@
 
 // Preview utilities (browser-safe, no Node.js dependencies)
 export {
+	ADMIN_API_PREFIX,
 	createDraftModeCookie,
 	DRAFT_MODE_COOKIE,
 	getPreviewSecret,
+	isAdminRequest,
 	isDraftMode,
 } from "#questpie/admin/shared/preview-utils.js";
 // Type exports

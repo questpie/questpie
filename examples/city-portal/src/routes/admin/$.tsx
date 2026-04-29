@@ -4,8 +4,9 @@
  * Handles all /admin/* routes (collections, globals, pages).
  */
 
-import { AdminRouter } from "@questpie/admin/client";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+
+import { AdminRouter } from "@questpie/admin/client";
 
 function AdminCatchAll() {
 	const navigate = useNavigate();

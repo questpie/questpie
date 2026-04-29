@@ -84,7 +84,6 @@ export function deepMerge<T extends Record<string, any> = Record<string, any>>(
 
 		// Merge each key from source into result
 		for (const key in source) {
-			// biome-ignore lint/suspicious/noPrototypeBuiltins: ES2021 compatibility
 			if (!Object.prototype.hasOwnProperty.call(source, key)) {
 				continue;
 			}

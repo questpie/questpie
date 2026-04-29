@@ -3,11 +3,13 @@ import z from "zod";
 
 export default route()
 	.post()
-	.schema(z.object({
-		startDate: z.string().datetime(),
-		endDate: z.string().datetime(),
-		completedOnly: z.boolean().optional().default(true),
-	}))
+	.schema(
+		z.object({
+			startDate: z.string().datetime(),
+			endDate: z.string().datetime(),
+			completedOnly: z.boolean().optional().default(true),
+		}),
+	)
 	.handler(async ({ input, collections }) => {
 		const { startDate, endDate, completedOnly } = input;
 

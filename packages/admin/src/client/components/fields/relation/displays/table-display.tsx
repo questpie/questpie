@@ -6,9 +6,19 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
+import { useTranslation } from "../../../../i18n/hooks";
 import { CollectionEditLink } from "../../../admin-link";
 import { Button } from "../../../ui/button";
 import { Skeleton } from "../../../ui/skeleton";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "../../../ui/table";
 import {
 	formatColumnHeader,
 	type RelationDisplayProps,
@@ -30,37 +40,35 @@ function TableSkeleton({
 	);
 
 	return (
-		<div className="rounded-md border">
-			<table className="w-full text-sm">
-				<thead>
-					<tr className="border-b border-border bg-card ">
+		<div className="panel-surface min-w-0 overflow-x-auto">
+			<Table>
+				<TableHeader>
+					<TableRow>
 						{columns.map((col) => (
-							<th key={col} className="px-3 py-2 text-left font-medium">
-								{formatColumnHeader(col)}
-							</th>
+							<TableHead key={col}>{formatColumnHeader(col)}</TableHead>
 						))}
-						{hasActions && <th className="px-3 py-2 w-20" />}
-					</tr>
-				</thead>
-				<tbody>
+						{hasActions && <TableHead className="w-20" />}
+					</TableRow>
+				</TableHeader>
+				<TableBody>
 					{skeletonKeys.map((key) => (
-						<tr key={key} className="border-b last:border-0">
+						<TableRow key={key}>
 							{columns.map((col) => (
-								<td key={col} className="px-3 py-2">
-									<Skeleton className="h-4 w-24 rounded" />
-								</td>
+								<TableCell key={col}>
+									<Skeleton variant="text" className="h-4 w-24" />
+								</TableCell>
 							))}
 							{hasActions && (
-								<td className="px-3 py-2">
+								<TableCell>
 									<div className="flex items-center justify-end gap-1">
-										<Skeleton className="h-7 w-7 rounded" />
+										<Skeleton variant="text" className="h-6 w-6" />
 									</div>
-								</td>
+								</TableCell>
 							)}
-						</tr>
+						</TableRow>
 					))}
-				</tbody>
-			</table>
+				</TableBody>
+			</Table>
 		</div>
 	);
 }
@@ -103,6 +111,7 @@ export function TableDisplay({
 	isLoading = false,
 	loadingCount = 3,
 }: RelationDisplayProps) {
+	const { t } = useTranslation();
 	const hasActions = editable || linkToDetail || !!actions?.onEdit;
 
 	// Show skeleton when loading and no items
@@ -117,42 +126,39 @@ export function TableDisplay({
 	}
 
 	return (
-		<div className="rounded-md border">
-			<table className="w-full text-sm">
-				<thead>
-					<tr className="border-b border-border bg-card ">
+		<div className="panel-surface min-w-0 overflow-x-auto">
+			<Table>
+				<TableHeader>
+					<TableRow>
 						{columns.map((col) => (
-							<th key={col} className="px-3 py-2 text-left font-medium">
-								{formatColumnHeader(col)}
-							</th>
+							<TableHead key={col}>{formatColumnHeader(col)}</TableHead>
 						))}
-						{hasActions && <th className="px-3 py-2 w-20" />}
-					</tr>
-				</thead>
-				<tbody>
+						{hasActions && <TableHead className="w-20" />}
+					</TableRow>
+				</TableHeader>
+				<TableBody>
 					{items.map((item) => (
-						<tr key={item.id} className="border-b last:border-0">
+						<TableRow key={item.id}>
 							{columns.map((col) => (
-								<td key={col} className="px-3 py-2">
+								<TableCell key={col}>
 									<CellRenderer
 										item={item}
 										column={col}
 										collectionConfig={collectionConfig}
 									/>
-								</td>
+								</TableCell>
 							))}
 							{hasActions && (
-								<td className="px-3 py-2">
+								<TableCell>
 									<div className="flex items-center justify-end gap-1">
 										{/* Edit button */}
 										{actions?.onEdit && (
 											<Button
 												type="button"
 												variant="ghost"
-												size="icon"
-												className="h-7 w-7"
+												size="icon-xs"
 												onClick={() => actions.onEdit?.(item)}
-												aria-label="Edit item"
+												aria-label={t("field.editItem")}
 											>
 												<Icon icon="ph:pencil" className="size-4" />
 											</Button>
@@ -163,10 +169,9 @@ export function TableDisplay({
 											<Button
 												type="button"
 												variant="ghost"
-												size="icon"
-												className="h-7 w-7"
+												size="icon-xs"
 												onClick={() => actions.onRemove?.(item)}
-												aria-label="Remove item"
+												aria-label={t("field.removeItem")}
 											>
 												<Icon icon="ph:x" className="size-4" />
 											</Button>
@@ -177,18 +182,18 @@ export function TableDisplay({
 											<CollectionEditLink
 												collection={collection as any}
 												id={item.id}
-												className="text-primary hover:underline"
+												className="item-surface text-muted-foreground hover:border-border hover:bg-accent hover:text-accent-foreground inline-flex min-h-10 min-w-10 items-center justify-center active:scale-[0.96]"
 											>
 												<Icon icon="ph:arrow-right" className="size-4" />
 											</CollectionEditLink>
 										)}
 									</div>
-								</td>
+								</TableCell>
 							)}
-						</tr>
+						</TableRow>
 					))}
-				</tbody>
-			</table>
+				</TableBody>
+			</Table>
 		</div>
 	);
 }

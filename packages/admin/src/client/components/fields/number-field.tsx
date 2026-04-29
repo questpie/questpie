@@ -1,4 +1,5 @@
 import { Controller } from "react-hook-form";
+
 import { cn } from "../../lib/utils";
 import { NumberInput } from "../primitives/number-input";
 import type { NumberFieldProps } from "./field-types";

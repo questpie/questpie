@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
+
 import type {
 	CategoryDeclaration,
 	CodegenResult,
@@ -15,6 +16,7 @@ import type {
 	DiscoveryResult,
 	ResolvedTarget,
 } from "questpie";
+
 import { generateAdminClientTemplate } from "#questpie/admin/server/codegen/admin-client-template";
 import { createAdminProjectionValidator } from "#questpie/admin/server/codegen/projection-validator";
 
@@ -29,6 +31,7 @@ function makeFile(
 		importPath?: string;
 		exportType?: "default" | "named" | "unknown";
 		namedExportName?: string;
+		source?: string;
 	} = {},
 ): DiscoveredFile {
 	return {
@@ -38,7 +41,7 @@ function makeFile(
 		importPath: opts.importPath ?? `../${key}`,
 		exportType: opts.exportType ?? "default",
 		namedExportName: opts.namedExportName,
-		source: `${key}.ts`,
+		source: opts.source ?? `${key}.ts`,
 	};
 }
 
@@ -197,6 +200,7 @@ describe("generateAdminClientTemplate", () => {
 				blocks: {
 					dirs: ["blocks"],
 					prefix: "block",
+					keyFromSource: "basename",
 					registryKey: false,
 					includeInAppState: false,
 					extractFromModules: false,
@@ -208,13 +212,45 @@ describe("generateAdminClientTemplate", () => {
 		// Imports
 		expect(output.code).toContain('import _mod from "../modules";');
 		expect(output.code).toContain('import _block_cta from "../blocks/cta";');
-		expect(output.code).toContain(
-			'import _block_hero from "../blocks/hero";',
-		);
+		expect(output.code).toContain('import _block_hero from "../blocks/hero";');
 		// Merged object with module spread
 		expect(output.code).toContain("blocks: { ..._mod.blocks,");
 		expect(output.code).toContain('"cta": _block_cta');
 		expect(output.code).toContain('"hero": _block_hero');
+	});
+
+	it("keys discovered blocks by source basename", () => {
+		const disc = emptyDiscovery();
+
+		const blocksMap = new Map<string, DiscoveredFile>();
+		blocksMap.set(
+			"imageText",
+			makeFile("imageText", {
+				varName: "_block_imageText",
+				importPath: "../blocks/image-text",
+				source: "blocks/image-text.tsx",
+			}),
+		);
+		disc.categories.set("blocks", blocksMap);
+
+		const ctx = makeCtx(disc, {
+			categories: {
+				blocks: {
+					dirs: ["blocks"],
+					prefix: "block",
+					keyFromSource: "basename",
+					registryKey: false,
+					includeInAppState: false,
+					extractFromModules: false,
+				},
+			},
+		});
+		const output = generateAdminClientTemplate(ctx);
+
+		expect(output.code).toContain(
+			'blocks: { "image-text": _block_imageText },',
+		);
+		expect(output.code).not.toContain('"imageText": _block_imageText');
 	});
 
 	it("emits blocks without module when no modules discovered", () => {
@@ -236,6 +272,7 @@ describe("generateAdminClientTemplate", () => {
 				blocks: {
 					dirs: ["blocks"],
 					prefix: "block",
+					keyFromSource: "basename",
 					registryKey: false,
 					includeInAppState: false,
 					extractFromModules: false,
@@ -337,6 +374,7 @@ describe("generateAdminClientTemplate", () => {
 				blocks: {
 					dirs: ["blocks"],
 					prefix: "block",
+					keyFromSource: "basename",
 					registryKey: false,
 					includeInAppState: false,
 					extractFromModules: false,
@@ -426,6 +464,7 @@ describe("generateAdminClientTemplate", () => {
 				blocks: {
 					dirs: ["blocks"],
 					prefix: "block",
+					keyFromSource: "basename",
 					registryKey: false,
 					includeInAppState: false,
 					extractFromModules: false,
@@ -484,6 +523,7 @@ describe("generateAdminClientTemplate", () => {
 				blocks: {
 					dirs: ["blocks"],
 					prefix: "block",
+					keyFromSource: "basename",
 					registryKey: false,
 					includeInAppState: false,
 					extractFromModules: false,

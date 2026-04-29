@@ -23,7 +23,9 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
 import type { Asset } from "../../hooks/use-upload";
+import { useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Skeleton } from "../ui/skeleton";
 
@@ -88,7 +90,7 @@ function getAssetTypeColor(mimeType?: string): string {
 	const type = mimeType.toLowerCase();
 
 	if (type.startsWith("image/")) return "bg-info/10";
-	if (type.startsWith("video/")) return "bg-primary/10";
+	if (type.startsWith("video/")) return "bg-surface-high";
 	if (type.startsWith("audio/")) return "bg-success/10";
 	if (type === "application/pdf") return "bg-destructive/10";
 
@@ -125,8 +127,8 @@ function MediaGridSkeleton({ columns = 4 }: { columns?: 2 | 3 | 4 | 5 }) {
 		<div className={cn("grid gap-3", gridClass)}>
 			{skeletonKeys.map((key) => (
 				<div key={key} className="space-y-2">
-					<Skeleton className="aspect-square w-full rounded-lg" />
-					<Skeleton className="h-4 w-3/4" />
+					<Skeleton className="aspect-square w-full" />
+					<Skeleton variant="text" className="h-4 w-3/4" />
 				</div>
 			))}
 		</div>
@@ -169,12 +171,12 @@ function AssetItem({
 			type="button"
 			onClick={handleClick}
 			className={cn(
-				"group relative aspect-square w-full overflow-hidden rounded-lg border",
-				"transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+				"panel-surface group relative aspect-square w-full overflow-hidden",
+				"focus-visible:ring-ring transition-[background-color,border-color,box-shadow,transform] focus-visible:ring-2 focus-visible:outline-none active:scale-[0.96]",
 				selected
-					? "ring-primary border-primary ring-2"
-					: "border-border hover:border-border",
-				"bg-muted",
+					? "border-border-strong bg-surface-high ring-ring/20 ring-2"
+					: "hover:border-border hover:bg-accent/20",
+				"bg-card",
 			)}
 		>
 			{/* Thumbnail or icon */}
@@ -182,7 +184,7 @@ function AssetItem({
 				<img
 					src={thumbnailUrl}
 					alt={asset.alt || asset.filename || "Asset"}
-					className="h-full w-full object-cover"
+					className="image-outline h-full w-full object-cover"
 					onError={() => setImageError(true)}
 				/>
 			) : (
@@ -192,7 +194,7 @@ function AssetItem({
 						getAssetTypeColor(asset.mimeType),
 					)}
 				>
-					<span className="text-muted-foreground text-xs font-medium uppercase">
+					<span className="text-muted-foreground chrome-meta text-xs font-medium">
 						{asset.mimeType?.split("/")[1]?.slice(0, 4) || "FILE"}
 					</span>
 				</div>
@@ -202,15 +204,13 @@ function AssetItem({
 			{showCheckbox && (
 				<div
 					className={cn(
-						"absolute right-2 top-2 flex size-5 items-center justify-center rounded-full border-2 transition-all",
+						"absolute top-2 right-2 flex size-5 items-center justify-center rounded-full border-2 transition-[background-color,border-color,color,opacity,transform]",
 						selected
-							? "bg-primary border-primary"
-							: "border-white bg-black/20 group-hover:bg-black/40",
+							? "border-foreground bg-foreground text-background"
+							: "border-border bg-background/80 text-muted-foreground group-hover:bg-background",
 					)}
 				>
-					{selected && (
-						<Icon icon="ph:check-bold" className="size-3 text-white" />
-					)}
+					{selected && <Icon icon="ph:check-bold" className="size-3" />}
 				</div>
 			)}
 
@@ -242,6 +242,9 @@ export function MediaGrid({
 	columns = 4,
 	className,
 }: MediaGridProps) {
+	const i18n = useSafeI18n();
+	const t = (key: string, fallback: string) => i18n?.t(key) ?? fallback;
+
 	// Handle toggle selection
 	const handleToggle = (assetId: string) => {
 		if (!onSelectionChange) return;
@@ -278,12 +281,12 @@ export function MediaGrid({
 		return (
 			<div
 				className={cn(
-					"flex flex-col items-center justify-center rounded-lg border border-dashed p-12",
-					"bg-muted text-muted-foreground",
+					"flex flex-col items-center justify-center p-8",
+					"text-muted-foreground",
 					className,
 				)}
 			>
-				<p className="text-sm">No assets found</p>
+				<p className="text-sm">{t("media.noAssets", "No assets found")}</p>
 			</div>
 		);
 	}

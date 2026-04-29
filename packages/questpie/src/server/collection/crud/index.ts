@@ -18,6 +18,8 @@ export type {
 	FindOneOptions,
 	FindOneOptionsBase,
 	FindOptions,
+	FindResult,
+	GroupedPaginatedResult,
 	OrderBy,
 	OrderByDirection,
 	PaginatedResult,

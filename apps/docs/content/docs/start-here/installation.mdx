@@ -1,9 +1,7 @@
 ---
 title: Installation
-description: Install QuestPie and set up your first project.
+description: Install QUESTPIE and set up your first project.
 ---
-
-# Installation
 
 ## Quick Start
 
@@ -34,13 +32,13 @@ bun add @questpie/admin
 import { runtimeConfig } from "questpie";
 
 export default runtimeConfig({
-  app: {
-    url: process.env.APP_URL || "http://localhost:3000",
-  },
-  db: {
-    url: process.env.DATABASE_URL || "postgres://localhost/myapp",
-  },
-  secret: process.env.APP_SECRET || "change-me-in-production",
+	app: {
+		url: process.env.APP_URL || "http://localhost:3000",
+	},
+	db: {
+		url: process.env.DATABASE_URL || "postgres://localhost/myapp",
+	},
+	secret: process.env.APP_SECRET || "change-me-in-production",
 });
 ```
 
@@ -55,12 +53,15 @@ The CLI resolves this file at the project root to find your config.
 ### 4. Create your first collection
 
 ```ts title="src/questpie/server/collections/posts.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("posts").fields(({ f }) => ({
-  title: f.text().required(),
-  body: f.textarea(),
-  status: f.select(["draft", "published"]),
+	title: f.text().required(),
+	body: f.textarea(),
+	status: f.select([
+		{ value: "draft", label: "Draft" },
+		{ value: "published", label: "Published" },
+	]),
 }));
 ```
 
@@ -90,23 +91,7 @@ bun dev
 
 ## With Admin Panel
 
-To add the admin interface, install `@questpie/admin` and register the plugin:
-
-```ts title="src/questpie/server/questpie.config.ts"
-import { adminPlugin } from "@questpie/admin/plugin";
-import { runtimeConfig } from "questpie";
-
-export default runtimeConfig({
-  plugins: [adminPlugin()],
-  app: {
-    url: process.env.APP_URL || "http://localhost:3000",
-  },
-  db: {
-    url: process.env.DATABASE_URL,
-  },
-  secret: process.env.APP_SECRET,
-});
-```
+To add the admin interface, install `@questpie/admin` and add the admin module:
 
 Add the admin module to your modules:
 
@@ -116,7 +101,7 @@ import { adminModule } from "@questpie/admin/server";
 export default [adminModule] as const;
 ```
 
-Re-run codegen to pick up admin conventions (sidebar, dashboard, branding):
+Create `src/questpie/server/config/admin.ts` for sidebar, dashboard, branding, and locale, then re-run codegen:
 
 ```bash
 bunx questpie generate
@@ -124,19 +109,23 @@ bunx questpie generate
 
 ## Adapters
 
-QuestPie needs an HTTP adapter to serve your API. Choose one:
+QUESTPIE needs an HTTP adapter to serve your API. Choose one:
 
-| Adapter | Package | Use case |
-|---|---|---|
-| Hono | `@questpie/hono` | General purpose, fast |
-| Elysia | `@questpie/elysia` | Bun-native, validation |
-| Next.js | `@questpie/nextjs` | Next.js API routes |
+| Adapter | Package            | Use case               |
+| ------- | ------------------ | ---------------------- |
+| Hono    | `@questpie/hono`   | General purpose, fast  |
+| Elysia  | `@questpie/elysia` | Bun-native, validation |
+| Next.js | `@questpie/next`   | Next.js API routes     |
 
 ```ts title="API handler (Hono example)"
-import { createFetchHandler } from "questpie/adapters/hono";
+import { questpieHono } from "@questpie/hono/server";
 import { app } from "#questpie";
+import { Hono } from "hono";
 
-export default createFetchHandler(app, { basePath: "/api" });
+const server = new Hono();
+server.route("/api", questpieHono(app));
+
+export default server;
 ```
 
 For TanStack Start, use the generic fetch handler directly — there is no adapter package:
@@ -148,22 +137,22 @@ import { app } from "#questpie";
 const handler = createFetchHandler(app, { basePath: "/api" });
 
 export const Route = createAPIFileRoute("/api/$")({
-  GET: ({ request }) => handler(request),
-  POST: ({ request }) => handler(request),
-  PATCH: ({ request }) => handler(request),
-  DELETE: ({ request }) => handler(request),
+	GET: ({ request }) => handler(request),
+	POST: ({ request }) => handler(request),
+	PATCH: ({ request }) => handler(request),
+	DELETE: ({ request }) => handler(request),
 });
 ```
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `APP_URL` | Yes | Public URL of your app |
-| `APP_SECRET` | Yes | Secret for auth sessions |
-| `SMTP_HOST` | No | Email SMTP host |
-| `SMTP_PORT` | No | Email SMTP port |
+| Variable       | Required | Description                  |
+| -------------- | -------- | ---------------------------- |
+| `DATABASE_URL` | Yes      | PostgreSQL connection string |
+| `APP_URL`      | Yes      | Public URL of your app       |
+| `APP_SECRET`   | Yes      | Secret for auth sessions     |
+| `SMTP_HOST`    | No       | Email SMTP host              |
+| `SMTP_PORT`    | No       | Email SMTP port              |
 
 ## What's Next
 

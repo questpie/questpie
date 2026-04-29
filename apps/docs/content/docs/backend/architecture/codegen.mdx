@@ -3,8 +3,6 @@ title: Codegen
 description: What questpie generate produces — the .generated/ directory, AppConfig, AppContext, and type augmentation.
 ---
 
-# Codegen
-
 Running `questpie generate` scans your file conventions and produces the `.generated/` directory. This is the bridge between your definitions and the typed runtime.
 
 ## What Gets Generated
@@ -22,43 +20,43 @@ Running `questpie generate` scans your file conventions and produces the `.gener
 
 // Entity type maps
 export type AppCollections = {
-  appointments: typeof appointments;
-  barbers: typeof barbers;
-  services: typeof services;
-  // ...
+	appointments: typeof appointments;
+	barbers: typeof barbers;
+	services: typeof services;
+	// ...
 };
 
 export type AppGlobals = {
-  siteSettings: typeof siteSettings;
+	siteSettings: typeof siteSettings;
 };
 
 export type AppRoutes = {
-  createBooking: typeof createBooking;
-  getActiveBarbers: typeof getActiveBarbers;
-  // ...
+	createBooking: typeof createBooking;
+	getActiveBarbers: typeof getActiveBarbers;
+	// ...
 };
 
 export type AppJobs = {
-  sendAppointmentConfirmation: typeof sendAppointmentConfirmation;
-  notifyBlogSubscribers: typeof notifyBlogSubscribers;
-  // ...
+	sendAppointmentConfirmation: typeof sendAppointmentConfirmation;
+	notifyBlogSubscribers: typeof notifyBlogSubscribers;
+	// ...
 };
 
 export type AppServices = {
-  blog: BlogService;
+	blog: BlogService;
 };
 
 export type AppEmails = {
-  appointmentConfirmation: typeof appointmentConfirmationEmail;
-  // ...
+	appointmentConfirmation: typeof appointmentConfirmationEmail;
+	// ...
 };
 
 // Flat config type for client SDK
 export type AppConfig = {
-  collections: AppCollections;
-  globals: AppGlobals;
-  routes: AppRoutes;
-  // auth, locales, etc.
+	collections: AppCollections;
+	globals: AppGlobals;
+	routes: AppRoutes;
+	// auth, locales, etc.
 };
 ```
 
@@ -67,18 +65,20 @@ export type AppConfig = {
 Codegen augments `AppContext` so every handler gets typed DI:
 
 ```ts
-declare global { namespace Questpie {
-  interface AppContext {
-    db: Database;
-    email: MailerService<AppEmailTemplates>;
-    queue: QueueClient<AppJobs>;
-    collections: AppCollections;
-    globals: AppGlobals;
-    session: Session | null;
-    blog: BlogService;   // Custom service
-    // ... all services
-  }
-}}
+declare global {
+	namespace Questpie {
+		interface AppContext {
+			db: Database;
+			email: MailerService<AppEmailTemplates>;
+			queue: QueueClient<AppJobs>;
+			collections: AppCollections;
+			globals: AppGlobals;
+			session: Session | null;
+			blog: BlogService; // Custom service
+			// ... all services
+		}
+	}
+}
 ```
 
 This is why you can destructure `{ collections, queue, email, blog }` in any handler — codegen generates the type augmentation from your file structure.
@@ -89,10 +89,10 @@ This is why you can destructure `{ collections, queue, email, blog }` in any han
 export const app = createApp(mergedModule, runtimeConfig);
 
 export async function createContext(options?: {
-  accessMode?: "system" | "user";
-  locale?: string;
+	accessMode?: "system" | "user";
+	locale?: string;
 }) {
-  return app.createContext(options);
+	return app.createContext(options);
 }
 ```
 
@@ -104,8 +104,8 @@ export async function createContext(options?: {
 import type { AppConfig } from "#questpie";
 
 export const client = createClient<AppConfig>({
-  baseURL: "http://localhost:3000",
-  basePath: "/api",
+	baseURL: "http://localhost:3000",
+	basePath: "/api",
 });
 ```
 
@@ -115,24 +115,24 @@ export const client = createClient<AppConfig>({
 import { app, createContext } from "#questpie";
 
 const ctx = await createContext({ accessMode: "system" });
-const posts = await app.api.collections.posts.find({}, ctx);
+const posts = await app.collections.posts.find({}, ctx);
 ```
 
 ### Typed admin hooks
 
 ```ts title="admin/hooks.ts"
 import { createTypedHooks } from "@questpie/admin/client";
-import type { AppConfig } from "#questpie";
+import type { App } from "#questpie";
 
 export const {
-  useCollectionList,
-  useCollectionItem,
-  useCollectionCreate,
-  useCollectionUpdate,
-  useCollectionDelete,
-  useGlobal,
-  useGlobalUpdate,
-} = createTypedHooks<AppConfig>();
+	useCollectionList,
+	useCollectionItem,
+	useCollectionCreate,
+	useCollectionUpdate,
+	useCollectionDelete,
+	useGlobal,
+	useGlobalUpdate,
+} = createTypedHooks<App>();
 ```
 
 ## When to Re-Run Codegen
@@ -151,13 +151,75 @@ You do **not** need to re-run codegen when you:
 - Update access control rules
 - Change runtime config values
 
-## The `#questpie` Alias
+## The `#questpie/factories` Alias
 
-The `#questpie` import in collection/global files resolves to a generated helper that provides typed builders:
+The `#questpie/factories` import in collection/global files resolves to generated helpers that provide typed builders:
 
 ```ts
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 // Provides field builder with autocompletion for relation targets, etc.
+```
+
+## How Discovery Works
+
+Codegen starts by scanning your project directories for files matching known conventions. Each entity category has a declared directory and file pattern:
+
+| Category      | Directory      | Pattern     | Key Strategy                     |
+| ------------- | -------------- | ----------- | -------------------------------- |
+| `collections` | `collections/` | `*.ts`      | Factory string arg → export name |
+| `globals`     | `globals/`     | `*.ts`      | Factory string arg → export name |
+| `routes`      | `routes/`      | `*.ts`      | Filename → camelCase/slash path  |
+| `jobs`        | `jobs/`        | `*.ts`      | Filename → camelCase             |
+| `services`    | `services/`    | `*.ts`      | Filename → camelCase             |
+| `emails`      | `emails/`      | `*.ts`      | Filename → camelCase             |
+| `seeds`       | `seeds/`       | `*.seed.ts` | Array (ordered)                  |
+| `blocks`      | `blocks/`      | `*.ts`      | Factory string arg → export name |
+
+Files prefixed with `_` (e.g., `_helpers.ts`) are ignored — use them for shared utilities within a category directory.
+
+Discovery also excludes `.d.ts` and `.d.mts` files to avoid picking up stale declaration artifacts.
+
+## Plugin System
+
+Codegen is extensible through plugins. Each plugin can contribute category declarations, modify generated output, or add entirely new generated files.
+
+### Core Plugins
+
+| Plugin              | What It Does                                                             |
+| ------------------- | ------------------------------------------------------------------------ |
+| `coreCodegenPlugin` | Discovers collections, globals, routes, jobs, services, emails, seeds    |
+| `adminPlugin`       | Discovers admin views, blocks, components, fields, and `config/admin.ts` |
+
+### Category Declarations
+
+Plugins declare categories with a `CategoryDeclaration` object:
+
+```ts
+{
+  name: "collections",
+  dirs: ["collections"],
+  prefix: "collection",
+  registryKey: "collections",
+  keyFromProperty: undefined, // Uses filename-based keys
+  extensions: [".ts", ".mts"],
+}
+```
+
+Key properties:
+
+- **`dirs`**: Which directories to scan
+- **`prefix`**: Used in generated variable names
+- **`registryKey`**: The key in the module registry (maps to `AppCollections`, etc.)
+- **`keyFromProperty`**: If set, reads the key from a property of the exported value (e.g., views use `name` property). Otherwise, derives the key from the filename.
+
+### Running Codegen
+
+```bash
+# One-time generation
+bunx questpie generate
+
+# Watch mode — re-generates on file changes
+bunx questpie dev
 ```
 
 ## Development Workflow
@@ -168,8 +230,17 @@ In development, use `questpie dev` which watches for file changes and re-runs co
 bunx questpie dev
 ```
 
+This watches for:
+
+- New, renamed, or deleted files in convention directories
+- Changes to `modules.ts` or `questpie.config.ts`
+- Plugin configuration changes
+
+Field option changes, hook logic changes, and access control rule changes do **not** require re-running codegen.
+
 ## Related Pages
 
 - [File Convention](/docs/backend/architecture/file-convention) — What files are discovered
 - [CLI](/docs/backend/architecture/cli) — CLI commands
 - [Type Inference](/docs/frontend/type-inference) — End-to-end type flow
+- [Plugins](/docs/backend/architecture/plugins) — Plugin architecture

@@ -13,6 +13,7 @@
 import { Icon } from "@iconify/react";
 import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -35,13 +36,13 @@ import {
 import { useTheme } from "@/lib/providers/theme-provider";
 
 // Types matching site-settings global
-export interface NavItem {
+interface NavItem {
 	label: string;
 	href: string;
 	isExternal?: boolean;
 }
 
-export interface HeaderProps {
+interface HeaderProps {
 	shopName?: string;
 	logo?: string; // Asset URL
 	navigation?: NavItem[];
@@ -72,10 +73,10 @@ export function Header({
 	};
 
 	return (
-		<header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+		<header className="border-border bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40 w-full border-b backdrop-blur">
 			<div className="container flex h-16 items-center justify-between">
 				{/* Logo */}
-				<a href="/" className="flex items-center gap-2 font-bold text-xl">
+				<a href="/" className="flex items-center gap-2 text-xl font-bold">
 					{logo ? (
 						<img src={logo} alt={shopName} className="h-8 w-auto" />
 					) : (
@@ -85,12 +86,12 @@ export function Header({
 				</a>
 
 				{/* Desktop Navigation */}
-				<nav className="hidden md:flex items-center gap-6">
+				<nav className="hidden items-center gap-6 md:flex">
 					{navigation.map((item) => (
 						<a
 							key={item.href}
 							href={item.href}
-							className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+							className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
 							{...(item.isExternal && {
 								target: "_blank",
 								rel: "noopener noreferrer",
@@ -120,6 +121,7 @@ export function Header({
 					{/* Locale Switcher */}
 					<DropdownMenu>
 						<DropdownMenuTrigger
+							nativeButton={false}
 							render={
 								<Button
 									variant="ghost"
@@ -132,15 +134,19 @@ export function Header({
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem onClick={() => handleLocaleChange("en")}>
-								<span className="flex items-center gap-2 w-full">
+								<span className="flex w-full items-center gap-2">
 									{t("language.en")}
-									{locale === "en" && <Icon icon="ph:check" className="size-4 ml-auto" />}
+									{locale === "en" && (
+										<Icon icon="ph:check" className="ml-auto size-4" />
+									)}
 								</span>
 							</DropdownMenuItem>
 							<DropdownMenuItem onClick={() => handleLocaleChange("sk")}>
-								<span className="flex items-center gap-2 w-full">
+								<span className="flex w-full items-center gap-2">
 									{t("language.sk")}
-									{locale === "sk" && <Icon icon="ph:check" className="size-4 ml-auto" />}
+									{locale === "sk" && (
+										<Icon icon="ph:check" className="ml-auto size-4" />
+									)}
 								</span>
 							</DropdownMenuItem>
 						</DropdownMenuContent>
@@ -178,12 +184,12 @@ export function Header({
 								</SheetTitle>
 							</SheetHeader>
 
-							<nav className="flex flex-col gap-4 mt-8 px-4">
+							<nav className="mt-8 flex flex-col gap-4 px-4">
 								{navigation.map((item) => (
 									<a
 										key={item.href}
 										href={item.href}
-										className="block py-2 text-lg font-medium text-foreground hover:text-muted-foreground transition-colors text-left"
+										className="text-foreground hover:text-muted-foreground block py-2 text-left text-lg font-medium transition-colors"
 										onClick={() => setMobileMenuOpen(false)}
 										{...(item.isExternal && {
 											target: "_blank",
@@ -196,7 +202,7 @@ export function Header({
 
 								{/* Book Now - Mobile */}
 								{ctaButtonText && (
-									<a href={ctaButtonLink} className="block mt-4">
+									<a href={ctaButtonLink} className="mt-4 block">
 										<Button className="bg-highlight text-highlight-foreground hover:bg-highlight/90 w-full">
 											{ctaButtonText}
 										</Button>
@@ -205,54 +211,55 @@ export function Header({
 							</nav>
 
 							{/* Mobile footer with theme/locale */}
-							<div className="mt-auto p-4 border-t border-border">
+							<div className="border-border mt-auto border-t p-4">
 								<div className="flex items-center justify-between">
-									<span className="text-sm text-muted-foreground">
+									<span className="text-muted-foreground text-sm">
 										{t("mobile.theme")}
 									</span>
 									<Button variant="outline" size="sm" onClick={toggleTheme}>
 										{resolvedTheme === "dark" ? (
 											<>
-												<Icon icon="ph:sun" className="size-4 mr-2" />
+												<Icon icon="ph:sun" className="mr-2 size-4" />
 												{t("theme.light")}
 											</>
 										) : (
 											<>
-												<Icon icon="ph:moon" className="size-4 mr-2" />
+												<Icon icon="ph:moon" className="mr-2 size-4" />
 												{t("theme.dark")}
 											</>
 										)}
 									</Button>
 								</div>
-								<div className="flex items-center justify-between mt-3">
-									<span className="text-sm text-muted-foreground">
+								<div className="mt-3 flex items-center justify-between">
+									<span className="text-muted-foreground text-sm">
 										{t("mobile.language")}
 									</span>
 									<DropdownMenu>
 										<DropdownMenuTrigger
+											nativeButton={false}
 											render={<Button variant="outline" size="sm" />}
 										>
-											<Icon icon="ph:globe" className="size-4 mr-2" />
+											<Icon icon="ph:globe" className="mr-2 size-4" />
 											{locale === "en" ? t("language.en") : t("language.sk")}
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="end">
 											<DropdownMenuItem
 												onClick={() => handleLocaleChange("en")}
 											>
-												<span className="flex items-center gap-2 w-full">
+												<span className="flex w-full items-center gap-2">
 													{t("language.en")}
 													{locale === "en" && (
-														<Icon icon="ph:check" className="size-4 ml-auto" />
+														<Icon icon="ph:check" className="ml-auto size-4" />
 													)}
 												</span>
 											</DropdownMenuItem>
 											<DropdownMenuItem
 												onClick={() => handleLocaleChange("sk")}
 											>
-												<span className="flex items-center gap-2 w-full">
+												<span className="flex w-full items-center gap-2">
 													{t("language.sk")}
 													{locale === "sk" && (
-														<Icon icon="ph:check" className="size-4 ml-auto" />
+														<Icon icon="ph:check" className="ml-auto size-4" />
 													)}
 												</span>
 											</DropdownMenuItem>

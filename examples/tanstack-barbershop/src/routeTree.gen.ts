@@ -15,7 +15,6 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as ApiPreviewRouteImport } from './routes/api/preview'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
-import { Route as AdminLoginRouteImport } from './routes/admin/login'
 import { Route as AdminSplatRouteImport } from './routes/admin/$'
 import { Route as AppContactRouteImport } from './routes/_app/contact'
 import { Route as AppBookingRouteImport } from './routes/_app/booking'
@@ -53,11 +52,6 @@ const ApiSplatRoute = ApiSplatRouteImport.update({
   id: '/api/$',
   path: '/api/$',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AdminLoginRoute = AdminLoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => AdminRoute,
 } as any)
 const AdminSplatRoute = AdminSplatRouteImport.update({
   id: '/$',
@@ -106,7 +100,6 @@ export interface FileRoutesByFullPath {
   '/booking': typeof AppBookingRoute
   '/contact': typeof AppContactRoute
   '/admin/$': typeof AdminSplatRoute
-  '/admin/login': typeof AdminLoginRoute
   '/api/$': typeof ApiSplatRoute
   '/api/preview': typeof ApiPreviewRoute
   '/': typeof AppIndexRoute
@@ -121,7 +114,6 @@ export interface FileRoutesByTo {
   '/booking': typeof AppBookingRoute
   '/contact': typeof AppContactRoute
   '/admin/$': typeof AdminSplatRoute
-  '/admin/login': typeof AdminLoginRoute
   '/api/$': typeof ApiSplatRoute
   '/api/preview': typeof ApiPreviewRoute
   '/': typeof AppIndexRoute
@@ -139,7 +131,6 @@ export interface FileRoutesById {
   '/_app/booking': typeof AppBookingRoute
   '/_app/contact': typeof AppContactRoute
   '/admin/$': typeof AdminSplatRoute
-  '/admin/login': typeof AdminLoginRoute
   '/api/$': typeof ApiSplatRoute
   '/api/preview': typeof ApiPreviewRoute
   '/_app/': typeof AppIndexRoute
@@ -157,7 +148,6 @@ export interface FileRouteTypes {
     | '/booking'
     | '/contact'
     | '/admin/$'
-    | '/admin/login'
     | '/api/$'
     | '/api/preview'
     | '/'
@@ -172,7 +162,6 @@ export interface FileRouteTypes {
     | '/booking'
     | '/contact'
     | '/admin/$'
-    | '/admin/login'
     | '/api/$'
     | '/api/preview'
     | '/'
@@ -189,7 +178,6 @@ export interface FileRouteTypes {
     | '/_app/booking'
     | '/_app/contact'
     | '/admin/$'
-    | '/admin/login'
     | '/api/$'
     | '/api/preview'
     | '/_app/'
@@ -250,13 +238,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/$'
       preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/admin/login': {
-      id: '/admin/login'
-      path: '/login'
-      fullPath: '/admin/login'
-      preLoaderRoute: typeof AdminLoginRouteImport
-      parentRoute: typeof AdminRoute
     }
     '/admin/$': {
       id: '/admin/$'
@@ -343,13 +324,11 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface AdminRouteChildren {
   AdminSplatRoute: typeof AdminSplatRoute
-  AdminLoginRoute: typeof AdminLoginRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminSplatRoute: AdminSplatRoute,
-  AdminLoginRoute: AdminLoginRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 

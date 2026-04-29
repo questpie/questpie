@@ -6,7 +6,6 @@
  */
 
 import type { QueryClient } from "@tanstack/react-query";
-import type { QuestpieClient } from "questpie/client";
 import { DEFAULT_LOCALE } from "questpie/shared";
 import {
 	createContext,
@@ -20,13 +19,15 @@ import {
 	useState,
 } from "react";
 import { createStore, useStore } from "zustand";
-// The admin client uses QuestpieClient<any> since the concrete App type
-// is project-specific and comes from .generated/index.ts at the app level.
+
+import type { AnyQuestpieClient } from "../builder";
 import { Admin, type AdminInput } from "../builder/admin";
+import type { BrandLogoConfig } from "../types/admin-config";
 import { I18nProvider } from "../i18n/hooks";
 import { adminMessages } from "../i18n/messages";
 import { createSimpleI18n, type SimpleMessages } from "../i18n/simple";
 import type { I18nAdapter } from "../i18n/types";
+import { getCookie } from "../lib/cookies.js";
 import { ContentLocalesProvider } from "./content-locales-provider";
 import { buildNavigation, type NavigationGroup } from "./routes";
 import {
@@ -52,15 +53,8 @@ const LEGACY_LOCALE_COOKIE = "questpie_locale";
 // Cookie Helpers
 // ============================================================================
 
-function getCookie(name: string): string | null {
-	if (typeof document === "undefined") return null;
-	const match = document.cookie.match(new RegExp(`${name}=([^;]+)`));
-	return match ? match[1] : null;
-}
-
 function setCookie(name: string, value: string): void {
 	if (typeof document === "undefined") return;
-	// biome-ignore lint/suspicious/noDocumentCookie: this string is ok
 	document.cookie = `${name}=${value}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; SameSite=Lax`;
 }
 
@@ -89,7 +83,7 @@ function setContentLocaleCookie(locale: string): void {
 export interface AdminState {
 	// Core values (from props)
 	admin: Admin;
-	client: QuestpieClient<any>;
+	client: AnyQuestpieClient;
 	authClient: any | null;
 	basePath: string;
 	navigate: (path: string) => void;
@@ -105,6 +99,9 @@ export interface AdminState {
 	// Derived/cached values
 	navigation: NavigationGroup[];
 	brandName: string;
+	brandLogo: BrandLogoConfig | null;
+	brandTagline: string | null;
+	brandFavicon: string | null;
 }
 
 export type AdminStore = ReturnType<typeof createAdminStore>;
@@ -115,7 +112,7 @@ export type AdminStore = ReturnType<typeof createAdminStore>;
 
 interface CreateAdminStoreProps {
 	admin: Admin;
-	client: QuestpieClient<any>;
+	client: AnyQuestpieClient;
 	authClient: any | null;
 	basePath: string;
 	navigate: (path: string) => void;
@@ -158,6 +155,9 @@ function createAdminStore({
 		// Derived values (computed once, updated when needed)
 		navigation: buildNavigation(admin, { basePath }),
 		brandName: "Admin",
+		brandLogo: null,
+		brandTagline: null,
+		brandFavicon: null,
 	}));
 }
 
@@ -180,7 +180,7 @@ export interface AdminProviderProps {
 	/**
 	 * The API client for data fetching
 	 */
-	client: QuestpieClient<any>;
+	client: AnyQuestpieClient;
 
 	/**
 	 * The auth client for authentication (created via createAdminAuthClient)
@@ -519,6 +519,30 @@ export function AdminProvider({
 // Branding Sync (reads server config and updates store)
 // ============================================================================
 
+function resolveBrandText(value: unknown, fallback: string): string {
+	if (typeof value === "string") return value;
+	if (value && typeof value === "object") {
+		const obj = value as Record<string, unknown>;
+		if (typeof obj.en === "string") return obj.en;
+		const first = Object.values(obj).find((v) => typeof v === "string");
+		if (typeof first === "string") return first;
+	}
+	return fallback;
+}
+
+function applyFavicon(href: string | null) {
+	if (typeof document === "undefined" || !href) return;
+	const FAVICON_ID = "qa-brand-favicon";
+	let link = document.getElementById(FAVICON_ID) as HTMLLinkElement | null;
+	if (!link) {
+		link = document.createElement("link");
+		link.id = FAVICON_ID;
+		link.rel = "icon";
+		document.head.appendChild(link);
+	}
+	link.href = href;
+}
+
 function BrandingSync() {
 	const store = useContext(AdminStoreContext);
 	useEffect(() => {
@@ -529,19 +553,31 @@ function BrandingSync() {
 		(client as any).routes
 			.getAdminConfig()
 			.then((config: any) => {
-				if (config?.branding?.name) {
-					const name = config.branding.name;
-					const resolved =
-						typeof name === "string"
-							? name
-							: typeof name === "object" && name !== null
-								? (name.en ?? Object.values(name)[0] ?? "Admin")
-								: "Admin";
-					store.setState({ brandName: resolved as string });
+				const branding = config?.branding;
+				if (!branding) return;
+				const next: Partial<AdminState> = {};
+				if (branding.name !== undefined) {
+					next.brandName = resolveBrandText(branding.name, "Admin");
+				}
+				if (branding.logo !== undefined) {
+					next.brandLogo = (branding.logo ?? null) as BrandLogoConfig | null;
+				}
+				if (branding.tagline !== undefined) {
+					next.brandTagline = branding.tagline
+						? resolveBrandText(branding.tagline, "")
+						: null;
+				}
+				if (branding.favicon !== undefined) {
+					const favicon = branding.favicon ?? null;
+					next.brandFavicon = favicon;
+					applyFavicon(favicon);
+				}
+				if (Object.keys(next).length > 0) {
+					store.setState(next);
 				}
 			})
 			.catch(() => {
-				// Fail silently - keep default "Admin"
+				// Fail silently — keep defaults.
 			});
 	}, [store]);
 	return null;
@@ -598,7 +634,7 @@ function useHasAdminProvider(): boolean {
  * Get the raw store from context (or null if outside provider).
  * For advanced use cases where you need conditional store access.
  */
-function useAdminStoreRaw(): AdminStore | null {
+export function useAdminStoreRaw(): AdminStore | null {
 	return useContext(AdminStoreContext);
 }
 
@@ -610,7 +646,7 @@ function useAdminStoreRaw(): AdminStore | null {
 export const selectAdmin = (s: AdminState) => s.admin;
 
 /** Select client instance */
-export const selectClient = (s: AdminState): QuestpieClient<any> => s.client;
+export const selectClient = (s: AdminState): AnyQuestpieClient => s.client;
 
 /** Select auth client instance */
 export const selectAuthClient = (s: AdminState) => s.authClient;

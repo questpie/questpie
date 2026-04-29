@@ -17,9 +17,12 @@ bun add @questpie/next questpie
 import { questpieNextRouteHandlers } from "@questpie/next";
 import { app } from "#questpie";
 
-export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(app, {
-  basePath: "/api",
-});
+export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(
+	app,
+	{
+		basePath: "/api",
+	},
+);
 
 export const dynamic = "force-dynamic";
 ```
@@ -32,8 +35,8 @@ import { createClient } from "questpie/client";
 import type { AppConfig } from "#questpie";
 
 export const appClient = createClient<AppConfig>({
-  baseURL: process.env.NEXT_PUBLIC_URL!,
-  basePath: "/api",
+	baseURL: process.env.NEXT_PUBLIC_URL!,
+	basePath: "/api",
 });
 ```
 
@@ -44,17 +47,19 @@ export const appClient = createClient<AppConfig>({
 import { appClient } from "@/lib/client";
 
 export default async function PostsPage() {
-  const { docs } = await appClient.collections.posts.find({
-    where: { published: { eq: true } },
-    orderBy: { publishedAt: "desc" },
-    limit: 10,
-  });
+	const { docs } = await appClient.collections.posts.find({
+		where: { published: { eq: true } },
+		orderBy: { publishedAt: "desc" },
+		limit: 10,
+	});
 
-  return (
-    <ul>
-      {docs.map((post) => <li key={post.id}>{post.title}</li>)}
-    </ul>
-  );
+	return (
+		<ul>
+			{docs.map((post) => (
+				<li key={post.id}>{post.title}</li>
+			))}
+		</ul>
+	);
 }
 ```
 
@@ -70,15 +75,15 @@ import { appClient } from "@/lib/client";
 const appQueries = createQuestpieQueryOptions(appClient);
 
 export function PostsList() {
-  const { data } = useQuery(
-    cmsQueries.collections.posts.find({ limit: 10 })
-  );
+	const { data } = useQuery(appQueries.collections.posts.find({ limit: 10 }));
 
-  return (
-    <ul>
-      {data?.docs.map((post) => <li key={post.id}>{post.title}</li>)}
-    </ul>
-  );
+	return (
+		<ul>
+			{data?.docs.map((post) => (
+				<li key={post.id}>{post.title}</li>
+			))}
+		</ul>
+	);
 }
 ```
 
@@ -91,12 +96,12 @@ import { app } from "#questpie";
 import { revalidatePath } from "next/cache";
 
 export async function createPost(formData: FormData) {
-  const post = await app.api.collections.posts.create({
-    title: formData.get("title") as string,
-    content: formData.get("content") as string,
-  });
-  revalidatePath("/posts");
-  return post;
+	const post = await app.collections.posts.create({
+		title: formData.get("title") as string,
+		content: formData.get("content") as string,
+	});
+	revalidatePath("/posts");
+	return post;
 }
 ```
 
@@ -104,24 +109,24 @@ export async function createPost(formData: FormData) {
 
 The adapter creates catch-all handlers under your base path:
 
-| Method | Route                                    | Description          |
-| ------ | ---------------------------------------- | -------------------- |
-| GET    | `/api/collections/:name`             | List items           |
-| POST   | `/api/collections/:name`             | Create item          |
-| GET    | `/api/collections/:name/:id`         | Get item             |
-| PATCH  | `/api/collections/:name/:id`         | Update item          |
-| DELETE | `/api/collections/:name/:id`         | Delete item          |
-| POST   | `/api/collections/:name/:id/restore` | Restore soft-deleted |
-| GET    | `/api/collections/:name/:id/versions` | List item versions   |
-| POST   | `/api/collections/:name/:id/revert`   | Revert item version  |
-| GET    | `/api/globals/:name`                 | Get global           |
-| PATCH  | `/api/globals/:name`                 | Update global        |
-| GET    | `/api/globals/:name/versions`         | List global versions |
+| Method | Route                                 | Description           |
+| ------ | ------------------------------------- | --------------------- |
+| GET    | `/api/collections/:name`              | List items            |
+| POST   | `/api/collections/:name`              | Create item           |
+| GET    | `/api/collections/:name/:id`          | Get item              |
+| PATCH  | `/api/collections/:name/:id`          | Update item           |
+| DELETE | `/api/collections/:name/:id`          | Delete item           |
+| POST   | `/api/collections/:name/:id/restore`  | Restore soft-deleted  |
+| GET    | `/api/collections/:name/:id/versions` | List item versions    |
+| POST   | `/api/collections/:name/:id/revert`   | Revert item version   |
+| GET    | `/api/globals/:name`                  | Get global            |
+| PATCH  | `/api/globals/:name`                  | Update global         |
+| GET    | `/api/globals/:name/versions`         | List global versions  |
 | POST   | `/api/globals/:name/revert`           | Revert global version |
-| POST   | `/api/collections/:name/upload`      | Upload file          |
-| ALL    | `/api/auth/*`                        | Better Auth routes   |
-| ANY    | `/api/:route*`                       | Custom app routes    |
-| GET    | `/api/collections/:name/subscribe`   | SSE realtime         |
+| POST   | `/api/collections/:name/upload`       | Upload file           |
+| ALL    | `/api/auth/*`                         | Better Auth routes    |
+| ANY    | `/api/:route*`                        | Custom app routes     |
+| GET    | `/api/collections/:name/subscribe`    | SSE realtime          |
 
 ## Environment Variables
 

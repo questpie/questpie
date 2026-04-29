@@ -1,14 +1,17 @@
+import { Icon as IconifyIcon } from "@iconify/react";
 import type * as React from "react";
+
 import { cn } from "../../lib/utils";
 
 // ============================================================================
 // Types
 // ============================================================================
 
+type EmptyStateVariant = "empty" | "error" | "search";
+
 interface EmptyStateProps {
 	/**
-	 * Title text (displayed in mono uppercase)
-	 * @example "NO_DATA_FOUND"
+	 * Title text
 	 */
 	title: string;
 
@@ -21,6 +24,17 @@ interface EmptyStateProps {
 	 * Optional icon component
 	 */
 	icon?: React.ComponentType<{ className?: string }>;
+
+	/**
+	 * Optional Iconify icon name
+	 */
+	iconName?: string;
+
+	/**
+	 * Visual treatment
+	 * @default "empty"
+	 */
+	variant?: EmptyStateVariant;
 
 	/**
 	 * Optional action button/element
@@ -44,7 +58,7 @@ interface EmptyStateProps {
 // ============================================================================
 
 /**
- * EmptyState - Cyber-styled empty state component
+ * EmptyState - Empty state component with theme-adaptive styling
  *
  * @example
  * ```tsx
@@ -64,40 +78,60 @@ export function EmptyState({
 	title,
 	description,
 	icon: Icon,
+	iconName,
+	variant = "empty",
 	action,
 	height = "h-48",
 	className,
 }: EmptyStateProps): React.ReactElement {
+	const resolvedIconName =
+		iconName ??
+		(variant === "error"
+			? "ph:warning-circle"
+			: variant === "search"
+				? "ph:magnifying-glass"
+				: "ph:tray");
+
 	return (
 		<div
 			data-slot="empty-state"
+			data-variant={variant}
+			role={variant === "error" ? "alert" : undefined}
 			className={cn(
-				"qa-empty-state relative flex flex-col items-center justify-center",
-				"border border-dashed border-border bg-card",
+				"qa-empty-state relative flex flex-col items-center justify-center px-6 py-8 text-center",
 				height,
 				className,
 			)}
 		>
-			<div className="text-center">
-				{/* Glow dot or icon */}
-				{Icon ? (
-					<Icon className="mx-auto mb-4 size-8 text-muted-foreground/50" />
-				) : (
-					<div className="mx-auto mb-4 size-1.5 bg-primary" />
-				)}
+			<div className="flex max-w-lg flex-col items-center">
+				<div
+					className={cn(
+						"mb-3 flex size-8 items-center justify-center",
+						variant === "error" ? "text-destructive" : "text-muted-foreground",
+					)}
+				>
+					{Icon ? (
+						<Icon className="size-5" />
+					) : (
+						<IconifyIcon icon={resolvedIconName} className="size-5" />
+					)}
+				</div>
 
-				{/* Title */}
-				<p className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
+				<p className="qa-empty-state__title text-foreground max-w-sm text-sm font-medium text-balance">
 					{title}
 				</p>
 
-				{/* Description */}
 				{description && (
-					<p className="mt-2 text-xs text-muted-foreground/60">{description}</p>
+					<p className="qa-empty-state__description text-muted-foreground mt-1 max-w-md text-sm/relaxed text-pretty">
+						{description}
+					</p>
 				)}
 
-				{/* Action */}
-				{action && <div className="mt-4">{action}</div>}
+				{action && (
+					<div className="qa-empty-state__action mt-4 flex flex-wrap items-center justify-center gap-2">
+						{action}
+					</div>
+				)}
 			</div>
 		</div>
 	);

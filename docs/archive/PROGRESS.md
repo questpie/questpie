@@ -105,7 +105,7 @@ feat: add standalone block() factory, split barbershop blocks to individual file
   - `jobs/send-appointment-confirmation.ts`
   - `jobs/send-appointment-cancellation.ts`
   - `jobs/send-appointment-reminder.ts`
-  > RFC §8.1 (File Convention)
+    > RFC §8.1 (File Convention)
 - [x] Each job: `q.job({ name, schema, handler })` → `export default job({ ... })`
   > RFC §8.2
 - [x] Split `functions/index.ts` + `functions/booking.ts` → individual files:
@@ -113,7 +113,7 @@ feat: add standalone block() factory, split barbershop blocks to individual file
   - `functions/get-revenue-stats.ts`
   - `functions/get-available-time-slots.ts`
   - `functions/create-booking.ts`
-  > RFC §7.1 (File Convention — Nested Folders = Nested Routes)
+    > RFC §7.1 (File Convention — Nested Folders = Nested Routes)
 - [x] Each function: `r.fn({ schema, handler })` → `export default fn({ ... })`
   > RFC §7.2
 - [x] Delete `rpc.ts`
@@ -326,7 +326,7 @@ feat!: remove QuestpieBuilder, RPC module, and positional callback signatures
 - [x] Core package: `bun run build` — clean
 - [x] Core package: `tsc --noEmit` — clean
 - [x] Admin package: `tsc --noEmit` — no new errors (only pre-existing client-side issues)
-- [x] Biome lint: no new warnings
+- [x] Lint: no new warnings
 - [ ] Barbershop example: end-to-end run
 - [ ] Update `create-questpie` templates
 - [ ] Update `apps/docs` documentation
@@ -354,7 +354,7 @@ feat: composable sidebar/dashboard from modules, typed registry pattern (Phase 7
 - [x] Updated codegen discover.ts: routes core category, singles map, plugin resolution
 - [x] Updated codegen template.ts: new/legacy architecture support
 - [x] Added core single file discovery: locale.ts, hooks.ts, access.ts, context.ts
-- [x] Added route dispatch in `createFetchHandler` at /routes/* URL pattern
+- [x] Added route dispatch in `createFetchHandler` at /routes/\* URL pattern
 - [x] Created module-template.ts for npm package codegen (.generated/module.ts)
 - [x] Updated admin codegen plugin: sidebar.ts, dashboard.ts, branding.ts, admin-locale.ts, blocks
 
@@ -386,7 +386,7 @@ feat: composable sidebar/dashboard from modules, typed registry pattern (Phase 7
 - [x] `tsc --noEmit` in packages/questpie — **clean** (0 errors)
 - [x] `tsc --noEmit` in packages/admin — **23 pre-existing errors** (0 new)
 - [x] `bun test` in packages/questpie — **781 pass, 0 fail**
-- [x] Biome check — auto-fixed formatting, no new errors
+- [x] Lint/format check — auto-fixed formatting, no new errors
 - [ ] Barbershop example end-to-end
 - [ ] City-portal example end-to-end
 - [ ] Update documentation (.md/.mdx files) — low priority, many references remain in docs
@@ -468,18 +468,18 @@ feat!: unified module architecture — static modules, delete factory functions 
 
 ### Key Files Changed
 
-| File | Action | Lines |
-|------|--------|-------|
-| `packages/questpie/src/server/config/app-context.ts` | **New** | ~50 |
-| `packages/questpie/src/cli/codegen/factory-template.ts` | **Rewritten** — Proxy wrappers | ~383 |
-| `packages/questpie/src/cli/codegen/template.ts` | Modified — AppContext augmentation | ~955 |
-| `packages/questpie/src/server/collection/builder/types.ts` | Modified — extends AppContext | ~1020 |
-| `packages/questpie/src/server/global/builder/types.ts` | Modified — extends AppContext | ~400 |
-| `packages/questpie/src/server/functions/types.ts` | Modified — extends AppContext | ~200 |
-| `packages/questpie/src/server/integrated/queue/types.ts` | Modified — extends AppContext | ~100 |
-| `packages/admin/src/server/block/block-builder.ts` | Modified — extends AppContext | ~200 |
-| `packages/questpie/src/server/collection/crud/shared/hooks.ts` | Modified — extractAppServices | ~200 |
-| All context creation sites (~12 files) | Modified — extractAppServices | various |
+| File                                                           | Action                             | Lines   |
+| -------------------------------------------------------------- | ---------------------------------- | ------- |
+| `packages/questpie/src/server/config/app-context.ts`           | **New**                            | ~50     |
+| `packages/questpie/src/cli/codegen/factory-template.ts`        | **Rewritten** — Proxy wrappers     | ~383    |
+| `packages/questpie/src/cli/codegen/template.ts`                | Modified — AppContext augmentation | ~955    |
+| `packages/questpie/src/server/collection/builder/types.ts`     | Modified — extends AppContext      | ~1020   |
+| `packages/questpie/src/server/global/builder/types.ts`         | Modified — extends AppContext      | ~400    |
+| `packages/questpie/src/server/functions/types.ts`              | Modified — extends AppContext      | ~200    |
+| `packages/questpie/src/server/integrated/queue/types.ts`       | Modified — extends AppContext      | ~100    |
+| `packages/admin/src/server/block/block-builder.ts`             | Modified — extends AppContext      | ~200    |
+| `packages/questpie/src/server/collection/crud/shared/hooks.ts` | Modified — extractAppServices      | ~200    |
+| All context creation sites (~12 files)                         | Modified — extractAppServices      | various |
 
 ### Phase 9.6: RFC Alignment — Remove App Type, Type AppContext (this session)
 
@@ -505,29 +505,29 @@ feat!: unified module architecture — static modules, delete factory functions 
 
 ## Quick Reference — RFC Section Index
 
-| Section | Topic | Key decisions |
-|---------|-------|---------------|
-| §1.1 | Context Object Convention | `({ f }) =>` not `(f) =>` everywhere |
-| §1.2 | App Access | Context `({ app })` in hooks/functions, direct import for scripts |
-| §1.3 | "Functions" not "RPC" | Rename throughout |
-| §2 | File Convention | by-type, by-feature, mixed layouts |
-| §3 | `collection()` Full API | Standalone factory, all chain methods stay |
-| §4 | `global()` Full API | Standalone factory |
-| §5 | Builder Extension System | 3 layers: interfaces → declaration merging → monkey-patching |
-| §5.7 | Registry Pattern | Extensible interfaces via declaration merging, `c`/`v` via callbacks |
-| §5.8 | Sidebar & Dashboard | Composable contributions, section dedup, item concat, callbacks |
-| §6 | Field System | 16 builtins, admin adds richText/blocks, custom fields |
-| §7 | Functions | Plain objects, nested folders = nested routes |
-| §7.5 | Route Handler | `createFetchHandler(app)` — no `rpc` option |
-| §8 | Jobs | Plain objects, 1 file per job |
-| §9 | Auth | Standalone `auth.ts` file |
-| §10 | Messages / i18n | `messages/*.ts`, merge strategy |
-| §11 | Blocks & Rich Text | Admin plugin fields, `block()` factory |
-| §12 | `config()` | Full config shape, modules array |
-| §13 | `module()` | Starter, admin, audit module definitions |
-| §13.7 | Module Merge Order | Depth-first, left-to-right, user wins |
-| §14 | Codegen Plugins | `CodegenPlugin` interface |
-| §15 | Generated Output | Complete `.generated/index.ts` example |
-| §16 | CLI Commands | `generate`, `dev`, `migrate:generate` |
-| §17 | AI Discoverability | Glob + grep is sufficient |
-| §18 | Migration Path | Manual steps, codemod, full removal |
+| Section | Topic                     | Key decisions                                                        |
+| ------- | ------------------------- | -------------------------------------------------------------------- |
+| §1.1    | Context Object Convention | `({ f }) =>` not `(f) =>` everywhere                                 |
+| §1.2    | App Access                | Context `({ app })` in hooks/functions, direct import for scripts    |
+| §1.3    | "Functions" not "RPC"     | Rename throughout                                                    |
+| §2      | File Convention           | by-type, by-feature, mixed layouts                                   |
+| §3      | `collection()` Full API   | Standalone factory, all chain methods stay                           |
+| §4      | `global()` Full API       | Standalone factory                                                   |
+| §5      | Builder Extension System  | 3 layers: interfaces → declaration merging → monkey-patching         |
+| §5.7    | Registry Pattern          | Extensible interfaces via declaration merging, `c`/`v` via callbacks |
+| §5.8    | Sidebar & Dashboard       | Composable contributions, section dedup, item concat, callbacks      |
+| §6      | Field System              | 16 builtins, admin adds richText/blocks, custom fields               |
+| §7      | Functions                 | Plain objects, nested folders = nested routes                        |
+| §7.5    | Route Handler             | `createFetchHandler(app)` — no `rpc` option                          |
+| §8      | Jobs                      | Plain objects, 1 file per job                                        |
+| §9      | Auth                      | Standalone `auth.ts` file                                            |
+| §10     | Messages / i18n           | `messages/*.ts`, merge strategy                                      |
+| §11     | Blocks & Rich Text        | Admin plugin fields, `block()` factory                               |
+| §12     | `config()`                | Full config shape, modules array                                     |
+| §13     | `module()`                | Starter, admin, audit module definitions                             |
+| §13.7   | Module Merge Order        | Depth-first, left-to-right, user wins                                |
+| §14     | Codegen Plugins           | `CodegenPlugin` interface                                            |
+| §15     | Generated Output          | Complete `.generated/index.ts` example                               |
+| §16     | CLI Commands              | `generate`, `dev`, `migrate:generate`                                |
+| §17     | AI Discoverability        | Glob + grep is sufficient                                            |
+| §18     | Migration Path            | Manual steps, codemod, full removal                                  |

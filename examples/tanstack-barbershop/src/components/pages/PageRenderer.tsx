@@ -5,15 +5,16 @@
  * Used by homepage and dynamic page routes.
  */
 
+import { useRouter } from "@tanstack/react-router";
+
+import type { PageLoaderData } from "@/lib/getPages.function";
+import admin from "@/questpie/admin/.generated/client";
 import {
 	type BlockContent,
 	BlockRenderer,
 	PreviewProvider,
 	useCollectionPreview,
 } from "@questpie/admin/client";
-import { useRouter } from "@tanstack/react-router";
-import type { PageLoaderData } from "@/lib/getPages.function";
-import admin from "@/questpie/admin/.generated/client";
 
 interface PageRendererProps {
 	page: PageLoaderData["page"];
@@ -74,9 +75,9 @@ function EmptyState({
 }) {
 	if (isHomepage) {
 		return (
-			<div className="py-32 text-center text-muted-foreground container">
-				<h1 className="text-4xl font-bold mb-4">Welcome to Sharp Cuts</h1>
-				<p className="text-xl mb-8">Your modern barbershop experience.</p>
+			<div className="text-muted-foreground container py-32 text-center">
+				<h1 className="mb-4 text-4xl font-bold">Welcome to Sharp Cuts</h1>
+				<p className="mb-8 text-xl">Your modern barbershop experience.</p>
 				{isPreviewMode ? (
 					<p className="text-sm">
 						Add a Hero block in the admin to get started.
@@ -84,7 +85,7 @@ function EmptyState({
 				) : (
 					<a
 						href="/admin"
-						className="text-highlight hover:underline font-medium"
+						className="text-highlight font-medium hover:underline"
 					>
 						Configure Homepage in Admin
 					</a>
@@ -94,7 +95,7 @@ function EmptyState({
 	}
 
 	return (
-		<div className="py-16 text-center text-muted-foreground">
+		<div className="text-muted-foreground py-16 text-center">
 			<p>This page has no content yet.</p>
 			{isPreviewMode && (
 				<p className="mt-2 text-sm">
@@ -107,7 +108,7 @@ function EmptyState({
 
 function PreviewModeIndicator() {
 	return (
-		<div className="fixed bottom-4 right-4 bg-highlight text-highlight-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium animate-bounce z-50">
+		<div className="bg-highlight text-highlight-foreground fixed right-4 bottom-4 z-50 animate-bounce rounded-full px-4 py-2 text-sm font-medium shadow-lg">
 			Preview Mode - Click blocks to edit
 		</div>
 	);

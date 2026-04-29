@@ -6,6 +6,7 @@
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
+
 import type {
 	CollectionBuilderState,
 	CollectionOptions,
@@ -65,7 +66,14 @@ export async function createVersionRecord(
 		workflowFromStage,
 	} = options;
 
-	// Get max version number
+	// Lock existing version rows for this record to prevent concurrent version number races.
+	// SELECT FOR UPDATE acquires row-level locks; the subsequent MAX is computed on locked rows.
+	await tx
+		.select({ versionNumber: (versionsTable as any).versionNumber })
+		.from(versionsTable)
+		.where(eq((versionsTable as any).id, row.id))
+		.for("update");
+
 	const maxVersionQuery = await tx
 		.select({
 			max: sql<number>`MAX(${(versionsTable as any).versionNumber})`,
@@ -118,17 +126,20 @@ export async function createVersionRecord(
 		}
 	}
 
-	// Cleanup old versions if maxVersions is set
+	// Cleanup old versions — use configured maxVersions or default of 50
+	const DEFAULT_MAX_VERSIONS = 50;
 	const versioningConfig = collectionOptions.versioning;
-	if (typeof versioningConfig === "object" && versioningConfig.maxVersions) {
-		await cleanupOldVersions(
-			tx,
-			row.id,
-			versioningConfig.maxVersions,
-			versionsTable,
-			i18nVersionsTable,
-		);
-	}
+	const maxVersions =
+		typeof versioningConfig === "object" && versioningConfig.maxVersions
+			? versioningConfig.maxVersions
+			: DEFAULT_MAX_VERSIONS;
+	await cleanupOldVersions(
+		tx,
+		row.id,
+		maxVersions,
+		versionsTable,
+		i18nVersionsTable,
+	);
 }
 
 /**

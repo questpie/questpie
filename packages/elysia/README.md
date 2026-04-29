@@ -12,12 +12,12 @@ bun add @questpie/elysia questpie elysia
 
 ```ts
 import { Elysia } from "elysia";
-import { questpieElysia } from "@questpie/elysia";
+import { questpieElysia } from "@questpie/elysia/server";
 import { app } from "./questpie";
 
 const app = new Elysia()
-  .use(questpieElysia(app, { basePath: "/api" }))
-  .listen(3000);
+	.use(questpieElysia(app, { basePath: "/api" }))
+	.listen(3000);
 
 export type App = typeof app;
 ```
@@ -32,7 +32,7 @@ import type { App } from "./server";
 import type { AppConfig } from "./questpie";
 
 const client = createClientFromEden<App, AppConfig>({
-  server: "localhost:3000",
+	server: "localhost:3000",
 });
 
 // CRUD — fully typed
@@ -52,8 +52,8 @@ import { createClient } from "questpie/client";
 import type { AppConfig } from "./questpie";
 
 const client = createClient<AppConfig>({
-  baseURL: "http://localhost:3000",
-  basePath: "/api",
+	baseURL: "http://localhost:3000",
+	basePath: "/api",
 });
 ```
 
@@ -61,24 +61,24 @@ const client = createClient<AppConfig>({
 
 The adapter automatically creates:
 
-| Method | Route                                    | Description          |
-| ------ | ---------------------------------------- | -------------------- |
-| GET    | `/api/collections/:name`             | List items           |
-| POST   | `/api/collections/:name`             | Create item          |
-| GET    | `/api/collections/:name/:id`         | Get item             |
-| PATCH  | `/api/collections/:name/:id`         | Update item          |
-| DELETE | `/api/collections/:name/:id`         | Delete item          |
-| POST   | `/api/collections/:name/:id/restore` | Restore soft-deleted |
-| GET    | `/api/collections/:name/:id/versions` | List item versions   |
-| POST   | `/api/collections/:name/:id/revert`   | Revert item version  |
-| GET    | `/api/globals/:name`                 | Get global           |
-| PATCH  | `/api/globals/:name`                 | Update global        |
-| GET    | `/api/globals/:name/versions`         | List global versions |
+| Method | Route                                 | Description           |
+| ------ | ------------------------------------- | --------------------- |
+| GET    | `/api/collections/:name`              | List items            |
+| POST   | `/api/collections/:name`              | Create item           |
+| GET    | `/api/collections/:name/:id`          | Get item              |
+| PATCH  | `/api/collections/:name/:id`          | Update item           |
+| DELETE | `/api/collections/:name/:id`          | Delete item           |
+| POST   | `/api/collections/:name/:id/restore`  | Restore soft-deleted  |
+| GET    | `/api/collections/:name/:id/versions` | List item versions    |
+| POST   | `/api/collections/:name/:id/revert`   | Revert item version   |
+| GET    | `/api/globals/:name`                  | Get global            |
+| PATCH  | `/api/globals/:name`                  | Update global         |
+| GET    | `/api/globals/:name/versions`         | List global versions  |
 | POST   | `/api/globals/:name/revert`           | Revert global version |
-| POST   | `/api/collections/:name/upload`      | Upload file          |
-| ALL    | `/api/auth/*`                        | Better Auth routes   |
-| ANY    | `/api/:route*`                       | Custom app routes    |
-| GET    | `/api/collections/:name/subscribe`   | SSE realtime         |
+| POST   | `/api/collections/:name/upload`       | Upload file           |
+| ALL    | `/api/auth/*`                         | Better Auth routes    |
+| ANY    | `/api/:route*`                        | Custom app routes     |
+| GET    | `/api/collections/:name/subscribe`    | SSE realtime          |
 
 ## Documentation
 

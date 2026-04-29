@@ -1,32 +1,30 @@
 ---
 title: Key-Value Store
-description: Redis or in-memory key-value store for caching and session data.
+description: In-memory or custom-adapter key-value store for caching and session data.
 ---
 
-# Key-Value Store
-
-QuestPie provides a KV store for caching, rate limiting, and ephemeral data.
+QUESTPIE provides a KV store for caching, rate limiting, and ephemeral data.
 
 ## Configuration
 
-### Redis
+### Default In-Memory
 
 ```ts title="questpie.config.ts"
 export default runtimeConfig({
-  kv: {
-    adapter: "redis",
-    url: process.env.REDIS_URL,
-  },
+	kv: {
+		defaultTtl: 3600,
+	},
 });
 ```
 
-### In-Memory
+If `adapter` is omitted, QUESTPIE uses the in-memory adapter.
 
-For development or single-instance:
+### Custom Adapter
 
 ```ts
 kv: {
-  adapter: "memory",
+  adapter: myKvAdapter,
+  defaultTtl: 3600,
 }
 ```
 
@@ -36,15 +34,15 @@ Access through the `kv` context:
 
 ```ts
 handler: async ({ kv }) => {
-  // Set
-  await kv.set("key", "value", { ttl: 3600 });
+	// Set
+	await kv.set("key", "value", 3600);
 
-  // Get
-  const value = await kv.get("key");
+	// Get
+	const value = await kv.get("key");
 
-  // Delete
-  await kv.delete("key");
-}
+	// Delete
+	await kv.delete("key");
+};
 ```
 
 ## Related Pages

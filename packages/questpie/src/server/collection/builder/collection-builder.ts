@@ -2,6 +2,7 @@ import type { Prettify } from "better-auth";
 import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTableExtraConfigValue } from "drizzle-orm/pg-core";
 import type { z } from "zod";
+
 import type {
 	CollectionInsert,
 	CollectionSelect,
@@ -32,9 +33,9 @@ import {
 import {
 	type BuiltinFields,
 	builtinFields,
-} from "#questpie/server/fields/builtin/defaults.js";
+} from "#questpie/server/modules/core/fields/index.js";
 import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
-import type { SearchableConfig } from "#questpie/server/integrated/search/index.js";
+import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import type { Override } from "#questpie/shared/type-utils.js";
 
 /**
@@ -80,7 +81,7 @@ type ExtractFieldTypes<TState extends CollectionBuilderState> =
  * Main collection builder class.
  * Uses field builder pattern for type-safe field definitions.
  */
-// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: Declaration merging is intentional for extension pattern
+// oxlint-disable-next-line no-unsafe-declaration-merging -- Declaration merging is intentional for extension pattern
 export class CollectionBuilder<TState extends CollectionBuilderState> {
 	/**
 	 * Internal state. Public for type extraction.
@@ -952,7 +953,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			...other.state.access,
 		};
 
+		// Spread both states first to preserve extension-set keys (admin, adminList,
+		// adminForm, adminActions, adminPreview, etc.) added via .set() — without this
+		// they are lost on merge. Then override the explicit merged keys below.
 		const mergedState = {
+			...this.state,
+			...other.state,
 			name: this.state.name,
 			fields: { ...this.state.fields, ...other.state.fields },
 			virtuals: {

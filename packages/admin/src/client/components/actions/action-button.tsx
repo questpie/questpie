@@ -9,6 +9,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
+
 import type {
 	ActionContext,
 	ActionDefinition,
@@ -16,8 +17,13 @@ import type {
 	ActionQueryClient,
 } from "../../builder/types/action-types";
 import { resolveIconElement } from "../../components/component-renderer";
-import { useResolveText } from "../../i18n/hooks";
-import { selectAuthClient, useAdminStore } from "../../runtime/provider";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
+import { cn } from "../../lib/utils";
+import {
+	selectAuthClient,
+	selectClient,
+	useAdminStore,
+} from "../../runtime/provider";
 import { Button } from "../ui/button";
 import { ConfirmationDialog } from "./confirmation-dialog";
 
@@ -38,6 +44,8 @@ interface ActionButtonProps<TItem = any> {
 	className?: string;
 	/** Show icon only */
 	iconOnly?: boolean;
+	/** Render as a dropdown menu row */
+	presentation?: "button" | "menu";
 	/** Callback when action dialog should open */
 	onOpenDialog?: (action: ActionDefinition<TItem>) => void;
 }
@@ -64,10 +72,13 @@ export function ActionButton<TItem = any>({
 	size = "default",
 	className,
 	iconOnly = false,
+	presentation = "button",
 	onOpenDialog,
 }: ActionButtonProps<TItem>): React.ReactElement | null {
 	const resolveText = useResolveText();
+	const { t } = useTranslation();
 	const authClient = useAdminStore(selectAuthClient);
+	const client = useAdminStore(selectClient);
 	const queryClient = useQueryClient();
 	const [showConfirm, setShowConfirm] = React.useState(false);
 	const [isLoading, setIsLoading] = React.useState(false);
@@ -139,13 +150,22 @@ export function ActionButton<TItem = any>({
 				const method = handler.method ? handler.method : "POST";
 				const endpoint = handler.endpoint.replace("{id}", itemId);
 				try {
-					// This would need actual API implementation
-					// For now, we'll show a placeholder
-					helpers.toast.info(`API call: ${method} ${endpoint}`);
-					helpers.refresh();
+					const collectionClient = (client as any).collections?.[collection];
+					if (method === "DELETE" && collectionClient?.delete) {
+						if (!itemId) throw new Error(t("toast.deleteFailed"));
+
+						await collectionClient.delete({ id: itemId });
+						helpers.toast.success(t("toast.deleteSuccess"));
+						await helpers.invalidateCollection(collection);
+					} else {
+						helpers.toast.info(`API call: ${method} ${endpoint}`);
+						helpers.refresh();
+					}
 					setIsLoading(false);
 				} catch (error) {
-					helpers.toast.error("Action failed");
+					helpers.toast.error(
+						error instanceof Error ? error.message : t("error.actionFailed"),
+					);
 					setIsLoading(false);
 				}
 				break;
@@ -157,7 +177,7 @@ export function ActionButton<TItem = any>({
 					await handler.fn(ctx);
 					setIsLoading(false);
 				} catch (error) {
-					helpers.toast.error("Action failed");
+					helpers.toast.error(t("error.actionFailed"));
 					setIsLoading(false);
 				}
 				break;
@@ -171,9 +191,76 @@ export function ActionButton<TItem = any>({
 			}
 
 			case "server": {
-				// Server actions are handled as form/dialog if they have a form config,
-				// otherwise execute directly via the action execution hook
-				onOpenDialog?.(action);
+				setIsLoading(true);
+				try {
+					const routes = (client as any)?.routes;
+					if (!routes?.executeAction) {
+						throw new Error(t("error.serverActionFailed"));
+					}
+
+					const serverHandler = handler as {
+						type: "server";
+						actionId: string;
+						collection: string;
+					};
+					const itemId =
+						item && !Array.isArray(item)
+							? String((item as Record<string, unknown>).id ?? "")
+							: undefined;
+					const itemIds = items
+						?.map((it: any) => it?.id)
+						.filter(Boolean)
+						.map(String);
+					const response = await routes.executeAction({
+						collection: serverHandler.collection,
+						actionId: serverHandler.actionId,
+						itemId,
+						itemIds: itemIds?.length ? itemIds : undefined,
+					});
+
+					if (!response?.success || response.result?.type === "error") {
+						const message =
+							response?.error ??
+							response?.result?.toast?.message ??
+							t("error.serverActionFailed");
+						throw new Error(message);
+					}
+
+					const result = response.result;
+					if (result?.toast?.message) {
+						helpers.toast.success(result.toast.message);
+					} else {
+						helpers.toast.success(t("toast.actionSuccess"));
+					}
+
+					if (result?.effects?.invalidate === true) {
+						await helpers.invalidateAll();
+					} else if (Array.isArray(result?.effects?.invalidate)) {
+						for (const collectionName of result.effects.invalidate) {
+							await helpers.invalidateCollection(collectionName);
+						}
+					}
+
+					if (result?.effects?.redirect) {
+						helpers.navigate(result.effects.redirect);
+					}
+					if (result?.type === "redirect" && result.url) {
+						if (result.external) {
+							window.open(result.url, "_blank");
+						} else {
+							helpers.navigate(result.url);
+						}
+					}
+					if (result?.effects?.closeModal) {
+						helpers.closeDialog();
+					}
+				} catch (error) {
+					helpers.toast.error(
+						error instanceof Error ? error.message : t("error.actionFailed"),
+					);
+				} finally {
+					setIsLoading(false);
+				}
 				break;
 			}
 		}
@@ -198,18 +285,29 @@ export function ActionButton<TItem = any>({
 	const iconElement = resolveIconElement(action.icon, {
 		"data-icon": "inline-start",
 	});
+	const label = resolveText(action.label);
 
 	return (
 		<>
 			<Button
-				variant={action.variant || "default"}
+				variant={
+					presentation === "menu" ? "ghost" : action.variant || "default"
+				}
 				size={iconOnly ? "icon-sm" : size}
 				onClick={handleClick}
 				disabled={isDisabled || isLoading}
-				className={className}
+				className={cn(
+					presentation === "menu" &&
+						"w-full justify-start rounded-[calc(var(--surface-radius)-2px)] px-3 py-2 text-left",
+					action.variant === "destructive" &&
+						presentation === "menu" &&
+						"text-destructive hover:bg-destructive/10 hover:text-destructive",
+					className,
+				)}
+				title={iconOnly ? label : undefined}
 			>
 				{iconElement}
-				{!iconOnly && resolveText(action.label)}
+				{iconOnly ? <span className="sr-only">{label}</span> : label}
 			</Button>
 
 			{action.confirmation && (

@@ -3,8 +3,6 @@ title: CRUD API
 description: Collection CRUD operations — find, findOne, create, update, delete, count.
 ---
 
-# CRUD API
-
 All collections expose these CRUD operations on both server and client.
 
 ## `find(options)`
@@ -38,9 +36,9 @@ const record = await collections.posts.findOne({
 
 ```ts
 const record = await collections.posts.create({
-  title: "Hello",
-  body: "World",
-  status: "draft",
+	title: "Hello",
+	body: "World",
+	status: "draft",
 });
 ```
 
@@ -50,8 +48,8 @@ const record = await collections.posts.create({
 
 ```ts
 const record = await collections.posts.update({
-  where: { id: "abc" },
-  data: { status: "published" },
+	where: { id: "abc" },
+	data: { status: "published" },
 });
 ```
 
@@ -61,7 +59,7 @@ const record = await collections.posts.update({
 
 ```ts
 await collections.posts.delete({
-  where: { id: "abc" },
+	where: { id: "abc" },
 });
 ```
 
@@ -69,7 +67,7 @@ await collections.posts.delete({
 
 ```ts
 const count = await collections.posts.count({
-  where: { status: "published" },
+	where: { status: "published" },
 });
 ```
 
@@ -79,8 +77,8 @@ const count = await collections.posts.count({
 
 ```ts
 await collections.posts.updateMany({
-  where: { status: "draft" },
-  data: { status: "archived" },
+	where: { status: "draft" },
+	data: { status: "archived" },
 });
 ```
 
@@ -88,7 +86,7 @@ await collections.posts.updateMany({
 
 ```ts
 await collections.posts.deleteMany({
-  where: { status: "archived" },
+	where: { status: "archived" },
 });
 ```
 

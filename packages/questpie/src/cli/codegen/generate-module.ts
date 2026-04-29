@@ -19,6 +19,7 @@
  */
 
 import { join } from "node:path";
+
 import { runCodegen } from "./index.js";
 import type { CodegenPlugin, CodegenResult } from "./types.js";
 

@@ -7,6 +7,8 @@
 
 import { describe, expect, it } from "bun:test";
 
+import { z } from "zod";
+
 // Import all factories — side effects patch Field.prototype
 import {
 	text,
@@ -22,9 +24,8 @@ import {
 	json,
 	object,
 	from,
-} from "#questpie/server/fields/builtin-factories/index.js";
+} from "#questpie/server/modules/core/fields/index.js";
 import { Field } from "#questpie/server/fields/field-class.js";
-import { z } from "zod";
 
 // ============================================================================
 // Text
@@ -414,7 +415,9 @@ describe("object()", () => {
 		});
 		const schema = f.required().toZodSchema();
 
-		expect(schema.safeParse({ street: "123 Main St", zip: "12345" }).success).toBe(true);
+		expect(
+			schema.safeParse({ street: "123 Main St", zip: "12345" }).success,
+		).toBe(true);
 		expect(schema.safeParse({ zip: "12345" }).success).toBe(false); // street required
 	});
 
@@ -521,7 +524,9 @@ describe("Cross-cutting field behavior", () => {
 		expect(datetime().getOperators().column).toBeDefined();
 		expect(email().getOperators().column).toBeDefined();
 		expect(url().getOperators().column).toBeDefined();
-		expect(select([{ value: "a", label: { en: "A" } }]).getOperators().column).toBeDefined();
+		expect(
+			select([{ value: "a", label: { en: "A" } }]).getOperators().column,
+		).toBeDefined();
 	});
 
 	it("chaining is immutable — original unchanged", () => {

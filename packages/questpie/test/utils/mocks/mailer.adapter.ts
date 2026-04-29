@@ -1,5 +1,5 @@
-import type { MailAdapter } from "../../../src/server/integrated/mailer/adapter.js";
-import type { SerializableMailOptions } from "../../../src/server/integrated/mailer/types.js";
+import type { MailAdapter } from "../../../src/server/modules/core/integrated/mailer/adapter.js";
+import type { SerializableMailOptions } from "../../../src/server/modules/core/integrated/mailer/types.js";
 
 export interface SentMail {
 	to: string | string[];

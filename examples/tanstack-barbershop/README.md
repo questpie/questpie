@@ -64,7 +64,7 @@ cp .env.example .env
 docker-compose up -d
 
 # 4. Run migrations (creates tables)
-bun qcms migrate:up
+bun questpie migrate
 
 # 5. Start dev server
 bun run dev
@@ -98,50 +98,34 @@ app.config.ts               # CLI configuration for migrations
 
 ### Key Files
 
-**`app.config.ts`** - CLI configuration for migrations:
+**`questpie.config.ts`** - CLI configuration:
 
 ```typescript
-import { defineConfig } from "@questpie/cli";
-import { app } from "./src/server/app";
+export default {
+	app: "./src/questpie/server/.generated/index.ts",
+	migrations: { directory: "./src/migrations" },
+};
+```
 
-export default defineConfig({
-  qcms: app,
-  cli: {
-    migrations: {
-      directory: "./src/migrations",
-    },
-  },
+**`src/questpie/server/questpie.config.ts`** - App runtime config:
+
+```typescript
+import { runtimeConfig } from "questpie";
+
+export default runtimeConfig({
+	db: { url: process.env.DATABASE_URL! },
+	app: { url: process.env.APP_URL! },
 });
 ```
 
-**`src/server/app.ts`** - app instance with migrations:
+**`src/questpie/server/modules.ts`** - Module dependencies:
 
 ```typescript
-import { migrations } from "../migrations";
-
-export const app = defineQCMS({ name: "barbershop" })
-  .collections({ ... })
-  .migrations(migrations)  // Load migrations
-  .build({ ... });
+import { adminModule } from "@questpie/admin/server";
+export default [adminModule] as const;
 ```
 
-**`src/configs/admin.ts`** - Single source of truth for admin UI:
-
-```typescript
-export const adminConfig = defineAdminConfig<App>()({
-  app: {
-    brand: { name: "Barbershop Admin" },
-  },
-  collections: {
-    barbers: {
-      label: "Barbers",
-      list: { defaultColumns: ["name", "email", "phone", "isActive"] },
-    },
-  },
-});
-```
-
-Everything else is **automatically generated** from this config!
+Collections, globals, routes, and admin config are **auto-discovered** by codegen from file conventions.
 
 ## 🛠️ CLI Commands
 
@@ -149,34 +133,34 @@ QUESTPIE includes a powerful CLI for database migrations:
 
 ```bash
 # Generate a new migration (after schema changes)
-bun qcms migrate:generate
+bun questpie migrate:generate
 
 # Run pending migrations
-bun qcms migrate:up
+bun questpie migrate:up
 
 # Check migration status
-bun qcms migrate:status
+bun questpie migrate:status
 
 # Rollback last batch
-bun qcms migrate:down
+bun questpie migrate:down
 
 # Reset all migrations
-bun qcms migrate:reset
+bun questpie migrate:reset
 
 # Fresh start (reset + run all)
-bun qcms migrate:fresh
+bun questpie migrate:fresh
 
 # Push schema directly (dev only - no migration file)
-bun qcms push
+bun questpie push
 ```
 
 ### Migration Workflow
 
 1. **Make schema changes** in your collection definitions
-2. **Generate migration**: `bun qcms migrate:generate`
+2. **Generate migration**: `bun questpie migrate:generate`
 3. **Review** the generated migration file in `src/migrations/`
 4. **Import** migrations in `src/server/app.ts` via `.migrations(migrations)`
-5. **Run migration**: `bun qcms migrate:up`
+5. **Run migration**: `bun questpie migrate:up`
 
 ## 🗄️ Database Schema
 
@@ -229,11 +213,11 @@ The entire admin UI is generated from `src/configs/admin.ts`:
 
 ```typescript
 export const adminConfig = defineAdminConfig<App>()({
-  collections: {
-    barbers: {
-      label: "Barbers", // That's it! Rest is auto-generated
-    },
-  },
+	collections: {
+		barbers: {
+			label: "Barbers", // That's it! Rest is auto-generated
+		},
+	},
 });
 ```
 
@@ -309,31 +293,35 @@ GET /api/auth/get-session
 
 Queue jobs are automatically set up with pg-boss (uses Postgres - no Redis needed!):
 
-```typescript
-// Jobs defined in app.ts
--send -
-  appointment -
-  confirmation -
-  send -
-  appointment -
-  cancellation -
-  send -
-  appointment -
-  reminder;
+- `src/questpie/server/jobs/send-appointment-confirmation.ts`
+- `src/questpie/server/jobs/send-appointment-cancellation.ts`
+- `src/questpie/server/jobs/send-appointment-reminder.ts`
+- `src/questpie/server/jobs/notify-blog-subscribers.ts`
 
-// Triggered via hooks
-afterCreate: async ({ data }) => {
-  await app.queue.sendAppointmentConfirmation.publish({
-    appointmentId: data.id,
-  });
+```typescript
+afterChange: async ({ data, operation, queue }) => {
+	if (operation === "create") {
+		await queue.sendAppointmentConfirmation.publish({
+			appointmentId: data.id,
+			customerId: data.customer,
+		});
+	}
 };
 ```
 
-To run workers (processes jobs):
+To run workers in development:
+
+```bash
+bun run dev:worker
+```
+
+To run workers in production:
 
 ```bash
 bun run worker
 ```
+
+The worker starts `app.queue.listen()` from `src/worker.ts` and processes queued jobs in a separate process from the web app.
 
 ## 🎨 Styling
 

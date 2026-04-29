@@ -3,16 +3,17 @@
  */
 
 import { RichTextRenderer } from "@questpie/admin/client";
+
 import type { BlockProps } from "../.generated/client";
 
-export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
+export function ImageTextRenderer({ values, data }: BlockProps<"image-text">) {
 	const imageUrl = (data?.image as any)?.url || values.image;
 	const isImageLeft = values.imagePosition !== "right";
 
 	return (
-		<section className="py-16 px-6">
+		<section className="px-6 py-16">
 			<div
-				className={`container mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center ${
+				className={`container mx-auto grid grid-cols-1 items-center gap-12 md:grid-cols-2 ${
 					!isImageLeft ? "direction-rtl" : ""
 				}`}
 			>
@@ -21,10 +22,10 @@ export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
 						<img
 							src={imageUrl}
 							alt={values.title || ""}
-							className="w-full rounded-lg object-cover aspect-[4/3]"
+							className="aspect-[4/3] w-full rounded-lg object-cover"
 						/>
 					) : (
-						<div className="w-full bg-muted rounded-lg aspect-[4/3] flex items-center justify-center text-muted-foreground">
+						<div className="bg-muted text-muted-foreground flex aspect-[4/3] w-full items-center justify-center rounded-lg">
 							No image
 						</div>
 					)}
@@ -32,7 +33,7 @@ export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
 
 				<div className={!isImageLeft ? "md:order-1" : ""}>
 					{values.title && (
-						<h2 className="text-3xl font-bold tracking-tight mb-6">
+						<h2 className="mb-6 text-3xl font-bold tracking-tight">
 							{values.title}
 						</h2>
 					)}
@@ -46,11 +47,11 @@ export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
 					{values.ctaText && (
 						<a
 							href={values.ctaLink || "#"}
-							className="inline-flex items-center gap-2 text-primary font-semibold hover:underline"
+							className="text-primary inline-flex items-center gap-2 font-semibold hover:underline"
 						>
 							{values.ctaText}
 							<svg
-								className="w-4 h-4"
+								className="h-4 w-4"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"

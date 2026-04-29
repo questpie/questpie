@@ -3,9 +3,7 @@ title: Authentication
 description: Better Auth integration — email/password, OAuth providers, sessions.
 ---
 
-# Authentication
-
-QuestPie uses [Better Auth](https://www.better-auth.com/) for authentication. Configure it with the `auth.ts` file convention.
+QUESTPIE uses [Better Auth](https://www.better-auth.com/) for authentication. Configure it with the `auth.ts` file convention.
 
 ## Configuration
 
@@ -13,25 +11,25 @@ QuestPie uses [Better Auth](https://www.better-auth.com/) for authentication. Co
 import type { AuthConfig } from "questpie";
 
 export default {
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: false,
-  },
-  baseURL: process.env.APP_URL || "http://localhost:3000",
-  basePath: "/api/auth",
-  secret: process.env.BETTER_AUTH_SECRET || "change-me",
+	emailAndPassword: {
+		enabled: true,
+		requireEmailVerification: false,
+	},
+	baseURL: process.env.APP_URL || "http://localhost:3000",
+	basePath: "/api/auth",
+	secret: process.env.BETTER_AUTH_SECRET || "change-me",
 } satisfies AuthConfig;
 ```
 
 ## Auth Options
 
-| Option | Type | Description |
-|---|---|---|
-| `emailAndPassword.enabled` | `boolean` | Enable email/password login |
-| `emailAndPassword.requireEmailVerification` | `boolean` | Require email verification |
-| `baseURL` | `string` | App URL |
-| `basePath` | `string` | Auth API path |
-| `secret` | `string` | Session secret |
+| Option                                      | Type      | Description                 |
+| ------------------------------------------- | --------- | --------------------------- |
+| `emailAndPassword.enabled`                  | `boolean` | Enable email/password login |
+| `emailAndPassword.requireEmailVerification` | `boolean` | Require email verification  |
+| `baseURL`                                   | `string`  | App URL                     |
+| `basePath`                                  | `string`  | Auth API path               |
+| `secret`                                    | `string`  | Session secret              |
 
 ## Session in Handlers
 
@@ -39,11 +37,11 @@ Access the current session in hooks, routes, and access rules:
 
 ```ts
 handler: async ({ session }) => {
-  if (!session) throw new Error("Not authenticated");
+	if (!session) throw new Error("Not authenticated");
 
-  const user = session.user;
-  // user.id, user.email, user.name, etc.
-}
+	const user = session.user;
+	// user.id, user.email, user.name, etc.
+};
 ```
 
 ## Access Control

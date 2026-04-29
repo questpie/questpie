@@ -46,7 +46,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Icon } from "@iconify/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import {
 	Controller,
@@ -54,6 +54,7 @@ import {
 	type FieldValues,
 } from "react-hook-form";
 import { toast } from "sonner";
+
 import { useCollectionItem } from "../../hooks/use-collection";
 import { type Asset, useUpload } from "../../hooks/use-upload";
 import { useUploadCollection } from "../../hooks/use-upload-collection";
@@ -64,7 +65,6 @@ import { MediaPickerDialog } from "../media/media-picker-dialog";
 import { AssetPreview } from "../primitives/asset-preview";
 import { Dropzone } from "../primitives/dropzone";
 import { ResourceSheet } from "../sheets";
-import { Button } from "../ui/button";
 import type { BaseFieldProps } from "./field-types";
 import { sanitizeFilename, useResolvedControl } from "./field-utils";
 import { FieldWrapper } from "./field-wrapper";
@@ -284,7 +284,7 @@ function SingleUploadInner({
 	const resolvedPlaceholder = placeholder
 		? resolveText(placeholder)
 		: undefined;
-	const { upload, isUploading, progress, error: uploadError } = useUpload();
+	const { upload, isUploading, progress } = useUpload();
 	const [isPickerOpen, setIsPickerOpen] = React.useState(false);
 	const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false);
 
@@ -300,9 +300,7 @@ function SingleUploadInner({
 	const handleDrop = async (files: File[]) => {
 		if (files.length === 0 || disabled) return;
 		if (!collection) {
-			toast.error(
-				unresolvedCollectionMessage || "No upload collection is configured.",
-			);
+			toast.error(unresolvedCollectionMessage || t("error.noUploadCollection"));
 			return;
 		}
 
@@ -355,22 +353,22 @@ function SingleUploadInner({
 		const parts: string[] = [];
 		if (normalizedAccept?.length) {
 			const types = normalizedAccept
-				.map((t: string) => {
-					if (t.startsWith("image/")) return "Images";
-					if (t.startsWith("video/")) return "Videos";
-					if (t.startsWith("audio/")) return "Audio";
-					if (t === "application/pdf") return "PDF";
-					return t;
+				.map((type: string) => {
+					if (type.startsWith("image/")) return t("dropzone.typeImages");
+					if (type.startsWith("video/")) return t("dropzone.typeVideos");
+					if (type.startsWith("audio/")) return t("dropzone.typeAudio");
+					if (type === "application/pdf") return t("dropzone.typePDF");
+					return type;
 				})
 				.filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
 			parts.push(types.join(", "));
 		}
 		if (maxSize) {
 			const mb = (maxSize / (1024 * 1024)).toFixed(0);
-			parts.push(`Max ${mb}MB`);
+			parts.push(t("upload.maxSize", { size: `${mb}MB` }));
 		}
 		return parts.join(" • ") || undefined;
-	}, [normalizedAccept, maxSize]);
+	}, [normalizedAccept, maxSize, t]);
 
 	const hasValue = !!assetId;
 	const isLoading = isUploading || (hasValue && isLoadingAsset);
@@ -384,7 +382,7 @@ function SingleUploadInner({
 	return (
 		<div className={className}>
 			{unresolvedCollectionMessage && (
-				<p className="mb-2 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+				<p className="border-warning/40 bg-warning/5 text-warning mb-2 border px-3 py-2 text-xs text-pretty">
 					{unresolvedCollectionMessage}
 				</p>
 			)}
@@ -415,23 +413,21 @@ function SingleUploadInner({
 					disabled={disabled}
 					loading={isUploading}
 					progress={isUploading ? progress : undefined}
-					label={resolvedPlaceholder || "Drop file here or click to browse"}
+					variant="compact"
+					label={resolvedPlaceholder || t("upload.dropzone")}
 					hint={hintText}
+					action={
+						collection
+							? {
+									label: t("upload.browseLibrary"),
+									icon: "ph:folder-open-bold",
+									onClick: () => setIsPickerOpen(true),
+									disabled,
+								}
+							: undefined
+					}
 					onValidationError={handleValidationError}
 				/>
-			)}
-
-			{!hasValue && !isUploading && !disabled && !!collection && (
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					onClick={() => setIsPickerOpen(true)}
-					className="mt-2 w-full"
-				>
-					<Icon icon="ph:folder-open-bold" className="mr-2 size-4" />
-					Browse Library
-				</Button>
 			)}
 
 			<MediaPickerDialog
@@ -453,7 +449,9 @@ function SingleUploadInner({
 				/>
 			)}
 
-			{error && <p className="text-destructive mt-1 text-xs">{error}</p>}
+			{error && (
+				<p className="text-destructive mt-1 text-xs text-pretty">{error}</p>
+			)}
 		</div>
 	);
 }
@@ -514,9 +512,7 @@ function MultipleUploadInner({
 	const [pendingUploads, setPendingUploads] = React.useState<
 		{ id: string; file: File }[]
 	>([]);
-	const [fetchedAssets, setFetchedAssets] = React.useState<Map<string, Asset>>(
-		() => new Map(),
-	);
+	const queryClient = useQueryClient();
 
 	const sensors = useSensors(
 		useSensor(PointerSensor),
@@ -527,54 +523,38 @@ function MultipleUploadInner({
 
 	const assetIds = (field.value as string[] | null | undefined) || [];
 
-	// Fetch assets that we don't have yet
-	React.useEffect(() => {
-		if (!client || !collection || assetIds.length === 0) return;
-
-		const missingIds = assetIds.filter((id) => !fetchedAssets.has(id));
-		if (missingIds.length === 0) return;
-
-		let cancelled = false;
-
-		(async () => {
-			try {
-				const response = await (client as any).collections[collection].find({
-					where: { id: { in: missingIds } },
-					limit: missingIds.length,
-				});
-				if (cancelled) {
-					return;
-				}
-				if (response) {
-					if (response.docs) {
-						setFetchedAssets((prev) => {
-							const next = new Map(prev);
-							for (const asset of response.docs) {
-								next.set(asset.id, asset as Asset);
-							}
-							return next;
-						});
-					}
-				}
-			} catch (fetchError) {
-				if (!cancelled) {
-					console.error("Failed to fetch assets:", fetchError);
-					toast.error("Failed to load assets");
+	const { data: fetchedAssetsMap = new Map<string, Asset>() } = useQuery({
+		queryKey: [
+			"questpie",
+			"collections",
+			collection,
+			"batch-assets",
+			...assetIds,
+		],
+		queryFn: async () => {
+			if (!client || !collection || assetIds.length === 0)
+				return new Map<string, Asset>();
+			const response = await (client as any).collections[collection].find({
+				where: { id: { in: assetIds } },
+				limit: assetIds.length,
+			});
+			const map = new Map<string, Asset>();
+			if (response?.docs) {
+				for (const doc of response.docs) {
+					map.set(doc.id, doc as Asset);
 				}
 			}
-		})();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [assetIds, collection, fetchedAssets, client]);
+			return map;
+		},
+		enabled: !!client && !!collection && assetIds.length > 0,
+		staleTime: 30_000,
+		placeholderData: (prev) => prev,
+	});
 
 	const handleDrop = (files: File[]) => {
 		if (files.length === 0 || disabled) return;
 		if (!collection) {
-			toast.error(
-				unresolvedCollectionMessage || "No upload collection is configured.",
-			);
+			toast.error(unresolvedCollectionMessage || t("error.noUploadCollection"));
 			return;
 		}
 
@@ -613,9 +593,9 @@ function MultipleUploadInner({
 				const newIds = uploadedAssets.map((a) => a.id);
 				field.onChange([...assetIds, ...newIds]);
 
-				for (const asset of uploadedAssets) {
-					setFetchedAssets((prev) => new Map(prev).set(asset.id, asset));
-				}
+				queryClient.invalidateQueries({
+					queryKey: ["questpie", "collections", collection, "batch-assets"],
+				});
 
 				if (onUploadComplete) {
 					onUploadComplete(uploadedAssets);
@@ -668,9 +648,7 @@ function MultipleUploadInner({
 
 	const handlePickerSelect = (ids: string | string[]) => {
 		if (!collection) {
-			toast.error(
-				unresolvedCollectionMessage || "No upload collection is configured.",
-			);
+			toast.error(unresolvedCollectionMessage || t("error.noUploadCollection"));
 			return;
 		}
 
@@ -678,7 +656,7 @@ function MultipleUploadInner({
 
 		const totalAfterAdd = assetIds.length + newIds.length;
 		if (maxItems && totalAfterAdd > maxItems) {
-			toast.warning(`Maximum ${maxItems} items allowed`);
+			toast.warning(t("error.maxItemsAllowed", { max: maxItems }));
 			const remainingSlots = maxItems - assetIds.length;
 			const idsToAdd = newIds.slice(0, remainingSlots);
 			field.onChange([...assetIds, ...idsToAdd]);
@@ -691,22 +669,22 @@ function MultipleUploadInner({
 		const parts: string[] = [];
 		if (normalizedAccept?.length) {
 			const types = normalizedAccept
-				.map((t: string) => {
-					if (t.startsWith("image/")) return "Images";
-					if (t.startsWith("video/")) return "Videos";
-					if (t.startsWith("audio/")) return "Audio";
-					if (t === "application/pdf") return "PDF";
-					return t;
+				.map((type: string) => {
+					if (type.startsWith("image/")) return t("dropzone.typeImages");
+					if (type.startsWith("video/")) return t("dropzone.typeVideos");
+					if (type.startsWith("audio/")) return t("dropzone.typeAudio");
+					if (type === "application/pdf") return t("dropzone.typePDF");
+					return type;
 				})
 				.filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
 			parts.push(types.join(", "));
 		}
 		if (maxSize) {
 			const mb = (maxSize / (1024 * 1024)).toFixed(0);
-			parts.push(`Max ${mb}MB`);
+			parts.push(t("upload.maxSize", { size: `${mb}MB` }));
 		}
 		return parts.join(" • ") || undefined;
-	}, [normalizedAccept, maxSize]);
+	}, [normalizedAccept, maxSize, t]);
 
 	const hasItems = assetIds.length > 0 || pendingUploads.length > 0;
 	const canAddMore = !maxItems || assetIds.length < maxItems;
@@ -717,7 +695,7 @@ function MultipleUploadInner({
 	return (
 		<div className={className}>
 			{unresolvedCollectionMessage && (
-				<p className="mb-2 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+				<p className="border-warning/40 bg-warning/5 text-warning mb-2 border px-3 py-2 text-xs text-pretty">
 					{unresolvedCollectionMessage}
 				</p>
 			)}
@@ -744,7 +722,7 @@ function MultipleUploadInner({
 								<SortableAssetItem
 									key={id}
 									id={id}
-									asset={fetchedAssets.get(id) || null}
+									asset={fetchedAssetsMap.get(id) || null}
 									disabled={disabled}
 									variant={previewVariant}
 									orderable={orderable}
@@ -788,28 +766,24 @@ function MultipleUploadInner({
 					disabled={disabled}
 					loading={isUploading}
 					progress={isUploading ? progress : undefined}
+					variant="compact"
 					label={
 						hasItems
-							? "Drop more files or click to add"
-							: resolvedPlaceholder || "Drop files here or click to browse"
+							? t("upload.browse")
+							: resolvedPlaceholder || t("upload.dropzone")
 					}
 					hint={hintText}
+					action={
+						!disabled
+							? {
+									label: t("upload.browseLibrary"),
+									icon: "ph:folder-open-bold",
+									onClick: () => setIsPickerOpen(true),
+								}
+							: undefined
+					}
 					onValidationError={handleValidationError}
-					className={hasItems ? "min-h-[80px]" : undefined}
 				/>
-			)}
-
-			{canAddMore && !isUploading && !disabled && !!collection && (
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					onClick={() => setIsPickerOpen(true)}
-					className="mt-2 w-full"
-				>
-					<Icon icon="ph:folder-open-bold" className="mr-2 size-4" />
-					Browse Library
-				</Button>
 			)}
 
 			<MediaPickerDialog
@@ -833,8 +807,8 @@ function MultipleUploadInner({
 			)}
 
 			{isUploading && !canAddMore && (
-				<div className="text-muted-foreground flex items-center justify-center gap-2 rounded-lg border border-dashed p-4 text-sm">
-					Uploading... {progress}%
+				<div className="panel-surface text-muted-foreground flex items-center justify-center gap-2 border-dashed p-4 text-sm tabular-nums">
+					{t("upload.uploading")} {progress}%
 				</div>
 			)}
 		</div>
@@ -888,7 +862,7 @@ export function UploadField({
 	// Determine preview variant based on mode if not specified
 	const effectivePreviewVariant =
 		previewVariant ??
-		(multiple ? (layout === "grid" ? "thumbnail" : "compact") : "card");
+		(multiple ? (layout === "grid" ? "thumbnail" : "compact") : "compact");
 
 	return (
 		<Controller

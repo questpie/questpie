@@ -2,8 +2,10 @@
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import * as React from "react";
+
 import { useIsMobile } from "#questpie/admin/client/hooks/use-media-query";
 import { cn } from "#questpie/admin/client/lib/utils";
+
 import { DialogContent, DialogFooter, DialogHeader } from "./dialog";
 import {
 	Drawer,
@@ -116,6 +118,7 @@ function ResponsiveDialogTrigger({
 	return (
 		<DialogPrimitive.Trigger
 			className={className}
+			nativeButton={!asChild}
 			render={asChild ? (children as React.ReactElement) : undefined}
 			{...props}
 		>
@@ -127,11 +130,13 @@ function ResponsiveDialogTrigger({
 interface ResponsiveDialogContentProps {
 	children: React.ReactNode;
 	className?: string;
+	showCloseButton?: boolean;
 }
 
 function ResponsiveDialogContent({
 	children,
 	className,
+	showCloseButton,
 }: ResponsiveDialogContentProps) {
 	const { isMobile } = useResponsiveDialog();
 
@@ -144,7 +149,10 @@ function ResponsiveDialogContent({
 	}
 
 	return (
-		<DialogContent className={cn("qa-responsive-dialog__content", className)}>
+		<DialogContent
+			showCloseButton={showCloseButton}
+			className={cn("qa-responsive-dialog__content", className)}
+		>
 			{children}
 		</DialogContent>
 	);
@@ -254,6 +262,7 @@ function ResponsiveDialogClose({
 	return (
 		<DialogPrimitive.Close
 			className={className}
+			nativeButton={!asChild}
 			render={asChild ? (children as React.ReactElement) : undefined}
 			{...props}
 		>

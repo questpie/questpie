@@ -1,0 +1,28 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"categories": {
+		"correctness": "error",
+		"suspicious": "warn"
+	},
+	"plugins": ["typescript", "unicorn", "oxc", "react", "import", "jsx-a11y"],
+	"rules": {
+		"typescript/no-explicit-any": "off",
+		"jsx-a11y/prefer-tag-over-role": "off",
+		"react/react-in-jsx-scope": "off",
+		"eslint/no-unused-vars": "warn",
+		"eslint/no-shadow": "off",
+		"unicorn/consistent-function-scoping": "off",
+		"unicorn/no-array-sort": "off",
+		"unicorn/no-useless-fallback-in-spread": "off",
+		"import/no-named-as-default": "off",
+		"import/no-named-as-default-member": "off",
+		"import/no-unassigned-import": "off",
+		"jsx-a11y/anchor-has-content": "warn",
+		"jsx-a11y/role-supports-aria-props": "warn",
+		"jsx-a11y/no-static-element-interactions": "warn",
+		"jsx-a11y/media-has-caption": "warn",
+		"jsx-a11y/label-has-associated-control": "warn",
+		"jsx-a11y/iframe-has-title": "warn"
+	},
+	"ignorePatterns": ["dist", ".next", ".generated", "node_modules", "*.min.js"]
+}

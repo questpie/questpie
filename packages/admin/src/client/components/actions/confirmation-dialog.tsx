@@ -9,7 +9,9 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
 import type { ConfirmationConfig } from "../../builder/types/action-types";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { Button } from "../ui/button";
 import {
 	Dialog,
@@ -57,6 +59,8 @@ export function ConfirmationDialog({
 	onConfirm,
 	loading = false,
 }: ConfirmationDialogProps): React.ReactElement {
+	const { t } = useTranslation();
+	const resolveText = useResolveText();
 	const [isProcessing, setIsProcessing] = React.useState(false);
 
 	const handleConfirm = async () => {
@@ -79,14 +83,16 @@ export function ConfirmationDialog({
 				<DialogHeader>
 					<div className="flex items-start gap-3">
 						{config.destructive && (
-							<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
-								<Icon icon="ph:warning" className="size-5 text-destructive" />
+							<div className="border-border-subtle bg-surface-low text-foreground-subtle flex size-10 shrink-0 items-center justify-center rounded-full border">
+								<Icon icon="ph:warning" className="size-5" />
 							</div>
 						)}
 						<div className="space-y-1">
-							<DialogTitle>{config.title}</DialogTitle>
+							<DialogTitle>{resolveText(config.title)}</DialogTitle>
 							{config.description && (
-								<DialogDescription>{config.description}</DialogDescription>
+								<DialogDescription>
+									{resolveText(config.description)}
+								</DialogDescription>
 							)}
 						</div>
 					</div>
@@ -97,14 +103,16 @@ export function ConfirmationDialog({
 						onClick={() => onOpenChange(false)}
 						disabled={isLoading}
 					>
-						{config.cancelLabel || "Cancel"}
+						{resolveText(config.cancelLabel) || t("common.cancel")}
 					</Button>
 					<Button
 						variant={config.destructive ? "destructive" : "default"}
 						onClick={handleConfirm}
 						disabled={isLoading}
 					>
-						{isLoading ? "Processing..." : config.confirmLabel || "Confirm"}
+						{isLoading
+							? t("ui.processing")
+							: resolveText(config.confirmLabel) || t("common.confirm")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

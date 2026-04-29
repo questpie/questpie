@@ -3,8 +3,6 @@ title: Access Control
 description: Control who can read, create, update, and delete records at the operation, row, and field level.
 ---
 
-# Access Control
-
 Access control determines who can perform operations on your collections and globals. Rules are defined per-collection and receive the full request context.
 
 ## Basic Access Rules
@@ -19,17 +17,18 @@ Access control determines who can perform operations on your collections and glo
 ```
 
 Each operation accepts either:
+
 - `boolean` — Static allow/deny
 - `(context) => boolean` — Dynamic function receiving the request context
 
 ## Operations
 
-| Operation | When checked |
-|---|---|
-| `read` | Listing and fetching records |
-| `create` | Creating new records |
-| `update` | Updating existing records |
-| `delete` | Deleting records |
+| Operation | When checked                 |
+| --------- | ---------------------------- |
+| `read`    | Listing and fetching records |
+| `create`  | Creating new records         |
+| `update`  | Updating existing records    |
+| `delete`  | Deleting records             |
 
 ## Context
 
@@ -45,6 +44,7 @@ Access functions receive the full `AppContext`:
 ```
 
 Available context properties:
+
 - `session` — Current auth session (null if unauthenticated)
 - `db` — Database instance
 - `collections` — Typed collection API
@@ -67,7 +67,7 @@ Server-side code can bypass access control using `accessMode: "system"`:
 
 ```ts
 const ctx = await app.createContext({ accessMode: "system" });
-const allPosts = await app.api.collections.posts.find({}, ctx);
+const allPosts = await app.collections.posts.find({}, ctx);
 // No access checks — useful for server-side scripts, jobs, seeds
 ```
 

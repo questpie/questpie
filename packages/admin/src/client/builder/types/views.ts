@@ -1,4 +1,5 @@
 import type * as React from "react";
+
 import type { ListViewConfig } from "./collection-types";
 import type { ComponentRegistry, FormViewConfig } from "./field-types";
 

@@ -1,11 +1,9 @@
 ---
-title: Realtime
+title: Realtime Client
 description: Live data subscriptions for real-time updates.
 ---
 
-# Realtime
-
-QuestPie supports real-time data subscriptions. The client receives live updates when records change.
+QUESTPIE supports real-time data subscriptions. The client receives live updates when records change.
 
 ## Transport
 
@@ -18,8 +16,8 @@ import { client } from "@/lib/client";
 
 // Subscribe to collection changes
 client.realtime.on("collections:appointments:*", (event) => {
-  console.log(event.type);  // "create", "update", "delete"
-  console.log(event.data);  // The changed record
+	console.log(event.type); // "create", "update", "delete"
+	console.log(event.data); // The changed record
 });
 
 // Subscribe to a specific record
@@ -28,11 +26,11 @@ client.realtime.subscribe(["collections:appointments:abc123"]);
 
 ## Channel Patterns
 
-| Pattern | Description |
-|---|---|
-| `collections:<name>:*` | All changes to a collection |
+| Pattern                   | Description                  |
+| ------------------------- | ---------------------------- |
+| `collections:<name>:*`    | All changes to a collection  |
 | `collections:<name>:<id>` | Changes to a specific record |
-| `globals:<name>` | Changes to a global |
+| `globals:<name>`          | Changes to a global          |
 
 ## Server-Side Broadcasting
 
@@ -53,21 +51,21 @@ Broadcast events from hooks or routes:
 
 Configure the realtime adapter in your runtime config:
 
-| Adapter | Package | Use case |
-|---|---|---|
-| `pgNotifyAdapter` | Built-in | PostgreSQL LISTEN/NOTIFY |
+| Adapter               | Package  | Use case                       |
+| --------------------- | -------- | ------------------------------ |
+| `pgNotifyAdapter`     | Built-in | PostgreSQL LISTEN/NOTIFY       |
 | `redisStreamsAdapter` | Built-in | Redis Streams (multi-instance) |
 
 ```ts title="questpie.config.ts"
 import { pgNotifyAdapter, runtimeConfig } from "questpie";
 
 export default runtimeConfig({
-  realtime: {
-    adapter: pgNotifyAdapter({
-      connectionString: process.env.DATABASE_URL,
-    }),
-  },
-  // ...
+	realtime: {
+		adapter: pgNotifyAdapter({
+			connectionString: process.env.DATABASE_URL,
+		}),
+	},
+	// ...
 });
 ```
 

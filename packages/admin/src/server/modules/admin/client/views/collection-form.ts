@@ -7,4 +7,3 @@ export default view("collection-form", {
 			default: React.ComponentType<any>;
 		}>,
 });
-

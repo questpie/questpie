@@ -1,7 +1,6 @@
 {
 	"name": "@questpie/tanstack-query",
-	"version": "2.0.0",
-	"type": "module",
+	"version": "3.1.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -10,18 +9,10 @@
 	"files": [
 		"dist"
 	],
-	"scripts": {
-		"build": "tsdown",
-		"check-types": "tsc --noEmit"
-	},
-	"devDependencies": {
-		"bun-types": "latest",
-		"tsdown": "^0.18.3"
-	},
-	"peerDependencies": {
-		"questpie": "^2.0.0",
-		"@tanstack/react-query": "^5.0.0"
-	},
+	"type": "module",
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
 	"exports": {
 		".": {
 			"types": "./dist/index.d.mts",
@@ -39,7 +30,16 @@
 			"./package.json": "./package.json"
 		}
 	},
-	"main": "./dist/index.mjs",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.mts"
+	"scripts": {
+		"build": "tsdown",
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"bun-types": "latest",
+		"tsdown": "^0.18.3"
+	},
+	"peerDependencies": {
+		"@tanstack/react-query": "^5.0.0",
+		"questpie": "^3.0.0"
+	}
 }

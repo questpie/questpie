@@ -3,6 +3,7 @@
 import { Icon } from "@iconify/react";
 import { Command as CommandPrimitive } from "cmdk";
 import type * as React from "react";
+
 import {
 	Dialog,
 	DialogContent,
@@ -24,7 +25,7 @@ function Command({
 		<CommandPrimitive
 			data-slot="command"
 			className={cn(
-				"qa-command bg-popover text-popover-foreground p-1 flex size-full flex-col overflow-hidden",
+				"qa-command bg-popover text-popover-foreground flex size-full flex-col overflow-hidden p-1",
 				className,
 			)}
 			{...props}
@@ -53,7 +54,7 @@ function CommandDialog({
 				<DialogDescription>{description}</DialogDescription>
 			</DialogHeader>
 			<DialogContent
-				className={cn("p-0 overflow-hidden", className)}
+				className={cn("overflow-hidden p-0", className)}
 				showCloseButton={showCloseButton}
 			>
 				{children}
@@ -68,11 +69,11 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
 	return (
 		<div data-slot="command-input-wrapper" className="p-1 pb-0">
-			<InputGroup className="bg-input  h-8!">
+			<InputGroup className="h-9!">
 				<CommandPrimitive.Input
 					data-slot="command-input"
 					className={cn(
-						"qa-command__input w-full text-xs/relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
+						"qa-command__input w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
 						className,
 					)}
 					{...props}
@@ -96,7 +97,7 @@ function CommandList({
 		<CommandPrimitive.List
 			data-slot="command-list"
 			className={cn(
-				"qa-command__list no-scrollbar max-h-72 scroll-py-1 outline-none overflow-x-hidden overflow-y-auto",
+				"qa-command__list no-scrollbar max-h-72 scroll-py-1 overflow-x-hidden overflow-y-auto outline-none",
 				className,
 			)}
 			{...props}
@@ -112,7 +113,7 @@ function CommandEmpty({
 		<CommandPrimitive.Empty
 			data-slot="command-empty"
 			className={cn(
-				"qa-command__empty py-6 text-center text-xs/relaxed",
+				"qa-command__empty text-muted-foreground py-6 text-center text-sm",
 				className,
 			)}
 			{...props}
@@ -128,7 +129,7 @@ function CommandGroup({
 		<CommandPrimitive.Group
 			data-slot="command-group"
 			className={cn(
-				"qa-command__group text-foreground [&_[cmdk-group-heading]]:text-muted-foreground overflow-hidden p-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium",
+				"qa-command__group text-foreground [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:font-chrome [&_[cmdk-group-heading]]:chrome-meta overflow-hidden p-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium",
 				className,
 			)}
 			{...props}
@@ -161,7 +162,7 @@ function CommandItem({
 		<CommandPrimitive.Item
 			data-slot="command-item"
 			className={cn(
-				"qa-command__item data-selected:bg-current/5 data-selected:text-foreground data-selected:*:[svg]:text-foreground relative flex min-h-7 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-xs/relaxed outline-hidden select-none [&_svg:not([class*='size-'])]:size-3.5 group/command-item data-[disabled=true]:pointer-events-none data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+				"qa-command__item item-surface data-selected:border-border data-selected:bg-accent data-selected:text-accent-foreground data-selected:*:[svg]:text-accent-foreground group/command-item relative flex min-h-9 cursor-pointer items-center gap-2.5 px-3 py-2 text-sm outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
 				className,
 			)}
 			{...props}
@@ -183,7 +184,7 @@ function CommandShortcut({
 		<span
 			data-slot="command-shortcut"
 			className={cn(
-				"text-muted-foreground group-data-selected/command-item:text-foreground ml-auto text-[0.625rem] tracking-widest",
+				"qa-command__shortcut text-muted-foreground group-data-selected/command-item:text-accent-foreground font-chrome chrome-meta ml-auto text-[0.625rem]",
 				className,
 			)}
 			{...props}

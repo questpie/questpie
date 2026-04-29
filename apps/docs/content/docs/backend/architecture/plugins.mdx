@@ -3,9 +3,7 @@ title: Plugins
 description: The plugin system — plugins declare what CAN exist, modules contribute what DOES exist, config runs the runtime.
 ---
 
-# Plugins
-
-QuestPie's plugin system follows a three-level architecture:
+QUESTPIE's plugin system follows a three-level architecture:
 
 - **Plugin** — Declares what CAN exist (file categories, builder extensions, registries)
 - **Module** — Contributes what DOES exist (actual values, entities)
@@ -15,49 +13,41 @@ The core framework is intentionally lean. Most functionality — including the a
 
 ## How Plugins Work
 
-A plugin tells codegen **what to look for** and **what types to generate**:
+A plugin tells codegen **what to look for** and **what types to generate**. Built-in modules can contribute their plugins automatically through `modules.ts`:
 
 ```ts
-import { adminPlugin } from "@questpie/admin/plugin";
-import { runtimeConfig } from "questpie";
+import { adminModule } from "@questpie/admin/server";
 
-export default runtimeConfig({
-  plugins: [adminPlugin()],
-  // ...
-});
+export default [adminModule] as const;
 ```
 
-When you add `adminPlugin()`, codegen starts looking for:
-- `sidebar.ts` — Admin sidebar configuration
-- `dashboard.ts` — Dashboard widgets
-- `branding.ts` — Admin branding
-- `blocks/*.ts` — Content block definitions
-- `admin-locale.ts` — Admin UI locale
+When you add `adminModule`, its plugin makes codegen look for:
 
-Without the plugin, these files are ignored.
+- `config/admin.ts` — Sidebar, dashboard, branding, and admin locale
+- `blocks/*.ts` — Content block definitions
+- admin views, components, and field types contributed by modules
+
+Without the module/plugin contribution, these files are ignored.
 
 ## Core vs Plugin Categories
 
 The core framework discovers these categories by default:
 
-| Category | Pattern |
-|---|---|
+| Category       | Pattern                |
+| -------------- | ---------------------- |
 | `collections/` | Collection definitions |
-| `globals/` | Global definitions |
-| `jobs/` | Background jobs |
-| `routes/` | HTTP routes |
-| `services/` | Singleton services |
-| `emails/` | Email templates |
+| `globals/`     | Global definitions     |
+| `jobs/`        | Background jobs        |
+| `routes/`      | HTTP routes            |
+| `services/`    | Singleton services     |
+| `emails/`      | Email templates        |
 
 The admin plugin adds:
 
-| Category | Pattern |
-|---|---|
-| `blocks/` | Content blocks |
-| `sidebar.ts` | Sidebar config |
-| `dashboard.ts` | Dashboard config |
-| `branding.ts` | Branding config |
-| `admin-locale.ts` | Admin UI locale |
+| Category          | Pattern        |
+| ----------------- | -------------- |
+| `blocks/`         | Content blocks |
+| `config/admin.ts` | Admin config   |
 
 ## CodegenPlugin Interface
 
@@ -65,25 +55,31 @@ Plugins implement the `CodegenPlugin` interface:
 
 ```ts
 interface CodegenPlugin {
-  name: string;
+	name: string;
+	targets: Record<string, CodegenTargetContribution>;
+}
 
-  // File categories to discover
-  categories?: Record<string, CategoryDeclaration>;
+interface CodegenTargetContribution {
+	// File categories to discover
+	categories?: Record<string, CategoryDeclaration>;
 
-  // Builder method extensions
-  extensions?: {
-    collection?: ExtensionDeclaration;
-    global?: ExtensionDeclaration;
-  };
+	// Single-file or directory patterns
+	discover?: Record<string, DiscoverPattern>;
 
-  // Module-level registries
-  moduleRegistries?: Record<string, ModuleRegistryDeclaration>;
+	// Builder method extensions
+	registries?: {
+		collectionExtensions?: Record<string, RegistryExtension>;
+		globalExtensions?: Record<string, RegistryExtension>;
+		fieldExtensions?: Record<string, RegistryExtension>;
+		singletonFactories?: Record<string, SingletonFactory>;
+		builderFactories?: Record<string, BuilderFactory>;
+	};
 
-  // Single-file factories
-  singletons?: Record<string, SingletonDeclaration>;
+	// Callback params like f, v, c, a
+	callbackParams?: Record<string, CallbackParamDefinition>;
 
-  // Post-discovery transformation
-  transform?: (ctx: CodegenContext) => void;
+	// Post-discovery transformation
+	transform?: (ctx: CodegenContext) => void;
 }
 ```
 
@@ -103,15 +99,15 @@ categories: {
 }
 ```
 
-| Property | Description |
-|---|---|
-| `pattern` | Glob pattern for file discovery |
-| `cardinality` | `"map"` (key-value) or `"single"` (one value) |
-| `recursive` | Support nested directories |
-| `featureLayout` | Scan `features/*/` directories |
-| `mergeStrategy` | How to merge with module contributions |
-| `moduleContributionKey` | Property name on module objects |
-| `registryKey` | Type name in generated `Registry` |
+| Property                | Description                                   |
+| ----------------------- | --------------------------------------------- |
+| `pattern`               | Glob pattern for file discovery               |
+| `cardinality`           | `"map"` (key-value) or `"single"` (one value) |
+| `recursive`             | Support nested directories                    |
+| `featureLayout`         | Scan `features/*/` directories                |
+| `mergeStrategy`         | How to merge with module contributions        |
+| `moduleContributionKey` | Property name on module objects               |
+| `registryKey`           | Type name in generated `Registry`             |
 
 ## Three Levels in Action
 
@@ -127,7 +123,7 @@ Module (contribution)
 
 Config (runtime)
   ├── db.url = "postgres://..."
-  ├── plugins = [adminPlugin()]
+  ├── config.admin from config/admin.ts
   └── secret = "..."
 ```
 

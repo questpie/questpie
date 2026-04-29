@@ -1,4 +1,5 @@
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
+
 import { content } from "./_categories";
 
 export const imageTextBlock = block("image-text")
@@ -17,15 +18,8 @@ export const imageTextBlock = block("image-text")
 			])
 			.label({ en: "Image Position", sk: "Pozícia obrázka" })
 			.default("left"),
-		title: f
-			.text()
-			.label({ en: "Title", sk: "Nadpis" })
-			.localized()
-			.required(),
-		content: f
-			.richText()
-			.label({ en: "Content", sk: "Obsah" })
-			.localized(),
+		title: f.text().label({ en: "Title", sk: "Nadpis" }).localized().required(),
+		content: f.richText().label({ en: "Content", sk: "Obsah" }).localized(),
 		ctaText: f
 			.text()
 			.label({ en: "CTA Text", sk: "Text tlačidla" })

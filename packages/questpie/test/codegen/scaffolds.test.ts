@@ -10,6 +10,7 @@
  * 6. Scaffold registry building collects across targets
  */
 import { describe, expect, it } from "bun:test";
+
 import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
@@ -99,10 +100,7 @@ describe("scaffold types on resolved targets", () => {
 	});
 
 	it("merges scaffolds from multiple plugins on the same target", () => {
-		const graph = resolveTargetGraph([
-			coreCodegenPlugin(),
-			testAdminPlugin(),
-		]);
+		const graph = resolveTargetGraph([coreCodegenPlugin(), testAdminPlugin()]);
 		const server = graph.get("server")!;
 
 		// Core scaffolds still present
@@ -116,10 +114,7 @@ describe("scaffold types on resolved targets", () => {
 	});
 
 	it("same scaffold name on different targets → both present", () => {
-		const graph = resolveTargetGraph([
-			coreCodegenPlugin(),
-			testAdminPlugin(),
-		]);
+		const graph = resolveTargetGraph([coreCodegenPlugin(), testAdminPlugin()]);
 
 		const serverBlock = graph.get("server")!.scaffolds.block;
 		const clientBlock = graph.get("admin-client")!.scaffolds.block;
@@ -134,10 +129,7 @@ describe("scaffold types on resolved targets", () => {
 	});
 
 	it("admin-client target has field scaffold but server does not", () => {
-		const graph = resolveTargetGraph([
-			coreCodegenPlugin(),
-			testAdminPlugin(),
-		]);
+		const graph = resolveTargetGraph([coreCodegenPlugin(), testAdminPlugin()]);
 
 		expect(graph.get("server")!.scaffolds.field).toBeUndefined();
 		expect(graph.get("admin-client")!.scaffolds.field).toBeDefined();
@@ -184,9 +176,12 @@ describe("scaffold template output", () => {
 			targetId: "server",
 		});
 
-		expect(output).toContain('import { collection } from "#questpie/factories"');
+		expect(output).toContain(
+			'import { collection } from "#questpie/factories"',
+		);
 		expect(output).toContain('collection("blog-posts")');
 		expect(output).toContain("blogPosts");
+		expect(output).toContain('f.text(255).label("Title").required()');
 	});
 
 	it("core email template has .tsx extension", () => {
@@ -195,11 +190,23 @@ describe("scaffold template output", () => {
 		expect(scaffold.extension).toBe(".tsx");
 	});
 
+	it("core route template uses an executable JSON route shape", () => {
+		const graph = resolveTargetGraph([coreCodegenPlugin()]);
+		const output = graph.get("server")!.scaffolds.route.template({
+			kebab: "sync-orders",
+			camel: "syncOrders",
+			pascal: "SyncOrders",
+			title: "Sync Orders",
+			targetId: "server",
+		});
+
+		expect(output).toContain(".post()");
+		expect(output).toContain(".schema(z.object({}))");
+		expect(output).not.toContain("ctx");
+	});
+
 	it("multi-target scaffold produces different content per target", () => {
-		const graph = resolveTargetGraph([
-			coreCodegenPlugin(),
-			testAdminPlugin(),
-		]);
+		const graph = resolveTargetGraph([coreCodegenPlugin(), testAdminPlugin()]);
 
 		const serverBlock = graph.get("server")!.scaffolds.block;
 		const clientBlock = graph.get("admin-client")!.scaffolds.block;
@@ -227,10 +234,7 @@ describe("scaffold template output", () => {
 
 describe("scaffold registry building", () => {
 	it("collects scaffolds across targets", () => {
-		const graph = resolveTargetGraph([
-			coreCodegenPlugin(),
-			testAdminPlugin(),
-		]);
+		const graph = resolveTargetGraph([coreCodegenPlugin(), testAdminPlugin()]);
 
 		// Build registry (same logic as addCommand)
 		const registry = new Map<

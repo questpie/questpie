@@ -4,15 +4,16 @@
  * Renders a specific page for a city with live preview support.
  */
 
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+
+import { getPageBySlug } from "@/lib/server-functions";
+import admin from "@/questpie/admin/.generated/client";
 import {
 	type BlockContent,
 	BlockRenderer,
 	PreviewProvider,
 	useCollectionPreview,
 } from "@questpie/admin/client";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { getPageBySlug } from "@/lib/server-functions";
-import admin from "@/questpie/admin/.generated/client";
 
 export const Route = createFileRoute("/_app/$citySlug/pages/$slug")({
 	loader: async ({ params }) => {
@@ -29,11 +30,11 @@ function CityPage() {
 	if (!page) {
 		return (
 			<div className="container mx-auto px-4 py-24 text-center">
-				<h1 className="text-4xl font-bold mb-4">Page Not Found</h1>
-				<p className="text-xl text-muted-foreground mb-8">
+				<h1 className="mb-4 text-4xl font-bold">Page Not Found</h1>
+				<p className="text-muted-foreground mb-8 text-xl">
 					The page you are looking for does not exist or has been moved.
 				</p>
-				<a href="./" className="text-primary hover:underline font-medium">
+				<a href="./" className="text-primary font-medium hover:underline">
 					Go back home
 				</a>
 			</div>
@@ -69,7 +70,7 @@ function PageWithPreview({ page }: { page: any }) {
 				<header className="container mx-auto px-6 py-12">
 					<h1 className="text-4xl font-bold tracking-tight">{data.title}</h1>
 					{data.excerpt && (
-						<p className="mt-4 text-xl text-muted-foreground max-w-3xl">
+						<p className="text-muted-foreground mt-4 max-w-3xl text-xl">
 							{data.excerpt}
 						</p>
 					)}
@@ -87,13 +88,13 @@ function PageWithPreview({ page }: { page: any }) {
 				)}
 
 				{!data.content?._tree?.length && !isPreviewMode && (
-					<div className="py-16 text-center text-muted-foreground container mx-auto">
+					<div className="text-muted-foreground container mx-auto py-16 text-center">
 						<p>This page has no content yet.</p>
 					</div>
 				)}
 
 				{isPreviewMode && (
-					<div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium z-50">
+					<div className="bg-primary text-primary-foreground fixed right-4 bottom-4 z-50 rounded-full px-4 py-2 text-sm font-medium shadow-lg">
 						Preview Mode - Click blocks to edit
 					</div>
 				)}

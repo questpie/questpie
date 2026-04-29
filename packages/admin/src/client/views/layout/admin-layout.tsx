@@ -10,26 +10,26 @@
  */
 
 import * as React from "react";
+
 import { SidebarInset, SidebarProvider } from "../../components/ui/sidebar";
 import { type AdminToasterProps, Toaster } from "../../components/ui/sonner";
-import {
-	BreadcrumbProvider,
-	useCurrentBreadcrumbs,
-} from "../../contexts/breadcrumb-context";
+import { useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { useAdminStore } from "../../runtime/provider";
+import { shouldHandleAdminShortcut } from "../../utils/keyboard-shortcuts";
 import { GlobalSearch } from "../common";
 import { AdminSidebar, type AdminSidebarProps } from "./admin-sidebar";
-import { AdminTopbar } from "./admin-topbar";
+import {
+	AdminThemeAppliedContext,
+	type AdminTheme,
+	useManagedAdminTheme,
+} from "./admin-theme";
+
+export type { AdminTheme } from "./admin-theme";
 
 // ============================================================================
 // Types
 // ============================================================================
-
-/**
- * Theme mode for the admin interface
- */
-export type AdminTheme = "light" | "dark" | "system";
 
 /**
  * Layout mode for content area width
@@ -156,22 +156,6 @@ function useLayoutProps(props: {
 }
 
 // ============================================================================
-// Internal Components
-// ============================================================================
-
-/**
- * Topbar wrapper that reads breadcrumbs from context
- */
-const AdminTopbarWithBreadcrumbs = React.memo(
-	function AdminTopbarWithBreadcrumbs(
-		props: Omit<React.ComponentProps<typeof AdminTopbar>, "breadcrumbs">,
-	) {
-		const breadcrumbs = useCurrentBreadcrumbs();
-		return <AdminTopbar {...props} breadcrumbs={breadcrumbs} />;
-	},
-);
-
-// ============================================================================
 // Component
 // ============================================================================
 
@@ -203,12 +187,13 @@ export function AdminLayout({
 	header,
 	footer,
 	navigate: navigateProp,
-	theme = "system",
-	setTheme,
+	theme: themeProp,
+	setTheme: setThemeProp,
 	showThemeToggle,
 	toasterProps,
 	layoutMode = "wide",
 }: AdminLayoutProps): React.ReactElement {
+	const { theme, setTheme } = useManagedAdminTheme(themeProp, setThemeProp);
 	// Infer show flags from content
 	const shouldShowHeader = !!header;
 	const shouldShowFooter = !!footer;
@@ -217,6 +202,11 @@ export function AdminLayout({
 		brandName: brandNameProp,
 		navigate: navigateProp,
 	});
+	const i18n = useSafeI18n();
+	const t = (key: string, fallback: string) => {
+		const message = i18n?.t(key);
+		return message && message !== key ? message : fallback;
+	};
 
 	const [isSearchOpen, setIsSearchOpen] = React.useState(false);
 	const openSearch = React.useCallback(() => setIsSearchOpen(true), []);
@@ -225,7 +215,7 @@ export function AdminLayout({
 	// Keyboard shortcuts for search
 	React.useEffect(() => {
 		const down = (e: KeyboardEvent) => {
-			if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+			if (shouldHandleAdminShortcut(e, { key: "k" })) {
 				e.preventDefault();
 				setIsSearchOpen(true);
 			}
@@ -235,16 +225,19 @@ export function AdminLayout({
 	}, []);
 
 	return (
-		<BreadcrumbProvider>
+		<AdminThemeAppliedContext.Provider value={true}>
 			<div
-				className={cn("qa-admin-layout min-h-screen bg-background ", className)}
+				className={cn(
+					"qa-admin-layout bg-sidebar text-foreground min-h-screen",
+					className,
+				)}
 			>
 				{/* Skip to main content link — visible on focus for keyboard users */}
 				<a
 					href="#main-content"
-					className="qa-admin-layout__skip-link sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:text-sm focus:font-medium"
+					className="qa-admin-layout__skip-link focus:bg-surface-high focus:text-foreground sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-sm focus:px-4 focus:py-2 focus:text-sm focus:font-medium"
 				>
-					Skip to main content
+					{t("ui.skipToMainContent", "Skip to main content")}
 				</a>
 
 				{isSearchOpen && (
@@ -259,7 +252,7 @@ export function AdminLayout({
 				{/* Max-width container for ultrawide monitors - centered with subtle side borders */}
 				<SidebarProvider
 					defaultOpen={!sidebarCollapsedProp}
-					className="qa-admin-layout__sidebar-wrapper mx-auto max-w-[1920px] h-svh overflow-hidden"
+					className="qa-admin-layout__sidebar-wrapper bg-sidebar mx-auto h-svh max-w-[1920px] overflow-hidden"
 				>
 					{/* Sidebar */}
 					<AdminSidebar
@@ -267,37 +260,35 @@ export function AdminLayout({
 						activeRoute={activeRoute}
 						basePath={basePath}
 						brandName={brandName}
+						theme={theme}
+						setTheme={setTheme}
+						showThemeToggle={showThemeToggle}
+						onSearchOpen={openSearch}
 						{...sidebarProps}
 					/>
 
 					{/* Content Area */}
-					<SidebarInset className="qa-admin-layout__content flex h-svh flex-col">
-						<AdminTopbarWithBreadcrumbs
-							onSearchOpen={openSearch}
-							theme={theme}
-							setTheme={setTheme}
-							showThemeToggle={showThemeToggle}
-						/>
-
+					<SidebarInset className="qa-admin-layout__content bg-background flex h-svh flex-col overflow-hidden md:rounded-tl-2xl">
 						{/* Header (optional) */}
 						{shouldShowHeader && header && (
-							<header className="qa-admin-layout__header border-b">
+							<header className="qa-admin-layout__header border-border-subtle border-b">
 								{header}
 							</header>
 						)}
 
 						<main
 							id="main-content"
-							className="qa-admin-layout__main flex-1 overflow-y-auto"
+							className="qa-admin-layout__main min-w-0 flex-1 overflow-y-auto"
 							tabIndex={-1}
 						>
 							<div
 								className={cn(
-									"qa-admin-layout__main-content",
+									"qa-admin-layout__main-content min-w-0",
 									layoutMode === "default" &&
-										"max-w-5xl mx-auto p-3 md:p-4 lg:p-6",
-									layoutMode === "wide" && "p-3 md:p-4 lg:p-6",
-									layoutMode === "full" && "p-2 md:p-3",
+										"mx-auto max-w-5xl px-3 pt-1 pb-6 md:px-4 md:pt-2 md:pb-8",
+									layoutMode === "wide" &&
+										"px-3 pt-1 pb-6 md:px-4 md:pt-2 md:pb-8",
+									layoutMode === "full" && "px-2 pt-1 pb-6 md:px-3 md:pb-8",
 									layoutMode === "immersive" && "p-0",
 								)}
 							>
@@ -307,7 +298,7 @@ export function AdminLayout({
 
 						{/* Footer (optional) */}
 						{shouldShowFooter && footer && (
-							<footer className="qa-admin-layout__footer border-t">
+							<footer className="qa-admin-layout__footer border-border-subtle border-t">
 								{footer}
 							</footer>
 						)}
@@ -317,6 +308,6 @@ export function AdminLayout({
 				{/* Toast notifications */}
 				<Toaster theme={theme} {...toasterProps} />
 			</div>
-		</BreadcrumbProvider>
+		</AdminThemeAppliedContext.Provider>
 	);
 }

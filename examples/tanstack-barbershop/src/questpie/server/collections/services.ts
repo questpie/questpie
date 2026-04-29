@@ -16,6 +16,11 @@ export const services = collection("services")
 			.number()
 			.required()
 			.label({ en: "Price (cents)", sk: "Cena (centy)" }),
+		order: f
+			.number()
+			.default(0)
+			.required()
+			.label({ en: "Order", sk: "Poradie" }),
 		isActive: f
 			.boolean()
 			.label({ en: "Active", sk: "Aktívna" })
@@ -35,12 +40,18 @@ export const services = collection("services")
 		label: { en: "Services", sk: "Služby" },
 		icon: c.icon("ph:scissors"),
 	}))
-	.list(({ v }) => v.collectionTable({}))
+	.list(({ v, f }) =>
+		v.collectionTable({
+			columns: [f.name, f.isActive, f.duration, f.price, f.order],
+			defaultSort: { field: f.order, direction: "asc" },
+			orderable: true,
+		}),
+	)
 	.form(({ v, f }) =>
 		v.collectionForm({
 			sidebar: {
 				position: "right",
-				fields: [f.isActive, f.image],
+				fields: [f.isActive, f.order, f.image],
 			},
 			fields: [
 				{

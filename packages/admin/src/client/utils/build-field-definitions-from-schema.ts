@@ -15,6 +15,7 @@ import type {
 	RelationSchema,
 	SelectFieldMetadata,
 } from "questpie";
+
 import type { AnyAdminMeta } from "../../augmentation";
 import {
 	configureField,
@@ -367,6 +368,10 @@ function applyNestedConfig(
 			registry,
 		);
 		config.fields = () => nestedDefs;
+		// Pass through form layout from server metadata
+		if (metadata.form) {
+			config.form = metadata.form;
+		}
 		return;
 	}
 

@@ -11,29 +11,24 @@ The pattern: **HTTP header carries a scope ID → server extracts it into typed 
 
 The `context.ts` file convention extracts custom properties from each incoming request. Place it in `src/questpie/server/context.ts` and codegen discovers it automatically.
 
-```ts title="src/questpie/server/context.ts"
-import { context } from "#questpie";
+```ts title="src/questpie/server/config/app.ts"
+import { appConfig } from "questpie";
 
-// Type your custom context properties
-declare global { namespace Questpie {
-  interface QuestpieContextExtension {
-    workspaceId: string | null;
-  }
-}}
-
-export default context(async ({ request, session, db }) => {
-  const workspaceId = request.headers.get("x-selected-workspace");
-  return { workspaceId: workspaceId || null };
+export default appConfig({
+	context: async ({ request, session, db }) => {
+		const workspaceId = request.headers.get("x-selected-workspace");
+		return { workspaceId: workspaceId || null };
+	},
 });
 ```
 
 The resolver receives:
 
-| Parameter | Type | Description |
-|---|---|---|
-| `request` | `Request` | Incoming HTTP request (Web API) |
-| `session` | `{ user, session } \| null` | Resolved auth session |
-| `db` | `Database` | Database client for validation queries |
+| Parameter | Type                        | Description                            |
+| --------- | --------------------------- | -------------------------------------- |
+| `request` | `Request`                   | Incoming HTTP request (Web API)        |
+| `session` | `{ user, session } \| null` | Resolved auth session                  |
+| `db`      | `Database`                  | Database client for validation queries |
 
 The returned object merges into the request context and is available in every handler, hook, and access rule.
 
@@ -42,38 +37,39 @@ The returned object merges into the request context and is available in every ha
 Use the typed context in access rules to enforce tenant isolation:
 
 ```ts title="collections/projects.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("projects")
-  .fields(({ f }) => ({
-    title: f.text().label("Title").required(),
-    workspace: f.relation("workspaces").required(),
-  }))
-  .access({
-    read: ({ ctx }) => {
-      if (!ctx.workspaceId) return false;
-      return { workspace: { equals: ctx.workspaceId } };
-    },
-    create: ({ ctx }) => !!ctx.workspaceId,
-    update: ({ ctx }) => {
-      if (!ctx.workspaceId) return false;
-      return { workspace: { equals: ctx.workspaceId } };
-    },
-    delete: ({ ctx }) => {
-      if (!ctx.workspaceId) return false;
-      return { workspace: { equals: ctx.workspaceId } };
-    },
-  })
-  .hooks({
-    beforeCreate: async ({ data, ctx }) => {
-      if (ctx.workspaceId) {
-        data.workspace = ctx.workspaceId;
-      }
-    },
-  });
+	.fields(({ f }) => ({
+		title: f.text().label("Title").required(),
+		workspace: f.relation("workspaces").required(),
+	}))
+	.access({
+		read: ({ ctx }) => {
+			if (!ctx.workspaceId) return false;
+			return { workspace: { equals: ctx.workspaceId } };
+		},
+		create: ({ ctx }) => !!ctx.workspaceId,
+		update: ({ ctx }) => {
+			if (!ctx.workspaceId) return false;
+			return { workspace: { equals: ctx.workspaceId } };
+		},
+		delete: ({ ctx }) => {
+			if (!ctx.workspaceId) return false;
+			return { workspace: { equals: ctx.workspaceId } };
+		},
+	})
+	.hooks({
+		beforeCreate: async ({ data, ctx }) => {
+			if (ctx.workspaceId) {
+				data.workspace = ctx.workspaceId;
+			}
+		},
+	});
 ```
 
 Access rules can return:
+
 - `true` — allow all records
 - `false` — deny all records
 - `{ field: { equals: value } }` — where-clause filter (row-level security)
@@ -86,27 +82,29 @@ Wrap your admin with `ScopeProvider` to enable scope selection:
 
 ```tsx title="routes/admin/$.tsx"
 import {
-  AdminLayout, AdminRouter,
-  ScopePicker, ScopeProvider,
+	AdminLayout,
+	AdminRouter,
+	ScopePicker,
+	ScopeProvider,
 } from "@questpie/admin/client";
 
 function AdminPage() {
-  return (
-    <ScopeProvider
-      headerName="x-selected-workspace"
-      storageKey="admin-workspace"
-    >
-      <AdminContent />
-    </ScopeProvider>
-  );
+	return (
+		<ScopeProvider
+			headerName="x-selected-workspace"
+			storageKey="admin-workspace"
+		>
+			<AdminContent />
+		</ScopeProvider>
+	);
 }
 ```
 
-| Prop | Type | Required | Description |
-|---|---|---|---|
-| `headerName` | `string` | Yes | HTTP header for scope ID (must match `context.ts`) |
-| `storageKey` | `string` | No | localStorage key for persistence |
-| `defaultScope` | `string \| null` | No | Default scope if none stored |
+| Prop           | Type             | Required | Description                                        |
+| -------------- | ---------------- | -------- | -------------------------------------------------- |
+| `headerName`   | `string`         | Yes      | HTTP header for scope ID (must match `context.ts`) |
+| `storageKey`   | `string`         | No       | localStorage key for persistence                   |
+| `defaultScope` | `string \| null` | No       | Default scope if none stored                       |
 
 ### ScopePicker
 
@@ -114,24 +112,24 @@ A dropdown for selecting the current scope. Place it in the sidebar:
 
 ```tsx
 <AdminLayout
-  admin={admin}
-  basePath="/admin"
-  slots={{
-    afterBrand: (
-      <div className="px-3 py-2 border-b">
-        <ScopePicker
-          collection="workspaces"
-          labelField="name"
-          placeholder="Select workspace..."
-          allowClear
-          clearText="All Workspaces"
-          compact
-        />
-      </div>
-    ),
-  }}
+	admin={admin}
+	basePath="/admin"
+	slots={{
+		afterBrand: (
+			<div className="px-3 py-2 border-b">
+				<ScopePicker
+					collection="workspaces"
+					labelField="name"
+					placeholder="Select workspace..."
+					allowClear
+					clearText="All Workspaces"
+					compact
+				/>
+			</div>
+		),
+	}}
 >
-  <AdminRouter basePath="/admin" />
+	<AdminRouter basePath="/admin" />
 </AdminLayout>
 ```
 
@@ -162,14 +160,14 @@ Inject the scope header into all API calls automatically:
 import { useScopedFetch } from "@questpie/admin/client";
 
 function AdminContent() {
-  const scopedFetch = useScopedFetch();
+	const scopedFetch = useScopedFetch();
 
-  const client = useMemo(
-    () => createClient<typeof app>({ baseURL: "/api", fetch: scopedFetch }),
-    [scopedFetch],
-  );
+	const client = useMemo(
+		() => createClient<typeof app>({ baseURL: "/api", fetch: scopedFetch }),
+		[scopedFetch],
+	);
 
-  return <AdminProvider client={client} />;
+	return <AdminProvider client={client} />;
 }
 ```
 
@@ -179,19 +177,19 @@ In production, verify the user belongs to the selected scope:
 
 ```ts title="src/questpie/server/context.ts"
 export default context(async ({ request, session, db }) => {
-  const workspaceId = request.headers.get("x-selected-workspace");
+	const workspaceId = request.headers.get("x-selected-workspace");
 
-  if (workspaceId && session?.user) {
-    const isMember = await db.query.workspaceMembers.findFirst({
-      where: and(
-        eq(workspaceMembers.workspaceId, workspaceId),
-        eq(workspaceMembers.userId, session.user.id),
-      ),
-    });
-    if (!isMember) throw new Error("Unauthorized");
-  }
+	if (workspaceId && session?.user) {
+		const isMember = await db.query.workspaceMembers.findFirst({
+			where: and(
+				eq(workspaceMembers.workspaceId, workspaceId),
+				eq(workspaceMembers.userId, session.user.id),
+			),
+		});
+		if (!isMember) throw new Error("Unauthorized");
+	}
 
-  return { workspaceId: workspaceId || null };
+	return { workspaceId: workspaceId || null };
 });
 ```
 
@@ -203,10 +201,10 @@ For advanced isolation, use a request-scoped service:
 import { service } from "questpie";
 
 export default service({
-  lifecycle: "request",
-  deps: ["db", "session"] as const,
-  create: ({ db, session }) => createScopedDb(db, session?.user?.tenantId),
-  dispose: (scopedDb) => scopedDb.release(),
+	lifecycle: "request",
+	deps: ["db", "session"] as const,
+	create: ({ db, session }) => createScopedDb(db, session?.user?.tenantId),
+	dispose: (scopedDb) => scopedDb.release(),
 });
 ```
 

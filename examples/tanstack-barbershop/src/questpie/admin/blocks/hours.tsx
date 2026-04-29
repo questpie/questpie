@@ -30,11 +30,11 @@ export function HoursRenderer({ values, data }: BlockProps<"hours">) {
 		<section className="px-6 py-16">
 			<div className="mx-auto max-w-2xl">
 				{values.title && (
-					<h2 className="mb-8 text-3xl font-bold tracking-tight text-center">
+					<h2 className="mb-8 text-center text-3xl font-bold tracking-tight">
 						{values.title}
 					</h2>
 				)}
-				<div className="rounded-lg border bg-card p-6">
+				<div className="bg-card rounded-lg border p-6">
 					<dl className="space-y-3">
 						{days.map(({ key, labelKey }) => {
 							const hours = businessHours?.[key];
@@ -46,9 +46,9 @@ export function HoursRenderer({ values, data }: BlockProps<"hours">) {
 							return (
 								<div
 									key={key}
-									className="flex items-center justify-between py-2 border-b last:border-b-0"
+									className="flex items-center justify-between border-b py-2 last:border-b-0"
 								>
-									<dt className="font-medium text-foreground">{t(labelKey)}</dt>
+									<dt className="text-foreground font-medium">{t(labelKey)}</dt>
 									<dd
 										className={cn(
 											"text-sm",

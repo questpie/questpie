@@ -1,30 +1,115 @@
 ---
 title: Branding
-description: Customize the admin panel name, logo, and appearance.
+description: Customize the admin panel name, brand chrome, and appearance.
 ---
 
-# Branding
-
-Configure the admin panel's branding with `branding.ts`.
+Admin branding is split across three layers: `config/admin.ts` provides server metadata, `questpie/admin/components/*` customizes React chrome, and your app shell owns favicon and CSS theme selection.
 
 ## Basic Setup
 
-```ts title="branding.ts"
-import { branding } from "#questpie";
+Add a `branding` property to your `config/admin.ts`:
 
-export default branding({
-  name: { en: "Barbershop Control", sk: "Riadenie barbershopu" },
+```ts title="src/questpie/server/config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+
+export default adminConfig({
+	branding: {
+		name: { en: "My App", sk: "Moja aplikacia" },
+	},
+	// sidebar, dashboard, locale can also go here
 });
 ```
 
+The file is auto-discovered by codegen — no manual registration needed.
+
 ## Options
 
-| Option | Type | Description |
-|---|---|---|
-| `name` | `string \| i18n` | App name shown in sidebar header |
-| `logo` | `string` | Logo URL or path |
+| Option | Type                               | Description                                                           |
+| ------ | ---------------------------------- | --------------------------------------------------------------------- |
+| `name` | `string \| Record<string, string>` | App name shown in the sidebar header. Supports i18n with locale keys. |
+
+## Full Example
+
+```ts title="src/questpie/server/config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+
+export default adminConfig({
+	branding: {
+		name: { en: "Barbershop Admin", sk: "Barbershop Admin" },
+	},
+	sidebar: {
+		/* ... */
+	},
+});
+```
+
+## Localized Names
+
+The `name` field accepts a locale-keyed object. The admin panel shows the name matching the current UI locale:
+
+```ts
+branding: {
+  name: {
+    en: "Content Management",
+    sk: "Sprava obsahu",
+    de: "Inhaltsverwaltung",
+  },
+}
+```
+
+If the current locale isn't in the object, it falls back to the first key.
+
+## What Goes Where
+
+Keep each customization in the layer that owns it:
+
+- **Admin name** — `config/admin.ts` via `branding.name`
+- **Sidebar logo/name HTML** — `questpie/admin/components/admin-sidebar-brand.tsx`
+- **Auth page wrapper** — `questpie/admin/components/admin-auth-layout.tsx`
+- **Favicon and `<head>` tags** — your app shell route/layout
+- **Colors, radius, typography, dark mode** — your app CSS importing `@questpie/admin/client/styles/base.css`
+
+Use SVGs for brand marks when you render them in override components.
+
+## File-First Logo Override
+
+For full control over the sidebar brand area (logo + name HTML), create a file-first override component. This replaces the entire brand slot in the sidebar header without touching your app shell.
+
+```tsx title="questpie/admin/components/admin-sidebar-brand.tsx"
+import type { AdminSidebarBrandProps } from "@questpie/admin/client";
+
+export default function MyBrand({ name, collapsed }: AdminSidebarBrandProps) {
+	return (
+		<div className="flex items-center gap-2">
+			<img src="/my-logo.svg" alt={name} className="size-6 shrink-0" />
+			{!collapsed && <span className="font-bold tracking-tight">{name}</span>}
+		</div>
+	);
+}
+```
+
+The `name` prop still comes from `config/admin.ts` branding — data flow is unchanged. Only the rendering changes.
+
+Use a normal React component as the default export for this file. Do **not** default-export a raw `() => import("...")` loader function here.
+
+Alternatively, if your app shell owns `<AdminSidebar>`, you can pass `renderBrand` directly:
+
+```tsx
+<AdminSidebar
+	renderBrand={({ name, collapsed }) => (
+		<MyBrand name={name} collapsed={collapsed} />
+	)}
+/>
+```
+
+Runtime props take priority over file-first overrides.
+
+## Theming
+
+For deeper customization of colors, typography, and layout, import `@questpie/admin/client/styles/base.css` in your app CSS and override CSS variables after it. The app shell also owns favicon links and dark-mode strategy.
 
 ## Related Pages
 
-- [Sidebar](/docs/workspace/views/sidebar) — Navigation
-- [Setup](/docs/workspace/setup) — Admin setup
+- [Sidebar](/docs/workspace/views/sidebar) — Navigation structure
+- [Setup](/docs/workspace/setup) — Admin panel setup
+- [Localization](/docs/workspace/localization) — UI locale configuration

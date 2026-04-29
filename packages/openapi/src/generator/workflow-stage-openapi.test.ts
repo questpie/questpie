@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { generateOpenApiSpec } from "./index.js";
 
 function hasStageParameter(operation: any): boolean {

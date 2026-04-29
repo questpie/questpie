@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import { collection, global } from "../../src/server/index.js";
+import { collection, global } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -20,8 +21,28 @@ const settings = global("settings").fields(({ f }) => ({
 	siteName: f.text().required(),
 }));
 
+const privatePosts = collection("private_posts")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+	}))
+	.access({
+		read: false,
+		create: true,
+		update: true,
+		delete: true,
+	});
+
+const privateSettings = global("private_settings")
+	.fields(({ f }) => ({
+		siteName: f.text().required(),
+	}))
+	.access({
+		read: false,
+		update: true,
+	});
+
 // Mock audit log collection matching the schema the audit route expects
-const adminAuditLog = collection("adminAuditLog").fields(({ f }) => ({
+const adminAuditLog = collection("admin_audit_log").fields(({ f }) => ({
 	action: f.text().required(),
 	resourceType: f.text().required(),
 	resource: f.text().required(),
@@ -40,7 +61,7 @@ describe("audit routes", () => {
 
 	beforeEach(async () => {
 		setup = await buildMockApp({
-			collections: { posts, adminAuditLog },
+			collections: { posts, admin_audit_log: adminAuditLog },
 			globals: { settings },
 			defaultAccess: { read: true, create: true, update: true, delete: true },
 		});
@@ -57,13 +78,13 @@ describe("audit routes", () => {
 			const ctx = createTestContext();
 
 			// Create a post
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Audited Post" },
 				ctx,
 			);
 
 			// Insert mock audit log entries
-			await setup.app.api.collections.adminAuditLog.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "create",
 					resourceType: "collection",
@@ -74,7 +95,7 @@ describe("audit routes", () => {
 				},
 				ctx,
 			);
-			await setup.app.api.collections.adminAuditLog.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "update",
 					resourceType: "collection",
@@ -109,7 +130,7 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "No Audit" },
 				ctx,
 			);
@@ -129,14 +150,14 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
-			const post = await setup.app.api.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Paginated" },
 				ctx,
 			);
 
 			// Insert 3 audit entries
 			for (let i = 1; i <= 3; i++) {
-				await setup.app.api.collections.adminAuditLog.create(
+				await (setup.app as any).collections.admin_audit_log.create(
 					{
 						action: "update",
 						resourceType: "collection",
@@ -173,17 +194,17 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
-			const post1 = await setup.app.api.collections.posts.create(
+			const post1 = await setup.app.collections.posts.create(
 				{ title: "Post 1" },
 				ctx,
 			);
-			const post2 = await setup.app.api.collections.posts.create(
+			const post2 = await setup.app.collections.posts.create(
 				{ title: "Post 2" },
 				ctx,
 			);
 
 			// Create audit entries for both posts
-			await setup.app.api.collections.adminAuditLog.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "create",
 					resourceType: "collection",
@@ -193,7 +214,7 @@ describe("audit routes", () => {
 				},
 				ctx,
 			);
-			await setup.app.api.collections.adminAuditLog.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "create",
 					resourceType: "collection",
@@ -215,6 +236,45 @@ describe("audit routes", () => {
 			expect(docs.length).toBe(1);
 			expect(docs[0].resourceId).toBe(post1.id);
 		});
+
+		it("does not expose audit entries when the caller cannot read the record", async () => {
+			const privateSetup = await buildMockApp({
+				collections: {
+					private_posts: privatePosts,
+					admin_audit_log: adminAuditLog,
+				},
+				defaultAccess: { read: true, create: true, update: true, delete: true },
+			});
+			await runTestDbMigrations(privateSetup.app);
+
+			try {
+				const handler = createFetchHandler(privateSetup.app);
+				const systemCtx = createTestContext({ accessMode: "system" });
+				const post = await privateSetup.app.collections.private_posts.create(
+					{ title: "Private Post" },
+					systemCtx,
+				);
+
+				await (privateSetup.app as any).collections.admin_audit_log.create(
+					{
+						action: "create",
+						resourceType: "collection",
+						resource: "private_posts",
+						resourceId: post.id,
+						title: "Created Private Post",
+					},
+					systemCtx,
+				);
+
+				const response = await handler(
+					new Request(`http://localhost/private_posts/${post.id}/audit`),
+				);
+
+				expect(response?.status).toBe(403);
+			} finally {
+				await privateSetup.cleanup();
+			}
+		});
 	});
 
 	describe("global audit endpoint", () => {
@@ -223,10 +283,10 @@ describe("audit routes", () => {
 			const ctx = createTestContext();
 
 			// Initialize global
-			await setup.app.api.globals.settings.update({ siteName: "My Site" }, ctx);
+			await setup.app.globals.settings.update({ siteName: "My Site" }, ctx);
 
 			// Insert mock audit log entries for the global
-			await setup.app.api.collections.adminAuditLog.create(
+			await (setup.app as any).collections.admin_audit_log.create(
 				{
 					action: "update",
 					resourceType: "global",
@@ -283,9 +343,11 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
+			await setup.app.globals.settings.update({ siteName: "Paginated" }, ctx);
+
 			// Insert 3 audit entries
 			for (let i = 1; i <= 3; i++) {
-				await setup.app.api.collections.adminAuditLog.create(
+				await (setup.app as any).collections.admin_audit_log.create(
 					{
 						action: "update",
 						resourceType: "global",
@@ -304,6 +366,42 @@ describe("audit routes", () => {
 			const body = (await response?.json()) as any;
 			const docs = body.docs ?? body;
 			expect(docs.length).toBe(1);
+		});
+
+		it("does not expose global audit entries when the caller cannot read the global", async () => {
+			const privateSetup = await buildMockApp({
+				collections: { admin_audit_log: adminAuditLog },
+				globals: { private_settings: privateSettings },
+				defaultAccess: { read: true, create: true, update: true, delete: true },
+			});
+			await runTestDbMigrations(privateSetup.app);
+
+			try {
+				const handler = createFetchHandler(privateSetup.app);
+				const systemCtx = createTestContext({ accessMode: "system" });
+
+				await privateSetup.app.globals.private_settings.update(
+					{ siteName: "Private Settings" },
+					systemCtx,
+				);
+				await (privateSetup.app as any).collections.admin_audit_log.create(
+					{
+						action: "update",
+						resourceType: "global",
+						resource: "private_settings",
+						title: "Updated private settings",
+					},
+					systemCtx,
+				);
+
+				const response = await handler(
+					new Request("http://localhost/globals/private_settings/audit"),
+				);
+
+				expect(response?.status).toBe(403);
+			} finally {
+				await privateSetup.cleanup();
+			}
 		});
 	});
 });

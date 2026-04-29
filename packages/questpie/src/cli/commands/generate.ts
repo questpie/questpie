@@ -1,11 +1,13 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { Readable } from "node:stream";
+
 import {
 	DrizzleMigrationGenerator,
 	type GenerateMigrationOptions,
 } from "../../server/migration/generator.js";
 import { loadQuestpieConfig } from "../config.js";
+import { resolveCliPath } from "../utils.js";
 import { resolveEntityRoot } from "./codegen.js";
 
 /**
@@ -103,7 +105,7 @@ async function generateMigrationInternal(
 	options: GenerateMigrationOptions = {},
 ): Promise<void> {
 	// Resolve config path
-	const resolvedConfigPath = join(process.cwd(), configPath);
+	const resolvedConfigPath = resolveCliPath(configPath);
 
 	if (!existsSync(resolvedConfigPath)) {
 		throw new Error(`Config file not found: ${resolvedConfigPath}`);
@@ -121,17 +123,16 @@ async function generateMigrationInternal(
 
 	// Get migrations from app config
 	// Supports both flat array (new codegen) and legacy nested format { migrations: [...] }
-	const existingMigrations = (
-		Array.isArray(app.config.migrations)
+	const existingMigrations =
+		(Array.isArray(app.config.migrations)
 			? app.config.migrations
-			: app.config.migrations?.migrations
-	) ?? [];
+			: app.config.migrations?.migrations) ?? [];
 	console.log(`📦 Found ${existingMigrations.length} existing migrations`);
 
 	// Get migration directory: explicit cli override or convention-based default (entity root)
 	const { rootDir } = await resolveEntityRoot(resolvedConfigPath);
 	const migrationDir = cmsConfig.cli?.migrations?.directory
-		? join(process.cwd(), cmsConfig.cli.migrations.directory)
+		? resolveCliPath(cmsConfig.cli.migrations.directory)
 		: join(rootDir, "migrations");
 
 	// Create migration directory if needed
@@ -181,7 +182,9 @@ async function generateMigrationInternal(
 	});
 
 	if (result.skipped) {
-		console.log("⏭️  No schema changes detected, skipping migration generation");
+		console.log(
+			"⏭️  No schema changes detected, skipping migration generation",
+		);
 		return;
 	}
 

@@ -1,4 +1,5 @@
 import type { SQL } from "drizzle-orm";
+
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import {
 	createFieldsCallbackContext,
@@ -7,7 +8,7 @@ import {
 import {
 	type BuiltinFields,
 	builtinFields,
-} from "#questpie/server/fields/builtin/defaults.js";
+} from "#questpie/server/modules/core/fields/index.js";
 import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 import { Global } from "#questpie/server/global/builder/global.js";
 import type {
@@ -44,7 +45,7 @@ type ExtractFieldTypes<TState extends GlobalBuilderState> =
 /**
  * Main global builder class
  */
-// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: Declaration merging is intentional for extension pattern
+// oxlint-disable-next-line no-unsafe-declaration-merging -- Declaration merging is intentional for extension pattern
 export class GlobalBuilder<TState extends GlobalBuilderState> {
 	private state: TState;
 	private _builtGlobal?: Global<TState>;

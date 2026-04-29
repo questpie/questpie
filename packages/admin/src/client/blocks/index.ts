@@ -16,7 +16,4 @@ export type {
 	BlockNode,
 	BlockRendererProps,
 } from "./types.js";
-export {
-	EMPTY_BLOCK_CONTENT,
-	isBlockContent,
-} from "./types.js";
+export { EMPTY_BLOCK_CONTENT, isBlockContent } from "./types.js";

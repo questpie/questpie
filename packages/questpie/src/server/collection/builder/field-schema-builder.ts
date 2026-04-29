@@ -13,8 +13,9 @@
  */
 
 import { z } from "zod";
-import type { Field } from "#questpie/server/fields/field-class.js";
+
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
 import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 
 // ============================================================================

@@ -1,5 +1,6 @@
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
+
 import type {
 	FilterRule,
 	SortConfig,
@@ -15,6 +16,8 @@ const EMPTY_CONFIG: ViewConfiguration = {
 	filters: [],
 	sortConfig: null,
 	visibleColumns: [],
+	groupBy: null,
+	collapsedGroups: [],
 	realtime: undefined,
 	includeDeleted: false,
 	pagination: { page: 1, pageSize: 25 },
@@ -135,6 +138,11 @@ export function useViewState(
 					storedConfig.visibleColumns,
 					defaultColumns,
 				),
+				groupBy:
+					storedConfig.groupBy !== undefined
+						? storedConfig.groupBy
+						: (initialConfig?.groupBy ?? null),
+				collapsedGroups: storedConfig.collapsedGroups ?? [],
 				realtime:
 					storedConfig.realtime !== undefined
 						? storedConfig.realtime
@@ -152,6 +160,8 @@ export function useViewState(
 			filters: initialConfig?.filters ?? [],
 			sortConfig: initialConfig?.sortConfig ?? null,
 			visibleColumns: defaultColumns,
+			groupBy: initialConfig?.groupBy ?? null,
+			collapsedGroups: initialConfig?.collapsedGroups ?? [],
 			realtime: initialConfig?.realtime,
 			includeDeleted: initialConfig?.includeDeleted ?? false,
 			pagination: initialConfig?.pagination ?? { page: 1, pageSize: 25 },
@@ -275,6 +285,33 @@ export function useViewState(
 		[setConfig],
 	);
 
+	const setGroupBy = useCallback(
+		(groupBy: string | null) => {
+			setConfig((prev) => ({
+				...prev,
+				groupBy,
+				collapsedGroups: [],
+				pagination: { ...(prev.pagination ?? { pageSize: 25 }), page: 1 },
+			}));
+		},
+		[setConfig],
+	);
+
+	const toggleCollapsedGroup = useCallback(
+		(groupKey: string) => {
+			setConfig((prev) => {
+				const collapsedGroups = prev.collapsedGroups ?? [];
+				return {
+					...prev,
+					collapsedGroups: collapsedGroups.includes(groupKey)
+						? collapsedGroups.filter((key) => key !== groupKey)
+						: [...collapsedGroups, groupKey],
+				};
+			});
+		},
+		[setConfig],
+	);
+
 	// Set page number
 	const setPage = useCallback(
 		(page: number) => {
@@ -337,6 +374,8 @@ export function useViewState(
 		return (
 			config.filters.length > 0 ||
 			config.sortConfig !== null ||
+			(config.groupBy ?? null) !== (initialConfig?.groupBy ?? null) ||
+			(config.collapsedGroups?.length ?? 0) > 0 ||
 			config.realtime !== initialConfig?.realtime ||
 			(config.includeDeleted ?? false) !==
 				(initialConfig?.includeDeleted ?? false) ||
@@ -349,6 +388,7 @@ export function useViewState(
 		config,
 		defaultColumns,
 		initialConfig?.includeDeleted,
+		initialConfig?.groupBy,
 		initialConfig?.realtime,
 	]);
 
@@ -362,6 +402,8 @@ export function useViewState(
 		setSort,
 		toggleSort,
 		setVisibleColumns,
+		setGroupBy,
+		toggleCollapsedGroup,
 		toggleColumn,
 		setPage,
 		setPageSize,

@@ -37,7 +37,7 @@
  * const flagUrl = getFlagUrl("en", 20, { en: "us" });
  * ```
  *
- * ### In QuestPie Configuration
+ * ### In QUESTPIE Configuration
  *
  * The best way to customize flag mapping is in your app locale config:
  *

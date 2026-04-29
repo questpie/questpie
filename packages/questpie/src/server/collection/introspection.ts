@@ -6,6 +6,7 @@
  */
 
 import { z } from "zod";
+
 import type { Collection } from "#questpie/server/collection/builder/collection.js";
 import { buildCollectionSchemas } from "#questpie/server/collection/builder/field-schema-builder.js";
 import type {
@@ -15,14 +16,18 @@ import type {
 	CollectionBuilderState,
 } from "#questpie/server/collection/builder/types.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
-import type { Field } from "#questpie/server/fields/field-class.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
+import type {
+	SerializedOptionsConfig,
+	SerializedReactiveConfig,
+} from "#questpie/server/fields/reactive-types.js";
 import {
 	extractDependencies,
 	getDebounce,
 	isReactiveConfig,
-	type SerializedOptionsConfig,
-	type SerializedReactiveConfig,
+	serializeFormLayoutProps,
+	serializeReactivePropsRecord,
 } from "#questpie/server/fields/reactive.js";
 import type {
 	FieldLocation,
@@ -33,7 +38,7 @@ import type {
 import {
 	extractWorkflowFromVersioning,
 	resolveWorkflowConfig,
-} from "#questpie/server/workflow/config.js";
+} from "#questpie/server/modules/core/workflow/config.js";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 // ============================================================================
@@ -150,10 +155,19 @@ export interface AdminListViewSchema {
 	columns?: string[];
 	/** Default sort configuration */
 	defaultSort?: { field: string; direction: "asc" | "desc" };
+	/** Enables reorder mode for this list using the conventional `order` field */
+	orderable?: boolean | { direction?: "asc" | "desc"; step?: number };
 	/** Searchable fields */
 	searchable?: string[];
 	/** Filterable fields */
 	filterable?: string[];
+	/** Client-side grouping options for the current fetched page */
+	grouping?: {
+		fields: string[];
+		defaultField?: string;
+		defaultCollapsed?: boolean;
+		showCounts?: boolean;
+	};
 	/** Actions configuration */
 	actions?: {
 		header?: { primary?: unknown[]; secondary?: unknown[] };
@@ -294,6 +308,10 @@ export interface AdminPreviewSchema {
 	position?: "left" | "right" | "bottom";
 	/** Default panel width (percentage) */
 	defaultWidth?: number;
+	/** Default preview pane size (percentage, 0-100) */
+	defaultSize?: number;
+	/** Minimum preview pane size (percentage, 0-100) */
+	minSize?: number;
 	/** URL template or pattern (actual URL generation happens server-side) */
 	hasUrlBuilder?: boolean;
 }
@@ -641,11 +659,28 @@ export async function introspectCollection(
 	// Evaluate collection-level access
 	const access = await evaluateCollectionAccess(state, context, app);
 
-	// Build field schemas
+	// Build field schemas — evaluate field access in parallel
+	const fieldEntries = Object.entries(fieldDefinitions);
+	const fieldAccessResults = await Promise.all(
+		fieldEntries.map(([, fieldDef]) =>
+			evaluateFieldAccess(fieldDef, context, app),
+		),
+	);
+
 	const fields: Record<string, FieldSchema> = {};
-	for (const [name, fieldDef] of Object.entries(fieldDefinitions)) {
+	for (let i = 0; i < fieldEntries.length; i++) {
+		const [name, fieldDef] = fieldEntries[i];
 		const metadata = fieldDef.getMetadata();
-		const fieldAccess = await evaluateFieldAccess(fieldDef, context, app);
+		// Serialize function-valued admin meta (e.g.
+		// `f.relation(...).admin({ filter: ({data}) => ({...}) })`) into
+		// `ReactivePropPlaceholder`. Function stays on the server; client
+		// resolves via /admin/reactive (`type: "prop"`).
+		if (metadata.meta && typeof metadata.meta === "object") {
+			metadata.meta = serializeReactivePropsRecord(
+				metadata.meta as Record<string, unknown>,
+			) as typeof metadata.meta;
+		}
+		const fieldAccess = fieldAccessResults[i];
 
 		// Generate field-level JSON Schema if possible
 		let validation: unknown;
@@ -785,11 +820,22 @@ function serializeActionFormFields(
 		if (typeof field.getMetadata === "function") {
 			const metadata = field.getMetadata();
 			const s = field._state ?? {};
+			const adminMeta =
+				(metadata.meta && typeof metadata.meta === "object"
+					? (metadata.meta as Record<string, unknown>)
+					: undefined) ??
+				(s.admin && typeof s.admin === "object"
+					? (s.admin as Record<string, unknown>)
+					: undefined) ??
+				(s.extensions?.admin && typeof s.extensions.admin === "object"
+					? (s.extensions.admin as Record<string, unknown>)
+					: undefined);
 
 			const serialized: Record<string, any> = {
 				type: metadata.type ?? field.getType?.() ?? "text",
 				label: metadata.label,
 				description: metadata.description,
+				placeholder: (metadata as { placeholder?: unknown }).placeholder,
 				required: metadata.required ?? false,
 				default: s.defaultValue,
 			};
@@ -803,6 +849,9 @@ function serializeActionFormFields(
 			}
 			if (metadata.multiple !== undefined) {
 				fieldOptions.multiple = metadata.multiple;
+			}
+			if (adminMeta) {
+				Object.assign(fieldOptions, adminMeta);
 			}
 
 			if (Object.keys(fieldOptions).length > 0) {
@@ -820,6 +869,67 @@ function serializeActionFormFields(
 	return result;
 }
 
+function serializeListActionReference(reference: unknown): unknown {
+	if (typeof reference === "string") return reference;
+
+	if (typeof reference === "function") {
+		const actionType = (reference as { type?: unknown }).type;
+		if (typeof actionType === "string") return actionType;
+
+		try {
+			const resolved = (reference as () => unknown)();
+			if (typeof resolved === "string" || typeof resolved === "object") {
+				return resolved;
+			}
+		} catch {
+			return undefined;
+		}
+	}
+
+	if (reference && typeof reference === "object") {
+		return reference;
+	}
+
+	return undefined;
+}
+
+function serializeListActionReferences(
+	references: unknown,
+): unknown[] | undefined {
+	if (!Array.isArray(references)) return undefined;
+
+	const serialized = references
+		.map(serializeListActionReference)
+		.filter((action) => action !== undefined);
+
+	return serialized.length > 0 ? serialized : [];
+}
+
+function serializeListActions(
+	actions: unknown,
+): AdminListViewSchema["actions"] {
+	if (!actions || typeof actions !== "object") return undefined;
+
+	const actionsRecord = actions as {
+		header?: { primary?: unknown; secondary?: unknown };
+		row?: unknown;
+		bulk?: unknown;
+	};
+
+	return {
+		header: actionsRecord.header
+			? {
+					primary: serializeListActionReferences(actionsRecord.header.primary),
+					secondary: serializeListActionReferences(
+						actionsRecord.header.secondary,
+					),
+				}
+			: undefined,
+		row: serializeListActionReferences(actionsRecord.row),
+		bulk: serializeListActionReferences(actionsRecord.bulk),
+	};
+}
+
 /**
  * Extract admin configuration from collection state.
  * These properties are added by the `adminModule` via monkey patching.
@@ -832,15 +942,10 @@ function serializeActionFormFields(
  * known to the core package.
  */
 interface AdminPluginState {
-	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
 	admin?: any;
-	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
 	adminList?: any;
-	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
 	adminForm?: any;
-	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
 	adminPreview?: any;
-	// biome-ignore lint/suspicious/noExplicitAny: plugin-dynamic state
 	adminActions?: any;
 }
 
@@ -880,9 +985,11 @@ function extractAdminConfig(
 			view: stateAny.adminList.view,
 			columns: stateAny.adminList.columns,
 			defaultSort: stateAny.adminList.defaultSort,
+			orderable: stateAny.adminList.orderable,
 			searchable: stateAny.adminList.searchable,
 			filterable: stateAny.adminList.filterable,
-			actions: stateAny.adminList.actions,
+			grouping: stateAny.adminList.grouping,
+			actions: serializeListActions(stateAny.adminList.actions),
 		};
 	}
 
@@ -892,8 +999,10 @@ function extractAdminConfig(
 	if (stateAny.adminForm) {
 		result.form = {
 			view: stateAny.adminForm.view,
-			fields: stateAny.adminForm.fields,
-			sidebar: stateAny.adminForm.sidebar,
+			fields: serializeFormLayoutProps(stateAny.adminForm.fields),
+			sidebar: stateAny.adminForm.sidebar
+				? serializeFormLayoutProps(stateAny.adminForm.sidebar)
+				: undefined,
 		};
 	}
 
@@ -903,6 +1012,8 @@ function extractAdminConfig(
 			enabled: stateAny.adminPreview.enabled,
 			position: stateAny.adminPreview.position,
 			defaultWidth: stateAny.adminPreview.defaultWidth,
+			defaultSize: stateAny.adminPreview.defaultSize,
+			minSize: stateAny.adminPreview.minSize,
 			// Don't include the url function - just indicate it exists
 			hasUrlBuilder: typeof stateAny.adminPreview.url === "function",
 		};
@@ -1001,9 +1112,8 @@ async function evaluateCollectionAccess(
 		app as { defaultAccess?: CollectionAccess } | undefined
 	)?.defaultAccess;
 
-	const { extractAppServices } = await import(
-		"#questpie/server/config/app-context.js"
-	);
+	const { extractAppServices } =
+		await import("#questpie/server/config/app-context.js");
 	const services = extractAppServices(app, {
 		db: context.db,
 		session: context.session,
@@ -1118,9 +1228,8 @@ async function evaluateFieldAccess(
 		return undefined;
 	}
 
-	const { extractAppServices } = await import(
-		"#questpie/server/config/app-context.js"
-	);
+	const { extractAppServices } =
+		await import("#questpie/server/config/app-context.js");
 	const services = extractAppServices(app, {
 		db: context.db,
 		session: context.session,

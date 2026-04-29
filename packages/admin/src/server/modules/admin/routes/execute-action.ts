@@ -16,8 +16,9 @@
  * ```
  */
 
-import { route, type Questpie } from "questpie";
+import { route } from "questpie";
 import { z } from "zod";
+
 import type {
 	ServerActionContext,
 	ServerActionDefinition,
@@ -25,9 +26,8 @@ import type {
 	ServerActionResult,
 	ServerActionsConfig,
 } from "../../../augmentation.js";
-
-// Type alias for the app app
-type App = Questpie<any>;
+import { translateAdminMessage } from "./i18n-helpers.js";
+import { type App, getApp, getAppState, getSession } from "./route-helpers.js";
 
 /**
  * Request to execute an action
@@ -67,8 +67,8 @@ export function getActionsConfig(
 	builtin: string[];
 	custom: Array<Omit<ServerActionDefinition, "handler">>;
 } | null {
-	const state = (app as any).state as any;
-	const collection = state.collections?.[collectionSlug];
+	const appState = getAppState(app) as Record<string, any>;
+	const collection = appState.collections?.[collectionSlug];
 
 	if (!collection) {
 		return null;
@@ -98,6 +98,12 @@ export function getActionsConfig(
 	// Strip handlers from custom actions for client
 	const customWithoutHandlers = (actionsConfig.custom || []).map((action) => {
 		const { handler, ...rest } = action;
+		if (rest.form?.fields) {
+			rest.form = {
+				...rest.form,
+				fields: serializeActionFormFields(rest.form.fields),
+			};
+		}
 		return rest;
 	});
 
@@ -113,6 +119,53 @@ export function getActionsConfig(
 		],
 		custom: customWithoutHandlers,
 	};
+}
+
+function serializeActionFormFields(
+	fields: Record<string, any>,
+): Record<string, any> {
+	const result: Record<string, any> = {};
+
+	for (const [fieldName, field] of Object.entries(fields)) {
+		if (!field || typeof field !== "object") {
+			result[fieldName] = field;
+			continue;
+		}
+
+		if (typeof field.getMetadata === "function") {
+			const metadata = field.getMetadata();
+			const state = field._state ?? {};
+			const adminMeta =
+				(metadata.meta && typeof metadata.meta === "object"
+					? (metadata.meta as Record<string, unknown>)
+					: undefined) ??
+				(state.admin && typeof state.admin === "object"
+					? (state.admin as Record<string, unknown>)
+					: undefined) ??
+				(state.extensions?.admin && typeof state.extensions.admin === "object"
+					? (state.extensions.admin as Record<string, unknown>)
+					: undefined);
+
+			const options: Record<string, unknown> = {};
+			if (metadata.options) options.options = metadata.options;
+			if (metadata.multiple !== undefined) options.multiple = metadata.multiple;
+			if (adminMeta) Object.assign(options, adminMeta);
+
+			result[fieldName] = {
+				type: metadata.type ?? field.getType?.() ?? "text",
+				label: metadata.label,
+				description: metadata.description,
+				required: metadata.required ?? false,
+				default: state.defaultValue,
+				options,
+			};
+			continue;
+		}
+
+		result[fieldName] = field;
+	}
+
+	return result;
 }
 
 /**
@@ -133,13 +186,15 @@ export async function executeAction(
 		locale,
 	} = request;
 
-	const state = (app as any).state as any;
-	const collection = state.collections?.[collectionSlug];
+	const appState = getAppState(app) as Record<string, any>;
+	const collection = appState.collections?.[collectionSlug];
+	const t = (key: string, params?: Record<string, unknown>) =>
+		translateAdminMessage(locale, key, params);
 
 	if (!collection) {
 		return {
 			success: false,
-			error: `Collection "${collectionSlug}" not found`,
+			error: t("action.collectionNotFound", { collection: collectionSlug }),
 		};
 	}
 
@@ -159,7 +214,7 @@ export async function executeAction(
 		"transition",
 	];
 
-	if (builtinActions.includes(actionId as any)) {
+	if ((builtinActions as string[]).includes(actionId)) {
 		return executeBuiltinAction(app, {
 			collectionSlug,
 			actionId,
@@ -177,7 +232,10 @@ export async function executeAction(
 	if (!customAction) {
 		return {
 			success: false,
-			error: `Action "${actionId}" not found on collection "${collectionSlug}"`,
+			error: t("action.notFound", {
+				action: actionId,
+				collection: collectionSlug,
+			}),
 		};
 	}
 
@@ -186,6 +244,7 @@ export async function executeAction(
 		const validationError = validateActionFormData(
 			customAction.form.fields,
 			data || {},
+			t,
 		);
 		if (validationError) {
 			return {
@@ -200,14 +259,15 @@ export async function executeAction(
 
 	// Execute custom action handler
 	try {
+		const appRec = app as Record<string, any>;
 		const context: ServerActionContext = {
 			data: data || {},
 			itemId,
 			itemIds,
-			auth: (app as any).auth,
-			collections: (app as any).api?.collections,
-			globals: (app as any).api?.globals,
-			db: (app as any).db,
+			auth: appRec.auth,
+			collections: appRec.api?.collections,
+			globals: appRec.api?.globals,
+			db: appRec.db,
 			session,
 			locale,
 		};
@@ -226,7 +286,9 @@ export async function executeAction(
 				type: "error",
 				toast: {
 					message:
-						error instanceof Error ? error.message : "Action execution failed",
+						error instanceof Error
+							? error.message
+							: t("action.executionFailed"),
 				},
 			},
 		};
@@ -248,10 +310,13 @@ async function executeBuiltinAction(
 		session?: unknown;
 	},
 ): Promise<ExecuteActionResponse> {
-	const { collectionSlug, actionId, itemId, itemIds, data } = params;
-	const collectionCrud = (app as any).api?.collections?.[collectionSlug];
+	const { collectionSlug, actionId, itemId, itemIds, data, locale } = params;
+	const t = (key: string, messageParams?: Record<string, unknown>) =>
+		translateAdminMessage(locale, key, messageParams);
+	const appRec = app as Record<string, any>;
+	const collectionCrud = appRec.api?.collections?.[collectionSlug];
 	const crudContext = {
-		db: (app as any).db,
+		db: appRec.db,
 		session: params.session,
 		locale: params.locale,
 	};
@@ -259,12 +324,12 @@ async function executeBuiltinAction(
 	try {
 		switch (actionId) {
 			case "create": {
-				const result = await (app as any).create(collectionSlug, data || {});
+				const result = await appRec.create(collectionSlug, data || {});
 				return {
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item created successfully" },
+						toast: { message: t("action.itemCreated") },
 						effects: {
 							invalidate: [collectionSlug],
 							redirect: `/admin/collections/${collectionSlug}/${result.id}`,
@@ -279,16 +344,16 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for save action" },
+							toast: { message: t("action.itemIdRequired.save") },
 						},
 					};
 				}
-				await (app as any).update(collectionSlug, itemId, data || {});
+				await appRec.update(collectionSlug, itemId, data || {});
 				return {
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item saved successfully" },
+						toast: { message: t("action.itemSaved") },
 						effects: { invalidate: [collectionSlug] },
 					},
 				};
@@ -300,16 +365,16 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for delete action" },
+							toast: { message: t("action.itemIdRequired.delete") },
 						},
 					};
 				}
-				await (app as any).delete(collectionSlug, itemId);
+				await appRec.delete(collectionSlug, itemId);
 				return {
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item deleted successfully" },
+						toast: { message: t("action.itemDeleted") },
 						effects: {
 							invalidate: [collectionSlug],
 							redirect: `/admin/collections/${collectionSlug}`,
@@ -325,20 +390,22 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message: "Item IDs are required for bulk delete action",
+								message: t("action.itemIdsRequired.bulkDelete"),
 							},
 						},
 					};
 				}
 				// Delete items in parallel
 				await Promise.all(
-					itemIds.map((id) => (app as any).delete(collectionSlug, id)),
+					itemIds.map((id) => appRec.delete(collectionSlug, id)),
 				);
 				return {
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: `${itemIds.length} items deleted successfully` },
+						toast: {
+							message: t("action.itemsDeleted", { count: itemIds.length }),
+						},
 						effects: { invalidate: [collectionSlug] },
 					},
 				};
@@ -350,13 +417,13 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for restore action" },
+							toast: { message: t("action.itemIdRequired.restore") },
 						},
 					};
 				}
 
-				if (typeof (app as any).restore === "function") {
-					await (app as any).restore(collectionSlug, itemId);
+				if (typeof appRec.restore === "function") {
+					await appRec.restore(collectionSlug, itemId);
 				} else if (collectionCrud?.restoreById) {
 					await collectionCrud.restoreById({ id: itemId }, crudContext);
 				} else {
@@ -365,7 +432,7 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message: "Restore is not supported for this collection",
+								message: t("action.restoreUnsupported"),
 							},
 						},
 					};
@@ -375,7 +442,7 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item restored successfully" },
+						toast: { message: t("action.itemRestored") },
 						effects: {
 							invalidate: [collectionSlug],
 							redirect: `/admin/collections/${collectionSlug}/${itemId}`,
@@ -391,15 +458,15 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message: "Item IDs are required for bulk restore action",
+								message: t("action.itemIdsRequired.bulkRestore"),
 							},
 						},
 					};
 				}
 
-				if (typeof (app as any).restore === "function") {
+				if (typeof appRec.restore === "function") {
 					await Promise.all(
-						itemIds.map((id) => (app as any).restore(collectionSlug, id)),
+						itemIds.map((id) => appRec.restore(collectionSlug, id)),
 					);
 				} else if (collectionCrud?.restoreById) {
 					await Promise.all(
@@ -423,7 +490,9 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: `${itemIds.length} items restored successfully` },
+						toast: {
+							message: t("action.itemsRestored", { count: itemIds.length }),
+						},
 						effects: { invalidate: [collectionSlug] },
 					},
 				};
@@ -435,31 +504,28 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for duplicate action" },
+							toast: { message: t("action.itemIdRequired.duplicate") },
 						},
 					};
 				}
-				const original = await (app as any).findById(collectionSlug, itemId);
+				const original = await appRec.findById(collectionSlug, itemId);
 				if (!original) {
 					return {
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item not found" },
+							toast: { message: t("action.itemNotFound") },
 						},
 					};
 				}
 				// Remove id and timestamps for duplication
 				const { id, createdAt, updatedAt, ...duplicateData } = original;
-				const duplicated = await (app as any).create(
-					collectionSlug,
-					duplicateData,
-				);
+				const duplicated = await appRec.create(collectionSlug, duplicateData);
 				return {
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item duplicated successfully" },
+						toast: { message: t("action.itemDuplicated") },
 						effects: {
 							invalidate: [collectionSlug],
 							redirect: `/admin/collections/${collectionSlug}/${duplicated.id}`,
@@ -474,7 +540,7 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for transition action" },
+							toast: { message: t("action.itemIdRequired.transition") },
 						},
 					};
 				}
@@ -485,7 +551,7 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message: "Target stage is required for transition action",
+								message: t("action.targetStageRequired"),
 							},
 						},
 					};
@@ -510,8 +576,7 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message:
-									"Workflow transitions are not supported for this collection",
+								message: t("action.workflowUnsupported"),
 							},
 						},
 					};
@@ -520,7 +585,9 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: `Transitioned to "${stage}" successfully` },
+						toast: {
+							message: t("workflow.transitionSuccess", { stage }),
+						},
 						effects: { invalidate: [collectionSlug] },
 					},
 				};
@@ -531,7 +598,9 @@ async function executeBuiltinAction(
 					success: false,
 					result: {
 						type: "error",
-						toast: { message: `Unknown built-in action: ${actionId}` },
+						toast: {
+							message: t("action.unknownBuiltin", { action: actionId }),
+						},
 					},
 				};
 		}
@@ -543,7 +612,9 @@ async function executeBuiltinAction(
 				type: "error",
 				toast: {
 					message:
-						error instanceof Error ? error.message : "Action execution failed",
+						error instanceof Error
+							? error.message
+							: t("action.executionFailed"),
 				},
 			},
 		};
@@ -556,7 +627,10 @@ async function executeBuiltinAction(
 function isFieldDefinition(
 	field: ServerActionFormField,
 ): field is { state: any; getMetadata(): any; toZodSchema(): unknown } {
-	return typeof (field as any).getMetadata === "function";
+	return (
+		typeof (field as unknown as Record<string, unknown>).getMetadata ===
+		"function"
+	);
 }
 
 /**
@@ -564,7 +638,7 @@ function isFieldDefinition(
  */
 function isFieldRequired(field: ServerActionFormField): boolean {
 	if (isFieldDefinition(field)) {
-		return !!(field as any)._state?.notNull;
+		return !!(field as unknown as Record<string, any>)._state?.notNull;
 	}
 	return !!field.required;
 }
@@ -576,10 +650,11 @@ function isFieldRequired(field: ServerActionFormField): boolean {
 function validateActionFormData(
 	fields: Record<string, ServerActionFormField>,
 	data: Record<string, unknown>,
+	t: (key: string, params?: Record<string, unknown>) => string,
 ): string | null {
 	for (const [fieldName, fieldConfig] of Object.entries(fields)) {
 		if (isFieldRequired(fieldConfig) && !data[fieldName]) {
-			return `Field "${fieldName}" is required`;
+			return t("action.fieldRequired", { field: fieldName });
 		}
 	}
 	return null;
@@ -600,7 +675,7 @@ const executeActionRequestSchema = z.object({
 
 const executeActionResponseSchema = z.object({
 	success: z.boolean(),
-	result: z.unknown().optional(),
+	result: z.record(z.string(), z.any()).optional(),
 	error: z.string().optional(),
 });
 
@@ -611,12 +686,12 @@ const getActionsConfigRequestSchema = z.object({
 const getActionsConfigResponseSchema = z
 	.object({
 		builtin: z.array(z.string()),
-		custom: z.array(z.unknown()),
+		custom: z.array(z.record(z.string(), z.any())),
 	})
 	.nullable();
 
 // ============================================================================
-// QuestPie Functions
+// QUESTPIE Functions
 // ============================================================================
 
 /**
@@ -637,8 +712,8 @@ export const executeActionFn = route()
 	.schema(executeActionRequestSchema)
 	.outputSchema(executeActionResponseSchema)
 	.handler(async (ctx) => {
-		const app = (ctx as any).app as App;
-		const session = (ctx as any).session;
+		const app = getApp(ctx);
+		const session = getSession(ctx);
 		return executeAction(app, ctx.input, session);
 	});
 
@@ -651,12 +726,12 @@ export const getActionsConfigFn = route()
 	.schema(getActionsConfigRequestSchema)
 	.outputSchema(getActionsConfigResponseSchema)
 	.handler((ctx) => {
-		const app = (ctx as any).app as App;
+		const app = getApp(ctx);
 		return getActionsConfig(app, ctx.input.collection);
 	});
 
 /**
- * QuestPie functions for action execution.
+ * QUESTPIE functions for action execution.
  * These are registered on the `adminModule`.
  */
 export const actionFunctions = {

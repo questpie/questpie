@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "better-auth";
+
 import type { CollectionAccess } from "#questpie/server/collection/builder/types.js";
 
 // ============================================================================
@@ -58,15 +59,15 @@ import type {
 	StorageConfig,
 } from "#questpie/server/config/types.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
-import type { KVConfig } from "#questpie/server/integrated/kv/index.js";
-import type { LoggerConfig } from "#questpie/server/integrated/logger/index.js";
-import type { MailerConfig } from "#questpie/server/integrated/mailer/index.js";
+import type { KVConfig } from "#questpie/server/modules/core/integrated/kv/types.js";
+import type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
+import type { MailerConfig } from "#questpie/server/modules/core/integrated/mailer/types.js";
 import type {
 	JobDefinition,
 	QueueAdapter,
-} from "#questpie/server/integrated/queue/types.js";
-import type { RealtimeConfig } from "#questpie/server/integrated/realtime/index.js";
-import type { SearchAdapter } from "#questpie/server/integrated/search/index.js";
+} from "#questpie/server/modules/core/integrated/queue/types.js";
+import type { RealtimeConfig } from "#questpie/server/modules/core/integrated/realtime/types.js";
+import type { SearchAdapter } from "#questpie/server/modules/core/integrated/search/types.js";
 import type { Migration } from "#questpie/server/migration/types.js";
 import type { RouteDefinition } from "#questpie/server/routes/types.js";
 import type { Seed, SeedCategory } from "#questpie/server/seed/types.js";
@@ -113,9 +114,6 @@ export interface ModuleDefinition {
 		import("#questpie/server/services/define-service.js").ServiceBuilder<any>
 	>;
 
-	/** Partial auth config — deep-merged with other modules and user config. */
-	auth?: BetterAuthOptions | Record<string, any>;
-
 	/** Migrations this module contributes — concatenated with others. */
 	migrations?: Migration[];
 
@@ -128,19 +126,79 @@ export interface ModuleDefinition {
 	 */
 	messages?: Record<string, Record<string, string>>;
 
-	/** Default access control. Last module with this set wins. */
-	defaultAccess?: CollectionAccess;
-
 	/**
-	 * Global lifecycle hooks. Arrays are concatenated across modules.
+	 * Config bucket — each config file maps to one key.
+	 * Plugins augment AppStateConfig to declare their config keys.
+	 * Merged per-key across modules using plugin-declared strategies.
 	 */
-	hooks?: GlobalHooksState;
+	config?: import("./app-state-config.js").ResolvedAppStateConfig;
 
 	/**
-	 * Extensible — admin module augments this interface to add:
-	 * listViews, formViews, components, blocks, sidebar, dashboard, branding, adminLocale.
+	 * Codegen plugin(s) this module contributes.
+	 * Auto-extracted by codegen from modules.ts during the pre-pass.
+	 * Excluded from module merge — only used at codegen time.
+	 */
+	plugin?:
+		| import("#questpie/cli/codegen/types.js").CodegenPlugin
+		| import("#questpie/cli/codegen/types.js").CodegenPlugin[];
+
+	/**
+	 * Extensible — plugins add category keys via declaration merging
+	 * (views, components, blocks, etc.)
 	 */
 	[key: string]: unknown;
+}
+
+/**
+ * Relaxed module input accepted by `createApp()`.
+ *
+ * Generated modules expose narrow record interfaces without string index
+ * signatures. Those remain structurally valid module inputs at runtime, but
+ * they are not assignable to `ModuleDefinition` directly. `createApp()`
+ * accepts this looser shape and normalizes it internally before merging.
+ */
+export interface AppModuleInput {
+	/** Unique module name (e.g. "questpie-starter", "questpie-admin"). */
+	name: string;
+
+	/** Dependency modules — resolved depth-first before this module. */
+	modules?: readonly AppModuleInput[];
+
+	/**
+	 * Extensible module payload.
+	 * Known keys (collections, routes, config, etc.) are interpreted at runtime.
+	 */
+	[key: string]: unknown;
+}
+
+// ============================================================================
+// App Config Input — composite config/app.ts type
+// ============================================================================
+
+/**
+ * Input type for `config/app.ts` — a composite config file that consolidates
+ * locale, access, hooks, and context resolver into a single file.
+ *
+ * Used with `appConfig()` factory for type inference.
+ *
+ * @example
+ * ```ts
+ * // config/app.ts
+ * import { appConfig } from "questpie";
+ *
+ * export default appConfig({
+ *   locale: { locales: [{ code: "en" }, { code: "sk" }], defaultLocale: "en" },
+ *   access: { read: true, create: true, update: true, delete: true },
+ *   hooks: { collections: [...], globals: [...] },
+ *   context: async ({ session }) => ({ role: session?.user?.role ?? "guest" }),
+ * });
+ * ```
+ */
+export interface AppConfigInput {
+	locale?: LocaleConfig;
+	access?: CollectionAccess;
+	hooks?: import("#questpie/server/config/global-hooks-types.js").GlobalHooksInput;
+	context?: ContextResolver;
 }
 
 // ============================================================================
@@ -302,7 +360,7 @@ export type RuntimeConfigInput = Partial<Pick<RuntimeConfig, "app" | "db">> &
  */
 export interface AppDefinition {
 	/** Modules from `modules.ts` — static module imports. */
-	modules?: ModuleDefinition[];
+	modules?: readonly AppModuleInput[];
 
 	/** Collections discovered from `collections/` directory. */
 	collections?: Record<string, AnyCollectionOrBuilder>;
@@ -329,7 +387,7 @@ export interface AppDefinition {
 	/** Email templates discovered from `emails/` directory. */
 	emailTemplates?: Record<
 		string,
-		import("#questpie/server/integrated/mailer/index.js").EmailTemplateDefinition<
+		import("#questpie/server/modules/core/integrated/mailer/template.js").EmailTemplateDefinition<
 			any,
 			any
 		>
@@ -346,9 +404,6 @@ export interface AppDefinition {
 
 	/** Default access rules from `access.ts`. */
 	defaultAccess?: CollectionAccess;
-
-	/** Context resolver from `context.ts`. */
-	contextResolver?: ContextResolver;
 
 	/**
 	 * Messages from `messages/` directory, keyed by locale.
@@ -427,9 +482,6 @@ export interface AppConfig {
 
 	/** Global lifecycle hooks. */
 	hooks?: GlobalHooksState;
-
-	/** Context resolver for extending request context. */
-	contextResolver?: ContextResolver;
 
 	/** I18n translations config (backend messages). */
 	translations?: TranslationsConfig;
@@ -526,9 +578,7 @@ export type ExtractFromModule<M, K extends string> = (M extends {
 	modules: infer Sub extends readonly any[];
 }
 	? ExtractFromModuleArray<Sub, K>
-	: // biome-ignore lint/complexity/noBannedTypes: empty object needed for intersection base
-		{}) &
-	// biome-ignore lint/complexity/noBannedTypes: empty object used as intersection identity
+	: {}) &
 	(K extends keyof M ? (M[K] extends Record<string, any> ? M[K] : {}) : {});
 
 /**
@@ -545,8 +595,7 @@ export type ExtractFromModuleArray<
 	K extends string,
 > = A extends readonly [infer First, ...infer Rest]
 	? ExtractFromModule<First, K> & ExtractFromModuleArray<Rest, K>
-	: // biome-ignore lint/complexity/noBannedTypes: empty object needed for tuple base case
-		{};
+	: {};
 
 /**
  * Extract property `K` from a config type's `modules` array.
@@ -568,5 +617,4 @@ export type ExtractModulesProperty<Config, K extends string> = Config extends {
 	modules: infer M extends readonly any[];
 }
 	? ExtractFromModuleArray<M, K>
-	: // biome-ignore lint/complexity/noBannedTypes: empty object needed for config without modules
-		{};
+	: {};

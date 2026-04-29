@@ -8,11 +8,19 @@
 "use client";
 
 import * as React from "react";
+
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
+
 import type { FieldInstance } from "../../builder/field/field.js";
-import { useResolveText } from "../../i18n/hooks.js";
+import { useResolveText, useTranslation } from "../../i18n/hooks.js";
 import { selectAdmin, useAdminStore } from "../../runtime/provider.js";
 import { buildFieldDefinitionsFromMetadata } from "../../utils/build-field-definitions-from-schema.js";
+import { useLazyComponent } from "../../utils/use-lazy-component.js";
+import {
+	FieldLayoutRenderer,
+	type FieldLayoutContext,
+} from "../layout/field-layout-renderer.js";
+import { Skeleton } from "../ui/skeleton.js";
 
 // ============================================================================
 // Types
@@ -33,6 +41,7 @@ export function BlockFieldsRenderer({
 	blockId,
 	blockSchema,
 }: BlockFieldsRendererProps) {
+	const { t } = useTranslation();
 	const admin = useAdminStore(selectAdmin);
 
 	// Convert block field metadata to field definitions with component references
@@ -47,11 +56,38 @@ export function BlockFieldsRenderer({
 		);
 	}, [blockSchema?.fields, admin]);
 
+	const resolveText = useResolveText();
+
 	if (Object.keys(blockFields).length === 0) {
 		return (
-			<div className="text-center text-sm text-muted-foreground py-4">
-				This block has no editable fields.
+			<div className="text-muted-foreground py-4 text-center text-sm">
+				{t("blocks.noEditableFields")}
 			</div>
+		);
+	}
+
+	// When form layout is defined, use the shared layout renderer
+	if (blockSchema.form?.fields?.length) {
+		const layoutCtx: FieldLayoutContext = {
+			renderField: (fieldName) => {
+				const fieldDef = blockFields[fieldName];
+				if (!fieldDef) return null;
+				return (
+					<BlockField
+						key={`${blockId}:${fieldName}`}
+						name={fieldName}
+						blockId={blockId}
+						definition={fieldDef}
+					/>
+				);
+			},
+			resolveText: (text, fallback) => resolveText(text, fallback),
+		};
+		return (
+			<FieldLayoutRenderer
+				items={blockSchema.form.fields as any}
+				ctx={layoutCtx}
+			/>
 		);
 	}
 
@@ -80,6 +116,16 @@ type BlockFieldProps = {
 	definition: FieldInstance;
 };
 
+function BlockFieldSkeleton({ type }: { type?: string }) {
+	const isLarge = type === "blocks" || type === "json" || type === "richText";
+	return (
+		<div className="space-y-2" aria-busy="true">
+			<Skeleton variant="text" className="h-4 w-24" />
+			<Skeleton className={isLarge ? "h-40 w-full" : "h-10 w-full"} />
+		</div>
+	);
+}
+
 function BlockField({ name, blockId, definition }: BlockFieldProps) {
 	const resolveText = useResolveText();
 	const options = (definition["~options"] || {}) as Record<string, any>;
@@ -95,14 +141,17 @@ function BlockField({ name, blockId, definition }: BlockFieldProps) {
 	const scopedName = `content._values.${blockId}.${name}`;
 
 	// Check if field has a registered component
-	const FieldComponent = definition.component as
-		| React.ComponentType<any>
-		| undefined;
+	const { Component: FieldComponent, loading: componentLoading } =
+		useLazyComponent(definition.component);
+
+	if (componentLoading) {
+		return <BlockFieldSkeleton type={fieldType} />;
+	}
 
 	// All fields should have a registered component (registry-first)
 	if (!FieldComponent) {
 		return (
-			<div className="text-sm text-destructive">
+			<div className="text-destructive text-sm">
 				No component registered for field type: {fieldType}
 			</div>
 		);

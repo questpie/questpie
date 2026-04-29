@@ -1,53 +1,53 @@
 {
-  "operations": [
-    {
-      "type": "remove",
-      "path": "ddl.column__COLON__public__DOT__appointments__DOT__displayTitle",
-      "timestamp": "2026-03-07T13:51:42.689Z",
-      "migrationId": "fancyOrangeTiger20260307T135142"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__navigation",
-      "value": {
-        "type": "jsonb",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Blog\",\"href\":\"/blog\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
-        "generated": null,
-        "identity": null,
-        "name": "navigation",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "site_settings_i18n"
-      },
-      "timestamp": "2026-03-07T13:51:42.689Z",
-      "migrationId": "fancyOrangeTiger20260307T135142"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__navigation",
-      "value": {
-        "type": "jsonb",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Blog\",\"href\":\"/blog\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
-        "generated": null,
-        "identity": null,
-        "name": "navigation",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "site_settings_i18n_versions"
-      },
-      "timestamp": "2026-03-07T13:51:42.689Z",
-      "migrationId": "fancyOrangeTiger20260307T135142"
-    }
-  ],
-  "metadata": {
-    "migrationId": "fancyOrangeTiger20260307T135142",
-    "timestamp": "2026-03-07T13:51:42.730Z",
-    "prevId": "00000000-0000-0000-0000-000000000000"
-  }
+	"operations": [
+		{
+			"type": "remove",
+			"path": "ddl.column__COLON__public__DOT__appointments__DOT__displayTitle",
+			"timestamp": "2026-03-07T13:51:42.689Z",
+			"migrationId": "fancyOrangeTiger20260307T135142"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__navigation",
+			"value": {
+				"type": "jsonb",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Blog\",\"href\":\"/blog\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
+				"generated": null,
+				"identity": null,
+				"name": "navigation",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "site_settings_i18n"
+			},
+			"timestamp": "2026-03-07T13:51:42.689Z",
+			"migrationId": "fancyOrangeTiger20260307T135142"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__navigation",
+			"value": {
+				"type": "jsonb",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Blog\",\"href\":\"/blog\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
+				"generated": null,
+				"identity": null,
+				"name": "navigation",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "site_settings_i18n_versions"
+			},
+			"timestamp": "2026-03-07T13:51:42.689Z",
+			"migrationId": "fancyOrangeTiger20260307T135142"
+		}
+	],
+	"metadata": {
+		"migrationId": "fancyOrangeTiger20260307T135142",
+		"timestamp": "2026-03-07T13:51:42.730Z",
+		"prevId": "00000000-0000-0000-0000-000000000000"
+	}
 }

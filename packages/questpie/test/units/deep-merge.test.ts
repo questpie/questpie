@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { deepMerge } from "../../src/shared/utils/data-utils.js";
 
 describe("deepMerge", () => {

@@ -1,6 +1,7 @@
 import { Icon } from "@iconify/react";
 import type * as React from "react";
 import { useState } from "react";
+
 import { useResolveText } from "../i18n/hooks";
 import type { I18nText } from "../i18n/types";
 import { cn } from "../lib/utils";
@@ -67,7 +68,7 @@ export function LocaleSwitcher({
 
 	if (!hasResolvedValue) return null;
 
-	const codeLabel = currentLocale.code.toUpperCase();
+	const codeLabel = currentLocale.code;
 	const nameLabel = currentLocale.label
 		? resolveText(currentLocale.label)
 		: codeLabel;
@@ -81,9 +82,9 @@ export function LocaleSwitcher({
 		case "both":
 			labelElement = (
 				<span className="flex items-center gap-1">
-					<span className="uppercase tracking-wide">{codeLabel}</span>
+					<span className="font-chrome chrome-meta">{codeLabel}</span>
 					{currentLocale.label && (
-						<span className="font-normal text-muted-foreground">
+						<span className="text-muted-foreground font-normal">
 							{resolveText(currentLocale.label)}
 						</span>
 					)}
@@ -93,18 +94,18 @@ export function LocaleSwitcher({
 		case "code":
 		default:
 			labelElement = (
-				<span className="uppercase tracking-wide">{codeLabel}</span>
+				<span className="font-chrome chrome-meta">{codeLabel}</span>
 			);
 			break;
 	}
 
 	const baseClassName = cn(
-		"inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground",
+		"item-surface border-border bg-secondary text-secondary-foreground inline-flex min-h-5 items-center gap-1 px-2 py-0.5 text-xs font-medium",
 		className,
 	);
 	const interactiveClassName = cn(
 		baseClassName,
-		"cursor-pointer transition-colors hover:bg-muted focus:outline-none focus:ring-1 focus:ring-ring",
+		"hover:bg-accent hover:text-accent-foreground focus:ring-ring cursor-pointer transition-colors focus:ring-1 focus:outline-none",
 	);
 	const ariaLabel = `Switch locale (current: ${nameLabel})`;
 
@@ -114,7 +115,7 @@ export function LocaleSwitcher({
 				<img
 					src={getLocaleFlagUrl(resolvedValue)}
 					alt={resolvedValue}
-					className="h-2.5 w-3.5 rounded-[1px] object-cover"
+					className="image-outline h-2.5 w-3.5 rounded-[1px] object-cover"
 					onError={() => setImgError(true)}
 				/>
 			)}
@@ -175,13 +176,15 @@ export function LocaleSwitcher({
 							<img
 								src={getLocaleFlagUrl(locale.code)}
 								alt={locale.code}
-								className="h-2.5 w-3.5 rounded-[1px] object-cover"
+								className="image-outline h-2.5 w-3.5 rounded-[1px] object-cover"
 								onError={(event) => {
 									event.currentTarget.style.display = "none";
 								}}
 							/>
 						)}
-						<span className="uppercase font-medium">{locale.code}</span>
+						<span className="font-chrome chrome-meta font-medium">
+							{locale.code}
+						</span>
 						{locale.label && (
 							<span className="text-muted-foreground">
 								{resolveText(locale.label)}

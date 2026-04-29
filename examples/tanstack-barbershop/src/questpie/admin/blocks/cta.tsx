@@ -6,6 +6,7 @@
  */
 
 import { Icon } from "@iconify/react";
+
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -34,13 +35,13 @@ export function CTARenderer({ values }: BlockProps<"cta">) {
 
 	return (
 		<section className={cn("px-6", sizeStyles, variantStyles.section)}>
-			<div className="container max-w-3xl mx-auto text-center">
-				<h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-6">
+			<div className="container mx-auto max-w-3xl text-center">
+				<h2 className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
 					{values.title}
 				</h2>
 
 				{values.description && (
-					<p className="text-lg opacity-90 mb-10 max-w-2xl mx-auto">
+					<p className="mx-auto mb-10 max-w-2xl text-lg opacity-90">
 						{values.description}
 					</p>
 				)}
@@ -55,9 +56,10 @@ export function CTARenderer({ values }: BlockProps<"cta">) {
 						)}
 					>
 						{values.buttonText}
-						<Icon icon="ph:arrow-right-bold"
+						<Icon
+							icon="ph:arrow-right-bold"
 							className="size-5 transition-transform group-hover:translate-x-1"
-						 />
+						/>
 					</a>
 				)}
 			</div>

@@ -6,7 +6,25 @@
 
 import { notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+
 import { app, createServerContext } from "@/lib/server-helpers";
+
+/**
+ * Recursively narrows `unknown` to `Record<string, {}>` so return types
+ * satisfy TanStack Start's deep `extends {}` constraint on ServerFn results.
+ * json/blocks/richText columns are typed as `unknown` by drizzle but are
+ * always JSON objects at runtime.
+ * Preserves Date, RegExp, and other builtins as-is.
+ */
+type JsonSafe<T> = unknown extends T
+	? Record<string, {}>
+	: T extends Date | RegExp | Function
+		? T
+		: T extends readonly (infer U)[]
+			? JsonSafe<U>[]
+			: T extends object
+				? { [K in keyof T]: JsonSafe<T[K]> }
+				: T;
 
 // ============================================================================
 // Cities
@@ -14,7 +32,7 @@ import { app, createServerContext } from "@/lib/server-helpers";
 
 export const getCities = createServerFn({ method: "GET" }).handler(async () => {
 	const ctx = await createServerContext();
-	const result = await app.api.collections.cities.find(
+	const result = await app.collections.cities.find(
 		{
 			where: { isActive: true },
 			orderBy: { name: "asc" },
@@ -28,7 +46,7 @@ export const getCityBySlug = createServerFn({ method: "GET" })
 	.inputValidator((data: { slug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const result = await app.api.collections.cities.find(
+		const result = await app.collections.cities.find(
 			{
 				where: { slug: data.slug },
 				limit: 1,
@@ -48,7 +66,7 @@ export const getSiteSettings = createServerFn({ method: "GET" })
 	.inputValidator((data: { citySlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const cityResult = await app.api.collections.cities.find(
+		const cityResult = await app.collections.cities.find(
 			{
 				where: { slug: data.citySlug },
 				limit: 1,
@@ -58,7 +76,7 @@ export const getSiteSettings = createServerFn({ method: "GET" })
 		const city = cityResult.docs[0];
 		if (!city) return null;
 
-		const settings = await app.api.globals.site_settings.get(
+		const settings = await app.globals.site_settings.get(
 			{ scope: city.id, with: { logo: true, favicon: true, ogImage: true } },
 			ctx,
 		);
@@ -73,7 +91,7 @@ export const getHomepage = createServerFn({ method: "GET" })
 	.inputValidator((data: { citySlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const cityResult = await app.api.collections.cities.find(
+		const cityResult = await app.collections.cities.find(
 			{ where: { slug: data.citySlug }, limit: 1 },
 			ctx,
 		);
@@ -81,32 +99,33 @@ export const getHomepage = createServerFn({ method: "GET" })
 		if (!city) throw notFound();
 
 		// Try "home" then "index"
-		let page = await app.api.collections.pages.findOne(
+		let page = await app.collections.pages.findOne(
 			{ where: { slug: "home", city: city.id, isPublished: true } },
 			ctx,
 		);
 		if (!page) {
-			page = await app.api.collections.pages.findOne(
+			page = await app.collections.pages.findOne(
 				{ where: { slug: "index", city: city.id, isPublished: true } },
 				ctx,
 			);
 		}
 
-		return { page };
+		const result = { page };
+		return result as JsonSafe<typeof result>;
 	});
 
 export const getPageBySlug = createServerFn({ method: "GET" })
 	.inputValidator((data: { citySlug: string; pageSlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const cityResult = await app.api.collections.cities.find(
+		const cityResult = await app.collections.cities.find(
 			{ where: { slug: data.citySlug }, limit: 1 },
 			ctx,
 		);
 		const city = cityResult.docs[0];
 		if (!city) throw notFound();
 
-		const page = await app.api.collections.pages.findOne(
+		const page = await app.collections.pages.findOne(
 			{
 				where: {
 					slug: data.pageSlug,
@@ -117,7 +136,8 @@ export const getPageBySlug = createServerFn({ method: "GET" })
 			ctx,
 		);
 
-		return { page };
+		const result = { page };
+		return result as JsonSafe<typeof result>;
 	});
 
 // ============================================================================
@@ -130,7 +150,7 @@ export const getNewsList = createServerFn({ method: "GET" })
 	)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const cityResult = await app.api.collections.cities.find(
+		const cityResult = await app.collections.cities.find(
 			{ where: { slug: data.citySlug }, limit: 1 },
 			ctx,
 		);
@@ -145,7 +165,7 @@ export const getNewsList = createServerFn({ method: "GET" })
 			where.category = data.category;
 		}
 
-		const result = await app.api.collections.news.find(
+		const result = await app.collections.news.find(
 			{
 				where,
 				limit: data.limit || 20,
@@ -153,21 +173,22 @@ export const getNewsList = createServerFn({ method: "GET" })
 			},
 			ctx,
 		);
-		return { news: result.docs };
+		const out = { news: result.docs };
+		return out as JsonSafe<typeof out>;
 	});
 
 export const getNewsBySlug = createServerFn({ method: "GET" })
 	.inputValidator((data: { citySlug: string; newsSlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const cityResult = await app.api.collections.cities.find(
+		const cityResult = await app.collections.cities.find(
 			{ where: { slug: data.citySlug }, limit: 1 },
 			ctx,
 		);
 		const city = cityResult.docs[0];
 		if (!city) throw notFound();
 
-		const article = await app.api.collections.news.findOne(
+		const article = await app.collections.news.findOne(
 			{
 				where: {
 					slug: data.newsSlug,
@@ -180,7 +201,8 @@ export const getNewsBySlug = createServerFn({ method: "GET" })
 		);
 
 		if (!article) throw notFound();
-		return { article };
+		const out = { article };
+		return out as JsonSafe<typeof out>;
 	});
 
 // ============================================================================
@@ -191,7 +213,7 @@ export const getAnnouncementsList = createServerFn({ method: "GET" })
 	.inputValidator((data: { citySlug: string; showExpired?: boolean }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const cityResult = await app.api.collections.cities.find(
+		const cityResult = await app.collections.cities.find(
 			{ where: { slug: data.citySlug }, limit: 1 },
 			ctx,
 		);
@@ -203,7 +225,7 @@ export const getAnnouncementsList = createServerFn({ method: "GET" })
 			where.validTo = { gte: new Date() };
 		}
 
-		const result = await app.api.collections.announcements.find(
+		const result = await app.collections.announcements.find(
 			{
 				where,
 				orderBy: { isPinned: "desc", validFrom: "desc" },
@@ -211,7 +233,8 @@ export const getAnnouncementsList = createServerFn({ method: "GET" })
 			},
 			ctx,
 		);
-		return { announcements: result.docs };
+		const out = { announcements: result.docs };
+		return out as JsonSafe<typeof out>;
 	});
 
 // ============================================================================
@@ -224,7 +247,7 @@ export const getDocumentsList = createServerFn({ method: "GET" })
 	)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const cityResult = await app.api.collections.cities.find(
+		const cityResult = await app.collections.cities.find(
 			{ where: { slug: data.citySlug }, limit: 1 },
 			ctx,
 		);
@@ -236,7 +259,7 @@ export const getDocumentsList = createServerFn({ method: "GET" })
 			where.category = data.category;
 		}
 
-		const result = await app.api.collections.documents.find(
+		const result = await app.collections.documents.find(
 			{
 				where,
 				limit: data.limit || 50,
@@ -256,14 +279,14 @@ export const getContactPageData = createServerFn({ method: "GET" })
 	.inputValidator((data: { citySlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const cityResult = await app.api.collections.cities.find(
+		const cityResult = await app.collections.cities.find(
 			{ where: { slug: data.citySlug }, limit: 1 },
 			ctx,
 		);
 		const city = cityResult.docs[0];
 		if (!city) throw notFound();
 
-		const result = await app.api.collections.contacts.find(
+		const result = await app.collections.contacts.find(
 			{
 				where: { city: city.id },
 				orderBy: { order: "asc" },
@@ -292,14 +315,14 @@ export const submitContactForm = createServerFn({ method: "POST" })
 	)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
-		const cityResult = await app.api.collections.cities.find(
+		const cityResult = await app.collections.cities.find(
 			{ where: { slug: data.citySlug }, limit: 1 },
 			ctx,
 		);
 		const city = cityResult.docs[0];
 		if (!city) throw new Error("City not found");
 
-		await app.api.collections.submissions.create(
+		await app.collections.submissions.create(
 			{
 				city: city.id,
 				name: data.name,

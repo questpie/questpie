@@ -6,6 +6,7 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+
 import { PageRenderer } from "@/components/pages/PageRenderer";
 import { getPage, type PageLoaderData } from "@/lib/getPages.function";
 

@@ -5,9 +5,11 @@
  */
 
 import { describe, expect, test } from "bun:test";
+
 import { pgTable, varchar } from "drizzle-orm/pg-core";
+
 import { createFieldBuilder } from "#questpie/server/fields/builder.js";
-import { builtinFields } from "#questpie/server/fields/builtin/index.js";
+import { builtinFields } from "#questpie/server/modules/core/fields/index.js";
 import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 
 // Mock tables for testing

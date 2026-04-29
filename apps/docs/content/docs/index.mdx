@@ -1,11 +1,11 @@
 ---
-title: Documentation
+title: Overview
 description: One schema. Every output. Backend-first TypeScript framework with schema-driven codegen.
 ---
 
-# One Schema. Every Output.
+## One Schema. Every Output.
 
-QuestPie is a **backend-first TypeScript framework** where you define your data schema once, and codegen + introspection project it into typed runtimes, APIs, and frontends.
+QUESTPIE is a **backend-first TypeScript framework** where you define your data schema once, and codegen + introspection project it into typed runtimes, APIs, and frontends.
 
 ```text
 Schema → Codegen → Typed Runtime → Projection → Any Frontend
@@ -14,25 +14,30 @@ Schema → Codegen → Typed Runtime → Projection → Any Frontend
 Define collections, routes, jobs, and hooks as plain files. Codegen wires them into a type-safe runtime. The admin panel, client SDK, and OpenAPI spec are all **projections** of the same schema — not separate definitions.
 
 <Callout type="warn">
-**Active Development** — QuestPie follows semantic versioning. The API may change between releases. Full stability is targeted for **v3**.
+	**Active Development** — QUESTPIE follows semantic versioning. The API may
+	change between releases. Full stability is targeted for **v3**.
 </Callout>
 
 ## How It Works
 
 ```ts title="collections/posts.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("posts").fields(({ f }) => ({
-  title: f.text(255).required(),
-  body: f.textarea().localized(),
-  cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
-  author: f.relation("users"),
-  status: f.select(["draft", "published"]),
-  publishedAt: f.date(),
+	title: f.text(255).required(),
+	body: f.textarea().localized(),
+	cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
+	author: f.relation("users"),
+	status: f.select([
+		{ value: "draft", label: "Draft" },
+		{ value: "published", label: "Published" },
+	]),
+	publishedAt: f.date(),
 }));
 ```
 
 This single file defines:
+
 - **Database schema** — Drizzle table with correct column types
 - **API validation** — Zod schemas for create/update
 - **Query operators** — Type-safe `where`, `orderBy`, `with`
@@ -53,15 +58,15 @@ Optional
 
 ## Documentation Sections
 
-- **[Start Here](/docs/start-here)** — What is QuestPie, installation, first app, project structure
+- **[Start Here](/docs/start-here)** — What is QUESTPIE, installation, first app, project structure
 - **[Build Your Backend](/docs/backend)** — Data modeling, rules, business logic, architecture
-- **[Build Your Workspace](/docs/workspace)** — Admin panel setup, views, blocks, actions
-- **[Integrate Frontend](/docs/frontend)** — Client SDK, TanStack Query, realtime, adapters
-- **[Operate in Production](/docs/production)** — Database, auth, storage, email, queue, deployment
-- **[Extend the Platform](/docs/extend)** — Custom fields, views, plugins, modules
+- **[Admin Workspace](/docs/workspace)** — Admin panel setup, views, blocks, actions
+- **[Client Integration](/docs/frontend)** — Client SDK, TanStack Query, realtime, HTTP adapters
+- **[Production](/docs/production)** — Database, auth, storage, email, queue, deployment
+- **[Extend](/docs/extend)** — Custom fields, views, plugins, modules
 - **[Examples](/docs/examples)** — TanStack Barbershop end-to-end walkthrough
-- **[Reference](/docs/reference)** — Complete API reference
+- **[API Reference](/docs/reference)** — Complete API reference
 
 ## Canonical Example
 
-All code examples in these docs come from the [TanStack Barbershop](https://github.com/nicepie/questpie-cms/tree/main/examples/tanstack-barbershop) — a real booking app with 7 collections, server routes, background jobs, email templates, and a full admin dashboard.
+All code examples in these docs come from the [TanStack Barbershop](/docs/examples/barbershop) — a real booking app with 7 collections, server routes, background jobs, email templates, and a full admin dashboard.

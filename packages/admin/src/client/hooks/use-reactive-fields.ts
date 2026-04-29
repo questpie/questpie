@@ -5,9 +5,11 @@
  * Supports batched RPC calls with debouncing.
  */
 
+import { useMutation } from "@tanstack/react-query";
 import type { FieldReactiveSchema } from "questpie/client";
 import * as React from "react";
-import { useFormContext, useWatch } from "react-hook-form";
+import { type UseFormReturn, useFormContext, useWatch } from "react-hook-form";
+
 import { useAdminStore } from "../runtime/provider.js";
 
 // ============================================================================
@@ -51,6 +53,9 @@ export interface UseReactiveFieldsOptions {
 
 	/** Whether to enable reactive updates */
 	enabled?: boolean;
+
+	/** Form instance - pass directly when calling outside FormProvider */
+	form?: UseFormReturn<any>;
 }
 
 /**
@@ -213,16 +218,16 @@ export function useReactiveFields({
 	reactiveConfigs,
 	debounce = 100,
 	enabled = true,
+	form: formProp,
 }: UseReactiveFieldsOptions): UseReactiveFieldsResult {
 	const client = useAdminStore((s) => s.client);
-	const form = useFormContext();
+	const formContext = useFormContext();
+	const form = formProp ?? formContext;
 
 	// State
 	const [fieldStates, setFieldStates] = React.useState<
 		Record<string, ReactiveFieldState>
 	>({});
-	const [isPending, setIsPending] = React.useState(false);
-	const [error, setError] = React.useState<Error | null>(null);
 
 	const requestDescriptors = React.useMemo(
 		() => buildReactiveRequestDescriptors(reactiveConfigs),
@@ -240,7 +245,7 @@ export function useReactiveFields({
 	);
 
 	const watchedDepValues = useWatch({
-		control: form?.control ?? undefined!,
+		control: form?.control as any,
 		name: watchDeps as any,
 		disabled: !form || watchDeps.length === 0,
 	});
@@ -252,7 +257,6 @@ export function useReactiveFields({
 
 	const prevFormValuesRef = React.useRef<Record<string, any>>({});
 	const prevDepValuesRef = React.useRef<Record<string, unknown>>({});
-	const requestIdRef = React.useRef(0);
 	const isInitializedRef = React.useRef(false);
 
 	// Debounce timer ref
@@ -260,83 +264,62 @@ export function useReactiveFields({
 		null,
 	);
 
-	// Fetch reactive states from server
-	const fetchReactiveStates = React.useCallback(
-		async (descriptors: ReactiveRequestDescriptor[] = requestDescriptors) => {
-			if (!enabled || !client || !form || descriptors.length === 0) {
-				return;
+	const mutateRef =
+		React.useRef<(descriptors: ReactiveRequestDescriptor[]) => void>(undefined);
+	const reactiveMutation = useMutation({
+		mutationFn: async (descriptors: ReactiveRequestDescriptor[]) => {
+			if (!client) {
+				return { results: [] as ReactiveFieldResult[] };
 			}
 
 			const formData = (form.getValues() ?? {}) as Record<string, any>;
 			const prevData = prevFormValuesRef.current;
-
 			const requests = descriptors.map((descriptor) => ({
 				field: descriptor.field,
 				type: descriptor.type,
-				formData,
 				siblingData: getSiblingData(formData, descriptor.field),
-				prevData,
 				prevSiblingData: getSiblingData(prevData, descriptor.field),
 			}));
+			return (client.routes as any).batchReactive({
+				collection,
+				type: mode,
+				formData,
+				prevData,
+				requests,
+			});
+		},
+		onSuccess: (response) => {
+			setFieldStates((prevState) => {
+				const nextState: Record<string, ReactiveFieldState> = {
+					...prevState,
+				};
 
-			if (requests.length === 0) {
-				return;
-			}
-
-			const requestId = ++requestIdRef.current;
-
-			setIsPending(true);
-			setError(null);
-
-			try {
-				const response = await (client.routes as any).batchReactive({
-					collection,
-					type: mode,
-					requests,
-				});
-
-				if (requestId !== requestIdRef.current) {
-					return;
-				}
-
-				setFieldStates((prevState) => {
-					const nextState: Record<string, ReactiveFieldState> = {
-						...prevState,
-					};
-
-					for (const result of response.results as ReactiveFieldResult[]) {
-						if (!nextState[result.field]) {
-							nextState[result.field] = {};
-						}
-
-						if (result.type === "compute") {
-							if (result.value !== undefined) {
-								form.setValue(result.field, result.value, {
-									shouldDirty: true,
-									shouldTouch: false,
-									shouldValidate: false,
-								});
-							}
-						} else {
-							nextState[result.field][result.type] = result.value as boolean;
-						}
+				for (const result of response.results as ReactiveFieldResult[]) {
+					if (!nextState[result.field]) {
+						nextState[result.field] = {};
 					}
 
-					return nextState;
-				});
-
-				prevFormValuesRef.current = { ...formData };
-			} catch (err) {
-				console.error("Reactive fields error:", err);
-				setError(err instanceof Error ? err : new Error(String(err)));
-			} finally {
-				if (requestId === requestIdRef.current) {
-					setIsPending(false);
+					if (result.type === "compute") {
+						if (result.value !== undefined) {
+							form.setValue(result.field, result.value, {
+								shouldDirty: true,
+								shouldTouch: false,
+								shouldValidate: true,
+							});
+						}
+					} else {
+						nextState[result.field][result.type] = result.value as boolean;
+					}
 				}
-			}
+
+				return nextState;
+			});
+			prevFormValuesRef.current = {
+				...((form.getValues() ?? {}) as Record<string, any>),
+			};
 		},
-		[enabled, client, requestDescriptors, form, collection, mode],
-	);
+	});
+	mutateRef.current = reactiveMutation.mutate;
 
 	React.useEffect(() => {
 		void collection;
@@ -363,7 +346,7 @@ export function useReactiveFields({
 				...((form.getValues() ?? {}) as Record<string, any>),
 			};
 			prevDepValuesRef.current = currentDepValues;
-			void fetchReactiveStates(requestDescriptors);
+			mutateRef.current?.(requestDescriptors);
 			return;
 		}
 
@@ -401,7 +384,7 @@ export function useReactiveFields({
 		}
 
 		debounceTimerRef.current = setTimeout(() => {
-			void fetchReactiveStates([...affectedDescriptors.values()]);
+			mutateRef.current?.([...affectedDescriptors.values()]);
 		}, debounce);
 
 		return () => {
@@ -417,7 +400,6 @@ export function useReactiveFields({
 		watchDeps,
 		dependencyGraph,
 		debounce,
-		fetchReactiveStates,
 	]);
 
 	React.useEffect(() => {
@@ -428,15 +410,10 @@ export function useReactiveFields({
 		};
 	}, []);
 
-	// Refresh function
-	const refresh = React.useCallback(() => {
-		void fetchReactiveStates(requestDescriptors);
-	}, [fetchReactiveStates, requestDescriptors]);
-
 	return {
 		fieldStates,
-		isPending,
-		error,
-		refresh,
+		isPending: reactiveMutation.isPending,
+		error: reactiveMutation.error ?? null,
+		refresh: () => mutateRef.current?.(requestDescriptors),
 	};
 }

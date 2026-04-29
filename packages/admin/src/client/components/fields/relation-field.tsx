@@ -11,6 +11,7 @@
 import type { QuestpieApp } from "questpie/client";
 import type * as React from "react";
 import { type Control, Controller, useFormContext } from "react-hook-form";
+
 import { useResolveText } from "../../i18n/hooks";
 import { RelationPicker, type RelationPickerProps } from "./relation-picker";
 import { RelationSelect, type RelationSelectProps } from "./relation-select";
@@ -54,9 +55,13 @@ type RelationFieldProps<T extends QuestpieApp> = {
 	locale?: string;
 
 	/**
-	 * Filter options based on form values
+	 * Pre-resolved `where` clause for the relation `find()` call. Reactive
+	 * filters from `f.relation(...).admin({ filter })` or layout
+	 * `props.filter` are resolved by `FieldRenderer` against the live form
+	 * via `/admin/reactive` before they reach this component — by the time
+	 * `filter` lands here it's plain JSON.
 	 */
-	filter?: (formValues: any) => any;
+	filter?: Record<string, unknown>;
 
 	/**
 	 * Is the field required

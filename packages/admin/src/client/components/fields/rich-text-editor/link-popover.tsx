@@ -17,6 +17,7 @@ import {
 	PopoverTitle,
 	PopoverTrigger,
 } from "../../ui/popover";
+import { createLinkAttributes } from "./link-utils";
 
 type LinkPopoverProps = {
 	editor: Editor | null;
@@ -36,11 +37,16 @@ export function LinkPopover({
 }: LinkPopoverProps) {
 	const { t } = useTranslation();
 	const [linkUrl, setLinkUrl] = React.useState("");
+	const prevOpenRef = React.useRef(false);
 
 	React.useEffect(() => {
-		if (!open || !editor) return;
-		const currentLink = editor.getAttributes("link").href as string | undefined;
-		setLinkUrl(currentLink || "");
+		if (open && !prevOpenRef.current && editor) {
+			const currentLink = editor.getAttributes("link").href as
+				| string
+				| undefined;
+			setLinkUrl(currentLink || "");
+		}
+		prevOpenRef.current = open;
 	}, [editor, open]);
 
 	const handleApplyLink = React.useCallback(() => {
@@ -51,15 +57,7 @@ export function LinkPopover({
 			return;
 		}
 
-		editor
-			.chain()
-			.focus()
-			.setLink({
-				href: linkUrl,
-				target: "_blank",
-				rel: "noopener noreferrer",
-			})
-			.run();
+		editor.chain().focus().setLink(createLinkAttributes(linkUrl)).run();
 		onOpenChange(false);
 	}, [editor, linkUrl, onOpenChange]);
 
@@ -78,8 +76,13 @@ export function LinkPopover({
 				</PopoverHeader>
 				<div className="space-y-2">
 					<Input
+						aria-label={t("editor.link")}
+						autoComplete="off"
+						inputMode="url"
+						name="rich-text-link-url"
+						type="text"
 						value={linkUrl}
-						placeholder="https://example.com"
+						placeholder={t("editor.pasteOrTypeLink")}
 						onChange={(event) => setLinkUrl(event.target.value)}
 						onKeyDown={(event) => {
 							if (event.key === "Enter") {

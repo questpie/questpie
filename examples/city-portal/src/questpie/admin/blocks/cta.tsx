@@ -25,13 +25,13 @@ export function CTARenderer({ values }: BlockProps<"cta">) {
 
 	return (
 		<section className={`px-6 py-20 ${variantStyles.section}`}>
-			<div className="container max-w-3xl mx-auto text-center">
-				<h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-6">
+			<div className="container mx-auto max-w-3xl text-center">
+				<h2 className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl">
 					{values.title}
 				</h2>
 
 				{values.description && (
-					<p className="text-lg opacity-90 mb-10 max-w-2xl mx-auto">
+					<p className="mx-auto mb-10 max-w-2xl text-lg opacity-90">
 						{values.description}
 					</p>
 				)}
@@ -39,7 +39,7 @@ export function CTARenderer({ values }: BlockProps<"cta">) {
 				{values.buttonText && (
 					<a
 						href={values.buttonLink || "#"}
-						className={`inline-flex items-center gap-2 px-8 py-3 rounded-md font-semibold transition-colors ${variantStyles.button}`}
+						className={`inline-flex items-center gap-2 rounded-md px-8 py-3 font-semibold transition-colors ${variantStyles.button}`}
 					>
 						{values.buttonText}
 					</a>

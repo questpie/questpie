@@ -55,7 +55,7 @@ grep -r "\"zod\":" packages/*/package.json examples/*/package.json
 # Check drizzle-orm version
 grep -r "\"drizzle-orm\":" packages/*/package.json examples/*/package.json
 
-# Check all critical deps in QuestPie package
+# Check all critical deps in QUESTPIE package
 cat packages/package.json | grep -E "\"(zod|drizzle-orm|better-auth|pg|pg-boss)\":"
 ```
 
@@ -80,11 +80,11 @@ Always use `workspace:*` for internal packages:
 
 ```json
 {
-  "dependencies": {
-    "questpie": "workspace:*",
-    "@questpie/admin": "workspace:*",
-    "@questpie/tanstack-query": "workspace:*"
-  }
+	"dependencies": {
+		"questpie": "workspace:*",
+		"@questpie/admin": "workspace:*",
+		"@questpie/tanstack-query": "workspace:*"
+	}
 }
 ```
 
@@ -94,7 +94,7 @@ Always use `workspace:*` for internal packages:
 
 ```json
 {
-  "packageManager": "bun@1.3.0"
+	"packageManager": "bun@1.3.0"
 }
 ```
 

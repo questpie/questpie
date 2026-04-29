@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+
 import type { I18nText } from "../../i18n/types";
 
 // =============================================================================
@@ -92,8 +93,9 @@ export interface CheckboxInputProps extends BasePrimitiveProps {
 	indeterminate?: boolean;
 }
 
-export interface CheckboxGroupProps<TValue = string>
-	extends BasePrimitiveProps {
+export interface CheckboxGroupProps<
+	TValue = string,
+> extends BasePrimitiveProps {
 	value: TValue[];
 	onChange: (value: TValue[]) => void;
 	options: SelectOption<TValue>[];

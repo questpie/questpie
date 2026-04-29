@@ -1,4 +1,5 @@
 import { Icon } from "@iconify/react";
+
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -106,7 +107,7 @@ export function NumberInput({
 					step={step}
 					aria-invalid={ariaInvalid}
 					aria-describedby={ariaDescribedBy}
-					className="text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+					className="[appearance:textfield] text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
 				/>
 				<Button
 					type="button"

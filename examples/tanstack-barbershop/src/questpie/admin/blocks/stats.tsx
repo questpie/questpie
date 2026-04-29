@@ -19,24 +19,24 @@ export function StatsRenderer({ values }: BlockProps<"stats">) {
 		<section className="px-6 py-16">
 			<div className="mx-auto max-w-6xl">
 				{values.title && (
-					<h2 className="mb-12 text-3xl font-bold tracking-tight text-center">
+					<h2 className="mb-12 text-center text-3xl font-bold tracking-tight">
 						{values.title}
 					</h2>
 				)}
-				<div className={cn("grid gap-6 grid-cols-1", columnsClass)}>
+				<div className={cn("grid grid-cols-1 gap-6", columnsClass)}>
 					{values.stats?.map((stat, index) => (
 						<div
 							key={index}
-							className="rounded-lg border bg-card p-6 text-center"
+							className="bg-card rounded-lg border p-6 text-center"
 						>
-							<div className="text-4xl font-bold text-foreground mb-2">
+							<div className="text-foreground mb-2 text-4xl font-bold">
 								{stat.value}
 							</div>
-							<div className="text-lg font-medium text-foreground mb-1">
+							<div className="text-foreground mb-1 text-lg font-medium">
 								{stat.label}
 							</div>
 							{stat.description && (
-								<div className="text-sm text-muted-foreground">
+								<div className="text-muted-foreground text-sm">
 									{stat.description}
 								</div>
 							)}

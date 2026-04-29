@@ -6,6 +6,7 @@
  */
 
 import * as React from "react";
+
 import type { DashboardConfig } from "../../builder";
 import { useAdminConfig } from "../../hooks/use-admin-config";
 import { cn } from "../../lib/utils";

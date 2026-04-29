@@ -1,4 +1,5 @@
 import { sql } from "questpie";
+
 import { collection } from "#questpie/factories";
 
 export const appointments = collection("appointments")

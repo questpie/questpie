@@ -8,6 +8,7 @@
 import { Icon } from "@iconify/react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+
 import {
 	Select,
 	SelectContent,
@@ -150,7 +151,7 @@ export function ScopePicker({
 
 	if (error) {
 		return (
-			<div className={cn("text-xs text-destructive", className)}>
+			<div className={cn("text-destructive text-xs", className)}>
 				Failed to load options
 			</div>
 		);
@@ -159,7 +160,7 @@ export function ScopePicker({
 	return (
 		<div className={cn("space-y-1.5", className)}>
 			{label && !compact && (
-				<span className="text-xs font-medium text-muted-foreground">
+				<span className="text-muted-foreground text-xs font-medium">
 					{label}
 				</span>
 			)}
@@ -184,7 +185,7 @@ export function ScopePicker({
 							<span className="flex items-center gap-2">
 								<Icon
 									icon="ph:globe"
-									className="size-4 text-muted-foreground"
+									className="text-muted-foreground size-4"
 								/>
 								{clearText}
 							</span>
@@ -204,7 +205,7 @@ export function ScopePicker({
 						</SelectItem>
 					))}
 					{options.length === 0 && (
-						<div className="px-2 py-1.5 text-xs text-muted-foreground">
+						<div className="text-muted-foreground px-2 py-1.5 text-xs">
 							No options available
 						</div>
 					)}

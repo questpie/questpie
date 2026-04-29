@@ -190,16 +190,16 @@
 	}
 
 	html {
-		@apply font-sans antialiased scroll-smooth;
+		@apply scroll-smooth font-sans antialiased;
 	}
 
 	body {
-		@apply font-sans bg-background text-foreground;
+		@apply bg-background text-foreground font-sans;
 	}
 
 	/* Focus styles */
 	:focus-visible {
-		@apply outline-2 outline-offset-2 outline-ring;
+		@apply outline-ring outline-2 outline-offset-2;
 	}
 
 	/* Selection */
@@ -313,19 +313,19 @@
 }
 
 .prose h1 {
-	@apply text-4xl font-bold tracking-tight mb-6;
+	@apply mb-6 text-4xl font-bold tracking-tight;
 }
 
 .prose h2 {
-	@apply text-3xl font-bold tracking-tight mb-4;
+	@apply mb-4 text-3xl font-bold tracking-tight;
 }
 
 .prose h3 {
-	@apply text-2xl font-semibold mb-3;
+	@apply mb-3 text-2xl font-semibold;
 }
 
 .prose h4 {
-	@apply text-xl font-semibold mb-2;
+	@apply mb-2 text-xl font-semibold;
 }
 
 .prose p {
@@ -350,23 +350,23 @@
 }
 
 .prose a {
-	@apply text-foreground underline underline-offset-4 hover:text-muted-foreground transition-colors;
+	@apply text-foreground hover:text-muted-foreground underline underline-offset-4 transition-colors;
 }
 
 .prose blockquote {
-	@apply border-l-4 border-border pl-4 italic text-muted-foreground my-4;
+	@apply border-border text-muted-foreground my-4 border-l-4 pl-4 italic;
 }
 
 .prose code {
-	@apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono;
+	@apply bg-muted rounded px-1.5 py-0.5 font-mono text-sm;
 }
 
 .prose pre {
-	@apply bg-muted p-4 rounded-lg overflow-x-auto my-4;
+	@apply bg-muted my-4 overflow-x-auto rounded-lg p-4;
 }
 
 .prose img {
-	@apply rounded-lg my-6;
+	@apply my-6 rounded-lg;
 }
 
 /* ============================================================================
@@ -375,7 +375,7 @@
 
 /* Container */
 .container {
-	@apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+	@apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
 }
 
 /* Section spacing */
@@ -393,7 +393,7 @@
 
 /* Cards with hover effect */
 .card-hover {
-	@apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
+	@apply transition-all duration-200 hover:-translate-y-1 hover:shadow-lg;
 }
 
 /* Button base styles (extend shadcn) */

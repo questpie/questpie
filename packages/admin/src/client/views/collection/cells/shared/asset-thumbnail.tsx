@@ -10,6 +10,7 @@
 
 import { Icon } from "@iconify/react";
 import type * as React from "react";
+
 import { Button } from "../../../../components/ui/button";
 import { cn } from "../../../../lib/utils";
 
@@ -122,10 +123,15 @@ export function AssetThumbnail({
 	if (typeof asset === "string") {
 		return (
 			<span
-				className="font-mono text-xs text-muted-foreground truncate max-w-[100px]"
+				className={cn(
+					"qa-asset-thumbnail text-muted-foreground inline-flex items-center gap-2",
+					className,
+				)}
 				title={asset}
 			>
-				{asset.slice(0, 8)}...
+				<span className="bg-muted border-border-subtle flex size-8 shrink-0 items-center justify-center rounded border">
+					<Icon icon="ph:file" className="size-4" />
+				</span>
 			</span>
 		);
 	}
@@ -142,73 +148,51 @@ export function AssetThumbnail({
 	const isAudioType = isAudio(mimeType);
 	const fileIcon = getFileIcon(mimeType);
 
-	// No URL means no preview
-	if (!url) {
-		if (assetObj.id) {
-			return (
-				<span className="font-mono text-xs text-muted-foreground">
-					{String(assetObj.id).slice(0, 8)}...
-				</span>
-			);
-		}
-		return <span className="text-muted-foreground">-</span>;
-	}
-
 	// ========== SM SIZE (32px) - Table cells ==========
 	if (size === "sm") {
 		const assetId = assetObj.id as string | undefined;
 		const handleClick = onClick && assetId ? () => onClick(assetId) : undefined;
 
-		if (isImageType) {
-			const containerProps = handleClick
-				? {
-						role: "button" as const,
-						tabIndex: 0 as const,
-						onClick: handleClick,
-						onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								handleClick();
-							}
-						},
-					}
-				: {};
-			return (
-				<div
-					className={cn(
-						"qa-asset-thumbnail flex items-center gap-2",
-						onClick && "cursor-pointer hover:opacity-80",
-						className,
-					)}
-					{...containerProps}
-				>
+		const containerProps = handleClick
+			? {
+					role: "button" as const,
+					tabIndex: 0 as const,
+					onClick: handleClick,
+					onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							handleClick();
+						}
+					},
+				}
+			: {};
+
+		return (
+			<div
+				className={cn(
+					"qa-asset-thumbnail flex items-center gap-2",
+					onClick && "cursor-pointer hover:opacity-80",
+					className,
+				)}
+				{...containerProps}
+			>
+				{isImageType && url ? (
 					<img
 						src={url}
 						alt={filename || "Asset"}
-						className="size-8 rounded object-cover border"
+						className="image-outline size-8 rounded object-cover"
 					/>
-					{showFilename && filename && (
-						<span className="text-xs truncate max-w-[100px]" title={filename}>
-							{filename}
-						</span>
-					)}
-				</div>
-			);
-		}
-
-		// Non-image files
-		if (showFilename && filename) {
-			return (
-				<span className="text-sm truncate max-w-[150px]" title={filename}>
-					{filename}
-				</span>
-			);
-		}
-
-		return (
-			<span className="font-mono text-xs text-muted-foreground">
-				{String(assetObj.id || "").slice(0, 8)}...
-			</span>
+				) : (
+					<span className="bg-muted border-border-subtle flex size-8 shrink-0 items-center justify-center rounded border">
+						<Icon icon={fileIcon} className="text-muted-foreground size-4" />
+					</span>
+				)}
+				{showFilename && filename && (
+					<span className="max-w-[120px] truncate text-xs" title={filename}>
+						{filename}
+					</span>
+				)}
+			</div>
 		);
 	}
 
@@ -217,7 +201,7 @@ export function AssetThumbnail({
 		const assetId = assetObj.id as string | undefined;
 		const handleClick = onClick && assetId ? () => onClick(assetId) : undefined;
 
-		if (isImageType) {
+		if (isImageType && url) {
 			const interactiveProps = handleClick
 				? {
 						role: "button" as const,
@@ -243,7 +227,7 @@ export function AssetThumbnail({
 					<img
 						src={url}
 						alt={filename || "Asset"}
-						className="size-10 rounded object-cover border"
+						className="image-outline size-10 rounded object-cover"
 					/>
 				</div>
 			);
@@ -273,8 +257,8 @@ export function AssetThumbnail({
 					)}
 					{...interactiveProps}
 				>
-					<div className="size-10 rounded border bg-muted flex items-center justify-center">
-						<Icon icon={fileIcon} className="size-5 text-muted-foreground" />
+					<div className="bg-muted flex size-10 items-center justify-center rounded border">
+						<Icon icon={fileIcon} className="text-muted-foreground size-5" />
 					</div>
 				</div>
 			);
@@ -285,23 +269,23 @@ export function AssetThumbnail({
 	return (
 		<div
 			className={cn(
-				"qa-asset-thumbnail relative overflow-hidden rounded-lg border bg-muted",
+				"qa-asset-thumbnail bg-muted relative overflow-hidden border",
 				className,
 			)}
 		>
 			{/* Image Preview */}
-			{isImageType && (
+			{isImageType && url && (
 				<div className="relative">
 					<img
 						src={url}
 						alt={alt || filename || "Asset preview"}
-						className="max-h-[400px] w-full object-contain"
+						className="image-outline max-h-[400px] w-full object-contain"
 					/>
 				</div>
 			)}
 
 			{/* Video Preview */}
-			{isVideoType && (
+			{isVideoType && url && (
 				<div className="relative">
 					{showControls ? (
 						<video
@@ -315,8 +299,8 @@ export function AssetThumbnail({
 						</video>
 					) : (
 						<div className="flex flex-col items-center justify-center gap-4 p-12">
-							<Icon icon={fileIcon} className="size-20 text-muted-foreground" />
-							<p className="text-sm text-muted-foreground">
+							<Icon icon={fileIcon} className="text-muted-foreground size-20" />
+							<p className="text-muted-foreground text-sm">
 								{filename || "Video"}
 							</p>
 						</div>
@@ -325,9 +309,9 @@ export function AssetThumbnail({
 			)}
 
 			{/* Audio Preview */}
-			{isAudioType && (
+			{isAudioType && url && (
 				<div className="flex flex-col items-center justify-center gap-4 p-8">
-					<Icon icon={fileIcon} className="size-16 text-muted-foreground" />
+					<Icon icon={fileIcon} className="text-muted-foreground size-16" />
 					{showControls && (
 						<audio
 							src={url}
@@ -335,11 +319,12 @@ export function AssetThumbnail({
 							className="w-full max-w-md"
 							preload="metadata"
 						>
+							<track kind="captions" />
 							Your browser does not support the audio tag.
 						</audio>
 					)}
 					{!showControls && (
-						<p className="text-sm text-muted-foreground">
+						<p className="text-muted-foreground text-sm">
 							{filename || "Audio"}
 						</p>
 					)}
@@ -347,25 +332,30 @@ export function AssetThumbnail({
 			)}
 
 			{/* Other File Types */}
-			{!isImageType && !isVideoType && !isAudioType && (
+			{(!url || (!isImageType && !isVideoType && !isAudioType)) && (
 				<div className="flex flex-col items-center justify-center gap-4 p-12">
-					<Icon icon={fileIcon} className="size-20 text-muted-foreground" />
-					<p className="text-sm text-muted-foreground">{filename || "File"}</p>
+					<Icon icon={fileIcon} className="text-muted-foreground size-20" />
+					<p className="text-muted-foreground text-sm">{filename || "File"}</p>
 				</div>
 			)}
 
 			{/* Open in new tab button (lg size only) */}
-			<div className="absolute right-2 top-2">
-				<Button
-					type="button"
-					variant="secondary"
-					size="icon-sm"
-					nativeButton={false}
-					render={<a href={url} target="_blank" rel="noopener noreferrer" />}
-				>
-					<Icon icon="ph:arrow-square-out-bold" />
-				</Button>
-			</div>
+			{url && (
+				<div className="absolute top-2 right-2">
+					<Button
+						type="button"
+						variant="secondary"
+						size="icon-sm"
+						nativeButton={false}
+						render={
+							// oxlint-disable-next-line jsx-a11y/anchor-has-content -- Button provides the visible content.
+							<a href={url} target="_blank" rel="noopener noreferrer" />
+						}
+					>
+						<Icon icon="ph:arrow-square-out-bold" />
+					</Button>
+				</div>
+			)}
 		</div>
 	);
 }

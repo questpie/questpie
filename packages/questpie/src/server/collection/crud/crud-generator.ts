@@ -1,13 +1,16 @@
 import {
 	and,
+	asc,
 	type Column,
 	count,
+	desc,
 	eq,
 	inArray,
 	type SQL,
 	sql,
 } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
+
 import type {
 	AccessWhere,
 	CollectionBuilderState,
@@ -18,10 +21,8 @@ import type {
 /** Title expression for SQL queries - resolved column or SQL expression */
 type TitleExpressionSQL = SQL | Column | null;
 
-import {
-	indexToSearch,
-	removeFromSearch,
-} from "#questpie/server/collection/crud/integrations/index.js";
+// Search/realtime integrations removed (Phase 3 — QUE-251).
+// Side effects now come from core module global hooks.
 import {
 	buildLocalizedFieldRef,
 	buildOrderByClauses,
@@ -56,14 +57,16 @@ import {
 } from "#questpie/server/collection/crud/shared/field-extraction.js";
 import { getColumn } from "#questpie/server/collection/crud/shared/field-resolver.js";
 import {
-	appendRealtimeChange,
+	executeGlobalCollectionHooks,
+	executeGlobalCollectionTransitionHooks,
+} from "#questpie/server/collection/crud/shared/global-hooks.js";
+import {
 	createHookContext,
 	executeHooks,
 	getDb,
 	mergeI18nRows,
 	normalizeContext,
-	notifyRealtimeChange,
-	onAfterCommit,
+	normalizeJsonbInput,
 	resolveFieldKey,
 	splitLocalizedFields,
 	withTransaction,
@@ -77,6 +80,8 @@ import type {
 	Extras,
 	FindManyOptions,
 	FindOneOptionsBase,
+	GroupedPaginatedResult,
+	GroupByOptions,
 	FindVersionsOptions,
 	OrderBy,
 	PaginatedResult,
@@ -90,7 +95,10 @@ import type {
 } from "#questpie/server/collection/crud/types.js";
 import { createVersionRecord } from "#questpie/server/collection/crud/versioning/index.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
-import { runWithContext } from "#questpie/server/config/context.js";
+import {
+	guardHookRecursion,
+	runWithContext,
+} from "#questpie/server/config/context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { StorageVisibility } from "#questpie/server/config/types.js";
 import { ApiError, parseDatabaseError } from "#questpie/server/errors/index.js";
@@ -103,7 +111,7 @@ import {
 	extractWorkflowFromVersioning,
 	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
-} from "#questpie/server/workflow/config.js";
+} from "#questpie/server/modules/core/workflow/config.js";
 
 export class CRUDGenerator<TState extends CollectionBuilderState> {
 	private readonly workflowConfig: ResolvedWorkflowConfig | undefined;
@@ -127,7 +135,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			i18nFallbackTable: PgTable | null,
 		) => TState["virtuals"],
 		private getTitleExpression?: (context: any) => TitleExpressionSQL,
-		private getVirtualsForVersions?: (context: any) => TState["virtuals"],
+		_getVirtualsForVersions?: (context: any) => TState["virtuals"],
 		private getVirtualsForVersionsWithAliases?: (
 			context: any,
 			i18nVersionsCurrentTable: PgTable | null,
@@ -280,16 +288,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const find = this.wrapWithAppContext(this.createFind());
 		const findOne = this.wrapWithAppContext(this.createFindOne());
 		const updateMany = this.wrapWithAppContext(this.createUpdateMany());
+		const updateBatch = this.wrapWithAppContext(this.createUpdateBatch());
 		const deleteMany = this.wrapWithAppContext(this.createDeleteMany());
 		const restoreById = this.wrapWithAppContext(this.createRestore());
 
 		const crud: CRUD = {
-			find,
+			find: find as CRUD["find"],
 			findOne,
 			count: this.wrapWithAppContext(this.createCount()),
 			create: this.wrapWithAppContext(this.createCreate()),
 			updateById: this.wrapWithAppContext(this.createUpdate()),
 			update: updateMany,
+			updateBatch,
 			deleteById: this.wrapWithAppContext(this.createDelete()),
 			delete: deleteMany,
 			restoreById,
@@ -376,6 +386,22 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		});
 	}
 
+	private normalizeGroupBy(
+		groupBy: FindManyOptions["groupBy"] | undefined,
+	): (GroupByOptions & { order: "asc" | "desc" }) | undefined {
+		if (!groupBy) return undefined;
+		if (typeof groupBy === "string") return { field: groupBy, order: "asc" };
+		if (!groupBy.field) return undefined;
+		return {
+			field: groupBy.field,
+			order: groupBy.order === "desc" ? "desc" : "asc",
+		};
+	}
+
+	private getGroupKey(value: unknown): string {
+		return value === null || value === undefined ? "__empty" : String(value);
+	}
+
 	/**
 	 * Internal find execution - shared logic for find and findOne
 	 * Reduces code duplication between the two methods
@@ -388,7 +414,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		options: FindManyOptions | FindOneOptionsBase,
 		context: CRUDContext,
 		mode: "many" | "one",
-	): Promise<PaginatedResult<T> | T | null> {
+		findOptions?: { skipOutputHooks?: boolean },
+	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T | null> {
 		// Normalize context FIRST to ensure locale defaults are applied
 		const normalized = this.normalizeContext({
 			...context,
@@ -398,6 +425,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 		// Run entire read operation within request-scoped context
 		// This enables implicit getContext<TApp>() calls in hooks (e.g., afterRead prefetch)
+		const _hookDepth = guardHookRecursion();
 		return runWithContext(
 			{
 				app: this.app,
@@ -406,6 +434,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				locale: normalized.locale,
 				accessMode: normalized.accessMode,
 				stage: normalized.stage,
+				_hookDepth,
 			},
 			async () => {
 				// Execute beforeOperation hook
@@ -456,6 +485,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					!!this.workflowConfig &&
 					!!readStage &&
 					readStage !== this.workflowConfig.initialStage;
+				const groupByOptions =
+					mode === "many"
+						? this.normalizeGroupBy((options as FindManyOptions).groupBy)
+						: undefined;
+
+				if (groupByOptions && useStageVersions) {
+					throw ApiError.badRequest(
+						"Grouped find is not supported for workflow stage reads yet",
+					);
+				}
 
 				// Get total count only for 'many' mode (pagination)
 				let totalDocs = 0;
@@ -747,6 +786,110 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					whereClauses.push(searchFilter);
 				}
 
+				let groupRows: Array<{ value: unknown; count: number }> | undefined;
+				let totalGroups: number | undefined;
+
+				if (groupByOptions) {
+					const column = getColumn(readTable, groupByOptions.field);
+					if (!column) {
+						throw ApiError.badRequest(
+							`Cannot group ${this.state.name} by unknown field "${groupByOptions.field}"`,
+						);
+					}
+
+					let totalGroupsQuery = db
+						.select({ count: sql<number>`count(distinct ${column})::int` })
+						.from(readTable);
+					let groupsQuery = db
+						.select({ value: column, count: count() })
+						.from(readTable);
+
+					if (useI18n && i18nCurrentTable) {
+						totalGroupsQuery = totalGroupsQuery.leftJoin(
+							i18nCurrentTable,
+							and(
+								eq(
+									getColumn(i18nCurrentTable, "parentId")!,
+									getColumn(readTable, "id")!,
+								),
+								eq(getColumn(i18nCurrentTable, "locale")!, normalized.locale!),
+							),
+						);
+						groupsQuery = groupsQuery.leftJoin(
+							i18nCurrentTable,
+							and(
+								eq(
+									getColumn(i18nCurrentTable, "parentId")!,
+									getColumn(readTable, "id")!,
+								),
+								eq(getColumn(i18nCurrentTable, "locale")!, normalized.locale!),
+							),
+						);
+
+						if (needsFallback && i18nFallbackTable) {
+							totalGroupsQuery = totalGroupsQuery.leftJoin(
+								i18nFallbackTable,
+								and(
+									eq(
+										getColumn(i18nFallbackTable, "parentId")!,
+										getColumn(readTable, "id")!,
+									),
+									eq(
+										getColumn(i18nFallbackTable, "locale")!,
+										normalized.defaultLocale!,
+									),
+								),
+							);
+							groupsQuery = groupsQuery.leftJoin(
+								i18nFallbackTable,
+								and(
+									eq(
+										getColumn(i18nFallbackTable, "parentId")!,
+										getColumn(readTable, "id")!,
+									),
+									eq(
+										getColumn(i18nFallbackTable, "locale")!,
+										normalized.defaultLocale!,
+									),
+								),
+							);
+						}
+					}
+
+					if (whereClauses.length > 0) {
+						totalGroupsQuery = totalGroupsQuery.where(and(...whereClauses));
+						groupsQuery = groupsQuery.where(and(...whereClauses));
+					}
+
+					const manyOptions = options as FindManyOptions;
+					const groupLimit = manyOptions.limit ?? totalDocs;
+					const groupOffset = manyOptions.offset ?? 0;
+					const totalGroupRows = await totalGroupsQuery;
+					totalGroups = totalGroupRows[0]?.count ?? 0;
+					groupsQuery = groupsQuery
+						.groupBy(column)
+						.orderBy(
+							groupByOptions.order === "desc" ? desc(column) : asc(column),
+						);
+					if (groupLimit !== undefined) {
+						groupsQuery = groupsQuery.limit(groupLimit);
+					}
+					if (groupOffset !== undefined) {
+						groupsQuery = groupsQuery.offset(groupOffset);
+					}
+
+					const selectedGroupRows = await groupsQuery;
+					groupRows = selectedGroupRows;
+					const groupValues = selectedGroupRows.map(
+						(row: { value: unknown }) => row.value,
+					);
+					if (groupValues.length === 0) {
+						whereClauses.push(sql`1 = 0`);
+					} else {
+						whereClauses.push(inArray(column, groupValues as any[]));
+					}
+				}
+
 				if (whereClauses.length > 0) {
 					query = query.where(and(...whereClauses));
 				}
@@ -770,10 +913,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					query = query.limit(1);
 				} else {
 					const manyOptions = options as FindManyOptions;
-					if (manyOptions.limit !== undefined) {
+					if (!groupByOptions && manyOptions.limit !== undefined) {
 						query = query.limit(manyOptions.limit);
 					}
-					if (manyOptions.offset !== undefined) {
+					if (!groupByOptions && manyOptions.offset !== undefined) {
 						query = query.offset(manyOptions.offset);
 					}
 				}
@@ -796,25 +939,37 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					await this.resolveRelations(rows, options.with, normalized);
 				}
 
-				// Filter fields based on field-level read access
-				for (const row of rows) {
-					await this.filterFieldsForRead(row, normalized);
-					await this.runFieldOutputHooks(row, "read", normalized, db);
-				}
+				// Filter fields and run output hooks in parallel per row.
+				// `skipOutputHooks` is set by `_executeUpdate`'s in-tx refetch to
+				// avoid recursing into other collections (e.g. blocks prefetch)
+				// while a tx is open — those calls would inherit `db: tx` and
+				// serialize through the open tx connection, deadlocking under
+				// parallel load. Output hooks + afterRead are re-run by the
+				// caller after the tx commits.
+				await Promise.all(
+					rows.map(async (row: any) => {
+						await this.filterFieldsForRead(row, normalized);
+						if (!findOptions?.skipOutputHooks) {
+							await this.runFieldOutputHooks(row, "read", normalized, db);
+						}
+					}),
+				);
 
-				// Execute afterRead hooks
-				if (this.state.hooks?.afterRead) {
-					for (const row of rows) {
-						await this.executeHooks(
-							this.state.hooks.afterRead,
-							this.createHookContext({
-								data: row,
-								operation: "read",
-								context: normalized,
-								db,
-							}),
-						);
-					}
+				// Execute afterRead hooks in parallel per row
+				if (this.state.hooks?.afterRead && !findOptions?.skipOutputHooks) {
+					await Promise.all(
+						rows.map((row: any) =>
+							this.executeHooks(
+								this.state.hooks.afterRead,
+								this.createHookContext({
+									data: row,
+									operation: "read",
+									context: normalized,
+									db,
+								}),
+							),
+						),
+					);
 				}
 
 				// Return based on mode
@@ -824,8 +979,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Construct paginated result for 'many' mode
 				const manyOptions = options as FindManyOptions;
-				const limit = manyOptions.limit ?? totalDocs;
-				const totalPages = limit > 0 ? Math.ceil(totalDocs / limit) : 1;
+				const paginatedTotal = groupByOptions ? (totalGroups ?? 0) : totalDocs;
+				const limit = manyOptions.limit ?? paginatedTotal;
+				const totalPages = limit > 0 ? Math.ceil(paginatedTotal / limit) : 1;
 				const offset = manyOptions.offset ?? 0;
 				const page = limit > 0 ? Math.floor(offset / limit) + 1 : 1;
 				const pagingCounter = (page - 1) * limit + 1;
@@ -833,8 +989,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const hasNextPage = page < totalPages;
 				const prevPage = hasPrevPage ? page - 1 : null;
 				const nextPage = hasNextPage ? page + 1 : null;
-
-				return {
+				const baseResult = {
 					docs: rows as T[],
 					totalDocs,
 					limit,
@@ -845,6 +1000,27 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					hasNextPage,
 					prevPage,
 					nextPage,
+				};
+
+				if (!groupByOptions) return baseResult;
+
+				return {
+					...baseResult,
+					groupBy: {
+						field: groupByOptions.field,
+						order: groupByOptions.order,
+					},
+					groups: (groupRows ?? []).map((group) => ({
+						key: this.getGroupKey(group.value),
+						value: group.value,
+						count: group.count,
+						docs: (rows as T[]).filter(
+							(row: any) =>
+								this.getGroupKey(row[groupByOptions.field]) ===
+								this.getGroupKey(group.value),
+						),
+					})),
+					totalGroups: totalGroups ?? 0,
 				};
 			},
 		);
@@ -857,9 +1033,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		return async (
 			options: FindManyOptions = {},
 			context: CRUDContext = {},
-		): Promise<PaginatedResult<any>> => {
+		): Promise<PaginatedResult<any> | GroupedPaginatedResult<any>> => {
 			return this._executeFind(options, context, "many") as Promise<
-				PaginatedResult<any>
+				PaginatedResult<any> | GroupedPaginatedResult<any>
 			>;
 		};
 	}
@@ -904,7 +1080,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const relation = this.state.relations?.[relationName];
 			if (!relation) continue;
 
-			const relatedCrud = this.app.api.collections[
+			const relatedCrud = this.app.collections[
 				relation.collection
 			] as unknown as CRUD;
 
@@ -975,7 +1151,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 			// ManyToMany relation (through junction table)
 			else if (relation.type === "manyToMany" && relation.through) {
-				const junctionCrud = this.app.api.collections[
+				const junctionCrud = this.app.collections[
 					relation.through
 				] as unknown as CRUD;
 				await resolveManyToManyRelation({
@@ -1172,6 +1348,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			// Run entire operation within request-scoped context
 			// This enables implicit getContext<TApp>() calls in hooks/access control
+			const _hookDepth = guardHookRecursion();
 			return runWithContext(
 				{
 					app: this.app,
@@ -1180,6 +1357,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					locale: normalized.locale,
 					accessMode: normalized.accessMode,
 					stage: normalized.stage,
+					_hookDepth,
 				},
 				async () => {
 					// Execute beforeOperation hook
@@ -1231,6 +1409,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						nestedRelations,
 					));
 
+					// Decode any pre-stringified jsonb values before any hook or write
+					// path observes them — see normalizeJsonbInput.
+					regularFields = normalizeJsonbInput(
+						regularFields,
+						this.state.fieldDefinitions,
+					);
+
 					// Validate field-level write access (on regular fields only)
 					await this.validateFieldWriteAccess(
 						regularFields,
@@ -1257,7 +1442,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					);
 
 					// Execute beforeChange hooks (after validation)
-					await this.executeHooks(
+					await this.executeCollectionHooksWithGlobal(
+						"beforeChange",
 						this.state.hooks?.beforeChange,
 						this.createHookContext({
 							data: regularFields,
@@ -1266,8 +1452,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db,
 						}),
 					);
-
-					let changeEvent: any = null;
 					let record: any;
 					try {
 						record = await withTransaction(db, async (tx: any) => {
@@ -1382,7 +1566,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							}
 
 							// Execute afterChange hooks
-							await this.executeHooks(
+							await this.executeCollectionHooksWithGlobal(
+								"afterChange",
 								this.state.hooks?.afterChange,
 								this.createHookContext({
 									data: createdRecord,
@@ -1392,26 +1577,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 								}),
 							);
 
-							changeEvent = await this.appendRealtimeChange(
-								{
-									operation: "create",
-									recordId: createdRecord.id,
-									payload: createdRecord as Record<string, unknown>,
-								},
-								context,
-								tx,
-							);
-
 							// Queue search indexing to run after transaction commits (fire-and-forget)
-							onAfterCommit(() => {
-								this.indexToSearch(createdRecord, context).catch((err) => {
-									const logger = context.logger as
-										| { error?: (...args: unknown[]) => void }
-										| undefined;
-									logger?.error?.("[Search] Index failed:", err);
-								});
-								return Promise.resolve();
-							});
 
 							return createdRecord;
 						});
@@ -1437,8 +1603,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db,
 						}),
 					);
-
-					await this.notifyRealtimeChange(changeEvent);
 					return record;
 				},
 			);
@@ -1450,7 +1614,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 * Ensures consistency in access control, hooks, validation, and re-fetching.
 	 */
 	private async _executeUpdate(
-		params: UpdateParams | { where: Where; data: Record<string, any> },
+		params:
+			| UpdateParams<any, any, string | number>
+			| { where: Where; data: Record<string, any> },
 		context: CRUDContext = {},
 	) {
 		const normalized = this.normalizeContext(context);
@@ -1544,6 +1710,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		let { regularFields, nestedRelations } =
 			this.separateNestedRelationsInternal(data);
 
+		// Decode any pre-stringified jsonb values before any hook or write
+		// path observes them. Drizzle stringifies jsonb values itself; if a
+		// caller (legacy seed, RPC, etc.) passes an already-encoded JSON
+		// string for a jsonb column, double-encoding stores a jsonb string
+		// instead of the intended array/object.
+		regularFields = normalizeJsonbInput(
+			regularFields,
+			this.state.fieldDefinitions,
+		);
+
 		// 4. Global Validation (Zod)
 		if (this.state.validation?.updateSchema) {
 			try {
@@ -1558,6 +1734,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		}
 
 		// 5. beforeChange hooks
+
+		// Compute bulk metadata once (available to all hook invocations)
+		const bulkMeta = isBatch
+			? {
+					isBatch: true as const,
+					recordIds: records.map((r: any) => r.id),
+					records,
+					count: records.length,
+				}
+			: undefined;
 
 		for (const existing of records) {
 			// Validate field-level write access
@@ -1576,7 +1762,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				existing,
 			);
 
-			await this.executeHooks(
+			await this.executeCollectionHooksWithGlobal(
+				"beforeChange",
 				this.state.hooks?.beforeChange,
 				this.createHookContext({
 					data: regularFields,
@@ -1584,11 +1771,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					operation: "update",
 					context: normalized,
 					db,
+					bulk: bulkMeta,
 				}),
 			);
 		}
-
-		let changeEvent: any = null;
 		let updatedRecords: any[];
 
 		try {
@@ -1634,14 +1820,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						...(nestedLocalized != null ? { _localized: nestedLocalized } : {}),
 					};
 
-					for (const recordId of recordIds) {
+					// Batch upsert: single multi-row INSERT...ON CONFLICT
+					const allRows = recordIds.map((recordId) => ({
+						parentId: recordId,
+						locale: normalized.locale,
+						...i18nValues,
+					}));
+					if (allRows.length > 0) {
 						await tx
 							.insert(this.i18nTable)
-							.values({
-								parentId: recordId,
-								locale: normalized.locale,
-								...i18nValues,
-							})
+							.values(allRows)
 							.onConflictDoUpdate({
 								target: [
 									getColumn(this.i18nTable, "parentId")!,
@@ -1662,7 +1850,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					);
 				}
 
-				// Re-fetch updated records with full state (i18n, virtuals, title, etc.)
+				// Re-fetch updated records WITHOUT field output hooks / afterRead.
+				// Field output hooks run AFTER the transaction commits — running
+				// them inside the tx caused inner CRUD calls (e.g. blocks prefetch
+				// hitting other collections) to inherit `db: tx` via context
+				// propagation, serializing every parallel inner query through the
+				// tx connection. Bun SQL can deadlock when many parallel queries
+				// queue behind an open tx, leaving the response un-read and the
+				// connection stuck `idle in transaction`.
 				const reFetchResult = (await this._executeFind(
 					{ where: { id: { in: recordIds } }, includeDeleted: true },
 					{
@@ -1671,53 +1866,51 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						stage: this.workflowConfig?.initialStage,
 					},
 					"many",
+					{ skipOutputHooks: true },
 				)) as PaginatedResult<any>;
 
 				const refetchedRecords = reFetchResult.docs;
 
 				// Create versions and run afterChange hooks
+				// Bulk metadata for afterChange: post-image records
+				const afterBulkMeta = isBatch
+					? {
+							isBatch: true as const,
+							recordIds: refetchedRecords.map((r: any) => r.id),
+							records: refetchedRecords,
+							count: refetchedRecords.length,
+						}
+					: undefined;
+
+				const afterChangePromises: Promise<void>[] = [];
 				for (const updated of refetchedRecords) {
 					const original = records.find((r) => r.id === updated.id);
 
 					await this.createVersion(tx, updated, "update", txContext);
 
-					await this.executeHooks(
-						this.state.hooks?.afterChange,
-						this.createHookContext({
-							data: updated,
-							original,
-							operation: "update",
-							context: txContext,
-							db: tx,
+					// Collect afterChange hooks for parallel execution in bulk
+					afterChangePromises.push(
+						this.executeCollectionHooksWithGlobal(
+							"afterChange",
+							this.state.hooks?.afterChange,
+							this.createHookContext({
+								data: updated,
+								original,
+								operation: "update",
+								context: txContext,
+								db: tx,
+								bulk: afterBulkMeta,
+							}),
+						).catch((err) => {
+							console.error(
+								`[QUESTPIE] afterChange hook error in bulk update:`,
+								err,
+							);
 						}),
 					);
 				}
-
-				// Realtime change
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: isBatch ? "bulk_update" : "update",
-						recordId: isBatch ? undefined : refetchedRecords[0].id,
-						payload: isBatch
-							? { count: refetchedRecords.length }
-							: (refetchedRecords[0] as Record<string, unknown>),
-					},
-					txContext,
-					tx,
-				);
-
-				// Queue search indexing to run after transaction commits (fire-and-forget)
-				for (const updated of refetchedRecords) {
-					onAfterCommit(() => {
-						this.indexToSearch(updated, normalized).catch((err) => {
-							const logger = context.logger as
-								| { error?: (...args: unknown[]) => void }
-								| undefined;
-							logger?.error?.("[Search] Index failed:", err);
-						});
-						return Promise.resolve();
-					});
-				}
+				// Execute all afterChange hooks in parallel (non-fatal)
+				await Promise.allSettled(afterChangePromises);
 
 				return refetchedRecords;
 			});
@@ -1750,8 +1943,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}),
 			);
 		}
-
-		await this.notifyRealtimeChange(changeEvent);
 
 		return isBatch ? updatedRecords : updatedRecords[0];
 	}
@@ -1827,7 +2018,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 
 			// Execute beforeDelete hooks
-			await this.executeHooks(
+			await this.executeCollectionHooksWithGlobal(
+				"beforeDelete",
 				this.state.hooks?.beforeDelete,
 				this.createHookContext({
 					data: existing,
@@ -1840,8 +2032,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			// Handle cascade operations BEFORE delete
 			await this.handleCascadeDeleteInternal(id, existing, context);
-
-			let changeEvent: any = null;
 			// Use transaction for delete + version
 			await withTransaction(db, async (tx: any) => {
 				// Create version BEFORE delete
@@ -1859,34 +2049,27 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.where(eq(getColumn(this.table, "id")!, id));
 				}
 
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: "delete",
-						recordId: id,
-					},
-					context,
-					tx,
-				);
-
-				// Queue search index removal to run after transaction commits
-				onAfterCommit(async () => {
-					await this.removeFromSearch(id, context);
-				});
+				// Execute afterDelete hooks inside transaction (non-fatal)
+				try {
+					await this.executeCollectionHooksWithGlobal(
+						"afterDelete",
+						this.state.hooks?.afterDelete,
+						this.createHookContext({
+							data: existing,
+							original: existing,
+							operation: "delete",
+							context,
+							db: tx,
+						}),
+					);
+				} catch (err) {
+					// afterDelete hook errors are non-fatal — log and continue
+					console.error(
+						`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
+						err,
+					);
+				}
 			});
-
-			// Execute afterDelete hooks
-			await this.executeHooks(
-				this.state.hooks?.afterDelete,
-				this.createHookContext({
-					data: existing,
-					original: existing,
-					operation: "delete",
-					context,
-					db,
-				}),
-			);
-
-			await this.notifyRealtimeChange(changeEvent);
 
 			const result = { success: true, data: existing };
 
@@ -1984,6 +2167,49 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Create updateBatch operation - heterogeneous updates in one transaction.
+	 */
+	private createUpdateBatch() {
+		return async (
+			params: {
+				updates: Array<{ id: string | number; data: UpdateParams["data"] }>;
+			},
+			context: CRUDContext = {},
+		) => {
+			if (!Array.isArray(params.updates)) {
+				throw ApiError.badRequest(
+					"updates must be an array",
+					undefined,
+					"error.updatesMustBeArray",
+				);
+			}
+
+			if (params.updates.length === 0) {
+				return [];
+			}
+
+			const normalized = this.normalizeContext(context);
+			const db = this.getDb(normalized);
+
+			return withTransaction(db, async (tx: any) => {
+				const txContext = { ...normalized, db: tx };
+				const updatedRecords: any[] = [];
+
+				for (const update of params.updates) {
+					updatedRecords.push(
+						await this._executeUpdate(
+							{ id: update.id, data: update.data },
+							txContext,
+						),
+					);
+				}
+
+				return updatedRecords;
+			});
+		};
+	}
+
+	/**
 	 * Create deleteMany operation - smart batched deletes
 	 * 1. find to get all matching records (for hooks + access control)
 	 * 2. Loop through beforeDelete hooks
@@ -2001,6 +2227,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			if (records.length === 0) {
 				return { success: true, count: 0 };
 			}
+
+			// Compute bulk metadata (pre-image for delete)
+			const deleteBulkMeta = {
+				isBatch: true as const,
+				recordIds: records.map((r: any) => r.id),
+				records,
+				count: records.length,
+			};
 
 			// 2. Loop through beforeDelete hooks and access control
 			for (const record of records) {
@@ -2033,7 +2267,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				// Execute beforeDelete hooks
-				await this.executeHooks(
+				await this.executeCollectionHooksWithGlobal(
+					"beforeDelete",
 					this.state.hooks?.beforeDelete,
 					this.createHookContext({
 						data: record,
@@ -2041,14 +2276,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						operation: "delete",
 						context,
 						db,
+						bulk: deleteBulkMeta,
 					}),
 				);
 
 				// Handle cascade operations per record
 				await this.handleCascadeDeleteInternal(record.id, record, context);
 			}
-
-			let changeEvent: any = null;
 			// 3. Batched DELETE query
 			await withTransaction(db, async (tx: any) => {
 				const recordIds = records.map((r: any) => r.id);
@@ -2069,28 +2303,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.delete(this.table)
 						.where(inArray(getColumn(this.table, "id")!, recordIds));
 				}
-
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: "bulk_delete",
-						payload: { count: records.length },
-					},
-					context,
-					tx,
-				);
-
-				// Queue search index removal to run after transaction commits
-				for (const record of records) {
-					onAfterCommit(async () => {
-						await this.removeFromSearch(record.id, context);
-					});
-				}
 			});
 
 			// 4. Loop through afterDelete hooks
 			for (const record of records) {
 				// Execute afterDelete hooks
-				await this.executeHooks(
+				await this.executeCollectionHooksWithGlobal(
+					"afterDelete",
 					this.state.hooks?.afterDelete,
 					this.createHookContext({
 						data: record,
@@ -2098,11 +2317,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						operation: "delete",
 						context,
 						db,
+						bulk: deleteBulkMeta,
 					}),
 				);
 			}
-
-			await this.notifyRealtimeChange(changeEvent);
 
 			return { success: true, count: records.length };
 		};
@@ -2247,7 +2465,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const hasVersion = typeof options.version === "number";
 
 			if (!hasVersionId && !hasVersion) {
-				throw ApiError.badRequest("Version or versionId required");
+				throw ApiError.badRequest(
+					"Version or versionId required",
+					undefined,
+					"error.versionRequired",
+				);
 			}
 
 			const versionRows = await db
@@ -2358,7 +2580,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 			}
 
-			await this.executeHooks(
+			await this.executeCollectionHooksWithGlobal(
+				"beforeChange",
 				this.state.hooks?.beforeChange,
 				this.createHookContext({
 					data: restoreData,
@@ -2435,7 +2658,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					version.versionStage,
 				);
 
-				await this.executeHooks(
+				await this.executeCollectionHooksWithGlobal(
+					"afterChange",
 					this.state.hooks?.afterChange,
 					this.createHookContext({
 						data: result,
@@ -2448,15 +2672,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Queue search indexing to run after transaction commits (fire-and-forget)
 				if (result) {
-					onAfterCommit(() => {
-						this.indexToSearch(result, normalized).catch((err) => {
-							const logger = context.logger as
-								| { error?: (...args: unknown[]) => void }
-								| undefined;
-							logger?.error?.("[Search] Index failed:", err);
-						});
-						return Promise.resolve();
-					});
 				}
 
 				return result;
@@ -2481,33 +2696,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			const { id, stage: toStage, scheduledAt } = params;
 
-			// If scheduledAt is in the future, schedule via queue job
-			if (scheduledAt && scheduledAt.getTime() > Date.now()) {
-				const queue = this.app?.queue as
-					| Record<string, { publish?: (...args: unknown[]) => Promise<void> }>
-					| undefined;
-				if (!queue?.["scheduled-transition"]?.publish) {
-					throw ApiError.badRequest(
-						"Scheduled transitions require a queue adapter with the scheduled-transition job registered",
-					);
-				}
-				await queue["scheduled-transition"].publish(
-					{
-						type: "collection" as const,
-						collection: this.state.name,
-						recordId: id as string,
-						stage: toStage,
-					},
-					{ startAfter: scheduledAt },
-				);
-				// Return the existing record unchanged
-				const rows = await this.getDb(this.normalizeContext(context))
-					.select()
-					.from(this.table)
-					.where(eq(getColumn(this.table, "id")!, id))
-					.limit(1);
-				return rows[0] ?? null;
-			}
 			const normalized = this.normalizeContext(context);
 			const db = this.getDb(normalized);
 
@@ -2545,6 +2733,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					session: normalized.session,
 					locale: normalized.locale,
 					row: existing,
+					request:
+						((context as any).req as Request | undefined) ??
+						((context as any).request as Request | undefined),
 				});
 				if (canTransition === false) {
 					throw ApiError.forbidden({
@@ -2580,19 +2771,31 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const transitionCtx: TransitionHookContext = {
 				...transitionServices,
 				data: existing,
+				recordId: id,
 				fromStage,
 				toStage,
+				scheduledAt,
 				locale: normalized.locale,
+				accessMode: normalized.accessMode,
 			} as TransitionHookContext;
 
-			// Execute beforeTransition hooks (throw to abort)
-			await this.executeTransitionHooks(
-				this.state.hooks?.beforeTransition,
-				transitionCtx,
-			);
+			// Execute beforeTransition hooks (throw to abort).
+			// TransitionScheduledError signals the transition was deferred to a queue job.
+			try {
+				await this.executeTransitionHooksWithGlobal(
+					"beforeTransition",
+					this.state.hooks?.beforeTransition,
+					transitionCtx,
+				);
+			} catch (err) {
+				if (err instanceof Error && err.name === "TransitionScheduledError") {
+					// Transition was scheduled for future execution — return record unchanged
+					return existing;
+				}
+				throw err;
+			}
 
 			// Create version snapshot at target stage (no data mutation)
-			let changeEvent: any = null;
 			await withTransaction(db, async (tx: any) => {
 				await createVersionRecord({
 					tx,
@@ -2607,26 +2810,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					workflowFromStage: fromStage,
 				});
 
-				changeEvent = await this.appendRealtimeChange(
-					{
-						operation: "update",
-						recordId: id as string,
-						payload: {
-							workflowTransition: { from: fromStage, to: toStage },
-						},
-					},
-					normalized,
-					tx,
-				);
+				// Execute afterTransition hooks inside transaction (non-fatal)
+				try {
+					await this.executeTransitionHooksWithGlobal(
+						"afterTransition",
+						this.state.hooks?.afterTransition,
+						transitionCtx,
+					);
+				} catch (err) {
+					console.error(
+						`[QUESTPIE] afterTransition hook error for "${this.state.name}":`,
+						err,
+					);
+				}
 			});
-
-			// Execute afterTransition hooks
-			await this.executeTransitionHooks(
-				this.state.hooks?.afterTransition,
-				transitionCtx,
-			);
-
-			await this.notifyRealtimeChange(changeEvent);
 
 			return existing;
 		};
@@ -2691,6 +2888,68 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Execute collection-specific hooks AND global collection hooks for a lifecycle event.
+	 * Global before* hooks run first; global after* hooks run last.
+	 */
+	/**
+	 * Cached collection key (camelCase record key).
+	 * Resolved lazily on first global hooks call.
+	 */
+	private _collectionKey: string | undefined;
+
+	/**
+	 * Resolve the collection key (camelCase record key) for this collection.
+	 * Falls back to slug if the key cannot be determined.
+	 * Used for include/exclude filtering in global hooks.
+	 */
+	private getCollectionKey(): string {
+		if (this._collectionKey !== undefined) return this._collectionKey;
+		if (!this.app) {
+			this._collectionKey = this.state.name;
+			return this._collectionKey;
+		}
+		const collections = this.app.getCollections();
+		for (const [key, coll] of Object.entries(collections)) {
+			if ((coll as any).state?.name === this.state.name) {
+				this._collectionKey = key;
+				return key;
+			}
+		}
+		this._collectionKey = this.state.name;
+		return this._collectionKey;
+	}
+
+	private async executeCollectionHooksWithGlobal(
+		hookName: "beforeChange" | "afterChange" | "beforeDelete" | "afterDelete",
+		collectionHooks: any | any[] | undefined,
+		ctx: HookContext<any, any, any>,
+	) {
+		const globalEntries = this.app?.globalHooks?.collections;
+		const isBefore = hookName.startsWith("before");
+		const collectionKey = this.getCollectionKey();
+
+		if (isBefore) {
+			// Global before* first, then collection-specific
+			await executeGlobalCollectionHooks(
+				globalEntries,
+				hookName,
+				collectionKey,
+				ctx as any,
+			);
+			await this.executeHooks(collectionHooks, ctx);
+		} else {
+			// Collection-specific first, then global after*
+			await this.executeHooks(collectionHooks, ctx);
+			await executeGlobalCollectionHooks(
+				globalEntries,
+				hookName,
+				collectionKey,
+				ctx as any,
+			);
+		}
+	}
+
+	/**
 	 * Execute transition hooks (supports arrays).
 	 * Uses TransitionHookContext instead of HookContext.
 	 */
@@ -2706,6 +2965,37 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Execute transition hooks AND global transition hooks.
+	 */
+	private async executeTransitionHooksWithGlobal(
+		hookName: "beforeTransition" | "afterTransition",
+		collectionHooks: any | any[] | undefined,
+		ctx: TransitionHookContext,
+	) {
+		const globalEntries = this.app?.globalHooks?.collections;
+		const isBefore = hookName === "beforeTransition";
+		const collectionKey = this.getCollectionKey();
+
+		if (isBefore) {
+			await executeGlobalCollectionTransitionHooks(
+				globalEntries,
+				hookName,
+				collectionKey,
+				ctx as any,
+			);
+			await this.executeTransitionHooks(collectionHooks, ctx);
+		} else {
+			await this.executeTransitionHooks(collectionHooks, ctx);
+			await executeGlobalCollectionTransitionHooks(
+				globalEntries,
+				hookName,
+				collectionKey,
+				ctx as any,
+			);
+		}
+	}
+
+	/**
 	 * Create hook context with full app access
 	 * Delegates to shared createHookContext utility
 	 */
@@ -2715,6 +3005,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		operation: "create" | "update" | "delete" | "read";
 		context: CRUDContext;
 		db: any;
+		bulk?: {
+			isBatch: true;
+			recordIds: (string | number)[];
+			records: any[];
+			count: number;
+		};
 	}): HookContext<any, any, any> {
 		return createHookContext({
 			...params,
@@ -2744,6 +3040,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		// System mode bypasses all access control
 		if (normalized.accessMode === "system") return true;
 
+		// Upload collections with public visibility get public read access by default
+		if (
+			operation === "read" &&
+			!this.state.access?.read &&
+			this.state.upload?.visibility === "public"
+		) {
+			return true;
+		}
+
 		// Use collection's access rule, or fall back to app defaultAccess
 		const accessRule =
 			this.state.access?.[operation] ?? this.app?.defaultAccess?.[operation];
@@ -2754,6 +3059,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			locale: normalized.locale,
 			row,
 			input,
+			request:
+				((context as any).req as Request | undefined) ??
+				((context as any).request as Request | undefined),
 		});
 	}
 
@@ -3004,61 +3312,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	/**
-	 * Index record to search service
-	 * Delegates to extracted indexToSearch function
-	 */
-	private async indexToSearch(
-		record: any,
-		context: CRUDContext,
-	): Promise<void> {
-		if (!this.app) return;
-		return indexToSearch(record, context, {
-			app: this.app,
-			state: this.state,
-			getTitle: this.getTitleExpression,
-		});
-	}
-
-	/**
-	 * Append a realtime change event
-	 * Delegates to shared appendRealtimeChange utility
-	 */
-	private async appendRealtimeChange(
-		params: {
-			operation: "create" | "update" | "delete" | "bulk_update" | "bulk_delete";
-			recordId?: string | null;
-			payload?: Record<string, unknown>;
-		},
-		context: CRUDContext,
-		db: any,
-	) {
-		return appendRealtimeChange(params, context, db, this.app, this.state.name);
-	}
-
-	/**
-	 * Notify realtime subscribers of a change
-	 * Delegates to shared notifyRealtimeChange utility
-	 */
-	private async notifyRealtimeChange(change: unknown) {
-		return notifyRealtimeChange(change, this.app);
-	}
-
-	/**
-	 * Remove record from search index
-	 * Delegates to extracted removeFromSearch function
-	 */
-	private async removeFromSearch(
-		recordId: string,
-		context: CRUDContext,
-	): Promise<void> {
-		if (!this.app) return;
-		return removeFromSearch(recordId, context, {
-			app: this.app,
-			state: this.state,
-		});
-	}
-
-	/**
 	 * Create upload operation for collections with .upload() configured
 	 * Handles file upload to storage and creates a record with metadata
 	 */
@@ -3082,6 +3335,43 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			if (uploadOptions.maxSize && file.size > uploadOptions.maxSize) {
 				throw ApiError.badRequest(
 					`File size ${file.size} exceeds maximum allowed size ${uploadOptions.maxSize}`,
+					undefined,
+					"upload.tooLarge",
+					{ maxSize: uploadOptions.maxSize },
+				);
+			}
+
+			// Block dangerous file extensions
+			const BLOCKED_EXTENSIONS = [
+				".php",
+				".exe",
+				".bat",
+				".sh",
+				".jsp",
+				".asp",
+				".aspx",
+				".cgi",
+				".pl",
+				".py",
+				".rb",
+				".cmd",
+				".com",
+				".scr",
+				".pif",
+				".vbs",
+				".wsf",
+				".msi",
+				".dll",
+			];
+			const fileExt = file.name
+				? `.${file.name.split(".").pop()?.toLowerCase()}`
+				: "";
+			if (BLOCKED_EXTENSIONS.includes(fileExt)) {
+				throw ApiError.badRequest(
+					`File extension "${fileExt}" is not allowed`,
+					undefined,
+					"upload.extensionNotAllowed",
+					{ extension: fileExt },
 				);
 			}
 
@@ -3099,6 +3389,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				if (!isAllowed) {
 					throw ApiError.badRequest(
 						`File type "${file.type}" is not allowed. Allowed types: ${uploadOptions.allowedTypes.join(", ")}`,
+						undefined,
+						"upload.invalidType",
+						{ type: file.type },
 					);
 				}
 			}
@@ -3118,7 +3411,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				const { Readable } = await import("node:stream");
 				const webStream = file.stream();
 				// Web ReadableStream → Node.js stream type mismatch requires cast
-				const nodeStream = Readable.fromWeb(
+				// Readable.fromWeb exists in Node 17+ / Bun but may not be in all TS lib definitions
+				const nodeStream = (Readable as any).fromWeb(
 					webStream as unknown as import("node:stream/web").ReadableStream,
 				);
 				await this.app.storage.use().putStream(key, nodeStream, {

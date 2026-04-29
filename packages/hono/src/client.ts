@@ -63,7 +63,7 @@ export function createClientFromHono<
 >(
 	config: HonoClientConfig,
 ): ReturnType<typeof hc<THono>> & ReturnType<typeof createClient<TApp>> {
-	// Create QuestPie client for CRUD operations
+	// Create QUESTPIE client for CRUD operations
 	const qpClient = createClient<TApp>({
 		baseURL: config.baseURL,
 		fetch: config.fetch,

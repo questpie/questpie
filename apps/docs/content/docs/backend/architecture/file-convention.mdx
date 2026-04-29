@@ -1,58 +1,53 @@
 ---
 title: File Convention
-description: How QuestPie discovers your files and wires them into the runtime — naming rules, layouts, and discovery mechanics.
+description: How QUESTPIE discovers your files and wires them into the runtime — naming rules, layouts, and discovery mechanics.
 ---
 
-# File Convention
-
-QuestPie uses your file system as the source of truth. Drop a file in the right directory, run codegen, and it's part of your app. No manual registration.
+QUESTPIE uses your file system as the source of truth. Drop a file in the right directory, run codegen, and it's part of your app. No manual registration.
 
 ## Directory Categories
 
 Each directory maps to a category of entity:
 
-| Directory | Entity | Export Style | Key Derivation |
-|---|---|---|---|
-| `collections/` | Collections | Default or named | Filename → camelCase |
-| `globals/` | Globals | Default or named | Filename → camelCase |
-| `routes/` | Routes | Default | Filename → camelCase/slash path |
-| `jobs/` | Jobs | Default | Filename → camelCase |
-| `routes/` (raw) | Routes | Default | Filename → slash-separated path |
-| `services/` | Services | Default | Filename → camelCase |
-| `emails/` | Email templates | Default | Filename → camelCase |
-| `blocks/` | Blocks | Named exports | Export name |
-| `messages/` | i18n messages | Default | Filename → locale key |
-| `migrations/` | DB migrations | Default | Array (ordered) |
-| `seeds/` | DB seeds | Default | Array (ordered) |
+| Directory       | Entity          | Export Style     | Key Derivation                  |
+| --------------- | --------------- | ---------------- | ------------------------------- |
+| `collections/`  | Collections     | Default or named | Factory arg → export name       |
+| `globals/`      | Globals         | Default or named | Factory arg → export name       |
+| `routes/`       | Routes          | Default          | Filename → camelCase/slash path |
+| `jobs/`         | Jobs            | Default          | Filename → camelCase            |
+| `routes/` (raw) | Routes          | Default          | Filename → slash-separated path |
+| `services/`     | Services        | Default          | Filename → camelCase            |
+| `emails/`       | Email templates | Default          | Filename → camelCase            |
+| `blocks/`       | Blocks          | Named exports    | Factory arg → export name       |
+| `messages/`     | i18n messages   | Default          | Filename → locale key           |
+| `migrations/`   | DB migrations   | Default          | Array (ordered)                 |
+| `seeds/`        | DB seeds        | Default          | Array (ordered)                 |
 
 ### Name derivation
 
-Filenames are converted from kebab-case to camelCase:
+Factory string args are entity identities for collections, globals, blocks, views, and components. They are converted from kebab-case to camelCase:
 
 ```text
-blog-posts.ts      → blogPosts
-create-booking.ts  → createBooking
-site-settings.ts   → siteSettings
+collection("blog-posts")  → blogPosts
+block("hero-banner")      → heroBanner
+global("siteSettings")    → siteSettings
 ```
+
+Only hyphens are camelized. Underscores are preserved, so `global("site_settings")` generates the key `site_settings`, not `siteSettings`.
 
 ## Single-File Conventions
 
 Some configs are single files, not directories:
 
-| File | Factory | Purpose |
-|---|---|---|
-| `questpie.config.ts` | `runtimeConfig({...})` | DB, plugins, adapters |
-| `modules.ts` | `export default [...]` | Module dependencies |
-| `auth.ts` | `satisfies AuthConfig` | Auth configuration |
-| `locale.ts` | `locale({...})` | Content locales |
-| `hooks.ts` | `export default { collections, globals }` | Global lifecycle hooks (applied across all entities) |
-| `access.ts` | `export default { read, create, update, delete }` | Default access rules for all entities |
-| `context.ts` | `export default contextResolver(...)` | Custom context resolution (e.g., tenant scoping) |
-| `fields.ts` | `export default { ...customFields }` | Custom field type definitions |
-| `sidebar.ts` | `sidebar({...})` | Admin sidebar |
-| `dashboard.ts` | `dashboard({...})` | Admin dashboard |
-| `branding.ts` | `branding({...})` | Admin branding |
-| `admin-locale.ts` | `adminLocale({...})` | Admin UI locale |
+| File                 | Factory                              | Purpose                                            |
+| -------------------- | ------------------------------------ | -------------------------------------------------- |
+| `questpie.config.ts` | `runtimeConfig({...})`               | DB, plugins, adapters                              |
+| `modules.ts`         | `export default [...]`               | Module dependencies                                |
+| `config/auth.ts`     | `authConfig({...})`                  | Auth configuration                                 |
+| `config/app.ts`      | `export default appConfig({...})`    | App-level config (context, locale, tenant scoping) |
+| `config/admin.ts`    | `adminConfig({...})`                 | Admin sidebar, dashboard, branding, locale         |
+| `config/openapi.ts`  | `openApiConfig({...})`               | OpenAPI and Scalar UI options                      |
+| `fields.ts`          | `export default { ...customFields }` | Custom field type definitions                      |
 
 ## Layouts
 
@@ -119,7 +114,7 @@ routes/
 1. **Scan** — Codegen walks the configured directories
 2. **Match** — Files matching the category pattern are picked up
 3. **Import** — Each file is imported and its exports are read
-4. **Key derivation** — Filename → camelCase (or export name for named exports)
+4. **Key derivation** — Factory string arg → export name → filename (camelCase)
 5. **Merge** — Project entities + module entities are merged
 6. **Emit** — Generated types and runtime wiring in `.generated/`
 
@@ -128,7 +123,7 @@ routes/
 Collection and global files use `#questpie` as an import alias:
 
 ```ts
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 ```
 
 This resolves to the generated app context, giving the builders access to field types and relation targets for autocompletion. It's configured via TypeScript path mapping.

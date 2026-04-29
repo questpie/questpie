@@ -1,4 +1,5 @@
 import type * as React from "react";
+
 import { cn } from "../../lib/utils";
 
 // ============================================================================
@@ -37,8 +38,7 @@ export function Toolbar({
 		<div
 			data-slot="toolbar"
 			className={cn(
-				"qa-toolbar bg-card border border-border",
-				"p-1 flex items-center gap-2",
+				"qa-toolbar border-border-subtle bg-card flex items-center gap-2 rounded-xl border p-1.5",
 				className,
 			)}
 			{...props}
@@ -94,7 +94,7 @@ export function ToolbarSeparator({
 	return (
 		<div
 			data-slot="toolbar-separator"
-			className={cn("qa-toolbar__separator h-4 w-px bg-border", className)}
+			className={cn("qa-toolbar__separator bg-border h-4 w-px", className)}
 			{...props}
 		/>
 	);

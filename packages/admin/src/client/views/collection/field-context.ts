@@ -6,6 +6,7 @@
  */
 
 import type React from "react";
+
 import type { FieldInstance } from "../../builder/field/field";
 import type { DynamicI18nText } from "../../builder/types/common";
 
@@ -57,9 +58,7 @@ export type FieldContext = {
  * Get field type from FieldInstance
  * FieldInstance.name contains the type name (e.g., "text", "relation")
  */
-function getFieldType(
-	fieldDef: FieldInstance | undefined,
-): string | undefined {
+function getFieldType(fieldDef: FieldInstance | undefined): string | undefined {
 	if (!fieldDef) return undefined;
 	// FieldInstance stores the field type in 'name' property
 	// This comes from field("text", ...) where "text" is the type

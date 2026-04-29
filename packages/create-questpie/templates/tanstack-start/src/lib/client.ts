@@ -1,7 +1,8 @@
 import { createClient } from "questpie/client";
-import type { AppConfig, AppRpc } from "@/questpie/server/app.js";
 
-export const client = createClient<AppConfig, AppRpc>({
+import type { AppConfig } from "@/questpie/server/app.js";
+
+export const client = createClient<AppConfig>({
 	baseURL:
 		typeof window !== "undefined"
 			? window.location.origin

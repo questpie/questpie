@@ -7,6 +7,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
+
 import type { NavItem } from "@/questpie/server/globals";
 
 interface HeaderProps {
@@ -69,7 +70,7 @@ export function Header({
 			{/* Alert Banner */}
 			{alertEnabled && alertMessage && (
 				<div
-					className={`px-4 py-2 text-center text-sm border-b ${alertStyles[alertType]}`}
+					className={`border-b px-4 py-2 text-center text-sm ${alertStyles[alertType]}`}
 				>
 					{alertMessage}
 				</div>
@@ -92,18 +93,18 @@ export function Header({
 									className="h-12 w-auto"
 								/>
 							) : (
-								<div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg">
+								<div className="bg-primary text-primary-foreground flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold">
 									{cityName.charAt(0)}
 								</div>
 							)}
 							<div>
 								<h1 className="text-xl font-bold">{cityName}</h1>
-								<p className="text-sm text-muted-foreground">City Council</p>
+								<p className="text-muted-foreground text-sm">City Council</p>
 							</div>
 						</Link>
 
 						{/* Desktop Navigation */}
-						<nav className="hidden md:flex items-center gap-6">
+						<nav className="hidden items-center gap-6 md:flex">
 							{navigation.map((item) =>
 								item.isExternal ? (
 									<a
@@ -111,7 +112,7 @@ export function Header({
 										href={item.href}
 										target="_blank"
 										rel="noopener noreferrer"
-										className="text-sm font-medium hover:text-primary transition-colors"
+										className="hover:text-primary text-sm font-medium transition-colors"
 									>
 										{item.label}
 									</a>
@@ -119,7 +120,7 @@ export function Header({
 									<Link
 										key={item.href}
 										to={resolveHref(item.href)}
-										className="text-sm font-medium hover:text-primary transition-colors"
+										className="hover:text-primary text-sm font-medium transition-colors"
 									>
 										{item.label}
 									</Link>
@@ -130,13 +131,13 @@ export function Header({
 						{/* Mobile Menu Button */}
 						<button
 							type="button"
-							className="md:hidden p-2"
+							className="p-2 md:hidden"
 							aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
 							onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
 						>
 							{mobileMenuOpen ? (
 								<svg
-									className="w-6 h-6"
+									className="h-6 w-6"
 									fill="none"
 									stroke="currentColor"
 									viewBox="0 0 24 24"
@@ -151,7 +152,7 @@ export function Header({
 								</svg>
 							) : (
 								<svg
-									className="w-6 h-6"
+									className="h-6 w-6"
 									fill="none"
 									stroke="currentColor"
 									viewBox="0 0 24 24"
@@ -181,11 +182,11 @@ export function Header({
 
 			{/* Mobile Menu Panel */}
 			<div
-				className={`fixed top-0 right-0 z-50 h-full w-72 bg-background shadow-xl transform transition-transform duration-300 ease-in-out md:hidden ${
+				className={`bg-background fixed top-0 right-0 z-50 h-full w-72 transform shadow-xl transition-transform duration-300 ease-in-out md:hidden ${
 					mobileMenuOpen ? "translate-x-0" : "translate-x-full"
 				}`}
 			>
-				<div className="flex items-center justify-between p-4 border-b">
+				<div className="flex items-center justify-between border-b p-4">
 					<span className="font-semibold">{cityName}</span>
 					<button
 						type="button"
@@ -194,7 +195,7 @@ export function Header({
 						onClick={closeMobileMenu}
 					>
 						<svg
-							className="w-5 h-5"
+							className="h-5 w-5"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -209,7 +210,7 @@ export function Header({
 						</svg>
 					</button>
 				</div>
-				<nav className="p-4 space-y-1">
+				<nav className="space-y-1 p-4">
 					{navigation.map((item) =>
 						item.isExternal ? (
 							<a
@@ -217,7 +218,7 @@ export function Header({
 								href={item.href}
 								target="_blank"
 								rel="noopener noreferrer"
-								className="block px-3 py-2 rounded-md text-sm font-medium hover:bg-muted transition-colors"
+								className="hover:bg-muted block rounded-md px-3 py-2 text-sm font-medium transition-colors"
 								onClick={closeMobileMenu}
 							>
 								{item.label}
@@ -226,7 +227,7 @@ export function Header({
 							<Link
 								key={item.href}
 								to={resolveHref(item.href)}
-								className="block px-3 py-2 rounded-md text-sm font-medium hover:bg-muted transition-colors"
+								className="hover:bg-muted block rounded-md px-3 py-2 text-sm font-medium transition-colors"
 								onClick={closeMobileMenu}
 							>
 								{item.label}

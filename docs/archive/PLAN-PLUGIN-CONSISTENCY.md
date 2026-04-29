@@ -94,31 +94,31 @@ This plan intentionally includes a **mental shift** and **breaking changes**.
 
 ```ts
 export interface CodegenPlugin {
-  name: string;
-  targets: Record<string, CodegenTargetContribution>;
+	name: string;
+	targets: Record<string, CodegenTargetContribution>;
 }
 
 export interface CodegenTargetContribution {
-  root: string;          // relative to resolved server root, ex: "." or "../admin"
-  outDir?: string;       // default ".generated"
-  outputFile: string;    // ex: "index.ts", "client.ts"
+	root: string; // relative to resolved server root, ex: "." or "../admin"
+	outDir?: string; // default ".generated"
+	outputFile: string; // ex: "index.ts", "client.ts"
 
-  categories?: Record<string, CategoryDeclaration>;
-  discover?: Record<string, DiscoverPattern>;
+	categories?: Record<string, CategoryDeclaration>;
+	discover?: Record<string, DiscoverPattern>;
 
-  registries?: {
-    collectionExtensions?: Record<string, RegistryExtension>;
-    globalExtensions?: Record<string, RegistryExtension>;
-    singletonFactories?: Record<string, SingletonFactory>;
-    moduleRegistries?: Record<string, ModuleRegistryConfig>;
-  };
+	registries?: {
+		collectionExtensions?: Record<string, RegistryExtension>;
+		globalExtensions?: Record<string, RegistryExtension>;
+		singletonFactories?: Record<string, SingletonFactory>;
+		moduleRegistries?: Record<string, ModuleRegistryConfig>;
+	};
 
-  transform?: (ctx: CodegenContext) => void;
+	transform?: (ctx: CodegenContext) => void;
 
-  // Optional custom generator for target-specific templates
-  generate?: (
-    ctx: CodegenTargetGenerateContext,
-  ) => Promise<CodegenTargetOutput> | CodegenTargetOutput;
+	// Optional custom generator for target-specific templates
+	generate?: (
+		ctx: CodegenTargetGenerateContext,
+	) => Promise<CodegenTargetOutput> | CodegenTargetOutput;
 }
 ```
 
@@ -185,14 +185,14 @@ Minimum shape (updated by Phase G — flat `views`, no `listViews`/`editViews`/`
 
 ```ts
 export type GeneratedAdminClient = {
-  views: Record<string, ViewDefinition>;
-  fields: Record<string, FieldRegistryEntry>;
-  components: Record<string, ComponentDefinition>;
-  pages: Record<string, PageDefinition>;
-  widgets: Record<string, WidgetDefinition>;
-  blocks: Record<string, BlockDefinition>;
-  locale: { default: string; supported: string[] };
-  translations: Record<string, unknown>;
+	views: Record<string, ViewDefinition>;
+	fields: Record<string, FieldRegistryEntry>;
+	components: Record<string, ComponentDefinition>;
+	pages: Record<string, PageDefinition>;
+	widgets: Record<string, WidgetDefinition>;
+	blocks: Record<string, BlockDefinition>;
+	locale: { default: string; supported: string[] };
+	translations: Record<string, unknown>;
 };
 ```
 
@@ -233,7 +233,7 @@ Important constraint:
 New setup pattern:
 
 ```ts
-import admin from "~/questpie/admin/.generated/client";
+import admin from "@/questpie/admin/.generated/client";
 
 <AdminLayoutProvider admin={admin} ... />
 ```
@@ -366,7 +366,7 @@ registry with plain-object factories — consistent with the server-side model.
    `collection-form`, `global-form`. Consistent prefixing.
 9. **Plain objects** — no builder classes, no `$options()`, no chaining.
 10. **Validation from introspection** — `buildZodFromIntrospection()` with
-   `FIELD_VALIDATORS` escape hatch for complex field types.
+    `FIELD_VALIDATORS` escape hatch for complex field types.
 
 ### G.1 View system design
 
@@ -374,9 +374,9 @@ registry with plain-object factories — consistent with the server-side model.
 
 ```ts
 interface ViewKindRegistry {
-  list: {};   // listing entities
-  form: {};   // editing a single entity (was "edit" — renamed for consistency
-              // with .form() extension, admin.form schema key, *-form view names)
+	list: {}; // listing entities
+	form: {}; // editing a single entity (was "edit" — renamed for consistency
+	// with .form() extension, admin.form schema key, *-form view names)
 }
 type ViewKind = keyof ViewKindRegistry;
 ```
@@ -385,13 +385,13 @@ Extensible via augmentation. Future kinds: `"preview"`, `"dashboard"`, etc.
 
 #### Naming consistency table
 
-| Layer | Collection list | Collection form | Global form |
-|-------|----------------|-----------------|-------------|
-| Server extension | `.list()` | `.form()` | `.form()` |
-| Kind | `"list"` | `"form"` | `"form"` |
-| Schema key | `admin.list` | `admin.form` | `admin.form` |
-| View name | `"collection-table"` | `"collection-form"` | `"global-form"` |
-| Component | `TableView` | `FormView` | `GlobalFormView` |
+| Layer            | Collection list      | Collection form     | Global form      |
+| ---------------- | -------------------- | ------------------- | ---------------- |
+| Server extension | `.list()`            | `.form()`           | `.form()`        |
+| Kind             | `"list"`             | `"form"`            | `"form"`         |
+| Schema key       | `admin.list`         | `admin.form`        | `admin.form`     |
+| View name        | `"collection-table"` | `"collection-form"` | `"global-form"`  |
+| Component        | `TableView`          | `FormView`          | `GlobalFormView` |
 
 Zero synonyms. Zero translations between layers.
 
@@ -402,10 +402,10 @@ User custom views follow the same `{entity-type}-{implementation}` pattern:
 
 ```ts
 interface ViewDefinition<TName, TKind extends ViewKind, TConfig> {
-  type: "view";
-  name: TName;
-  kind: TKind;          // "list" | "form"
-  readonly "~config"?: TConfig;
+	type: "view";
+	name: TName;
+	kind: TKind; // "list" | "form"
+	readonly "~config"?: TConfig;
 }
 ```
 
@@ -413,14 +413,14 @@ interface ViewDefinition<TName, TKind extends ViewKind, TConfig> {
 
 ```ts
 interface ViewDefinition<
-  TName extends string = string,
-  TKind extends ViewKind = ViewKind,
-  TConfig = unknown,
+	TName extends string = string,
+	TKind extends ViewKind = ViewKind,
+	TConfig = unknown,
 > {
-  readonly name: TName;
-  readonly kind: TKind;                        // "list" | "form"
-  readonly component: MaybeLazyComponent;      // client-only
-  readonly config?: TConfig;                   // view-level defaults (showSearch, showMeta, etc.)
+	readonly name: TName;
+	readonly kind: TKind; // "list" | "form"
+	readonly component: MaybeLazyComponent; // client-only
+	readonly config?: TConfig; // view-level defaults (showSearch, showMeta, etc.)
 }
 ```
 
@@ -431,9 +431,9 @@ Schema-level overrides merge on top at runtime.
 
 ```ts
 function view<TName extends string, TKind extends ViewKind, TConfig = unknown>(
-  name: TName,
-  options: { kind: TKind; component: MaybeLazyComponent; config?: TConfig },
-): ViewDefinition<TName, TKind, TConfig>
+	name: TName,
+	options: { kind: TKind; component: MaybeLazyComponent; config?: TConfig },
+): ViewDefinition<TName, TKind, TConfig>;
 ```
 
 Replaces `listView()` + `editView()`. Returns `Object.freeze`'d plain object.
@@ -535,18 +535,19 @@ Same factories used by admin module and user code — no difference.
 
 ```ts
 interface AdminState {
-  views: Record<string, ViewDefinition>;
-  fields: Record<string, FieldRegistryEntry>;
-  components: Record<string, ComponentDefinition>;
-  pages: Record<string, PageDefinition>;
-  widgets: Record<string, WidgetDefinition>;
-  blocks: Record<string, BlockDefinition>;
-  translations: TranslationsMap;
-  locale: LocaleConfig;    // includes labels: { en: "English", sk: "Slovenčina" }
+	views: Record<string, ViewDefinition>;
+	fields: Record<string, FieldRegistryEntry>;
+	components: Record<string, ComponentDefinition>;
+	pages: Record<string, PageDefinition>;
+	widgets: Record<string, WidgetDefinition>;
+	blocks: Record<string, BlockDefinition>;
+	translations: TranslationsMap;
+	locale: LocaleConfig; // includes labels: { en: "English", sk: "Slovenčina" }
 }
 ```
 
 Removed from old `AdminBuilderState`:
+
 - `"~app"` phantom type
 - `listViews` / `editViews` (flat `views` instead)
 - `defaultViews` (removed concept entirely)
@@ -557,20 +558,20 @@ Locale labels move from hardcoded `Admin.getLocaleLabel()` to `locale.labels` in
 
 ```ts
 class Admin {
-  constructor(public readonly state: AdminState) {}
+	constructor(public readonly state: AdminState) {}
 
-  getViews(): Record<string, ViewDefinition>
-  getView(name: string): ViewDefinition | undefined
-  getViewsByKind(kind: ViewKind): Record<string, ViewDefinition>
-  getField(name: string): FieldRegistryEntry | undefined
-  getFields(): Record<string, FieldRegistryEntry>
-  getComponent(name: string): ComponentDefinition | undefined
-  getPage(name: string): PageDefinition | undefined
-  getPages(): Record<string, PageDefinition>
-  getWidget(name: string): WidgetDefinition | undefined
-  getWidgets(): Record<string, WidgetDefinition>
+	getViews(): Record<string, ViewDefinition>;
+	getView(name: string): ViewDefinition | undefined;
+	getViewsByKind(kind: ViewKind): Record<string, ViewDefinition>;
+	getField(name: string): FieldRegistryEntry | undefined;
+	getFields(): Record<string, FieldRegistryEntry>;
+	getComponent(name: string): ComponentDefinition | undefined;
+	getPage(name: string): PageDefinition | undefined;
+	getPages(): Record<string, PageDefinition>;
+	getWidget(name: string): WidgetDefinition | undefined;
+	getWidgets(): Record<string, WidgetDefinition>;
 
-  static normalize(input: AdminState): Admin
+	static normalize(input: AdminState): Admin;
 }
 ```
 
@@ -581,10 +582,10 @@ Removed: `getListViews()`, `getEditViews()`, `getDefaultViews()`.
 
 ```ts
 interface FieldRegistryEntry<TName extends string = string> {
-  readonly name: TName;
-  readonly component: React.ComponentType<BaseFieldProps>;
-  readonly cell?: React.ComponentType<BaseCellProps>;
-  readonly validator?: FieldValidator;   // optional — for custom field validation
+	readonly name: TName;
+	readonly component: React.ComponentType<BaseFieldProps>;
+	readonly cell?: React.ComponentType<BaseCellProps>;
+	readonly validator?: FieldValidator; // optional — for custom field validation
 }
 ```
 
@@ -595,12 +596,13 @@ Added: optional `validator` for third-party field extensibility.
 
 ```ts
 function buildZodFromIntrospection(
-  fieldSchema: FieldIntrospection,
-  ctx?: { buildSchema: (field: FieldIntrospection) => z.ZodType },
-): z.ZodType
+	fieldSchema: FieldIntrospection,
+	ctx?: { buildSchema: (field: FieldIntrospection) => z.ZodType },
+): z.ZodType;
 ```
 
 Three-tier resolution:
+
 1. `field.validator` (from FieldRegistryEntry — custom fields)
 2. `FIELD_VALIDATORS[fieldType]` (built-in special cases: object, array, blocks, time, select, date, datetime, email)
 3. Generic introspection path (14 simple fields — zero per-field code)
@@ -646,10 +648,10 @@ introspection merges extension defaults with user-provided state generically.
 
 ```ts
 export interface RegistryExtension {
-  stateKey: string;
-  configType: string;
-  defaults?: Record<string, unknown>;   // NEW
-  // ... isCallback, callbackContextParams, etc.
+	stateKey: string;
+	configType: string;
+	defaults?: Record<string, unknown>; // NEW
+	// ... isCallback, callbackContextParams, etc.
 }
 ```
 
@@ -749,7 +751,10 @@ Primary files:
   ```ts
   const viewName = schema.admin[operation].view; // ALWAYS present (from extension defaults)
   const viewDef = views[viewName];
-  const viewConfig = mergeViewConfig(viewDef?.config, schema.admin[operation]?.["~config"]);
+  const viewConfig = mergeViewConfig(
+  	viewDef?.config,
+  	schema.admin[operation]?.["~config"],
+  );
   ```
 - Add `kind` validation: warn if resolved view's kind doesn't match route expectation.
 - Remove `showSearch`, `showFilters`, `showToolbar`, `showMeta`, `realtime` extraction
@@ -786,18 +791,18 @@ Primary files:
 
 ### G.7 Delete legacy code
 
-| File | Reason |
-|---|---|
-| `client/builder/admin-builder.ts` | `AdminBuilder` class → codegen |
-| `client/builder/qa.ts` | `qa()` factory → codegen |
-| `client/builder/defaults/core.ts` | `coreAdminModule` → generated defaults |
-| `client/builder/defaults/starter.ts` | `adminModule` re-export → `@questpie/admin/client/defaults` |
-| `client/builder/defaults/fields.tsx` | 18 hardcoded fields → individual module client files |
-| `client/builder/defaults/views.ts` | Hardcoded views → individual module client files |
-| `client/builder/defaults/pages.ts` | Hardcoded pages → individual module client files |
-| `client/builder/defaults/widgets.ts` | Hardcoded widgets → individual module client files |
-| `client/builder/defaults/components.ts` | Hardcoded components → individual module client files |
-| `client/builder/types/views.ts` | `DefaultViewsConfig` type → removed concept |
+| File                                    | Reason                                                      |
+| --------------------------------------- | ----------------------------------------------------------- |
+| `client/builder/admin-builder.ts`       | `AdminBuilder` class → codegen                              |
+| `client/builder/qa.ts`                  | `qa()` factory → codegen                                    |
+| `client/builder/defaults/core.ts`       | `coreAdminModule` → generated defaults                      |
+| `client/builder/defaults/starter.ts`    | `adminModule` re-export → `@questpie/admin/client/defaults` |
+| `client/builder/defaults/fields.tsx`    | 18 hardcoded fields → individual module client files        |
+| `client/builder/defaults/views.ts`      | Hardcoded views → individual module client files            |
+| `client/builder/defaults/pages.ts`      | Hardcoded pages → individual module client files            |
+| `client/builder/defaults/widgets.ts`    | Hardcoded widgets → individual module client files          |
+| `client/builder/defaults/components.ts` | Hardcoded components → individual module client files       |
+| `client/builder/types/views.ts`         | `DefaultViewsConfig` type → removed concept                 |
 
 Update `exports/client.ts`:
 

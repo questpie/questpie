@@ -18,14 +18,15 @@
  */
 
 import type { z } from "zod";
+
 import type {
 	HttpMethod,
+	JsonRouteParams,
 	JsonRouteDefinition,
 	JsonRouteHandlerArgs,
 	RawRouteDefinition,
 	RawRouteHandlerArgs,
 	RouteAccess,
-	RouteDefinition,
 } from "./types.js";
 
 // ============================================================================
@@ -47,7 +48,7 @@ type HasSchema<T = any> = { __schema: T };
 // ============================================================================
 
 interface BuilderConfig {
-	method?: HttpMethod;
+	method?: HttpMethod | HttpMethod[];
 	mode?: "json" | "raw";
 	schema?: z.ZodSchema<any>;
 	outputSchema?: z.ZodSchema<any>;
@@ -66,9 +67,10 @@ interface BuilderConfig {
  * Default method: POST
  */
 export class RouteBuilder<
+	TParams extends JsonRouteParams = JsonRouteParams,
 	_TMethod extends NoMethod | HasMethod = NoMethod,
-	_TMode extends NoMode | JsonMode | RawMode = NoMode,
-	_TSchema extends NoSchema | HasSchema = NoSchema,
+	TMode extends NoMode | JsonMode | RawMode = NoMode,
+	TSchema extends NoSchema | HasSchema = NoSchema,
 > {
 	/** @internal */
 	private readonly _config: Readonly<BuilderConfig>;
@@ -79,25 +81,44 @@ export class RouteBuilder<
 	}
 
 	// ── HTTP Method setters ─────────────────────────────────────
+	// Chainable: `.get().post()` registers both GET and POST.
 
-	get(): RouteBuilder<HasMethod<"GET">, _TMode, _TSchema> {
-		return new RouteBuilder({ ...this._config, method: "GET" });
+	private _addMethod(m: HttpMethod): HttpMethod | HttpMethod[] {
+		const existing = this._config.method;
+		if (!existing) return m;
+		const arr = Array.isArray(existing) ? existing : [existing];
+		return arr.includes(m) ? arr : [...arr, m];
 	}
 
-	post(): RouteBuilder<HasMethod<"POST">, _TMode, _TSchema> {
-		return new RouteBuilder({ ...this._config, method: "POST" });
+	get(): RouteBuilder<TParams, HasMethod<"GET">, TMode, TSchema> {
+		return new RouteBuilder({ ...this._config, method: this._addMethod("GET") });
 	}
 
-	put(): RouteBuilder<HasMethod<"PUT">, _TMode, _TSchema> {
-		return new RouteBuilder({ ...this._config, method: "PUT" });
+	post(): RouteBuilder<TParams, HasMethod<"POST">, TMode, TSchema> {
+		return new RouteBuilder({ ...this._config, method: this._addMethod("POST") });
 	}
 
-	delete(): RouteBuilder<HasMethod<"DELETE">, _TMode, _TSchema> {
-		return new RouteBuilder({ ...this._config, method: "DELETE" });
+	put(): RouteBuilder<TParams, HasMethod<"PUT">, TMode, TSchema> {
+		return new RouteBuilder({ ...this._config, method: this._addMethod("PUT") });
 	}
 
-	patch(): RouteBuilder<HasMethod<"PATCH">, _TMode, _TSchema> {
-		return new RouteBuilder({ ...this._config, method: "PATCH" });
+	delete(): RouteBuilder<TParams, HasMethod<"DELETE">, TMode, TSchema> {
+		return new RouteBuilder({ ...this._config, method: this._addMethod("DELETE") });
+	}
+
+	patch(): RouteBuilder<TParams, HasMethod<"PATCH">, TMode, TSchema> {
+		return new RouteBuilder({ ...this._config, method: this._addMethod("PATCH") });
+	}
+
+	head(): RouteBuilder<TParams, HasMethod<"HEAD">, TMode, TSchema> {
+		return new RouteBuilder({ ...this._config, method: this._addMethod("HEAD") });
+	}
+
+	options(): RouteBuilder<TParams, HasMethod<"OPTIONS">, TMode, TSchema> {
+		return new RouteBuilder({
+			...this._config,
+			method: this._addMethod("OPTIONS"),
+		});
 	}
 
 	// ── Mode ────────────────────────────────────────────────────
@@ -106,8 +127,13 @@ export class RouteBuilder<
 	 * Mark this route as raw — handler receives `(request, ctx)` and returns `Response`.
 	 * Cannot be combined with `.schema()`.
 	 */
-	raw(): RouteBuilder<_TMethod, RawMode, NoSchema> {
-		return new RouteBuilder({ ...this._config, mode: "raw", schema: undefined, outputSchema: undefined });
+	raw(): RouteBuilder<TParams, _TMethod, RawMode, NoSchema> {
+		return new RouteBuilder({
+			...this._config,
+			mode: "raw",
+			schema: undefined,
+			outputSchema: undefined,
+		});
 	}
 
 	// ── Schema ──────────────────────────────────────────────────
@@ -118,7 +144,7 @@ export class RouteBuilder<
 	 */
 	schema<TInput>(
 		schema: z.ZodSchema<TInput>,
-	): RouteBuilder<_TMethod, JsonMode, HasSchema<TInput>> {
+	): RouteBuilder<TParams, _TMethod, JsonMode, HasSchema<TInput>> {
 		return new RouteBuilder({ ...this._config, mode: "json", schema });
 	}
 
@@ -127,8 +153,24 @@ export class RouteBuilder<
 	 */
 	outputSchema<TOutput>(
 		schema: z.ZodSchema<TOutput>,
-	): RouteBuilder<_TMethod, _TMode, _TSchema> {
+	): RouteBuilder<TParams, _TMethod, TMode, TSchema> {
 		return new RouteBuilder({ ...this._config, outputSchema: schema }) as any;
+	}
+
+	/**
+	 * Declare the URL params shape available to the handler.
+	 *
+	 * This is the source-level path to exact params safety. Codegen can infer
+	 * route params for generated `AppRoutes`, but it cannot retroactively type
+	 * the handler inside this source file from the filename alone.
+	 */
+	params<TNextParams extends JsonRouteParams>(): RouteBuilder<
+		TNextParams,
+		_TMethod,
+		TMode,
+		TSchema
+	> {
+		return new RouteBuilder({ ...this._config }) as any;
 	}
 
 	// ── Access ──────────────────────────────────────────────────
@@ -136,9 +178,7 @@ export class RouteBuilder<
 	/**
 	 * Set access control for this route.
 	 */
-	access(
-		access: RouteAccess,
-	): RouteBuilder<_TMethod, _TMode, _TSchema> {
+	access(access: RouteAccess): RouteBuilder<TParams, _TMethod, TMode, TSchema> {
 		return new RouteBuilder({ ...this._config, access }) as any;
 	}
 
@@ -153,21 +193,21 @@ export class RouteBuilder<
 	 * - Otherwise → defaults to `RawRouteDefinition` with POST method
 	 */
 	handler(
-		handler: _TMode extends RawMode
-			? (args: RawRouteHandlerArgs) => Response | Promise<Response>
-			: _TSchema extends HasSchema<infer TInput>
-				? (args: JsonRouteHandlerArgs<TInput>) => any
-				: (args: RawRouteHandlerArgs) => Response | Promise<Response>,
-	): _TMode extends RawMode
-		? RawRouteDefinition
-		: _TSchema extends HasSchema<infer TInput>
-			? JsonRouteDefinition<TInput, any>
-			: RawRouteDefinition {
+		handler: TMode extends RawMode
+			? (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>
+			: TSchema extends HasSchema<infer TInput>
+				? (args: JsonRouteHandlerArgs<TInput, TParams>) => any
+				: (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>,
+	): TMode extends RawMode
+		? RawRouteDefinition<TParams>
+		: TSchema extends HasSchema<infer TInput>
+			? JsonRouteDefinition<TInput, any, TParams>
+			: RawRouteDefinition<TParams> {
 		const method = this._config.method ?? "POST";
 
 		if (this._config.mode === "json" || this._config.schema) {
 			// JSON route
-			const def: JsonRouteDefinition = {
+			const def: JsonRouteDefinition<any, any, TParams> = {
 				__brand: "route",
 				mode: "json",
 				method,
@@ -180,7 +220,7 @@ export class RouteBuilder<
 		}
 
 		// Raw route (default)
-		const def: RawRouteDefinition = {
+		const def: RawRouteDefinition<TParams> = {
 			__brand: "route",
 			mode: "raw",
 			method,

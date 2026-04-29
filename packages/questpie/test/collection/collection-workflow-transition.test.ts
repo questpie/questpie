@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { collection } from "../../src/server/index.js";
+
+import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -135,13 +136,13 @@ describe("collection transitionStage", () => {
 	it("transitions a record from draft to published", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created = await setup.app.api.collections.workflow_posts.create(
+		const created = await setup.app.collections.workflow_posts.create(
 			{ id: crypto.randomUUID(), title: "My Post" },
 			ctx,
 		);
 
 		const result =
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			);
@@ -149,7 +150,7 @@ describe("collection transitionStage", () => {
 		expect(result.id).toBe(created.id);
 
 		// Verify the record is now readable from the published stage
-		const published = await setup.app.api.collections.workflow_posts.findOne(
+		const published = await setup.app.collections.workflow_posts.findOne(
 			{ where: { id: created.id }, stage: "published" },
 			ctx,
 		);
@@ -160,13 +161,13 @@ describe("collection transitionStage", () => {
 	it("throws for unknown target stage", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created = await setup.app.api.collections.workflow_posts.create(
+		const created = await setup.app.collections.workflow_posts.create(
 			{ id: crypto.randomUUID(), title: "My Post" },
 			ctx,
 		);
 
 		await expect(
-			setup.app.api.collections.workflow_posts.transitionStage(
+			setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "nonexistent" },
 				ctx,
 			),
@@ -177,7 +178,7 @@ describe("collection transitionStage", () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
 		await expect(
-			setup.app.api.collections.workflow_posts.transitionStage(
+			setup.app.collections.workflow_posts.transitionStage(
 				{ id: crypto.randomUUID(), stage: "published" },
 				ctx,
 			),
@@ -187,13 +188,13 @@ describe("collection transitionStage", () => {
 	it("throws when workflow is not enabled on the collection", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created = await setup.app.api.collections.no_workflow.create(
+		const created = await setup.app.collections.no_workflow.create(
 			{ id: crypto.randomUUID(), title: "No WF" },
 			ctx,
 		);
 
 		await expect(
-			setup.app.api.collections.no_workflow.transitionStage(
+			setup.app.collections.no_workflow.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			),
@@ -203,34 +204,34 @@ describe("collection transitionStage", () => {
 	it("enforces transition guards", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created = await setup.app.api.collections.guarded_posts.create(
+		const created = await setup.app.collections.guarded_posts.create(
 			{ id: crypto.randomUUID(), title: "My Post" },
 			ctx,
 		);
 
 		// draft -> published should fail (must go through review)
 		await expect(
-			setup.app.api.collections.guarded_posts.transitionStage(
+			setup.app.collections.guarded_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			),
 		).rejects.toThrow('Transition from "draft" to "published" is not allowed');
 
 		// draft -> review should succeed
-		await setup.app.api.collections.guarded_posts.transitionStage(
+		await setup.app.collections.guarded_posts.transitionStage(
 			{ id: created.id, stage: "review" },
 			ctx,
 		);
 
 		// review -> published should succeed
-		await setup.app.api.collections.guarded_posts.transitionStage(
+		await setup.app.collections.guarded_posts.transitionStage(
 			{ id: created.id, stage: "published" },
 			ctx,
 		);
 
 		// published -> draft should fail (published has transitions: [])
 		await expect(
-			setup.app.api.collections.guarded_posts.transitionStage(
+			setup.app.collections.guarded_posts.transitionStage(
 				{ id: created.id, stage: "draft" },
 				ctx,
 			),
@@ -240,18 +241,18 @@ describe("collection transitionStage", () => {
 	it("does not mutate record data during transition", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created = await setup.app.api.collections.workflow_posts.create(
+		const created = await setup.app.collections.workflow_posts.create(
 			{ id: crypto.randomUUID(), title: "Original Title" },
 			ctx,
 		);
 
-		await setup.app.api.collections.workflow_posts.transitionStage(
+		await setup.app.collections.workflow_posts.transitionStage(
 			{ id: created.id, stage: "published" },
 			ctx,
 		);
 
 		// Draft stage should still have the original data
-		const draftRow = await setup.app.api.collections.workflow_posts.findOne(
+		const draftRow = await setup.app.collections.workflow_posts.findOne(
 			{ where: { id: created.id } },
 			ctx,
 		);
@@ -262,7 +263,7 @@ describe("collection transitionStage", () => {
 		const systemCtx = createTestContext({ accessMode: "system" });
 
 		const created =
-			await setup.app.api.collections.transition_access_posts.create(
+			await setup.app.collections.transition_access_posts.create(
 				{ id: crypto.randomUUID(), title: "My Post" },
 				systemCtx,
 			);
@@ -273,7 +274,7 @@ describe("collection transitionStage", () => {
 			role: "editor",
 		});
 		await expect(
-			setup.app.api.collections.transition_access_posts.transitionStage(
+			setup.app.collections.transition_access_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				nonAdminCtx,
 			),
@@ -285,7 +286,7 @@ describe("collection transitionStage", () => {
 			role: "admin",
 		});
 		const result =
-			await setup.app.api.collections.transition_access_posts.transitionStage(
+			await setup.app.collections.transition_access_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				adminCtx,
 			);
@@ -297,14 +298,14 @@ describe("collection transitionStage", () => {
 		// This verifies the fallback chain works
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created = await setup.app.api.collections.workflow_posts.create(
+		const created = await setup.app.collections.workflow_posts.create(
 			{ id: crypto.randomUUID(), title: "Fallback Test" },
 			ctx,
 		);
 
 		const userCtx = createTestContext({ accessMode: "user", role: "user" });
 		const result =
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				userCtx,
 			);
@@ -316,12 +317,12 @@ describe("collection transitionStage", () => {
 		hookCalls.after = [];
 
 		const ctx = createTestContext({ accessMode: "system" });
-		const created = await setup.app.api.collections.hooked_posts.create(
+		const created = await setup.app.collections.hooked_posts.create(
 			{ id: crypto.randomUUID(), title: "Hooked" },
 			ctx,
 		);
 
-		await setup.app.api.collections.hooked_posts.transitionStage(
+		await setup.app.collections.hooked_posts.transitionStage(
 			{ id: created.id, stage: "published" },
 			ctx,
 		);
@@ -341,41 +342,50 @@ describe("collection transitionStage", () => {
 
 	it("aborts transition when beforeTransition hook throws", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
-		const created = await setup.app.api.collections.blocking_hooks_posts.create(
+		const created = await setup.app.collections.blocking_hooks_posts.create(
 			{ id: crypto.randomUUID(), title: "Blocked" },
 			ctx,
 		);
 
 		await expect(
-			setup.app.api.collections.blocking_hooks_posts.transitionStage(
+			setup.app.collections.blocking_hooks_posts.transitionStage(
 				{ id: created.id, stage: "published" },
 				ctx,
 			),
 		).rejects.toThrow("Transition blocked by hook");
 	});
 
-	it("throws when scheduledAt is used without a queue adapter", async () => {
+	it("schedules future transitions through the core queue job", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created = await setup.app.api.collections.workflow_posts.create(
+		const created = await setup.app.collections.workflow_posts.create(
 			{ id: crypto.randomUUID(), title: "Schedule Test" },
 			ctx,
 		);
 
 		const futureDate = new Date(Date.now() + 60_000);
 
-		await expect(
-			setup.app.api.collections.workflow_posts.transitionStage(
-				{ id: created.id, stage: "published", scheduledAt: futureDate },
-				ctx,
-			),
-		).rejects.toThrow("Scheduled transitions require a queue adapter");
+		const result = await setup.app.collections.workflow_posts.transitionStage(
+			{ id: created.id, stage: "published", scheduledAt: futureDate },
+			ctx,
+		);
+
+		expect(result.id).toBe(created.id);
+
+		const jobs = setup.app.mocks.queue.getJobsByName("scheduled-transition");
+		expect(jobs).toHaveLength(1);
+		expect(jobs[0].payload).toEqual({
+			type: "collection",
+			collection: "workflow_posts",
+			recordId: created.id,
+			stage: "published",
+		});
 	});
 
 	it("executes immediately when scheduledAt is in the past", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created = await setup.app.api.collections.workflow_posts.create(
+		const created = await setup.app.collections.workflow_posts.create(
 			{ id: crypto.randomUUID(), title: "Past Schedule" },
 			ctx,
 		);
@@ -383,14 +393,14 @@ describe("collection transitionStage", () => {
 		const pastDate = new Date(Date.now() - 60_000);
 
 		const result =
-			await setup.app.api.collections.workflow_posts.transitionStage(
+			await setup.app.collections.workflow_posts.transitionStage(
 				{ id: created.id, stage: "published", scheduledAt: pastDate },
 				ctx,
 			);
 
 		expect(result.id).toBe(created.id);
 
-		const published = await setup.app.api.collections.workflow_posts.findOne(
+		const published = await setup.app.collections.workflow_posts.findOne(
 			{ where: { id: created.id }, stage: "published" },
 			ctx,
 		);

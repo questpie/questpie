@@ -3,9 +3,7 @@ title: Realtime Infrastructure
 description: Realtime adapters — pgNotify for single-instance, Redis Streams for multi-instance.
 ---
 
-# Realtime Infrastructure
-
-QuestPie supports real-time data updates via `POST /realtime` multiplexed endpoint.
+QUESTPIE supports real-time data updates via `POST /realtime` multiplexed endpoint.
 
 ## Adapters
 
@@ -17,11 +15,11 @@ Uses PostgreSQL `LISTEN/NOTIFY`. Works for single-instance deployments:
 import { pgNotifyAdapter, runtimeConfig } from "questpie";
 
 export default runtimeConfig({
-  realtime: {
-    adapter: pgNotifyAdapter({
-      connectionString: process.env.DATABASE_URL,
-    }),
-  },
+	realtime: {
+		adapter: pgNotifyAdapter({
+			connectionString: process.env.DATABASE_URL,
+		}),
+	},
 });
 ```
 
@@ -33,20 +31,20 @@ Uses Redis Streams. Required for multi-instance deployments:
 import { redisStreamsAdapter } from "questpie";
 
 export default runtimeConfig({
-  realtime: {
-    adapter: redisStreamsAdapter({
-      url: process.env.REDIS_URL,
-    }),
-  },
+	realtime: {
+		adapter: redisStreamsAdapter({
+			url: process.env.REDIS_URL,
+		}),
+	},
 });
 ```
 
 ## When to Use Which
 
-| Adapter | Use case |
-|---|---|
-| `pgNotifyAdapter` | Single server, development, simple deployments |
-| `redisStreamsAdapter` | Multiple servers, horizontal scaling |
+| Adapter               | Use case                                       |
+| --------------------- | ---------------------------------------------- |
+| `pgNotifyAdapter`     | Single server, development, simple deployments |
+| `redisStreamsAdapter` | Multiple servers, horizontal scaling           |
 
 ## Related Pages
 

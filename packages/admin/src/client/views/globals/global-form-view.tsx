@@ -11,6 +11,7 @@ import { QuestpieClientError } from "questpie/client";
 import * as React from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
+
 import type {
 	ComponentRegistry,
 	FormViewConfig,
@@ -37,7 +38,9 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
+import { EmptyState } from "../../components/ui/empty-state";
 import { Label } from "../../components/ui/label";
+import { Skeleton } from "../../components/ui/skeleton";
 import {
 	useGlobal,
 	useGlobalRevertVersion,
@@ -52,7 +55,13 @@ import { useGlobalServerValidation } from "../../hooks/use-server-validation";
 import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { useSafeContentLocales, useScopedLocale } from "../../runtime";
+import {
+	detectManyToManyRelations,
+	hasManyToManyRelations,
+} from "../../utils/detect-relations";
+import { shouldHandleAdminShortcut } from "../../utils/keyboard-shortcuts";
 import { AutoFormFields } from "../collection/auto-form-fields";
+import { AdminViewHeader } from "../layout/admin-view-layout";
 
 // ============================================================================
 // Helper Functions
@@ -76,6 +85,38 @@ function extractReactiveConfigs(
 	}
 
 	return configs;
+}
+
+function GlobalFormViewSkeleton() {
+	return (
+		<div className="qa-global-form w-full space-y-4" aria-busy="true">
+			<span className="sr-only">Loading global form</span>
+			<AdminViewHeader
+				title={<Skeleton variant="text" className="h-7 w-48" />}
+				meta={<Skeleton variant="text" className="h-3 w-36" />}
+				actions={
+					<>
+						<Skeleton className="size-8" />
+						<Skeleton className="h-8 w-20" />
+					</>
+				}
+			/>
+			<div className="space-y-4">
+				<div className="space-y-2">
+					<Skeleton variant="text" className="h-4 w-24" />
+					<Skeleton className="h-10 w-full" />
+				</div>
+				<div className="space-y-2">
+					<Skeleton variant="text" className="h-4 w-32" />
+					<Skeleton className="h-10 w-full" />
+				</div>
+				<div className="space-y-2">
+					<Skeleton variant="text" className="h-4 w-28" />
+					<Skeleton className="h-32 w-full" />
+				</div>
+			</div>
+		</div>
+	);
 }
 
 // ============================================================================
@@ -167,9 +208,49 @@ export default function GlobalFormView({
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 
-	const { data: globalData, isLoading: dataLoading } = useGlobal(globalName);
 	const { fields: schemaFields, schema: globalSchema } =
 		useGlobalFields(globalName);
+
+	// Auto-detect M:N relations (e.g. upload-through) — they are virtual and
+	// are NOT included in the response unless explicitly requested via `with`.
+	const withRelations = React.useMemo(
+		() =>
+			detectManyToManyRelations({
+				fields: config?.fields as any,
+				schema: globalSchema as any,
+			}),
+		[config?.fields, globalSchema],
+	);
+
+	const {
+		data: globalDataRaw,
+		isLoading: dataLoading,
+		error: dataError,
+	} = useGlobal(
+		globalName,
+		hasManyToManyRelations(withRelations) ? { with: withRelations } : undefined,
+	);
+
+	// Backend returns relation arrays as { id, ... } objects but the form needs
+	// arrays of ids — same transform CollectionFormView does for editing.
+	const globalData = React.useMemo(() => {
+		if (!globalDataRaw || !hasManyToManyRelations(withRelations)) {
+			return globalDataRaw;
+		}
+		const result: Record<string, any> = { ...(globalDataRaw as any) };
+		for (const key of Object.keys(withRelations)) {
+			const value = result[key];
+			if (
+				Array.isArray(value) &&
+				value.length > 0 &&
+				typeof value[0] === "object" &&
+				value[0]?.id
+			) {
+				result[key] = value.map((v: any) => v.id);
+			}
+		}
+		return result;
+	}, [globalDataRaw, withRelations]);
 
 	const { locale: contentLocale, setLocale: setContentLocale } =
 		useScopedLocale();
@@ -351,8 +432,62 @@ export default function GlobalFormView({
 		t,
 	]);
 
+	// Locale change dirty guard
+	const prevLocaleRef = React.useRef(contentLocale);
+	const skipResetRef = React.useRef(false);
+	const localeSnapshotRef = React.useRef<Record<string, any> | null>(null);
+	const [localeChangeDialog, setLocaleChangeDialog] = React.useState<{
+		open: boolean;
+		pendingLocale: string | null;
+	}>({ open: false, pendingLocale: null });
+
+	React.useEffect(() => {
+		if (prevLocaleRef.current !== contentLocale) {
+			if (form.formState.isDirty && !localeChangeDialog.open) {
+				skipResetRef.current = true;
+				localeSnapshotRef.current = form.getValues();
+				setLocaleChangeDialog({ open: true, pendingLocale: contentLocale });
+				setContentLocale(prevLocaleRef.current);
+			} else {
+				prevLocaleRef.current = contentLocale;
+				skipResetRef.current = false;
+			}
+		}
+	}, [
+		contentLocale,
+		form.formState.isDirty,
+		localeChangeDialog.open,
+		setContentLocale,
+		form,
+	]);
+
+	const handleLocaleChangeConfirm = React.useCallback(() => {
+		skipResetRef.current = false;
+		localeSnapshotRef.current = null;
+		if (localeChangeDialog.pendingLocale) {
+			prevLocaleRef.current = localeChangeDialog.pendingLocale;
+			setContentLocale(localeChangeDialog.pendingLocale);
+		}
+		setLocaleChangeDialog({ open: false, pendingLocale: null });
+	}, [localeChangeDialog.pendingLocale, setContentLocale]);
+
+	const handleLocaleChangeCancel = React.useCallback(() => {
+		skipResetRef.current = false;
+		if (localeSnapshotRef.current) {
+			form.reset(localeSnapshotRef.current, {
+				keepDirty: true,
+				keepDirtyValues: true,
+				keepErrors: true,
+				keepTouched: true,
+			});
+		}
+		localeSnapshotRef.current = null;
+		setLocaleChangeDialog({ open: false, pendingLocale: null });
+	}, [form]);
+
 	// Reset form when data loads
 	React.useEffect(() => {
+		if (skipResetRef.current) return;
 		if (globalData) {
 			form.reset(globalData as any);
 		}
@@ -371,6 +506,7 @@ export default function GlobalFormView({
 		reactiveConfigs,
 		enabled: !dataLoading && Object.keys(reactiveConfigs).length > 0,
 		debounce: 300,
+		form,
 	});
 
 	const resolvedConfig = React.useMemo(() => {
@@ -427,7 +563,12 @@ export default function GlobalFormView({
 	// Keyboard shortcut: Cmd+S to save
 	React.useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+			if (
+				shouldHandleAdminShortcut(e, {
+					allowEditableTarget: true,
+					key: "s",
+				})
+			) {
 				e.preventDefault();
 				form.handleSubmit(onSubmit)();
 			}
@@ -468,12 +609,31 @@ export default function GlobalFormView({
 		});
 	};
 
-	if (dataLoading) {
+	if (dataError) {
 		return (
-			<div className="flex h-64 items-center justify-center text-muted-foreground">
-				<Icon icon="ph:spinner-gap" className="size-6 animate-spin" />
-			</div>
+			<EmptyState
+				variant="error"
+				iconName="ph:warning-circle"
+				title={t("error.failedToLoad")}
+				description={dataError instanceof Error ? dataError.message : undefined}
+				height="h-64"
+				action={
+					<Button
+						variant="outline"
+						size="sm"
+						className="gap-2"
+						onClick={() => window.location.reload()}
+					>
+						<Icon icon="ph:arrow-clockwise" className="size-3.5" />
+						{t("common.retry")}
+					</Button>
+				}
+			/>
 		);
+	}
+
+	if (dataLoading) {
+		return <GlobalFormViewSkeleton />;
 	}
 
 	const globalLabel = resolveText(
@@ -487,13 +647,11 @@ export default function GlobalFormView({
 				onSubmit={form.handleSubmit(onSubmit)}
 				className="qa-global-form w-full space-y-4"
 			>
-				{/* Header - Title & Actions */}
-				<div className="qa-global-form__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-					<div className="min-w-0 flex-1">
-						<div className="flex items-center gap-3 flex-wrap">
-							<h1 className="qa-global-form__title text-2xl md:text-3xl font-extrabold tracking-tight">
-								{globalLabel}
-							</h1>
+				<AdminViewHeader
+					className="qa-global-form__header"
+					title={globalLabel}
+					titleAccessory={
+						<>
 							{localeOptions.length > 0 && (
 								<LocaleSwitcher
 									locales={localeOptions}
@@ -501,81 +659,94 @@ export default function GlobalFormView({
 									onChange={setContentLocale}
 								/>
 							)}
-
-							{/* Workflow stage badge */}
 							{workflowEnabled && currentStage && (
 								<Badge variant="outline" className="gap-1.5">
 									<Icon icon="ph:git-branch" className="size-3" />
 									{currentStageLabel}
 								</Badge>
 							)}
-						</div>
-						{showMeta && globalData?.updatedAt && (
-							<p className="qa-global-form__meta mt-1 text-xs text-muted-foreground">
+						</>
+					}
+					meta={
+						showMeta && globalData?.updatedAt ? (
+							<span>
 								{t("form.lastUpdated")}: {formatDate(globalData.updatedAt)}
-							</p>
-						)}
-					</div>
+							</span>
+						) : undefined
+					}
+					actions={
+						<>
+							{headerActions}
 
-					<div className="qa-global-form__actions flex items-center gap-2 shrink-0">
-						{headerActions}
-
-						{/* Workflow transition dropdown */}
-						{workflowEnabled && allowedTransitions.length > 0 && (
-							<DropdownMenu>
-								<DropdownMenuTrigger
-									render={
-										<Button type="button" variant="outline" className="gap-2" />
-									}
-								>
-									<Icon icon="ph:arrows-left-right" className="size-4" />
-									{t("workflow.transition")}
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="end">
-									{allowedTransitions.map((stage) => (
-										<DropdownMenuItem
-											key={stage.name}
-											onClick={() =>
-												setTransitionTarget({
-													name: stage.name,
-													label: stage.label,
-												})
-											}
-										>
-											<Icon icon="ph:arrow-right" className="mr-2 size-4" />
-											{stage.label || stage.name}
-										</DropdownMenuItem>
-									))}
-								</DropdownMenuContent>
-							</DropdownMenu>
-						)}
-
-						<Button
-							type="button"
-							variant="outline"
-							size="icon"
-							className="size-9"
-							onClick={() => setIsHistoryOpen(true)}
-							title={t("history.title")}
-						>
-							<Icon icon="ph:clock-counter-clockwise" className="size-4" />
-							<span className="sr-only">{t("history.title")}</span>
-						</Button>
-						<Button type="submit" disabled={isSubmitting} className="gap-2">
-							{isSubmitting ? (
-								<>
-									<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
-									{t("common.loading")}
-								</>
-							) : (
-								<>
-									<Icon icon="ph:check" width={16} height={16} />
-									{t("common.save")}
-								</>
+							{/* Workflow transition dropdown */}
+							{workflowEnabled && allowedTransitions.length > 0 && (
+								<DropdownMenu>
+									<DropdownMenuTrigger
+										render={
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												className="gap-2"
+											/>
+										}
+									>
+										<Icon icon="ph:arrows-left-right" className="size-3.5" />
+										{t("workflow.transition")}
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end">
+										{allowedTransitions.map((stage) => (
+											<DropdownMenuItem
+												key={stage.name}
+												onClick={() =>
+													setTransitionTarget({
+														name: stage.name,
+														label: stage.label,
+													})
+												}
+											>
+												<Icon icon="ph:arrow-right" className="mr-2 size-4" />
+												{stage.label || stage.name}
+											</DropdownMenuItem>
+										))}
+									</DropdownMenuContent>
+								</DropdownMenu>
 							)}
-						</Button>
-					</div>
-				</div>
+
+							<Button
+								type="button"
+								variant="outline"
+								size="icon-sm"
+								onClick={() => setIsHistoryOpen(true)}
+								title={t("history.title")}
+							>
+								<Icon icon="ph:clock-counter-clockwise" className="size-3.5" />
+								<span className="sr-only">{t("history.title")}</span>
+							</Button>
+							<Button
+								type="submit"
+								size="sm"
+								disabled={isSubmitting}
+								className="gap-2"
+							>
+								{isSubmitting ? (
+									<>
+										<Icon
+											icon="ph:spinner-gap"
+											className="size-4 animate-spin"
+										/>
+										{t("common.loading")}
+									</>
+								) : (
+									<>
+										<Icon icon="ph:check" width={16} height={16} />
+										{t("common.save")}
+									</>
+								)}
+							</Button>
+						</>
+					}
+				/>
 
 				{/* Main Content - Form Fields */}
 				<AutoFormFields
@@ -592,6 +763,7 @@ export default function GlobalFormView({
 				auditEntries={auditData ?? []}
 				isLoadingAudit={auditLoading}
 				versions={(versionsData ?? []) as any[]}
+				fields={globalSchema?.fields as any}
 				isLoadingVersions={versionsLoading}
 				isReverting={revertVersionMutation.isPending}
 				onRevert={async (version) => {
@@ -661,7 +833,7 @@ export default function GlobalFormView({
 							/>
 							<Label
 								htmlFor="global-transition-schedule"
-								className="text-sm cursor-pointer"
+								className="cursor-pointer text-sm"
 							>
 								{t("workflow.scheduleLabel")}
 							</Label>
@@ -669,7 +841,7 @@ export default function GlobalFormView({
 
 						{transitionSchedule && (
 							<div className="space-y-1.5 pl-6">
-								<Label className="text-xs text-muted-foreground">
+								<Label className="text-muted-foreground text-xs">
 									{t("workflow.scheduledAt")}
 								</Label>
 								<DateTimeInput
@@ -677,7 +849,7 @@ export default function GlobalFormView({
 									onChange={setTransitionScheduledAt}
 									minDate={new Date()}
 								/>
-								<p className="text-xs text-muted-foreground">
+								<p className="text-muted-foreground text-xs">
 									{t("workflow.scheduledDescription")}
 								</p>
 							</div>
@@ -711,6 +883,28 @@ export default function GlobalFormView({
 							{transitionSchedule
 								? t("workflow.scheduleLabel")
 								: t("workflow.transition")}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+			{/* Locale change confirmation dialog */}
+			<Dialog
+				open={localeChangeDialog.open}
+				onOpenChange={(open) => !open && handleLocaleChangeCancel()}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>{t("locale.unsavedChanges")}</DialogTitle>
+						<DialogDescription>
+							{t("locale.unsavedChangesDescription")}
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button variant="outline" onClick={handleLocaleChangeCancel}>
+							{t("common.cancel")}
+						</Button>
+						<Button variant="default" onClick={handleLocaleChangeConfirm}>
+							{t("locale.discardChanges")}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

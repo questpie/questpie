@@ -9,7 +9,9 @@
  */
 
 import * as React from "react";
+
 import { Badge } from "../../../components/ui/badge";
+import { useTranslation } from "../../../i18n/hooks";
 
 // ============================================================================
 // Default Cell (Ultra-Simple Fallback)
@@ -39,7 +41,7 @@ export function TextCell({ value }: { value: unknown }) {
 	}
 	const text = String(value);
 	return (
-		<span className="truncate max-w-[300px] block" title={text}>
+		<span className="block max-w-[300px] truncate" title={text}>
 			{text}
 		</span>
 	);
@@ -83,7 +85,7 @@ export function RichTextCell({ value }: { value: unknown }) {
 		return <span className="text-muted-foreground">-</span>;
 	}
 	return (
-		<span className="truncate max-w-[300px] block" title={text}>
+		<span className="block max-w-[300px] truncate" title={text}>
 			{text}
 		</span>
 	);
@@ -116,9 +118,10 @@ export function NumberCell({ value }: { value: unknown }) {
  * Boolean cell - badge display
  */
 export function BooleanCell({ value }: { value: unknown }) {
+	const { t } = useTranslation();
 	return (
 		<Badge variant={value ? "default" : "secondary"}>
-			{value ? "Yes" : "No"}
+			{value ? t("common.yes") : t("common.no")}
 		</Badge>
 	);
 }
@@ -181,7 +184,7 @@ export function EmailCell({ value }: { value: unknown }) {
 	if (value === null || value === undefined || value === "") {
 		return <span className="text-muted-foreground">-</span>;
 	}
-	return <span className="text-primary">{String(value)}</span>;
+	return <span className="text-foreground">{String(value)}</span>;
 }
 
 /**

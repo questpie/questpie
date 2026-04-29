@@ -1,6 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+
+import type { Auth, BetterAuthOptions } from "better-auth";
 import type { Session, User } from "better-auth/types";
-import type { AccessMode, QuestpieContextExtension } from "./types.js";
+
+import type { InternalContextStore } from "./internal-context.js";
+import type { AccessMode } from "./types.js";
 
 // ============================================================================
 // Type Inference Utilities
@@ -19,6 +23,44 @@ export type InferSessionFromApp<TApp> = TApp extends {
 }
 	? S
 	: { user: User; session: Session };
+
+type SessionMarker<TAuthConfig> = TAuthConfig extends {
+	__questpieSessionType__?: infer TSession;
+}
+	? NonNullable<TSession>
+	: never;
+
+/**
+ * Infer custom request-context extensions from `config/app.ts`.
+ *
+ * This extracts the return shape of `appConfig({ context })` so generated
+ * `AppContext` can expose those request-scoped properties without relying on
+ * `typeof app`.
+ */
+export type InferContextExtensionsFromAppConfig<TAppConfig> =
+	TAppConfig extends {
+		context?: infer TContext;
+	}
+		? TContext extends (...args: any[]) => infer TResult
+			? Awaited<TResult> extends Record<string, any>
+				? Awaited<TResult>
+				: {}
+			: {}
+		: {};
+
+/**
+ * Infer the Session type from a Better Auth config object.
+ *
+ * Used by generated code to avoid recursive `typeof app` references while still
+ * preserving plugin-extended session/user fields.
+ */
+export type InferSessionFromAuthConfig<TAuthConfig> = [
+	SessionMarker<TAuthConfig>,
+] extends [never]
+	? Auth<
+			TAuthConfig extends BetterAuthOptions ? TAuthConfig : BetterAuthOptions
+		>["$Infer"]["Session"]
+	: SessionMarker<TAuthConfig>;
 
 /**
  * Infer the database type from a app instance.
@@ -51,14 +93,20 @@ export type InferAppFromApp<TApp> = TApp;
  * Internal AsyncLocalStorage for request-scoped context.
  * Used when getContext() is called to retrieve implicit context.
  */
-const appContextStorage = new AsyncLocalStorage<{
-	app: unknown;
-	session?: unknown | null;
-	db?: unknown;
-	locale?: string;
-	accessMode?: string;
-	stage?: string;
-}>();
+const appContextStorage = new AsyncLocalStorage<
+	{
+		app: unknown;
+		session?: unknown | null;
+		db?: unknown;
+		locale?: string;
+		accessMode?: string;
+		stage?: string;
+		_hookDepth?: number;
+	} & InternalContextStore
+>();
+
+/** Maximum recursion depth for hook-triggered CRUD operations */
+const MAX_HOOK_RECURSION = 5;
 
 /**
  * Stored context shape returned by tryGetContext.
@@ -70,6 +118,29 @@ export interface StoredContext {
 	locale?: string;
 	accessMode?: string;
 	stage?: string;
+	_hookDepth?: number;
+}
+
+/**
+ * Increment hook recursion depth and throw if limit exceeded.
+ * Call this at the start of each CRUD operation to prevent infinite loops
+ * caused by hooks triggering more CRUD operations.
+ */
+export function guardHookRecursion(): number {
+	const ctx = appContextStorage.getStore();
+	const depth = (ctx?._hookDepth ?? 0) + 1;
+	if (depth > MAX_HOOK_RECURSION) {
+		throw new Error(
+			`[QUESTPIE] Maximum hook recursion depth (${MAX_HOOK_RECURSION}) exceeded. ` +
+				"A lifecycle hook is likely triggering CRUD operations that re-trigger the same hook.",
+		);
+	}
+	if (depth >= 3) {
+		console.warn(
+			`[QUESTPIE] Hook recursion depth at ${depth} — review hooks for potential infinite loops`,
+		);
+	}
+	return depth;
 }
 
 /**
@@ -116,10 +187,22 @@ export function runWithContext<T>(
 		locale?: string;
 		accessMode?: string;
 		stage?: string;
+		_hookDepth?: number;
 	},
 	fn: () => T | Promise<T>,
 ): Promise<T> {
-	return appContextStorage.run(ctx, fn) as Promise<T>;
+	// Inherit hook depth from parent context if not explicitly set
+	if (ctx._hookDepth === undefined) {
+		const parent = appContextStorage.getStore();
+		if (parent?._hookDepth !== undefined) {
+			ctx._hookDepth = parent._hookDepth;
+		}
+	}
+	// Cast needed because some @types/node versions type AsyncLocalStorage.run() as returning void
+	return appContextStorage.run(
+		ctx as StoredContext & InternalContextStore,
+		fn,
+	) as unknown as Promise<T>;
 }
 
 /**
@@ -257,30 +340,20 @@ export interface BaseRequestContext {
 }
 
 /**
- * Full request context including user-defined extensions.
+ * Full request context.
  *
- * Extend via module augmentation:
- * ```ts
- * declare module 'questpie' {
- *   interface QuestpieContextExtension {
- *     tenantId: string | null
- *   }
- * }
- * ```
- *
- * Then in access functions:
+ * In access functions:
  * ```ts
  * .access({
  *   read: ({ ctx }) => {
- *     ctx.tenantId // ✅ Typed as string | null
+ *     ctx.session // ✅ Typed
  *   }
  * })
  * ```
  */
-export type RequestContext = BaseRequestContext &
-	QuestpieContextExtension & {
-		/**
-		 * Allow additional properties for backwards compatibility.
-		 */
-		[key: string]: unknown;
-	};
+export type RequestContext = BaseRequestContext & {
+	/**
+	 * Allow additional properties for backwards compatibility.
+	 */
+	[key: string]: unknown;
+};

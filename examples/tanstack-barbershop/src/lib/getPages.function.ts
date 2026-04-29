@@ -1,9 +1,10 @@
-import { isDraftMode } from "@questpie/admin/shared";
 import { notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
+
 import { app } from "#questpie";
 import { createRequestContext } from "@/lib/server-helpers";
+import { isDraftMode } from "@questpie/admin/shared";
 
 export type PageLoaderData = Awaited<ReturnType<typeof getPage>>;
 
@@ -16,7 +17,7 @@ export const getPage = createServerFn({ method: "GET" })
 		const isDraft = isDraftMode(cookieHeader);
 		const ctx = await createRequestContext();
 
-		const page = await app.api.collections.pages.findOne(
+		const page = await app.collections.pages.findOne(
 			{
 				where: isDraft
 					? { slug: data.slug }

@@ -112,7 +112,6 @@ export type TypedTranslateFn<TCustomKeys extends string = never> = (
  *
  * @deprecated Use .messages() on the builder instead
  */
-// biome-ignore lint/suspicious/noEmptyInterface: Module augmentation target for backwards compatibility
 export interface BackendMessageRegistry {
 	// Empty - message keys now flow through builder chain via .messages()
 	// Legacy keys can still be added via module augmentation

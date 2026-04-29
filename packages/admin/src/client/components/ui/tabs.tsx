@@ -1,7 +1,6 @@
 "use client";
 
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
-import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../../lib/utils";
 
@@ -15,7 +14,7 @@ function Tabs({
 			data-slot="tabs"
 			data-orientation={orientation}
 			className={cn(
-				"qa-tabs gap-2 group/tabs flex data-[orientation=horizontal]:flex-col",
+				"qa-tabs group/tabs flex gap-2 data-[orientation=horizontal]:flex-col",
 				className,
 			)}
 			{...props}
@@ -23,31 +22,29 @@ function Tabs({
 	);
 }
 
-const tabsListVariants = cva(
-	"qa-tabs__list p-[3px] group-data-horizontal/tabs:h-8 group/tabs-list text-muted-foreground inline-flex w-fit items-center justify-center group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col",
-	{
-		variants: {
-			variant: {
-				default: "bg-muted",
-				line: "gap-1 bg-transparent",
-			},
-		},
-		defaultVariants: {
-			variant: "default",
-		},
-	},
-);
+type TabsListVariant = "pills";
+
+const tabsListBase =
+	"qa-tabs__list group/tabs-list text-muted-foreground bg-surface-low border-border-subtle inline-flex w-fit items-center justify-center gap-1 rounded-md border p-1 group-data-horizontal/tabs:min-h-9 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col";
+
+const tabsListVariantStyles: Record<TabsListVariant, string> = {
+	pills: "border-transparent bg-muted/70",
+};
 
 function TabsList({
 	className,
-	variant = "default",
+	variant,
 	...props
-}: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
+}: TabsPrimitive.List.Props & { variant?: TabsListVariant }) {
 	return (
 		<TabsPrimitive.List
 			data-slot="tabs-list"
-			data-variant={variant}
-			className={cn(tabsListVariants({ variant }), className)}
+			data-variant={variant ?? "default"}
+			className={cn(
+				tabsListBase,
+				variant && tabsListVariantStyles[variant],
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -58,10 +55,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
 		<TabsPrimitive.Tab
 			data-slot="tabs-trigger"
 			className={cn(
-				"qa-tabs__trigger gap-1.5 border border-transparent px-1.5 py-0.5 font-mono text-xs font-medium group-data-vertical/tabs:py-[calc(--spacing(1.25))] [&_svg:not([class*='size-'])]:size-3.5 focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center whitespace-nowrap transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
-				"group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
-				"data-active:bg-background dark:data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input data-active:text-foreground",
-				"after:bg-primary after:absolute after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
+				"qa-tabs__trigger font-chrome text-muted-foreground hover:text-foreground data-active:bg-surface-high data-active:text-foreground focus-visible:ring-ring/20 relative inline-flex min-h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-sm border border-transparent px-3 py-1 text-xs font-medium whitespace-nowrap tabular-nums transition-[background-color,color,border-color,box-shadow,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start focus-visible:ring-[3px] focus-visible:outline-none active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
 				className,
 			)}
 			{...props}
@@ -74,7 +68,7 @@ function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
 		<TabsPrimitive.Panel
 			data-slot="tabs-content"
 			className={cn(
-				"qa-tabs__content text-xs/relaxed flex-1 outline-none",
+				"qa-tabs__content flex-1 text-xs/relaxed transition-opacity duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-standard)] outline-none motion-reduce:transition-none",
 				className,
 			)}
 			{...props}

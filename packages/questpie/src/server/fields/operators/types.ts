@@ -8,7 +8,13 @@
 
 import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import type { ContextualOperators, OperatorFn, OperatorMap, QueryContext } from "../types.js";
+
+import type {
+	ContextualOperators,
+	OperatorFn,
+	OperatorMap,
+	QueryContext,
+} from "../types.js";
 
 // ============================================================================
 // JSONB Cast Strategies
@@ -28,7 +34,13 @@ import type { ContextualOperators, OperatorFn, OperatorMap, QueryContext } from 
  * - `"jsonb"` → `col#>'{path}'` (preserves JSONB structure, no text extraction)
  * - `null` → no JSONB operators (e.g., toMany relations have no column)
  */
-export type JsonbCast = "text" | "numeric" | "boolean" | "timestamp" | "jsonb" | null;
+export type JsonbCast =
+	| "text"
+	| "numeric"
+	| "boolean"
+	| "timestamp"
+	| "jsonb"
+	| null;
 
 // ============================================================================
 // Operator Set Definition
@@ -83,7 +95,10 @@ export type ResolvedOperatorSet<TDef extends OperatorSetDefinition> =
 		TDef["column"],
 		TDef["jsonbCast"] extends null
 			? Record<string, never>
-			: TDef["column"] & (TDef["jsonbOverrides"] extends OperatorMap ? TDef["jsonbOverrides"] : {})
+			: TDef["column"] &
+					(TDef["jsonbOverrides"] extends OperatorMap
+						? TDef["jsonbOverrides"]
+						: {})
 	>;
 
 // ============================================================================

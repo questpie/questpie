@@ -3,8 +3,6 @@ title: Field API
 description: Complete reference for all field factories and chain methods.
 ---
 
-# Field API
-
 All fields are accessed through the `f` builder in `.fields(({ f }) => {...})`. Every chain method returns a **new immutable** field instance — you can safely reuse and extend base fields.
 
 ```ts
@@ -18,27 +16,27 @@ const slug = base.label("Slug").inputOptional();
 
 Every field supports these methods:
 
-| Method | Description |
-|---|---|
-| `.required()` | Mark as NOT NULL |
-| `.default(value)` | Set default value (makes input optional) |
-| `.label(text)` | Display label (string or `{ en: "...", sk: "..." }`) |
-| `.description(text)` | Help text (string or i18n object) |
-| `.localized()` | Store per-locale values in i18n table |
-| `.virtual(expr?)` | No DB column; optional SQL expression for computed fields |
-| `.array()` | Wrap as JSONB array of this field's type |
-| `.inputFalse()` | Exclude from API input (read-only) |
-| `.inputOptional()` | Always optional in input, even if NOT NULL (e.g. auto-generated slugs) |
-| `.outputFalse()` | Exclude from API output (write-only) |
-| `.hooks(h)` | Field-level lifecycle hooks |
-| `.access(a)` | Field-level access control |
-| `.operators(ops)` | Override the operator set for queries |
-| `.drizzle(fn)` | Escape hatch: modify the Drizzle column builder |
-| `.zod(fn)` | Escape hatch: modify the auto-derived Zod schema |
-| `.fromDb(fn)` | Transform value after reading from DB |
-| `.toDb(fn)` | Transform value before writing to DB |
-| `.minItems(n)` | Minimum items (for `.array()` fields) |
-| `.maxItems(n)` | Maximum items (for `.array()` fields) |
+| Method               | Description                                                            |
+| -------------------- | ---------------------------------------------------------------------- |
+| `.required()`        | Mark as NOT NULL                                                       |
+| `.default(value)`    | Set default value (makes input optional)                               |
+| `.label(text)`       | Display label (string or `{ en: "...", sk: "..." }`)                   |
+| `.description(text)` | Help text (string or i18n object)                                      |
+| `.localized()`       | Store per-locale values in i18n table                                  |
+| `.virtual(expr?)`    | No DB column; optional SQL expression for computed fields              |
+| `.array()`           | Wrap as JSONB array of this field's type                               |
+| `.inputFalse()`      | Exclude from API input (read-only)                                     |
+| `.inputOptional()`   | Always optional in input, even if NOT NULL (e.g. auto-generated slugs) |
+| `.outputFalse()`     | Exclude from API output (write-only)                                   |
+| `.hooks(h)`          | Field-level lifecycle hooks                                            |
+| `.access(a)`         | Field-level access control                                             |
+| `.operators(ops)`    | Override the operator set for queries                                  |
+| `.drizzle(fn)`       | Escape hatch: modify the Drizzle column builder                        |
+| `.zod(fn)`           | Escape hatch: modify the auto-derived Zod schema                       |
+| `.fromDb(fn)`        | Transform value after reading from DB                                  |
+| `.toDb(fn)`          | Transform value before writing to DB                                   |
+| `.minItems(n)`       | Minimum items (for `.array()` fields)                                  |
+| `.maxItems(n)`       | Maximum items (for `.array()` fields)                                  |
 
 ## Text Fields
 
@@ -86,14 +84,14 @@ website: f.url(),
 
 These methods are available on `text`, `textarea`, `email`, and `url` fields:
 
-| Method | Description |
-|---|---|
-| `.pattern(regex)` | Add regex validation |
-| `.trim()` | Trim whitespace |
-| `.lowercase()` | Lowercase transform |
-| `.uppercase()` | Uppercase transform |
-| `.min(n)` | Minimum string length |
-| `.max(n)` | Maximum string length |
+| Method            | Description           |
+| ----------------- | --------------------- |
+| `.pattern(regex)` | Add regex validation  |
+| `.trim()`         | Trim whitespace       |
+| `.lowercase()`    | Lowercase transform   |
+| `.uppercase()`    | Uppercase transform   |
+| `.min(n)`         | Minimum string length |
+| `.max(n)`         | Maximum string length |
 
 ```ts
 username: f.text(50).required().trim().lowercase().pattern(/^[a-z0-9_]+$/),
@@ -123,24 +121,24 @@ price: f.number({ mode: "decimal", precision: 10, scale: 2 }).required(),
 
 **Modes:**
 
-| Mode | PG Column | Use Case |
-|---|---|---|
-| `"integer"` (default) | `integer` | Counts, IDs, quantities |
-| `"smallint"` | `smallint` | Small ranges (ports, flags) |
-| `"bigint"` | `bigint` | Large counts, timestamps |
-| `"real"` | `real` | Approximate decimals (4 bytes) |
-| `"double"` | `double precision` | Approximate decimals (8 bytes) |
-| `{ mode: "decimal", precision?, scale? }` | `numeric(p,s)` | Exact decimals (money) |
+| Mode                                      | PG Column          | Use Case                       |
+| ----------------------------------------- | ------------------ | ------------------------------ |
+| `"integer"` (default)                     | `integer`          | Counts, IDs, quantities        |
+| `"smallint"`                              | `smallint`         | Small ranges (ports, flags)    |
+| `"bigint"`                                | `bigint`           | Large counts, timestamps       |
+| `"real"`                                  | `real`             | Approximate decimals (4 bytes) |
+| `"double"`                                | `double precision` | Approximate decimals (8 bytes) |
+| `{ mode: "decimal", precision?, scale? }` | `numeric(p,s)`     | Exact decimals (money)         |
 
 ### Number Chain Methods
 
-| Method | Description |
-|---|---|
-| `.min(n)` | Minimum value |
-| `.max(n)` | Maximum value |
-| `.positive()` | Must be > 0 |
-| `.int()` | Must be integer (useful for `"real"` / `"double"` modes) |
-| `.step(n)` | Step constraint (e.g., `.step(0.01)` for currency) |
+| Method        | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `.min(n)`     | Minimum value                                            |
+| `.max(n)`     | Maximum value                                            |
+| `.positive()` | Must be > 0                                              |
+| `.int()`      | Must be integer (useful for `"real"` / `"double"` modes) |
+| `.step(n)`    | Step constraint (e.g., `.step(0.01)` for currency)       |
 
 ```ts
 price: f.number({ mode: "decimal", precision: 10, scale: 2 }).positive().step(0.01),
@@ -180,10 +178,10 @@ createdAt: f.datetime({ precision: 6 }).autoNow().inputFalse(),
 
 **Config:**
 
-| Option | Type | Default |
-|---|---|---|
-| `precision` | `0-6` | `3` |
-| `withTimezone` | `boolean` | `true` |
+| Option         | Type      | Default |
+| -------------- | --------- | ------- |
+| `precision`    | `0-6`     | `3`     |
+| `withTimezone` | `boolean` | `true`  |
 
 ### `f.time(config?)`
 
@@ -196,16 +194,16 @@ openAt: f.time({ precision: 3 }),
 
 **Config:**
 
-| Option | Type | Default |
-|---|---|---|
-| `precision` | `0-6` | `0` |
-| `withSeconds` | `boolean` | `true` |
+| Option        | Type      | Default |
+| ------------- | --------- | ------- |
+| `precision`   | `0-6`     | `0`     |
+| `withSeconds` | `boolean` | `true`  |
 
 ### Date/Time Chain Methods
 
-| Method | Description |
-|---|---|
-| `.autoNow()` | Default to current date/time on create |
+| Method             | Description                                 |
+| ------------------ | ------------------------------------------- |
+| `.autoNow()`       | Default to current date/time on create      |
 | `.autoNowUpdate()` | Update to current date/time on every change |
 
 ```ts
@@ -220,8 +218,12 @@ updatedAt: f.datetime().autoNowUpdate().inputFalse(),
 Single value from a predefined list.
 
 ```ts
-// Simple string options
-status: f.select(["draft", "published", "archived"]).default("draft").required(),
+// Basic options
+status: f.select([
+  { value: "draft", label: "Draft" },
+  { value: "published", label: "Published" },
+  { value: "archived", label: "Archived" },
+]).default("draft").required(),
 
 // Options with labels (supports i18n)
 status: f.select([
@@ -236,17 +238,26 @@ status: f.select([
 Use `.array()` to allow multiple selections:
 
 ```ts
-tags: f.select(["frontend", "backend", "devops", "design"]).array(),
+tags: f.select([
+  { value: "frontend", label: "Frontend" },
+  { value: "backend", label: "Backend" },
+  { value: "devops", label: "DevOps" },
+  { value: "design", label: "Design" },
+]).array(),
 ```
 
 ### Select Chain Methods
 
-| Method | Description |
-|---|---|
+| Method        | Description                           |
+| ------------- | ------------------------------------- |
 | `.enum(name)` | Use a PG enum type instead of varchar |
 
 ```ts
-status: f.select(["active", "inactive", "suspended"]).enum("user_status"),
+status: f.select([
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "suspended", label: "Suspended" },
+]).enum("user_status"),
 ```
 
 ## Object
@@ -307,7 +318,11 @@ Use `.array()` on an object field:
 
 ```ts
 socialLinks: f.object({
-  platform: f.select(["instagram", "facebook", "twitter"]),
+  platform: f.select([
+    { value: "instagram", label: "Instagram" },
+    { value: "facebook", label: "Facebook" },
+    { value: "twitter", label: "Twitter" },
+  ]),
   url: f.url(),
 }).array().maxItems(5),
 ```
@@ -378,13 +393,13 @@ Creates two columns: `commentableType` (varchar) and `commentableId` (varchar FK
 
 ### Relation Chain Methods
 
-| Method | Description |
-|---|---|
-| `.hasMany(config)` | One-to-many (FK on target table) |
-| `.manyToMany(config)` | Many-to-many via junction collection |
-| `.multiple()` | Store array of FKs inline as JSONB |
-| `.onDelete(action)` | Referential delete action |
-| `.onUpdate(action)` | Referential update action |
+| Method                | Description                                    |
+| --------------------- | ---------------------------------------------- |
+| `.hasMany(config)`    | One-to-many (FK on target table)               |
+| `.manyToMany(config)` | Many-to-many via junction collection           |
+| `.multiple()`         | Store array of FKs inline as JSONB             |
+| `.onDelete(action)`   | Referential delete action                      |
+| `.onUpdate(action)`   | Referential update action                      |
 | `.relationName(name)` | Disambiguate multiple relations to same target |
 
 **Referential actions:** `"cascade"`, `"set null"`, `"set default"`, `"restrict"`, `"no action"`
@@ -424,14 +439,14 @@ gallery: f.upload({
 
 **Config:**
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `to` | `string` | `"assets"` | Target upload collection |
-| `mimeTypes` | `string[]` | — | Allowed MIME types |
-| `maxSize` | `number` | — | Max file size in bytes |
-| `through` | `string` | — | Junction collection for multi-upload |
-| `sourceField` | `string` | — | Source FK on junction |
-| `targetField` | `string` | — | Target FK on junction |
+| Option        | Type       | Default    | Description                          |
+| ------------- | ---------- | ---------- | ------------------------------------ |
+| `to`          | `string`   | `"assets"` | Target upload collection             |
+| `mimeTypes`   | `string[]` | —          | Allowed MIME types                   |
+| `maxSize`     | `number`   | —          | Max file size in bytes               |
+| `through`     | `string`   | —          | Junction collection for multi-upload |
+| `sourceField` | `string`   | —          | Source FK on junction                |
+| `targetField` | `string`   | —          | Target FK on junction                |
 
 ## Custom
 
@@ -447,8 +462,8 @@ handle: f.from(citext, z.string().min(3).max(30)),
 
 ### Custom Chain Methods
 
-| Method | Description |
-|---|---|
+| Method        | Description                                             |
+| ------------- | ------------------------------------------------------- |
 | `.type(name)` | Override the type string used in introspection/metadata |
 
 ## Operators Reference
@@ -457,63 +472,63 @@ Each field type provides type-safe query operators for `where` clauses.
 
 ### String Operators (text, textarea, email, url)
 
-| Operator | Description |
-|---|---|
-| `equals` | Exact match |
-| `not_equals` | Not equal |
-| `in` | In array |
-| `not_in` | Not in array |
-| `contains` | Case-insensitive substring |
-| `starts_with` | Starts with |
-| `ends_with` | Ends with |
-| `is_empty` | Is null or empty string |
+| Operator      | Description                |
+| ------------- | -------------------------- |
+| `equals`      | Exact match                |
+| `not_equals`  | Not equal                  |
+| `in`          | In array                   |
+| `not_in`      | Not in array               |
+| `contains`    | Case-insensitive substring |
+| `starts_with` | Starts with                |
+| `ends_with`   | Ends with                  |
+| `is_empty`    | Is null or empty string    |
 
 ### Number Operators
 
-| Operator | Description |
-|---|---|
-| `equals` | Exact match |
-| `not_equals` | Not equal |
-| `in` | In array |
-| `not_in` | Not in array |
-| `gt` | Greater than |
-| `gte` | Greater than or equal |
-| `lt` | Less than |
-| `lte` | Less than or equal |
-| `between` | Between two values |
+| Operator     | Description           |
+| ------------ | --------------------- |
+| `equals`     | Exact match           |
+| `not_equals` | Not equal             |
+| `in`         | In array              |
+| `not_in`     | Not in array          |
+| `gt`         | Greater than          |
+| `gte`        | Greater than or equal |
+| `lt`         | Less than             |
+| `lte`        | Less than or equal    |
+| `between`    | Between two values    |
 
 ### Boolean Operators
 
 | Operator | Description |
-|---|---|
+| -------- | ----------- |
 | `equals` | Exact match |
 
 ### Date/Time Operators
 
-| Operator | Description |
-|---|---|
-| `equals` | Exact match |
-| `not_equals` | Not equal |
-| `gt` | After |
-| `gte` | On or after |
-| `lt` | Before |
-| `lte` | On or before |
-| `between` | Between two dates |
+| Operator     | Description       |
+| ------------ | ----------------- |
+| `equals`     | Exact match       |
+| `not_equals` | Not equal         |
+| `gt`         | After             |
+| `gte`        | On or after       |
+| `lt`         | Before            |
+| `lte`        | On or before      |
+| `between`    | Between two dates |
 
 ### Select Operators
 
-| Operator | Description |
-|---|---|
-| `equals` | Exact match |
-| `not_equals` | Not equal |
-| `in` | In array of values |
-| `not_in` | Not in array |
+| Operator     | Description        |
+| ------------ | ------------------ |
+| `equals`     | Exact match        |
+| `not_equals` | Not equal          |
+| `in`         | In array of values |
+| `not_in`     | Not in array       |
 
 ### Relation (belongs-to) Operators
 
-| Operator | Description |
-|---|---|
-| `equals` | Match by ID |
+| Operator     | Description     |
+| ------------ | --------------- |
+| `equals`     | Match by ID     |
 | `not_equals` | Not equal to ID |
-| `in` | ID in array |
-| `not_in` | ID not in array |
+| `in`         | ID in array     |
+| `not_in`     | ID not in array |

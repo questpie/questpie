@@ -6,6 +6,7 @@
  */
 
 import { createContext, useCallback, useContext, useState } from "react";
+
 import type { ScopeContextValue, ScopeProviderProps } from "./types";
 
 /**
@@ -48,8 +49,12 @@ export function ScopeProvider({
 		}
 		// Initial load from localStorage
 		if (storageKey) {
-			const stored = localStorage.getItem(storageKey);
-			return stored ?? defaultScope;
+			try {
+				const stored = localStorage.getItem(storageKey);
+				return stored ?? defaultScope;
+			} catch {
+				return defaultScope;
+			}
 		}
 		return defaultScope;
 	});
@@ -60,10 +65,14 @@ export function ScopeProvider({
 		(id: string | null) => {
 			setScopeId(id);
 			if (storageKey && typeof window !== "undefined") {
-				if (id) {
-					localStorage.setItem(storageKey, id);
-				} else {
-					localStorage.removeItem(storageKey);
+				try {
+					if (id) {
+						localStorage.setItem(storageKey, id);
+					} else {
+						localStorage.removeItem(storageKey);
+					}
+				} catch {
+					// Ignore localStorage errors (incognito mode, quota exceeded)
 				}
 			}
 		},

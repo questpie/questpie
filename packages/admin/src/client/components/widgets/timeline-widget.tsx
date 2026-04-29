@@ -8,16 +8,18 @@
 import { Icon as IconifyIcon } from "@iconify/react";
 import { useQuery } from "@tanstack/react-query";
 import type * as React from "react";
+
 import type {
 	TimelineItem,
 	TimelineWidgetConfig,
 } from "../../builder/types/widget-types";
 import { resolveIconElement } from "../../components/component-renderer";
 import { useServerWidgetData } from "../../hooks/use-server-widget-data";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime";
 import { WidgetCard } from "../../views/dashboard/widget-card";
+import { WidgetEmptyState } from "./widget-empty-state";
 import { TimelineWidgetSkeleton } from "./widget-skeletons";
 
 /**
@@ -44,15 +46,23 @@ const variantStyles = {
 function formatTimestamp(
 	date: Date | string,
 	format: TimelineWidgetConfig["timestampFormat"] = "relative",
+	t: (key: string, params?: Record<string, unknown>) => string,
+	formatDate: (
+		date: Date | number,
+		options?: Intl.DateTimeFormatOptions,
+	) => string,
 ): string {
 	const d = typeof date === "string" ? new Date(date) : date;
 
 	switch (format) {
 		case "absolute":
-			return d.toLocaleDateString();
+			return formatDate(d);
 
 		case "datetime":
-			return d.toLocaleString();
+			return formatDate(d, {
+				dateStyle: "medium",
+				timeStyle: "short",
+			});
 
 		case "relative":
 		default: {
@@ -63,11 +73,11 @@ function formatTimestamp(
 			const hours = Math.floor(minutes / 60);
 			const days = Math.floor(hours / 24);
 
-			if (days > 7) return d.toLocaleDateString();
-			if (days > 0) return `${days}d ago`;
-			if (hours > 0) return `${hours}h ago`;
-			if (minutes > 0) return `${minutes}m ago`;
-			return "just now";
+			if (days > 7) return formatDate(d);
+			if (days > 0) return t("time.daysAgoShort", { count: days });
+			if (hours > 0) return t("time.hoursAgoShort", { count: hours });
+			if (minutes > 0) return t("time.minutesAgoShort", { count: minutes });
+			return t("time.justNow");
 		}
 	}
 }
@@ -107,6 +117,7 @@ export default function TimelineWidget({
 }: TimelineWidgetProps) {
 	const client = useAdminStore(selectClient);
 	const resolveText = useResolveText();
+	const { t, formatDate } = useTranslation();
 	const {
 		maxItems = 10,
 		showTimestamps = true,
@@ -125,7 +136,7 @@ export default function TimelineWidget({
 		enabled: !useServerData && !!config.loader,
 		refetchInterval: config.refreshInterval,
 	});
-	const { data, isLoading, error, refetch } = useServerData
+	const { data, isLoading, error, refetch, isFetching } = useServerData
 		? serverQuery
 		: clientQuery;
 
@@ -139,13 +150,19 @@ export default function TimelineWidget({
 		}
 	};
 
+	const resolvedEmptyMessage = emptyMessage
+		? resolveText(emptyMessage)
+		: undefined;
+
 	// Empty state
 	const emptyContent = (
-		<div className="flex h-24 items-center justify-center text-muted-foreground">
-			<p className="text-sm">
-				{emptyMessage ? resolveText(emptyMessage) : "No activity yet"}
-			</p>
-		</div>
+		<WidgetEmptyState
+			iconName="ph:clock-counter-clockwise"
+			title={resolvedEmptyMessage ?? t("widget.timeline.emptyTitle")}
+			description={
+				resolvedEmptyMessage ? undefined : t("widget.timeline.emptyDescription")
+			}
+		/>
 	);
 
 	// Timeline content
@@ -166,7 +183,7 @@ export default function TimelineWidget({
 						<>
 							{/* Timeline line */}
 							{!isLast && (
-								<div className="absolute left-[11px] top-6 bottom-0 w-px bg-border" />
+								<div className="bg-border absolute top-6 bottom-0 left-[11px] w-px" />
 							)}
 
 							{/* Icon dot */}
@@ -185,43 +202,43 @@ export default function TimelineWidget({
 							</div>
 
 							{/* Content */}
-							<div className="flex-1 min-w-0 pt-0.5 text-left">
-								<p className="text-sm font-medium truncate">{item.title}</p>
+							<div className="min-w-0 flex-1 pt-0.5 text-left">
+								<p className="truncate text-sm font-medium">{item.title}</p>
 								{item.description && (
-									<p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+									<p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
 										{item.description}
 									</p>
 								)}
 								{showTimestamps && item.timestamp && (
-									<p className="text-xs text-muted-foreground mt-1">
-										{formatTimestamp(item.timestamp, timestampFormat)}
+									<p className="text-muted-foreground mt-1 text-xs">
+										{formatTimestamp(
+											item.timestamp,
+											timestampFormat,
+											t,
+											formatDate,
+										)}
 									</p>
 								)}
 							</div>
 						</>
 					);
 
-					if (isClickable) {
-						return (
-							<button
-								key={item.id}
-								type="button"
-								className={cn(
-									"relative flex gap-3 pb-4 w-full",
-									"cursor-pointer hover:bg-muted -mx-2 px-2 rounded-md transition-colors",
-									isLast && "pb-0",
-								)}
-								onClick={() => handleItemClick(item)}
-							>
-								{itemContent}
-							</button>
-						);
-					}
-
 					return (
 						<div
 							key={item.id}
 							className={cn("relative flex gap-3 pb-4", isLast && "pb-0")}
+							{...(isClickable
+								? {
+										role: "button",
+										tabIndex: 0,
+										onClick: () => handleItemClick(item),
+										onKeyDown: (e: React.KeyboardEvent) => {
+											if (e.key === "Enter" || e.key === " ")
+												handleItemClick(item);
+										},
+										style: { cursor: "pointer" },
+									}
+								: {})}
 						>
 							{itemContent}
 						</div>
@@ -233,12 +250,20 @@ export default function TimelineWidget({
 	return (
 		<WidgetCard
 			title={title}
+			description={
+				config.description ? resolveText(config.description) : undefined
+			}
+			icon={config.icon}
+			variant={config.cardVariant}
 			isLoading={isLoading}
+			isRefreshing={isFetching && !isLoading}
 			loadingSkeleton={<TimelineWidgetSkeleton count={maxItems} />}
 			error={
 				error instanceof Error ? error : error ? new Error(String(error)) : null
 			}
 			onRefresh={() => refetch()}
+			actions={config.actions}
+			className={config.className}
 		>
 			{timelineContent}
 		</WidgetCard>

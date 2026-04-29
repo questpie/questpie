@@ -7,17 +7,19 @@
  * This field type is only available when using the `adminModule`.
  */
 
-import type { PgJsonbBuilder } from "drizzle-orm/pg-core";
 import {
 	type ContextualOperators,
 	type DefaultFieldState,
 	type Field,
 	field,
+	fieldType,
+	type FieldTypeDefinition,
 	isNotNull,
 	isNull,
 	jsonb,
 	sql,
 } from "questpie";
+import type { PgJsonbBuilder } from "questpie/drizzle-pg-core";
 import { z } from "zod";
 
 // ============================================================================
@@ -215,10 +217,14 @@ export type RichTextFieldState = DefaultFieldState & {
  * content: f.richText().required().localized()
  * ```
  */
-export function richText(): Field<RichTextFieldState> {
-	return field<RichTextFieldState>({
-		type: "richText",
-		columnFactory: (name) => jsonb(name) as any,
+/**
+ * Rich text field runtime state factory.
+ * Shared between the legacy `richText()` function and the new `richTextFieldType`.
+ */
+function createRichTextState() {
+	return {
+		type: "richText" as const,
+		columnFactory: (name: string) => jsonb(name) as any,
 		schemaFactory: () => {
 			const nodeSchema: z.ZodType<TipTapNode> = z.lazy(() =>
 				z.object({
@@ -245,7 +251,7 @@ export function richText(): Field<RichTextFieldState> {
 			jsonbCast: null,
 			column: getRichTextOperators().column,
 		} as any,
-		metadataFactory: (state) => ({
+		metadataFactory: (state: any) => ({
 			type: "richText" as const,
 			label: state.label,
 			description: state.description,
@@ -253,7 +259,7 @@ export function richText(): Field<RichTextFieldState> {
 			localized: state.localized ?? false,
 			readOnly: state.input === false ? true : undefined,
 			writeOnly: state.output === false ? true : undefined,
-			meta: state.admin as any,
+			meta: state.extensions?.admin as any,
 		}),
 		notNull: false,
 		hasDefault: false,
@@ -262,5 +268,22 @@ export function richText(): Field<RichTextFieldState> {
 		input: true,
 		output: true,
 		isArray: false,
-	});
+	};
 }
+
+export function richText(): Field<RichTextFieldState> {
+	return field<RichTextFieldState>(createRichTextState());
+}
+
+/**
+ * Rich text field type definition (v3 API).
+ *
+ * Use this with the `fieldType()` discovery system instead of the
+ * legacy `richText()` factory function.
+ */
+export const richTextFieldType: FieldTypeDefinition<"richText", []> = fieldType(
+	"richText",
+	{
+		create: createRichTextState as any,
+	},
+);

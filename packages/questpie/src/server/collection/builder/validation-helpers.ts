@@ -6,8 +6,9 @@
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { pgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import type { Field } from "#questpie/server/fields/field-class.js";
+
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
 import {
 	createInsertSchema,
 	createUpdateSchema,

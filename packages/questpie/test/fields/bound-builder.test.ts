@@ -5,6 +5,7 @@
  * Uses standalone collection() and global() which include builtinFields by default.
  */
 import { describe, expect, test } from "bun:test";
+
 import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 import { global } from "#questpie/server/global/builder/global-builder.js";
 

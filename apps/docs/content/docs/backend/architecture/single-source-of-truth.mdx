@@ -3,45 +3,43 @@ title: Single Source of Truth
 description: Fields drive everything — database, validation, query operators, types, and UI rendering from one definition.
 ---
 
-# Single Source of Truth
-
-In QuestPie, a field definition is not just a form widget or a database column. It's the **single source of truth** that drives every layer of the stack.
+In QUESTPIE, a field definition is not just a form widget or a database column. It's the **single source of truth** that drives every layer of the stack.
 
 ## What One Field Definition Produces
 
 ```ts
-price: f.number().required().label("Price (cents)")
+price: f.number().required().label("Price (cents)");
 ```
 
-From this single line, QuestPie derives:
+From this single line, QUESTPIE derives:
 
-| Layer | Output |
-|---|---|
-| **Database** | `integer NOT NULL` column in Drizzle schema |
-| **API validation** | `z.number()` in the create/update Zod schema |
-| **Query operators** | `where: { price: { gte: 1000, lt: 5000 } }` |
-| **TypeScript types** | `price: number` in `Select` and `Insert` types |
-| **Client SDK** | Typed `find()`, `create()`, `update()` with `price` field |
-| **Admin list** | Numeric column with sorting |
-| **Admin form** | Number input with "Price (cents)" label |
-| **Admin filters** | Numeric range filter |
+| Layer                | Output                                                    |
+| -------------------- | --------------------------------------------------------- |
+| **Database**         | `integer NOT NULL` column in Drizzle schema               |
+| **API validation**   | `z.number()` in the create/update Zod schema              |
+| **Query operators**  | `where: { price: { gte: 1000, lt: 5000 } }`               |
+| **TypeScript types** | `price: number` in `Select` and `Insert` types            |
+| **Client SDK**       | Typed `find()`, `create()`, `update()` with `price` field |
+| **Admin list**       | Numeric column with sorting                               |
+| **Admin form**       | Number input with "Price (cents)" label                   |
+| **Admin filters**    | Numeric range filter                                      |
 
 ## No Dual Definitions
 
 Traditional approaches require you to define schema in multiple places:
 
 ```text
-// Without QuestPie — same data defined 3+ times
+// Without QUESTPIE — same data defined 3+ times
 Database migration   → INTEGER price NOT NULL
 API validation       → z.object({ price: z.number() })
 TypeScript type      → interface Post { price: number }
 Form component       → <NumberInput name="price" label="Price" required />
 ```
 
-With QuestPie:
+With QUESTPIE:
 
 ```text
-// With QuestPie — defined once
+// With QUESTPIE — defined once
 f.number().required().label("Price")
 → database, validation, types, UI all derived automatically
 ```
@@ -79,11 +77,15 @@ Add a field to a collection, re-run codegen:
 .fields(({ f }) => ({
   title: f.text().required(),
   body: f.textarea(),
-  status: f.select(["draft", "published"]).default("draft"),
+  status: f.select([
+    { value: "draft", label: "Draft" },
+    { value: "published", label: "Published" },
+  ]).default("draft"),
 }))
 ```
 
 After `questpie generate`:
+
 - Database gets a new `status` column
 - API validates `status` on create/update
 - Client SDK exposes `where: { status: "draft" }`
@@ -119,21 +121,21 @@ where: { barber: barberId }
 
 The field type maps to an admin form component:
 
-| Field Type | Default Renderer |
-|---|---|
-| `text` | Text input |
-| `textarea` | Textarea |
+| Field Type | Default Renderer          |
+| ---------- | ------------------------- |
+| `text`     | Text input                |
+| `textarea` | Textarea                  |
 | `richText` | Rich text editor (TipTap) |
-| `number` | Number input |
-| `boolean` | Checkbox / switch |
-| `date` | Date picker |
-| `datetime` | Date-time picker |
-| `select` | Select dropdown |
-| `relation` | Relation picker |
-| `upload` | File upload with preview |
-| `object` | Nested form group |
-| `array` | Repeatable items |
-| `blocks` | Block editor |
+| `number`   | Number input              |
+| `boolean`  | Checkbox / switch         |
+| `date`     | Date picker               |
+| `datetime` | Date-time picker          |
+| `select`   | Select dropdown           |
+| `relation` | Relation picker           |
+| `upload`   | File upload with preview  |
+| `object`   | Nested form group         |
+| `array`    | Repeatable items          |
+| `blocks`   | Block editor              |
 
 ## Related Pages
 

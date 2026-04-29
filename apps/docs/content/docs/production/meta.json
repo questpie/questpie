@@ -1,7 +1,6 @@
 {
-	"title": "Operate in Production",
+	"title": "Production",
 	"pages": [
-		"index",
 		"database",
 		"migrations",
 		"authentication",
@@ -13,6 +12,7 @@
 		"kv",
 		"logger",
 		"multi-tenancy",
+		"openapi",
 		"deployment"
 	]
 }

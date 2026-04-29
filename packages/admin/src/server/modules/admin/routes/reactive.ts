@@ -11,19 +11,10 @@ import type {
 	ReactiveContext,
 	ReactiveServerContext,
 } from "questpie";
-import { ApiError, route, type Questpie } from "questpie";
+import { ApiError, type Questpie, route } from "questpie";
 import { z } from "zod";
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Get typed app from context.
- */
-function getApp(ctx: any): Questpie<any> {
-	return ctx.app as Questpie<any>;
-}
+import { getApp, buildServerContext } from "./route-helpers.js";
 
 /**
  * Build ReactiveContext from request data.
@@ -356,7 +347,7 @@ function getReactiveHandler(
 	type: "collection" | "global" = "collection",
 ): ((ctx: ReactiveContext) => any) | null {
 	const entity = getEntity(app, entityName, type);
-	const formConfig = (entity.state as any).adminForm;
+	const formConfig = (entity.state as unknown as Record<string, unknown>).adminForm;
 
 	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
 	if (!fieldEntry) {
@@ -380,6 +371,74 @@ function getReactiveHandler(
 	) {
 		return (handlerConfig as { handler: (ctx: ReactiveContext) => any })
 			.handler;
+	}
+
+	return null;
+}
+
+/**
+ * Coerce a `function | { handler }` config-like value to the underlying
+ * handler function. Returns `null` for static values.
+ */
+function unwrapHandler(
+	value: unknown,
+): ((ctx: ReactiveContext) => any) | null {
+	if (typeof value === "function") {
+		return value as (ctx: ReactiveContext) => any;
+	}
+	if (
+		value !== null &&
+		typeof value === "object" &&
+		"handler" in (value as Record<string, unknown>) &&
+		typeof (value as { handler?: unknown }).handler === "function"
+	) {
+		return (value as { handler: (ctx: ReactiveContext) => any }).handler;
+	}
+	return null;
+}
+
+/**
+ * Get a reactive prop handler. Resolution chain (first hit wins):
+ *
+ *  1. **Layout-level** `state.adminForm.fields[*].props[propPath]`
+ *     (per-instance `.form()` override)
+ *  2. **Field-level** `state.fieldDefinitions[fieldPath]._state.extensions.admin[propPath]`
+ *     (default attached to the field via `f.<x>().admin({ ... })`)
+ *
+ * The wire-side counterpart is the `ReactivePropPlaceholder` introspection
+ * emits for function values in either location.
+ */
+function getReactivePropHandler(
+	app: Questpie<any>,
+	entityName: string,
+	fieldPath: string,
+	propPath: string,
+	type: "collection" | "global" = "collection",
+): ((ctx: ReactiveContext) => any) | null {
+	// 1. Layout-level — per-instance `.form()` override.
+	const entity = getEntity(app, entityName, type);
+	const formConfig = (entity.state as unknown as Record<string, unknown>)
+		.adminForm;
+	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
+	if (fieldEntry) {
+		const props = fieldEntry.props as Record<string, unknown> | undefined;
+		if (props && typeof props === "object") {
+			const layoutHandler = unwrapHandler(props[propPath]);
+			if (layoutHandler) return layoutHandler;
+		}
+	}
+
+	// 2. Field-level — `f.<x>().admin({ [propPath]: ... })` default.
+	let fieldDef: { _state?: { extensions?: { admin?: Record<string, unknown> } } };
+	try {
+		fieldDef = getFieldDefinition(app, entityName, fieldPath, type);
+	} catch {
+		return null;
+	}
+	const adminMeta = fieldDef._state?.extensions?.admin;
+	if (adminMeta && typeof adminMeta === "object") {
+		const fieldHandler = unwrapHandler(adminMeta[propPath]);
+		if (fieldHandler) return fieldHandler;
 	}
 
 	return null;
@@ -415,10 +474,16 @@ const reactiveRequestSchema = z.object({
 	field: z.string(),
 
 	/** Type of reactive operation */
-	type: z.enum(["hidden", "readOnly", "disabled", "compute"]),
+	type: z.enum(["hidden", "readOnly", "disabled", "compute", "prop"]),
+
+	/**
+	 * Required when `type === "prop"` — identifies which key inside the
+	 * field's layout `props` record should be evaluated (e.g. "filter").
+	 */
+	propPath: z.string().optional(),
 
 	/** Current form data */
-	formData: z.record(z.string(), z.unknown()),
+	formData: z.record(z.string(), z.unknown()).optional(),
 
 	/** Sibling data (for array items) */
 	siblingData: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -440,6 +505,12 @@ const batchReactiveInputSchema = z.object({
 	/** Entity type - collection or global */
 	type: z.enum(["collection", "global"]).default("collection"),
 
+	/** Current form data shared by all requests */
+	formData: z.record(z.string(), z.unknown()).optional(),
+
+	/** Previous form data shared by all requests */
+	prevData: z.record(z.string(), z.unknown()).nullable().optional(),
+
 	/** Array of reactive requests */
 	requests: z.array(reactiveRequestSchema),
 });
@@ -452,7 +523,10 @@ const reactiveResultSchema = z.object({
 	field: z.string(),
 
 	/** Type of reactive operation */
-	type: z.enum(["hidden", "readOnly", "disabled", "compute"]),
+	type: z.enum(["hidden", "readOnly", "disabled", "compute", "prop"]),
+
+	/** Echo of the prop key when type === "prop" */
+	propPath: z.string().optional(),
 
 	/** Computed value */
 	value: z.unknown(),
@@ -525,73 +599,112 @@ export const batchReactive = route()
 	.outputSchema(batchReactiveOutputSchema)
 	.handler(async (ctx) => {
 		const app = getApp(ctx);
-		const { collection: entityName, type: entityType, requests } = ctx.input;
+		const {
+			collection: entityName,
+			type: entityType,
+			requests,
+			formData: sharedFormData,
+			prevData: sharedPrevData,
+		} = ctx.input;
 
 		// Build server context (req is not available in function handlers)
-		const serverCtx: ReactiveServerContext = {
-			db: (ctx as any).db,
-			user: (ctx as any).session?.user ?? null,
-			req: new Request("http://localhost"), // Placeholder - not used in handlers
-			locale: (ctx as any).locale ?? "en",
-		};
+		const serverCtx: ReactiveServerContext = buildServerContext(ctx);
 
-		const results: z.infer<typeof reactiveResultSchema>[] = [];
-
-		for (const request of requests) {
-			const { field, type, formData, siblingData, prevData, prevSiblingData } =
-				request;
-
-			try {
-				// Get field definition
-				getFieldDefinition(app, entityName, field, entityType);
-
-				// Get reactive handler
-				const handler = getReactiveHandler(
-					app,
-					entityName,
+		const results = await Promise.all(
+			requests.map(async (request) => {
+				const {
 					field,
 					type,
-					entityType,
-				);
+					propPath,
+					formData,
+					siblingData,
+					prevData,
+					prevSiblingData,
+				} = request;
+				const resolvedFormData = (formData ?? sharedFormData ?? {}) as Record<
+					string,
+					any
+				>;
+				const resolvedPrevData = (prevData ?? sharedPrevData ?? null) as Record<
+					string,
+					any
+				> | null;
 
-				if (!handler) {
-					// No handler found - skip
-					results.push({
+				try {
+					// Get field definition (validates the path exists)
+					getFieldDefinition(app, entityName, field, entityType);
+
+					// Resolve the right handler for this request type
+					let handler: ((ctx: ReactiveContext) => any) | null;
+					if (type === "prop") {
+						if (!propPath) {
+							return {
+								field,
+								type,
+								value: undefined as unknown,
+								error: "propPath is required when type === 'prop'",
+							};
+						}
+						handler = getReactivePropHandler(
+							app,
+							entityName,
+							field,
+							propPath,
+							entityType,
+						);
+					} else {
+						handler = getReactiveHandler(
+							app,
+							entityName,
+							field,
+							type,
+							entityType,
+						);
+					}
+
+					if (!handler) {
+						// No handler found - skip
+						const what =
+							type === "prop" ? `prop '${propPath}'` : `${type} handler`;
+						return {
+							field,
+							type,
+							...(propPath ? { propPath } : {}),
+							value: undefined as unknown,
+							error: `No ${what} found for field '${field}'`,
+						};
+					}
+
+					// Build context
+					const reactiveCtx = buildReactiveContext(
+						resolvedFormData,
+						siblingData as Record<string, any> | null,
+						resolvedPrevData,
+						prevSiblingData as Record<string, any> | null,
+						serverCtx,
+					);
+
+					// Execute handler
+					const value = await handler(reactiveCtx);
+
+					return {
 						field,
 						type,
-						value: undefined,
-						error: `No ${type} handler found for field '${field}'`,
-					});
-					continue;
+						...(propPath ? { propPath } : {}),
+						value,
+					};
+				} catch (error) {
+					// Handler error - return error message
+					return {
+						field,
+						type,
+						...(propPath ? { propPath } : {}),
+						value: undefined as unknown,
+						error: error instanceof Error ? error.message : String(error),
+					};
 				}
-
-				// Build context
-				const reactiveCtx = buildReactiveContext(
-					formData as Record<string, any>,
-					siblingData as Record<string, any> | null,
-					prevData as Record<string, any> | null,
-					prevSiblingData as Record<string, any> | null,
-					serverCtx,
-				);
-
-				// Execute handler
-				const value = await handler(reactiveCtx);
-
-				results.push({
-					field,
-					type,
-					value,
-				});
-			} catch (error) {
-				// Handler error - return error message
-				results.push({
-					field,
-					type,
-					value: undefined,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
-		}
+			}),
+		);
 
 		return { results };
 	});
@@ -618,12 +731,7 @@ export const fieldOptions = route()
 		} = ctx.input;
 
 		// Build server context (req is not available in function handlers)
-		const serverCtx: ReactiveServerContext = {
-			db: (ctx as any).db,
-			user: (ctx as any).session?.user ?? null,
-			req: new Request("http://localhost"), // Placeholder - not used in handlers
-			locale: (ctx as any).locale ?? "en",
-		};
+		const serverCtx: ReactiveServerContext = buildServerContext(ctx);
 
 		try {
 			// Get field definition

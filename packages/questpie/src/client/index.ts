@@ -1,5 +1,6 @@
 import qs from "qs";
 import superjson from "superjson";
+
 import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
 	InferRouteInput,
@@ -21,13 +22,14 @@ import type {
 	GlobalUpdate,
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
+
 import type {
 	ApplyQuery,
 	CreateInputBase,
 	CreateInputWithRelations,
+	FindResult,
 	FindManyOptions,
 	FindOneOptionsBase,
-	PaginatedResult,
 	UpdateInput,
 	Where,
 	With,
@@ -296,12 +298,10 @@ type CollectionAPI<
 	>(
 		options?: TQuery,
 	) => Promise<
-		PaginatedResult<
-			ApplyQuery<
-				CollectionSelect<TCollection>,
-				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
-				TQuery
-			>
+		FindResult<
+			CollectionSelect<TCollection>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+			TQuery
 		>
 	>;
 
@@ -426,6 +426,22 @@ type CollectionAPI<
 				CollectionUpdate<TCollection>,
 				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
 			>;
+		},
+		options?: LocaleOptions,
+	) => Promise<CollectionSelect<TCollection>[]>;
+
+	/**
+	 * Update multiple records with distinct data per record
+	 */
+	updateBatch: (
+		params: {
+			updates: Array<{
+				id: string;
+				data: UpdateInput<
+					CollectionUpdate<TCollection>,
+					ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
+				>;
+			}>;
 		},
 		options?: LocaleOptions,
 	) => Promise<CollectionSelect<TCollection>[]>;
@@ -1043,6 +1059,21 @@ export function createClient<TApp extends QuestpieApp>(
 					});
 				},
 
+				updateBatch: async (
+					{ updates }: { updates: Array<{ id: string; data: any }> },
+					options: LocaleOptions = {},
+				) => {
+					const queryString = qs.stringify(options, {
+						skipNulls: true,
+						arrayFormat: "brackets",
+					});
+					const path = `${apiBasePath}/${collectionName}/update-batch${queryString ? `?${queryString}` : ""}`;
+					return request(path, {
+						method: "POST",
+						body: JSON.stringify({ updates }),
+					});
+				},
+
 				deleteMany: async (
 					{ where }: { where: any },
 					options: LocaleOptions = {},
@@ -1470,6 +1501,28 @@ export type {
 	RelationSchema,
 } from "#questpie/server/collection/introspection.js";
 export type { GlobalSchema } from "#questpie/server/global/introspection.js";
+// Re-export reactive prop placeholder shape so the admin client can detect
+// it in `extraProps` values and decide whether to call /admin/reactive.
+export type {
+	ReactivePropPlaceholder,
+	ReactivePropValue,
+} from "#questpie/server/fields/reactive-types.js";
+
+/**
+ * Type guard for `ReactivePropPlaceholder` — inlined here to avoid pulling
+ * the server's reactive runtime (Proxy dep-tracking) into the client bundle.
+ * Keep in sync with `serializeReactivePropValue`'s output shape.
+ */
+import type { ReactivePropPlaceholder as _ReactivePropPlaceholder } from "#questpie/server/fields/reactive-types.js";
+export function isReactivePropPlaceholder(
+	value: unknown,
+): value is _ReactivePropPlaceholder {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as { "~reactive"?: unknown })["~reactive"] === "prop"
+	);
+}
 // Re-export collection and global meta types
 export type {
 	CollectionFieldMeta,

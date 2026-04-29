@@ -1,11 +1,9 @@
 ---
 title: Hono Adapter
-description: Serve QuestPie APIs with Hono.
+description: Serve QUESTPIE APIs with Hono.
 ---
 
-# Hono Adapter
-
-The Hono adapter connects QuestPie to the [Hono](https://hono.dev) web framework.
+The Hono adapter connects QUESTPIE to the [Hono](https://hono.dev) web framework.
 
 ## Install
 
@@ -17,33 +15,31 @@ bun add @questpie/hono hono
 
 ```ts title="src/index.ts"
 import { Hono } from "hono";
-import { createFetchHandler } from "questpie/adapters/hono";
+import { questpieHono } from "@questpie/hono/server";
 import { app } from "#questpie";
 
 const server = new Hono();
 
-const handler = createFetchHandler(app, { basePath: "/api" });
-
-server.all("/api/*", (c) => handler(c.req.raw));
+server.route("/api", questpieHono(app));
 
 export default server;
 ```
 
 ## With OpenAPI
 
-OpenAPI is now registered as a module rather than wrapping the handler. Add `openApiModule()` to your `modules.ts`:
+OpenAPI is registered as a module rather than wrapping the handler. Add `openApiModule` to your `modules.ts`:
 
 ```ts title="modules.ts"
 import { adminModule } from "@questpie/admin/server";
 import { openApiModule } from "@questpie/openapi";
 
-export default [adminModule, openApiModule()] as const;
+export default [adminModule, openApiModule] as const;
 ```
 
 The fetch handler stays the same — no wrapping needed:
 
 ```ts title="src/index.ts"
-const handler = createFetchHandler(app, { basePath: "/api" });
+server.route("/api", questpieHono(app));
 
 // OpenAPI spec at /api/openapi.json
 // Scalar UI at /api/docs

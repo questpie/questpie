@@ -1,0 +1,10 @@
+{
+	"title": "Live Preview",
+	"pages": [
+		"architecture",
+		"same-tab-recipe",
+		"shared-preview",
+		"protocol",
+		"migration"
+	]
+}

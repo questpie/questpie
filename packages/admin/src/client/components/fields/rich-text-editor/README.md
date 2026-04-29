@@ -4,16 +4,16 @@ Modern, icon-based rich text editor built on Tiptap with feature presets for com
 
 ## Features
 
-- 🎨 **Icon-based toolbar** using Iconify icons (Phosphor set)
-- ⌨️ **Keyboard shortcuts** (⌘B, ⌘I, ⌘U, etc.)
-- 🎯 **Feature presets** for quick configuration
-- 🧩 **Modular architecture** for easy customization
-- 🌙 **Theme support** (light/dark mode)
-- 📝 **Slash commands** for quick insertions
-- 💬 **Bubble menu** for selection-based formatting
-- 📊 **Character counting** with limits
-- 🖼️ **Image upload** support
-- 📋 **Table editing** with full controls
+- Icon-based toolbar using Iconify icons (Phosphor set)
+- Keyboard shortcuts
+- Feature presets for quick configuration
+- Modular architecture for easy customization
+- Theme support (light/dark mode)
+- Slash commands for quick insertions
+- Bubble menu for selection-based formatting
+- Character counting with limits
+- Image upload support
+- Table editing with full controls
 
 ## Quick Start
 
@@ -22,14 +22,15 @@ Modern, icon-based rich text editor built on Tiptap with feature presets for com
 The easiest way to use the RichText editor is with presets:
 
 ```tsx
-import { RichTextSimple } from "@questpie/admin/client";
+import { RichTextEditor } from "@questpie/admin/client";
 
 // Simple editor - perfect for blog posts
-<RichTextSimple
-  name="content"
-  value={content}
-  onChange={setContent}
-  placeholder="Start writing..."
+<RichTextEditor
+	preset="simple"
+	name="content"
+	value={content}
+	onChange={setContent}
+	placeholder="Start writing..."
 />;
 ```
 
@@ -40,9 +41,12 @@ import { RichTextSimple } from "@questpie/admin/client";
 Perfect for: Comments, notes, simple text fields
 
 ```tsx
-import { RichTextMinimal } from "@questpie/admin/client";
-
-<RichTextMinimal name="comment" value={comment} onChange={setComment} />;
+<RichTextEditor
+	preset="minimal"
+	name="comment"
+	value={comment}
+	onChange={setComment}
+/>
 ```
 
 **Features:**
@@ -58,15 +62,14 @@ import { RichTextMinimal } from "@questpie/admin/client";
 Perfect for: Blog posts, articles, descriptions
 
 ```tsx
-import { RichTextSimple } from "@questpie/admin/client";
-
-<RichTextSimple
-  name="description"
-  value={description}
-  onChange={setDescription}
-  showCharacterCount
-  maxCharacters={500}
-/>;
+<RichTextEditor
+	preset="simple"
+	name="description"
+	value={description}
+	onChange={setDescription}
+	showCharacterCount
+	maxCharacters={500}
+/>
 ```
 
 **Features:**
@@ -87,14 +90,13 @@ import { RichTextSimple } from "@questpie/admin/client";
 Perfect for: General-purpose content editing
 
 ```tsx
-import { RichTextStandard } from "@questpie/admin/client";
-
-<RichTextStandard
-  name="content"
-  value={content}
-  onChange={setContent}
-  onImageUpload={handleImageUpload}
-/>;
+<RichTextEditor
+	preset="standard"
+	name="content"
+	value={content}
+	onChange={setContent}
+	onImageUpload={handleImageUpload}
+/>
 ```
 
 **Features:**
@@ -112,15 +114,14 @@ import { RichTextStandard } from "@questpie/admin/client";
 Perfect for: Documentation, technical writing
 
 ```tsx
-import { RichTextAdvanced } from "@questpie/admin/client";
-
-<RichTextAdvanced
-  name="documentation"
-  value={docs}
-  onChange={setDocs}
-  onImageUpload={handleImageUpload}
-  showCharacterCount
-/>;
+<RichTextEditor
+	preset="advanced"
+	name="documentation"
+	value={docs}
+	onChange={setDocs}
+	onImageUpload={handleImageUpload}
+	showCharacterCount
+/>
 ```
 
 **Features:**
@@ -140,14 +141,14 @@ Start with a preset and customize specific features:
 import { RichTextEditor } from "@questpie/admin/client";
 
 <RichTextEditor
-  preset="simple"
-  features={{
-    // Enable images in simple preset
-    image: true,
-    // Disable headings
-    heading: false,
-  }}
-  onImageUpload={handleImageUpload}
+	preset="simple"
+	features={{
+		// Enable images in simple preset
+		image: true,
+		// Disable headings
+		heading: false,
+	}}
+	onImageUpload={handleImageUpload}
 />;
 ```
 
@@ -157,15 +158,15 @@ For full control, configure features manually:
 
 ```tsx
 <RichTextEditor
-  features={{
-    toolbar: true,
-    bubbleMenu: true,
-    bold: true,
-    italic: true,
-    underline: true,
-    link: true,
-    // ... other features
-  }}
+	features={{
+		toolbar: true,
+		bubbleMenu: true,
+		bold: true,
+		italic: true,
+		underline: true,
+		link: true,
+		// ... other features
+	}}
 />
 ```
 
@@ -175,22 +176,19 @@ Enable image uploads by providing an upload handler:
 
 ```tsx
 const handleImageUpload = async (file: File): Promise<string> => {
-  const formData = new FormData();
-  formData.append("file", file);
+	const formData = new FormData();
+	formData.append("file", file);
 
-  const response = await fetch("/api/upload", {
-    method: "POST",
-    body: formData,
-  });
+	const response = await fetch("/api/upload", {
+		method: "POST",
+		body: formData,
+	});
 
-  const { url } = await response.json();
-  return url;
+	const { url } = await response.json();
+	return url;
 };
 
-<RichTextStandard
-  onImageUpload={handleImageUpload}
-  enableImages // Optional, defaults to true if onImageUpload provided
-/>;
+<RichTextEditor preset="standard" onImageUpload={handleImageUpload} />;
 ```
 
 ## Output Formats
@@ -225,20 +223,20 @@ The editor supports multiple output formats:
 Add character/word counting with optional limits:
 
 ```tsx
-<RichTextSimple showCharacterCount maxCharacters={500} />
+<RichTextEditor preset="simple" showCharacterCount maxCharacters={500} />
 ```
 
 ## Keyboard Shortcuts
 
 Built-in keyboard shortcuts with visual hints in tooltips:
 
-- **⌘B** - Bold
-- **⌘I** - Italic
-- **⌘U** - Underline
-- **⌘E** - Code
-- **⌘K** - Insert/edit link
-- **⌘Z** - Undo
-- **⌘⇧Z** - Redo
+- **Cmd+B** - Bold
+- **Cmd+I** - Italic
+- **Cmd+U** - Underline
+- **Cmd+E** - Code
+- **Cmd+K** - Insert/edit link
+- **Cmd+Z** - Undo
+- **Cmd+Shift+Z** - Redo
 
 ## Slash Commands
 
@@ -258,23 +256,19 @@ The editor uses CSS classes for theming:
 
 ```css
 .qp-rich-text-editor {
-  /* Main container */
+	/* Main container */
 }
-
 .qp-rich-text-editor__content {
-  /* Editor content area */
+	/* Editor content area */
 }
-
 .qp-rich-text-editor__slash {
-  /* Slash command menu */
+	/* Slash command menu */
 }
-
 .qp-rich-text-editor__slash-item {
-  /* Slash command item */
+	/* Slash command item */
 }
-
 .qp-rich-text-editor__slash-item--active {
-  /* Active slash command item */
+	/* Active slash command item */
 }
 ```
 
@@ -292,8 +286,6 @@ import { CustomExtension } from "./custom-extension";
 
 ### Read-only Mode
 
-Disable editing:
-
 ```tsx
 <RichTextEditor readOnly value={content} />
 ```
@@ -303,17 +295,14 @@ Disable editing:
 All UI text is internationalized:
 
 ```tsx
-<RichTextEditor
-  localized
-  locale="cs" // Czech
-/>
+<RichTextEditor localized locale="cs" />
 ```
 
 ## Architecture
 
 The editor is split into focused modules:
 
-- `index.tsx` - Main component (249 lines)
+- `index.tsx` - Main component
 - `toolbar.tsx` - Icon-based toolbar
 - `bubble-menu.tsx` - Selection menu
 - `slash-commands.tsx` - Slash command system
@@ -322,63 +311,47 @@ The editor is split into focused modules:
 - `table-controls.tsx` - Table manipulation
 - `extensions.tsx` - Tiptap configuration
 - `presets.ts` - Feature presets
-- `variants.tsx` - Convenience components
 - `types.ts` - TypeScript definitions
 - `utils.ts` - Helper functions
-
-## Migration from Old API
-
-The new preset system is backward compatible:
-
-```tsx
-// Old way (still works)
-<RichTextEditor
-  features={{
-    bold: true,
-    italic: true,
-    // ... manual configuration
-  }}
-/>
-
-// New way (recommended)
-<RichTextSimple />
-```
 
 ## Examples
 
 ### Blog Post Editor
 
 ```tsx
-<RichTextSimple
-  name="content"
-  value={post.content}
-  onChange={(content) => updatePost({ content })}
-  placeholder="Write your post..."
-  showCharacterCount
-  maxCharacters={5000}
+<RichTextEditor
+	preset="simple"
+	name="content"
+	value={post.content}
+	onChange={(content) => updatePost({ content })}
+	placeholder="Write your post..."
+	showCharacterCount
+	maxCharacters={5000}
 />
 ```
 
 ### Comment System
 
 ```tsx
-<RichTextMinimal
-  name="comment"
-  value={comment}
-  onChange={setComment}
-  placeholder="Add a comment..."
+<RichTextEditor
+	preset="minimal"
+	name="comment"
+	value={comment}
+	onChange={setComment}
+	placeholder="Add a comment..."
 />
 ```
 
 ### Documentation Editor
 
 ```tsx
-<RichTextAdvanced
-  name="docs"
-  value={documentation}
-  onChange={setDocumentation}
-  onImageUpload={uploadToS3}
-  showCharacterCount
+<RichTextEditor
+	preset="advanced"
+	name="docs"
+	value={documentation}
+	onChange={setDocumentation}
+	onImageUpload={uploadToS3}
+	showCharacterCount
 />
 ```
 
@@ -386,13 +359,10 @@ The new preset system is backward compatible:
 
 ```tsx
 <RichTextEditor
-  preset="simple"
-  features={{
-    // Add images to simple preset
-    image: true,
-  }}
-  onImageUpload={uploadProductImage}
-  maxCharacters={1000}
-  showCharacterCount
+	preset="simple"
+	features={{ image: true }}
+	onImageUpload={uploadProductImage}
+	maxCharacters={1000}
+	showCharacterCount
 />
 ```

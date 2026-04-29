@@ -86,6 +86,46 @@ export default {
 	"collection.new": "Novo {{name}}",
 	"collection.duplicateSuccess": "{{name}} duplicado com sucesso",
 	"collection.duplicateError": "Falha ao duplicar {{name}}",
+	// Actions
+	"action.collectionNotFound": 'Coleção "{{collection}}" não encontrada',
+	"action.notFound":
+		'Ação "{{action}}" não encontrada na coleção "{{collection}}"',
+	"action.executionFailed": "Falha ao executar a ação",
+	"action.itemCreated": "Item criado com sucesso",
+	"action.itemIdRequired.save":
+		"O ID do item é obrigatório para a ação de salvar",
+	"action.itemSaved": "Item salvo com sucesso",
+	"action.itemIdRequired.delete":
+		"O ID do item é obrigatório para a ação de excluir",
+	"action.itemDeleted": "Item excluído com sucesso",
+	"action.itemIdsRequired.bulkDelete":
+		"IDs de itens são obrigatórios para exclusão em massa",
+	"action.itemsDeleted": {
+		one: "{{count}} item excluído com sucesso",
+		other: "{{count}} itens excluídos com sucesso",
+	},
+	"action.itemIdRequired.restore":
+		"O ID do item é obrigatório para a ação de restaurar",
+	"action.restoreUnsupported": "Restauração não é suportada para esta coleção",
+	"action.itemRestored": "Item restaurado com sucesso",
+	"action.itemIdsRequired.bulkRestore":
+		"IDs de itens são obrigatórios para restauração em massa",
+	"action.itemsRestored": {
+		one: "{{count}} item restaurado com sucesso",
+		other: "{{count}} itens restaurados com sucesso",
+	},
+	"action.itemIdRequired.duplicate":
+		"O ID do item é obrigatório para a ação de duplicar",
+	"action.itemNotFound": "Item não encontrado",
+	"action.itemDuplicated": "Item duplicado com sucesso",
+	"action.itemIdRequired.transition":
+		"O ID do item é obrigatório para a ação de transição",
+	"action.targetStageRequired":
+		"O estágio de destino é obrigatório para a ação de transição",
+	"action.workflowUnsupported":
+		"Transições de workflow não são suportadas para esta coleção",
+	"action.unknownBuiltin": "Ação integrada desconhecida: {{action}}",
+	"action.fieldRequired": 'O campo "{{field}}" é obrigatório',
 
 	// Relations
 	"relation.select": "Selecionar {{name}}",
@@ -183,6 +223,9 @@ export default {
 	"auth.profile": "Perfil",
 	"auth.myAccount": "Minha conta",
 	"auth.logoutFailed": "Falha ao sair. Por favor, tente novamente.",
+	"auth.setupAlreadyCompleted":
+		"A configuração já foi concluída - existem usuários administradores no sistema",
+	"auth.failedToCreateUserAccount": "Falha ao criar conta de usuário",
 
 	// Errors
 	"error.notFound": "Não encontrado",
@@ -233,6 +276,17 @@ export default {
 	"editor.underline": "Sublinhado",
 	"editor.strikethrough": "Tachado",
 	"editor.heading": "Título {{level}}",
+	"editor.richTextToolbar": "Barra de texto rico",
+	"editor.blockType": "Tipo de bloco",
+	"editor.selectionBlockType": "Tipo de bloco selecionado",
+	"editor.paragraph": "Parágrafo",
+	"editor.textBlocks": "Blocos de texto",
+	"editor.headings": "Títulos",
+	"editor.blocks": "Blocos",
+	"editor.formatting": "Formatação",
+	"editor.moreFormatting": "Mais formatação",
+	"editor.alignment": "Alinhamento",
+	"editor.insert": "Inserir",
 	"editor.link": "Inserir link",
 	"editor.image": "Inserir imagem",
 	"editor.list": "Lista",
@@ -266,6 +320,18 @@ export default {
 	"editor.chooseFile": "Escolher arquivo",
 	"editor.uploading": "Enviando...",
 	"editor.browseLibrary": "Procurar na biblioteca",
+	"editor.startWriting": "Comece a escrever...",
+	"editor.pasteOrTypeLink": "Cole ou digite um link...",
+	"editor.paragraphDescription": "Começar com texto simples",
+	"editor.heading1Description": "Título de seção grande",
+	"editor.heading2Description": "Título de seção médio",
+	"editor.heading3Description": "Título de seção pequeno",
+	"editor.bulletListDescription": "Criar uma lista com marcadores",
+	"editor.orderedListDescription": "Criar uma lista numerada",
+	"editor.quoteDescription": "Inserir uma citação",
+	"editor.codeBlockDescription": "Inserir trecho de código",
+	"editor.dividerDescription": "Inserir uma linha horizontal",
+	"editor.tableDescription": "Inserir uma tabela 3x3",
 
 	// Toasts
 	"toast.success": "Sucesso",
@@ -513,6 +579,21 @@ export default {
 	"preview.fullscreen": "Tela cheia",
 	"preview.close": "Fechar visualização",
 	"preview.loading": "Carregando visualização...",
+	"preview.pathRequired": "O caminho é obrigatório",
+	"preview.collectionNameRequired": "O nome da coleção é obrigatório",
+	"preview.adminSessionRequired": "Sessão de administrador obrigatória",
+	"preview.invalidTokenFormat": "Formato de token inválido",
+	"preview.invalidSignature": "Assinatura inválida",
+	"preview.invalidPayload": "Payload inválido",
+	"preview.tokenExpired": "Token expirado",
+	"preview.invalidPath": "Caminho inválido",
+	"preview.collectionNotFound": 'Coleção "{{collection}}" não encontrada',
+	"preview.noUrlConfigured":
+		"Nenhuma URL de pré-visualização configurada para esta coleção",
+	"preview.disabledForCollection":
+		"A pré-visualização está desativada para esta coleção",
+	"preview.generateUrlFailed":
+		"Falha ao gerar URL de pré-visualização: {{message}}",
 
 	// Autosave
 	"autosave.saving": "Salvando...",
@@ -540,4 +621,386 @@ export default {
 	"collectionSearch.placeholder": "Pesquisar registros...",
 	"collectionSearch.noResults": "Nenhum registro correspondente encontrado",
 	"collectionSearch.searching": "Pesquisando...",
+
+	// Audit
+	"audit.section.activity": "Atividade",
+
+	// Additional Admin UI Messages
+	"audit.collection.description":
+		"Navegue por todas as alterações registradas e pela atividade dos usuários",
+	"audit.collection.label": "Log de auditoria",
+	"audit.sections.changes": "Alterações",
+	"audit.sections.event": "Detalhes do evento",
+	"audit.sections.user": "Usuário",
+	"audit.widget.recentActivity.empty": "Nenhuma atividade recente registrada.",
+	"audit.widget.recentActivity.title": "Atividade recente",
+	"auth.backToLogin": "Voltar ao login",
+	"auth.checkYourEmail": "Verifique seu e-mail",
+	"auth.completeRegistration": "Concluir cadastro",
+	"auth.createAccountDescription": "Crie sua conta para começar",
+	"auth.enterNewPassword": "Digite sua nova senha abaixo.",
+	"auth.forgotPasswordDescription":
+		"Digite seu e-mail para receber um link de redefinição de senha",
+	"auth.forgotPasswordFormDescription":
+		"Digite seu endereço de e-mail e enviaremos um link para redefinir sua senha.",
+	"auth.forgotPasswordTitle": "Esqueci minha senha",
+	"auth.goToLogin": "Ir para o login",
+	"auth.invalidInvitation": "Convite inválido",
+	"auth.invalidInvitationDescription": "Este link de convite não é mais válido",
+	"auth.invalidLink": "Link inválido",
+	"auth.invalidLinkDescription":
+		"O link de redefinição de senha é inválido ou expirou.",
+	"auth.invalidOrExpiredInvitation": "Convite inválido ou expirado",
+	"auth.invitationExpiredMessage":
+		"O convite pode ter expirado ou já ter sido usado. Entre em contato com seu administrador para receber um novo convite.",
+	"auth.inviteEmailDescription":
+		"Um link de convite será enviado para este e-mail",
+	"auth.inviteEmailLabel": "Endereço de e-mail",
+	"auth.inviteMessage": "Mensagem pessoal (opcional)",
+	"auth.inviteMessageDescription":
+		"Esta mensagem será incluída no e-mail de convite",
+	"auth.inviteMessagePlaceholder":
+		"Adicione uma mensagem pessoal ao convite...",
+	"auth.inviteRole": "Função",
+	"auth.inviteRoleDescription":
+		"A função determina quais permissões o usuário terá",
+	"auth.inviteSelectRole": "Selecionar uma função",
+	"auth.inviteSentSuccess": "Convite enviado com sucesso",
+	"auth.inviteSentTo": "Convite enviado para {{email}}",
+	"auth.inviteUser": "Convidar usuário",
+	"auth.inviteUserDescription":
+		"Envie um convite para adicionar um novo usuário",
+	"auth.pleaseWait": "Aguarde...",
+	"auth.rememberYourPassword": "Lembra da sua senha?",
+	"auth.requestNewResetLink": "Solicite um novo link de redefinição de senha.",
+	"auth.resetLinkSentDescription":
+		"Enviamos um link de redefinição de senha para seu endereço de e-mail. Verifique sua caixa de entrada e siga as instruções.",
+	"auth.resetPasswordSuccess": "Senha redefinida com sucesso",
+	"auth.resetPasswordSuccessDescription":
+		"Sua senha foi redefinida com sucesso. Agora você pode entrar com sua nova senha.",
+	"auth.sendInvitation": "Enviar convite",
+	"auth.sendingInvitation": "Enviando convite...",
+	"auth.signInDescription":
+		"Digite suas credenciais para acessar o painel de administração",
+	"auth.user": "Usuário",
+	"auth.validatingInvitation": "Validando convite",
+	"blocks.add": "Adicionar bloco",
+	"blocks.addFirst": "Adicione seu primeiro bloco para começar",
+	"blocks.addTo": "Adicionar a {{parent}}",
+	"blocks.emptyTitle": "Nenhum bloco",
+	"blocks.libraryDescription":
+		"Escolha um tipo de bloco para adicionar ao seu layout.",
+	"blocks.noDefinitions": "Nenhuma definição de bloco registrada",
+	"blocks.noDefinitionsHint":
+		"Registre blocos com .blocks() na sua configuração de administração",
+	"blocks.noEditableFields": "Este bloco não tem campos editáveis.",
+	"blocks.noSearchResults": "Nenhum bloco corresponde à sua pesquisa",
+	"blocks.searchPlaceholder": "Pesquisar blocos...",
+	"blocks.tryDifferentSearch": "Tente outro termo de pesquisa.",
+	"blocks.uncategorized": "Outro",
+	"blocks.unknownType":
+		'Tipo de bloco "{{type}}" desconhecido. Este tipo de bloco não está registrado.',
+	"cell.blocks": "Blocos",
+	"cell.file": { one: "{{count}} arquivo", other: "{{count}} arquivos" },
+	"cell.item": { one: "{{count}} item", other: "{{count}} itens" },
+	"cell.more": "+{{count}} a mais",
+	"collection.bulkRestoreError": "Falha ao restaurar itens",
+	"collection.bulkRestorePartial": {
+		one: "{{success}} item restaurado, {{failed}} falhou",
+		other: "{{success}} itens restaurados, {{failed}} falharam",
+	},
+	"collection.bulkRestoreSuccess": {
+		one: "{{count}} item restaurado com sucesso",
+		other: "{{count}} itens restaurados com sucesso",
+	},
+	"collection.orderSaveFailed": "Falha ao salvar a ordem",
+	"collection.orderSaved": "Ordem salva",
+	"collection.reorderAddOrderField":
+		"Adicione um campo de ordem numérico antes de reordenar",
+	"collection.reorderClearFilters": "Limpe os filtros para reordenar",
+	"collection.reorderClearSearch": "Limpe a pesquisa para reordenar",
+	"collection.reorderEnableOrderable":
+		"Habilite a ordenação manual antes de reordenar",
+	"collection.reorderEnterMode": "Entrar no modo de reordenação",
+	"collection.reorderExitMode": "Sair do modo de reordenação",
+	"collection.reorderItems": "Reordenar itens",
+	"collection.reorderMode": "Modo de reordenação",
+	"collection.reorderRemoveGrouping": "Remova o agrupamento para reordenar",
+	"collection.reorderShowOnePage": "Mostre uma página de itens para reordenar",
+	"collection.reorderSwitchSort":
+		"Alterne para a ordenação por {{field}} e reordene",
+	"collection.reorderUnavailable": "Reordenação indisponível: {{reason}}",
+	"collection.restoreError": "Falha ao restaurar item",
+	"collection.restoreSuccess": "Item restaurado com sucesso",
+	"collection.restoring": "Restaurando...",
+	"collection.sortedByField": "Ordenado por {{field}} {{direction}}.",
+	"collectionSearch.noResultsDescription":
+		"Tente outro termo de pesquisa ou limpe a pesquisa para voltar à lista completa.",
+	"common.backToList": "Voltar à lista",
+	"common.deleted": "Excluído",
+	"common.done": "Concluído",
+	"common.moreActions": "Mais ações",
+	"common.noValue": "Nenhum valor",
+	"confirm.deleteAll": "Excluir tudo",
+	"confirm.deleteItemDescription":
+		"Esta ação não pode ser desfeita. O item será excluído permanentemente.",
+	"confirm.deleteItemTitle": "Excluir item?",
+	"confirm.deleteSelected": "Excluir selecionados",
+	"confirm.deleteSelectedDescription":
+		"Esta ação não pode ser desfeita. Todos os itens selecionados serão excluídos permanentemente.",
+	"confirm.deleteSelectedTitle": "Excluir itens selecionados?",
+	"confirm.restore": "Restaurar",
+	"confirm.restoreDescription":
+		"Este item voltará a ficar visível nas visualizações de lista normais.",
+	"confirm.restoreTitle": "Restaurar item?",
+	"dashboard.noWidgets": "Nenhum widget configurado",
+	"dashboard.noWidgetsDescription":
+		"Adicione widgets à configuração do seu painel para exibir dados aqui.",
+	"dashboard.systemStatus": "Status do sistema",
+	"dashboard.welcomeDescription":
+		"Selecione uma coleção na barra lateral para gerenciar seu conteúdo.",
+	"dropzone.invalidType": '"{{name}}" não é um tipo de arquivo aceito',
+	"dropzone.label": "Solte arquivos aqui ou clique para procurar",
+	"dropzone.tooLarge": '"{{name}}" excede o tamanho máximo de {{maxSize}}',
+	"dropzone.typeAudio": "Áudio",
+	"dropzone.typeImages": "Imagens",
+	"dropzone.typePDF": "PDF",
+	"dropzone.typeVideos": "Vídeos",
+	"dropzone.uploading": "Enviando...",
+	"error.accessRestricted": "Acesso restrito",
+	"error.accessRestrictedDescription":
+		"Você não tem permissão para acessar esta página. Entre em contato com seu administrador se acreditar que isso é um erro.",
+	"error.accessRestrictedResourceDescription":
+		'O recurso {{type}} "{{name}}" não está disponível no painel de administração. Ele pode estar oculto ou você pode não ter permissão para acessá-lo.',
+	"error.actionFailed": "Ação falhou",
+	"error.anErrorOccurred": "Ocorreu um erro",
+	"error.autosaveFailed": "Falha ao salvar automaticamente",
+	"error.backToDashboard": "Voltar ao painel",
+	"error.componentNotFound": "Componente não encontrado",
+	"error.failedToCreateAccount": "Falha ao criar conta",
+	"error.failedToCreateAdminAccount": "Falha ao criar conta de administrador",
+	"error.failedToGeneratePreviewToken": "Falha ao gerar token de visualização",
+	"error.failedToLoad": "Falha ao carregar",
+	"error.failedToLoadAssets": "Falha ao carregar mídia",
+	"error.failedToLoadComponent": "Falha ao carregar componente",
+	"error.failedToLoadOptions": "Falha ao carregar opções",
+	"error.failedToLoadSelectedItems": "Falha ao carregar itens selecionados",
+	"error.failedToLoadView": "Falha ao carregar {{viewType}}",
+	"error.failedToLoadViewFor":
+		"Falha ao carregar {{viewType}} para {{collection}}",
+	"error.failedToResetPassword": "Falha ao redefinir senha",
+	"error.failedToSendInvitation": "Falha ao enviar convite",
+	"error.failedToSendResetEmail": "Falha ao enviar e-mail de redefinição",
+	"error.invalidCredentials": "Credenciais inválidas",
+	"error.maxItemsAllowed": "Máximo de {{max}} itens permitido",
+	"error.missingFieldComponent":
+		"Nenhum componente registrado para o tipo de campo: {{type}}",
+	"error.multipleUploadCollections":
+		"Há várias coleções de upload disponíveis ({{collections}}). Especifique qual coleção usar.",
+	"error.noUploadCollection": "Nenhuma coleção de upload está configurada.",
+	"error.pageNotFound": "Página não encontrada",
+	"error.pageNotFoundDescription": "A página que você procura não existe.",
+	"error.selectAtLeastOne": "Selecione pelo menos um item de mídia",
+	"error.serverActionFailed": "Ação do servidor falhou",
+	"error.somethingWentWrong": "Algo deu errado",
+	"error.tryAgain": "Tente novamente",
+	"error.unexpectedError": "Ocorreu um erro inesperado",
+	"error.unknownWidget": "Widget desconhecido",
+	"error.unregisteredViewDescription":
+		'A visualização "{{viewId}}" não está registrada no registro de visualizações do admin.',
+	"error.uploadFailed": "Upload falhou",
+	"error.widgetError": "Erro de widget",
+	"error.widgetTypeNotRecognized":
+		'O tipo de widget "{{type}}" não é reconhecido.',
+	"field.codeEditor": "Editor de código",
+	"field.dragToReorder": "Arraste para reordenar",
+	"field.editItem": "Editar item",
+	"field.formEditor": "Editor de formulário",
+	"field.moveDown": "Mover para baixo",
+	"field.moveUp": "Mover para cima",
+	"field.noItems": "Nenhum item",
+	"field.removeItem": "Remover item",
+	"field.section": "Seção",
+	"form.deletedBanner":
+		"Este registro foi excluído em {{date}}. Use a ação Restaurar para torná-lo ativo novamente.",
+	"form.lastUpdated": "Última atualização",
+	"history.after": "Depois",
+	"history.before": "Antes",
+	"history.blocksCount": { one: "{{count}} bloco", other: "{{count}} blocos" },
+	"history.changeAdded": "Adicionado",
+	"history.changeChanged": "Alterado",
+	"history.changeRemoved": "Removido",
+	"history.changedFields": {
+		one: "{{count}} campo alterado",
+		other: "{{count}} campos alterados",
+	},
+	"history.description": "Alterações e atividade deste registro",
+	"history.diffAgainstVersion": "Diferença em relação à versão {{number}}",
+	"history.empty": "Nenhuma atividade registrada",
+	"history.hideChanges": "Ocultar alterações",
+	"history.initialSnapshot": "Instantâneo inicial",
+	"history.itemsCount": { one: "{{count}} item", other: "{{count}} itens" },
+	"history.moreFields": { one: "{{count}} a mais", other: "{{count}} a mais" },
+	"history.noFieldChanges":
+		"Nenhuma alteração em nível de campo neste instantâneo.",
+	"history.objectWithKeys": {
+		one: "Objeto com {{count}} chave",
+		other: "Objeto com {{count}} chaves",
+	},
+	"history.showChanges": {
+		one: "Mostrar alterações ({{count}})",
+		other: "Mostrar alterações ({{count}})",
+	},
+	"history.stage": "Etapa",
+	"history.systemUser": "Sistema",
+	"history.tabActivity": "Atividade",
+	"history.tabVersions": "Versões",
+	"history.title": "Histórico",
+	"history.versionDescription":
+		"Navegue por instantâneos de versão e inspecione diferenças em nível de campo.",
+	"input.selectDate": "Selecionar data",
+	"input.selectDateRange": "Selecionar intervalo de datas",
+	"input.selectDateTime": "Selecionar data e hora",
+	"input.selectTime": "Selecionar hora",
+	"lock.blockedDescription":
+		"Este documento está bloqueado. Você pode visualizá-lo, mas não pode fazer alterações até que o bloqueio expire.",
+	"lock.blockedTitle": "{{name}} está editando no momento",
+	"lock.cannotSave":
+		"Não é possível salvar: o documento está bloqueado por outro usuário",
+	"lock.openElsewhere":
+		"Você está com este documento aberto em outra aba. As alterações serão sincronizadas automaticamente.",
+	"media.allFiles": "Todos os arquivos",
+	"media.audio": "Áudio",
+	"media.browseLibrary": "Navegar pela biblioteca de mídia",
+	"media.documents": "Documentos",
+	"media.images": "Imagens",
+	"media.noAssets": "Nenhuma mídia",
+	"media.searchPlaceholder": "Pesquisar por nome de arquivo...",
+	"media.videos": "Vídeos",
+	"nav.adminNavigation": "Navegação administrativa",
+	"nav.breadcrumb": "Trilha de navegação",
+	"preview.exitPreview": "Sair da visualização",
+	"preview.exitTooltip":
+		"Sair do modo de visualização e limpar o cookie de rascunho",
+	"preview.hidePreview": "Ocultar visualização",
+	"preview.loadingPreview": "Carregando visualização...",
+	"preview.mode": "Modo de visualização",
+	"preview.previewError": "Erro de visualização",
+	"preview.refreshing": "Atualizando...",
+	"preview.showPreview": "Mostrar visualização",
+	"table.editing": "Editando",
+	"table.emptyDescription": "Os registros aparecerão aqui depois de criados.",
+	"table.noItemsInCollection": "Nenhum item encontrado nesta coleção",
+	"table.pagination": "Paginação",
+	"table.show": "Mostrar",
+	"time.daysAgoShort": { one: "{{count}}d atrás", other: "{{count}}d atrás" },
+	"time.hoursAgoShort": { one: "{{count}}h atrás", other: "{{count}}h atrás" },
+	"time.justNow": "agora mesmo",
+	"time.minutesAgoShort": {
+		one: "{{count}}m atrás",
+		other: "{{count}}m atrás",
+	},
+	"ui.commandPalette": "Paleta de comandos",
+	"ui.commandPaletteDescription": "Pesquise um comando para executar...",
+	"ui.expand": "Expandir",
+	"ui.expandSidebar": "Expandir barra lateral",
+	"ui.processing": "Processando...",
+	"ui.searchPlaceholder": "Pesquisar...",
+	"ui.skipToMainContent": "Pular para o conteúdo principal",
+	"ui.themeDark": "Escuro",
+	"ui.themeLight": "Claro",
+	"ui.themeSystem": "Sistema",
+	"ui.toggleSidebar": "Alternar barra lateral",
+	"ui.toggleTheme": "Alternar tema",
+	"upload.browseLibrary": "Navegar pela biblioteca",
+	"upload.bulkDescription":
+		"Adicione vários arquivos à sua biblioteca de mídia",
+	"upload.bulkError": {
+		one: "{{count}} arquivo falhou ao enviar",
+		other: "{{count}} arquivos falharam ao enviar",
+	},
+	"upload.bulkHint": "Envie vários arquivos de uma vez",
+	"upload.bulkSuccess": {
+		one: "{{count}} arquivo enviado com sucesso",
+		other: "{{count}} arquivos enviados com sucesso",
+	},
+	"upload.bulkTitle": "Enviar arquivos",
+	"upload.failedCount": {
+		one: "{{count}} falhou",
+		other: "{{count}} falharam",
+	},
+	"upload.filesCount": {
+		one: "{{count}} arquivo",
+		other: "{{count}} arquivos",
+	},
+	"upload.uploadedCount": {
+		one: "{{count}} enviado",
+		other: "{{count}} enviados",
+	},
+	"upload.waitForComplete": "Aguarde a conclusão dos uploads",
+	"version.createdAt": "Criado",
+	"version.empty": "Nenhuma versão encontrada.",
+	"version.globalHistoryDescription":
+		"Navegue por versões globais anteriores e restaure uma delas se necessário.",
+	"version.history": "Histórico de versões",
+	"version.historyDescription":
+		"Navegue por versões anteriores e restaure uma delas se necessário.",
+	"version.label": "Versão {{number}}",
+	"version.operationCreate": "Criado",
+	"version.operationDelete": "Excluído",
+	"version.operationUnknown": "Alterado",
+	"version.operationUpdate": "Atualizado",
+	"version.revert": "Reverter",
+	"version.revertConfirmDescription":
+		"Isto substituirá o conteúdo atual pela versão {{number}}.",
+	"version.revertConfirmTitle": "Reverter para esta versão?",
+	"version.revertSuccess": "Versão restaurada com sucesso",
+	"version.user": "Usuário",
+	"viewOptions.groupBy": "Agrupar por",
+	"viewOptions.groupByDescription":
+		"Agrupe a página atual por um campo configurado.",
+	"viewOptions.noGrouping": "Sem agrupamento",
+	"viewOptions.noResultsDescription":
+		"Nenhum registro corresponde aos filtros ativos. Ajuste ou limpe os filtros para ver mais resultados.",
+	"viewOptions.realtime": "Atualizações em tempo real",
+	"viewOptions.realtimeDescription":
+		"Atualize esta tabela automaticamente quando os dados mudarem.",
+	"viewOptions.showDeleted": "Mostrar excluídos",
+	"viewOptions.showDeletedDescription":
+		"Incluir registros excluídos de forma reversível nesta visualização.",
+	"viewOptions.sort": "Ordenar",
+	"widget.chart.emptyDescription":
+		"Configure uma fonte de dados para exibir um gráfico.",
+	"widget.chart.emptyTitle": "Nenhum dado de gráfico",
+	"widget.progress.emptyDescription":
+		"Configure dados de progresso para exibir este widget.",
+	"widget.progress.emptyTitle": "Nenhum progresso configurado",
+	"widget.quickActions.emptyDescription":
+		"Adicione ações rápidas à configuração do seu painel.",
+	"widget.quickActions.emptyTitle": "Nenhuma ação rápida",
+	"widget.recentItems.emptyDescription":
+		"Os itens recentes aparecerão aqui depois de criados.",
+	"widget.recentItems.emptyTitle": "Nenhum item recente",
+	"widget.table.emptyDescription": "Não há registros para os critérios atuais.",
+	"widget.table.emptyTitle": "Nenhuma linha para mostrar",
+	"widget.timeline.emptyDescription": "Não há eventos para exibir.",
+	"widget.timeline.emptyTitle": "Nenhuma atividade ainda",
+	"widget.value.emptyDescription":
+		"Configure uma fonte de valor para exibir este widget.",
+	"widget.value.emptyTitle": "Nenhum valor configurado",
+	"workflow.currentStage": "Etapa atual",
+	"workflow.noTransitions": "Nenhuma transição disponível a partir desta etapa",
+	"workflow.scheduleLabel": "Agendar para depois",
+	"workflow.scheduledAt": "Data e hora agendadas",
+	"workflow.scheduledDescription":
+		"A transição acontecerá automaticamente no horário agendado.",
+	"workflow.scheduledSuccess":
+		'Transição para "{{stage}}" agendada para {{date}}',
+	"workflow.transition": "Transição",
+	"workflow.transitionDescription":
+		'Isto fará a transição de "{{from}}" para "{{to}}".',
+	"workflow.transitionFailed": "Falha na transição",
+	"workflow.transitionSuccess":
+		'Transição para "{{stage}}" concluída com sucesso',
+	"workflow.transitionTo": "Transição para {{stage}}",
 } as const;

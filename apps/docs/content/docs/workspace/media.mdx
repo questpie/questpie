@@ -3,9 +3,7 @@ title: Media & Uploads
 description: File uploads, asset management, and the upload field.
 ---
 
-# Media & Uploads
-
-QuestPie handles file uploads through the `upload` field type and a configurable storage backend.
+QUESTPIE handles file uploads through the `upload` field type and a configurable storage backend.
 
 ## Upload Field
 
@@ -25,15 +23,16 @@ coverImage: f.upload({
 
 ## Upload Options
 
-| Option | Type | Description |
-|---|---|---|
-| `to` | `string` | Target upload collection (e.g., `"assets"`) |
-| `mimeTypes` | `string[]` | Allowed MIME types (supports wildcards) |
-| `maxSize` | `number` | Max file size in bytes |
+| Option      | Type       | Description                                 |
+| ----------- | ---------- | ------------------------------------------- |
+| `to`        | `string`   | Target upload collection (e.g., `"assets"`) |
+| `mimeTypes` | `string[]` | Allowed MIME types (supports wildcards)     |
+| `maxSize`   | `number`   | Max file size in bytes                      |
 
 ## Admin UI
 
 In the admin panel, upload fields render:
+
 - **Drag-and-drop** area for file upload
 - **Preview** for images
 - **File info** (name, size, type)
@@ -45,10 +44,10 @@ Configure the storage backend in your runtime config:
 
 ```ts title="questpie.config.ts"
 export default runtimeConfig({
-  storage: {
-    basePath: "/api",
-  },
-  // ...
+	storage: {
+		basePath: "/api",
+	},
+	// ...
 });
 ```
 

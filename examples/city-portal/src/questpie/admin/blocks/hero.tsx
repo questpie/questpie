@@ -38,14 +38,14 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 			/>
 
 			<div
-				className={`relative z-10 container mx-auto px-6 py-20 flex flex-col gap-6 ${alignClass}`}
+				className={`relative z-10 container mx-auto flex flex-col gap-6 px-6 py-20 ${alignClass}`}
 			>
-				<h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white tracking-tight leading-[1.1] max-w-4xl">
+				<h1 className="max-w-4xl text-4xl leading-[1.1] font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
 					{values.title}
 				</h1>
 
 				{values.subtitle && (
-					<p className="text-lg sm:text-xl md:text-2xl text-white/85 max-w-2xl">
+					<p className="max-w-2xl text-lg text-white/85 sm:text-xl md:text-2xl">
 						{values.subtitle}
 					</p>
 				)}
@@ -53,11 +53,11 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 				{values.ctaText && (
 					<a
 						href={values.ctaLink || "#"}
-						className="mt-4 inline-flex items-center gap-2 bg-white text-gray-900 px-8 py-3 rounded-md font-semibold hover:bg-gray-100 transition-colors"
+						className="mt-4 inline-flex items-center gap-2 rounded-md bg-white px-8 py-3 font-semibold text-gray-900 transition-colors hover:bg-gray-100"
 					>
 						{values.ctaText}
 						<svg
-							className="w-5 h-5"
+							className="h-5 w-5"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -79,11 +79,11 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 							<input
 								type="search"
 								placeholder="Search for services, news, or information..."
-								className="flex-1 px-4 py-3 rounded-l-md text-gray-900 focus:outline-none"
+								className="flex-1 rounded-l-md px-4 py-3 text-gray-900 focus:outline-none"
 							/>
 							<button
 								type="button"
-								className="px-6 py-3 bg-primary text-primary-foreground rounded-r-md hover:bg-primary/90 font-medium"
+								className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-r-md px-6 py-3 font-medium"
 							>
 								Search
 							</button>

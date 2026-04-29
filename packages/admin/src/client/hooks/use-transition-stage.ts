@@ -32,6 +32,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import * as React from "react";
+
 import { selectClient, useAdminStore } from "../runtime";
 
 // ============================================================================
@@ -128,11 +129,11 @@ export function useTransitionStage(
 			// picks up the new stage, version snapshot, and audit entry.
 			if (mode === "collection") {
 				queryClient.invalidateQueries({
-					queryKey: ["questpie", "collections", resourceName],
+					queryKey: ["questpie", "collections"],
 				});
 			} else {
 				queryClient.invalidateQueries({
-					queryKey: ["questpie", "globals", resourceName],
+					queryKey: ["questpie", "globals"],
 				});
 			}
 			queryClient.invalidateQueries({

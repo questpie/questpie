@@ -7,6 +7,7 @@
 import { DEFAULT_LOCALE } from "questpie/shared";
 import * as React from "react";
 import { createContext, useCallback, useContext } from "react";
+
 import type {
 	I18nAdapter,
 	I18nContext as I18nContextType,
@@ -14,6 +15,7 @@ import type {
 	I18nText,
 	UseTranslationResult,
 } from "./types";
+import { resolveDateFnsLocale } from "./date-locale";
 
 // ============================================================================
 // Context
@@ -71,7 +73,7 @@ export function I18nProvider({
 			getLocaleName: adapter.getLocaleName.bind(adapter),
 			isRTL: adapter.isRTL.bind(adapter),
 		}),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// oxlint-disable-next-line react/exhaustive-deps
 		[adapter, adapter.locale],
 	);
 
@@ -147,6 +149,15 @@ function useLocale(): string {
  */
 function useSetLocale(): I18nAdapter["setLocale"] {
 	return useI18n().setLocale;
+}
+
+/**
+ * Returns the date-fns `Locale` object matching the current admin UI locale.
+ * Only `enUS` is bundled by default — register others via `registerDateFnsLocale`.
+ */
+export function useDateFnsLocale() {
+	const { locale } = useTranslation();
+	return resolveDateFnsLocale(locale);
 }
 
 // ============================================================================

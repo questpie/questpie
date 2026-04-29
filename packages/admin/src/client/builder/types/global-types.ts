@@ -3,6 +3,7 @@
  */
 
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
 import type { I18nText } from "../../i18n/types.js";
 import type { Admin } from "../admin";
 import type { IconComponent } from "./common";
@@ -68,9 +69,7 @@ interface GlobalConfig<TApp = any> {
 	hidden?: boolean;
 }
 
-export interface GlobalBuilderState<
-	TAdminApp extends Admin<any> = Admin<any>,
-> {
+export interface GlobalBuilderState<TAdminApp extends Admin<any> = Admin<any>> {
 	readonly name: string;
 	readonly "~adminApp": TAdminApp;
 	/** Display label - supports inline translations */

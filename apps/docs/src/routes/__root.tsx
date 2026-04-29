@@ -1,3 +1,4 @@
+import "virtual:iconify-preload";
 import {
 	createRootRoute,
 	HeadContent,
@@ -6,7 +7,9 @@ import {
 } from "@tanstack/react-router";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import type * as React from "react";
+
 import { generateLinks } from "@/lib/seo";
+
 import appCss from "@/styles/app.css?url";
 
 export const Route = createRootRoute({
@@ -20,7 +23,16 @@ export const Route = createRootRoute({
 				{ name: "viewport", content: "width=device-width, initial-scale=1" },
 				{ name: "format-detection", content: "telephone=no" },
 				{ name: "color-scheme", content: "light dark" },
-				{ name: "theme-color", content: "#B700FF" },
+				{
+					name: "theme-color",
+					media: "(prefers-color-scheme: light)",
+					content: "#fafafa",
+				},
+				{
+					name: "theme-color",
+					media: "(prefers-color-scheme: dark)",
+					content: "#121212",
+				},
 			],
 			links: [
 				...generateLinks({ cssUrl: appCss, includeCanonical: false }),
@@ -61,7 +73,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 			<head>
 				<HeadContent />
 			</head>
-			<body className="flex flex-col min-h-screen">
+			<body className="flex min-h-screen flex-col">
 				<RootProvider>{children}</RootProvider>
 				<Scripts />
 			</body>

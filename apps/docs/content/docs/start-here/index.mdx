@@ -1,13 +1,11 @@
 ---
-title: What is QuestPie
+title: What is QUESTPIE
 description: A backend-first TypeScript framework where schema drives everything — from database to typed frontends.
 ---
 
-# What is QuestPie
+QUESTPIE is a **backend-first TypeScript framework**. You define your data schema once, codegen generates the typed runtime, and any frontend can consume it through introspection.
 
-QuestPie is a **backend-first TypeScript framework**. You define your data schema once, codegen generates the typed runtime, and any frontend can consume it through introspection.
-
-It is **not a CMS**. The admin panel is one projection of your schema — the same way an SDK, an OpenAPI spec, or a mobile app would be. The framework exists independently of any UI.
+The admin panel is one projection of your schema — the same way an SDK, an OpenAPI spec, or a mobile app would be. The framework exists independently of any UI.
 
 ## The Core Idea
 
@@ -31,17 +29,20 @@ The admin panel, client SDK, and OpenAPI spec all consume these generated types.
 
 ## Mental Model
 
-Think of QuestPie in three layers:
+Think of QUESTPIE in three layers:
 
 ### Layer 1: Schema (you write this)
 
 ```ts title="collections/posts.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("posts").fields(({ f }) => ({
-  title: f.text().required(),
-  body: f.textarea(),
-  status: f.select(["draft", "published"]),
+	title: f.text().required(),
+	body: f.textarea(),
+	status: f.select([
+		{ value: "draft", label: "Draft" },
+		{ value: "published", label: "Published" },
+	]),
 }));
 ```
 
@@ -57,8 +58,8 @@ Running `questpie generate` discovers your files and generates:
 
 ```ts title="Client SDK"
 const posts = await client.collections.posts.find({
-  where: { status: "published" },
-  orderBy: { createdAt: "desc" },
+	where: { status: "published" },
+	orderBy: { createdAt: "desc" },
 });
 // posts is fully typed from your schema
 ```
@@ -70,53 +71,55 @@ const posts = await client.collections.posts.find({
 
 ## Why Not Just Use [X]?
 
-| If you need... | QuestPie gives you... |
-|---|---|
-| A typed API from schema | Collections → CRUD endpoints + Zod validation + query operators |
-| Business logic alongside data | Routes, hooks, jobs - all in the same project with DI |
-| An admin panel | `@questpie/admin` reads your schema, no separate config |
-| Multiple frontends | One schema, typed client SDK for any framework |
-| Full-stack type safety | Schema types flow from server → codegen → client |
+| If you need...                | QUESTPIE gives you...                                           |
+| ----------------------------- | --------------------------------------------------------------- |
+| A typed API from schema       | Collections → CRUD endpoints + Zod validation + query operators |
+| Business logic alongside data | Routes, hooks, jobs - all in the same project with DI           |
+| An admin panel                | `@questpie/admin` reads your schema, no separate config         |
+| Multiple frontends            | One schema, typed client SDK for any framework                  |
+| Full-stack type safety        | Schema types flow from server → codegen → client                |
 
 ## Context-First Architecture
 
-Every handler in QuestPie receives its dependencies through context — no imports, no singletons, no god objects:
+Every handler in QUESTPIE receives its dependencies through context — no imports, no singletons, no god objects:
 
 ```ts title="routes/create-booking.ts"
 import { route } from "questpie";
 import z from "zod";
 
 export default route()
-  .post()
-  .schema(z.object({
-    barberId: z.string(),
-    serviceId: z.string(),
-    scheduledAt: z.string().datetime(),
-  }))
-  .handler(async ({ input, collections, queue }) => {
-    const service = await collections.services.findOne({
-      where: { id: input.serviceId },
-    });
+	.post()
+	.schema(
+		z.object({
+			barberId: z.string(),
+			serviceId: z.string(),
+			scheduledAt: z.string().datetime(),
+		}),
+	)
+	.handler(async ({ input, collections, queue }) => {
+		const service = await collections.services.findOne({
+			where: { id: input.serviceId },
+		});
 
-    const appointment = await collections.appointments.create({
-      barber: input.barberId,
-      service: input.serviceId,
-      scheduledAt: new Date(input.scheduledAt),
-      status: "pending",
-    });
+		const appointment = await collections.appointments.create({
+			barber: input.barberId,
+			service: input.serviceId,
+			scheduledAt: new Date(input.scheduledAt),
+			status: "pending",
+		});
 
-    await queue.sendAppointmentConfirmation.publish({
-      appointmentId: appointment.id,
-    });
+		await queue.sendAppointmentConfirmation.publish({
+			appointmentId: appointment.id,
+		});
 
-    return { success: true, appointmentId: appointment.id };
-  });
+		return { success: true, appointmentId: appointment.id };
+	});
 ```
 
 `collections`, `queue`, `email`, `db`, `session` — all injected through `AppContext`. Codegen generates the type augmentation, so everything is discoverable and typed.
 
 ## What's Next
 
-- [Installation](/docs/start-here/installation) — Get QuestPie running
+- [Installation](/docs/start-here/installation) — Get QUESTPIE running
 - [First App](/docs/start-here/first-app) — Build a working API in 5 minutes
 - [Project Structure](/docs/start-here/project-structure) — File conventions and discovery rules

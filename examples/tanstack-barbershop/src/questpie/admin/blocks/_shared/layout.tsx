@@ -59,10 +59,10 @@ export function DividerRenderer({ values }: BlockProps<"divider">) {
 		] ?? dividerWidthClasses.full;
 
 	return (
-		<div className="py-8 px-6">
+		<div className="px-6 py-8">
 			<hr
 				className={cn(
-					"border-t border-border",
+					"border-border border-t",
 					widthClass,
 					values.style === "dashed" && "border-dashed",
 				)}

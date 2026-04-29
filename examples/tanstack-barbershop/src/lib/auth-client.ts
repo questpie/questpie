@@ -4,8 +4,8 @@
  * Type-safe Better Auth client for admin authentication
  */
 
-import { createAdminAuthClient } from "@questpie/admin/client";
 import type { AppConfig } from "#questpie";
+import { createAdminAuthClient } from "@questpie/admin/client";
 
 export const authClient = createAdminAuthClient<AppConfig>({
 	baseURL:
@@ -15,4 +15,3 @@ export const authClient = createAdminAuthClient<AppConfig>({
 	basePath: "/api/auth",
 });
 
-export type AuthClient = typeof authClient;

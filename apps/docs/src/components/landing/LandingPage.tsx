@@ -1,32 +1,83 @@
+import { Icon } from "@iconify/react";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
+import {
+	type HTMLAttributes,
+	type ReactNode,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 /* ─── Helpers ─── */
 
-function SectionBar({
-	num,
+function CodePanel({
 	label,
-	title,
+	children,
+	className,
+	contentClassName,
+	...props
 }: {
-	num: string;
-	label: string;
-	title: string;
-}) {
+	label?: ReactNode;
+	children: ReactNode;
+	className?: string;
+	contentClassName?: string;
+} & HTMLAttributes<HTMLDivElement>) {
 	return (
-		<div className="grid grid-cols-[auto_1fr] border-b border-border">
-			<div className="bg-card px-5 py-4 text-5xl font-extrabold font-mono text-primary leading-none min-w-[100px] text-center border-r border-border flex items-center justify-center max-sm:text-3xl max-sm:px-4 max-sm:min-w-[72px]">
-				{num}
-			</div>
-			<div className="px-5 py-4 flex flex-col justify-center">
-				<div className="font-mono text-[10px] tracking-[3px] uppercase text-primary">
+		<div
+			{...props}
+			className={cn(
+				"border-border-subtle bg-card relative flex h-full min-w-0 flex-col overflow-hidden rounded-[var(--surface-radius)] border shadow-[var(--surface-shadow)]",
+				className,
+			)}
+		>
+			{label && (
+				<div className="border-border-subtle bg-surface-low text-muted-foreground shrink-0 border-b px-3 py-2 font-mono text-[11px] font-medium">
 					{label}
 				</div>
-				<div className="font-mono text-[clamp(18px,2.5vw,24px)] font-bold text-foreground mt-0.5">
-					{title}
-				</div>
+			)}
+			<div
+				className={cn(
+					"text-muted-foreground min-h-0 flex-1 overflow-x-auto p-4 font-mono text-[13px] leading-[1.6] whitespace-pre",
+					contentClassName,
+				)}
+			>
+				{children}
 			</div>
+		</div>
+	);
+}
+
+function Badge({ children }: { children: ReactNode }) {
+	return (
+		<span className="border-border-subtle bg-surface-low text-muted-foreground font-chrome inline-flex items-center rounded-[var(--control-radius-inner)] border px-2.5 py-1 text-[11px] font-medium">
+			{children}
+		</span>
+	);
+}
+
+function SectionHeader({
+	num,
+	title,
+	subtitle,
+}: {
+	num: string;
+	title: string;
+	subtitle: string;
+}) {
+	return (
+		<div className="mb-8 md:mb-12">
+			<div className="text-muted-foreground mb-3 font-mono text-xs font-medium">
+				{num}
+			</div>
+			<h2 className="text-foreground mb-4 text-3xl leading-tight font-semibold text-balance md:text-4xl">
+				{title}
+			</h2>
+			<p className="text-muted-foreground max-w-2xl text-lg leading-[1.65] text-pretty">
+				{subtitle}
+			</p>
 		</div>
 	);
 }
@@ -42,7 +93,7 @@ function Reveal({
 		<div
 			data-reveal
 			className={cn(
-				"opacity-0 translate-y-3 transition-all duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] data-[visible]:opacity-100 data-[visible]:translate-y-0",
+				"translate-y-3 opacity-0 transition-[opacity,transform] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] data-[visible]:translate-y-0 data-[visible]:opacity-100 motion-reduce:translate-y-0 motion-reduce:transition-none",
 				className,
 			)}
 		>
@@ -51,230 +102,1467 @@ function Reveal({
 	);
 }
 
-function Lmw({
+function VisualAssetFrame({
+	asset,
 	children,
 	className,
+	...props
 }: {
+	asset?: string;
 	children: ReactNode;
 	className?: string;
+} & HTMLAttributes<HTMLDivElement>) {
+	return (
+		<div
+			{...props}
+			data-section-asset={asset}
+			className={cn(
+				"md:border-border-subtle md:bg-card relative min-w-0 overflow-hidden p-0 md:rounded-[var(--surface-radius)] md:border md:p-6 md:shadow-[var(--surface-shadow)]",
+				className,
+			)}
+		>
+			<div
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle_at_50%_0,color-mix(in_srgb,var(--foreground)_5%,transparent)_0,transparent_28rem)] md:block"
+			/>
+			<div className="relative">{children}</div>
+		</div>
+	);
+}
+
+function VisualNode({
+	icon,
+	title,
+	description,
+	active,
+	className,
+	children,
+}: {
+	icon?: string;
+	title: string;
+	description?: string;
+	active?: boolean;
+	className?: string;
+	children?: ReactNode;
 }) {
 	return (
 		<div
 			className={cn(
-				"max-w-[1200px] mx-auto relative z-[1] border-x border-border",
+				"border-border-subtle bg-surface-low min-w-0 rounded-[var(--control-radius)] border p-3",
+				active && "border-border-strong bg-surface-high",
 				className,
 			)}
 		>
-			{children}
-		</div>
-	);
-}
-
-function TwoCol({
-	children,
-	className,
-}: {
-	children: ReactNode;
-	className?: string;
-}) {
-	return (
-		<div className={cn("grid grid-cols-2 max-[900px]:grid-cols-1", className)}>
-			{children}
-		</div>
-	);
-}
-
-function TwoColLeft({
-	children,
-	className,
-}: {
-	children: ReactNode;
-	className?: string;
-}) {
-	return (
-		<div
-			className={cn(
-				"p-6 border-b border-border border-r border-border max-[900px]:border-r-0",
-				className,
+			<div className="flex min-w-0 items-center gap-2">
+				{icon && (
+					<Icon
+						ssr
+						aria-hidden="true"
+						icon={icon}
+						width={15}
+						height={15}
+						className="text-muted-foreground shrink-0"
+					/>
+				)}
+				<div className="text-foreground font-chrome min-w-0 truncate text-sm font-semibold">
+					{title}
+				</div>
+			</div>
+			{description && (
+				<p className="text-muted-foreground mt-1 text-xs leading-relaxed text-pretty">
+					{description}
+				</p>
 			)}
-		>
 			{children}
 		</div>
 	);
 }
 
-function TwoColRight({
-	children,
-	className,
-}: {
-	children: ReactNode;
-	className?: string;
-}) {
+/* ─── Swap Anything Section (interactive config builder) ─── */
+
+type AdapterOption = {
+	label: string;
+	fn: string;
+	code: string;
+	soon?: boolean;
+};
+
+type AdapterCategory = {
+	key: string;
+	label: string;
+	options: AdapterOption[];
+};
+
+const ADAPTER_CATEGORIES: AdapterCategory[] = [
+	{
+		key: "kv",
+		label: "KV / Cache",
+		options: [
+			{
+				label: "Custom Redis",
+				fn: "KVAdapter",
+				code: "kv: { adapter: myRedisAdapter }",
+			},
+			{
+				label: "Memory",
+				fn: "default memory",
+				code: "kv: { defaultTtl: 3600 }",
+			},
+			{
+				label: "CF KV",
+				fn: "KVAdapter",
+				code: "kv: { adapter: myCloudflareKvAdapter }",
+				soon: true,
+			},
+		],
+	},
+	{
+		key: "queue",
+		label: "Queue",
+		options: [
+			{
+				label: "pg-boss",
+				fn: "pgBossAdapter",
+				code: "queue: { adapter: pgBossAdapter({ connectionString }) }",
+			},
+			{
+				label: "CF Queues",
+				fn: "cloudflareQueuesAdapter",
+				code: "queue: { adapter: cloudflareQueuesAdapter({ enqueue }) }",
+			},
+			{
+				label: "BullMQ",
+				fn: "bullmqAdapter",
+				code: "queue: { adapter: bullmqAdapter() }",
+				soon: true,
+			},
+		],
+	},
+	{
+		key: "search",
+		label: "Search",
+		options: [
+			{
+				label: "Postgres FTS",
+				fn: "createPostgresSearchAdapter",
+				code: "search: createPostgresSearchAdapter()",
+			},
+			{
+				label: "pgvector",
+				fn: "createPgVectorSearchAdapter",
+				code: "search: createPgVectorSearchAdapter({ embeddings })",
+			},
+			{
+				label: "Meilisearch",
+				fn: "meilisearchAdapter",
+				code: "search: meilisearchAdapter()",
+				soon: true,
+			},
+		],
+	},
+	{
+		key: "realtime",
+		label: "Realtime",
+		options: [
+			{
+				label: "PG NOTIFY",
+				fn: "pgNotifyAdapter",
+				code: "realtime: { adapter: pgNotifyAdapter() }",
+			},
+			{
+				label: "Redis Streams",
+				fn: "redisStreamsAdapter",
+				code: "realtime: { adapter: redisStreamsAdapter({ client }) }",
+			},
+		],
+	},
+	{
+		key: "storage",
+		label: "Storage",
+		options: [
+			{
+				label: "S3",
+				fn: "S3Driver",
+				code: 'storage: { driver: new S3Driver({ bucket: "assets" }) }',
+			},
+			{
+				label: "R2",
+				fn: "S3Driver",
+				code: "storage: { driver: new S3Driver({ endpoint: env.R2_URL }) }",
+			},
+			{
+				label: "GCS",
+				fn: "FlyDrive driver",
+				code: "storage: { driver: myGcsDriver }",
+			},
+			{
+				label: "Local",
+				fn: "local FS",
+				code: 'storage: { location: "./uploads" }',
+			},
+		],
+	},
+	{
+		key: "email",
+		label: "Email",
+		options: [
+			{
+				label: "SMTP",
+				fn: "SmtpAdapter",
+				code: "email: { adapter: new SmtpAdapter({ transport }) }",
+			},
+			{
+				label: "Console",
+				fn: "ConsoleAdapter",
+				code: "email: { adapter: new ConsoleAdapter() }",
+			},
+			{
+				label: "Resend",
+				fn: "resendAdapter",
+				code: "email: { adapter: resendAdapter() }",
+				soon: true,
+			},
+		],
+	},
+];
+
+function SwapAnythingSection() {
+	const [selections, setSelections] = useState<Record<string, number>>({
+		kv: 0,
+		queue: 0,
+		search: 0,
+		realtime: 0,
+		storage: 0,
+		email: 0,
+	});
+
+	const handleSelect = (key: string, index: number) => {
+		setSelections((prev) => ({ ...prev, [key]: index }));
+	};
+
 	return (
-		<div className={cn("p-6 border-b border-border", className)}>
-			{children}
-		</div>
+		<>
+			<SectionHeader
+				num="03"
+				title="Keep your stack. Swap the adapter."
+				subtitle="Cache, queue, search, realtime, storage, and email stay in app config. QUESTPIE treats infrastructure as replaceable adapters, not a platform lock-in."
+			/>
+
+			<div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[1fr_1.2fr]">
+				{/* Left: adapter grid */}
+				<div className="grid min-w-0 auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2">
+					{ADAPTER_CATEGORIES.map((cat) => (
+						<div
+							key={cat.key}
+							className="border-border-subtle bg-card flex min-h-32 flex-col rounded-[var(--surface-radius)] border p-4 shadow-[var(--surface-shadow)]"
+						>
+							<div className="text-muted-foreground mb-2 font-mono text-[11px] font-medium">
+								{cat.label}
+							</div>
+							<div className="flex flex-1 flex-wrap content-start gap-1.5">
+								{cat.options.map((opt, i) => (
+									<button
+										key={opt.label}
+										type="button"
+										disabled={opt.soon}
+										onClick={() => !opt.soon && handleSelect(cat.key, i)}
+										aria-pressed={!opt.soon && selections[cat.key] === i}
+										className={cn(
+											"font-chrome min-h-10 rounded-[var(--control-radius-inner)] border px-2.5 py-1 text-xs font-medium transition-[background-color,color,border-color,transform,opacity] active:scale-[0.96] motion-reduce:active:scale-100",
+											opt.soon
+												? "border-border-subtle text-muted-foreground/40 cursor-default opacity-70 active:scale-100"
+												: selections[cat.key] === i
+													? "border-border-strong bg-surface-high text-foreground"
+													: "border-border-subtle bg-card text-muted-foreground hover:bg-surface-low hover:text-foreground",
+										)}
+									>
+										{opt.label}
+										{opt.soon && (
+											<span className="text-muted-foreground/40 ml-1 font-mono text-[9px]">
+												soon
+											</span>
+										)}
+									</button>
+								))}
+							</div>
+						</div>
+					))}
+				</div>
+
+				{/* Right: live config output */}
+				<div className="grid min-w-0 content-start gap-3">
+					<div className="border-border-subtle bg-card relative min-w-0 overflow-hidden rounded-[var(--surface-radius)] border shadow-[var(--surface-shadow)]">
+						<div className="border-border-subtle bg-surface-low text-muted-foreground border-b px-3 py-2 font-mono text-[11px] font-medium">
+							questpie.config.ts
+						</div>
+						<div className="text-muted-foreground overflow-x-auto p-4 font-mono text-[13px] leading-[1.8] whitespace-pre">
+							<span className="text-[var(--syntax-function)]">
+								runtimeConfig
+							</span>
+							{"({\n"}
+							{ADAPTER_CATEGORIES.map((cat) => {
+								const opt = cat.options[selections[cat.key]];
+								const fnIdx = opt.code.indexOf(opt.fn);
+								const hasHighlight = fnIdx >= 0;
+								const before = hasHighlight
+									? opt.code.slice(0, fnIdx)
+									: opt.code;
+								const after = hasHighlight
+									? opt.code.slice(fnIdx + opt.fn.length)
+									: "";
+
+								return (
+									<span key={cat.key}>
+										{"  "}
+										{before}
+										{hasHighlight && (
+											<span className="text-[var(--syntax-function)]">
+												{opt.fn}
+											</span>
+										)}
+										{after}
+										{",\n"}
+									</span>
+								);
+							})}
+							{"})"}
+						</div>
+						<div className="text-muted-foreground border-border-subtle mx-4 border-t px-1 py-3 text-sm leading-relaxed">
+							Select an adapter on the left. The config mirrors the selected
+							runtime slot.
+						</div>
+					</div>
+					<Link
+						to="/docs/$"
+						params={{ _splat: "extend/custom-adapters" }}
+						className="border-border-subtle bg-card text-muted-foreground hover:bg-surface-low hover:text-foreground flex min-h-28 items-center justify-between gap-4 rounded-[var(--surface-radius)] border p-4 shadow-[var(--surface-shadow)] transition-[background-color,color,transform] active:scale-[0.96] motion-reduce:active:scale-100 lg:min-h-[9rem]"
+					>
+						<div className="min-w-0">
+							<div className="mb-2 font-mono text-[11px] font-medium">
+								Custom
+							</div>
+							<div className="font-chrome flex min-w-0 items-center gap-1.5 text-sm font-medium">
+								<Icon
+									ssr
+									icon="ph:code"
+									width={14}
+									height={14}
+									className="shrink-0"
+								/>
+								<span className="truncate">Write your own adapter</span>
+							</div>
+							<p className="mt-1 text-xs leading-relaxed text-pretty">
+								Under 50 lines when the runtime slot already exists.
+							</p>
+						</div>
+						<Icon
+							icon="ph:arrow-right"
+							width={14}
+							height={14}
+							className="shrink-0"
+						/>
+					</Link>
+				</div>
+			</div>
+		</>
 	);
 }
 
-/* ─── File Conventions Section (with toggle) ─── */
+/* ─── File Conventions Section (with toggle + staggered badges) ─── */
+
+const CONVENTION_ASSET_FILES = {
+	"by-type": [
+		{
+			icon: "ph:database",
+			title: "collections/posts.ts",
+			description: "Model + CRUD",
+		},
+		{
+			icon: "ph:signpost",
+			title: "routes/admin/stats.ts",
+			description: "Typed HTTP action",
+		},
+		{
+			icon: "ph:lightning",
+			title: "jobs/send-newsletter.ts",
+			description: "Queue worker",
+		},
+	],
+	"by-feature": [
+		{
+			icon: "ph:folder-simple",
+			title: "blog/collections/posts.ts",
+			description: "Feature-owned model",
+		},
+		{
+			icon: "ph:folder-simple",
+			title: "shop/services/stripe.ts",
+			description: "Feature service",
+		},
+		{
+			icon: "ph:folder-simple",
+			title: "shared/routes/stats.ts",
+			description: "Shared action",
+		},
+	],
+} as const;
+
+const CONVENTION_ASSET_OUTPUTS = [
+	{
+		icon: "ph:brackets-curly",
+		title: "Registry keys",
+		description: "camelized from factory identity",
+	},
+	{
+		icon: "ph:tree-structure",
+		title: "Runtime module",
+		description: "collections, routes, jobs, services",
+	},
+	{
+		icon: "ph:code",
+		title: "Type surface",
+		description: "App, AppConfig, client SDK",
+	},
+] as const;
+
+function FileConventionAsset({ layout }: { layout: "by-type" | "by-feature" }) {
+	const files = CONVENTION_ASSET_FILES[layout];
+
+	return (
+		<VisualAssetFrame asset="file-conventions">
+			<div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<div className="text-muted-foreground font-mono text-[11px] font-medium">
+						File convention pipeline
+					</div>
+					<h3 className="text-foreground mt-1 text-lg leading-tight font-semibold text-balance">
+						Folder structure becomes runtime structure
+					</h3>
+				</div>
+				<div className="border-border-subtle bg-surface-low text-muted-foreground rounded-[var(--control-radius-inner)] border px-2.5 py-1 font-mono text-[11px]">
+					{layout === "by-type" ? "by type" : "by feature"}
+				</div>
+			</div>
+
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
+				<div className="grid gap-3">
+					{files.map((file) => (
+						<VisualNode
+							key={file.title}
+							icon={file.icon}
+							title={file.title}
+							description={file.description}
+						/>
+					))}
+				</div>
+
+				<div className="border-border-subtle bg-surface-high mx-auto flex size-28 flex-col items-center justify-center rounded-[var(--surface-radius)] border text-center shadow-[var(--surface-shadow)]">
+					<Icon
+						ssr
+						aria-hidden="true"
+						icon="ph:gear-six"
+						width={22}
+						height={22}
+						className="text-muted-foreground mb-2"
+					/>
+					<div className="text-foreground font-chrome text-sm font-semibold">
+						Codegen
+					</div>
+					<div className="text-muted-foreground mt-1 font-mono text-[10px]">
+						discover + emit
+					</div>
+				</div>
+
+				<div className="grid gap-3">
+					{CONVENTION_ASSET_OUTPUTS.map((output) => (
+						<VisualNode
+							key={output.title}
+							icon={output.icon}
+							title={output.title}
+							description={output.description}
+						/>
+					))}
+				</div>
+			</div>
+		</VisualAssetFrame>
+	);
+}
 
 function FileConventionsSection() {
 	const [layout, setLayout] = useState<"by-type" | "by-feature">("by-type");
 
 	const byTypeTree = (
-		<pre className="px-5 py-4" style={{ fontSize: 12 }}>
-			<span className="text-muted-foreground/60">src/questpie/server/</span>
+		<>
+			<span className="text-primary">src/questpie/server/</span>
 			{`
 ├── collections/
 │   ├── `}
-			<span className="text-primary font-semibold">posts.ts</span>
+			<span className="text-foreground font-bold">posts.ts</span>
 			{`
 │   └── `}
-			<span className="text-primary font-semibold">users.ts</span>
+			<span className="text-foreground font-bold">users.ts</span>
 			{`
 ├── routes/
 │   └── `}
-			<span className="text-primary font-semibold">admin/stats.ts</span>
+			<span className="text-foreground font-bold">admin/stats.ts</span>
 			{`
 ├── blocks/
 │   └── `}
-			<span className="text-primary font-semibold">hero.ts</span>
+			<span className="text-foreground font-bold">hero.ts</span>
 			{`
 ├── jobs/
 │   └── `}
-			<span className="text-primary font-semibold">send-newsletter.ts</span>
+			<span className="text-foreground font-bold">send-newsletter.ts</span>
 			{`
 ├── services/
 │   └── `}
-			<span className="text-primary font-semibold">stripe.ts</span>
+			<span className="text-foreground font-bold">stripe.ts</span>
 			{`
 ├── seeds/
 │   └── `}
-			<span className="text-primary font-semibold">demo-data.ts</span>
+			<span className="text-foreground font-bold">demo-data.ts</span>
 			{`
 └── `}
-			<span className="text-primary font-semibold">auth.ts</span>
-		</pre>
+			<span className="text-foreground font-bold">auth.ts</span>
+		</>
 	);
 
 	const byFeatureTree = (
-		<pre className="px-5 py-4" style={{ fontSize: 12 }}>
-			<span className="text-muted-foreground/60">src/questpie/server/</span>
+		<>
+			<span className="text-primary">src/questpie/server/</span>
 			{`
 ├── blog/
-│   ├── `}
-			<span className="text-primary font-semibold">posts.collection.ts</span>
+│   ├── collections/
+│   │   └── `}
+			<span className="text-foreground font-bold">posts.ts</span>
 			{`
-│   ├── `}
-			<span className="text-primary font-semibold">hero.block.ts</span>
+│   ├── blocks/
+│   │   └── `}
+			<span className="text-foreground font-bold">hero.ts</span>
 			{`
-│   └── `}
-			<span className="text-primary font-semibold">newsletter.job.ts</span>
+│   └── jobs/
+│       └── `}
+			<span className="text-foreground font-bold">newsletter.ts</span>
 			{`
 ├── shop/
-│   ├── `}
-			<span className="text-primary font-semibold">products.collection.ts</span>
+│   ├── collections/
+│   │   ├── `}
+			<span className="text-foreground font-bold">products.ts</span>
 			{`
-│   ├── `}
-			<span className="text-primary font-semibold">orders.collection.ts</span>
+│   │   └── `}
+			<span className="text-foreground font-bold">orders.ts</span>
 			{`
-│   └── `}
-			<span className="text-primary font-semibold">stripe.service.ts</span>
+│   └── services/
+│       └── `}
+			<span className="text-foreground font-bold">stripe.ts</span>
 			{`
 ├── shared/
-│   ├── `}
-			<span className="text-primary font-semibold">users.collection.ts</span>
+│   ├── collections/
+│   │   └── `}
+			<span className="text-foreground font-bold">users.ts</span>
 			{`
-│   └── `}
-			<span className="text-primary font-semibold">stats.route.ts</span>
+│   └── routes/
+│       └── `}
+			<span className="text-foreground font-bold">stats.ts</span>
 			{`
 └── `}
-			<span className="text-primary font-semibold">auth.ts</span>
-		</pre>
+			<span className="text-foreground font-bold">auth.ts</span>
+		</>
 	);
 
-	const byTypeBadges = [
-		["posts.ts", "CRUD + API + ADMIN", "text-[var(--syntax-string)]"],
-		["users.ts", "AUTH-CONNECTED ENTITY", "text-[var(--syntax-string)]"],
-		["admin/stats.ts", "TYPE-SAFE ROUTE", "text-primary"],
-		["hero.ts", "VISUAL BLOCK", "text-[#FFB300]"],
-		["send-newsletter.ts", "BACKGROUND JOB", "text-[#40C4FF]"],
-		["stripe.ts", "SINGLETON SERVICE", "text-muted-foreground"],
-		["demo-data.ts", "DB SEED", "text-muted-foreground"],
-		["auth.ts", "BETTER AUTH", "text-muted-foreground"],
+	return (
+		<>
+			<SectionHeader
+				num="02"
+				title="A file is a feature, not a registration chore"
+				subtitle="Collections, routes, jobs, services, blocks, and seeds are discovered from the server directory. Codegen turns file intent into runtime modules and typed client surfaces."
+			/>
+
+			<div className="border-border-subtle bg-surface-low mb-4 inline-flex gap-1 rounded-[var(--control-radius)] border p-1">
+				{(["by-type", "by-feature"] as const).map((mode) => (
+					<button
+						key={mode}
+						type="button"
+						onClick={() => setLayout(mode)}
+						aria-pressed={layout === mode}
+						className={cn(
+							"font-chrome min-h-10 rounded-[var(--control-radius-inner)] px-3 text-xs font-medium transition-[background-color,color,transform] active:scale-[0.96] motion-reduce:active:scale-100",
+							layout === mode
+								? "bg-surface-high text-foreground"
+								: "text-muted-foreground hover:bg-card hover:text-foreground",
+						)}
+					>
+						{mode === "by-type" ? "By type" : "By feature"}
+					</button>
+				))}
+			</div>
+
+			<div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+				<FileConventionAsset layout={layout} />
+				<CodePanel
+					label={
+						layout === "by-type"
+							? "server layout — by type"
+							: "server layout — by feature"
+					}
+				>
+					{layout === "by-type" ? byTypeTree : byFeatureTree}
+				</CodePanel>
+			</div>
+		</>
+	);
+}
+
+/* ─── §04 Admin Showcase Section ─── */
+
+const adminScreenshotSrc: string | null = null;
+
+function AdminScreenshotSlot({ children }: { children: ReactNode }) {
+	return (
+		<div
+			data-admin-screenshot-slot
+			className="admin-step-content md:border-border-subtle md:bg-card flex min-h-0 flex-1 flex-col overflow-hidden md:min-h-[26rem] md:rounded-[var(--surface-radius)] md:border md:shadow-[var(--surface-shadow)]"
+		>
+			{adminScreenshotSrc ? (
+				<img
+					src={adminScreenshotSrc}
+					alt="QUESTPIE admin workspace"
+					className="h-full min-h-0 w-full object-cover outline outline-1 outline-black/10 md:min-h-[26rem] dark:outline-white/10"
+				/>
+			) : (
+				children
+			)}
+		</div>
+	);
+}
+
+function AdminShowcaseSection() {
+	const [activeTab, setActiveTab] = useState(0);
+
+	type AdminTab = {
+		label: string;
+		codeLabel: string;
+		code: ReactNode;
+		mockup: ReactNode;
+	};
+
+	const tabs: AdminTab[] = [
+		{
+			label: "Collection",
+			codeLabel: "collections/posts.ts",
+			code: (
+				<>
+					<span className="text-primary font-semibold">collection</span>(
+					<span className="text-[var(--syntax-string)]">"posts"</span>){`\n  .`}
+					<span className="text-[var(--syntax-function)]">admin</span>
+					{`(({ c }) => ({
+    label: `}
+					<span className="text-[var(--syntax-string)]">"Posts"</span>
+					{`,
+    icon: c.icon(`}
+					<span className="text-[var(--syntax-string)]">"ph:article"</span>
+					{`),
+  }))
+  .`}
+					<span className="text-[var(--syntax-function)]">list</span>
+					{`(({ v }) => v.collectionTable({
+    columns: [`}
+					<span className="text-[var(--syntax-string)]">"title"</span>
+					{`, `}
+					<span className="text-[var(--syntax-string)]">"status"</span>
+					{`, `}
+					<span className="text-[var(--syntax-string)]">"author"</span>
+					{`, `}
+					<span className="text-[var(--syntax-string)]">"date"</span>
+					{`],
+  }))
+  .`}
+					<span className="text-[var(--syntax-function)]">form</span>
+					{`(({ v, f }) => v.collectionForm({
+    fields: [f.title, f.content],
+    sidebar: { fields: [f.status, f.author] },
+  }))
+  .`}
+					<span className="text-[var(--syntax-function)]">access</span>
+					{`({
+    create: ({ session }) => !!session,
+    update: ({ session, doc }) =>
+      doc.authorId === session?.user?.id,
+  })`}
+				</>
+			),
+			mockup: (
+				<>
+					<div className="border-border-subtle bg-surface-low flex h-11 items-center justify-between border-b px-4">
+						<div className="font-chrome text-sm font-semibold">Posts</div>
+						<button
+							type="button"
+							className="border-border-subtle bg-surface-high text-foreground hover:bg-surface-highest font-chrome rounded-[var(--control-radius-inner)] border px-3 py-1.5 text-xs font-medium transition-[background-color,transform] active:scale-[0.96] motion-reduce:active:scale-100"
+						>
+							Create
+						</button>
+					</div>
+					<div className="flex flex-1">
+						<div className="border-border-subtle bg-card hidden w-28 border-r p-3 sm:block">
+							<ul className="text-muted-foreground font-chrome flex flex-col gap-2 text-xs">
+								<li className="text-foreground bg-surface-high rounded-[var(--control-radius-inner)] px-2 py-1 font-medium">
+									Posts
+								</li>
+								<li>Users</li>
+								<li>Settings</li>
+							</ul>
+						</div>
+						<div className="flex-1 overflow-x-auto p-4">
+							<table className="w-full border-collapse text-left">
+								<thead>
+									<tr>
+										{["Title", "Status", "Author", "Date"].map((h) => (
+											<th
+												key={h}
+												className="text-muted-foreground border-border-subtle font-chrome border-b pb-2 text-xs font-medium"
+											>
+												{h}
+											</th>
+										))}
+									</tr>
+								</thead>
+								<tbody className="text-[13px]">
+									{[
+										{
+											title: "Getting Started Guide",
+											status: "published",
+											author: "admin",
+											date: "Mar 15",
+										},
+										{
+											title: "Adapter Architecture",
+											status: "draft",
+											author: "admin",
+											date: "Mar 12",
+										},
+									].map((row) => (
+										<tr key={row.title}>
+											<td className="text-foreground border-border-subtle border-b py-3 pr-4">
+												{row.title}
+											</td>
+											<td className="border-border-subtle border-b py-3 pr-4">
+												{row.status === "published" ? (
+													<Badge>Published</Badge>
+												) : (
+													<span className="border-border-subtle bg-surface-low text-muted-foreground font-chrome inline-flex rounded-[var(--control-radius-inner)] border px-2.5 py-1 text-[11px] font-medium">
+														Draft
+													</span>
+												)}
+											</td>
+											<td className="text-muted-foreground border-border-subtle border-b py-3 pr-4">
+												{row.author}
+											</td>
+											<td className="text-muted-foreground border-border-subtle border-b py-3">
+												{row.date}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</>
+			),
+		},
+		{
+			label: "Global",
+			codeLabel: "globals/site-settings.ts",
+			code: (
+				<>
+					<span className="text-primary font-semibold">global</span>(
+					<span className="text-[var(--syntax-string)]">"siteSettings"</span>)
+					{`\n  .`}
+					<span className="text-[var(--syntax-function)]">fields</span>
+					{`(({ f }) => ({
+    siteName: f.`}
+					<span className="text-[var(--syntax-function)]">text</span>
+					{`(),
+    tagline:  f.`}
+					<span className="text-[var(--syntax-function)]">text</span>
+					{`(),
+    logo:     f.`}
+					<span className="text-[var(--syntax-function)]">upload</span>
+					{`(),
+  }))
+  .`}
+					<span className="text-[var(--syntax-function)]">options</span>
+					{`({ versioning: `}
+					<span className="text-primary font-semibold">true</span>
+					{` })`}
+				</>
+			),
+			mockup: (
+				<div className="flex flex-1 flex-col">
+					<div className="border-border-subtle bg-surface-low flex h-11 items-center justify-between border-b px-4">
+						<div className="font-chrome text-sm font-semibold">
+							Site Settings
+						</div>
+						<button
+							type="button"
+							className="border-border-subtle bg-card text-foreground hover:bg-surface-high font-chrome flex items-center gap-1 rounded-[var(--control-radius-inner)] border px-2.5 py-1 text-xs font-medium transition-[background-color,transform] active:scale-[0.96] motion-reduce:active:scale-100"
+						>
+							<Icon
+								ssr
+								icon="ph:clock-counter-clockwise"
+								width={12}
+								height={12}
+							/>
+							History
+						</button>
+					</div>
+					<div className="flex flex-1">
+						<div className="flex flex-1 flex-col gap-4 p-4">
+							{[
+								{ label: "Site Name", value: "QuestPie Docs" },
+								{
+									label: "Tagline",
+									value: "Define once. Project everywhere.",
+								},
+							].map((field) => (
+								<div key={field.label}>
+									<label className="text-muted-foreground font-chrome mb-1.5 block text-xs font-medium">
+										{field.label}
+									</label>
+									<div className="border-border-subtle bg-card text-foreground font-chrome rounded-[var(--control-radius)] border px-3 py-2 text-sm">
+										{field.value}
+									</div>
+								</div>
+							))}
+							<div>
+								<label className="text-muted-foreground font-chrome mb-1.5 block text-xs font-medium">
+									Logo
+								</label>
+								<div className="border-border-subtle bg-surface-low flex h-16 items-center justify-center rounded-[var(--control-radius)] border">
+									<Icon
+										ssr
+										icon="ph:image"
+										width={20}
+										height={20}
+										className="text-muted-foreground"
+									/>
+								</div>
+							</div>
+						</div>
+						<div className="border-border-subtle bg-card w-40 border-l p-3">
+							<div className="text-muted-foreground font-chrome mb-3 text-xs font-medium">
+								Version history
+							</div>
+							<div className="flex flex-col gap-2">
+								{[
+									{
+										v: "v3 — current",
+										time: "2 min ago",
+										active: true,
+									},
+									{
+										v: "v2",
+										time: "1 hour ago",
+										active: false,
+									},
+									{ v: "v1", time: "Mar 14", active: false },
+								].map((ver) => (
+									<div
+										key={ver.v}
+										className={`border-l-2 pl-2 ${ver.active ? "border-border-strong" : "border-border-subtle"}`}
+									>
+										<div
+											className={`font-mono text-[10px] ${ver.active ? "text-foreground font-bold" : "text-muted-foreground"}`}
+										>
+											{ver.v}
+										</div>
+										<div className="text-muted-foreground font-mono text-[9px]">
+											{ver.time}
+										</div>
+									</div>
+								))}
+							</div>
+						</div>
+					</div>
+				</div>
+			),
+		},
+		{
+			label: "Admin config",
+			codeLabel: "config/admin.ts",
+			code: (
+				<>
+					<span className="text-primary font-semibold">export default</span>{" "}
+					<span className="text-[var(--syntax-function)]">adminConfig</span>
+					{`({
+  sidebar: {
+    sections: [
+      { id: `}
+					<span className="text-[var(--syntax-string)]">"content"</span>
+					{`, title: `}
+					<span className="text-[var(--syntax-string)]">"Content"</span>
+					{` },
+    ],
+    items: [
+      { sectionId: `}
+					<span className="text-[var(--syntax-string)]">"content"</span>
+					{`, type: `}
+					<span className="text-[var(--syntax-string)]">"collection"</span>
+					{`,
+        collection: `}
+					<span className="text-[var(--syntax-string)]">"posts"</span>
+					{` },
+      { sectionId: `}
+					<span className="text-[var(--syntax-string)]">"content"</span>
+					{`, type: `}
+					<span className="text-[var(--syntax-string)]">"collection"</span>
+					{`,
+        collection: `}
+					<span className="text-[var(--syntax-string)]">"users"</span>
+					{` },
+    ],
+  },
+  dashboard: {
+    actions: [
+      { id: `}
+					<span className="text-[var(--syntax-string)]">"new-post"</span>
+					{`, href: `}
+					<span className="text-[var(--syntax-string)]">
+						"/admin/collections/posts?create=true"
+					</span>
+					{`, label: `}
+					<span className="text-[var(--syntax-string)]">"New Post"</span>
+					{` },
+    ],
+  },
+  locale: {
+    locales: [`}
+					<span className="text-[var(--syntax-string)]">"en"</span>
+					{`, `}
+					<span className="text-[var(--syntax-string)]">"sk"</span>
+					{`],
+    defaultLocale: `}
+					<span className="text-[var(--syntax-string)]">"en"</span>
+					{`,
+  },
+})`}
+				</>
+			),
+			mockup: (
+				<div className="flex flex-1 flex-col">
+					<div className="border-border-subtle bg-surface-low flex h-11 items-center justify-between border-b px-4">
+						<div className="font-chrome text-sm font-semibold">Admin</div>
+						<div className="border-border-subtle bg-card flex overflow-hidden rounded-[var(--control-radius-inner)] border">
+							<button
+								type="button"
+								className="bg-surface-high text-foreground font-chrome px-2.5 py-1 text-xs font-medium"
+							>
+								EN
+							</button>
+							<button
+								type="button"
+								className="text-muted-foreground border-border-subtle font-chrome border-l px-2.5 py-1 text-xs font-medium"
+							>
+								SK
+							</button>
+						</div>
+					</div>
+					<div className="flex flex-1">
+						<div className="border-border-subtle bg-card w-36 border-r p-3">
+							<div className="text-muted-foreground font-chrome mb-2 text-xs font-medium">
+								Content
+							</div>
+							<ul className="font-chrome mb-4 flex flex-col gap-1 text-xs">
+								<li className="bg-surface-high text-foreground flex items-center gap-2 rounded-[var(--control-radius-inner)] px-2 py-1.5 font-medium">
+									<Icon
+										ssr
+										icon="ph:article"
+										width={14}
+										height={14}
+										className="text-muted-foreground"
+									/>
+									Posts
+								</li>
+								<li className="text-muted-foreground flex items-center gap-2 px-2 py-1.5">
+									<Icon ssr icon="ph:users" width={14} height={14} />
+									Users
+								</li>
+							</ul>
+							<div className="border-border-subtle border-t pt-3">
+								<ul className="font-chrome flex flex-col gap-1 text-xs">
+									<li className="text-muted-foreground flex items-center gap-2 px-2 py-1.5">
+										<Icon ssr icon="ph:gear" width={14} height={14} />
+										Settings
+									</li>
+								</ul>
+							</div>
+						</div>
+						<div className="flex-1 p-4">
+							<div className="font-chrome mb-4 text-xs font-medium">
+								Quick actions
+							</div>
+							<div className="mb-5 flex flex-wrap gap-2">
+								<button
+									type="button"
+									className="border-border-subtle bg-card text-foreground hover:bg-surface-high font-chrome flex items-center gap-1.5 rounded-[var(--control-radius-inner)] border px-3 py-1.5 text-xs font-medium transition-[background-color,transform] active:scale-[0.96] motion-reduce:active:scale-100"
+								>
+									<Icon ssr icon="ph:plus" width={12} height={12} />
+									Create Post
+								</button>
+							</div>
+							<div className="grid grid-cols-2 gap-3">
+								{[
+									{ label: "Total posts", value: "142" },
+									{ label: "Published", value: "89" },
+								].map((s) => (
+									<div
+										key={s.label}
+										className="border-border-subtle bg-surface-low rounded-[var(--control-radius)] border p-3"
+									>
+										<div className="text-muted-foreground font-chrome text-xs font-medium">
+											{s.label}
+										</div>
+										<div className="text-foreground text-xl font-semibold tabular-nums">
+											{s.value}
+										</div>
+									</div>
+								))}
+							</div>
+						</div>
+					</div>
+				</div>
+			),
+		},
 	];
 
-	const byFeatureBadges = [
-		["posts.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["hero.block.ts", "BLOCK", "text-[#FFB300]"],
-		["newsletter.job.ts", "JOB", "text-[#40C4FF]"],
-		["products.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["orders.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["stripe.service.ts", "SERVICE", "text-muted-foreground"],
-		["users.collection.ts", "COLLECTION", "text-[var(--syntax-string)]"],
-		["stats.route.ts", "ROUTE", "text-primary"],
+	const current = tabs[activeTab];
+	const projectionPoints = [
+		{
+			icon: "ph:tree-structure",
+			title: "Registry-resolved",
+			description:
+				"Server emits references. The admin client resolves them through registered views and components.",
+		},
+		{
+			icon: "ph:sliders-horizontal",
+			title: "Configured, not forked",
+			description:
+				"Sidebar, dashboard, forms, actions, and field rendering stay in admin config and builder extensions.",
+		},
+		{
+			icon: "ph:arrows-clockwise",
+			title: "Replaceable surface",
+			description:
+				"Use the default workspace while it fits, then swap views or package your own module without rewriting the backend.",
+		},
 	];
-
-	const badges = layout === "by-type" ? byTypeBadges : byFeatureBadges;
 
 	return (
-		<section>
-			<Lmw>
-				<SectionBar
-					num="02"
-					label="File system = source of truth"
-					title="Drop a file. Get a feature."
-				/>
-				<div className="flex border-b border-border">
-					{(["by-type", "by-feature"] as const).map((mode) => (
+		<>
+			<SectionHeader
+				num="04"
+				title="Admin is a projection, not a second product"
+				subtitle="The admin UI reads the same collection, global, field, view, and component contracts as the rest of your app. Use the default admin, extend it, or replace it."
+			/>
+
+			{/* Tab bar */}
+			<div className="border-border-subtle bg-surface-low inline-flex rounded-[var(--control-radius)] border p-1">
+				<div className="flex flex-wrap gap-1">
+					{tabs.map((tab, i) => (
 						<button
-							key={mode}
+							key={tab.label}
 							type="button"
-							onClick={() => setLayout(mode)}
+							onClick={() => setActiveTab(i)}
+							aria-pressed={i === activeTab}
 							className={cn(
-								"flex-1 py-2 font-mono text-[10px] uppercase tracking-[2px] font-semibold transition-colors border-r border-border last:border-r-0",
-								layout === mode
-									? "bg-card text-primary"
-									: "bg-background text-muted-foreground hover:text-foreground",
+								"font-chrome min-h-10 rounded-[var(--control-radius-inner)] px-3 py-2 text-xs font-medium transition-[background-color,color,transform] active:scale-[0.96] motion-reduce:active:scale-100",
+								i === activeTab
+									? "bg-surface-high text-foreground"
+									: "text-muted-foreground hover:bg-card hover:text-foreground",
 							)}
 						>
-							{mode === "by-type" ? "By type" : "By feature"}
+							{tab.label}
 						</button>
 					))}
 				</div>
-				<TwoCol>
-					<TwoColLeft className="bg-background font-mono text-xs leading-relaxed text-muted-foreground p-0!">
-						{layout === "by-type" ? byTypeTree : byFeatureTree}
-					</TwoColLeft>
-					<TwoColRight className="p-0!">
+			</div>
+
+			{/* Content grid */}
+			<div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
+				<div className="grid grid-cols-1 gap-3 lg:col-span-5">
+					{projectionPoints.map((point) => (
 						<div
-							className="grid gap-px bg-border"
-							style={{ gridTemplateColumns: "1fr" }}
+							key={point.title}
+							className="border-border-subtle bg-card rounded-[var(--surface-radius)] border p-5 shadow-[var(--surface-shadow)]"
 						>
-							{badges.map(([name, badge, color]) => (
-								<div
-									key={name}
-									className="flex justify-between items-center px-5 py-2.5 bg-background text-[13px]"
-								>
-									<span className="font-mono text-foreground">{name}</span>
-									<span
-										className={cn("font-mono text-[10px] tracking-wide", color)}
-									>
-										{badge}
-									</span>
+							<div className="text-muted-foreground mb-3 flex items-center gap-2">
+								<Icon ssr icon={point.icon} width={17} height={17} />
+								<h3 className="text-foreground font-chrome text-sm font-semibold">
+									{point.title}
+								</h3>
+							</div>
+							<p className="text-muted-foreground text-sm leading-relaxed text-pretty">
+								{point.description}
+							</p>
+						</div>
+					))}
+				</div>
+
+				<div
+					className="flex flex-col lg:col-span-7"
+					key={`mockup-${activeTab}`}
+				>
+					<AdminScreenshotSlot>{current.mockup}</AdminScreenshotSlot>
+				</div>
+			</div>
+		</>
+	);
+}
+
+/* ─── §05 End-to-End Types (clickable pipeline) ─── */
+
+const TYPE_IMPACT_NODES = [
+	{
+		icon: "ph:pencil-simple-line",
+		title: "Field def",
+		description: "source contract",
+	},
+	{
+		icon: "ph:brackets-curly",
+		title: "Codegen",
+		description: "typed registry",
+	},
+	{
+		icon: "ph:database",
+		title: "Drizzle",
+		description: "storage shape",
+	},
+	{
+		icon: "ph:shield-check",
+		title: "Zod",
+		description: "runtime guard",
+	},
+	{
+		icon: "ph:terminal-window",
+		title: "Client SDK",
+		description: "typed query",
+	},
+] as const;
+
+function TypeImpactAsset({
+	activeStep,
+	onStepChange,
+}: {
+	activeStep: number;
+	onStepChange: (step: number) => void;
+}) {
+	return (
+		<VisualAssetFrame asset="type-impact" className="md:p-5">
+			<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<div className="text-muted-foreground font-mono text-[11px] font-medium">
+						Impact map
+					</div>
+					<h3 className="text-foreground mt-1 text-lg leading-tight font-semibold text-balance">
+						One field edit ripples through every contract
+					</h3>
+				</div>
+				<div className="border-border-subtle bg-surface-low text-muted-foreground rounded-[var(--control-radius-inner)] border px-2.5 py-1 font-mono text-[11px] tabular-nums">
+					0{activeStep + 1} / 05
+				</div>
+			</div>
+
+			<div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+				{TYPE_IMPACT_NODES.map((node, index) => {
+					const active = index === activeStep;
+
+					return (
+						<button
+							key={node.title}
+							type="button"
+							onClick={() => onStepChange(index)}
+							aria-pressed={active}
+							className={cn(
+								"border-border-subtle bg-surface-low min-w-0 rounded-[var(--control-radius)] border p-3 text-left transition-[background-color,border-color,color,transform] active:scale-[0.96] motion-reduce:active:scale-100",
+								active && "border-border-strong bg-surface-high",
+							)}
+						>
+							<div className="flex min-w-0 items-center gap-2">
+								<Icon
+									ssr
+									aria-hidden="true"
+									icon={node.icon}
+									width={15}
+									height={15}
+									className="text-muted-foreground shrink-0"
+								/>
+								<div className="text-foreground font-chrome min-w-0 truncate text-sm font-semibold">
+									{node.title}
 								</div>
-							))}
-						</div>
-						<div className="px-5 py-3 text-[11px] text-muted-foreground border-t border-border">
-							{layout === "by-type"
-								? "Grouped by type. Codegen discovers everything. No manual registration."
-								: "Grouped by domain. Same conventions — codegen handles both layouts."}
-						</div>
-					</TwoColRight>
-				</TwoCol>
-			</Lmw>
-		</section>
+							</div>
+							<p className="text-muted-foreground mt-1 text-xs leading-relaxed text-pretty">
+								{node.description}
+							</p>
+						</button>
+					);
+				})}
+			</div>
+
+			<div className="border-border-subtle bg-surface-low mt-4 rounded-[var(--control-radius)] border p-3">
+				<div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm leading-relaxed">
+					<Icon
+						ssr
+						aria-hidden="true"
+						icon="ph:warning-circle"
+						width={15}
+						height={15}
+						className="text-primary"
+					/>
+					<span>
+						Rename <span className="text-foreground font-mono">title</span> and
+						TypeScript points at stale forms, SDK calls, filters, and view
+						config.
+					</span>
+				</div>
+			</div>
+		</VisualAssetFrame>
+	);
+}
+
+function EndToEndTypesSection() {
+	const [activeStep, setActiveStep] = useState(4);
+
+	const snippetLabels = [
+		"collections/posts.ts",
+		".generated/module.ts",
+		"runtime — drizzle",
+		"runtime — zod",
+		"client.ts",
+	];
+
+	const snippets: ReactNode[] = [
+		// Step 0: Field def
+		<>
+			<span className="text-primary font-semibold">collection</span>(
+			<span className="text-[var(--syntax-string)]">"posts"</span>){`\n  .`}
+			<span className="text-[var(--syntax-function)]">fields</span>
+			{`(({ f }) => ({
+    title:   f.`}
+			<span className="text-[var(--syntax-function)]">text</span>(
+			<span className="text-[var(--syntax-number)]">255</span>).
+			<span className="text-[var(--syntax-function)]">required</span>
+			{`(),
+    content: f.`}
+			<span className="text-[var(--syntax-function)]">richText</span>
+			{`(),
+    status:  f.`}
+			<span className="text-[var(--syntax-function)]">select</span>
+			{`([
+      { value: `}
+			<span className="text-[var(--syntax-string)]">"draft"</span>
+			{`, label: `}
+			<span className="text-[var(--syntax-string)]">"Draft"</span>
+			{` },
+      { value: `}
+			<span className="text-[var(--syntax-string)]">"published"</span>
+			{`, label: `}
+			<span className="text-[var(--syntax-string)]">"Published"</span>
+			{` },
+    ]),
+    author:  f.`}
+			<span className="text-[var(--syntax-function)]">relation</span>(
+			<span className="text-[var(--syntax-string)]">"users"</span>).
+			<span className="text-[var(--syntax-function)]">required</span>
+			{`(),
+  }))`}
+		</>,
+		// Step 1: Codegen — actual generated module
+		<>
+			<span className="text-muted-foreground/60">
+				{"// AUTO-GENERATED — DO NOT EDIT"}
+			</span>
+			{"\n"}
+			<span className="text-primary font-semibold">import</span>
+			{" _coll_posts "}
+			<span className="text-primary font-semibold">from</span>{" "}
+			<span className="text-[var(--syntax-string)]">
+				"../collections/posts"
+			</span>
+			{"\n"}
+			<span className="text-primary font-semibold">import</span>
+			{" _coll_users "}
+			<span className="text-primary font-semibold">from</span>{" "}
+			<span className="text-[var(--syntax-string)]">
+				"../collections/users"
+			</span>
+			{"\n"}
+			<span className="text-primary font-semibold">import</span>
+			{" _job_newsletter "}
+			<span className="text-primary font-semibold">from</span>{" "}
+			<span className="text-[var(--syntax-string)]">"../jobs/newsletter"</span>
+			{"\n\n"}
+			<span className="text-primary font-semibold">export interface</span>
+			{" AppCollections {\n"}
+			{"  posts: "}
+			<span className="text-[var(--syntax-type)]">typeof</span>
+			{" _coll_posts\n"}
+			{"  users: "}
+			<span className="text-[var(--syntax-type)]">typeof</span>
+			{" _coll_users\n}\n\n"}
+			<span className="text-primary font-semibold">const</span>
+			{` _module = {
+  name: `}
+			<span className="text-[var(--syntax-string)]">"app"</span>
+			{` as const,
+  collections: {
+    posts: _coll_posts,
+    users: _coll_users,
+  },
+  jobs: { newsletter: _job_newsletter },
+  globals: {},
+  routes: {},
+}
+
+`}
+			<span className="text-primary font-semibold">export default</span>
+			{" _module"}
+		</>,
+		// Step 2: Drizzle table — runtime-derived
+		<>
+			<span className="text-muted-foreground/60">
+				{"// Derived at runtime from .fields() definition"}
+			</span>
+			{"\n"}
+			<span className="text-muted-foreground/60">
+				{"// You never write this — questpie builds it"}
+			</span>
+			{"\n\n"}
+			<span className="text-primary font-semibold">const</span>
+			{" postsTable = "}
+			<span className="text-[var(--syntax-function)]">pgTable</span>
+			{`(`}
+			<span className="text-[var(--syntax-string)]">"posts"</span>
+			{`, {
+  id:       `}
+			<span className="text-[var(--syntax-function)]">serial</span>
+			{`().primaryKey(),
+  title:    `}
+			<span className="text-[var(--syntax-function)]">varchar</span>
+			{`({ length: `}
+			<span className="text-[var(--syntax-number)]">255</span>
+			{` }).notNull(),
+  content:  `}
+			<span className="text-[var(--syntax-function)]">jsonb</span>
+			{`(), `}
+			<span className="text-muted-foreground/60">{"// TipTap document"}</span>
+			{`
+  status:   `}
+			<span className="text-[var(--syntax-function)]">statusEnum</span>
+			{`(`}
+			<span className="text-[var(--syntax-string)]">"status"</span>
+			{`),
+  authorId: `}
+			<span className="text-[var(--syntax-function)]">integer</span>
+			{`()
+              .references(() => usersTable.id)
+              .notNull(),
+});`}
+		</>,
+		// Step 3: Zod schema — runtime-inferred
+		<>
+			<span className="text-muted-foreground/60">
+				{"// Inferred at runtime from .fields()"}
+			</span>
+			{"\n"}
+			<span className="text-muted-foreground/60">
+				{"// Fully typed — change a field, types update"}
+			</span>
+			{"\n\n"}
+			<span className="text-primary font-semibold">const</span>
+			{" postsSchema = "}
+			<span className="text-[var(--syntax-function)]">z</span>
+			{`.`}
+			<span className="text-[var(--syntax-function)]">object</span>
+			{`({
+  title:    z.`}
+			<span className="text-[var(--syntax-function)]">string</span>
+			{`().max(`}
+			<span className="text-[var(--syntax-number)]">255</span>
+			{`),
+  content:  `}
+			<span className="text-[var(--syntax-function)]">tiptapDocSchema</span>
+			{`
+              .optional(),
+  status:   z.`}
+			<span className="text-[var(--syntax-function)]">enum</span>
+			{`([`}
+			<span className="text-[var(--syntax-string)]">"draft"</span>
+			{`, `}
+			<span className="text-[var(--syntax-string)]">"published"</span>
+			{`]),
+  authorId: z.`}
+			<span className="text-[var(--syntax-function)]">number</span>
+			{`().int(),
+});
+
+`}
+			<span className="text-muted-foreground/60">
+				{"// type PostInput = z.infer<typeof postsSchema>"}
+			</span>
+		</>,
+		// Step 4: Client SDK (current snippet)
+		<>
+			<span className="text-primary font-semibold">const</span>
+			{` { docs } = `}
+			<span className="text-primary font-semibold">await</span>
+			{` client.collections.posts.`}
+			<span className="text-[var(--syntax-function)]">find</span>
+			{`({
+  where: { status: { eq: `}
+			<span className="text-[var(--syntax-string)]">"published"</span>
+			{` } },
+  orderBy: { createdAt: `}
+			<span className="text-[var(--syntax-string)]">"desc"</span>
+			{` },
+  with: { author: `}
+			<span className="text-primary font-semibold">true</span>
+			{`, tags: `}
+			<span className="text-primary font-semibold">true</span>
+			{` },
+  locale: `}
+			<span className="text-[var(--syntax-string)]">"sk"</span>
+			{`,
+});
+
+`}
+			<span className="text-muted-foreground/60">
+				{"// docs[0].title → string"}
+			</span>
+			{"\n"}
+			<span className="text-muted-foreground/60">
+				{"// docs[0].author → User"}
+			</span>
+			{"\n"}
+			<span className="text-muted-foreground/60">
+				{"// docs[0].tags → Tag[]"}
+			</span>
+		</>,
+	];
+
+	return (
+		<>
+			<SectionHeader
+				num="05"
+				title="Change the contract, see every consequence"
+				subtitle="The field definition feeds generated registries, database shape, validation, client SDK calls, and admin forms. Rename or tighten a field and the compiler points to the fallout."
+			/>
+
+			<div className="grid gap-4">
+				<TypeImpactAsset activeStep={activeStep} onStepChange={setActiveStep} />
+				<CodePanel label={snippetLabels[activeStep]} key={`e2e-${activeStep}`}>
+					<div className="admin-step-content">{snippets[activeStep]}</div>
+				</CodePanel>
+			</div>
+		</>
 	);
 }
 
@@ -301,6 +1589,7 @@ function Nav() {
 
 	useEffect(() => {
 		const handleScroll = () => setIsScrolled(window.scrollY > 8);
+		handleScroll();
 		window.addEventListener("scroll", handleScroll, { passive: true });
 		return () => window.removeEventListener("scroll", handleScroll);
 	}, []);
@@ -308,105 +1597,94 @@ function Nav() {
 	return (
 		<header
 			className={cn(
-				"fixed inset-x-0 top-0 z-50 h-14 border-b transition-colors duration-200",
+				"fixed inset-x-0 top-0 z-50 h-14 border-b transition-[background-color,border-color] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)]",
 				isScrolled
-					? "bg-background/95 backdrop-blur-sm border-border"
-					: "bg-background border-border",
+					? "border-border-subtle bg-background/40 backdrop-blur-md"
+					: "border-transparent bg-transparent",
 			)}
 		>
-			<div className="mx-auto max-w-[1200px] px-6 h-full flex items-center justify-between max-sm:px-3">
-				<Link to="/" className="flex items-center gap-2">
-					<img
-						src="/symbol/Q-symbol-dark-pink.svg"
-						alt="QUESTPIE"
-						className="block h-6 w-auto dark:hidden sm:hidden"
-					/>
-					<img
-						src="/symbol/Q-symbol-white-pink.svg"
-						alt="QUESTPIE"
-						className="hidden h-6 w-auto dark:block dark:sm:hidden"
-					/>
-					<img
-						src="/logo/Questpie-dark-pink.svg"
-						alt="QUESTPIE"
-						className="hidden h-5 w-auto dark:hidden sm:block"
-					/>
-					<img
-						src="/logo/Questpie-white-pink.svg"
-						alt="QUESTPIE"
-						className="hidden h-5 w-auto dark:sm:block"
-					/>
-				</Link>
+			<div className="mx-auto flex h-full max-w-[1200px] items-center justify-between px-4 md:px-8">
+				<div className="flex items-center gap-8">
+					<Link to="/" className="flex items-center gap-2">
+						<img
+							src="/symbol/symbol-light.svg"
+							alt="QUESTPIE"
+							className="block h-6 w-auto sm:hidden dark:hidden"
+						/>
+						<img
+							src="/symbol/symbol-dark.svg"
+							alt="QUESTPIE"
+							className="hidden h-6 w-auto dark:block dark:sm:hidden"
+						/>
+						<img
+							src="/logo/horizontal-lockup-light.svg"
+							alt="QUESTPIE"
+							className="hidden h-5 w-auto sm:block dark:hidden"
+						/>
+						<img
+							src="/logo/horizontal-lockup-dark.svg"
+							alt="QUESTPIE"
+							className="hidden h-5 w-auto dark:sm:block"
+						/>
+					</Link>
 
-				<div className="hidden md:flex items-center gap-6">
-					{navItems.map((item) =>
-						item.type === "internal" ? (
-							<Link
-								key={item.label}
-								to={item.href}
-								params={item.params as never}
-								className="font-mono text-[11px] font-medium text-muted-foreground uppercase tracking-wider transition-colors hover:text-foreground"
-							>
-								{item.label}
-							</Link>
-						) : (
-							<a
-								key={item.label}
-								href={item.href}
-								target="_blank"
-								rel="noreferrer"
-								className="font-mono text-[11px] font-medium text-muted-foreground uppercase tracking-wider transition-colors hover:text-foreground"
-							>
-								{item.label}
-							</a>
-						),
-					)}
+					<div className="text-muted-foreground font-chrome hidden items-center gap-1 text-sm font-medium md:flex">
+						{navItems.map((item) =>
+							item.type === "internal" ? (
+								<Link
+									key={item.label}
+									to={item.href}
+									params={item.params as never}
+									className="hover:bg-surface-low hover:text-foreground rounded-[var(--control-radius-inner)] px-3 py-2 transition-[background-color,color]"
+								>
+									{item.label}
+								</Link>
+							) : (
+								<a
+									key={item.label}
+									href={item.href}
+									target="_blank"
+									rel="noreferrer"
+									className="hover:bg-surface-low hover:text-foreground rounded-[var(--control-radius-inner)] px-3 py-2 transition-[background-color,color]"
+								>
+									{item.label}
+								</a>
+							),
+						)}
+					</div>
+				</div>
+
+				<div className="flex items-center gap-2">
 					<ThemeToggle />
 					<Link
 						to="/docs/$"
 						params={{ _splat: "start-here/first-app" }}
-						className="inline-flex h-7 items-center justify-center border border-primary/40 bg-primary/10 px-4 font-mono text-[10px] font-semibold uppercase tracking-wider text-primary transition-all hover:bg-primary hover:text-white"
+						className={cn(primaryCta, "hidden sm:inline-flex")}
 					>
 						Get started
 					</Link>
-				</div>
-
-				<button
-					type="button"
-					className="p-1.5 text-muted-foreground transition-colors hover:text-foreground md:hidden"
-					onClick={() => setMobileOpen((v) => !v)}
-					aria-label="Toggle navigation"
-				>
-					<svg
-						className="h-5 w-5"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-						strokeWidth={2}
+					<button
+						type="button"
+						className="text-muted-foreground hover:bg-surface-low hover:text-foreground flex size-10 items-center justify-center rounded-[var(--control-radius)] transition-[background-color,color,transform] active:scale-[0.96] motion-reduce:active:scale-100 md:hidden"
+						onClick={() => setMobileOpen((v) => !v)}
+						aria-label="Toggle navigation"
 					>
-						{mobileOpen ? (
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								d="M6 18L18 6M6 6l12 12"
-							/>
-						) : (
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								d="M4 6h16M4 12h16M4 18h16"
-							/>
-						)}
-					</svg>
-				</button>
+						<Icon
+							ssr
+							icon={mobileOpen ? "ph:x" : "ph:list"}
+							width={20}
+							height={20}
+						/>
+					</button>
+				</div>
 			</div>
 
 			{mobileOpen && (
-				<div className="absolute inset-x-0 top-full border-b border-border bg-background p-4 md:hidden">
-					<div className="mx-auto max-w-[1200px] flex flex-col gap-3">
+				<div className="border-border-subtle bg-background absolute inset-x-0 top-full border-b p-4 md:hidden">
+					<div className="mx-auto flex max-w-[1200px] flex-col gap-3">
 						<Link
 							to="/docs/$"
-							className="font-mono text-sm text-muted-foreground"
+							className="text-muted-foreground hover:bg-surface-low hover:text-foreground font-chrome rounded-[var(--control-radius)] px-3 py-2 text-sm transition-[background-color,color]"
 							onClick={() => setMobileOpen(false)}
 						>
 							Docs
@@ -414,7 +1692,7 @@ function Nav() {
 						<Link
 							to="/docs/$"
 							params={{ _splat: "examples" }}
-							className="font-mono text-sm text-muted-foreground"
+							className="text-muted-foreground hover:bg-surface-low hover:text-foreground font-chrome rounded-[var(--control-radius)] px-3 py-2 text-sm transition-[background-color,color]"
 							onClick={() => setMobileOpen(false)}
 						>
 							Examples
@@ -423,18 +1701,18 @@ function Nav() {
 							href="https://github.com/questpie/questpie"
 							target="_blank"
 							rel="noreferrer"
-							className="font-mono text-sm text-muted-foreground"
+							className="text-muted-foreground hover:bg-surface-low hover:text-foreground font-chrome rounded-[var(--control-radius)] px-3 py-2 text-sm transition-[background-color,color]"
 							onClick={() => setMobileOpen(false)}
 						>
 							GitHub
 						</a>
-						<div className="my-1 h-px bg-border" />
+						<div className="bg-border-subtle my-1 h-px" />
 						<div className="flex items-center justify-between">
 							<ThemeToggle />
 							<Link
 								to="/docs/$"
 								params={{ _splat: "start-here/first-app" }}
-								className="inline-flex h-7 items-center border border-primary/40 bg-primary/10 px-3 font-mono text-[10px] uppercase tracking-wider text-primary"
+								className={primaryCta}
 								onClick={() => setMobileOpen(false)}
 							>
 								Get started
@@ -451,137 +1729,1073 @@ function Nav() {
 
 function LandingFooter() {
 	return (
-		<footer>
-			<div className="mx-auto max-w-[1200px]">
-				<div className="grid grid-cols-4 gap-px bg-border max-sm:grid-cols-2">
-					<div className="bg-background p-5">
-						<div className="font-mono text-[9px] tracking-[2px] uppercase text-muted-foreground/60 mb-2">
+		<footer className="border-border-subtle border-t">
+			<div className="mx-auto max-w-[1200px] px-4 py-12 md:px-8">
+				<div className="grid grid-cols-1 gap-12 md:grid-cols-4">
+					<div className="md:col-span-1">
+						<Link to="/" className="mb-4 flex items-center">
+							<img
+								src="/logo/horizontal-lockup-light.svg"
+								alt="QUESTPIE"
+								className="block h-4 w-auto dark:hidden"
+							/>
+							<img
+								src="/logo/horizontal-lockup-dark.svg"
+								alt="QUESTPIE"
+								className="hidden h-4 w-auto dark:block"
+							/>
+						</Link>
+						<p className="text-muted-foreground mb-4 text-sm leading-relaxed">
+							Open source server-first TypeScript framework for schema-driven
+							products.
+						</p>
+						<div className="text-muted-foreground font-mono text-[11px]">
+							MIT License
+						</div>
+					</div>
+					<div>
+						<div className="font-chrome mb-4 text-xs font-semibold">
 							Product
 						</div>
-						<Link
-							to="/docs/$"
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							Docs
-						</Link>
-						<Link
-							to="/docs/$"
-							params={{ _splat: "examples" }}
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							Examples
-						</Link>
-						<Link
-							to="/docs/$"
-							params={{ _splat: "start-here" }}
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							Getting Started
-						</Link>
-						<a
-							href="https://github.com/questpie/questpie/releases"
-							target="_blank"
-							rel="noreferrer"
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							Releases
-						</a>
+						<ul className="text-muted-foreground flex flex-col gap-2 text-sm">
+							<li>
+								<Link
+									to="/docs/$"
+									className="hover:text-foreground transition-colors"
+								>
+									Docs
+								</Link>
+							</li>
+							<li>
+								<Link
+									to="/docs/$"
+									params={{ _splat: "examples" }}
+									className="hover:text-foreground transition-colors"
+								>
+									Examples
+								</Link>
+							</li>
+							<li>
+								<Link
+									to="/docs/$"
+									params={{ _splat: "start-here" }}
+									className="hover:text-foreground transition-colors"
+								>
+									Getting Started
+								</Link>
+							</li>
+							<li>
+								<a
+									href="https://github.com/questpie/questpie/releases"
+									target="_blank"
+									rel="noreferrer"
+									className="hover:text-foreground transition-colors"
+								>
+									Releases
+								</a>
+							</li>
+						</ul>
 					</div>
-					<div className="bg-background p-5">
-						<div className="font-mono text-[9px] tracking-[2px] uppercase text-muted-foreground/60 mb-2">
+					<div>
+						<div className="font-chrome mb-4 text-xs font-semibold">
 							Ecosystem
 						</div>
-						<Link
-							to="/docs/$"
-							params={{ _splat: "frontend/adapters/hono" }}
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							Hono
-						</Link>
-						<Link
-							to="/docs/$"
-							params={{ _splat: "frontend/adapters/elysia" }}
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							Elysia
-						</Link>
-						<Link
-							to="/docs/$"
-							params={{ _splat: "frontend/adapters/nextjs" }}
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							Next.js
-						</Link>
-						<Link
-							to="/docs/$"
-							params={{ _splat: "frontend/tanstack-query" }}
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							TanStack
-						</Link>
+						<ul className="text-muted-foreground flex flex-col gap-2 text-sm">
+							<li>
+								<Link
+									to="/docs/$"
+									params={{ _splat: "frontend/adapters/hono" }}
+									className="hover:text-foreground transition-colors"
+								>
+									Hono
+								</Link>
+							</li>
+							<li>
+								<Link
+									to="/docs/$"
+									params={{ _splat: "frontend/adapters/elysia" }}
+									className="hover:text-foreground transition-colors"
+								>
+									Elysia
+								</Link>
+							</li>
+							<li>
+								<Link
+									to="/docs/$"
+									params={{ _splat: "frontend/adapters/nextjs" }}
+									className="hover:text-foreground transition-colors"
+								>
+									Next.js
+								</Link>
+							</li>
+							<li>
+								<Link
+									to="/docs/$"
+									params={{ _splat: "frontend/tanstack-query" }}
+									className="hover:text-foreground transition-colors"
+								>
+									TanStack
+								</Link>
+							</li>
+						</ul>
 					</div>
-					<div className="bg-background p-5">
-						<div className="font-mono text-[9px] tracking-[2px] uppercase text-muted-foreground/60 mb-2">
+					<div>
+						<div className="font-chrome mb-4 text-xs font-semibold">
 							Community
 						</div>
-						<a
-							href="https://github.com/questpie/questpie"
-							target="_blank"
-							rel="noreferrer"
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							GitHub
-						</a>
-						<a
-							href="https://github.com/questpie/questpie/issues"
-							target="_blank"
-							rel="noreferrer"
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							Issues
-						</a>
-						<a
-							href="https://github.com/questpie/questpie/pulls"
-							target="_blank"
-							rel="noreferrer"
-							className="block text-xs text-muted-foreground py-0.5 hover:text-primary transition-colors"
-						>
-							Pull Requests
-						</a>
-					</div>
-					<div className="bg-background p-5">
-						<div className="font-mono text-[9px] tracking-[2px] uppercase text-muted-foreground/60 mb-2">
-							Install
-						</div>
-						<div className="font-mono text-xs text-primary mt-1">
-							npx create-questpie
-						</div>
-						<div className="text-[10px] text-muted-foreground mt-3 leading-relaxed">
-							MIT License
-							<br />
-							TypeScript &middot; Drizzle &middot; Zod
-							<br />
-							Better Auth &middot; Hono
-						</div>
+						<ul className="text-muted-foreground flex flex-col gap-2 text-sm">
+							<li>
+								<a
+									href="https://github.com/questpie/questpie"
+									target="_blank"
+									rel="noreferrer"
+									className="hover:text-foreground transition-colors"
+								>
+									GitHub
+								</a>
+							</li>
+							<li>
+								<a
+									href="https://github.com/questpie/questpie/issues"
+									target="_blank"
+									rel="noreferrer"
+									className="hover:text-foreground transition-colors"
+								>
+									Issues
+								</a>
+							</li>
+							<li>
+								<a
+									href="https://github.com/questpie/questpie/pulls"
+									target="_blank"
+									rel="noreferrer"
+									className="hover:text-foreground transition-colors"
+								>
+									Pull Requests
+								</a>
+							</li>
+						</ul>
 					</div>
 				</div>
-				<div className="px-6 py-4 flex justify-between items-center flex-wrap gap-2 text-[11px] text-muted-foreground/60">
-					<Link to="/" className="flex items-center">
-						<img
-							src="/logo/Questpie-dark-pink.svg"
-							alt="QUESTPIE"
-							className="block h-4 w-auto dark:hidden"
-						/>
-						<img
-							src="/logo/Questpie-white-pink.svg"
-							alt="QUESTPIE"
-							className="hidden h-4 w-auto dark:block"
-						/>
-					</Link>
-					<span>Open source &middot; Server-first TypeScript framework</span>
+				<div className="text-muted-foreground border-border-subtle mt-12 flex flex-col items-center justify-between gap-4 border-t pt-8 md:flex-row">
+					<div className="text-[12px]">
+						TypeScript &middot; Drizzle &middot; Zod &middot; Better Auth
+						&middot; Hono
+					</div>
 				</div>
 			</div>
 		</footer>
+	);
+}
+
+/* ─── Landing constants ─── */
+
+const fn = "text-[var(--syntax-function)]";
+const str = "text-[var(--syntax-string)]";
+const num = "text-[var(--syntax-number)]";
+const kw = "text-primary font-semibold";
+const ctaBase =
+	"font-chrome inline-flex min-h-10 items-center justify-center gap-2 rounded-[var(--control-radius)] px-4 py-2 text-sm font-medium transition-[background-color,color,border-color,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100";
+const primaryCta = cn(
+	ctaBase,
+	"bg-primary text-primary-foreground hover:bg-primary/85",
+);
+const secondaryCta = cn(
+	ctaBase,
+	"border-border-subtle bg-card text-foreground hover:bg-surface-low border",
+);
+const textCta = cn(
+	ctaBase,
+	"text-primary hover:bg-surface-low bg-transparent px-2",
+);
+const landingShell =
+	"relative isolate overflow-hidden bg-background [background-image:linear-gradient(180deg,color-mix(in_srgb,var(--surface-low)_48%,transparent)_0,transparent_46rem)]";
+const landingSection = "px-4 py-12 md:px-8 md:py-20";
+const landingAmbientLayer =
+	"pointer-events-none absolute inset-x-[-10%] inset-y-0 z-0 bg-[radial-gradient(ellipse_at_50%_-8rem,color-mix(in_srgb,var(--foreground)_8%,transparent)_0,transparent_40rem),radial-gradient(ellipse_at_18%_22rem,var(--ambient-top)_0,transparent_32rem),radial-gradient(ellipse_at_84%_20rem,color-mix(in_srgb,var(--primary)_7%,transparent)_0,transparent_28rem),radial-gradient(ellipse_at_50%_64rem,var(--ambient-edge)_0,transparent_56rem),linear-gradient(112deg,transparent_0_28%,var(--ambient-sheen)_46%,transparent_66%_100%)] opacity-55 motion-safe:animate-[landing-field-sweep_34s_var(--motion-ease-standard)_infinite_alternate] motion-reduce:opacity-30";
+const landingTraceLayer =
+	"pointer-events-none absolute inset-x-[-12%] inset-y-0 z-0 bg-[linear-gradient(116deg,transparent_0_31%,var(--ambient-trace)_31.15%_31.35%,transparent_31.55%_100%),linear-gradient(64deg,transparent_0_54%,var(--ambient-trace)_54.1%_54.22%,transparent_54.4%_100%)] [background-size:44rem_44rem,58rem_58rem] opacity-[0.28] [mask-image:radial-gradient(ellipse_at_50%_26rem,black_0,transparent_70rem)] motion-safe:animate-[landing-trace-drift_48s_linear_infinite_alternate] motion-reduce:opacity-[0.18] dark:opacity-[0.34]";
+const landingParticleLayer =
+	"pointer-events-none absolute inset-x-[-10%] inset-y-0 z-0 bg-[radial-gradient(circle_at_14px_18px,var(--ambient-particle)_0_1px,transparent_1.45px),radial-gradient(circle_at_88px_64px,var(--ambient-particle-accent)_0_1px,transparent_1.5px),radial-gradient(circle_at_150px_112px,var(--ambient-particle-muted)_0_1px,transparent_1.45px)] [background-size:180px_180px,260px_260px,340px_340px] opacity-[0.5] [mask-image:radial-gradient(ellipse_at_50%_28rem,black_0,transparent_78rem)] motion-safe:animate-[landing-particle-drift_80s_linear_infinite] motion-reduce:opacity-[0.24] dark:opacity-[0.62]";
+const landingVignetteLayer =
+	"pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(90deg,var(--background)_0,transparent_12%_88%,var(--background)_100%),linear-gradient(180deg,transparent_0_44%,var(--background)_100%)] opacity-75";
+const landingNoiseLayer =
+	"pointer-events-none absolute inset-0 z-0 opacity-[0.045] mix-blend-soft-light dark:opacity-[0.06] [background-image:url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http://www.w3.org/2000/svg%22%20width%3D%22160%22%20height%3D%22160%22%20viewBox%3D%220%200%20160%20160%22%3E%3Cfilter%20id%3D%22n%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%22.75%22%20numOctaves%3D%224%22%20stitchTiles%3D%22stitch%22/%3E%3C/filter%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20filter%3D%22url(%23n)%22%20opacity%3D%22.38%22/%3E%3C/svg%3E')] [background-size:160px_160px]";
+const heroCodePanelEffect =
+	"before:pointer-events-none before:absolute before:inset-0 before:z-10 before:bg-[linear-gradient(115deg,transparent_0_28%,var(--hero-shimmer,var(--glass-highlight))_48%,transparent_68%_100%)] before:opacity-0 motion-safe:before:animate-[hero-panel-sheen_9s_var(--motion-ease-standard)_infinite] motion-reduce:before:hidden";
+
+type HeroPrimitive = {
+	kind: string;
+	title: string;
+	description: string;
+	icon: string;
+	file: string;
+	outputs: string[];
+	snippet: ReactNode;
+};
+
+const HERO_PRIMITIVES: HeroPrimitive[] = [
+	{
+		kind: "Collection",
+		title: "Model data once",
+		description:
+			"Fields, access, relations, validation, uploads, localization, and admin metadata start from the same contract.",
+		icon: "ph:database",
+		file: "collections/posts.ts",
+		outputs: ["CRUD API", "Admin table", "Typed client", "Validation"],
+		snippet: (
+			<>
+				<span className={kw}>collection</span>
+				{"("}
+				<span className={str}>"posts"</span>
+				{")\n  ."}
+				<span className={fn}>fields</span>
+				{`(({ f }) => ({
+    title:   f.`}
+				<span className={fn}>text</span>
+				{"("}
+				<span className={num}>255</span>
+				{")."}
+				<span className={fn}>required</span>
+				{`(),
+    content: f.`}
+				<span className={fn}>richText</span>
+				{`().`}
+				<span className={fn}>localized</span>
+				{`(),
+    status:  f.`}
+				<span className={fn}>select</span>
+				{`([`}
+				<span className={str}>"draft"</span>
+				{`, `}
+				<span className={str}>"published"</span>
+				{`]),
+    author:  f.`}
+				<span className={fn}>relation</span>
+				{"("}
+				<span className={str}>"users"</span>
+				{")."}
+				<span className={fn}>required</span>
+				{`(),
+  }))`}
+			</>
+		),
+	},
+	{
+		kind: "Global",
+		title: "Keep singleton state typed",
+		description:
+			"Settings, navigation, feature flags, and SEO live as first-class primitives instead of ad hoc config blobs.",
+		icon: "ph:globe-hemisphere-west",
+		file: "globals/site-settings.ts",
+		outputs: ["Singleton API", "Admin form", "History", "Typed reads"],
+		snippet: (
+			<>
+				<span className={kw}>global</span>
+				{"("}
+				<span className={str}>"siteSettings"</span>
+				{")\n  ."}
+				<span className={fn}>fields</span>
+				{`(({ f }) => ({
+    siteName: f.`}
+				<span className={fn}>text</span>
+				{`().`}
+				<span className={fn}>required</span>
+				{`(),
+    nav:      f.`}
+				<span className={fn}>blocks</span>
+				{`(),
+    ogImage:  f.`}
+				<span className={fn}>upload</span>
+				{`({ to: `}
+				<span className={str}>"assets"</span>
+				{` }),
+  }))
+  .`}
+				<span className={fn}>options</span>
+				{`({ versioning: `}
+				<span className={kw}>true</span>
+				{` })`}
+			</>
+		),
+	},
+	{
+		kind: "Route",
+		title: "Add typed product actions",
+		description:
+			"Custom HTTP behavior stays close to the app context, with typed input and access to collections, services, and queues.",
+		icon: "ph:signpost",
+		file: "routes/publish-post.ts",
+		outputs: ["HTTP endpoint", "Typed input", "App context", "Client call"],
+		snippet: (
+			<>
+				<span className={kw}>export default</span>{" "}
+				<span className={fn}>route</span>
+				{`()\n  .`}
+				<span className={fn}>post</span>
+				{`()\n  .`}
+				<span className={fn}>schema</span>
+				{`(z.object({ id: z.number() }))\n  .`}
+				<span className={fn}>handler</span>
+				{`(async ({ input, collections }) => {
+    `}
+				<span className={kw}>return</span>
+				{` collections.posts.`}
+				<span className={fn}>updateById</span>
+				{`({
+      id: input.id,
+      data: { status: `}
+				<span className={str}>"published"</span>
+				{` },
+    })
+  })`}
+			</>
+		),
+	},
+	{
+		kind: "Job",
+		title: "Move workflows off-request",
+		description:
+			"Background work is declared with payload schema and the same rich context as routes and hooks.",
+		icon: "ph:lightning",
+		file: "jobs/send-newsletter.ts",
+		outputs: [
+			"Queue payload",
+			"Worker handler",
+			"Retryable work",
+			"Typed context",
+		],
+		snippet: (
+			<>
+				<span className={kw}>export default</span>{" "}
+				<span className={fn}>job</span>
+				{`({
+  name: `}
+				<span className={str}>"sendNewsletter"</span>
+				{`,
+  schema: z.object({ postId: z.number() }),
+  handler: async ({ payload, collections, email }) => {
+    `}
+				<span className={kw}>const</span>
+				{` post = `}
+				<span className={kw}>await</span>
+				{` collections.posts.`}
+				<span className={fn}>findOne</span>
+				{`({ where: { id: payload.postId } })
+    `}
+				<span className={kw}>return</span>
+				{` email.`}
+				<span className={fn}>send</span>
+				{`({ template: `}
+				<span className={str}>"newsletter"</span>
+				{`, data: post })
+  },
+})`}
+			</>
+		),
+	},
+	{
+		kind: "Admin attach",
+		title: "Project the workspace",
+		description:
+			"Views, components, actions, sidebar items, and dashboards attach to the same server primitives through registries.",
+		icon: "ph:layout",
+		file: "config/admin.ts",
+		outputs: ["Sidebar", "Forms", "Tables", "Actions"],
+		snippet: (
+			<>
+				<span className={kw}>export default</span>{" "}
+				<span className={fn}>adminConfig</span>
+				{`({
+  sidebar: {
+    sections: [{ id: `}
+				<span className={str}>"content"</span>
+				{`, title: `}
+				<span className={str}>"Content"</span>
+				{` }],
+    items: [
+      { sectionId: `}
+				<span className={str}>"content"</span>
+				{`, type: `}
+				<span className={str}>"collection"</span>
+				{`, collection: `}
+				<span className={str}>"posts"</span>
+				{` },
+      { sectionId: `}
+				<span className={str}>"content"</span>
+				{`, type: `}
+				<span className={str}>"global"</span>
+				{`, global: `}
+				<span className={str}>"siteSettings"</span>
+				{` },
+    ],
+  },
+  dashboard: {
+    items: [{ type: `}
+				<span className={str}>"stats"</span>
+				{`, collection: `}
+				<span className={str}>"posts"</span>
+				{`, label: `}
+				<span className={str}>"Published"</span>
+				{` }],
+  },
+})`}
+			</>
+		),
+	},
+];
+
+function HeroPrimitiveCarousel() {
+	const [activeIndex, setActiveIndex] = useState(0);
+	const [isPaused, setIsPaused] = useState(false);
+	const rootRef = useRef<HTMLDivElement>(null);
+	const hasRenderedRef = useRef(false);
+	const isVisibleRef = useRef(true);
+	const active = HERO_PRIMITIVES[activeIndex];
+
+	useEffect(() => {
+		hasRenderedRef.current = true;
+	}, []);
+
+	useEffect(() => {
+		const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+		if (reduceMotion.matches) return;
+
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				isVisibleRef.current = entry?.isIntersecting ?? true;
+			},
+			{ threshold: 0.35 },
+		);
+
+		if (rootRef.current) observer.observe(rootRef.current);
+
+		const interval = window.setInterval(() => {
+			if (isPaused || !isVisibleRef.current) return;
+			setActiveIndex((current) => (current + 1) % HERO_PRIMITIVES.length);
+		}, 4600);
+
+		return () => {
+			window.clearInterval(interval);
+			observer.disconnect();
+		};
+	}, [isPaused]);
+
+	return (
+		<div
+			ref={rootRef}
+			data-hero-carousel
+			className="relative"
+			onMouseEnter={() => setIsPaused(true)}
+			onMouseLeave={() => setIsPaused(false)}
+			onFocus={() => setIsPaused(true)}
+			onBlur={() => setIsPaused(false)}
+		>
+			<CodePanel
+				label={
+					<div className="flex min-w-0 items-center justify-between gap-3">
+						<span className="truncate">{active.file}</span>
+						<span className="border-border-subtle bg-card text-foreground font-chrome inline-flex shrink-0 items-center gap-1.5 rounded-[var(--control-radius-inner)] border px-2 py-1 text-[11px] font-medium">
+							<Icon ssr icon={active.icon} width={12} height={12} />
+							{active.kind}
+						</span>
+					</div>
+				}
+				data-hero-panel
+				className={cn(
+					"glass-panel h-[34rem] max-md:rounded-none max-md:border-0 max-md:[background-color:transparent] max-md:bg-transparent max-md:shadow-none max-md:[box-shadow:none] max-md:[backdrop-filter:none] max-md:[-webkit-backdrop-filter:none] sm:h-[32.75rem]",
+					heroCodePanelEffect,
+				)}
+				contentClassName="min-h-0"
+			>
+				<div
+					key={active.kind}
+					className={cn(
+						"flex h-full min-h-0 flex-col whitespace-normal",
+						hasRenderedRef.current && "hero-carousel-slide",
+					)}
+				>
+					<div className="mb-4 flex min-h-[6rem] shrink-0 items-start gap-3 sm:min-h-[5rem]">
+						<div className="border-border-subtle bg-surface-low text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-[var(--control-radius)] border">
+							<Icon ssr icon={active.icon} width={18} height={18} />
+						</div>
+						<div>
+							<h3 className="text-foreground font-chrome text-base leading-snug font-semibold text-balance">
+								{active.title}
+							</h3>
+							<p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
+								{active.description}
+							</p>
+						</div>
+					</div>
+
+					<div
+						data-hero-code
+						className="border-border-subtle bg-background/35 text-muted-foreground min-h-0 flex-1 overflow-auto rounded-[var(--control-radius)] border p-4 font-mono text-[12px] leading-[1.7] whitespace-pre sm:text-[13px]"
+					>
+						{active.snippet}
+					</div>
+
+					<div className="mt-4 grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
+						{active.outputs.map((output) => (
+							<div
+								key={output}
+								className="border-border-subtle bg-surface-low text-muted-foreground font-chrome rounded-[var(--control-radius-inner)] border px-2.5 py-2 text-xs font-medium"
+							>
+								{output}
+							</div>
+						))}
+					</div>
+				</div>
+			</CodePanel>
+
+			<div
+				data-hero-controls
+				className="mt-3 flex items-center justify-between gap-3"
+			>
+				<div className="flex items-center gap-1.5" aria-label="Hero primitives">
+					{HERO_PRIMITIVES.map((primitive, index) => (
+						<button
+							key={primitive.kind}
+							type="button"
+							onClick={() => setActiveIndex(index)}
+							className={cn(
+								"border-border-subtle flex size-10 items-center justify-center rounded-[var(--control-radius-inner)] border transition-[background-color,color,border-color,transform,opacity] active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
+								index === activeIndex
+									? "border-border-strong bg-surface-high text-foreground opacity-100"
+									: "bg-card text-muted-foreground hover:bg-surface-low hover:text-foreground opacity-70 hover:opacity-100",
+							)}
+							aria-label={`Show ${primitive.kind}`}
+							aria-pressed={index === activeIndex}
+						>
+							<Icon ssr icon={primitive.icon} width={15} height={15} />
+						</button>
+					))}
+				</div>
+				<div className="text-muted-foreground hidden font-mono text-[11px] tabular-nums sm:block">
+					{String(activeIndex + 1).padStart(2, "0")} /{" "}
+					{String(HERO_PRIMITIVES.length).padStart(2, "0")}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+const PRIMITIVE_SURFACES = [
+	{
+		icon: "ph:database",
+		title: "Collections",
+		description:
+			"Model persisted resources with fields, relations, uploads, versions, hooks, and access rules.",
+		outputs: ["CRUD", "Admin", "SDK"],
+	},
+	{
+		icon: "ph:globe-hemisphere-west",
+		title: "Globals",
+		description:
+			"Keep singleton settings typed, editable, versioned, and available to every frontend surface.",
+		outputs: ["Settings", "History", "Forms"],
+	},
+	{
+		icon: "ph:signpost",
+		title: "Routes",
+		description:
+			"Add product actions with typed input, output, auth context, services, and collections.",
+		outputs: ["HTTP", "Zod", "Context"],
+	},
+	{
+		icon: "ph:lightning",
+		title: "Jobs",
+		description:
+			"Move slow workflows into queue-backed handlers without leaving the app contract.",
+		outputs: ["Queue", "Retry", "Worker"],
+	},
+	{
+		icon: "ph:layout",
+		title: "Admin attach",
+		description:
+			"Attach views, fields, actions, dashboards, and components through registries instead of hardcoded screens.",
+		outputs: ["Views", "Actions", "Components"],
+	},
+	{
+		icon: "ph:puzzle-piece",
+		title: "Modules",
+		description:
+			"Package primitives and conventions so teams can share product capability, not boilerplate.",
+		outputs: ["Plugins", "Factories", "Registries"],
+	},
+] as const;
+
+const PROJECTION_OUTPUTS = [
+	{
+		icon: "ph:globe",
+		label: "API",
+		detail: "CRUD + routes",
+	},
+	{
+		icon: "ph:check-circle",
+		label: "Validation",
+		detail: "runtime schemas",
+	},
+	{
+		icon: "ph:cube",
+		label: "Typed client",
+		detail: "SDK + queries",
+	},
+	{
+		icon: "ph:layout",
+		label: "Admin",
+		detail: "forms + tables",
+	},
+	{
+		icon: "ph:activity",
+		label: "Realtime",
+		detail: "events + streams",
+	},
+	{
+		icon: "ph:lightning",
+		label: "Jobs",
+		detail: "queue workers",
+	},
+] as const;
+
+function ProjectionOutputCard({
+	output,
+}: {
+	output: (typeof PROJECTION_OUTPUTS)[number];
+}) {
+	return (
+		<div className="border-border-subtle bg-card/85 rounded-[var(--control-radius)] border p-3 shadow-[var(--surface-shadow)] backdrop-blur-sm">
+			<div className="text-muted-foreground mb-2 flex items-center gap-2">
+				<Icon ssr icon={output.icon} width={15} height={15} />
+				<span className="text-foreground font-chrome text-sm font-semibold">
+					{output.label}
+				</span>
+			</div>
+			<div className="text-muted-foreground font-chrome text-xs">
+				{output.detail}
+			</div>
+		</div>
+	);
+}
+
+function ContractProjectionMap() {
+	const leftOutputs = PROJECTION_OUTPUTS.slice(0, 3);
+	const rightOutputs = PROJECTION_OUTPUTS.slice(3);
+
+	return (
+		<div
+			data-contract-projection-map
+			className="md:border-border-subtle md:bg-card relative mb-4 overflow-hidden p-0 md:rounded-[var(--surface-radius)] md:border md:p-6 md:shadow-[var(--surface-shadow)]"
+		>
+			<div
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle_at_50%_50%,color-mix(in_srgb,var(--foreground)_6%,transparent)_0,transparent_32rem)] md:block"
+			/>
+			<svg
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-0 hidden h-full w-full text-[var(--border-subtle)] md:block"
+				viewBox="0 0 100 100"
+				preserveAspectRatio="none"
+			>
+				<path
+					d="M50 50 C38 20 28 17 16 17"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="0.35"
+				/>
+				<path
+					d="M50 50 C36 50 29 50 16 50"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="0.35"
+				/>
+				<path
+					d="M50 50 C38 80 28 83 16 83"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="0.35"
+				/>
+				<path
+					d="M50 50 C62 20 72 17 84 17"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="0.35"
+				/>
+				<path
+					d="M50 50 C64 50 71 50 84 50"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="0.35"
+				/>
+				<path
+					d="M50 50 C62 80 72 83 84 83"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="0.35"
+				/>
+			</svg>
+
+			<div className="relative grid grid-cols-1 gap-4 md:grid-cols-[1fr_1.15fr_1fr] md:items-center">
+				<div className="order-2 grid gap-3 md:order-none">
+					{leftOutputs.map((output) => (
+						<ProjectionOutputCard key={output.label} output={output} />
+					))}
+				</div>
+
+				<div className="border-border-subtle bg-surface-low order-1 mx-auto flex min-h-48 w-full max-w-sm flex-col justify-center rounded-[var(--surface-radius)] border p-5 text-center shadow-[var(--surface-shadow)] md:order-none">
+					<div className="text-muted-foreground border-border-subtle bg-card mx-auto mb-4 flex size-11 items-center justify-center rounded-[var(--control-radius)] border">
+						<Icon ssr icon="ph:brackets-curly" width={20} height={20} />
+					</div>
+					<h3 className="text-foreground text-xl leading-tight font-semibold text-balance">
+						Product contract
+					</h3>
+					<p className="text-muted-foreground mx-auto mt-2 max-w-60 text-sm leading-relaxed text-pretty">
+						Fields, routes, jobs, access, admin config, and module registries
+						share one typed source.
+					</p>
+					<div className="mt-4 flex flex-wrap justify-center gap-1.5">
+						{["schema", "runtime", "workspace"].map((tag) => (
+							<span
+								key={tag}
+								className="border-border-subtle bg-card text-muted-foreground font-chrome rounded-[var(--control-radius-inner)] border px-2 py-1 text-[11px] font-medium"
+							>
+								{tag}
+							</span>
+						))}
+					</div>
+				</div>
+
+				<div className="order-3 grid gap-3 md:order-none">
+					{rightOutputs.map((output) => (
+						<ProjectionOutputCard key={output.label} output={output} />
+					))}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function OneSchemaSection() {
+	return (
+		<>
+			<SectionHeader
+				num="01"
+				title="Primitives become product surfaces"
+				subtitle="QUESTPIE is not another layer of boilerplate. You define a primitive once, codegen records it in a typed registry, and every runtime surface reads from that same source."
+			/>
+
+			<ContractProjectionMap />
+
+			<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+				{PRIMITIVE_SURFACES.map((surface) => (
+					<div
+						key={surface.title}
+						className="border-border-subtle bg-card hover:bg-surface-low rounded-[var(--surface-radius)] border p-5 shadow-[var(--surface-shadow)] transition-[background-color,border-color]"
+					>
+						<div className="text-muted-foreground mb-3 flex items-center gap-2">
+							<Icon ssr icon={surface.icon} width={17} height={17} />
+							<span className="text-foreground font-chrome text-sm font-semibold">
+								{surface.title}
+							</span>
+						</div>
+						<p className="text-muted-foreground min-h-16 text-sm leading-relaxed text-pretty">
+							{surface.description}
+						</p>
+						<div className="mt-4 flex flex-wrap gap-1.5">
+							{surface.outputs.map((output) => (
+								<span
+									key={output}
+									className="border-border-subtle bg-surface-low text-muted-foreground font-chrome inline-flex rounded-[var(--control-radius-inner)] border px-2 py-1 text-[11px] font-medium"
+								>
+									{output}
+								</span>
+							))}
+						</div>
+					</div>
+				))}
+			</div>
+		</>
+	);
+}
+
+/* ─── §06 Module composition asset ─── */
+
+const MODULE_INPUTS = [
+	{
+		icon: "ph:package",
+		title: "Starter",
+		description: "auth, assets, users",
+	},
+	{
+		icon: "ph:layout",
+		title: "Admin",
+		description: "views, fields, dashboard",
+	},
+	{
+		icon: "ph:clipboard-text",
+		title: "Audit",
+		description: "global hooks",
+	},
+	{
+		icon: "ph:flow-arrow",
+		title: "Workflows",
+		description: "durable steps, events, cron",
+	},
+	{
+		icon: "ph:puzzle-piece",
+		title: "Your module",
+		description: "domain capability",
+	},
+] as const;
+
+const MODULE_OUTPUTS = [
+	{
+		icon: "ph:globe",
+		title: "API",
+		description: "runtime handlers",
+	},
+	{
+		icon: "ph:monitor",
+		title: "Workspace",
+		description: "admin surfaces",
+	},
+	{
+		icon: "ph:terminal",
+		title: "SDK",
+		description: "typed clients",
+	},
+] as const;
+
+function ModuleCompositionAsset() {
+	return (
+		<VisualAssetFrame asset="module-composition" className="mb-4">
+			<div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<div className="text-muted-foreground font-mono text-[11px] font-medium">
+						Module graph
+					</div>
+					<h3 className="text-foreground mt-1 text-lg leading-tight font-semibold text-balance">
+						Defaults and custom packages meet at the app contract
+					</h3>
+				</div>
+				<div className="border-border-subtle bg-surface-low text-muted-foreground rounded-[var(--control-radius-inner)] border px-2.5 py-1 font-mono text-[11px]">
+					registry-first
+				</div>
+			</div>
+
+			<div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.05fr_1fr] lg:items-center">
+				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+					{MODULE_INPUTS.map((module) => (
+						<VisualNode
+							key={module.title}
+							icon={module.icon}
+							title={module.title}
+							description={module.description}
+						/>
+					))}
+				</div>
+
+				<div className="border-border-subtle bg-surface-high mx-auto flex min-h-56 w-full max-w-sm flex-col justify-center rounded-[var(--surface-radius)] border p-5 text-center shadow-[var(--surface-shadow)]">
+					<div className="text-muted-foreground border-border-subtle bg-card mx-auto mb-4 flex size-12 items-center justify-center rounded-[var(--control-radius)] border">
+						<Icon
+							ssr
+							aria-hidden="true"
+							icon="ph:cube-focus"
+							width={22}
+							height={22}
+						/>
+					</div>
+					<h3 className="text-foreground text-xl leading-tight font-semibold text-balance">
+						QUESTPIE app
+					</h3>
+					<p className="text-muted-foreground mx-auto mt-2 max-w-64 text-sm leading-relaxed text-pretty">
+						Modules merge state, configs, registries, builders, and callbacks
+						without hardcoded runtime names.
+					</p>
+					<div className="mt-4 flex flex-wrap justify-center gap-1.5">
+						{["merge", "augment", "project"].map((tag) => (
+							<span
+								key={tag}
+								className="border-border-subtle bg-card text-muted-foreground font-chrome rounded-[var(--control-radius-inner)] border px-2 py-1 text-[11px] font-medium"
+							>
+								{tag}
+							</span>
+						))}
+					</div>
+				</div>
+
+				<div className="grid gap-3">
+					{MODULE_OUTPUTS.map((output) => (
+						<VisualNode
+							key={output.title}
+							icon={output.icon}
+							title={output.title}
+							description={output.description}
+						/>
+					))}
+				</div>
+			</div>
+		</VisualAssetFrame>
+	);
+}
+
+const DEV_LOOP_STEPS = [
+	{
+		icon: "ph:eye",
+		title: "Watch",
+		description: "Detect convention changes",
+		command: "questpie dev",
+		output: "watching questpie/server/**",
+		detail: "Change detected: collections/posts.ts",
+		badge: "file watcher armed",
+	},
+	{
+		icon: "ph:gear-six",
+		title: "Generate",
+		description: "Emit registries and types",
+		command: "questpie dev",
+		output: "generated .generated/index.ts",
+		detail: "App types, registries, and module imports refreshed",
+		badge: "typed registry updated",
+	},
+	{
+		icon: "ph:shield-warning",
+		title: "Validate",
+		description: "Catch missing projections",
+		command: "questpie dev",
+		output: "renderer contract checked",
+		detail: "Missing admin projection fails before runtime",
+		badge: "contract clean",
+	},
+	{
+		icon: "ph:rocket-launch",
+		title: "Ship",
+		description: "Move with confidence",
+		command: "questpie dev",
+		output: "API, admin, and client surfaces in sync",
+		detail: "Keep coding without a manual sync step",
+		badge: "ready to ship",
+	},
+] as const;
+
+function DevLoopAsset() {
+	const [activeStep, setActiveStep] = useState(0);
+	const [isPaused, setIsPaused] = useState(false);
+	const rootRef = useRef<HTMLDivElement>(null);
+	const isVisibleRef = useRef(true);
+	const active = DEV_LOOP_STEPS[activeStep];
+
+	useEffect(() => {
+		const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+		if (reduceMotion.matches) return;
+
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				isVisibleRef.current = entry?.isIntersecting ?? true;
+			},
+			{ threshold: 0.35 },
+		);
+
+		if (rootRef.current) observer.observe(rootRef.current);
+
+		const interval = window.setInterval(() => {
+			if (isPaused || !isVisibleRef.current) return;
+			setActiveStep((current) => (current + 1) % DEV_LOOP_STEPS.length);
+		}, 4200);
+
+		return () => {
+			window.clearInterval(interval);
+			observer.disconnect();
+		};
+	}, [isPaused]);
+
+	return (
+		<VisualAssetFrame asset="dev-loop" className="mb-4">
+			<div
+				ref={rootRef}
+				onMouseEnter={() => setIsPaused(true)}
+				onMouseLeave={() => setIsPaused(false)}
+				onFocus={() => setIsPaused(true)}
+				onBlur={() => setIsPaused(false)}
+			>
+				<div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<div className="text-muted-foreground font-mono text-[11px] font-medium">
+							Development loop
+						</div>
+						<h3 className="text-foreground mt-1 text-lg leading-tight font-semibold text-balance">
+							Feedback arrives while the contract is still fresh
+						</h3>
+					</div>
+					<div className="border-border-subtle bg-surface-low text-muted-foreground rounded-[var(--control-radius-inner)] border px-2.5 py-1 font-mono text-[11px] tabular-nums">
+						{String(activeStep + 1).padStart(2, "0")} /{" "}
+						{String(DEV_LOOP_STEPS.length).padStart(2, "0")}
+					</div>
+				</div>
+
+				<div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+					{DEV_LOOP_STEPS.map((step, index) => {
+						const selected = index === activeStep;
+
+						return (
+							<button
+								key={step.title}
+								type="button"
+								onClick={() => setActiveStep(index)}
+								aria-pressed={selected}
+								className={cn(
+									"border-border-subtle bg-surface-low min-w-0 rounded-[var(--control-radius)] border p-3 text-left transition-[background-color,border-color,color,transform,opacity] active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
+									selected
+										? "border-border-strong bg-surface-high text-foreground"
+										: "hover:bg-surface-high opacity-85 hover:opacity-100",
+								)}
+							>
+								<div className="flex min-w-0 items-center gap-2">
+									<Icon
+										ssr
+										aria-hidden="true"
+										icon={step.icon}
+										width={15}
+										height={15}
+										className="text-muted-foreground shrink-0"
+									/>
+									<div className="text-foreground font-chrome min-w-0 truncate text-sm font-semibold">
+										{step.title}
+									</div>
+								</div>
+								<p className="text-muted-foreground mt-1 text-xs leading-relaxed text-pretty">
+									{step.description}
+								</p>
+								<div className="text-muted-foreground mt-3 font-mono text-[10px] tabular-nums">
+									{String(index + 1).padStart(2, "0")}
+								</div>
+							</button>
+						);
+					})}
+				</div>
+
+				<div className="border-border-subtle bg-surface-low mt-4 grid gap-3 rounded-[var(--control-radius)] border p-3 md:grid-cols-[1fr_auto] md:items-center">
+					<div
+						key={active.title}
+						aria-live="polite"
+						className="admin-step-content font-mono text-[12px] leading-relaxed"
+					>
+						<div className="text-foreground">
+							<span className="text-primary">$</span> {active.command}
+						</div>
+						<div className="text-muted-foreground">
+							<span className="text-[var(--status-success)]">✓</span>{" "}
+							{active.output}
+						</div>
+						<div className="text-muted-foreground/70">{active.detail}</div>
+					</div>
+					<div className="border-border-subtle bg-card text-muted-foreground font-chrome rounded-[var(--control-radius-inner)] border px-3 py-2 text-xs">
+						{active.badge}
+					</div>
+				</div>
+			</div>
+		</VisualAssetFrame>
 	);
 }
 
@@ -591,6 +2805,17 @@ function LandingFooter() {
 
 export function LandingPage() {
 	useEffect(() => {
+		const revealVisible = () => {
+			document.querySelectorAll("[data-reveal]").forEach((el) => {
+				const rect = el.getBoundingClientRect();
+				const isVisible =
+					rect.top < window.innerHeight * 0.92 &&
+					rect.bottom > window.innerHeight * 0.08;
+
+				if (isVisible) el.setAttribute("data-visible", "");
+			});
+		};
+
 		const obs = new IntersectionObserver(
 			(entries) => {
 				for (const e of entries) {
@@ -600,819 +2825,201 @@ export function LandingPage() {
 			{ threshold: 0.1 },
 		);
 		document.querySelectorAll("[data-reveal]").forEach((el) => obs.observe(el));
-		return () => obs.disconnect();
+		revealVisible();
+		window.addEventListener("scroll", revealVisible, { passive: true });
+		window.addEventListener("resize", revealVisible);
+
+		return () => {
+			obs.disconnect();
+			window.removeEventListener("scroll", revealVisible);
+			window.removeEventListener("resize", revealVisible);
+		};
 	}, []);
 
 	return (
-		<div className="landing bg-background bg-grid-quest text-foreground">
+		<div className="landing bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
 			<Nav />
 
-			{/* ─── §1 HERO ─── */}
-			<section className="mt-14 border-b border-border">
-				<div className="grid grid-cols-2 min-h-[calc(100vh-56px)] max-w-[1200px] mx-auto border-x border-border max-[900px]:grid-cols-1">
-					<div className="px-6 py-16 sm:py-20 flex flex-col justify-center border-r border-border max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:border-border">
-						<div className="font-mono text-[10px] tracking-[3px] text-primary uppercase mb-6">
-							Open source framework
+			<main className={landingShell}>
+				<div
+					aria-hidden="true"
+					data-bg-layer="ambient"
+					className={landingAmbientLayer}
+				/>
+				<div
+					aria-hidden="true"
+					data-bg-layer="trace"
+					className={landingTraceLayer}
+				/>
+				<div
+					aria-hidden="true"
+					data-bg-layer="particles"
+					className={landingParticleLayer}
+				/>
+				<div
+					aria-hidden="true"
+					data-bg-layer="vignette"
+					className={landingVignetteLayer}
+				/>
+				<div
+					aria-hidden="true"
+					data-bg-layer="noise"
+					className={landingNoiseLayer}
+				/>
+
+				<div className="relative z-10 mx-auto max-w-[1200px]">
+					{/* ─── HERO ─── */}
+					<section className="mt-14 px-4 py-16 md:px-8 md:py-24">
+						<div className="grid grid-cols-1 items-center gap-8 md:gap-12 lg:grid-cols-2 lg:gap-24">
+							<div>
+								<div className="text-muted-foreground font-chrome mb-5 text-sm font-medium">
+									Schema-first product framework
+								</div>
+								<h1 className="text-foreground mb-6 text-4xl leading-[1.08] font-semibold text-balance md:text-5xl lg:text-6xl">
+									Build the product, not the plumbing.
+								</h1>
+								<p className="text-muted-foreground mb-8 max-w-xl text-lg leading-[1.6] md:text-xl">
+									Define the product contract once. QUESTPIE projects your
+									schema, routes, jobs, and admin config into APIs, workspace
+									screens, validation, access rules, typed clients, and realtime
+									updates.
+								</p>
+								<div className="flex flex-wrap items-center gap-3 sm:gap-4 lg:mb-12">
+									<Link
+										to="/docs/$"
+										params={{ _splat: "start-here/first-app" }}
+										className={primaryCta}
+									>
+										Start with a schema{" "}
+										<Icon ssr icon="ph:arrow-right" width={16} height={16} />
+									</Link>
+									<a href="#schema-output" className={secondaryCta}>
+										See what you get{" "}
+										<Icon ssr icon="ph:arrow-down" width={16} height={16} />
+									</a>
+								</div>
+							</div>
+
+							<div className="relative">
+								<HeroPrimitiveCarousel />
+							</div>
 						</div>
-						<h1 className="font-mono text-[clamp(28px,5vw,52px)] font-extrabold text-foreground leading-[1.05] tracking-tight">
-							One backend.
-							<br />
-							Ship everywhere.
-						</h1>
-						<p className="text-sm text-muted-foreground leading-relaxed mt-5 max-w-[440px]">
-							Define your schema once. Get REST, typed routes, realtime, typed
-							client SDK, and optional admin UI. Server-first TypeScript. Built
-							on Drizzle, Zod, Better Auth.
-						</p>
-						<div className="flex gap-px mt-8">
+					</section>
+
+					{/* ─── §01 ONE SCHEMA — Hover highlight ─── */}
+					<Reveal>
+						<section id="schema-output" className={landingSection}>
+							<OneSchemaSection />
+						</section>
+					</Reveal>
+
+					{/* ─── §02 FILE CONVENTIONS ─── */}
+					<Reveal>
+						<section className={landingSection}>
+							<FileConventionsSection />
+						</section>
+					</Reveal>
+
+					{/* ─── §03 SWAP ANYTHING ─── */}
+					<Reveal>
+						<section className={landingSection}>
+							<SwapAnythingSection />
+						</section>
+					</Reveal>
+
+					{/* ─── §04 ADMIN SHOWCASE ─── */}
+					<Reveal>
+						<section className={landingSection}>
+							<AdminShowcaseSection />
+						</section>
+					</Reveal>
+
+					{/* ─── §05 END-TO-END TYPES ─── */}
+					<Reveal>
+						<section className={landingSection}>
+							<EndToEndTypesSection />
+						</section>
+					</Reveal>
+
+					{/* ─── §06 COMPOSABLE ─── */}
+					<Reveal>
+						<section className={landingSection}>
+							<SectionHeader
+								num="06"
+								title="Compose the framework around your product"
+								subtitle="Core features, admin surfaces, audit trails, and your own packages compose through the same conventions. Keep the defaults where they fit and swap the parts that should be yours."
+							/>
+
+							<ModuleCompositionAsset />
+						</section>
+					</Reveal>
+
+					{/* ─── §07 DX — Staggered terminal reveal ─── */}
+					<section className={landingSection}>
+						<Reveal>
+							<SectionHeader
+								num="07"
+								title="Fast feedback while you build"
+								subtitle="The CLI watches convention files, regenerates typed registries, scaffolds common resources, and fails early when a server contract is missing a client projection."
+							/>
+						</Reveal>
+
+						<Reveal>
+							<DevLoopAsset />
+						</Reveal>
+					</section>
+
+					{/* ─── CTA ─── */}
+					<section className="px-4 py-24 text-center md:px-8 md:py-32">
+						<div className="mb-8">
+							<img
+								src="/symbol/symbol-light.svg"
+								alt="Q"
+								className="mx-auto block h-12 w-12 dark:hidden"
+							/>
+							<img
+								src="/symbol/symbol-dark.svg"
+								alt="Q"
+								className="mx-auto hidden h-12 w-12 dark:block"
+							/>
+						</div>
+						<h2 className="text-foreground mb-6 text-4xl leading-tight font-semibold text-balance md:text-5xl">
+							Start with one schema contract.
+						</h2>
+						<div className="border-border-subtle bg-card mb-8 inline-flex items-center gap-4 rounded-[var(--surface-radius)] border px-6 py-3 shadow-[var(--surface-shadow)]">
+							<span className="text-primary font-mono">$</span>
+							<span className="font-mono text-[14px]">bun create questpie</span>
+						</div>
+						<div className="flex flex-wrap items-center justify-center gap-4">
 							<Link
 								to="/docs/$"
 								params={{ _splat: "start-here/first-app" }}
-								className="font-mono px-5 py-2.5 bg-primary border border-primary text-white text-[11px] font-semibold uppercase tracking-wider transition-colors hover:bg-primary/80"
+								className={primaryCta}
 							>
-								Get started &rarr;
+								Read the docs{" "}
+								<Icon ssr icon="ph:arrow-right" width={16} height={16} />
+							</Link>
+							<Link
+								to="/docs/$"
+								params={{ _splat: "examples" }}
+								className={secondaryCta}
+							>
+								Browse examples{" "}
+								<Icon ssr icon="ph:arrow-right" width={16} height={16} />
 							</Link>
 							<a
 								href="https://github.com/questpie/questpie"
 								target="_blank"
 								rel="noreferrer"
-								className="font-mono px-5 py-2.5 bg-background border border-border text-foreground text-[11px] font-semibold uppercase tracking-wider transition-colors hover:border-primary hover:text-primary"
+								className={textCta}
 							>
-								GitHub &#9733;
+								<Icon ssr icon="ph:github-logo" width={16} height={16} /> Star
+								on GitHub
 							</a>
 						</div>
-						<div className="flex gap-px mt-6 flex-wrap">
-							{[
-								"TypeScript",
-								"Server-first",
-								"Zero lock-in",
-								"MIT license",
-							].map((t) => (
-								<span
-									key={t}
-									className="font-mono text-[10px] px-2.5 py-1 bg-card text-muted-foreground tracking-wide"
-								>
-									{t}
-								</span>
-							))}
-						</div>
-					</div>
-					<div className="flex flex-col">
-						<div className="bg-background font-mono text-xs leading-relaxed text-muted-foreground flex-1 border-b border-border">
-							<pre className="p-6">
-								<span className="text-primary font-semibold">collection</span>(
-								<span className="text-[var(--syntax-string)]">"posts"</span>)
-								{`
-  .`}
-								<span className="text-[var(--syntax-function)]">fields</span>
-								{`(({ f }) => ({
-    title:   f.`}
-								<span className="text-[var(--syntax-function)]">text</span>(
-								<span className="text-[#FFB300]">255</span>
-								).
-								<span className="text-[var(--syntax-function)]">required</span>
-								{`(),
-    content: f.`}
-								<span className="text-[var(--syntax-function)]">richText</span>
-								().
-								<span className="text-[var(--syntax-function)]">localized</span>
-								{`(),
-    status:  f.`}
-								<span className="text-[var(--syntax-function)]">select</span>
-								{`([
-      { value: `}
-								<span className="text-[var(--syntax-string)]">"draft"</span>
-								{`, label: `}
-								<span className="text-[var(--syntax-string)]">"Draft"</span>
-								{` },
-      { value: `}
-								<span className="text-[var(--syntax-string)]">"published"</span>
-								{`, label: `}
-								<span className="text-[var(--syntax-string)]">"Published"</span>
-								{` },
-    ]),
-    author:  f.`}
-								<span className="text-[var(--syntax-function)]">relation</span>(
-								<span className="text-[var(--syntax-string)]">"users"</span>).
-								<span className="text-[var(--syntax-function)]">required</span>
-								{`(),
-    tags:    f.`}
-								<span className="text-[var(--syntax-function)]">relation</span>(
-								<span className="text-[var(--syntax-string)]">"tags"</span>).
-								<span className="text-[var(--syntax-function)]">hasMany</span>
-								{`({ foreignKey: `}
-								<span className="text-[var(--syntax-string)]">"postId"</span>
-								{` }),
-    seo:     f.`}
-								<span className="text-[var(--syntax-function)]">object</span>
-								{`({
-      title: f.`}
-								<span className="text-[var(--syntax-function)]">text</span>
-								{`(),
-      desc:  f.`}
-								<span className="text-[var(--syntax-function)]">text</span>(
-								<span className="text-[#FFB300]">160</span>)
-								{`,
-    }),
-  }))
-  .`}
-								<span className="text-[var(--syntax-function)]">access</span>
-								{`({
-    read: `}
-								<span className="text-primary font-semibold">true</span>
-								{`,
-    create: ({ session }) => !!session,
-    update: ({ session, doc }) =>
-      doc.authorId === session?.user?.id,
-  })
-  .`}
-								<span className="text-[var(--syntax-function)]">
-									versioning
-								</span>
-								{`({ enabled: `}
-								<span className="text-primary font-semibold">true</span>
-								{`, maxVersions: `}
-								<span className="text-[#FFB300]">10</span>
-								{` })`}
-							</pre>
-						</div>
-						<div className="grid grid-cols-4 gap-px bg-border">
-							{[
-								"REST API",
-								"Typed client SDK",
-								"Admin panel",
-								"Zod validation",
-							].map((label) => (
-								<div
-									key={label}
-									className="font-mono bg-background px-3 py-2.5 text-[10px] tracking-wide text-[#00E676]"
-								>
-									<span className="text-muted-foreground/40">→ </span>
-									{label}
-								</div>
-							))}
-						</div>
-					</div>
+					</section>
 				</div>
-			</section>
-
-			{/* ─── §2 ONE SCHEMA ─── */}
-			<Reveal>
-				<section>
-					<Lmw>
-						<SectionBar
-							num="01"
-							label="One schema, everything generated"
-							title="Define once. Get the rest for free."
-						/>
-						<TwoCol>
-							<TwoColLeft className="bg-background font-mono text-xs leading-relaxed text-muted-foreground p-0!">
-								<pre className="px-5 py-4">
-									<span className="text-muted-foreground/60">
-										{"// This one definition generates:"}
-									</span>
-									{"\n"}
-									<span className="text-muted-foreground/60">
-										{"// REST, Routes, Admin, Validation,"}
-									</span>
-									{"\n"}
-									<span className="text-muted-foreground/60">
-										{"// Client SDK, Realtime, Search"}
-									</span>
-									{"\n\n"}
-									<span className="text-primary font-semibold">collection</span>
-									(<span className="text-[var(--syntax-string)]">"posts"</span>)
-									{`
-  .`}
-									<span className="text-[var(--syntax-function)]">fields</span>
-									{`(({ f }) => ({
-    title:   f.`}
-									<span className="text-[var(--syntax-function)]">text</span>(
-									<span className="text-[#FFB300]">255</span>).
-									<span className="text-[var(--syntax-function)]">
-										required
-									</span>
-									{`(),
-    content: f.`}
-									<span className="text-[var(--syntax-function)]">
-										richText
-									</span>
-									().
-									<span className="text-[var(--syntax-function)]">
-										localized
-									</span>
-									{`(),
-    status:  f.`}
-									<span className="text-[var(--syntax-function)]">select</span>
-									{`([...]).`}
-									<span className="text-[var(--syntax-function)]">
-										required
-									</span>
-									{`(),
-    author:  f.`}
-									<span className="text-[var(--syntax-function)]">
-										relation
-									</span>
-									(<span className="text-[var(--syntax-string)]">"users"</span>)
-									{`,
-  }))`}
-								</pre>
-							</TwoColLeft>
-							<TwoColRight>
-								<ul className="list-none font-mono text-xs p-0 m-0">
-									{[
-										["REST API", "/api/collections/posts"],
-										["Typed routes", "typed, namespaced"],
-										["Realtime via SSE", "subscribe to changes"],
-										["Typed client SDK", "zero codegen step"],
-										["Admin panel", "table, form, block editor"],
-										["Zod validation", "from field definitions"],
-										["Access control", "row-level, field-level"],
-										["i18n", "two-table strategy, per-field localization"],
-										["Versioning", "workflow stages, drafts → published"],
-									].map(([title, desc]) => (
-										<li
-											key={title}
-											className="py-1 flex gap-2.5 border-b border-border"
-										>
-											<span className="text-[#00E676]">&#10003;</span>
-											<span className="text-foreground">{title}</span>
-											<span className="text-muted-foreground ml-1">
-												&mdash;{" "}
-												{desc.includes("→")
-													? desc.split("→").map((part, i) => (
-															<span key={i}>
-																{i > 0 && (
-																	<span className="text-[#00E676]"> → </span>
-																)}
-																{part.trim()}
-															</span>
-														))
-													: desc}
-											</span>
-										</li>
-									))}
-								</ul>
-							</TwoColRight>
-						</TwoCol>
-					</Lmw>
-				</section>
-			</Reveal>
-
-			{/* ─── §3 FILE CONVENTIONS ─── */}
-			<Reveal>
-				<FileConventionsSection />
-			</Reveal>
-
-			{/* ─── §4 ADAPTERS ─── */}
-			<Reveal>
-				<section>
-					<Lmw>
-						<SectionBar
-							num="03"
-							label="Swap anything"
-							title="Your infrastructure. Your choice."
-						/>
-						<TwoCol>
-							<TwoColLeft className="p-0! border-b-0!">
-								<div
-									className="grid gap-px bg-border"
-									style={{ gridTemplateColumns: "100px 1fr" }}
-								>
-									{[
-										["Runtime", "Node.js · Bun · Cloudflare Workers · Deno"],
-										["Database", "PostgreSQL · PGlite · Neon · PlanetScale"],
-										["Queue", "pg-boss · Cloudflare Queues"],
-										["Search", "Postgres FTS · Meilisearch · Elasticsearch"],
-										["Realtime", "PG NOTIFY · Redis Streams"],
-										["Storage", "Local · S3 · R2 · GCS (FlyDrive)"],
-										["HTTP", "Hono · Elysia · Next.js · TanStack Start"],
-									].map(([cat, val]) => (
-										<>
-											<div
-												key={`c-${cat}`}
-												className="font-mono px-4 py-2 text-[10px] tracking-[2px] text-primary uppercase bg-card flex items-center"
-											>
-												{cat}
-											</div>
-											<div
-												key={`v-${cat}`}
-												className="px-4 py-2 text-[13px] text-foreground bg-background"
-											>
-												{val}
-											</div>
-										</>
-									))}
-								</div>
-							</TwoColLeft>
-							<TwoColRight className="bg-background font-mono text-xs leading-relaxed text-muted-foreground p-0! border-b-0!">
-								<pre className="px-5 py-4">
-									{`runtimeConfig({
-  db: { url: `}
-									<span className="text-[var(--syntax-string)]">
-										DATABASE_URL
-									</span>
-									{` },
-  queue: { adapter: `}
-									<span className="text-[var(--syntax-function)]">
-										pgBossAdapter
-									</span>
-									{`() },
-  search: `}
-									<span className="text-[var(--syntax-function)]">
-										postgresSearchAdapter
-									</span>
-									{`(),
-  realtime: { adapter: `}
-									<span className="text-[var(--syntax-function)]">
-										pgNotifyAdapter
-									</span>
-									{`() },
-  storage: { driver: `}
-									<span className="text-[var(--syntax-function)]">
-										s3Driver
-									</span>
-									{`({
-    bucket: `}
-									<span className="text-[var(--syntax-string)]">"assets"</span>
-									{`
-  }) },
-  email: { adapter: `}
-									<span className="text-[var(--syntax-function)]">
-										smtpAdapter
-									</span>
-									{`() },
-})`}
-								</pre>
-								<div className="mt-4 pt-3 border-t border-border mx-6 text-[11px] text-muted-foreground pb-4">
-									Write your own adapter in under 50 lines.
-								</div>
-							</TwoColRight>
-						</TwoCol>
-					</Lmw>
-				</section>
-			</Reveal>
-
-			{/* ─── §5 ADMIN ─── */}
-			<Reveal>
-				<section>
-					<Lmw>
-						<SectionBar
-							num="04"
-							label="Optional admin"
-							title="Ship the admin panel only when you need it."
-						/>
-						<TwoCol>
-							<TwoColLeft className="bg-background font-mono text-xs leading-relaxed text-muted-foreground p-0!">
-								<pre className="px-5 py-4">
-									<span className="text-primary font-semibold">collection</span>
-									(<span className="text-[var(--syntax-string)]">"posts"</span>)
-									{`
-  .`}
-									<span className="text-[var(--syntax-function)]">admin</span>
-									{`(({ c }) => ({
-    label: { en: `}
-									<span className="text-[var(--syntax-string)]">"Posts"</span>
-									{`, sk: `}
-									<span className="text-[var(--syntax-string)]">
-										"Príspevky"
-									</span>
-									{` },
-    icon: c.`}
-									<span className="text-[var(--syntax-function)]">icon</span>(
-									<span className="text-[var(--syntax-string)]">
-										"ph:article"
-									</span>
-									)
-									{`,
-  }))
-  .`}
-									<span className="text-[var(--syntax-function)]">list</span>
-									{`(({ v, f }) => v.`}
-									<span className="text-[var(--syntax-function)]">table</span>
-									{`({
-    columns: [`}
-									<span className="text-[var(--syntax-string)]">"title"</span>
-									{`, `}
-									<span className="text-[var(--syntax-string)]">"status"</span>
-									{`, `}
-									<span className="text-[var(--syntax-string)]">"author"</span>
-									{`],
-    defaultSort: { field: f.createdAt },
-  }))
-  .`}
-									<span className="text-[var(--syntax-function)]">form</span>
-									{`(({ v, f }) => v.`}
-									<span className="text-[var(--syntax-function)]">form</span>
-									{`({
-    fields: [f.title, f.content],
-    sidebar: { fields: [f.status, f.author] },
-  }))`}
-								</pre>
-								<div className="mt-4 pt-3 border-t border-border mx-6 text-[11px] text-muted-foreground pb-4">
-									Swappable package. Web, React Native, or build your own.
-								</div>
-							</TwoColLeft>
-							<TwoColRight className="p-0!">
-								<div className="grid grid-cols-[140px_1fr] font-mono text-[11px] overflow-hidden max-[900px]:grid-cols-1">
-									<div className="bg-card border-r border-border p-3 max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:border-border max-[900px]:flex max-[900px]:gap-1 max-[900px]:flex-wrap">
-										<div className="font-mono text-[9px] tracking-[2px] text-muted-foreground/60 uppercase px-3.5 py-1 mb-1 max-[900px]:mb-0">
-											Admin
-										</div>
-										<div className="px-3.5 py-1 text-foreground border-l-2 border-primary">
-											Posts
-										</div>
-										<div className="px-3.5 py-1 text-muted-foreground">
-											Users
-										</div>
-										<div className="px-3.5 py-1 text-muted-foreground">
-											Settings
-										</div>
-										<div className="px-3.5 py-1 text-muted-foreground">
-											Assets
-										</div>
-										<div className="px-3.5 py-1 text-muted-foreground">
-											Audit log
-										</div>
-									</div>
-									<div className="flex flex-col">
-										<div className="flex justify-between items-center px-3 py-2 border-b border-border">
-											<span className="font-bold text-foreground">Posts</span>
-											<div className="flex gap-1">
-												<span className="text-[9px] px-1.5 py-0.5 bg-primary text-white opacity-80">
-													EN
-												</span>
-												<span className="text-[9px] px-1.5 py-0.5 border border-border text-muted-foreground">
-													SK
-												</span>
-											</div>
-										</div>
-										<table className="w-full border-collapse text-[11px]">
-											<thead>
-												<tr>
-													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">
-														Title
-													</th>
-													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">
-														Status
-													</th>
-													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">
-														Author
-													</th>
-													<th className="bg-card text-muted-foreground text-[9px] uppercase tracking-[1.5px] font-medium px-2.5 py-1.5 text-left border-b border-border">
-														Date
-													</th>
-												</tr>
-											</thead>
-											<tbody>
-												<tr>
-													<td className="px-2.5 py-1.5 border-b border-border text-foreground">
-														Getting Started Guide
-													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-[#00E676] text-[9px] tracking-wide">
-														PUBLISHED
-													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
-														admin
-													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
-														Mar 6
-													</td>
-												</tr>
-												<tr>
-													<td className="px-2.5 py-1.5 border-b border-border text-foreground">
-														Adapter Architecture
-													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-[#FFB300] text-[9px] tracking-wide">
-														DRAFT
-													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
-														admin
-													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
-														Mar 5
-													</td>
-												</tr>
-												<tr>
-													<td className="px-2.5 py-1.5 border-b border-border text-foreground">
-														File Conventions Deep Dive
-													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-[#00E676] text-[9px] tracking-wide">
-														PUBLISHED
-													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
-														admin
-													</td>
-													<td className="px-2.5 py-1.5 border-b border-border text-muted-foreground">
-														Mar 3
-													</td>
-												</tr>
-												<tr>
-													<td className="px-2.5 py-1.5 border-b-0 text-foreground">
-														Block System Overview
-													</td>
-													<td className="px-2.5 py-1.5 border-b-0 text-[#FFB300] text-[9px] tracking-wide">
-														DRAFT
-													</td>
-													<td className="px-2.5 py-1.5 border-b-0 text-muted-foreground">
-														admin
-													</td>
-													<td className="px-2.5 py-1.5 border-b-0 text-muted-foreground">
-														Mar 1
-													</td>
-												</tr>
-											</tbody>
-										</table>
-									</div>
-								</div>
-							</TwoColRight>
-						</TwoCol>
-					</Lmw>
-				</section>
-			</Reveal>
-
-			{/* ─── §6 TYPE SAFETY ─── */}
-			<Reveal>
-				<section>
-					<Lmw>
-						<SectionBar
-							num="05"
-							label="End-to-end types"
-							title="Schema to screen. Zero disconnect."
-						/>
-						<div className="flex items-center flex-wrap gap-0 p-6 border-b border-border overflow-x-auto max-sm:p-4">
-							{[
-								"Field def",
-								"Codegen",
-								"Drizzle table",
-								"Zod schema",
-								"Client SDK",
-								"React",
-							].map((step, i) => (
-								<>
-									{i > 0 && (
-										<span
-											key={`a-${step}`}
-											className="text-primary px-0.5 text-base"
-										>
-											&rarr;
-										</span>
-									)}
-									<div
-										key={step}
-										className="font-mono py-2 px-3.5 bg-card border border-border text-[11px] text-foreground max-sm:text-[10px] max-sm:py-1.5 max-sm:px-2.5"
-									>
-										{step}
-									</div>
-								</>
-							))}
-						</div>
-						<div className="bg-background font-mono text-xs leading-relaxed text-muted-foreground border-b border-border">
-							<pre className="px-5 py-4">
-								<span className="text-primary font-semibold">const</span>
-								{` { docs } = `}
-								<span className="text-primary font-semibold">await</span>
-								{` client.collections.posts.`}
-								<span className="text-[var(--syntax-function)]">find</span>
-								{`({
-  where: { status: { eq: `}
-								<span className="text-[var(--syntax-string)]">"published"</span>
-								{` } },
-  orderBy: { createdAt: `}
-								<span className="text-[var(--syntax-string)]">"desc"</span>
-								{` },
-  with: { author: `}
-								<span className="text-primary font-semibold">true</span>
-								{`, tags: `}
-								<span className="text-primary font-semibold">true</span>
-								{` },
-  locale: `}
-								<span className="text-[var(--syntax-string)]">"sk"</span>
-								{`,
-});
-`}
-								<span className="text-muted-foreground/60">
-									{"// docs[0].title → string"}
-								</span>
-								{`
-`}
-								<span className="text-muted-foreground/60">
-									{"// docs[0].author → User"}
-								</span>
-								{`
-`}
-								<span className="text-muted-foreground/60">
-									{"// docs[0].tags → Tag[]"}
-								</span>
-								{`
-`}
-								<span className="text-muted-foreground/60">
-									{"// Change a field — TypeScript catches it everywhere."}
-								</span>
-							</pre>
-						</div>
-					</Lmw>
-				</section>
-			</Reveal>
-
-			{/* ─── §7 MODULES ─── */}
-			<Reveal>
-				<section>
-					<Lmw>
-						<SectionBar
-							num="06"
-							label="Composable"
-							title="Core parts = user code."
-						/>
-						<div className="grid gap-px bg-border grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
-							{[
-								[
-									"01",
-									"questpie-starter",
-									"Auth, users, sessions, API keys, assets. Better Auth integration. Default access. i18n messages.",
-								],
-								[
-									"02",
-									"questpie-admin",
-									"Admin UI. 18 field renderers, 3 view types, sidebar, dashboard widgets. Table, form, block editor.",
-								],
-								[
-									"03",
-									"questpie-audit",
-									"Change logging via global hooks. Every create, update, delete tracked. Zero config required.",
-								],
-								[
-									"04",
-									"questpie-workflows",
-									"Durable workflows. Replay-based engine, step primitives, events, cron, compensation. Admin UI included.",
-								],
-								[
-									"05",
-									"Your module",
-									"Same file conventions, same patterns. Build your own module. Publish to npm. No special APIs.",
-								],
-							].map(([idx, title, desc]) => (
-								<div
-									key={idx}
-									className="bg-background p-5 transition-[outline-color] hover:outline hover:outline-1 hover:outline-primary hover:-outline-offset-1 hover:z-[2] hover:relative"
-								>
-									<div className="font-mono text-[10px] tracking-[3px] text-primary mb-1.5">
-										{idx}
-									</div>
-									<div className="font-mono text-[13px] font-bold text-foreground mb-1">
-										{title}
-									</div>
-									<div className="text-xs text-muted-foreground leading-normal">
-										{desc}
-									</div>
-								</div>
-							))}
-						</div>
-						<div className="px-5 py-3 text-[11px] text-muted-foreground border-b border-border">
-							Modules compose depth-first with deduplication. Every module uses
-							the exact same conventions as user code.
-						</div>
-					</Lmw>
-				</section>
-			</Reveal>
-
-			{/* ─── §8 DX ─── */}
-			<Reveal>
-				<section>
-					<Lmw>
-						<SectionBar
-							num="07"
-							label="Developer experience"
-							title="The details matter."
-						/>
-						<div className="grid gap-px bg-border grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
-							<div className="bg-background p-5 transition-[outline-color] hover:outline hover:outline-1 hover:outline-primary hover:-outline-offset-1 hover:z-[2] hover:relative">
-								<div className="font-mono text-[10px] tracking-[3px] text-primary mb-1.5">
-									WATCH
-								</div>
-								<div className="bg-background font-mono text-[11px] leading-[1.8] px-4 py-3 whitespace-pre text-muted-foreground my-2">
-									<span className="text-primary">$</span> questpie dev{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
-									Watching...{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
-									server (23 collections)
-									{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
-									admin-client (15 blocks)
-								</div>
-								<div className="text-xs text-muted-foreground leading-normal">
-									Instant regeneration on file changes.
-								</div>
-							</div>
-							<div className="bg-background p-5 transition-[outline-color] hover:outline hover:outline-1 hover:outline-primary hover:-outline-offset-1 hover:z-[2] hover:relative">
-								<div className="font-mono text-[10px] tracking-[3px] text-primary mb-1.5">
-									SCAFFOLD
-								</div>
-								<div className="bg-background font-mono text-[11px] leading-[1.8] px-4 py-3 whitespace-pre text-muted-foreground my-2">
-									<span className="text-primary">$</span> questpie add
-									collection products
-									{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
-									Created collections/products.ts{"\n"}
-									<span className="text-[var(--syntax-string)]">&#10003;</span>{" "}
-									Regenerated types
-								</div>
-								<div className="text-xs text-muted-foreground leading-normal">
-									One command. Typed immediately.
-								</div>
-							</div>
-							<div className="bg-background p-5 transition-[outline-color] hover:outline hover:outline-1 hover:outline-primary hover:-outline-offset-1 hover:z-[2] hover:relative">
-								<div className="font-mono text-[10px] tracking-[3px] text-primary mb-1.5">
-									VALIDATE
-								</div>
-								<div className="bg-background font-mono text-[11px] leading-[1.8] px-4 py-3 whitespace-pre text-muted-foreground my-2">
-									<span className="text-destructive">
-										&#10007; Server defines blocks/hero
-									</span>
-									{"\n"}
-									<span className="text-destructive">
-										&nbsp; but no renderer found
-									</span>
-									{"\n"}
-									<span className="text-primary">
-										&rarr; Create admin/blocks/hero.tsx
-									</span>
-								</div>
-								<div className="text-xs text-muted-foreground leading-normal">
-									Mismatch = build error. Not runtime surprise.
-								</div>
-							</div>
-							<div className="bg-background p-5 transition-[outline-color] hover:outline hover:outline-1 hover:outline-primary hover:-outline-offset-1 hover:z-[2] hover:relative">
-								<div className="font-mono text-[10px] tracking-[3px] text-primary mb-1.5">
-									REALTIME
-								</div>
-								<div
-									className="bg-background font-mono text-xs leading-relaxed text-muted-foreground my-2"
-									style={{ padding: "10px 14px", fontSize: 11 }}
-								>
-									<pre>
-										{`client.realtime.`}
-										<span className="text-[var(--syntax-function)]">
-											subscribe
-										</span>
-										{`(
-  { resource: `}
-										<span className="text-[var(--syntax-string)]">"posts"</span>
-										{` },
-  (event) => `}
-										<span className="text-[var(--syntax-function)]">
-											updateUI
-										</span>
-										{`(event)
-);`}
-									</pre>
-								</div>
-								<div className="text-xs text-muted-foreground leading-normal">
-									SSE multiplexer. PG NOTIFY. Auto-reconnect.
-								</div>
-							</div>
-						</div>
-					</Lmw>
-				</section>
-			</Reveal>
-
-			{/* ─── §9 CTA ─── */}
-			<section className="border-y border-border">
-				<div className="grid grid-cols-[1fr_auto] max-w-[1200px] mx-auto border-x border-border max-[900px]:grid-cols-1">
-					<div className="py-10 px-6 border-r border-border max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:border-border">
-						<h2 className="font-mono text-[clamp(20px,3vw,28px)] font-extrabold text-foreground tracking-tight">
-							One backend. Ship everywhere.
-						</h2>
-						<div className="font-mono mt-3 text-sm text-primary">
-							npx create-questpie
-						</div>
-					</div>
-					<div className="p-6 flex flex-col gap-px justify-center">
-						<Link
-							to="/docs/$"
-							params={{ _splat: "start-here/first-app" }}
-							className="font-mono px-5 py-2.5 bg-primary border border-primary text-white text-[11px] uppercase tracking-wider text-center block transition-colors hover:bg-primary/80"
-						>
-							Read the docs &rarr;
-						</Link>
-						<Link
-							to="/docs/$"
-							params={{ _splat: "examples" }}
-							className="font-mono px-5 py-2.5 bg-background border border-border text-foreground text-[11px] uppercase tracking-wider text-center block transition-colors hover:border-primary hover:text-primary"
-						>
-							Browse examples &rarr;
-						</Link>
-						<a
-							href="https://github.com/questpie/questpie"
-							target="_blank"
-							rel="noreferrer"
-							className="font-mono px-5 py-2.5 bg-background border border-border text-foreground text-[11px] uppercase tracking-wider text-center block transition-colors hover:border-primary hover:text-primary"
-						>
-							Star on GitHub &#9733;
-						</a>
-					</div>
-				</div>
-			</section>
+			</main>
 
 			<LandingFooter />
 		</div>

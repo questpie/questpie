@@ -9,8 +9,11 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
 import type { BlockCategoryConfig } from "#questpie/admin/server/augmentation.js";
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
+
+import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import { Input } from "../ui/input.js";
 import {
@@ -55,6 +58,7 @@ export function BlockLibrarySidebar({
 	open,
 	onClose,
 }: BlockLibrarySidebarProps) {
+	const { t } = useTranslation();
 	const actions = useBlockEditorActions();
 	const blockRegistry = useBlockRegistry();
 	const allowedBlocks = useAllowedBlockTypes();
@@ -67,7 +71,7 @@ export function BlockLibrarySidebar({
 
 		// Default uncategorized category
 		const uncategorizedConfig: BlockCategoryConfig = {
-			label: { en: "Other" },
+			label: { key: "blocks.uncategorized", fallback: "Other" },
 			order: 999,
 		};
 
@@ -110,17 +114,12 @@ export function BlockLibrarySidebar({
 
 		// Convert to array and sort
 		const result = Array.from(categoryMap.values());
-
-		// Sort categories by order
 		result.sort((a, b) => (a.config.order ?? 999) - (b.config.order ?? 999));
-
-		// Sort blocks within each category by order
 		for (const category of result) {
 			category.blocks.sort(
 				(a, b) => (a.admin?.order ?? 999) - (b.admin?.order ?? 999),
 			);
 		}
-
 		return result;
 	}, [blockRegistry, allowedBlocks, search]);
 
@@ -151,13 +150,11 @@ export function BlockLibrarySidebar({
 		>
 			<SheetContent
 				side="left"
-				className="qa-block-library w-full sm:max-w-md flex flex-col"
+				className="qa-block-library flex w-full flex-col sm:max-w-md"
 			>
 				<SheetHeader className="space-y-2">
-					<SheetTitle>Add Block</SheetTitle>
-					<SheetDescription>
-						Select a block type to add to your content
-					</SheetDescription>
+					<SheetTitle>{t("blocks.add")}</SheetTitle>
+					<SheetDescription>{t("blocks.libraryDescription")}</SheetDescription>
 				</SheetHeader>
 
 				{/* Search */}
@@ -165,11 +162,11 @@ export function BlockLibrarySidebar({
 					<div className="relative">
 						<Icon
 							icon="ph:magnifying-glass"
-							className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+							className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
 						/>
 						<Input
 							ref={searchInputRef}
-							placeholder="Search blocks..."
+							placeholder={t("blocks.searchPlaceholder")}
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
 							className="pl-9"
@@ -183,12 +180,14 @@ export function BlockLibrarySidebar({
 						<div className="flex flex-col items-center justify-center py-12 text-center">
 							<Icon
 								icon="ph:cube"
-								className="h-12 w-12 text-muted-foreground/50 mb-4"
+								className="text-muted-foreground/50 mb-4 h-12 w-12"
 							/>
-							<p className="text-sm text-muted-foreground">No blocks found</p>
+							<p className="text-muted-foreground text-sm">
+								{t("blocks.noSearchResults")}
+							</p>
 							{search && (
-								<p className="text-xs text-muted-foreground mt-1">
-									Try a different search term
+								<p className="text-muted-foreground mt-1 text-xs">
+									{t("blocks.tryDifferentSearch")}
 								</p>
 							)}
 						</div>
@@ -201,10 +200,10 @@ export function BlockLibrarySidebar({
 										{category.config.icon && (
 											<Icon
 												icon={category.config.icon.props.name as string}
-												className="h-4 w-4 text-muted-foreground"
+												className="text-muted-foreground h-4 w-4"
 											/>
 										)}
-										<h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+										<h4 className="text-muted-foreground font-chrome chrome-meta text-xs font-semibold">
 											{getCategoryDisplayLabel(category.config)}
 										</h4>
 									</div>
@@ -216,9 +215,9 @@ export function BlockLibrarySidebar({
 												type="button"
 												key={block.name}
 												className={cn(
-													"flex flex-col items-start gap-2 rounded-md border p-3 text-left",
-													"transition-colors hover:border-primary hover:bg-accent",
-													"focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+													"panel-surface flex flex-col items-start gap-2 p-3 text-left",
+													"hover:border-border hover:bg-accent transition-colors",
+													"focus-visible:ring-ring/25 focus:outline-none focus-visible:ring-3",
 												)}
 												onClick={() => handleSelectBlock(block.name)}
 											>
@@ -228,11 +227,11 @@ export function BlockLibrarySidebar({
 													className="text-muted-foreground"
 												/>
 												<div className="min-w-0">
-													<p className="text-sm font-medium truncate">
+													<p className="truncate text-sm font-medium">
 														{getBlockDisplayLabel(block)}
 													</p>
 													{block.admin?.description && (
-														<p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+														<p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
 															{getDescriptionText(block.admin.description)}
 														</p>
 													)}
@@ -303,7 +302,7 @@ function getCategoryDisplayLabel(config: BlockCategoryConfig): string {
 	}
 
 	// I18nLocaleMap
-	return label.en || Object.values(label)[0] || "Other";
+	return label.en || Object.values(label)[0] || "Uncategorized";
 }
 
 function getDescriptionText(description: I18nText | undefined): string {

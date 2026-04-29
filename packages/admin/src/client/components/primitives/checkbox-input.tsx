@@ -100,7 +100,7 @@ function CheckboxGroup<TValue extends string = string>({
 						className={cn(
 							"flex items-center gap-2",
 							option.disabled || disabled
-								? "opacity-50 cursor-not-allowed"
+								? "cursor-not-allowed opacity-50"
 								: "cursor-pointer",
 						)}
 					>
@@ -110,7 +110,7 @@ function CheckboxGroup<TValue extends string = string>({
 							onChange={(checked) => handleChange(option.value, checked)}
 							disabled={option.disabled || disabled}
 						/>
-						<label htmlFor={optionId} className="text-sm cursor-pointer">
+						<label htmlFor={optionId} className="cursor-pointer text-sm">
 							{resolveText(option.label)}
 						</label>
 					</div>
@@ -169,7 +169,7 @@ function RadioGroup<TValue extends string = string>({
 						className={cn(
 							"flex items-center gap-2",
 							option.disabled || disabled
-								? "opacity-50 cursor-not-allowed"
+								? "cursor-not-allowed opacity-50"
 								: "cursor-pointer",
 						)}
 					>
@@ -181,11 +181,11 @@ function RadioGroup<TValue extends string = string>({
 							onChange={() => onChange(option.value)}
 							disabled={option.disabled || disabled}
 							className={cn(
-								"size-4 shrink-0 accent-primary",
+								"accent-foreground size-4 shrink-0",
 								"disabled:cursor-not-allowed disabled:opacity-50",
 							)}
 						/>
-						<label htmlFor={optionId} className="text-sm cursor-pointer">
+						<label htmlFor={optionId} className="cursor-pointer text-sm">
 							{resolveText(option.label)}
 						</label>
 					</div>

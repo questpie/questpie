@@ -6,7 +6,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
+
 import { sql } from "drizzle-orm";
+
 import type {
 	CollectionInsert,
 	CollectionSelect,

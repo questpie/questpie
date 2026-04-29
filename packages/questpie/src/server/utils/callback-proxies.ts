@@ -14,7 +14,10 @@
  * Used as the `f` callback param: `f.title` → `"title"`.
  */
 export function createFieldNameProxy(): Record<string, string> {
-	return new Proxy({}, {
-		get: (_: unknown, prop: string | symbol) => String(prop),
-	}) as Record<string, string>;
+	return new Proxy(
+		{},
+		{
+			get: (_: unknown, prop: string | symbol) => String(prop),
+		},
+	) as Record<string, string>;
 }

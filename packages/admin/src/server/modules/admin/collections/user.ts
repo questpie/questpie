@@ -12,6 +12,7 @@
  */
 
 import { starterModule } from "questpie";
+
 import { collection } from "../factories";
 
 const adminUserCollection = collection("user")
@@ -24,12 +25,11 @@ const adminUserCollection = collection("user")
 	}))
 	.list(({ v, f, a }) =>
 		v.collectionTable({
-			columns: [f.name, f.email, f.role, f.banned],
+			columns: [f.avatar, f.name, f.email, f.role, f.banned],
 			searchable: [f.name, f.email],
 			defaultSort: { field: f.name, direction: "asc" },
 			actions: {
 				header: { primary: [], secondary: [] },
-				row: [a.delete],
 				bulk: [a.deleteMany],
 			},
 		}),
@@ -38,7 +38,7 @@ const adminUserCollection = collection("user")
 		v.collectionForm({
 			sidebar: {
 				position: "right",
-				fields: [f.image, f.role, f.emailVerified],
+				fields: [f.avatar, f.role, f.emailVerified],
 			},
 			fields: [
 				{
@@ -106,18 +106,51 @@ const adminUserCollection = collection("user")
 						name: f
 							.text()
 							.label({ key: "defaults.users.fields.name.label" })
-							.required(),
+							.description({
+								en: "Shown in the admin panel and account profile.",
+								sk: "Zobrazí sa v administrácii a profile účtu.",
+							})
+							.required()
+							.set("admin", {
+								placeholder: {
+									key: "defaults.users.fields.name.placeholder",
+									fallback: "Enter the user's full name",
+								},
+								autoComplete: "name",
+							}),
 						email: f
 							.email()
 							.label({ key: "defaults.users.fields.email.label" })
-							.required(),
+							.description({
+								en: "The address this user will use to sign in.",
+								sk: "Adresa, ktorú bude používateľ používať na prihlásenie.",
+							})
+							.required()
+							.set("admin", {
+								placeholder: {
+									en: "name@example.com",
+									sk: "meno@example.com",
+								},
+								autoComplete: "email",
+							}),
 						password: f
 							.text()
 							.label({
 								key: "defaults.users.actions.createUser.fields.password.label",
 							})
+							.description({
+								en: "Share this password securely with the new user.",
+								sk: "Toto heslo bezpečne odovzdajte novému používateľovi.",
+							})
 							.required()
-							.admin({ type: "password", autoComplete: "new-password" }),
+							.set("admin", {
+								type: "password",
+								autoComplete: "new-password",
+								placeholder: {
+									key: "defaults.users.actions.createUser.fields.password.placeholder",
+									fallback: "Enter a temporary password",
+								},
+							}),
 						role: f
 							.select([
 								{
@@ -132,7 +165,17 @@ const adminUserCollection = collection("user")
 								},
 							])
 							.label({ key: "defaults.users.fields.role.label" })
-							.default("user"),
+							.description({
+								en: "Admins can manage the whole admin area; users have limited access.",
+								sk: "Administrátori môžu spravovať celú administráciu; používatelia majú obmedzený prístup.",
+							})
+							.default("user")
+							.set("admin", {
+								placeholder: {
+									en: "Select a role",
+									sk: "Vyberte rolu",
+								},
+							}),
 					},
 				},
 				handler: async ({ data, auth, session }: any) => {
@@ -206,14 +249,14 @@ const adminUserCollection = collection("user")
 								key: "defaults.users.actions.resetPassword.fields.newPassword.label",
 							})
 							.required()
-							.admin({ type: "password", autoComplete: "new-password" }),
+							.set("admin", { type: "password", autoComplete: "new-password" }),
 						confirmPassword: f
 							.text()
 							.label({
 								key: "defaults.users.actions.resetPassword.fields.confirmPassword.label",
 							})
 							.required()
-							.admin({ type: "password", autoComplete: "new-password" }),
+							.set("admin", { type: "password", autoComplete: "new-password" }),
 					},
 				},
 				handler: async ({ data, itemId, auth, session }: any) => {

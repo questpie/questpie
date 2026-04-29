@@ -13,9 +13,6 @@
  * ```
  */
 
-// Side-effect: patch Field.prototype with .admin() method
-import "../server/field-patch.js";
-
 // Framework adapters
 export * from "../server/adapters/index.js";
 // Export augmentation types for external use
@@ -26,6 +23,7 @@ export type {
 	AdminBlockConfig,
 	AdminCollectionConfig,
 	AdminConfigContext,
+	AdminConfigInput,
 	AdminGlobalConfig,
 	AdminLocaleConfig,
 	BlockCategoryConfig,
@@ -207,6 +205,8 @@ export {
 } from "../server/modules/audit/index.js";
 // Codegen plugin — register in questpie.config.ts
 export { adminPlugin } from "../server/plugin.js";
+// Admin config factory (runtime identity function for typed admin config)
+export { adminConfig } from "../server/augmentation.js";
 // Proxy factories (runtime helpers for admin config callbacks)
 export {
 	createActionCallbackProxy,

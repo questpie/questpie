@@ -6,7 +6,7 @@ import type { BlockProps } from "../.generated/client";
 
 export function AnnouncementBannerRenderer({
 	data,
-}: BlockProps<"announcementBanner">) {
+}: BlockProps<"announcement-banner">) {
 	const announcements = (data as any)?.announcements || [];
 
 	if (announcements.length === 0) return null;
@@ -22,17 +22,17 @@ export function AnnouncementBannerRenderer({
 	};
 
 	return (
-		<section className="py-4 px-6">
+		<section className="px-6 py-4">
 			<div className="container mx-auto space-y-2">
 				{announcements.map((announcement: any) => (
 					<div
 						key={announcement.id}
-						className={`flex items-center gap-3 px-4 py-3 rounded-md border text-sm ${
+						className={`flex items-center gap-3 rounded-md border px-4 py-3 text-sm ${
 							categoryStyles[announcement.category] || categoryStyles.notice
 						}`}
 					>
 						{announcement.isPinned && (
-							<span className="font-bold text-xs uppercase">Pinned</span>
+							<span className="text-xs font-bold uppercase">Pinned</span>
 						)}
 						<span className="font-medium">{announcement.title}</span>
 						{announcement.validTo && (

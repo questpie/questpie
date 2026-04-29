@@ -5,7 +5,7 @@
  * with updated type state via intersections.
  *
  * ```ts
- * f.text(255).required().label({ en: "Name" }).admin({ placeholder: "..." })
+ * f.text(255).required().label({ en: "Name" })
  * ```
  *
  * Type state grows monotonically:
@@ -18,7 +18,9 @@ import type { SQL } from "drizzle-orm";
 import type { HasDefault, NotNull } from "drizzle-orm/column-builder";
 import { jsonb } from "drizzle-orm/pg-core";
 import { type ZodType, z } from "zod";
+
 import type { I18nText } from "#questpie/shared/i18n/types.js";
+
 import { buildZodFromState } from "./derive-schema.js";
 import type {
 	ArrayFieldState,
@@ -197,11 +199,24 @@ export class Field<TState extends FieldState = FieldState> {
 	/**
 	 * Escape hatch: modify the underlying Drizzle column builder.
 	 * The transform receives the column builder and returns a (possibly different) one.
+	 *
+	 * If the returned column has a narrower `$type<T>()`, it propagates to
+	 * the field's `data` type. A column whose `_.data` is still `unknown`
+	 * leaves the field's existing `data` in place.
 	 */
 	drizzle<TNewCol>(
 		fn: (col: TState["column"]) => TNewCol,
-	): Field<TState & { column: TNewCol }> {
-		return this._clone<{ column: TNewCol }>({ drizzleTransform: fn as any });
+	): Field<
+		Omit<TState, "column" | "data"> & {
+			column: TNewCol;
+			data: TNewCol extends { _: { data: infer D } }
+				? unknown extends D
+					? TState["data"]
+					: D
+				: TState["data"];
+		}
+	> {
+		return this._clone({ drizzleTransform: fn as any }) as any;
 	}
 
 	/**
@@ -223,16 +238,47 @@ export class Field<TState extends FieldState = FieldState> {
 	}
 
 	// ========================================================================
+	// Public Derive — for fieldType() methods
+	// ========================================================================
+
+	/**
+	 * Create a new Field with additional state, restricted to safe properties.
+	 * Used by `fieldType().methods` to modify field state without accessing
+	 * identity properties (type, columnFactory, schemaFactory, operatorSet, etc.).
+	 *
+	 * @param extra - Partial state to merge (identity properties are omitted)
+	 */
+	derive(
+		extra: Omit<
+			Partial<FieldRuntimeState>,
+			| "type"
+			| "columnFactory"
+			| "schemaFactory"
+			| "operatorSet"
+			| "innerField"
+			| "isArray"
+			| "virtual"
+		>,
+	): Field<TState> {
+		return new Field({ ...this._state, ...extra }) as unknown as Field<TState>;
+	}
+
+	// ========================================================================
 	// Builder Methods — Plugin Extensions
 	// ========================================================================
 
 	/**
-	 * Set admin-specific configuration for this field.
-	 * Added at runtime by @questpie/admin via prototype patching.
+	 * Generic extension setter for plugin-contributed state.
+	 * Used by codegen-generated extension proxies (e.g. `.admin()`, `.form()`).
+	 *
+	 * @param key - Extension key (e.g. "admin", "form")
+	 * @param value - Extension value
 	 */
-	admin(opts: unknown): Field<TState> {
-		// Runtime implementation is patched in by @questpie/admin/server
-		return this._clone<{}>({ admin: opts });
+	set<TKey extends string>(key: TKey, value: unknown): Field<TState> {
+		return new Field({
+			...this._state,
+			extensions: { ...this._state.extensions, [key]: value },
+		}) as unknown as Field<TState>;
 	}
 
 	// ========================================================================
@@ -248,96 +294,6 @@ export class Field<TState extends FieldState = FieldState> {
 	maxItems(n: number): Field<TState> {
 		return this._clone<{}>({ maxItems: n });
 	}
-
-	// ========================================================================
-	// Builder Methods — Field-Specific Chain Methods
-	// ========================================================================
-	// These are implemented on the prototype by each builtin factory file.
-	// Declared here so the types survive tsdown's .mjs output (module
-	// augmentation with relative paths doesn't work across .js → .mjs).
-
-	// -- Text fields (text.ts) --
-	/** Set regex pattern (text fields). */
-	declare pattern: (re: RegExp) => Field<TState>;
-	/** Trim whitespace (text fields). */
-	declare trim: () => Field<TState>;
-	/** Convert to lowercase (text fields). */
-	declare lowercase: () => Field<TState>;
-	/** Convert to uppercase (text fields). */
-	declare uppercase: () => Field<TState>;
-
-	// -- Number fields (number.ts) --
-	/** Set minimum value (number fields). */
-	declare min: (n: number) => Field<TState>;
-	/** Set maximum value (number fields). */
-	declare max: (n: number) => Field<TState>;
-	/** Require positive value (number fields). */
-	declare positive: () => Field<TState>;
-	/** Require integer value (number fields). */
-	declare int: () => Field<TState>;
-	/** Set step increment (number fields). */
-	declare step: (n: number) => Field<TState>;
-
-	// -- Select fields (select.ts) --
-	/** Use PostgreSQL enum type for storage. */
-	declare enum: (enumName: string) => Field<TState>;
-
-	// -- Relation fields (relation.ts) --
-	/** Convert to hasMany relation (FK on target table). */
-	declare hasMany: (config: {
-		foreignKey: string;
-		onDelete?: ReferentialAction;
-		relationName?: string;
-	}) => Field<
-		Omit<TState, "virtual" | "column" | "operators" | "relationKind"> & {
-			virtual: true;
-			column: null;
-			operators: typeof import("./operators/builtin.js").toManyOps;
-			relationKind: "many";
-		}
-	>;
-	/** Convert to manyToMany relation (junction table). */
-	declare manyToMany: (config: {
-		through: string | (() => { name: string });
-		sourceField?: string;
-		targetField?: string;
-		relationName?: string;
-	}) => Field<
-		Omit<TState, "virtual" | "column" | "operators" | "relationKind"> & {
-			virtual: true;
-			column: null;
-			operators: typeof import("./operators/builtin.js").toManyOps;
-			relationKind: "many";
-		}
-	>;
-	/** Convert to multiple relation (jsonb array of FKs). */
-	declare multiple: () => Field<
-		Omit<TState, "operators" | "data"> & {
-			operators: typeof import("./operators/builtin.js").multipleOps;
-			data: string[];
-		}
-	>;
-	/** Set onDelete action. */
-	declare onDelete: (action: ReferentialAction) => Field<TState>;
-	/** Set onUpdate action. */
-	declare onUpdate: (action: ReferentialAction) => Field<TState>;
-	/** Set relation name (for disambiguation). */
-	declare relationName: (name: string) => Field<TState>;
-
-	// -- Date fields (date.ts) --
-	/** Auto-set to current date/time on create. */
-	declare autoNow: () => Field<
-		Omit<TState, "hasDefault" | "column"> & {
-			hasDefault: true;
-			column: HasDefault<TState["column"]>;
-		}
-	>;
-	/** Auto-update to current date/time on every update. */
-	declare autoNowUpdate: () => Field<TState>;
-
-	// -- Custom fields (from.ts) --
-	/** Set the field type string (for admin UI mapping). */
-	declare type: (typeName: string) => Field<TState>;
 
 	// ========================================================================
 	// Public Runtime Accessors
@@ -453,7 +409,7 @@ export class Field<TState extends FieldState = FieldState> {
 			readOnly: s.input === false ? true : undefined,
 			writeOnly: s.output === false ? true : undefined,
 			validation: this._buildValidation(),
-			meta: s.admin as any,
+			meta: s.extensions?.admin as any,
 		};
 
 		return base;

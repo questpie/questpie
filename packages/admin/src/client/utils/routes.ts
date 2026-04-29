@@ -6,6 +6,7 @@
  */
 
 import type { QuestpieApp } from "questpie/client";
+
 import type { CollectionNames, GlobalNames, PageDefinition } from "../builder";
 import type { Admin } from "../builder/admin";
 
@@ -152,7 +153,7 @@ export function createAdminRoutes<TApp extends QuestpieApp>(
 	const pageConfigByPath: Record<string, PageDefinition<string>> = {};
 
 	for (const [id, config] of Object.entries(pagesConfig)) {
-		const configPath = (config as any).path ?? id;
+		const configPath = config.path ?? id;
 		const pagePath = configPath.startsWith("/")
 			? configPath.slice(1)
 			: configPath;

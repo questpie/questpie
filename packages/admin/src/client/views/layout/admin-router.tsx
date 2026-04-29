@@ -14,19 +14,32 @@
  */
 
 import { Icon } from "@iconify/react";
+import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
+
 import type { PageDefinition } from "../../builder/page/page.js";
 import type { MaybeLazyComponent } from "../../builder/types/common.js";
 import type { ComponentRegistry } from "../../builder/types/field-types.js";
 import type { DashboardConfig } from "../../builder/types/ui-config.js";
+import { Button } from "../../components/ui/button.js";
 import { Card } from "../../components/ui/card.js";
 import { Skeleton } from "../../components/ui/skeleton.js";
 import { useSuspenseAdminConfig } from "../../hooks/use-admin-config";
+import { getCollectionMetaQueryOptions } from "../../hooks/use-collection-meta";
 import { useCollectionSchema } from "../../hooks/use-collection-schema";
+import { getGlobalMetaQueryOptions } from "../../hooks/use-global-meta";
 import { useGlobalSchema } from "../../hooks/use-global-schema";
 import { parsePrefillParams } from "../../hooks/use-prefill-params";
-import { useAdminStore } from "../../runtime/provider";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
+import type { I18nText } from "../../i18n/types";
+import { formatLabel } from "../../lib/utils";
+import { selectClient, useAdminStore } from "../../runtime/provider";
+import {
+	FormViewSkeleton,
+	TableViewSkeleton,
+} from "../collection/view-skeletons";
 import { DashboardGrid } from "../dashboard/dashboard-grid";
+import { AdminViewHeader } from "./admin-view-layout";
 
 // ============================================================================
 // Constants
@@ -35,6 +48,17 @@ import { DashboardGrid } from "../dashboard/dashboard-grid";
 // Module-level constants for empty objects to avoid recreating on each render
 const EMPTY_COLLECTION_COMPONENTS: Record<string, any> = {};
 const EMPTY_GLOBAL_COMPONENTS: Record<string, any> = {};
+const AUTH_ROUTE_SEGMENTS = new Set([
+	"login",
+	"forgot-password",
+	"reset-password",
+	"accept-invite",
+	"setup",
+]);
+const componentLoaderCache = new WeakMap<
+	() => Promise<any>,
+	React.ComponentType<any>
+>();
 
 // ============================================================================
 // Types
@@ -148,6 +172,7 @@ interface RouterConfig {
 	globals: Record<string, GlobalRouterConfig>;
 	pages: Record<string, PageDefinition<string>>;
 	views: Record<string, any>;
+	brandingName?: I18nText;
 	dashboardConfig?: DashboardConfig;
 	DashboardComponent?: React.ComponentType;
 }
@@ -213,6 +238,7 @@ function useRouterConfig(props: {
 		globals: serverGlobals,
 		pages: props.pages ?? storePages,
 		views: storeViews,
+		brandingName: serverConfig?.branding?.name,
 		dashboardConfig: mergedDashboard,
 		DashboardComponent: props.DashboardComponent,
 	};
@@ -269,6 +295,32 @@ function matchRoute(
 	}
 
 	return { type: "not-found" };
+}
+
+function formatDocumentTitle(pageTitle: string, appTitle: string): string {
+	const title = pageTitle.trim();
+	const app = appTitle.trim() || "Admin";
+
+	if (!title || title === app) return app;
+	return `${title} | ${app}`;
+}
+
+function setDocumentMetaDescription(description: string): void {
+	const content = description.trim();
+	if (!content) return;
+
+	let meta = document.querySelector<HTMLMetaElement>(
+		'meta[name="description"]',
+	);
+
+	if (!meta) {
+		meta = document.createElement("meta");
+		meta.name = "description";
+		meta.setAttribute("data-questpie-admin", "true");
+		document.head.appendChild(meta);
+	}
+
+	meta.content = content;
 }
 
 /**
@@ -350,12 +402,21 @@ function isDynamicImportLoader(
 	return loader.length === 0;
 }
 
-function ViewLoadingState() {
-	return (
-		<div className="flex h-64 items-center justify-center text-muted-foreground">
-			<Icon icon="ph:spinner-gap" className="size-6 animate-spin" />
-		</div>
-	);
+function getCachedComponent(loader: MaybeLazyComponent | undefined) {
+	if (!isDynamicImportLoader(loader)) return undefined;
+	return componentLoaderCache.get(loader);
+}
+
+function cacheComponent(
+	loader: MaybeLazyComponent | undefined,
+	Component: React.ComponentType<any>,
+) {
+	if (!isDynamicImportLoader(loader)) return;
+	componentLoaderCache.set(loader, Component);
+}
+
+function ViewLoadingState({ viewKind }: { viewKind: "list" | "form" }) {
+	return viewKind === "list" ? <TableViewSkeleton /> : <FormViewSkeleton />;
 }
 
 function UnknownViewState({
@@ -365,12 +426,16 @@ function UnknownViewState({
 	viewKind: "list" | "form";
 	viewId: string;
 }) {
+	const { t } = useTranslation();
+
 	return (
-		<div className="container ">
+		<div className="container">
 			<Card className="border-warning/30 bg-warning/5 p-6">
-				<h1 className="text-lg font-semibold">Unknown {viewKind} view</h1>
-				<p className="mt-2 text-sm text-muted-foreground">
-					View "{viewId}" is not registered in the admin view registry.
+				<h1 className="text-lg font-semibold">
+					{t("error.failedToLoadView", { viewType: viewKind })}
+				</h1>
+				<p className="text-muted-foreground mt-2 text-sm">
+					{t("error.unregisteredViewDescription", { viewId })}
 				</p>
 			</Card>
 		</div>
@@ -392,6 +457,57 @@ function RouterSkeleton() {
 			</div>
 		</div>
 	);
+}
+
+function AuthPageSkeleton() {
+	return (
+		<div className="qa-auth-layout bg-background text-foreground relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-8 sm:px-8">
+			<div className="qa-auth-layout__shell grid w-full max-w-4xl items-center gap-10 lg:grid-cols-[minmax(220px,280px)_minmax(360px,384px)] lg:gap-16">
+				<aside className="qa-auth-layout__brand flex flex-col items-center justify-center gap-8">
+					<div className="flex items-center gap-3">
+						<Skeleton className="size-9" />
+						<Skeleton variant="text" className="h-4 w-36" />
+					</div>
+					<Skeleton variant="text" className="hidden h-3 w-40 lg:block" />
+				</aside>
+
+				<main className="qa-auth-layout__form-panel flex items-center justify-center">
+					<Card className="border-border-subtle w-full max-w-sm shadow-none">
+						<div className="space-y-5 p-4">
+							<div className="space-y-2">
+								<Skeleton variant="text" className="h-4 w-20" />
+								<Skeleton className="h-10 w-full" />
+							</div>
+							<div className="space-y-2">
+								<Skeleton variant="text" className="h-4 w-24" />
+								<Skeleton className="h-10 w-full" />
+							</div>
+							<Skeleton variant="text" className="h-4 w-28" />
+							<Skeleton className="h-10 w-full" />
+						</div>
+					</Card>
+				</main>
+			</div>
+		</div>
+	);
+}
+
+function getFallbackForSegments(segments: string[]) {
+	const [first, second, third] = segments;
+
+	if (first && AUTH_ROUTE_SEGMENTS.has(first)) {
+		return <AuthPageSkeleton />;
+	}
+
+	if (first === "collections" && second) {
+		return third ? <FormViewSkeleton /> : <TableViewSkeleton />;
+	}
+
+	if (first === "globals" && second) {
+		return <FormViewSkeleton />;
+	}
+
+	return <RouterSkeleton />;
 }
 
 function shallowEqualComponentProps(
@@ -454,10 +570,13 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 		Component: React.ComponentType<any> | React.LazyExoticComponent<any> | null;
 		loading: boolean;
 		error: Error | null;
-	}>({
-		Component: null,
-		loading: true,
-		error: null,
+	}>(() => {
+		const cachedComponent = getCachedComponent(loader);
+		return {
+			Component: cachedComponent ?? null,
+			loading: !cachedComponent,
+			error: null,
+		};
 	});
 
 	React.useEffect(() => {
@@ -469,6 +588,16 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 		if (!isDynamicImportLoader(loader)) {
 			setState({
 				Component: loader as React.ComponentType<any>,
+				loading: false,
+				error: null,
+			});
+			return;
+		}
+
+		const cachedComponent = getCachedComponent(loader);
+		if (cachedComponent) {
+			setState({
+				Component: cachedComponent,
 				loading: false,
 				error: null,
 			});
@@ -489,6 +618,7 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 				} else {
 					Component = result as unknown as React.ComponentType<any>;
 				}
+				cacheComponent(loader, Component);
 				setState({ Component, loading: false, error: null });
 			} catch (error) {
 				if (!mounted) return;
@@ -512,7 +642,7 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 	}, [loader]);
 
 	if (state.loading) {
-		return <ViewLoadingState />;
+		return <ViewLoadingState viewKind={viewKind} />;
 	}
 
 	if (state.error || !state.Component) {
@@ -522,7 +652,7 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 	const Component = state.Component;
 
 	return (
-		<React.Suspense fallback={<ViewLoadingState />}>
+		<React.Suspense fallback={<ViewLoadingState viewKind={viewKind} />}>
 			<Component {...componentProps} />
 		</React.Suspense>
 	);
@@ -533,7 +663,8 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 // ============================================================================
 
 function DefaultDashboard() {
-	const date = new Date().toLocaleDateString("en-US", {
+	const { t, formatDate } = useTranslation();
+	const date = formatDate(new Date(), {
 		weekday: "long",
 		year: "numeric",
 		month: "long",
@@ -541,29 +672,27 @@ function DefaultDashboard() {
 	});
 
 	return (
-		<div className="qa-default-dashboard container ">
-			<div className="mb-8 flex items-end justify-between">
-				<div>
-					<h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-					<p className="text-muted-foreground mt-1 font-mono text-xs uppercase tracking-widest">
-						{date}
-					</p>
-				</div>
-			</div>
+		<div className="qa-default-dashboard container">
+			<AdminViewHeader
+				className="mb-4"
+				title={t("dashboard.title")}
+				meta={date}
+			/>
 
 			<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-				<Card className="relative overflow-hidden p-6">
-					<div className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-primary/10 blur-3xl" />
-					<div className="relative">
+				<Card className="p-6">
+					<div>
 						<div className="mb-4 flex items-center gap-3">
-							<div className="h-2 w-2 rounded-full bg-primary " />
-							<h3 className="font-mono text-xs font-bold uppercase tracking-widest text-primary">
-								System Status
+							<div className="bg-primary h-2 w-2 rounded-full" />
+							<h3 className="text-muted-foreground font-chrome chrome-meta text-xs font-medium">
+								{t("dashboard.systemStatus")}
 							</h3>
 						</div>
-						<h2 className="mb-2 text-xl font-bold">Welcome back</h2>
-						<p className="text-sm leading-relaxed text-muted-foreground">
-							Select a collection from the sidebar to manage your content.
+						<h2 className="mb-2 text-xl font-semibold">
+							{t("dashboard.welcome")}
+						</h2>
+						<p className="text-muted-foreground text-sm leading-relaxed">
+							{t("dashboard.welcomeDescription")}
 						</p>
 					</div>
 				</Card>
@@ -573,11 +702,13 @@ function DefaultDashboard() {
 }
 
 function DefaultNotFound() {
+	const { t } = useTranslation();
+
 	return (
-		<div className="qa-not-found container ">
-			<h1 className="mb-4 text-2xl font-bold">Page Not Found</h1>
+		<div className="qa-not-found container">
+			<h1 className="mb-4 text-2xl font-bold">{t("error.pageNotFound")}</h1>
 			<p className="text-muted-foreground">
-				The page you're looking for doesn't exist.
+				{t("error.pageNotFoundDescription")}
 			</p>
 		</div>
 	);
@@ -594,33 +725,28 @@ function RestrictedAccess({
 	navigate: (path: string) => void;
 	basePath: string;
 }) {
+	const { t } = useTranslation();
+
 	return (
 		<div className="qa-restricted-access container py-12">
-			<Card className="relative mx-auto max-w-lg overflow-hidden p-8 text-center">
-				<div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-muted blur-3xl" />
-				<div className="absolute -left-16 -bottom-16 h-40 w-40 rounded-full bg-muted blur-3xl" />
-				<div className="relative">
-					<div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+			<Card className="mx-auto max-w-lg p-8 text-center">
+				<div>
+					<div className="bg-muted mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full">
 						<Icon
 							icon="ph:lock-simple"
-							className="h-8 w-8 text-muted-foreground"
+							className="text-muted-foreground h-8 w-8"
 						/>
 					</div>
-					<h1 className="mb-2 text-xl font-semibold">Access Restricted</h1>
-					<p className="mb-6 text-sm text-muted-foreground">
-						The {type}{" "}
-						<span className="font-mono text-foreground">"{name}"</span> is not
-						available in the admin panel. It may be hidden or you don't have
-						permission to access it.
+					<h1 className="mb-2 text-xl font-semibold">
+						{t("error.accessRestricted")}
+					</h1>
+					<p className="text-muted-foreground mb-6 text-sm">
+						{t("error.accessRestrictedResourceDescription", { type, name })}
 					</p>
-					<button
-						type="button"
-						onClick={() => navigate(basePath)}
-						className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-					>
+					<Button variant="outline" onClick={() => navigate(basePath)}>
 						<Icon icon="ph:arrow-left" className="h-4 w-4" />
-						Back to Dashboard
-					</button>
+						{t("error.backToDashboard")}
+					</Button>
 				</div>
 			</Card>
 		</div>
@@ -628,10 +754,12 @@ function RestrictedAccess({
 }
 
 function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
+	const { t } = useTranslation();
+	const component = config.component;
 	const [Component, setComponent] = React.useState<React.ComponentType | null>(
-		null,
+		() => getCachedComponent(component as MaybeLazyComponent) ?? null,
 	);
-	const [loading, setLoading] = React.useState(true);
+	const [loading, setLoading] = React.useState(() => Component == null);
 	const [error, setError] = React.useState<Error | null>(null);
 
 	React.useEffect(() => {
@@ -639,8 +767,25 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 
 		async function load() {
 			try {
-				if (typeof config.component === "function") {
-					const result = (config.component as () => any)();
+				const cachedComponent = getCachedComponent(
+					component as MaybeLazyComponent,
+				);
+				if (cachedComponent) {
+					if (mounted) {
+						setComponent(() => cachedComponent);
+						setLoading(false);
+						setError(null);
+					}
+					return;
+				}
+
+				if (mounted) {
+					setLoading(true);
+					setError(null);
+				}
+
+				if (typeof component === "function") {
+					const result = (component as () => any)();
 					let isThenable = false;
 					if (result != null) {
 						if (typeof result.then === "function") {
@@ -656,16 +801,17 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 							} else {
 								resolved = mod;
 							}
+							cacheComponent(component as MaybeLazyComponent, resolved);
 							setComponent(() => resolved);
 						}
 					} else {
 						if (mounted) {
-							setComponent(() => config.component as React.ComponentType);
+							setComponent(() => component as React.ComponentType);
 						}
 					}
-				} else if (config.component) {
+				} else if (component) {
 					if (mounted) {
-						setComponent(() => config.component as React.ComponentType);
+						setComponent(() => component as React.ComponentType);
 					}
 				}
 				if (mounted) {
@@ -677,7 +823,7 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 					if (err instanceof Error) {
 						resolvedError = err;
 					} else {
-						resolvedError = new Error("Failed to load");
+						resolvedError = new Error(t("error.failedToLoad"));
 					}
 					setError(resolvedError);
 				}
@@ -691,20 +837,23 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 		return () => {
 			mounted = false;
 		};
-	}, [config.component]);
+	}, [component, t]);
 
 	if (loading) {
-		return (
-			<div className="flex h-64 items-center justify-center text-muted-foreground">
-				<Icon icon="ph:spinner-gap" className="size-6 animate-spin" />
-			</div>
+		const path = config.path?.replace(/^\//, "") ?? "";
+		return AUTH_ROUTE_SEGMENTS.has(path) ? (
+			<AuthPageSkeleton />
+		) : (
+			<RouterSkeleton />
 		);
 	}
 
 	if (error) {
 		return (
-			<div className="container ">
-				<h1 className="mb-4 text-2xl font-bold text-destructive">Error</h1>
+			<div className="container">
+				<h1 className="text-destructive mb-4 text-2xl font-bold">
+					{t("error.unexpectedError")}
+				</h1>
 				<p className="text-muted-foreground">{error.message}</p>
 			</div>
 		);
@@ -725,7 +874,7 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
  */
 export function AdminRouter(props: AdminRouterProps): React.ReactElement {
 	return (
-		<React.Suspense fallback={<RouterSkeleton />}>
+		<React.Suspense fallback={getFallbackForSegments(props.segments)}>
 			<AdminRouterInner {...props} />
 		</React.Suspense>
 	);
@@ -775,6 +924,7 @@ function AdminRouterInner({
 		globals,
 		pages,
 		views,
+		brandingName,
 		dashboardConfig,
 		DashboardComponent,
 	} = useRouterConfig({
@@ -799,6 +949,21 @@ function AdminRouterInner({
 
 	const activeGlobalName = route.type === "global-edit" ? route.name : "";
 
+	// Prefetch collection/global metadata before the view's Suspense boundary.
+	// When TableView/FormView call useSuspenseCollectionMeta, data is already cached.
+	const queryClient = useQueryClient();
+	const client = useAdminStore(selectClient);
+	if (activeCollectionName && client) {
+		queryClient.prefetchQuery(
+			getCollectionMetaQueryOptions(activeCollectionName, client),
+		);
+	}
+	if (activeGlobalName && client) {
+		queryClient.prefetchQuery(
+			getGlobalMetaQueryOptions(activeGlobalName, client),
+		);
+	}
+
 	const { data: activeCollectionSchema } = useCollectionSchema(
 		activeCollectionName as any,
 		{
@@ -813,33 +978,110 @@ function AdminRouterInner({
 		},
 	);
 
-	// Focus management + document.title on route change
+	const { t } = useTranslation();
+	const resolveText = useResolveText();
+
+	// Keep browser chrome readable for every admin route.
+	React.useEffect(() => {
+		const appTitle = resolveText(brandingName, "Admin");
+		let pageTitle = t("dashboard.title");
+		let metaDescription = pageTitle;
+
+		const resolveResourceLabel = (
+			config: Record<string, any> | undefined,
+			schemaConfig: Record<string, any> | undefined,
+			fallback: string,
+		) =>
+			resolveText(
+				config?.label ?? config?.meta?.label ?? schemaConfig?.label,
+				formatLabel(fallback),
+			);
+
+		const resolveResourceDescription = (
+			config: Record<string, any> | undefined,
+			schemaConfig: Record<string, any> | undefined,
+		) =>
+			resolveText(
+				config?.description ??
+					config?.meta?.description ??
+					schemaConfig?.description,
+			).trim();
+
+		switch (route.type) {
+			case "dashboard": {
+				pageTitle = resolveText(dashboardConfig?.title, t("dashboard.title"));
+				metaDescription =
+					resolveText(dashboardConfig?.description).trim() || pageTitle;
+				break;
+			}
+			case "collection-list": {
+				const config = collections[route.name];
+				const schemaConfig = (activeCollectionSchema as any)?.admin?.config;
+				const label = resolveResourceLabel(config, schemaConfig, route.name);
+				pageTitle = label;
+				metaDescription =
+					resolveResourceDescription(config, schemaConfig) ||
+					t("collection.list", { name: label });
+				break;
+			}
+			case "collection-create": {
+				const config = collections[route.name];
+				const schemaConfig = (activeCollectionSchema as any)?.admin?.config;
+				const label = resolveResourceLabel(config, schemaConfig, route.name);
+				pageTitle = `${label}: ${t("common.create")}`;
+				metaDescription =
+					resolveResourceDescription(config, schemaConfig) ||
+					t("collection.create", { name: label });
+				break;
+			}
+			case "collection-edit": {
+				const config = collections[route.name];
+				const schemaConfig = (activeCollectionSchema as any)?.admin?.config;
+				const label = resolveResourceLabel(config, schemaConfig, route.name);
+				pageTitle = `${label}: ${t("common.edit")}`;
+				metaDescription =
+					resolveResourceDescription(config, schemaConfig) ||
+					t("collection.edit", { name: label });
+				break;
+			}
+			case "global-edit": {
+				const config = globals[route.name];
+				const schemaConfig = (activeGlobalSchema as any)?.admin?.config;
+				const label = resolveResourceLabel(config, schemaConfig, route.name);
+				pageTitle = label;
+				metaDescription =
+					resolveResourceDescription(config, schemaConfig) || label;
+				break;
+			}
+			case "page": {
+				pageTitle = resolveText(route.config.label, formatLabel(route.name));
+				metaDescription = pageTitle;
+				break;
+			}
+			case "not-found": {
+				pageTitle = t("error.notFound");
+				metaDescription = pageTitle;
+				break;
+			}
+		}
+
+		document.title = formatDocumentTitle(pageTitle, appTitle);
+		setDocumentMetaDescription(metaDescription || pageTitle);
+	}, [
+		activeCollectionSchema,
+		activeGlobalSchema,
+		brandingName,
+		collections,
+		dashboardConfig,
+		globals,
+		resolveText,
+		route,
+		t,
+	]);
+
+	// Focus management on route change
 	const routeKey = segments.join("/");
 	React.useEffect(() => {
-		// Build document title from route
-		let pageTitle = "Admin";
-		switch (route.type) {
-			case "dashboard":
-				pageTitle = "Dashboard";
-				break;
-			case "collection-list":
-				pageTitle = `${route.name} — List`;
-				break;
-			case "collection-create":
-				pageTitle = `${route.name} — Create`;
-				break;
-			case "collection-edit":
-				pageTitle = `${route.name} — Edit`;
-				break;
-			case "global-edit":
-				pageTitle = `${route.name} — Settings`;
-				break;
-			case "page":
-				pageTitle = route.name;
-				break;
-		}
-		document.title = pageTitle;
-
 		// Move focus to main content area on route change for screen readers
 		const main = document.getElementById("main-content");
 		if (main) {
@@ -848,7 +1090,7 @@ function AdminRouterInner({
 				main.focus({ preventScroll: true });
 			});
 		}
-	}, [routeKey, route]);
+	}, [routeKey]);
 
 	// Dashboard
 	if (route.type === "dashboard") {

@@ -1,6 +1,7 @@
+import { sql } from "drizzle-orm";
 import { migration } from "questpie";
 import type { OperationSnapshot } from "questpie";
-import { sql } from "drizzle-orm";
+
 import snapshotJson from "./snapshots/20260206T180920_fancy_green_tiger.json";
 
 const snapshot = snapshotJson as OperationSnapshot;

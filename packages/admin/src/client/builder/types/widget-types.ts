@@ -5,7 +5,9 @@
  */
 
 import type * as React from "react";
+
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
 import type { I18nText } from "../../i18n/types";
 import type {
 	DynamicI18nText,
@@ -60,6 +62,12 @@ export interface BaseWidgetConfig {
 	 * Column span (1-12)
 	 */
 	span?: number;
+
+	/**
+	 * Row span in the dashboard tile grid.
+	 * A widget with span=2 and rowSpan=2 renders as a 2x2 tile.
+	 */
+	rowSpan?: number;
 
 	/**
 	 * Grid position (for dashboard layouts)

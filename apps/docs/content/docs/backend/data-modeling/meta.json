@@ -1,4 +1,11 @@
 {
 	"title": "Data Modeling",
-	"pages": ["fields", "collections", "globals", "relations", "localization"]
+	"pages": [
+		"fields",
+		"collections",
+		"globals",
+		"relations",
+		"localization",
+		"versioning-workflow"
+	]
 }

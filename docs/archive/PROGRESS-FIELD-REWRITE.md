@@ -1,11 +1,13 @@
 # Field System Rewrite — Progress Log
 
 ## Phase 1: Operator System Refactor (non-breaking)
+
 **Status**: COMPLETED
 **Started**: 2026-03-03
 **Commit**: `2d539088` — `refactor: operator system with auto-derived JSONB ops (Phase 1)`
 
 ### What was done
+
 - [x] `operators/types.ts` — `OperatorSetDefinition`, `JsonbCast`, `ResolvedOperatorSet` types
 - [x] `operators/operator-set.ts` — `operatorSet()`, `extendOperatorSet()` frozen factories
 - [x] `operators/resolve.ts` — `resolveContextualOperators()`, `deriveJsonbOperator()`, `buildJsonbRef()`
@@ -16,6 +18,7 @@
 - [x] Extended operator detection: where-builder checks field's operator map keys (not just hardcoded list)
 
 ### Verification
+
 - 78 field tests pass
 - 156 admin tests pass
 - `npx tsc --noEmit` passes (only pre-existing module augmentation error)
@@ -23,11 +26,13 @@
 ---
 
 ## Phase 2: Core Field Builder Class
+
 **Status**: COMPLETED
 **Started**: 2026-03-03
 **Commit**: `8beef4da` — `feat: immutable Field<TState> builder class (Phase 2)`
 
 ### What was done
+
 - [x] `v2/types.ts` — `FieldState`, `DefaultFieldState`, `ArrayFieldState`, `FieldRuntimeState`, type extractors
 - [x] `v2/field.ts` — `Field<TState>` class with immutable builder, backward compat getters (state, $types), toColumn(), toZodSchema(), getOperators(), getMetadata()
 - [x] `v2/derive-schema.ts` — `buildZodFromState()` auto-derivation from type + refinements
@@ -35,16 +40,19 @@
 - [x] `test/fields/v2/field.test.ts` — 30 tests covering builder, column, schema, operators, metadata, compat
 
 ### Verification
+
 - 108 field tests pass (78 existing + 30 new)
 - 156 admin tests pass
 
 ---
 
 ## Phase 3: Builtin Field Factories
+
 **Status**: COMPLETED
 **Started**: 2026-03-03
 
 ### What was done
+
 - [x] `v2/builtin/text.ts` — text() factory with text/varchar modes, prototype augmentation for .pattern(), .trim(), .lowercase(), .uppercase()
 - [x] `v2/builtin/textarea.ts` — textarea() factory (pgText column)
 - [x] `v2/builtin/email.ts` — email() factory with .email() validation
@@ -62,16 +70,19 @@
 - [x] `test/fields/v2/builtin.test.ts` — 66 tests covering all 13 factories + cross-cutting behavior
 
 ### Verification
+
 - 174 field tests pass (78 existing + 96 v2)
 - 156 admin tests pass
 
 ---
 
 ## Phase 4: Relation + Upload Fields
+
 **Status**: COMPLETED
 **Started**: 2026-03-03
 
 ### What was done
+
 - [x] `v2/builtin/relation.ts` — relation() factory supporting all 6 relation types via chain methods:
   - Default: belongsTo (varchar FK column)
   - `.hasMany({ foreignKey })` — virtual, toMany operators
@@ -87,30 +98,36 @@
 - [x] `test/fields/v2/relation.test.ts` — 36 tests covering all 6 relation variants + upload + cross-cutting
 
 ### Verification
+
 - 210 field tests pass (78 existing + 132 v2)
 - 156 admin tests pass
 
 ---
 
 ## Phase 5: Collection Builder Integration
+
 **Status**: Pending
 
 ---
 
 ## Phase 6: Admin Integration via Codegen Plugin
+
 **Status**: Pending
 
 ---
 
 ## Phase 7: Example + Consumer Migration
+
 **Status**: Pending
 
 ---
 
 ## Phase 8: Codegen Updates
+
 **Status**: Pending
 
 ---
 
 ## Phase 9: Cleanup + Test Migration
+
 **Status**: Pending

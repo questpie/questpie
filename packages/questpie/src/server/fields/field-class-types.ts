@@ -12,7 +12,9 @@
 import type { SQL } from "drizzle-orm";
 import type { PgJsonbBuilder } from "drizzle-orm/pg-core";
 import type { ZodType } from "zod";
+
 import type { I18nText } from "#questpie/shared/i18n/types.js";
+
 import type { OperatorSetDefinition } from "./operators/types.js";
 import type {
 	FieldAccess,
@@ -78,7 +80,6 @@ export type DefaultFieldState = {
 
 declare global {
 	namespace Questpie {
-		// biome-ignore lint/suspicious/noEmptyInterface: Augmentation point
 		interface ArrayFieldMeta {}
 	}
 }
@@ -230,9 +231,9 @@ export interface FieldRuntimeState {
 	/** Explicit type override */
 	customType?: string;
 
-	// ---- Admin config (added via .admin() augmentation) ----
-	/** Admin-specific configuration */
-	admin?: unknown;
+	// ---- Plugin-contributed extensions (populated via .set()) ----
+	/** Plugin-contributed extensions keyed by extension name */
+	extensions?: Record<string, unknown>;
 
 	// ---- Metadata factory override ----
 	/** Custom metadata factory (for fields that need special metadata) */

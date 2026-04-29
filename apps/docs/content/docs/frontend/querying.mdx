@@ -3,9 +3,7 @@ title: Querying
 description: Query operators — where, orderBy, with, select, pagination.
 ---
 
-# Querying
-
-QuestPie provides type-safe query operators derived from your field definitions. Every operator is available on both the server and client.
+QUESTPIE provides type-safe query operators derived from your field definitions. Every operator is available on both the server and client.
 
 ## Where Clauses
 
@@ -13,13 +11,19 @@ QuestPie provides type-safe query operators derived from your field definitions.
 
 ```ts
 // Exact match
-where: { status: "published" }
+where: {
+	status: "published";
+}
 
 // Boolean
-where: { isActive: true }
+where: {
+	isActive: true;
+}
 
 // Relation by ID
-where: { barber: "barber-id-123" }
+where: {
+	barber: "barber-id-123";
+}
 ```
 
 ### Comparison
@@ -41,9 +45,21 @@ where: {
 ### Text Operations
 
 ```ts
-where: { title: { contains: "hello" } }
-where: { email: { startsWith: "john" } }
-where: { slug: { endsWith: "-draft" } }
+where: {
+	title: {
+		contains: "hello";
+	}
+}
+where: {
+	email: {
+		startsWith: "john";
+	}
+}
+where: {
+	slug: {
+		endsWith: "-draft";
+	}
+}
 ```
 
 ### In
@@ -55,36 +71,42 @@ where: { id: { in: ["id1", "id2", "id3"] } }
 
 ## Operators by Field Type
 
-| Field Type | Operators |
-|---|---|
-| `text` | `equals`, `contains`, `startsWith`, `endsWith`, `in` |
-| `number` | `equals`, `gt`, `gte`, `lt`, `lte`, `in` |
-| `boolean` | `equals` |
-| `date` / `datetime` | `equals`, `gt`, `gte`, `lt`, `lte` |
-| `select` | `equals`, `in` |
-| `relation` | `equals` (by ID) |
+| Field Type          | Operators                                            |
+| ------------------- | ---------------------------------------------------- |
+| `text`              | `equals`, `contains`, `startsWith`, `endsWith`, `in` |
+| `number`            | `equals`, `gt`, `gte`, `lt`, `lte`, `in`             |
+| `boolean`           | `equals`                                             |
+| `date` / `datetime` | `equals`, `gt`, `gte`, `lt`, `lte`                   |
+| `select`            | `equals`, `in`                                       |
+| `relation`          | `equals` (by ID)                                     |
 
 ## OrderBy
 
 ```ts
-orderBy: { createdAt: "desc" }
-orderBy: { name: "asc" }
-orderBy: { price: "asc" }
+orderBy: {
+	createdAt: "desc";
+}
+orderBy: {
+	name: "asc";
+}
+orderBy: {
+	price: "asc";
+}
 ```
 
 ## Pagination
 
 ```ts
 const page1 = await client.collections.posts.find({
-  limit: 10,
-  offset: 0,
+	limit: 10,
+	offset: 0,
 });
 // page1.docs — first 10 records
 // page1.totalDocs — total count
 
 const page2 = await client.collections.posts.find({
-  limit: 10,
-  offset: 10,
+	limit: 10,
+	offset: 10,
 });
 ```
 
@@ -94,16 +116,16 @@ Include related data:
 
 ```ts
 const barber = await client.collections.barbers.findOne({
-  where: { id: "abc" },
-  with: {
-    services: true,
-    // Nested
-    appointments: {
-      with: {
-        service: true,
-      },
-    },
-  },
+	where: { id: "abc" },
+	with: {
+		services: true,
+		// Nested
+		appointments: {
+			with: {
+				service: true,
+			},
+		},
+	},
 });
 ```
 
@@ -113,7 +135,7 @@ Pick specific fields:
 
 ```ts
 const posts = await client.collections.posts.find({
-  select: { id: true, title: true, status: true },
+	select: { id: true, title: true, status: true },
 });
 // Only id, title, status returned
 ```
@@ -124,13 +146,13 @@ Same operators work in hooks, routes, and jobs:
 
 ```ts
 handler: async ({ collections }) => {
-  const active = await collections.barbers.find({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
-    with: { services: true },
-  });
-  return active;
-}
+	const active = await collections.barbers.find({
+		where: { isActive: true },
+		orderBy: { name: "asc" },
+		with: { services: true },
+	});
+	return active;
+};
 ```
 
 ## Related Pages

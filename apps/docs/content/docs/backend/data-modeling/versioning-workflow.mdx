@@ -1,0 +1,256 @@
+---
+title: Versioning & Workflow
+description: Track record versions, read workflow stages, and transition drafts through publishing states.
+---
+
+Versioning stores snapshots of collection records and globals. Workflow builds on versioning by adding named stages such as `draft`, `review`, and `published`.
+
+## Enable Versioning
+
+Use plain versioning when you only need history and restore:
+
+```ts title="collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export const posts = collection("posts")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		content: f.richText(),
+	}))
+	.options({
+		versioning: true,
+	});
+```
+
+Versioning creates version tables and enables:
+
+- `findVersions({ id })`
+- `revertToVersion({ id, version })`
+- admin history and restore actions
+
+## Enable The Default Workflow
+
+Set `workflow: true` inside `versioning` for the default `draft -> published` workflow:
+
+```ts
+.options({
+	versioning: {
+		workflow: true,
+	},
+})
+```
+
+The default stages are `draft` and `published`. New records are created in `draft` unless a write context specifies another stage.
+
+## Configure Custom Stages
+
+Use an array when any stage may transition to any other stage:
+
+```ts
+.options({
+	versioning: {
+		workflow: {
+			initialStage: "draft",
+			stages: ["draft", "review", "published"],
+		},
+	},
+})
+```
+
+Use an object when transitions should be explicit:
+
+```ts
+.options({
+	versioning: {
+		maxVersions: 100,
+		workflow: {
+			initialStage: "draft",
+			stages: {
+				draft: {
+					label: "Draft",
+					transitions: ["review"],
+				},
+				review: {
+					label: "In review",
+					transitions: ["published", "draft"],
+				},
+				published: {
+					label: "Published",
+					transitions: ["draft"],
+				},
+			},
+		},
+	},
+})
+```
+
+If `transitions` is omitted for a stage, that stage can transition to any configured stage. If `transitions: []` is set, that stage has no outgoing transitions.
+
+## Read A Stage
+
+Reads without `stage` use the current working stage, which is normally the initial stage:
+
+```ts
+const draft = await collections.posts.findOne({
+	where: { id: "post_123" },
+});
+```
+
+Pass `stage` to read a workflow snapshot:
+
+```ts
+const published = await collections.posts.findOne({
+	where: { id: "post_123" },
+	stage: "published",
+});
+```
+
+The client SDK forwards `stage` the same way:
+
+```ts
+const page = await client.collections.pages.findOne({
+	where: { id: "page_123" },
+	stage: "published",
+});
+```
+
+For localized content, `stage` and `locale` can be combined:
+
+```ts
+const page = await client.collections.pages.findOne({
+	where: { id: "page_123" },
+	stage: "published",
+	locale: "sk",
+});
+```
+
+## Transition A Collection Record
+
+Use `transitionStage()` to move a record to a target stage:
+
+```ts
+await collections.posts.transitionStage({
+	id: "post_123",
+	stage: "published",
+});
+```
+
+Client-side:
+
+```ts
+await client.collections.posts.transitionStage({
+	id: "post_123",
+	stage: "published",
+});
+```
+
+A transition validates that:
+
+- workflow is enabled
+- the target stage exists
+- the configured transition graph allows the move
+- `access.transition` allows the user, or `access.update` allows the user when `transition` is not configured
+
+Transitioning creates a version snapshot at the target stage. It does not mutate the working draft row.
+
+## Transition A Global
+
+Globals use the same workflow config shape under `.options()`:
+
+```ts title="globals/site-settings.ts"
+import { global } from "#questpie/factories";
+
+export const siteSettings = global("siteSettings")
+	.fields(({ f }) => ({
+		siteName: f.text().required(),
+		announcement: f.textarea().localized(),
+	}))
+	.options({
+		versioning: {
+			workflow: {
+				initialStage: "draft",
+				stages: {
+					draft: { transitions: ["published"] },
+					published: { transitions: ["draft"] },
+				},
+			},
+		},
+	});
+```
+
+Server-side:
+
+```ts
+await globals.siteSettings.transitionStage({ stage: "published" });
+```
+
+Client-side:
+
+```ts
+await client.globals.siteSettings.transitionStage({ stage: "published" });
+```
+
+## Transition Access
+
+Use `access.transition` when publishing rules differ from editing rules:
+
+```ts
+.access({
+	read: true,
+	update: ({ session }) => !!session,
+	transition: ({ session }) => session?.user?.role === "admin",
+})
+```
+
+If `transition` is omitted, QUESTPIE falls back to the `update` rule.
+
+## Transition Hooks
+
+Use `beforeTransition` to validate or block a transition, and `afterTransition` for side effects:
+
+```ts
+.hooks({
+	beforeTransition: ({ data, fromStage, toStage }) => {
+		if (toStage === "published" && !data.title) {
+			throw new Error("Cannot publish without a title");
+		}
+	},
+	afterTransition: async ({ data, toStage, queue }) => {
+		if (toStage === "published") {
+			await queue.notifySubscribers.publish({ postId: data.id });
+		}
+	},
+})
+```
+
+The transition hook context includes the normal `AppContext` services plus `data`, `fromStage`, `toStage`, `recordId` for collections, `locale`, `accessMode`, and optional `scheduledAt`.
+
+## Scheduled Transitions
+
+The admin transition hook supports a future `scheduledAt` value. Scheduled transitions require a queue adapter because the core module publishes a `scheduledTransition` job.
+
+```ts
+await transition.mutateAsync({
+	id: "post_123",
+	stage: "published",
+	scheduledAt: new Date("2026-05-01T09:00:00Z"),
+});
+```
+
+Before scheduling, QUESTPIE validates the target stage, record existence, access rule, and transition graph. The immediate transition is skipped; the queued job performs it later.
+
+## Admin Behavior
+
+When a collection or global has versioning with workflow:
+
+- history sidebar shows version stage metadata
+- transition actions appear in the form toolbar
+- buttons are based on the current stage and configured outgoing transitions
+- successful transitions invalidate collection/global queries so the form and history refresh
+
+## Related Pages
+
+- [Collections](/docs/backend/data-modeling/collections) — Collection builder options
+- [Globals](/docs/backend/data-modeling/globals) — Global builder options
+- [Hooks API](/docs/reference/hooks-api) — Transition hook context
+- [Built-in Actions](/docs/workspace/actions/builtin) — Admin toolbar actions

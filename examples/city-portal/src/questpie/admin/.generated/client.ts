@@ -42,10 +42,10 @@ import type { textBlock } from "../../server/blocks/text";
 import type { videoBlock } from "../../server/blocks/video";
 
 const admin = {
-	blocks: { "accordion": _block_accordion, "announcementBanner": _block_announcementBanner, "columns": _block_columns, "contactsList": _block_contactsList, "cta": _block_cta, "divider": _block_divider, "documentsList": _block_documentsList, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "image": _block_image, "imageText": _block_imageText, "latestNews": _block_latestNews, "spacer": _block_spacer, "text": _block_text, "video": _block_video },
+	blocks: { "accordion": _block_accordion, "announcement-banner": _block_announcementBanner, "columns": _block_columns, "contacts-list": _block_contactsList, "cta": _block_cta, "divider": _block_divider, "documents-list": _block_documentsList, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "image": _block_image, "image-text": _block_imageText, "latest-news": _block_latestNews, "spacer": _block_spacer, "text": _block_text, "video": _block_video },
 };
 
-type _ServerBlocks = { "accordion": typeof accordionBlock; "announcementBanner": typeof announcementBannerBlock; "columns": typeof columnsBlock; "contactsList": typeof contactsListBlock; "cta": typeof ctaBlock; "divider": typeof dividerBlock; "documentsList": typeof documentsListBlock; "gallery": typeof galleryBlock; "heading": typeof headingBlock; "hero": typeof heroBlock; "image": typeof imageBlock; "imageText": typeof imageTextBlock; "latestNews": typeof latestNewsBlock; "spacer": typeof spacerBlock; "text": typeof textBlock; "video": typeof videoBlock };
+type _ServerBlocks = { "accordion": typeof accordionBlock; "announcement-banner": typeof announcementBannerBlock; "columns": typeof columnsBlock; "contacts-list": typeof contactsListBlock; "cta": typeof ctaBlock; "divider": typeof dividerBlock; "documents-list": typeof documentsListBlock; "gallery": typeof galleryBlock; "heading": typeof headingBlock; "hero": typeof heroBlock; "image": typeof imageBlock; "image-text": typeof imageTextBlock; "latest-news": typeof latestNewsBlock; "spacer": typeof spacerBlock; "text": typeof textBlock; "video": typeof videoBlock };
 
 export type BlockProps<T extends keyof _ServerBlocks> = BlockRendererProps<
 	InferBlockValues<_ServerBlocks[T]["state"]>,

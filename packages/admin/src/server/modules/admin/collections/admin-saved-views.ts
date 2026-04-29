@@ -5,7 +5,7 @@
  */
 import { collection } from "questpie";
 
-import { savedViewsCollection } from "../../admin-preferences/collections/saved-views.collection.js";
+import { savedViewsCollection } from "../../admin-preferences/collections/saved-views.js";
 
 export default collection("admin_saved_views")
 	.merge(savedViewsCollection)

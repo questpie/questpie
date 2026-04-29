@@ -5,6 +5,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useForm } from "react-hook-form";
+
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import {
@@ -119,7 +120,7 @@ export function LoginForm({
 						<div className="relative">
 							<Icon
 								icon="ph:envelope-duotone"
-								className="text-muted-foreground absolute left-2 top-1/2 size-4 -translate-y-1/2"
+								className="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2"
 							/>
 							<Input
 								id="email"
@@ -148,7 +149,7 @@ export function LoginForm({
 						<div className="relative">
 							<Icon
 								icon="ph:lock-duotone"
-								className="text-muted-foreground absolute left-2 top-1/2 size-4 -translate-y-1/2"
+								className="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2"
 							/>
 							<Input
 								id="password"
@@ -179,7 +180,7 @@ export function LoginForm({
 							<label className="text-muted-foreground flex items-center gap-2 text-xs">
 								<input
 									type="checkbox"
-									className="rounded border-gray-300"
+									className="border-border accent-foreground"
 									{...register("rememberMe")}
 								/>
 								{t("auth.rememberMe")}

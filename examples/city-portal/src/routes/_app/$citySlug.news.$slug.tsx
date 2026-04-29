@@ -4,9 +4,10 @@
  * Displays a single news article with rich text content.
  */
 
-import { RichTextRenderer } from "@questpie/admin/client";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
+
 import { getNewsBySlug } from "@/lib/server-functions";
+import { RichTextRenderer } from "@questpie/admin/client";
 
 export const Route = createFileRoute("/_app/$citySlug/news/$slug")({
 	loader: async ({ params }) => {
@@ -40,10 +41,10 @@ function NewsDetail() {
 				to="/$citySlug/news"
 				params={{ citySlug }}
 				search={{ category: "all" }}
-				className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors mb-8"
+				className="text-muted-foreground hover:text-primary mb-8 inline-flex items-center gap-1 text-sm transition-colors"
 			>
 				<svg
-					className="w-4 h-4"
+					className="h-4 w-4"
 					fill="none"
 					stroke="currentColor"
 					viewBox="0 0 24 24"
@@ -60,31 +61,31 @@ function NewsDetail() {
 			</Link>
 
 			{/* Article Header */}
-			<header className="max-w-3xl mb-8">
-				<div className="flex items-center gap-3 mb-4">
+			<header className="mb-8 max-w-3xl">
+				<div className="mb-4 flex items-center gap-3">
 					{article.category && (
-						<span className="text-xs font-medium bg-primary/10 text-primary px-3 py-1 rounded-full uppercase tracking-wide">
+						<span className="bg-primary/10 text-primary rounded-full px-3 py-1 text-xs font-medium tracking-wide uppercase">
 							{article.category}
 						</span>
 					)}
 					{article.isFeatured && (
-						<span className="text-xs font-medium bg-amber-100 text-amber-800 px-3 py-1 rounded-full">
+						<span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
 							Featured
 						</span>
 					)}
 				</div>
 
-				<h1 className="text-4xl font-bold tracking-tight mb-4">
+				<h1 className="mb-4 text-4xl font-bold tracking-tight">
 					{article.title}
 				</h1>
 
 				{article.excerpt && (
-					<p className="text-xl text-muted-foreground mb-4">
+					<p className="text-muted-foreground mb-4 text-xl">
 						{article.excerpt}
 					</p>
 				)}
 
-				<div className="flex items-center gap-4 text-sm text-muted-foreground">
+				<div className="text-muted-foreground flex items-center gap-4 text-sm">
 					{article.publishedAt && (
 						<time>
 							{new Date(article.publishedAt).toLocaleDateString("en-GB", {
@@ -108,7 +109,7 @@ function NewsDetail() {
 					<img
 						src={article.image.url}
 						alt={article.title}
-						className="w-full rounded-lg object-cover max-h-[500px]"
+						className="max-h-[500px] w-full rounded-lg object-cover"
 					/>
 				</div>
 			)}
@@ -116,7 +117,7 @@ function NewsDetail() {
 			{/* Article Content */}
 			{article.content && (
 				<div className="prose max-w-3xl">
-					<RichTextRenderer content={article.content} />
+					<RichTextRenderer content={article.content as any} />
 				</div>
 			)}
 		</article>

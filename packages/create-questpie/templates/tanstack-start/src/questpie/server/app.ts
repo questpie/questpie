@@ -7,4 +7,4 @@
  * If .generated/ does not exist yet, run: bun questpie generate
  */
 
-export { type App, app } from "./.generated/index";
+export { type App, type AppConfig, app } from "./.generated/index";

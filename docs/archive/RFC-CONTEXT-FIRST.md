@@ -9,7 +9,7 @@
 
 ## Summary
 
-QuestPie's core is an **empty framework**. It provides builder primitives (`CollectionBuilder`, `GlobalBuilder`), a codegen engine, and a plugin API — but zero fields, zero views, zero collections, zero services. Everything is contributed by **modules** and **plugins**, wired together by codegen, and made available to every handler through a single extensible interface: **`AppContext`**.
+QUESTPIE's core is an **empty framework**. It provides builder primitives (`CollectionBuilder`, `GlobalBuilder`), a codegen engine, and a plugin API — but zero fields, zero views, zero collections, zero services. Everything is contributed by **modules** and **plugins**, wired together by codegen, and made available to every handler through a single extensible interface: **`AppContext`**.
 
 There is no god object. No `Questpie<TConfig>` generic. No `App` type. The runtime `app` is a simple extensible object where everything sits flat. Plugins and modules add their keys horizontally — fields, views, services, routes, collections — through the same mechanism.
 
@@ -51,26 +51,26 @@ Empty by default. **Every handler context extends it:**
 
 ```ts
 interface HookContext<TData, TOriginal, TOperation> extends AppContext {
-  data: TData;
-  original: TOriginal | undefined;
-  operation: TOperation;
+	data: TData;
+	original: TOriginal | undefined;
+	operation: TOperation;
 }
 
 interface FunctionHandlerArgs<TInput> extends AppContext {
-  input: TInput;
+	input: TInput;
 }
 
 interface JobHandlerArgs<TPayload> extends AppContext {
-  payload: TPayload;
+	payload: TPayload;
 }
 
 interface RouteHandlerArgs extends AppContext {
-  request: Request;
-  params: Record<string, string>;
+	request: Request;
+	params: Record<string, string>;
 }
 
 interface AccessContext<TData> extends AppContext {
-  data?: TData;
+	data?: TData;
 }
 ```
 
@@ -112,35 +112,50 @@ declare module "questpie" {
 ```ts
 // In a hook — all typed, zero imports needed:
 hooks: {
-  afterChange: [async ({ data, db, session, queue, email, stripe }) => {
-    if (data.status === "published") {
-      await queue.sendNotification.publish({ postId: data.id });
-      await email.send({ to: "admin@example.com", subject: "New post", html: "<p>New post published</p>" });
-      stripe.events.track("post_published");
-    }
-  }]
+	afterChange: [
+		async ({ data, db, session, queue, email, stripe }) => {
+			if (data.status === "published") {
+				await queue.sendNotification.publish({ postId: data.id });
+				await email.send({
+					to: "admin@example.com",
+					subject: "New post",
+					html: "<p>New post published</p>",
+				});
+				stripe.events.track("post_published");
+			}
+		},
+	];
 }
 
 // In a function:
 export default fn({
-  schema: z.object({ postId: z.string() }),
-  handler: async ({ input, db, collections }) => {
-    return await collections.posts.findOne({
-      where: { id: input.postId },
-      with: { author: true },
-    });
-  }
+	schema: z.object({ postId: z.string() }),
+	handler: async ({ input, db, collections }) => {
+		return await collections.posts.findOne({
+			where: { id: input.postId },
+			with: { author: true },
+		});
+	},
 });
 
 // In a job:
 export default job({
-  name: "send-weekly-digest",
-  schema: z.object({ userId: z.string() }),
-  handler: async ({ payload, db, email, collections }) => {
-    const user = await collections.users.findOne({ where: { id: payload.userId } });
-    const posts = await collections.posts.find({ limit: 10, orderBy: { createdAt: "desc" } });
-    await email.send({ to: user.email, subject: "Weekly Digest", html: renderDigest(posts) });
-  }
+	name: "send-weekly-digest",
+	schema: z.object({ userId: z.string() }),
+	handler: async ({ payload, db, email, collections }) => {
+		const user = await collections.users.findOne({
+			where: { id: payload.userId },
+		});
+		const posts = await collections.posts.find({
+			limit: 10,
+			orderBy: { createdAt: "desc" },
+		});
+		await email.send({
+			to: user.email,
+			subject: "Weekly Digest",
+			html: renderDigest(posts),
+		});
+	},
 });
 ```
 
@@ -151,15 +166,15 @@ Any plugin can add keys to `AppContext`:
 ```ts
 // @questpie/channels plugin
 declare module "questpie" {
-  interface AppContext {
-    channels: ChannelsService;
-  }
+	interface AppContext {
+		channels: ChannelsService;
+	}
 }
 
 // Now EVERY handler gets `channels` typed:
 async ({ data, channels }) => {
-  await channels.broadcast("post-updates", { action: "created", post: data });
-}
+	await channels.broadcast("post-updates", { action: "created", post: data });
+};
 ```
 
 ---
@@ -170,18 +185,18 @@ async ({ data, channels }) => {
 
 Core (`packages/questpie`) is a **framework** — it provides primitives, not features:
 
-| Primitive | Purpose |
-|-----------|---------|
-| `CollectionBuilder` | Immutable builder for defining collections (fields, hooks, access, relations) |
-| `GlobalBuilder` | Immutable builder for defining globals |
-| `createApp()` | Runtime assembly — creates the app object from definition + runtime config |
-| `AppContext` | Empty extensible interface — the universal handler context |
-| `extractAppServices()` | Flattens app instance into AppContext shape |
-| Codegen engine | File discovery + template generation |
-| `CodegenPlugin` API | Extension point for plugins to discover files and register builder extensions |
-| Type utilities | `GetCollection`, `GetGlobal`, `CollectionSelect`, etc. |
-| HTTP adapter | `createFetchHandler()` — URL dispatch (§7) |
-| CRUD generator | Generates typed CRUD APIs from collection/global definitions |
+| Primitive              | Purpose                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| `CollectionBuilder`    | Immutable builder for defining collections (fields, hooks, access, relations) |
+| `GlobalBuilder`        | Immutable builder for defining globals                                        |
+| `createApp()`          | Runtime assembly — creates the app object from definition + runtime config    |
+| `AppContext`           | Empty extensible interface — the universal handler context                    |
+| `extractAppServices()` | Flattens app instance into AppContext shape                                   |
+| Codegen engine         | File discovery + template generation                                          |
+| `CodegenPlugin` API    | Extension point for plugins to discover files and register builder extensions |
+| Type utilities         | `GetCollection`, `GetGlobal`, `CollectionSelect`, etc.                        |
+| HTTP adapter           | `createFetchHandler()` — URL dispatch (§7)                                    |
+| CRUD generator         | Generates typed CRUD APIs from collection/global definitions                  |
 
 ### What Core Does NOT Provide
 
@@ -236,12 +251,14 @@ Fields come from modules, injected by codegen into the generated `collection()` 
 // The codegen merges them from module definitions.
 
 export function collection(name) {
-  return _wrapColl(new CollectionBuilder({
-    name,
-    fieldTypes: _mergedFieldTypes,  // ← injected by codegen
-    fields: {},
-    // ...
-  }));
+	return _wrapColl(
+		new CollectionBuilder({
+			name,
+			fieldTypes: _mergedFieldTypes, // ← injected by codegen
+			fields: {},
+			// ...
+		}),
+	);
 }
 ```
 
@@ -250,11 +267,10 @@ User writes:
 ```ts
 import { collection } from "#questpie";
 
-export const posts = collection("posts")
-  .fields(({ f }) => ({
-    title: f.text({ required: true }),       // ← from starter module
-    body: f.richText(),                       // ← from admin module
-  }));
+export const posts = collection("posts").fields(({ f }) => ({
+	title: f.text({ required: true }), // ← from starter module
+	body: f.richText(), // ← from admin module
+}));
 ```
 
 `f` proxy knows all available field types because codegen injected them. Core doesn't know or care what fields exist.
@@ -263,7 +279,7 @@ export const posts = collection("posts")
 
 ## §4 Primitives — Routes, Functions, Jobs, Services
 
-QuestPie provides four handler primitives. Each receives `AppContext` with full typed services.
+QUESTPIE provides four handler primitives. Each receives `AppContext` with full typed services.
 
 ### §4.1 Functions — Type-Safe Remote Procedures
 
@@ -277,15 +293,17 @@ import { fn } from "questpie";
 import { z } from "zod";
 
 export default fn({
-  schema: z.object({
-    period: z.enum(["week", "month", "year"]),
-  }),
-  access: ({ session }) => session?.user.role === "admin",
-  handler: async ({ input, db }) => {
-    const stats = await db.select().from(orders)
-      .where(gte(orders.createdAt, getPeriodStart(input.period)));
-    return { revenue: stats.reduce((sum, o) => sum + o.total, 0) };
-  },
+	schema: z.object({
+		period: z.enum(["week", "month", "year"]),
+	}),
+	access: ({ session }) => session?.user.role === "admin",
+	handler: async ({ input, db }) => {
+		const stats = await db
+			.select()
+			.from(orders)
+			.where(gte(orders.createdAt, getPeriodStart(input.period)));
+		return { revenue: stats.reduce((sum, o) => sum + o.total, 0) };
+	},
 });
 ```
 
@@ -302,6 +320,7 @@ functions/
 ```
 
 **Key properties:**
+
 - `schema` — Zod schema validates input before handler runs
 - `outputSchema` — optional, validates output
 - `access` — access control callback or boolean
@@ -341,11 +360,11 @@ tables only when SQL expressiveness is essential (aggregations, window functions
 import { fn } from "questpie";
 
 export default fn({
-  mode: "raw",
-  handler: async ({ request, db }) => {
-    const csv = await generateCSV(db);
-    return new Response(csv, { headers: { "Content-Type": "text/csv" } });
-  },
+	mode: "raw",
+	handler: async ({ request, db }) => {
+		const csv = await generateCSV(db);
+		return new Response(csv, { headers: { "Content-Type": "text/csv" } });
+	},
 });
 ```
 
@@ -360,30 +379,33 @@ export default fn({
 import { route } from "questpie";
 
 export default route({
-  method: "POST",
-  handler: async ({ request, db, queue }) => {
-    const sig = request.headers.get("stripe-signature");
-    const body = await request.text();
+	method: "POST",
+	handler: async ({ request, db, queue }) => {
+		const sig = request.headers.get("stripe-signature");
+		const body = await request.text();
 
-    const event = verifyStripeWebhook(body, sig, process.env.STRIPE_SECRET!);
+		const event = verifyStripeWebhook(body, sig, process.env.STRIPE_SECRET!);
 
-    switch (event.type) {
-      case "checkout.session.completed":
-        await queue.processPayment.publish({ sessionId: event.data.object.id });
-        break;
-      case "invoice.payment_failed":
-        await queue.handleFailedPayment.publish({ invoiceId: event.data.object.id });
-        break;
-    }
+		switch (event.type) {
+			case "checkout.session.completed":
+				await queue.processPayment.publish({ sessionId: event.data.object.id });
+				break;
+			case "invoice.payment_failed":
+				await queue.handleFailedPayment.publish({
+					invoiceId: event.data.object.id,
+				});
+				break;
+		}
 
-    return new Response("ok", { status: 200 });
-  },
+		return new Response("ok", { status: 200 });
+	},
 });
 ```
 
 **URL:** `POST /routes/webhooks/stripe`
 
 **Key differences from functions:**
+
 - Any HTTP method (`GET`, `POST`, `PUT`, `DELETE`, etc.)
 - No schema validation — you parse the request yourself
 - No automatic serialization — you return a `Response` directly
@@ -393,25 +415,25 @@ export default route({
 ```ts
 // routes/health.ts
 export default route({
-  method: "GET",
-  handler: async ({ db }) => {
-    const ok = await db.execute(sql`SELECT 1`);
-    return Response.json({ status: "ok", db: !!ok });
-  },
+	method: "GET",
+	handler: async ({ db }) => {
+		const ok = await db.execute(sql`SELECT 1`);
+		return Response.json({ status: "ok", db: !!ok });
+	},
 });
 ```
 
 ### §4.3 When to Use Functions vs Routes
 
-| | Functions (`fn`) | Routes (`route`) |
-|---|---|---|
-| **Input** | Zod-validated JSON body | Raw `Request` — parse yourself |
-| **Output** | Auto-serialized (JSON/SuperJSON) | Raw `Response` — build yourself |
-| **HTTP method** | Always `POST` | Any method |
-| **Access control** | Built-in `access` callback | Handle yourself |
-| **Client SDK** | `client.rpc.myFunction(input)` — type-safe | Not in client SDK |
-| **Use for** | Business logic, queries, mutations | Webhooks, downloads, streams, health |
-| **URL pattern** | `/rpc/{name}` | `/routes/{path}` |
+|                    | Functions (`fn`)                           | Routes (`route`)                     |
+| ------------------ | ------------------------------------------ | ------------------------------------ |
+| **Input**          | Zod-validated JSON body                    | Raw `Request` — parse yourself       |
+| **Output**         | Auto-serialized (JSON/SuperJSON)           | Raw `Response` — build yourself      |
+| **HTTP method**    | Always `POST`                              | Any method                           |
+| **Access control** | Built-in `access` callback                 | Handle yourself                      |
+| **Client SDK**     | `client.rpc.myFunction(input)` — type-safe | Not in client SDK                    |
+| **Use for**        | Business logic, queries, mutations         | Webhooks, downloads, streams, health |
+| **URL pattern**    | `/rpc/{name}`                              | `/routes/{path}`                     |
 
 **Rule of thumb:** If the caller is your own frontend → **function**. If the caller is an external service or needs non-JSON responses → **route**.
 
@@ -427,28 +449,28 @@ import { job } from "questpie";
 import { z } from "zod";
 
 export default job({
-  name: "send-appointment-confirmation",
-  schema: z.object({
-    appointmentId: z.string(),
-    customerEmail: z.string().email(),
-  }),
-  options: {
-    retryLimit: 3,
-    retryDelay: 5, // seconds
-    retryBackoff: true,
-  },
-  handler: async ({ payload, db, email, collections }) => {
-    const appointment = await collections.appointments.findOne({
-      where: { id: payload.appointmentId },
-      with: { barber: true, service: true },
-    });
+	name: "send-appointment-confirmation",
+	schema: z.object({
+		appointmentId: z.string(),
+		customerEmail: z.string().email(),
+	}),
+	options: {
+		retryLimit: 3,
+		retryDelay: 5, // seconds
+		retryBackoff: true,
+	},
+	handler: async ({ payload, db, email, collections }) => {
+		const appointment = await collections.appointments.findOne({
+			where: { id: payload.appointmentId },
+			with: { barber: true, service: true },
+		});
 
-    await email.send({
-      to: payload.customerEmail,
-      subject: `Appointment confirmed with ${appointment.barber.name}`,
-      html: renderConfirmationEmail(appointment),
-    });
-  },
+		await email.send({
+			to: payload.customerEmail,
+			subject: `Appointment confirmed with ${appointment.barber.name}`,
+			html: renderConfirmationEmail(appointment),
+		});
+	},
 });
 ```
 
@@ -457,14 +479,15 @@ export default job({
 ```ts
 // In a hook, function, route, or another job:
 async ({ data, queue }) => {
-  await queue.sendAppointmentConfirmation.publish({
-    appointmentId: data.id,
-    customerEmail: data.customerEmail,
-  });
-}
+	await queue.sendAppointmentConfirmation.publish({
+		appointmentId: data.id,
+		customerEmail: data.customerEmail,
+	});
+};
 ```
 
 **Queue API per job:**
+
 - `queue.jobName.publish(payload, options?)` — enqueue for immediate processing
 - `queue.jobName.schedule(payload, cron)` — schedule recurring execution
 - `queue.jobName.unschedule()` — cancel scheduled execution
@@ -475,18 +498,21 @@ async ({ data, queue }) => {
 import { workflow } from "questpie";
 
 export default workflow("onboard-customer")
-  .step("create-account", async ({ payload, db }) => {
-    const user = await db.insert(users).values(payload).returning();
-    return { userId: user.id };
-  })
-  .step("send-welcome", async ({ payload, email }) => {
-    await email.send({ to: payload.email, subject: "Welcome!" });
-    return payload;
-  })
-  .step("setup-defaults", async ({ payload, collections }) => {
-    await collections.preferences.create({ userId: payload.userId, theme: "light" });
-  })
-  .build(z.object({ email: z.string(), name: z.string() }));
+	.step("create-account", async ({ payload, db }) => {
+		const user = await db.insert(users).values(payload).returning();
+		return { userId: user.id };
+	})
+	.step("send-welcome", async ({ payload, email }) => {
+		await email.send({ to: payload.email, subject: "Welcome!" });
+		return payload;
+	})
+	.step("setup-defaults", async ({ payload, collections }) => {
+		await collections.preferences.create({
+			userId: payload.userId,
+			theme: "light",
+		});
+	})
+	.build(z.object({ email: z.string(), name: z.string() }));
 ```
 
 ### §4.5 Services — Dependency Injection
@@ -501,33 +527,33 @@ export default workflow("onboard-customer")
 
 ```ts
 interface ServiceDefinition<TDeps extends readonly string[], TInstance> {
-  /**
-   * Lifecycle determines when the service is created:
-   * - "singleton" — created once at app startup, destroyed at app.destroy()
-   * - "request" — created fresh per request, disposed at end of request
-   * @default "singleton"
-   */
-  lifecycle?: "singleton" | "request";
+	/**
+	 * Lifecycle determines when the service is created:
+	 * - "singleton" — created once at app startup, destroyed at app.destroy()
+	 * - "request" — created fresh per request, disposed at end of request
+	 * @default "singleton"
+	 */
+	lifecycle?: "singleton" | "request";
 
-  /**
-   * Dependencies — names of infrastructure or other services this service needs.
-   * Resolved from AppContext before calling create().
-   * Use `as const` for type-safe deps:
-   *   deps: ["db", "logger"] as const
-   */
-  deps?: TDeps;
+	/**
+	 * Dependencies — names of infrastructure or other services this service needs.
+	 * Resolved from AppContext before calling create().
+	 * Use `as const` for type-safe deps:
+	 *   deps: ["db", "logger"] as const
+	 */
+	deps?: TDeps;
 
-  /**
-   * Factory function. Receives resolved dependencies as an object.
-   */
-  create: (deps: Record<TDeps[number], any>) => TInstance;
+	/**
+	 * Factory function. Receives resolved dependencies as an object.
+	 */
+	create: (deps: Record<TDeps[number], any>) => TInstance;
 
-  /**
-   * Cleanup function called when the service is destroyed.
-   * For singletons: called at app.destroy() (server shutdown).
-   * For request-scoped: called at end of request (if handler completes).
-   */
-  dispose?: (instance: TInstance) => void | Promise<void>;
+	/**
+	 * Cleanup function called when the service is destroyed.
+	 * For singletons: called at app.destroy() (server shutdown).
+	 * For request-scoped: called at end of request (if handler completes).
+	 */
+	dispose?: (instance: TInstance) => void | Promise<void>;
 }
 ```
 
@@ -541,8 +567,8 @@ import { service } from "#questpie";
 import Stripe from "stripe";
 
 export default service({
-  lifecycle: "singleton",
-  create: () => new Stripe(process.env.STRIPE_SECRET_KEY!),
+	lifecycle: "singleton",
+	create: () => new Stripe(process.env.STRIPE_SECRET_KEY!),
 });
 ```
 
@@ -551,13 +577,13 @@ export default service({
 import { service } from "#questpie";
 
 export default service({
-  lifecycle: "singleton",
-  deps: ["logger"] as const,
-  create: ({ logger }) => {
-    logger.info("Geocoding service initialized");
-    return new GeocodingClient({ apiKey: process.env.MAPS_API_KEY! });
-  },
-  dispose: (instance) => instance.close(),
+	lifecycle: "singleton",
+	deps: ["logger"] as const,
+	create: ({ logger }) => {
+		logger.info("Geocoding service initialized");
+		return new GeocodingClient({ apiKey: process.env.MAPS_API_KEY! });
+	},
+	dispose: (instance) => instance.close(),
 });
 ```
 
@@ -570,28 +596,31 @@ Created fresh per request. Good for tenant-scoped connections, user-specific con
 import { service } from "#questpie";
 
 export default service({
-  lifecycle: "request",
-  deps: ["db", "session"] as const,
-  create: ({ db, session }) => {
-    const tenantId = session?.user?.tenantId;
-    return tenantId ? createScopedDb(db, tenantId) : db;
-  },
+	lifecycle: "request",
+	deps: ["db", "session"] as const,
+	create: ({ db, session }) => {
+		const tenantId = session?.user?.tenantId;
+		return tenantId ? createScopedDb(db, tenantId) : db;
+	},
 });
 ```
 
 #### Dependency Resolution
 
 Services can depend on:
+
 - **Infrastructure** — `db`, `email`, `queue`, `storage`, `kv`, `logger`, `search`, `realtime`
 - **Other services** — singleton services can depend on other singletons (resolved in registration order)
 - **Request context** — request-scoped services also get `session` and other request-level deps
 
 Resolution order for singletons at startup:
+
 1. Infrastructure services initialized (db, queue, email, storage, etc.)
 2. Singleton services created in registration order
 3. Each service's `deps` resolved from infrastructure + already-created singletons
 
 Resolution for request-scoped services per request:
+
 1. Infrastructure deps from app instance
 2. Singleton service instances from cache
 3. Request-scoped overrides (session, transaction db)
@@ -603,10 +632,10 @@ Codegen discovers `services/*.ts`, derives the instance type via `ServiceInstanc
 ```ts
 // Generated — declare module "questpie"
 interface AppContext {
-  // ... infrastructure ...
-  stripe: ServiceInstanceOf<typeof _svc_stripe>;       // Stripe
-  geocoding: ServiceInstanceOf<typeof _svc_geocoding>; // GeocodingClient
-  tenantDb: ServiceInstanceOf<typeof _svc_tenantDb>;   // DrizzleClient
+	// ... infrastructure ...
+	stripe: ServiceInstanceOf<typeof _svc_stripe>; // Stripe
+	geocoding: ServiceInstanceOf<typeof _svc_geocoding>; // GeocodingClient
+	tenantDb: ServiceInstanceOf<typeof _svc_tenantDb>; // DrizzleClient
 }
 ```
 
@@ -615,10 +644,13 @@ At runtime, `extractAppServices()` resolves all services from the app instance a
 ```ts
 // Every handler gets all services flat:
 async ({ data, db, stripe, geocoding, tenantDb, session }) => {
-  const location = await geocoding.geocode(data.address);
-  const charge = await stripe.charges.create({ amount: data.price * 100, currency: "usd" });
-  await tenantDb.insert(orders).values({ ...data, location });
-}
+	const location = await geocoding.geocode(data.address);
+	const charge = await stripe.charges.create({
+		amount: data.price * 100,
+		currency: "usd",
+	});
+	await tenantDb.insert(orders).values({ ...data, location });
+};
 ```
 
 #### Lifecycle & Cleanup
@@ -682,16 +714,16 @@ Response
 
 The handler is extensible through the primitives themselves — no framework hooks needed:
 
-| Extension Point | Mechanism |
-|----------------|-----------|
-| New HTTP endpoints | `routes/*.ts` files → auto-discovered, mounted at `/routes/*` |
-| New business logic | `functions/*.ts` files → auto-discovered, mounted at `/rpc/*` |
-| Custom auth | `getSession` callback on adapter config |
-| Custom locale | `getLocale` callback on adapter config |
-| Context enrichment | `context.ts` single file — adds properties to every request context |
-| New CRUD collections | `collections/*.ts` files → auto-discovered, auto-mounted at `/:slug` |
-| New globals | `globals/*.ts` files → auto-discovered, auto-mounted at `/globals/:slug` |
-| Background work | `jobs/*.ts` files → dispatched via `queue.jobName.publish()` |
+| Extension Point      | Mechanism                                                                |
+| -------------------- | ------------------------------------------------------------------------ |
+| New HTTP endpoints   | `routes/*.ts` files → auto-discovered, mounted at `/routes/*`            |
+| New business logic   | `functions/*.ts` files → auto-discovered, mounted at `/rpc/*`            |
+| Custom auth          | `getSession` callback on adapter config                                  |
+| Custom locale        | `getLocale` callback on adapter config                                   |
+| Context enrichment   | `context.ts` single file — adds properties to every request context      |
+| New CRUD collections | `collections/*.ts` files → auto-discovered, auto-mounted at `/:slug`     |
+| New globals          | `globals/*.ts` files → auto-discovered, auto-mounted at `/globals/:slug` |
+| Background work      | `jobs/*.ts` files → dispatched via `queue.jobName.publish()`             |
 
 **Example: Adding webhooks to an existing app:**
 
@@ -716,22 +748,22 @@ import { createFetchHandler } from "questpie";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, {
-  basePath: "/api",
-  accessMode: "user",
+	basePath: "/api",
+	accessMode: "user",
 
-  // Custom context enrichment (e.g., multi-tenancy)
-  extendContext: async ({ request }) => ({
-    tenantId: request.headers.get("x-tenant-id"),
-  }),
+	// Custom context enrichment (e.g., multi-tenancy)
+	extendContext: async ({ request }) => ({
+		tenantId: request.headers.get("x-tenant-id"),
+	}),
 
-  // Custom session resolution (override Better Auth)
-  getSession: async (request, app) => {
-    const token = request.headers.get("authorization")?.replace("Bearer ", "");
-    return token ? verifyApiKey(token) : null;
-  },
+	// Custom session resolution (override Better Auth)
+	getSession: async (request, app) => {
+		const token = request.headers.get("authorization")?.replace("Bearer ", "");
+		return token ? verifyApiKey(token) : null;
+	},
 
-  // Custom locale resolution
-  getLocale: (request) => request.headers.get("x-locale") ?? undefined,
+	// Custom locale resolution
+	getLocale: (request) => request.headers.get("x-locale") ?? undefined,
 });
 ```
 
@@ -749,13 +781,13 @@ Admin module adds methods like `.admin()`, `.list()`, `.form()` to `CollectionBu
 
 ```ts
 declare module "questpie" {
-  interface CollectionBuilder<TState> {
-    admin(configFn: AdminConfigCallback): CollectionBuilder<TState>;
-    list(configFn: ListConfigCallback): CollectionBuilder<TState>;
-    form(configFn: FormConfigCallback): CollectionBuilder<TState>;
-    preview(config: PreviewConfig): CollectionBuilder<TState>;
-    actions(configFn: ActionsCallback): CollectionBuilder<TState>;
-  }
+	interface CollectionBuilder<TState> {
+		admin(configFn: AdminConfigCallback): CollectionBuilder<TState>;
+		list(configFn: ListConfigCallback): CollectionBuilder<TState>;
+		form(configFn: FormConfigCallback): CollectionBuilder<TState>;
+		preview(config: PreviewConfig): CollectionBuilder<TState>;
+		actions(configFn: ActionsCallback): CollectionBuilder<TState>;
+	}
 }
 ```
 
@@ -764,35 +796,48 @@ declare module "questpie" {
 ```ts
 // Extension registry (generated)
 const _collExt = {
-  admin:   { stateKey: "admin",        resolve: (fn) => fn({ c: componentProxy }) },
-  list:    { stateKey: "adminList",    resolve: (fn) => fn({ v: viewProxy, f: fieldRefProxy }) },
-  form:    { stateKey: "adminForm",    resolve: (fn) => fn({ v: viewProxy, f: fieldRefProxy }) },
-  preview: { stateKey: "adminPreview", resolve: (v) => v },
-  actions: { stateKey: "adminActions", resolve: (fn) => fn({ a: actionProxy, c: componentProxy }) },
+	admin: { stateKey: "admin", resolve: (fn) => fn({ c: componentProxy }) },
+	list: {
+		stateKey: "adminList",
+		resolve: (fn) => fn({ v: viewProxy, f: fieldRefProxy }),
+	},
+	form: {
+		stateKey: "adminForm",
+		resolve: (fn) => fn({ v: viewProxy, f: fieldRefProxy }),
+	},
+	preview: { stateKey: "adminPreview", resolve: (v) => v },
+	actions: {
+		stateKey: "adminActions",
+		resolve: (fn) => fn({ a: actionProxy, c: componentProxy }),
+	},
 };
 
 // Proxy wrapper (generated)
 function _wrapColl(builder) {
-  return new Proxy(builder, {
-    get(target, prop, receiver) {
-      if (typeof prop === "string" && prop in _collExt) {
-        const ext = _collExt[prop];
-        return (configOrFn) => _wrapColl(target.set(ext.stateKey, ext.resolve(configOrFn)));
-      }
-      const val = Reflect.get(target, prop, receiver);
-      if (typeof val === "function") {
-        return function (...args) {
-          const result = val.apply(target, args);
-          return result instanceof CollectionBuilder ? _wrapColl(result) : result;
-        };
-      }
-      return val;
-    },
-  });
+	return new Proxy(builder, {
+		get(target, prop, receiver) {
+			if (typeof prop === "string" && prop in _collExt) {
+				const ext = _collExt[prop];
+				return (configOrFn) =>
+					_wrapColl(target.set(ext.stateKey, ext.resolve(configOrFn)));
+			}
+			const val = Reflect.get(target, prop, receiver);
+			if (typeof val === "function") {
+				return function (...args) {
+					const result = val.apply(target, args);
+					return result instanceof CollectionBuilder
+						? _wrapColl(result)
+						: result;
+				};
+			}
+			return val;
+		},
+	});
 }
 ```
 
 **Key properties:**
+
 - **Zero prototype mutation** — no global side effects
 - **Generic inference preserved** — TypeScript sees augmented interface, Proxy is transparent
 - **Plugin-composable** — any plugin can add extensions via `CodegenPlugin.registries`
@@ -805,16 +850,16 @@ A plugin can add new builder methods:
 ```ts
 // @questpie/webhooks codegen plugin
 export const webhooksPlugin: CodegenPlugin = {
-  name: "questpie-webhooks",
-  registries: {
-    collectionExtensions: {
-      webhooks: {
-        stateKey: "webhooks",
-        configType: "WebhookConfig",
-        isCallback: false,
-      },
-    },
-  },
+	name: "questpie-webhooks",
+	registries: {
+		collectionExtensions: {
+			webhooks: {
+				stateKey: "webhooks",
+				configType: "WebhookConfig",
+				isCallback: false,
+			},
+		},
+	},
 };
 ```
 
@@ -822,9 +867,9 @@ Generated output:
 
 ```ts
 declare module "questpie" {
-  interface CollectionBuilder<TState> {
-    webhooks(config: WebhookConfig): CollectionBuilder<TState>;
-  }
+	interface CollectionBuilder<TState> {
+		webhooks(config: WebhookConfig): CollectionBuilder<TState>;
+	}
 }
 ```
 
@@ -918,15 +963,17 @@ Generated typed factory functions with plugin extensions:
 
 ```ts
 // NOT exported — internal only
-type _AppInternal = Questpie<QuestpieConfig & {
-  collections: AppCollections;
-  globals: AppGlobals;
-  jobs: AppJobs;
-  functions: AppFunctions;
-  routes: AppRoutes;
-  services: AppServices;
-  blocks: AppBlocks;
-}>;
+type _AppInternal = Questpie<
+	QuestpieConfig & {
+		collections: AppCollections;
+		globals: AppGlobals;
+		jobs: AppJobs;
+		functions: AppFunctions;
+		routes: AppRoutes;
+		services: AppServices;
+		blocks: AppBlocks;
+	}
+>;
 ```
 
 This type exists **only** in generated code for deriving typed service accessors (`_AppInternal["db"]`, `_AppInternal["queue"]`, etc.). It is **never exported**, **never visible** to users. User code never references `Questpie<>`.
@@ -944,15 +991,15 @@ import { createClient } from "questpie/client";
 import type { AppConfig } from "#questpie";
 
 const client = createClient<AppConfig>({
-  baseURL: "http://localhost:3000",
-  basePath: "/api",
+	baseURL: "http://localhost:3000",
+	basePath: "/api",
 });
 
 // Type-safe collections
 const { docs, total } = await client.collections.posts.find({
-  where: { status: "published" },
-  with: { author: true },
-  limit: 10,
+	where: { status: "published" },
+	with: { author: true },
+	limit: 10,
 });
 
 // Type-safe functions
@@ -971,7 +1018,7 @@ import { createAdminAuthClient } from "@questpie/admin/hooks";
 import type { AppConfig } from "#questpie";
 
 export const authClient = createAdminAuthClient<AppConfig>({
-  baseURL: "http://localhost:3000",
+	baseURL: "http://localhost:3000",
 });
 
 // Typed session, sign-in, sign-out
@@ -985,12 +1032,14 @@ Both client factories use a minimal type constraint:
 ```ts
 // In questpie/client
 export interface QuestpieApp {
-  collections: Record<string, AnyCollectionOrBuilder>;
-  globals?: Record<string, any>;
-  auth?: any;
+	collections: Record<string, AnyCollectionOrBuilder>;
+	globals?: Record<string, any>;
+	auth?: any;
 }
 
-export function createClient<T extends QuestpieApp>(config: ClientConfig): QuestpieClient<T>;
+export function createClient<T extends QuestpieApp>(
+	config: ClientConfig,
+): QuestpieClient<T>;
 ```
 
 `AppConfig` satisfies `QuestpieApp` because it has `collections`, `globals`, and `auth` — all flat, no nesting.
@@ -1015,23 +1064,23 @@ Each module returns a `ModuleDefinition`:
 
 ```ts
 interface ModuleDefinition {
-  name: string;
-  collections?: Record<string, AnyCollectionOrBuilder>;
-  globals?: Record<string, AnyGlobal>;
-  jobs?: Record<string, JobDefinition>;
-  functions?: FunctionsTree;
-  routes?: Record<string, RouteDefinition>;
-  services?: Record<string, ServiceDefinition>;
-  fields?: Record<string, FieldDefinition>;         // ← field types
-  listViews?: Record<string, ViewDefinition>;        // ← view types
-  editViews?: Record<string, ViewDefinition>;        // ← view types
-  components?: Record<string, ComponentDefinition>;  // ← component types
-  sidebar?: SidebarContribution[];
-  dashboard?: DashboardContribution[];
-  messages?: Record<string, Record<string, string>>;
-  hooks?: GlobalHooks;
-  defaultAccess?: AccessConfig;
-  auth?: AuthConfig;
+	name: string;
+	collections?: Record<string, AnyCollectionOrBuilder>;
+	globals?: Record<string, AnyGlobal>;
+	jobs?: Record<string, JobDefinition>;
+	functions?: FunctionsTree;
+	routes?: Record<string, RouteDefinition>;
+	services?: Record<string, ServiceDefinition>;
+	fields?: Record<string, FieldDefinition>; // ← field types
+	listViews?: Record<string, ViewDefinition>; // ← view types
+	editViews?: Record<string, ViewDefinition>; // ← view types
+	components?: Record<string, ComponentDefinition>; // ← component types
+	sidebar?: SidebarContribution[];
+	dashboard?: DashboardContribution[];
+	messages?: Record<string, Record<string, string>>;
+	hooks?: GlobalHooks;
+	defaultAccess?: AccessConfig;
+	auth?: AuthConfig;
 }
 ```
 
@@ -1152,15 +1201,15 @@ After implementation, verify:
 
 ## §13 Glossary
 
-| Term | Definition |
-|------|-----------|
-| **AppContext** | Empty interface in core, augmented by generated code. Every handler extends it. |
-| **AppConfig** | Flat type (`{ collections, globals, auth }`) for client APIs. Exported from generated code. |
-| **Function** | Type-safe RPC — validated input, auto-serialized output. `POST /rpc/{name}`. |
-| **Route** | Raw HTTP handler — any method, full `Request`/`Response` control. Mounted at `/routes/{path}`. |
-| **Job** | Background task — queued, retried, schedulable. Dispatched via `queue.jobName.publish()`. |
-| **Service** | Singleton or request-scoped dependency. Flat on AppContext. |
-| **Module** | Static data object contributing collections, fields, views, etc. Merged by `createApp()`. |
-| **CodegenPlugin** | Extension point for codegen — discovers files, registers builder extensions. |
-| **Extension** | Builder method added via `declare module` (types) + Proxy (runtime). |
-| **`_AppInternal`** | Internal `Questpie<>` type in generated code. Never exported. Used only for type derivation. |
+| Term               | Definition                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| **AppContext**     | Empty interface in core, augmented by generated code. Every handler extends it.                |
+| **AppConfig**      | Flat type (`{ collections, globals, auth }`) for client APIs. Exported from generated code.    |
+| **Function**       | Type-safe RPC — validated input, auto-serialized output. `POST /rpc/{name}`.                   |
+| **Route**          | Raw HTTP handler — any method, full `Request`/`Response` control. Mounted at `/routes/{path}`. |
+| **Job**            | Background task — queued, retried, schedulable. Dispatched via `queue.jobName.publish()`.      |
+| **Service**        | Singleton or request-scoped dependency. Flat on AppContext.                                    |
+| **Module**         | Static data object contributing collections, fields, views, etc. Merged by `createApp()`.      |
+| **CodegenPlugin**  | Extension point for codegen — discovers files, registers builder extensions.                   |
+| **Extension**      | Builder method added via `declare module` (types) + Proxy (runtime).                           |
+| **`_AppInternal`** | Internal `Questpie<>` type in generated code. Never exported. Used only for type derivation.   |

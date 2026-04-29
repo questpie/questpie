@@ -4,7 +4,9 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
-import { useResolveText } from "../../../../i18n/hooks";
+
+import { useResolveText, useTranslation } from "../../../../i18n/hooks";
+import { cn } from "../../../../lib/utils";
 import { CollectionEditLink } from "../../../admin-link";
 import { Button } from "../../../ui/button";
 import { Skeleton } from "../../../ui/skeleton";
@@ -40,14 +42,11 @@ function CardsSkeleton({
 	return (
 		<div className={`grid gap-4 ${gridCols[gridColumns]}`}>
 			{skeletonKeys.map((key) => (
-				<div
-					key={key}
-					className="rounded-lg border border-border bg-card overflow-hidden"
-				>
+				<div key={key} className="panel-surface overflow-hidden">
 					{hasImage && <Skeleton className="aspect-video w-full" />}
-					<div className="p-3 space-y-2">
-						<Skeleton className="h-5 w-3/4 rounded" />
-						<Skeleton className="h-4 w-1/2 rounded" />
+					<div className="space-y-2 p-3">
+						<Skeleton variant="text" className="h-5 w-3/4" />
+						<Skeleton variant="text" className="h-4 w-1/2" />
 					</div>
 				</div>
 			))}
@@ -66,6 +65,7 @@ export function CardsDisplay({
 	isLoading = false,
 	loadingCount = 3,
 }: RelationDisplayProps) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const getTitle = (item: any) =>
 		item[fields?.title || "_title"] || getItemDisplayValue(item);
@@ -99,43 +99,50 @@ export function CardsDisplay({
 				const image = getImage(item);
 				const subtitle = getSubtitle(item);
 				const meta = getMeta(item);
+				const isInteractive = editable || !!actions?.onEdit || linkToDetail;
 
 				const cardContent = (
-					<div className="rounded-lg border border-border bg-card hover:bg-card transition-colors overflow-hidden h-full">
+					<div
+						className={cn(
+							"panel-surface h-full overflow-hidden",
+							isInteractive &&
+								"hover:border-border hover:bg-accent/30 hover:text-foreground",
+						)}
+					>
 						{image && (
-							<div className="aspect-video bg-muted">
+							<div className="bg-muted aspect-video">
 								<img
 									src={image}
 									alt={getTitle(item)}
-									className="w-full h-full object-cover"
+									className="image-outline h-full w-full object-cover"
 								/>
 							</div>
 						)}
 						<div className="p-3">
 							<div className="flex items-start justify-between gap-2">
 								<div className="min-w-0 flex-1">
-									<div className="font-medium truncate">{getTitle(item)}</div>
+									<div className="truncate font-medium">{getTitle(item)}</div>
 									{subtitle && (
-										<div className="text-sm text-muted-foreground truncate mt-0.5">
+										<div className="text-muted-foreground mt-0.5 truncate text-sm">
 											{subtitle}
 										</div>
 									)}
 								</div>
 								{/* Action buttons for editable mode */}
 								{editable && (actions?.onEdit || actions?.onRemove) && (
-									<div className="flex items-center gap-1 shrink-0">
+									<div className="flex shrink-0 items-center gap-1">
 										{actions?.onEdit && (
 											<Button
 												type="button"
 												variant="ghost"
-												size="icon"
-												className="h-7 w-7"
+												size="icon-xs"
+												className="relative after:absolute after:-inset-1"
 												onClick={(e) => {
 													e.preventDefault();
 													e.stopPropagation();
 													actions.onEdit?.(item);
 												}}
-												aria-label="Edit item"
+												aria-label={t("field.editItem")}
 											>
 												<Icon icon="ph:pencil" className="size-3" />
 											</Button>
@@ -144,14 +151,14 @@ export function CardsDisplay({
 											<Button
 												type="button"
 												variant="ghost"
-												size="icon"
-												className="h-7 w-7"
+												size="icon-xs"
+												className="relative after:absolute after:-inset-1"
 												onClick={(e) => {
 													e.preventDefault();
 													e.stopPropagation();
 													actions.onRemove?.(item);
 												}}
-												aria-label="Remove item"
+												aria-label={t("field.removeItem")}
 											>
 												<Icon icon="ph:x" className="size-3" />
 											</Button>
@@ -160,10 +167,10 @@ export function CardsDisplay({
 								)}
 							</div>
 							{meta.length > 0 && (
-								<div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
+								<div className="text-muted-foreground mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
 									{meta.map((m) => (
 										<span key={String(m.label)}>
-											<span className="font-medium">
+											<span className="font-chrome chrome-meta mr-1 font-medium">
 												{resolveText(m.label)}:
 											</span>
 											{m.value}
@@ -182,7 +189,7 @@ export function CardsDisplay({
 							key={item.id}
 							type="button"
 							onClick={() => actions.onEdit?.(item)}
-							className="text-left w-full"
+							className="w-full text-left"
 						>
 							{cardContent}
 						</button>

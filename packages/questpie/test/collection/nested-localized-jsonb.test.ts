@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { collection } from "../../src/server/index.js";
+
+import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -48,7 +49,7 @@ describe("nested localized JSONB", () => {
 		const ctx = createTestContext();
 
 		// Create page with $i18n wrappers for localized values
-		const created = await setup.app.api.collections.pages.create(
+		const created = await setup.app.collections.pages.create(
 			{
 				slug: "home",
 				content: {
@@ -78,7 +79,7 @@ describe("nested localized JSONB", () => {
 		expect(created.slug).toBe("home");
 
 		// Read back - should get merged content (localized values injected)
-		const found = await setup.app.api.collections.pages.findOne(
+		const found = await setup.app.collections.pages.findOne(
 			{ where: { id: created.id } },
 			ctx,
 		);
@@ -98,7 +99,7 @@ describe("nested localized JSONB", () => {
 		const ctxSk = createTestContext({ locale: "sk" });
 
 		// Create in EN with $i18n wrappers
-		const created = await setup.app.api.collections.pages.create(
+		const created = await setup.app.collections.pages.create(
 			{
 				slug: "about",
 				content: {
@@ -120,7 +121,7 @@ describe("nested localized JSONB", () => {
 		);
 
 		// Update only SK localized values
-		await setup.app.api.collections.pages.updateById(
+		await setup.app.collections.pages.updateById(
 			{
 				id: created.id,
 				data: {
@@ -144,7 +145,7 @@ describe("nested localized JSONB", () => {
 		);
 
 		// Read in SK - should get SK values
-		const skPage = await setup.app.api.collections.pages.findOne(
+		const skPage = await setup.app.collections.pages.findOne(
 			{ where: { id: created.id } },
 			ctxSk,
 		);
@@ -157,7 +158,7 @@ describe("nested localized JSONB", () => {
 
 		// Read in DE (no translation) - should fallback to EN
 		const ctxDe = createTestContext({ locale: "de" });
-		const dePage = await setup.app.api.collections.pages.findOne(
+		const dePage = await setup.app.collections.pages.findOne(
 			{ where: { id: created.id } },
 			ctxDe,
 		);
@@ -172,7 +173,7 @@ describe("nested localized JSONB", () => {
 	it("handles mixed static and localized fields correctly", async () => {
 		const ctx = createTestContext();
 
-		const created = await setup.app.api.collections.pages.create(
+		const created = await setup.app.collections.pages.create(
 			{
 				slug: "contact",
 				content: {
@@ -195,7 +196,7 @@ describe("nested localized JSONB", () => {
 		);
 
 		// Update only title - other localized values stay
-		await setup.app.api.collections.pages.updateById(
+		await setup.app.collections.pages.updateById(
 			{
 				id: created.id,
 				data: {
@@ -219,7 +220,7 @@ describe("nested localized JSONB", () => {
 			ctx,
 		);
 
-		const found = await setup.app.api.collections.pages.findOne(
+		const found = await setup.app.collections.pages.findOne(
 			{ where: { id: created.id } },
 			ctx,
 		);
@@ -236,7 +237,7 @@ describe("nested localized JSONB", () => {
 		const ctx = createTestContext();
 
 		// Create page with fully static content (no $i18n wrappers)
-		const created = await setup.app.api.collections.pages.create(
+		const created = await setup.app.collections.pages.create(
 			{
 				slug: "static-page",
 				content: {
@@ -251,7 +252,7 @@ describe("nested localized JSONB", () => {
 			ctx,
 		);
 
-		const foundStatic = await setup.app.api.collections.pages.findOne(
+		const foundStatic = await setup.app.collections.pages.findOne(
 			{ where: { id: created.id } },
 			ctx,
 		);
@@ -269,7 +270,7 @@ describe("nested localized JSONB", () => {
 		const ctxSk = createTestContext({ locale: "sk" });
 
 		// Create page with blocks structure in EN (like seed.ts)
-		const created = await setup.app.api.collections.pages.create(
+		const created = await setup.app.collections.pages.create(
 			{
 				slug: "home",
 				content: {
@@ -319,7 +320,7 @@ describe("nested localized JSONB", () => {
 		);
 
 		// Update with SK translations (like seed.ts does)
-		await setup.app.api.collections.pages.updateById(
+		await setup.app.collections.pages.updateById(
 			{
 				id: created.id,
 				data: {
@@ -368,7 +369,7 @@ describe("nested localized JSONB", () => {
 		);
 
 		// Read in SK - should get SK values
-		const skPage = await setup.app.api.collections.pages.findOne(
+		const skPage = await setup.app.collections.pages.findOne(
 			{ where: { id: created.id } },
 			ctxSk,
 		);
@@ -390,7 +391,7 @@ describe("nested localized JSONB", () => {
 		expect(skContent?._values["cta-1"]?.buttonText).toBe("Rezervovať");
 
 		// Read in EN - should get EN values
-		const enPage = await setup.app.api.collections.pages.findOne(
+		const enPage = await setup.app.collections.pages.findOne(
 			{ where: { id: created.id } },
 			ctxEn,
 		);
@@ -412,7 +413,7 @@ describe("nested localized JSONB", () => {
 		const ctxSk = createTestContext({ locale: "sk" });
 
 		// Create two pages
-		const p1 = await setup.app.api.collections.pages.create(
+		const p1 = await setup.app.collections.pages.create(
 			{
 				slug: "page-1",
 				content: {
@@ -423,7 +424,7 @@ describe("nested localized JSONB", () => {
 			ctxEn,
 		);
 
-		const p2 = await setup.app.api.collections.pages.create(
+		const p2 = await setup.app.collections.pages.create(
 			{
 				slug: "page-2",
 				content: {
@@ -435,7 +436,7 @@ describe("nested localized JSONB", () => {
 		);
 
 		// Batch update in SK
-		await setup.app.api.collections.pages.update(
+		await setup.app.collections.pages.update(
 			{
 				where: { id: { in: [p1.id, p2.id] } },
 				data: {
@@ -449,7 +450,7 @@ describe("nested localized JSONB", () => {
 		);
 
 		// Verify P1 in SK
-		const p1Sk = await setup.app.api.collections.pages.findOne(
+		const p1Sk = await setup.app.collections.pages.findOne(
 			{ where: { id: p1.id } },
 			ctxSk,
 		);
@@ -457,7 +458,7 @@ describe("nested localized JSONB", () => {
 		expect((p1Sk?.content as any)?.alignment).toBe("center");
 
 		// Verify P2 in SK
-		const p2Sk = await setup.app.api.collections.pages.findOne(
+		const p2Sk = await setup.app.collections.pages.findOne(
 			{ where: { id: p2.id } },
 			ctxSk,
 		);
@@ -465,7 +466,7 @@ describe("nested localized JSONB", () => {
 		expect((p2Sk?.content as any)?.alignment).toBe("center");
 
 		// Verify P1 in EN remains unchanged in localized part
-		const p1En = await setup.app.api.collections.pages.findOne(
+		const p1En = await setup.app.collections.pages.findOne(
 			{ where: { id: p1.id } },
 			ctxEn,
 		);

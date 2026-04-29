@@ -6,12 +6,14 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
+
 import type { ProgressWidgetConfig } from "../../builder/types/widget-types";
 import { useServerWidgetData } from "../../hooks/use-server-widget-data";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime";
 import { WidgetCard } from "../../views/dashboard/widget-card";
+import { WidgetEmptyState } from "./widget-empty-state";
 import { ProgressWidgetSkeleton } from "./widget-skeletons";
 
 /**
@@ -46,6 +48,7 @@ interface ProgressWidgetProps {
 export default function ProgressWidget({ config }: ProgressWidgetProps) {
 	const client = useAdminStore(selectClient);
 	const resolveText = useResolveText();
+	const { t } = useTranslation();
 	const { color, showPercentage = true } = config;
 
 	type ProgressData = {
@@ -65,7 +68,7 @@ export default function ProgressWidget({ config }: ProgressWidgetProps) {
 		enabled: !useServerData && !!config.loader,
 		refetchInterval: config.refreshInterval,
 	});
-	const { data, isLoading, error, refetch } = useServerData
+	const { data, isLoading, error, refetch, isFetching } = useServerData
 		? serverQuery
 		: clientQuery;
 
@@ -91,10 +94,10 @@ export default function ProgressWidget({ config }: ProgressWidgetProps) {
 		<div className="space-y-3">
 			{/* Progress bar */}
 			<div className="relative">
-				<div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+				<div className="bg-muted h-2 w-full overflow-hidden rounded-full">
 					<div
 						className={cn(
-							"h-full rounded-full transition-all duration-500",
+							"h-full rounded-full transition-[width] duration-500",
 							getProgressColor(),
 						)}
 						style={{ width: `${percentage}%` }}
@@ -104,31 +107,47 @@ export default function ProgressWidget({ config }: ProgressWidgetProps) {
 
 			{/* Labels */}
 			<div className="flex items-center justify-between text-sm">
-				<span className="text-muted-foreground">
+				<span className="text-muted-foreground tabular-nums">
 					{data.label ||
 						`${data.current.toLocaleString()} / ${data.target.toLocaleString()}`}
 				</span>
 				{showPercentage && (
-					<span className="font-medium">{percentageFormatted}%</span>
+					<span className="font-medium tabular-nums">
+						{percentageFormatted}%
+					</span>
 				)}
 			</div>
 
 			{/* Subtitle */}
 			{data.subtitle && (
-				<p className="text-xs text-muted-foreground">{data.subtitle}</p>
+				<p className="text-muted-foreground text-xs">{data.subtitle}</p>
 			)}
 		</div>
-	) : null;
+	) : (
+		<WidgetEmptyState
+			iconName="ph:target"
+			title={t("widget.progress.emptyTitle")}
+			description={t("widget.progress.emptyDescription")}
+		/>
+	);
 
 	return (
 		<WidgetCard
 			title={title}
+			description={
+				config.description ? resolveText(config.description) : undefined
+			}
+			icon={config.icon}
+			variant={config.cardVariant}
 			isLoading={isLoading}
+			isRefreshing={isFetching && !isLoading}
 			loadingSkeleton={<ProgressWidgetSkeleton />}
 			error={
 				error instanceof Error ? error : error ? new Error(String(error)) : null
 			}
 			onRefresh={() => refetch()}
+			actions={config.actions}
+			className={config.className}
 		>
 			{progressContent}
 		</WidgetCard>

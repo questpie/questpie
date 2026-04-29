@@ -10,6 +10,8 @@
 import { watch } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+
+import { extractPluginsFromModules } from "../codegen/extract-plugins.js";
 import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
@@ -21,6 +23,7 @@ import type {
 	MultiTargetCodegenResult,
 } from "../codegen/types.js";
 import { isPackageConfig, type PackageConfig } from "../config.js";
+import { resolveCliPath, toFileImportSpecifier } from "../utils.js";
 
 // ============================================================================
 // generate command
@@ -52,7 +55,7 @@ export async function resolveEntityRoot(
 ): Promise<{ configPath: string; rootDir: string }> {
 	let content: string;
 	try {
-		content = await readFile(configPath, "utf-8");
+		content = String(await readFile(configPath, "utf-8"));
 	} catch {
 		return { configPath, rootDir: dirname(configPath) };
 	}
@@ -110,7 +113,9 @@ export async function loadConfigForCodegen(
 	configPath: string,
 ): Promise<ConfigLoadResult> {
 	try {
-		const configModule = await import(/* @vite-ignore */ configPath);
+		const configModule = await import(
+			/* @vite-ignore */ toFileImportSpecifier(configPath)
+		);
 		const config = configModule.default || configModule.config || configModule;
 
 		// PackageConfig mode: iterate over modulesDir subdirectories
@@ -168,7 +173,7 @@ export async function loadConfigForCodegen(
  * - Package: `packageConfig({ modulesDir: "..." })` → iterates module subdirectories
  */
 export async function generateCommand(options: GenerateOptions): Promise<void> {
-	const rawConfigPath = resolve(process.cwd(), options.configPath);
+	const rawConfigPath = resolveCliPath(options.configPath);
 	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
 
 	// Load plugins + module/package config from questpie.config.ts
@@ -216,10 +221,13 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
 			console.log(`  Config: ${configPath}`);
 		}
 
+		// Pre-pass: extract codegen plugins from modules.ts
+		const allPlugins = await extractModulePlugins(rootDir, plugins, options);
+
 		const multiResult = await runAllTargets({
 			rootDir,
 			configPath,
-			plugins,
+			plugins: allPlugins,
 			dryRun: options.dryRun,
 		});
 
@@ -351,7 +359,7 @@ async function buildImportRewriteMap(
 ): Promise<Record<string, string> | undefined> {
 	try {
 		const pkgJsonPath = join(packageDir, "package.json");
-		const pkgJsonContent = await readFile(pkgJsonPath, "utf-8");
+		const pkgJsonContent = String(await readFile(pkgJsonPath, "utf-8"));
 		const pkgJson = JSON.parse(pkgJsonContent);
 		const pkgName = pkgJson.name;
 		if (!pkgName) return undefined;
@@ -360,7 +368,7 @@ async function buildImportRewriteMap(
 		const tsconfigPath = join(packageDir, "tsconfig.json");
 		let tsconfigContent: string;
 		try {
-			tsconfigContent = await readFile(tsconfigPath, "utf-8");
+			tsconfigContent = String(await readFile(tsconfigPath, "utf-8"));
 		} catch {
 			return undefined;
 		}
@@ -912,6 +920,68 @@ function printDiscovered(
 	}
 	for (const [key, file] of d.singles) {
 		console.log(`\n  ${key}: ${file.source}`);
+	}
+}
+
+/**
+ * Pre-pass: extract codegen plugins from modules.ts.
+ *
+ * Module packages (e.g. `@questpie/admin`, `@questpie/openapi`) can declare
+ * `plugin` on their module definition. This pre-pass imports modules.ts,
+ * traverses the module tree, and extracts all plugins — so they participate
+ * in codegen without manual registration in questpie.config.ts.
+ *
+ * Merge order: module-extracted plugins → runtimeConfig plugins.
+ * Core plugin is always prepended by runAllTargets/runCodegen.
+ */
+async function extractModulePlugins(
+	rootDir: string,
+	configPlugins: CodegenPlugin[],
+	options: GenerateOptions,
+): Promise<CodegenPlugin[]> {
+	const modulesPath = join(rootDir, "modules.ts");
+	try {
+		await stat(modulesPath);
+	} catch {
+		return configPlugins;
+	}
+
+	try {
+		const modulesExport = await import(/* @vite-ignore */ modulesPath);
+		const modules = modulesExport.default ?? [];
+		if (!Array.isArray(modules)) return configPlugins;
+
+		const modulePlugins = extractPluginsFromModules(modules);
+		if (modulePlugins.length === 0) return configPlugins;
+
+		if (options.verbose) {
+			console.log(
+				`  Extracted ${modulePlugins.length} plugin(s) from modules.ts: ${modulePlugins.map((p) => p.name).join(", ")}`,
+			);
+		}
+
+		// Dedupe: module-extracted first, then config plugins (config wins on name collision)
+		const seen = new Set<string>();
+		const merged: CodegenPlugin[] = [];
+		// Config plugins take priority — add them first to the seen set
+		for (const p of configPlugins) {
+			seen.add(p.name);
+			merged.push(p);
+		}
+		// Then add module-extracted plugins that weren't already in config
+		for (const p of modulePlugins) {
+			if (!seen.has(p.name)) {
+				seen.add(p.name);
+				merged.push(p);
+			}
+		}
+		return merged;
+	} catch (error) {
+		if (options.verbose) {
+			const reason = error instanceof Error ? error.message : String(error);
+			console.warn(`  Could not extract plugins from modules.ts: ${reason}`);
+		}
+		return configPlugins;
 	}
 }
 

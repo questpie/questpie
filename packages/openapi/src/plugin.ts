@@ -1,8 +1,9 @@
 /**
  * OpenAPI Codegen Plugin
  *
- * Lightweight plugin that emits an `AppRouteKeys` type from discovered routes.
- * Enables static analysis and type-safe route references without runtime execution.
+ * Lightweight plugin that:
+ * 1. Emits an `AppRouteKeys` type from discovered routes
+ * 2. Discovers `config/openapi.ts` for typed OpenAPI configuration
  *
  * @example
  * ```ts
@@ -24,15 +25,29 @@ export function openApiPlugin(): CodegenPlugin {
 			server: {
 				root: ".",
 				outputFile: "index.ts",
+				discover: {
+					openapi: { pattern: "config/openapi.ts", configKey: "openapi" },
+				},
+				registries: {
+					singletonFactories: {
+						openapi: {
+							configType: "OpenApiModuleConfig",
+							imports: [
+								{
+									name: "OpenApiModuleConfig",
+									from: "@questpie/openapi",
+								},
+							],
+						},
+					},
+				},
 				transform: (ctx) => {
 					const routes = ctx.categories.get("routes");
 					if (!routes?.size) return;
 
 					const keys = [...routes.keys()];
 					const union = keys.map((k) => `"${k}"`).join(" | ");
-					ctx.addTypeDeclaration(
-						`export type AppRouteKeys = ${union};`,
-					);
+					ctx.addTypeDeclaration(`export type AppRouteKeys = ${union};`);
 				},
 			},
 		},

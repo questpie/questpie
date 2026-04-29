@@ -9,7 +9,9 @@
  */
 
 import * as React from "react";
+
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
+
 import type { BlockContent, BlockNode } from "../../../blocks/types";
 import { isBlockContent } from "../../../blocks/types";
 import type { FieldInstance } from "../../../builder/field/field";
@@ -20,7 +22,7 @@ import {
 	TooltipTrigger,
 } from "../../../components/ui/tooltip";
 import { useAdminConfig } from "../../../hooks/use-admin-config";
-import { useResolveText } from "../../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../../i18n/hooks";
 import { cn } from "../../../lib/utils";
 import { selectAdmin, useAdminStore } from "../../../runtime";
 import {
@@ -46,7 +48,7 @@ export function JsonCell({ value }: { value: unknown }) {
 		typeof value === "string" ? value : JSON.stringify(value, null, 0);
 	const truncated = json.length > 50 ? `${json.slice(0, 50)}...` : json;
 	return (
-		<span className="font-mono text-xs text-muted-foreground" title={json}>
+		<span className="text-muted-foreground font-mono text-xs" title={json}>
 			{truncated}
 		</span>
 	);
@@ -67,6 +69,7 @@ export function ObjectCell({
 	row?: unknown;
 	fieldDef?: FieldInstance;
 }) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	if (value === null || value === undefined) {
 		return <span className="text-muted-foreground">-</span>;
@@ -105,7 +108,7 @@ export function ObjectCell({
 					className={cn(
 						"inline-flex items-center gap-1 text-xs",
 						"text-muted-foreground hover:text-foreground",
-						"transition-colors cursor-default max-w-[220px]",
+						"max-w-[220px] cursor-default transition-colors",
 					)}
 				>
 					<span className="truncate">{previewParts.join(", ")}</span>
@@ -116,8 +119,8 @@ export function ObjectCell({
 					)}
 				</span>
 			</TooltipTrigger>
-			<TooltipContent side="bottom" align="start" className={"w-72 p-0 "}>
-				<div className="max-h-[300px] overflow-y-auto p-3  space-y-0.5">
+			<TooltipContent side="bottom" align="start" className={"w-72 p-0"}>
+				<div className="max-h-[300px] space-y-0.5 overflow-y-auto p-3">
 					{entries.slice(0, 12).map(([key, val]) => {
 						const nestedDef = nestedFields?.[key];
 						const label = resolveText(getFieldLabel(key, nestedDef));
@@ -130,10 +133,10 @@ export function ObjectCell({
 							return (
 								<div key={key} className="py-1">
 									<div className="flex items-center gap-1.5 text-xs font-medium">
-										<span className="size-1 rounded-full bg-foreground/60" />
+										<span className="bg-muted-foreground/50 size-1.5 rounded-full" />
 										{label}
 									</div>
-									<div className="ml-2.5 pl-2 border-l border-border mt-0.5 space-y-0.5">
+									<div className="bg-muted/50 mt-1 ml-3 space-y-0.5 rounded-sm px-2 py-1.5">
 										{nestedEntries.map(([k, v]) => (
 											<div
 												key={k}
@@ -142,7 +145,7 @@ export function ObjectCell({
 												<span className="text-muted-foreground">
 													{formatFieldLabel(k)}
 												</span>
-												<span className="truncate max-w-[120px]">
+												<span className="max-w-[120px] truncate">
 													{formatPrimitiveValue(v)}
 												</span>
 											</div>
@@ -157,10 +160,10 @@ export function ObjectCell({
 							return (
 								<div
 									key={key}
-									className="flex items-center justify-between gap-2 text-xs py-0.5"
+									className="item-surface border-border flex items-center justify-between gap-2 px-2 py-1 text-xs"
 								>
 									<span className="flex items-center gap-1.5">
-										<span className="size-1 rounded-full bg-foreground/60" />
+										<span className="bg-muted-foreground/50 size-1.5 rounded-full" />
 										<span className="text-muted-foreground">{label}</span>
 									</span>
 									<Badge variant="secondary" className="h-4 px-1 text-[10px]">
@@ -174,13 +177,13 @@ export function ObjectCell({
 						return (
 							<div
 								key={key}
-								className="flex items-center justify-between gap-2 text-xs py-0.5"
+								className="item-surface border-border flex items-center justify-between gap-2 px-2 py-1 text-xs"
 							>
 								<span className="flex items-center gap-1.5">
-									<span className="size-1 rounded-full bg-foreground/60" />
+									<span className="bg-muted-foreground/50 size-1.5 rounded-full" />
 									<span className="text-muted-foreground">{label}</span>
 								</span>
-								<span className="font-medium truncate max-w-[140px]">
+								<span className="max-w-[140px] truncate font-medium">
 									{formatPrimitiveValue(val)}
 								</span>
 							</div>
@@ -188,8 +191,8 @@ export function ObjectCell({
 					})}
 				</div>
 				{entries.length > 12 && (
-					<div className="text-[11px] text-muted-foreground text-center py-1.5 border-t border-border">
-						+{entries.length - 12} more
+					<div className="text-muted-foreground border-border border-t py-1.5 text-center text-[11px]">
+						{t("cell.more", { count: entries.length - 12 })}
 					</div>
 				)}
 			</TooltipContent>
@@ -212,6 +215,7 @@ export function ArrayCell({
 	row?: unknown;
 	fieldDef?: FieldInstance;
 }) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	if (value === null || value === undefined) {
 		return <span className="text-muted-foreground">-</span>;
@@ -249,12 +253,12 @@ export function ArrayCell({
 						className={cn(
 							"inline-flex items-center gap-1.5 text-xs",
 							"text-muted-foreground hover:text-foreground",
-							"transition-colors cursor-default max-w-[180px]",
+							"max-w-[180px] cursor-default transition-colors",
 						)}
 					>
 						<Badge
 							variant="secondary"
-							className="h-4 min-w-4 px-1 text-[10px] shrink-0"
+							className="h-4 min-w-4 shrink-0 px-1 text-[10px]"
 						>
 							{value.length}
 						</Badge>
@@ -268,9 +272,9 @@ export function ArrayCell({
 			<TooltipContent
 				side="bottom"
 				align="start"
-				className="p-0 w-64 max-w-[90vw] bg-popover border-border"
+				className="bg-popover border-border w-64 max-w-[90vw] p-0"
 			>
-				<div className="max-h-[280px] overflow-y-auto p-2 space-y-0.5">
+				<div className="max-h-[280px] space-y-0.5 overflow-y-auto p-2">
 					{value.slice(0, 10).map((item, idx) => {
 						const label = getItemLabel(item, idx, itemLabelFn);
 
@@ -299,11 +303,11 @@ export function ArrayCell({
 							return (
 								<div key={String(itemId)} className="py-1">
 									<div className="flex items-center gap-1.5 text-xs font-medium">
-										<span className="size-1 rounded-full bg-foreground/60" />
+										<span className="bg-muted-foreground/50 size-1.5 rounded-full" />
 										{label}
 									</div>
 									{details.length > 0 && (
-										<div className="ml-2.5 pl-2 border-l border-border mt-0.5 space-y-0.5">
+										<div className="bg-muted/50 mt-1 ml-3 space-y-0.5 rounded-sm px-2 py-1.5">
 											{details.map(([k, v]) => {
 												const itemFieldDef = itemFields?.[k];
 												return (
@@ -314,7 +318,7 @@ export function ArrayCell({
 														<span className="text-muted-foreground">
 															{resolveText(getFieldLabel(k, itemFieldDef))}
 														</span>
-														<span className="truncate max-w-[100px]">
+														<span className="max-w-[100px] truncate">
 															{formatPrimitiveValue(v)}
 														</span>
 													</div>
@@ -329,17 +333,17 @@ export function ArrayCell({
 						return (
 							<div
 								key={`item-${String(item)}`}
-								className="flex items-center gap-1.5 text-xs py-0.5"
+								className="item-surface border-border flex items-center gap-1.5 px-2 py-1 text-xs"
 							>
-								<span className="size-1 rounded-full bg-foreground/60" />
+								<span className="bg-muted-foreground/50 size-1.5 rounded-full" />
 								{formatPrimitiveValue(item)}
 							</div>
 						);
 					})}
 				</div>
 				{value.length > 10 && (
-					<div className="text-[11px] text-muted-foreground text-center py-1.5 border-t border-border">
-						+{value.length - 10} more
+					<div className="text-muted-foreground border-border border-t py-1.5 text-center text-[11px]">
+						{t("cell.more", { count: value.length - 10 })}
 					</div>
 				)}
 			</TooltipContent>
@@ -413,6 +417,7 @@ function collectBlockStats(tree: BlockNode[]): {
  * Blocks cell - summarizes block tree content with type counts
  */
 export function BlocksCell({ value }: { value: unknown }) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const { data: adminConfig } = useAdminConfig();
 
@@ -442,7 +447,6 @@ export function BlocksCell({ value }: { value: unknown }) {
 			label: getBlockLabel(type, blockDefs?.[type], resolveText),
 		}),
 	);
-
 	entries.sort((a, b) => {
 		if (b.count !== a.count) return b.count - a.count;
 		return a.label.localeCompare(b.label);
@@ -461,14 +465,14 @@ export function BlocksCell({ value }: { value: unknown }) {
 				render={
 					<span
 						className={cn(
-							"inline-flex items-center gap-1.5 text-xs",
-							"text-muted-foreground hover:text-foreground",
-							"transition-colors cursor-default max-w-[220px]",
+							"inline-flex h-6 max-w-[240px] cursor-default items-center gap-2 rounded-md px-1.5 text-xs",
+							"text-muted-foreground hover:bg-surface-high hover:text-foreground",
+							"transition-[background-color,color] duration-150 ease-out",
 						)}
 					>
 						<Badge
-							variant="secondary"
-							className="h-4 min-w-4 px-1 text-[10px] shrink-0"
+							variant="outline"
+							className="h-5 min-w-5 shrink-0 px-1.5 text-[10px]"
 						>
 							{total}
 						</Badge>
@@ -482,30 +486,30 @@ export function BlocksCell({ value }: { value: unknown }) {
 			<TooltipContent
 				side="bottom"
 				align="start"
-				className="p-0 w-64 max-w-[90vw] bg-popover border-border"
+				className="w-64 max-w-[90vw] p-1"
 			>
-				<div className="flex items-center justify-between px-2 py-1.5 text-[11px] text-muted-foreground border-b border-border">
-					<span>Blocks</span>
-					<Badge variant="secondary" className="h-4 px-1 text-[10px]">
+				<div className="text-muted-foreground flex items-center justify-between px-2 py-1 text-[11px]">
+					<span>{t("cell.blocks")}</span>
+					<Badge variant="outline" className="h-5 px-1.5 text-[10px]">
 						{total}
 					</Badge>
 				</div>
-				<div className="max-h-[280px] overflow-y-auto p-2 space-y-0.5">
+				<div className="max-h-[280px] space-y-0.5 overflow-y-auto p-1">
 					{entries.slice(0, 10).map((entry) => (
 						<div
 							key={entry.type}
-							className="flex items-center justify-between gap-2 text-xs py-0.5"
+							className="flex h-7 items-center justify-between gap-2 rounded-md px-2 text-xs"
 						>
 							<span className="truncate">{entry.label}</span>
-							<Badge variant="secondary" className="h-4 px-1 text-[10px]">
+							<Badge variant="outline" className="h-5 px-1.5 text-[10px]">
 								{entry.count}
 							</Badge>
 						</div>
 					))}
 				</div>
 				{entries.length > 10 && (
-					<div className="text-[11px] text-muted-foreground text-center py-1.5 border-t border-border">
-						+{entries.length - 10} more
+					<div className="text-muted-foreground py-1.5 text-center text-[11px]">
+						{t("cell.more", { count: entries.length - 10 })}
 					</div>
 				)}
 			</TooltipContent>

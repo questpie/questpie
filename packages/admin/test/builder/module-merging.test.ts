@@ -6,8 +6,10 @@
  */
 
 import { describe, expect, it } from "bun:test";
+
 import type { AdminState } from "#questpie/admin/client/builder/admin-types";
 import { view } from "#questpie/admin/client/builder/view/view";
+
 import {
 	createDashboardPage,
 	createEmailField,
@@ -65,7 +67,10 @@ describe("Field Merging", () => {
 			fields: { email: createEmailField() },
 		};
 
-		const combined = mergeStates(mergeStates(createEmptyState(), module1), module2);
+		const combined = mergeStates(
+			mergeStates(createEmptyState(), module1),
+			module2,
+		);
 
 		expect(combined.fields.text).toBeDefined();
 		expect(combined.fields.email).toBeDefined();
@@ -84,7 +89,10 @@ describe("Field Merging", () => {
 			fields: { text: field2 },
 		};
 
-		const combined = mergeStates(mergeStates(createEmptyState(), module1), module2);
+		const combined = mergeStates(
+			mergeStates(createEmptyState(), module1),
+			module2,
+		);
 
 		expect(combined.fields.text).toBe(field2);
 	});
@@ -117,7 +125,10 @@ describe("View Merging", () => {
 			views: { grid: view("grid", { kind: "list", component: MockTableView }) },
 		};
 
-		const combined = mergeStates(mergeStates(createEmptyState(), module1), module2);
+		const combined = mergeStates(
+			mergeStates(createEmptyState(), module1),
+			module2,
+		);
 
 		expect(combined.views.table).toBeDefined();
 		expect(combined.views.grid).toBeDefined();
@@ -131,10 +142,15 @@ describe("View Merging", () => {
 
 		const module2: AdminState = {
 			...createEmptyState(),
-			views: { wizard: view("wizard", { kind: "form", component: MockFormView }) },
+			views: {
+				wizard: view("wizard", { kind: "form", component: MockFormView }),
+			},
 		};
 
-		const combined = mergeStates(mergeStates(createEmptyState(), module1), module2);
+		const combined = mergeStates(
+			mergeStates(createEmptyState(), module1),
+			module2,
+		);
 
 		expect(combined.views.form).toBeDefined();
 		expect(combined.views.wizard).toBeDefined();
@@ -170,7 +186,10 @@ describe("Widget Merging", () => {
 			widgets: { chart: createStatsWidget() },
 		};
 
-		const combined = mergeStates(mergeStates(createEmptyState(), module1), module2);
+		const combined = mergeStates(
+			mergeStates(createEmptyState(), module1),
+			module2,
+		);
 
 		expect(combined.widgets.stats).toBeDefined();
 		expect(combined.widgets.chart).toBeDefined();
@@ -189,7 +208,10 @@ describe("Widget Merging", () => {
 			widgets: { stats: widget2 },
 		};
 
-		const combined = mergeStates(mergeStates(createEmptyState(), module1), module2);
+		const combined = mergeStates(
+			mergeStates(createEmptyState(), module1),
+			module2,
+		);
 
 		expect(combined.widgets.stats).toBe(widget2);
 	});
@@ -207,7 +229,10 @@ describe("Page Merging", () => {
 			pages: { settings: createDashboardPage() },
 		};
 
-		const combined = mergeStates(mergeStates(createEmptyState(), module1), module2);
+		const combined = mergeStates(
+			mergeStates(createEmptyState(), module1),
+			module2,
+		);
 
 		expect(combined.pages.dashboard).toBeDefined();
 		expect(combined.pages.settings).toBeDefined();
@@ -255,9 +280,18 @@ describe("Chained Merges", () => {
 		const field2 = createTextField();
 		const field3 = createTextField();
 
-		const module1: AdminState = { ...createEmptyState(), fields: { text: field1 } };
-		const module2: AdminState = { ...createEmptyState(), fields: { text: field2 } };
-		const module3: AdminState = { ...createEmptyState(), fields: { text: field3 } };
+		const module1: AdminState = {
+			...createEmptyState(),
+			fields: { text: field1 },
+		};
+		const module2: AdminState = {
+			...createEmptyState(),
+			fields: { text: field2 },
+		};
+		const module3: AdminState = {
+			...createEmptyState(),
+			fields: { text: field3 },
+		};
 
 		const combined = mergeStates(
 			mergeStates(mergeStates(createEmptyState(), module1), module2),

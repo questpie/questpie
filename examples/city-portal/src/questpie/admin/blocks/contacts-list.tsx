@@ -7,35 +7,35 @@ import type { BlockProps } from "../.generated/client";
 export function ContactsListRenderer({
 	values,
 	data,
-}: BlockProps<"contactsList">) {
+}: BlockProps<"contacts-list">) {
 	const contacts = (data as any)?.contacts || [];
 
 	return (
-		<section className="py-16 px-6">
+		<section className="px-6 py-16">
 			<div className="container mx-auto">
 				{values.title && (
-					<h2 className="text-3xl font-bold tracking-tight mb-8">
+					<h2 className="mb-8 text-3xl font-bold tracking-tight">
 						{values.title}
 					</h2>
 				)}
 
 				{contacts.length === 0 && (
-					<p className="text-muted-foreground text-center py-8">
+					<p className="text-muted-foreground py-8 text-center">
 						No contacts available.
 					</p>
 				)}
 
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+				<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 					{contacts.map((contact: any) => (
 						<div
 							key={contact.id}
-							className="border rounded-lg p-6 hover:shadow-md transition-shadow"
+							className="rounded-lg border p-6 transition-shadow hover:shadow-md"
 						>
-							<h3 className="font-semibold text-lg mb-2">
+							<h3 className="mb-2 text-lg font-semibold">
 								{contact.department}
 							</h3>
 							{contact.description && (
-								<p className="text-sm text-muted-foreground mb-4">
+								<p className="text-muted-foreground mb-4 text-sm">
 									{contact.description}
 								</p>
 							)}

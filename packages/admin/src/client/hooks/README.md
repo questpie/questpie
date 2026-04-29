@@ -7,22 +7,22 @@ React hooks for data fetching and admin functionality. Built on TanStack Query.
 Hooks require `AdminProvider` to be mounted in your app:
 
 ```tsx
-import { AdminLayoutProvider } from "@questpie/admin/views/layout";
-import { Admin } from "@questpie/admin/builder";
+import { AdminLayoutProvider } from "@questpie/admin/client";
+import { Admin } from "@questpie/admin/client";
 import { admin } from "./admin";
 
 function App() {
-  return (
-    <AdminLayoutProvider
-      admin={Admin.from(admin)}
-      client={client}
-      queryClient={queryClient}
-      LinkComponent={Link}
-      basePath="/admin"
-    >
-      {children}
-    </AdminLayoutProvider>
-  );
+	return (
+		<AdminLayoutProvider
+			admin={Admin.normalize(admin)}
+			client={client}
+			queryClient={queryClient}
+			LinkComponent={Link}
+			basePath="/admin"
+		>
+			{children}
+		</AdminLayoutProvider>
+	);
 }
 ```
 
@@ -36,7 +36,7 @@ function App() {
 
 ```tsx
 const { data } = useCollectionList("posts", { limit: 10 }, undefined, {
-  realtime: false,
+	realtime: false,
 });
 ```
 
@@ -47,27 +47,27 @@ const { data } = useCollectionList("posts", { limit: 10 }, undefined, {
 Fetch paginated list with filters and sorting:
 
 ```tsx
-import { useCollectionList } from "@questpie/admin/hooks";
+import { useCollectionList } from "@questpie/admin/client";
 
 function PostsList() {
-  const { data, isLoading, error } = useCollectionList("posts", {
-    limit: 10,
-    offset: 0,
-    where: { status: { eq: "published" } },
-    orderBy: { createdAt: "desc" },
-    with: { author: true },
-  });
+	const { data, isLoading, error } = useCollectionList("posts", {
+		limit: 10,
+		offset: 0,
+		where: { status: { eq: "published" } },
+		orderBy: { createdAt: "desc" },
+		with: { author: true },
+	});
 
-  if (isLoading) return <Spinner />;
-  if (error) return <Error message={error.message} />;
+	if (isLoading) return <Spinner />;
+	if (error) return <Error message={error.message} />;
 
-  return (
-    <ul>
-      {data?.docs.map((post) => (
-        <li key={post.id}>{post.title}</li>
-      ))}
-    </ul>
-  );
+	return (
+		<ul>
+			{data?.docs.map((post) => (
+				<li key={post.id}>{post.title}</li>
+			))}
+		</ul>
+	);
 }
 ```
 
@@ -76,22 +76,22 @@ function PostsList() {
 Fetch single item by ID:
 
 ```tsx
-import { useCollectionItem } from "@questpie/admin/hooks";
+import { useCollectionItem } from "@questpie/admin/client";
 
 function PostDetail({ id }: { id: string }) {
-  const { data: post, isLoading } = useCollectionItem("posts", id, {
-    with: { author: true, tags: true },
-  });
+	const { data: post, isLoading } = useCollectionItem("posts", id, {
+		with: { author: true, tags: true },
+	});
 
-  if (isLoading) return <Spinner />;
-  if (!post) return <NotFound />;
+	if (isLoading) return <Spinner />;
+	if (!post) return <NotFound />;
 
-  return (
-    <article>
-      <h1>{post.title}</h1>
-      <p>By {post.author?.name}</p>
-    </article>
-  );
+	return (
+		<article>
+			<h1>{post.title}</h1>
+			<p>By {post.author?.name}</p>
+		</article>
+	);
 }
 ```
 
@@ -100,27 +100,27 @@ function PostDetail({ id }: { id: string }) {
 Create new items:
 
 ```tsx
-import { useCollectionCreate } from "@questpie/admin/hooks";
+import { useCollectionCreate } from "@questpie/admin/client";
 
 function CreatePost() {
-  const createPost = useCollectionCreate("posts", {
-    onSuccess: (data) => {
-      console.log("Created:", data);
-    },
-  });
+	const createPost = useCollectionCreate("posts", {
+		onSuccess: (data) => {
+			console.log("Created:", data);
+		},
+	});
 
-  const handleSubmit = (data) => {
-    createPost.mutate(data);
-  };
+	const handleSubmit = (data) => {
+		createPost.mutate(data);
+	};
 
-  return (
-    <form onSubmit={handleSubmit}>
-      {/* form fields */}
-      <button disabled={createPost.isPending}>
-        {createPost.isPending ? "Creating..." : "Create"}
-      </button>
-    </form>
-  );
+	return (
+		<form onSubmit={handleSubmit}>
+			{/* form fields */}
+			<button disabled={createPost.isPending}>
+				{createPost.isPending ? "Creating..." : "Create"}
+			</button>
+		</form>
+	);
 }
 ```
 
@@ -129,27 +129,27 @@ function CreatePost() {
 Update existing items:
 
 ```tsx
-import { useCollectionUpdate } from "@questpie/admin/hooks";
+import { useCollectionUpdate } from "@questpie/admin/client";
 
 function EditPost({ id }: { id: string }) {
-  const updatePost = useCollectionUpdate("posts", {
-    onSuccess: () => {
-      console.log("Updated!");
-    },
-  });
+	const updatePost = useCollectionUpdate("posts", {
+		onSuccess: () => {
+			console.log("Updated!");
+		},
+	});
 
-  const handleSave = (data) => {
-    updatePost.mutate({ id, data });
-  };
+	const handleSave = (data) => {
+		updatePost.mutate({ id, data });
+	};
 
-  return (
-    <form onSubmit={handleSave}>
-      {/* form fields */}
-      <button disabled={updatePost.isPending}>
-        {updatePost.isPending ? "Saving..." : "Save"}
-      </button>
-    </form>
-  );
+	return (
+		<form onSubmit={handleSave}>
+			{/* form fields */}
+			<button disabled={updatePost.isPending}>
+				{updatePost.isPending ? "Saving..." : "Save"}
+			</button>
+		</form>
+	);
 }
 ```
 
@@ -158,23 +158,23 @@ function EditPost({ id }: { id: string }) {
 Delete items:
 
 ```tsx
-import { useCollectionDelete } from "@questpie/admin/hooks";
+import { useCollectionDelete } from "@questpie/admin/client";
 
 function DeleteButton({ id }: { id: string }) {
-  const deletePost = useCollectionDelete("posts", {
-    onSuccess: () => {
-      console.log("Deleted!");
-    },
-  });
+	const deletePost = useCollectionDelete("posts", {
+		onSuccess: () => {
+			console.log("Deleted!");
+		},
+	});
 
-  return (
-    <button
-      onClick={() => deletePost.mutate(id)}
-      disabled={deletePost.isPending}
-    >
-      {deletePost.isPending ? "Deleting..." : "Delete"}
-    </button>
-  );
+	return (
+		<button
+			onClick={() => deletePost.mutate(id)}
+			disabled={deletePost.isPending}
+		>
+			{deletePost.isPending ? "Deleting..." : "Delete"}
+		</button>
+	);
 }
 ```
 
@@ -185,18 +185,18 @@ function DeleteButton({ id }: { id: string }) {
 Fetch global settings:
 
 ```tsx
-import { useGlobal } from "@questpie/admin/hooks";
+import { useGlobal } from "@questpie/admin/client";
 
 function Settings() {
-  const { data: settings, isLoading } = useGlobal("siteSettings");
+	const { data: settings, isLoading } = useGlobal("siteSettings");
 
-  if (isLoading) return <Spinner />;
+	if (isLoading) return <Spinner />;
 
-  return (
-    <div>
-      <h1>{settings?.siteName}</h1>
-    </div>
-  );
+	return (
+		<div>
+			<h1>{settings?.siteName}</h1>
+		</div>
+	);
 }
 ```
 
@@ -205,16 +205,16 @@ function Settings() {
 Update global settings:
 
 ```tsx
-import { useGlobalUpdate } from "@questpie/admin/hooks";
+import { useGlobalUpdate } from "@questpie/admin/client";
 
 function SettingsForm() {
-  const updateSettings = useGlobalUpdate("siteSettings");
+	const updateSettings = useGlobalUpdate("siteSettings");
 
-  const handleSave = (data) => {
-    updateSettings.mutate(data);
-  };
+	const handleSave = (data) => {
+		updateSettings.mutate(data);
+	};
 
-  return <form onSubmit={handleSave}>{/* form fields */}</form>;
+	return <form onSubmit={handleSave}>{/* form fields */}</form>;
 }
 ```
 
@@ -226,20 +226,20 @@ Access admin store state with selectors:
 
 ```tsx
 import {
-  useAdminStore,
-  selectClient,
-  selectBasePath,
-} from "@questpie/admin/hooks";
+	useAdminStore,
+	selectClient,
+	selectBasePath,
+} from "@questpie/admin/client";
 
 function MyComponent() {
-  const client = useAdminStore(selectClient);
-  const basePath = useAdminStore(selectBasePath);
+	const client = useAdminStore(selectClient);
+	const basePath = useAdminStore(selectBasePath);
 
-  // Multiple selectors
-  const { admin, locale } = useAdminStore((s) => ({
-    admin: s.admin,
-    locale: s.locale,
-  }));
+	// Multiple selectors
+	const { admin, locale } = useAdminStore((s) => ({
+		admin: s.admin,
+		locale: s.locale,
+	}));
 }
 ```
 
@@ -259,10 +259,10 @@ Available selectors:
 Get full admin context (legacy, prefer `useAdminStore`):
 
 ```tsx
-import { useAdminContext } from "@questpie/admin/hooks";
+import { useAdminContext } from "@questpie/admin/client";
 
 function MyComponent() {
-  const { admin, client, queryClient } = useAdminContext();
+	const { admin, client, queryClient } = useAdminContext();
 }
 ```
 
@@ -273,22 +273,22 @@ function MyComponent() {
 Access Better Auth client:
 
 ```tsx
-import { useAuthClient } from "@questpie/admin/hooks";
+import { useAuthClient } from "@questpie/admin/client";
 
 function UserMenu() {
-  const authClient = useAuthClient();
-  const session = authClient.useSession();
+	const authClient = useAuthClient();
+	const session = authClient.useSession();
 
-  if (!session.data?.user) {
-    return <LoginButton />;
-  }
+	if (!session.data?.user) {
+		return <LoginButton />;
+	}
 
-  return (
-    <div>
-      <span>{session.data.user.email}</span>
-      <button onClick={() => authClient.signOut()}>Sign Out</button>
-    </div>
-  );
+	return (
+		<div>
+			<span>{session.data.user.email}</span>
+			<button onClick={() => authClient.signOut()}>Sign Out</button>
+		</div>
+	);
 }
 ```
 
@@ -297,11 +297,11 @@ function UserMenu() {
 Create auth client instance:
 
 ```tsx
-import { createAdminAuthClient } from "@questpie/admin/hooks";
+import { createAdminAuthClient } from "@questpie/admin/client";
 
 const authClient = createAdminAuthClient({
-  baseURL: "http://localhost:3000",
-  basePath: "/api/auth",
+	baseURL: "http://localhost:3000",
+	basePath: "/api/auth",
 });
 ```
 
@@ -312,28 +312,28 @@ const authClient = createAdminAuthClient({
 Type-safe navigation helpers:
 
 ```tsx
-import { useAdminRoutes } from "@questpie/admin/hooks";
+import { useAdminRoutes } from "@questpie/admin/client";
 
 function Navigation() {
-  const { routes, navigate } = useAdminRoutes();
+	const { routes, navigate } = useAdminRoutes();
 
-  // Get URLs
-  const postsUrl = routes.collection("posts");
-  const newPostUrl = routes.collectionCreate("posts");
-  const editPostUrl = routes.collectionEdit("posts", "123");
-  const settingsUrl = routes.global("siteSettings");
+	// Get URLs
+	const postsUrl = routes.collection("posts");
+	const newPostUrl = routes.collectionCreate("posts");
+	const editPostUrl = routes.collectionEdit("posts", "123");
+	const settingsUrl = routes.global("siteSettings");
 
-  // Navigate programmatically
-  const goToPost = () => {
-    navigate({ collection: "posts", action: "edit", id: "123" });
-  };
+	// Navigate programmatically
+	const goToPost = () => {
+		navigate({ collection: "posts", action: "edit", id: "123" });
+	};
 
-  return (
-    <nav>
-      <a href={postsUrl}>Posts</a>
-      <button onClick={goToPost}>Edit Post</button>
-    </nav>
-  );
+	return (
+		<nav>
+			<a href={postsUrl}>Posts</a>
+			<button onClick={goToPost}>Edit Post</button>
+		</nav>
+	);
 }
 ```
 
@@ -342,15 +342,15 @@ function Navigation() {
 Get href for admin routes:
 
 ```tsx
-import { getAdminLinkHref } from "@questpie/admin/hooks";
+import { getAdminLinkHref } from "@questpie/admin/client";
 
 const href = getAdminLinkHref(
-  {
-    collection: "posts",
-    action: "edit",
-    id: "123",
-  },
-  "/admin",
+	{
+		collection: "posts",
+		action: "edit",
+		id: "123",
+	},
+	"/admin",
 );
 // => "/admin/collections/posts/123"
 ```
@@ -364,10 +364,10 @@ For full type inference, register your app types:
 import type { App } from "./server/app";
 
 declare module "@questpie/admin/builder" {
-  interface AdminTypeRegistry {
-    app: App;
-    admin: typeof admin;
-  }
+	interface AdminTypeRegistry {
+		app: App;
+		admin: typeof admin;
+	}
 }
 ```
 

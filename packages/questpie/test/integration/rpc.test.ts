@@ -1,17 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+
 import { z } from "zod";
+
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import { collection, global, route } from "../../src/server/index.js";
+import { collection, global, route } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 
 const createDefinition = () => {
 	const ping = route()
 		.post()
 		.schema(z.object({ message: z.string() }))
-		.outputSchema(z.object({
-			message: z.string(),
-			hasSession: z.boolean(),
-		}))
+		.outputSchema(
+			z.object({
+				message: z.string(),
+				hasSession: z.boolean(),
+			}),
+		)
 		.handler(async ({ input, session }) => {
 			return {
 				message: input.message,

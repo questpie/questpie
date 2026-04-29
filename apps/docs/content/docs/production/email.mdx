@@ -3,9 +3,7 @@ title: Email
 description: Transactional email with Nodemailer — SMTP, console adapter, and email templates.
 ---
 
-# Email
-
-QuestPie supports sending transactional emails with typed templates.
+QUESTPIE supports sending transactional emails with typed templates.
 
 ## Configuration
 
@@ -13,18 +11,18 @@ QuestPie supports sending transactional emails with typed templates.
 import { SmtpAdapter, ConsoleAdapter, runtimeConfig } from "questpie";
 
 export default runtimeConfig({
-  email: {
-    adapter:
-      process.env.NODE_ENV === "development"
-        ? new ConsoleAdapter({ logHtml: false })
-        : new SmtpAdapter({
-            transport: {
-              host: process.env.SMTP_HOST,
-              port: parseInt(process.env.SMTP_PORT || "587"),
-              secure: true,
-            },
-          }),
-  },
+	email: {
+		adapter:
+			process.env.NODE_ENV === "development"
+				? new ConsoleAdapter({ logHtml: false })
+				: new SmtpAdapter({
+						transport: {
+							host: process.env.SMTP_HOST,
+							port: parseInt(process.env.SMTP_PORT || "587"),
+							secure: true,
+						},
+					}),
+	},
 });
 ```
 
@@ -37,23 +35,23 @@ import { email } from "questpie";
 import z from "zod";
 
 export default email({
-  name: "appointmentConfirmation",
-  schema: z.object({
-    customerName: z.string(),
-    barberName: z.string(),
-    serviceName: z.string(),
-    scheduledAt: z.string(),
-  }),
-  handler: ({ input }) => ({
-    subject: "Appointment Confirmed",
-    html: `
+	name: "appointmentConfirmation",
+	schema: z.object({
+		customerName: z.string(),
+		barberName: z.string(),
+		serviceName: z.string(),
+		scheduledAt: z.string(),
+	}),
+	handler: ({ input }) => ({
+		subject: "Appointment Confirmed",
+		html: `
       <h1>Hi ${input.customerName}!</h1>
       <p>Your appointment has been confirmed.</p>
       <p><strong>Barber:</strong> ${input.barberName}</p>
       <p><strong>Service:</strong> ${input.serviceName}</p>
       <p><strong>When:</strong> ${input.scheduledAt}</p>
     `,
-  }),
+	}),
 });
 ```
 
@@ -63,24 +61,24 @@ From jobs, hooks, or routes via the `email` context:
 
 ```ts
 handler: async ({ email }) => {
-  await email.sendTemplate({
-    template: "appointmentConfirmation",
-    input: {
-      customerName: "John",
-      barberName: "Mike",
-      serviceName: "Haircut",
-      scheduledAt: "2025-03-15 10:00",
-    },
-    to: "john@example.com",
-  });
-}
+	await email.sendTemplate({
+		template: "appointmentConfirmation",
+		input: {
+			customerName: "John",
+			barberName: "Mike",
+			serviceName: "Haircut",
+			scheduledAt: "2025-03-15 10:00",
+		},
+		to: "john@example.com",
+	});
+};
 ```
 
 ## Adapters
 
-| Adapter | Description |
-|---|---|
-| `SmtpAdapter` | Send via SMTP (production) |
+| Adapter          | Description                  |
+| ---------------- | ---------------------------- |
+| `SmtpAdapter`    | Send via SMTP (production)   |
 | `ConsoleAdapter` | Log to console (development) |
 
 ## Related Pages

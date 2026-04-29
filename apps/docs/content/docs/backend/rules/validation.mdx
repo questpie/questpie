@@ -3,9 +3,7 @@ title: Validation
 description: Field-level validation, Zod refinements, and custom validation rules.
 ---
 
-# Validation
-
-QuestPie validates data at multiple levels: field constraints, Zod schemas, and custom validation hooks.
+QUESTPIE validates data at multiple levels: field constraints, Zod schemas, and custom validation hooks.
 
 ## Field-Level Constraints
 
@@ -21,14 +19,14 @@ Built-in constraints on field definitions:
 }))
 ```
 
-| Chain Method | Fields | Description |
-|---|---|---|
-| `.required()` | All | Field must have a value |
-| `.max(n)` | `text`, `textarea` | Maximum string length |
-| `.min(n)` / `.max(n)` | `number` | Numeric range |
-| `.maxItems(n)` | `.array()` | Maximum array length |
-| `mimeTypes` | `upload` | Allowed file types (config) |
-| `maxSize` | `upload` | Max file size in bytes (config) |
+| Chain Method          | Fields             | Description                     |
+| --------------------- | ------------------ | ------------------------------- |
+| `.required()`         | All                | Field must have a value         |
+| `.max(n)`             | `text`, `textarea` | Maximum string length           |
+| `.min(n)` / `.max(n)` | `number`           | Numeric range                   |
+| `.maxItems(n)`        | `.array()`         | Maximum array length            |
+| `mimeTypes`           | `upload`           | Allowed file types (config)     |
+| `maxSize`             | `upload`           | Max file size in bytes (config) |
 
 These constraints are automatically enforced in the API validation layer (Zod schemas generated from field definitions).
 

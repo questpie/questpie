@@ -4,15 +4,16 @@
  * Renders the homepage for a specific city with live preview support.
  */
 
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+
+import { getHomepage } from "@/lib/server-functions";
+import admin from "@/questpie/admin/.generated/client";
 import {
 	type BlockContent,
 	BlockRenderer,
 	PreviewProvider,
 	useCollectionPreview,
 } from "@questpie/admin/client";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { getHomepage } from "@/lib/server-functions";
-import admin from "@/questpie/admin/.generated/client";
 
 export const Route = createFileRoute("/_app/$citySlug/")({
 	loader: async ({ params }) => {
@@ -29,11 +30,11 @@ function CityHomepage() {
 	if (!page) {
 		return (
 			<div className="container mx-auto px-4 py-24 text-center">
-				<h1 className="text-4xl font-bold mb-4">Welcome</h1>
-				<p className="text-xl text-muted-foreground mb-8">
+				<h1 className="mb-4 text-4xl font-bold">Welcome</h1>
+				<p className="text-muted-foreground mb-8 text-xl">
 					This city portal is being set up. Please check back soon.
 				</p>
-				<a href="/admin" className="text-primary hover:underline font-medium">
+				<a href="/admin" className="text-primary font-medium hover:underline">
 					Configure in Admin
 				</a>
 			</div>
@@ -76,14 +77,14 @@ function HomepageWithPreview({ page }: { page: any }) {
 				)}
 
 				{!data.content?._tree?.length && !isPreviewMode && (
-					<div className="py-32 text-center text-muted-foreground container mx-auto">
-						<h1 className="text-4xl font-bold mb-4">Welcome to {data.title}</h1>
-						<p className="text-xl mb-8">
+					<div className="text-muted-foreground container mx-auto py-32 text-center">
+						<h1 className="mb-4 text-4xl font-bold">Welcome to {data.title}</h1>
+						<p className="mb-8 text-xl">
 							Your city council website is ready to be built.
 						</p>
 						<a
 							href="/admin"
-							className="text-primary hover:underline font-medium"
+							className="text-primary font-medium hover:underline"
 						>
 							Add content in the Admin Panel
 						</a>
@@ -91,7 +92,7 @@ function HomepageWithPreview({ page }: { page: any }) {
 				)}
 
 				{isPreviewMode && (
-					<div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium z-50">
+					<div className="bg-primary text-primary-foreground fixed right-4 bottom-4 z-50 rounded-full px-4 py-2 text-sm font-medium shadow-lg">
 						Preview Mode - Click blocks to edit
 					</div>
 				)}

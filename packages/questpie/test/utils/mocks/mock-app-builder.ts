@@ -1,10 +1,10 @@
 import type { DriveManager } from "flydrive";
-import {
-	Questpie,
-	createApp,
-	module,
-} from "../../../src/exports/index.js";
-import type { ModuleDefinition, RuntimeConfig } from "../../../src/server/config/module-types.js";
+
+import { Questpie, createApp, module } from "../../../src/exports/index.js";
+import type {
+	ModuleDefinition,
+	RuntimeConfig,
+} from "../../../src/server/config/module-types.js";
 import { createTestDb } from "../test-db";
 import { MockKVAdapter } from "./kv.adapter";
 import { MockLogger } from "./logger.adapter";
@@ -41,7 +41,7 @@ export type MockApp<TApp = any> = TApp & {
  * });
  *
  * // Use app normally
- * await app.api.collections.products.create({ name: "Widget", price: 9.99 });
+ * await app.collections.products.create({ name: "Widget", price: 9.99 });
  *
  * // Inspect mock state
  * expect(app.mocks.mailer.getSentCount()).toBe(0);
@@ -66,12 +66,31 @@ export async function buildMockApp(
 	const testDb = usesCustomDb ? null : await createTestDb();
 	const dbConfig = runtimeOverrides.db ?? { pglite: testDb };
 
-	// Extract top-level keys that createApp reads from definition (not from modules)
-	const { locale, contextResolver, ...moduleDef } = definition as any;
-	const normalizedDef = module({ name: "test", ...moduleDef });
+	// Normalize module definition — move flat config keys into config bucket
+	const { locale, hooks, defaultAccess, auth, config: existingConfig, ...moduleDef } = definition as any;
+
+	// Build config bucket from flat keys + any existing config
+	const appConfigPart: Record<string, unknown> = {};
+	if (locale) appConfigPart.locale = locale;
+	if (hooks) appConfigPart.hooks = hooks;
+	if (defaultAccess) appConfigPart.access = defaultAccess;
+
+	const moduleConfig: Record<string, unknown> = { ...(existingConfig ?? {}) };
+	if (Object.keys(appConfigPart).length > 0) {
+		moduleConfig.app = { ...(moduleConfig.app as any ?? {}), ...appConfigPart };
+	}
+	if (auth) {
+		moduleConfig.auth = auth;
+	}
+
+	const normalizedDef = module({
+		name: "test",
+		...moduleDef,
+		...(Object.keys(moduleConfig).length > 0 ? { config: moduleConfig } : {}),
+	});
 
 	const app = await createApp(
-		{ modules: [normalizedDef], locale, contextResolver },
+		{ modules: [normalizedDef] },
 		{
 			app: runtimeOverrides.app ?? { url: "http://localhost:3000" },
 			db: dbConfig,

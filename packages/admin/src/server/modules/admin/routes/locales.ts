@@ -8,9 +8,7 @@
 import { route } from "questpie";
 import { z } from "zod";
 
-// ============================================================================
-// Type Helpers
-// ============================================================================
+import { getApp } from "./route-helpers.js";
 
 // ============================================================================
 // Schema Definitions
@@ -59,7 +57,7 @@ const getContentLocales = route()
 	.schema(getContentLocalesSchema)
 	.outputSchema(getContentLocalesOutputSchema)
 	.handler(async (ctx) => {
-		const app = (ctx as any).app;
+		const app = getApp(ctx);
 		const localeConfig = app.config.locale;
 
 		// If no locale config, return sensible defaults

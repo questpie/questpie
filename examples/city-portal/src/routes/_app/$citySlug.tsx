@@ -13,6 +13,7 @@ import {
 	Scripts,
 	useParams,
 } from "@tanstack/react-router";
+
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { queryClient } from "@/lib/query-client";
@@ -22,6 +23,7 @@ import type {
 	NavItem,
 	SocialLink,
 } from "@/questpie/server/globals";
+
 import stylesCss from "@/styles.css?url";
 
 export const Route = createFileRoute("/_app/$citySlug")({
@@ -65,7 +67,7 @@ function CityLayout() {
 				<HeadContent />
 			</head>
 			<body
-				className="min-h-screen bg-background text-foreground antialiased"
+				className="bg-background text-foreground min-h-screen antialiased"
 				style={
 					settings?.primaryColour
 						? ({ "--primary": settings.primaryColour } as React.CSSProperties)

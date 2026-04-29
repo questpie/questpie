@@ -5,7 +5,9 @@
  */
 
 import type { QuestpieApp } from "questpie/client";
+
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
 import type { CollectionNames, GlobalNames, IconComponent } from "../builder";
 import type { Admin } from "../builder/admin";
 import { isComponentReference } from "../components/component-renderer";
@@ -109,7 +111,7 @@ function buildRoutes<TApp extends QuestpieApp>(
 	const pages: Record<string, PageRoutes> = {};
 
 	for (const [name, config] of Object.entries(pageConfigs)) {
-		const pagePath = (config as any).path ?? name;
+		const pagePath = config.path ?? name;
 		pages[name] = {
 			view: () =>
 				pagePath.startsWith("/") ? pagePath : path("pages", pagePath),
@@ -188,15 +190,15 @@ export function buildNavigation<TApp extends QuestpieApp>(
 	const items: NavigationItem[] = [];
 
 	for (const [name, config] of Object.entries(admin.getPages())) {
-		if ((config as any).showInNav === false) continue;
+		if (config.showInNav === false) continue;
 
 		items.push({
 			id: `page:${name}`,
-			label: resolveLabel((config as any).label, name),
+			label: resolveLabel(config.label, name),
 			href: routes.pages[name].view(),
-			icon: resolveIcon((config as any).icon),
-			group: (config as any).group,
-			order: (config as any).order ?? 0,
+			icon: resolveIcon(config.icon),
+			group: config.group,
+			order: config.order ?? 0,
 			type: "page",
 		});
 	}

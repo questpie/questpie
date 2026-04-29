@@ -1,5 +1,6 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+
 import { DocsRouteContent } from "@/components/docs/DocsRouteContent";
 import {
 	buildBreadcrumbs,
@@ -12,10 +13,7 @@ import {
 } from "@/lib/seo";
 
 const docsCompatRedirects = new Map<string, string>([
-	[
-		"getting-started/your-first-app",
-		"/docs/getting-started/first-platform-walkthrough",
-	],
+	["getting-started/your-first-app", "/docs/start-here/first-app"],
 ]);
 
 export const Route = createFileRoute("/docs/$")({

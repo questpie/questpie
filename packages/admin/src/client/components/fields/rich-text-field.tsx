@@ -1,4 +1,5 @@
 import { Controller } from "react-hook-form";
+
 import { useResolvedControl } from "./field-utils";
 import type { RichTextEditorProps } from "./rich-text-editor";
 import { RichTextEditor } from "./rich-text-editor";

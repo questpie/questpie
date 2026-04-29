@@ -3,23 +3,21 @@ title: Block Prefetch
 description: Prefetch relation data for blocks — images, related records, and nested content.
 ---
 
-# Block Prefetch
-
 Blocks often reference related data — images, linked records, etc. Use `.prefetch()` to define what should be loaded alongside block values.
 
 ## Basic Prefetch
 
 ```ts title="blocks/hero.ts"
 export const heroBlock = block("hero")
-  .fields(({ f }) => ({
-    title: f.text().required(),
-    backgroundImage: f.upload({ to: "assets" }),
-  }))
-  .prefetch({
-    with: {
-      backgroundImage: true,  // Load the full image record
-    },
-  });
+	.fields(({ f }) => ({
+		title: f.text().required(),
+		backgroundImage: f.upload({ to: "assets" }),
+	}))
+	.prefetch({
+		with: {
+			backgroundImage: true, // Load the full image record
+		},
+	});
 ```
 
 When this block is fetched, `data.backgroundImage` will contain the full asset record (including `url`, `filename`, `mimeType`, etc.) instead of just the ID.
@@ -47,17 +45,17 @@ In the renderer, prefetched data appears in the `data` prop:
 
 ```tsx
 function HeroRenderer({ values, data }: BlockProps<"hero">) {
-  // values.backgroundImage = "asset-id-123" (just the ID)
-  // data.backgroundImage = { url: "/api/assets/...", filename: "hero.jpg", ... }
+	// values.backgroundImage = "asset-id-123" (just the ID)
+	// data.backgroundImage = { url: "/api/assets/...", filename: "hero.jpg", ... }
 
-  return (
-    <section>
-      {data?.backgroundImage?.url && (
-        <img src={data.backgroundImage.url} alt="" />
-      )}
-      <h1>{values.title}</h1>
-    </section>
-  );
+	return (
+		<section>
+			{data?.backgroundImage?.url && (
+				<img src={data.backgroundImage.url} alt="" />
+			)}
+			<h1>{values.title}</h1>
+		</section>
+	);
 }
 ```
 

@@ -1,4 +1,5 @@
 import { seed } from "questpie";
+
 import { richText, richTextFormatted, uploadAllImages } from "./_helpers.js";
 
 export default seed({
@@ -44,6 +45,7 @@ export default seed({
 					"Traditional haircut with scissors and clippers. Includes wash, cut, and style.",
 				price: 3500,
 				duration: 45,
+				order: 30,
 				image: img.serviceHaircut,
 				isActive: true,
 			},
@@ -56,6 +58,7 @@ export default seed({
 					"Modern skin fade with razor-sharp lines and a seamless blend.",
 				price: 4500,
 				duration: 50,
+				order: 50,
 				image: img.serviceFade,
 				isActive: true,
 			},
@@ -68,6 +71,7 @@ export default seed({
 					"Straight razor shave with steamed towels, pre-shave oil, and moisturizer.",
 				price: 4000,
 				duration: 40,
+				order: 40,
 				image: img.serviceShave,
 				isActive: true,
 			},
@@ -80,6 +84,7 @@ export default seed({
 					"Precision beard shaping with hot towel treatment and beard oil finish.",
 				price: 3000,
 				duration: 30,
+				order: 20,
 				image: img.serviceBeard,
 				isActive: true,
 			},
@@ -92,6 +97,7 @@ export default seed({
 					"Haircut for kids under 12. Patient service in a relaxed atmosphere.",
 				price: 2500,
 				duration: 30,
+				order: 10,
 				image: img.serviceKids,
 				isActive: true,
 			},
@@ -104,6 +110,7 @@ export default seed({
 					"The complete experience: haircut, beard sculpting, hot towel shave, and facial treatment.",
 				price: 8500,
 				duration: 90,
+				order: 60,
 				image: img.serviceGrooming,
 				isActive: true,
 			},

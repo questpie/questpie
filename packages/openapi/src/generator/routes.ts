@@ -3,6 +3,7 @@
  */
 
 import type { RoutesTree } from "questpie";
+
 import type { OpenApiConfig, PathOperation } from "../types.js";
 import { jsonRequestBody, jsonResponse, zodToJsonSchema } from "./schemas.js";
 

@@ -10,6 +10,7 @@ import {
 	useParams,
 } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
+
 import { getContactPageData, submitContactForm } from "@/lib/server-functions";
 
 const cityRouteApi = getRouteApi("/_app/$citySlug");
@@ -42,14 +43,14 @@ function ContactPage() {
 	return (
 		<div className="container mx-auto px-4 py-12">
 			<div className="mb-8">
-				<h1 className="text-4xl font-bold tracking-tight mb-2">Contact Us</h1>
+				<h1 className="mb-2 text-4xl font-bold tracking-tight">Contact Us</h1>
 				<p className="text-muted-foreground">
 					Get in touch with your council. Find the right department or send us a
 					message.
 				</p>
 			</div>
 
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+			<div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
 				{/* Left: Contact Form */}
 				<div className="lg:col-span-2">
 					<ContactForm citySlug={citySlug} />
@@ -61,12 +62,12 @@ function ContactPage() {
 					{(settings?.contactEmail ||
 						settings?.contactPhone ||
 						settings?.address) && (
-						<div className="border rounded-lg p-6">
-							<h2 className="font-semibold text-lg mb-4">Quick Contact</h2>
+						<div className="rounded-lg border p-6">
+							<h2 className="mb-4 text-lg font-semibold">Quick Contact</h2>
 							<div className="space-y-3 text-sm">
 								{settings?.contactEmail && (
 									<div>
-										<p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
+										<p className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
 											Email
 										</p>
 										<a
@@ -79,7 +80,7 @@ function ContactPage() {
 								)}
 								{settings?.contactPhone && (
 									<div>
-										<p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
+										<p className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
 											Phone
 										</p>
 										<a
@@ -92,7 +93,7 @@ function ContactPage() {
 								)}
 								{settings?.address && (
 									<div>
-										<p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
+										<p className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
 											Address
 										</p>
 										<p className="whitespace-pre-line">{settings.address}</p>
@@ -100,7 +101,7 @@ function ContactPage() {
 								)}
 								{settings?.openingHours && (
 									<div>
-										<p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
+										<p className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
 											Opening Hours
 										</p>
 										<p className="whitespace-pre-line">
@@ -113,17 +114,17 @@ function ContactPage() {
 					)}
 
 					{settings?.emergencyPhone && (
-						<div className="border border-red-200 bg-red-50 rounded-lg p-6">
-							<h2 className="font-semibold text-lg mb-2 text-red-900">
+						<div className="rounded-lg border border-red-200 bg-red-50 p-6">
+							<h2 className="mb-2 text-lg font-semibold text-red-900">
 								Emergency Contact
 							</h2>
 							<a
 								href={`tel:${settings.emergencyPhone}`}
-								className="text-red-700 font-medium hover:underline"
+								className="font-medium text-red-700 hover:underline"
 							>
 								{settings.emergencyPhone}
 							</a>
-							<p className="text-xs text-red-700/75 mt-1">
+							<p className="mt-1 text-xs text-red-700/75">
 								Out of hours emergency line
 							</p>
 						</div>
@@ -134,20 +135,20 @@ function ContactPage() {
 			{/* Department Contacts */}
 			{contacts.length > 0 && (
 				<div className="mt-16">
-					<h2 className="text-2xl font-bold tracking-tight mb-6">
+					<h2 className="mb-6 text-2xl font-bold tracking-tight">
 						Departments
 					</h2>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+					<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 						{contacts.map((contact: any) => (
 							<div
 								key={contact.id}
-								className="border rounded-lg p-6 hover:shadow-md transition-shadow"
+								className="rounded-lg border p-6 transition-shadow hover:shadow-md"
 							>
-								<h3 className="font-semibold text-lg mb-2">
+								<h3 className="mb-2 text-lg font-semibold">
 									{contact.department}
 								</h3>
 								{contact.description && (
-									<p className="text-sm text-muted-foreground mb-4">
+									<p className="text-muted-foreground mb-4 text-sm">
 										{contact.description}
 									</p>
 								)}
@@ -245,10 +246,10 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 
 	if (status === "success") {
 		return (
-			<div className="border rounded-lg p-8 text-center bg-green-50 border-green-200">
-				<div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+			<div className="rounded-lg border border-green-200 bg-green-50 p-8 text-center">
+				<div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
 					<svg
-						className="w-8 h-8 text-green-600"
+						className="h-8 w-8 text-green-600"
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
@@ -262,7 +263,7 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 						/>
 					</svg>
 				</div>
-				<h2 className="text-xl font-semibold text-green-900 mb-2">
+				<h2 className="mb-2 text-xl font-semibold text-green-900">
 					Message Sent
 				</h2>
 				<p className="text-green-800">
@@ -271,7 +272,7 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 				<button
 					type="button"
 					onClick={() => setStatus("idle")}
-					className="mt-4 text-sm font-medium text-primary hover:underline"
+					className="text-primary mt-4 text-sm font-medium hover:underline"
 				>
 					Send another message
 				</button>
@@ -280,19 +281,19 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 	}
 
 	return (
-		<div className="border rounded-lg p-6">
-			<h2 className="text-xl font-semibold mb-6">Send us a message</h2>
+		<div className="rounded-lg border p-6">
+			<h2 className="mb-6 text-xl font-semibold">Send us a message</h2>
 
 			{status === "error" && errorMessage && (
-				<div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
+				<div className="mb-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
 					{errorMessage}
 				</div>
 			)}
 
 			<form onSubmit={handleSubmit} className="space-y-5">
-				<div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+				<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
 					<div>
-						<label htmlFor="name" className="block text-sm font-medium mb-1.5">
+						<label htmlFor="name" className="mb-1.5 block text-sm font-medium">
 							Name <span className="text-red-500">*</span>
 						</label>
 						<input
@@ -300,11 +301,11 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 							id="name"
 							name="name"
 							required
-							className="w-full px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+							className="bg-background focus:ring-primary/20 focus:border-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
 						/>
 					</div>
 					<div>
-						<label htmlFor="email" className="block text-sm font-medium mb-1.5">
+						<label htmlFor="email" className="mb-1.5 block text-sm font-medium">
 							Email <span className="text-red-500">*</span>
 						</label>
 						<input
@@ -312,27 +313,27 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 							id="email"
 							name="email"
 							required
-							className="w-full px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+							className="bg-background focus:ring-primary/20 focus:border-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
 						/>
 					</div>
 				</div>
 
-				<div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+				<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
 					<div>
-						<label htmlFor="phone" className="block text-sm font-medium mb-1.5">
+						<label htmlFor="phone" className="mb-1.5 block text-sm font-medium">
 							Phone
 						</label>
 						<input
 							type="tel"
 							id="phone"
 							name="phone"
-							className="w-full px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+							className="bg-background focus:ring-primary/20 focus:border-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
 						/>
 					</div>
 					<div>
 						<label
 							htmlFor="department"
-							className="block text-sm font-medium mb-1.5"
+							className="mb-1.5 block text-sm font-medium"
 						>
 							Department
 						</label>
@@ -340,7 +341,7 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 							id="department"
 							name="department"
 							defaultValue="general"
-							className="w-full px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+							className="bg-background focus:ring-primary/20 focus:border-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
 						>
 							{DEPARTMENTS.map((dept) => (
 								<option key={dept.value} value={dept.value}>
@@ -352,7 +353,7 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 				</div>
 
 				<div>
-					<label htmlFor="subject" className="block text-sm font-medium mb-1.5">
+					<label htmlFor="subject" className="mb-1.5 block text-sm font-medium">
 						Subject <span className="text-red-500">*</span>
 					</label>
 					<input
@@ -360,12 +361,12 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 						id="subject"
 						name="subject"
 						required
-						className="w-full px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+						className="bg-background focus:ring-primary/20 focus:border-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
 					/>
 				</div>
 
 				<div>
-					<label htmlFor="message" className="block text-sm font-medium mb-1.5">
+					<label htmlFor="message" className="mb-1.5 block text-sm font-medium">
 						Message <span className="text-red-500">*</span>
 					</label>
 					<textarea
@@ -373,14 +374,14 @@ function ContactForm({ citySlug }: { citySlug: string }) {
 						name="message"
 						required
 						rows={6}
-						className="w-full px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-y"
+						className="bg-background focus:ring-primary/20 focus:border-primary w-full resize-y rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
 					/>
 				</div>
 
 				<button
 					type="submit"
 					disabled={status === "submitting"}
-					className="px-6 py-2.5 bg-primary text-primary-foreground rounded-md font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-6 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
 				>
 					{status === "submitting" ? "Sending..." : "Send Message"}
 				</button>

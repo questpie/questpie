@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import * as React from "react";
 import { toast } from "sonner";
 import { z } from "zod";
+
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -188,13 +189,13 @@ function BookingPage() {
 
 	if (step === "success") {
 		return (
-			<div className="min-h-[80vh] flex items-center justify-center px-6">
-				<div className="max-w-md w-full text-center space-y-8 animate-fade-in-up">
+			<div className="flex min-h-[80vh] items-center justify-center px-6">
+				<div className="animate-fade-in-up w-full max-w-md space-y-8 text-center">
 					<div className="flex justify-center">
-						<div className="size-24 bg-highlight/10 rounded-full flex items-center justify-center">
+						<div className="bg-highlight/10 flex size-24 items-center justify-center rounded-full">
 							<Icon
 								icon="ph:check-circle-fill"
-								className="size-16 text-highlight"
+								className="text-highlight size-16"
 							/>
 						</div>
 					</div>
@@ -204,20 +205,20 @@ function BookingPage() {
 						</h1>
 						<p className="text-muted-foreground text-lg">
 							{t("booking.confirmed.message")}{" "}
-							<span className="font-bold text-foreground">
+							<span className="text-foreground font-bold">
 								{customerInfo.email}
 							</span>
 							.
 						</p>
 					</div>
-					<div className="pt-8 space-y-4">
+					<div className="space-y-4 pt-8">
 						<Link
 							to="/"
-							className="block w-full py-4 bg-foreground text-background font-bold uppercase tracking-widest hover:bg-highlight transition-all"
+							className="bg-foreground text-background hover:bg-highlight block w-full py-4 font-bold tracking-widest uppercase transition-all"
 						>
 							{t("booking.returnHome")}
 						</Link>
-						<p className="text-sm text-muted-foreground">
+						<p className="text-muted-foreground text-sm">
 							{t("booking.needToChange")} +421 900 000 000
 						</p>
 					</div>
@@ -227,10 +228,10 @@ function BookingPage() {
 	}
 
 	return (
-		<div className="py-20 px-6 bg-muted/30 min-h-screen">
-			<div className="container max-w-4xl mx-auto">
+		<div className="bg-muted/30 min-h-screen px-6 py-20">
+			<div className="container mx-auto max-w-4xl">
 				{/* Progress Header */}
-				<div className="mb-12 flex justify-between items-center">
+				<div className="mb-12 flex items-center justify-between">
 					<div className="space-y-1">
 						<h1 className="text-3xl font-bold tracking-tight">
 							{t("booking.title")}
@@ -247,7 +248,7 @@ function BookingPage() {
 						<Button
 							variant="ghost"
 							onClick={handleBack}
-							className="gap-2 font-bold uppercase tracking-widest text-xs"
+							className="gap-2 text-xs font-bold tracking-widest uppercase"
 						>
 							<Icon icon="ph:arrow-left" className="size-4" />{" "}
 							{t("booking.back")}
@@ -255,12 +256,12 @@ function BookingPage() {
 					)}
 				</div>
 
-				<div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+				<div className="grid grid-cols-1 gap-12 lg:grid-cols-12">
 					{/* Main Flow */}
-					<div className="lg:col-span-8 space-y-8">
+					<div className="space-y-8 lg:col-span-8">
 						{/* STEP 1: SERVICE */}
 						{step === "service" && (
-							<div className="space-y-6 animate-fade-in-up">
+							<div className="animate-fade-in-up space-y-6">
 								<h2 className="text-2xl font-bold">
 									{t("booking.selectService")}
 								</h2>
@@ -273,21 +274,21 @@ function BookingPage() {
 												handleNext();
 											}}
 											className={cn(
-												"flex items-center justify-between p-6 bg-card border-2 text-left transition-all group",
+												"bg-card group flex items-center justify-between border-2 p-6 text-left transition-all",
 												selectedService?.id === service.id
 													? "border-highlight"
-													: "border-transparent hover:border-highlight/30",
+													: "hover:border-highlight/30 border-transparent",
 											)}
 										>
 											<div className="space-y-1">
-												<p className="font-bold text-lg group-hover:text-highlight transition-colors">
+												<p className="group-hover:text-highlight text-lg font-bold transition-colors">
 													{service.name}
 												</p>
-												<p className="text-sm text-muted-foreground">
+												<p className="text-muted-foreground text-sm">
 													{service.duration} min
 												</p>
 											</div>
-											<p className="font-bold text-highlight">
+											<p className="text-highlight font-bold">
 												{formatPrice(service.price)}
 											</p>
 										</button>
@@ -298,11 +299,11 @@ function BookingPage() {
 
 						{/* STEP 2: BARBER */}
 						{step === "barber" && (
-							<div className="space-y-6 animate-fade-in-up">
+							<div className="animate-fade-in-up space-y-6">
 								<h2 className="text-2xl font-bold">
 									{t("booking.selectBarber")}
 								</h2>
-								<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+								<div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
 									{barbers.map((barber) => (
 										<button
 											key={barber.id}
@@ -311,32 +312,32 @@ function BookingPage() {
 												handleNext();
 											}}
 											className={cn(
-												"p-6 bg-card border-2 text-center transition-all group",
+												"bg-card group border-2 p-6 text-center transition-all",
 												selectedBarber?.id === barber.id
 													? "border-highlight"
-													: "border-transparent hover:border-highlight/30",
+													: "hover:border-highlight/30 border-transparent",
 											)}
 										>
-											<div className="size-20 bg-muted mx-auto mb-4 overflow-hidden rounded-full border border-border">
+											<div className="bg-muted border-border mx-auto mb-4 size-20 overflow-hidden rounded-full border">
 												{barber.avatar ? (
 													<img
 														src={barber.avatar}
-														className="w-full h-full object-cover"
+														className="h-full w-full object-cover"
 														alt=""
 													/>
 												) : (
-													<div className="w-full h-full flex items-center justify-center">
+													<div className="flex h-full w-full items-center justify-center">
 														<Icon
 															icon="ph:user"
-															className="size-10 text-muted-foreground/30"
+															className="text-muted-foreground/30 size-10"
 														/>
 													</div>
 												)}
 											</div>
-											<p className="font-bold text-lg group-hover:text-highlight transition-colors">
+											<p className="group-hover:text-highlight text-lg font-bold transition-colors">
 												{barber.name}
 											</p>
-											<p className="text-sm text-muted-foreground line-clamp-1">
+											<p className="text-muted-foreground line-clamp-1 text-sm">
 												{barber.specialties?.join(" · ")}
 											</p>
 										</button>
@@ -347,13 +348,13 @@ function BookingPage() {
 
 						{/* STEP 3: DATE & TIME */}
 						{step === "datetime" && (
-							<div className="space-y-8 animate-fade-in-up">
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+							<div className="animate-fade-in-up space-y-8">
+								<div className="grid grid-cols-1 gap-8 md:grid-cols-2">
 									<div className="space-y-4">
 										<h2 className="text-2xl font-bold">
 											{t("booking.selectDate")}
 										</h2>
-										<div className="p-4 bg-card border border-border rounded-none">
+										<div className="bg-card border-border rounded-none border p-4">
 											<Calendar
 												mode="single"
 												selected={selectedDate}
@@ -375,7 +376,7 @@ function BookingPage() {
 												{[...Array(9)].map((_, i) => (
 													<div
 														key={i}
-														className="h-12 bg-muted animate-pulse"
+														className="bg-muted h-12 animate-pulse"
 													/>
 												))}
 											</div>
@@ -387,7 +388,7 @@ function BookingPage() {
 															key={slot}
 															onClick={() => setSelectedTime(slot)}
 															className={cn(
-																"py-3 px-4 border text-center font-bold text-sm transition-all",
+																"border px-4 py-3 text-center text-sm font-bold transition-all",
 																selectedTime === slot
 																	? "bg-highlight border-highlight text-highlight-foreground"
 																	: "bg-card border-border hover:border-highlight",
@@ -399,7 +400,7 @@ function BookingPage() {
 												</div>
 											</ScrollArea>
 										) : (
-											<div className="p-8 text-center bg-muted border border-dashed border-border text-muted-foreground italic">
+											<div className="bg-muted border-border text-muted-foreground border border-dashed p-8 text-center italic">
 												{t("booking.noSlotsForDay")}
 											</div>
 										)}
@@ -411,7 +412,7 @@ function BookingPage() {
 										size="lg"
 										disabled={!selectedTime}
 										onClick={handleNext}
-										className="bg-highlight hover:bg-highlight/90 text-highlight-foreground font-bold uppercase tracking-widest h-14 px-12"
+										className="bg-highlight hover:bg-highlight/90 text-highlight-foreground h-14 px-12 font-bold tracking-widest uppercase"
 									>
 										{t("booking.next")}{" "}
 										<Icon icon="ph:arrow-right" className="ml-2" />
@@ -424,16 +425,16 @@ function BookingPage() {
 						{step === "info" && (
 							<form
 								onSubmit={handleFinalSubmit}
-								className="space-y-8 animate-fade-in-up"
+								className="animate-fade-in-up space-y-8"
 							>
 								<h2 className="text-2xl font-bold">
 									{t("booking.yourDetails")}
 								</h2>
-								<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+								<div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
 									<div className="space-y-2">
 										<Label
 											htmlFor="name"
-											className="font-bold uppercase tracking-wider text-xs"
+											className="text-xs font-bold tracking-wider uppercase"
 										>
 											{t("booking.name")}
 										</Label>
@@ -447,14 +448,14 @@ function BookingPage() {
 													name: e.target.value,
 												})
 											}
-											className="bg-card h-12 rounded-none border-border"
+											className="bg-card border-border h-12 rounded-none"
 											placeholder="John Doe"
 										/>
 									</div>
 									<div className="space-y-2">
 										<Label
 											htmlFor="email"
-											className="font-bold uppercase tracking-wider text-xs"
+											className="text-xs font-bold tracking-wider uppercase"
 										>
 											{t("booking.email")}
 										</Label>
@@ -469,14 +470,14 @@ function BookingPage() {
 													email: e.target.value,
 												})
 											}
-											className="bg-card h-12 rounded-none border-border"
+											className="bg-card border-border h-12 rounded-none"
 											placeholder="john@example.com"
 										/>
 									</div>
-									<div className="sm:col-span-2 space-y-2">
+									<div className="space-y-2 sm:col-span-2">
 										<Label
 											htmlFor="phone"
-											className="font-bold uppercase tracking-wider text-xs"
+											className="text-xs font-bold tracking-wider uppercase"
 										>
 											{t("booking.phoneOptional")}
 										</Label>
@@ -489,14 +490,14 @@ function BookingPage() {
 													phone: e.target.value,
 												})
 											}
-											className="bg-card h-12 rounded-none border-border"
+											className="bg-card border-border h-12 rounded-none"
 											placeholder="+421 ..."
 										/>
 									</div>
-									<div className="sm:col-span-2 space-y-2">
+									<div className="space-y-2 sm:col-span-2">
 										<Label
 											htmlFor="notes"
-											className="font-bold uppercase tracking-wider text-xs"
+											className="text-xs font-bold tracking-wider uppercase"
 										>
 											{t("booking.notesForBarber")}
 										</Label>
@@ -509,18 +510,18 @@ function BookingPage() {
 													notes: e.target.value,
 												})
 											}
-											className="bg-card h-12 rounded-none border-border"
+											className="bg-card border-border h-12 rounded-none"
 											placeholder={t("booking.notesPlaceholder")}
 										/>
 									</div>
 								</div>
 
-								<div className="pt-8 border-t border-border">
+								<div className="border-border border-t pt-8">
 									<Button
 										type="submit"
 										size="lg"
 										disabled={bookingMutation.isPending}
-										className="w-full bg-highlight hover:bg-highlight/90 text-highlight-foreground font-bold uppercase tracking-widest h-16 text-lg"
+										className="bg-highlight hover:bg-highlight/90 text-highlight-foreground h-16 w-full text-lg font-bold tracking-widest uppercase"
 									>
 										{bookingMutation.isPending
 											? t("booking.booking")
@@ -534,7 +535,7 @@ function BookingPage() {
 					{/* Sidebar Summary */}
 					<div className="lg:col-span-4">
 						<div className="sticky top-24 space-y-6">
-							<Card className="rounded-none border-border bg-card">
+							<Card className="border-border bg-card rounded-none">
 								<CardHeader>
 									<CardTitle className="text-xl font-bold">
 										Booking Summary
@@ -543,18 +544,18 @@ function BookingPage() {
 								<CardContent className="space-y-6">
 									{selectedService && (
 										<div className="flex gap-4">
-											<div className="size-10 bg-muted flex items-center justify-center shrink-0">
+											<div className="bg-muted flex size-10 shrink-0 items-center justify-center">
 												<Icon
 													icon="ph:clock-bold"
-													className="size-5 text-muted-foreground"
+													className="text-muted-foreground size-5"
 												/>
 											</div>
 											<div>
-												<p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+												<p className="text-muted-foreground text-xs font-bold tracking-widest uppercase">
 													Service
 												</p>
 												<p className="font-bold">{selectedService.name}</p>
-												<p className="text-sm text-highlight">
+												<p className="text-highlight text-sm">
 													{formatPrice(selectedService.price)}
 												</p>
 											</div>
@@ -563,22 +564,22 @@ function BookingPage() {
 
 									{selectedBarber && (
 										<div className="flex gap-4">
-											<div className="size-10 bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+											<div className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden">
 												{selectedBarber.avatar ? (
 													<img
 														src={selectedBarber.avatar}
-														className="w-full h-full object-cover"
+														className="h-full w-full object-cover"
 														alt=""
 													/>
 												) : (
 													<Icon
 														icon="ph:user-bold"
-														className="size-5 text-muted-foreground"
+														className="text-muted-foreground size-5"
 													/>
 												)}
 											</div>
 											<div>
-												<p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+												<p className="text-muted-foreground text-xs font-bold tracking-widest uppercase">
 													Barber
 												</p>
 												<p className="font-bold">{selectedBarber.name}</p>
@@ -588,20 +589,20 @@ function BookingPage() {
 
 									{selectedDate && selectedTime && (
 										<div className="flex gap-4">
-											<div className="size-10 bg-muted flex items-center justify-center shrink-0">
+											<div className="bg-muted flex size-10 shrink-0 items-center justify-center">
 												<Icon
 													icon="ph:calendar-bold"
-													className="size-5 text-muted-foreground"
+													className="text-muted-foreground size-5"
 												/>
 											</div>
 											<div>
-												<p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+												<p className="text-muted-foreground text-xs font-bold tracking-widest uppercase">
 													Appointment
 												</p>
 												<p className="font-bold">
 													{format(selectedDate, "PPP")}
 												</p>
-												<p className="text-sm font-bold text-highlight">
+												<p className="text-highlight text-sm font-bold">
 													{format(new Date(selectedTime), "HH:mm")}
 												</p>
 											</div>
@@ -609,28 +610,28 @@ function BookingPage() {
 									)}
 
 									{!selectedService && (
-										<div className="py-12 text-center text-muted-foreground text-sm italic">
+										<div className="text-muted-foreground py-12 text-center text-sm italic">
 											Select a service to start
 										</div>
 									)}
 								</CardContent>
 								{selectedService && (
-									<CardFooter className="flex justify-between items-center border-t pt-4">
-										<span className="font-bold text-lg">
+									<CardFooter className="flex items-center justify-between border-t pt-4">
+										<span className="text-lg font-bold">
 											{t("booking.total")}
 										</span>
-										<span className="font-bold text-2xl text-highlight">
+										<span className="text-highlight text-2xl font-bold">
 											{formatPrice(selectedService.price)}
 										</span>
 									</CardFooter>
 								)}
 							</Card>
 
-							<div className="p-6 bg-muted/50 border border-border space-y-4">
-								<h3 className="font-bold text-sm uppercase tracking-widest">
+							<div className="bg-muted/50 border-border space-y-4 border p-6">
+								<h3 className="text-sm font-bold tracking-widest uppercase">
 									{t("booking.policy.title")}
 								</h3>
-								<ul className="text-xs text-muted-foreground space-y-2 leading-relaxed">
+								<ul className="text-muted-foreground space-y-2 text-xs leading-relaxed">
 									<li>• {t("booking.policy.arrive")}</li>
 									<li>• {t("booking.policy.cancel")}</li>
 									<li>• {t("booking.policy.payment")}</li>

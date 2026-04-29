@@ -1,4 +1,5 @@
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
+
 import { content } from "./_categories";
 
 export const headingBlock = block("heading")
@@ -9,11 +10,7 @@ export const headingBlock = block("heading")
 		order: 2,
 	}))
 	.fields(({ f }) => ({
-		text: f
-			.text()
-			.label({ en: "Text", sk: "Text" })
-			.localized()
-			.required(),
+		text: f.text().label({ en: "Text", sk: "Text" }).localized().required(),
 		level: f
 			.select([
 				{ value: "h1", label: "H1" },

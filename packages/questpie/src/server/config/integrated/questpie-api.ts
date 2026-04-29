@@ -5,16 +5,16 @@ import type {
 	CollectionSelectFromApp,
 	CRUD,
 	CRUDContext,
+	FindResult,
 	FindOneOptions,
 	FindOptions,
-	PaginatedResult,
 } from "#questpie/server/collection/crud/index.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 import type {
 	GlobalCRUD,
 	GlobalSelectFromApp,
-} from "#questpie/server/global/crud/index.js";
+} from "#questpie/server/global/crud/types.js";
 import type {
 	AnyCollectionOrBuilder,
 	CollectionInsert,
@@ -44,25 +44,30 @@ type CollectionHasUpload<TCollection> =
  * Build an app-like context from TCollections for field-definition resolution.
  * This allows nested relation Where/With to resolve through WhereFromCollection.
  */
-type AppFromCollections<
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
-> = { collections: TCollections };
+type AppFromCollections<TCollections extends Record<string, any>> = {
+	collections: TCollections;
+};
+
+/** Detect `any` to short-circuit expensive type resolution */
+type IsAny<T> = 0 extends 1 & T ? true : false;
 
 /**
  * Collection-aware CRUD that uses FindOptions/FindOneOptions typed against
  * the collection + TApp context for field-definition-aware operator types.
  *
- * This ensures that:
- * - Where clauses use FieldOperatorsFromFieldDef (not WhereOperatorsLegacy)
- * - Nested relation Where flows through WhereFromCollection
- * - With clauses get typed where/columns/orderBy from field definitions
+ * IsAny guard: when TCollection is `any` (dynamic runtime access),
+ * TSelect/TRelations degrade to `any` instead of resolving to `never`.
  */
 type CollectionCRUD<
 	TCollection,
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
+	TCollections extends Record<string, any>,
 	TApp = AppFromCollections<TCollections>,
-	TSelect = CollectionSelectFromApp<TCollection, TApp>,
-	TRelations = CollectionRelationsFromApp<TCollection, TApp>,
+	TSelect = IsAny<TCollection> extends true
+		? any
+		: CollectionSelectFromApp<TCollection, TApp>,
+	TRelations = IsAny<TCollection> extends true
+		? any
+		: CollectionRelationsFromApp<TCollection, TApp>,
 > = Omit<
 	CRUD<
 		TSelect,
@@ -75,7 +80,7 @@ type CollectionCRUD<
 	find<TQuery extends FindOptions<TCollection, TApp>>(
 		options?: TQuery,
 		context?: CRUDContext,
-	): Promise<PaginatedResult<ApplyQuery<TSelect, TRelations, TQuery>>>;
+	): Promise<FindResult<TSelect, TRelations, TQuery>>;
 
 	findOne<TQuery extends FindOneOptions<TCollection, TApp>>(
 		options?: TQuery,
@@ -88,9 +93,9 @@ type CollectionCRUD<
 	): Promise<number>;
 };
 
-type CollectionAPI<
+export type CollectionAPI<
 	TCollection,
-	TCollections extends Record<string, AnyCollectionOrBuilder>,
+	TCollections extends Record<string, any>,
 > = Omit<CollectionCRUD<TCollection, TCollections>, "upload" | "uploadMany"> &
 	(CollectionHasUpload<TCollection> extends true
 		? UploadMethods<
@@ -119,8 +124,8 @@ export class QuestpieAPI<TConfig extends QuestpieConfig = QuestpieConfig> {
 	/**
 	 * Access collections CRUD operations
 	 * @example
-	 * await app.api.collections.users.create({ email: '...' }, context)
-	 * await app.api.collections.posts.find({ where: { status: 'published' } })
+	 * await app.collections.users.create({ email: '...' }, context)
+	 * await app.collections.posts.find({ where: { status: 'published' } })
 	 */
 	public get collections(): {
 		[K in keyof TConfig["collections"]]: CollectionAPI<

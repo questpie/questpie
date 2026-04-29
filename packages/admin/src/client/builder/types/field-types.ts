@@ -5,7 +5,9 @@
  */
 
 import type { z } from "zod";
+
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
 import type { I18nText } from "../../i18n/types.js";
 import type { ActionDefinition } from "./action-types";
 import type {
@@ -656,12 +658,19 @@ interface FieldReactiveConfig<TData = any> {
 }
 
 /**
- * Field layout item with optional reactive config
+ * Field layout item — single-field reference variant.
+ *
+ * On the wire this matches the server's `FormFieldLayoutItem` after
+ * introspection has serialized any function-valued `props.<key>` to a
+ * `ReactivePropPlaceholder`. Kept as `Record<string, unknown>` here because
+ * the client only ever consumes the post-serialization shape.
  */
-export interface FieldLayoutItemWithReactive<TData = any>
+export interface FieldLayoutItemRef<TData = any>
 	extends FieldReactiveConfig<TData> {
 	field: string;
 	className?: string;
+	/** Forwarded to the field component. See server `FormFieldLayoutItem.props`. */
+	props?: Record<string, unknown>;
 }
 
 /**
@@ -681,7 +690,7 @@ export interface FieldLayoutItemWithReactive<TData = any>
  */
 export type FieldLayoutItem<TData = any> =
 	| string
-	| FieldLayoutItemWithReactive<TData>
+	| FieldLayoutItemRef<TData>
 	| SectionLayout<TData>
 	| TabsLayout<TData>;
 
@@ -690,7 +699,7 @@ export type FieldLayoutItem<TData = any> =
  */
 export function isFieldReference<TData = any>(
 	item: FieldLayoutItem<TData>,
-): item is string | FieldLayoutItemWithReactive<TData> {
+): item is string | FieldLayoutItemRef<TData> {
 	return typeof item === "string" || ("field" in item && !("type" in item));
 }
 

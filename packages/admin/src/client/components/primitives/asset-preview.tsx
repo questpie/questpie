@@ -16,6 +16,7 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
 import type { Asset } from "../../hooks/use-upload";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -235,11 +236,7 @@ export function AssetPreview({
 	if (variant === "thumbnail") {
 		// Show skeleton when loading and no actual asset data
 		if (isLoadingAsset) {
-			return (
-				<Skeleton
-					className={cn("aspect-square w-full rounded-lg", className)}
-				/>
-			);
+			return <Skeleton className={cn("aspect-square w-full", className)} />;
 		}
 
 		const isInteractive = onClick && !disabled && asset.id;
@@ -259,10 +256,10 @@ export function AssetPreview({
 		const content = (
 			<div
 				className={cn(
-					"group relative aspect-square overflow-hidden rounded-lg border",
+					"group relative aspect-square overflow-hidden border",
 					"bg-muted border-border",
 					disabled && "opacity-60",
-					onClick && !disabled && "cursor-pointer hover:border-border",
+					onClick && !disabled && "hover:border-border cursor-pointer",
 					className,
 				)}
 				{...interactiveProps}
@@ -272,7 +269,7 @@ export function AssetPreview({
 					<img
 						src={thumbnailUrl}
 						alt={asset.alt || filename}
-						className="h-full w-full object-cover"
+						className="image-outline h-full w-full object-cover"
 						onError={() => setImageError(true)}
 					/>
 				) : (
@@ -293,7 +290,7 @@ export function AssetPreview({
 								className="text-muted-foreground size-6 animate-spin"
 							/>
 							{typeof progress === "number" && (
-								<span className="text-muted-foreground absolute inset-0 flex items-center justify-center text-[10px] font-medium">
+								<span className="text-muted-foreground absolute inset-0 flex items-center justify-center text-[10px] font-medium tabular-nums">
 									{progress}%
 								</span>
 							)}
@@ -355,17 +352,15 @@ export function AssetPreview({
 		if (isLoadingAsset) {
 			return (
 				<div
-					className={cn(
-						"flex items-center gap-2 rounded-md border p-2",
-						"bg-muted border-border",
-						className,
-					)}
+					className={cn("panel-surface flex items-center gap-2 p-2", className)}
 				>
-					{showDragHandle && <Skeleton className="size-4 -ml-1 rounded" />}
-					<Skeleton className="size-8 shrink-0 rounded" />
+					{showDragHandle && (
+						<Skeleton variant="text" className="-ml-1 size-4" />
+					)}
+					<Skeleton className="size-8 shrink-0" />
 					<div className="min-w-0 flex-1 space-y-1.5">
-						<Skeleton className="h-4 w-32 rounded" />
-						<Skeleton className="h-3 w-16 rounded" />
+						<Skeleton variant="text" className="h-4 w-32" />
+						<Skeleton variant="text" className="h-3 w-16" />
 					</div>
 				</div>
 			);
@@ -388,10 +383,9 @@ export function AssetPreview({
 		return (
 			<div
 				className={cn(
-					"group flex items-center gap-2 rounded-md border p-2",
-					"bg-muted border-border",
+					"panel-surface group flex items-center gap-2 p-2",
 					disabled && "opacity-60",
-					onClick && !disabled && "cursor-pointer hover:border-border",
+					onClick && !disabled && "hover:bg-accent/20 cursor-pointer",
 					className,
 				)}
 				{...compactInteractiveProps}
@@ -408,12 +402,12 @@ export function AssetPreview({
 				)}
 
 				{/* Icon or thumbnail */}
-				<div className="bg-muted flex size-8 shrink-0 items-center justify-center overflow-hidden rounded">
+				<div className="bg-muted flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-sm">
 					{thumbnailUrl && !imageError ? (
 						<img
 							src={thumbnailUrl}
 							alt={asset.alt || filename}
-							className="h-full w-full object-cover"
+							className="image-outline h-full w-full object-cover"
 							onError={() => setImageError(true)}
 						/>
 					) : (
@@ -428,7 +422,7 @@ export function AssetPreview({
 				<div className="min-w-0 flex-1">
 					<p className="truncate text-sm font-medium">{filename}</p>
 					{size && (
-						<p className="text-muted-foreground text-xs">
+						<p className="text-muted-foreground text-xs tabular-nums">
 							{formatFileSize(size)}
 						</p>
 					)}
@@ -493,17 +487,11 @@ export function AssetPreview({
 	// Show skeleton when loading and no actual asset data
 	if (isLoadingAsset) {
 		return (
-			<div
-				className={cn(
-					"overflow-hidden rounded-lg border",
-					"bg-muted border-border",
-					className,
-				)}
-			>
+			<div className={cn("panel-surface overflow-hidden", className)}>
 				<Skeleton className="aspect-video w-full" />
 				<div className="space-y-1.5 p-3">
-					<Skeleton className="h-4 w-3/4 rounded" />
-					<Skeleton className="h-3 w-1/2 rounded" />
+					<Skeleton variant="text" className="h-4 w-3/4" />
+					<Skeleton variant="text" className="h-3 w-1/2" />
 				</div>
 			</div>
 		);
@@ -526,10 +514,9 @@ export function AssetPreview({
 	return (
 		<div
 			className={cn(
-				"group relative overflow-hidden rounded-lg border",
-				"bg-muted border-border",
+				"panel-surface group relative overflow-hidden",
 				disabled && "opacity-60",
-				onClick && !disabled && "cursor-pointer hover:border-border",
+				onClick && !disabled && "hover:bg-accent/20 cursor-pointer",
 				className,
 			)}
 			{...cardInteractiveProps}
@@ -538,7 +525,7 @@ export function AssetPreview({
 			{showDragHandle && (
 				<button
 					type="button"
-					className="text-muted-foreground hover:text-foreground absolute left-2 top-2 z-10 cursor-grab touch-none rounded p-1 active:cursor-grabbing"
+					className="text-muted-foreground hover:text-foreground absolute top-2 left-2 z-10 cursor-grab touch-none rounded p-1 active:cursor-grabbing"
 					{...dragHandleProps}
 				>
 					<Icon icon="ph:dots-six-vertical-bold" className="size-4" />
@@ -551,7 +538,7 @@ export function AssetPreview({
 					<img
 						src={thumbnailUrl}
 						alt={asset.alt || filename}
-						className="h-full w-full object-contain"
+						className="image-outline h-full w-full object-contain"
 						onError={() => setImageError(true)}
 					/>
 				) : (
@@ -561,7 +548,7 @@ export function AssetPreview({
 							className="text-muted-foreground size-12"
 						/>
 						{extension && (
-							<span className="bg-muted text-muted-foreground rounded px-2 py-0.5 text-xs font-medium">
+							<span className="item-surface border-border bg-muted text-muted-foreground px-2 py-0.5 text-xs font-medium">
 								{extension}
 							</span>
 						)}
@@ -577,12 +564,12 @@ export function AssetPreview({
 						/>
 						{typeof progress === "number" && (
 							<>
-								<span className="text-muted-foreground text-sm font-medium">
+								<span className="text-muted-foreground text-sm font-medium tabular-nums">
 									{progress}%
 								</span>
-								<div className="bg-muted h-1.5 w-24 overflow-hidden rounded-full">
+								<div className="bg-muted h-1.5 w-24 overflow-hidden rounded-sm">
 									<div
-										className="bg-primary h-full rounded-full transition-all duration-300"
+										className="bg-primary h-full rounded-sm transition-[width] duration-300"
 										style={{ width: `${progress}%` }}
 									/>
 								</div>
@@ -597,7 +584,7 @@ export function AssetPreview({
 						type="button"
 						variant="secondary"
 						size="icon-xs"
-						className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
+						className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100"
 						onClick={(e) => {
 							e.stopPropagation();
 							onRemove();
@@ -609,12 +596,12 @@ export function AssetPreview({
 			</div>
 
 			{/* File info footer */}
-			<div className="flex items-center gap-2 border-t p-2">
+			<div className="border-border flex items-center gap-2 border-t p-2">
 				<div className="min-w-0 flex-1">
 					<p className="truncate text-sm font-medium" title={filename}>
 						{filename}
 					</p>
-					<p className="text-muted-foreground text-xs">
+					<p className="text-muted-foreground text-xs tabular-nums">
 						{formatFileSize(size)}
 						{mimeType && ` • ${mimeType.split("/")[1]?.toUpperCase()}`}
 					</p>
@@ -630,7 +617,7 @@ export function AssetPreview({
 								size="icon-sm"
 								nativeButton={false}
 								render={
-									// biome-ignore lint/a11y/useAnchorContent: TODO: improve accessibility
+									// oxlint-disable-next-line jsx-a11y/anchor-has-content -- TODO: improve accessibility
 									<a href={href} onClick={(e) => e.stopPropagation()} />
 								}
 							>

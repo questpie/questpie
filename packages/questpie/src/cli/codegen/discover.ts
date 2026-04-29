@@ -10,6 +10,7 @@
 import type { Dirent } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
+
 import type {
 	CategoryDeclaration,
 	DiscoveredFile,
@@ -44,8 +45,13 @@ export function kebabToCamelCase(filename: string): string {
  * Prefixed with underscore + category to avoid collisions.
  */
 function toVarName(prefix: string, key: string): string {
-	// Replace dots and dashes with underscores
-	const safe = key.replace(/[.\-/]/g, "_");
+	// Replace non-identifier chars with underscores
+	// Handles parameterized route filenames like [collection], [...key]
+	const safe = key
+		.replace(/\.\.\./g, "spread_")
+		.replace(/[^a-zA-Z0-9_]/g, "_")
+		.replace(/_+/g, "_")
+		.replace(/^_|_$/g, "");
 	return `_${prefix}_${safe}`;
 }
 
@@ -56,8 +62,8 @@ function toVarName(prefix: string, key: string): string {
 const TS_EXTENSIONS = new Set([".ts", ".tsx", ".mts"]);
 const IGNORE_FILES = new Set(["index.ts", "index.mts", "index.tsx"]);
 
-/** Files starting with _ are considered private/utility and skipped. */
-function isPrivateFile(name: string): boolean {
+/** Path entries starting with _ are considered private/utility and skipped. */
+function isPrivatePathEntry(name: string): boolean {
 	return name.startsWith("_");
 }
 
@@ -80,9 +86,12 @@ async function scanDir(
 	for (const entry of entries) {
 		const name = String(entry.name);
 		const fullPath = join(dir, name);
-		if (entry.isDirectory() && recursive) {
-			const nested = await scanDir(fullPath, base, true);
-			results.push(...nested);
+		if (entry.isDirectory()) {
+			if (isPrivatePathEntry(name)) continue;
+			if (recursive) {
+				const nested = await scanDir(fullPath, base, true);
+				results.push(...nested);
+			}
 		} else if (entry.isFile()) {
 			const ext = extname(name);
 			if (
@@ -90,9 +99,9 @@ async function scanDir(
 				!name.endsWith(".d.ts") &&
 				!name.endsWith(".d.mts") &&
 				!IGNORE_FILES.has(name) &&
-				!isPrivateFile(name)
+				!isPrivatePathEntry(name)
 			) {
-				results.push(relative(base, fullPath));
+				results.push(relative(base, fullPath).replaceAll("\\", "/"));
 			}
 		}
 	}
@@ -176,6 +185,7 @@ async function discoverFeatures(
 	for (const fDir of featureDirs) {
 		if (!fDir.isDirectory()) continue;
 		const featureName = String(fDir.name);
+		if (isPrivatePathEntry(featureName)) continue;
 		for (const dir of category.dirs) {
 			const scanPath = join(featuresDir, featureName, dir);
 			const files = await scanDir(scanPath, scanPath, category.recursive);
@@ -329,6 +339,8 @@ interface ResolvedPattern {
 	keyFrom: "filename" | "exportName";
 	cardinality: "single" | "map";
 	mergeStrategy: "replace" | "spread";
+	destructure?: Record<string, string>;
+	configKey?: string;
 }
 
 /**
@@ -336,10 +348,9 @@ interface ResolvedPattern {
  */
 function resolveDiscoverPattern(pattern: DiscoverPattern): ResolvedPattern {
 	if (typeof pattern === "string") {
-		const isSingleFile =
-			!pattern.includes("*") &&
-			!pattern.includes("/") &&
-			pattern.endsWith(".ts");
+		// A pattern is single-file if it has no glob wildcards AND ends with a TS extension.
+		// This correctly handles path-based patterns like "config/app.ts".
+		const isSingleFile = !pattern.includes("*") && /\.\w+$/.test(pattern);
 		return {
 			pattern,
 			resolve: "auto",
@@ -349,15 +360,15 @@ function resolveDiscoverPattern(pattern: DiscoverPattern): ResolvedPattern {
 		};
 	}
 	const isSingleFile =
-		!pattern.pattern.includes("*") &&
-		!pattern.pattern.includes("/") &&
-		pattern.pattern.endsWith(".ts");
+		!pattern.pattern.includes("*") && /\.\w+$/.test(pattern.pattern);
 	return {
 		pattern: pattern.pattern,
 		resolve: pattern.resolve ?? "auto",
 		keyFrom: pattern.keyFrom ?? "filename",
 		cardinality: pattern.cardinality ?? (isSingleFile ? "single" : "map"),
 		mergeStrategy: pattern.mergeStrategy ?? "replace",
+		destructure: pattern.destructure,
+		configKey: pattern.configKey,
 	};
 }
 
@@ -386,7 +397,7 @@ async function discoverSingleFile(
 		if (await fileExists(fullPath)) {
 			const importPath = relativeImport(outDir, fullPath);
 			const exportInfo = await detectExportType(fullPath);
-			singles.set(stateKey, {
+			const file: DiscoveredFile = {
 				absolutePath: fullPath,
 				key: stateKey,
 				importPath,
@@ -395,7 +406,14 @@ async function discoverSingleFile(
 				exportType: exportInfo.type,
 				namedExportName: exportInfo.namedExportName,
 				isBundle: exportInfo.isBundle,
-			});
+			};
+			if (resolved.destructure) {
+				file.destructure = resolved.destructure;
+			}
+			if (resolved.configKey) {
+				file.configKey = resolved.configKey;
+			}
+			singles.set(stateKey, file);
 			break;
 		}
 	}
@@ -478,6 +496,7 @@ async function discoverSpreadFile(
 	for (const fDir of featureDirs) {
 		if (!fDir.isDirectory()) continue;
 		const featureName = String(fDir.name);
+		if (isPrivatePathEntry(featureName)) continue;
 		const featureSuffix = kebabToCamelCase(`${featureName}.ts`); // strips fake .ts, converts kebab
 
 		for (const filename of candidates) {
@@ -555,6 +574,7 @@ async function discoverDirectoryPattern(
 	for (const fDir of featureDirs) {
 		if (!fDir.isDirectory()) continue;
 		const fDirName = String(fDir.name);
+		if (isPrivatePathEntry(fDirName)) continue;
 		const featureScanPath = join(featuresDir, fDirName, baseDir);
 		const featureFiles = await scanDir(
 			featureScanPath,
@@ -609,11 +629,24 @@ function deriveFileKey(relPath: string, category: DiscoveryCategory): string {
 		}
 
 		const sep = category.keySeparator ?? ".";
-		const segments = innerPath
-			.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "")
-			.split("/")
-			.map(kebabToCamelCase);
-		return segments.join(sep);
+		const stripped = innerPath.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "");
+
+		// Detect HTTP method suffix on the last segment:
+		// [collection].patch → key "[collection]:PATCH"
+		// globals/[name].delete → key "globals/[name]:DELETE"
+		const methodSuffixRe = /\.(get|post|put|patch|delete)$/i;
+		const methodMatch = stripped.match(methodSuffixRe);
+		const withoutMethod = methodMatch
+			? stripped.slice(0, -methodMatch[0].length)
+			: stripped;
+
+		const segments = withoutMethod.split("/").map(kebabToCamelCase);
+		const key = segments.join(sep);
+
+		if (methodMatch) {
+			return `${key}:${methodMatch[1].toUpperCase()}`;
+		}
+		return key;
 	}
 	// Simple: filename → camelCase key
 	return kebabToCamelCase(basename(relPath));
@@ -636,13 +669,14 @@ async function processFile(
 	relPath: string,
 	category: DiscoveryCategory,
 ): Promise<DiscoveredFile[]> {
+	relPath = relPath.replaceAll("\\", "/");
 	const absolutePath = join(rootDir, relPath);
 	const importPath = relativeImport(outDir, absolutePath);
 
 	// Read file content once — used by both factory and legacy detection
 	let content: string;
 	try {
-		content = await readFile(absolutePath, "utf-8");
+		content = String(await readFile(absolutePath, "utf-8"));
 	} catch {
 		return [];
 	}
@@ -658,12 +692,14 @@ async function processFile(
 		const results: DiscoveredFile[] = [];
 		const namedMatches = matches.filter((m) => !m.isDefault);
 		const defaultMatch = matches.find((m) => m.isDefault);
+		// For named exports: prefer factory string arg (camelCase'd), fall back to export name.
+		// For default exports: key from factory string arg if available, else filename.
+		// See AGENTS.md "Codegen Key Derivation" for the full decision table.
+		const fileKey = deriveFileKey(relPath, category);
 		if (namedMatches.length > 0) {
 			// Named factory exports found — each becomes a separate entity
 			for (const m of namedMatches) {
-				const key = m.entityKey
-					? kebabToCamelCase(`${m.entityKey}.ts`)
-					: m.exportName;
+				const key = m.entityKey ? kebabToCamelCase(m.entityKey) : m.exportName;
 				results.push({
 					absolutePath,
 					key,
@@ -675,15 +711,15 @@ async function processFile(
 				});
 			}
 		} else if (defaultMatch) {
-			// Only a default factory export — single entity
-			const key = defaultMatch.entityKey
-				? kebabToCamelCase(`${defaultMatch.entityKey}.ts`)
-				: deriveFileKey(relPath, category);
+			// Only a default factory export — single entity.
+			const effectiveKey = defaultMatch.entityKey
+				? kebabToCamelCase(defaultMatch.entityKey)
+				: fileKey;
 			results.push({
 				absolutePath,
-				key,
+				key: effectiveKey,
 				importPath,
-				varName: toVarName(category.prefix, key),
+				varName: toVarName(category.prefix, effectiveKey),
 				source: relPath,
 				exportType: "default",
 			});
@@ -715,7 +751,7 @@ async function processFile(
  * Strips the .ts extension and ensures it starts with "../".
  */
 function relativeImport(fromDir: string, toFile: string): string {
-	let rel = relative(fromDir, toFile);
+	let rel = relative(fromDir, toFile).replaceAll("\\", "/");
 	// Remove extension
 	rel = rel.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "");
 	// Ensure it starts with ./ or ../
@@ -807,7 +843,7 @@ export async function detectExportType(
 ): Promise<ExportDetection> {
 	let content: string;
 	try {
-		content = await readFile(absolutePath, "utf-8");
+		content = String(await readFile(absolutePath, "utf-8"));
 	} catch {
 		return { type: "unknown" };
 	}
@@ -861,24 +897,17 @@ export function detectFactoryExports(
 	const factoryAlt = factoryFunctions
 		.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
 		.join("|");
+	const factorySet = new Set(factoryFunctions);
 
 	// ── Pass 1: Build factory variable map ──────────────────────
-	// Matches: [export] const/let/var X = factory(...) or factory<T>(...)
-	// Captures: [1] varName, [2] factoryName, [3] first string arg (optional)
-	const assignRe = new RegExp(
-		`(?:const|let|var)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*(${factoryAlt})\\s*(?:<[^>]*>)?\\s*\\(\\s*(?:["']([^"']+)["'])?`,
-		"gm",
-	);
-
 	const factoryVars = new Map<
 		string,
 		{ factoryName: string; entityKey: string | null }
 	>();
-	let match: RegExpExecArray | null;
-	while ((match = assignRe.exec(content)) !== null) {
-		factoryVars.set(match[1], {
-			factoryName: match[2],
-			entityKey: match[3] ?? null,
+	for (const assignment of findFactoryAssignments(content, factorySet)) {
+		factoryVars.set(assignment.varName, {
+			factoryName: assignment.factoryName,
+			entityKey: assignment.entityKey,
 		});
 	}
 
@@ -889,6 +918,7 @@ export function detectFactoryExports(
 	// 2a. Direct exports: export const/let/var X
 	const directExportRe =
 		/\bexport\s+(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/gm;
+	let match: RegExpExecArray | null;
 	while ((match = directExportRe.exec(content)) !== null) {
 		const name = match[1];
 		const info = factoryVars.get(name);
@@ -967,6 +997,307 @@ export function detectFactoryExports(
 	}
 
 	return results;
+}
+
+interface FactoryAssignmentMatch {
+	varName: string;
+	factoryName: string;
+	entityKey: string | null;
+}
+
+function findFactoryAssignments(
+	content: string,
+	factoryFunctions: Set<string>,
+): FactoryAssignmentMatch[] {
+	const matches: FactoryAssignmentMatch[] = [];
+	const declRe = /\b(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/gm;
+	let match: RegExpExecArray | null;
+
+	while ((match = declRe.exec(content)) !== null) {
+		const varName = match[1];
+		const assignment = parseFactoryAssignment(
+			content,
+			declRe.lastIndex,
+			factoryFunctions,
+		);
+		if (!assignment) continue;
+		matches.push({
+			varName,
+			factoryName: assignment.factoryName,
+			entityKey: assignment.entityKey,
+		});
+	}
+
+	return matches;
+}
+
+function parseFactoryAssignment(
+	content: string,
+	startIndex: number,
+	factoryFunctions: Set<string>,
+): { factoryName: string; entityKey: string | null } | null {
+	const equalsIndex = findDeclarationEquals(content, startIndex);
+	if (equalsIndex === -1) return null;
+
+	let index = skipWhitespaceAndComments(content, equalsIndex + 1);
+	const factoryName = readIdentifierAt(content, index);
+	if (!factoryName || !factoryFunctions.has(factoryName)) return null;
+
+	index += factoryName.length;
+	index = skipWhitespaceAndComments(content, index);
+
+	if (content[index] === "<") {
+		index = skipBalanced(content, index, "<", ">");
+		if (index === -1) return null;
+		index = skipWhitespaceAndComments(content, index);
+	}
+
+	if (content[index] !== "(") return null;
+
+	const entityKey = readFirstStringArgument(content, index + 1);
+	return { factoryName, entityKey };
+}
+
+function findDeclarationEquals(content: string, startIndex: number): number {
+	let index = startIndex;
+	let parenDepth = 0;
+	let braceDepth = 0;
+	let bracketDepth = 0;
+	let angleDepth = 0;
+
+	while (index < content.length) {
+		const ch = content[index];
+		const next = content[index + 1];
+
+		if (ch === '"' || ch === "'" || ch === "`") {
+			index = skipStringLiteral(content, index, ch);
+			continue;
+		}
+
+		if (ch === "/" && next === "/") {
+			index = skipLineComment(content, index + 2);
+			continue;
+		}
+
+		if (ch === "/" && next === "*") {
+			index = skipBlockComment(content, index + 2);
+			continue;
+		}
+
+		switch (ch) {
+			case "(":
+				parenDepth++;
+				index++;
+				continue;
+			case ")":
+				parenDepth = Math.max(0, parenDepth - 1);
+				index++;
+				continue;
+			case "{":
+				braceDepth++;
+				index++;
+				continue;
+			case "}":
+				braceDepth = Math.max(0, braceDepth - 1);
+				index++;
+				continue;
+			case "[":
+				bracketDepth++;
+				index++;
+				continue;
+			case "]":
+				bracketDepth = Math.max(0, bracketDepth - 1);
+				index++;
+				continue;
+			case "<":
+				angleDepth++;
+				index++;
+				continue;
+			case ">":
+				angleDepth = Math.max(0, angleDepth - 1);
+				index++;
+				continue;
+			case "=":
+				if (next === ">" || next === "=") {
+					index += 2;
+					continue;
+				}
+				if (
+					parenDepth === 0 &&
+					braceDepth === 0 &&
+					bracketDepth === 0 &&
+					angleDepth === 0
+				) {
+					return index;
+				}
+				index++;
+				continue;
+			case ";":
+			case "\n":
+				if (
+					parenDepth === 0 &&
+					braceDepth === 0 &&
+					bracketDepth === 0 &&
+					angleDepth === 0
+				) {
+					return -1;
+				}
+				index++;
+				continue;
+			default:
+				index++;
+		}
+	}
+
+	return -1;
+}
+
+function skipWhitespaceAndComments(content: string, startIndex: number): number {
+	let index = startIndex;
+
+	while (index < content.length) {
+		const ch = content[index];
+		const next = content[index + 1];
+
+		if (/\s/.test(ch)) {
+			index++;
+			continue;
+		}
+
+		if (ch === "/" && next === "/") {
+			index = skipLineComment(content, index + 2);
+			continue;
+		}
+
+		if (ch === "/" && next === "*") {
+			index = skipBlockComment(content, index + 2);
+			continue;
+		}
+
+		break;
+	}
+
+	return index;
+}
+
+function readIdentifierAt(content: string, startIndex: number): string | null {
+	const identRe = /[a-zA-Z_$][a-zA-Z0-9_$]*/y;
+	identRe.lastIndex = startIndex;
+	const match = identRe.exec(content);
+	return match?.[0] ?? null;
+}
+
+function readFirstStringArgument(
+	content: string,
+	startIndex: number,
+): string | null {
+	const index = skipWhitespaceAndComments(content, startIndex);
+	const quote = content[index];
+	if (quote !== '"' && quote !== "'") return null;
+
+	let cursor = index + 1;
+	let value = "";
+	while (cursor < content.length) {
+		const ch = content[cursor];
+		if (ch === "\\") {
+			value += content[cursor + 1] ?? "";
+			cursor += 2;
+			continue;
+		}
+		if (ch === quote) {
+			return value;
+		}
+		value += ch;
+		cursor++;
+	}
+
+	return null;
+}
+
+function skipBalanced(
+	content: string,
+	startIndex: number,
+	openChar: string,
+	closeChar: string,
+): number {
+	let depth = 0;
+	let index = startIndex;
+
+	while (index < content.length) {
+		const ch = content[index];
+		const next = content[index + 1];
+
+		if (ch === '"' || ch === "'" || ch === "`") {
+			index = skipStringLiteral(content, index, ch);
+			continue;
+		}
+
+		if (ch === "/" && next === "/") {
+			index = skipLineComment(content, index + 2);
+			continue;
+		}
+
+		if (ch === "/" && next === "*") {
+			index = skipBlockComment(content, index + 2);
+			continue;
+		}
+
+		if (ch === openChar) {
+			depth++;
+			index++;
+			continue;
+		}
+
+		if (ch === closeChar) {
+			depth--;
+			index++;
+			if (depth === 0) return index;
+			continue;
+		}
+
+		index++;
+	}
+
+	return -1;
+}
+
+function skipStringLiteral(
+	content: string,
+	startIndex: number,
+	quote: '"' | "'" | "`",
+): number {
+	let index = startIndex + 1;
+	while (index < content.length) {
+		const ch = content[index];
+		if (ch === "\\") {
+			index += 2;
+			continue;
+		}
+		if (ch === quote) {
+			return index + 1;
+		}
+		index++;
+	}
+	return index;
+}
+
+function skipLineComment(content: string, startIndex: number): number {
+	let index = startIndex;
+	while (index < content.length && content[index] !== "\n") {
+		index++;
+	}
+	return index;
+}
+
+function skipBlockComment(content: string, startIndex: number): number {
+	let index = startIndex;
+	while (index < content.length) {
+		if (content[index] === "*" && content[index + 1] === "/") {
+			return index + 2;
+		}
+		index++;
+	}
+	return index;
 }
 
 /**

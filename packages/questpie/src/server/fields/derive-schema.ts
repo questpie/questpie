@@ -6,6 +6,7 @@
  */
 
 import { z, type ZodType } from "zod";
+
 import type { FieldRuntimeState } from "./field-class-types.js";
 
 // ============================================================================
@@ -139,10 +140,9 @@ function applyRefinements(schema: ZodType, state: FieldRuntimeState): ZodType {
 		if (state.positive) s = s.positive();
 		if (state.int) s = s.int();
 		if (state.step !== undefined) {
-			s = s.refine(
-				(v) => v % state.step! === 0,
-				{ message: `Must be a multiple of ${state.step}` },
-			) as any;
+			s = s.refine((v) => v % state.step! === 0, {
+				message: `Must be a multiple of ${state.step}`,
+			}) as any;
 		}
 		return s;
 	}

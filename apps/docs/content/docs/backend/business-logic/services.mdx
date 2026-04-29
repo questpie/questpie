@@ -3,9 +3,9 @@ title: Services
 description: Singleton and request-scoped services — define once, inject everywhere via AppContext.
 ---
 
-# Services
-
 Services are reusable units of logic that get injected into `AppContext` under the `services` key. Define a service in `services/`, and it becomes available in every hook, route, and job handler.
+
+Use services for application-specific logic: payment clients, domain workflows, third-party SDK wrappers, calculators, or reusable operations that need access to `db`, `collections`, `queue`, `email`, or other context services. Built-in infrastructure (`db`, `queue`, `email`, `storage`, `kv`, `search`, `realtime`, `logger`) is already injected directly by QUESTPIE.
 
 ## Defining a Service
 
@@ -15,26 +15,29 @@ import { service } from "questpie";
 const WORDS_PER_MINUTE = 200;
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, " ");
+	return html.replace(/<[^>]*>/g, " ");
 }
 
 export default service({
-  lifecycle: "singleton",
-  create: () => ({
-    computeReadingTime(content: string): number {
-      const text = stripHtml(content);
-      const words = text.trim().split(/\s+/).filter((w) => w.length > 0).length;
-      return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE));
-    },
+	lifecycle: "singleton",
+	create: () => ({
+		computeReadingTime(content: string): number {
+			const text = stripHtml(content);
+			const words = text
+				.trim()
+				.split(/\s+/)
+				.filter((w) => w.length > 0).length;
+			return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE));
+		},
 
-    generateSlug(title: string): string {
-      return title
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-");
-    },
-  }),
+		generateSlug(title: string): string {
+			return title
+				.toLowerCase()
+				.replace(/[^a-z0-9\s-]/g, "")
+				.trim()
+				.replace(/\s+/g, "-");
+		},
+	}),
 });
 ```
 
@@ -45,45 +48,52 @@ The filename becomes the key inside `services`: `services/blog.ts` → `ctx.serv
 Services are available in every handler via `services` destructuring:
 
 ```ts title="collections/posts.ts"
-export const posts = collection("posts")
-  .fields(({ f }) => ({
-    title: f.text().required().label("Title"),
-    content: f.textarea().label("Content"),
-    readingTime: f.number().label("Reading Time"),
-    slug: f.text().label("Slug"),
-  }))
-  .hooks({
-    beforeChange: async ({ data, services }) => {
-      const { blog } = services;
-      if (data.content) {
-        data.readingTime = blog.computeReadingTime(data.content);
-      }
-      if (data.title) {
-        data.slug = blog.generateSlug(data.title);
-      }
-    },
-  });
+import { collection } from "#questpie/factories";
+
+export default collection("posts")
+	.fields(({ f }) => ({
+		title: f.text().required().label("Title"),
+		content: f.textarea().label("Content"),
+		readingTime: f.number().label("Reading Time"),
+		slug: f.text().label("Slug"),
+	}))
+	.hooks({
+		beforeChange: async ({ data, services }) => {
+			const { blog } = services;
+			if (data.content) {
+				data.readingTime = blog.computeReadingTime(data.content);
+			}
+			if (data.title) {
+				data.slug = blog.generateSlug(data.title);
+			}
+		},
+	});
 ```
 
 ```ts title="routes/get-post-stats.ts"
+import { route } from "questpie";
+import z from "zod";
+
 export default route()
-  .post()
-  .schema(z.object({ postId: z.string() }))
-  .handler(async ({ input, collections, services }) => {
-    const post = await collections.posts.findOne({ where: { id: input.postId } });
-    return {
-      readingTime: services.blog.computeReadingTime(post.content),
-      excerpt: services.blog.extractExcerpt(post.content),
-    };
-  });
+	.post()
+	.schema(z.object({ postId: z.string() }))
+	.handler(async ({ input, collections, services }) => {
+		const post = await collections.posts.findOne({
+			where: { id: input.postId },
+		});
+		return {
+			readingTime: services.blog.computeReadingTime(post.content),
+			excerpt: services.blog.extractExcerpt(post.content),
+		};
+	});
 ```
 
 ## Lifecycle
 
-| Lifecycle | Created | Destroyed | Use for |
-|---|---|---|---|
-| `"singleton"` (default) | Once at app startup | App shutdown | External clients, SDKs, connection pools |
-| `"request"` | Per request | End of request | Tenant-scoped DB, user-specific config |
+| Lifecycle               | Created             | Destroyed      | Use for                                  |
+| ----------------------- | ------------------- | -------------- | ---------------------------------------- |
+| `"singleton"` (default) | Once at app startup | App shutdown   | External clients, SDKs, connection pools |
+| `"request"`             | Per request         | End of request | Tenant-scoped DB, user-specific config   |
 
 ### Singleton (default)
 
@@ -92,8 +102,8 @@ import { service } from "questpie";
 import Stripe from "stripe";
 
 export default service({
-  lifecycle: "singleton",
-  create: () => new Stripe(process.env.STRIPE_SECRET_KEY!),
+	lifecycle: "singleton",
+	create: () => new Stripe(process.env.STRIPE_SECRET_KEY!),
 });
 ```
 
@@ -103,32 +113,51 @@ export default service({
 import { service } from "questpie";
 
 export default service({
-  lifecycle: "request",
-  deps: ["db", "session"] as const,
-  create: ({ db, session }) => {
-    return createScopedDb(db, session?.user?.tenantId);
-  },
-  dispose: (scopedDb) => scopedDb.release(),
+	lifecycle: "request",
+	create: ({ db, session }) => {
+		return createScopedDb(db, session?.user?.tenantId);
+	},
+	dispose: (scopedDb) => scopedDb.release(),
 });
 ```
 
 ## Dependencies
 
-Services can depend on other services and infrastructure via `deps`. Use `as const` for type safety:
+Service factories receive a `ServiceCreateContext` directly. Destructure the infrastructure and services you need; there is no separate `deps` list.
 
 ```ts title="services/analytics.ts"
 import { service } from "questpie";
 
 export default service({
-  deps: ["db", "logger"] as const,
-  create: ({ db, logger }) => {
-    logger.info("Analytics service initialized");
-    return new AnalyticsService(db);
-  },
+	lifecycle: "singleton",
+	create: ({ db, logger, services }) => {
+		logger.info("Analytics service initialized");
+		return new AnalyticsService(db, services.blog);
+	},
 });
 ```
 
 Available dependencies include: `db`, `logger`, `kv`, `email`, `queue`, `storage`, `search`, `realtime`, `session`, and any other user-defined services.
+
+Keep long-running processes out of services. A service may publish a job with `queue.someJob.publish(...)`, but it should not call `queue.listen()` or start background loops. Job execution belongs in a worker process; see [Jobs](/docs/backend/business-logic/jobs) and [Queue](/docs/production/queue).
+
+## Namespaces
+
+By default, user services live under `services.*`. You can place a singleton service under a custom namespace when that reads better for your app:
+
+```ts title="services/billing.ts"
+import { service } from "questpie";
+
+export default service()
+	.namespace("workflows")
+	.create(({ queue }) => ({
+		async confirmPayment(paymentId: string) {
+			await queue.capturePayment.publish({ paymentId });
+		},
+	}));
+```
+
+Handlers access it as `workflows.billing.confirmPayment(...)`. Request-scoped services can use the default `services` namespace or `namespace(null)` for top-level access, but custom namespaces are singleton-only.
 
 ## Disposal
 
@@ -136,14 +165,14 @@ Optional `dispose` function for cleanup:
 
 ```ts
 export default service({
-  lifecycle: "singleton",
-  create: () => {
-    const pool = createConnectionPool();
-    return pool;
-  },
-  dispose: async (pool) => {
-    await pool.close();
-  },
+	lifecycle: "singleton",
+	create: () => {
+		const pool = createConnectionPool();
+		return pool;
+	},
+	dispose: async (pool) => {
+		await pool.close();
+	},
 });
 ```
 
@@ -155,14 +184,15 @@ export default service({
 ```ts
 service({
   lifecycle?: "singleton" | "request",  // default: "singleton"
-  deps?: readonly string[],             // dependencies from AppContext
-  create: (deps) => TInstance,          // factory function
+  namespace?: string | null,            // default: "services"
+  create: (ctx) => TInstance,           // factory function
   dispose?: (instance) => void | Promise<void>,  // cleanup
 })
 ```
 
 ## Related Pages
 
-- [Routes](/docs/backend/business-logic/routes) — Use services in route handlers
+- [Typed Routes](/docs/backend/business-logic/routes) — Use services in route handlers
 - [Hooks](/docs/backend/rules/hooks) — Use services in lifecycle hooks
+- [Jobs](/docs/backend/business-logic/jobs) — Publish background work from services
 - [Codegen](/docs/backend/architecture/codegen) — How services appear in AppContext

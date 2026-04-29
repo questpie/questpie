@@ -17,6 +17,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
 import { useState } from "react";
+
+import { cn } from "#questpie/admin/client/lib/utils.js";
+
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { Checkbox } from "../ui/checkbox";
 import type { AvailableField } from "./types.js";
@@ -57,22 +60,23 @@ function SortableColumnItem({
 		<div
 			ref={setNodeRef}
 			style={style}
-			className={`flex items-center gap-2 p-2.5 hover:bg-muted border border-transparent hover:border-border rounded-lg transition-colors ${
-				isDragging ? "opacity-50 bg-muted" : ""
-			}`}
+			className={cn(
+				"border-border-subtle bg-surface-low hover:border-border-strong hover:bg-surface-high flex items-center gap-2 rounded-md border p-2.5 transition-[background-color,border-color,opacity]",
+				isDragging && "opacity-75",
+			)}
 		>
 			<button
 				type="button"
-				className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none"
+				className="text-muted-foreground hover:text-foreground cursor-grab touch-none active:cursor-grabbing"
 				{...attributes}
 				{...listeners}
 			>
 				<Icon icon="ph:dots-six-vertical-bold" width={16} height={16} />
 			</button>
-			<label className="flex items-center gap-3 flex-1 cursor-pointer">
+			<label className="flex flex-1 cursor-pointer items-center gap-3">
 				<Checkbox checked={isVisible} onCheckedChange={onToggle} />
 				<span className="text-sm font-medium">{resolveText(field.label)}</span>
-				<span className="text-xs text-muted-foreground ml-auto">
+				<span className="text-muted-foreground ml-auto text-xs">
 					{field.type}
 				</span>
 			</label>
@@ -192,7 +196,7 @@ export function ColumnsTab({
 
 	return (
 		<div className="space-y-2 py-4">
-			<p className="text-xs text-muted-foreground mb-4">
+			<p className="text-muted-foreground mb-4 text-xs">
 				{t("viewOptions.columnsDragHint")}
 			</p>
 			<DndContext
@@ -215,9 +219,9 @@ export function ColumnsTab({
 				</SortableContext>
 			</DndContext>
 			{orderedFields.length === 0 && (
-				<div className="text-center p-8 text-muted-foreground text-sm">
+				<p className="text-muted-foreground py-2 text-sm">
 					{t("viewOptions.noFieldsAvailable")}
-				</div>
+				</p>
 			)}
 		</div>
 	);

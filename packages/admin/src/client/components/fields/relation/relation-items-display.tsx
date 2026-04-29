@@ -10,7 +10,8 @@
  */
 
 import type * as React from "react";
-import { useResolveText } from "../../../i18n/hooks";
+
+import { useResolveText, useTranslation } from "../../../i18n/hooks";
 import type { I18nText } from "../../../i18n/types";
 import type {
 	CollectionFieldsConfig,
@@ -121,13 +122,14 @@ export function RelationItemsDisplay({
 	gridColumns,
 	linkToDetail = false,
 	renderItem,
-	emptyMessage = "No items",
+	emptyMessage,
 	collectionConfig,
 	isLoading = false,
 	loadingCount,
 }: RelationItemsDisplayProps) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
-	const resolvedEmptyMessage = resolveText(emptyMessage ?? "No items");
+	const resolvedEmptyMessage = resolveText(emptyMessage ?? t("field.noItems"));
 
 	// Show loading state (skeletons) when loading
 	// Pass to display components so they can render skeletons
@@ -151,8 +153,8 @@ export function RelationItemsDisplay({
 	// Empty state - only show when not loading and no items
 	if (!isLoading && (!items || items.length === 0)) {
 		return (
-			<div className="rounded-lg border border-dashed p-4 text-center">
-				<p className="text-sm text-muted-foreground">{resolvedEmptyMessage}</p>
+			<div className="py-2">
+				<p className="text-muted-foreground text-sm">{resolvedEmptyMessage}</p>
 			</div>
 		);
 	}

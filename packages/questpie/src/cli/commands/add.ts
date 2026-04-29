@@ -11,12 +11,15 @@
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import {
-	coreCodegenPlugin,
-	resolveTargetGraph,
-} from "../codegen/index.js";
+
+import { coreCodegenPlugin, resolveTargetGraph } from "../codegen/index.js";
 import type { ResolvedTarget, ScaffoldConfig } from "../codegen/types.js";
-import { generateCommand, loadConfigForCodegen, resolveEntityRoot } from "./codegen.js";
+import { resolveCliPath } from "../utils.js";
+import {
+	generateCommand,
+	loadConfigForCodegen,
+	resolveEntityRoot,
+} from "./codegen.js";
 
 // ============================================================================
 // Types
@@ -43,7 +46,7 @@ interface ScaffoldEntry {
 
 export async function addCommand(options: AddOptions): Promise<void> {
 	// 1. Load config and resolve target graph
-	const rawConfigPath = resolve(process.cwd(), options.configPath);
+	const rawConfigPath = resolveCliPath(options.configPath);
 	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
 	const { plugins: userPlugins } = await loadConfigForCodegen(configPath);
 
@@ -104,9 +107,10 @@ export async function addCommand(options: AddOptions): Promise<void> {
 		const outDir = join(targetRootDir, entry.scaffold.dir);
 		const filePath = join(outDir, `${kebab}${ext}`);
 
-		const label = filteredEntries.length > 1
-			? `[${entry.targetId}] ${options.type}: ${options.name}`
-			: `${options.type}: ${options.name}`;
+		const label =
+			filteredEntries.length > 1
+				? `[${entry.targetId}] ${options.type}: ${options.name}`
+				: `${options.type}: ${options.name}`;
 
 		console.log(`Adding ${label}`);
 		console.log(`  File: ${filePath}`);

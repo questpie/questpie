@@ -32,6 +32,7 @@ export const parseFindOptions = (url: URL) => {
 
 	if (parsedQuery.where) options.where = parsedQuery.where;
 	if (parsedQuery.orderBy) options.orderBy = parsedQuery.orderBy;
+	if (parsedQuery.groupBy) options.groupBy = parsedQuery.groupBy;
 	if (parsedQuery.with) options.with = parsedQuery.with;
 	if (parsedQuery.includeDeleted !== undefined) {
 		options.includeDeleted = parseBoolean(parsedQuery.includeDeleted);

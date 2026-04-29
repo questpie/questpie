@@ -14,6 +14,7 @@ import { Icon } from "@iconify/react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Table } from "@tanstack/react-table";
 import * as React from "react";
+
 import type {
 	ActionContext,
 	ActionDefinition,
@@ -156,7 +157,20 @@ export function BulkActionToolbar<TItem = any>({
 	// Don't render if nothing selected AND no active filters (after all hooks)
 	const hasFilters = filterCount > 0;
 	const hasSelection = selectedCount > 0;
-	if (!hasSelection && !hasFilters) return null;
+	const isVisible = hasSelection || hasFilters;
+	const [shouldRender, setShouldRender] = React.useState(isVisible);
+
+	React.useEffect(() => {
+		if (isVisible) {
+			setShouldRender(true);
+			return;
+		}
+
+		const timeout = window.setTimeout(() => setShouldRender(false), 180);
+		return () => window.clearTimeout(timeout);
+	}, [isVisible]);
+
+	if (!shouldRender) return null;
 
 	// Execute bulk action handler
 	const executeBulkAction = async (action: ActionDefinition<TItem>) => {
@@ -319,24 +333,27 @@ export function BulkActionToolbar<TItem = any>({
 	return (
 		<>
 			{/* Fixed toolbar at bottom of screen */}
-			<div className="qa-bulk-toolbar fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200 max-w-[calc(100%-2rem)] sm:max-w-none">
-				<div className="qa-bulk-toolbar__bar flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 bg-background border border-border shadow-lg rounded-full overflow-x-auto">
+			<div
+				data-state={isVisible ? "open" : "closed"}
+				className="qa-bulk-toolbar fixed bottom-6 left-1/2 z-50 max-w-[calc(100%-2rem)] -translate-x-1/2 transition-[opacity,translate,scale] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-enter)] data-[state=closed]:pointer-events-none data-[state=closed]:translate-y-2 data-[state=closed]:scale-[0.98] data-[state=closed]:opacity-0 data-[state=open]:translate-y-0 data-[state=open]:scale-100 data-[state=open]:opacity-100 motion-reduce:transition-none sm:max-w-none"
+			>
+				<div className="qa-bulk-toolbar__bar bg-background border-border flex items-center gap-2 overflow-x-auto rounded-full border px-3 py-2 shadow-lg transition-[gap,padding] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] sm:gap-3 sm:px-4 sm:py-2.5">
 					{/* Filter segment - shows when filters are active */}
 					{hasFilters && (
 						<>
-							<div className="flex items-center gap-2 shrink-0">
+							<div className="flex shrink-0 items-center gap-2">
 								{onOpenFilters ? (
 									<Button
 										variant="ghost"
 										size="sm"
 										onClick={onOpenFilters}
-										className="h-6 px-2 text-xs gap-2"
+										className="h-6 gap-2 px-2 text-xs"
 									>
 										<Icon
 											icon="ph:funnel-fill"
 											width={14}
 											height={14}
-											className="text-primary"
+											className="text-foreground"
 										/>
 										{t("viewOptions.activeFilters", { count: filterCount })}
 									</Button>
@@ -346,7 +363,7 @@ export function BulkActionToolbar<TItem = any>({
 											icon="ph:funnel-fill"
 											width={14}
 											height={14}
-											className="text-primary"
+											className="text-foreground"
 										/>
 										<span className="text-sm font-medium whitespace-nowrap">
 											{t("viewOptions.activeFilters", { count: filterCount })}
@@ -366,7 +383,12 @@ export function BulkActionToolbar<TItem = any>({
 							</div>
 
 							{/* Divider between filter and selection segments */}
-							{hasSelection && <div className="h-4 w-px bg-border shrink-0" />}
+							{hasSelection && (
+								<div
+									className="qa-bulk-toolbar__divider bg-border h-4 w-px shrink-0"
+									aria-hidden="true"
+								/>
+							)}
 						</>
 					)}
 
@@ -374,21 +396,25 @@ export function BulkActionToolbar<TItem = any>({
 					{hasSelection && (
 						<>
 							{/* Selection count */}
-							<span className="text-sm font-medium whitespace-nowrap shrink-0">
+							<span className="shrink-0 text-sm font-medium whitespace-nowrap">
 								{t("collection.selected", { count: selectedCount })}
 							</span>
 
 							{/* Divider */}
-							<div className="h-4 w-px bg-border shrink-0" />
+							<div
+								className="qa-bulk-toolbar__divider bg-border h-4 w-px shrink-0"
+								aria-hidden="true"
+							/>
 
 							{/* Select dropdown */}
 							<DropdownMenu>
 								<DropdownMenuTrigger
+									nativeButton={false}
 									render={
 										<Button
 											variant="ghost"
 											size="sm"
-											className="gap-1 h-7 px-2 shrink-0"
+											className="h-7 shrink-0 gap-1 px-2"
 										/>
 									}
 									disabled={isSelectingAll}
@@ -423,11 +449,12 @@ export function BulkActionToolbar<TItem = any>({
 							{visibleActions.length > 0 && (
 								<DropdownMenu>
 									<DropdownMenuTrigger
+										nativeButton={false}
 										render={
 											<Button
 												variant="outline"
 												size="sm"
-												className="gap-1 h-7 px-2 shrink-0"
+												className="h-7 shrink-0 gap-1 px-2"
 											/>
 										}
 										disabled={isLoading}
@@ -503,7 +530,7 @@ export function BulkActionToolbar<TItem = any>({
 						...confirmAction.confirmation,
 						// Override description to include count
 						description: confirmAction.confirmation.description
-							? `${confirmAction.confirmation.description} (${selectedCount} items)`
+							? `${resolveText(confirmAction.confirmation.description)} (${selectedCount} items)`
 							: `This will affect ${selectedCount} items.`,
 					}}
 					onConfirm={handleConfirm}

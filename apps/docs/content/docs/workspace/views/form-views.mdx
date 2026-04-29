@@ -3,8 +3,6 @@ title: Form Views
 description: Configure edit forms — sections, sidebar, tabs, grid layouts, and reactive visibility.
 ---
 
-# Form Views
-
 Form views control the edit interface for collections and globals. Configure them with `.form()`.
 
 ## Basic Form
@@ -47,14 +45,14 @@ Group fields into labeled sections:
 
 ### Section Options
 
-| Option | Type | Description |
-|---|---|---|
-| `type` | `"section"` | Required |
-| `label` | `string \| i18n` | Section heading |
-| `description` | `string \| i18n` | Section description |
-| `layout` | `"grid" \| "stack"` | Field layout |
-| `columns` | `number` | Grid columns (with `layout: "grid"`) |
-| `fields` | `Field[]` | Fields in this section |
+| Option        | Type                | Description                          |
+| ------------- | ------------------- | ------------------------------------ |
+| `type`        | `"section"`         | Required                             |
+| `label`       | `string \| i18n`    | Section heading                      |
+| `description` | `string \| i18n`    | Section description                  |
+| `layout`      | `"grid" \| "stack"` | Field layout                         |
+| `columns`     | `number`            | Grid columns (with `layout: "grid"`) |
+| `fields`      | `Field[]`           | Fields in this section               |
 
 ## Sidebar
 
@@ -106,11 +104,11 @@ Auto-compute field values from other fields:
 )
 ```
 
-| Option | Type | Description |
-|---|---|---|
-| `handler` | `(ctx) => value` | Compute function |
-| `deps` | `(ctx) => any[]` | Reactive dependencies |
-| `debounce` | `number` | Debounce in milliseconds |
+| Option     | Type             | Description              |
+| ---------- | ---------------- | ------------------------ |
+| `handler`  | `(ctx) => value` | Compute function         |
+| `deps`     | `(ctx) => any[]` | Reactive dependencies    |
+| `debounce` | `number`         | Debounce in milliseconds |
 
 ## Conditional Visibility
 

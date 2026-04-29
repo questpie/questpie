@@ -55,12 +55,20 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
-import type { QuestpieClient } from "questpie/client";
 import type * as React from "react";
+
+import type { AnyQuestpieClient } from "../../builder";
 import { Admin, type AdminInput } from "../../builder/admin";
 import { AuthGuard } from "../../components/auth";
+import { getAdminConfigQueryOptions } from "../../hooks/use-admin-config";
 import { AdminProvider } from "../../runtime/provider";
+import {
+	getAdminLocalesQueryOptions,
+	getAdminTranslationsQueryOptions,
+	getUiLocaleFromCookie,
+} from "../../runtime/translations-provider";
 import { AdminLayout, type AdminLayoutSharedProps } from "./admin-layout";
+import { AdminThemeAppliedContext, useManagedAdminTheme } from "./admin-theme";
 
 // ============================================================================
 // Types
@@ -84,7 +92,7 @@ interface AdminLayoutProviderProps extends AdminLayoutSharedProps {
 	/**
 	 * API client for data fetching
 	 */
-	client: QuestpieClient<any>;
+	client: AnyQuestpieClient;
 
 	/**
 	 * Auth client for authentication (created via createAdminAuthClient)
@@ -188,6 +196,32 @@ interface AdminLayoutProviderProps extends AdminLayoutSharedProps {
 
 import { QueryClient as QueryClientClass } from "@tanstack/react-query";
 
+/** Debounced 401 redirect - prevents multiple redirects from concurrent failures */
+let sessionExpiredRedirectPending = false;
+
+function handleSessionExpiredError(error: unknown) {
+	if (sessionExpiredRedirectPending) return;
+
+	const status =
+		error != null && typeof error === "object" && "status" in error
+			? (error as { status: number }).status
+			: undefined;
+
+	if (status !== 401) return;
+
+	// Don't redirect if already on a public/login page
+	if (typeof window !== "undefined") {
+		const path = window.location.pathname;
+		if (DEFAULT_PUBLIC_PATHS.some((p) => path.endsWith(p))) return;
+
+		sessionExpiredRedirectPending = true;
+		const returnUrl = encodeURIComponent(
+			window.location.pathname + window.location.search,
+		);
+		window.location.href = `${path.replace(/\/[^/]*$/, "")}/login?returnUrl=${returnUrl}`;
+	}
+}
+
 let cachedQueryClient: QueryClient | undefined;
 
 function getDefaultQueryClient(): QueryClient {
@@ -196,9 +230,26 @@ function getDefaultQueryClient(): QueryClient {
 			defaultOptions: {
 				queries: {
 					staleTime: 60 * 1000, // 1 minute
+					refetchOnWindowFocus: false, // Admin panel — no silent refetch on tab switch
+					retry: (failureCount, error) => {
+						// Don't retry on 401 (session expired)
+						const status =
+							error != null && typeof error === "object" && "status" in error
+								? (error as { status: number }).status
+								: undefined;
+						if (status === 401) return false;
+						return failureCount < 3;
+					},
+				},
+				mutations: {
+					onError: handleSessionExpiredError,
 				},
 			},
 		});
+
+		// Use global query cache error handler for queries
+		cachedQueryClient.getQueryCache().config.onError =
+			handleSessionExpiredError;
 	}
 	return cachedQueryClient;
 }
@@ -282,6 +333,23 @@ export function AdminLayoutProvider({
 	children,
 }: AdminLayoutProviderProps): React.ReactElement {
 	const qc = queryClient ?? getDefaultQueryClient();
+	const { theme: managedTheme, setTheme: setManagedTheme } =
+		useManagedAdminTheme(theme, setTheme);
+
+	// Prefetch critical data BEFORE any Suspense boundary in the tree.
+	// This eliminates the sequential waterfall:
+	//   TranslationsProvider suspends → AdminRouter suspends → View suspends
+	// By starting all fetches in parallel here, each boundary resolves from
+	// cache instead of triggering a new network request.
+	// prefetchQuery is idempotent — skips if data is already cached or fetching.
+	if ((client as any)?.routes) {
+		qc.prefetchQuery(getAdminConfigQueryOptions(client));
+		if (useServerTranslations) {
+			const locale = initialUiLocale ?? getUiLocaleFromCookie() ?? "en";
+			qc.prefetchQuery(getAdminLocalesQueryOptions(client));
+			qc.prefetchQuery(getAdminTranslationsQueryOptions(client, locale));
+		}
+	}
 
 	// Normalize admin input - accepts plain state or Admin instance
 	const admin = Admin.normalize(adminInput);
@@ -315,8 +383,8 @@ export function AdminLayoutProvider({
 				header={header}
 				footer={footer}
 				sidebarProps={sidebarProps}
-				theme={theme}
-				setTheme={setTheme}
+				theme={managedTheme}
+				setTheme={setManagedTheme}
 				showThemeToggle={showThemeToggle}
 				toasterProps={toasterProps}
 				className={className}
@@ -341,16 +409,18 @@ export function AdminLayoutProvider({
 	}
 
 	const content = (
-		<AdminProvider
-			admin={admin}
-			client={client}
-			authClient={authClient}
-			useServerTranslations={useServerTranslations}
-			translationsFallback={translationsFallback}
-			initialUiLocale={initialUiLocale}
-		>
-			{innerContent}
-		</AdminProvider>
+		<AdminThemeAppliedContext.Provider value={true}>
+			<AdminProvider
+				admin={admin}
+				client={client}
+				authClient={authClient}
+				useServerTranslations={useServerTranslations}
+				translationsFallback={translationsFallback}
+				initialUiLocale={initialUiLocale}
+			>
+				{innerContent}
+			</AdminProvider>
+		</AdminThemeAppliedContext.Provider>
 	);
 
 	// Always wrap with QueryClientProvider

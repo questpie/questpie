@@ -6,7 +6,6 @@
  * Sidebar, dashboard, branding, locale, context are file conventions.
  */
 
-import { adminPlugin } from "@questpie/admin/plugin";
 import {
 	ConsoleAdapter,
 	pgBossAdapter,
@@ -18,7 +17,6 @@ const DATABASE_URL =
 	process.env.DATABASE_URL || "postgres://localhost/cityportal";
 
 export default runtimeConfig({
-	plugins: [adminPlugin()],
 	app: {
 		url: process.env.APP_URL || "http://localhost:3001",
 	},

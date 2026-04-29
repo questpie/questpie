@@ -65,7 +65,7 @@ export function createClientFromEden<
 		? config.server
 		: `http://${config.server}`;
 
-	// Create QuestPie client for CRUD operations
+	// Create QUESTPIE client for CRUD operations
 	const qpClient = createClient<TQP>({
 		baseURL,
 		fetch: config.fetch,

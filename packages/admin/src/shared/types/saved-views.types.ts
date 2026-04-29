@@ -62,6 +62,8 @@ export interface ViewConfiguration {
 	filters: FilterRule[];
 	sortConfig: SortConfig | null;
 	visibleColumns: string[];
+	groupBy?: string | null;
+	collapsedGroups?: string[];
 	realtime?: boolean;
 	includeDeleted?: boolean;
 	pagination?: {

@@ -16,6 +16,7 @@ import {
 } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
 import type { CollectionMeta } from "questpie/client";
+
 import type {
 	RegisteredCMS,
 	RegisteredCollectionNames,
@@ -74,6 +75,7 @@ export function useCollectionMeta<K extends ResolvedCollectionNames>(
 		staleTime: 5 * 60 * 1000, // 5 minutes
 		gcTime: 30 * 60 * 1000, // 30 minutes (formerly cacheTime)
 		...queryOptions,
+		enabled: !!collection && (queryOptions?.enabled ?? true),
 	});
 }
 
@@ -105,7 +107,7 @@ function getCollectionMetaQueryKey(collection: string) {
  * });
  * ```
  */
-function getCollectionMetaQueryOptions(collection: string, client: any) {
+export function getCollectionMetaQueryOptions(collection: string, client: any) {
 	return {
 		queryKey: getCollectionMetaQueryKey(collection),
 		queryFn: async (): Promise<CollectionMeta> => {

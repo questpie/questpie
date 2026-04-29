@@ -7,33 +7,33 @@ import type { BlockProps } from "../.generated/client";
 export function DocumentsListRenderer({
 	values,
 	data,
-}: BlockProps<"documentsList">) {
+}: BlockProps<"documents-list">) {
 	const documents = (data as any)?.documents || [];
 
 	return (
-		<section className="py-16 px-6">
+		<section className="px-6 py-16">
 			<div className="container mx-auto">
 				{values.title && (
-					<h2 className="text-3xl font-bold tracking-tight mb-8">
+					<h2 className="mb-8 text-3xl font-bold tracking-tight">
 						{values.title}
 					</h2>
 				)}
 
 				{documents.length === 0 && (
-					<p className="text-muted-foreground text-center py-8">
+					<p className="text-muted-foreground py-8 text-center">
 						No documents available.
 					</p>
 				)}
 
-				<div className="border rounded-lg divide-y">
+				<div className="divide-y rounded-lg border">
 					{documents.map((doc: any) => (
 						<div
 							key={doc.id}
-							className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+							className="hover:bg-muted/50 flex items-center justify-between p-4 transition-colors"
 						>
 							<div className="flex-1">
 								<h3 className="font-medium">{doc.title}</h3>
-								<div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+								<div className="text-muted-foreground mt-1 flex items-center gap-3 text-sm">
 									{doc.category && (
 										<span className="capitalize">{doc.category}</span>
 									)}
@@ -48,7 +48,7 @@ export function DocumentsListRenderer({
 							{doc.file && (
 								<a
 									href={doc.file}
-									className="text-primary hover:underline text-sm font-medium"
+									className="text-primary text-sm font-medium hover:underline"
 									download
 								>
 									Download

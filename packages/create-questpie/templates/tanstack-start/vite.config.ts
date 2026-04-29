@@ -20,7 +20,7 @@ export default defineConfig({
 	},
 	build: {
 		rollupOptions: {
-			external: ["bun", /^drizzle-kit/],
+			external: ["bun", /^drizzle-kit/, /^@aws-sdk\//],
 		},
 	},
 });

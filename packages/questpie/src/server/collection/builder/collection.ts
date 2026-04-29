@@ -16,6 +16,7 @@ import {
 	index,
 	integer,
 	jsonb,
+	pgSchema,
 	pgTable,
 	serial,
 	smallint,
@@ -26,6 +27,7 @@ import {
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
+
 import type {
 	CollectionBuilderIndexesFn,
 	CollectionBuilderState,
@@ -48,7 +50,7 @@ import type { FieldSelect } from "#questpie/server/fields/field-types.js";
 import {
 	extractWorkflowFromVersioning,
 	resolveWorkflowConfig,
-} from "#questpie/server/workflow/config.js";
+} from "#questpie/server/modules/core/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type { Prettify } from "#questpie/shared/type-utils.js";
 
@@ -329,7 +331,9 @@ export type CollectionUpdate<TState extends CollectionBuilderState> =
  * Default ID column factory - creates a text column with gen_random_uuid() default
  */
 const defaultIdColumn = () =>
-	text("id").primaryKey().default(sql`gen_random_uuid()`);
+	text("id")
+		.primaryKey()
+		.default(sql`gen_random_uuid()`);
 
 /**
  * Helper to get column config from a Drizzle column
@@ -495,7 +499,9 @@ export class Collection<TState extends CollectionBuilderState> {
 	 * @param parentIdColumn - The ID column from the parent table to match type
 	 */
 	static readonly i18nVersionCols = (parentIdColumn?: PgColumn) => ({
-		id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+		id: text("id")
+			.primaryKey()
+			.default(sql`gen_random_uuid()`),
 		parentId: parentIdColumn
 			? cloneColumnType(parentIdColumn, "parent_id").notNull()
 			: text("parent_id").notNull(),
@@ -508,7 +514,9 @@ export class Collection<TState extends CollectionBuilderState> {
 	 * @param parentIdColumn - The ID column from the parent table to match type
 	 */
 	static readonly i18nCols = (parentIdColumn?: PgColumn) => ({
-		id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+		id: text("id")
+			.primaryKey()
+			.default(sql`gen_random_uuid()`),
 		parentId: parentIdColumn
 			? cloneColumnType(parentIdColumn, "parent_id").notNull()
 			: text("parent_id").notNull(),
@@ -830,6 +838,20 @@ export class Collection<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Resolve the table builder for this collection.
+	 * When `options.schema` is set, returns `pgSchema(name).table`; otherwise `pgTable`.
+	 *
+	 * Both signatures accept `(name, columns, extraConfig?)` and behave identically —
+	 * only the resulting table's `schema` metadata differs, which Drizzle/drizzle-kit
+	 * use to emit the correct `CREATE SCHEMA` and qualified table/FK names.
+	 */
+	private getTableBuilder(): typeof pgTable {
+		const schemaName = this.state.options?.schema;
+		if (!schemaName) return pgTable;
+		return pgSchema(schemaName).table as unknown as typeof pgTable;
+	}
+
+	/**
 	 * Generate the main Drizzle table
 	 */
 	private generateMainTable(
@@ -877,7 +899,8 @@ export class Collection<TState extends CollectionBuilderState> {
 		}
 
 		// Create final table with constraints
-		const table = pgTable(tableName, columns as any, (t) => {
+		const tableBuilder = this.getTableBuilder();
+		const table = tableBuilder(tableName, columns as any, (t) => {
 			const constraints: Record<string, any> = {};
 
 			// User-defined indexes
@@ -924,7 +947,9 @@ export class Collection<TState extends CollectionBuilderState> {
 
 		const columns: Record<string, any> = {
 			// Own ID - uses default type
-			id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+			id: text("id")
+				.primaryKey()
+				.default(sql`gen_random_uuid()`),
 			// Parent ID - matches parent table's ID type
 			parentId: cloneColumnType(parentIdColumn, "parent_id")
 				.notNull()
@@ -957,7 +982,8 @@ export class Collection<TState extends CollectionBuilderState> {
 			// nested mode: skip, uses _localized column
 		}
 
-		return pgTable(tableName, columns as any, (t) => ({
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => ({
 			parentLocaleIdx: uniqueIndex().on(t.parentId, t.locale),
 		}));
 	}
@@ -1014,7 +1040,8 @@ export class Collection<TState extends CollectionBuilderState> {
 		}
 		*/
 
-		return pgTable(tableName, columns as any, (t) => [
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => [
 			index().on(t.id, t.versionNumber),
 			index().on(t.id, t.versionStage, t.versionNumber),
 			index().on(t.versionCreatedAt),
@@ -1068,7 +1095,8 @@ export class Collection<TState extends CollectionBuilderState> {
 			}
 		}
 
-		return pgTable(tableName, columns as any, (t) => [
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => [
 			uniqueIndex().on(t.parentId, t.versionNumber, t.locale),
 			index().on(t.parentId, t.versionNumber),
 		]) as any;

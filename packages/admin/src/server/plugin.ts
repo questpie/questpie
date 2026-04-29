@@ -18,6 +18,7 @@
  */
 
 import type { CodegenPlugin } from "questpie";
+
 import { generateAdminClientTemplate } from "./codegen/admin-client-template.js";
 import { createAdminProjectionValidator } from "./codegen/projection-validator.js";
 
@@ -79,19 +80,52 @@ export function adminPlugin(): CodegenPlugin {
 						dirs: ["blocks"],
 						prefix: "bloc",
 						factoryFunctions: ["block"],
+						keyFromProperty: "state.name",
 						registryKey: true,
 						includeInAppState: true,
 						extractFromModules: true,
 						typeEmit: "standard",
 					},
+					// Contribute field factory imports to the core fieldTypes category.
+					// The factory template uses these to import and spread-merge
+					// adminFields (richText, blocks) into _allFieldDefs.
+					fieldTypes: {
+						dirs: ["fields"],
+						prefix: "ftype",
+						factoryImports: [
+							{ name: "adminFields", from: "@questpie/admin/server" },
+						],
+					},
 				},
 				discover: {
-					sidebar: "sidebar.ts",
-					dashboard: "dashboard.ts",
-					branding: "branding.ts",
-					adminLocale: "admin-locale.ts",
+					adminConfig: { pattern: "config/admin.ts", configKey: "admin" },
 				},
 				registries: {
+					builderFactories: {
+						block: {
+							builderClass: "BlockBuilder",
+							import: {
+								name: "BlockBuilder",
+								from: "@questpie/admin/server",
+							},
+							createMethod: "create",
+							returnType:
+								"import('@questpie/admin/server').BlockBuilder<{ name: TName }>",
+						},
+					},
+					fieldExtensions: {
+						admin: {
+							stateKey: "admin",
+							configType: "unknown",
+						},
+						form: {
+							stateKey: "form",
+							configType:
+								"(ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/server').FieldLayoutItem[] }",
+							isCallback: true,
+							callbackContextParams: ["f"],
+						},
+					},
 					collectionExtensions: {
 						admin: {
 							stateKey: "admin",
@@ -235,39 +269,11 @@ export function adminPlugin(): CodegenPlugin {
 						},
 					},
 					singletonFactories: {
-						branding: {
-							configType: "ServerBrandingConfig",
+						adminConfig: {
+							configType: "AdminConfigInput",
 							imports: [
 								{
-									name: "ServerBrandingConfig",
-									from: "@questpie/admin/server",
-								},
-							],
-						},
-						adminLocale: {
-							configType: "AdminLocaleConfig",
-							imports: [
-								{
-									name: "AdminLocaleConfig",
-									from: "@questpie/admin/server",
-								},
-							],
-						},
-						sidebar: {
-							configType: "SidebarContribution",
-							imports: [
-								{
-									name: "SidebarContribution",
-									from: "@questpie/admin/server",
-								},
-							],
-							isCallback: true,
-						},
-						dashboard: {
-							configType: "DashboardContribution",
-							imports: [
-								{
-									name: "DashboardContribution",
+									name: "AdminConfigInput",
 									from: "@questpie/admin/server",
 								},
 							],
@@ -275,11 +281,9 @@ export function adminPlugin(): CodegenPlugin {
 						},
 					},
 				},
-				transform(ctx) {
-					// Ensure dashboard exists as empty array when no dashboard.ts found
-					if (!ctx.singles.has("dashboard")) {
-						ctx.addRuntimeCode("dashboard: [] as const,");
-					}
+				transform(_ctx) {
+					// Dashboard is now part of config.admin — no need for empty stubs.
+					// Admin reads it from app.state.config.admin.dashboard at runtime.
 				},
 				callbackParams: {
 					v: {
@@ -300,7 +304,7 @@ export function adminPlugin(): CodegenPlugin {
 						dir: "blocks",
 						description: "Server-side block definition",
 						template: ({ kebab, camel }) =>
-							`import { block } from "@questpie/admin/server";\n\nexport const ${camel}Block = block("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text("Title"),\n\t}));\n`,
+							`import { block } from "#questpie/factories";\n\nexport const ${camel}Block = block("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text(255).label("Title").required(),\n\t}));\n`,
 					},
 					view: {
 						dir: "views",
@@ -315,13 +319,6 @@ export function adminPlugin(): CodegenPlugin {
 							`import { component } from "@questpie/admin/server";\n\nexport const ${camel}Component = component("${kebab}", {\n\t// TODO: configure component props\n});\n`,
 					},
 				},
-				// Runtime field factories contributed by the admin module.
-				// These are imported in the codegen-generated factories.ts and
-				// spread-merged with builtinFields so collection/global builders
-				// can use f.richText(), f.blocks() etc. at runtime.
-				runtimeFieldImports: [
-					{ name: "adminFields", from: "@questpie/admin/server" },
-				],
 			},
 
 			// ── admin-client target ──────────────────────────────────
@@ -336,6 +333,7 @@ export function adminPlugin(): CodegenPlugin {
 					blocks: {
 						dirs: ["blocks"],
 						prefix: "block",
+						keyFromSource: "basename",
 						registryKey: false,
 						includeInAppState: false,
 						extractFromModules: false,
@@ -411,7 +409,7 @@ export function adminPlugin(): CodegenPlugin {
 							`type { ${varName} }`,
 							`../../server/blocks/${kebab}`,
 						);
-						entries.push(`${JSON.stringify(key)}: typeof ${varName}`);
+						entries.push(`${JSON.stringify(kebab)}: typeof ${varName}`);
 					}
 
 					// Emit _ServerBlocks map + BlockProps<T> helper

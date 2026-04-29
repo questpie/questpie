@@ -3,11 +3,9 @@ title: Deployment
 description: Docker deployment, environment variables, and production hardening.
 ---
 
-# Deployment
-
 ## Docker
 
-QuestPie apps can be containerized with Docker:
+QUESTPIE apps can be containerized with Docker:
 
 ```dockerfile title="Dockerfile"
 FROM oven/bun:1 AS base
@@ -28,18 +26,18 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `APP_URL` | Yes | Public URL |
-| `APP_SECRET` / `BETTER_AUTH_SECRET` | Yes | Session secret |
-| `SMTP_HOST` | No | Email SMTP host |
-| `SMTP_PORT` | No | Email SMTP port |
-| `REDIS_URL` | No | Redis URL (for KV, realtime) |
-| `S3_BUCKET` | No | S3 bucket name |
-| `S3_REGION` | No | S3 region |
-| `S3_ACCESS_KEY` | No | S3 access key |
-| `S3_SECRET_KEY` | No | S3 secret key |
+| Variable                            | Required | Description                  |
+| ----------------------------------- | -------- | ---------------------------- |
+| `DATABASE_URL`                      | Yes      | PostgreSQL connection string |
+| `APP_URL`                           | Yes      | Public URL                   |
+| `APP_SECRET` / `BETTER_AUTH_SECRET` | Yes      | Session secret               |
+| `SMTP_HOST`                         | No       | Email SMTP host              |
+| `SMTP_PORT`                         | No       | Email SMTP port              |
+| `REDIS_URL`                         | No       | Redis URL (for KV, realtime) |
+| `S3_BUCKET`                         | No       | S3 bucket name               |
+| `S3_REGION`                         | No       | S3 region                    |
+| `S3_ACCESS_KEY`                     | No       | S3 access key                |
+| `S3_SECRET_KEY`                     | No       | S3 secret key                |
 
 ## Production Checklist
 
@@ -61,13 +59,13 @@ Add a health check endpoint:
 import { route } from "questpie";
 
 export default route({
-  method: "GET",
-  handler: async ({ db }) => {
-    await db.execute(sql`SELECT 1`);
-    return new Response(JSON.stringify({ status: "ok" }), {
-      headers: { "Content-Type": "application/json" },
-    });
-  },
+	method: "GET",
+	handler: async ({ db }) => {
+		await db.execute(sql`SELECT 1`);
+		return new Response(JSON.stringify({ status: "ok" }), {
+			headers: { "Content-Type": "application/json" },
+		});
+	},
 });
 ```
 

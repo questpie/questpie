@@ -3,15 +3,17 @@ import z from "zod";
 
 export default route()
 	.post()
-	.schema(z.object({
-		barberId: z.string(),
-		serviceId: z.string(),
-		scheduledAt: z.string().datetime(),
-		customerName: z.string().min(2),
-		customerEmail: z.string().email(),
-		customerPhone: z.string().optional(),
-		notes: z.string().optional(),
-	}))
+	.schema(
+		z.object({
+			barberId: z.string(),
+			serviceId: z.string(),
+			scheduledAt: z.string().datetime(),
+			customerName: z.string().min(2),
+			customerEmail: z.string().email(),
+			customerPhone: z.string().optional(),
+			notes: z.string().optional(),
+		}),
+	)
 	.handler(async ({ input, collections }) => {
 		const service = await collections.services.findOne({
 			where: { id: input.serviceId },

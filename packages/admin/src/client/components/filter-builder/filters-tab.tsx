@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { selectClient, useAdminStore, useScopedLocale } from "../../runtime";
 import { SelectMulti } from "../primitives/select-multi";
@@ -335,8 +336,8 @@ function FilterValueInput({
 					<SelectValue placeholder={t("viewOptions.valuePlaceholder")} />
 				</SelectTrigger>
 				<SelectContent>
-					<SelectItem value="true">True</SelectItem>
-					<SelectItem value="false">False</SelectItem>
+					<SelectItem value="true">{t("common.yes")}</SelectItem>
+					<SelectItem value="false">{t("common.no")}</SelectItem>
 				</SelectContent>
 			</Select>
 		);
@@ -502,7 +503,7 @@ export function FiltersTab({
 						label,
 					};
 				});
-			} catch (_error) {
+			} catch {
 				return [];
 			}
 		},
@@ -511,7 +512,7 @@ export function FiltersTab({
 
 	return (
 		<div className="space-y-4 py-4">
-			<p className="text-xs text-muted-foreground">
+			<p className="text-muted-foreground text-xs">
 				{t("viewOptions.filtersDescription")}
 			</p>
 
@@ -529,10 +530,10 @@ export function FiltersTab({
 				return (
 					<div
 						key={filter.id}
-						className="p-3 bg-muted border border-border rounded-lg space-y-2"
+						className="bg-muted border-border space-y-2 border p-3"
 					>
-						<div className="flex justify-between items-center">
-							<span className="text-xs font-semibold text-muted-foreground uppercase">
+						<div className="flex items-center justify-between">
+							<span className="text-muted-foreground text-xs font-semibold uppercase">
 								{t("viewOptions.filterNumber", { number: idx + 1 })}
 							</span>
 							<Button
@@ -623,9 +624,9 @@ export function FiltersTab({
 			})}
 
 			{filters.length === 0 && (
-				<div className="text-center p-8 border border-dashed border-border rounded-lg text-muted-foreground text-sm">
+				<p className="text-muted-foreground py-2 text-sm">
 					{t("viewOptions.noActiveFilters")}
-				</div>
+				</p>
 			)}
 
 			<div className="flex gap-2">
@@ -633,7 +634,7 @@ export function FiltersTab({
 					variant="outline"
 					size="sm"
 					onClick={addFilter}
-					className="flex-1 gap-2 rounded-md"
+					className="flex-1 gap-2"
 					disabled={filterableFields.length === 0}
 				>
 					<Icon icon="ph:plus" width={14} height={14} />
@@ -644,7 +645,7 @@ export function FiltersTab({
 						variant="ghost"
 						size="sm"
 						onClick={clearAllFilters}
-						className="rounded-md"
+						className=""
 					>
 						{t("viewOptions.clearAll")}
 					</Button>

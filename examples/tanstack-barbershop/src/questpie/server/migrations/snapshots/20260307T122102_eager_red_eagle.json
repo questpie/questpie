@@ -1,334 +1,332 @@
 {
-  "operations": [
-    {
-      "type": "remove",
-      "path": "ddl.fk__COLON__public__DOT__barber_services__DOT__barber_services_barber_barbers_id_fkey",
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "remove",
-      "path": "ddl.fk__COLON__public__DOT__barber_services__DOT__barber_services_service_services_id_fkey",
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.table__COLON__public__DOT__blog_posts",
-      "value": {
-        "isRlsEnabled": false,
-        "name": "blog_posts",
-        "entityType": "tables",
-        "schema": "public"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__user__DOT__image",
-      "value": {
-        "type": "varchar(2048)",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "image",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "user"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__appointments__DOT__displayTitle",
-      "value": {
-        "type": "varchar(255)",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "displayTitle",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "appointments"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__id",
-      "value": {
-        "type": "text",
-        "typeSchema": null,
-        "notNull": true,
-        "dimensions": 0,
-        "default": "gen_random_uuid()",
-        "generated": null,
-        "identity": null,
-        "name": "id",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__title",
-      "value": {
-        "type": "varchar(255)",
-        "typeSchema": null,
-        "notNull": true,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "title",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__slug",
-      "value": {
-        "type": "varchar(255)",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "slug",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__content",
-      "value": {
-        "type": "jsonb",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "content",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__excerpt",
-      "value": {
-        "type": "text",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "excerpt",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__readingTime",
-      "value": {
-        "type": "integer",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "readingTime",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__status",
-      "value": {
-        "type": "varchar(50)",
-        "typeSchema": null,
-        "notNull": true,
-        "dimensions": 0,
-        "default": "'draft'",
-        "generated": null,
-        "identity": null,
-        "name": "status",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__publishedAt",
-      "value": {
-        "type": "timestamp(3) with time zone",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "publishedAt",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__author",
-      "value": {
-        "type": "varchar(36)",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "author",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__coverImage",
-      "value": {
-        "type": "varchar(36)",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "coverImage",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__tags",
-      "value": {
-        "type": "varchar(255)",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
-        "generated": null,
-        "identity": null,
-        "name": "tags",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__created_at",
-      "value": {
-        "type": "timestamp",
-        "typeSchema": null,
-        "notNull": true,
-        "dimensions": 0,
-        "default": "now()",
-        "generated": null,
-        "identity": null,
-        "name": "created_at",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__updated_at",
-      "value": {
-        "type": "timestamp",
-        "typeSchema": null,
-        "notNull": true,
-        "dimensions": 0,
-        "default": "now()",
-        "generated": null,
-        "identity": null,
-        "name": "updated_at",
-        "entityType": "columns",
-        "schema": "public",
-        "table": "blog_posts"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    },
-    {
-      "type": "set",
-      "path": "ddl.pk__COLON__public__DOT__blog_posts__DOT__blog_posts_pkey",
-      "value": {
-        "columns": [
-          "id"
-        ],
-        "nameExplicit": false,
-        "name": "blog_posts_pkey",
-        "schema": "public",
-        "table": "blog_posts",
-        "entityType": "pks"
-      },
-      "timestamp": "2026-03-07T12:21:02.447Z",
-      "migrationId": "eagerRedEagle20260307T122102"
-    }
-  ],
-  "metadata": {
-    "migrationId": "eagerRedEagle20260307T122102",
-    "timestamp": "2026-03-07T12:21:02.488Z",
-    "prevId": "00000000-0000-0000-0000-000000000000"
-  }
+	"operations": [
+		{
+			"type": "remove",
+			"path": "ddl.fk__COLON__public__DOT__barber_services__DOT__barber_services_barber_barbers_id_fkey",
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "remove",
+			"path": "ddl.fk__COLON__public__DOT__barber_services__DOT__barber_services_service_services_id_fkey",
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.table__COLON__public__DOT__blog_posts",
+			"value": {
+				"isRlsEnabled": false,
+				"name": "blog_posts",
+				"entityType": "tables",
+				"schema": "public"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__user__DOT__image",
+			"value": {
+				"type": "varchar(2048)",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "image",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "user"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__appointments__DOT__displayTitle",
+			"value": {
+				"type": "varchar(255)",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "displayTitle",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "appointments"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__id",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "gen_random_uuid()",
+				"generated": null,
+				"identity": null,
+				"name": "id",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__title",
+			"value": {
+				"type": "varchar(255)",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "title",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__slug",
+			"value": {
+				"type": "varchar(255)",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "slug",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__content",
+			"value": {
+				"type": "jsonb",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "content",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__excerpt",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "excerpt",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__readingTime",
+			"value": {
+				"type": "integer",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "readingTime",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__status",
+			"value": {
+				"type": "varchar(50)",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "'draft'",
+				"generated": null,
+				"identity": null,
+				"name": "status",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__publishedAt",
+			"value": {
+				"type": "timestamp(3) with time zone",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "publishedAt",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__author",
+			"value": {
+				"type": "varchar(36)",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "author",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__coverImage",
+			"value": {
+				"type": "varchar(36)",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "coverImage",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__tags",
+			"value": {
+				"type": "varchar(255)",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "tags",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__created_at",
+			"value": {
+				"type": "timestamp",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "now()",
+				"generated": null,
+				"identity": null,
+				"name": "created_at",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__blog_posts__DOT__updated_at",
+			"value": {
+				"type": "timestamp",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "now()",
+				"generated": null,
+				"identity": null,
+				"name": "updated_at",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "blog_posts"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		},
+		{
+			"type": "set",
+			"path": "ddl.pk__COLON__public__DOT__blog_posts__DOT__blog_posts_pkey",
+			"value": {
+				"columns": ["id"],
+				"nameExplicit": false,
+				"name": "blog_posts_pkey",
+				"schema": "public",
+				"table": "blog_posts",
+				"entityType": "pks"
+			},
+			"timestamp": "2026-03-07T12:21:02.447Z",
+			"migrationId": "eagerRedEagle20260307T122102"
+		}
+	],
+	"metadata": {
+		"migrationId": "eagerRedEagle20260307T122102",
+		"timestamp": "2026-03-07T12:21:02.488Z",
+		"prevId": "00000000-0000-0000-0000-000000000000"
+	}
 }

@@ -14,8 +14,15 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
+
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
 import { resolveIconElement } from "../../components/component-renderer";
+import {
+	InputGroup,
+	InputGroupAddon,
+	InputGroupInput,
+} from "../../components/ui/input-group";
 import { Kbd } from "../../components/ui/kbd";
 import {
 	ResponsiveDialog,
@@ -79,6 +86,34 @@ function getConfigProps(config: unknown) {
 }
 
 /**
+ * Safe highlight renderer - escapes HTML and wraps query matches in <mark> tags.
+ * Returns React elements instead of raw HTML to prevent XSS.
+ */
+function highlightText(text: string, query: string): React.ReactNode {
+	if (!query.trim() || !text) return text;
+
+	// Escape special regex characters in query
+	const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const regex = new RegExp(`(${escaped})`, "gi");
+	const parts = text.split(regex);
+
+	if (parts.length === 1) return text;
+
+	return parts.map((part, i) =>
+		i % 2 === 1
+			? React.createElement(
+					"mark",
+					{
+						key: i,
+						className: "bg-accent text-accent-foreground rounded-xs px-0.5",
+					},
+					part,
+				)
+			: part,
+	);
+}
+
+/**
  * Simple fuzzy search - matches if query words appear anywhere in text
  */
 function fuzzyMatch(text: string, query: string): boolean {
@@ -116,6 +151,7 @@ interface SearchGroupProps {
 	startIndex: number;
 	onSelect: (item: SearchItem) => void;
 	onHover: (index: number) => void;
+	query?: string;
 }
 
 const SearchGroup = React.memo(function SearchGroup({
@@ -125,6 +161,7 @@ const SearchGroup = React.memo(function SearchGroup({
 	startIndex,
 	onSelect,
 	onHover,
+	query = "",
 }: SearchGroupProps) {
 	const resolveText = useResolveText();
 
@@ -132,7 +169,7 @@ const SearchGroup = React.memo(function SearchGroup({
 
 	return (
 		<div className="mb-4 last:mb-0">
-			<h3 className="mb-2 px-2 font-mono text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+			<h3 className="qa-global-search__group-title text-muted-foreground font-chrome chrome-meta mb-2 px-2.5 text-xs font-medium">
 				{resolveText(title)}
 			</h3>
 			<div className="space-y-0.5">
@@ -146,30 +183,29 @@ const SearchGroup = React.memo(function SearchGroup({
 							type="button"
 							onClick={() => onSelect(item)}
 							onMouseEnter={() => onHover(globalIndex)}
+							data-selected={isSelected}
 							className={cn(
-								"flex w-full items-center gap-3 px-3 py-2.5 text-sm outline-none transition-colors rounded-md",
+								"item-surface flex w-full items-center gap-3 border-transparent px-3 py-2.5 text-sm transition-colors outline-none",
 								isSelected
-									? "bg-accent text-accent-foreground"
-									: "hover:bg-accent hover:text-accent-foreground",
+									? "border-border bg-accent text-accent-foreground"
+									: "hover:border-border hover:bg-accent hover:text-accent-foreground",
 							)}
 						>
 							{item.icon && (
-								<span className="h-4 w-4 text-muted-foreground shrink-0 flex items-center justify-center">
+								<span className="text-muted-foreground flex h-4 w-4 shrink-0 items-center justify-center">
 									{resolveIconElement(item.icon, { className: "h-4 w-4" })}
 								</span>
 							)}
-							<div className="flex flex-col items-start min-w-0">
+							<div className="flex min-w-0 flex-col items-start">
 								{item.highlights?.title ? (
-									<span
-										className="truncate"
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: highlights from server
-										dangerouslySetInnerHTML={{ __html: item.highlights.title }}
-									/>
+									<span className="truncate">
+										{highlightText(item.label, query)}
+									</span>
 								) : (
 									<span className="truncate">{resolveText(item.label)}</span>
 								)}
 								{item.sublabel && (
-									<span className="text-xs text-muted-foreground truncate">
+									<span className="text-muted-foreground truncate text-xs">
 										{item.sublabel}
 									</span>
 								)}
@@ -368,11 +404,13 @@ export function GlobalSearch({
 			switch (e.key) {
 				case "ArrowDown":
 					e.preventDefault();
-					setSelectedIndex((i) => Math.min(i + 1, totalCount - 1));
+					setSelectedIndex((i) => (totalCount > 0 ? (i + 1) % totalCount : 0));
 					break;
 				case "ArrowUp":
 					e.preventDefault();
-					setSelectedIndex((i) => Math.max(i - 1, 0));
+					setSelectedIndex((i) =>
+						totalCount > 0 ? (i - 1 + totalCount) % totalCount : 0,
+					);
 					break;
 				case "Enter":
 					e.preventDefault();
@@ -403,33 +441,34 @@ export function GlobalSearch({
 
 	return (
 		<ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-			<ResponsiveDialogContent className="qa-global-search p-0 gap-0 max-w-2xl">
+			<ResponsiveDialogContent
+				className="qa-global-search gap-0 p-0 sm:max-w-3xl"
+				showCloseButton={false}
+			>
 				{/* Search Input */}
-				<div className="qa-global-search__input-area flex items-center border-b px-3">
-					<Icon
-						icon="ph:magnifying-glass"
-						className="mr-2 h-5 w-5 text-muted-foreground shrink-0"
-					/>
-					<input
-						ref={inputRef}
-						className="flex h-14 w-full rounded-none bg-transparent py-3 text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-						placeholder={t("globalSearch.placeholder")}
-						value={query}
-						onChange={(e) => {
-							setQuery(e.target.value);
-							setSelectedIndex(0);
-						}}
-						onKeyDown={handleKeyDown}
-					/>
-					<div className="flex items-center gap-1 shrink-0">
-						{isSearching && (
-							<Icon
-								icon="ph:spinner"
-								className="h-4 w-4 animate-spin text-muted-foreground"
-							/>
-						)}
-						<Kbd>ESC</Kbd>
-					</div>
+				<div className="qa-global-search__input-area border-border-subtle bg-popover border-b p-3">
+					<InputGroup className="h-12 border-transparent bg-transparent focus-within:border-transparent focus-within:ring-0 hover:border-transparent">
+						<InputGroupAddon align="inline-start" className="pl-0">
+							<Icon icon="ph:magnifying-glass" className="size-5" />
+						</InputGroupAddon>
+						<InputGroupInput
+							ref={inputRef}
+							className="h-12 px-0 text-base"
+							placeholder={t("globalSearch.placeholder")}
+							value={query}
+							onChange={(e) => {
+								setQuery(e.target.value);
+								setSelectedIndex(0);
+							}}
+							onKeyDown={handleKeyDown}
+						/>
+						<InputGroupAddon align="inline-end" className="gap-2 pr-0">
+							{isSearching && (
+								<Icon icon="ph:spinner" className="size-4 animate-spin" />
+							)}
+							<Kbd>ESC</Kbd>
+						</InputGroupAddon>
+					</InputGroup>
 				</div>
 
 				{/* Results */}
@@ -471,11 +510,12 @@ export function GlobalSearch({
 									startIndex={recordsStartIndex}
 									onSelect={handleSelect}
 									onHover={handleHover}
+									query={query}
 								/>
 							)}
 						</>
 					) : (
-						<div className="py-8 text-center text-sm text-muted-foreground">
+						<div className="text-muted-foreground py-8 text-center text-sm">
 							{isSearching ? (
 								<div className="flex items-center justify-center gap-2">
 									<Icon icon="ph:spinner" className="h-4 w-4 animate-spin" />
@@ -489,14 +529,14 @@ export function GlobalSearch({
 				</div>
 
 				{/* Footer with keyboard hints */}
-				<div className="qa-global-search__footer border-t px-3 py-2 flex items-center justify-end gap-4 text-xs text-muted-foreground">
+				<div className="qa-global-search__footer text-muted-foreground flex items-center justify-end gap-4 border-t px-3 py-2 text-xs">
 					<span className="flex items-center gap-1">
-						<Kbd className="text-[10px] px-1">↑</Kbd>
-						<Kbd className="text-[10px] px-1">↓</Kbd>
+						<Kbd className="px-1 text-[10px]">↑</Kbd>
+						<Kbd className="px-1 text-[10px]">↓</Kbd>
 						<span>{t("globalSearch.navigate")}</span>
 					</span>
 					<span className="flex items-center gap-1">
-						<Kbd className="text-[10px] px-1.5">↵</Kbd>
+						<Kbd className="px-1.5 text-[10px]">↵</Kbd>
 						<span>{t("globalSearch.select")}</span>
 					</span>
 				</div>

@@ -10,16 +10,16 @@ Source-of-truth guidance for AI agents working in this monorepo.
 
 ## Workspace Layout
 
-| Path                                                | Purpose                                                                                                                 |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Path                                                | Purpose                                                                                                                    |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `packages/questpie`                                 | Core engine — field builders, CRUD, routes, introspection, CLI. Exports: `questpie`, `questpie/client`, `questpie/shared`. |
-| `packages/admin`                                    | Config-driven admin UI (React + Tailwind v4 + shadcn). Exports: `@questpie/admin/server`, `@questpie/admin/client`.     |
-| `packages/tanstack-query`                           | TanStack Query option builders, `streamedQuery`, batch helpers.                                                         |
-| `packages/openapi`                                  | OpenAPI spec generation + Scalar UI module (`openApiModule()`).                                                         |
-| `packages/elysia`, `packages/hono`, `packages/next` | Framework adapters — thin wrappers around `createFetchHandler`.                                                         |
-| `packages/create-questpie`                          | CLI scaffolder (`bunx create-questpie`). Templates live in `templates/`.                                                |
-| `apps/docs`                                         | Documentation site (TanStack Start + Vite + Fumadocs). Content in `content/docs/`.                                      |
-| `examples/*`                                        | Full reference implementations (tanstack-barbershop, city-portal).                                                      |
+| `packages/admin`                                    | Config-driven admin UI (React + Tailwind v4 + shadcn). Exports: `@questpie/admin/server`, `@questpie/admin/client`.        |
+| `packages/tanstack-query`                           | TanStack Query option builders, `streamedQuery`, batch helpers.                                                            |
+| `packages/openapi`                                  | OpenAPI spec generation + Scalar UI module (`openApiModule`).                                                              |
+| `packages/elysia`, `packages/hono`, `packages/next` | Framework adapters — thin wrappers around `createFetchHandler`.                                                            |
+| `packages/create-questpie`                          | CLI scaffolder (`bunx create-questpie`). Templates live in `templates/`.                                                   |
+| `apps/docs`                                         | Documentation site (TanStack Start + Vite + Fumadocs). Content in `content/docs/`.                                         |
+| `examples/*`                                        | Full reference implementations (tanstack-barbershop, city-portal).                                                         |
 
 ## Key Architecture
 
@@ -39,51 +39,45 @@ Internal imports use the `#questpie/*` subpath alias (e.g. `#questpie/server/fie
 
 All QUESTPIE projects follow this split:
 
-| Layer      | Directory          | Defines                                                               |
-| ---------- | ------------------ | --------------------------------------------------------------------- |
+| Layer      | Directory          | Defines                                                                  |
+| ---------- | ------------------ | ------------------------------------------------------------------------ |
 | **Server** | `questpie/server/` | Schema, fields, access control, hooks, routes, jobs — WHAT the data does |
-| **Admin**  | `questpie/admin/`  | Branding, custom renderers, client builder — HOW it renders           |
-| **Routes** | `routes/`          | HTTP mounting only — no business logic                                |
+| **Admin**  | `questpie/admin/`  | Branding, custom renderers, client builder — HOW it renders              |
+| **Routes** | `routes/`          | HTTP mounting only — no business logic                                   |
 
 ### Standalone Factories + File Convention
 
 New projects use **standalone factories** and **file convention** with codegen:
 
 ```ts
-// collections/posts.collection.ts
-import { collection } from "questpie";
+// collections/posts.ts
+import { collection } from "#questpie/factories";
 
-export default collection("posts")
-  .fields(({ f }) => ({
-    title: f.text({ label: "Title", required: true }),
-    content: f.richText({ label: "Content" }),
-  }));
+export const posts = collection("posts").fields(({ f }) => ({
+	title: f.text(255).label("Title").required(),
+	content: f.richText().label("Content"),
+}));
 
 // routes/healthcheck.ts
 import { route } from "questpie";
 
 export default route()
-  .get()
-  .handler(async () => ({ status: "ok" }));
+	.get()
+	.handler(async () => ({ status: "ok" }));
 
 // questpie.config.ts
 import { runtimeConfig } from "questpie";
-import { adminPlugin } from "@questpie/admin/plugin";
 
 export default runtimeConfig({
-  plugins: [adminPlugin()],
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
+	db: { url: process.env.DATABASE_URL! },
+	app: { url: process.env.APP_URL! },
 });
 
 // modules.ts
 import { adminModule } from "@questpie/admin/server";
 import { openApiModule } from "@questpie/openapi";
 
-export default [
-  adminModule,
-  openApiModule({ info: { title: "My API", version: "1.0.0" } }),
-] as const;
+export default [adminModule, openApiModule] as const;
 ```
 
 Codegen discovers files and generates `.generated/index.ts` with the `app` instance and `App` type. User code imports via the `#questpie` subpath:
@@ -97,29 +91,30 @@ const handler = createFetchHandler(app, { basePath: "/api" });
 
 The `#questpie` alias is configured in both `package.json` (`imports` field) and `tsconfig.json` (`paths`) — it resolves to `./src/questpie/server/.generated/index.ts`.
 
-### Internal `q` Builder (Admin Module)
-
-The `q` builder still exists internally for `@questpie/admin` module construction. It is marked `@internal` and should not be used in new project code:
-
-```ts
-// @internal — used by admin module only
-import { q } from "questpie";
-```
-
 ### Field Builder System
 
-Fields are defined via a proxy-based `f` factory inside `.fields()`:
+Fields are defined via a proxy-based `f` factory inside `.fields()`. Fields use a **fluent builder** pattern (NOT options objects):
 
 ```ts
 const posts = collection("posts").fields(({ f }) => ({
-  title: f.text({ label: "Title", required: true }),
-  content: f.richText({ label: "Content" }),
-  published: f.boolean({ label: "Published", default: false }),
-  category: f.select({ label: "Category", options: ["news", "blog"] }),
+	title: f.text(255).label("Title").required(),
+	content: f.richText().label("Content"),
+	published: f.boolean().label("Published").default(false),
+	category: f
+		.select([
+			{ value: "news", label: "News" },
+			{ value: "blog", label: "Blog" },
+		])
+		.label("Category"),
+	author: f.relation("users").label("Author"),
+	image: f.upload().label("Cover Image"),
 }));
 ```
 
-Built-in field types: `text`, `number`, `boolean`, `date`, `dateTime`, `select`, `multiSelect`, `relation`, `upload`, `richText`, `json`, `slug`, `email`, `url`, `password`, `color`, `textarea`.
+Key builder methods: `.label()`, `.required()`, `.default()`, `.localized()`, `.inputOptional()`, `.admin()`, `.access()`, `.hooks()`, `.meta()`, `.operators()`.
+
+**Built-in field types (core):** `text`, `number`, `boolean`, `date`, `datetime`, `time`, `select`, `relation`, `upload`, `object`, `json`, `from`, `email`, `url`, `textarea`.
+**Admin module fields:** `richText`, `blocks` (provided by `@questpie/admin`).
 
 **Custom fields** via `field<TConfig, TValue>()` factory — see `packages/questpie/src/server/fields/field.ts`.
 **Custom operators** via `operator<TValue>()` — see `packages/questpie/src/server/fields/common-operators.ts`.
@@ -131,15 +126,16 @@ Type-safe server routes via file convention:
 ```ts
 // routes/get-stats.ts
 import { route } from "questpie";
-import z from "zod";
+import { z } from "zod";
 
 export default route()
-  .post()
-  .schema(z.object({ period: z.enum(["day", "week", "month"]) }))
-  .handler(async ({ collections }) => {
-    const count = await collections.posts.count({});
-    return { posts: count };
-  });
+	.post()
+	.schema(z.object({ period: z.enum(["day", "week", "month"]) }))
+	.handler(async ({ input, collections }) => {
+		// handler receives AppContext & { input } — destructure what you need
+		const count = await collections.posts.count({});
+		return { posts: count, period: input.period };
+	});
 ```
 
 Routes are auto-discovered by codegen and available at `/api/<name>`.
@@ -149,17 +145,17 @@ Routes are auto-discovered by codegen and available at `/api/<name>`.
 Server emits serializable references that the client resolves via registries:
 
 - **Component references**: `c.icon("ph:article")`, `c.badge({ ... })` — `ComponentReference<TType, TProps>`.
-- **View references**: `v.collectionTable({})`, `v.collectionForm({ sidebar, fields })`, `v.globalForm({ fields })` — resolved from `state.views`.
+- **View references**: `v.collectionTable({})`, `v.collectionForm({ sidebar, fields })`, `v.globalForm({ fields })` — resolved from registered views.
 - **Field metadata**: Introspection API at `packages/questpie/src/server/collection/introspection.ts` emits `CollectionSchema` / `FieldSchema`.
 
 ## Registry-First Philosophy (Critical)
 
 - **Never** hardcode admin/view/component/type names in server runtime — always derive from builder state and registered maps.
 - **Fields**: resolve from builder state fields registry.
-- **Views**: resolve from `state.views`.
-- **Components**: resolve `c.*` from `state.components`.
+- **Views**: resolve from registered view maps.
+- **Components**: resolve `c.*` from registered component maps.
 - **Entities**: collections/globals/jobs/queues flow from builder state, not literal names.
-- Defaults are provided by module registration (`runtimeConfig({ plugins: [adminPlugin()] })` + `modules.ts` on server / `qa.use(adminModule)` on client), not hardcoded.
+- Defaults are provided by module registration (`modules.ts` on server and `questpie/admin/modules.ts` on the admin client), not hardcoded.
 - Client resolves server-emitted `{ type, props }` references using its own registry — never assume server-only types.
 - When extending builders, prefer lazy type extraction (`FieldsOf<this>`, `QuestpieStateOf<this>`) over giant mapped types.
 
@@ -170,18 +166,40 @@ The codegen pipeline is fully plugin-driven. Nothing is hardcoded in the CLI —
 ### Core Plugin (`coreCodegenPlugin()`)
 
 Lives in `packages/questpie/src/cli/codegen/index.ts`. Always auto-prepended by `runCodegen()`. Declares:
-- **10 category declarations**: collections, globals, jobs, routes, messages, services, emails, migrations, seeds, and admin/plugin declarations — each with full `CategoryDeclaration` metadata (dirs, prefix, emit strategy, type emission, registry key).
-- **4 singleton factories**: locale, hooks, access, context.
+
+- **10 category declarations**: collections, globals, jobs, routes, messages, services, emails, migrations, seeds, and fieldTypes — each with full `CategoryDeclaration` metadata (dirs, prefix, emit strategy, type emission, registry key).
+- **5 discover patterns**: `modules.ts`, `plugin.ts`, `fields.ts`, `config/auth.ts` (authConfig), and `config/app.ts` (appConfig).
+- **2 singleton factories**: appConfig (`AppConfigInput`), authConfig (`AuthConfig`).
 - **1 callback param**: `f` (field ref proxy: `f.title` → `"title"`).
+
+### Config Directory Convention
+
+All project configuration lives in `config/` inside the server directory:
+
+| File                | Factory                                      | Contains                                                        |
+| ------------------- | -------------------------------------------- | --------------------------------------------------------------- |
+| `config/auth.ts`    | `authConfig()` from `"questpie"`             | Better Auth options (email/password, social providers, plugins) |
+| `config/app.ts`     | `appConfig()` from `"questpie"`              | `locale`, `access` (defaultAccess), `hooks`, `context`          |
+| `config/admin.ts`   | `adminConfig()` from `"#questpie/factories"` | `sidebar`, `dashboard`, `branding`, admin UI `locale`           |
+| `config/openapi.ts` | `openApiConfig()` from `"@questpie/openapi"` | OpenAPI spec info, Scalar UI options                            |
+
+Config files use `configKey` on `DiscoverPattern`; each file is emitted into the generated `config` bucket (`config.app`, `config.auth`, `config.admin`, etc.).
+
+### Module Plugin Auto-Extraction
+
+Modules can declare `plugin` on `ModuleDefinition`. Codegen pre-pass imports `modules.ts`, traverses depth-first, and extracts all plugins. This means `openApiModule` and other module packages contribute their codegen plugins automatically — no manual `plugins: [openApiPlugin()]` in `questpie.config.ts` needed.
 
 ### Admin Plugin (`adminPlugin()`)
 
-Lives in `packages/admin/src/server/plugin.ts`. User registers in `questpie.config.ts` via `plugins: [adminPlugin()]`. Declares:
-- **7 discover patterns**: views, components, blocks, sidebar, dashboard, branding, adminLocale.
+Lives in `packages/admin/src/server/plugin.ts`. User projects usually get it automatically from `adminModule.plugin` in `modules.ts`; direct `plugins: [adminPlugin()]` is only needed for custom setups that do not load the module. Declares:
+
+- **1 server discover pattern**: `config/admin.ts` (adminConfig emitted to `config.admin`).
+- **3 server categories**: views, components, blocks, plus field type imports for admin fields.
 - **2 module registries**: views, components — with placeholder tokens for type extraction.
 - **5 collection extensions**: admin, list, form, preview, actions.
 - **2 global extensions**: admin, form.
-- **4 singleton factories**: branding, adminLocale, sidebar, dashboard.
+- **2 field extensions**: admin (per-field admin meta), form (layout for object fields).
+- **1 singleton factory**: adminConfig (`AdminConfigInput`).
 - **3 callback params**: `v` (view proxy), `c` (component proxy), `a` (action proxy).
 - **1 type registry**: `ComponentTypeRegistry` in `@questpie/admin/server`.
 
@@ -189,11 +207,11 @@ Lives in `packages/admin/src/server/plugin.ts`. User registers in `questpie.conf
 
 Three augmentation interfaces allow plugins to extend discriminant types:
 
-| Interface | Package | Purpose | Fallback |
-|---|---|---|---|
-| `FieldTypeRegistry` | `questpie` | Field type names (`"text"`, `"number"`, etc.) | `string` |
-| `ComponentTypeRegistry` | `@questpie/admin/server` | Component type names (`"icon"`, `"badge"`, etc.) | `string` |
-| `ViewKindRegistry` | `@questpie/admin/server` | View kind names (`"list"`, `"edit"`) | literal union |
+| Interface               | Package                  | Purpose                                          | Fallback      |
+| ----------------------- | ------------------------ | ------------------------------------------------ | ------------- |
+| `FieldTypeRegistry`     | `questpie`               | Field type names (`"text"`, `"number"`, etc.)    | `string`      |
+| `ComponentTypeRegistry` | `@questpie/admin/server` | Component type names (`"icon"`, `"badge"`, etc.) | `string`      |
+| `ViewKindRegistry`      | `@questpie/admin/server` | View kind names (`"list"`, `"edit"`)             | literal union |
 
 Codegen generates `declare module` augmentations that extend these interfaces with the actual keys extracted from modules. The companion type aliases (`FieldType`, `ComponentType`, `ViewKind`) use the `[keyof Registry] extends [never] ? string : keyof Registry` pattern to fall back to `string` when the registry is empty.
 
@@ -204,25 +222,53 @@ Codegen generates `declare module` augmentations that extend these interfaces wi
 - **`ModuleRegistryConfig`** (`cli/codegen/types.ts`): Module-level type registries with placeholder tokens, registry keys, and optional `typeRegistry` for interface augmentation.
 - **`CallbackParamDefinition`** (`cli/codegen/types.ts`): Inline JS proxy code for callback context parameters.
 
+### Codegen Key Derivation — How Entity Keys Are Determined
+
+Every discovered entity (collection, view, block, component, route, etc.) gets a **key** that becomes:
+
+- The import variable name: `_view_{key}`, `_coll_{key}`, `_bloc_{key}`
+- The object key in module/app state: `{ [key]: entity }`
+- The type key in registry interfaces: `interface Views { [key]: typeof entity }`
+- The callback proxy key: `v.{key}(...)`, `f.{key}`
+
+**Key derivation rules** (in `discover.ts`, function `processFile`):
+
+| Scenario                                                                     | Key source                                        | Example                                                                                   |
+| ---------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Category with `factoryFunctions`, **named exports**, factory has string arg  | **Factory string arg** (kebab→camelCase)          | `blocks/hero.ts` exports `heroBlock = block("hero")` → key: `hero`                        |
+| Category with `factoryFunctions`, **named exports**, no string arg           | Export name                                       | `export const heroBlock = block(config)` → key: `heroBlock`                               |
+| Category with `factoryFunctions`, **default export**, factory has string arg | **Factory string arg** (kebab→camelCase)          | `views/table.ts` exports `default view("collection-table", ...)` → key: `collectionTable` |
+| Category with `factoryFunctions`, **default export**, no string arg          | Filename (camelCase)                              | `views/custom.ts` exports `default view(config)` → key: `custom`                          |
+| Category **without** `factoryFunctions`                                      | Filename (camelCase)                              | `fields/boolean.ts` → key: `boolean`                                                      |
+| Recursive category (routes)                                                  | Path segments (camelCase, joined by keySeparator) | `routes/webhooks/stripe.ts` → key: `webhooks/stripe`                                      |
+
+**Why factory arg, not filename?** The factory string arg is the entity's **identity** — it's used at runtime for lookup, serialization, and API contracts. The filename is just file organization. A view named `"collection-table"` could live in `views/table.ts`, `views/default-list.ts`, or any file — the identity is the string passed to `view()`.
+
+Only hyphen-case is camelized; underscores are preserved. Use `global("siteSettings")` or `global("site-settings")` when the generated key should be `siteSettings` — `global("site_settings")` generates `site_settings`.
+
+**Consistency guarantee**: `collection("posts")` → `posts`, `block("hero")` → `hero`, `view("collection-table")` → `collectionTable`, `component("icon")` → `icon`. The factory arg is always the source of truth for the key when available.
+
+**`keyFromProperty`** (`CategoryDeclaration.keyFromProperty`): Some categories (admin-client views) use a runtime property (e.g. `.name`) as the object key at runtime: `[_view.name]: _view`. This is separate from the discover key — the discover key drives types and imports, `keyFromProperty` drives the runtime object emission in `module.ts`. When `keyFromProperty` is set, types for that category are skipped in module-template (the file-derived key would mismatch the runtime key).
+
 ### Runtime Merging (`create-app.ts`)
 
-- **`MERGE_FNS`**: `Map<string, MergeFn>` — per-key merge functions (e.g., `["auth", mergeAuthOptions]`). No string strategies, no switch statements.
-- **`CONFIG_CONSUMED_KEYS`**: Derived from `MERGE_FNS.keys()`. Keys NOT in this set flow to `instance.state` for plugins.
+- **`MERGE_FNS`**: `Map<string, MergeFn>` — per-key merge functions for module keys such as collections, routes, services, messages, migrations, seeds, and the `config` bucket. No string strategies, no switch statements.
+- **`CONFIG_CONSUMED_KEYS`**: Derived from `MERGE_FNS.keys()` plus structural/derived keys. Keys NOT in this set flow to `instance.state` for plugins.
 - **`mergeRecord`, `mergeConcat`, `lastWins`**: Exported reusable merge helpers for plugins.
 
 ## Codegen Output & Exports
 
 Running `questpie generate` produces `.generated/index.ts` which exports:
 
-| Export | Type | Purpose |
-|---|---|---|
-| `app` | `App` | The runtime app instance — use in server functions, scripts, API handlers |
-| `App` | type | Fully-typed `Questpie<...>` alias — use for type references (`typeof app`) |
-| `AppConfig` | type | Flat config for client APIs — `createClient<AppConfig>()`, `createAdminAuthClient<AppConfig>()` |
-| `AppCollections` | type | Map of all collection definitions |
-| `AppGlobals` | type | Map of all global definitions |
-| `AppRoutes` | type | Map of all route definitions |
-| `createContext` | function | Creates a rich `AppContext` for scripts/tests/standalone code |
+| Export           | Type     | Purpose                                                                                         |
+| ---------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `app`            | `App`    | The runtime app instance — use in server functions, scripts, API handlers                       |
+| `App`            | type     | Fully-typed `Questpie<...>` alias — use for type references (`typeof app`)                      |
+| `AppConfig`      | type     | Flat config for client APIs — `createClient<AppConfig>()`, `createAdminAuthClient<AppConfig>()` |
+| `AppCollections` | type     | Map of all collection definitions                                                               |
+| `AppGlobals`     | type     | Map of all global definitions                                                                   |
+| `AppRoutes`      | type     | Map of all route definitions                                                                    |
+| `createContext`  | function | Creates a rich `AppContext` for scripts/tests/standalone code                                   |
 
 ### The `#questpie` Subpath Import
 
@@ -248,7 +294,10 @@ Used as the **2nd argument** to CRUD methods:
 
 ```ts
 const ctx = await app.createContext({ accessMode: "system", locale: "en" });
-const posts = await app.api.collections.posts.find({ where: { published: true } }, ctx);
+const posts = await app.collections.posts.find(
+	{ where: { published: true } },
+	ctx,
+);
 ```
 
 ### `AppContext` (rich — flat services for handlers)
@@ -256,10 +305,11 @@ const posts = await app.api.collections.posts.find({ where: { published: true } 
 Provided automatically to framework handlers via `declare global { namespace Questpie { interface AppContext } }` augmentation. Contains **everything**: `db`, `collections`, `globals`, `queue`, `storage`, `email`, `kv`, `session`, `services`, `t`, etc.
 
 You get this in:
+
 - **Route handlers**: `route().handler(async ({ collections, db, input }) => ...)`
 - **Hooks**: `beforeCreate: [async ({ data, collections, db }) => ...]`
 - **Block prefetch**: `.prefetch(async ({ values, ctx }) => ctx.collections.*)`
-- **Jobs**: `job().handler(async ({ data, collections }) => ...)`
+- **Jobs**: `job({ name, schema, handler: async ({ payload, collections }) => ... })`
 - **Services**: `service().create(({ db, collections }) => ...)`
 
 For standalone use (scripts, seeds, tests), create one explicitly:
@@ -272,16 +322,16 @@ const posts = await ctx.collections.posts.find({});
 
 ### When to Import `app` vs Use Handler Context
 
-| Context | Import `app`? | How to access data |
-|---|---|---|
-| Server functions (`createServerFn`) | Yes — `import { app } from "#questpie"` | `app.api.collections.*` + `RequestContext` |
-| API route mount (`createFetchHandler`) | Yes — `import { app } from "#questpie"` | Pass to handler |
-| Worker (`app.queue.listen()`) | Yes — `import { app } from "#questpie"` | Direct call |
-| Scripts, seeds, tests | Yes — `import { createContext } from "#questpie"` | Rich `AppContext` |
-| QuestPie route handlers | **NO** — destructure `{ collections }` | Provided automatically |
-| Collection hooks | **NO** — destructure from handler args | Provided automatically |
-| Block prefetch | **NO** — use `ctx.collections.*` | Provided automatically |
-| Access control | **NO** — destructure from handler args | Provided automatically |
+| Context                                | Import `app`?                                     | How to access data                     |
+| -------------------------------------- | ------------------------------------------------- | -------------------------------------- |
+| Server functions (`createServerFn`)    | Yes — `import { app } from "#questpie"`           | `app.collections.*` + `RequestContext` |
+| API route mount (`createFetchHandler`) | Yes — `import { app } from "#questpie"`           | Pass to handler                        |
+| Worker (`app.queue.listen()`)          | Yes — `import { app } from "#questpie"`           | Direct call                            |
+| Scripts, seeds, tests                  | Yes — `import { createContext } from "#questpie"` | Rich `AppContext`                      |
+| QUESTPIE route handlers                | **NO** — destructure `{ collections }`            | Provided automatically                 |
+| Collection hooks                       | **NO** — destructure from handler args            | Provided automatically                 |
+| Block prefetch                         | **NO** — use `ctx.collections.*`                  | Provided automatically                 |
+| Access control                         | **NO** — destructure from handler args            | Provided automatically                 |
 
 **Rule:** Files inside `questpie/server/collections/`, `globals/`, `routes/`, `hooks/`, `blocks/`, `jobs/` must NEVER import from `#questpie` or `.generated/index.ts` — this creates circular dependencies because `.generated/index.ts` imports them.
 
@@ -296,10 +346,10 @@ const posts = await ctx.collections.posts.find({});
 | `bun run build`        | Build all packages                                   |
 | `bun run check-types`  | TypeScript type checking across the monorepo         |
 | `bun test`             | Run tests (Bun test runner, migrations silenced)     |
-| `bun run lint`         | Biome lint check                                     |
-| `bun run lint:fix`     | Biome lint with auto-fix                             |
-| `bun run format`       | Prettier format (writes)                             |
-| `bun run format:check` | Prettier format check                                |
+| `bun run lint`         | Oxlint lint check                                    |
+| `bun run lint:fix`     | Oxlint lint with auto-fix                            |
+| `bun run format`       | Oxfmt format (writes)                                |
+| `bun run format:check` | Oxfmt format check                                   |
 | `bun run clean`        | Remove lock files, node_modules, and build artifacts |
 
 ### Package-Specific Commands
@@ -313,9 +363,9 @@ Inside `packages/questpie`:
 
 ### Formatting & Linting
 
-- **Biome** (`biome.json`): tabs for indentation, double quotes for JS/TS.
-- Organize imports via Biome assist.
-- Run `bunx @biomejs/biome check --write .` to fix all issues.
+- **Oxlint** (`.oxlintrc.json`): linting with correctness + suspicious categories.
+- **Oxfmt** (`.oxfmtrc.json`): tabs for indentation, double quotes for JS/TS, import sorting, Tailwind class sorting.
+- Run `bunx oxlint --fix` to fix lint issues, `bunx oxfmt` to format.
 
 ### Testing
 
@@ -339,7 +389,7 @@ Inside `packages/questpie`:
 
 ### Dependencies
 
-- **Always check `DEPENDENCIES.md`** before adding deps — it lists pinned versions for critical packages (zod v4, drizzle-orm beta, better-auth, etc.).
+- **Check `package.json`** before adding deps — critical packages have pinned versions (zod v4, drizzle-orm beta, better-auth, etc.).
 - Internal deps **must** use `workspace:*`.
 - Key pinned versions: `zod ^4.2.1`, `drizzle-orm 1.0.0-beta.*`, `react ^19.2.0`, `tailwindcss ^4.0.6`.
 
@@ -363,8 +413,8 @@ Inside `packages/questpie`:
 base-ui uses `render` prop, NOT `asChild`:
 
 ```tsx
-// ✅ Correct
-<DialogTrigger render={<Button>Open</Button>} />
+// ✅ Correct — render prop + nativeButton={false} when render is not a <button>
+<DialogTrigger nativeButton={false} render={<Button>Open</Button>} />
 
 // ❌ Wrong — asChild is Radix, not base-ui
 <DialogTrigger asChild><Button>Open</Button></DialogTrigger>
@@ -390,20 +440,20 @@ Use `ctx.collections.*` directly — no app import needed:
 
 ```ts
 // blocks/team.ts
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
 
 export const teamBlock = block("team")
-  .fields(({ f }) => ({
-    limit: f.number({ label: "Limit", default: 4 }),
-  }))
-  .prefetch(async ({ values, ctx }) => {
-    const res = await ctx.collections.barbers.find({
-      limit: values.limit || 4,
-      where: { isActive: true },
-      with: { avatar: true },
-    });
-    return { members: res.docs };
-  });
+	.fields(({ f }) => ({
+		limit: f.number().label("Limit").default(4),
+	}))
+	.prefetch(async ({ values, ctx }) => {
+		const res = await ctx.collections.barbers.find({
+			limit: values.limit || 4,
+			where: { isActive: true },
+			with: { avatar: true },
+		});
+		return { members: res.docs };
+	});
 ```
 
 Blocks with only declarative prefetch (`{ with: { field: true } }`) don't need a function at all.
@@ -424,8 +474,7 @@ All reactive handlers run **server-side** with access to `ctx.db`, `ctx.user`, `
 **Dynamic options** for select/relation:
 
 ```ts
-city: f.relation({
-  to: "cities",
+city: f.relation("cities").label("City").admin({
   options: {
     handler: async ({ data, search, ctx }) => {
       const cities = await ctx.db.query.cities.findMany({
@@ -435,13 +484,12 @@ city: f.relation({
     },
     deps: ({ data }) => [data.country],
   },
-});
+}),
 ```
 
 ## References
 
 - Core package README: `packages/questpie/README.md`
 - Admin package README: `packages/admin/README.md`
-- Admin builder guide: `packages/admin/BUILDER_GUIDE.md`
-- Dependencies: `DEPENDENCIES.md`
+- Archived dependencies: `docs/archive/DEPENDENCIES.md`
 - Documentation source: `apps/docs/content/docs/`

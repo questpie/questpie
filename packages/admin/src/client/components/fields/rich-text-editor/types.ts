@@ -3,6 +3,7 @@
  */
 
 import type { Editor, Extension as TiptapExtension } from "@tiptap/core";
+
 import type { FieldComponentProps } from "../../../builder";
 import type { RichTextPreset } from "./presets";
 
@@ -122,6 +123,7 @@ export type OutputValue = Record<string, any>;
 export type SlashCommandItem = {
 	title: string;
 	description?: string;
+	icon?: string;
 	keywords?: string[];
 	command: (editor: Editor) => void;
 };

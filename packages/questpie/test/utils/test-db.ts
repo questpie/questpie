@@ -1,10 +1,12 @@
 import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { sql } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/pglite";
-import type { Questpie } from "../../src/server/index.js";
+
+import type { Questpie } from "../../src/exports/index.js";
 import type { MockApp } from "./mocks/mock-app-builder";
 
 export type TestDb = ReturnType<typeof drizzle>;
@@ -27,9 +29,8 @@ export const runTestDbMigrations = async (
 	app: Questpie<any> | MockApp<any>,
 ) => {
 	// Generate migrations in-memory using drizzle-kit API
-	const { generateDrizzleJson, generateMigration } = await import(
-		"drizzle-kit/api-postgres"
-	);
+	const { generateDrizzleJson, generateMigration } =
+		await import("drizzle-kit/api-postgres");
 
 	const schema = app.getSchema();
 	const emptySnapshot = {

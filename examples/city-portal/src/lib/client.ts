@@ -5,6 +5,7 @@
  */
 
 import { createClient } from "questpie/client";
+
 import type { AppConfig } from "@/questpie/server/.generated";
 
 export const client = createClient<AppConfig>({

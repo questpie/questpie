@@ -8,6 +8,7 @@
  */
 
 import { Icon } from "@iconify/react";
+
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -45,16 +46,16 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 			{/* Content */}
 			<div
 				className={cn(
-					"relative z-10 container px-6 py-20 flex flex-col gap-6",
+					"relative z-10 container flex flex-col gap-6 px-6 py-20",
 					alignClass,
 				)}
 			>
-				<h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white tracking-tight leading-[1.1] animate-fade-in-up max-w-4xl">
+				<h1 className="animate-fade-in-up max-w-4xl text-4xl leading-[1.1] font-bold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
 					{values.title}
 				</h1>
 
 				{values.subtitle && (
-					<p className="text-lg sm:text-xl md:text-2xl text-white/85 max-w-2xl animate-fade-in-up [animation-delay:100ms]">
+					<p className="animate-fade-in-up max-w-2xl text-lg text-white/85 [animation-delay:100ms] sm:text-xl md:text-2xl">
 						{values.subtitle}
 					</p>
 				)}
@@ -64,15 +65,16 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 						href={values.ctaLink || "/booking"}
 						className={cn(
 							buttonVariants({ size: "lg" }),
-							"mt-4 animate-fade-in-up [animation-delay:200ms]",
-							"group gap-3 bg-highlight text-highlight-foreground hover:bg-highlight/90",
+							"animate-fade-in-up mt-4 [animation-delay:200ms]",
+							"group bg-highlight text-highlight-foreground hover:bg-highlight/90 gap-3",
 							"text-base font-semibold",
 						)}
 					>
 						{values.ctaText}
-						<Icon icon="ph:arrow-right-bold"
+						<Icon
+							icon="ph:arrow-right-bold"
 							className="size-5 transition-transform group-hover:translate-x-1"
-						 />
+						/>
 					</a>
 				)}
 

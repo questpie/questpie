@@ -1,13 +1,14 @@
 #!/usr/bin/env bun
 
 import { Command } from "commander";
+
 import { addCommand } from "./commands/add.js";
 import { devCommand, generateCommand } from "./commands/codegen.js";
 import { generateMigrationCommand } from "./commands/generate.js";
 import { pushCommand } from "./commands/push.js";
 import { runMigrationCommand } from "./commands/run.js";
 import { runSeedCommand } from "./commands/seed.js";
-import { generateSeedCommand } from "./commands/seed-generate.js";
+import { parsePositiveIntegerOption } from "./utils.js";
 
 const program = new Command();
 
@@ -133,7 +134,7 @@ program
 			await runMigrationCommand({
 				action: "down",
 				configPath: options.config,
-				batch: options.batch ? Number.parseInt(options.batch, 10) : undefined,
+				batch: parsePositiveIntegerOption(options.batch, "--batch"),
 				targetMigration: options.target,
 				dryRun: options.dryRun,
 			});
@@ -262,32 +263,6 @@ program
 			});
 		} catch (error) {
 			console.error("❌ Failed to run seeds:", error);
-			process.exit(1);
-		}
-	});
-
-// Generate seed
-program
-	.command("seed:generate")
-	.description("Generate a new seed file")
-	.option(
-		"-c, --config <path>",
-		"Path to app config file",
-		"questpie.config.ts",
-	)
-	.requiredOption("-n, --name <name>", "Seed name (e.g., adminUser, demoData)")
-	.option("--category <category>", "Seed category (required, dev, test)", "dev")
-	.option("--dry-run", "Show what would be generated without creating files")
-	.action(async (options) => {
-		try {
-			await generateSeedCommand({
-				configPath: options.config,
-				name: options.name,
-				category: options.category,
-				dryRun: options.dryRun,
-			});
-		} catch (error) {
-			console.error("❌ Failed to generate seed:", error);
 			process.exit(1);
 		}
 	});

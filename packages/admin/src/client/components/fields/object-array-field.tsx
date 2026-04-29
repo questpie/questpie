@@ -8,6 +8,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
+
 import type { FieldInstance } from "../../builder/field/field";
 import { configureField } from "../../builder/field/field";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
@@ -37,7 +38,8 @@ import { LocaleBadge } from "./locale-badge";
 // ============================================================================
 
 interface ObjectArrayFieldProps
-	extends BaseFieldProps,
+	extends
+		BaseFieldProps,
 		Pick<
 			ArrayFieldConfig,
 			| "item"
@@ -76,7 +78,7 @@ function ItemFieldRenderer({
 
 	if (!Component) {
 		return (
-			<div className="text-sm text-destructive">
+			<div className="text-destructive text-sm">
 				No component for field type: {fieldDef.name}
 			</div>
 		);
@@ -90,7 +92,7 @@ function ItemFieldRenderer({
 		required,
 		disabled: optionsDisabled,
 		readOnly,
-		hidden,
+		hidden: _hidden,
 		localized,
 		locale,
 		...fieldSpecificOptions
@@ -135,8 +137,8 @@ function ObjectArrayItemFields({
 }: ObjectArrayItemFieldsProps) {
 	if (fieldEntries.length === 0) {
 		return (
-			<div className="rounded-lg border border-dashed p-4 text-center">
-				<p className="text-sm text-muted-foreground">
+			<div className="py-2">
+				<p className="text-muted-foreground text-sm text-pretty">
 					No fields configured for items.
 				</p>
 			</div>
@@ -302,8 +304,8 @@ export function ObjectArrayField({
 	};
 
 	const emptyState = (
-		<div className="rounded-lg border border-dashed p-4 text-center">
-			<p className="text-sm text-muted-foreground">
+		<div className="py-2">
+			<p className="text-muted-foreground text-sm text-pretty">
 				{resolvedPlaceholder || emptyLabel}
 			</p>
 		</div>
@@ -335,7 +337,7 @@ export function ObjectArrayField({
 						{resolvedLabel}
 						{required && <span className="text-destructive">*</span>}
 						{maxItems && (
-							<span className="ml-2 text-xs text-muted-foreground">
+							<span className="text-muted-foreground ml-2 text-xs tabular-nums">
 								({fields.length}/{maxItems})
 							</span>
 						)}
@@ -344,7 +346,7 @@ export function ObjectArrayField({
 				</div>
 			)}
 			{description && (
-				<p className="text-sm text-muted-foreground">
+				<p className="text-muted-foreground text-sm text-pretty">
 					{resolveText(description)}
 				</p>
 			)}
@@ -359,13 +361,10 @@ export function ObjectArrayField({
 							const canMoveDown = orderable && index < fields.length - 1;
 
 							return (
-								<div
-									key={field.id}
-									className="rounded-lg border border-border bg-card "
-								>
-									<div className="flex items-center justify-between border-b px-3 py-2">
+								<div key={field.id} className="panel-surface overflow-hidden">
+									<div className="border-border-subtle bg-surface-low flex items-center justify-between border-b px-3 py-2">
 										<div className="flex items-center gap-2">
-											<span className="text-xs text-muted-foreground">
+											<span className="text-muted-foreground text-xs tabular-nums">
 												#{index + 1}
 											</span>
 											<span className="text-sm font-medium">{itemLabel}</span>
@@ -376,26 +375,26 @@ export function ObjectArrayField({
 													<Button
 														type="button"
 														variant="ghost"
-														size="icon"
-														className="h-6 w-6"
+														size="icon-sm"
+														className="relative after:absolute after:-inset-1"
 														onClick={() => handleMove(index, index - 1)}
 														disabled={!canMoveUp || disabled}
-														title="Move up"
-														aria-label="Move item up"
+														title={t("field.moveUp")}
+														aria-label={t("field.moveUp")}
 													>
-														<Icon icon="ph:caret-up" className="h-3 w-3" />
+														<Icon icon="ph:caret-up" className="size-3.5" />
 													</Button>
 													<Button
 														type="button"
 														variant="ghost"
-														size="icon"
-														className="h-6 w-6"
+														size="icon-sm"
+														className="relative after:absolute after:-inset-1"
 														onClick={() => handleMove(index, index + 1)}
 														disabled={!canMoveDown || disabled}
-														title="Move down"
-														aria-label="Move item down"
+														title={t("field.moveDown")}
+														aria-label={t("field.moveDown")}
 													>
-														<Icon icon="ph:caret-down" className="h-3 w-3" />
+														<Icon icon="ph:caret-down" className="size-3.5" />
 													</Button>
 												</>
 											)}
@@ -403,8 +402,8 @@ export function ObjectArrayField({
 												<Button
 													type="button"
 													variant="ghost"
-													size="icon"
-													className="h-6 w-6"
+													size="icon-sm"
+													className="relative after:absolute after:-inset-1"
 													onClick={() => {
 														setActiveIndex(index);
 														setIsOpen(true);
@@ -413,21 +412,21 @@ export function ObjectArrayField({
 													title={t("common.edit")}
 													aria-label={t("common.edit")}
 												>
-													<Icon icon="ph:pencil" className="h-3 w-3" />
+													<Icon icon="ph:pencil" className="size-3.5" />
 												</Button>
 											)}
 											{canRemove && (
 												<Button
 													type="button"
 													variant="ghost"
-													size="icon"
-													className="h-6 w-6"
+													size="icon-sm"
+													className="relative after:absolute after:-inset-1"
 													onClick={() => handleRemove(index)}
 													disabled={disabled}
 													title={t("common.remove")}
 													aria-label={t("common.remove")}
 												>
-													<Icon icon="ph:trash" className="h-3 w-3" />
+													<Icon icon="ph:trash" className="size-3.5" />
 												</Button>
 											)}
 										</div>

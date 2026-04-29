@@ -21,6 +21,7 @@
  */
 
 import type { Column, SQL } from "drizzle-orm";
+
 import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
 import { normalizeContext } from "#questpie/server/collection/crud/shared/index.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
@@ -83,75 +84,15 @@ function isSearchDisabled(state: CollectionBuilderState): boolean {
 }
 
 // ============================================================================
-// Async Indexing with Debounce
+// Async Indexing via SearchService.scheduleIndex()
 // ============================================================================
 
 /**
- * Pending items waiting to be indexed via queue
- * Key: "collection:recordId"
- */
-const pendingIndexItems = new Map<
-	string,
-	{ collection: string; recordId: string }
->();
-
-/** Timeout handle for debounced flush */
-let flushTimeout: ReturnType<typeof setTimeout> | null = null;
-
-/** Debounce delay in milliseconds */
-const DEBOUNCE_DELAY_MS = 100;
-
-/**
- * Check if async indexing is available
- * Returns true if queue has the index-records job configured
+ * Check if async indexing is available via the search service's per-instance debounce.
+ * Returns true if the search service has a queue dispatch function set.
  */
 function isAsyncIndexingAvailable(app: Questpie<any>): boolean {
-	if (!app.queue) return false;
-
-	// Check if index-records job exists on the queue client
-	return typeof (app.queue as any)["index-records"]?.publish === "function";
-}
-
-/**
- * Flush pending index items to the queue
- */
-async function flushPendingItems(app: Questpie<any>): Promise<void> {
-	if (pendingIndexItems.size === 0) return;
-
-	const items = Array.from(pendingIndexItems.values());
-	pendingIndexItems.clear();
-
-	try {
-		await (app.queue as any)["index-records"].publish({ items });
-	} catch (error) {
-		app.logger.error("[Search] Failed to dispatch index-records job:", error);
-		// Items are lost - could implement retry logic here if needed
-	}
-}
-
-/**
- * Schedule an item for async indexing with debouncing
- */
-function scheduleAsyncIndex(
-	app: Questpie<any>,
-	collection: string,
-	recordId: string,
-): void {
-	const key = `${collection}:${recordId}`;
-	pendingIndexItems.set(key, { collection, recordId });
-
-	// Clear existing timeout
-	if (flushTimeout) {
-		clearTimeout(flushTimeout);
-	}
-
-	// Schedule new flush
-	flushTimeout = setTimeout(() => {
-		flushTimeout = null;
-		flushPendingItems(app).catch((err) => {
-			app.logger.error("[Search] Error in debounced flush:", err);
-		});
-	}, DEBOUNCE_DELAY_MS);
+	return (app.search as any)?._queuePublish != null;
 }
 
 // ============================================================================
@@ -237,7 +178,7 @@ async function indexAllLocalesSync(
 
 		try {
 			// Fetch localized version of the record
-			const crud = app.api.collections[state.name];
+			const crud = app.collections[state.name];
 			if (!crud) continue;
 
 			const localizedRecord = await crud.findOne({
@@ -303,10 +244,10 @@ export async function indexToSearch(
 
 	const normalized = normalizeContext(context);
 
-	// Check if async indexing is available
-	if (isAsyncIndexingAvailable(app)) {
-		// Use debounced async indexing (indexes all locales in background)
-		scheduleAsyncIndex(app, state.name, record.id);
+	// Check if async indexing is available (per-instance debounce on search service)
+	if (isAsyncIndexingAvailable(app) && app.search.scheduleIndex(state.name, record.id)) {
+		// Debounced async indexing — indexes all locales in background via queue
+		return;
 	} else {
 		// Fallback: synchronous indexing for all locales
 		await indexAllLocalesSync(record, state, app, normalized.defaultLocale);
@@ -356,15 +297,13 @@ export async function removeFromSearch(
 }
 
 /**
- * Force flush any pending index items immediately
- * Useful for tests or graceful shutdown
+ * Force flush any pending index items immediately.
+ * Delegates to the search service's per-instance flush.
  */
 export async function flushPendingSearchIndexes(
 	app: Questpie<any>,
 ): Promise<void> {
-	if (flushTimeout) {
-		clearTimeout(flushTimeout);
-		flushTimeout = null;
+	if (app.search?.flushPending) {
+		await app.search.flushPending();
 	}
-	await flushPendingItems(app);
 }

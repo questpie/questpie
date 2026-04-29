@@ -8,10 +8,13 @@ import {
 } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
+
 import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
-import { collection } from "../../src/server/index.js";
+
 import { createApp, module } from "../../src/exports/index.js";
+import { collection } from "../../src/exports/index.js";
+import { MigrationRunner } from "../../src/server/migration/runner.js";
 import type { Migration } from "../../src/server/migration/types.js";
 import { MockKVAdapter } from "../utils/mocks/kv.adapter";
 import { MockLogger } from "../utils/mocks/logger.adapter";
@@ -228,6 +231,79 @@ AND table_name IN ('posts', 'comments')
 		expect(status.executed.length).toBe(0);
 		expect(status.pending.length).toBe(2);
 	});
+
+	test("should run target migration inclusively", async () => {
+		const targetDb = await createTestDb();
+		const def = module({ name: "target-test" });
+		const targetApp = await createApp(def, {
+			app: { url: "http://localhost:3000" },
+			db: { pglite: targetDb },
+			email: { adapter: new MockMailAdapter() },
+			queue: { adapter: new MockQueueAdapter() },
+			kv: { adapter: new MockKVAdapter() },
+			logger: { adapter: new MockLogger() },
+		});
+		const runner = new MigrationRunner(targetApp.db, { silent: true });
+		const ran: string[] = [];
+
+		const migrations: Migration[] = [
+			{
+				id: "first",
+				async up({ db }) {
+					ran.push("first");
+					await db.execute(
+						sql.raw(`CREATE TABLE target_first (id TEXT PRIMARY KEY)`),
+					);
+				},
+				async down({ db }) {
+					await db.execute(sql.raw(`DROP TABLE target_first`));
+				},
+			},
+			{
+				id: "second",
+				async up({ db }) {
+					ran.push("second");
+					await db.execute(
+						sql.raw(`CREATE TABLE target_second (id TEXT PRIMARY KEY)`),
+					);
+				},
+				async down({ db }) {
+					await db.execute(sql.raw(`DROP TABLE target_second`));
+				},
+			},
+			{
+				id: "third",
+				async up({ db }) {
+					ran.push("third");
+					await db.execute(
+						sql.raw(`CREATE TABLE target_third (id TEXT PRIMARY KEY)`),
+					);
+				},
+				async down({ db }) {
+					await db.execute(sql.raw(`DROP TABLE target_third`));
+				},
+			},
+		];
+
+		try {
+			await runner.runMigrationsUp(migrations, {
+				targetMigration: "second",
+			});
+
+			expect(ran).toEqual(["first", "second"]);
+
+			const status = await runner.status(migrations);
+			expect(status.executed.map((migration) => migration.id)).toEqual([
+				"first",
+				"second",
+			]);
+			expect(status.pending.map((migration) => migration.id)).toEqual([
+				"third",
+			]);
+		} finally {
+			await targetDb.close();
+		}
+	});
 });
 
 /**
@@ -267,9 +343,8 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 	});
 
 	test("should generate migration file from schema", async () => {
-		const { DrizzleMigrationGenerator } = await import(
-			"../../src/server/migration/generator.js"
-		);
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
 
 		const posts = collection("posts").fields(({ f }) => ({
 			title: f.text(255).required(),
@@ -307,9 +382,8 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 	});
 
 	test("should skip if no schema changes", async () => {
-		const { DrizzleMigrationGenerator } = await import(
-			"../../src/server/migration/generator.js"
-		);
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
 
 		const posts = collection("posts").fields(({ f }) => ({
 			title: f.text(255).required(),
@@ -347,9 +421,8 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 	});
 
 	test("should build cumulative snapshot from migrations", async () => {
-		const { DrizzleMigrationGenerator } = await import(
-			"../../src/server/migration/generator.js"
-		);
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
 
 		const generator = new DrizzleMigrationGenerator();
 

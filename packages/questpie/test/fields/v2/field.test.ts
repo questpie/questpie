@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
+
 import {
 	integer,
 	boolean as pgBoolean,
@@ -12,11 +13,12 @@ import {
 	varchar,
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { Field, field } from "#questpie/server/fields/field-class.js";
+
 import type {
 	DefaultFieldState,
 	FieldRuntimeState,
 } from "#questpie/server/fields/field-class-types.js";
+import { Field, field } from "#questpie/server/fields/field-class.js";
 import {
 	booleanOps,
 	numberOps,

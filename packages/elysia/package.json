@@ -1,34 +1,15 @@
 {
 	"name": "@questpie/elysia",
-	"version": "2.0.0",
-	"type": "module",
+	"version": "3.1.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
 		"directory": "packages/elysia"
 	},
-	"scripts": {
-		"build": "tsdown",
-		"check-types": "tsc --noEmit"
-	},
 	"files": [
 		"dist"
 	],
-	"dependencies": {
-		"@elysiajs/cors": "^1.2.1",
-		"@elysiajs/eden": "^1.2.6",
-		"questpie": "workspace:*",
-		"elysia": "^1.2.14",
-		"qs": "^6.13.1"
-	},
-	"devDependencies": {
-		"@types/qs": "^6.9.17",
-		"bun-types": "latest",
-		"tsdown": "^0.18.3"
-	},
-	"peerDependencies": {
-		"questpie": "^2.0.0"
-	},
+	"type": "module",
 	"exports": {
 		"./client": "./src/client.ts",
 		"./server": "./src/server.ts",
@@ -41,5 +22,24 @@
 			"./server": "./dist/server.mjs",
 			"./package.json": "./package.json"
 		}
+	},
+	"scripts": {
+		"build": "tsdown",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@elysiajs/cors": "^1.2.1",
+		"@elysiajs/eden": "^1.2.6",
+		"elysia": "^1.2.14",
+		"qs": "^6.13.1",
+		"questpie": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/qs": "^6.9.17",
+		"bun-types": "latest",
+		"tsdown": "^0.18.3"
+	},
+	"peerDependencies": {
+		"questpie": "^3.0.0"
 	}
 }

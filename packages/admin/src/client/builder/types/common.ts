@@ -3,6 +3,7 @@
  */
 
 import type * as React from "react";
+
 import type { I18nText } from "../../i18n/types.js";
 
 /**

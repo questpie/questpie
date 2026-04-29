@@ -3,8 +3,6 @@ title: Hooks
 description: Lifecycle hooks for collections — beforeValidate, beforeChange, afterChange, beforeDelete, afterDelete.
 ---
 
-# Hooks
-
 Hooks let you run logic at specific points in the collection lifecycle. They receive the full typed `AppContext` through context injection — no imports needed.
 
 ## Hook Lifecycle
@@ -81,18 +79,18 @@ beforeDelete → Database Delete → afterDelete
 
 Every hook receives the full `AppContext` via destructuring:
 
-| Property | Available in | Description |
-|---|---|---|
-| `data` | before/afterChange, beforeValidate | The record data being written |
-| `operation` | before/afterChange | `"create"` or `"update"` |
-| `original` | before/afterChange (update only) | Previous record state |
-| `id` | before/afterDelete | ID of record being deleted |
-| `collections` | All | Typed collection API |
-| `globals` | All | Typed globals API |
-| `queue` | All | Queue client for publishing jobs |
-| `email` | All | Email service |
-| `db` | All | Database instance |
-| `session` | All | Current auth session |
+| Property      | Available in                       | Description                      |
+| ------------- | ---------------------------------- | -------------------------------- |
+| `data`        | before/afterChange, beforeValidate | The record data being written    |
+| `operation`   | before/afterChange                 | `"create"` or `"update"`         |
+| `original`    | before/afterChange (update only)   | Previous record state            |
+| `id`          | before/afterDelete                 | ID of record being deleted       |
+| `collections` | All                                | Typed collection API             |
+| `globals`     | All                                | Typed globals API                |
+| `queue`       | All                                | Queue client for publishing jobs |
+| `email`       | All                                | Email service                    |
+| `db`          | All                                | Database instance                |
+| `session`     | All                                | Current auth session             |
 
 Plus any custom services defined in `services/`.
 
@@ -179,4 +177,4 @@ Hooks use context-first injection. All dependencies are available through destru
 - [Validation](/docs/backend/rules/validation) — Field-level validation
 - [Access Control](/docs/backend/rules/access-control) — Operation permissions
 - [Jobs](/docs/backend/business-logic/jobs) — Background tasks triggered by hooks
-- [Routes](/docs/backend/business-logic/routes) — Server-side business logic
+- [Typed Routes](/docs/backend/business-logic/routes) — Server-side business logic

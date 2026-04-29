@@ -11,6 +11,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import * as React from "react";
+
 import type { BlockNode } from "../../blocks/types.js";
 import { cn } from "../../lib/utils.js";
 import { BlockInsertButton } from "./block-insert-button.js";

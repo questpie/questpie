@@ -23,6 +23,14 @@ function generateLLMSTxt(baseUrl: string, pages: LLMSPage[]) {
 	const sections: string[] = [];
 
 	const sectionOrder: Array<{ key: string; title: string }> = [
+		{ key: "start-here", title: "Start Here" },
+		{ key: "backend", title: "Build Your Backend" },
+		{ key: "workspace", title: "Admin Workspace" },
+		{ key: "frontend", title: "Client Integration" },
+		{ key: "production", title: "Production" },
+		{ key: "extend", title: "Extend" },
+		{ key: "examples", title: "Examples" },
+		{ key: "reference", title: "API Reference" },
 		{ key: "getting-started", title: "Platform Quickstart" },
 		{ key: "mentality", title: "Architecture Principles" },
 		{ key: "server", title: "Server Model" },
@@ -30,8 +38,6 @@ function generateLLMSTxt(baseUrl: string, pages: LLMSPage[]) {
 		{ key: "client", title: "Client Projections" },
 		{ key: "admin", title: "Admin Interface" },
 		{ key: "guides", title: "Guides" },
-		{ key: "examples", title: "Examples" },
-		{ key: "reference", title: "Reference" },
 		{ key: "migration", title: "Migration" },
 	];
 

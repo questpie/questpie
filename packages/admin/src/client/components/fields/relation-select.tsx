@@ -9,21 +9,24 @@
  */
 
 import { Icon } from "@iconify/react";
-import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import { useQueryClient } from "@tanstack/react-query";
 import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
 import { toast } from "sonner";
+
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
+
 import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useCollectionItem } from "../../hooks/use-collection";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime";
 import { resolveIconElement } from "../component-renderer";
+import { FieldSelectActionGroup } from "../primitives/field-select-control";
 import { SelectSingle } from "../primitives/select-single";
 import type { SelectOption } from "../primitives/types";
 import { ResourceSheet } from "../sheets/resource-sheet";
-import { Button } from "../ui/button";
+import { InputGroupAddon, InputGroupButton } from "../ui/input-group";
 import { LocaleBadge } from "./locale-badge";
 
 export interface RelationSelectProps<_T extends QuestpieApp> {
@@ -63,9 +66,13 @@ export interface RelationSelectProps<_T extends QuestpieApp> {
 	locale?: string;
 
 	/**
-	 * Filter options based on form values
+	 * Pre-resolved `where` clause for the relation `find()` call. Reactive
+	 * filters (`f.relation(...).admin({ filter: ({ data }) => ({...}) })` or
+	 * layout-level `props.filter`) are resolved by `FieldRenderer` against
+	 * the live form via `/admin/reactive` before they reach this component —
+	 * so by the time `filter` lands here it's plain JSON.
 	 */
-	filter?: (formValues: any) => any;
+	filter?: Record<string, unknown>;
 
 	/**
 	 * Is the field required
@@ -158,9 +165,9 @@ export function RelationSelect<T extends QuestpieApp>({
 					options.search = search;
 				}
 
-				// Add custom filter if provided
+				// Add custom filter if provided (already resolved by FieldRenderer)
 				if (filter) {
-					options.where = filter({});
+					options.where = filter;
 				}
 
 				const response = await (client as any).collections[
@@ -198,11 +205,19 @@ export function RelationSelect<T extends QuestpieApp>({
 				});
 			} catch (error) {
 				console.error("Failed to load relation options:", error);
-				toast.error("Failed to load options");
+				toast.error(t("error.failedToLoadOptions"));
 				return [];
 			}
 		},
-		[client, targetCollection, filter, renderOption, collectionIconRef, locale],
+		[
+			client,
+			targetCollection,
+			filter,
+			renderOption,
+			collectionIconRef,
+			locale,
+			t,
+		],
 	);
 
 	const queryClient = useQueryClient();
@@ -233,12 +248,10 @@ export function RelationSelect<T extends QuestpieApp>({
 	}, [queryClient, queryOpts, targetCollection, value]);
 
 	// Fetch selected item details using the hook
-	const { data: selectedItem } = useCollectionItem(
-		targetCollection,
-		value || "",
-		undefined,
-		{ enabled: !!value },
-	);
+	const { data: selectedItem, isLoading: isLoadingSelectedItem } =
+		useCollectionItem(targetCollection, value || "", undefined, {
+			enabled: !!value,
+		});
 
 	const selectedOptions = React.useMemo(() => {
 		if (!selectedItem) return [];
@@ -288,7 +301,7 @@ export function RelationSelect<T extends QuestpieApp>({
 				<div className="flex items-center gap-2">
 					<label
 						htmlFor={name}
-						className="text-sm font-medium flex items-center gap-1.5"
+						className="font-chrome flex items-center gap-1.5 text-sm font-medium"
 					>
 						{resolveIconElement(collectionIconRef, {
 							className: "size-3.5 text-muted-foreground",
@@ -300,9 +313,9 @@ export function RelationSelect<T extends QuestpieApp>({
 				</div>
 			)}
 
-			<div className="flex items-stretch gap-0">
-				{/* Searchable Select Dropdown - uses server-side search */}
-				<div className="min-w-0 flex-1">
+			{!readOnly ? (
+				<FieldSelectActionGroup error={!!error}>
+					{/* Searchable Select Dropdown - uses server-side search */}
 					<SelectSingle
 						id={name}
 						value={value || null}
@@ -318,62 +331,89 @@ export function RelationSelect<T extends QuestpieApp>({
 									limit: 50,
 									locale,
 									search,
-									where: filter ? filter({}) : undefined,
+									where: filter ?? undefined,
 								},
 							])
 						}
 						prefetchOnMount
 						placeholder={resolvedPlaceholder || `${selectLabel}...`}
-						disabled={disabled || readOnly}
+						disabled={disabled}
 						clearable={!required}
 						emptyMessage={noResultsLabel}
 						drawerTitle={selectLabel}
-						className={cn(
-							!readOnly && "rounded-r-none",
-							error && "border-destructive",
-						)}
+						selectedLabel={
+							selectedItem?._title || selectedItem?.id || undefined
+						}
+						isLoadingValue={!!value && isLoadingSelectedItem}
+						asInputGroupControl
 						aria-invalid={!!error}
 					/>
-				</div>
 
-				{/* Action Buttons */}
-				{!readOnly && (
-					<div className="flex">
+					{/* Action Buttons */}
+					<InputGroupAddon align="inline-end" className="gap-0.5 pr-1">
 						{/* Edit button (only if value is set) */}
 						{value && (
-							<Button
-								type="button"
-								variant="outline"
-								size="icon"
+							<InputGroupButton
+								size="icon-sm"
+								className="text-muted-foreground hover:bg-surface-high hover:text-foreground"
 								onClick={handleOpenEdit}
 								disabled={disabled}
 								title={t("collection.edit", { name: labelText })}
 								aria-label={t("collection.edit", { name: labelText })}
-								className="rounded-none border-l-0"
 							>
-								<Icon icon="ph:pencil" className="h-4 w-4" />
-							</Button>
+								<Icon icon="ph:pencil" className="size-3.5" />
+							</InputGroupButton>
 						)}
 
 						{/* Create button */}
-						<Button
-							type="button"
-							variant="outline"
-							size="icon"
+						<InputGroupButton
+							size="icon-sm"
+							className="text-muted-foreground hover:bg-surface-high hover:text-foreground"
 							onClick={handleOpenCreate}
 							disabled={disabled}
 							title={createLabel}
 							aria-label={createLabel}
-							className="border-l-0 rounded-l-none"
 						>
-							<Icon icon="ph:plus" className="h-4 w-4" />
-						</Button>
-					</div>
-				)}
-			</div>
+							<Icon icon="ph:plus" className="size-3.5" />
+						</InputGroupButton>
+					</InputGroupAddon>
+				</FieldSelectActionGroup>
+			) : (
+				/* Read-only: plain select, no action buttons */
+				<SelectSingle
+					id={name}
+					value={value || null}
+					onChange={handleValueChange}
+					options={selectedOptions}
+					loadOptions={loadOptions}
+					queryKey={(search) =>
+						queryOpts.key([
+							"collections",
+							targetCollection,
+							"find",
+							{
+								limit: 50,
+								locale,
+								search,
+								where: filter ?? undefined,
+							},
+						])
+					}
+					prefetchOnMount
+					placeholder={resolvedPlaceholder || `${selectLabel}...`}
+					disabled
+					clearable={false}
+					emptyMessage={noResultsLabel}
+					drawerTitle={selectLabel}
+					selectedLabel={selectedItem?._title || selectedItem?.id || undefined}
+					isLoadingValue={!!value && isLoadingSelectedItem}
+					className={cn(error && "border-destructive")}
+					aria-invalid={!!error}
+				/>
+			)}
 
 			{/* Error message */}
-			{error && <p className="text-sm text-destructive">{error}</p>}
+			{error && <p className="text-destructive text-sm">{error}</p>}
 
 			{/* Side Sheet for Create/Edit */}
 			<ResourceSheet

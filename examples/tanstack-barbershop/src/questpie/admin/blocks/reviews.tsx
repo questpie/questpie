@@ -6,6 +6,7 @@
  */
 
 import { Icon } from "@iconify/react";
+
 import { useTranslation } from "../../../lib/providers/locale-provider";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -29,18 +30,18 @@ export function ReviewsRenderer({ values, data }: BlockProps<"reviews">) {
 	}[values.columns || "3"];
 
 	return (
-		<section className="py-20 px-6 bg-muted/30">
+		<section className="bg-muted/30 px-6 py-20">
 			<div className="container">
 				{/* Header */}
 				{(values.title || values.subtitle) && (
-					<div className="text-center mb-16 max-w-2xl mx-auto">
+					<div className="mx-auto mb-16 max-w-2xl text-center">
 						{values.title && (
-							<h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">
+							<h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
 								{values.title}
 							</h2>
 						)}
 						{values.subtitle && (
-							<p className="text-lg text-muted-foreground">{values.subtitle}</p>
+							<p className="text-muted-foreground text-lg">{values.subtitle}</p>
 						)}
 					</div>
 				)}
@@ -50,18 +51,20 @@ export function ReviewsRenderer({ values, data }: BlockProps<"reviews">) {
 					{reviews.map((review, i) => (
 						<article
 							key={review.id}
-							className="bg-card border border-border p-8 rounded-lg hover:shadow-lg transition-all animate-fade-in-up"
+							className="bg-card border-border animate-fade-in-up rounded-lg border p-8 transition-all hover:shadow-lg"
 							style={{ animationDelay: `${i * 100}ms` }}
 						>
 							{/* Quote Icon */}
-							<Icon icon="ph:quotes-fill"
-								className="size-10 text-highlight/20 mb-4"
-							 />
+							<Icon
+								icon="ph:quotes-fill"
+								className="text-highlight/20 mb-4 size-10"
+							/>
 
 							{/* Rating */}
-							<div className="flex items-center gap-0.5 mb-4">
+							<div className="mb-4 flex items-center gap-0.5">
 								{[1, 2, 3, 4, 5].map((star) => (
-									<Icon icon={star <= review.rating ? "ph:star-fill" : "ph:star"}
+									<Icon
+										icon={star <= review.rating ? "ph:star-fill" : "ph:star"}
 										key={star}
 										className={cn(
 											"size-5",
@@ -69,20 +72,20 @@ export function ReviewsRenderer({ values, data }: BlockProps<"reviews">) {
 												? "text-highlight"
 												: "text-muted-foreground/30",
 										)}
-									 />
+									/>
 								))}
 							</div>
 
 							{/* Comment */}
 							{review.comment && (
-								<p className="text-foreground leading-relaxed mb-6 line-clamp-4">
+								<p className="text-foreground mb-6 line-clamp-4 leading-relaxed">
 									"{review.comment}"
 								</p>
 							)}
 
 							{/* Footer */}
-							<div className="pt-4 border-t border-border">
-								<span className="font-medium text-sm">
+							<div className="border-border border-t pt-4">
+								<span className="text-sm font-medium">
 									{review.customerName || t("blocks.reviews.anonymous")}
 								</span>
 							</div>
@@ -91,7 +94,7 @@ export function ReviewsRenderer({ values, data }: BlockProps<"reviews">) {
 				</div>
 
 				{reviews.length === 0 && (
-					<p className="text-center text-muted-foreground py-12">
+					<p className="text-muted-foreground py-12 text-center">
 						{t("blocks.reviews.empty")}
 					</p>
 				)}

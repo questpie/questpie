@@ -7,6 +7,7 @@
 
 import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
+
 import type { CollectionNames, GlobalNames } from "../builder";
 import {
 	type AdminLinkProps as AdminLinkTargetProps,
@@ -18,8 +19,10 @@ import {
 // Types
 // ============================================================================
 
-interface AdminLinkProps<TApp extends QuestpieApp>
-	extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href"> {
+interface AdminLinkProps<TApp extends QuestpieApp> extends Omit<
+	React.AnchorHTMLAttributes<HTMLAnchorElement>,
+	"href"
+> {
 	/** Link to dashboard */
 	to?: "dashboard";
 	/** Link to collection */

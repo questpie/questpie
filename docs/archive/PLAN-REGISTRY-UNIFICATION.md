@@ -6,17 +6,17 @@ The codegen system has **two completely separate paths** to Registry augmentatio
 
 ### Current State of Chaos
 
-| Issue | Description |
-|---|---|
-| `CategoryDeclaration.registryKey` is DEAD CODE | Declared as `true` on all 10 core categories but NEVER consumed by any template for Registry augmentation |
-| `moduleRegistries` is separate mechanism | Admin plugin uses a completely different path to write Registry augmentation |
-| Views use `discover` not `categories` on server | `"views/*.ts"` is a discover pattern, not a CategoryDeclaration — has no metadata |
-| `listViews`/`formViews` are derived via transform | Runtime `filterViewsByKind()` + `addRuntimeCode()` instead of proper categories |
-| `~fieldTypes` is hardcoded | Always emitted in module-template regardless of declarations |
-| `auth` is hardcoded | Special-case scanning in discover.ts, not a standard discover single |
-| Two placeholder systems | Core categories have no placeholder support; admin uses `$VIEW_NAMES`, `$COMPONENTS` etc. |
-| `keyFromProperty` only works in custom generator | Standard templates ignore it |
-| Blocks have no registryKey | Server-side blocks don't augment Registry, unlike components |
+| Issue                                             | Description                                                                                               |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `CategoryDeclaration.registryKey` is DEAD CODE    | Declared as `true` on all 10 core categories but NEVER consumed by any template for Registry augmentation |
+| `moduleRegistries` is separate mechanism          | Admin plugin uses a completely different path to write Registry augmentation                              |
+| Views use `discover` not `categories` on server   | `"views/*.ts"` is a discover pattern, not a CategoryDeclaration — has no metadata                         |
+| `listViews`/`formViews` are derived via transform | Runtime `filterViewsByKind()` + `addRuntimeCode()` instead of proper categories                           |
+| `~fieldTypes` is hardcoded                        | Always emitted in module-template regardless of declarations                                              |
+| `auth` is hardcoded                               | Special-case scanning in discover.ts, not a standard discover single                                      |
+| Two placeholder systems                           | Core categories have no placeholder support; admin uses `$VIEW_NAMES`, `$COMPONENTS` etc.                 |
+| `keyFromProperty` only works in custom generator  | Standard templates ignore it                                                                              |
+| Blocks have no registryKey                        | Server-side blocks don't augment Registry, unlike components                                              |
 
 ---
 
@@ -31,9 +31,11 @@ The codegen system has **two completely separate paths** to Registry augmentatio
 ## Phase 1: Make CategoryDeclaration.registryKey Actually Work
 
 ### Goal
+
 Make `module-template.ts` read `registryKey` from `CategoryDeclaration` and emit Registry augmentation for ALL categories that have it.
 
 ### Current State
+
 - `module-template.ts` only does Registry augmentation via `moduleRegistries` (lines 398-453)
 - `CategoryDeclaration.registryKey` is set to `true` on collections, globals, jobs, functions, routes, services but NEVER read by any template
 
@@ -44,25 +46,26 @@ Make `module-template.ts` read `registryKey` from `CategoryDeclaration` and emit
 **File**: `packages/questpie/src/cli/codegen/types.ts`
 
 Add to `CategoryDeclaration`:
+
 ```ts
 interface CategoryDeclaration {
-  // ... existing fields ...
+	// ... existing fields ...
 
-  /** Placeholder token for name union in configType strings (e.g. "$COLLECTION_NAMES") */
-  placeholder?: string;
-  /** Placeholder token for full record type in configType strings (e.g. "$COLLECTIONS") */
-  recordPlaceholder?: string;
-  /** Type registry interface to augment (e.g. { module: "@questpie/admin/server", interface: "ComponentTypeRegistry" }) */
-  typeRegistry?: { module: string; interface: string };
-  /**
-   * When category is derived from another category via transform (e.g. listViews from views),
-   * specifies the source category and how the derivation works.
-   * The transform still runs, but this metadata tells module-template how to handle Registry.
-   */
-  derivedFrom?: {
-    sourceCategory: string;
-    extractedConstPrefix: string;
-  };
+	/** Placeholder token for name union in configType strings (e.g. "$COLLECTION_NAMES") */
+	placeholder?: string;
+	/** Placeholder token for full record type in configType strings (e.g. "$COLLECTIONS") */
+	recordPlaceholder?: string;
+	/** Type registry interface to augment (e.g. { module: "@questpie/admin/server", interface: "ComponentTypeRegistry" }) */
+	typeRegistry?: { module: string; interface: string };
+	/**
+	 * When category is derived from another category via transform (e.g. listViews from views),
+	 * specifies the source category and how the derivation works.
+	 * The transform still runs, but this metadata tells module-template how to handle Registry.
+	 */
+	derivedFrom?: {
+		sourceCategory: string;
+		extractedConstPrefix: string;
+	};
 }
 ```
 
@@ -75,18 +78,25 @@ Replace the `moduleRegistries`-driven Registry augmentation loop with a generic 
 ```ts
 // For each category with registryKey, emit Registry augmentation
 for (const [catName, declaration] of categories) {
-  if (!declaration.registryKey) continue;
-  const registryKeyName = typeof declaration.registryKey === 'string' ? declaration.registryKey : catName;
+	if (!declaration.registryKey) continue;
+	const registryKeyName =
+		typeof declaration.registryKey === "string"
+			? declaration.registryKey
+			: catName;
 
-  // Check if this is an extracted const (derived category like listViews/formViews)
-  // or a normal category with a named type interface
-  if (declaration.derivedFrom) {
-    // Use extracted const: typeof _reg_listViews & Record<string, unknown>
-    registryLines.push(`${registryKeyName}: typeof _reg_${catName} & Record<string, unknown>;`);
-  } else if (declaration.typeEmit !== 'none') {
-    // Use named type interface: AdminCollections & Record<string, unknown>
-    registryLines.push(`${registryKeyName}: ${typeInterfaceName} & Record<string, unknown>;`);
-  }
+	// Check if this is an extracted const (derived category like listViews/formViews)
+	// or a normal category with a named type interface
+	if (declaration.derivedFrom) {
+		// Use extracted const: typeof _reg_listViews & Record<string, unknown>
+		registryLines.push(
+			`${registryKeyName}: typeof _reg_${catName} & Record<string, unknown>;`,
+		);
+	} else if (declaration.typeEmit !== "none") {
+		// Use named type interface: AdminCollections & Record<string, unknown>
+		registryLines.push(
+			`${registryKeyName}: ${typeInterfaceName} & Record<string, unknown>;`,
+		);
+	}
 }
 ```
 
@@ -99,26 +109,36 @@ Replace `moduleRegistries`-driven type alias generation with a loop over categor
 ```ts
 // For each category with placeholder, generate type alias reading from Registry
 for (const [catName, declaration] of allCategories) {
-  const registryKeyName = typeof declaration.registryKey === 'string' ? declaration.registryKey : catName;
-  if (declaration.placeholder) {
-    lines.push(`type _${pascal(catName)}Names = (keyof _RegistryProp<"${registryKeyName}"> & string) | (string & {});`);
-  }
-  if (declaration.recordPlaceholder) {
-    lines.push(`type _${pascal(catName)}Record = _RegistryProp<"${registryKeyName}">;`);
-  }
+	const registryKeyName =
+		typeof declaration.registryKey === "string"
+			? declaration.registryKey
+			: catName;
+	if (declaration.placeholder) {
+		lines.push(
+			`type _${pascal(catName)}Names = (keyof _RegistryProp<"${registryKeyName}"> & string) | (string & {});`,
+		);
+	}
+	if (declaration.recordPlaceholder) {
+		lines.push(
+			`type _${pascal(catName)}Record = _RegistryProp<"${registryKeyName}">;`,
+		);
+	}
 }
 ```
 
 And `buildPlaceholderMap()` reads from categories instead of `moduleRegistries`:
 
 ```ts
-function buildPlaceholderMap(categories: Map<string, CategoryDeclaration>): Map<string, string> {
-  const map = new Map();
-  for (const [catName, decl] of categories) {
-    if (decl.placeholder) map.set(decl.placeholder, `_${pascal(catName)}Names`);
-    if (decl.recordPlaceholder) map.set(decl.recordPlaceholder, `_${pascal(catName)}Record`);
-  }
-  return map;
+function buildPlaceholderMap(
+	categories: Map<string, CategoryDeclaration>,
+): Map<string, string> {
+	const map = new Map();
+	for (const [catName, decl] of categories) {
+		if (decl.placeholder) map.set(decl.placeholder, `_${pascal(catName)}Names`);
+		if (decl.recordPlaceholder)
+			map.set(decl.recordPlaceholder, `_${pascal(catName)}Record`);
+	}
+	return map;
 }
 ```
 
@@ -127,6 +147,7 @@ function buildPlaceholderMap(categories: Map<string, CategoryDeclaration>): Map<
 ## Phase 2: Promote Views/Blocks/Components from `discover` to `categories` on Server Target
 
 ### Goal
+
 Views, blocks, and components become proper `CategoryDeclaration` entries on the server target, with all the metadata they need.
 
 ### Changes
@@ -136,6 +157,7 @@ Views, blocks, and components become proper `CategoryDeclaration` entries on the
 **File**: `packages/admin/src/server/plugin.ts`
 
 Before:
+
 ```ts
 discover: {
   views: "views/*.ts",
@@ -147,6 +169,7 @@ discover: {
 ```
 
 After:
+
 ```ts
 categories: {
   views: {
@@ -212,6 +235,7 @@ discover: {
 #### 2.2 Keep the transform for listViews/formViews derivation
 
 The transform still calls `filterViewsByKind()` and `addRuntimeCode()`. But now `listViews` and `formViews` are proper CategoryDeclarations with `derivedFrom`, so the module-template knows to:
+
 1. Use the extracted const pattern (`_reg_listViews`)
 2. Emit Registry augmentation with `typeof _reg_listViews`
 3. NOT try to discover files for them (empty `dirs`)
@@ -225,6 +249,7 @@ Delete the entire `registries.moduleRegistries` block from plugin.ts. All that m
 ## Phase 3: Remove `moduleRegistries` from the Codegen System
 
 ### Goal
+
 Delete `moduleRegistries` as a concept. Everything goes through `CategoryDeclaration`.
 
 ### Changes
@@ -244,6 +269,7 @@ Remove `moduleRegistries` merging logic. Categories already merge via `Object.as
 #### 3.3 Update module-template.ts
 
 Remove all `moduleRegistries`-specific code:
+
 - Remove the `moduleRegistries` parameter
 - Remove `extractedConsts` detection from `extraModuleProperties` matching `moduleRegistries` keys
 - Replace with: `extractedConsts` detection for categories with `derivedFrom`
@@ -252,6 +278,7 @@ Remove all `moduleRegistries`-specific code:
 #### 3.4 Update factory-template.ts
 
 Remove all `moduleRegistries`-specific code:
+
 - Remove type alias generation from `moduleRegistries`
 - Replace with category-driven type alias generation
 - `buildPlaceholderMap()` reads from categories
@@ -261,6 +288,7 @@ Remove all `moduleRegistries`-specific code:
 ## Phase 4: Make `~fieldTypes` Declarative
 
 ### Goal
+
 Remove the hardcoded `~fieldTypes` emission from module-template. Make it driven by CategoryDeclaration or DiscoverPattern metadata.
 
 ### Changes
@@ -271,9 +299,9 @@ Remove the hardcoded `~fieldTypes` emission from module-template. Make it driven
 
 ```ts
 interface DiscoverSinglePattern {
-  pattern: string;
-  /** If set, augments Registry with `typeof` this single under the given key */
-  registryKey?: string;
+	pattern: string;
+	/** If set, augments Registry with `typeof` this single under the given key */
+	registryKey?: string;
 }
 ```
 
@@ -297,9 +325,15 @@ Remove the hardcoded `~fieldTypes` block (lines 429-437). Replace with generic h
 ```ts
 // For each single with registryKey, emit Registry augmentation
 for (const [singleName, pattern] of discoverPatterns) {
-  if (typeof pattern === 'object' && pattern.registryKey && discovered.singles.has(singleName)) {
-    registryLines.push(`"${pattern.registryKey}": typeof ${discovered.singles.get(singleName).varName};`);
-  }
+	if (
+		typeof pattern === "object" &&
+		pattern.registryKey &&
+		discovered.singles.has(singleName)
+	) {
+		registryLines.push(
+			`"${pattern.registryKey}": typeof ${discovered.singles.get(singleName).varName};`,
+		);
+	}
 }
 ```
 
@@ -308,6 +342,7 @@ for (const [singleName, pattern] of discoverPatterns) {
 ## Phase 5: Make `auth` a Standard Discover Single
 
 ### Goal
+
 Remove hardcoded auth scanning from discover.ts.
 
 ### Changes
@@ -342,6 +377,7 @@ Delete the "Phase 2: Auth" section (lines 256-274). Auth is now found by the gen
 ## Phase 6: Make `keyFromProperty` Work in Standard Templates
 
 ### Goal
+
 `keyFromProperty` should work in `module-template.ts` and `template.ts`, not just in the custom admin-client generator.
 
 ### Changes
@@ -354,13 +390,13 @@ In the category emission loop (lines 280-344), when generating object entries:
 
 ```ts
 // Current: always uses file key
-`${file.key}: ${file.varName}`
+`${file.key}: ${file.varName}`;
 
 // New: respect keyFromProperty
 if (declaration.keyFromProperty) {
-  `[${file.varName}.${declaration.keyFromProperty}]: ${file.varName}`
+	`[${file.varName}.${declaration.keyFromProperty}]: ${file.varName}`;
 } else {
-  `${file.key}: ${file.varName}`
+	`${file.key}: ${file.varName}`;
 }
 ```
 
@@ -385,6 +421,7 @@ Currently only services have `appContextEmit: "services"` which flattens them on
 ### 7.3 Clean up `registries` type
 
 After removing `moduleRegistries`, the `registries` field on `CodegenTargetContribution` becomes:
+
 ```ts
 registries?: {
   collectionExtensions?: Record<string, ExtensionConfig>;
@@ -405,6 +442,7 @@ registries?: {
 ### 7.5 Regenerate all .generated/ files
 
 After all changes, run `questpie generate` to regenerate:
+
 - `packages/questpie/src/server/modules/starter/.generated/module.ts`
 - `packages/questpie/src/server/modules/core/.generated/module.ts`
 - `packages/admin/src/server/modules/admin/.generated/module.ts`

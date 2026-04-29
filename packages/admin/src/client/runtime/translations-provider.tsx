@@ -23,8 +23,10 @@ import {
 	useMemo,
 	useState,
 } from "react";
+
 import { I18nProvider } from "../i18n/hooks";
 import { createSimpleI18n, type SimpleMessages } from "../i18n/simple";
+import { getCookie } from "../lib/cookies.js";
 import { selectClient, useAdminStore } from "./provider";
 
 // ============================================================================
@@ -40,15 +42,8 @@ const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 // Cookie Helpers
 // ============================================================================
 
-function getCookie(name: string): string | null {
-	if (typeof document === "undefined") return null;
-	const match = document.cookie.match(new RegExp(`${name}=([^;]+)`));
-	return match ? match[1] : null;
-}
-
 function setCookie(name: string, value: string): void {
 	if (typeof document === "undefined") return;
-	// biome-ignore lint/suspicious/noDocumentCookie: this string is ok
 	document.cookie = `${name}=${value}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; SameSite=Lax`;
 }
 
@@ -93,7 +88,7 @@ interface TranslationsProviderProps {
  * });
  * ```
  */
-function getAdminTranslationsQueryOptions(client: any, locale: string) {
+export function getAdminTranslationsQueryOptions(client: any, locale: string) {
 	return {
 		queryKey: ["questpie", "adminTranslations", locale] as const,
 		queryFn: async () => {
@@ -133,7 +128,7 @@ function getAdminTranslationsQueryOptions(client: any, locale: string) {
  * });
  * ```
  */
-function getAdminLocalesQueryOptions(client: any) {
+export function getAdminLocalesQueryOptions(client: any) {
 	return {
 		queryKey: ["questpie", "adminLocales"] as const,
 		queryFn: async () => {
@@ -210,7 +205,7 @@ function LoadingFallback(): ReactElement {
 	return (
 		<div className="qp-flex qp-h-screen qp-w-screen qp-items-center qp-justify-center qp-bg-background">
 			<div className="qp-flex qp-flex-col qp-items-center qp-gap-4">
-				<div className="qp-h-8 qp-w-8 qp-animate-spin qp-rounded-full qp-border-4 qp-border-primary qp-border-t-transparent" />
+				<div className="qp-h-8 qp-w-8 qp-animate-spin qp-rounded-full qp-border-4 qp-border-foreground qp-border-t-transparent" />
 				<span className="qp-text-sm qp-text-muted-foreground">Loading...</span>
 			</div>
 		</div>

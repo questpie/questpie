@@ -8,6 +8,7 @@
  * files are published with the npm package.
  */
 import { packageConfig } from "questpie/cli";
+
 import { adminPlugin } from "./src/server/plugin.js";
 
 export default packageConfig({

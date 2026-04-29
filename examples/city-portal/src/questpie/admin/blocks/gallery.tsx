@@ -29,10 +29,10 @@ export function GalleryRenderer({ values, data }: BlockProps<"gallery">) {
 	const gapClass = gapClasses[values.gap || "medium"];
 
 	return (
-		<section className="py-16 px-6">
+		<section className="px-6 py-16">
 			<div className="container mx-auto">
 				{values.title && (
-					<h2 className="text-3xl font-bold tracking-tight mb-8 text-center">
+					<h2 className="mb-8 text-center text-3xl font-bold tracking-tight">
 						{values.title}
 					</h2>
 				)}
@@ -43,21 +43,21 @@ export function GalleryRenderer({ values, data }: BlockProps<"gallery">) {
 						return (
 							<figure
 								key={image.id}
-								className="group relative overflow-hidden rounded-lg bg-muted aspect-square"
+								className="group bg-muted relative aspect-square overflow-hidden rounded-lg"
 							>
 								{url ? (
 									<img
 										src={url}
 										alt={image.caption || ""}
-										className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+										className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
 									/>
 								) : (
-									<div className="w-full h-full flex items-center justify-center text-muted-foreground">
+									<div className="text-muted-foreground flex h-full w-full items-center justify-center">
 										No image
 									</div>
 								)}
 								{values.showCaptions && image.caption && (
-									<figcaption className="absolute bottom-0 left-0 right-0 bg-black/60 text-white p-3 text-sm">
+									<figcaption className="absolute right-0 bottom-0 left-0 bg-black/60 p-3 text-sm text-white">
 										{image.caption}
 									</figcaption>
 								)}

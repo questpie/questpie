@@ -12,6 +12,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+
 import { discoverFiles } from "./discover.js";
 import { generateFactoryTemplate } from "./factory-template.js";
 import { generateModuleTemplate } from "./module-template.js";
@@ -104,9 +105,6 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						prefix: "email",
 						typeEmit: "emails",
 						createAppKey: "emailTemplates",
-						extraTypeImports: [
-							'import type { MailerService } from "questpie";',
-						],
 						registryKey: "emails",
 						includeInAppState: false,
 						extractFromModules: false,
@@ -129,33 +127,31 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						includeInAppState: false,
 						extractFromModules: false,
 					},
+					fieldTypes: {
+						dirs: ["fields"],
+						prefix: "ftype",
+						factoryFunctions: ["fieldType"],
+						registryKey: "~fieldTypes",
+						includeInAppState: false,
+						extractFromModules: true,
+					},
 				},
 				discover: {
 					modules: "modules.ts",
+					plugin: "plugin.ts",
 					fields: { pattern: "fields.ts", registryKey: "~fieldTypes" },
-					auth: "auth.ts",
-					locale: "locale.ts",
-					hooks: "hooks.ts",
-					defaultAccess: "access.ts",
-					contextResolver: "context.ts",
+					authConfig: { pattern: "config/auth.ts", configKey: "auth" },
+					appConfig: { pattern: "config/app.ts", configKey: "app" },
 				},
 				registries: {
 					singletonFactories: {
-						locale: {
-							configType: "LocaleConfig",
-							imports: [{ name: "LocaleConfig", from: "questpie" }],
+						appConfig: {
+							configType: "AppConfigInput",
+							imports: [{ name: "AppConfigInput", from: "questpie" }],
 						},
-						hooks: {
-							configType: "GlobalHooksInput",
-							imports: [{ name: "GlobalHooksInput", from: "questpie" }],
-						},
-						access: {
-							configType: "CollectionAccess",
-							imports: [{ name: "CollectionAccess", from: "questpie" }],
-						},
-						context: {
-							configType: "ContextResolver",
-							imports: [{ name: "ContextResolver", from: "questpie" }],
+						authConfig: {
+							configType: "AuthConfig",
+							imports: [{ name: "AuthConfig", from: "questpie" }],
 						},
 					},
 				},
@@ -170,19 +166,19 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						dir: "collections",
 						description: "Collection definition",
 						template: ({ kebab, camel }) =>
-							`import { collection } from "#questpie/factories";\n\nexport const ${camel} = collection("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text("Title"),\n\t}))\n\t.title(({ f }) => f.title);\n`,
+							`import { collection } from "#questpie/factories";\n\nexport const ${camel} = collection("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text(255).label("Title").required(),\n\t}))\n\t.title(({ f }) => f.title);\n`,
 					},
 					global: {
 						dir: "globals",
 						description: "Global definition",
 						template: ({ kebab, camel }) =>
-							`import { global } from "#questpie/factories";\n\nexport const ${camel} = global("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text("Title"),\n\t}));\n`,
+							`import { global } from "#questpie/factories";\n\nexport const ${camel} = global("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text(255).label("Title").required(),\n\t}));\n`,
 					},
 					job: {
 						dir: "jobs",
 						description: "Background job",
 						template: ({ kebab }) =>
-							`import { job } from "questpie";\nimport { z } from "zod";\n\nexport default job({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async ({ payload, ctx }) => {},\n});\n`,
+							`import { job } from "questpie";\nimport { z } from "zod";\n\nexport default job({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async () => {},\n});\n`,
 					},
 					service: {
 						dir: "services",
@@ -194,14 +190,14 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						dir: "emails",
 						extension: ".tsx",
 						description: "Email template",
-						template: ({ camel, title }) =>
-							`import { email } from "questpie";\n\nexport default email({\n\tsubject: () => "${title}",\n\trender: async (props: {}) => {\n\t\treturn <div>{/* TODO: implement ${camel} email template */}</div>;\n\t},\n});\n`,
+						template: ({ kebab, title }) =>
+							`import { email } from "questpie";\nimport { z } from "zod";\n\nexport default email({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async () => ({\n\t\tsubject: "${title}",\n\t\thtml: "<div>${title}</div>",\n\t}),\n});\n`,
 					},
 					route: {
 						dir: "routes",
 						description: "API route",
 						template: () =>
-							`import { route } from "questpie";\nimport { z } from "zod";\n\nexport default route()\n\t.get()\n\t.schema(z.object({}))\n\t.handler(async ({ input, ctx }) => {\n\t\treturn {};\n\t});\n`,
+							`import { route } from "questpie";\nimport { z } from "zod";\n\nexport default route()\n\t.post()\n\t.schema(z.object({}))\n\t.handler(async () => {\n\t\treturn {};\n\t});\n`,
 					},
 					seed: {
 						dir: "seeds",
@@ -264,12 +260,13 @@ export function resolveTargetGraph(
 					registries: {
 						collectionExtensions: {},
 						globalExtensions: {},
+						fieldExtensions: {},
 						singletonFactories: {},
+						builderFactories: {},
 					},
 					callbackParams: {},
 					transforms: [],
 					scaffolds: {},
-					runtimeFieldImports: [],
 				};
 				targets.set(targetId, target);
 			} else {
@@ -315,9 +312,28 @@ export function resolveTargetGraph(
 				target.moduleRoot = contribution.moduleRoot;
 			}
 
-			// Merge categories
+			// Merge categories (deep per category key — arrays are concatenated)
 			if (contribution.categories) {
-				Object.assign(target.categories, contribution.categories);
+				for (const [catKey, catDecl] of Object.entries(
+					contribution.categories,
+				)) {
+					const existing = target.categories[catKey];
+					if (existing) {
+						// Collect array fields before Object.assign overwrites them
+						const prevFactoryImports = existing.factoryImports;
+						// Shallow merge scalar/object properties
+						Object.assign(existing, catDecl);
+						// Concatenate array properties
+						if (catDecl.factoryImports && prevFactoryImports) {
+							existing.factoryImports = [
+								...prevFactoryImports,
+								...catDecl.factoryImports,
+							];
+						}
+					} else {
+						target.categories[catKey] = catDecl;
+					}
+				}
 			}
 
 			// Merge discover patterns
@@ -340,10 +356,19 @@ export function resolveTargetGraph(
 						reg.globalExtensions,
 					);
 				}
+				if (reg.fieldExtensions) {
+					Object.assign(target.registries.fieldExtensions, reg.fieldExtensions);
+				}
 				if (reg.singletonFactories) {
 					Object.assign(
 						target.registries.singletonFactories,
 						reg.singletonFactories,
+					);
+				}
+				if (reg.builderFactories) {
+					Object.assign(
+						target.registries.builderFactories,
+						reg.builderFactories,
 					);
 				}
 			}
@@ -356,11 +381,6 @@ export function resolveTargetGraph(
 			// Merge scaffolds
 			if (contribution.scaffolds) {
 				Object.assign(target.scaffolds, contribution.scaffolds);
-			}
-
-			// Collect runtime field imports
-			if (contribution.runtimeFieldImports) {
-				target.runtimeFieldImports.push(...contribution.runtimeFieldImports);
 			}
 
 			// Collect transform functions
@@ -452,33 +472,9 @@ export async function runCodegen(
 		}
 	}
 
-	// 2c. Check for reserved path collisions in route keys
-	const routesMap = discovered.categories.get("routes");
-	if (routesMap) {
-		const RESERVED_PREFIXES = [
-			"auth/",
-			"search",
-			"realtime",
-			"storage/",
-			"globals/",
-			"health",
-		];
-		for (const [routeKey] of routesMap) {
-			for (const reserved of RESERVED_PREFIXES) {
-				if (
-					routeKey === reserved ||
-					routeKey.startsWith(
-						reserved.endsWith("/") ? reserved : reserved + "/",
-					)
-				) {
-					throw new Error(
-						`[codegen] Route key "${routeKey}" collides with reserved path prefix "${reserved}". ` +
-							`Rename the route file to avoid conflicts with built-in HTTP handlers.`,
-					);
-				}
-			}
-		}
-	}
+	// Route collision check removed — all routes (auth, search, realtime, etc.)
+	// are now core module route definitions, not reserved HTTP adapter prefixes.
+	// The trie-based matcher handles priority: literal > param > wildcard.
 
 	// 3. Build codegen context for transforms
 	const extraImports: Array<{ name: string; path: string }> = [];
@@ -595,22 +591,33 @@ export async function runCodegen(
 		});
 	}
 
-	// 7. Write output
+	// 7. Validate generated code syntax before writing
+	// Catches stray lines, unclosed brackets, and other template bugs early.
+	const filesToWrite: Array<{ path: string; code: string }> = [];
 	const outputPath = join(outDir, outputFile);
+	filesToWrite.push({ path: outputPath, code });
+	if (moduleRegistriesCode) {
+		filesToWrite.push({
+			path: join(outDir, "registries.ts"),
+			code: moduleRegistriesCode,
+		});
+	}
+	if (factoriesCode) {
+		filesToWrite.push({
+			path: join(outDir, "factories.ts"),
+			code: factoriesCode,
+		});
+	}
+
+	for (const file of filesToWrite) {
+		validateGeneratedSyntax(file.code, file.path);
+	}
+
+	// 8. Write output
 	if (!dryRun) {
 		await mkdir(outDir, { recursive: true });
-		await writeFile(outputPath, code, "utf-8");
-
-		// Write registries.ts for module factory registry augmentations
-		if (moduleRegistriesCode) {
-			const registriesPath = join(outDir, "registries.ts");
-			await writeFile(registriesPath, moduleRegistriesCode, "utf-8");
-		}
-
-		// Always write factories.ts in root app mode
-		if (factoriesCode) {
-			const factoriesPath = join(outDir, "factories.ts");
-			await writeFile(factoriesPath, factoriesCode, "utf-8");
+		for (const file of filesToWrite) {
+			await writeFile(file.path, file.code, "utf-8");
 		}
 	}
 
@@ -620,6 +627,35 @@ export async function runCodegen(
 		outputPath,
 		discovered,
 	};
+}
+
+// ============================================================================
+// Syntax validation
+// ============================================================================
+
+/**
+ * Validate that generated TypeScript code is syntactically valid.
+ *
+ * Uses Bun's transpiler to parse the code. If parsing fails, throws a
+ * descriptive error with the offending line — much easier to debug than
+ * a runtime Vite/rolldown parse error in the browser.
+ *
+ * This catches template bugs like stray lines outside expressions,
+ * unclosed brackets, duplicate declarations, etc.
+ */
+function validateGeneratedSyntax(code: string, filePath: string): void {
+	try {
+		const transpiler = new Bun.Transpiler({ loader: "ts" });
+		transpiler.transformSync(code);
+	} catch (err: any) {
+		const msg = err?.message ?? String(err);
+		const relPath = relative(process.cwd(), filePath);
+		throw new Error(
+			`[codegen] Generated code has syntax errors in ${relPath}:\n${msg}\n\n` +
+				`This is a codegen bug — the template produced invalid TypeScript.`,
+			{ cause: err },
+		);
+	}
 }
 
 // ============================================================================
@@ -719,13 +755,21 @@ export async function runAllTargets(
 					extraEntities,
 				});
 
-				// Write output
+				// Validate & write output
 				const outputPath = join(targetOutDir, target.outputFile);
+				validateGeneratedSyntax(output.code, outputPath);
+				if (output.additionalFiles) {
+					for (const [relPath, content] of Object.entries(
+						output.additionalFiles,
+					)) {
+						validateGeneratedSyntax(content, join(targetOutDir, relPath));
+					}
+				}
+
 				if (!dryRun) {
 					await mkdir(targetOutDir, { recursive: true });
 					await writeFile(outputPath, output.code, "utf-8");
 
-					// Write additional files if provided
 					if (output.additionalFiles) {
 						for (const [relPath, content] of Object.entries(
 							output.additionalFiles,
@@ -784,7 +828,7 @@ export async function runAllTargets(
  * stripping the .ts extension.
  */
 function computeRelativeImport(fromDir: string, toFile: string): string {
-	let rel = relative(fromDir, toFile);
+	let rel = relative(fromDir, toFile).replaceAll("\\", "/");
 	// Remove .ts extension
 	rel = rel.replace(/\.(ts|tsx|mts|mjs|js|jsx)$/, "");
 	if (!rel.startsWith(".")) {

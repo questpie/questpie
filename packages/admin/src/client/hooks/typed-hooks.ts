@@ -23,7 +23,6 @@
  * ```
  */
 
-import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import {
 	type UseMutationOptions,
 	type UseQueryOptions,
@@ -32,6 +31,9 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import type { QuestpieApp } from "questpie/client";
+
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
+
 import { selectClient, useAdminStore, useScopedLocale } from "../runtime";
 import { selectContentLocale } from "../runtime/provider";
 
@@ -42,14 +44,16 @@ import { selectContentLocale } from "../runtime/provider";
 /**
  * Extract collection names from a QuestpieApp config
  */
-type CollectionNames<TApp extends QuestpieApp> =
-	keyof TApp["collections"] & string;
+type CollectionNames<TApp extends QuestpieApp> = keyof TApp["collections"] &
+	string;
 
 /**
  * Extract global names from a QuestpieApp config
  */
-type GlobalNames<TApp extends QuestpieApp> =
-	keyof NonNullable<TApp["globals"]> & string;
+type GlobalNames<TApp extends QuestpieApp> = keyof NonNullable<
+	TApp["globals"]
+> &
+	string;
 
 // ============================================================================
 // Typed Hooks Interface
@@ -203,9 +207,7 @@ export interface TypedHooks<TApp extends QuestpieApp> {
  * const { data: settings } = useGlobal("siteSettings");
  * ```
  */
-export function createTypedHooks<
-	TApp extends QuestpieApp,
->(): TypedHooks<TApp> {
+export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 	// Collection list hook
 	function useCollectionList<K extends CollectionNames<TApp>>(
 		collection: K,
@@ -300,7 +302,9 @@ export function createTypedHooks<
 			locale: contentLocale,
 		});
 
-		const baseOptions = (queryOpts.collections as any)[collection as string].create();
+		const baseOptions = (queryOpts.collections as any)[
+			collection as string
+		].create();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -346,7 +350,9 @@ export function createTypedHooks<
 			locale: contentLocale,
 		});
 
-		const baseOptions = (queryOpts.collections as any)[collection as string].update();
+		const baseOptions = (queryOpts.collections as any)[
+			collection as string
+		].update();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -401,7 +407,9 @@ export function createTypedHooks<
 			locale: contentLocale,
 		});
 
-		const baseOptions = (queryOpts.collections as any)[collection as string].delete();
+		const baseOptions = (queryOpts.collections as any)[
+			collection as string
+		].delete();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -456,7 +464,9 @@ export function createTypedHooks<
 			locale: contentLocale,
 		});
 
-		const baseOptions = (queryOpts.collections as any)[collection as string].restore();
+		const baseOptions = (queryOpts.collections as any)[
+			collection as string
+		].restore();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -537,8 +547,9 @@ export function createTypedHooks<
 			locale: contentLocale,
 		});
 
-		const baseOptions =
-			(queryOpts.collections as any)[collection as string].revertToVersion();
+		const baseOptions = (queryOpts.collections as any)[
+			collection as string
+		].revertToVersion();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,

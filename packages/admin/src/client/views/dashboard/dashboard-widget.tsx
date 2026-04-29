@@ -6,8 +6,10 @@
  */
 
 import * as React from "react";
+
 import type { AnyWidgetConfig, WidgetComponentProps } from "../../builder";
 import { WidgetErrorBoundary } from "../../components/error-boundary";
+import { useTranslation } from "../../i18n/hooks";
 import { selectAdmin, useAdminStore } from "../../runtime";
 import { WidgetCard } from "./widget-card";
 
@@ -42,13 +44,14 @@ interface DashboardWidgetProps {
 // ============================================================================
 
 function UnknownWidget({ type }: { type: string }) {
+	const { t } = useTranslation();
 	return (
 		<WidgetCard
-			title="Unknown Widget"
+			title={t("error.unknownWidget")}
 			className="border-warning/20 bg-warning/5"
 		>
-			<p className="text-xs text-muted-foreground">
-				Widget type "{type}" is not recognized.
+			<p className="text-muted-foreground text-xs">
+				{t("error.widgetTypeNotRecognized", { type })}
 			</p>
 		</WidgetCard>
 	);
@@ -72,6 +75,7 @@ function RegistryWidgetRenderer({
 	navigate,
 }: RegistryWidgetRendererProps) {
 	"use no memo";
+	const { t } = useTranslation();
 	const [state, setState] = React.useState<{
 		Component: React.ComponentType<any> | null;
 		loading: boolean;
@@ -118,7 +122,7 @@ function RegistryWidgetRenderer({
 						error:
 							err instanceof Error
 								? err
-								: new Error("Failed to load component"),
+								: new Error(t("error.failedToLoadComponent")),
 					});
 				}
 			}
@@ -127,7 +131,7 @@ function RegistryWidgetRenderer({
 		return () => {
 			mounted = false;
 		};
-	}, [loader]);
+	}, [loader, t]);
 
 	if (state.loading) {
 		return <WidgetCard isLoading />;
@@ -138,7 +142,7 @@ function RegistryWidgetRenderer({
 	}
 
 	if (!state.Component) {
-		return <WidgetCard error={new Error("Component not found")} />;
+		return <WidgetCard error={new Error(t("error.componentNotFound"))} />;
 	}
 
 	const Component = state.Component;
@@ -168,6 +172,7 @@ function CustomWidgetRenderer({
 	span,
 }: CustomWidgetRendererProps) {
 	"use no memo";
+	const { t } = useTranslation();
 	const [state, setState] = React.useState<{
 		Component: React.ComponentType<WidgetComponentProps> | null;
 		loading: boolean;
@@ -212,7 +217,7 @@ function CustomWidgetRenderer({
 						error:
 							err instanceof Error
 								? err
-								: new Error("Failed to load component"),
+								: new Error(t("error.failedToLoadComponent")),
 					});
 				}
 			}
@@ -221,7 +226,7 @@ function CustomWidgetRenderer({
 		return () => {
 			mounted = false;
 		};
-	}, [loader]);
+	}, [loader, t]);
 
 	if (state.loading) {
 		return <WidgetCard isLoading />;
@@ -232,7 +237,7 @@ function CustomWidgetRenderer({
 	}
 
 	if (!state.Component) {
-		return <WidgetCard error={new Error("Component not found")} />;
+		return <WidgetCard error={new Error(t("error.componentNotFound"))} />;
 	}
 
 	const Component = state.Component;
@@ -293,8 +298,10 @@ export function DashboardWidget({
 	}
 
 	return (
-		<WidgetErrorBoundary widgetType={config.type}>
-			{widgetElement}
-		</WidgetErrorBoundary>
+		<div className="qa-dashboard-widget h-full min-h-0">
+			<WidgetErrorBoundary widgetType={config.type}>
+				{widgetElement}
+			</WidgetErrorBoundary>
+		</div>
 	);
 }

@@ -45,14 +45,18 @@ export interface ViewDefinition<
 /**
  * List view definition
  */
-export type ListViewDefinition<TName extends string = string> =
-	ViewDefinition<TName, "list">;
+export type ListViewDefinition<TName extends string = string> = ViewDefinition<
+	TName,
+	"list"
+>;
 
 /**
  * Form view definition
  */
-export type FormViewDefinition<TName extends string = string> =
-	ViewDefinition<TName, "form">;
+export type FormViewDefinition<TName extends string = string> = ViewDefinition<
+	TName,
+	"form"
+>;
 
 // ============================================================================
 // Factory Function

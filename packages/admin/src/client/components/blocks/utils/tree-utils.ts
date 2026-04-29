@@ -6,6 +6,7 @@
  */
 
 import { arrayMove } from "@dnd-kit/sortable";
+
 import type { BlockNode } from "../../../blocks/types.js";
 
 /**

@@ -39,6 +39,7 @@ export interface CollectionCrud {
 	findOne(options?: any, context?: any): Promise<any | null>;
 	find(options?: any, context?: any): Promise<{ docs: any[] }>;
 	updateById(params: any, context?: any): Promise<any>;
+	deleteById?(params: any, context?: any): Promise<any>;
 }
 
 /**

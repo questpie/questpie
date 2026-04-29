@@ -1,24 +1,24 @@
 # Documentation Migration Guide
 
-> Instructions for AI agents updating the QuestPie documentation (`apps/docs/`) to reflect the file-convention codegen architecture.
+> Instructions for AI agents updating the QUESTPIE documentation (`apps/docs/`) to reflect the file-convention codegen architecture.
 
 ---
 
 ## 1. What Changed — Old vs New
 
-| Concept | Old | New |
-|---------|-----|-----|
-| App composition | `QuestpieBuilder` chain (`q().use().collection().build()`) | File convention + codegen (`questpie generate`) |
-| Entity definition | Inline in builder chain | One file per entity (`collections/*.ts`, `globals/*.ts`, etc.) |
-| Callback style | Positional: `(f) =>`, `(f, a) =>` | Destructured object: `({ f }) =>`, `({ f, a }) =>` |
-| RPC / functions | `rpc()`, `r.fn()`, `r.router()` | `functions/` directory, `fn()` factory |
-| Modules | Factory functions: `admin()`, `audit()`, `starter()` | Static imports: `adminModule`, `auditModule`, `starterModule` |
-| Module config | Options passed to factory: `admin({ branding, sidebar })` | Separate files: `branding.ts`, `sidebar.ts` discovered by plugin |
-| Config | `config({})` mixing entities + runtime | `runtimeConfig({})` for runtime + plugins only |
-| App access in handlers | `app` typed as `any`, `typedApp<App>(ctx.app)` | `AppContext` — flat typed context (`{ db, collections, session, ... }`) |
-| Email templates | `render` (React) + `subject` (sync) | `handler` returning `{ subject, html, text? }` |
-| Builder extensions | Prototype mutation | Proxy-based + `declare module` augmentation |
-| Imports | `import { collection } from "questpie"` | `import { collection } from "#questpie"` (typed factories from generated code) |
+| Concept                | Old                                                        | New                                                                            |
+| ---------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| App composition        | `QuestpieBuilder` chain (`q().use().collection().build()`) | File convention + codegen (`questpie generate`)                                |
+| Entity definition      | Inline in builder chain                                    | One file per entity (`collections/*.ts`, `globals/*.ts`, etc.)                 |
+| Callback style         | Positional: `(f) =>`, `(f, a) =>`                          | Destructured object: `({ f }) =>`, `({ f, a }) =>`                             |
+| RPC / functions        | `rpc()`, `r.fn()`, `r.router()`                            | `functions/` directory, `fn()` factory                                         |
+| Modules                | Factory functions: `admin()`, `audit()`, `starter()`       | Static imports: `adminModule`, `auditModule`, `starterModule`                  |
+| Module config          | Options passed to factory: `admin({ branding, sidebar })`  | Separate files: `branding.ts`, `sidebar.ts` discovered by plugin               |
+| Config                 | `config({})` mixing entities + runtime                     | `runtimeConfig({})` for runtime + plugins only                                 |
+| App access in handlers | `app` typed as `any`, `typedApp<App>(ctx.app)`             | `AppContext` — flat typed context (`{ db, collections, session, ... }`)        |
+| Email templates        | `render` (React) + `subject` (sync)                        | `handler` returning `{ subject, html, text? }`                                 |
+| Builder extensions     | Prototype mutation                                         | Proxy-based + `declare module` augmentation                                    |
+| Imports                | `import { collection } from "questpie"`                    | `import { collection } from "#questpie"` (typed factories from generated code) |
 
 ---
 
@@ -28,82 +28,82 @@ Use these mechanical replacements as a starting point. Each row shows the old pa
 
 ### Entity definitions
 
-| Old Pattern | New Pattern |
-|-------------|-------------|
-| `q().collection("name", (qb) => qb.fields(...))` | `collection("name").fields(...)` in `collections/name.ts` |
-| `qb.collection("name")` | `collection("name")` |
-| `qb.global("name")` | `global("name")` |
-| `qb.block("name")` | `block("name")` |
-| `import { collection, global } from "questpie"` | `import { collection, global } from "#questpie"` (for typed factories) |
-| `import { block } from "@questpie/admin"` | `import { block } from "#questpie"` (if admin plugin is active) |
+| Old Pattern                                      | New Pattern                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| `q().collection("name", (qb) => qb.fields(...))` | `collection("name").fields(...)` in `collections/name.ts`              |
+| `qb.collection("name")`                          | `collection("name")`                                                   |
+| `qb.global("name")`                              | `global("name")`                                                       |
+| `qb.block("name")`                               | `block("name")`                                                        |
+| `import { collection, global } from "questpie"`  | `import { collection, global } from "#questpie"` (for typed factories) |
+| `import { block } from "@questpie/admin"`        | `import { block } from "#questpie"` (if admin plugin is active)        |
 
 ### Callback signatures
 
-| Old Pattern | New Pattern |
-|-------------|-------------|
-| `.fields((f) => ({ ... }))` | `.fields(({ f }) => ({ ... }))` |
-| `.fields((f, a) => ({ ... }))` | `.fields(({ f, a }) => ({ ... }))` |
+| Old Pattern                                      | New Pattern                                          |
+| ------------------------------------------------ | ---------------------------------------------------- |
+| `.fields((f) => ({ ... }))`                      | `.fields(({ f }) => ({ ... }))`                      |
+| `.fields((f, a) => ({ ... }))`                   | `.fields(({ f, a }) => ({ ... }))`                   |
 | `.hooks({ beforeChange: [(data, app) => ...] })` | `.hooks({ beforeChange: [({ data, app }) => ...] })` |
-| `.access({ read: (session) => ... })` | `.access({ read: ({ session }) => ... })` |
-| `.admin((c) => ({ ... }))` | `.admin(({ c }) => ({ ... }))` |
-| `.list((v, f) => ...)` | `.list(({ v, f }) => ...)` |
-| `.form((v, f) => ...)` | `.form(({ v, f }) => ...)` |
-| `.actions((a, c) => ...)` | `.actions(({ a, c }) => ...)` |
-| `.title((f) => f.name)` | `.title(({ f }) => f.name)` |
-| `.indexes((table) => [...])` | `.indexes(({ table }) => [...])` |
+| `.access({ read: (session) => ... })`            | `.access({ read: ({ session }) => ... })`            |
+| `.admin((c) => ({ ... }))`                       | `.admin(({ c }) => ({ ... }))`                       |
+| `.list((v, f) => ...)`                           | `.list(({ v, f }) => ...)`                           |
+| `.form((v, f) => ...)`                           | `.form(({ v, f }) => ...)`                           |
+| `.actions((a, c) => ...)`                        | `.actions(({ a, c }) => ...)`                        |
+| `.title((f) => f.name)`                          | `.title(({ f }) => f.name)`                          |
+| `.indexes((table) => [...])`                     | `.indexes(({ table }) => [...])`                     |
 
 ### RPC → Functions
 
-| Old Pattern | New Pattern |
-|-------------|-------------|
-| `import { rpc } from "questpie"` | Remove — no longer exists |
-| `const r = rpc()` | Remove — use `functions/` directory |
-| `r.fn({ schema, handler })` | `fn({ schema, handler })` in `functions/name.ts` |
-| `r.router({ a: fnA, b: fnB })` | Nested folders: `functions/a.ts`, `functions/b.ts` |
-| `handler: async (input) => ...` | `handler: async ({ input, db, ... }) => ...` |
-| `createFetchHandler(app, { rpc: appRpc })` | `createFetchHandler(app)` |
+| Old Pattern                                | New Pattern                                        |
+| ------------------------------------------ | -------------------------------------------------- |
+| `import { rpc } from "questpie"`           | Remove — no longer exists                          |
+| `const r = rpc()`                          | Remove — use `functions/` directory                |
+| `r.fn({ schema, handler })`                | `fn({ schema, handler })` in `functions/name.ts`   |
+| `r.router({ a: fnA, b: fnB })`             | Nested folders: `functions/a.ts`, `functions/b.ts` |
+| `handler: async (input) => ...`            | `handler: async ({ input, db, ... }) => ...`       |
+| `createFetchHandler(app, { rpc: appRpc })` | `createFetchHandler(app)`                          |
 
 ### Modules
 
-| Old Pattern | New Pattern |
-|-------------|-------------|
-| `import { starter } from "questpie"` | `import { starterModule } from "questpie"` |
+| Old Pattern                                      | New Pattern                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------ |
+| `import { starter } from "questpie"`             | `import { starterModule } from "questpie"`                   |
 | `import { admin, audit } from "@questpie/admin"` | `import { adminModule, auditModule } from "@questpie/admin"` |
-| `starter()` | `starterModule` (static object) |
-| `admin({ branding: {...}, sidebar: ... })` | `adminModule` + separate `branding.ts`, `sidebar.ts` files |
-| `audit({ dashboard: true })` | `auditModule` + `dashboard.ts` file |
-| `.use(starterModule).use(adminModule)` | `modules.ts`: `export default [starterModule, adminModule]` |
+| `starter()`                                      | `starterModule` (static object)                              |
+| `admin({ branding: {...}, sidebar: ... })`       | `adminModule` + separate `branding.ts`, `sidebar.ts` files   |
+| `audit({ dashboard: true })`                     | `auditModule` + `dashboard.ts` file                          |
+| `.use(starterModule).use(adminModule)`           | `modules.ts`: `export default [starterModule, adminModule]`  |
 
 ### Config
 
-| Old Pattern | New Pattern |
-|-------------|-------------|
+| Old Pattern                    | New Pattern                                                    |
+| ------------------------------ | -------------------------------------------------------------- |
 | `config({ db, modules, ... })` | `runtimeConfig({ db, adapters, ... })` in `questpie.config.ts` |
-| `q().use(module).build()` | Codegen reads `modules.ts` + file convention |
+| `q().use(module).build()`      | Codegen reads `modules.ts` + file convention                   |
 
 ### App access
 
-| Old Pattern | New Pattern |
-|-------------|-------------|
-| `typedApp<App>(ctx.app)` | Just use `app` from context — already typed |
-| `const app: any` | `{ app }` destructured from handler context |
+| Old Pattern                   | New Pattern                                               |
+| ----------------------------- | --------------------------------------------------------- |
+| `typedApp<App>(ctx.app)`      | Just use `app` from context — already typed               |
+| `const app: any`              | `{ app }` destructured from handler context               |
 | `import { App } from "./app"` | `import type { AppConfig } from "#questpie"` (for client) |
 
 ### Email templates
 
-| Old Pattern | New Pattern |
-|-------------|-------------|
+| Old Pattern                                   | New Pattern                                          |
+| --------------------------------------------- | ---------------------------------------------------- |
 | `render: (props) => <Component {...props} />` | `handler: ({ input }) => ({ subject, html, text? })` |
-| `subject: (ctx) => \`...\`` | Include `subject` in handler return |
-| `sendTemplate({ context: data })` | `sendTemplate({ input: data })` |
-| `InferEmailTemplateContext<T>` | `InferEmailTemplateInput<T>` |
+| `subject: (ctx) => \`...\``                   | Include `subject` in handler return                  |
+| `sendTemplate({ context: data })`             | `sendTemplate({ input: data })`                      |
+| `InferEmailTemplateContext<T>`                | `InferEmailTemplateInput<T>`                         |
 
 ### Jobs
 
-| Old Pattern | New Pattern |
-|-------------|-------------|
+| Old Pattern                        | New Pattern                                        |
+| ---------------------------------- | -------------------------------------------------- |
 | `q.job({ name, schema, handler })` | `job({ name, schema, handler })` in `jobs/name.ts` |
-| `handler: async (payload) => ...` | `handler: async ({ payload, db, ... }) => ...` |
+| `handler: async (payload) => ...`  | `handler: async ({ payload, db, ... }) => ...`     |
 
 ---
 
@@ -111,63 +111,63 @@ Use these mechanical replacements as a starting point. Each row shows the old pa
 
 ### HIGH — Core concepts that are fundamentally different
 
-| File | What needs changing |
-|------|-------------------|
-| `server/collections.mdx` | All examples use `qb.collection()` with `(f) =>`. Rewrite to `collection()` from `#questpie` with `({ f }) =>`. Show file convention structure. |
-| `server/globals.mdx` | Same as collections — `qb.global()` → `global()` with destructured callbacks. |
-| `server/field-types.mdx` | All field examples use `(f) =>`. Change to `({ f }) =>`. |
-| `server/field-builder.mdx` | Same — positional callbacks throughout. |
-| `server/hooks-and-lifecycle.mdx` | Hook examples use old callback signatures. Update to `({ data, app, operation }) =>`. |
-| `server/rpc.mdx` | **Entire page needs rewrite or rename.** RPC is gone — rename to "Functions", rewrite all examples using `functions/` directory and `fn()`. |
-| `server/modules-and-extensions.mdx` | Module factory pattern is gone. Rewrite to explain static modules + file convention + codegen. |
-| `server/type-safe-contexts.mdx` | `typedApp<App>` is gone. Rewrite to explain `AppContext` augmentation. |
-| `server/relations.mdx` | Relation examples use old callback style. Update `(f) =>` → `({ f }) =>`. |
-| `server/access-control.mdx` | Access examples use old signatures. Update to `({ session }) =>`. |
-| `reference/q-builder-api.mdx` | **Delete or redirect.** `QuestpieBuilder` no longer exists. |
-| `reference/rpc-api.mdx` | **Delete or redirect.** RPC API no longer exists. |
-| `reference/collection-builder-api.mdx` | Update callback signatures throughout. |
-| `reference/global-builder-api.mdx` | Update callback signatures throughout. |
-| `reference/hooks-api.mdx` | Update hook context signatures. |
-| `getting-started/` | Quickstart guides likely use old builder pattern. Full rewrite needed. |
-| `guides/build-a-booking-system.mdx` | Full guide using old patterns. Rewrite with file convention. |
+| File                                   | What needs changing                                                                                                                             |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/collections.mdx`               | All examples use `qb.collection()` with `(f) =>`. Rewrite to `collection()` from `#questpie` with `({ f }) =>`. Show file convention structure. |
+| `server/globals.mdx`                   | Same as collections — `qb.global()` → `global()` with destructured callbacks.                                                                   |
+| `server/field-types.mdx`               | All field examples use `(f) =>`. Change to `({ f }) =>`.                                                                                        |
+| `server/field-builder.mdx`             | Same — positional callbacks throughout.                                                                                                         |
+| `server/hooks-and-lifecycle.mdx`       | Hook examples use old callback signatures. Update to `({ data, app, operation }) =>`.                                                           |
+| `server/rpc.mdx`                       | **Entire page needs rewrite or rename.** RPC is gone — rename to "Functions", rewrite all examples using `functions/` directory and `fn()`.     |
+| `server/modules-and-extensions.mdx`    | Module factory pattern is gone. Rewrite to explain static modules + file convention + codegen.                                                  |
+| `server/type-safe-contexts.mdx`        | `typedApp<App>` is gone. Rewrite to explain `AppContext` augmentation.                                                                          |
+| `server/relations.mdx`                 | Relation examples use old callback style. Update `(f) =>` → `({ f }) =>`.                                                                       |
+| `server/access-control.mdx`            | Access examples use old signatures. Update to `({ session }) =>`.                                                                               |
+| `reference/q-builder-api.mdx`          | **Delete or redirect.** `QuestpieBuilder` no longer exists.                                                                                     |
+| `reference/rpc-api.mdx`                | **Delete or redirect.** RPC API no longer exists.                                                                                               |
+| `reference/collection-builder-api.mdx` | Update callback signatures throughout.                                                                                                          |
+| `reference/global-builder-api.mdx`     | Update callback signatures throughout.                                                                                                          |
+| `reference/hooks-api.mdx`              | Update hook context signatures.                                                                                                                 |
+| `getting-started/`                     | Quickstart guides likely use old builder pattern. Full rewrite needed.                                                                          |
+| `guides/build-a-booking-system.mdx`    | Full guide using old patterns. Rewrite with file convention.                                                                                    |
 
 ### MEDIUM — Partially affected or less central
 
-| File | What needs changing |
-|------|-------------------|
-| `server/validation.mdx` | May reference old callback styles. |
-| `server/localization.mdx` | May use old config pattern. Update to `locale.ts` file convention. |
-| `server/versioning.mdx` | Hook examples may use old signatures. |
-| `server/soft-delete.mdx` | Hook examples may use old signatures. |
-| `server/reactive-fields.mdx` | May use old callback style. |
-| `infrastructure/email.mdx` | **Already partially updated.** Verify handler-based API is fully documented. |
-| `infrastructure/queue-and-jobs.mdx` | Job examples may use old `q.job()` pattern. |
-| `infrastructure/authentication.mdx` | Auth config location changed — now `auth.ts` file. |
-| `infrastructure/database-and-migrations.mdx` | May reference old config shape. |
-| `guides/build-a-page-builder.mdx` | Block examples may use old `qb.block()`. |
-| `guides/custom-field-type.mdx` | Extension mechanism changed (proxy-based). |
-| `guides/builder-extension-packages.mdx` | Extension mechanism fundamentally different. |
-| `reference/cli.mdx` | Add `questpie generate` and `questpie dev` commands. |
-| `reference/field-api.mdx` | Callback signatures in field definitions. |
-| `reference/adapter-api.mdx` | `createFetchHandler` `rpc` option removed. |
-| `reference/infrastructure-api.mdx` | May reference old config patterns. |
-| `reference/registry-api.mdx` | Registry concept expanded — update with codegen-generated Registry. |
+| File                                         | What needs changing                                                          |
+| -------------------------------------------- | ---------------------------------------------------------------------------- |
+| `server/validation.mdx`                      | May reference old callback styles.                                           |
+| `server/localization.mdx`                    | May use old config pattern. Update to `locale.ts` file convention.           |
+| `server/versioning.mdx`                      | Hook examples may use old signatures.                                        |
+| `server/soft-delete.mdx`                     | Hook examples may use old signatures.                                        |
+| `server/reactive-fields.mdx`                 | May use old callback style.                                                  |
+| `infrastructure/email.mdx`                   | **Already partially updated.** Verify handler-based API is fully documented. |
+| `infrastructure/queue-and-jobs.mdx`          | Job examples may use old `q.job()` pattern.                                  |
+| `infrastructure/authentication.mdx`          | Auth config location changed — now `auth.ts` file.                           |
+| `infrastructure/database-and-migrations.mdx` | May reference old config shape.                                              |
+| `guides/build-a-page-builder.mdx`            | Block examples may use old `qb.block()`.                                     |
+| `guides/custom-field-type.mdx`               | Extension mechanism changed (proxy-based).                                   |
+| `guides/builder-extension-packages.mdx`      | Extension mechanism fundamentally different.                                 |
+| `reference/cli.mdx`                          | Add `questpie generate` and `questpie dev` commands.                         |
+| `reference/field-api.mdx`                    | Callback signatures in field definitions.                                    |
+| `reference/adapter-api.mdx`                  | `createFetchHandler` `rpc` option removed.                                   |
+| `reference/infrastructure-api.mdx`           | May reference old config patterns.                                           |
+| `reference/registry-api.mdx`                 | Registry concept expanded — update with codegen-generated Registry.          |
 
 ### LOW — Minimal or no changes needed
 
-| File | Notes |
-|------|-------|
-| `infrastructure/storage.mdx` | Storage API unchanged. |
-| `infrastructure/kv-store.mdx` | KV API unchanged. |
-| `infrastructure/logger.mdx` | Logger API unchanged. |
-| `infrastructure/realtime.mdx` | Realtime API unchanged. |
-| `infrastructure/search.mdx` | Search API unchanged. |
-| `reference/crud-api.mdx` | CRUD API unchanged. |
-| `reference/query-operators.mdx` | Query operators unchanged. |
-| `reference/error-codes.mdx` | Error codes unchanged. |
-| `admin/` directory | Admin UI docs unchanged (client-side). |
-| `client/` directory | Client SDK unchanged. |
-| `reference/qa-builder-api.mdx` | Admin builder (`qa`) unchanged. |
+| File                            | Notes                                  |
+| ------------------------------- | -------------------------------------- |
+| `infrastructure/storage.mdx`    | Storage API unchanged.                 |
+| `infrastructure/kv-store.mdx`   | KV API unchanged.                      |
+| `infrastructure/logger.mdx`     | Logger API unchanged.                  |
+| `infrastructure/realtime.mdx`   | Realtime API unchanged.                |
+| `infrastructure/search.mdx`     | Search API unchanged.                  |
+| `reference/crud-api.mdx`        | CRUD API unchanged.                    |
+| `reference/query-operators.mdx` | Query operators unchanged.             |
+| `reference/error-codes.mdx`     | Error codes unchanged.                 |
+| `admin/` directory              | Admin UI docs unchanged (client-side). |
+| `client/` directory             | Client SDK unchanged.                  |
+| `reference/qa-builder-api.mdx`  | Admin builder (`qa`) unchanged.        |
 
 ---
 
@@ -195,6 +195,7 @@ Most of these were minor/partial fixes. The substantive content updates are stil
 For every `.mdx` file in the HIGH and MEDIUM lists:
 
 1. **Grep for stale patterns** — run these searches across `apps/docs/`:
+
    ```
    grep -rn "qb\." apps/docs/content/
    grep -rn "(f) =>" apps/docs/content/
@@ -296,6 +297,7 @@ The starter template — shows the minimal file convention setup.
 After updating docs, verify correctness:
 
 1. **Grep for remaining stale patterns:**
+
    ```bash
    # These should return zero results in docs content:
    grep -rn "QuestpieBuilder" apps/docs/content/
@@ -309,6 +311,7 @@ After updating docs, verify correctness:
    ```
 
 2. **Check callback style** — `(f) =>` in code blocks should be `({ f }) =>`:
+
    ```bash
    # Look for positional callbacks in code blocks:
    grep -n "\.fields((f)" apps/docs/content/
@@ -316,9 +319,11 @@ After updating docs, verify correctness:
    ```
 
 3. **Build the docs site:**
+
    ```bash
    cd apps/docs && bun run build
    ```
+
    Fix any broken links or build errors.
 
 4. **Spot-check code examples** — ensure imports use `#questpie` for `collection`/`global`/`block` and `"questpie"` for framework utilities like `fn`, `job`, `email`, `defineService`.

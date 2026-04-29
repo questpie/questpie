@@ -21,6 +21,7 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
 import { RenderProfiler } from "../../lib/render-profiler.js";
 import {
 	useBlockEditorActions,
@@ -124,10 +125,10 @@ export function BlockCanvas() {
 			{/* Drag overlay - shows what's being dragged */}
 			<DragOverlay>
 				{activeBlock && (
-					<div className="flex items-center gap-2 rounded-md border bg-background p-2 shadow-lg">
+					<div className="bg-background flex items-center gap-2 border p-2 shadow-lg">
 						<Icon
 							icon="ph:dots-six-vertical"
-							className="h-4 w-4 text-muted-foreground"
+							className="text-muted-foreground h-4 w-4"
 						/>
 						<BlockIcon
 							icon={activeBlockSchema?.admin?.icon}

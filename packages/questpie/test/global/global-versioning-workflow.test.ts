@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { global } from "../../src/server/index.js";
+
+import { global } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -56,25 +57,25 @@ describe("global versioning + workflow", () => {
 		it("creates and reads global in draft stage", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.shorthand_config.update(
+			await setup.app.globals.shorthand_config.update(
 				{ siteName: "Shorthand Site" },
 				ctx,
 			);
 
-			const result = await setup.app.api.globals.shorthand_config.get({}, ctx);
+			const result = await setup.app.globals.shorthand_config.get({}, ctx);
 			expect(result?.siteName).toBe("Shorthand Site");
 		});
 
 		it("transitions from draft to published using shorthand config", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.shorthand_config.update(
+			await setup.app.globals.shorthand_config.update(
 				{ siteName: "To Publish" },
 				ctx,
 			);
 
 			const result =
-				await setup.app.api.globals.shorthand_config.transitionStage(
+				await setup.app.globals.shorthand_config.transitionStage(
 					{ stage: "published" },
 					ctx,
 				);
@@ -82,7 +83,7 @@ describe("global versioning + workflow", () => {
 			expect(result.siteName).toBe("To Publish");
 
 			// Should be readable from published stage
-			const published = await setup.app.api.globals.shorthand_config.get(
+			const published = await setup.app.globals.shorthand_config.get(
 				{ stage: "published" },
 				ctx,
 			);
@@ -92,13 +93,13 @@ describe("global versioning + workflow", () => {
 		it("rejects transition to unknown stage with shorthand config", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.shorthand_config.update(
+			await setup.app.globals.shorthand_config.update(
 				{ siteName: "Bad Transition" },
 				ctx,
 			);
 
 			await expect(
-				setup.app.api.globals.shorthand_config.transitionStage(
+				setup.app.globals.shorthand_config.transitionStage(
 					{ stage: "review" },
 					ctx,
 				),
@@ -110,17 +111,17 @@ describe("global versioning + workflow", () => {
 		it("returns versionStage for workflow-enabled globals", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.workflow_config.update(
+			await setup.app.globals.workflow_config.update(
 				{ siteName: "Version Stage Test" },
 				ctx,
 			);
 
-			await setup.app.api.globals.workflow_config.update(
+			await setup.app.globals.workflow_config.update(
 				{ siteName: "Updated" },
 				ctx,
 			);
 
-			const versions = await setup.app.api.globals.workflow_config.findVersions(
+			const versions = await setup.app.globals.workflow_config.findVersions(
 				{},
 				ctx,
 			);
@@ -136,17 +137,17 @@ describe("global versioning + workflow", () => {
 		it("records correct versionStage after transition", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.workflow_config.update(
+			await setup.app.globals.workflow_config.update(
 				{ siteName: "Track Stage" },
 				ctx,
 			);
 
-			await setup.app.api.globals.workflow_config.transitionStage(
+			await setup.app.globals.workflow_config.transitionStage(
 				{ stage: "published" },
 				ctx,
 			);
 
-			const versions = await setup.app.api.globals.workflow_config.findVersions(
+			const versions = await setup.app.globals.workflow_config.findVersions(
 				{},
 				ctx,
 			);
@@ -159,12 +160,12 @@ describe("global versioning + workflow", () => {
 		it("does not return versionStage for non-workflow globals", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.plain_versioned.update(
+			await setup.app.globals.plain_versioned.update(
 				{ siteName: "No Workflow" },
 				ctx,
 			);
 
-			const versions = await setup.app.api.globals.plain_versioned.findVersions(
+			const versions = await setup.app.globals.plain_versioned.findVersions(
 				{},
 				ctx,
 			);
@@ -178,29 +179,29 @@ describe("global versioning + workflow", () => {
 		it("get() without stage reads draft, get({ stage }) reads published", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.workflow_config.update(
+			await setup.app.globals.workflow_config.update(
 				{ siteName: "Draft v1" },
 				ctx,
 			);
 
 			// Transition to published
-			await setup.app.api.globals.workflow_config.transitionStage(
+			await setup.app.globals.workflow_config.transitionStage(
 				{ stage: "published" },
 				ctx,
 			);
 
 			// Update draft after transition
-			await setup.app.api.globals.workflow_config.update(
+			await setup.app.globals.workflow_config.update(
 				{ siteName: "Draft v2" },
 				ctx,
 			);
 
 			// Draft should show v2
-			const draft = await setup.app.api.globals.workflow_config.get({}, ctx);
+			const draft = await setup.app.globals.workflow_config.get({}, ctx);
 			expect(draft?.siteName).toBe("Draft v2");
 
 			// Published should still show v1
-			const published = await setup.app.api.globals.workflow_config.get(
+			const published = await setup.app.globals.workflow_config.get(
 				{ stage: "published" },
 				ctx,
 			);
@@ -210,13 +211,13 @@ describe("global versioning + workflow", () => {
 		it("returns null for unpublished globals when querying published stage", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.workflow_config.update(
+			await setup.app.globals.workflow_config.update(
 				{ siteName: "Never Published" },
 				ctx,
 			);
 
 			// Query published stage — should return null
-			const published = await setup.app.api.globals.workflow_config.get(
+			const published = await setup.app.globals.workflow_config.get(
 				{ stage: "published" },
 				ctx,
 			);
@@ -226,44 +227,44 @@ describe("global versioning + workflow", () => {
 		it("re-publishing updates the published snapshot", async () => {
 			const ctx = createTestContext({ accessMode: "system" });
 
-			await setup.app.api.globals.workflow_config.update(
+			await setup.app.globals.workflow_config.update(
 				{ siteName: "V1" },
 				ctx,
 			);
 
 			// First publish
-			await setup.app.api.globals.workflow_config.transitionStage(
+			await setup.app.globals.workflow_config.transitionStage(
 				{ stage: "published" },
 				ctx,
 			);
 
-			let published = await setup.app.api.globals.workflow_config.get(
+			let published = await setup.app.globals.workflow_config.get(
 				{ stage: "published" },
 				ctx,
 			);
 			expect(published?.siteName).toBe("V1");
 
 			// Update draft
-			await setup.app.api.globals.workflow_config.update(
+			await setup.app.globals.workflow_config.update(
 				{ siteName: "V2" },
 				ctx,
 			);
 
 			// Published still V1
-			published = await setup.app.api.globals.workflow_config.get(
+			published = await setup.app.globals.workflow_config.get(
 				{ stage: "published" },
 				ctx,
 			);
 			expect(published?.siteName).toBe("V1");
 
 			// Re-publish
-			await setup.app.api.globals.workflow_config.transitionStage(
+			await setup.app.globals.workflow_config.transitionStage(
 				{ stage: "published" },
 				ctx,
 			);
 
 			// Now published shows V2
-			published = await setup.app.api.globals.workflow_config.get(
+			published = await setup.app.globals.workflow_config.get(
 				{ stage: "published" },
 				ctx,
 			);

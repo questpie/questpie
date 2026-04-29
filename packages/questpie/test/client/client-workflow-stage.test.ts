@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
+
 import { createClient } from "../../src/client/index.js";
 
 type CapturedCall = {

@@ -1,4 +1,4 @@
 {
 	"title": "Views",
-	"pages": ["index", "list-views", "form-views", "dashboard", "sidebar"]
+	"pages": ["list-views", "form-views", "dashboard", "sidebar"]
 }

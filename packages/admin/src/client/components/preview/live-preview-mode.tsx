@@ -11,44 +11,20 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
-import type { CollectionBuilderState } from "../../builder/types/collection-types.js";
-import type { ComponentRegistry } from "../../builder/types/field-types.js";
+
 import {
 	FocusProvider,
 	type FocusState,
 	parsePreviewFieldPath,
 	scrollFieldIntoView,
 	useFocus,
-} from "../../context/focus-context.js";
+} from "../../contexts/focus-context.js";
 import { useIsMobile } from "../../hooks/use-media-query.js";
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
-import { LocaleScopeProvider } from "../../runtime/locale-scope.js";
-import {
-	selectBasePath,
-	selectNavigate,
-	useAdminStore,
-} from "../../runtime/provider.js";
-import FormView from "../../views/collection/form-view.js";
 import { Button } from "../ui/button.js";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { PreviewPane, type PreviewPaneRef } from "./preview-pane.js";
-
-// ============================================================================
-// Context
-// ============================================================================
-
-type LivePreviewContextValue = {
-	triggerPreviewRefresh: () => void;
-};
-
-const LivePreviewContext = React.createContext<LivePreviewContextValue | null>(
-	null,
-);
-
-export function useLivePreviewContext() {
-	return React.useContext(LivePreviewContext);
-}
 
 // ============================================================================
 // Types
@@ -59,20 +35,16 @@ interface LivePreviewModeProps {
 	open: boolean;
 	/** Callback to close preview mode */
 	onClose: () => void;
-	/** Collection name */
-	collection: string;
-	/** Item ID (for edit mode) */
-	itemId?: string;
-	/** Collection config */
-	config?: any;
-	/** All collections config (for embedded) */
-	allCollectionsConfig?: Record<string, any>;
-	/** Component registry */
-	registry?: ComponentRegistry;
+	/** Form content rendered in the left pane */
+	children: React.ReactNode;
 	/** Preview URL (null while loading) */
 	previewUrl: string | null;
-	/** Callback after successful save */
-	onSuccess?: (data: any) => void;
+	/** Optional external ref for preview pane control */
+	previewRef?: React.RefObject<PreviewPaneRef | null>;
+	/** Default preview pane size (percentage, 0-100). @default 50 */
+	defaultSize?: number;
+	/** Minimum preview pane size (percentage, 0-100). @default 30 */
+	minSize?: number;
 }
 
 // ============================================================================
@@ -83,22 +55,124 @@ type LivePreviewContentProps = LivePreviewModeProps & {
 	previewRef: React.RefObject<PreviewPaneRef | null>;
 };
 
+const DEV_TELEMETRY = process.env.NODE_ENV === "development";
+
+// ============================================================================
+// Resize Hook
+// ============================================================================
+
+function useResizablePane(defaultSize = 50, minSize = 30, enabled = true) {
+	const [previewPercent, setPreviewPercent] = React.useState(defaultSize);
+	const isDragging = React.useRef(false);
+	const containerRef = React.useRef<HTMLDivElement>(null);
+
+	const handleMouseDown = React.useCallback(
+		(e: React.MouseEvent) => {
+			if (!enabled) return;
+			e.preventDefault();
+			isDragging.current = true;
+			document.body.style.cursor = "col-resize";
+			document.body.style.userSelect = "none";
+		},
+		[enabled],
+	);
+
+	React.useEffect(() => {
+		if (!enabled) {
+			return;
+		}
+
+		const handleMouseMove = (e: MouseEvent) => {
+			if (!isDragging.current || !containerRef.current) return;
+			const rect = containerRef.current.getBoundingClientRect();
+			const x = e.clientX - rect.left;
+			const formPercent = (x / rect.width) * 100;
+			const newPreview = Math.min(
+				100 - minSize,
+				Math.max(minSize, 100 - formPercent),
+			);
+			setPreviewPercent(newPreview);
+		};
+		const handleMouseUp = () => {
+			if (isDragging.current) {
+				isDragging.current = false;
+				document.body.style.cursor = "";
+				document.body.style.userSelect = "";
+			}
+		};
+		window.addEventListener("mousemove", handleMouseMove);
+		window.addEventListener("mouseup", handleMouseUp);
+		return () => {
+			window.removeEventListener("mousemove", handleMouseMove);
+			window.removeEventListener("mouseup", handleMouseUp);
+		};
+	}, [enabled, minSize]);
+
+	return { previewPercent, containerRef, handleMouseDown };
+}
+
+function useLivePreviewRenderTelemetry({
+	open,
+	isMobile,
+	activeTab,
+}: {
+	open: boolean;
+	isMobile: boolean;
+	activeTab: "form" | "preview";
+}) {
+	const renderCountRef = React.useRef(0);
+	const startAtRef = React.useRef(0);
+	const lastLogAtRef = React.useRef(0);
+
+	React.useEffect(() => {
+		if (!DEV_TELEMETRY) return;
+
+		if (!open) {
+			renderCountRef.current = 0;
+			startAtRef.current = 0;
+			lastLogAtRef.current = 0;
+			return;
+		}
+
+		const now = performance.now();
+		if (!startAtRef.current) {
+			startAtRef.current = now;
+		}
+
+		renderCountRef.current += 1;
+		const shouldLogByCount = renderCountRef.current % 25 === 0;
+		const shouldLogByTime = now - lastLogAtRef.current >= 5000;
+		if (!shouldLogByCount && !shouldLogByTime) {
+			return;
+		}
+
+		lastLogAtRef.current = now;
+		const elapsedMs = Math.max(1, now - startAtRef.current);
+		const rendersPerSecond = (renderCountRef.current * 1000) / elapsedMs;
+		console.debug(
+			`[LivePreviewTelemetry] renders=${renderCountRef.current} rps=${rendersPerSecond.toFixed(2)} mobile=${isMobile} tab=${activeTab}`,
+		);
+	});
+}
+
 function LivePreviewContent({
+	open,
 	onClose,
-	collection,
-	itemId,
-	config,
-	allCollectionsConfig,
-	registry,
+	children,
 	previewUrl,
-	onSuccess,
 	previewRef,
+	defaultSize = 50,
+	minSize = 30,
 }: LivePreviewContentProps) {
 	const { t } = useTranslation();
 	const isMobile = useIsMobile();
-	const navigate = useAdminStore(selectNavigate);
-	const basePath = useAdminStore(selectBasePath);
 	const [activeTab, setActiveTab] = React.useState<"form" | "preview">("form");
+	useLivePreviewRenderTelemetry({ open, isMobile, activeTab });
+	const { previewPercent, containerRef, handleMouseDown } = useResizablePane(
+		defaultSize,
+		minSize,
+		open && !isMobile,
+	);
 
 	// Access FocusContext
 	const focusContext = useFocus();
@@ -110,8 +184,15 @@ function LivePreviewContent({
 		window.location.href = "/api/preview?disable=true";
 	}, []);
 
+	React.useEffect(() => {
+		if (!open) {
+			setActiveTab("form");
+		}
+	}, [open]);
+
 	// Sync focus changes to preview iframe
 	React.useEffect(() => {
+		if (!open) return;
 		if (!previewRef.current) return;
 
 		if (focusState.type === "field") {
@@ -127,7 +208,53 @@ function LivePreviewContent({
 				previewRef.current.sendFocusToPreview(fullPath);
 			}
 		}
-	}, [focusState, previewRef]);
+	}, [focusState, previewRef, open]);
+
+	// Keyboard navigation: Tab/Shift+Tab cycles through fields in preview form
+	React.useEffect(() => {
+		if (!open) return;
+
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key !== "Tab") return;
+			const formScope = document.querySelector<HTMLElement>(
+				"[data-preview-form-scope]",
+			);
+			if (!formScope) return;
+
+			const fields = Array.from(
+				formScope.querySelectorAll<HTMLElement>("[data-field-path]"),
+			);
+			if (fields.length === 0) return;
+
+			// Only intercept Tab when focus is inside the form scope
+			if (!formScope.contains(document.activeElement)) return;
+
+			e.preventDefault();
+			const currentPath =
+				focusState.type === "field" ? focusState.fieldPath : null;
+			const currentIdx = currentPath
+				? fields.findIndex(
+						(el) => el.getAttribute("data-field-path") === currentPath,
+					)
+				: -1;
+
+			let nextIdx: number;
+			if (e.shiftKey) {
+				nextIdx = currentIdx <= 0 ? fields.length - 1 : currentIdx - 1;
+			} else {
+				nextIdx = currentIdx >= fields.length - 1 ? 0 : currentIdx + 1;
+			}
+
+			const nextField = fields[nextIdx];
+			const nextPath = nextField?.getAttribute("data-field-path");
+			if (nextPath) {
+				focusContext.focusField(nextPath);
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [focusState, focusContext, open]);
 
 	// Preview click handlers - update FocusContext state
 	const handlePreviewFieldClick = React.useCallback(
@@ -152,127 +279,93 @@ function LivePreviewContent({
 		[focusContext],
 	);
 
-	// Use provided config or undefined (schema-driven)
-	const resolvedConfig = config;
-	const resolvedAllCollections = allCollectionsConfig;
-
 	return (
-		<div className="fixed inset-0 z-50 bg-background flex flex-col">
+		<div
+			className={
+				open ? "bg-background fixed inset-0 z-50 flex flex-col" : "w-full"
+			}
+		>
 			{/* Header */}
-			<div className="flex items-center justify-between border-b px-4 py-2 shrink-0">
-				<div className="flex items-center gap-2">
-					<Icon icon="ph:eye" className="h-4 w-4 text-muted-foreground" />
-					<span className="font-medium">{t("preview.livePreview")}</span>
-				</div>
-
-				{/* Mobile tabs in header */}
-				{isMobile && (
-					<Tabs
-						value={activeTab}
-						onValueChange={(v) => setActiveTab(v as "form" | "preview")}
-						className="mx-4"
-					>
-						<TabsList className="h-8">
-							<TabsTrigger value="form" className="text-xs px-3">
-								{t("common.form")}
-							</TabsTrigger>
-							<TabsTrigger value="preview" className="text-xs px-3">
-								{t("preview.title")}
-							</TabsTrigger>
-						</TabsList>
-					</Tabs>
-				)}
-
-				<div className="flex items-center gap-1">
-					<Button
-						variant="ghost"
-						size="sm"
-						onClick={handleExitPreview}
-						className="gap-1.5"
-						title="Exit preview mode and clear draft cookie"
-					>
-						<Icon icon="ph:sign-out" className="h-4 w-4" />
-						<span className="hidden sm:inline">Exit Preview</span>
-					</Button>
-					<Button variant="ghost" size="icon" onClick={onClose}>
-						<Icon icon="ph:x" className="h-4 w-4" />
-						<span className="sr-only">{t("common.close")}</span>
-					</Button>
-				</div>
-			</div>
-
-			{/* Content */}
-			{isMobile ? (
-				/* Mobile: Tabs content */
-				<div className="flex-1 min-h-0">
-					{activeTab === "form" ? (
-						<div className="h-full overflow-y-auto p-6" data-preview-form-scope>
-							<LocaleScopeProvider>
-								<FormView
-									collection={collection}
-									id={itemId}
-									config={resolvedConfig}
-									allCollectionsConfig={resolvedAllCollections}
-									registry={registry}
-									navigate={navigate}
-									basePath={basePath}
-									onSuccess={onSuccess}
-									showMeta={false}
-								/>
-							</LocaleScopeProvider>
-						</div>
-					) : (
-						<div className="h-full">
-							{previewUrl ? (
-								<PreviewPane
-									ref={previewRef}
-									url={previewUrl}
-									onFieldClick={handlePreviewFieldClick}
-									onBlockClick={handlePreviewBlockClick}
-								/>
-							) : (
-								<div className="h-full flex items-center justify-center">
-									<Icon
-										icon="ph:spinner"
-										className="h-6 w-6 animate-spin text-muted-foreground"
-									/>
-									<span className="ml-2 text-sm text-muted-foreground">
-										Loading preview...
-									</span>
-								</div>
-							)}
-						</div>
-					)}
-				</div>
-			) : (
-				/* Desktop: Side by side */
-				<div className="flex-1 flex min-h-0">
-					{/* Form panel - fixed width like sheet */}
-					<div
-						data-preview-form-scope
-						className={cn(
-							"h-full border-r bg-background shrink-0",
-							"w-full sm:max-w-2xl",
-							"overflow-y-auto p-6",
-						)}
-					>
-						<LocaleScopeProvider>
-							<FormView
-								collection={collection}
-								id={itemId}
-								config={resolvedConfig}
-								allCollectionsConfig={resolvedAllCollections}
-								registry={registry}
-								navigate={navigate}
-								basePath={basePath}
-								onSuccess={onSuccess}
-								showMeta={false}
-							/>
-						</LocaleScopeProvider>
+			{open && (
+				<div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
+					<div className="flex items-center gap-2">
+						<Icon icon="ph:eye" className="text-muted-foreground h-4 w-4" />
+						<span className="font-medium">{t("preview.livePreview")}</span>
 					</div>
 
-					{/* Preview panel - fills remaining space */}
-					<div className="flex-1 min-w-0 bg-muted">
+					{/* Mobile tabs in header */}
+					{isMobile && (
+						<Tabs
+							value={activeTab}
+							onValueChange={(v) => setActiveTab(v as "form" | "preview")}
+							className="mx-4"
+						>
+							<TabsList className="h-8">
+								<TabsTrigger value="form" className="px-3 text-xs">
+									{t("common.form")}
+								</TabsTrigger>
+								<TabsTrigger value="preview" className="px-3 text-xs">
+									{t("preview.title")}
+								</TabsTrigger>
+							</TabsList>
+						</Tabs>
+					)}
+
+					<div className="flex items-center gap-1">
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={handleExitPreview}
+							className="gap-1.5"
+							title={t("preview.exitTooltip")}
+						>
+							<Icon icon="ph:sign-out" className="h-4 w-4" />
+							<span className="hidden sm:inline">
+								{t("preview.exitPreview")}
+							</span>
+						</Button>
+						<Button variant="ghost" size="icon" onClick={onClose}>
+							<Icon icon="ph:x" className="h-4 w-4" />
+							<span className="sr-only">{t("common.close")}</span>
+						</Button>
+					</div>
+				</div>
+			)}
+
+			{/* Content */}
+			<div
+				ref={open && !isMobile ? containerRef : undefined}
+				className={
+					open
+						? isMobile
+							? "min-h-0 flex-1"
+							: "flex min-h-0 flex-1"
+						: "w-full"
+				}
+			>
+				<div
+					data-preview-form-scope
+					className={
+						open
+							? isMobile
+								? cn(
+										"h-full overflow-y-auto p-6",
+										activeTab !== "form" && "hidden",
+									)
+								: "bg-background h-full overflow-y-auto border-r p-6"
+							: "w-full"
+					}
+					style={
+						open && !isMobile
+							? { width: `${100 - previewPercent}%` }
+							: undefined
+					}
+				>
+					{children}
+				</div>
+
+				{open && isMobile && (
+					<div className={activeTab === "preview" ? "h-full" : "hidden"}>
 						{previewUrl ? (
 							<PreviewPane
 								ref={previewRef}
@@ -281,19 +374,57 @@ function LivePreviewContent({
 								onBlockClick={handlePreviewBlockClick}
 							/>
 						) : (
-							<div className="h-full flex items-center justify-center">
+							<div className="flex h-full items-center justify-center">
 								<Icon
 									icon="ph:spinner"
-									className="h-6 w-6 animate-spin text-muted-foreground"
+									className="text-muted-foreground h-6 w-6 animate-spin"
 								/>
-								<span className="ml-2 text-sm text-muted-foreground">
-									Loading preview...
+								<span className="text-muted-foreground ml-2 text-sm">
+									{t("preview.loadingPreview")}
 								</span>
 							</div>
 						)}
 					</div>
-				</div>
-			)}
+				)}
+
+				{open && !isMobile && (
+					<>
+						{/* Drag handle */}
+						<button
+							type="button"
+							aria-label="Resize preview pane"
+							onMouseDown={handleMouseDown}
+							onClick={(e) => e.preventDefault()}
+							className="bg-border hover:bg-border-strong w-1 shrink-0 cursor-col-resize appearance-none border-0 p-0 transition-colors"
+						/>
+
+						{/* Preview panel */}
+						<div
+							className="bg-muted min-w-0"
+							style={{ width: `${previewPercent}%` }}
+						>
+							{previewUrl ? (
+								<PreviewPane
+									ref={previewRef}
+									url={previewUrl}
+									onFieldClick={handlePreviewFieldClick}
+									onBlockClick={handlePreviewBlockClick}
+								/>
+							) : (
+								<div className="flex h-full items-center justify-center">
+									<Icon
+										icon="ph:spinner"
+										className="text-muted-foreground h-6 w-6 animate-spin"
+									/>
+									<span className="text-muted-foreground ml-2 text-sm">
+										{t("preview.loadingPreview")}
+									</span>
+								</div>
+							)}
+						</div>
+					</>
+				)}
+			</div>
 		</div>
 	);
 }
@@ -305,26 +436,14 @@ function LivePreviewContent({
 export function LivePreviewMode({
 	open,
 	onClose,
-	collection,
-	itemId,
-	config,
-	allCollectionsConfig,
-	registry,
+	children,
 	previewUrl,
-	onSuccess,
+	previewRef: previewRefProp,
+	defaultSize,
+	minSize,
 }: LivePreviewModeProps) {
-	// Create ref for PreviewPane
-	const previewRef = React.useRef<PreviewPaneRef>(null);
-
-	// Create context value with refresh callback
-	const contextValue = React.useMemo(
-		() => ({
-			triggerPreviewRefresh: () => {
-				previewRef.current?.triggerRefresh();
-			},
-		}),
-		[],
-	);
+	const fallbackPreviewRef = React.useRef<PreviewPaneRef>(null);
+	const previewRef = previewRefProp ?? fallbackPreviewRef;
 
 	// Handle focus changes from FocusContext - scroll to and focus the field
 	const handleFocusChange = React.useCallback((state: FocusState) => {
@@ -341,50 +460,18 @@ export function LivePreviewMode({
 		}
 	}, []);
 
-	if (!open) return null;
-
 	return (
-		<LivePreviewContext.Provider value={contextValue}>
-			<FocusProvider onFocusChange={handleFocusChange}>
-				<LivePreviewContent
-					open={open}
-					onClose={onClose}
-					collection={collection}
-					itemId={itemId}
-					config={config}
-					allCollectionsConfig={allCollectionsConfig}
-					registry={registry}
-					previewUrl={previewUrl}
-					onSuccess={onSuccess}
-					previewRef={previewRef}
-				/>
-			</FocusProvider>
-		</LivePreviewContext.Provider>
-	);
-}
-
-// ============================================================================
-// Trigger Button Component
-// ============================================================================
-
-interface LivePreviewButtonProps {
-	onClick: () => void;
-	disabled?: boolean;
-}
-
-function LivePreviewButton({ onClick, disabled }: LivePreviewButtonProps) {
-	return (
-		<Button
-			type="button"
-			variant="outline"
-			size="icon"
-			className="size-9"
-			onClick={onClick}
-			disabled={disabled}
-			title="Live Preview"
-		>
-			<Icon icon="ph:eye" className="size-4" />
-			<span className="sr-only">Live Preview</span>
-		</Button>
+		<FocusProvider onFocusChange={handleFocusChange}>
+			<LivePreviewContent
+				open={open}
+				onClose={onClose}
+				previewUrl={previewUrl}
+				previewRef={previewRef}
+				defaultSize={defaultSize}
+				minSize={minSize}
+			>
+				{children}
+			</LivePreviewContent>
+		</FocusProvider>
 	);
 }

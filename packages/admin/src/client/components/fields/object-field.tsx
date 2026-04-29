@@ -13,6 +13,10 @@ import { configureField } from "../../builder/field/field";
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectAdmin, useAdminStore } from "../../runtime";
+import {
+	FieldLayoutRenderer,
+	type FieldLayoutContext,
+} from "../layout/field-layout-renderer";
 import type { BaseFieldProps, ObjectFieldConfig } from "./field-types";
 import { gridColumnClasses } from "./field-utils";
 import { FieldWrapper } from "./field-wrapper";
@@ -22,13 +26,17 @@ import { FieldWrapper } from "./field-wrapper";
 // ============================================================================
 
 interface ObjectFieldProps
-	extends BaseFieldProps,
-		Omit<ObjectFieldConfig, "fields"> {
+	extends BaseFieldProps, Omit<ObjectFieldConfig, "fields"> {
 	/**
 	 * Nested field definitions.
 	 * Can be a callback (evaluated at render time) or pre-evaluated record.
 	 */
 	fields?: ((ctx: { r: any }) => Record<string, any>) | Record<string, any>;
+	/**
+	 * Form layout for nested fields (sections, tabs, grid).
+	 * When provided, renders fields using the layout system instead of default stack.
+	 */
+	form?: { fields: any[] };
 }
 
 // ============================================================================
@@ -59,7 +67,7 @@ function NestedFieldRenderer({
 	if (!Component) {
 		// Fallback error display if no component found
 		return (
-			<div className="text-sm text-destructive">
+			<div className="text-destructive text-sm">
 				No component for field type: {fieldDef.name}
 			</div>
 		);
@@ -110,7 +118,8 @@ export function ObjectField({
 	locale,
 	className,
 	fields: fieldsProp,
-	wrapper = "flat",
+	form: formProp,
+	wrapper = "collapsible",
 	layout = "stack",
 	columns = 2,
 	defaultCollapsed = true,
@@ -146,19 +155,81 @@ export function ObjectField({
 		return null;
 	}
 
+	// When form layout is defined, use the shared layout renderer
+	if (formProp?.fields?.length) {
+		const layoutCtx: FieldLayoutContext = {
+			renderField: (fieldName, opts) => {
+				const fieldDef = nestedFields[fieldName] as FieldInstance | undefined;
+				if (!fieldDef) return null;
+				return (
+					<NestedFieldRenderer
+						key={fieldName}
+						fieldName={fieldName}
+						fieldDef={fieldDef}
+						parentName={name}
+						disabled={disabled}
+					/>
+				);
+			},
+			resolveText: (text, fallback) => resolveText(text, fallback),
+		};
+
+		const content = (
+			<FieldLayoutRenderer items={formProp.fields} ctx={layoutCtx} />
+		);
+
+		// Wrap in collapsible or flat container
+		if (wrapper === "collapsible") {
+			return (
+				<div className={cn("qa-object-field panel-surface", className)}>
+					<button
+						type="button"
+						onClick={() => setIsCollapsed(!isCollapsed)}
+						className="hover:bg-muted flex min-h-10 w-full items-center justify-between p-3 text-left transition-colors active:scale-[0.96]"
+						disabled={disabled}
+					>
+						<div className="flex items-center gap-2">
+							{isCollapsed ? (
+								<Icon icon="ph:caret-right" className="h-4 w-4" />
+							) : (
+								<Icon icon="ph:caret-down" className="h-4 w-4" />
+							)}
+							<span className="font-medium">{resolveText(label ?? name)}</span>
+							{required && <span className="text-destructive">*</span>}
+						</div>
+					</button>
+					{!isCollapsed && <div className="border-t p-4">{content}</div>}
+				</div>
+			);
+		}
+
+		if (label) {
+			return (
+				<FieldWrapper
+					name={name}
+					label={resolveText(label)}
+					description={description}
+					required={required}
+					disabled={disabled}
+					localized={localized}
+					locale={locale}
+				>
+					<div className={cn("qa-object-field pt-1", className)}>{content}</div>
+				</FieldWrapper>
+			);
+		}
+
+		return <div className={cn("qa-object-field", className)}>{content}</div>;
+	}
+
 	// Collapsible wrapper (also support legacy layout="collapsible" for backwards compatibility)
 	if (wrapper === "collapsible" || (layout as string) === "collapsible") {
 		return (
-			<div
-				className={cn(
-					"qa-object-field rounded-lg border border-border bg-card ",
-					className,
-				)}
-			>
+			<div className={cn("qa-object-field panel-surface", className)}>
 				<button
 					type="button"
 					onClick={() => setIsCollapsed(!isCollapsed)}
-					className="flex w-full items-center justify-between p-3 text-left hover:bg-muted"
+					className="hover:bg-muted flex min-h-10 w-full items-center justify-between p-3 text-left transition-colors active:scale-[0.96]"
 					disabled={disabled}
 				>
 					<div className="flex items-center gap-2">
@@ -174,7 +245,7 @@ export function ObjectField({
 				{!isCollapsed && (
 					<div className="border-t p-4">
 						{description && (
-							<p className="mb-4 text-sm text-muted-foreground">
+							<p className="text-muted-foreground mb-4 text-sm text-pretty">
 								{resolveText(description)}
 							</p>
 						)}

@@ -1,0 +1,34 @@
+{
+	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"useTabs": true,
+	"singleQuote": false,
+	"printWidth": 80,
+	"semi": true,
+	"trailingComma": "all",
+	"arrowParens": "always",
+	"bracketSpacing": true,
+	"endOfLine": "lf",
+	"sortImports": {
+		"groups": [
+			"builtin",
+			"external",
+			["internal", "subpath"],
+			["parent", "sibling", "index"],
+			"style",
+			"unknown"
+		],
+		"internalPattern": ["@questpie/", "~/", "@/"],
+		"newlinesBetween": true,
+		"order": "asc"
+	},
+	"sortTailwindcss": {
+		"functions": ["cn", "clsx", "cva"]
+	},
+	"sortPackageJson": true,
+	"ignorePatterns": [
+		"**/*.gen.ts",
+		"**/.generated",
+		"**/templates/**/*.yml",
+		"**/templates/**/*.yaml"
+	]
+}

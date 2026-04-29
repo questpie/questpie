@@ -89,6 +89,47 @@ export default {
 	"collection.new": "Neues {{name}}",
 	"collection.duplicateSuccess": "{{name}} erfolgreich dupliziert",
 	"collection.duplicateError": "Fehler beim Duplizieren von {{name}}",
+	// Actions
+	"action.collectionNotFound": 'Sammlung "{{collection}}" nicht gefunden',
+	"action.notFound":
+		'Aktion "{{action}}" wurde in Sammlung "{{collection}}" nicht gefunden',
+	"action.executionFailed": "Ausführung der Aktion fehlgeschlagen",
+	"action.itemCreated": "Element erfolgreich erstellt",
+	"action.itemIdRequired.save":
+		"Element-ID ist für die Speichern-Aktion erforderlich",
+	"action.itemSaved": "Element erfolgreich gespeichert",
+	"action.itemIdRequired.delete":
+		"Element-ID ist für die Löschen-Aktion erforderlich",
+	"action.itemDeleted": "Element erfolgreich gelöscht",
+	"action.itemIdsRequired.bulkDelete":
+		"Element-IDs sind für die Massenlöschung erforderlich",
+	"action.itemsDeleted": {
+		one: "{{count}} Element erfolgreich gelöscht",
+		other: "{{count}} Elemente erfolgreich gelöscht",
+	},
+	"action.itemIdRequired.restore":
+		"Element-ID ist für die Wiederherstellen-Aktion erforderlich",
+	"action.restoreUnsupported":
+		"Wiederherstellen wird für diese Sammlung nicht unterstützt",
+	"action.itemRestored": "Element erfolgreich wiederhergestellt",
+	"action.itemIdsRequired.bulkRestore":
+		"Element-IDs sind für die Massenwiederherstellung erforderlich",
+	"action.itemsRestored": {
+		one: "{{count}} Element erfolgreich wiederhergestellt",
+		other: "{{count}} Elemente erfolgreich wiederhergestellt",
+	},
+	"action.itemIdRequired.duplicate":
+		"Element-ID ist für die Duplizieren-Aktion erforderlich",
+	"action.itemNotFound": "Element nicht gefunden",
+	"action.itemDuplicated": "Element erfolgreich dupliziert",
+	"action.itemIdRequired.transition":
+		"Element-ID ist für die Übergangsaktion erforderlich",
+	"action.targetStageRequired":
+		"Zielstatus ist für die Übergangsaktion erforderlich",
+	"action.workflowUnsupported":
+		"Workflow-Übergänge werden für diese Sammlung nicht unterstützt",
+	"action.unknownBuiltin": "Unbekannte integrierte Aktion: {{action}}",
+	"action.fieldRequired": 'Feld "{{field}}" ist erforderlich',
 
 	// Relations
 	"relation.select": "{{name}} auswählen",
@@ -187,6 +228,10 @@ export default {
 	"auth.myAccount": "Mein Konto",
 	"auth.logoutFailed":
 		"Abmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
+	"auth.setupAlreadyCompleted":
+		"Einrichtung bereits abgeschlossen - Admin-Benutzer existieren im System",
+	"auth.failedToCreateUserAccount":
+		"Benutzerkonto konnte nicht erstellt werden",
 
 	// Errors
 	"error.notFound": "Nicht gefunden",
@@ -239,6 +284,17 @@ export default {
 	"editor.underline": "Unterstrichen",
 	"editor.strikethrough": "Durchgestrichen",
 	"editor.heading": "Überschrift {{level}}",
+	"editor.richTextToolbar": "Rich-Text-Werkzeugleiste",
+	"editor.blockType": "Blocktyp",
+	"editor.selectionBlockType": "Blocktyp der Auswahl",
+	"editor.paragraph": "Absatz",
+	"editor.textBlocks": "Textblöcke",
+	"editor.headings": "Überschriften",
+	"editor.blocks": "Blöcke",
+	"editor.formatting": "Formatierung",
+	"editor.moreFormatting": "Weitere Formatierung",
+	"editor.alignment": "Ausrichtung",
+	"editor.insert": "Einfügen",
 	"editor.link": "Link einfügen",
 	"editor.image": "Bild einfügen",
 	"editor.list": "Liste",
@@ -272,6 +328,18 @@ export default {
 	"editor.chooseFile": "Datei auswählen",
 	"editor.uploading": "Wird hochgeladen...",
 	"editor.browseLibrary": "Bibliothek durchsuchen",
+	"editor.startWriting": "Mit dem Schreiben beginnen...",
+	"editor.pasteOrTypeLink": "Link einfügen oder eingeben...",
+	"editor.paragraphDescription": "Mit normalem Text beginnen",
+	"editor.heading1Description": "Große Abschnittsüberschrift",
+	"editor.heading2Description": "Mittlere Abschnittsüberschrift",
+	"editor.heading3Description": "Kleine Abschnittsüberschrift",
+	"editor.bulletListDescription": "Aufzählungsliste erstellen",
+	"editor.orderedListDescription": "Nummerierte Liste erstellen",
+	"editor.quoteDescription": "Zitat einfügen",
+	"editor.codeBlockDescription": "Codebeispiel einfügen",
+	"editor.dividerDescription": "Horizontale Linie einfügen",
+	"editor.tableDescription": "3x3-Tabelle einfügen",
 
 	// Toasts
 	"toast.success": "Erfolg",
@@ -519,6 +587,21 @@ export default {
 	"preview.fullscreen": "Vollbild",
 	"preview.close": "Vorschau schließen",
 	"preview.loading": "Vorschau wird geladen...",
+	"preview.pathRequired": "Pfad ist erforderlich",
+	"preview.collectionNameRequired": "Sammlungsname ist erforderlich",
+	"preview.adminSessionRequired": "Admin-Sitzung erforderlich",
+	"preview.invalidTokenFormat": "Ungültiges Token-Format",
+	"preview.invalidSignature": "Ungültige Signatur",
+	"preview.invalidPayload": "Ungültige Nutzdaten",
+	"preview.tokenExpired": "Token abgelaufen",
+	"preview.invalidPath": "Ungültiger Pfad",
+	"preview.collectionNotFound": 'Sammlung "{{collection}}" nicht gefunden',
+	"preview.noUrlConfigured":
+		"Für diese Sammlung ist keine Vorschau-URL konfiguriert",
+	"preview.disabledForCollection":
+		"Vorschau ist für diese Sammlung deaktiviert",
+	"preview.generateUrlFailed":
+		"Vorschau-URL konnte nicht generiert werden: {{message}}",
 
 	// Autosave
 	"autosave.saving": "Wird gespeichert...",
@@ -546,4 +629,445 @@ export default {
 	"collectionSearch.placeholder": "Datensätze durchsuchen...",
 	"collectionSearch.noResults": "Keine passenden Datensätze gefunden",
 	"collectionSearch.searching": "Suche läuft...",
+
+	// Audit
+	"audit.section.activity": "Aktivität",
+
+	// English parity additions
+	"common.moreActions": "Weitere Aktionen",
+	"common.backToList": "Zurück zur Liste",
+	"common.deleted": "Gelöscht",
+	"common.done": "Fertig",
+	"common.noValue": "Kein Wert",
+	"nav.breadcrumb": "Breadcrumb",
+	"nav.adminNavigation": "Admin-Navigation",
+
+	"dashboard.noWidgets": "Keine Widgets konfiguriert",
+	"dashboard.noWidgetsDescription":
+		"Fügen Sie Widgets zu Ihrer Dashboard-Konfiguration hinzu, um hier Daten anzuzeigen.",
+	"dashboard.systemStatus": "Systemstatus",
+	"dashboard.welcomeDescription":
+		"Wählen Sie eine Sammlung aus der Seitenleiste, um Ihre Inhalte zu verwalten.",
+
+	"collection.restoring": "Wird wiederhergestellt...",
+	"collection.restoreSuccess": "Element erfolgreich wiederhergestellt",
+	"collection.restoreError": "Element konnte nicht wiederhergestellt werden",
+	"collection.bulkRestoreSuccess": {
+		one: "{{count}} Element erfolgreich wiederhergestellt",
+		other: "{{count}} Elemente erfolgreich wiederhergestellt",
+	},
+	"collection.bulkRestoreError":
+		"Elemente konnten nicht wiederhergestellt werden",
+	"collection.bulkRestorePartial": {
+		one: "{{success}} Element wiederhergestellt, {{failed}} fehlgeschlagen",
+		other: "{{success}} Elemente wiederhergestellt, {{failed}} fehlgeschlagen",
+	},
+	"collection.orderSaved": "Reihenfolge gespeichert",
+	"collection.orderSaveFailed": "Reihenfolge konnte nicht gespeichert werden",
+	"collection.reorderMode": "Sortiermodus",
+	"collection.sortedByField": "Sortiert nach {{field}} {{direction}}.",
+	"collection.reorderEnableOrderable":
+		"Sortierbarkeit vor dem Neuanordnen aktivieren",
+	"collection.reorderAddOrderField":
+		"Vor dem Neuanordnen ein numerisches Reihenfolge-Feld hinzufügen",
+	"collection.reorderClearSearch": "Suche löschen, um neu anzuordnen",
+	"collection.reorderRemoveGrouping":
+		"Gruppierung entfernen, um neu anzuordnen",
+	"collection.reorderClearFilters": "Filter löschen, um neu anzuordnen",
+	"collection.reorderShowOnePage":
+		"Eine Seite mit Elementen anzeigen, um neu anzuordnen",
+	"collection.reorderExitMode": "Sortiermodus verlassen",
+	"collection.reorderItems": "Elemente neu anordnen",
+	"collection.reorderSwitchSort":
+		"Zur Sortierung nach {{field}} wechseln und neu anordnen",
+	"collection.reorderUnavailable": "Neuanordnen nicht verfügbar: {{reason}}",
+	"collection.reorderEnterMode": "Sortiermodus starten",
+
+	"blocks.add": "Block hinzufügen",
+	"blocks.addTo": "Zu {{parent}} hinzufügen",
+	"blocks.addFirst": "Fügen Sie Ihren ersten Block hinzu, um zu beginnen",
+	"blocks.unknownType":
+		'Unbekannter Blocktyp "{{type}}". Dieser Blocktyp ist nicht registriert.',
+	"blocks.searchPlaceholder": "Blöcke suchen...",
+	"blocks.uncategorized": "Sonstige",
+	"blocks.noEditableFields": "Dieser Block hat keine bearbeitbaren Felder.",
+	"blocks.noDefinitions": "Keine Blockdefinitionen registriert",
+	"blocks.noDefinitionsHint":
+		"Registrieren Sie Blöcke mit .blocks() in Ihrer Admin-Konfiguration",
+	"blocks.emptyTitle": "Noch keine Blöcke",
+	"blocks.libraryDescription": "Wählen Sie einen Blocktyp zum Hinzufügen aus.",
+	"blocks.noSearchResults": "Keine Blöcke entsprechen Ihrer Suche",
+	"blocks.tryDifferentSearch": "Versuchen Sie einen anderen Suchbegriff.",
+
+	"form.deletedBanner":
+		"Dieser Datensatz wurde am {{date}} gelöscht. Verwenden Sie die Wiederherstellen-Aktion, um ihn wieder zu aktivieren.",
+	"form.lastUpdated": "Zuletzt aktualisiert",
+
+	"auth.forgotPasswordTitle": "Passwort vergessen",
+	"auth.forgotPasswordDescription":
+		"Geben Sie Ihre E-Mail-Adresse ein, um einen Link zum Zurücksetzen des Passworts zu erhalten",
+	"auth.checkYourEmail": "Überprüfen Sie Ihre E-Mail",
+	"auth.resetLinkSentDescription":
+		"Wir haben Ihnen einen Link zum Zurücksetzen des Passworts gesendet. Prüfen Sie Ihren Posteingang und folgen Sie den Anweisungen.",
+	"auth.backToLogin": "Zurück zur Anmeldung",
+	"auth.forgotPasswordFormDescription":
+		"Geben Sie Ihre E-Mail-Adresse ein und wir senden Ihnen einen Link zum Zurücksetzen Ihres Passworts.",
+	"auth.rememberYourPassword": "Erinnern Sie sich an Ihr Passwort?",
+	"auth.resetPasswordSuccess": "Passwort erfolgreich zurückgesetzt",
+	"auth.resetPasswordSuccessDescription":
+		"Ihr Passwort wurde erfolgreich zurückgesetzt. Sie können sich jetzt mit Ihrem neuen Passwort anmelden.",
+	"auth.enterNewPassword": "Geben Sie unten Ihr neues Passwort ein.",
+	"auth.createAccountDescription": "Erstellen Sie Ihr Konto, um zu beginnen",
+	"auth.inviteEmailLabel": "E-Mail-Adresse",
+	"auth.inviteEmailDescription":
+		"Ein Einladungslink wird an diese E-Mail gesendet",
+	"auth.inviteRole": "Rolle",
+	"auth.inviteSelectRole": "Rolle auswählen",
+	"auth.inviteRoleDescription":
+		"Die Rolle bestimmt, welche Berechtigungen der Benutzer hat",
+	"auth.inviteMessage": "Persönliche Nachricht (optional)",
+	"auth.inviteMessagePlaceholder":
+		"Fügen Sie der Einladung eine persönliche Nachricht hinzu...",
+	"auth.inviteMessageDescription":
+		"Diese Nachricht wird in der Einladungs-E-Mail enthalten sein",
+	"auth.sendingInvitation": "Einladung wird gesendet...",
+	"auth.sendInvitation": "Einladung senden",
+	"auth.inviteSentSuccess": "Einladung erfolgreich gesendet",
+	"auth.signInDescription":
+		"Geben Sie Ihre Anmeldedaten ein, um auf den Admin-Bereich zuzugreifen",
+	"auth.inviteUser": "Benutzer einladen",
+	"auth.inviteUserDescription":
+		"Senden Sie eine Einladung, um einen neuen Benutzer hinzuzufügen",
+	"auth.inviteSentTo": "Einladung an {{email}} gesendet",
+	"auth.completeRegistration": "Registrierung abschließen",
+	"auth.validatingInvitation": "Einladung wird geprüft",
+	"auth.pleaseWait": "Bitte warten...",
+	"auth.invalidInvitation": "Ungültige Einladung",
+	"auth.invalidInvitationDescription":
+		"Dieser Einladungslink ist nicht mehr gültig",
+	"auth.invalidOrExpiredInvitation": "Ungültige oder abgelaufene Einladung",
+	"auth.invitationExpiredMessage":
+		"Die Einladung ist möglicherweise abgelaufen oder wurde bereits verwendet. Bitte wenden Sie sich für eine neue Einladung an Ihren Administrator.",
+	"auth.goToLogin": "Zur Anmeldung",
+	"auth.invalidLink": "Ungültiger Link",
+	"auth.invalidLinkDescription":
+		"Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen.",
+	"auth.requestNewResetLink":
+		"Bitte fordern Sie einen neuen Link zum Zurücksetzen des Passworts an.",
+	"auth.user": "Benutzer",
+
+	"error.somethingWentWrong": "Etwas ist schiefgelaufen",
+	"error.unexpectedError": "Ein unerwarteter Fehler ist aufgetreten",
+	"error.failedToLoad": "Laden fehlgeschlagen",
+	"error.failedToLoadView": "{{viewType}} konnte nicht geladen werden",
+	"error.failedToLoadViewFor":
+		"{{viewType}} für {{collection}} konnte nicht geladen werden",
+	"error.widgetError": "Widget-Fehler",
+	"error.unknownWidget": "Unbekanntes Widget",
+	"error.widgetTypeNotRecognized": 'Widget-Typ "{{type}}" wird nicht erkannt.',
+	"error.componentNotFound": "Komponente nicht gefunden",
+	"error.failedToLoadComponent": "Komponente konnte nicht geladen werden",
+	"error.pageNotFound": "Seite nicht gefunden",
+	"error.pageNotFoundDescription": "Die gesuchte Seite existiert nicht.",
+	"error.accessRestricted": "Zugriff eingeschränkt",
+	"error.accessRestrictedDescription":
+		"Sie haben keine Berechtigung, auf diese Seite zuzugreifen. Wenden Sie sich an Ihren Administrator, wenn Sie dies für einen Fehler halten.",
+	"error.accessRestrictedResourceDescription":
+		'{{type}} "{{name}}" ist im Admin-Bereich nicht verfügbar. Es ist möglicherweise ausgeblendet oder Sie haben keine Berechtigung, darauf zuzugreifen.',
+	"error.tryAgain": "Erneut versuchen",
+	"error.backToDashboard": "Zurück zum Dashboard",
+	"error.noUploadCollection": "Keine Upload-Sammlung ist konfiguriert.",
+	"error.multipleUploadCollections":
+		"Mehrere Upload-Sammlungen sind verfügbar ({{collections}}). Geben Sie an, welche Sammlung verwendet werden soll.",
+	"error.autosaveFailed": "Automatisches Speichern fehlgeschlagen",
+	"error.actionFailed": "Aktion fehlgeschlagen",
+	"error.serverActionFailed": "Serveraktion fehlgeschlagen",
+	"error.failedToLoadOptions": "Optionen konnten nicht geladen werden",
+	"error.failedToLoadAssets": "Medien konnten nicht geladen werden",
+	"error.failedToLoadSelectedItems":
+		"Ausgewählte Elemente konnten nicht geladen werden",
+	"error.invalidCredentials": "Ungültige Anmeldedaten",
+	"error.failedToSendResetEmail":
+		"E-Mail zum Zurücksetzen konnte nicht gesendet werden",
+	"error.failedToResetPassword": "Passwort konnte nicht zurückgesetzt werden",
+	"error.failedToCreateAccount": "Konto konnte nicht erstellt werden",
+	"error.failedToCreateAdminAccount":
+		"Administratorkonto konnte nicht erstellt werden",
+	"error.failedToSendInvitation": "Einladung konnte nicht gesendet werden",
+	"error.anErrorOccurred": "Ein Fehler ist aufgetreten",
+	"error.uploadFailed": "Upload fehlgeschlagen",
+	"error.failedToGeneratePreviewToken":
+		"Vorschau-Token konnte nicht generiert werden",
+	"error.missingFieldComponent":
+		"Keine Komponente für Feldtyp registriert: {{type}}",
+	"error.selectAtLeastOne": "Bitte wählen Sie mindestens ein Medium aus",
+	"error.maxItemsAllowed": "Maximal {{max}} Elemente erlaubt",
+	"error.unregisteredViewDescription":
+		'Ansicht "{{viewId}}" ist nicht in der Admin-Ansichtsregistrierung registriert.',
+
+	"table.show": "Anzeigen",
+	"table.noItemsInCollection": "Keine Elemente in dieser Sammlung gefunden",
+	"table.emptyDescription":
+		"Datensätze erscheinen hier, sobald sie erstellt wurden.",
+	"table.pagination": "Seitennavigation",
+	"table.editing": "Bearbeitung",
+
+	"upload.bulkTitle": "Dateien hochladen",
+	"upload.bulkDescription":
+		"Mehrere Dateien zu Ihrer Medienbibliothek hinzufügen",
+	"upload.bulkHint": "Mehrere Dateien auf einmal hochladen",
+	"upload.bulkSuccess": {
+		one: "{{count}} Datei erfolgreich hochgeladen",
+		other: "{{count}} Dateien erfolgreich hochgeladen",
+	},
+	"upload.bulkError": {
+		one: "{{count}} Datei konnte nicht hochgeladen werden",
+		other: "{{count}} Dateien konnten nicht hochgeladen werden",
+	},
+	"upload.waitForComplete":
+		"Bitte warten Sie, bis die Uploads abgeschlossen sind",
+	"upload.filesCount": {
+		one: "{{count}} Datei",
+		other: "{{count}} Dateien",
+	},
+	"upload.uploadedCount": {
+		one: "{{count}} hochgeladen",
+		other: "{{count}} hochgeladen",
+	},
+	"upload.failedCount": {
+		one: "{{count}} fehlgeschlagen",
+		other: "{{count}} fehlgeschlagen",
+	},
+	"upload.browseLibrary": "Bibliothek durchsuchen",
+
+	"confirm.deleteSelected": "Ausgewählte löschen",
+	"confirm.deleteSelectedTitle": "Ausgewählte Elemente löschen?",
+	"confirm.deleteSelectedDescription":
+		"Diese Aktion kann nicht rückgängig gemacht werden. Alle ausgewählten Elemente werden dauerhaft gelöscht.",
+	"confirm.deleteAll": "Alle löschen",
+	"confirm.restoreTitle": "Element wiederherstellen?",
+	"confirm.restoreDescription":
+		"Dieses Element wird wieder in normalen Listenansichten sichtbar.",
+	"confirm.restore": "Wiederherstellen",
+	"confirm.deleteItemTitle": "Element löschen?",
+	"confirm.deleteItemDescription":
+		"Diese Aktion kann nicht rückgängig gemacht werden. Das Element wird dauerhaft gelöscht.",
+
+	"input.selectDate": "Datum auswählen",
+	"input.selectDateTime": "Datum und Uhrzeit auswählen",
+	"input.selectDateRange": "Datumsbereich auswählen",
+	"input.selectTime": "Zeit auswählen",
+
+	"defaults.users.tabs.profile": "Profil",
+	"defaults.users.tabs.security": "Sicherheit",
+	"defaults.assets.sections.dimensions": "Abmessungen",
+
+	"viewOptions.realtime": "Echtzeitaktualisierungen",
+	"viewOptions.realtimeDescription":
+		"Diese Tabelle automatisch aktualisieren, wenn sich Daten ändern.",
+	"viewOptions.showDeleted": "Gelöschte anzeigen",
+	"viewOptions.showDeletedDescription":
+		"Soft-gelöschte Datensätze in diese Ansicht einschließen.",
+	"viewOptions.groupBy": "Gruppieren nach",
+	"viewOptions.groupByDescription":
+		"Die aktuelle Seite nach einem konfigurierten Feld gruppieren.",
+	"viewOptions.noGrouping": "Keine Gruppierung",
+	"viewOptions.sort": "Sortierung",
+
+	"version.history": "Versionsverlauf",
+	"version.historyDescription":
+		"Durchsuchen Sie frühere Versionen und stellen Sie bei Bedarf eine wieder her.",
+	"version.globalHistoryDescription":
+		"Durchsuchen Sie frühere globale Versionen und stellen Sie bei Bedarf eine wieder her.",
+	"version.empty": "Keine Versionen gefunden.",
+	"version.label": "Version {{number}}",
+	"version.createdAt": "Erstellt",
+	"version.user": "Benutzer",
+	"version.revert": "Zurücksetzen",
+	"version.revertSuccess": "Version erfolgreich wiederhergestellt",
+	"version.operationCreate": "Erstellt",
+	"version.operationUpdate": "Aktualisiert",
+	"version.operationDelete": "Gelöscht",
+	"version.operationUnknown": "Geändert",
+	"version.revertConfirmTitle": "Zu dieser Version zurückkehren?",
+	"version.revertConfirmDescription":
+		"Dies ersetzt den aktuellen Inhalt durch Version {{number}}.",
+
+	"viewOptions.noResultsDescription":
+		"Keine Datensätze entsprechen den aktiven Filtern. Passen Sie sie an oder löschen Sie sie, um mehr Ergebnisse zu sehen.",
+
+	"preview.exitPreview": "Vorschau verlassen",
+	"preview.exitTooltip": "Vorschaumodus verlassen und Entwurfs-Cookie löschen",
+	"preview.loadingPreview": "Vorschau wird geladen...",
+	"preview.previewError": "Vorschaufehler",
+	"preview.refreshing": "Wird aktualisiert...",
+	"preview.showPreview": "Vorschau anzeigen",
+	"preview.hidePreview": "Vorschau ausblenden",
+	"preview.mode": "Vorschaumodus",
+
+	"collectionSearch.noResultsDescription":
+		"Versuchen Sie einen anderen Suchbegriff oder löschen Sie die Suche, um zur vollständigen Liste zurückzukehren.",
+
+	"audit.collection.label": "Audit-Protokoll",
+	"audit.collection.description":
+		"Alle aufgezeichneten Änderungen und Benutzeraktivitäten durchsuchen",
+	"audit.sections.event": "Ereignisdetails",
+	"audit.sections.user": "Benutzer",
+	"audit.sections.changes": "Änderungen",
+	"audit.widget.recentActivity.title": "Letzte Aktivität",
+	"audit.widget.recentActivity.empty":
+		"Keine aktuelle Aktivität aufgezeichnet.",
+
+	"history.title": "Verlauf",
+	"history.description": "Änderungen und Aktivität für diesen Datensatz",
+	"history.versionDescription":
+		"Versions-Snapshots durchsuchen und Unterschiede auf Feldebene prüfen.",
+	"history.tabActivity": "Aktivität",
+	"history.tabVersions": "Versionen",
+	"history.empty": "Keine Aktivität aufgezeichnet",
+	"history.showChanges": {
+		one: "Änderung anzeigen ({{count}})",
+		other: "Änderungen anzeigen ({{count}})",
+	},
+	"history.hideChanges": "Änderungen ausblenden",
+	"history.changedFields": {
+		one: "{{count}} geändertes Feld",
+		other: "{{count}} geänderte Felder",
+	},
+	"history.moreFields": {
+		one: "{{count}} weiteres",
+		other: "{{count}} weitere",
+	},
+	"history.changeAdded": "Hinzugefügt",
+	"history.changeRemoved": "Entfernt",
+	"history.changeChanged": "Geändert",
+	"history.diffAgainstVersion": "Diff gegen Version {{number}}",
+	"history.initialSnapshot": "Initialer Snapshot",
+	"history.noFieldChanges":
+		"Keine Änderungen auf Feldebene in diesem Snapshot.",
+	"history.before": "Vorher",
+	"history.after": "Nachher",
+	"history.stage": "Phase",
+	"history.systemUser": "System",
+	"history.itemsCount": {
+		one: "{{count}} Element",
+		other: "{{count}} Elemente",
+	},
+	"history.blocksCount": {
+		one: "{{count}} Block",
+		other: "{{count}} Blöcke",
+	},
+	"history.objectWithKeys": {
+		one: "Objekt mit {{count}} Schlüssel",
+		other: "Objekt mit {{count}} Schlüsseln",
+	},
+
+	"workflow.transition": "Übergang",
+	"workflow.currentStage": "Aktuelle Phase",
+	"workflow.transitionTo": "Zu {{stage}} wechseln",
+	"workflow.transitionDescription": 'Dies wechselt von "{{from}}" zu "{{to}}".',
+	"workflow.scheduleLabel": "Für später planen",
+	"workflow.scheduledAt": "Geplantes Datum und Uhrzeit",
+	"workflow.scheduledDescription":
+		"Der Übergang erfolgt automatisch zum geplanten Zeitpunkt.",
+	"workflow.transitionSuccess": 'Erfolgreich zu "{{stage}}" gewechselt',
+	"workflow.scheduledSuccess": 'Übergang zu "{{stage}}" für {{date}} geplant',
+	"workflow.transitionFailed": "Übergang fehlgeschlagen",
+	"workflow.noTransitions": "Keine Übergänge aus dieser Phase verfügbar",
+
+	"lock.blockedTitle": "{{name}} bearbeitet gerade",
+	"lock.blockedDescription":
+		"Dieses Dokument ist gesperrt. Sie können es anzeigen, aber keine Änderungen vornehmen, bis die Sperre abläuft.",
+	"lock.openElsewhere":
+		"Sie haben dieses Dokument in einem anderen Tab geöffnet. Änderungen werden automatisch synchronisiert.",
+	"lock.cannotSave":
+		"Speichern nicht möglich - Dokument ist von einem anderen Benutzer gesperrt",
+
+	"ui.toggleSidebar": "Seitenleiste umschalten",
+	"ui.expandSidebar": "Seitenleiste erweitern",
+	"ui.skipToMainContent": "Zum Hauptinhalt springen",
+	"ui.processing": "Wird verarbeitet...",
+	"ui.commandPalette": "Befehlspalette",
+	"ui.commandPaletteDescription": "Nach einem auszuführenden Befehl suchen...",
+	"ui.searchPlaceholder": "Suchen...",
+	"ui.expand": "Erweitern",
+	"ui.toggleTheme": "Design umschalten",
+	"ui.themeLight": "Hell",
+	"ui.themeDark": "Dunkel",
+	"ui.themeSystem": "System",
+
+	"dropzone.label": "Dateien hier ablegen oder zum Durchsuchen klicken",
+	"dropzone.invalidType": '"{{name}}" ist kein zulässiger Dateityp',
+	"dropzone.tooLarge":
+		'"{{name}}" überschreitet die maximale Größe von {{maxSize}}',
+	"dropzone.uploading": "Wird hochgeladen...",
+	"dropzone.typeImages": "Bilder",
+	"dropzone.typeVideos": "Videos",
+	"dropzone.typeAudio": "Audio",
+	"dropzone.typePDF": "PDF",
+
+	"media.browseLibrary": "Medienbibliothek durchsuchen",
+	"media.allFiles": "Alle Dateien",
+	"media.images": "Bilder",
+	"media.videos": "Videos",
+	"media.audio": "Audio",
+	"media.documents": "Dokumente",
+	"media.searchPlaceholder": "Nach Dateiname suchen...",
+	"media.noAssets": "Keine Medien gefunden",
+
+	"field.moveUp": "Nach oben verschieben",
+	"field.moveDown": "Nach unten verschieben",
+	"field.dragToReorder": "Ziehen zum Neuanordnen",
+	"field.editItem": "Element bearbeiten",
+	"field.removeItem": "Element entfernen",
+	"field.noItems": "Keine Elemente",
+	"field.codeEditor": "Code-Editor",
+	"field.formEditor": "Formular-Editor",
+	"field.section": "Abschnitt",
+
+	"cell.file": {
+		one: "{{count}} Datei",
+		other: "{{count}} Dateien",
+	},
+	"cell.item": {
+		one: "{{count}} Element",
+		other: "{{count}} Elemente",
+	},
+	"cell.more": "+{{count}} weitere",
+	"cell.blocks": "Blöcke",
+
+	"widget.quickActions.emptyTitle": "Keine Schnellaktionen",
+	"widget.quickActions.emptyDescription":
+		"Schnellaktionen erscheinen hier, sobald sie konfiguriert sind.",
+	"widget.chart.emptyTitle": "Keine Diagrammdaten",
+	"widget.chart.emptyDescription":
+		"Diagrammdaten erscheinen hier, sobald sie verfügbar sind.",
+	"widget.recentItems.emptyTitle": "Keine aktuellen Elemente",
+	"widget.recentItems.emptyDescription":
+		"Aktuelle Elemente erscheinen hier, sobald Datensätze erstellt wurden.",
+	"widget.value.emptyTitle": "Kein Wert zum Anzeigen",
+	"widget.value.emptyDescription":
+		"Dieser Wert erscheint, sobald Daten verfügbar sind.",
+	"widget.progress.emptyTitle": "Keine Fortschrittsdaten",
+	"widget.progress.emptyDescription":
+		"Der Fortschritt erscheint hier, sobald Daten verfügbar sind.",
+	"widget.timeline.emptyTitle": "Noch keine Aktivität",
+	"widget.timeline.emptyDescription": "Es gibt keine Ereignisse zum Anzeigen.",
+	"widget.table.emptyTitle": "Keine Zeilen zum Anzeigen",
+	"widget.table.emptyDescription":
+		"Für die aktuellen Kriterien gibt es keine Datensätze.",
+
+	"time.justNow": "gerade eben",
+	"time.minutesAgoShort": {
+		one: "vor {{count}}m",
+		other: "vor {{count}}m",
+	},
+	"time.hoursAgoShort": {
+		one: "vor {{count}}h",
+		other: "vor {{count}}h",
+	},
+	"time.daysAgoShort": {
+		one: "vor {{count}}d",
+		other: "vor {{count}}d",
+	},
 } as const;

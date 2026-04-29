@@ -1,5 +1,6 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+
 import { createFileRoute } from "@tanstack/react-router";
 
 const execAsync = promisify(exec);
@@ -20,6 +21,22 @@ type PagePriority = {
 };
 
 const pagePriorities: PagePriority[] = [
+	{ pattern: /^start-here$/, priority: 1.0, changefreq: "weekly" },
+	{ pattern: /^start-here\//, priority: 0.9, changefreq: "weekly" },
+	{ pattern: /^backend$/, priority: 0.9, changefreq: "weekly" },
+	{ pattern: /^backend\//, priority: 0.8, changefreq: "weekly" },
+	{ pattern: /^workspace$/, priority: 0.9, changefreq: "weekly" },
+	{ pattern: /^workspace\//, priority: 0.8, changefreq: "weekly" },
+	{ pattern: /^frontend$/, priority: 0.9, changefreq: "weekly" },
+	{ pattern: /^frontend\//, priority: 0.8, changefreq: "weekly" },
+	{ pattern: /^production$/, priority: 0.8, changefreq: "monthly" },
+	{ pattern: /^production\//, priority: 0.7, changefreq: "monthly" },
+	{ pattern: /^extend$/, priority: 0.7, changefreq: "monthly" },
+	{ pattern: /^extend\//, priority: 0.7, changefreq: "monthly" },
+	{ pattern: /^reference$/, priority: 0.6, changefreq: "monthly" },
+	{ pattern: /^reference\//, priority: 0.6, changefreq: "monthly" },
+	{ pattern: /^examples$/, priority: 0.6, changefreq: "monthly" },
+	{ pattern: /^examples\//, priority: 0.6, changefreq: "monthly" },
 	{ pattern: /^getting-started$/, priority: 1.0, changefreq: "weekly" },
 	{ pattern: /^getting-started\//, priority: 0.9, changefreq: "weekly" },
 	{ pattern: /^server$/, priority: 0.9, changefreq: "weekly" },
@@ -31,8 +48,6 @@ const pagePriorities: PagePriority[] = [
 	{ pattern: /^infrastructure$/, priority: 0.8, changefreq: "monthly" },
 	{ pattern: /^infrastructure\//, priority: 0.7, changefreq: "monthly" },
 	{ pattern: /^guides\//, priority: 0.7, changefreq: "monthly" },
-	{ pattern: /^reference\//, priority: 0.6, changefreq: "monthly" },
-	{ pattern: /^examples\//, priority: 0.6, changefreq: "monthly" },
 	{ pattern: /^migration\//, priority: 0.5, changefreq: "yearly" },
 	{ pattern: /^mentality\//, priority: 0.6, changefreq: "monthly" },
 ];

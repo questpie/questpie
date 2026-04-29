@@ -1,0 +1,143 @@
+---
+title: KV / Cache Adapter
+description: Implement a custom key-value cache adapter for QUESTPIE.
+---
+
+QUESTPIE uses KV adapters for cache-like key/value storage. The built-in `MemoryKVAdapter` works for development; for production you might want Redis, Memcached, DynamoDB, or anything else that speaks get/set/delete.
+
+## Interface
+
+```ts
+export interface KVAdapter {
+	get<T = unknown>(key: string): Promise<T | null>;
+	set(key: string, value: unknown, ttl?: number): Promise<void>;
+	delete(key: string): Promise<void>;
+	has(key: string): Promise<boolean>;
+	clear(): Promise<void>;
+
+	// Optional — tag-based cache invalidation
+	setWithTags?(
+		key: string,
+		value: unknown,
+		tags: string[],
+		ttl?: number,
+	): Promise<void>;
+	invalidateByTag?(tag: string): Promise<void>;
+	invalidateByTags?(tags: string[]): Promise<void>;
+}
+```
+
+## Required methods
+
+| Method                  | Description                                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get(key)`              | Return the stored value or `null`. Must respect TTL -- expired entries should return `null`.                                                   |
+| `set(key, value, ttl?)` | Store any serializable value. `ttl` is in **seconds**. If omitted, the entry never expires (unless the global `defaultTtl` in config applies). |
+| `delete(key)`           | Remove a single key.                                                                                                                           |
+| `has(key)`              | Test existence. Must respect expiration -- return `false` for expired keys.                                                                    |
+| `clear()`               | Wipe all keys managed by this adapter instance.                                                                                                |
+
+## Optional: tag-based invalidation
+
+If your provider supports grouping keys by tags (Redis sets, Memcached namespaces, etc.), implement these three methods:
+
+- **`setWithTags(key, value, tags, ttl?)`** -- store a value and associate it with one or more tags.
+- **`invalidateByTag(tag)`** -- delete every key associated with the tag.
+- **`invalidateByTags(tags)`** -- bulk version of the above.
+
+These power QUESTPIE's cache invalidation workflows. If your backend does not support tags, safely omit them -- QUESTPIE will skip tag-based invalidation.
+
+## Minimal example
+
+```ts title="my-kv-adapter.ts"
+import type { KVAdapter } from "questpie";
+
+export class MyKVAdapter implements KVAdapter {
+	private store = new Map<string, { value: unknown; expiresAt?: number }>();
+	private tagIndex = new Map<string, Set<string>>();
+
+	async get<T = unknown>(key: string): Promise<T | null> {
+		const entry = this.store.get(key);
+		if (!entry) return null;
+		if (entry.expiresAt && Date.now() > entry.expiresAt) {
+			this.store.delete(key);
+			return null;
+		}
+		return entry.value as T;
+	}
+
+	async set(key: string, value: unknown, ttl?: number): Promise<void> {
+		const expiresAt = ttl ? Date.now() + ttl * 1000 : undefined;
+		this.store.set(key, { value, expiresAt });
+	}
+
+	async delete(key: string): Promise<void> {
+		this.store.delete(key);
+	}
+
+	async has(key: string): Promise<boolean> {
+		return (await this.get(key)) !== null;
+	}
+
+	async clear(): Promise<void> {
+		this.store.clear();
+		this.tagIndex.clear();
+	}
+
+	// --- Optional tag support ---
+
+	async setWithTags(
+		key: string,
+		value: unknown,
+		tags: string[],
+		ttl?: number,
+	): Promise<void> {
+		await this.set(key, value, ttl);
+		for (const tag of tags) {
+			if (!this.tagIndex.has(tag)) this.tagIndex.set(tag, new Set());
+			this.tagIndex.get(tag)!.add(key);
+		}
+	}
+
+	async invalidateByTag(tag: string): Promise<void> {
+		const keys = this.tagIndex.get(tag);
+		if (!keys) return;
+		for (const key of keys) this.store.delete(key);
+		this.tagIndex.delete(tag);
+	}
+
+	async invalidateByTags(tags: string[]): Promise<void> {
+		await Promise.all(tags.map((tag) => this.invalidateByTag(tag)));
+	}
+}
+```
+
+## Registration
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { MyKVAdapter } from "./my-kv-adapter";
+
+export default runtimeConfig({
+	// ...
+	kv: {
+		adapter: new MyKVAdapter(),
+		defaultTtl: 3600, // optional global TTL in seconds
+	},
+});
+```
+
+The `KVConfig` also accepts an optional `defaultTtl` (seconds) that applies when `set()` is called without an explicit TTL.
+
+## Testing tips
+
+- Test TTL expiry with very short lifetimes (e.g. 1 second), then assert `get()` and `has()` return `null`/`false` after the TTL passes.
+- Test `has()` after expiration, not just after `set()`.
+- If you implement tags, verify `invalidateByTag` removes every linked key and does not affect untagged keys.
+- Serialize and deserialize complex objects (nested arrays, dates) to catch serialization edge cases early.
+
+## Reference implementations
+
+- [MemoryKVAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/kv/adapters/memory.ts) -- in-memory Map with TTL and tag support
+- [IORedisKVAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/kv/adapters/ioredis.ts) -- Redis via ioredis, tag invalidation via Redis SETs
+- [KVAdapter interface source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/kv/adapter.ts)

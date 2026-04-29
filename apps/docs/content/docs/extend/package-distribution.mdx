@@ -3,14 +3,12 @@ title: Package Distribution
 description: How QUESTPIE packages are built, versioned, and published — tsdown, exports strategy, changesets.
 ---
 
-# Package Distribution
-
 This guide covers how QUESTPIE packages are built, structured, and published as npm packages. It applies to the core `questpie` package, `@questpie/admin`, adapters, and any custom module packages.
 
 ## Monorepo Structure
 
 ```text
-questpie-cms/
+questpie/
 ├── packages/
 │   ├── questpie/              # Core framework
 │   ├── admin/                 # Admin UI
@@ -26,18 +24,20 @@ questpie-cms/
 │   ├── city-portal/
 │   └── tanstack-barbershop/
 ├── turbo.json                 # Turborepo task config
-├── biome.json                 # Linting & formatting
+├── .oxlintrc.json             # Linting configuration
+├── .oxfmtrc.json              # Formatting configuration
 └── package.json               # Workspace root
 ```
 
 **Tooling:**
+
 - **Runtime**: Bun
-- **Package manager**: pnpm workspaces (via `workspaces` field in root `package.json`)
+- **Package manager**: Bun workspaces (via `workspaces` field in root `package.json`)
 - **Task orchestration**: Turborepo
 - **Build**: tsdown (TypeScript -> ESM)
 - **Versioning**: Changesets
-- **Formatting**: Prettier
-- **Linting**: Biome
+- **Formatting**: Oxfmt
+- **Linting**: Oxlint
 
 ## Package Structure
 
@@ -69,47 +69,48 @@ Each package uses a **dual exports** pattern — development imports resolve to 
 
 ```json title="package.json"
 {
-  "type": "module",
-  "main": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+	"type": "module",
+	"main": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
 
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.mts",
-      "default": "./src/exports/index.ts"
-    },
-    "./server": {
-      "types": "./dist/server.d.mts",
-      "default": "./src/exports/server.ts"
-    },
-    "./client": {
-      "types": "./dist/client.d.mts",
-      "default": "./src/exports/client.ts"
-    }
-  },
+	"exports": {
+		".": {
+			"types": "./dist/index.d.mts",
+			"default": "./src/exports/index.ts"
+		},
+		"./server": {
+			"types": "./dist/server.d.mts",
+			"default": "./src/exports/server.ts"
+		},
+		"./client": {
+			"types": "./dist/client.d.mts",
+			"default": "./src/exports/client.ts"
+		}
+	},
 
-  "publishConfig": {
-    "exports": {
-      ".": {
-        "types": "./dist/index.d.mts",
-        "default": "./dist/index.mjs"
-      },
-      "./server": {
-        "types": "./dist/server.d.mts",
-        "default": "./dist/server.mjs"
-      },
-      "./client": {
-        "types": "./dist/client.d.mts",
-        "default": "./dist/client.mjs"
-      }
-    }
-  },
+	"publishConfig": {
+		"exports": {
+			".": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			},
+			"./server": {
+				"types": "./dist/server.d.mts",
+				"default": "./dist/server.mjs"
+			},
+			"./client": {
+				"types": "./dist/client.d.mts",
+				"default": "./dist/client.mjs"
+			}
+		}
+	},
 
-  "files": ["dist"]
+	"files": ["dist"]
 }
 ```
 
 **Why dual exports?**
+
 - During development (monorepo), `exports.default` points to `.ts` source — no build step needed, fast HMR
 - When published, `publishConfig.exports` overrides — consumers get compiled `.mjs` + `.d.mts`
 - `types` always points to `dist/` — TypeScript gets declaration files for both scenarios
@@ -122,16 +123,17 @@ All packages use [tsdown](https://tsdown.dev) for building:
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/exports/*.ts"],    // Entry points from exports directory
-  outDir: "dist",
-  format: ["esm"],                // ESM only, no CommonJS
-  clean: true,                    // Clean dist/ before build
-  dts: { sourcemap: false },      // Generate .d.mts declaration files
-  unbundle: true,                 // Don't bundle imports (keep as external)
+	entry: ["src/exports/*.ts"], // Entry points from exports directory
+	outDir: "dist",
+	format: ["esm"], // ESM only, no CommonJS
+	clean: true, // Clean dist/ before build
+	dts: { sourcemap: false }, // Generate .d.mts declaration files
+	unbundle: true, // Don't bundle imports (keep as external)
 });
 ```
 
 **Key settings:**
+
 - **ESM only** — all packages use `"type": "module"`, no CommonJS output
 - **Unbundled** — external dependencies stay as imports, not bundled
 - **Declaration files** — `.d.mts` generated alongside `.mjs`
@@ -139,6 +141,7 @@ export default defineConfig({
 ### Special Build Features
 
 **Admin package** — includes React Compiler:
+
 ```ts
 plugins: [
   pluginBabel({
@@ -149,6 +152,7 @@ copy: [{ from: "src/client/styles/**/*.css", to: "dist/client/styles" }],
 ```
 
 **CLI packages** — mark output as executable:
+
 ```ts
 onSuccess: async () => {
   await chmod("dist/index.mjs", 0o755);
@@ -161,19 +165,19 @@ Packages use `imports` for internal path aliases:
 
 ```json title="package.json"
 {
-  "imports": {
-    "#questpie/*": "./src/*"
-  }
+	"imports": {
+		"#questpie/*": "./src/*"
+	}
 }
 ```
 
 ```json title="tsconfig.json"
 {
-  "compilerOptions": {
-    "paths": {
-      "#questpie/*": ["./src/*"]
-    }
-  }
+	"compilerOptions": {
+		"paths": {
+			"#questpie/*": ["./src/*"]
+		}
+	}
 }
 ```
 
@@ -185,12 +189,12 @@ Packages reference each other via `workspace:*`:
 
 ```json
 {
-  "dependencies": {
-    "questpie": "workspace:*"
-  },
-  "peerDependencies": {
-    "questpie": "workspace:*"
-  }
+	"dependencies": {
+		"questpie": "workspace:*"
+	},
+	"peerDependencies": {
+		"questpie": "workspace:*"
+	}
 }
 ```
 
@@ -202,20 +206,30 @@ The project uses [Changesets](https://github.com/changesets/changesets) for vers
 
 ```json title=".changeset/config.json"
 {
-  "changelog": ["@changesets/changelog-github", { "repo": "questpie/questpie" }],
-  "commit": false,
-  "fixed": [
-    ["questpie", "@questpie/admin", "@questpie/elysia", "@questpie/hono",
-     "@questpie/next", "@questpie/tanstack-query"]
-  ],
-  "access": "public",
-  "baseBranch": "main",
-  "updateInternalDependencies": "patch",
-  "ignore": ["city-portal-example", "tanstack-barbershop-example"]
+	"changelog": [
+		"@changesets/changelog-github",
+		{ "repo": "questpie/questpie" }
+	],
+	"commit": false,
+	"fixed": [
+		[
+			"questpie",
+			"@questpie/admin",
+			"@questpie/elysia",
+			"@questpie/hono",
+			"@questpie/next",
+			"@questpie/tanstack-query"
+		]
+	],
+	"access": "public",
+	"baseBranch": "main",
+	"updateInternalDependencies": "patch",
+	"ignore": ["city-portal-example", "tanstack-barbershop-example"]
 }
 ```
 
 **Key decisions:**
+
 - **Lock-step versioning** — all core packages (`fixed` group) are versioned together
 - **Public access** — scoped packages published as public
 - **Examples ignored** — example projects excluded from version tracking
@@ -245,24 +259,24 @@ The `scripts/publish.ts` script:
 
 ```json title="turbo.json"
 {
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**"]
-    },
-    "test": {
-      "dependsOn": ["^build"],
-      "cache": false
-    },
-    "check-types": {
-      "dependsOn": ["^check-types"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    }
-  }
+	"tasks": {
+		"build": {
+			"dependsOn": ["^build"],
+			"inputs": ["$TURBO_DEFAULT$", ".env*"],
+			"outputs": [".next/**", "!.next/cache/**"]
+		},
+		"test": {
+			"dependsOn": ["^build"],
+			"cache": false
+		},
+		"check-types": {
+			"dependsOn": ["^check-types"]
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true
+		}
+	}
 }
 ```
 
@@ -290,22 +304,19 @@ See [Building a Module](/docs/extend/building-a-module) for the full package-mod
 
 ```json title="tsconfig.json"
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "skipLibCheck": true,
-    "incremental": true,
-    "composite": true,
-    "paths": {
-      "#questpie/*": ["./src/*"]
-    }
-  },
-  "include": [
-    "src",
-    "src/server/modules/**/.generated/*.ts"
-  ]
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ES2022",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"skipLibCheck": true,
+		"incremental": true,
+		"composite": true,
+		"paths": {
+			"#questpie/*": ["./src/*"]
+		}
+	},
+	"include": ["src", "src/server/modules/**/.generated/*.ts"]
 }
 ```
 

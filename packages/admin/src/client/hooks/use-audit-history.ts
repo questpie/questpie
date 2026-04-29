@@ -1,5 +1,6 @@
 import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
 import * as React from "react";
+
 import { selectClient, useAdminStore } from "../runtime";
 
 export type AuditEntry = {

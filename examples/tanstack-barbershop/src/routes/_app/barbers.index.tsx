@@ -5,10 +5,11 @@
  */
 
 import { Icon } from "@iconify/react";
-import { RichTextRenderer, type TipTapDoc } from "@questpie/admin/client";
 import { createFileRoute } from "@tanstack/react-router";
+
 import { getAllBarbers } from "@/lib/getBarbers.function";
 import { useTranslation } from "@/lib/providers/locale-provider";
+import { RichTextRenderer, type TipTapDoc } from "@questpie/admin/client";
 
 export const Route = createFileRoute("/_app/barbers/")({
 	loader: async () => {
@@ -23,53 +24,57 @@ function BarbersPage() {
 	const { t } = useTranslation();
 
 	return (
-		<div className="py-20 px-6">
-			<div className="container max-w-6xl mx-auto">
-				<header className="mb-16 text-center max-w-2xl mx-auto">
-					<h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+		<div className="px-6 py-20">
+			<div className="container mx-auto max-w-6xl">
+				<header className="mx-auto mb-16 max-w-2xl text-center">
+					<h1 className="mb-4 text-4xl font-bold tracking-tight md:text-5xl">
 						{t("barbers.title")}
 					</h1>
-					<p className="text-xl text-muted-foreground">
+					<p className="text-muted-foreground text-xl">
 						{t("barbers.subtitle")}
 					</p>
 				</header>
 
-				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+				<div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
 					{barbers.map((barber, i) => (
 						<a
 							key={barber.id}
 							href={`/barbers/${barber.slug}`}
-							className="group block animate-fade-in-up"
+							className="group animate-fade-in-up block"
 							style={{ animationDelay: `${i * 100}ms` }}
 						>
-							<div className="aspect-[3/4] bg-muted mb-6 overflow-hidden relative border border-border">
+							<div className="bg-muted border-border relative mb-6 aspect-[3/4] overflow-hidden border">
 								{barber.avatar ? (
 									<img
 										src={barber.avatar as string}
 										alt={barber.name as string}
-										className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+										className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
 									/>
 								) : (
-									<div className="w-full h-full flex items-center justify-center bg-muted">
-										<Icon icon="ph:user" className="size-32 text-muted-foreground/20" />
+									<div className="bg-muted flex h-full w-full items-center justify-center">
+										<Icon
+											icon="ph:user"
+											className="text-muted-foreground/20 size-32"
+										/>
 									</div>
 								)}
-								<div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-500" />
+								<div className="absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/20" />
 
-								<div className="absolute bottom-0 left-0 right-0 p-6 translate-y-full group-hover:translate-y-0 transition-transform duration-500 bg-gradient-to-t from-black/80 to-transparent">
-									<span className="text-white font-bold inline-flex items-center gap-2">
-										{t("barbers.viewProfile")} <Icon icon="ph:arrow-right" className="size-4" />
+								<div className="absolute right-0 bottom-0 left-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-6 transition-transform duration-500 group-hover:translate-y-0">
+									<span className="inline-flex items-center gap-2 font-bold text-white">
+										{t("barbers.viewProfile")}{" "}
+										<Icon icon="ph:arrow-right" className="size-4" />
 									</span>
 								</div>
 							</div>
 
-							<h3 className="text-2xl font-bold mb-2 group-hover:text-highlight transition-colors">
+							<h3 className="group-hover:text-highlight mb-2 text-2xl font-bold transition-colors">
 								{barber.name}
 							</h3>
 
 							{barber.specialties &&
 								(barber.specialties as string[]).length > 0 && (
-									<p className="text-highlight font-medium text-sm mb-3">
+									<p className="text-highlight mb-3 text-sm font-medium">
 										{(barber.specialties as string[]).join(" · ")}
 									</p>
 								)}
@@ -88,8 +93,8 @@ function BarbersPage() {
 				</div>
 
 				{barbers.length === 0 && (
-					<div className="text-center py-20 bg-muted/30 border border-dashed border-border">
-						<p className="text-xl text-muted-foreground">
+					<div className="bg-muted/30 border-border border border-dashed py-20 text-center">
+						<p className="text-muted-foreground text-xl">
 							{t("barbers.empty")}
 						</p>
 					</div>

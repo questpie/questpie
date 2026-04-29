@@ -1,9 +1,10 @@
-import { migration } from "questpie"
-import type { OperationSnapshot } from "questpie"
-import { sql } from "drizzle-orm"
-import snapshotJson from "./snapshots/20260307T122102_eager_red_eagle.json"
+import { sql } from "drizzle-orm";
+import { migration } from "questpie";
+import type { OperationSnapshot } from "questpie";
 
-const snapshot = snapshotJson as OperationSnapshot
+import snapshotJson from "./snapshots/20260307T122102_eager_red_eagle.json";
+
+const snapshot = snapshotJson as OperationSnapshot;
 
 export default migration({
 	id: "eagerRedEagle20260307T122102",
@@ -22,18 +23,34 @@ export default migration({
 	"tags" varchar(255),
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);`)
-		await db.execute(sql`ALTER TABLE "barber_services" DROP CONSTRAINT IF EXISTS "barber_services_barber_barbers_id_fkey";`)
-		await db.execute(sql`ALTER TABLE "barber_services" DROP CONSTRAINT IF EXISTS "barber_services_service_services_id_fkey";`)
-		await db.execute(sql`ALTER TABLE "appointments" ADD COLUMN "displayTitle" varchar(255);`)
-		await db.execute(sql`ALTER TABLE "user" ALTER COLUMN "image" SET DATA TYPE varchar(2048) USING "image"::varchar(2048);`)
+);`);
+		await db.execute(
+			sql`ALTER TABLE "barber_services" DROP CONSTRAINT IF EXISTS "barber_services_barber_barbers_id_fkey";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "barber_services" DROP CONSTRAINT IF EXISTS "barber_services_service_services_id_fkey";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "appointments" ADD COLUMN "displayTitle" varchar(255);`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "user" ALTER COLUMN "image" SET DATA TYPE varchar(2048) USING "image"::varchar(2048);`,
+		);
 	},
 	async down({ db }) {
-		await db.execute(sql`DROP TABLE "blog_posts";`)
-		await db.execute(sql`ALTER TABLE "appointments" DROP COLUMN "displayTitle";`)
-		await db.execute(sql`ALTER TABLE "user" ALTER COLUMN "image" SET DATA TYPE varchar(500) USING "image"::varchar(500);`)
-		await db.execute(sql`ALTER TABLE "barber_services" ADD CONSTRAINT "barber_services_barber_barbers_id_fkey" FOREIGN KEY ("barber") REFERENCES "barbers"("id") ON DELETE CASCADE;`)
-		await db.execute(sql`ALTER TABLE "barber_services" ADD CONSTRAINT "barber_services_service_services_id_fkey" FOREIGN KEY ("service") REFERENCES "services"("id") ON DELETE CASCADE;`)
+		await db.execute(sql`DROP TABLE "blog_posts";`);
+		await db.execute(
+			sql`ALTER TABLE "appointments" DROP COLUMN "displayTitle";`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "user" ALTER COLUMN "image" SET DATA TYPE varchar(500) USING "image"::varchar(500);`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "barber_services" ADD CONSTRAINT "barber_services_barber_barbers_id_fkey" FOREIGN KEY ("barber") REFERENCES "barbers"("id") ON DELETE CASCADE;`,
+		);
+		await db.execute(
+			sql`ALTER TABLE "barber_services" ADD CONSTRAINT "barber_services_service_services_id_fkey" FOREIGN KEY ("service") REFERENCES "services"("id") ON DELETE CASCADE;`,
+		);
 	},
 	snapshot,
-})
+});

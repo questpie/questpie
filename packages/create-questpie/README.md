@@ -19,8 +19,11 @@ bunx create-questpie my-app
 | Flag                    | Description                                 |
 | ----------------------- | ------------------------------------------- |
 | `-t, --template <name>` | Template to use (default: `tanstack-start`) |
+| `--database <name>`     | Database name (default: derived from name)  |
 | `--no-install`          | Skip dependency installation                |
 | `--no-git`              | Skip git initialization                     |
+| `--no-skills`           | Skip project-local QUESTPIE agent skills    |
+| `--no-generate`         | Skip post-install QUESTPIE codegen          |
 
 ## Templates
 
@@ -44,7 +47,7 @@ my-app/
 ├── src/
 │   ├── questpie/
 │   │   ├── server/
-│   │   │   ├── questpie.config.ts # runtimeConfig({ plugins: [adminPlugin()], ... })
+│   │   │   ├── questpie.config.ts # runtimeConfig({ db, app, ... })
 │   │   │   ├── modules.ts          # [adminModule, ...] as const
 │   │   │   ├── auth.ts            # Auth config (satisfies AuthConfig)
 │   │   │   ├── .generated/        # Codegen output (app + App type)
@@ -56,7 +59,7 @@ my-app/
 │   │   ├── client.ts              # Typed client
 │   │   └── query-client.ts        # TanStack Query client
 │   ├── routes/
-│   │   ├── api/$.ts               # QuestPie route handler
+│   │   ├── api/$.ts               # QUESTPIE route handler
 │   │   └── admin/                 # Admin panel routes
 │   └── migrations/                # Drizzle migrations
 ├── questpie.config.ts             # CLI config
@@ -69,10 +72,17 @@ my-app/
 
 ```bash
 cd my-app
-cp .env.example .env              # Set DATABASE_URL
-bun questpie migrate              # Run migrations
-bun dev                           # Start dev server
+docker compose up -d
+bun run scaffold:verify           # Regenerate codegen + type-check
+bun run migrate                   # Run migrations
+bun run dev                       # Start dev server
+
+# Add entities (auto-runs codegen)
+bunx questpie add collection products
+bunx questpie add global marketing
 ```
+
+The scaffolder creates `.env` from `.env.example`, installs project-local QUESTPIE agent skills under `.agents/skills`, and runs `questpie:generate` after dependency installation by default. `questpie add` runs codegen automatically. Use `bun run questpie:generate` only when you create files manually.
 
 ## Documentation
 

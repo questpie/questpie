@@ -4,6 +4,8 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
+import { useTranslation } from "../../../../i18n/hooks";
 import { CollectionEditLink } from "../../../admin-link";
 import { resolveIconElement } from "../../../component-renderer";
 import { Badge } from "../../../ui/badge";
@@ -20,7 +22,7 @@ function ChipsSkeleton({ count = 3 }: { count?: number }) {
 	return (
 		<div className="flex flex-wrap gap-2">
 			{skeletonKeys.map((key) => (
-				<Skeleton key={key} className="h-6 w-20 rounded-full" />
+				<Skeleton key={key} variant="chip" className="h-6 w-20" />
 			))}
 		</div>
 	);
@@ -36,6 +38,7 @@ export function ChipsDisplay({
 	isLoading = false,
 	loadingCount = 3,
 }: RelationDisplayProps) {
+	const { t } = useTranslation();
 	const iconElement = resolveIconElement(collectionIcon, {
 		className: "size-3 text-muted-foreground",
 	});
@@ -46,7 +49,7 @@ export function ChipsDisplay({
 	}
 
 	return (
-		<div className="flex flex-wrap gap-2">
+		<div className="qa-chips-display flex flex-wrap gap-2">
 			{items.map((item) => {
 				const displayText = getItemDisplayValue(item);
 
@@ -55,7 +58,7 @@ export function ChipsDisplay({
 					return (
 						<div
 							key={item.id}
-							className="inline-flex items-center gap-1 rounded-md border bg-secondary pl-2 pr-1 py-1"
+							className="qa-chips-display__chip item-surface border-border bg-secondary text-secondary-foreground inline-flex min-h-8 items-center gap-1 py-0.5 pr-1 pl-2"
 						>
 							{iconElement}
 							<span className="text-sm">{displayText}</span>
@@ -63,10 +66,10 @@ export function ChipsDisplay({
 								<Button
 									type="button"
 									variant="ghost"
-									size="icon"
-									className="h-5 w-5"
+									size="icon-xs"
+									className="relative after:absolute after:-inset-1"
 									onClick={() => actions.onEdit?.(item)}
-									aria-label="Edit item"
+									aria-label={t("field.editItem")}
 								>
 									<Icon icon="ph:pencil" className="size-3" />
 								</Button>
@@ -75,10 +78,10 @@ export function ChipsDisplay({
 								<Button
 									type="button"
 									variant="ghost"
-									size="icon"
-									className="h-5 w-5"
+									size="icon-xs"
+									className="relative after:absolute after:-inset-1"
 									onClick={() => actions.onRemove?.(item)}
-									aria-label="Remove item"
+									aria-label={t("field.removeItem")}
 								>
 									<Icon icon="ph:x" className="size-3" />
 								</Button>
@@ -94,11 +97,11 @@ export function ChipsDisplay({
 							key={item.id}
 							type="button"
 							onClick={() => actions.onEdit?.(item)}
-							className="inline-flex"
+							className="focus-visible:ring-ring/40 inline-flex rounded-md focus-visible:ring-2 focus-visible:outline-none active:scale-[0.96]"
 						>
 							<Badge
 								variant="secondary"
-								className="hover:bg-secondary cursor-pointer gap-1"
+								className="item-surface border-border hover:bg-accent hover:text-accent-foreground cursor-pointer gap-1"
 							>
 								{iconElement}
 								{displayText}
@@ -115,11 +118,11 @@ export function ChipsDisplay({
 							key={item.id}
 							collection={collection as any}
 							id={item.id}
-							className="inline-flex"
+							className="focus-visible:ring-ring/40 inline-flex rounded-md focus-visible:ring-2 focus-visible:outline-none active:scale-[0.96]"
 						>
 							<Badge
 								variant="secondary"
-								className="hover:bg-secondary cursor-pointer gap-1"
+								className="item-surface border-border hover:bg-accent hover:text-accent-foreground cursor-pointer gap-1"
 							>
 								{iconElement}
 								{displayText}
@@ -130,7 +133,11 @@ export function ChipsDisplay({
 
 				// Read-only badge
 				return (
-					<Badge key={item.id} variant="secondary" className="gap-1">
+					<Badge
+						key={item.id}
+						variant="secondary"
+						className="item-surface border-border gap-1"
+					>
 						{iconElement}
 						{displayText}
 					</Badge>

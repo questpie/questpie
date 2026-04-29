@@ -6,13 +6,15 @@
  */
 
 import { Icon } from "@iconify/react";
-import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CollectionSchema, FieldReactiveSchema } from "questpie/client";
 import { QuestpieClientError } from "questpie/client";
 import * as React from "react";
 import { FormProvider, useForm, useFormState } from "react-hook-form";
 import { toast } from "sonner";
+
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
+
 import { getDefaultFormActions } from "../../builder/types/action-registry";
 import type {
 	ActionContext,
@@ -32,10 +34,8 @@ import { ConfirmationDialog } from "../../components/actions/confirmation-dialog
 import { resolveIconElement } from "../../components/component-renderer";
 import { HistorySidebar } from "../../components/history-sidebar";
 import { LocaleSwitcher } from "../../components/locale-switcher";
-import {
-	LivePreviewMode,
-	useLivePreviewContext,
-} from "../../components/preview/live-preview-mode";
+import { LivePreviewMode } from "../../components/preview/live-preview-mode";
+import type { PreviewPaneRef } from "../../components/preview/preview-pane";
 import { DateTimeInput } from "../../components/primitives/date-input";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -55,6 +55,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
+import { EmptyState } from "../../components/ui/empty-state";
 import { Label } from "../../components/ui/label";
 import {
 	useCollectionValidation,
@@ -62,7 +63,6 @@ import {
 	useSearchParamToggle,
 	useSidebarSearchParam,
 } from "../../hooks";
-import { useCollectionAuditHistory } from "../../hooks/use-audit-history";
 import {
 	useCollectionCreate,
 	useCollectionDelete,
@@ -91,7 +91,8 @@ import {
 	detectManyToManyRelations,
 	hasManyToManyRelations,
 } from "../../utils/detect-relations";
-
+import { shouldHandleAdminShortcut } from "../../utils/keyboard-shortcuts";
+import { AdminViewHeader } from "../layout/admin-view-layout";
 import { AutoFormFields } from "./auto-form-fields";
 import { FormViewSkeleton } from "./view-skeletons";
 
@@ -218,7 +219,7 @@ type AutosaveManagerProps = {
 	isDirtyRef: React.MutableRefObject<boolean>;
 	isSubmittingRef: React.MutableRefObject<boolean>;
 	updateMutation: { mutateAsync: (args: any) => Promise<any> };
-	previewContext: ReturnType<typeof useLivePreviewContext>;
+	onPreviewRefresh?: () => void;
 	onSavingChange: (isSaving: boolean) => void;
 	onSaved: (savedAt: Date) => void;
 };
@@ -233,10 +234,11 @@ const AutosaveManager = React.memo(function AutosaveManager({
 	isDirtyRef,
 	isSubmittingRef,
 	updateMutation,
-	previewContext,
+	onPreviewRefresh,
 	onSavingChange,
 	onSaved,
 }: AutosaveManagerProps) {
+	const { t } = useTranslation();
 	const timerRef = React.useRef<NodeJS.Timeout | null>(null);
 
 	const runAutosave = React.useCallback(async () => {
@@ -254,11 +256,9 @@ const AutosaveManager = React.memo(function AutosaveManager({
 						data,
 					});
 
-					form.reset(result as any);
+					form.reset(result as any, { keepTouched: true });
 
-					if (previewContext) {
-						previewContext.triggerPreviewRefresh();
-					}
+					onPreviewRefresh?.();
 
 					onSaved(new Date());
 					onSavingChange(false);
@@ -270,6 +270,9 @@ const AutosaveManager = React.memo(function AutosaveManager({
 		} catch (error) {
 			onSavingChange(false);
 			console.error("Autosave failed:", error);
+			toast.error(t("error.autosaveFailed"), {
+				description: error instanceof Error ? error.message : undefined,
+			});
 		}
 	}, [
 		form,
@@ -278,7 +281,8 @@ const AutosaveManager = React.memo(function AutosaveManager({
 		isSubmittingRef,
 		onSaved,
 		onSavingChange,
-		previewContext,
+		onPreviewRefresh,
+		t,
 		updateMutation,
 	]);
 
@@ -381,7 +385,7 @@ const AutosaveIndicator = React.memo(function AutosaveIndicator({
 
 	if (lastSaved) {
 		return (
-			<Badge variant="secondary" className="gap-1.5 text-muted-foreground">
+			<Badge variant="secondary" className="text-muted-foreground gap-1.5">
 				<Icon icon="ph:check" className="size-3" />
 				{t("autosave.saved")} {formatTimeAgo(lastSaved)}
 			</Badge>
@@ -408,6 +412,7 @@ const SaveSubmitButton = React.memo(function SaveSubmitButton({
 	return (
 		<Button
 			type="submit"
+			size="sm"
 			disabled={isSubmittingNow || !isDirty}
 			className="gap-2"
 		>
@@ -557,7 +562,11 @@ export default function FormView({
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const isEditMode = !!id;
-	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
+	const {
+		fields: resolvedFields,
+		schema,
+		isLoading: isFieldsLoading,
+	} = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
 	});
 	const resolvedFormConfig = React.useMemo(
@@ -583,15 +592,12 @@ export default function FormView({
 		[schema],
 	);
 
-	// Try to get preview context (will be null if not in LivePreviewMode)
-	const previewContext = useLivePreviewContext();
-
 	// Preview configuration from introspected schema (server-side .preview() config)
 	// Note: url function cannot be serialized, so we use hasUrlBuilder flag + RPC
 	const schemaPreview = schema?.admin?.preview;
 	const hasPreview =
 		!!schemaPreview?.hasUrlBuilder && schemaPreview?.enabled !== false;
-	const canUseLivePreview = hasPreview && isEditMode && !!id && !previewContext;
+	const canUseLivePreview = hasPreview && isEditMode && !!id;
 	const previewSearchParamOptions = React.useMemo(
 		() => ({ legacyKeys: [{ key: "sidebar", trueValue: "preview" }] }),
 		[],
@@ -603,25 +609,21 @@ export default function FormView({
 	const [isHistoryOpen, setIsHistoryOpen] = useSidebarSearchParam("history", {
 		legacyKey: "history",
 	});
+	const previewRef = React.useRef<PreviewPaneRef>(null);
+	const triggerPreviewRefresh = React.useCallback(() => {
+		if (!isLivePreviewOpen) return;
+		previewRef.current?.triggerRefresh();
+	}, [isLivePreviewOpen]);
 
 	// Create mode (or missing id) should never keep preview open.
-	// Skip when inside LivePreviewMode (previewContext is set) — the inner FormView
-	// must not clear the ?preview param, otherwise it immediately closes the outer preview.
 	// Also wait for schema to load — prevents clearing ?preview on page refresh before
 	// we know if the collection supports preview.
 	React.useEffect(() => {
-		if (previewContext) return;
 		if (!schema) return;
 		if (!canUseLivePreview && isLivePreviewOpen) {
 			setIsLivePreviewOpen(false);
 		}
-	}, [
-		canUseLivePreview,
-		isLivePreviewOpen,
-		setIsLivePreviewOpen,
-		previewContext,
-		schema,
-	]);
+	}, [canUseLivePreview, isLivePreviewOpen, setIsLivePreviewOpen, schema]);
 
 	// Create mode should never keep history sidebar open
 	React.useEffect(() => {
@@ -637,7 +639,11 @@ export default function FormView({
 	);
 
 	// Fetch item if in edit mode (include relations if specified)
-	const { data: item, isLoading } = useCollectionItem(
+	const {
+		data: item,
+		isLoading,
+		error: itemError,
+	} = useCollectionItem(
 		collection as any,
 		id ?? "",
 		hasManyToManyRelations(withRelations)
@@ -701,14 +707,6 @@ export default function FormView({
 				enabled:
 					isEditMode && !!id && isHistoryOpen && !!schema?.options?.versioning,
 			},
-		);
-
-	const { data: auditData, isLoading: auditLoading } =
-		useCollectionAuditHistory(
-			collection,
-			id ?? "",
-			{ limit: 50 },
-			{ enabled: isEditMode && !!id && isHistoryOpen },
 		);
 
 	// ========================================================================
@@ -783,10 +781,19 @@ export default function FormView({
 		React.useState<Date | null>(null);
 
 	// Get validation resolver - prefer server validation (AJV with JSON Schema) over client validation
-	const clientResolver = useCollectionValidation(collection);
+	const validationMode = isEditMode ? "update" : "create";
+	const hasServerValidationSchema =
+		validationMode === "update"
+			? !!schema?.validation?.update
+			: !!schema?.validation?.insert;
+	const shouldBuildClientResolver =
+		!isFieldsLoading && !hasServerValidationSchema;
+	const clientResolver = useCollectionValidation(collection, {
+		enabled: shouldBuildClientResolver,
+	});
 	const resolver = usePreferServerValidation(
 		collection,
-		{ mode: isEditMode ? "update" : "create" },
+		{ mode: validationMode, schema },
 		clientResolver,
 	);
 
@@ -954,24 +961,34 @@ export default function FormView({
 
 	// Reset form when item loads
 	React.useEffect(() => {
-		if (skipItemResetRef.current) return;
+		if (skipItemResetRef.current || isLoading) return;
 		if (transformedItem) {
 			form.reset(transformedItem as any);
-		} else if (defaultValuesProp) {
+		} else if (!isEditMode && defaultValuesProp) {
 			form.reset(defaultValuesProp as any);
 		}
-	}, [form, transformedItem, defaultValuesProp]);
+	}, [form, transformedItem, defaultValuesProp, isLoading, isEditMode]);
 
-	// Handle locale change confirmation
+	// Handle locale change confirmation - invalidate queries so fresh locale data loads
+	const localeQueryClient = useQueryClient();
 	const handleLocaleChangeConfirm = React.useCallback(() => {
 		skipItemResetRef.current = false;
 		localeChangeSnapshotRef.current = null;
 		if (localeChangeDialog.pendingLocale) {
 			prevLocaleRef.current = localeChangeDialog.pendingLocale;
 			setContentLocale(localeChangeDialog.pendingLocale);
+			// Invalidate item query to refetch with new locale
+			localeQueryClient.invalidateQueries({
+				queryKey: ["collections", collection],
+			});
 		}
 		setLocaleChangeDialog({ open: false, pendingLocale: null });
-	}, [localeChangeDialog.pendingLocale, setContentLocale]);
+	}, [
+		localeChangeDialog.pendingLocale,
+		setContentLocale,
+		localeQueryClient,
+		collection,
+	]);
 
 	const handleLocaleChangeCancel = React.useCallback(() => {
 		skipItemResetRef.current = false;
@@ -986,6 +1003,15 @@ export default function FormView({
 		localeChangeSnapshotRef.current = null;
 		setLocaleChangeDialog({ open: false, pendingLocale: null });
 	}, [form]);
+
+	const handleLocaleDialogOpenChange = React.useCallback(
+		(open: boolean) => {
+			if (!open) {
+				handleLocaleChangeCancel();
+			}
+		},
+		[handleLocaleChangeCancel],
+	);
 
 	const onSubmit = React.useEffectEvent(async (data: any) => {
 		const savePromise = async () => {
@@ -1010,9 +1036,7 @@ export default function FormView({
 						form.reset(result as any);
 
 						// Trigger preview refresh after successful save
-						if (previewContext) {
-							previewContext.triggerPreviewRefresh();
-						}
+						triggerPreviewRefresh();
 					} else if (result?.id) {
 						navigate(`${basePath}/collections/${collection}/${result.id}`);
 					} else {
@@ -1069,7 +1093,12 @@ export default function FormView({
 	// Keyboard shortcut: Cmd+S to save
 	React.useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+			if (
+				shouldHandleAdminShortcut(e, {
+					allowEditableTarget: true,
+					key: "s",
+				})
+			) {
 				e.preventDefault();
 				e.stopPropagation();
 				form.handleSubmit(onSubmitRef.current, (errors) => {
@@ -1094,7 +1123,7 @@ export default function FormView({
 		resolvedFormConfig as any
 	)?.actions;
 
-	const { serverActions } = useServerActions({ collection });
+	const { serverActions } = useServerActions({ collection, schema });
 
 	const scopedServerFormActions = React.useMemo(
 		() =>
@@ -1164,83 +1193,101 @@ export default function FormView({
 	);
 
 	// Action helpers
-	const actionHelpers: ActionHelpers = {
-		navigate: storeNavigate,
-		toast: {
-			success: toast.success,
-			error: toast.error,
-			info: toast.info,
-			warning: toast.warning,
-		},
-		t,
-		invalidateCollection: async (targetCollection?: string) => {
-			const col = targetCollection || collection;
-			// Invalidate list and count queries for the collection
-			await queryClient.invalidateQueries({
-				queryKey: queryOpts.key(["collections", col, "find", contentLocale]),
-			});
-			await queryClient.invalidateQueries({
-				queryKey: queryOpts.key(["collections", col, "count", contentLocale]),
-			});
-		},
-		invalidateItem: async (itemId: string, targetCollection?: string) => {
-			const col = targetCollection || collection;
-			// Invalidate findOne query for specific item
-			await queryClient.invalidateQueries({
-				queryKey: queryOpts.key([
-					"collections",
-					col,
-					"findOne",
-					contentLocale,
-					{ id: itemId },
-				]),
-			});
-			// Also invalidate list queries since item data changed
-			await queryClient.invalidateQueries({
-				queryKey: queryOpts.key(["collections", col, "find", contentLocale]),
-			});
-		},
-		invalidateAll: async () => {
-			// Invalidate all queries
-			await queryClient.invalidateQueries({
-				queryKey: [...QUERY_KEY_PREFIX],
-			});
-		},
-		refresh: () => {
-			// Invalidate current collection queries (better than page reload)
-			queryClient.invalidateQueries({
-				queryKey: queryOpts.key([
-					"collections",
-					collection,
-					"find",
-					contentLocale,
-				]),
-			});
-			queryClient.invalidateQueries({
-				queryKey: queryOpts.key([
-					"collections",
-					collection,
-					"count",
-					contentLocale,
-				]),
-			});
-		},
-		closeDialog: () => {
-			setDialogAction(null);
-			setConfirmAction(null);
-		},
-		basePath: storeBasePath || basePath,
-	};
+	const actionHelpers: ActionHelpers = React.useMemo(
+		() => ({
+			navigate: storeNavigate,
+			toast: {
+				success: toast.success,
+				error: toast.error,
+				info: toast.info,
+				warning: toast.warning,
+			},
+			t,
+			invalidateCollection: async (targetCollection?: string) => {
+				const col = targetCollection || collection;
+				// Invalidate list and count queries for the collection
+				await queryClient.invalidateQueries({
+					queryKey: queryOpts.key(["collections", col, "find", contentLocale]),
+				});
+				await queryClient.invalidateQueries({
+					queryKey: queryOpts.key(["collections", col, "count", contentLocale]),
+				});
+			},
+			invalidateItem: async (itemId: string, targetCollection?: string) => {
+				const col = targetCollection || collection;
+				// Invalidate findOne query for specific item
+				await queryClient.invalidateQueries({
+					queryKey: queryOpts.key([
+						"collections",
+						col,
+						"findOne",
+						contentLocale,
+						{ id: itemId },
+					]),
+				});
+				// Also invalidate list queries since item data changed
+				await queryClient.invalidateQueries({
+					queryKey: queryOpts.key(["collections", col, "find", contentLocale]),
+				});
+			},
+			invalidateAll: async () => {
+				// Invalidate all queries
+				await queryClient.invalidateQueries({
+					queryKey: [...QUERY_KEY_PREFIX],
+				});
+			},
+			refresh: () => {
+				// Invalidate current collection queries (better than page reload)
+				queryClient.invalidateQueries({
+					queryKey: queryOpts.key([
+						"collections",
+						collection,
+						"find",
+						contentLocale,
+					]),
+				});
+				queryClient.invalidateQueries({
+					queryKey: queryOpts.key([
+						"collections",
+						collection,
+						"count",
+						contentLocale,
+					]),
+				});
+			},
+			closeDialog: () => {
+				setDialogAction(null);
+				setConfirmAction(null);
+			},
+			basePath: storeBasePath || basePath,
+		}),
+		[
+			storeNavigate,
+			t,
+			collection,
+			queryClient,
+			queryOpts,
+			contentLocale,
+			storeBasePath,
+			basePath,
+		],
+	);
 
 	// Action context for visibility/disabled checks
+	// Use ref for transformedItem to avoid re-computing action visibility on every field change
+	const transformedItemRef = React.useRef(transformedItem);
+	transformedItemRef.current = transformedItem;
+
 	const actionContext: ActionContext = React.useMemo(
 		() => ({
-			item: transformedItem,
+			get item() {
+				return transformedItemRef.current;
+			},
 			collection,
 			helpers: actionHelpers,
 			queryClient: actionQueryClient,
 		}),
-		[transformedItem, collection, actionHelpers, actionQueryClient],
+		[collection, actionHelpers, actionQueryClient],
 	);
 
 	// Filter visible actions
@@ -1322,14 +1369,15 @@ export default function FormView({
 
 					setActionLoading(true);
 					toast.promise(
-						deleteMutation.mutateAsync(itemId).finally(() => {
+						deleteMutation.mutateAsync({ id: itemId }).finally(() => {
 							setActionLoading(false);
 						}),
 						{
 							loading: t("toast.deleting"),
 							success: () => {
-								// Navigate back to list on delete
-								navigate(`${basePath}/collections/${collection}`);
+								storeNavigate(
+									`${storeBasePath || basePath}/collections/${collection}`,
+								);
 								return t("toast.deleteSuccess");
 							},
 							error: (err) => err.message || t("toast.deleteFailed"),
@@ -1339,7 +1387,7 @@ export default function FormView({
 					// For other API operations, make a fetch request
 					// (This is a fallback - most actions should use custom handlers)
 					let itemId_: string;
-					if (transformedItem && transformedItem.id) {
+					if (transformedItem?.id) {
 						itemId_ = String(transformedItem.id);
 					} else {
 						itemId_ = String(id);
@@ -1414,6 +1462,67 @@ export default function FormView({
 				}
 				break;
 			}
+			case "server": {
+				const serverHandler = handler as {
+					type: "server";
+					actionId: string;
+					collection: string;
+				};
+				setActionLoading(true);
+				try {
+					const routes = (client as any)?.routes;
+					if (!routes?.executeAction) {
+						throw new Error(t("error.serverActionFailed"));
+					}
+					const response = await routes.executeAction({
+						collection: serverHandler.collection,
+						actionId: serverHandler.actionId,
+						itemId: transformedItem?.id || id,
+					});
+					if (!response?.success || response.result?.type === "error") {
+						throw new Error(
+							response?.error ??
+								response?.result?.toast?.message ??
+								t("error.serverActionFailed"),
+						);
+					}
+					const result = response.result;
+					if (result?.toast?.message) {
+						toast.success(result.toast.message);
+					} else {
+						toast.success(t("toast.actionSuccess"));
+					}
+					if (result?.effects?.invalidate === true) {
+						await actionHelpers.invalidateAll();
+					} else if (Array.isArray(result?.effects?.invalidate)) {
+						for (const col of result.effects.invalidate) {
+							await actionHelpers.invalidateCollection(col);
+						}
+					}
+					if (result?.effects?.redirect) {
+						storeNavigate(result.effects.redirect);
+					}
+					if (result?.type === "redirect" && result.url) {
+						if (result.external) {
+							window.open(result.url, "_blank");
+						} else {
+							storeNavigate(result.url);
+						}
+					}
+					if (result?.effects?.closeModal) {
+						actionHelpers.closeDialog();
+					}
+				} catch (error) {
+					toast.error(
+						error instanceof Error
+							? error.message
+							: t("error.actionFailed"),
+					);
+				} finally {
+					setActionLoading(false);
+				}
+				break;
+			}
 		}
 		setConfirmAction(null);
 	};
@@ -1436,9 +1545,7 @@ export default function FormView({
 
 		const result = await revertVersionMutation.mutateAsync(payload);
 		form.reset(result as any);
-		if (previewContext) {
-			previewContext.triggerPreviewRefresh();
-		}
+		triggerPreviewRefresh();
 		toast.success(t("version.revertSuccess"));
 		setPendingRevertVersion(null);
 	};
@@ -1465,6 +1572,44 @@ export default function FormView({
 		}
 	};
 
+	const handleConfirmActionOpenChange = React.useCallback((open: boolean) => {
+		if (!open) {
+			setConfirmAction(null);
+		}
+	}, []);
+
+	const handleActionDialogOpenChange = React.useCallback((open: boolean) => {
+		if (!open) {
+			setDialogAction(null);
+		}
+	}, []);
+
+	const handleRevertDialogOpenChange = React.useCallback((open: boolean) => {
+		if (!open) {
+			setPendingRevertVersion(null);
+		}
+	}, []);
+
+	const handleWorkflowDialogOpenChange = React.useCallback((open: boolean) => {
+		if (!open) {
+			setTransitionTarget(null);
+			setTransitionSchedule(false);
+			setTransitionScheduledAt(null);
+		}
+	}, []);
+
+	const workflowTransitionTriggerRender = React.useMemo(
+		() => (
+			<Button type="button" variant="outline" size="sm" className="gap-2" />
+		),
+		[],
+	);
+
+	const secondaryActionsTriggerRender = React.useMemo(
+		() => <Button variant="outline" size="icon-sm" />,
+		[],
+	);
+
 	// Format date helper
 	const formatDate = (date: string | Date) => {
 		return new Date(date).toLocaleDateString(undefined, {
@@ -1490,7 +1635,10 @@ export default function FormView({
 	// Refresh lock on form activity (debounced) - keeps lock alive while user is editing
 	const lockRefreshTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 	React.useEffect(() => {
-		if (!isEditMode || isBlocked) return;
+		if (!isEditMode || isBlocked || isLoading) return;
+
+		const target = formElementRef.current;
+		if (!target) return;
 
 		const scheduleLockRefresh = () => {
 			if (lockRefreshTimerRef.current) {
@@ -1501,8 +1649,7 @@ export default function FormView({
 			}, 1000);
 		};
 
-		const events = ["input", "change", "keydown", "pointerdown"] as const;
-		const target = formElementRef.current ?? document;
+		const events = ["input", "change"] as const;
 
 		for (const event of events) {
 			target.addEventListener(event, scheduleLockRefresh, {
@@ -1524,60 +1671,76 @@ export default function FormView({
 				clearTimeout(lockRefreshTimerRef.current);
 			}
 		};
-	}, [isEditMode, isBlocked, refreshLock]);
+	}, [isEditMode, isBlocked, isLoading, refreshLock]);
 
 	// Generate preview URL via server RPC (url function runs server-side)
-	const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-
-	React.useEffect(() => {
-		if (!isLivePreviewOpen || !canUseLivePreview || !client) {
-			setPreviewUrl(null);
-			return;
-		}
-
-		const persistedRecord = transformedItem as Record<string, unknown> | null;
-
-		if (!persistedRecord) {
-			setPreviewUrl(null);
-			return;
-		}
-
-		let cancelled = false;
-
-		const routes = (client as any).routes;
-		routes
-			.getPreviewUrl({
+	const { data: previewUrl = null } = useQuery({
+		queryKey: [
+			"questpie",
+			"preview-url",
+			collection,
+			(transformedItem as any)?.id,
+			contentLocale,
+		],
+		queryFn: async () => {
+			const result = await (client as any).routes.getPreviewUrl({
 				collection,
-				record: persistedRecord,
+				record: transformedItem as Record<string, unknown>,
 				locale: contentLocale,
-			})
-			.then((result: { url?: string } | null | undefined) => {
-				if (!cancelled) {
-					setPreviewUrl(result?.url ?? null);
-				}
-			})
-			.catch((error: unknown) => {
-				if (!cancelled) {
-					console.error("[FormView] Failed to get preview URL:", error);
-					setPreviewUrl(null);
-				}
 			});
+			return result?.url ?? null;
+		},
+		enabled:
+			isLivePreviewOpen && canUseLivePreview && !!client && !!transformedItem,
+		staleTime: 30_000,
+	});
 
-		return () => {
-			cancelled = true;
-		};
-	}, [
-		isLivePreviewOpen,
-		canUseLivePreview,
-		client,
-		collection,
-		contentLocale,
-		transformedItem,
-	]);
+	// Show error state for failed item fetch
+	if (isEditMode && itemError) {
+		const is404 =
+			itemError != null &&
+			typeof itemError === "object" &&
+			"status" in itemError &&
+			(itemError as any).status === 404;
+		return (
+			<EmptyState
+				variant={is404 ? "empty" : "error"}
+				iconName={is404 ? "ph:file-dashed" : "ph:warning-circle"}
+				title={is404 ? t("error.notFound") : t("error.failedToLoad")}
+				description={
+					!is404 && itemError instanceof Error ? itemError.message : undefined
+				}
+				height="h-64"
+				action={
+					is404 ? (
+						<Button
+							variant="outline"
+							size="sm"
+							className="gap-2"
+							onClick={() => navigate(`${basePath}/collections/${collection}`)}
+						>
+							<Icon icon="ph:arrow-left" className="size-3.5" />
+							{t("common.backToList")}
+						</Button>
+					) : (
+						<Button
+							variant="outline"
+							size="sm"
+							className="gap-2"
+							onClick={() => window.location.reload()}
+						>
+							<Icon icon="ph:arrow-clockwise" className="size-3.5" />
+							{t("common.retry")}
+						</Button>
+					)
+				}
+			/>
+		);
+	}
 
-	// Show skeleton until form data is ready (edit mode only)
-	// This prevents race conditions where form fields render before data is loaded
-	if (isEditMode && isLoading) {
+	// Keep skeleton visible until the backing document and field schema are both ready.
+	// This avoids mounting an empty form and then immediately re-hydrating it.
+	if ((isEditMode && isLoading) || isFieldsLoading) {
 		return <FormViewSkeleton />;
 	}
 
@@ -1597,37 +1760,37 @@ export default function FormView({
 		<>
 			{/* Lock banner - show when someone else is editing */}
 			{isBlocked && blockedByUser && (
-				<div className="qa-form-view__lock-banner flex items-center gap-3 p-3 mb-4 rounded-lg bg-warning/10 border border-warning/30">
+				<div className="qa-form-view__lock-banner bg-warning/10 border-warning/30 mb-4 flex items-center gap-3 border p-3">
 					{blockedByUser.image ? (
 						<img
 							src={blockedByUser.image}
 							alt=""
-							className="size-8 rounded-full"
+							className="image-outline size-8 rounded-full"
 						/>
 					) : (
-						<div className="size-8 rounded-full bg-warning/20 flex items-center justify-center">
-							<Icon icon="ph:user" className="size-4 text-warning" />
+						<div className="bg-warning/20 flex size-8 items-center justify-center rounded-full">
+							<Icon icon="ph:user" className="text-warning size-4" />
 						</div>
 					)}
-					<div className="flex-1 min-w-0">
-						<p className="text-sm font-medium text-warning">
+					<div className="min-w-0 flex-1">
+						<p className="text-warning text-sm font-medium">
 							{t("lock.blockedTitle", {
 								name: blockedByUser.name ?? blockedByUser.email,
 							})}
 						</p>
-						<p className="text-xs text-warning/80">
+						<p className="text-warning/80 text-xs">
 							{t("lock.blockedDescription")}
 						</p>
 					</div>
-					<Icon icon="ph:lock-simple" className="size-5 text-warning" />
+					<Icon icon="ph:lock-simple" className="text-warning size-5" />
 				</div>
 			)}
 
 			{/* Warning banner - show when same user has document open elsewhere */}
 			{isOpenElsewhere && (
-				<div className="flex items-center gap-3 p-3 mb-4 rounded-lg bg-info/10 border border-info/30">
-					<Icon icon="ph:browser" className="size-5 text-info" />
-					<p className="text-sm text-info">{t("lock.openElsewhere")}</p>
+				<div className="qa-form-view__open-elsewhere-banner bg-info/10 border-info/30 mb-4 flex items-center gap-3 border p-3">
+					<Icon icon="ph:browser" className="text-info size-5" />
+					<p className="text-info text-sm">{t("lock.openElsewhere")}</p>
 				</div>
 			)}
 
@@ -1647,7 +1810,7 @@ export default function FormView({
 					isDirtyRef={formIsDirtyRef}
 					isSubmittingRef={formIsSubmittingRef}
 					updateMutation={updateMutation}
-					previewContext={previewContext}
+					onPreviewRefresh={triggerPreviewRefresh}
 					onSavingChange={setIsSaving}
 					onSaved={setLastSaved}
 				/>
@@ -1676,13 +1839,11 @@ export default function FormView({
 						}}
 						className="qa-form-view__form space-y-4"
 					>
-						{/* Header - Title, Meta & Actions */}
-						<div className="qa-form-view__header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-							<div className="min-w-0 flex-1">
-								<div className="flex items-center gap-3 flex-wrap">
-									<h1 className="qa-form-view__title text-2xl md:text-3xl font-extrabold tracking-tight truncate">
-										{title}
-									</h1>
+						<AdminViewHeader
+							className="qa-form-view__header"
+							title={title}
+							titleAccessory={
+								<>
 									{localeOptions.length > 0 && (
 										<LocaleSwitcher
 											locales={localeOptions}
@@ -1710,208 +1871,205 @@ export default function FormView({
 											{currentStageLabel}
 										</Badge>
 									)}
-								</div>
-								{/* Metadata - horizontal scroll on mobile */}
-								{showMeta && item && (
-									<div className="qa-form-view__meta mt-1 overflow-x-auto no-scrollbar">
-										<p className="text-xs text-muted-foreground font-mono flex items-center gap-2 whitespace-nowrap">
-											<span className="opacity-60">{t("form.id")}:</span>
-											<button
-												type="button"
-												className="hover:text-foreground transition-colors cursor-pointer"
-												onClick={() => {
-													navigator.clipboard.writeText(String(item.id)).then(
-														() => toast.success(t("toast.idCopied")),
-														() => toast.error(t("toast.copyFailed")),
-													);
-												}}
-												title={t("common.copy")}
-											>
-												{item.id}
-											</button>
-											{item.createdAt && (
-												<>
-													<span className="opacity-40">·</span>
-													<span>
-														<span className="opacity-60">
-															{t("form.created")}{" "}
-														</span>
-														{formatDate(item.createdAt)}
+								</>
+							}
+							meta={
+								showMeta && item ? (
+									<>
+										<span className="opacity-60">{t("form.id")}:</span>
+										<button
+											type="button"
+											className="hover:text-foreground cursor-pointer transition-colors"
+											onClick={() => {
+												navigator.clipboard.writeText(String(item.id)).then(
+													() => toast.success(t("toast.idCopied")),
+													() => toast.error(t("toast.copyFailed")),
+												);
+											}}
+											title={t("common.copy")}
+										>
+											{item.id}
+										</button>
+										{item.createdAt && (
+											<>
+												<span className="opacity-40">·</span>
+												<span>
+													<span className="opacity-60">
+														{t("form.created")}{" "}
 													</span>
-												</>
-											)}
-											{item.updatedAt && (
-												<>
-													<span className="opacity-40">·</span>
-													<span>
-														<span className="opacity-60">
-															{t("form.updated")}{" "}
-														</span>
-														{formatDate(item.updatedAt)}
+													{formatDate(item.createdAt)}
+												</span>
+											</>
+										)}
+										{item.updatedAt && (
+											<>
+												<span className="opacity-40">·</span>
+												<span>
+													<span className="opacity-60">
+														{t("form.updated")}{" "}
 													</span>
-												</>
-											)}
-										</p>
-									</div>
-								)}
-							</div>
+													{formatDate(item.updatedAt)}
+												</span>
+											</>
+										)}
+									</>
+								) : undefined
+							}
+							actions={
+								<>
+									{headerActions}
 
-							<div className="qa-form-view__actions flex items-center gap-2 shrink-0 w-auto">
-								{headerActions}
+									{/* Live Preview button */}
+									{canUseLivePreview && (
+										<Button
+											type="button"
+											variant="outline"
+											size="icon-sm"
+											onClick={() => setIsLivePreviewOpen(true)}
+											title={t("preview.livePreview")}
+										>
+											<Icon icon="ph:eye" className="size-4" />
+											<span className="sr-only">
+												{t("preview.livePreview")}
+											</span>
+										</Button>
+									)}
 
-								{/* Live Preview button */}
-								{canUseLivePreview && (
-									<Button
-										type="button"
-										variant="outline"
-										size="icon"
-										className="size-9"
-										onClick={() => setIsLivePreviewOpen(true)}
-										title={t("preview.livePreview")}
-									>
-										<Icon icon="ph:eye" className="size-4" />
-										<span className="sr-only">{t("preview.livePreview")}</span>
-									</Button>
-								)}
+									{/* History button — only show when versioning is enabled */}
+									{isEditMode && id && schema?.options?.versioning && (
+										<Button
+											type="button"
+											variant="outline"
+											size="icon-sm"
+											onClick={() => setIsHistoryOpen(true)}
+											title={t("history.title")}
+										>
+											<Icon
+												icon="ph:clock-counter-clockwise"
+												className="size-4"
+											/>
+											<span className="sr-only">{t("history.title")}</span>
+										</Button>
+									)}
 
-								{/* History button */}
-								{isEditMode && id && (
-									<Button
-										type="button"
-										variant="outline"
-										size="icon"
-										className="size-9"
-										onClick={() => setIsHistoryOpen(true)}
-										title={t("history.title")}
-									>
-										<Icon
-											icon="ph:clock-counter-clockwise"
-											className="size-4"
+									{/* Workflow transition dropdown */}
+									{workflowEnabled &&
+										isEditMode &&
+										id &&
+										allowedTransitions.length > 0 && (
+											<DropdownMenu>
+												<DropdownMenuTrigger
+													render={workflowTransitionTriggerRender}
+												>
+													<Icon
+														icon="ph:arrows-left-right"
+														className="size-4"
+													/>
+													{t("workflow.transition")}
+												</DropdownMenuTrigger>
+												<DropdownMenuContent align="end">
+													{allowedTransitions.map((stage) => (
+														<DropdownMenuItem
+															key={stage.name}
+															onClick={() =>
+																setTransitionTarget({
+																	name: stage.name,
+																	label: stage.label,
+																})
+															}
+														>
+															<Icon
+																icon="ph:arrow-right"
+																className="mr-2 size-4"
+															/>
+															{stage.label || stage.name}
+														</DropdownMenuItem>
+													))}
+												</DropdownMenuContent>
+											</DropdownMenu>
+										)}
+
+									{/* Primary form actions as buttons */}
+									{visiblePrimaryActions.map((action) => (
+										<ActionButton
+											key={action.id}
+											action={action}
+											collection={collection}
+											helpers={actionHelpers}
+											size="sm"
+											onOpenDialog={(a) => setDialogAction(a)}
 										/>
-										<span className="sr-only">{t("history.title")}</span>
-									</Button>
-								)}
+									))}
 
-								{/* Workflow transition dropdown */}
-								{workflowEnabled &&
-									isEditMode &&
-									id &&
-									allowedTransitions.length > 0 && (
+									{/* Save button */}
+									<SaveSubmitButton
+										control={form.control}
+										isMutationPending={isMutationPending}
+										t={t}
+									/>
+
+									{/* Secondary form actions in dropdown */}
+									{visibleSecondaryActions.length > 0 && (
 										<DropdownMenu>
 											<DropdownMenuTrigger
-												render={
-													<Button
-														type="button"
-														variant="outline"
-														className="gap-2"
-													/>
-												}
+												render={secondaryActionsTriggerRender}
 											>
-												<Icon icon="ph:arrows-left-right" className="size-4" />
-												{t("workflow.transition")}
+												<Icon
+													icon="ph:dots-three-vertical"
+													className="size-4"
+												/>
+												<span className="sr-only">
+													{t("common.moreActions")}
+												</span>
 											</DropdownMenuTrigger>
 											<DropdownMenuContent align="end">
-												{allowedTransitions.map((stage) => (
-													<DropdownMenuItem
-														key={stage.name}
-														onClick={() =>
-															setTransitionTarget({
-																name: stage.name,
-																label: stage.label,
-															})
-														}
-													>
-														<Icon
-															icon="ph:arrow-right"
-															className="mr-2 size-4"
-														/>
-														{stage.label || stage.name}
-													</DropdownMenuItem>
-												))}
+												{regularSecondary.map((action) => {
+													const iconElement = resolveIconElement(action.icon, {
+														className: "mr-2 size-4",
+													});
+													return (
+														<DropdownMenuItem
+															key={action.id}
+															onClick={() => handleActionClick(action)}
+															disabled={actionLoading}
+														>
+															{iconElement}
+															{resolveText(action.label)}
+														</DropdownMenuItem>
+													);
+												})}
+
+												{regularSecondary.length > 0 &&
+													destructiveSecondary.length > 0 && (
+														<DropdownMenuSeparator />
+													)}
+
+												{destructiveSecondary.map((action) => {
+													const iconElement = resolveIconElement(action.icon, {
+														className: "mr-2 size-4",
+													});
+													return (
+														<DropdownMenuItem
+															key={action.id}
+															variant="destructive"
+															onClick={() => handleActionClick(action)}
+															disabled={actionLoading}
+														>
+															{iconElement}
+															{resolveText(action.label)}
+														</DropdownMenuItem>
+													);
+												})}
 											</DropdownMenuContent>
 										</DropdownMenu>
 									)}
-
-								{/* Primary form actions as buttons */}
-								{visiblePrimaryActions.map((action) => (
-									<ActionButton
-										key={action.id}
-										action={action}
-										collection={collection}
-										helpers={actionHelpers}
-										onOpenDialog={(a) => setDialogAction(a)}
-									/>
-								))}
-
-								{/* Save button */}
-								<SaveSubmitButton
-									control={form.control}
-									isMutationPending={isMutationPending}
-									t={t}
-								/>
-
-								{/* Secondary form actions in dropdown */}
-								{visibleSecondaryActions.length > 0 && (
-									<DropdownMenu>
-										<DropdownMenuTrigger
-											render={
-												<Button
-													variant="outline"
-													size="icon"
-													className="size-9"
-												/>
-											}
-										>
-											<Icon icon="ph:dots-three-vertical" className="size-4" />
-											<span className="sr-only">{t("common.moreActions")}</span>
-										</DropdownMenuTrigger>
-										<DropdownMenuContent align="end">
-											{regularSecondary.map((action) => {
-												const iconElement = resolveIconElement(action.icon, {
-													className: "mr-2 size-4",
-												});
-												return (
-													<DropdownMenuItem
-														key={action.id}
-														onClick={() => handleActionClick(action)}
-														disabled={actionLoading}
-													>
-														{iconElement}
-														{resolveText(action.label)}
-													</DropdownMenuItem>
-												);
-											})}
-
-											{regularSecondary.length > 0 &&
-												destructiveSecondary.length > 0 && (
-													<DropdownMenuSeparator />
-												)}
-
-											{destructiveSecondary.map((action) => {
-												const iconElement = resolveIconElement(action.icon, {
-													className: "mr-2 size-4",
-												});
-												return (
-													<DropdownMenuItem
-														key={action.id}
-														variant="destructive"
-														onClick={() => handleActionClick(action)}
-														disabled={actionLoading}
-													>
-														{iconElement}
-														{resolveText(action.label)}
-													</DropdownMenuItem>
-												);
-											})}
-										</DropdownMenuContent>
-									</DropdownMenu>
-								)}
-							</div>
-						</div>
+								</>
+							}
+						/>
 
 						{/* Soft-deleted banner */}
 						{item?.deletedAt && (
-							<div className="qa-form-view__deleted-banner flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+							<div className="qa-form-view__deleted-banner border-destructive/30 bg-destructive/5 text-destructive flex items-center gap-2 border px-4 py-3 text-sm">
 								<Icon icon="ph:trash" className="size-4 shrink-0" />
 								<span>
 									{t("form.deletedBanner", {
@@ -1934,38 +2092,38 @@ export default function FormView({
 			</FormProvider>
 
 			{/* Locale Change Confirmation Dialog */}
-			<Dialog
-				open={localeChangeDialog.open}
-				onOpenChange={(open) => {
-					if (!open) handleLocaleChangeCancel();
-				}}
-			>
-				<DialogContent showCloseButton={false}>
-					<DialogHeader>
-						<DialogTitle className="flex items-center gap-2">
-							<Icon icon="ph:warning-fill" className="size-5 text-warning" />
-							{t("confirm.localeChange")}
-						</DialogTitle>
-						<DialogDescription>
-							{t("confirm.localeChangeDescription")}
-						</DialogDescription>
-					</DialogHeader>
-					<DialogFooter>
-						<Button variant="outline" onClick={handleLocaleChangeCancel}>
-							{t("confirm.localeChangeStay")}
-						</Button>
-						<Button variant="destructive" onClick={handleLocaleChangeConfirm}>
-							{t("confirm.localeChangeDiscard")}
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+			{localeChangeDialog.open && (
+				<Dialog
+					open={localeChangeDialog.open}
+					onOpenChange={handleLocaleDialogOpenChange}
+				>
+					<DialogContent showCloseButton={false}>
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<Icon icon="ph:warning-fill" className="text-warning size-5" />
+								{t("confirm.localeChange")}
+							</DialogTitle>
+							<DialogDescription>
+								{t("confirm.localeChangeDescription")}
+							</DialogDescription>
+						</DialogHeader>
+						<DialogFooter>
+							<Button variant="outline" onClick={handleLocaleChangeCancel}>
+								{t("confirm.localeChangeStay")}
+							</Button>
+							<Button variant="destructive" onClick={handleLocaleChangeConfirm}>
+								{t("confirm.localeChangeDiscard")}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+			)}
 
 			{/* Action Confirmation Dialog */}
 			{confirmAction?.confirmation && (
 				<ConfirmationDialog
 					open={!!confirmAction}
-					onOpenChange={(open) => !open && setConfirmAction(null)}
+					onOpenChange={handleConfirmActionOpenChange}
 					config={confirmAction.confirmation}
 					onConfirm={handleConfirm}
 					loading={actionLoading}
@@ -1976,7 +2134,7 @@ export default function FormView({
 			{dialogAction && (
 				<ActionDialog
 					open={!!dialogAction}
-					onOpenChange={(open) => !open && setDialogAction(null)}
+					onOpenChange={handleActionDialogOpenChange}
 					action={dialogAction}
 					collection={collection}
 					item={transformedItem}
@@ -1984,156 +2142,152 @@ export default function FormView({
 				/>
 			)}
 
-			<HistorySidebar
-				open={isHistoryOpen}
-				onOpenChange={setIsHistoryOpen}
-				auditEntries={auditData ?? []}
-				isLoadingAudit={auditLoading}
-				versions={(versionsData ?? []) as any[]}
-				isLoadingVersions={versionsLoading}
-				isReverting={revertVersionMutation.isPending}
-				onRevert={async (version) => {
-					handleRevertVersion(version);
-				}}
-				showVersionsTab={!!schema?.options?.versioning}
-			/>
+			{isHistoryOpen && (
+				<HistorySidebar
+					open={isHistoryOpen}
+					onOpenChange={setIsHistoryOpen}
+					versions={(versionsData ?? []) as any[]}
+					fields={schema?.fields as any}
+					isLoadingVersions={versionsLoading}
+					isReverting={revertVersionMutation.isPending}
+					onRevert={async (version) => {
+						handleRevertVersion(version);
+					}}
+					showVersionsTab={!!schema?.options?.versioning}
+				/>
+			)}
 
-			<ConfirmationDialog
-				open={!!pendingRevertVersion}
-				onOpenChange={(open) => {
-					if (!open) setPendingRevertVersion(null);
-				}}
-				config={{
-					title: t("version.revertConfirmTitle"),
-					description: t("version.revertConfirmDescription", {
-						number:
-							pendingRevertVersion?.versionNumber ??
-							pendingRevertVersion?.versionId ??
-							"-",
-					}),
-					confirmLabel: t("version.revert"),
-					cancelLabel: t("common.cancel"),
-					destructive: false,
-				}}
-				onConfirm={confirmRevertVersion}
-				loading={revertVersionMutation.isPending}
-			/>
+			{pendingRevertVersion && (
+				<ConfirmationDialog
+					open={!!pendingRevertVersion}
+					onOpenChange={handleRevertDialogOpenChange}
+					config={{
+						title: t("version.revertConfirmTitle"),
+						description: t("version.revertConfirmDescription", {
+							number:
+								pendingRevertVersion?.versionNumber ??
+								pendingRevertVersion?.versionId ??
+								"-",
+						}),
+						confirmLabel: t("version.revert"),
+						cancelLabel: t("common.cancel"),
+						destructive: false,
+					}}
+					onConfirm={confirmRevertVersion}
+					loading={revertVersionMutation.isPending}
+				/>
+			)}
 
 			{/* Workflow Transition Confirmation Dialog */}
-			<Dialog
-				open={!!transitionTarget}
-				onOpenChange={(open) => {
-					if (!open) {
-						setTransitionTarget(null);
-						setTransitionSchedule(false);
-						setTransitionScheduledAt(null);
-					}
-				}}
-			>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle className="flex items-center gap-2">
-							<Icon icon="ph:arrows-left-right" className="size-5" />
-							{t("workflow.transitionTo", {
-								stage: transitionTarget?.label ?? transitionTarget?.name ?? "",
-							})}
-						</DialogTitle>
-						<DialogDescription>
-							{t("workflow.transitionDescription", {
-								from: currentStageLabel,
-								to: transitionTarget?.label ?? transitionTarget?.name ?? "",
-							})}
-						</DialogDescription>
-					</DialogHeader>
+			{transitionTarget && (
+				<Dialog
+					open={!!transitionTarget}
+					onOpenChange={handleWorkflowDialogOpenChange}
+				>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<Icon icon="ph:arrows-left-right" className="size-5" />
+								{t("workflow.transitionTo", {
+									stage:
+										transitionTarget?.label ?? transitionTarget?.name ?? "",
+								})}
+							</DialogTitle>
+							<DialogDescription>
+								{t("workflow.transitionDescription", {
+									from: currentStageLabel,
+									to: transitionTarget?.label ?? transitionTarget?.name ?? "",
+								})}
+							</DialogDescription>
+						</DialogHeader>
 
-					{/* Optional scheduling */}
-					<div className="space-y-3 py-2">
-						<div className="flex items-center gap-2">
-							<Checkbox
-								checked={transitionSchedule}
-								onCheckedChange={(val) => {
-									setTransitionSchedule(!!val);
-									if (!val) setTransitionScheduledAt(null);
-								}}
-								id="transition-schedule"
-							/>
-							<Label
-								htmlFor="transition-schedule"
-								className="text-sm cursor-pointer"
-							>
-								{t("workflow.scheduleLabel")}
-							</Label>
+						{/* Optional scheduling */}
+						<div className="space-y-3 py-2">
+							<div className="flex items-center gap-2">
+								<Checkbox
+									checked={transitionSchedule}
+									onCheckedChange={(val) => {
+										setTransitionSchedule(!!val);
+										if (!val) setTransitionScheduledAt(null);
+									}}
+									id="transition-schedule"
+								/>
+								<Label
+									htmlFor="transition-schedule"
+									className="cursor-pointer text-sm"
+								>
+									{t("workflow.scheduleLabel")}
+								</Label>
+							</div>
+
+							{transitionSchedule && (
+								<div className="space-y-1.5 pl-6">
+									<Label className="text-muted-foreground text-xs">
+										{t("workflow.scheduledAt")}
+									</Label>
+									<DateTimeInput
+										value={transitionScheduledAt}
+										onChange={setTransitionScheduledAt}
+										minDate={new Date()}
+									/>
+									<p className="text-muted-foreground text-xs">
+										{t("workflow.scheduledDescription")}
+									</p>
+								</div>
+							)}
 						</div>
 
-						{transitionSchedule && (
-							<div className="space-y-1.5 pl-6">
-								<Label className="text-xs text-muted-foreground">
-									{t("workflow.scheduledAt")}
-								</Label>
-								<DateTimeInput
-									value={transitionScheduledAt}
-									onChange={setTransitionScheduledAt}
-									minDate={new Date()}
-								/>
-								<p className="text-xs text-muted-foreground">
-									{t("workflow.scheduledDescription")}
-								</p>
-							</div>
-						)}
-					</div>
-
-					<DialogFooter>
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => {
-								setTransitionTarget(null);
-								setTransitionSchedule(false);
-								setTransitionScheduledAt(null);
-							}}
-						>
-							{t("common.cancel")}
-						</Button>
-						<Button
-							type="button"
-							onClick={confirmTransition}
-							disabled={
-								transitionMutation.isPending ||
-								(transitionSchedule && !transitionScheduledAt)
-							}
-							className="gap-2"
-						>
-							{transitionMutation.isPending && (
-								<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
-							)}
-							{transitionSchedule
-								? t("workflow.scheduleLabel")
-								: t("workflow.transition")}
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => {
+									setTransitionTarget(null);
+									setTransitionSchedule(false);
+									setTransitionScheduledAt(null);
+								}}
+							>
+								{t("common.cancel")}
+							</Button>
+							<Button
+								type="button"
+								onClick={confirmTransition}
+								disabled={
+									transitionMutation.isPending ||
+									(transitionSchedule && !transitionScheduledAt)
+								}
+								className="gap-2"
+							>
+								{transitionMutation.isPending && (
+									<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
+								)}
+								{transitionSchedule
+									? t("workflow.scheduleLabel")
+									: t("workflow.transition")}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+			)}
 		</>
 	);
 
-	return (
-		<>
-			<div className="qa-form-view w-full">{formContent}</div>
+	const formShell = <div className="qa-form-view w-full">{formContent}</div>;
 
-			{/* Live Preview Mode */}
-			{canUseLivePreview && isLivePreviewOpen && (
-				<LivePreviewMode
-					open={isLivePreviewOpen}
-					onClose={() => setIsLivePreviewOpen(false)}
-					collection={collection}
-					itemId={id}
-					config={config}
-					allCollectionsConfig={allCollectionsConfig}
-					registry={registry}
-					previewUrl={previewUrl}
-					onSuccess={onSuccess}
-				/>
-			)}
-		</>
+	if (!canUseLivePreview) {
+		return formShell;
+	}
+
+	return (
+		<LivePreviewMode
+			open={isLivePreviewOpen}
+			onClose={() => setIsLivePreviewOpen(false)}
+			previewUrl={previewUrl}
+			previewRef={previewRef}
+			defaultSize={schemaPreview?.defaultSize}
+			minSize={schemaPreview?.minSize}
+		>
+			{formShell}
+		</LivePreviewMode>
 	);
 }

@@ -1,9 +1,7 @@
 ---
 title: Error Codes
-description: QuestPie error codes and their meanings.
+description: QUESTPIE error codes and their meanings.
 ---
-
-# Error Codes
 
 ## Client Errors
 
@@ -24,35 +22,35 @@ try {
 
 ## HTTP Status Codes
 
-| Code | Meaning |
-|---|---|
-| `400` | Bad Request — validation failed |
-| `401` | Unauthorized — not authenticated |
-| `403` | Forbidden — insufficient permissions |
-| `404` | Not Found — record doesn't exist |
+| Code  | Meaning                                      |
+| ----- | -------------------------------------------- |
+| `400` | Bad Request — validation failed              |
+| `401` | Unauthorized — not authenticated             |
+| `403` | Forbidden — insufficient permissions         |
+| `404` | Not Found — record doesn't exist             |
 | `409` | Conflict — duplicate key or version conflict |
-| `422` | Unprocessable — semantic validation error |
-| `500` | Internal Server Error |
+| `422` | Unprocessable — semantic validation error    |
+| `500` | Internal Server Error                        |
 
 ## Error Codes
 
-| Code | Description |
-|---|---|
-| `VALIDATION_ERROR` | Input failed Zod validation |
-| `NOT_FOUND` | Record not found |
-| `FORBIDDEN` | Access denied by access rules |
-| `UNAUTHORIZED` | No valid session |
-| `CONFLICT` | Unique constraint or version conflict |
-| `INTERNAL_ERROR` | Unexpected server error |
+| Code               | Description                           |
+| ------------------ | ------------------------------------- |
+| `VALIDATION_ERROR` | Input failed Zod validation           |
+| `NOT_FOUND`        | Record not found                      |
+| `FORBIDDEN`        | Access denied by access rules         |
+| `UNAUTHORIZED`     | No valid session                      |
+| `CONFLICT`         | Unique constraint or version conflict |
+| `INTERNAL_ERROR`   | Unexpected server error               |
 
 ## Field Errors
 
 ```ts
 if (error instanceof QuestpieClientError) {
-  const titleError = error.getFieldError("title");
-  // "Title is required"
+	const titleError = error.getFieldError("title");
+	// "Title is required"
 
-  const allErrors = error.getFieldErrorsMap();
-  // { title: "Title is required", email: "Invalid email" }
+	const allErrors = error.getFieldErrorsMap();
+	// { title: "Title is required", email: "Invalid email" }
 }
 ```

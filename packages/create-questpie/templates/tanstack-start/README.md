@@ -1,93 +1,113 @@
 # {{projectName}}
 
-A [QUESTPIE](https://questpie.com) project built with TanStack Start.
+A [QUESTPIE](https://questpie.com) app built with TanStack Start.
 
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) (v1.3+)
-- [Docker](https://docker.com) (for PostgreSQL)
+- [Bun](https://bun.sh) v1.3+
+- [Docker](https://docker.com) (for local PostgreSQL)
 
 ### Setup
 
 ```bash
-# Start PostgreSQL
+# 1) Start PostgreSQL
 docker compose up -d
 
-# Run database migrations
-bun questpie migrate
+# 2) Regenerate codegen and type-check
+bun run scaffold:verify
 
-# Start the dev server
-bun dev
+# 3) Run migrations
+bun run migrate
+
+# 4) Start development server
+bun run dev
 ```
 
-The admin panel will be available at [http://localhost:3000/admin](http://localhost:3000/admin).
-
-The API docs (Scalar UI) are at [http://localhost:3000/api/docs](http://localhost:3000/api/docs).
+- Admin panel: `http://localhost:3000/admin`
+- API docs (Scalar): `http://localhost:3000/api/docs`
 
 ## Project Structure
 
-```
+```text
 src/
   questpie/
     server/
-      questpie.config.ts              # Runtime configuration
-      modules.ts                    # Module registrations
+      questpie.config.ts             # Runtime config
+      modules.ts                     # Module list (admin/openapi/...)
+      config/
+        admin.ts                     # Admin sidebar/dashboard/branding
+        auth.ts                      # Auth config
+        openapi.ts                   # OpenAPI/Scalar config
+      app.ts                         # Re-export of generated app
+      .generated/                    # Codegen output (do not edit manually)
       collections/
-        posts.collection.ts         # Posts collection
+        posts.collection.ts
       globals/
-        site-settings.global.ts     # Site settings
+        site-settings.global.ts
     admin/
-      admin.ts                      # Admin UI configuration
-      builder.ts                    # Client-side builder
+      admin.ts                       # Re-export of generated admin config
+      modules.ts                     # Admin client module defaults
+      .generated/                    # Admin client codegen output
   routes/
-    admin.tsx                       # Admin layout
-    admin/                          # Admin routes
-    api/$.ts                    # API handler
+    api/$.ts                         # QUESTPIE fetch handler mount
+    admin.tsx
+    admin/
   lib/
-    env.ts                          # Type-safe environment variables
-    client.ts                   # API client
-    auth-client.ts                  # Auth client
-    query-client.ts                 # React Query client
-  migrations/                       # Database migrations
+    env.ts
+    client.ts
+    auth-client.ts
+    query-client.ts
+migrations/
 ```
 
 ## Scripts
 
-| Command                       | Description              |
-| ----------------------------- | ------------------------ |
-| `bun dev`                     | Start development server |
-| `bun build`                   | Build for production     |
-| `bun start`                   | Start production server  |
-| `bun questpie migrate`        | Run database migrations  |
-| `bun questpie migrate:create` | Create a new migration   |
+| Command                          | Description                                   |
+| -------------------------------- | --------------------------------------------- |
+| `bun dev`                        | Start development server                      |
+| `bun build`                      | Build for production                          |
+| `bun start`                      | Start production server                       |
+| `bun check-types`                | Type check                                    |
+| `bun run scaffold:generate`      | Regenerate routes and QUESTPIE codegen        |
+| `bun run scaffold:verify`        | Regenerate codegen and type-check             |
+| `bun run routes:generate`        | Regenerate TanStack Router route tree         |
+| `bun run questpie:generate`      | Regenerate `src/questpie/server/.generated/*` |
+| `bun questpie add <type> <name>` | Scaffold entity files (auto-runs codegen)     |
+| `bun run migrate`                | Run migrations                                |
+| `bun run migrate:create`         | Create migration                              |
 
-## Adding Collections
+## Adding a Collection
 
-Create a new file following the naming convention:
+Preferred workflow:
 
-```
-src/questpie/server/collections/my-collection.collection.ts
-```
+1. Run `bun questpie add collection products`.
+2. The CLI creates the file and runs codegen automatically.
+3. Run `bun run migrate:create`.
 
-Then register it in `app.ts`:
+Manual workflow (when you create files by hand):
 
-```ts
-import { myCollection } from "./collections/my-collection.collection.js";
+1. Create a file in `src/questpie/server/collections/`.
+2. Export a collection builder from that file.
+3. Run `bun run questpie:generate`.
+4. Run `bun run migrate:create`.
 
-// Add to .collections()
-.collections({ posts, myCollection })
-```
+Collections are discovered automatically by codegen. No manual `app.ts` registration is required.
 
-## Adding Globals
+## Adding a Global
 
-```
-src/questpie/server/globals/my-global.global.ts
-```
+Preferred workflow:
 
-Then register in `app.ts`:
+1. Run `bun questpie add global marketing`.
+2. The CLI creates the file and runs codegen automatically.
+3. Run `bun run migrate:create`.
 
-```ts
-.globals({ siteSettings, myGlobal })
-```
+Manual workflow (when you create files by hand):
+
+1. Create a file in `src/questpie/server/globals/`.
+2. Export a global builder from that file.
+3. Run `bun run questpie:generate`.
+4. Run `bun run migrate:create`.
+
+Globals are discovered automatically by codegen. No manual `app.ts` registration is required.

@@ -9,7 +9,7 @@ import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
 
-export function BookingCtaRenderer({ values }: BlockProps<"bookingCta">) {
+export function BookingCtaRenderer({ values }: BlockProps<"booking-cta">) {
 	// Build booking URL with query params
 	const params = new URLSearchParams();
 	if (values.serviceId) params.set("service", values.serviceId);
@@ -23,7 +23,7 @@ export function BookingCtaRenderer({ values }: BlockProps<"bookingCta">) {
 		}),
 		"text-base font-semibold",
 		values.variant === "highlight" &&
-			"bg-highlight text-white hover:bg-highlight/90",
+			"bg-highlight hover:bg-highlight/90 text-white",
 		values.variant === "default" &&
 			"bg-primary text-primary-foreground hover:bg-primary/90",
 		values.variant === "outline" &&
@@ -37,7 +37,7 @@ export function BookingCtaRenderer({ values }: BlockProps<"bookingCta">) {
 					{values.title || "Book Your Appointment"}
 				</h2>
 				{values.description && (
-					<p className="mt-4 text-lg text-muted-foreground">
+					<p className="text-muted-foreground mt-4 text-lg">
 						{values.description}
 					</p>
 				)}

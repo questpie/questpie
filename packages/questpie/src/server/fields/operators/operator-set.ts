@@ -65,7 +65,8 @@ export function extendOperatorSet<
 	},
 ): OperatorSetDefinition<
 	TBase["column"] & TExtraColumn,
-	(TBase["jsonbOverrides"] extends OperatorMap ? TBase["jsonbOverrides"] : {}) & TExtraJsonb
+	(TBase["jsonbOverrides"] extends OperatorMap ? TBase["jsonbOverrides"] : {}) &
+		TExtraJsonb
 > {
 	return Object.freeze({
 		jsonbCast: extensions.jsonbCast ?? base.jsonbCast,

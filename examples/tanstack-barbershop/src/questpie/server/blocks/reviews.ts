@@ -1,4 +1,5 @@
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
+
 import { sections } from "./_categories";
 
 export const reviewsBlock = block("reviews")
@@ -25,10 +26,7 @@ export const reviewsBlock = block("reviews")
 			])
 			.label({ en: "Filter", sk: "Filter" })
 			.default("featured"),
-		limit: f
-			.number()
-			.label({ en: "Limit", sk: "Limit" })
-			.default(3),
+		limit: f.number().label({ en: "Limit", sk: "Limit" }).default(3),
 		columns: f
 			.select([
 				{ value: "2", label: "2" },

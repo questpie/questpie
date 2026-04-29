@@ -42,6 +42,27 @@ export function trackDependencies<T>(
 
 				return nextValue;
 			},
+			has(currentTarget, prop: string | symbol) {
+				if (typeof prop === "symbol") {
+					return Reflect.has(currentTarget, prop);
+				}
+
+				const path = prefix ? `${prefix}.${prop}` : prop;
+				deps.add(path);
+				return Reflect.has(currentTarget, prop);
+			},
+			ownKeys(currentTarget) {
+				const keys = Reflect.ownKeys(currentTarget);
+				for (const key of keys) {
+					if (typeof key !== "string") continue;
+					const path = prefix ? `${prefix}.${key}` : key;
+					deps.add(path);
+				}
+				return keys;
+			},
+			getOwnPropertyDescriptor(currentTarget, prop) {
+				return Reflect.getOwnPropertyDescriptor(currentTarget, prop);
+			},
 		});
 	};
 

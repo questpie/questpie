@@ -2,11 +2,15 @@
  * Tiptap Extensions Configuration
  *
  * Factory functions for creating and configuring Tiptap extensions.
+ *
+ * `buildExtensions` returns synchronously when codeBlock is disabled (most
+ * editors), so the editor mounts on the very first render — no loading state.
+ * When codeBlock IS enabled, lowlight is lazy-loaded once and cached at module
+ * level, making subsequent builds instant.
  */
 
 import type { AnyExtension } from "@tiptap/core";
 import CharacterCount from "@tiptap/extension-character-count";
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -17,27 +21,138 @@ import TableRow from "@tiptap/extension-table-row";
 import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
 import StarterKit from "@tiptap/starter-kit";
-import { common, createLowlight } from "lowlight";
 
 import { createSlashCommandExtension } from "./slash-commands";
 import type { RichTextFeatures, SlashCommandItem } from "./types";
 
-const lowlight = createLowlight(common);
+// ============================================================================
+// Module-level lowlight cache — loaded once, reused forever
+// ============================================================================
+
+let codeBlockExtension: AnyExtension | null = null;
+let codeBlockLoadPromise: Promise<AnyExtension> | null = null;
 
 /**
- * Build Tiptap extensions based on feature configuration
+ * Returns the cached CodeBlockLowlight extension synchronously if already
+ * loaded, otherwise starts a single shared fetch and returns the promise.
  */
-export function buildExtensions({
-	features,
-	placeholder,
-	maxCharacters,
-	customExtensions,
-}: {
+function getCodeBlockExtension(): AnyExtension | Promise<AnyExtension> {
+	if (codeBlockExtension) return codeBlockExtension;
+
+	if (!codeBlockLoadPromise) {
+		codeBlockLoadPromise = Promise.all([
+			import("@tiptap/extension-code-block-lowlight"),
+			import("lowlight"),
+		]).then(([{ default: CodeBlockLowlight }, { common, createLowlight }]) => {
+			const lowlight = createLowlight(common);
+			codeBlockExtension = CodeBlockLowlight.configure({ lowlight });
+			return codeBlockExtension;
+		});
+	}
+
+	return codeBlockLoadPromise;
+}
+
+// ============================================================================
+// Extension builder
+// ============================================================================
+
+type BuildExtensionsOptions = {
 	features: Required<RichTextFeatures>;
+	labels?: RichTextExtensionLabels;
 	placeholder?: string;
 	maxCharacters?: number;
 	customExtensions?: AnyExtension[];
-}): AnyExtension[] {
+};
+
+type RichTextExtensionLabels = {
+	bulletList: string;
+	bulletListDescription: string;
+	codeBlock: string;
+	codeBlockDescription: string;
+	divider: string;
+	dividerDescription: string;
+	heading: (level: number) => string;
+	heading1Description: string;
+	heading2Description: string;
+	heading3Description: string;
+	orderedList: string;
+	orderedListDescription: string;
+	paragraph: string;
+	paragraphDescription: string;
+	quote: string;
+	quoteDescription: string;
+	table: string;
+	tableDescription: string;
+};
+
+const defaultLabels: RichTextExtensionLabels = {
+	bulletList: "Bullet list",
+	bulletListDescription: "Create a bulleted list",
+	codeBlock: "Code block",
+	codeBlockDescription: "Insert code snippet",
+	divider: "Divider",
+	dividerDescription: "Insert a horizontal rule",
+	heading: (level) => `Heading ${level}`,
+	heading1Description: "Large section heading",
+	heading2Description: "Medium section heading",
+	heading3Description: "Small section heading",
+	orderedList: "Numbered list",
+	orderedListDescription: "Create an ordered list",
+	paragraph: "Paragraph",
+	paragraphDescription: "Start with plain text",
+	quote: "Quote",
+	quoteDescription: "Capture a quote",
+	table: "Table",
+	tableDescription: "Insert a 3x3 table",
+};
+
+/**
+ * Build Tiptap extensions based on feature configuration.
+ *
+ * Returns **synchronously** (`AnyExtension[]`) when no async deps are needed
+ * (i.e. codeBlock disabled, or lowlight already cached). Only returns a
+ * `Promise` on the first build that includes codeBlock.
+ */
+export function buildExtensions({
+	features,
+	labels,
+	placeholder,
+	maxCharacters,
+	customExtensions,
+}: BuildExtensionsOptions): AnyExtension[] | Promise<AnyExtension[]> {
+	const base = buildBaseExtensions({
+		features,
+		labels,
+		placeholder,
+		maxCharacters,
+		customExtensions,
+	});
+
+	if (!features.codeBlock) return base;
+
+	const codeBlock = getCodeBlockExtension();
+
+	// Cached — return sync
+	if (!((codeBlock as any) instanceof Promise)) {
+		return [...base, codeBlock as AnyExtension];
+	}
+
+	// First load — async
+	return (codeBlock as Promise<AnyExtension>).then((ext) => [...base, ext]);
+}
+
+// ============================================================================
+// Sync base extension builder (everything except lowlight)
+// ============================================================================
+
+function buildBaseExtensions({
+	features,
+	labels = defaultLabels,
+	placeholder,
+	maxCharacters,
+	customExtensions,
+}: BuildExtensionsOptions): AnyExtension[] {
 	const starterKitConfig: Record<string, any> = {
 		codeBlock: false,
 	};
@@ -59,7 +174,7 @@ export function buildExtensions({
 	const extensions: AnyExtension[] = [
 		StarterKit.configure(starterKitConfig),
 		Placeholder.configure({
-			placeholder: placeholder || "Start writing...",
+			placeholder: placeholder || "Start writing...", // Fallback; parent should pass translated string
 		}),
 	];
 
@@ -94,10 +209,6 @@ export function buildExtensions({
 		);
 	}
 
-	if (features.codeBlock) {
-		extensions.push(CodeBlockLowlight.configure({ lowlight }));
-	}
-
 	if (features.characterCount && maxCharacters) {
 		extensions.push(
 			CharacterCount.configure({
@@ -108,28 +219,31 @@ export function buildExtensions({
 
 	if (features.slashCommands) {
 		extensions.push(
-			createSlashCommandExtension((editor) => {
+			createSlashCommandExtension((_editor) => {
 				const commands: SlashCommandItem[] = [];
 
 				if (features.heading) {
 					commands.push(
 						{
-							title: "Heading 1",
-							description: "Large section heading",
+							title: labels.heading(1),
+							description: labels.heading1Description,
+							icon: "ph:text-h-one",
 							keywords: ["h1"],
 							command: (cmdEditor) =>
 								cmdEditor.chain().focus().toggleHeading({ level: 1 }).run(),
 						},
 						{
-							title: "Heading 2",
-							description: "Medium section heading",
+							title: labels.heading(2),
+							description: labels.heading2Description,
+							icon: "ph:text-h-two",
 							keywords: ["h2"],
 							command: (cmdEditor) =>
 								cmdEditor.chain().focus().toggleHeading({ level: 2 }).run(),
 						},
 						{
-							title: "Heading 3",
-							description: "Small section heading",
+							title: labels.heading(3),
+							description: labels.heading3Description,
+							icon: "ph:text-h-three",
 							keywords: ["h3"],
 							command: (cmdEditor) =>
 								cmdEditor.chain().focus().toggleHeading({ level: 3 }).run(),
@@ -138,8 +252,9 @@ export function buildExtensions({
 				}
 
 				commands.push({
-					title: "Paragraph",
-					description: "Start with plain text",
+					title: labels.paragraph,
+					description: labels.paragraphDescription,
+					icon: "ph:text-align-left",
 					keywords: ["text"],
 					command: (cmdEditor) =>
 						cmdEditor.chain().focus().setParagraph().run(),
@@ -147,8 +262,9 @@ export function buildExtensions({
 
 				if (features.bulletList) {
 					commands.push({
-						title: "Bullet list",
-						description: "Create a bulleted list",
+						title: labels.bulletList,
+						description: labels.bulletListDescription,
+						icon: "ph:list-bullets",
 						keywords: ["list", "ul"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleBulletList().run(),
@@ -157,8 +273,9 @@ export function buildExtensions({
 
 				if (features.orderedList) {
 					commands.push({
-						title: "Numbered list",
-						description: "Create an ordered list",
+						title: labels.orderedList,
+						description: labels.orderedListDescription,
+						icon: "ph:list-numbers",
 						keywords: ["list", "ol"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleOrderedList().run(),
@@ -167,8 +284,9 @@ export function buildExtensions({
 
 				if (features.blockquote) {
 					commands.push({
-						title: "Quote",
-						description: "Capture a quote",
+						title: labels.quote,
+						description: labels.quoteDescription,
+						icon: "ph:quotes",
 						keywords: ["blockquote"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleBlockquote().run(),
@@ -177,8 +295,9 @@ export function buildExtensions({
 
 				if (features.codeBlock) {
 					commands.push({
-						title: "Code block",
-						description: "Insert code snippet",
+						title: labels.codeBlock,
+						description: labels.codeBlockDescription,
+						icon: "ph:code-block",
 						keywords: ["code"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleCodeBlock().run(),
@@ -187,8 +306,9 @@ export function buildExtensions({
 
 				if (features.horizontalRule) {
 					commands.push({
-						title: "Divider",
-						description: "Insert a horizontal rule",
+						title: labels.divider,
+						description: labels.dividerDescription,
+						icon: "ph:minus",
 						keywords: ["hr"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().setHorizontalRule().run(),
@@ -197,8 +317,9 @@ export function buildExtensions({
 
 				if (features.table) {
 					commands.push({
-						title: "Table",
-						description: "Insert a 3x3 table",
+						title: labels.table,
+						description: labels.tableDescription,
+						icon: "ph:table",
 						keywords: ["grid"],
 						command: (cmdEditor) =>
 							cmdEditor

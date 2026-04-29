@@ -104,7 +104,7 @@ async function seed() {
 	// ========================================
 	// Idempotency check
 	// ========================================
-	const existing = await app.api.collections.cities.find(
+	const existing = await app.collections.cities.find(
 		{ where: { slug: "london" }, limit: 1 },
 		ctx,
 	);
@@ -121,27 +121,27 @@ async function seed() {
 		const cleanupSteps: [string, () => Promise<unknown>][] = [
 			[
 				"submissions",
-				() => app.api.collections.submissions.delete({ where: {} }, ctx),
+				() => app.collections.submissions.delete({ where: {} }, ctx),
 			],
 			[
 				"documents",
-				() => app.api.collections.documents.delete({ where: {} }, ctx),
+				() => app.collections.documents.delete({ where: {} }, ctx),
 			],
 			[
 				"announcements",
-				() => app.api.collections.announcements.delete({ where: {} }, ctx),
+				() => app.collections.announcements.delete({ where: {} }, ctx),
 			],
-			["news", () => app.api.collections.news.delete({ where: {} }, ctx)],
+			["news", () => app.collections.news.delete({ where: {} }, ctx)],
 			[
 				"contacts",
-				() => app.api.collections.contacts.delete({ where: {} }, ctx),
+				() => app.collections.contacts.delete({ where: {} }, ctx),
 			],
-			["pages", () => app.api.collections.pages.delete({ where: {} }, ctx)],
+			["pages", () => app.collections.pages.delete({ where: {} }, ctx)],
 			[
 				"cityMembers",
-				() => app.api.collections.cityMembers.delete({ where: {} }, ctx),
+				() => app.collections.cityMembers.delete({ where: {} }, ctx),
 			],
-			["cities", () => app.api.collections.cities.delete({ where: {} }, ctx)],
+			["cities", () => app.collections.cities.delete({ where: {} }, ctx)],
 		];
 		for (const [name, fn] of cleanupSteps) {
 			try {
@@ -163,7 +163,7 @@ async function seed() {
 	const cityIds: Record<string, string> = {};
 
 	for (const city of britishCities) {
-		const result = await app.api.collections.cities.create(
+		const result = await app.collections.cities.create(
 			{
 				name: city.name,
 				slug: city.slug,
@@ -193,7 +193,7 @@ async function seed() {
 			cityId,
 		});
 
-		await app.api.globals.site_settings.update(
+		await app.globals.site_settings.update(
 			{
 				siteName: `${city.name} Council`,
 				tagline: city.tagline,
@@ -281,7 +281,7 @@ async function seed() {
 		for (let i = 0; i < departments.length; i++) {
 			const { dept, desc } = departments[i];
 
-			await app.api.collections.contacts.create(
+			await app.collections.contacts.create(
 				{
 					city: cityId,
 					department: dept,
@@ -376,7 +376,7 @@ async function seed() {
 			const publishedAt = new Date();
 			publishedAt.setDate(publishedAt.getDate() - article.daysAgo);
 
-			await app.api.collections.news.create(
+			await app.collections.news.create(
 				{
 					city: cityId,
 					title: article.title,
@@ -452,7 +452,7 @@ async function seed() {
 		const cityId = cityIds[city.slug];
 
 		for (const announcement of announcements) {
-			await app.api.collections.announcements.create(
+			await app.collections.announcements.create(
 				{
 					city: cityId,
 					title: announcement.title,
@@ -485,7 +485,7 @@ async function seed() {
 		const cityId = cityIds[city.slug];
 
 		// Homepage
-		await app.api.collections.pages.create(
+		await app.collections.pages.create(
 			{
 				city: cityId,
 				title: `Welcome to ${city.name}`,
@@ -533,7 +533,7 @@ async function seed() {
 		);
 
 		// About page
-		await app.api.collections.pages.create(
+		await app.collections.pages.create(
 			{
 				city: cityId,
 				title: "About Us",
@@ -561,7 +561,7 @@ async function seed() {
 		);
 
 		// Services page
-		await app.api.collections.pages.create(
+		await app.collections.pages.create(
 			{
 				city: cityId,
 				title: "Services",

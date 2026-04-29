@@ -24,9 +24,9 @@ Each field is a **plain object** with generic methods. `field` uses the curried 
 
 ```ts
 export const field =
-  <TConfig extends BaseFieldConfig, TValue>() =>
-  <const TImpl extends FieldDef<TConfig, TValue>>(impl: TImpl): TImpl =>
-    impl;
+	<TConfig extends BaseFieldConfig, TValue>() =>
+	<const TImpl extends FieldDef<TConfig, TValue>>(impl: TImpl): TImpl =>
+		impl;
 ```
 
 - First call: provide `TConfig` and `TValue` explicitly
@@ -123,30 +123,30 @@ getDefaultRegistry().register("x", xField as any);
 ```ts
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
-  type BuildFieldState,
-  type ExtractConfigFromFieldDef,
-  type ExtractOpsFromFieldDef,
-  type ExtractTypeFromFieldDef,
-  type ExtractValueFromFieldDef,
-  createFieldDefinition,
+	type BuildFieldState,
+	type ExtractConfigFromFieldDef,
+	type ExtractOpsFromFieldDef,
+	type ExtractTypeFromFieldDef,
+	type ExtractValueFromFieldDef,
+	createFieldDefinition,
 } from "./field.js";
 
 export type FieldBuilderProxy<TFields = DefaultFieldTypeMap> = {
-  [K in keyof TFields]: <
-    const TUserConfig extends ExtractConfigFromFieldDef<TFields[K]>,
-  >(
-    config?: TUserConfig,
-  ) => FieldDefinition<
-    BuildFieldState<
-      ExtractTypeFromFieldDef<TFields[K]>,
-      TUserConfig extends undefined
-        ? ExtractConfigFromFieldDef<TFields[K]>
-        : TUserConfig,
-      ExtractValueFromFieldDef<TFields[K]>,
-      AnyPgColumn,
-      ExtractOpsFromFieldDef<TFields[K]>
-    >
-  >;
+	[K in keyof TFields]: <
+		const TUserConfig extends ExtractConfigFromFieldDef<TFields[K]>,
+	>(
+		config?: TUserConfig,
+	) => FieldDefinition<
+		BuildFieldState<
+			ExtractTypeFromFieldDef<TFields[K]>,
+			TUserConfig extends undefined
+				? ExtractConfigFromFieldDef<TFields[K]>
+				: TUserConfig,
+			ExtractValueFromFieldDef<TFields[K]>,
+			AnyPgColumn,
+			ExtractOpsFromFieldDef<TFields[K]>
+		>
+	>;
 };
 ```
 
@@ -154,21 +154,21 @@ export type FieldBuilderProxy<TFields = DefaultFieldTypeMap> = {
 
 ```ts
 export function createFieldBuilder<TMap = DefaultFieldTypeMap>(
-  registry: FieldRegistry,
+	registry: FieldRegistry,
 ): FieldBuilderProxy<TMap> {
-  return new Proxy({} as FieldBuilderProxy<TMap>, {
-    get(_target, prop: string) {
-      const fieldDef = registry.get(prop);
-      if (!fieldDef) {
-        throw new Error(
-          `Unknown field type: "${prop}". Available types: ${registry.types().join(", ")}`,
-        );
-      }
-      // Return a factory function that wraps the plain field def
-      return (config?: any) => createFieldDefinition(fieldDef, config);
-    },
-    // ... rest stays the same
-  });
+	return new Proxy({} as FieldBuilderProxy<TMap>, {
+		get(_target, prop: string) {
+			const fieldDef = registry.get(prop);
+			if (!fieldDef) {
+				throw new Error(
+					`Unknown field type: "${prop}". Available types: ${registry.types().join(", ")}`,
+				);
+			}
+			// Return a factory function that wraps the plain field def
+			return (config?: any) => createFieldDefinition(fieldDef, config);
+		},
+		// ... rest stays the same
+	});
 }
 ```
 
@@ -234,20 +234,20 @@ bun run check-types  # all 6 packages
 
 ## Key Files Reference
 
-| File                                                                    | Purpose                                                                                           | Status        |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------- |
-| `packages/questpie/src/server/fields/field.ts`                   | `FieldDef`, curried `field`, `createFieldDefinition`, `BuildFieldState`, extraction helpers | ✅ DONE       |
-| `packages/questpie/src/server/fields/builtin/*.ts`                      | All 15 builtin field definitions                                                                  | ✅ DONE       |
-| `packages/questpie/src/server/fields/builtin/defaults.ts`               | `defaultFields` map — no changes needed, types flow automatically                                 | ✅ NO CHANGES |
-| `packages/questpie/src/server/fields/builder.ts`                        | `FieldBuilderProxy` type, `createFieldBuilder` runtime                                            | ❌ NEXT       |
-| `packages/questpie/src/server/fields/registry.ts`                       | `FieldRegistry`, storage types                                                                    | ❌ TODO       |
-| `packages/questpie/src/server/fields/field-types.ts`                    | `FieldWhere`, `FieldSelect`, system field instances                                               | ❌ TODO       |
-| `packages/questpie/src/server/fields/types.ts`                          | `FieldDefinition<TState>`, `ContextualOperators`, `OperatorFn`                                    | ✅ NO CHANGES |
-| `packages/questpie/src/server/fields/common-operators.ts`               | `stringColumnOperators`, `numberColumnOperators`, etc.                                            | ✅ NO CHANGES |
-| `packages/questpie/src/server/collection/builder/collection-builder.ts` | `createFieldBuilderFromFactories`, `ExtractFieldTypes`                                            | ❌ TODO       |
-| `packages/questpie/src/server/collection/crud/types.ts`                 | `Where`, `WhereFromCollection`, etc.                                                              | ✅ NO CHANGES |
-| `packages/questpie/src/server/config/builder-types.ts`                  | `QuestpieBuilderState`                                                                            | ✅ NO CHANGES |
-| `packages/questpie/test/types/unified-api-types.test-d.ts`              | Type tests                                                                                        | ❌ OPTIONAL   |
+| File                                                                    | Purpose                                                                                     | Status        |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------- |
+| `packages/questpie/src/server/fields/field.ts`                          | `FieldDef`, curried `field`, `createFieldDefinition`, `BuildFieldState`, extraction helpers | ✅ DONE       |
+| `packages/questpie/src/server/fields/builtin/*.ts`                      | All 15 builtin field definitions                                                            | ✅ DONE       |
+| `packages/questpie/src/server/fields/builtin/defaults.ts`               | `defaultFields` map — no changes needed, types flow automatically                           | ✅ NO CHANGES |
+| `packages/questpie/src/server/fields/builder.ts`                        | `FieldBuilderProxy` type, `createFieldBuilder` runtime                                      | ❌ NEXT       |
+| `packages/questpie/src/server/fields/registry.ts`                       | `FieldRegistry`, storage types                                                              | ❌ TODO       |
+| `packages/questpie/src/server/fields/field-types.ts`                    | `FieldWhere`, `FieldSelect`, system field instances                                         | ❌ TODO       |
+| `packages/questpie/src/server/fields/types.ts`                          | `FieldDefinition<TState>`, `ContextualOperators`, `OperatorFn`                              | ✅ NO CHANGES |
+| `packages/questpie/src/server/fields/common-operators.ts`               | `stringColumnOperators`, `numberColumnOperators`, etc.                                      | ✅ NO CHANGES |
+| `packages/questpie/src/server/collection/builder/collection-builder.ts` | `createFieldBuilderFromFactories`, `ExtractFieldTypes`                                      | ❌ TODO       |
+| `packages/questpie/src/server/collection/crud/types.ts`                 | `Where`, `WhereFromCollection`, etc.                                                        | ✅ NO CHANGES |
+| `packages/questpie/src/server/config/builder-types.ts`                  | `QuestpieBuilderState`                                                                      | ✅ NO CHANGES |
+| `packages/questpie/test/types/unified-api-types.test-d.ts`              | Type tests                                                                                  | ❌ OPTIONAL   |
 
 ---
 

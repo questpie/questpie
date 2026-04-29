@@ -5,6 +5,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useForm, useWatch } from "react-hook-form";
+
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import {
@@ -108,17 +109,18 @@ export function ResetPasswordForm({
 	if (isSuccess) {
 		return (
 			<div className={cn("space-y-4 text-center", className)}>
-				<div className="bg-primary/10 mx-auto flex size-12 items-center justify-center">
+				<div className="bg-surface-high mx-auto flex size-12 items-center justify-center rounded-lg">
 					<Icon
 						icon="ph:check-circle-duotone"
-						className="text-primary size-6"
+						className="text-foreground size-6"
 					/>
 				</div>
 				<div className="space-y-2">
-					<h3 className="text-sm font-medium">Password reset successful</h3>
+					<h3 className="text-sm font-medium">
+						{t("auth.resetPasswordSuccess")}
+					</h3>
 					<p className="text-muted-foreground text-xs">
-						Your password has been reset successfully. You can now sign in with
-						your new password.
+						{t("auth.resetPasswordSuccessDescription")}
 					</p>
 				</div>
 				<Button
@@ -127,7 +129,7 @@ export function ResetPasswordForm({
 					size="lg"
 					onClick={onBackToLoginClick}
 				>
-					Sign in
+					{t("auth.signIn")}
 				</Button>
 			</div>
 		);
@@ -139,7 +141,7 @@ export function ResetPasswordForm({
 			className={cn("qa-reset-password-form space-y-4", className)}
 		>
 			<p className="text-muted-foreground text-xs">
-				Enter your new password below.
+				{t("auth.enterNewPassword")}
 			</p>
 
 			<FieldGroup>
@@ -150,7 +152,7 @@ export function ResetPasswordForm({
 						<div className="relative">
 							<Icon
 								icon="ph:lock-duotone"
-								className="text-muted-foreground absolute left-2 top-1/2 size-4 -translate-y-1/2"
+								className="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2"
 							/>
 							<Input
 								id="password"
@@ -186,7 +188,7 @@ export function ResetPasswordForm({
 						<div className="relative">
 							<Icon
 								icon="ph:lock-duotone"
-								className="text-muted-foreground absolute left-2 top-1/2 size-4 -translate-y-1/2"
+								className="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2"
 							/>
 							<Input
 								id="confirmPassword"

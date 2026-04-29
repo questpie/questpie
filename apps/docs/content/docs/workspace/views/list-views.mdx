@@ -3,8 +3,6 @@ title: List Views
 description: Configure table views — columns, sorting, search, and display.
 ---
 
-# List Views
-
 List views control how collections appear in the admin table. Configure them with `.list()` on your collection.
 
 ## Basic Table
@@ -28,11 +26,12 @@ Specify which fields to show and their order:
 )
 ```
 
-| Option | Type | Description |
-|---|---|---|
-| `columns` | `Field[]` | Fields to show as columns |
-| `searchableFields` | `Field[]` | Fields included in text search |
-| `defaultSort` | `{ field, direction }` | Default sort order |
+| Option             | Type                   | Description                    |
+| ------------------ | ---------------------- | ------------------------------ |
+| `columns`          | `Field[]`              | Fields to show as columns      |
+| `searchableFields` | `Field[]`              | Fields included in text search |
+| `defaultSort`      | `{ field, direction }` | Default sort order             |
+| `orderable`        | `boolean \| object`    | Enable drag reorder mode       |
 
 ## Sorting
 
@@ -57,6 +56,58 @@ Mark fields as searchable for the global search bar:
   }),
 )
 ```
+
+## Orderable Lists
+
+Orderable lists are explicit. QUESTPIE does not infer reorder behavior from a business field like `price`, `createdAt`, or `title`.
+
+Use this recipe when editors should manually control the display order of records:
+
+1. Add a numeric field named `order` to the collection.
+2. Create and run a migration for that field.
+3. Set initial values in seeds or a one-off backfill.
+4. Enable `orderable` in the list view.
+5. Use `defaultSort: { field: f.order, direction: "asc" }` so the table opens in reorder-compatible order.
+
+```ts
+export const services = collection("services")
+	.fields(({ f }) => ({
+		name: f.text(255).required(),
+		price: f.number().required(),
+		order: f.number().default(0).required(),
+	}))
+	.list(({ v, f }) =>
+		v.collectionTable({
+			columns: [f.name, f.price, f.order],
+			defaultSort: { field: f.order, direction: "asc" },
+			orderable: true,
+		}),
+	);
+```
+
+`orderable` uses the conventional `order` field. This is deliberate: reorder mode updates order values, so it must never point at domain data such as `price`.
+
+The admin only enables reorder mode when the current list is safe to reorder:
+
+- The collection list has `orderable` enabled.
+- The collection has an `order` field.
+- The current sort is `order asc` unless you configure another direction.
+- Search, grouping, filters, and multi-page result sets are inactive.
+
+When an editor drags rows, QUESTPIE writes the new order through the normal collection update pipeline using batch updates. Access rules, field validation, hooks, realtime invalidation, and versioning still apply.
+
+You can customize direction and spacing between generated values:
+
+```ts
+.list(({ v, f }) =>
+  v.collectionTable({
+    defaultSort: { field: f.order, direction: "asc" },
+    orderable: { direction: "asc", step: 10 },
+  }),
+)
+```
+
+Do not use `orderable` for computed, localized, relation, or business fields. Add a dedicated `order` field instead.
 
 ## Related Pages
 

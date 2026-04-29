@@ -1,14 +1,18 @@
 import { describe, expect, test } from "bun:test";
+
 import { z } from "zod/v4";
+
 import { ApiError } from "../../src/server/errors/index.js";
+import { allBackendMessagesEN } from "../../src/server/i18n/messages.js";
 import {
-	allBackendMessagesEN,
 	createTranslator,
-	createZodErrorMap,
 	mergeTranslationsConfig,
-	type TranslationsConfig,
+} from "../../src/server/i18n/translator.js";
+import type { TranslationsConfig } from "../../src/server/i18n/types.js";
+import {
+	createZodErrorMap,
 	type ZodIssue,
-} from "../../src/server/i18n/index.js";
+} from "../../src/server/i18n/zod-error-map.js";
 
 describe("i18n", () => {
 	describe("createTranslator", () => {
@@ -33,6 +37,11 @@ describe("i18n", () => {
 				fallbackLocale: "en",
 			});
 			expect(t("some.nonexistent.key" as any, {})).toBe("some.nonexistent.key");
+		});
+
+		test("should use bundled Slovak validation messages", () => {
+			const t = createTranslator(undefined);
+			expect(t("validation.union.invalid", {}, "sk")).toBe("Neplatný vstup");
 		});
 
 		test("should translate simple message", () => {
@@ -73,12 +82,12 @@ describe("i18n", () => {
 		test("should fallback to default locale when message not found in requested locale", () => {
 			const t = createTranslator({
 				messages: {
-					en: { "error.notFound": "Resource not found" },
-					sk: {}, // No translation for error.notFound
+					en: { "custom.fallbackOnly": "Fallback message" },
+					sk: {}, // No translation for custom.fallbackOnly
 				},
 				fallbackLocale: "en",
 			});
-			expect(t("error.notFound", {}, "sk")).toBe("Resource not found");
+			expect(t("custom.fallbackOnly", {}, "sk")).toBe("Fallback message");
 		});
 
 		test("should handle plural messages - one", () => {
@@ -393,6 +402,29 @@ describe("i18n", () => {
 			expect(resultEn?.message).toBe("Invalid email address");
 		});
 
+		test("should translate Zod v4 invalid_type and invalid_value issues", () => {
+			const t = createTranslator(undefined);
+			const errorMap = createZodErrorMap(t as any, "sk");
+
+			expect(
+				errorMap({
+					code: "invalid_type",
+					expected: "string",
+					path: ["name"],
+					message: "Invalid input: expected string, received undefined",
+				}).message,
+			).toBe("Toto pole je povinné");
+
+			expect(
+				errorMap({
+					code: "invalid_value",
+					values: ["draft", "published"],
+					path: ["status"],
+					message: 'Invalid option: expected one of "draft"|"published"',
+				}).message,
+			).toBe("Neplatná možnosť. Očakávané: draft, published");
+		});
+
 		test("should work with Zod global error map via setErrorMap", () => {
 			const translatorWithLocales = createTranslator({
 				messages: {
@@ -421,9 +453,7 @@ describe("i18n", () => {
 				}
 			} finally {
 				// Restore default error map
-				if (defaultMap) {
-					z.setErrorMap(defaultMap);
-				}
+				z.setErrorMap(defaultMap as any);
 			}
 		});
 
@@ -543,6 +573,24 @@ describe("i18n", () => {
 				expect(error.messageKey).toBe("error.validation");
 				expect(error.fieldErrors).toBeDefined();
 				expect(error.fieldErrors?.length).toBeGreaterThan(0);
+			}
+		});
+
+		test("should translate fromZodError field errors in toJSON", () => {
+			const schema = z.object({
+				name: z.string(),
+				status: z.enum(["draft", "published"]),
+			});
+			const result = schema.safeParse({});
+
+			if (!result.success) {
+				const error = ApiError.fromZodError(result.error);
+				const json = error.toJSON(false, t, "sk");
+
+				expect(json.fieldErrors?.[0]?.message).toBe("Toto pole je povinné");
+				expect(json.fieldErrors?.[1]?.message).toBe(
+					"Neplatná možnosť. Očakávané: draft, published",
+				);
 			}
 		});
 	});

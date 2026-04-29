@@ -11,7 +11,7 @@ interface ValueObject {
 	[themeName: string]: string;
 }
 
-export interface UseThemeProps {
+interface UseThemeProps {
 	themes: string[];
 	forcedTheme?: string | undefined;
 	setTheme: React.Dispatch<React.SetStateAction<string>>;
@@ -20,9 +20,9 @@ export interface UseThemeProps {
 	systemTheme?: "dark" | "light" | undefined;
 }
 
-export type Attribute = `data-${string}` | "class";
+type Attribute = `data-${string}` | "class";
 
-export interface ThemeProviderProps extends React.PropsWithChildren {
+interface ThemeProviderProps extends React.PropsWithChildren {
 	themes?: string[] | undefined;
 	forcedTheme?: string | undefined;
 	enableSystem?: boolean | undefined;
@@ -307,7 +307,7 @@ const getSystemTheme = (e?: MediaQueryList | MediaQueryListEvent) => {
  * Inline script to prevent FOUC (Flash of Unstyled Content)
  * Runs before React hydration to set the correct theme immediately
  */
-export const script = (
+const script = (
 	attribute: Attribute | Attribute[],
 	storageKey: string,
 	defaultTheme: string,

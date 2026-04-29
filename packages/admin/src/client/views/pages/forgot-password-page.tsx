@@ -6,10 +6,11 @@
  */
 
 import * as React from "react";
+
 import { useAuthClient } from "../../hooks/use-auth";
+import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
-	selectBrandName,
 	selectNavigate,
 	useAdminStore,
 } from "../../runtime/provider";
@@ -67,16 +68,16 @@ export interface ForgotPasswordPageProps {
  * ```
  */
 export function ForgotPasswordPage({
-	title = "Forgot password",
-	description = "Enter your email to receive a password reset link",
+	title,
+	description,
 	logo,
 	loginPath,
 	resetPasswordRedirectUrl,
 }: ForgotPasswordPageProps) {
+	const { t } = useTranslation();
 	const authClient = useAuthClient();
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
-	const brandName = useAdminStore(selectBrandName);
 
 	const [error, setError] = React.useState<string | null>(null);
 
@@ -102,7 +103,7 @@ export function ForgotPasswordPage({
 				if (result.error.message) {
 					setError(result.error.message);
 				} else {
-					setError("Failed to send reset email");
+					setError(t("error.failedToSendResetEmail"));
 				}
 				return;
 			}
@@ -112,7 +113,7 @@ export function ForgotPasswordPage({
 			if (err instanceof Error) {
 				setError(err.message);
 			} else {
-				setError("An error occurred");
+				setError(t("error.anErrorOccurred"));
 			}
 		}
 	};
@@ -123,9 +124,9 @@ export function ForgotPasswordPage({
 
 	return (
 		<AuthLayout
-			title={title}
-			description={description}
-			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			title={title ?? t("auth.forgotPasswordTitle")}
+			description={description ?? t("auth.forgotPasswordDescription")}
+			logo={logo}
 			className="qa-forgot-password-page"
 		>
 			<ForgotPasswordForm
@@ -134,13 +135,5 @@ export function ForgotPasswordPage({
 				error={error}
 			/>
 		</AuthLayout>
-	);
-}
-
-function DefaultLogo({ brandName }: { brandName: string }) {
-	return (
-		<div className="text-center">
-			<h1 className="text-xl font-bold">{brandName}</h1>
-		</div>
 	);
 }

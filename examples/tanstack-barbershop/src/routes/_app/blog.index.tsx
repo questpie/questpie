@@ -6,6 +6,7 @@
 
 import { Icon } from "@iconify/react";
 import { createFileRoute } from "@tanstack/react-router";
+
 import { getAllBlogPosts } from "@/lib/getBlogPosts.function";
 import { useTranslation } from "@/lib/providers/locale-provider";
 
@@ -31,43 +32,48 @@ function BlogIndexPage() {
 	const { t } = useTranslation();
 
 	return (
-		<div className="py-20 px-6">
-			<div className="container max-w-6xl mx-auto">
-				<header className="mb-16 text-center max-w-2xl mx-auto">
-					<h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+		<div className="px-6 py-20">
+			<div className="container mx-auto max-w-6xl">
+				<header className="mx-auto mb-16 max-w-2xl text-center">
+					<h1 className="mb-4 text-4xl font-bold tracking-tight md:text-5xl">
 						Blog
 					</h1>
-					<p className="text-xl text-muted-foreground">
+					<p className="text-muted-foreground text-xl">
 						News, tips, and stories from our barbershop
 					</p>
 				</header>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+				<div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3">
 					{posts.map((post, i) => (
 						<a
 							key={post.id}
 							href={`/blog/${post.slug}`}
-							className="group block animate-fade-in-up"
+							className="group animate-fade-in-up block"
 							style={{ animationDelay: `${i * 100}ms` }}
 						>
-							<div className="aspect-[16/10] bg-muted mb-6 overflow-hidden relative border border-border">
+							<div className="bg-muted border-border relative mb-6 aspect-[16/10] overflow-hidden border">
 								{post.coverImage ? (
 									<img
 										src={post.coverImage as string}
 										alt={post.title as string}
-										className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+										className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
 									/>
 								) : (
-									<div className="w-full h-full flex items-center justify-center bg-muted">
-										<Icon icon="ph:article" className="size-20 text-muted-foreground/20" />
+									<div className="bg-muted flex h-full w-full items-center justify-center">
+										<Icon
+											icon="ph:article"
+											className="text-muted-foreground/20 size-20"
+										/>
 									</div>
 								)}
-								<div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-500" />
+								<div className="absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/20" />
 							</div>
 
-							<div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
+							<div className="text-muted-foreground mb-3 flex items-center gap-3 text-sm">
 								{post.publishedAt && (
-									<time>{formatDate(post.publishedAt as unknown as string)}</time>
+									<time>
+										{formatDate(post.publishedAt as unknown as string)}
+									</time>
 								)}
 								{post.readingTime && (
 									<span className="flex items-center gap-1">
@@ -77,12 +83,12 @@ function BlogIndexPage() {
 								)}
 							</div>
 
-							<h3 className="text-2xl font-bold mb-2 group-hover:text-highlight transition-colors">
+							<h3 className="group-hover:text-highlight mb-2 text-2xl font-bold transition-colors">
 								{post.title}
 							</h3>
 
 							{post.excerpt && (
-								<p className="text-muted-foreground leading-relaxed line-clamp-3 mb-4">
+								<p className="text-muted-foreground mb-4 line-clamp-3 leading-relaxed">
 									{post.excerpt}
 								</p>
 							)}
@@ -96,7 +102,7 @@ function BlogIndexPage() {
 										.map((tag) => (
 											<span
 												key={tag}
-												className="px-2 py-0.5 bg-muted text-muted-foreground text-xs font-medium"
+												className="bg-muted text-muted-foreground px-2 py-0.5 text-xs font-medium"
 											>
 												{tag}
 											</span>
@@ -108,8 +114,8 @@ function BlogIndexPage() {
 				</div>
 
 				{posts.length === 0 && (
-					<div className="text-center py-20 bg-muted/30 border border-dashed border-border">
-						<p className="text-xl text-muted-foreground">
+					<div className="bg-muted/30 border-border border border-dashed py-20 text-center">
+						<p className="text-muted-foreground text-xl">
 							No blog posts yet. Check back soon!
 						</p>
 					</div>

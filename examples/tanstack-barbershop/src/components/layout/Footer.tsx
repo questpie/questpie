@@ -11,6 +11,7 @@
  */
 
 import { Icon } from "@iconify/react";
+
 import { useTranslation } from "@/lib/providers/locale-provider";
 
 // Types matching site-settings global
@@ -26,7 +27,7 @@ export interface SocialLink {
 	url: string;
 }
 
-export interface FooterLink {
+interface FooterLink {
 	label: string;
 	href: string;
 	isExternal?: boolean;
@@ -42,7 +43,7 @@ export interface BusinessHours {
 	sunday: { isOpen: boolean; start: string; end: string };
 }
 
-export interface FooterProps {
+interface FooterProps {
 	shopName?: string;
 	tagline?: string;
 	footerLinks?: FooterLink[];
@@ -97,12 +98,12 @@ export function Footer({
 	] as const;
 
 	return (
-		<footer className="bg-muted/50 border-t border-border">
+		<footer className="bg-muted/50 border-border border-t">
 			<div className="container py-12 md:py-16">
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
+				<div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4 lg:gap-12">
 					{/* Brand */}
 					<div className="space-y-4">
-						<div className="flex items-center gap-2 font-bold text-xl">
+						<div className="flex items-center gap-2 text-xl font-bold">
 							<Icon icon="ph:scissors-bold" className="size-6" />
 							<span>{shopName}</span>
 						</div>
@@ -134,7 +135,7 @@ export function Footer({
 					{/* Quick Links */}
 					{footerLinks.length > 0 && (
 						<div className="space-y-4">
-							<h3 className="font-semibold text-sm uppercase tracking-wider">
+							<h3 className="text-sm font-semibold tracking-wider uppercase">
 								{t("footer.quickLinks")}
 							</h3>
 							<nav className="flex flex-col gap-2">
@@ -142,7 +143,7 @@ export function Footer({
 									<a
 										key={link.href}
 										href={link.href}
-										className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+										className="text-muted-foreground hover:text-foreground text-sm transition-colors"
 										{...(link.isExternal && {
 											target: "_blank",
 											rel: "noopener noreferrer",
@@ -158,7 +159,7 @@ export function Footer({
 					{/* Business Hours */}
 					{businessHours && (
 						<div className="space-y-4">
-							<h3 className="font-semibold text-sm uppercase tracking-wider">
+							<h3 className="text-sm font-semibold tracking-wider uppercase">
 								{t("footer.hours")}
 							</h3>
 							<div className="space-y-1 text-sm">
@@ -167,7 +168,7 @@ export function Footer({
 									return (
 										<div
 											key={day}
-											className="flex justify-between gap-4 text-muted-foreground"
+											className="text-muted-foreground flex justify-between gap-4"
 										>
 											<span>{t(`day.${day}`)}</span>
 											<span>
@@ -184,20 +185,20 @@ export function Footer({
 
 					{/* Contact Info */}
 					<div className="space-y-4">
-						<h3 className="font-semibold text-sm uppercase tracking-wider">
+						<h3 className="text-sm font-semibold tracking-wider uppercase">
 							{t("contact.title")}
 						</h3>
 						<div className="space-y-3 text-sm">
 							{fullAddress && (
-								<div className="flex items-start gap-3 text-muted-foreground">
-									<Icon icon="ph:map-pin" className="size-4 mt-0.5 shrink-0" />
+								<div className="text-muted-foreground flex items-start gap-3">
+									<Icon icon="ph:map-pin" className="mt-0.5 size-4 shrink-0" />
 									<span>{fullAddress}</span>
 								</div>
 							)}
 							{contactPhone && (
 								<a
 									href={`tel:${contactPhone.replace(/\s/g, "")}`}
-									className="flex items-center gap-3 text-muted-foreground hover:text-foreground transition-colors"
+									className="text-muted-foreground hover:text-foreground flex items-center gap-3 transition-colors"
 								>
 									<Icon icon="ph:phone" className="size-4 shrink-0" />
 									<span>{contactPhone}</span>
@@ -206,7 +207,7 @@ export function Footer({
 							{contactEmail && (
 								<a
 									href={`mailto:${contactEmail}`}
-									className="flex items-center gap-3 text-muted-foreground hover:text-foreground transition-colors"
+									className="text-muted-foreground hover:text-foreground flex items-center gap-3 transition-colors"
 								>
 									<Icon icon="ph:envelope-simple" className="size-4 shrink-0" />
 									<span>{contactEmail}</span>
@@ -218,9 +219,9 @@ export function Footer({
 			</div>
 
 			{/* Copyright */}
-			<div className="border-t border-border">
+			<div className="border-border border-t">
 				<div className="container py-4">
-					<p className="text-center text-xs text-muted-foreground">
+					<p className="text-muted-foreground text-center text-xs">
 						&copy; {currentYear}{" "}
 						{copyrightText || `${shopName}. ${t("footer.rights")}`}
 					</p>

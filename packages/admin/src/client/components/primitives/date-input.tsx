@@ -4,7 +4,8 @@ import { Icon } from "@iconify/react";
 import { format } from "date-fns";
 import { useState } from "react";
 import { DayPicker } from "react-day-picker";
-import { useResolveText } from "../../i18n/hooks";
+
+import { useDateFnsLocale, useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import type {
@@ -12,6 +13,51 @@ import type {
 	DateRangeInputProps,
 	DateTimeInputProps,
 } from "./types";
+
+const datePickerClassNames = {
+	months: "flex flex-col sm:flex-row gap-2",
+	month: "flex flex-col gap-3",
+	month_caption: "relative flex h-9 items-center justify-center px-9",
+	caption_label: "text-foreground text-sm font-medium",
+	nav: "absolute inset-x-0 top-0 flex items-center justify-between px-1",
+	button_previous: cn(
+		"text-muted-foreground flex size-8 items-center justify-center rounded-md bg-transparent p-0 transition-[background-color,color,opacity] duration-150 ease-out",
+		"hover:bg-surface-high hover:text-foreground",
+	),
+	button_next: cn(
+		"text-muted-foreground flex size-8 items-center justify-center rounded-md bg-transparent p-0 transition-[background-color,color,opacity] duration-150 ease-out",
+		"hover:bg-surface-high hover:text-foreground",
+	),
+	month_grid: "w-full border-separate border-spacing-y-1",
+	weekdays: "flex",
+	weekday:
+		"text-muted-foreground flex size-9 items-center justify-center text-[0.7rem] font-medium",
+	week: "flex w-full",
+	day: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-transparent [&:has([aria-selected].day-outside)]:bg-transparent",
+	day_button: cn(
+		"size-9 rounded-[var(--control-radius-inner)] p-0 text-sm font-normal transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+		"hover:bg-surface-high hover:text-foreground active:scale-[0.96]",
+		"focus-visible:ring-ring/20 focus-visible:ring-3 focus-visible:outline-none",
+	),
+	selected:
+		"bg-foreground text-background shadow-[var(--control-shadow)] hover:bg-foreground hover:text-background focus:bg-foreground focus:text-background",
+	today:
+		"bg-surface-mid text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)]",
+	outside: "text-muted-foreground opacity-45",
+	disabled: "text-muted-foreground opacity-30",
+	hidden: "invisible",
+};
+
+const dateTriggerClassName = cn(
+	"control-surface font-chrome flex w-full items-center justify-start gap-2 px-3 py-2 text-sm",
+	"hover:bg-surface-low hover:text-foreground",
+	"focus-visible:border-border-strong focus-visible:ring-ring/20 aria-expanded:border-border-strong aria-expanded:ring-ring/20 focus-visible:ring-3 focus-visible:outline-none aria-expanded:ring-3",
+	"disabled:cursor-not-allowed disabled:opacity-50",
+);
+
+const openTriggerClassName = "border-border-strong ring-ring/20 ring-3";
+
+const datePopoverClassName = "floating-surface w-auto p-1";
 
 /**
  * Date Input Primitive
@@ -41,6 +87,7 @@ export function DateInput({
 	"aria-invalid": ariaInvalid,
 }: DateInputProps) {
 	const resolveText = useResolveText();
+	const dateFnsLocale = useDateFnsLocale();
 	const [open, setOpen] = useState(false);
 
 	const handleSelect = (date: Date | undefined) => {
@@ -60,10 +107,9 @@ export function DateInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"qa-date-input flex h-9 w-full items-center justify-start gap-2 border border-border bg-input px-3 py-2 text-sm",
-					"hover:bg-accent hover:text-accent-foreground",
-					"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-					"disabled:cursor-not-allowed disabled:opacity-50",
+					"qa-date-input",
+					dateTriggerClassName,
+					open && openTriggerClassName,
 					!value && "text-muted-foreground",
 					className,
 				)}
@@ -80,49 +126,19 @@ export function DateInput({
 					/>
 				)}
 			</PopoverTrigger>
-			<PopoverContent className="w-auto p-0" align="start">
+			<PopoverContent className={datePopoverClassName} align="start">
 				<DayPicker
 					mode="single"
 					selected={value ?? undefined}
 					onSelect={handleSelect}
+					locale={dateFnsLocale}
 					disabled={(date) => {
 						if (minDate && date < minDate) return true;
 						if (maxDate && date > maxDate) return true;
 						return false;
 					}}
-					className="p-3"
-					classNames={{
-						months: "flex flex-col sm:flex-row gap-2",
-						month: "flex flex-col gap-4",
-						month_caption: "flex justify-center pt-1 relative items-center h-9",
-						caption_label: "text-sm font-medium",
-						nav: "absolute inset-x-0 top-0 flex items-center justify-between px-1",
-						button_previous: cn(
-							"size-8 flex items-center justify-center rounded-md",
-							"bg-transparent p-0 opacity-50 hover:opacity-100 hover:bg-accent",
-						),
-						button_next: cn(
-							"size-8 flex items-center justify-center rounded-md",
-							"bg-transparent p-0 opacity-50 hover:opacity-100 hover:bg-accent",
-						),
-						month_grid: "w-full border-collapse",
-						weekdays: "flex",
-						weekday:
-							"text-muted-foreground w-9 font-normal text-[0.8rem] text-center",
-						week: "flex w-full mt-2",
-						day: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-outside)]:bg-accent",
-						day_button: cn(
-							"size-9 p-0 font-normal rounded-md",
-							"hover:bg-accent hover:text-accent-foreground",
-							"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-						),
-						selected:
-							"bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-md",
-						today: "bg-accent text-accent-foreground",
-						outside: "text-muted-foreground opacity-50",
-						disabled: "text-muted-foreground opacity-50",
-						hidden: "invisible",
-					}}
+					className="qa-date-picker font-chrome p-2"
+					classNames={datePickerClassNames}
 				/>
 			</PopoverContent>
 		</Popover>
@@ -157,6 +173,7 @@ export function DateTimeInput({
 	"aria-invalid": ariaInvalid,
 }: DateTimeInputProps) {
 	const resolveText = useResolveText();
+	const dateFnsLocale = useDateFnsLocale();
 	const [open, setOpen] = useState(false);
 	const [timeValue, setTimeValue] = useState(() => {
 		if (!value) return "";
@@ -204,10 +221,9 @@ export function DateTimeInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"qa-datetime-input flex h-9 w-full items-center justify-start gap-2 border border-border bg-input px-3 py-2 text-sm",
-					"hover:bg-accent hover:text-accent-foreground",
-					"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-					"disabled:cursor-not-allowed disabled:opacity-50",
+					"qa-datetime-input",
+					dateTriggerClassName,
+					open && openTriggerClassName,
 					!value && "text-muted-foreground",
 					className,
 				)}
@@ -224,59 +240,29 @@ export function DateTimeInput({
 					/>
 				)}
 			</PopoverTrigger>
-			<PopoverContent className="w-auto p-0" align="start">
+			<PopoverContent className={datePopoverClassName} align="start">
 				<DayPicker
 					mode="single"
 					selected={value ?? undefined}
 					onSelect={handleDateSelect}
+					locale={dateFnsLocale}
 					disabled={(date) => {
 						if (minDate && date < minDate) return true;
 						if (maxDate && date > maxDate) return true;
 						return false;
 					}}
-					className="p-3"
-					classNames={{
-						months: "flex flex-col sm:flex-row gap-2",
-						month: "flex flex-col gap-4",
-						month_caption: "flex justify-center pt-1 relative items-center h-9",
-						caption_label: "text-sm font-medium",
-						nav: "absolute inset-x-0 top-0 flex items-center justify-between px-1",
-						button_previous: cn(
-							"size-8 flex items-center justify-center rounded-md",
-							"bg-transparent p-0 opacity-50 hover:opacity-100 hover:bg-accent",
-						),
-						button_next: cn(
-							"size-8 flex items-center justify-center rounded-md",
-							"bg-transparent p-0 opacity-50 hover:opacity-100 hover:bg-accent",
-						),
-						month_grid: "w-full border-collapse",
-						weekdays: "flex",
-						weekday:
-							"text-muted-foreground w-9 font-normal text-[0.8rem] text-center",
-						week: "flex w-full mt-2",
-						day: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-outside)]:bg-accent",
-						day_button: cn(
-							"size-9 p-0 font-normal rounded-md",
-							"hover:bg-accent hover:text-accent-foreground",
-							"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-						),
-						selected:
-							"bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-md",
-						today: "bg-accent text-accent-foreground",
-						outside: "text-muted-foreground opacity-50",
-						disabled: "text-muted-foreground opacity-50",
-						hidden: "invisible",
-					}}
+					className="qa-date-picker font-chrome p-2"
+					classNames={datePickerClassNames}
 				/>
-				<div className="border-t border-border p-3">
+				<div className="border-border-subtle bg-surface-low/60 border-t p-3">
 					<input
 						type="time"
 						step={precision === "second" ? 1 : 60}
 						value={timeValue}
 						onChange={handleTimeChange}
 						className={cn(
-							"flex h-9 w-full border border-border bg-input px-3 py-2 text-sm",
-							"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+							"qa-time-input control-surface flex w-full px-3 py-2 text-sm",
+							"focus-visible:border-border-strong focus-visible:ring-ring/20 focus-visible:ring-3 focus-visible:outline-none",
 						)}
 					/>
 				</div>
@@ -310,6 +296,7 @@ function DateRangeInput({
 	"aria-invalid": ariaInvalid,
 }: DateRangeInputProps) {
 	const resolveText = useResolveText();
+	const dateFnsLocale = useDateFnsLocale();
 	const [open, setOpen] = useState(false);
 
 	const handleSelect = (range: { from?: Date; to?: Date } | undefined) => {
@@ -340,10 +327,9 @@ function DateRangeInput({
 				disabled={disabled}
 				aria-invalid={ariaInvalid}
 				className={cn(
-					"qa-date-range-input flex h-9 w-full items-center justify-start gap-2 border border-border bg-input px-3 py-2 text-sm",
-					"hover:bg-accent hover:text-accent-foreground",
-					"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-					"disabled:cursor-not-allowed disabled:opacity-50",
+					"qa-date-range-input",
+					dateTriggerClassName,
+					open && openTriggerClassName,
 					!value.start && !value.end && "text-muted-foreground",
 					className,
 				)}
@@ -358,7 +344,7 @@ function DateRangeInput({
 					/>
 				)}
 			</PopoverTrigger>
-			<PopoverContent className="w-auto p-0" align="start">
+			<PopoverContent className={datePopoverClassName} align="start">
 				<DayPicker
 					mode="range"
 					selected={
@@ -367,47 +353,21 @@ function DateRangeInput({
 							: undefined
 					}
 					onSelect={handleSelect}
+					locale={dateFnsLocale}
 					numberOfMonths={2}
 					disabled={(date) => {
 						if (minDate && date < minDate) return true;
 						if (maxDate && date > maxDate) return true;
 						return false;
 					}}
-					className="p-3"
+					className="qa-date-picker font-chrome p-2"
 					classNames={{
-						months: "flex flex-col sm:flex-row gap-4",
-						month: "flex flex-col gap-4",
-						month_caption: "flex justify-center pt-1 relative items-center h-9",
-						caption_label: "text-sm font-medium",
-						nav: "absolute inset-x-0 top-0 flex items-center justify-between px-1",
-						button_previous: cn(
-							"size-8 flex items-center justify-center rounded-md",
-							"bg-transparent p-0 opacity-50 hover:opacity-100 hover:bg-accent",
-						),
-						button_next: cn(
-							"size-8 flex items-center justify-center rounded-md",
-							"bg-transparent p-0 opacity-50 hover:opacity-100 hover:bg-accent",
-						),
-						month_grid: "w-full border-collapse",
-						weekdays: "flex",
-						weekday:
-							"text-muted-foreground w-9 font-normal text-[0.8rem] text-center",
-						week: "flex w-full mt-2",
-						day: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-outside)]:bg-accent",
-						day_button: cn(
-							"size-9 p-0 font-normal rounded-md",
-							"hover:bg-accent hover:text-accent-foreground",
-							"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-						),
-						selected:
-							"bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-md",
+						...datePickerClassNames,
+						months: "flex flex-col sm:flex-row gap-3",
+						day: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-surface-high/55 [&:has([aria-selected].day-outside)]:bg-surface-high/35",
 						range_start: "rounded-l-md",
 						range_end: "rounded-r-md",
-						range_middle: "bg-accent",
-						today: "bg-accent text-accent-foreground",
-						outside: "text-muted-foreground opacity-50",
-						disabled: "text-muted-foreground opacity-50",
-						hidden: "invisible",
+						range_middle: "bg-surface-high/55 text-foreground",
 					}}
 				/>
 			</PopoverContent>

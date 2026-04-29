@@ -5,6 +5,9 @@
  */
 
 import { Icon } from "@iconify/react";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+
+import { getBarber } from "@/lib/getBarbers.function";
 import {
 	PreviewField,
 	PreviewProvider,
@@ -12,8 +15,6 @@ import {
 	type TipTapDoc,
 	useCollectionPreview,
 } from "@questpie/admin/client";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { getBarber } from "@/lib/getBarbers.function";
 
 export const Route = createFileRoute("/_app/barbers/$slug")({
 	loader: async (ctx) => {
@@ -50,12 +51,12 @@ function BarberProfilePage() {
 			focusedField={focusedField}
 			onFieldClick={handleFieldClick}
 		>
-			<div className={isPreviewMode ? "preview-mode py-20 px-6" : "py-20 px-6"}>
-				<div className="container max-w-5xl mx-auto">
+			<div className={isPreviewMode ? "preview-mode px-6 py-20" : "px-6 py-20"}>
+				<div className="container mx-auto max-w-5xl">
 					{/* Back Link */}
 					<Link
 						to="/barbers"
-						className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-12 transition-colors group"
+						className="text-muted-foreground hover:text-foreground group mb-12 inline-flex items-center gap-2 transition-colors"
 					>
 						<Icon
 							icon="ph:arrow-left"
@@ -64,24 +65,24 @@ function BarberProfilePage() {
 						Back to Team
 					</Link>
 
-					<div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+					<div className="grid grid-cols-1 gap-16 lg:grid-cols-12">
 						{/* Left: Avatar & Info */}
-						<div className="lg:col-span-5 space-y-8">
+						<div className="space-y-8 lg:col-span-5">
 							<PreviewField
 								field="avatar"
-								className="aspect-[3/4] bg-muted overflow-hidden border border-border sticky top-24"
+								className="bg-muted border-border sticky top-24 aspect-[3/4] overflow-hidden border"
 							>
 								{previewBarber.avatar ? (
 									<img
 										src={previewBarber.avatar as string}
 										alt={previewBarber.name as string}
-										className="w-full h-full object-cover"
+										className="h-full w-full object-cover"
 									/>
 								) : (
-									<div className="w-full h-full flex items-center justify-center">
+									<div className="flex h-full w-full items-center justify-center">
 										<Icon
 											icon="ph:user"
-											className="size-40 text-muted-foreground/20"
+											className="text-muted-foreground/20 size-40"
 										/>
 									</div>
 								)}
@@ -89,12 +90,12 @@ function BarberProfilePage() {
 						</div>
 
 						{/* Right: Bio & Services */}
-						<div className="lg:col-span-7 space-y-12">
+						<div className="space-y-12 lg:col-span-7">
 							<section>
 								<PreviewField
 									field="name"
 									as="h1"
-									className="text-4xl md:text-5xl font-bold tracking-tight mb-4"
+									className="mb-4 text-4xl font-bold tracking-tight md:text-5xl"
 								>
 									{previewBarber.name}
 								</PreviewField>
@@ -103,12 +104,12 @@ function BarberProfilePage() {
 									(previewBarber.specialties as string[]).length > 0 && (
 										<PreviewField
 											field="specialties"
-											className="flex flex-wrap gap-2 mb-8"
+											className="mb-8 flex flex-wrap gap-2"
 										>
 											{(previewBarber.specialties as string[]).map((s) => (
 												<span
 													key={s}
-													className="px-3 py-1 bg-highlight/10 text-highlight text-sm font-bold uppercase tracking-wider"
+													className="bg-highlight/10 text-highlight px-3 py-1 text-sm font-bold tracking-wider uppercase"
 												>
 													{s}
 												</span>
@@ -136,26 +137,26 @@ function BarberProfilePage() {
 							</section>
 
 							{/* Contact Info */}
-							<section className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-8 bg-muted/30 border border-border">
+							<section className="bg-muted/30 border-border grid grid-cols-1 gap-6 border p-8 sm:grid-cols-2">
 								<PreviewField field="email" className="space-y-1">
-									<span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+									<span className="text-muted-foreground text-xs font-bold tracking-widest uppercase">
 										Email
 									</span>
 									<a
 										href={`mailto:${previewBarber.email}`}
-										className="flex items-center gap-2 font-medium hover:text-highlight transition-colors"
+										className="hover:text-highlight flex items-center gap-2 font-medium transition-colors"
 									>
 										<Icon icon="ph:envelope-simple" className="size-5" />
 										{previewBarber.email}
 									</a>
 								</PreviewField>
 								<PreviewField field="phone" className="space-y-1">
-									<span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+									<span className="text-muted-foreground text-xs font-bold tracking-widest uppercase">
 										Phone
 									</span>
 									<a
 										href={`tel:${previewBarber.phone}`}
-										className="flex items-center gap-2 font-medium hover:text-highlight transition-colors"
+										className="hover:text-highlight flex items-center gap-2 font-medium transition-colors"
 									>
 										<Icon icon="ph:phone" className="size-5" />
 										{previewBarber.phone}
@@ -178,18 +179,18 @@ function BarberProfilePage() {
 										{previewBarber.services.map((service: any) => (
 											<div
 												key={service.id}
-												className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border border-border bg-card hover:border-highlight/30 transition-all group"
+												className="border-border bg-card hover:border-highlight/30 group flex flex-col justify-between border p-6 transition-all sm:flex-row sm:items-center"
 											>
 												<div className="mb-4 sm:mb-0">
-													<h3 className="text-xl font-bold group-hover:text-highlight transition-colors">
+													<h3 className="group-hover:text-highlight text-xl font-bold transition-colors">
 														{service.name}
 													</h3>
-													<div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+													<div className="text-muted-foreground mt-1 flex items-center gap-4 text-sm">
 														<span className="flex items-center gap-1.5">
 															<Icon icon="ph:clock" className="size-4" />
 															{service.duration} min
 														</span>
-														<span className="font-bold text-highlight">
+														<span className="text-highlight font-bold">
 															{formatPrice(service.price)}
 														</span>
 													</div>
@@ -201,7 +202,7 @@ function BarberProfilePage() {
 														barber: previewBarber.id,
 														service: service.id,
 													}}
-													className="px-6 py-3 bg-foreground text-background text-sm font-bold uppercase tracking-widest hover:bg-highlight hover:text-highlight-foreground transition-all text-center"
+													className="bg-foreground text-background hover:bg-highlight hover:text-highlight-foreground px-6 py-3 text-center text-sm font-bold tracking-widest uppercase transition-all"
 												>
 													Book This
 												</Link>
@@ -212,7 +213,7 @@ function BarberProfilePage() {
 							)}
 
 							{isPreviewMode && (
-								<div className="fixed bottom-4 right-4 bg-highlight text-highlight-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium z-50">
+								<div className="bg-highlight text-highlight-foreground fixed right-4 bottom-4 z-50 rounded-full px-4 py-2 text-sm font-medium shadow-lg">
 									Preview Mode - Click fields to edit
 								</div>
 							)}

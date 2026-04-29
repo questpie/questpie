@@ -3,9 +3,7 @@ title: Migrations
 description: Database migrations — generate, up, down, push, fresh, reset.
 ---
 
-# Migrations
-
-QuestPie provides CLI commands for database schema management.
+QUESTPIE provides CLI commands for database schema management.
 
 ## Development: Push
 
@@ -49,9 +47,7 @@ Drop everything and re-run all migrations:
 bunx questpie migrate:fresh
 ```
 
-<Callout type="warn">
-Destroys all data. Development only.
-</Callout>
+<Callout type="warn">Destroys all data. Development only.</Callout>
 
 ### Reset
 
@@ -65,11 +61,11 @@ bunx questpie migrate:reset
 
 ```ts title="questpie.config.ts"
 export default runtimeConfig({
-  cli: {
-    migrations: {
-      directory: "./src/migrations",
-    },
-  },
+	cli: {
+		migrations: {
+			directory: "./src/migrations",
+		},
+	},
 });
 ```
 
@@ -78,7 +74,7 @@ export default runtimeConfig({
 Populate the database with initial data:
 
 ```bash
-bunx questpie seed:run
+bunx questpie seed
 ```
 
 Seed files go in the configured seeds directory:

@@ -5,6 +5,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useForm, useWatch } from "react-hook-form";
+
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import {
@@ -128,7 +129,7 @@ export function AcceptInviteForm({
 						<div className="relative">
 							<Icon
 								icon="ph:user-duotone"
-								className="text-muted-foreground absolute left-2 top-1/2 size-4 -translate-y-1/2"
+								className="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2"
 							/>
 							<Input
 								id="accept-name"
@@ -159,7 +160,7 @@ export function AcceptInviteForm({
 						<div className="relative">
 							<Icon
 								icon="ph:lock-duotone"
-								className="text-muted-foreground absolute left-2 top-1/2 size-4 -translate-y-1/2"
+								className="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2"
 							/>
 							<Input
 								id="accept-password"
@@ -195,7 +196,7 @@ export function AcceptInviteForm({
 						<div className="relative">
 							<Icon
 								icon="ph:lock-duotone"
-								className="text-muted-foreground absolute left-2 top-1/2 size-4 -translate-y-1/2"
+								className="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2"
 							/>
 							<Input
 								id="accept-confirm-password"

@@ -1,136 +1,195 @@
 ---
-title: Localization
-description: Enable multi-language content with per-field localization and locale configuration.
+title: Content Languages
+description: Configure content locales, mark localized fields, and query translated content.
 ---
 
-# Localization
+QUESTPIE separates **content language** from **admin UI language**.
 
-QuestPie supports per-field content localization. Mark any field as `localized: true` and it stores separate values for each configured locale.
+- Content language controls localized field values stored for records and globals.
+- Admin UI language controls the interface strings shown in the admin panel.
 
-## Locale Configuration
+Use this page for content languages. For admin interface language and message keys, see [UI Language & Messages](/docs/workspace/ui-language-and-messages).
 
-Define content locales in the locale convention file:
+## Configure Content Locales
 
-```ts title="locale.ts"
-import { locale } from "#questpie";
+Define content locales in `config/app.ts`:
 
-export default locale({
-  locales: [
-    {
-      code: "en",
-      label: "English",
-      fallback: true,
-      flagCountryCode: "us",
-    },
-    { code: "sk", label: "Slovenčina" },
-    { code: "de", label: "Deutsch" },
-  ],
-  defaultLocale: "en",
+```ts title="config/app.ts"
+import { appConfig } from "questpie";
+
+export default appConfig({
+	locale: {
+		locales: [
+			{
+				code: "en",
+				label: "English",
+				fallback: true,
+				flagCountryCode: "gb",
+			},
+			{ code: "sk", label: "Slovencina" },
+			{ code: "de", label: "Deutsch" },
+		],
+		defaultLocale: "en",
+		fallbacks: {
+			"en-US": "en",
+			"en-GB": "en",
+			"de-AT": "de",
+		},
+	},
 });
 ```
 
-| Option | Type | Description |
-|---|---|---|
-| `code` | `string` | Locale identifier (e.g., `"en"`, `"sk"`) |
-| `label` | `string` | Display name |
-| `fallback` | `boolean` | Fallback locale when translation is missing |
-| `flagCountryCode` | `string` | ISO country code for flag icon |
-| `defaultLocale` | `string` | Default locale for new content |
+| Option            | Type                           | Description                                                      |
+| ----------------- | ------------------------------ | ---------------------------------------------------------------- |
+| `code`            | `string`                       | Locale identifier, such as `"en"`, `"sk"`, or `"en-US"`          |
+| `label`           | `string`                       | Display name shown in locale pickers                             |
+| `fallback`        | `boolean`                      | Metadata for marking the primary fallback locale in UI           |
+| `flagCountryCode` | `string`                       | Optional country code for flag display                           |
+| `defaultLocale`   | `string`                       | Locale used when no locale is requested                          |
+| `fallbacks`       | `Record<string, string>`       | Maps unsupported requested locales to supported locales          |
+| `locales`         | `Locale[] \| (() => Locale[])` | Static locale list or a resolver for dynamic locale availability |
 
-## Localizing Fields
+## Add A Language
 
-Chain `.localized()` on any field:
+1. Add the locale object to `config/app.ts`.
+2. Add or update `fallbacks` if regional variants should resolve to an existing locale.
+3. Add translated values for localized fields in the admin or through the CRUD API.
+4. Re-run codegen only if you just created `config/app.ts`; editing the locale list itself does not change generated types.
+5. Run migrations only if you changed field definitions, such as adding `.localized()` to a field.
 
-```ts title="collections/services.ts"
-.fields(({ f }) => ({
-  name: f.text().required().localized(),
-  description: f.textarea().localized(),
-  price: f.number().required(),  // NOT localized — same in all locales
-}))
+Adding a new content locale does not require a database migration by itself. Localized values are stored by locale in i18n tables.
+
+## Change The Default Language
+
+Change `defaultLocale` in `config/app.ts`:
+
+```ts title="config/app.ts"
+export default appConfig({
+	locale: {
+		locales: [
+			{ code: "en", label: "English" },
+			{ code: "sk", label: "Slovencina", fallback: true },
+		],
+		defaultLocale: "sk",
+	},
+});
 ```
 
-Localized fields create separate database columns per locale (e.g., `name_en`, `name_sk`) or a JSON structure, depending on the storage strategy.
+The default locale is used when no locale is passed to `app.createContext()`, the HTTP adapter, or the client SDK. Missing localized values fall back to the default locale unless a query explicitly sets `localeFallback: false`.
 
-### Localizable Field Types
+## Localize Fields
 
-Most field types support localization:
+Chain `.localized()` on fields whose values should vary by content language:
 
-- `f.text()`, `f.textarea()`
-- `f.select()`
-- `f.array()`
-- `f.blocks()`
+```ts title="collections/pages.ts"
+import { collection } from "#questpie/factories";
 
-Numeric, boolean, date, and relation fields are typically **not** localized since their values are language-independent.
+export const pages = collection("pages").fields(({ f }) => ({
+	title: f.text(255).required().localized(),
+	excerpt: f.textarea().localized(),
+	content: f.blocks().localized(),
+	slug: f.text(255).required(),
+	publishedAt: f.datetime(),
+}));
+```
 
-## Labels and Descriptions
+Only localized fields change when the active content locale changes. Non-localized fields share one value across every language.
 
-Field labels and descriptions also support i18n — but this is for the **admin UI language**, not content localization:
+Good localized candidates:
+
+- `f.text()`, `f.textarea()`, `f.richText()`
+- `f.select()` when the stored value is language-specific
+- object/array fields where the whole structure should vary per locale
+- `f.blocks()` for page sections and marketing content
+
+Usually not localized:
+
+- IDs, slugs, booleans, numbers, dates, relation IDs, and upload references
+
+## Localized Objects And Arrays
+
+Localizing an array or object localizes the whole value for that locale:
 
 ```ts
-name: f.text()
-  .label({ en: "Full Name", sk: "Celé meno" })
-  .description({
-    en: "The barber's full display name",
-    sk: "Celé zobrazovacie meno holiča",
-  })
-  .required()
-  .localized(),  // Content is also localized
+navigation: f
+	.object({
+		label: f.text().required(),
+		href: f.text().required(),
+	})
+	.array()
+	.localized(),
 ```
 
-## Admin UI Locale
+Switching from `"en"` to `"sk"` loads a separate navigation array for Slovak. It does not translate individual rows inside the English array.
 
-The admin panel has its own locale config for the interface language:
+## Query Localized Content
 
-```ts title="admin-locale.ts"
-import { adminLocale } from "#questpie";
+Route handlers and hooks receive the request locale in context:
 
-export default adminLocale({
-  locales: ["en", "sk"],
-  defaultLocale: "en",
+```ts title="routes/published-pages.ts"
+import { route } from "questpie";
+
+export default route().handler(async ({ collections }) => {
+	return collections.pages.find({
+		where: { isPublished: true },
+	});
 });
 ```
 
-This controls the admin interface language, not the content locales.
-
-## Querying Localized Content
-
-### Server-side
-
-The locale is part of the request context:
+For standalone scripts and tests, pass the locale when creating context:
 
 ```ts
-// In routes/hooks - locale comes from the request
-const services = await collections.services.find({
-  where: { isActive: true },
-});
-// Returns localized `name` and `description` for the current locale
+import { createContext } from "#questpie";
+
+const ctx = await createContext({ locale: "sk" });
+const pages = await ctx.collections.pages.find({});
 ```
 
-### Client-side
-
-Set the locale on the client:
+The client SDK can use a default locale or a per-call locale:
 
 ```ts
 client.setLocale("sk");
 
-const services = await client.collections.services.find({
-  where: { isActive: true },
+const pages = await client.collections.pages.find({});
+
+const englishPages = await client.collections.pages.find({
+	locale: "en",
 });
-// Returns Slovak translations
 ```
 
-## Localized Arrays
-
-Arrays can be localized as a whole — each locale has its own array:
+Disable fallback when you need to detect missing translations:
 
 ```ts
-navigation: f.object({
-  label: f.text().required(),
-  href: f.text().required(),
-}).array().localized(),
+const page = await client.collections.pages.findOne({
+	where: { id: "page_123" },
+	locale: "sk",
+	localeFallback: false,
+});
 ```
+
+## Admin Editing
+
+When any collection or global has localized fields, the admin shows a content locale switcher. The switcher changes only localized values; the admin UI language stays the same.
+
+The admin sends the active content locale on collection/global requests, relation option requests, validation, actions, and block editing. If a form has unsaved changes, switching content locale asks the editor whether to discard those unsaved edits.
+
+## Labels And Descriptions
+
+Field labels, collection labels, sidebar items, and help text use `I18nText`, not content localization. They can be plain strings, inline locale maps, or translation key references:
+
+```ts
+title: f
+	.text(255)
+	.label({ en: "Title", sk: "Nadpis" })
+	.description({ key: "fields.title.help", fallback: "Shown on the page" })
+	.localized(),
+```
+
+These labels follow the admin UI language. The field value follows the content language.
 
 ## Related Pages
 
-- [Fields](/docs/backend/data-modeling/fields) — Field types and options
-- [Globals](/docs/backend/data-modeling/globals) — Site-wide settings with localization
+- [Workspace Localization](/docs/workspace/localization) — How editors switch content locale in the admin
+- [UI Language & Messages](/docs/workspace/ui-language-and-messages) — Admin interface locale and message keys
+- [Fields](/docs/backend/data-modeling/fields) — Field types and `.localized()`
+- [Globals](/docs/backend/data-modeling/globals) — Site-wide localized settings

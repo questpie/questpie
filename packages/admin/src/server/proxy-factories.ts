@@ -157,24 +157,58 @@ export function createComponentCallbackProxy(): Record<
 	) as Record<string, (...args: unknown[]) => Record<string, unknown>>;
 }
 
+function createBuiltinActionReference(name: string): unknown {
+	const ref = (() => name) as (() => string) & {
+		type: string;
+		toJSON: () => string;
+		valueOf: () => string;
+		[Symbol.toPrimitive]: () => string;
+	};
+
+	Object.defineProperties(ref, {
+		type: { value: name },
+		toJSON: { value: () => name },
+		valueOf: { value: () => name },
+		[Symbol.toPrimitive]: { value: () => name },
+	});
+
+	return ref;
+}
+
 /**
- * Create a simple action proxy for builder callback contexts.
- * Provides a `custom()` method and returns action names as strings for built-in actions.
+ * Create an action proxy for builder callback contexts.
  *
- * Used as the `a` callback param: `a.delete` → `"delete"`, `a.custom("archive", config)` → `{ id: "archive", ...config }`.
+ * The same `a` proxy is used by `.list()` (`a.delete`) and `.actions()`
+ * (`a.delete()`, `a.headerAction(...)`), so built-ins are callable values that
+ * also serialize back to their action name.
  */
 export function createActionCallbackProxy(): Record<string, unknown> {
 	return new Proxy(
 		{
 			custom: (name: string, config?: Record<string, unknown>) => ({
-				id: name,
-				...config,
+				type: name,
+				...(config ? { config } : {}),
+			}),
+			action: (def: Record<string, unknown>) => ({
+				scope: "single",
+				...def,
+			}),
+			bulkAction: (def: Record<string, unknown>) => ({
+				...def,
+				scope: "bulk",
+			}),
+			headerAction: (def: Record<string, unknown>) => ({
+				...def,
+				scope: "header",
 			}),
 		} as Record<string, unknown>,
 		{
 			get: (target: Record<string, unknown>, prop: string | symbol) => {
+				if (prop === "then") return undefined;
+
 				return (
-					(target as Record<string | symbol, unknown>)[prop] ?? String(prop)
+					(target as Record<string | symbol, unknown>)[prop] ??
+					createBuiltinActionReference(String(prop))
 				);
 			},
 		},

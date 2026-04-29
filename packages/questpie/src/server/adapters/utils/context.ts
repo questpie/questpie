@@ -4,6 +4,8 @@
  * Utilities for resolving session, locale, and creating adapter context.
  */
 
+import { tryGetContext } from "../../config/context.js";
+import { getInternalAdapterContext } from "../../config/internal-context.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import type {
@@ -93,12 +95,13 @@ export const createAdapterContext = async <
 		? await config.extendContext({ request, app, context: baseContext })
 		: undefined;
 
-	// 2. Apply app-level context resolver (from .context() on builder)
-	// This is where custom headers like x-tenant-id are extracted
+	// 2. Apply app-level context extension (from config.app.context in the user's config/app.ts).
+	// This replaced the old `contextResolver` concept — the function signature is the same,
+	// but it now lives under config.app.context (see QuestpieAppConfig.context).
 	let cmsExtension: Record<string, any> | undefined;
-	const contextResolver = app.config.contextResolver;
-	if (contextResolver) {
-		cmsExtension = await contextResolver({
+	const appContextFn = (app.state as any)?.config?.app?.context;
+	if (typeof appContextFn === "function") {
+		cmsExtension = await appContextFn({
 			request,
 			session: sessionData,
 			db: app.db,
@@ -106,10 +109,13 @@ export const createAdapterContext = async <
 	}
 
 	// Merge all extensions into context
+	// Pass `request` through so access functions can branch on URL/headers
+	// (e.g. distinguish admin vs frontend calls).
 	const appContext = await app.createContext({
 		...baseContext,
 		...(adapterExtension ?? {}),
 		...(cmsExtension ?? {}),
+		request,
 	});
 
 	return {
@@ -131,6 +137,14 @@ export const resolveContext = async <
 ) => {
 	if (context?.appContext) {
 		return context;
+	}
+
+	const stored = tryGetContext();
+	const storedAdapterContext = getInternalAdapterContext(stored) as
+		| AdapterContext
+		| undefined;
+	if (stored?.app === app && storedAdapterContext?.appContext) {
+		return storedAdapterContext;
 	}
 
 	return createAdapterContext(app, request, config);

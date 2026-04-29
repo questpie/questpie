@@ -8,7 +8,10 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+
+import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import type {
 	AdminToPreviewMessage,
@@ -16,6 +19,8 @@ import type {
 } from "../../preview/types.js";
 import { isPreviewToAdminMessage } from "../../preview/types.js";
 import { selectClient, useAdminStore } from "../../runtime/provider.js";
+
+const DEV_TELEMETRY = process.env.NODE_ENV === "development";
 
 // ============================================================================
 // Types
@@ -69,54 +74,48 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 		},
 		ref,
 	) => {
+		const { t } = useTranslation();
 		const client = useAdminStore(selectClient);
 		const iframeRef = React.useRef<HTMLIFrameElement>(null);
 		const [isReady, setIsReady] = React.useState(false);
 		const isReadyRef = React.useRef(false);
-		const [isLoading, setIsLoading] = React.useState(true);
+		const [iframeLoading, setIframeLoading] = React.useState(true);
 		const [isRefreshing, setIsRefreshing] = React.useState(false);
-		const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-		const [tokenError, setTokenError] = React.useState<string | null>(null);
+		const isRefreshingRef = React.useRef(false);
+		const pendingRefreshRef = React.useRef(false);
+		const refreshMetricsRef = React.useRef({
+			startedAt: 0,
+			requested: 0,
+			queued: 0,
+			completed: 0,
+			lastLogAt: 0,
+		});
 
-		// Mint preview token when URL changes
-		React.useEffect(() => {
-			if (!url) {
-				setPreviewUrl(null);
-				return;
-			}
-
-			let cancelled = false;
-
-			setIsLoading(true);
-			setTokenError(null);
-
-			(client as any).routes
-				.mintPreviewToken({
+		const {
+			data: previewUrl,
+			error: tokenQueryError,
+			isLoading: isTokenLoading,
+		} = useQuery({
+			queryKey: ["questpie", "preview-token", url],
+			queryFn: async () => {
+				const result = await (client as any).routes.mintPreviewToken({
 					path: url,
-					ttlMs: 60 * 60 * 1000, // 1 hour
-				})
-				.then((result: { token: string }) => {
-					if (!cancelled) {
-						setPreviewUrl(`/api/preview?token=${result.token}`);
-					}
-				})
-				.catch((error: unknown) => {
-					if (!cancelled) {
-						console.error("Failed to mint preview token:", error);
-						setTokenError(
-							error instanceof Error
-								? error.message
-								: "Failed to generate preview token",
-						);
-						setPreviewUrl(null);
-						setIsLoading(false);
-					}
+					ttlMs: 60 * 60 * 1000,
 				});
-
-			return () => {
-				cancelled = true;
-			};
-		}, [url, client]);
+				return `/api/preview?token=${result.token}`;
+			},
+			enabled: !!url && !!client,
+			staleTime: 50 * 60 * 1000,
+			retry: false,
+		});
+		const previewUrlResolved = previewUrl ?? null;
+		const tokenError =
+			tokenQueryError instanceof Error
+				? tokenQueryError.message
+				: tokenQueryError
+					? t("error.failedToGeneratePreviewToken")
+					: null;
+		const isLoading = isTokenLoading || iframeLoading;
 
 		// Validate origin for security
 		const isValidOrigin = React.useCallback(
@@ -155,15 +154,43 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			[url],
 		);
 
+		const requestRefresh = React.useCallback(() => {
+			if (!isReady) {
+				return;
+			}
+
+			const metrics = refreshMetricsRef.current;
+			const now = performance.now();
+			if (!metrics.startedAt) {
+				metrics.startedAt = now;
+			}
+			metrics.requested += 1;
+
+			if (isRefreshingRef.current) {
+				pendingRefreshRef.current = true;
+				metrics.queued += 1;
+				if (DEV_TELEMETRY && now - metrics.lastLogAt >= 5000) {
+					metrics.lastLogAt = now;
+					const elapsedSec = Math.max(1, (now - metrics.startedAt) / 1000);
+					const refreshPerMinute = (metrics.completed * 60) / elapsedSec;
+					console.debug(
+						`[LivePreviewTelemetry] refresh requested=${metrics.requested} completed=${metrics.completed} queued=${metrics.queued} rpm=${refreshPerMinute.toFixed(1)}`,
+					);
+				}
+				return;
+			}
+
+			isRefreshingRef.current = true;
+			setIsRefreshing(true);
+			sendToPreview({ type: "PREVIEW_REFRESH" });
+		}, [isReady, sendToPreview]);
+
 		// Expose refresh and focus methods via imperative handle
 		React.useImperativeHandle(
 			ref,
 			() => ({
 				triggerRefresh: () => {
-					if (isReady) {
-						setIsRefreshing(true);
-						sendToPreview({ type: "PREVIEW_REFRESH" });
-					}
+					requestRefresh();
 				},
 				sendFocusToPreview: (fieldPath: string) => {
 					if (isReady) {
@@ -171,7 +198,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					}
 				},
 			}),
-			[isReady, sendToPreview],
+			[isReady, requestRefresh, sendToPreview],
 		);
 
 		// Listen for messages from preview
@@ -190,12 +217,47 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 				switch (event.data.type) {
 					case "PREVIEW_READY":
 						isReadyRef.current = true;
+						isRefreshingRef.current = false;
+						pendingRefreshRef.current = false;
+						refreshMetricsRef.current = {
+							startedAt: 0,
+							requested: 0,
+							queued: 0,
+							completed: 0,
+							lastLogAt: 0,
+						};
 						setIsReady(true);
-						setIsLoading(false);
+						setIframeLoading(false);
+						setIsRefreshing(false);
 						break;
 
 					case "REFRESH_COMPLETE":
-						setIsRefreshing(false);
+						if (refreshMetricsRef.current.startedAt) {
+							refreshMetricsRef.current.completed += 1;
+						}
+						if (pendingRefreshRef.current) {
+							pendingRefreshRef.current = false;
+							sendToPreview({ type: "PREVIEW_REFRESH" });
+						} else {
+							isRefreshingRef.current = false;
+							setIsRefreshing(false);
+							if (DEV_TELEMETRY) {
+								const metrics = refreshMetricsRef.current;
+								const now = performance.now();
+								if (now - metrics.lastLogAt >= 5000 && metrics.startedAt) {
+									metrics.lastLogAt = now;
+									const elapsedSec = Math.max(
+										1,
+										(now - metrics.startedAt) / 1000,
+									);
+									const refreshPerMinute =
+										(metrics.completed * 60) / elapsedSec;
+									console.debug(
+										`[LivePreviewTelemetry] refresh requested=${metrics.requested} completed=${metrics.completed} queued=${metrics.queued} rpm=${refreshPerMinute.toFixed(1)}`,
+									);
+								}
+							}
+						}
 						break;
 
 					case "FIELD_CLICKED":
@@ -213,7 +275,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 
 			window.addEventListener("message", handleMessage);
 			return () => window.removeEventListener("message", handleMessage);
-		}, [isValidOrigin, onFieldClick, onBlockClick]);
+		}, [isValidOrigin, onFieldClick, onBlockClick, sendToPreview]);
 
 		// Send selected block updates
 		React.useEffect(() => {
@@ -227,7 +289,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			// Preview should signal PREVIEW_READY, but set a fallback timeout
 			setTimeout(() => {
 				if (!isReadyRef.current) {
-					setIsLoading(false);
+					setIframeLoading(false);
 				}
 			}, 3000);
 		}, []);
@@ -236,22 +298,22 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 			<div className={cn("relative h-full w-full", className)}>
 				{/* Loading overlay */}
 				{isLoading && (
-					<div className="absolute inset-0 z-10 flex items-center justify-center bg-muted">
+					<div className="bg-muted absolute inset-0 z-10 flex items-center justify-center">
 						<Icon
 							icon="ph:spinner"
-							className="h-6 w-6 animate-spin text-muted-foreground"
+							className="text-muted-foreground h-6 w-6 animate-spin"
 						/>
-						<span className="ml-2 text-sm text-muted-foreground">
-							Loading preview...
+						<span className="text-muted-foreground ml-2 text-sm">
+							{t("preview.loadingPreview")}
 						</span>
 					</div>
 				)}
 
 				{/* Error overlay */}
 				{tokenError && (
-					<div className="absolute inset-0 z-10 flex items-center justify-center bg-muted">
-						<div className="rounded-md bg-destructive/10 border border-destructive px-4 py-3 text-sm text-destructive">
-							<p className="font-medium">Preview Error</p>
+					<div className="bg-muted absolute inset-0 z-10 flex items-center justify-center">
+						<div className="bg-destructive/10 border-destructive text-destructive border px-4 py-3 text-sm">
+							<p className="font-medium">{t("preview.previewError")}</p>
 							<p>{tokenError}</p>
 						</div>
 					</div>
@@ -259,22 +321,24 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 
 				{/* Refreshing indicator */}
 				{isRefreshing && !isLoading && (
-					<div className="absolute top-4 right-4 z-10 flex items-center gap-2 rounded-md bg-background px-3 py-2 shadow-md border">
+					<div className="bg-background absolute top-4 right-4 z-10 flex items-center gap-2 border px-3 py-2 shadow-md">
 						<Icon
 							icon="ph:spinner"
-							className="h-4 w-4 animate-spin text-muted-foreground"
+							className="text-muted-foreground h-4 w-4 animate-spin"
 						/>
-						<span className="text-sm text-muted-foreground">Refreshing...</span>
+						<span className="text-muted-foreground text-sm">
+							{t("preview.refreshing")}
+						</span>
 					</div>
 				)}
 
 				{/* Preview iframe */}
-				{previewUrl && (
+				{previewUrlResolved && (
 					<iframe
 						ref={iframeRef}
-						src={previewUrl}
+						src={previewUrlResolved}
 						className="h-full w-full border-0"
-						title="Preview"
+						title={t("common.preview")}
 						onLoad={handleLoad}
 						sandbox="allow-scripts allow-same-origin allow-forms"
 					/>
@@ -302,25 +366,26 @@ type PreviewToggleButtonProps = {
 /**
  * Button to toggle preview pane visibility.
  */
-function PreviewToggleButton({
+function _PreviewToggleButton({
 	isPreviewVisible,
 	onToggle,
 	className,
 }: PreviewToggleButtonProps) {
+	const { t } = useTranslation();
 	return (
 		<button
 			type="button"
 			onClick={onToggle}
 			className={cn(
-				"inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm",
+				"inline-flex items-center gap-2 px-3 py-1.5 text-sm",
 				"border transition-colors",
 				isPreviewVisible
-					? "border-primary bg-primary/10 text-primary"
+					? "border-border-strong bg-surface-high text-foreground"
 					: "border-border hover:bg-muted",
 				className,
 			)}
 		>
-			{isPreviewVisible ? "Hide Preview" : "Show Preview"}
+			{isPreviewVisible ? t("preview.hidePreview") : t("preview.showPreview")}
 		</button>
 	);
 }

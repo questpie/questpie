@@ -1,0 +1,28 @@
+{
+	"operations": [
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__user__DOT__avatar",
+			"value": {
+				"type": "varchar(36)",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "avatar",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "user"
+			},
+			"timestamp": "2026-04-27T09:32:18.206Z",
+			"migrationId": "eagerBluePhoenix20260427T093217"
+		}
+	],
+	"metadata": {
+		"migrationId": "eagerBluePhoenix20260427T093217",
+		"timestamp": "2026-04-27T09:32:18.257Z",
+		"prevId": "00000000-0000-0000-0000-000000000000"
+	}
+}

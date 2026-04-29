@@ -7,7 +7,9 @@
 "use client";
 
 import * as React from "react";
+
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
 import { ComponentRenderer } from "../../components/component-renderer";
 import { cn } from "../../lib/utils.js";
 import { useBlockDefinition } from "./block-editor-context.js";

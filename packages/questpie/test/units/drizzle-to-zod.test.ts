@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+
 import {
 	bigint,
 	boolean,
@@ -18,6 +19,7 @@ import {
 	varchar,
 } from "drizzle-orm/pg-core";
 import type z from "zod";
+
 import {
 	createInsertSchema,
 	createUpdateSchema,

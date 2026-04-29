@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { collection } from "../../src/server/index.js";
+
+import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -57,7 +58,7 @@ describe("global hooks injection", () => {
 		});
 
 		it("fires afterChange hook on create for articles", async () => {
-			await (setup.app as any).api.collections.articles.create({
+			await (setup.app as any).collections.articles.create({
 				title: "Test Article",
 			});
 
@@ -71,7 +72,7 @@ describe("global hooks injection", () => {
 		});
 
 		it("fires afterChange hook on create for pages", async () => {
-			await (setup.app as any).api.collections.pages.create({
+			await (setup.app as any).collections.pages.create({
 				title: "Test Page",
 			});
 
@@ -85,13 +86,13 @@ describe("global hooks injection", () => {
 		});
 
 		it("fires afterChange hook on update", async () => {
-			const created = await (setup.app as any).api.collections.articles.create({
+			const created = await (setup.app as any).collections.articles.create({
 				title: "Original",
 			});
 
 			hookCalls.length = 0;
 
-			await (setup.app as any).api.collections.articles.update({
+			await (setup.app as any).collections.articles.update({
 				where: { id: created.id },
 				data: { title: "Updated" },
 			});
@@ -106,13 +107,13 @@ describe("global hooks injection", () => {
 		});
 
 		it("fires afterDelete hook", async () => {
-			const created = await (setup.app as any).api.collections.articles.create({
+			const created = await (setup.app as any).collections.articles.create({
 				title: "To Delete",
 			});
 
 			hookCalls.length = 0;
 
-			await (setup.app as any).api.collections.articles.delete({
+			await (setup.app as any).collections.articles.delete({
 				where: { id: created.id },
 			});
 
@@ -170,7 +171,7 @@ describe("global hooks injection", () => {
 		});
 
 		it("fires hook for non-excluded collections", async () => {
-			await (setup.app as any).api.collections.articles.create({
+			await (setup.app as any).collections.articles.create({
 				title: "Test",
 			});
 
@@ -179,7 +180,7 @@ describe("global hooks injection", () => {
 		});
 
 		it("does NOT fire hook for excluded collections", async () => {
-			await (setup.app as any).api.collections.logs.create({
+			await (setup.app as any).collections.logs.create({
 				message: "Log entry",
 			});
 
@@ -222,7 +223,7 @@ describe("global hooks injection", () => {
 		});
 
 		it("fires hooks from both modules", async () => {
-			await (setup.app as any).api.collections.articles.create(
+			await (setup.app as any).collections.articles.create(
 				{
 					title: "Test",
 				},
@@ -275,23 +276,23 @@ describe("global hooks injection", () => {
 		});
 
 		it("creates audit log entry when article is created", async () => {
-			await (setup.app as any).api.collections.articles.create({
+			await (setup.app as any).collections.articles.create({
 				title: "Test Article",
 			});
 
-			const logs = await (setup.app as any).api.collections.auditLog.find();
+			const logs = await (setup.app as any).collections.auditLog.find();
 			expect(logs.docs).toHaveLength(1);
 			expect(logs.docs[0].action).toBe("create");
 			expect(logs.docs[0].resource).toBe("articles");
 		});
 
 		it("does NOT create audit log for auditLog collection itself (exclude)", async () => {
-			await (setup.app as any).api.collections.auditLog.create({
+			await (setup.app as any).collections.auditLog.create({
 				action: "manual",
 				resource: "test",
 			});
 
-			const logs = await (setup.app as any).api.collections.auditLog.find();
+			const logs = await (setup.app as any).collections.auditLog.find();
 			// Should only have the one we just created, no recursive audit entry
 			expect(logs.docs).toHaveLength(1);
 			expect(logs.docs[0].action).toBe("manual");
@@ -334,7 +335,7 @@ describe("global hooks injection", () => {
 		});
 
 		it("allows beforeChange to mutate data", async () => {
-			const result = await (setup.app as any).api.collections.articles.create({
+			const result = await (setup.app as any).collections.articles.create({
 				title: "Hello World",
 			});
 

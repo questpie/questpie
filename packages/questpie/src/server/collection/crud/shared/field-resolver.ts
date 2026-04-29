@@ -5,6 +5,7 @@
  */
 
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
+
 import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
 
 /**

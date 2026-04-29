@@ -7,4 +7,3 @@ export default view("collection-table", {
 			default: React.ComponentType<any>;
 		}>,
 });
-

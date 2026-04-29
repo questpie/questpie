@@ -1,4 +1,5 @@
 import type { Questpie } from "../server/config/questpie.js";
+import { toFileImportSpecifier } from "./utils.js";
 
 /**
  * CLI-specific configuration options
@@ -134,7 +135,9 @@ export function config<TApp extends Questpie<any>>(
 export async function loadQuestpieConfig(
 	configPath: string,
 ): Promise<QuestpieConfigFile> {
-	const configModule = await import(/* @vite-ignore */ configPath);
+	const configModule = await import(
+		/* @vite-ignore */ toFileImportSpecifier(configPath)
+	);
 	const config = configModule.config || configModule.default || configModule;
 
 	// Check if this is the new AppConfig format (has app.url but app is not a Questpie instance)
@@ -149,7 +152,9 @@ export async function loadQuestpieConfig(
 		const { dirname, join } = await import("node:path");
 		const generatedPath = join(dirname(configPath), ".generated", "index.ts");
 		try {
-			const generatedModule = await import(/* @vite-ignore */ generatedPath);
+			const generatedModule = await import(
+				/* @vite-ignore */ toFileImportSpecifier(generatedPath)
+			);
 			if (generatedModule.app) {
 				return {
 					app: generatedModule.app,

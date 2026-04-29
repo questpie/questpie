@@ -1,19 +1,18 @@
 import { describe, expect, test } from "bun:test";
+
 import type { BetterAuthOptions } from "better-auth";
 import { admin, bearer } from "better-auth/plugins";
-import {
-	auth,
-	coreAuthOptions,
-	mergeAuthOptions,
-} from "../../src/server/integrated/auth/config.js";
 
-describe("auth", () => {
+import { authConfig } from "../../src/server/config/factories.js";
+import { mergeAuthOptions } from "../../src/server/modules/core/integrated/auth/merge.js";
+
+describe("authConfig", () => {
 	test("should return the same options object passed in", () => {
 		const options: BetterAuthOptions = {
 			baseURL: "http://localhost:3000",
 			secret: "test-secret",
 		};
-		const result = auth(options);
+		const result = authConfig(options);
 
 		expect(result).toBe(options);
 	});
@@ -23,7 +22,7 @@ describe("auth", () => {
 			baseURL: "http://localhost:3000",
 			secret: "test-secret",
 		};
-		const result = auth(options);
+		const result = authConfig(options);
 
 		expect(result.baseURL).toBe("http://localhost:3000");
 	});
@@ -33,56 +32,9 @@ describe("auth", () => {
 			baseURL: "http://localhost:3000",
 			secret: "test-secret",
 		};
-		const result = auth(options);
+		const result = authConfig(options);
 
 		expect(result.secret).toBe("test-secret");
-	});
-});
-
-describe("coreAuthOptions", () => {
-	test("should be an instance of BetterAuthOptions", () => {
-		expect(coreAuthOptions).toBeDefined();
-		expect(typeof coreAuthOptions).toBe("object");
-	});
-
-	test("should have plugins array", () => {
-		expect(coreAuthOptions.plugins).toBeDefined();
-		expect(Array.isArray(coreAuthOptions.plugins)).toBe(true);
-	});
-
-	test("should include at least 3 plugins (admin, api-key, bearer)", () => {
-		const length = coreAuthOptions.plugins?.length ?? 0;
-		expect(length >= 3).toBe(true);
-	});
-
-	test("should have admin plugin", () => {
-		const pluginIds = coreAuthOptions.plugins?.map((p) => p.id) ?? [];
-		expect(pluginIds.includes("admin")).toBe(true);
-	});
-
-	test("should have api-key plugin", () => {
-		const pluginIds = coreAuthOptions.plugins?.map((p) => p.id) ?? [];
-		expect(pluginIds.includes("api-key")).toBe(true);
-	});
-
-	test("should have bearer plugin", () => {
-		const pluginIds = coreAuthOptions.plugins?.map((p) => p.id) ?? [];
-		expect(pluginIds.includes("bearer")).toBe(true);
-	});
-
-	test("should enable emailAndPassword authentication", () => {
-		expect(coreAuthOptions.emailAndPassword?.enabled).toBe(true);
-	});
-
-	test("should require email verification", () => {
-		expect(coreAuthOptions.emailAndPassword?.requireEmailVerification).toBe(
-			true,
-		);
-	});
-
-	test("should set useSecureCookies based on NODE_ENV", () => {
-		const isProduction = process.env.NODE_ENV === "production";
-		expect(coreAuthOptions.advanced?.useSecureCookies).toBe(isProduction);
 	});
 });
 

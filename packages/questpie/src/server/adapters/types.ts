@@ -194,6 +194,12 @@ export type AdapterRoutes = {
 			context?: AdapterContext,
 			input?: unknown,
 		) => Promise<Response>;
+		updateBatch: (
+			request: Request,
+			params: { collection: string },
+			context?: AdapterContext,
+			input?: unknown,
+		) => Promise<Response>;
 		deleteMany: (
 			request: Request,
 			params: { collection: string },

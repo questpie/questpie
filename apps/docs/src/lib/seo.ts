@@ -4,9 +4,9 @@
 
 export const siteConfig = {
 	name: "QUESTPIE",
-	title: "QUESTPIE — One backend. Ship everywhere.",
+	title: "QUESTPIE — Build the product, not the plumbing.",
 	description:
-		"Server-first TypeScript framework. Define your schema once, ship REST, typed routes, realtime, typed clients, and optional admin UI. Open source.",
+		"Schema-first TypeScript framework. Define the product contract once and project schema, routes, jobs, and admin config into APIs, workspace screens, validation, typed clients, and realtime updates.",
 	url: "https://questpie.com",
 	ogImage: "/og-questpie.png",
 	twitterHandle: "@questpie",
@@ -31,7 +31,7 @@ export const siteConfig = {
 		"elysia",
 		"nextjs adapter",
 		"drizzle orm",
-		"content platform",
+		"application framework",
 	],
 } as const;
 
@@ -93,7 +93,16 @@ export function generateMeta(props: SeoProps = {}) {
 		{ name: "author", content: siteConfig.name },
 		{ name: "publisher", content: siteConfig.name },
 		{ name: "application-name", content: siteConfig.name },
-		{ name: "theme-color", content: "#B700FF" },
+		{
+			name: "theme-color",
+			media: "(prefers-color-scheme: light)",
+			content: "#fafafa",
+		},
+		{
+			name: "theme-color",
+			media: "(prefers-color-scheme: dark)",
+			content: "#121212",
+		},
 		{ name: "color-scheme", content: "light dark" },
 
 		{ property: "og:type", content: type },
@@ -197,7 +206,7 @@ export function generateLinks(
 					{
 						rel: "mask-icon",
 						href: "/favicon.svg",
-						color: "#B700FF",
+						color: "#b700ff",
 					},
 					{
 						rel: "manifest",
@@ -351,14 +360,20 @@ export function generateBreadcrumbJsonLd(items: BreadcrumbItem[]) {
 }
 
 export const sectionLabels: Record<string, string> = {
+	"start-here": "Start Here",
+	backend: "Build Your Backend",
+	workspace: "Admin Workspace",
+	frontend: "Client Integration",
+	production: "Production",
+	extend: "Extend",
+	examples: "Examples",
+	reference: "API Reference",
 	"getting-started": "Getting Started",
 	server: "Server",
 	client: "Client",
 	admin: "Admin",
 	infrastructure: "Infrastructure",
 	guides: "Guides",
-	examples: "Examples",
-	reference: "Reference",
 	migration: "Migration",
 	mentality: "Architecture",
 };

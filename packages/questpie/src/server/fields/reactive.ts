@@ -1,255 +1,46 @@
 /**
- * Reactive Field System Types
+ * Reactive Field System — Core Runtime
  *
- * This module defines types for reactive field behaviors including:
- * - Reactive field states (hidden, readOnly, disabled)
- * - Computed values
- * - Dynamic options
- * - Proxy-based dependency tracking
+ * Re-exports plain types from reactive-types.ts and provides
+ * Proxy-based dependency tracking for introspection serialization.
  *
- * All reactive handlers run on the server with access to DB and user context.
+ * Higher-level serialization helpers (serializeReactiveConfig,
+ * serializeOptionsConfig, getHandler) have been moved to
+ * `@questpie/admin` (server/fields/reactive-runtime.ts).
+ *
+ * For type-only imports (no runtime dependency), use reactive-types.ts.
  */
 
-import type { I18nText } from "#questpie/shared/i18n/types.js";
+// Re-export all plain types for backward compatibility
+export type {
+	ReactiveServerContext,
+	ReactiveContext,
+	ReactiveHandler,
+	ReactiveConfig,
+	OptionsContext,
+	OptionsHandler,
+	OptionsResult,
+	OptionsConfig,
+	ReactiveAdminMeta,
+	ReactivePropPlaceholder,
+	ReactivePropValue,
+	SerializedReactiveConfig,
+	SerializedOptionsConfig,
+	TrackingResult,
+} from "./reactive-types.js";
+
+import type {
+	ReactiveContext,
+	ReactiveConfig,
+	ReactiveHandler,
+	ReactivePropPlaceholder,
+	ReactivePropValue,
+	TrackingResult,
+} from "./reactive-types.js";
 
 // ============================================================================
-// Reactive Context
+// Dependency Tracking (Runtime — uses Proxy)
 // ============================================================================
-
-/**
- * Server context available to reactive handlers.
- * Provides access to database, user, request, and locale.
- */
-export interface ReactiveServerContext {
-	/** Database client (Drizzle) */
-	db: unknown;
-
-	/** Authenticated user (if any) */
-	user: unknown | null;
-
-	/** Current request */
-	req: Request;
-
-	/** Current locale */
-	locale: string;
-}
-
-/**
- * Context provided to reactive handlers (hidden, readOnly, disabled, compute).
- * Includes form data with proxy for automatic dependency tracking.
- *
- * @template T - Form data type (default: Record<string, any>)
- */
-export interface ReactiveContext<T = Record<string, any>> {
-	/**
-	 * Current form values - proxy for dependency tracking.
-	 * Accessing properties automatically registers them as dependencies.
-	 */
-	data: T;
-
-	/**
-	 * Sibling values in array/object context - proxy for dependency tracking.
-	 * Used when field is inside an array item to access other fields in the same item.
-	 */
-	sibling: Record<string, any>;
-
-	/**
-	 * Previous values for change detection.
-	 * Useful for conditional logic based on what changed.
-	 */
-	prev: {
-		data: T;
-		sibling: Record<string, any>;
-	};
-
-	/** Server context (db, user, req, locale) */
-	ctx: ReactiveServerContext;
-}
-
-// ============================================================================
-// Reactive Config Types
-// ============================================================================
-
-/**
- * Reactive handler function type.
- *
- * @template TReturn - Return type of the handler
- */
-export type ReactiveHandler<TReturn> = (
-	ctx: ReactiveContext,
-) => TReturn | Promise<TReturn>;
-
-/**
- * Reactive configuration - can be short or full syntax.
- *
- * Short syntax: just the handler function
- * Full syntax: object with handler, optional deps, optional debounce
- *
- * @template TReturn - Return type of the handler
- *
- * @example Short syntax
- * ```ts
- * hidden: ({ data }) => !data.showAdvanced
- * ```
- *
- * @example Full syntax
- * ```ts
- * compute: {
- *   handler: ({ data }) => slugify(data.title),
- *   deps: ({ data }) => [data.title, data.category],
- *   debounce: 300,
- * }
- * ```
- */
-export type ReactiveConfig<TReturn> =
-	| ReactiveHandler<TReturn>
-	| {
-			/** Handler function that computes the value */
-			handler: ReactiveHandler<TReturn>;
-			/**
-			 * Dependencies - optional, auto-detected via proxy.
-			 * Can be array of field paths or a function with proxy tracking.
-			 */
-			deps?: string[] | ((ctx: ReactiveContext) => any[]);
-			/** Debounce in ms (only for compute) */
-			debounce?: number;
-	  };
-
-// ============================================================================
-// Options Context (for dynamic options)
-// ============================================================================
-
-/**
- * Context provided to dynamic options handlers.
- * Extends reactive context with search and pagination.
- *
- * @template T - Form data type
- */
-export interface OptionsContext<T = Record<string, any>> {
-	/** Current form values - proxy for dependency tracking */
-	data: T;
-
-	/** Sibling values (for array/object context) */
-	sibling: Record<string, any>;
-
-	/** Search query (user typing) */
-	search: string;
-
-	/** Page number (0-based) */
-	page: number;
-
-	/** Items per page */
-	limit: number;
-
-	/** Server context */
-	ctx: ReactiveServerContext;
-}
-
-/**
- * Options handler function type.
- */
-export type OptionsHandler<T = Record<string, any>> = (
-	ctx: OptionsContext<T>,
-) => OptionsResult | Promise<OptionsResult>;
-
-/**
- * Result from options handler.
- */
-export interface OptionsResult {
-	/** List of options */
-	options: Array<{ value: string | number; label: I18nText }>;
-
-	/** Whether there are more items (for infinite scroll) */
-	hasMore?: boolean;
-
-	/** Total count (optional) */
-	total?: number;
-}
-
-/**
- * Dynamic options configuration.
- *
- * @example
- * ```ts
- * options: {
- *   handler: async ({ data, search, page, limit, ctx }) => {
- *     const cities = await ctx.db.query.cities.findMany({
- *       where: { countryId: data.country },
- *       limit,
- *       offset: page * limit,
- *     });
- *     return {
- *       options: cities.map(c => ({ value: c.id, label: c.name })),
- *       hasMore: cities.length === limit,
- *     };
- *   },
- *   deps: ({ data }) => [data.country],
- * }
- * ```
- */
-export interface OptionsConfig<T = Record<string, any>> {
-	/** Handler that fetches options */
-	handler: OptionsHandler<T>;
-
-	/**
-	 * Dependencies - when these change, options are refetched.
-	 * Auto-detected via proxy if not provided.
-	 */
-	deps?: string[] | ((ctx: OptionsContext<T>) => any[]);
-}
-
-// ============================================================================
-// Reactive Admin Meta Extensions
-// ============================================================================
-
-/**
- * Reactive extensions for BaseAdminMeta.
- * These properties can be static (boolean) or reactive (function/config).
- */
-export interface ReactiveAdminMeta {
-	/**
-	 * Hide the field conditionally.
-	 * - `true`: Always hidden
-	 * - Function: Evaluated on server based on form data
-	 */
-	hidden?: boolean | ReactiveConfig<boolean>;
-
-	/**
-	 * Make field read-only conditionally.
-	 * - `true`: Always read-only
-	 * - Function: Evaluated on server based on form data
-	 */
-	readOnly?: boolean | ReactiveConfig<boolean>;
-
-	/**
-	 * Disable the field conditionally.
-	 * - `true`: Always disabled
-	 * - Function: Evaluated on server based on form data
-	 */
-	disabled?: boolean | ReactiveConfig<boolean>;
-
-	/**
-	 * Compute field value automatically.
-	 * Handler should return the computed value or undefined to keep current value.
-	 * Return null to reset field to null/default.
-	 */
-	compute?: ReactiveConfig<any>;
-}
-
-// ============================================================================
-// Dependency Tracking
-// ============================================================================
-
-/**
- * Result of dependency tracking.
- */
-export interface TrackingResult<T> {
-	/** Result of executing the function */
-	result: T;
-
-	/** Dependencies detected (field paths) */
-	deps: string[];
-}
 
 /**
  * Track dependencies accessed by a handler function using Proxy.
@@ -356,13 +147,6 @@ export function extractDependencies(config: ReactiveConfig<any>): string[] {
 }
 
 /**
- * Get handler function from ReactiveConfig.
- */
-export function getHandler<T>(config: ReactiveConfig<T>): ReactiveHandler<T> {
-	return typeof config === "function" ? config : config.handler;
-}
-
-/**
  * Get debounce value from ReactiveConfig.
  */
 export function getDebounce(config: ReactiveConfig<any>): number | undefined {
@@ -383,96 +167,121 @@ export function isReactiveConfig(value: unknown): value is ReactiveConfig<any> {
 }
 
 // ============================================================================
-// Introspection Types (for client)
+// Reactive Prop Values (per-field-instance escape hatch)
 // ============================================================================
 
 /**
- * Serialized reactive config for introspection response.
- * Sent to client so it knows which fields to watch.
+ * True if the value is a function or `{ handler }` config — i.e. a value
+ * that needs to be evaluated server-side and replaced with a placeholder
+ * before being shipped to the client.
  */
-export interface SerializedReactiveConfig {
-	/** Fields to watch for changes */
-	watch: string[];
-
-	/** Debounce in ms (for compute) */
-	debounce?: number;
+function isReactivePropDynamic(
+	value: unknown,
+): value is
+	| ReactiveHandler<unknown>
+	| { handler: ReactiveHandler<unknown>; deps?: unknown; debounce?: number } {
+	if (typeof value === "function") return true;
+	if (typeof value !== "object" || value === null) return false;
+	const obj = value as { handler?: unknown };
+	return typeof obj.handler === "function";
 }
 
 /**
- * Serialized options config for introspection response.
+ * True if the value is a `ReactivePropPlaceholder` (i.e. came back from the
+ * wire after introspection serialized a function value). Used by the client
+ * to decide whether a `props.<key>` value needs RPC resolution or can be
+ * used directly.
  */
-export interface SerializedOptionsConfig {
-	/** Fields to watch for changes */
-	watch: string[];
-
-	/** Options support search */
-	searchable: boolean;
-
-	/** Options support pagination */
-	paginated: boolean;
+export function isReactivePropPlaceholder(
+	value: unknown,
+): value is ReactivePropPlaceholder {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as { "~reactive"?: unknown })["~reactive"] === "prop"
+	);
 }
 
 /**
- * Serialize a ReactiveConfig for introspection response.
+ * Serialize a single prop value. Static values pass through unchanged.
+ * Function / `{ handler, deps, debounce }` values become a
+ * `ReactivePropPlaceholder` carrying just the dependency list and debounce —
+ * the handler stays on the server and is evaluated on demand by the
+ * `/admin/reactive` `prop` endpoint.
  */
-export function serializeReactiveConfig(
-	config: ReactiveConfig<any>,
-): SerializedReactiveConfig {
-	return {
-		watch: extractDependencies(config),
-		debounce: getDebounce(config),
-	};
-}
+export function serializeReactivePropValue<T>(
+	value: ReactivePropValue<T> | undefined,
+): unknown {
+	if (value === undefined) return undefined;
+	if (!isReactivePropDynamic(value)) return value;
 
-/**
- * Serialize an OptionsConfig for introspection response.
- */
-export function serializeOptionsConfig(
-	config: OptionsConfig<any>,
-): SerializedOptionsConfig {
-	let watch: string[];
-
-	if (Array.isArray(config.deps)) {
-		watch = config.deps;
-	} else if (typeof config.deps === "function") {
-		watch = trackDepsFunction(config.deps as any);
-	} else {
-		// Track from handler (create dummy OptionsContext)
-		const deps = new Set<string>();
-
-		const createProxy = (prefix: string): any =>
-			new Proxy({} as any, {
-				get(_, prop: string | symbol) {
-					if (typeof prop === "symbol" || prop === "then") {
-						return undefined;
-					}
-					const path = prefix ? `${prefix}.${prop}` : prop;
-					deps.add(path);
-					return createProxy(path);
-				},
-			});
-
-		const ctx: OptionsContext = {
-			data: createProxy(""),
-			sibling: createProxy("$sibling"),
-			search: "",
-			page: 0,
-			limit: 20,
-			ctx: {} as any,
-		};
-
-		try {
-			config.handler(ctx);
-		} catch {
-			// Ignore
-		}
-
-		watch = [...deps];
-	}
-
-	return {
+	const config: ReactiveConfig<unknown> =
+		typeof value === "function"
+			? (value as ReactiveHandler<unknown>)
+			: (value as {
+					handler: ReactiveHandler<unknown>;
+					deps?: string[] | ((ctx: ReactiveContext) => any[]);
+					debounce?: number;
+				});
+	const watch = extractDependencies(config);
+	const debounce = getDebounce(config);
+	const placeholder: ReactivePropPlaceholder = {
+		"~reactive": "prop",
 		watch,
-		searchable: true, // Options handlers always support search
-		paginated: true, // Options handlers always support pagination
+		...(debounce !== undefined ? { debounce } : {}),
 	};
+	return placeholder;
+}
+
+/**
+ * Walk a `props` object and serialize every value through
+ * `serializeReactivePropValue`. Returns a new object with dynamic values
+ * replaced by placeholders; `undefined` if the input had no entries to
+ * serialize (caller can skip emitting the key in that case).
+ */
+export function serializeReactivePropsRecord(
+	props: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+	if (!props || typeof props !== "object") return undefined;
+	const out: Record<string, unknown> = {};
+	let any = false;
+	for (const [key, value] of Object.entries(props)) {
+		if (value === undefined) continue;
+		out[key] = serializeReactivePropValue(value as ReactivePropValue<unknown>);
+		any = true;
+	}
+	return any ? out : undefined;
+}
+
+/**
+ * Recursively walk an admin form layout (`fields`, sections, tabs, sidebar)
+ * and replace each `props` record with its serialized form. The input is
+ * treated as opaque — anything we don't recognise as a layout container is
+ * returned untouched. We never mutate the input.
+ */
+export function serializeFormLayoutProps<T>(layout: T): T {
+	if (Array.isArray(layout)) {
+		return layout.map((item) => serializeFormLayoutProps(item)) as unknown as T;
+	}
+	if (!layout || typeof layout !== "object") return layout;
+	const obj = layout as Record<string, unknown>;
+	const result: Record<string, unknown> = { ...obj };
+	if (obj.props && typeof obj.props === "object" && !Array.isArray(obj.props)) {
+		const serialized = serializeReactivePropsRecord(
+			obj.props as Record<string, unknown>,
+		);
+		if (serialized !== undefined) {
+			result.props = serialized;
+		}
+	}
+	for (const key of ["fields", "tabs", "sections", "items"] as const) {
+		const value = obj[key];
+		if (Array.isArray(value)) {
+			result[key] = value.map((item) => serializeFormLayoutProps(item));
+		}
+	}
+	if (obj.sidebar && typeof obj.sidebar === "object") {
+		result.sidebar = serializeFormLayoutProps(obj.sidebar);
+	}
+	return result as T;
 }

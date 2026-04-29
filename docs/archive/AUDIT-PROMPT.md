@@ -6,11 +6,12 @@
 
 ## Your Role
 
-You are a senior architect auditing a TypeScript CMS framework called **QuestPie**. Your job is to deeply read the codebase and verify that the **actual implementation** matches the design documents (RFCs, plans, audit specs). You must be thorough, precise, and flag every deviation — even small naming inconsistencies.
+You are a senior architect auditing a TypeScript CMS framework called **QUESTPIE**. Your job is to deeply read the codebase and verify that the **actual implementation** matches the design documents (RFCs, plans, audit specs). You must be thorough, precise, and flag every deviation — even small naming inconsistencies.
 
 ## Context
 
-QuestPie is a headless CMS framework with:
+QUESTPIE is a headless CMS framework with:
+
 - A **server** layer (collections, globals, fields, hooks, access, jobs, functions, routes, services, blocks)
 - An **admin client** layer (React UI: views, fields, components, pages, widgets, blocks)
 - A **codegen engine** that discovers files by convention and generates typed entrypoints
@@ -36,6 +37,7 @@ Read these files carefully — they are the **source of truth** for what the imp
 ## What to Audit
 
 For each area below, read the relevant source files, compare against the design docs, and report:
+
 - **PASS** — implementation matches design
 - **PARTIAL** — partially implemented, list what's missing
 - **FAIL** — implementation contradicts design
@@ -46,6 +48,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `PLAN-PLUGIN-CONSISTENCY.md` §4, §5, §6 + `RFC-PLUGIN-SYSTEM.md` §3–4
 
 **Check**:
+
 - [ ] `CodegenPlugin` uses target-first model (`targets: Record<string, CodegenTargetContribution>`)
 - [ ] `CodegenTargetContribution` has: `root`, `outDir`, `outputFile`, `categories`, `discover`, `registries`, `transform`, `generate`, `moduleRoot`
 - [ ] Target graph resolver merges contributions from multiple plugins, validates conflicts
@@ -55,6 +58,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] Admin-client target has `root: "../admin"`, `moduleRoot: "client"`, `outputFile: "client.ts"`
 
 **Files to read**:
+
 - `packages/questpie/src/cli/codegen/types.ts`
 - `packages/questpie/src/cli/codegen/index.ts`
 - `packages/questpie/src/cli/commands/codegen.ts`
@@ -65,6 +69,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `PLAN-PLUGIN-CONSISTENCY.md` §G.3–G.5, `AUDIT-PHASE-G.md` Decisions 5–6
 
 **Check**:
+
 - [ ] `modules/admin/client/.generated/module.ts` exists and contains all wrapper files (should be ~36: 18 fields, 3 views, 2 components, 5 pages, 8 widgets)
 - [ ] Module is exported via `@questpie/admin/client/module` (check `package.json` exports)
 - [ ] Admin-client target has `modules: "modules.ts"` in its `discover` config
@@ -77,6 +82,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] Barbershop example has `admin/modules.ts` that imports from `@questpie/admin/client/module`
 
 **Files to read**:
+
 - `packages/admin/src/server/modules/admin/client/.generated/module.ts`
 - `packages/admin/src/server/modules/admin/client/index.ts`
 - `packages/admin/src/server/codegen/admin-client-template.ts`
@@ -91,6 +97,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `AUDIT-PHASE-G.md` Decision 1, `PLAN-PLUGIN-CONSISTENCY.md` §G.1
 
 **Check**:
+
 - [ ] `ViewKindRegistry` has `list` and `form` (NOT `edit`)
 - [ ] Server view definitions use `kind: "form"` (not `"edit"`)
 - [ ] Client view definitions use `kind: "form"`
@@ -101,6 +108,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] `getViewsByKind("form")` works, no `getEditViews()` method
 
 **Files to read**:
+
 - `packages/admin/src/client/builder/view/view.ts` (ViewKind, ViewKindRegistry)
 - `packages/admin/src/server/modules/admin/views/` (server view definitions)
 - `packages/admin/src/server/modules/admin/client/views/` (client view wrappers)
@@ -112,6 +120,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `PLAN-PLUGIN-CONSISTENCY.md` §G.1, `AUDIT-PHASE-G.md` Decisions 3, 8
 
 **Check**:
+
 - [ ] `AdminState` (or `AdminBuilderState`) has flat `views: Record<string, ViewDefinition>` — NO `listViews`/`editViews` split
 - [ ] `Admin` class has `getViews()`, `getView(name)`, `getViewsByKind(kind)` — NO `getListViews()`, `getEditViews()`
 - [ ] NO `defaultViews` concept anywhere
@@ -120,6 +129,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] View-level config (showSearch, showFilters, showMeta, realtime) lives on `ViewDefinition.config` — NOT on a `defaultViews` layer
 
 **Files to read**:
+
 - `packages/admin/src/client/builder/admin-types.ts` (AdminBuilderState / AdminState)
 - `packages/admin/src/client/builder/admin.ts` (Admin class)
 - `packages/admin/src/client/builder/view/view.ts` (view factories, ViewDefinition)
@@ -130,6 +140,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `PLAN-PLUGIN-CONSISTENCY.md` §G.EXT, `AUDIT-PHASE-G.md` Decision 2
 
 **Check**:
+
 - [ ] `RegistryExtension` type has `defaults?: Record<string, unknown>`
 - [ ] Admin plugin sets defaults: `list: { defaults: { view: "collection-table" } }`, `form: { defaults: { view: "collection-form" } }`, global form: `{ defaults: { view: "global-form" } }`
 - [ ] Introspection applies extension defaults generically (not hardcoded per entity type)
@@ -137,6 +148,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] Schema always has view name populated (because extension defaults ensure it)
 
 **Files to read**:
+
 - `packages/questpie/src/cli/codegen/types.ts` (RegistryExtension)
 - `packages/admin/src/server/plugin.ts` (extension defaults)
 - `packages/admin/src/server/registry-helpers.ts` or introspection files
@@ -147,6 +159,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `AUDIT-PHASE-G.md` Decision 7, `PLAN-PLUGIN-CONSISTENCY.md` §G.2
 
 **Check**:
+
 - [ ] `view()` factory returns plain frozen object (not a builder class)
 - [ ] `field()` factory returns `FieldRegistryEntry` — plain object with `name`, `component`, optional `cell`, optional `validator`
 - [ ] `page()`, `widget()`, `component()` factories return plain frozen objects
@@ -154,6 +167,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] Same factories used by admin module wrapper files and user code — no difference
 
 **Files to read**:
+
 - `packages/admin/src/client/builder/view/view.ts`
 - `packages/admin/src/client/builder/field/field.ts`
 - `packages/admin/src/client/builder/page/page.ts`
@@ -166,6 +180,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `AUDIT-PHASE-G.md` Decision 4, `PLAN-PLUGIN-CONSISTENCY.md` §G.2
 
 **Check**:
+
 - [ ] `buildZodFromIntrospection()` function exists
 - [ ] Three-tier resolution: field.validator → FIELD_VALIDATORS[type] → generic introspection
 - [ ] `FIELD_VALIDATORS` registry handles special cases (object, array, blocks, time, select, date, datetime, email)
@@ -173,6 +188,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] Per-field `createZod` functions removed from field definitions
 
 **Files to read**:
+
 - `packages/admin/src/client/builder/validation.ts` or similar
 - `packages/admin/src/client/builder/field/field.ts` (FieldRegistryEntry type)
 
@@ -181,6 +197,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `PLAN-PLUGIN-CONSISTENCY.md` §G.7
 
 **Check**:
+
 - [ ] `client/builder/defaults/core.ts` DELETED (contained `coreAdminModule`)
 - [ ] `client/builder/defaults/starter.ts` DELETED (contained `adminModule` re-export)
 - [ ] `client/builder/qa.ts` DELETED (contained `qa()` factory)
@@ -197,6 +214,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] `AdminBuilder` class DELETED or at least not in the critical path
 
 **Files to read/verify existence**:
+
 - `packages/admin/src/client/builder/defaults/` (check what files remain)
 - `packages/admin/src/client/builder/qa.ts` (should not exist)
 - `packages/admin/src/exports/client.ts` (check exports)
@@ -208,6 +226,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `AUDIT-PHASE-G.md` Decision 2, `PLAN-PLUGIN-CONSISTENCY.md` §G.6
 
 **Check**:
+
 - [ ] NO `DEFAULT_LIST_VIEW_ID`, `DEFAULT_EDIT_VIEW_ID` constants
 - [ ] NO `VIEW_DEFAULTS` map
 - [ ] NO `defaultViews` usage in route handlers
@@ -217,6 +236,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] Kind validation: warn if resolved view's kind doesn't match route expectation
 
 **Files to read**:
+
 - `packages/admin/src/client/views/layout/admin-router.tsx`
 
 ### Area 10: Admin-Client Wrapper Files (Phase G)
@@ -224,6 +244,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `PLAN-PLUGIN-CONSISTENCY.md` §G.4
 
 **Check**:
+
 - [ ] 3 view wrappers exist: `collection-table.ts`, `collection-form.ts`, `global-form.ts`
 - [ ] 18 field wrappers (one per built-in field type)
 - [ ] Component wrappers (icon, possibly badge)
@@ -233,6 +254,7 @@ For each area below, read the relevant source files, compare against the design 
 - [ ] View wrappers carry `config` (showSearch, showMeta, etc.) on the view definition
 
 **Files to read**:
+
 - `packages/admin/src/server/modules/admin/client/views/`
 - `packages/admin/src/server/modules/admin/client/fields/`
 - `packages/admin/src/server/modules/admin/client/components/`
@@ -244,17 +266,20 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `PLAN-PLUGIN-CONSISTENCY.md` §G.4
 
 **Check**:
+
 - [ ] Server view files use `view()` factory with `kind` and `configSchema`
 - [ ] 3 server views: `collection-table.ts` (kind: "list"), `collection-form.ts` (kind: "form"), `global-form.ts` (kind: "form")
 - [ ] `global-form.ts` EXISTS (it was new in Phase G)
 - [ ] View names match convention: `collection-table`, `collection-form`, `global-form`
 
 **Files to read**:
+
 - `packages/admin/src/server/modules/admin/views/`
 
 ### Area 12: Tests
 
 **Check**:
+
 - [ ] `packages/admin/test/server/codegen.test.ts` — tests module-based template output (no coreAdminModule)
 - [ ] `packages/admin/test/builder/admin.test.ts` — tests Admin class with flat views, no AdminBuilder normalization
 - [ ] `packages/admin/test/builder/qa.test.ts` DELETED
@@ -266,6 +291,7 @@ For each area below, read the relevant source files, compare against the design 
 **Design**: `RFC-CONTEXT-FIRST.md` §2–3, `RFC-PLUGIN-SYSTEM.md` §1.1, `AUDIT-PHASE-G.md` Core Principle
 
 **Check**:
+
 - [ ] **"Core modules = user code"** — admin module's built-in views/fields/pages/widgets use the EXACT same file conventions, factories, and codegen patterns as user code. No special internal APIs.
 - [ ] **"Everything declarative, nothing imperative"** — no hardcoded maps, no if/switch for specific entity types. All defaults expressed as data.
 - [ ] **"Consistent naming"** — same concept = same name across server, client, codegen, runtime. Check for synonyms (e.g., "edit" vs "form", "list" vs "table").

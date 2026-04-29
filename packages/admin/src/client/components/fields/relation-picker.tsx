@@ -12,11 +12,13 @@
  */
 
 import { Icon } from "@iconify/react";
-import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
 import { toast } from "sonner";
+
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
+
 import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { selectClient, useAdminStore } from "../../runtime";
@@ -73,9 +75,13 @@ export interface RelationPickerProps<_T extends QuestpieApp> {
 	locale?: string;
 
 	/**
-	 * Filter options based on form values
+	 * Pre-resolved `where` clause for the relation `find()` call. Reactive
+	 * filters (`f.relation(...).admin({ filter: ({ data }) => ({...}) })` or
+	 * layout-level `props.filter`) are resolved by `FieldRenderer` against
+	 * the live form via `/admin/reactive` before they reach this component —
+	 * so by the time `filter` lands here it's plain JSON.
 	 */
-	filter?: (formValues: any) => any;
+	filter?: Record<string, unknown>;
 
 	/**
 	 * Is the field required
@@ -207,14 +213,37 @@ export function RelationPicker<T extends QuestpieApp>({
 	}, [resolvedValue]);
 	const client = useAdminStore(selectClient);
 
-	// Keep track of fetched items for display
-	// Using lazy init to avoid creating new Map on every render
-	const [fetchedItems, setFetchedItems] = React.useState<Map<string, any>>(
-		() => new Map(),
-	);
-
-	// Track loading state for items
-	const [isLoadingItems, setIsLoadingItems] = React.useState(false);
+	const {
+		data: fetchedItemsMap = new Map<string, any>(),
+		isLoading: isLoadingItems,
+	} = useQuery({
+		queryKey: [
+			"questpie",
+			"collections",
+			targetCollection,
+			"relation-batch",
+			...selectedIds,
+		],
+		queryFn: async () => {
+			if (!client || selectedIds.length === 0) return new Map<string, any>();
+			const response = await (client as any).collections[targetCollection].find(
+				{
+					where: { id: { in: selectedIds } },
+					limit: selectedIds.length,
+				},
+			);
+			const map = new Map<string, any>();
+			if (response?.docs) {
+				for (const doc of response.docs) {
+					map.set(doc.id, doc);
+				}
+			}
+			return map;
+		},
+		enabled: !!client && selectedIds.length > 0,
+		staleTime: 30_000,
+		placeholderData: (prev) => prev,
+	});
 
 	// Load options from server with search
 	const loadOptions = React.useCallback(
@@ -231,9 +260,9 @@ export function RelationPicker<T extends QuestpieApp>({
 					options.search = search;
 				}
 
-				// Add custom filter if provided
+				// Add custom filter if provided (already resolved by FieldRenderer)
 				if (filter) {
-					options.where = filter({});
+					options.where = filter;
 				}
 
 				const response = await (client as any).collections[
@@ -250,18 +279,10 @@ export function RelationPicker<T extends QuestpieApp>({
 					docs = [];
 				}
 
-				// Immutable update - create new Map with spread to avoid mutations
-				setFetchedItems(
-					(prev) =>
-						new Map([
-							...prev,
-							...docs.map((doc: any) => [doc.id, doc] as const),
-						]),
-				);
-
 				// Filter out already selected items and transform to SelectOption format
+				const selectedIdSet = new Set(selectedIds);
 				return docs
-					.filter((opt: any) => !selectedIds.includes(opt.id))
+					.filter((opt: any) => !selectedIdSet.has(opt.id))
 					.map((item: any) => {
 						let label: string;
 						if (renderOption) {
@@ -283,7 +304,7 @@ export function RelationPicker<T extends QuestpieApp>({
 					});
 			} catch (error) {
 				console.error("Failed to load relation options:", error);
-				toast.error("Failed to load options");
+				toast.error(t("error.failedToLoadOptions"));
 				return [];
 			}
 		},
@@ -294,6 +315,7 @@ export function RelationPicker<T extends QuestpieApp>({
 			selectedIds,
 			renderOption,
 			collectionIconRef,
+			t,
 		],
 	);
 
@@ -311,75 +333,20 @@ export function RelationPicker<T extends QuestpieApp>({
 	);
 
 	const refetch = React.useCallback(async () => {
-		// Clear cached items to force refresh
-		setFetchedItems(new Map());
+		queryClient.invalidateQueries({
+			queryKey: ["questpie", "collections", targetCollection, "relation-batch"],
+		});
 		queryClient.invalidateQueries({
 			queryKey: queryOpts.key(["collections", targetCollection, "find"]),
 		});
-		selectedIds.forEach((id) => {
-			queryClient.invalidateQueries({
-				queryKey: queryOpts.key([
-					"collections",
-					targetCollection,
-					"findOne",
-					{ where: { id } },
-				]),
-			});
-		});
-	}, [queryClient, queryOpts, selectedIds, targetCollection]);
-
-	// Fetch selected items on mount for display
-	React.useEffect(() => {
-		if (!client || !selectedIds.length) {
-			setIsLoadingItems(false);
-			return;
-		}
-
-		// Fetch any selected items that we don't have in cache
-		const missingIds = selectedIds.filter((id) => !fetchedItems.has(id));
-		if (missingIds.length === 0) {
-			setIsLoadingItems(false);
-			return;
-		}
-
-		setIsLoadingItems(true);
-
-		let cancelled = false;
-
-		(async () => {
-			for (const id of missingIds) {
-				if (cancelled) return;
-				const response = await (client as any).collections[
-					targetCollection
-				].findOne({ where: { id } });
-				if (cancelled) continue;
-				if (response) {
-					// Immutable update - spread prev and add new entry
-					setFetchedItems((prev) => new Map([...prev, [id, response]]));
-				}
-			}
-			if (!cancelled) {
-				setIsLoadingItems(false);
-			}
-		})().catch((error) => {
-			console.error("Failed to fetch selected items:", error);
-			toast.error("Failed to load selected items");
-			if (!cancelled) {
-				setIsLoadingItems(false);
-			}
-		});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [client, targetCollection, selectedIds, fetchedItems]);
+	}, [queryClient, queryOpts, targetCollection]);
 
 	// Get selected items from cache
 	const selectedItems = React.useMemo(() => {
 		return selectedIds
-			.map((id: string) => fetchedItems.get(id))
+			.map((id: string) => fetchedItemsMap.get(id))
 			.filter(Boolean);
-	}, [selectedIds, fetchedItems]);
+	}, [selectedIds, fetchedItemsMap]);
 
 	const handleAdd = React.useCallback(
 		(itemId: string | null) => {
@@ -440,7 +407,7 @@ export function RelationPicker<T extends QuestpieApp>({
 				<div className="flex items-center gap-2">
 					<label
 						htmlFor={name}
-						className="text-sm font-medium flex items-center gap-1.5"
+						className="font-chrome flex items-center gap-1.5 text-sm font-medium"
 					>
 						{resolveIconElement(collectionIconRef, {
 							className: "size-3.5 text-muted-foreground",
@@ -448,7 +415,7 @@ export function RelationPicker<T extends QuestpieApp>({
 						{resolvedLabel}
 						{required && <span className="text-destructive">*</span>}
 						{maxItems && (
-							<span className="ml-2 text-xs text-muted-foreground">
+							<span className="text-muted-foreground font-chrome chrome-meta ml-2 text-xs tabular-nums">
 								({selectedIds.length}/{maxItems})
 							</span>
 						)}
@@ -479,7 +446,7 @@ export function RelationPicker<T extends QuestpieApp>({
 
 			{/* Add More */}
 			{!readOnly && canAddMore && (
-				<div className="flex gap-2">
+				<div className="qa-relation-picker__add-more flex items-center gap-2">
 					{/* Searchable Select to add existing items - uses server-side search */}
 					<div className="flex-1">
 						<SelectSingle
@@ -494,7 +461,7 @@ export function RelationPicker<T extends QuestpieApp>({
 									{
 										limit: 50,
 										search,
-										where: filter ? filter({}) : undefined,
+										where: filter ?? undefined,
 										selectedIds,
 									},
 								])
@@ -513,6 +480,7 @@ export function RelationPicker<T extends QuestpieApp>({
 						type="button"
 						variant="outline"
 						size="icon"
+						className="text-muted-foreground hover:text-foreground size-10"
 						onClick={handleOpenCreate}
 						disabled={disabled}
 						title={createLabel}
@@ -525,15 +493,15 @@ export function RelationPicker<T extends QuestpieApp>({
 
 			{/* Empty State - only show when not loading */}
 			{selectedIds.length === 0 && !isLoadingItems && (
-				<div className="rounded-lg border border-dashed p-4 text-center">
-					<p className="text-sm text-muted-foreground">
+				<div className="qa-relation-picker__empty-state py-2">
+					<p className="text-muted-foreground text-sm text-pretty">
 						{resolvedPlaceholder || emptyLabel}
 					</p>
 				</div>
 			)}
 
 			{/* Error message */}
-			{error && <p className="text-sm text-destructive">{error}</p>}
+			{error && <p className="text-destructive text-sm text-pretty">{error}</p>}
 
 			{/* Side Sheet for Create/Edit */}
 			<ResourceSheet

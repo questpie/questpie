@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
+
 import { z } from "zod";
+
 import {
 	email,
 	type EmailTemplateDefinition,
@@ -7,7 +9,7 @@ import {
 	type InferEmailTemplateContext,
 	type EmailResult,
 	type EmailHandlerArgs,
-} from "../../../src/server/integrated/mailer/template.js";
+} from "../../../src/server/modules/core/integrated/mailer/template.js";
 
 describe("email() factory", () => {
 	it("returns the definition unchanged", () => {
@@ -72,7 +74,9 @@ describe("email() factory", () => {
 			}),
 		});
 
-		const result = def.handler({ input: { msg: "plain" } } as any) as EmailResult;
+		const result = def.handler({
+			input: { msg: "plain" },
+		} as any) as EmailResult;
 		expect(result.text).toBe("plain");
 	});
 

@@ -3,8 +3,6 @@ title: Custom Actions
 description: Define custom actions with forms, confirmation dialogs, and server-side handlers.
 ---
 
-# Custom Actions
-
 Custom actions extend the admin with domain-specific operations — bulk status changes, exports, notifications, or any workflow step.
 
 ## Defining Custom Actions
@@ -60,17 +58,17 @@ Custom actions can be added to collections with forms and handlers:
 
 ## Action Options
 
-| Option | Type | Description |
-|---|---|---|
-| `id` | `string` | Unique identifier |
-| `label` | `string \| i18n` | Button label |
-| `icon` | `Icon` | Button icon |
-| `confirm` | `string \| i18n` | Confirmation dialog text |
-| `form` | `object` | Form fields shown before execution |
-| `handler` | `function` | Server-side handler |
-| `bulk` | `boolean` | Available as bulk action in list view |
+| Option    | Type             | Description                           |
+| --------- | ---------------- | ------------------------------------- |
+| `id`      | `string`         | Unique identifier                     |
+| `label`   | `string \| i18n` | Button label                          |
+| `icon`    | `Icon`           | Button icon                           |
+| `confirm` | `string \| i18n` | Confirmation dialog text              |
+| `form`    | `object`         | Form fields shown before execution    |
+| `handler` | `function`       | Server-side handler                   |
+| `bulk`    | `boolean`        | Available as bulk action in list view |
 
 ## Related Pages
 
 - [Built-in Actions](/docs/workspace/actions/builtin) — Default CRUD actions
-- [Routes](/docs/backend/business-logic/routes) — Server-side route logic
+- [Typed Routes](/docs/backend/business-logic/routes) — Server-side route logic

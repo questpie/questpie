@@ -4,15 +4,16 @@
  * Default login page that uses AuthLayout and LoginForm.
  * Integrates with authClient from AdminProvider context.
  *
- * Automatically redirects to setup page if no users exist.
+ * Automatically redirects to setup page if no admin users exist.
  */
 
 import * as React from "react";
+
 import { useAuthClient } from "../../hooks/use-auth";
 import { useSetupStatus } from "../../hooks/use-setup-status";
+import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
-	selectBrandName,
 	selectNavigate,
 	useAdminStore,
 } from "../../runtime/provider";
@@ -71,7 +72,7 @@ export interface LoginPageProps {
  * Default login page component.
  *
  * Uses authClient from AdminProvider to handle authentication.
- * Automatically redirects to setup page if no users exist.
+ * Automatically redirects to setup page if no admin users exist.
  *
  * @example
  * ```tsx
@@ -80,8 +81,8 @@ export interface LoginPageProps {
  * ```
  */
 export function LoginPage({
-	title = "Sign in",
-	description = "Enter your credentials to access the admin panel",
+	title,
+	description,
 	logo,
 	redirectTo,
 	forgotPasswordPath,
@@ -89,17 +90,17 @@ export function LoginPage({
 	showForgotPassword = true,
 	showSignUp = false,
 }: LoginPageProps) {
+	const { t } = useTranslation();
 	const authClient = useAuthClient();
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
-	const brandName = useAdminStore(selectBrandName);
 
 	const [error, setError] = React.useState<string | null>(null);
 
-	// Check if setup is required (no users exist)
+	// Check if setup is required (no admin users exist)
 	const { data: setupStatus, isLoading: isCheckingSetup } = useSetupStatus();
 
-	// Redirect to setup page if no users exist
+	// Redirect to setup page if no admin users exist
 	React.useEffect(() => {
 		if (!isCheckingSetup && setupStatus && setupStatus.required) {
 			navigate(`${basePath}/setup`);
@@ -121,7 +122,7 @@ export function LoginPage({
 				if (result.error.message) {
 					setError(result.error.message);
 				} else {
-					setError("Invalid credentials");
+					setError(t("error.invalidCredentials"));
 				}
 				return;
 			}
@@ -132,7 +133,7 @@ export function LoginPage({
 			if (err instanceof Error) {
 				setError(err.message);
 			} else {
-				setError("An error occurred");
+				setError(t("error.anErrorOccurred"));
 			}
 		}
 	};
@@ -149,9 +150,9 @@ export function LoginPage({
 
 	return (
 		<AuthLayout
-			title={title}
-			description={description}
-			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			title={title ?? t("auth.signIn")}
+			description={description ?? t("auth.signInDescription")}
+			logo={logo}
 			className="qa-login-page"
 		>
 			<LoginForm
@@ -163,13 +164,5 @@ export function LoginPage({
 				error={error}
 			/>
 		</AuthLayout>
-	);
-}
-
-function DefaultLogo({ brandName }: { brandName: string }) {
-	return (
-		<div className="text-center">
-			<h1 className="text-xl font-bold">{brandName}</h1>
-		</div>
 	);
 }

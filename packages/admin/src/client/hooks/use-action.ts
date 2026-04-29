@@ -7,10 +7,12 @@
 
 "use client";
 
-import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
+
 import { getDefaultActionsConfig } from "../builder/types/action-registry";
 import type {
 	ActionContext,
@@ -272,9 +274,15 @@ export function useActions<TItem = any>({
 	// Merge provided config with defaults
 	const actions: Required<ActionsConfig<TItem>> = React.useMemo(
 		() => ({
-			header: actionsConfig?.header ??
-				defaultActions.header ?? { primary: [], secondary: [] },
-			bulk: actionsConfig?.bulk ?? defaultActions.bulk ?? [],
+			header:
+				actionsConfig?.header !== undefined
+					? actionsConfig.header
+					: (defaultActions.header ?? { primary: [], secondary: [] }),
+			row: actionsConfig?.row ?? [],
+			bulk:
+				actionsConfig?.bulk !== undefined
+					? actionsConfig.bulk
+					: (defaultActions.bulk ?? []),
 		}),
 		[actionsConfig, defaultActions],
 	);
@@ -406,7 +414,7 @@ function useActionExecution<TItem = any>({
 						if (collectionClient) {
 							if (method === "delete" && collectionClient.delete) {
 								await collectionClient.delete({ id: (item as any)?.id });
-								helpers.toast.success("Item deleted successfully");
+								helpers.toast.success(helpers.t("toast.deleteSuccess"));
 							} else {
 								// For other methods, show info (actual implementation would call the API)
 								helpers.toast.info(`${handler.method || "POST"} ${endpoint}`);
@@ -467,6 +475,16 @@ function useActionExecution<TItem = any>({
 										}
 									}
 								}
+								if (result?.effects?.redirect) {
+									helpers.navigate(result.effects.redirect);
+								}
+								if (result?.type === "redirect" && result.url) {
+									if (result.external) {
+										window.open(result.url, "_blank");
+									} else {
+										helpers.navigate(result.url);
+									}
+								}
 								if (result?.effects?.closeModal) {
 									helpers.closeDialog();
 								}
@@ -475,7 +493,9 @@ function useActionExecution<TItem = any>({
 							}
 						} catch (err) {
 							helpers.toast.error(
-								err instanceof Error ? err.message : "Server action failed",
+								err instanceof Error
+									? err.message
+									: helpers.t("error.serverActionFailed"),
 							);
 						}
 						break;
@@ -483,7 +503,9 @@ function useActionExecution<TItem = any>({
 				}
 			} catch (error) {
 				helpers.toast.error(
-					error instanceof Error ? error.message : "Action failed",
+					error instanceof Error
+						? error.message
+						: helpers.t("error.actionFailed"),
 				);
 			} finally {
 				setIsExecuting(false);

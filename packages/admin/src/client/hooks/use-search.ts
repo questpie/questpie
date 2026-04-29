@@ -7,6 +7,7 @@
 
 import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+
 import { selectClient, useAdminStore, useScopedLocale } from "../runtime";
 
 // ============================================================================

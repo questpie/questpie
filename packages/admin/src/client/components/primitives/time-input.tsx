@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+
 import { useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import type { TimeInputProps } from "./types";
@@ -47,14 +48,14 @@ export function TimeInput({
 		<div className="qa-time-input relative">
 			<div
 				className={cn(
-					"flex h-9 w-full items-center gap-2 border border-border bg-input px-3 py-2 text-sm",
-					"focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+					"control-surface font-chrome flex w-full items-center gap-2 px-3 py-2 text-sm",
+					"focus-within:border-border-strong focus-within:ring-ring/20 focus-within:ring-3",
 					disabled && "cursor-not-allowed opacity-50",
-					ariaInvalid && "border-destructive",
+					ariaInvalid && "border-border-strong",
 					className,
 				)}
 			>
-				<Icon icon="ph:clock" className="size-4 text-muted-foreground" />
+				<Icon icon="ph:clock" className="text-muted-foreground size-4" />
 				<input
 					type="time"
 					id={id}

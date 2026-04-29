@@ -11,7 +11,9 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
 import type { BlockNode } from "../../blocks/types.js";
+import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import {
@@ -63,10 +65,12 @@ export const BlockItem = React.memo(function BlockItem({
 	index: _index,
 	parentId: _parentId,
 }: BlockItemProps) {
+	const { t } = useTranslation();
 	const actions = useBlockEditorActions();
 	const blockSchema = useBlockSchema(block.type);
 	const values = useBlockValues(block.id);
 	const isExpanded = useIsBlockExpanded(block.id);
+	const isUnknownType = !blockSchema;
 	const canHaveChildren = blockSchema?.allowChildren ?? false;
 
 	// Drag and drop
@@ -131,19 +135,24 @@ export const BlockItem = React.memo(function BlockItem({
 		>
 			{/* Drop indicator line */}
 			{showDropIndicator && (
-				<div className="absolute -top-0.5 left-0 right-0 z-10 h-0.5 bg-primary" />
+				<div className="bg-primary absolute -top-0.5 right-0 left-0 z-10 h-0.5" />
 			)}
 
 			{/* Block card */}
-			<Card className={cn("overflow-hidden transition-shadow p-0 gap-0")}>
+			<Card
+				className={cn(
+					"gap-0 overflow-hidden p-0 transition-shadow",
+					isUnknownType && "border-destructive/50",
+				)}
+			>
 				{/* Header - clickable to expand/collapse */}
 				<CardHeader
 					role="button"
 					tabIndex={0}
 					className={cn(
-						"group flex flex-row items-center gap-2 px-3 py-2 cursor-pointer select-none",
+						"group flex cursor-pointer flex-row items-center gap-2 px-3 py-2 select-none",
 						"hover:bg-muted transition-colors",
-						"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+						"focus-visible:ring-ring/25 focus-visible:ring-3 focus-visible:outline-none focus-visible:ring-inset",
 					)}
 					onClick={handleToggleExpand}
 					onKeyDown={handleKeyDown}
@@ -152,14 +161,14 @@ export const BlockItem = React.memo(function BlockItem({
 					<button
 						type="button"
 						data-drag-handle
-						className="cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-muted"
+						className="hover:bg-muted -ml-1 cursor-grab rounded p-1 active:cursor-grabbing"
 						{...attributes}
 						{...listeners}
 						onClick={(e) => e.stopPropagation()}
 					>
 						<Icon
 							icon="ph:dots-six-vertical"
-							className="h-4 w-4 text-muted-foreground"
+							className="text-muted-foreground h-4 w-4"
 						/>
 					</button>
 
@@ -175,25 +184,33 @@ export const BlockItem = React.memo(function BlockItem({
 					</div>
 
 					{/* Block icon */}
-					<BlockIcon
-						icon={blockSchema?.admin?.icon}
-						size={14}
-						className={isRoot ? "text-foreground" : "text-muted-foreground"}
-					/>
+					{isUnknownType ? (
+						<Icon icon="ph:warning" className="text-destructive h-3.5 w-3.5" />
+					) : (
+						<BlockIcon
+							icon={blockSchema?.admin?.icon}
+							size={14}
+							className={isRoot ? "text-foreground" : "text-muted-foreground"}
+						/>
+					)}
 
 					{/* Block label */}
-					<div className="flex-1 min-w-0 flex items-baseline gap-2">
+					<div className="flex min-w-0 flex-1 items-baseline gap-2">
 						<span
 							className={cn(
-								"text-sm font-medium truncate",
-								isRoot ? "text-foreground" : "text-foreground/90",
+								"truncate text-sm font-medium",
+								isUnknownType
+									? "text-destructive"
+									: isRoot
+										? "text-foreground"
+										: "text-foreground/90",
 							)}
 						>
 							{blockLabel}
 						</span>
 						{/* Show preview text if available */}
 						{values && (
-							<span className="text-xs text-muted-foreground truncate hidden sm:inline">
+							<span className="text-muted-foreground hidden truncate text-xs sm:inline">
 								{getPreviewText(values)}
 							</span>
 						)}
@@ -206,7 +223,7 @@ export const BlockItem = React.memo(function BlockItem({
 							canHaveChildren={canHaveChildren}
 							onDuplicate={handleDuplicate}
 							onRemove={handleRemove}
-							className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+							className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
 						/>
 					</div>
 				</CardHeader>
@@ -217,14 +234,24 @@ export const BlockItem = React.memo(function BlockItem({
 						<BlockFieldsRenderer blockId={block.id} blockSchema={blockSchema} />
 					</CardContent>
 				)}
+
+				{/* Unknown block type warning */}
+				{isExpanded && isUnknownType && (
+					<CardContent className="p-3">
+						<div className="text-destructive flex items-center gap-2 text-sm">
+							<Icon icon="ph:warning" className="h-4 w-4 shrink-0" />
+							<span>{t("blocks.unknownType", { type: block.type })}</span>
+						</div>
+					</CardContent>
+				)}
 			</Card>
 
 			{/* Children with rail */}
 			{canHaveChildren && isExpanded && block.children.length > 0 && (
 				<div className="relative">
 					{/* Rail line */}
-					<div className="absolute left-3 top-0 bottom-0 w-px bg-border" />
-					<div className="pl-8 pt-2 space-y-2">
+					<div className="bg-border absolute top-0 bottom-0 left-3 w-px" />
+					<div className="space-y-2 pt-2 pl-8">
 						<BlockTree
 							blocks={block.children}
 							level={level + 1}
@@ -236,10 +263,10 @@ export const BlockItem = React.memo(function BlockItem({
 
 			{/* Add child button - only for blocks that can have children */}
 			{canHaveChildren && isExpanded && (
-				<div className="pl-8 relative mt-2">
-					<div className="absolute left-3 -top-2 w-px h-[calc(50%+8px)] bg-border" />
+				<div className="relative mt-2 pl-8">
+					<div className="bg-border absolute -top-2 left-3 h-[calc(50%+8px)] w-px" />
 					{/* Horizontal rail connector */}
-					<div className="absolute left-3 top-1/2 w-5 h-px bg-border" />
+					<div className="bg-border absolute top-1/2 left-3 h-px w-5" />
 					<BlockInsertButton
 						position={{ parentId: block.id, index: block.children.length }}
 						variant="rail"

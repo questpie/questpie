@@ -63,16 +63,14 @@ export type OptionalKeys<T> = {
 /**
  * Checks if a key is required in T.
  */
-export type IsRequired<T, K extends keyof T> = K extends RequiredKeys<T>
-	? true
-	: false;
+export type IsRequired<T, K extends keyof T> =
+	K extends RequiredKeys<T> ? true : false;
 
 /**
  * Checks if a key is optional in T.
  */
-export type IsOptional<T, K extends keyof T> = K extends OptionalKeys<T>
-	? true
-	: false;
+export type IsOptional<T, K extends keyof T> =
+	K extends OptionalKeys<T> ? true : false;
 
 /**
  * Checks if type T has key K.
@@ -168,7 +166,7 @@ export type AssertTrue<T extends true> = T;
 export type AssertFalse<T extends false> = T;
 
 /**
- * Prettier type display - expands type for better IDE hover info.
+ * Type display - expands type for better IDE hover info.
  */
 export type Prettify<T> = {
 	[K in keyof T]: T[K];

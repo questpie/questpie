@@ -1,4 +1,4 @@
-import type { KVAdapter } from "../../../src/server/integrated/kv/adapter.js";
+import type { KVAdapter } from "../../../src/server/modules/core/integrated/kv/adapter.js";
 
 /**
  * Mock KV Adapter for testing

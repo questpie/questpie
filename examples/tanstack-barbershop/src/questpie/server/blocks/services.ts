@@ -1,4 +1,5 @@
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
+
 import { sections } from "./_categories";
 
 export const servicesBlock = block("services")
@@ -77,6 +78,7 @@ export const servicesBlock = block("services")
 		// Auto mode
 		const res = await ctx.collections.services.find({
 			limit: (values.limit as number) || 6,
+			orderBy: [{ order: "asc" }, { price: "asc" }],
 			with: { image: true },
 		});
 		return { services: res.docs };

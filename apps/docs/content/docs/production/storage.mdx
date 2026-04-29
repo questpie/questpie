@@ -3,17 +3,15 @@ title: Storage
 description: File storage with Flydrive — S3, local filesystem, and upload configuration.
 ---
 
-# Storage
-
-QuestPie uses [Flydrive](https://flydrive.dev/) for file storage. Supports S3, local filesystem, and other backends.
+QUESTPIE uses [Flydrive](https://flydrive.dev/) for file storage. It uses local filesystem storage by default and accepts any custom FlyDrive driver instance for S3, R2, GCS, and other backends.
 
 ## Configuration
 
 ```ts title="questpie.config.ts"
 export default runtimeConfig({
-  storage: {
-    basePath: "/api",
-  },
+	storage: {
+		basePath: "/api",
+	},
 });
 ```
 
@@ -35,20 +33,21 @@ avatar: f.upload({
 
 Files stored on local filesystem. Default for development.
 
-### S3 (Production)
+### S3 or S3-Compatible (Production)
 
 ```ts
+import { S3Driver } from "flydrive/drivers/s3";
+
 export default runtimeConfig({
-  storage: {
-    basePath: "/api",
-    driver: "s3",
-    s3: {
-      bucket: process.env.S3_BUCKET,
-      region: process.env.S3_REGION,
-      accessKeyId: process.env.S3_ACCESS_KEY,
-      secretAccessKey: process.env.S3_SECRET_KEY,
-    },
-  },
+	storage: {
+		basePath: "/api",
+		driver: new S3Driver({
+			bucket: process.env.S3_BUCKET,
+			region: process.env.S3_REGION,
+			accessKeyId: process.env.S3_ACCESS_KEY,
+			secretAccessKey: process.env.S3_SECRET_KEY,
+		}),
+	},
 });
 ```
 
@@ -57,7 +56,7 @@ export default runtimeConfig({
 ```ts
 // Upload a file
 const asset = await client.collections.assets.upload(file, {
-  onProgress: (progress) => console.log(`${progress}%`),
+	onProgress: (progress) => console.log(`${progress}%`),
 });
 ```
 

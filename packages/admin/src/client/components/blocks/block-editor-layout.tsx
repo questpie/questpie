@@ -9,6 +9,9 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
+import { useTranslation } from "../../i18n/hooks.js";
+import { SEARCH_PARAMS_EVENT } from "../../lib/events.js";
 import { RenderProfiler } from "../../lib/render-profiler.js";
 import { cn } from "../../lib/utils.js";
 import { Button } from "../ui/button.js";
@@ -19,8 +22,6 @@ import {
 	useBlockTree,
 } from "./block-editor-context.js";
 import { BlockLibrarySidebar } from "./block-library-sidebar.js";
-
-const SEARCH_PARAMS_EVENT = "questpie:searchparamschange";
 
 // ============================================================================
 // Types
@@ -41,6 +42,7 @@ export function BlockEditorLayout({
 	className,
 	minHeight = 500,
 }: BlockEditorLayoutProps) {
+	const { t } = useTranslation();
 	const actions = useBlockEditorActions();
 	const tree = useBlockTree();
 	const isLibraryOpen = useBlockLibraryOpen();
@@ -98,11 +100,11 @@ export function BlockEditorLayout({
 					<div className="text-muted-foreground">
 						<Icon
 							icon="ph:stack"
-							className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4"
+							className="text-muted-foreground/30 mx-auto mb-4 h-12 w-12"
 						/>
-						<p className="text-sm font-medium">No blocks yet</p>
-						<p className="text-xs text-muted-foreground mt-1">
-							Add your first block to get started
+						<p className="text-sm font-medium">{t("blocks.emptyTitle")}</p>
+						<p className="text-muted-foreground mt-1 text-xs">
+							{t("blocks.addFirst")}
 						</p>
 					</div>
 					<Button
@@ -112,7 +114,7 @@ export function BlockEditorLayout({
 						onClick={handleOpenSidebar}
 					>
 						<Icon icon="ph:plus" className="mr-2 h-4 w-4" />
-						Add block
+						{t("blocks.add")}
 					</Button>
 				</div>
 			)}

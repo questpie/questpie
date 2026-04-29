@@ -8,20 +8,19 @@
  * @see RFC-MODULE-ARCHITECTURE §8.1 (User Project)
  */
 
-import { adminPlugin } from "@questpie/admin/plugin";
 import {
 	ConsoleAdapter,
 	pgBossAdapter,
 	runtimeConfig,
 	SmtpAdapter,
 } from "questpie";
+
 import { messages } from "@/questpie/server/i18n";
 
 const DATABASE_URL =
 	process.env.DATABASE_URL || "postgres://localhost/barbershop";
 
 export default runtimeConfig({
-	plugins: [adminPlugin()],
 	app: {
 		url: process.env.APP_URL || "http://localhost:3000",
 	},

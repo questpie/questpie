@@ -1,0 +1,267 @@
+---
+title: Search Adapter
+description: Implement a custom full-text search adapter for QUESTPIE.
+---
+
+Search adapters back the high-level `app.search` API. The built-in `PostgresSearchAdapter` uses PostgreSQL FTS + trigram; you might want Elasticsearch, Meilisearch, Typesense, or Algolia instead.
+
+## Interface
+
+```ts
+export interface SearchAdapter {
+	readonly name: string;
+	readonly capabilities: AdapterCapabilities;
+
+	initialize(ctx: AdapterInitContext): Promise<void>;
+	getMigrations(): AdapterMigration[];
+
+	search(options: SearchOptions): Promise<SearchResponse>;
+	index(params: IndexParams): Promise<void>;
+	remove(params: RemoveParams): Promise<void>;
+	reindex(collection: string): Promise<void>;
+	clear(): Promise<void>;
+
+	// Optional
+	indexBatch?(params: IndexParams[]): Promise<void>;
+	getTableSchemas?(): Record<string, any>;
+	getExtensions?(): string[];
+}
+```
+
+### Capabilities
+
+Declare what search modes your adapter supports:
+
+```ts
+export type AdapterCapabilities = {
+	lexical: boolean; // text search (FTS, inverted index)
+	trigram: boolean; // fuzzy matching (pg_trgm, etc.)
+	semantic: boolean; // vector/embedding search
+	hybrid: boolean; // combined lexical + semantic
+	facets: boolean; // faceted filtering/aggregation
+};
+```
+
+### Initialization context
+
+```ts
+export type AdapterInitContext = {
+	db: PostgresJsDatabase<any>;
+	logger: AdapterLogger;
+};
+```
+
+Your adapter receives the Drizzle DB instance and a logger during `initialize()`. Use them for runtime queries and diagnostics.
+
+### Migrations
+
+```ts
+export type AdapterMigration = {
+	name: string;
+	up: string; // SQL to apply
+	down: string; // SQL to rollback
+};
+```
+
+If your adapter needs database tables (like the Postgres adapter does), return SQL migrations from `getMigrations()`. For external services (Elasticsearch, Meilisearch), return `[]`.
+
+## Required methods
+
+| Method                | Description                                                                   |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `initialize(ctx)`     | Capture DB/logger references, validate configuration. Called once at startup. |
+| `getMigrations()`     | Return SQL migrations for adapter storage, or `[]` for external services.     |
+| `search(options)`     | Execute a search query and return results with total count.                   |
+| `index(params)`       | Upsert one record into the search index.                                      |
+| `remove(params)`      | Remove one record from the index.                                             |
+| `reindex(collection)` | Rebuild the index for one collection from source data.                        |
+| `clear()`             | Remove all indexed data.                                                      |
+
+### `search()` options
+
+```ts
+export type SearchOptions = {
+	query: string;
+	collections?: string[];
+	locale?: string;
+	limit?: number;
+	offset?: number;
+	mode?: "lexical" | "semantic" | "hybrid";
+	filters?: Record<string, string | string[]>;
+	highlights?: boolean;
+	facets?: FacetDefinition[];
+	accessFilters?: CollectionAccessFilter[];
+};
+```
+
+### `index()` params
+
+```ts
+export type IndexParams = {
+	collection: string;
+	recordId: string;
+	locale: string;
+	title: string;
+	content?: string;
+	metadata?: Record<string, any>;
+	embedding?: number[];
+	facets?: FacetIndexValue[];
+};
+```
+
+### `remove()` params
+
+```ts
+export type RemoveParams = {
+	collection: string;
+	recordId: string;
+	locale?: string;
+};
+```
+
+**Note:** The interface uses `remove()` rather than `delete()`. If your provider SDK calls the operation "delete", map it internally inside `remove()`.
+
+## Optional methods
+
+| Method                 | Description                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| `indexBatch(params[])` | Bulk index multiple records. If not implemented, QUESTPIE falls back to calling `index()` in a loop. |
+| `getTableSchemas()`    | Return Drizzle table schemas for adapter tables (used by migration generator).                       |
+| `getExtensions()`      | Return PostgreSQL extensions your adapter requires (e.g. `["pg_trgm", "pgvector"]`).                 |
+
+## Minimal example
+
+```ts title="my-search-adapter.ts"
+import type {
+	AdapterCapabilities,
+	AdapterInitContext,
+	AdapterMigration,
+	IndexParams,
+	RemoveParams,
+	SearchAdapter,
+	SearchOptions,
+	SearchResponse,
+} from "questpie";
+
+export class MeilisearchAdapter implements SearchAdapter {
+	readonly name = "meilisearch";
+	readonly capabilities: AdapterCapabilities = {
+		lexical: true,
+		trigram: false,
+		semantic: false,
+		hybrid: false,
+		facets: true,
+	};
+
+	private client: any; // MeiliSearch client
+	private logger?: AdapterInitContext["logger"];
+
+	constructor(private options: { host: string; apiKey: string }) {}
+
+	async initialize(ctx: AdapterInitContext): Promise<void> {
+		this.logger = ctx.logger;
+		// Initialize your Meilisearch client here
+		// this.client = new MeiliSearch({
+		//   host: this.options.host,
+		//   apiKey: this.options.apiKey,
+		// });
+		this.logger.info("[MeilisearchAdapter] initialized");
+	}
+
+	getMigrations(): AdapterMigration[] {
+		// External service -- no SQL migrations needed
+		return [];
+	}
+
+	async search(options: SearchOptions): Promise<SearchResponse> {
+		// Map QUESTPIE search options to Meilisearch API
+		const index = this.client.index(options.collections?.[0] ?? "default");
+		const result = await index.search(options.query, {
+			limit: options.limit ?? 20,
+			offset: options.offset ?? 0,
+			filter: options.filters
+				? Object.entries(options.filters).map(([k, v]) => `${k} = "${v}"`)
+				: undefined,
+		});
+
+		return {
+			results: result.hits.map((hit: any) => ({
+				collection: options.collections?.[0] ?? "default",
+				recordId: hit.id,
+				locale: hit.locale ?? "en",
+				title: hit.title ?? "",
+				score: hit._rankingScore ?? 1,
+				metadata: hit,
+			})),
+			total: result.estimatedTotalHits ?? result.hits.length,
+		};
+	}
+
+	async index(params: IndexParams): Promise<void> {
+		const index = this.client.index(params.collection);
+		await index.addDocuments([
+			{
+				id: `${params.recordId}_${params.locale}`,
+				recordId: params.recordId,
+				locale: params.locale,
+				title: params.title,
+				content: params.content,
+				...params.metadata,
+			},
+		]);
+	}
+
+	async remove(params: RemoveParams): Promise<void> {
+		const index = this.client.index(params.collection);
+		if (params.locale) {
+			await index.deleteDocument(`${params.recordId}_${params.locale}`);
+		} else {
+			// Remove all locale variants
+			await index.deleteDocument(params.recordId);
+		}
+	}
+
+	async reindex(collection: string): Promise<void> {
+		const index = this.client.index(collection);
+		await index.deleteAllDocuments();
+		// Re-index from source -- production adapters fetch records
+		// from the database and call index() for each.
+	}
+
+	async clear(): Promise<void> {
+		// Delete all indexes or all documents across indexes
+	}
+}
+```
+
+## Registration
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { MeilisearchAdapter } from "./my-search-adapter";
+
+export default runtimeConfig({
+	// ...
+	search: new MeilisearchAdapter({
+		host: "http://localhost:7700",
+		apiKey: process.env.MEILI_API_KEY!,
+	}),
+});
+```
+
+Note that `search` takes the adapter instance directly (not nested under `adapter` key), unlike other config sections.
+
+## Testing tips
+
+- Test `index()` + `search()` round-trip for a single document.
+- Test `remove()` actually makes the document unsearchable.
+- Test `initialize()` separately so startup errors are obvious.
+- If you return migrations or table schemas, run a migration generation check before shipping.
+- If you implement facets, verify empty-result searches still return stable facet shapes.
+- For external services, use testcontainers or a local dev instance in CI.
+
+## Reference implementations
+
+- [PostgresSearchAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/search/adapters/postgres.ts) -- FTS + trigram, facets, access filters, ~1100 lines
+- [PgVectorSearchAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/search/adapters/pgvector.ts) -- extends Postgres adapter with vector embeddings
+- [SearchAdapter interface source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/search/types.ts)

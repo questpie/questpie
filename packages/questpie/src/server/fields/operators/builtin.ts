@@ -25,7 +25,9 @@ import {
 	notLike,
 	sql,
 } from "drizzle-orm";
+
 import type { DateInput } from "#questpie/shared/type-utils.js";
+
 import { operator } from "../types.js";
 import type { CollectionWherePlaceholder } from "../types.js";
 import { extendOperatorSet, operatorSet } from "./operator-set.js";
@@ -44,7 +46,9 @@ export const stringOps = operatorSet({
 		eq: operator<string, unknown>((col, value) => eq(col, value)),
 		ne: operator<string, unknown>((col, value) => ne(col, value)),
 		in: operator<string[], unknown>((col, values) => inArray(col, values)),
-		notIn: operator<string[], unknown>((col, values) => notInArray(col, values)),
+		notIn: operator<string[], unknown>((col, values) =>
+			notInArray(col, values),
+		),
 		like: operator<string, unknown>((col, value) => like(col, value)),
 		ilike: operator<string, unknown>((col, value) => ilike(col, value)),
 		notLike: operator<string, unknown>((col, value) => notLike(col, value)),
@@ -84,7 +88,9 @@ export const numberOps = operatorSet({
 		lt: operator<number, unknown>((col, value) => lt(col, value)),
 		lte: operator<number, unknown>((col, value) => lte(col, value)),
 		in: operator<number[], unknown>((col, values) => inArray(col, values)),
-		notIn: operator<number[], unknown>((col, values) => notInArray(col, values)),
+		notIn: operator<number[], unknown>((col, values) =>
+			notInArray(col, values),
+		),
 		isNull: operator<boolean, unknown>((col, value) =>
 			value ? isNull(col) : isNotNull(col),
 		),
@@ -155,9 +161,7 @@ export const dateOps = operatorSet({
  */
 export const emailOps = extendOperatorSet(stringOps, {
 	column: {
-		domain: operator<string, unknown>((col, value) =>
-			ilike(col, `%@${value}`),
-		),
+		domain: operator<string, unknown>((col, value) => ilike(col, `%@${value}`)),
 		domainIn: operator<string[], unknown>((col, values) => {
 			if (values.length === 0) return sql`FALSE`;
 			if (values.length === 1) return ilike(col, `%@${values[0]}`);
@@ -224,8 +228,7 @@ export const urlOps = extendOperatorSet(stringOps, {
 				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%://" + values[0] + "%"}`;
 			return sql`(${sql.join(
 				values.map(
-					(h) =>
-						sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%://" + h + "%"}`,
+					(h) => sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%://" + h + "%"}`,
 				),
 				sql` OR `,
 			)})`;
@@ -581,7 +584,9 @@ export const basicOps = operatorSet({
 		eq: operator<unknown, unknown>((col, value) => eq(col, value)),
 		ne: operator<unknown, unknown>((col, value) => ne(col, value)),
 		in: operator<unknown[], unknown>((col, values) => inArray(col, values)),
-		notIn: operator<unknown[], unknown>((col, values) => notInArray(col, values)),
+		notIn: operator<unknown[], unknown>((col, values) =>
+			notInArray(col, values),
+		),
 		isNull: operator<boolean, unknown>((col, value) =>
 			value ? isNull(col) : isNotNull(col),
 		),

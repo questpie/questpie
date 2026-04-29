@@ -1,19 +1,37 @@
 {
 	"name": "create-questpie",
-	"version": "1.0.0",
-	"type": "module",
-	"description": "Create a new QuestPie project",
+	"version": "2.0.2",
+	"description": "Create a new QUESTPIE project",
+	"keywords": [
+		"create",
+		"framework",
+		"questpie",
+		"scaffold",
+		"template"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/questpie/questpie.git",
+		"directory": "packages/create-questpie"
+	},
 	"bin": {
 		"create-questpie": "./dist/index.mjs"
 	},
 	"files": [
 		"dist",
-		"templates"
+		"templates",
+		"skills"
 	],
+	"type": "module",
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"build": "tsdown",
 		"dev": "tsdown --watch",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"test": "bun test test"
 	},
 	"dependencies": {
 		"@clack/prompts": "^0.10.0",
@@ -24,21 +42,5 @@
 		"bun-types": "latest",
 		"tsdown": "^0.18.3",
 		"typescript": "^5.9.2"
-	},
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/questpie/questpie.git",
-		"directory": "packages/create-questpie"
-	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"keywords": [
-		"questpie",
-		"framework",
-		"create",
-		"scaffold",
-		"template"
-	],
-	"license": "MIT"
+	}
 }

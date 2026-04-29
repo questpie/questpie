@@ -8,6 +8,8 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+
+import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
 import { Button } from "../ui/button.js";
 import { useBlockEditorActions } from "./block-editor-context.js";
@@ -41,6 +43,7 @@ export function BlockInsertButton({
 	parentLabel,
 	className,
 }: BlockInsertButtonProps) {
+	const { t } = useTranslation();
 	const { openLibrary } = useBlockEditorActions();
 
 	const handleOpen = () => {
@@ -52,7 +55,7 @@ export function BlockInsertButton({
 		return (
 			<div
 				className={cn(
-					"group relative w-full cursor-pointer -my-0.5 z-10",
+					"group relative z-10 -my-0.5 w-full cursor-pointer",
 					"h-2 sm:h-1.5",
 					className,
 				)}
@@ -67,13 +70,13 @@ export function BlockInsertButton({
 				}}
 			>
 				{/* Hover indicator line */}
-				<div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-primary/40 transition-colors sm:bg-transparent sm:group-hover:bg-primary" />
+				<div className="bg-border-strong sm:group-hover:bg-foreground absolute inset-x-0 top-1/2 h-px -translate-y-1/2 transition-colors sm:bg-transparent" />
 
 				{/* Add button that appears on hover */}
 				<div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center justify-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-					<div className="pointer-events-auto flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground shadow-sm cursor-pointer">
+					<div className="bg-foreground text-background pointer-events-auto flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-xs shadow-sm">
 						<Icon icon="ph:plus-bold" width={10} height={10} />
-						<span>Add</span>
+						<span>{t("common.add")}</span>
 					</div>
 				</div>
 			</div>
@@ -86,19 +89,21 @@ export function BlockInsertButton({
 			<button
 				type="button"
 				className={cn(
-					"group flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors relative",
+					"group text-muted-foreground hover:text-foreground relative flex min-h-10 items-center gap-2 text-xs font-medium transition-colors active:scale-[0.96]",
 					className,
 				)}
 				onClick={handleOpen}
 			>
 				{/* Add button */}
-				<div className="flex items-center justify-center w-5 h-5 rounded-full border border-border bg-background text-muted-foreground group-hover:border-foreground group-hover:text-foreground transition-all relative z-10">
-					<Icon icon="ph:plus" className="w-3 h-3" />
+				<div className="border-border bg-background text-muted-foreground group-hover:border-foreground group-hover:text-foreground relative z-10 flex h-5 w-5 items-center justify-center rounded-full border transition-[background-color,border-color,color]">
+					<Icon icon="ph:plus" className="h-3 w-3" />
 				</div>
 
 				{/* Label */}
 				<span className="truncate">
-					{parentLabel ? `Add to ${parentLabel}` : "Add block"}
+					{parentLabel
+						? t("blocks.addTo", { parent: parentLabel })
+						: t("blocks.add")}
 				</span>
 			</button>
 		);
@@ -112,7 +117,7 @@ export function BlockInsertButton({
 			onClick={handleOpen}
 		>
 			<Icon icon="ph:plus" className="mr-2 h-4 w-4" />
-			Add block
+			{t("blocks.add")}
 		</Button>
 	);
 }

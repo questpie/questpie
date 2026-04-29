@@ -3,9 +3,7 @@ title: TanStack Barbershop
 description: End-to-end tour of the barbershop booking app - collections, routes, jobs, admin, and frontend.
 ---
 
-# TanStack Barbershop
-
-The barbershop example is a complete booking app built with TanStack Start and QuestPie. It demonstrates every major feature of the framework.
+The barbershop example is a complete booking app built with TanStack Start and QUESTPIE. It demonstrates every major feature of the framework.
 
 **Source:** `examples/tanstack-barbershop/`
 
@@ -19,12 +17,11 @@ examples/tanstack-barbershop/
 │   │   ├── server/
 │   │   │   ├── questpie.config.ts            # Runtime config
 │   │   │   ├── modules.ts                    # adminModule + auditModule
-│   │   │   ├── auth.ts                       # Better Auth config
-│   │   │   ├── locale.ts                     # en + sk locales
-│   │   │   ├── admin-locale.ts               # Admin UI locales
-│   │   │   ├── sidebar.ts                    # 6 sidebar sections
-│   │   │   ├── dashboard.ts                  # Stats, charts, timeline
-│   │   │   ├── branding.ts                   # "Barbershop Control"
+│   │   │   ├── config/
+│   │   │   │   ├── auth.ts                   # Better Auth config
+│   │   │   │   ├── app.ts                    # App-level config
+│   │   │   │   ├── admin.ts                  # Sidebar, dashboard, branding, locale
+│   │   │   │   └── openapi.ts                # OpenAPI config
 │   │   │   ├── collections/
 │   │   │   │   ├── barbers.ts                # Complex: working hours, social links, M2M
 │   │   │   │   ├── services.ts               # Localized, relations
@@ -70,16 +67,14 @@ examples/tanstack-barbershop/
 ### Runtime Config
 
 ```ts title="questpie.config.ts"
-import { adminPlugin } from "@questpie/admin/plugin";
 import { pgBossAdapter, runtimeConfig, SmtpAdapter } from "questpie";
 
 export default runtimeConfig({
-  plugins: [adminPlugin()],
-  app: { url: process.env.APP_URL || "http://localhost:3000" },
-  db: { url: process.env.DATABASE_URL || "postgres://localhost/barbershop" },
-  storage: { basePath: "/api" },
-  secret: process.env.BETTER_AUTH_SECRET || "demo-secret",
-  queue: { adapter: pgBossAdapter({ connectionString: DATABASE_URL }) },
+	app: { url: process.env.APP_URL || "http://localhost:3000" },
+	db: { url: process.env.DATABASE_URL || "postgres://localhost/barbershop" },
+	storage: { basePath: "/api" },
+	secret: process.env.BETTER_AUTH_SECRET || "demo-secret",
+	queue: { adapter: pgBossAdapter({ connectionString: DATABASE_URL }) },
 });
 ```
 
@@ -87,45 +82,51 @@ export default runtimeConfig({
 
 ```ts title="collections/appointments.ts"
 export const appointments = collection("appointments")
-  .fields(({ f }) => ({
-    customer: f.relation("user").required(),
-    barber: f.relation("barbers").required(),
-    service: f.relation("services").required(),
-    scheduledAt: f.datetime().required(),
-    status: f.select([
-        { value: "pending", label: { en: "Pending" } },
-        { value: "confirmed", label: { en: "Confirmed" } },
-        { value: "completed", label: { en: "Completed" } },
-        { value: "cancelled", label: { en: "Cancelled" } },
-      ]).required().default("pending"),
-    cancellationReason: f.textarea(),
-    displayTitle: f.text().virtual(sql`(SELECT name FROM "user" WHERE id = appointments.customer)
+	.fields(({ f }) => ({
+		customer: f.relation("user").required(),
+		barber: f.relation("barbers").required(),
+		service: f.relation("services").required(),
+		scheduledAt: f.datetime().required(),
+		status: f
+			.select([
+				{ value: "pending", label: { en: "Pending" } },
+				{ value: "confirmed", label: { en: "Confirmed" } },
+				{ value: "completed", label: { en: "Completed" } },
+				{ value: "cancelled", label: { en: "Cancelled" } },
+			])
+			.required()
+			.default("pending"),
+		cancellationReason: f.textarea(),
+		displayTitle: f.text()
+			.virtual(sql`(SELECT name FROM "user" WHERE id = appointments.customer)
       || ' - ' || TO_CHAR(appointments."scheduledAt", 'YYYY-MM-DD HH24:MI')`),
-  }))
-  .form(({ v, f }) =>
-    v.collectionForm({
-      fields: [{
-        type: "section",
-        fields: [
-          f.cancelledAt,
-          {
-            field: f.cancellationReason,
-            hidden: ({ data }) => data.status !== "cancelled",
-          },
-        ],
-      }],
-    }),
-  )
-  .hooks({
-    afterChange: async ({ data, operation, queue }) => {
-      if (operation === "create") {
-        await queue.sendAppointmentConfirmation.publish({
-          appointmentId: data.id,
-          customerId: data.customer,
-        });
-      }
-    },
-  });
+	}))
+	.form(({ v, f }) =>
+		v.collectionForm({
+			fields: [
+				{
+					type: "section",
+					fields: [
+						f.cancelledAt,
+						{
+							field: f.cancellationReason,
+							hidden: ({ data }) => data.status !== "cancelled",
+						},
+					],
+				},
+			],
+		}),
+	)
+	.hooks({
+		afterChange: async ({ data, operation, queue }) => {
+			if (operation === "create") {
+				await queue.sendAppointmentConfirmation.publish({
+					appointmentId: data.id,
+					customerId: data.customer,
+				});
+			}
+		},
+	});
 ```
 
 ### Service Injection
@@ -134,12 +135,18 @@ export const appointments = collection("appointments")
 import { service } from "questpie";
 
 export default service({
-  lifecycle: "singleton",
-  create: () => ({
-    computeReadingTime(content: string): number { /* ... */ },
-    generateSlug(title: string): string { /* ... */ },
-    extractExcerpt(content: string): string { /* ... */ },
-  }),
+	lifecycle: "singleton",
+	create: () => ({
+		computeReadingTime(content: string): number {
+			/* ... */
+		},
+		generateSlug(title: string): string {
+			/* ... */
+		},
+		extractExcerpt(content: string): string {
+			/* ... */
+		},
+	}),
 });
 ```
 
@@ -161,10 +168,11 @@ import { createClient } from "questpie/client";
 import type { AppConfig } from "#questpie";
 
 export const client = createClient<AppConfig>({
-  baseURL: typeof window !== "undefined"
-    ? window.location.origin
-    : process.env.APP_URL,
-  basePath: "/api",
+	baseURL:
+		typeof window !== "undefined"
+			? window.location.origin
+			: process.env.APP_URL,
+	basePath: "/api",
 });
 ```
 
@@ -175,46 +183,46 @@ import { client } from "@/lib/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 function BookingWizard() {
-  const { data: barbers } = useQuery({
-    queryKey: ["barbers"],
-    queryFn: () => client.routes.getActiveBarbers({}),
-  });
+	const { data: barbers } = useQuery({
+		queryKey: ["barbers"],
+		queryFn: () => client.routes.getActiveBarbers({}),
+	});
 
-  const booking = useMutation({
-    mutationFn: (data) => client.routes.createBooking(data),
-    onSuccess: (result) => {
-      // Navigate to confirmation
-    },
-  });
+	const booking = useMutation({
+		mutationFn: (data) => client.routes.createBooking(data),
+		onSuccess: (result) => {
+			// Navigate to confirmation
+		},
+	});
 
-  // Multi-step wizard UI...
+	// Multi-step wizard UI...
 }
 ```
 
 ## What This Example Demonstrates
 
-| Feature | Where |
-|---|---|
-| Complex fields (objects, arrays, select) | `collections/barbers.ts` |
-| Many-to-many relations | `barbers ↔ barberServices ↔ services` |
-| Virtual SQL fields | `appointments.ts` → `displayTitle` |
-| Lifecycle hooks | `appointments.ts` → `afterChange` |
-| Service injection | `blog.ts` → used in `blog-posts.ts` hooks |
-| Background jobs | `jobs/send-appointment-confirmation.ts` |
-| Email templates | `emails/appointment-confirmation.ts` |
-| Server routes | `routes/create-booking.ts` |
-| Admin dashboard | `dashboard.ts` — stats, charts, timeline |
-| Admin sidebar | `sidebar.ts` — 6 sections, mixed items |
-| Content blocks | `blocks/hero.ts`, `pages.ts` with `f.blocks()` |
-| Conditional visibility | `appointments.ts` form → `hidden` |
-| Computed form fields | `barbers.ts` form → slug from name |
-| Multi-language (i18n) | Labels, content, admin UI |
-| Access control | `site-settings.ts` → admin-only update |
-| Live preview | `barbers.ts`, `pages.ts` → preview URL |
+| Feature                                  | Where                                          |
+| ---------------------------------------- | ---------------------------------------------- |
+| Complex fields (objects, arrays, select) | `collections/barbers.ts`                       |
+| Many-to-many relations                   | `barbers ↔ barberServices ↔ services`          |
+| Virtual SQL fields                       | `appointments.ts` → `displayTitle`             |
+| Lifecycle hooks                          | `appointments.ts` → `afterChange`              |
+| Service injection                        | `blog.ts` → used in `blog-posts.ts` hooks      |
+| Background jobs                          | `jobs/send-appointment-confirmation.ts`        |
+| Email templates                          | `emails/appointment-confirmation.ts`           |
+| Server routes                            | `routes/create-booking.ts`                     |
+| Admin dashboard                          | `config/admin.ts` — stats, charts, timeline    |
+| Admin sidebar                            | `config/admin.ts` — 6 sections, mixed items    |
+| Content blocks                           | `blocks/hero.ts`, `pages.ts` with `f.blocks()` |
+| Conditional visibility                   | `appointments.ts` form → `hidden`              |
+| Computed form fields                     | `barbers.ts` form → slug from name             |
+| Multi-language (i18n)                    | Labels, content, admin UI                      |
+| Access control                           | `site-settings.ts` → admin-only update         |
+| Live preview                             | `barbers.ts`, `pages.ts` → preview URL         |
 
 ## Related Pages
 
 - [First App](/docs/start-here/first-app) — Minimal getting started
 - [Collections](/docs/backend/data-modeling/collections) — Collection API
-- [Routes](/docs/backend/business-logic/routes) — Typed JSON route handlers
+- [Typed Routes](/docs/backend/business-logic/routes) — Typed JSON route handlers
 - [Dashboard](/docs/workspace/views/dashboard) — Dashboard widgets

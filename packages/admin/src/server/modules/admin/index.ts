@@ -10,18 +10,30 @@
  * - `adminRoutes` — admin route definitions derived from `adminModule.routes`
  *
  * The admin module itself follows the file convention:
- * - collections/  → merged starter collections + admin UI config
- * - routes/       → route handlers for admin panel operations
- * - modules.ts    → [starterModule] dependency
- * - sidebar.ts    → admin sidebar contribution
+ * - collections/     → merged starter collections + admin UI config
+ * - routes/          → route handlers for admin panel operations
+ * - modules.ts       → [starterModule] dependency
+ * - config/admin.ts  → admin sidebar contribution
  */
 
 // ── Generated module ──────────────────────────────────────────────────────────
-export type { AdminCollections, AdminModule } from "./.generated/module.js";
-export { default as adminModule } from "./.generated/module.js";
+export type { AdminCollections } from "./.generated/module.js";
+import _generatedModule from "./.generated/module.js";
+import { adminPlugin } from "../../plugin.js";
+
+/**
+ * Admin module with codegen plugin attached.
+ *
+ * The `plugin` field lets `extractPluginsFromModules` auto-discover the admin
+ * codegen plugin from modules.ts, eliminating the need for users to manually
+ * add `plugins: [adminPlugin()]` in their questpie.config.ts.
+ */
+export const adminModule = Object.assign(_generatedModule, {
+	plugin: adminPlugin(),
+});
+export type AdminModule = typeof adminModule;
 
 // ── Admin route bundle — derived from generated module (no manual duplication) ─
-import adminModule from "./.generated/module.js";
 
 /**
  * Admin routes — flat spread of all admin route definitions.
@@ -39,7 +51,7 @@ export {
 	type SortConfig,
 	savedViewsCollection,
 	type ViewConfiguration,
-} from "../admin-preferences/collections/saved-views.collection.js";
+} from "../admin-preferences/collections/saved-views.js";
 
 // Action execution (used in HTTP adapter for custom action handling)
 export {

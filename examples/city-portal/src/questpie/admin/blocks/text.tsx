@@ -3,6 +3,7 @@
  */
 
 import { RichTextRenderer } from "@questpie/admin/client";
+
 import type { BlockProps } from "../.generated/client";
 
 export function TextRenderer({ values }: BlockProps<"text">) {
@@ -37,7 +38,7 @@ export function TextRenderer({ values }: BlockProps<"text">) {
 
 	return (
 		<section className={`px-6 ${paddingClass}`}>
-			<div className="mx-auto prose prose-neutral dark:prose-invert">
+			<div className="prose prose-neutral dark:prose-invert mx-auto">
 				<RichTextRenderer content={values.content} styles={richTextStyles} />
 			</div>
 		</section>

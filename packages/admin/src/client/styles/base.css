@@ -1,0 +1,1026 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* ================================================================
+   QUESTPIE ADMIN THEME — Base
+   ================================================================
+
+   This file contains the admin design tokens, Tailwind mappings, and shared
+   utilities. It is the single supported admin stylesheet for now.
+
+   VARIABLE REFERENCE
+   ------------------
+
+   -- Surface Colors -----------------------------------------
+   --background          Page background (darkest/lightest surface)
+   --foreground          Primary text color on background
+   --card                Elevated surface: cards, panels, sidebar
+   --card-foreground     Text on card surfaces
+   --popover             Floating surfaces: dropdowns, tooltips, dialogs
+   --popover-foreground  Text on floating surfaces
+   --input               Form input backgrounds
+   --muted               Subtle backgrounds: hover, table headers, toggles
+   --muted-foreground    Secondary/dimmed text (helper text, placeholders)
+   --accent              Interactive hover backgrounds
+   --accent-foreground   Text on accent backgrounds
+
+   -- Brand Colors -------------------------------------------
+   --primary             Company CTA color; reserve for solid primary actions
+   --primary-foreground  Text on primary color backgrounds
+   --secondary           Secondary action backgrounds
+   --secondary-foreground Text on secondary backgrounds
+
+   -- Semantic Colors ----------------------------------------
+   --destructive         Errors, delete actions, danger states
+   --success             Confirmations, positive states
+   --warning             Caution states
+   --info                Informational emphasis
+
+   -- Structure ----------------------------------------------
+   --border              Default border color (all structural borders)
+   --ring                Neutral focus ring color
+
+   -- Sidebar ------------------------------------------------
+   Separate tokens for sidebar to allow independent theming.
+   --sidebar, --sidebar-foreground, --sidebar-primary,
+   --sidebar-accent, --sidebar-border, --sidebar-ring,
+   --sidebar-active-background, --sidebar-active-foreground,
+   --sidebar-active-indicator, etc.
+
+   -- Shape -------------------------------------------------
+   --radius              Base border-radius (neutral default: 0.5rem / 8px)
+   --shadow-*            Default shadow scale for elevated surfaces
+
+   -- Typography ---------------------------------------------
+   --font-sans           Default for all UI body text and content
+   --font-mono           Technical content: code, kbd, IDs, timestamps
+   --font-chrome         UI chrome (buttons, labels, inputs, tabs, badges)
+   --font-heading        Headings (h1-h6); defaults to var(--font-sans)
+
+   -- Spacing ------------------------------------------------
+   --spacing-card        Internal card/panel padding (default: 16px)
+   --spacing-section     Section gaps (default: 24px)
+   --spacing-input       Input internal padding (default: 12px)
+
+   -- Texture -----------------------------------------------
+   Base intentionally does not add background texture. Apps can add their own
+   body::before layer if they need branded texture.
+   ================================================================ */
+
+/* Dark-first Autopilot base. :root is dark; .light opt-in mirrors hierarchy. */
+:root,
+.dark {
+	--background: #121212;
+	--foreground: #ececec;
+	--foreground-muted: #a0a0a0;
+	--foreground-subtle: #737373;
+	--foreground-disabled: #5a5a5a;
+	--surface: #161616;
+	--surface-low: #1b1b1b;
+	--surface-mid: #222222;
+	--surface-high: #2a2a2a;
+	--surface-highest: #333333;
+	--card: #1b1b1b;
+	--card-foreground: #ececec;
+	--popover: #1b1b1b;
+	--popover-foreground: #ececec;
+	--input: #343434;
+	--muted: #222222;
+	--muted-foreground: #a0a0a0;
+	--accent: #2a2a2a;
+	--accent-foreground: #ececec;
+	--secondary: #222222;
+	--secondary-foreground: #ececec;
+	--primary: #b700ff;
+	--primary-foreground: #ffffff;
+	--destructive: #ff5f6d;
+	--destructive-foreground: #1c0b0f;
+	--success: #4ade80;
+	--success-foreground: #062d16;
+	--warning: #222222;
+	--warning-foreground: #ececec;
+	--info: #222222;
+	--info-foreground: #ececec;
+	--border-subtle: #262626;
+	--border: #343434;
+	--border-strong: #4a4a4a;
+	--ring: #737373;
+	--selection: #333333;
+	--radius: 0.75rem;
+	--control-height: 2.5rem;
+	--control-radius: 0.75rem;
+	--control-radius-inner: 0.5rem;
+	--control-background: var(--card);
+	--control-border: var(--border);
+	--control-shadow: none;
+	--surface-radius: 0.875rem;
+	--surface-shadow: none;
+	--floating-radius: 0.875rem;
+	--floating-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.72);
+	--motion-duration-fast: 100ms;
+	--motion-duration-base: 150ms;
+	--motion-duration-slow: 200ms;
+	--motion-ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+	--motion-ease-move: cubic-bezier(0.25, 1, 0.5, 1);
+	--motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--motion-scale-enter: 0.98;
+
+	/* Neutral charts/statuses: color is not primary communication. */
+	--chart-1: #ececec;
+	--chart-2: #a0a0a0;
+	--chart-3: #737373;
+	--chart-4: #5a5a5a;
+	--chart-5: #4a4a4a;
+
+	/* Typography */
+	--font-sans: "Geist Variable", "Inter", sans-serif;
+	--font-mono:
+		"JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
+	--font-chrome: var(--font-sans);
+	--font-heading: var(--font-sans);
+
+	/* Spacing Scale */
+	--spacing-section: 1.5rem;
+	--spacing-card: 1rem;
+	--spacing-input: 0.75rem;
+	--spacing-shell-gap: 0.75rem;
+	--spacing-shell-padding: 0.75rem;
+	--spacing-panel: 1.25rem;
+
+	/* Sidebar / left rail: neutral active states, no purple navigation. */
+	--sidebar: #161616;
+	--sidebar-foreground: #ececec;
+	--sidebar-primary: #ececec;
+	--sidebar-primary-foreground: #121212;
+	--sidebar-accent: #2a2a2a;
+	--sidebar-accent-foreground: #ececec;
+	--sidebar-border: #262626;
+	--sidebar-ring: var(--ring);
+	--sidebar-active-background: var(--surface-high);
+	--sidebar-active-foreground: var(--foreground);
+	--sidebar-active-indicator: var(--border-strong);
+	--sidebar-submenu: color-mix(in srgb, var(--surface-high) 48%, transparent);
+
+	--chrome-text-transform: none;
+	--chrome-letter-spacing: normal;
+}
+
+.light,
+:root.light {
+	--background: #fafafa;
+	--foreground: #1c1c1c;
+	--foreground-muted: #616161;
+	--foreground-subtle: #858585;
+	--foreground-disabled: #a0a0a0;
+	--surface: #f7f7f7;
+	--surface-low: #ffffff;
+	--surface-mid: #f0f0f0;
+	--surface-high: #e8e8e8;
+	--surface-highest: #dedede;
+	--card: #ffffff;
+	--card-foreground: #1c1c1c;
+	--popover: #ffffff;
+	--popover-foreground: #1c1c1c;
+	--input: #e2e2e2;
+	--muted: #f0f0f0;
+	--muted-foreground: #616161;
+	--accent: #e8e8e8;
+	--accent-foreground: #1c1c1c;
+	--secondary: #f0f0f0;
+	--secondary-foreground: #1c1c1c;
+	--primary: #b700ff;
+	--primary-foreground: #ffffff;
+	--destructive: #d92d3a;
+	--destructive-foreground: #ffffff;
+	--success: #16a34a;
+	--success-foreground: #ffffff;
+	--warning: #f0f0f0;
+	--warning-foreground: #1c1c1c;
+	--info: #f0f0f0;
+	--info-foreground: #1c1c1c;
+	--border-subtle: #ebebeb;
+	--border: #e2e2e2;
+	--border-strong: #c9c9c9;
+	--ring: #858585;
+	--selection: #e8e8e8;
+	--control-background: var(--card);
+	--control-border: var(--border);
+	--control-shadow: none;
+	--surface-shadow: none;
+	--floating-shadow: 0 16px 36px -30px rgba(0, 0, 0, 0.38);
+
+	--chart-1: #1c1c1c;
+	--chart-2: #616161;
+	--chart-3: #858585;
+	--chart-4: #a0a0a0;
+	--chart-5: #c9c9c9;
+
+	--sidebar: #f7f7f7;
+	--sidebar-foreground: #1c1c1c;
+	--sidebar-primary: #1c1c1c;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #e8e8e8;
+	--sidebar-accent-foreground: #1c1c1c;
+	--sidebar-border: #ebebeb;
+	--sidebar-ring: var(--ring);
+	--sidebar-active-background: var(--surface-high);
+	--sidebar-active-foreground: var(--foreground);
+	--sidebar-active-indicator: var(--border-strong);
+	--sidebar-submenu: color-mix(in srgb, var(--surface-high) 55%, transparent);
+}
+
+@theme inline {
+	/* Typography */
+	--font-sans: "Geist Variable", "Inter", sans-serif;
+	--font-mono:
+		"JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
+	--font-chrome: var(--font-sans);
+	--font-heading: var(--font-heading);
+
+	/* Radius: Autopilot neutral-soft ladder */
+	--radius-xs: 4px;
+	--radius-sm: var(--control-radius-inner);
+	--radius-md: var(--control-radius);
+	--radius-lg: var(--surface-radius);
+	--radius-xl: 20px;
+	--radius-2xl: 24px;
+	--radius-3xl: 28px;
+	--radius-4xl: 28px;
+	--radius-full: 9999px;
+
+	/* Shadow scale: neutral black-alpha only. */
+	--shadow-xs: var(--control-shadow);
+	--shadow-sm: var(--surface-shadow);
+	--shadow: var(--surface-shadow);
+	--shadow-md: var(--floating-shadow);
+	--shadow-lg: var(--floating-shadow);
+	--shadow-xl: var(--floating-shadow);
+	--shadow-2xl: var(--floating-shadow);
+
+	/* Color mappings */
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar: var(--sidebar);
+	--color-chart-5: var(--chart-5);
+	--color-chart-4: var(--chart-4);
+	--color-chart-3: var(--chart-3);
+	--color-chart-2: var(--chart-2);
+	--color-chart-1: var(--chart-1);
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-border-subtle: var(--border-subtle);
+	--color-border-strong: var(--border-strong);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-success: var(--success);
+	--color-success-foreground: var(--success-foreground);
+	--color-warning: var(--warning);
+	--color-warning-foreground: var(--warning-foreground);
+	--color-info: var(--info);
+	--color-info-foreground: var(--info-foreground);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-foreground-muted: var(--foreground-muted);
+	--color-foreground-subtle: var(--foreground-subtle);
+	--color-foreground-disabled: var(--foreground-disabled);
+	--color-surface: var(--surface);
+	--color-surface-low: var(--surface-low);
+	--color-surface-mid: var(--surface-mid);
+	--color-surface-high: var(--surface-high);
+	--color-surface-highest: var(--surface-highest);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+}
+
+@utility control-surface {
+	height: var(--control-height);
+	border: 1px solid var(--control-border);
+	border-radius: var(--control-radius);
+	background-color: var(--control-background);
+	box-shadow: var(--control-shadow);
+	transition-property: background-color, border-color, color, box-shadow;
+	transition-duration: var(--motion-duration-base);
+	transition-timing-function: var(--motion-ease-standard);
+}
+
+@utility floating-surface {
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--floating-radius);
+	background-color: var(--popover);
+	box-shadow: var(--floating-shadow);
+}
+
+@utility motion-interactive {
+	transition-property:
+		background-color, border-color, color, box-shadow, opacity, transform;
+	transition-duration: var(--motion-duration-base);
+	transition-timing-function: var(--motion-ease-standard);
+}
+
+@utility motion-floating {
+	transition-property: opacity, transform;
+	transition-duration: var(--motion-duration-base);
+	transition-timing-function: var(--motion-ease-enter);
+}
+
+@utility motion-floating-fast {
+	transition-property: opacity, transform;
+	transition-duration: var(--motion-duration-fast);
+	transition-timing-function: var(--motion-ease-enter);
+}
+
+@utility motion-sheet {
+	transition-property: opacity, transform;
+	transition-duration: var(--motion-duration-slow);
+	transition-timing-function: var(--motion-ease-move);
+}
+
+@utility motion-overlay {
+	transition-property: opacity, backdrop-filter;
+	transition-duration: var(--motion-duration-base);
+	transition-timing-function: var(--motion-ease-standard);
+}
+
+/* =============================================================================
+   Rich Text Editor Styles
+   ============================================================================= */
+
+.qp-rich-text-editor {
+	position: relative;
+	border-color: var(--border-subtle);
+	background: var(--surface-low);
+	transition-property: background-color, border-color, box-shadow;
+	transition-duration: var(--motion-duration-base);
+	transition-timing-function: var(--motion-ease-standard);
+}
+
+.qp-rich-text-editor:focus-within {
+	border-color: var(--border-strong);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.qp-rich-text-editor [data-rich-text-toolbar-button] {
+	flex: 0 0 auto;
+}
+
+.qp-rich-text-editor__toolbar {
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+
+.qp-rich-text-editor__toolbar::-webkit-scrollbar {
+	display: none;
+}
+
+.qp-rich-text-editor__toolbar > [role="group"] {
+	flex: 0 0 auto;
+}
+
+.qp-rich-text-editor__bubble {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.25rem;
+	border-radius: calc(var(--control-radius-inner) + 0.25rem);
+}
+
+.qp-rich-text-editor__bubble-block {
+	border-color: transparent;
+	background: transparent;
+	box-shadow: none;
+}
+
+.qp-rich-text-editor__bubble-separator {
+	width: 1px;
+	height: 1.5rem;
+	background: var(--border-subtle);
+}
+
+.qp-rich-text-editor__link-form {
+	display: grid;
+	grid-template-columns: auto minmax(12rem, 18rem) auto auto;
+	align-items: center;
+	gap: 0.375rem;
+	padding: 0.125rem;
+}
+
+.qp-rich-text-editor__link-input {
+	height: 2rem;
+	border-color: transparent;
+	background: transparent;
+	box-shadow: none;
+	font-size: 0.8125rem;
+}
+
+.qp-rich-text-editor__upload-status {
+	position: absolute;
+	right: 0.75rem;
+	bottom: 0.75rem;
+	z-index: 1;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--control-radius);
+	background: var(--popover);
+	box-shadow: var(--floating-shadow);
+	padding: 0.375rem 0.625rem;
+	color: var(--popover-foreground);
+	font-family: var(--font-chrome);
+	font-size: 0.75rem;
+}
+
+.qp-rich-text-editor__content {
+	min-height: 240px;
+	padding: 1rem 1.25rem 1.25rem;
+	outline: none;
+	color: var(--foreground);
+	font-size: 0.9375rem;
+	line-height: 1.65;
+	text-wrap: pretty;
+	caret-color: var(--foreground);
+}
+
+.qp-rich-text-editor__content.ProseMirror-focused {
+	outline: none;
+}
+
+.qp-rich-text-editor__content p.is-editor-empty:first-child::before {
+	content: attr(data-placeholder);
+	float: left;
+	height: 0;
+	color: var(--muted-foreground);
+	pointer-events: none;
+}
+
+.qp-rich-text-editor__content > *:first-child {
+	margin-top: 0;
+}
+
+.qp-rich-text-editor__content > *:last-child {
+	margin-bottom: 0;
+}
+
+.qp-rich-text-editor__content p {
+	margin: 0 0 0.8rem;
+}
+
+.qp-rich-text-editor__content h1 {
+	margin: 1.5rem 0 0.85rem;
+	font-size: 1.625rem;
+	font-weight: 650;
+	letter-spacing: 0;
+	line-height: 1.2;
+	text-wrap: balance;
+}
+
+.qp-rich-text-editor__content h2 {
+	margin: 1.35rem 0 0.75rem;
+	font-size: 1.375rem;
+	font-weight: 650;
+	letter-spacing: 0;
+	line-height: 1.25;
+	text-wrap: balance;
+}
+
+.qp-rich-text-editor__content h3 {
+	margin: 1.15rem 0 0.65rem;
+	font-size: 1.125rem;
+	font-weight: 650;
+	letter-spacing: 0;
+	line-height: 1.3;
+	text-wrap: balance;
+}
+
+.qp-rich-text-editor__content h4,
+.qp-rich-text-editor__content h5,
+.qp-rich-text-editor__content h6 {
+	margin: 1rem 0 0.5rem;
+	font-size: 1rem;
+	font-weight: 650;
+	letter-spacing: 0;
+	line-height: 1.35;
+	text-wrap: balance;
+}
+
+.qp-rich-text-editor__content ul,
+.qp-rich-text-editor__content ol {
+	margin: 0.75rem 0;
+	padding-left: 1.35rem;
+}
+
+.qp-rich-text-editor__content li {
+	margin: 0.25rem 0;
+	padding-left: 0.15rem;
+}
+
+.qp-rich-text-editor__content blockquote {
+	margin: 1rem 0;
+	border-left: 3px solid var(--border-strong);
+	padding: 0.15rem 0 0.15rem 0.85rem;
+	color: var(--muted-foreground);
+}
+
+.qp-rich-text-editor__content code {
+	background: var(--muted);
+	border-radius: var(--radius-xs);
+	padding: 0.1rem 0.3rem;
+	font-size: 0.875em;
+	font-family: var(--font-mono);
+}
+
+.qp-rich-text-editor__content pre {
+	background: var(--muted);
+	border-radius: var(--control-radius-inner);
+	margin: 1rem 0;
+	padding: 0.875rem 1rem;
+	font-family: var(--font-mono);
+	font-size: 0.8125rem;
+	line-height: 1.6;
+	overflow-x: auto;
+}
+
+.qp-rich-text-editor__content pre code {
+	background: transparent;
+	border-radius: 0;
+	padding: 0;
+}
+
+.qp-rich-text-editor__content hr {
+	border: none;
+	border-top: 1px solid var(--border-subtle);
+	margin: 1.25rem 0;
+}
+
+.qp-rich-text-editor__content img {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	margin: 1rem 0;
+	border-radius: var(--control-radius-inner);
+	outline: 1px solid rgba(255, 255, 255, 0.1);
+	outline-offset: -1px;
+}
+
+.light .qp-rich-text-editor__content img,
+:root.light .qp-rich-text-editor__content img {
+	outline-color: rgba(0, 0, 0, 0.1);
+}
+
+.qp-rich-text-editor__content table {
+	border-collapse: collapse;
+	margin: 1rem 0;
+	width: 100%;
+	font-size: 0.875rem;
+}
+
+.qp-rich-text-editor__content th,
+.qp-rich-text-editor__content td {
+	border: 1px solid var(--border-subtle);
+	padding: 0.5rem 0.625rem;
+	text-align: left;
+	vertical-align: top;
+}
+
+.qp-rich-text-editor__content th {
+	background: var(--surface-mid);
+	font-weight: 600;
+}
+
+.tippy-box[data-theme~="qp-rich-text-editor"] {
+	background: var(--popover);
+	color: var(--popover-foreground);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--floating-radius);
+	box-shadow: var(--floating-shadow);
+}
+
+.tippy-box[data-theme~="qp-rich-text-editor"] .tippy-content {
+	padding: 0;
+}
+
+.qp-rich-text-editor__slash {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	min-width: 280px;
+	max-width: min(360px, calc(100vw - 2rem));
+	padding: 0.35rem;
+}
+
+.qp-rich-text-editor__slash-item {
+	display: flex;
+	width: 100%;
+	min-height: 3rem;
+	align-items: center;
+	gap: 0.625rem;
+	border: 1px solid transparent;
+	border-radius: var(--control-radius-inner);
+	background: transparent;
+	padding: 0.45rem 0.55rem;
+	color: var(--foreground);
+	font-size: 0.8125rem;
+	line-height: 1.2;
+	text-align: left;
+	transition:
+		background-color 150ms ease,
+		border-color 150ms ease,
+		color 150ms ease;
+}
+
+.qp-rich-text-editor__slash-item--active,
+.qp-rich-text-editor__slash-item:hover {
+	background: var(--surface-high);
+	border-color: var(--border-subtle);
+	color: var(--accent-foreground);
+}
+
+.qp-rich-text-editor__slash-icon {
+	display: inline-flex;
+	width: 2rem;
+	height: 2rem;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	border-radius: var(--radius-xs);
+	background: var(--surface-mid);
+	color: var(--muted-foreground);
+}
+
+.qp-rich-text-editor__slash-copy {
+	display: flex;
+	min-width: 0;
+	flex: 1;
+	flex-direction: column;
+	gap: 0.125rem;
+}
+
+.qp-rich-text-editor__slash-title {
+	font-family: var(--font-chrome);
+	font-weight: 600;
+}
+
+.qp-rich-text-editor__slash-description {
+	color: var(--muted-foreground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.qp-rich-text-editor__slash-empty {
+	padding: 0.5rem;
+	font-size: 0.75rem;
+	color: var(--muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.qp-rich-text-editor,
+	.qp-rich-text-editor__bubble,
+	.qp-rich-text-editor__slash-item {
+		transition: none;
+	}
+}
+
+@media (max-width: 640px) {
+	.qp-rich-text-editor__content {
+		min-height: 200px;
+		padding: 0.875rem 1rem 1rem;
+	}
+
+	.qp-rich-text-editor__bubble {
+		max-width: calc(100vw - 1.5rem);
+		flex-wrap: wrap;
+	}
+
+	.qp-rich-text-editor__link-form {
+		width: min(24rem, calc(100vw - 2rem));
+		grid-template-columns: auto minmax(0, 1fr) auto auto;
+	}
+
+	.qp-rich-text-editor__slash {
+		min-width: min(280px, calc(100vw - 2rem));
+	}
+}
+
+/* =============================================================================
+   Base Styles
+   ============================================================================= */
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+
+	html {
+		font-family: var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	body {
+		@apply bg-background text-foreground;
+		font-family: var(--font-sans);
+		font-size: 15px;
+		line-height: 1.55;
+		text-rendering: optimizeLegibility;
+	}
+
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-family: var(--font-heading);
+		letter-spacing: -0.02em;
+		text-wrap: balance;
+	}
+
+	p,
+	li,
+	dd,
+	dt {
+		text-wrap: pretty;
+	}
+
+	button,
+	input,
+	textarea,
+	select {
+		font: inherit;
+	}
+
+	::selection {
+		background-color: var(--selection);
+		color: var(--foreground);
+	}
+}
+
+/* =============================================================================
+   Custom Scrollbar Styles
+   ============================================================================= */
+
+@utility scrollbar-thin {
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklch, var(--border) 50%, transparent)
+		transparent;
+
+	&::-webkit-scrollbar {
+		width: 6px;
+		height: 6px;
+	}
+
+	&::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	&::-webkit-scrollbar-thumb {
+		background: color-mix(in oklch, var(--border) 60%, transparent);
+		border-radius: 3px;
+	}
+
+	&::-webkit-scrollbar-thumb:hover {
+		background: var(--border);
+	}
+
+	&::-webkit-scrollbar-corner {
+		background: transparent;
+	}
+}
+
+/* =============================================================================
+   Chrome Meta — compact metadata/label text treatment
+   ============================================================================= */
+
+@utility chrome-meta {
+	text-transform: var(--chrome-text-transform, none);
+	letter-spacing: var(--chrome-letter-spacing, normal);
+}
+
+/* =============================================================================
+   Shared Surface Helpers
+   Neutral structural helpers for repeated item/panel patterns.
+   Color comes from semantic utilities layered on top.
+   ============================================================================= */
+
+@utility item-surface {
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm, var(--radius));
+	background-color: transparent;
+	transition-property:
+		background-color, border-color, color, box-shadow, opacity, transform;
+	transition-duration: var(--motion-duration-base);
+	transition-timing-function: var(--motion-ease-standard);
+}
+
+@utility panel-surface {
+	border: 1px solid var(--border);
+	border-radius: var(--surface-radius, var(--radius));
+	background-color: var(--card);
+	box-shadow: var(--surface-shadow);
+	transition-property:
+		background-color, border-color, color, box-shadow, opacity, transform;
+	transition-duration: var(--motion-duration-base);
+	transition-timing-function: var(--motion-ease-standard);
+}
+
+@utility image-outline {
+	outline: 1px solid rgba(255, 255, 255, 0.1);
+	outline-offset: -1px;
+}
+
+.light .image-outline,
+:root.light .image-outline {
+	outline-color: rgba(0, 0, 0, 0.1);
+}
+
+/* =============================================================================
+   Field Focus Animation
+   ============================================================================= */
+
+@keyframes field-glow {
+	0%,
+	100% {
+		background-color: transparent;
+	}
+	50% {
+		background-color: color-mix(in srgb, var(--surface-high) 40%, transparent);
+	}
+}
+
+.animate-field-glow {
+	animation: field-glow 2s ease-in-out;
+}
+
+/* =============================================================================
+   Realtime Highlight Animation
+   ============================================================================= */
+
+@keyframes realtime-pulse {
+	0% {
+		border-left-color: var(--border-strong);
+	}
+	100% {
+		border-left-color: transparent;
+	}
+}
+
+.animate-realtime-pulse {
+	border-left: 3px solid transparent;
+	animation: realtime-pulse 1.5s ease-out;
+}
+
+/* Delete animation - neutral pulse + fade out */
+@keyframes realtime-delete {
+	0% {
+		background-color: color-mix(
+			in srgb,
+			var(--surface-highest) 45%,
+			transparent
+		);
+		opacity: 1;
+	}
+	70% {
+		background-color: color-mix(
+			in srgb,
+			var(--surface-highest) 28%,
+			transparent
+		);
+		opacity: 0.7;
+	}
+	100% {
+		background-color: color-mix(
+			in srgb,
+			var(--surface-highest) 18%,
+			transparent
+		);
+		opacity: 0;
+	}
+}
+
+.animate-realtime-delete {
+	animation: realtime-delete 1.5s ease-out forwards;
+	pointer-events: none;
+}
+
+/* =============================================================================
+   Reduced Motion — Respect user's motion preferences (WCAG 2.1 AA)
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+
+	.animate-field-glow,
+	.animate-realtime-pulse,
+	.animate-realtime-delete,
+	.animate-spin {
+		animation: none !important;
+	}
+}
+
+/* =============================================================================
+   High Contrast — Improve visibility for users needing more contrast
+   ============================================================================= */
+
+@media (prefers-contrast: more) {
+	:root {
+		--muted-foreground: oklch(0.37 0 0);
+		--border: oklch(0.66 0 0);
+	}
+
+	.dark {
+		--muted-foreground: oklch(0.73 0 0);
+		--border: oklch(0.56 0 0);
+	}
+}
+
+/* =============================================================================
+   Focus Visible — Enhanced focus styles for keyboard navigation
+   ============================================================================= */
+
+@layer base {
+	:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
+	}
+
+	/* Skip link styles */
+	[href="#main-content"]:focus {
+		clip: auto;
+		clip-path: none;
+		height: auto;
+		width: auto;
+		overflow: visible;
+		white-space: nowrap;
+	}
+
+	/* Field focus pulse animation (preview click-to-focus) */
+	@keyframes field-focus-pulse {
+		0% {
+			box-shadow: 0 0 0 0 var(--ring);
+		}
+		50% {
+			box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 30%, transparent);
+		}
+		100% {
+			box-shadow: 0 0 0 0 transparent;
+		}
+	}
+
+	.field-focus-pulse {
+		animation: field-focus-pulse 0.6s ease-out;
+		border-radius: var(--radius);
+	}
+}
+
+iconify-icon {
+	display: inline-block;
+}
+
+iconify-icon:not([width]) {
+	width: 1em;
+	height: 1em;
+}
+
+.qa-auth-layout {
+	--primary: var(--foreground);
+	--primary-foreground: var(--background);
+}
+
+/* =============================================================================
+   Input Group Control — Layout Fix
+
+   SelectSingle / InputGroupInput rendered inside InputGroup as
+   [data-slot="input-group-control"] must grow to fill available flex space.
+   The Button primitive carries `shrink-0` in its base CVA which prevents it
+   from yielding space to sibling InputGroupAddon buttons.
+   Unlayered CSS wins over Tailwind @layer utilities — this is intentional.
+   ============================================================================= */
+
+[data-slot="input-group-control"] {
+	flex: 1 1 0%;
+	min-width: 0;
+}

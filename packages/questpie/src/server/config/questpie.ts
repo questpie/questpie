@@ -1,13 +1,9 @@
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { SQL } from "bun";
-import { drizzle as drizzleBun } from "drizzle-orm/bun-sql";
+import type { SQL } from "bun";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { drizzle as drizzlePgLite } from "drizzle-orm/pglite";
-import { DriveManager } from "flydrive";
+import type { DriveManager } from "flydrive";
+
 import {
 	type Collection,
 	CollectionBuilder,
@@ -29,47 +25,35 @@ import type {
 	Locale,
 	TablesFromConfig,
 } from "#questpie/server/config/types.js";
-import {
-	type Global,
-	GlobalBuilder,
-} from "#questpie/server/global/builder/index.js";
-import { createTranslator } from "#questpie/server/i18n/translator.js";
-import { KVService } from "#questpie/server/integrated/kv/index.js";
-import { LoggerService } from "#questpie/server/integrated/logger/index.js";
-import { MailerService } from "#questpie/server/integrated/mailer/index.js";
-import {
-	createQueueClient,
-	type QueueClient,
-} from "#questpie/server/integrated/queue/index.js";
+import type { Global } from "#questpie/server/global/builder/global.js";
+import { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
+import type { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
+import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
+import type { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
+import type { QueueClient } from "#questpie/server/modules/core/integrated/queue/types.js";
 import {
 	questpieRealtimeLogTable,
-	RealtimeService,
-} from "#questpie/server/integrated/realtime/index.js";
-import {
-	createSearchService,
-	type SearchService,
-	type SearchServiceWrapper,
-} from "#questpie/server/integrated/search/index.js";
-import { createDiskDriver } from "#questpie/server/integrated/storage/create-driver.js";
+} from "#questpie/server/modules/core/integrated/realtime/collection.js";
+import type { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
+import type { SearchService } from "#questpie/server/modules/core/integrated/search/types.js";
+import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
 import {
 	ServiceBuilder,
 	type ServiceLifecycle,
 } from "#questpie/server/services/define-service.js";
-import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type {
 	AnyCollectionOrBuilder,
 	AnyGlobal,
 	AnyGlobalBuilder,
 } from "#questpie/shared/type-utils.js";
+
 import type { GlobalHooksState } from "./global-hooks-types.js";
 import type { GetMessageKeys, QuestpieConfig } from "./types.js";
 
 interface ResolvedServiceDefinition {
 	lifecycle: ServiceLifecycle;
-	create: (
-		ctx: Questpie.ServiceCreateContext,
-	) => unknown | Promise<unknown>;
+	create: (ctx: Questpie.ServiceCreateContext) => unknown | Promise<unknown>;
 	dispose?: (instance: unknown) => void | Promise<void>;
 	namespace: string | null;
 }
@@ -86,7 +70,17 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _customServiceNamespaces = new Set<string>();
 	public readonly config: TConfig;
 	private resolvedLocales: Locale[] | null = null;
-	private pgConnectionString?: string;
+
+	/**
+	 * @internal Exposed for service definitions (db, realtime).
+	 * Stores the raw SQL connection for cleanup and realtime adapter.
+	 */
+	public _sqlClient?: SQL;
+	/**
+	 * @internal Exposed for service definitions (realtime).
+	 * Stores the PG connection string for PgNotify adapter.
+	 */
+	public _pgConnectionString?: string;
 
 	/**
 	 * Default access control for all collections and globals.
@@ -127,7 +121,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 * // => "Záznam nenájdený" (in Slovak)
 	 * ```
 	 */
-	public readonly t: (
+	public t!: (
 		key: GetMessageKeys<TConfig> | (string & {}),
 		params?: Record<string, unknown>,
 		locale?: string,
@@ -137,38 +131,59 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 * Better Auth instance - properly typed based on auth configuration
 	 * Type is inferred from the AuthConfig passed to .auth() in the builder
 	 */
-	public auth: TConfig["auth"] extends BetterAuthOptions
+	public auth!: TConfig["auth"] extends BetterAuthOptions
 		? ReturnType<typeof betterAuth<TConfig["auth"]>>
 		: ReturnType<typeof betterAuth<BetterAuthOptions>>;
-	public storage: DriveManager<{
+	public storage!: DriveManager<{
 		[Questpie.__internal
 			.storageDriverServiceName]: () => import("flydrive/types").DriverContract;
 	}>;
-	public queue: QueueClient<NonNullable<TConfig["queue"]>["jobs"]>;
-	public email: MailerService;
-	public kv: KVService;
-	public logger: LoggerService;
-	public search: SearchService;
-	public realtime: RealtimeService;
+	public queue!: QueueClient<NonNullable<TConfig["queue"]>["jobs"]>;
+	public email!: MailerService;
+	public kv!: KVService;
+	public logger!: LoggerService;
+	public search!: SearchService;
+	public realtime!: RealtimeService;
 	/** Extension state for plugin-contributed configurations (admin layout, blocks, sidebar, etc.) */
-	public state?: Record<string, unknown>;
+	public state?: { config?: import("./app-state-config.js").ResolvedAppStateConfig } & Record<string, unknown>;
 
-	public migrations: QuestpieMigrationsAPI<TConfig>;
-	public seeds: QuestpieSeedsAPI<TConfig>;
-	public api: QuestpieApi<TConfig>;
+	public migrations!: QuestpieMigrationsAPI<TConfig>;
+	public seeds!: QuestpieSeedsAPI<TConfig>;
+	private _api: QuestpieApi<TConfig>;
 
-	public db: DrizzleClientFromQuestpieConfig<TConfig>;
+	/**
+	 * Access collections CRUD operations.
+	 * @example
+	 * await app.collections.users.create({ email: '...' }, context)
+	 * await app.collections.posts.find({ where: { status: 'published' } })
+	 */
+	public get collections(): QuestpieApi<TConfig>["collections"] {
+		return this._api.collections;
+	}
+
+	/**
+	 * Access globals CRUD operations.
+	 * @example
+	 * await app.globals.settings.get()
+	 * await app.globals.settings.update({ siteName: 'New name' })
+	 */
+	public get globals(): QuestpieApi<TConfig>["globals"] {
+		return this._api.globals;
+	}
+
+
+	public db!: DrizzleClientFromQuestpieConfig<TConfig>;
 
 	private _initPromise: Promise<void> | null = null;
-	private _sqlClient?: SQL;
 
 	constructor(config: TConfig) {
 		this.config = config;
 		this.defaultAccess = config.defaultAccess;
-		this.globalHooks = config.globalHooks ?? { collections: [], globals: [] };
-
-		// Initialize translator
-		this.t = createTranslator(config.translations);
+		const rawHooks = config.globalHooks ?? { collections: [], globals: [] };
+		this.globalHooks = {
+			collections: Array.isArray(rawHooks.collections) ? rawHooks.collections : rawHooks.collections ? [rawHooks.collections] : [],
+			globals: Array.isArray(rawHooks.globals) ? rawHooks.globals : rawHooks.globals ? [rawHooks.globals] : [],
+		};
 
 		// Register collections from config
 		this.registerCollections(config.collections);
@@ -183,126 +198,10 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		// Validate all relations point to existing collections
 		this.validateRelations();
 
-		// Initialize database client from config
-		if ("url" in config.db) {
-			// Postgres via Bun SQL
-			const bunSqlClient = new SQL({ url: config.db.url });
-			this._sqlClient = bunSqlClient;
-			this.db = drizzleBun({
-				client: bunSqlClient,
-				schema: this.getSchema(),
-			}) as any;
-			// Store connection string for pg client (used by realtime, migrations, etc.)
-			this.pgConnectionString = config.db.url;
-		} else {
-			// PGlite for testing
-			this.db = drizzlePgLite({
-				client: config.db.pglite,
-				schema: this.getSchema(),
-			}) as any;
-		}
+		// Create API (lazy — no db needed at construction time)
+		this._api = new QuestpieAPI(this) as QuestpieApi<TConfig>;
 
-		// Batteries Included - Guaranteed Initialization with sensible defaults
-		this.kv = new KVService(config.kv);
-		this.logger = new LoggerService(config.logger);
-
-		// Initialize search service with adapter
-		// config.search is now a SearchAdapter (or undefined for default)
-		this.search = createSearchService(
-			config.search,
-			this.db as any,
-			this.logger,
-		);
-
-		// Initialize search adapter asynchronously
-		// This is done here but the actual initialization happens on first use
-		// or can be explicitly called via app.search.initialize()
-		this.search.initialize().catch((err: unknown) => {
-			this.logger.error("[QuestPie] Failed to initialize search adapter:", err);
-		});
-
-		// Initialize realtime service with auto-configured adapter
-		this.realtime = new RealtimeService(
-			this.db as any,
-			config.realtime,
-			this.pgConnectionString,
-		);
-
-		// Set subscription context for dependency resolution
-		this.realtime.setSubscriptionContext({
-			resolveCollectionDependencies: (baseCollection, withConfig) => {
-				return this.resolveCollectionDependencies(baseCollection, withConfig);
-			},
-			resolveGlobalDependencies: (globalName, withConfig) => {
-				return this.resolveGlobalDependencies(globalName, withConfig);
-			},
-		});
-
-		// Initialize queue if configured
-		if (config.queue) {
-			if (!config.queue.adapter) {
-				throw new Error(
-					"QUESTPIE: Queue adapter is required when jobs are defined. Provide adapter in .build({ queue: { adapter: ... } })",
-				);
-			}
-			this.queue = createQueueClient(config.queue.jobs, config.queue.adapter, {
-				createContext: async () => this.createContext({ accessMode: "system" }),
-				getApp: () => this,
-				logger: this.logger,
-			}) as any;
-		} else {
-			this.queue = {} as any; // Empty queue client if no jobs defined
-		}
-
-		// For critical infrastructure, we currently require config or throw
-		// In the future, we could provide safe "dev" defaults (e.g. local storage, console mail)
-
-		// Resolve auth config - could be a factory function
-
-		this.auth = betterAuth({
-			...(config.auth ?? {}),
-			database: drizzleAdapter(this.db, {
-				provider: "pg",
-				schema: this.getSchema(),
-				transaction: true,
-			}),
-		}) as typeof this.auth;
-
-		// Initialize storage with default or custom driver
-		this.storage = new DriveManager({
-			default: Questpie.__internal.storageDriverServiceName,
-			fakes: {
-				location: new URL(
-					join(tmpdir(), "fakes", crypto.randomUUID()),
-					import.meta.url,
-				),
-				urlBuilder: {
-					// TODO: is this correct?
-					generateSignedURL(key, _filePath, _options) {
-						return Promise.resolve(`http://fake-storage.local/${key}`);
-					},
-					generateURL(key, _filePath) {
-						return Promise.resolve(`http://fake-storage.local/${key}`);
-					},
-				},
-			},
-			services: {
-				[Questpie.__internal.storageDriverServiceName]: () =>
-					createDiskDriver(this.config),
-			},
-		});
-
-		if (config.email?.adapter) {
-			this.email = new MailerService(config.email as any);
-		} else {
-			throw new Error(
-				"QUESTPIE: 'email.adapter' is required. Provide adapter in .build({ email: { adapter: ... } })",
-			);
-		}
-
-		this.migrations = new QuestpieMigrationsAPI(this);
-		this.seeds = new QuestpieSeedsAPI(this);
-		this.api = new QuestpieAPI(this) as QuestpieApi<TConfig>;
+		// Resolve service definitions so _initServices can use them
 		this._resolveServiceDefs();
 
 		// In development, track this instance in globalThis so that HMR module
@@ -356,29 +255,47 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 * ```
 	 */
 	async destroy(): Promise<void> {
-		const disposals: Promise<void>[] = [];
+		// Dispose user services first (non-infrastructure)
+		const infraNames = new Set(
+			Questpie._INFRA_SERVICES.map(([svcName]) => svcName),
+		);
+		const userDisposals: Promise<void>[] = [];
 		for (const [name, def] of Object.entries(this._serviceDefs)) {
 			if (def.lifecycle !== "singleton") continue;
 			if (!def.dispose) continue;
+			if (infraNames.has(name)) continue;
 			if (this._singletonServices[name] === undefined) continue;
 
 			const result = def.dispose(this._singletonServices[name]);
 			if (result instanceof Promise) {
-				disposals.push(result);
+				userDisposals.push(result);
 			}
 		}
+		if (userDisposals.length > 0) {
+			await Promise.allSettled(userDisposals);
+		}
 
-		if (disposals.length > 0) {
-			await Promise.allSettled(disposals);
+		// Dispose infrastructure services in reverse-DAG order
+		const infraDisposals: Promise<void>[] = [];
+		for (let i = Questpie._INFRA_SERVICES.length - 1; i >= 0; i--) {
+			const [svcName] = Questpie._INFRA_SERVICES[i]!;
+			const def = this._serviceDefs[svcName];
+			if (!def?.dispose) continue;
+			if (this._singletonServices[svcName] === undefined) continue;
+
+			const result = def.dispose(this._singletonServices[svcName]);
+			if (result instanceof Promise) {
+				infraDisposals.push(result);
+			}
+		}
+		if (infraDisposals.length > 0) {
+			await Promise.allSettled(infraDisposals);
 		}
 
 		this._singletonServices = {};
 
-		await Promise.allSettled([
-			this._sqlClient?.close({ timeout: 5 }),
-			this.realtime?.destroy(),
-			this.queue?.stop?.(),
-		]);
+		// Close raw SQL connection (not managed by drizzle dispose)
+		await this._sqlClient?.close({ timeout: 5 });
 	}
 
 	private async _autoInit(): Promise<void> {
@@ -391,7 +308,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				await this.seeds.run(categories ? { category: categories } : {});
 			}
 		} catch (err) {
-			this.logger.error("[QuestPie] Auto-initialization failed:", err);
+			this.logger.error("[QUESTPIE] Auto-initialization failed:", err);
 			throw err;
 		}
 	}
@@ -405,7 +322,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		if (namespace === "") {
 			throw new Error(
-				"[QuestPie] Service namespace cannot be an empty string.",
+				"[QUESTPIE] Service namespace cannot be an empty string.",
 			);
 		}
 
@@ -422,27 +339,24 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			const state =
 				input instanceof ServiceBuilder
 					? input.state
-					: ((input as { state?: unknown }).state as
+					: (((input as { state?: unknown }).state as
 							| Record<string, unknown>
-							| undefined) ??
-						(input as Record<string, unknown>);
+							| undefined) ?? (input as Record<string, unknown>));
 
 			if (!state || typeof state !== "object") {
 				throw new Error(
-					`[QuestPie] Service "${name}" is invalid. Use service().create(...) or service({ create: ... }).`,
+					`[QUESTPIE] Service "${name}" is invalid. Use service().create(...) or service({ create: ... }).`,
 				);
 			}
 
 			if (typeof state.create !== "function") {
-				throw new Error(
-					`[QuestPie] Service "${name}" must define create().`,
-				);
+				throw new Error(`[QUESTPIE] Service "${name}" must define create().`);
 			}
 
 			const lifecycle = (state.lifecycle ?? "singleton") as ServiceLifecycle;
 			if (lifecycle !== "singleton" && lifecycle !== "request") {
 				throw new Error(
-					`[QuestPie] Service "${name}" has invalid lifecycle "${String(state.lifecycle)}".`,
+					`[QUESTPIE] Service "${name}" has invalid lifecycle "${String(state.lifecycle)}".`,
 				);
 			}
 
@@ -450,10 +364,15 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				state.namespace as string | null | undefined,
 			);
 
-			if (lifecycle === "request" && namespace !== "services") {
-				const formattedNamespace = namespace === null ? "null" : namespace;
+			// Request-scoped services can use namespace: null (top-level on ctx)
+			// or namespace: "services" (default). Custom namespaces are singleton-only.
+			if (
+				lifecycle === "request" &&
+				namespace !== "services" &&
+				namespace !== null
+			) {
 				throw new Error(
-					`[QuestPie] Service "${name}" uses namespace "${formattedNamespace}" but only singleton services may use non-default namespaces.`,
+					`[QUESTPIE] Service "${name}" uses namespace "${namespace}" but only singleton services may use custom namespaces. Use namespace: null or "services" for request-scoped services.`,
 				);
 			}
 
@@ -474,9 +393,64 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		}
 	}
 
+	/**
+	 * Infrastructure service name → Questpie property name mapping.
+	 * Defines resolution order (topological): independent services first,
+	 * then services that depend on earlier ones.
+	 */
+	private static readonly _INFRA_SERVICES: ReadonlyArray<
+		readonly [serviceName: string, propertyName: string]
+	> = [
+		// Tier 0: no dependencies (config only)
+		["i18n", "t"],
+		["logger", "logger"],
+		["kv", "kv"],
+		["db", "db"],
+		["email", "email"],
+		["storage", "storage"],
+		// Tier 1: depend on db and/or logger
+		["auth", "auth"],
+		["search", "search"],
+		["realtime", "realtime"],
+		// Tier 2: depend on logger + needs app.createContext
+		["queue", "queue"],
+	] as const;
+
 	async _initServices(): Promise<void> {
+		// Phase 1: Resolve infrastructure services in dependency order.
+		// After each, assign to `this.*` so subsequent services can read them.
+		for (const [svcName, propName] of Questpie._INFRA_SERVICES) {
+			const def = this._serviceDefs[svcName];
+			if (!def) continue;
+
+			const result = await this._resolveSingletonService(svcName, {
+				stack: [],
+				lazyTriggered: false,
+				allowAsync: true,
+			});
+			(this as any)[propName] = result;
+		}
+
+		// Wire search service → queue for per-instance debounced indexing
+		if (
+			this.search &&
+			typeof (this.queue as any)?.["index-records"]?.publish === "function"
+		) {
+			(this.search as any)._queuePublish = (payload: any) =>
+				(this.queue as any)["index-records"].publish(payload);
+		}
+
+		// Create migrations and seeds now that db is available
+		this.migrations = new QuestpieMigrationsAPI(this);
+		this.seeds = new QuestpieSeedsAPI(this);
+
+		// Phase 2: Resolve remaining singleton services (user-defined)
 		for (const [name, def] of Object.entries(this._serviceDefs)) {
 			if (def.lifecycle !== "singleton") continue;
+			// Skip infrastructure services — already resolved
+			if (Questpie._INFRA_SERVICES.some(([svcName]) => svcName === name)) {
+				continue;
+			}
 
 			await this._resolveSingletonService(name, {
 				stack: [],
@@ -485,7 +459,10 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			});
 		}
 
-		if (!this._initPromise && (this.config.autoMigrate || this.config.autoSeed)) {
+		if (
+			!this._initPromise &&
+			(this.config.autoMigrate || this.config.autoSeed)
+		) {
 			this._initPromise = this._autoInit();
 		}
 	}
@@ -541,8 +518,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			email: this.email,
 			auth: this.auth,
 			app: this,
-			collections: this.api?.collections,
-			globals: this.api?.globals,
+			collections: this.collections,
+			globals: this.globals,
 			t: this.t,
 		} as Record<string, unknown>;
 
@@ -552,7 +529,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 					return Reflect.get(target, prop, receiver);
 				}
 
-				if (Object.prototype.hasOwnProperty.call(target, prop)) {
+				if (Object.hasOwn(target, prop)) {
 					return target[prop];
 				}
 
@@ -573,7 +550,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			},
 			has: (target, prop) => {
 				if (typeof prop !== "string") return false;
-				if (Object.prototype.hasOwnProperty.call(target, prop)) return true;
+				if (Object.hasOwn(target, prop)) return true;
 				if (prop === "services") return true;
 				if (this._customServiceNamespaces.has(prop)) return true;
 				const topLevelDef = this._serviceDefs[prop];
@@ -664,12 +641,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 					popIfCurrent();
 					if (options.lazyTriggered) {
 						throw new Error(
-							`[QuestPie] Service "${name}" has async create() but was lazily triggered. Reorder services so "${name}" initializes first.`,
+							`[QUESTPIE] Service "${name}" has async create() but was lazily triggered. Reorder services so "${name}" initializes first.`,
 						);
 					}
 
 					throw new Error(
-						`[QuestPie] Service "${name}" has async create() but this resolution path is synchronous.`,
+						`[QUESTPIE] Service "${name}" has async create() but this resolution path is synchronous.`,
 					);
 				}
 
@@ -705,24 +682,43 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		if (existingIndex === -1) return;
 
 		const cycle = [...stack.slice(existingIndex), name].join(" -> ");
-		throw new Error(`[QuestPie] Circular service dependency detected: ${cycle}`);
+		throw new Error(
+			`[QUESTPIE] Circular service dependency detected: ${cycle}`,
+		);
 	}
 
 	/**
 	 * Resolve a service by name (singleton or create request-scoped).
 	 * @internal Used by context creation for flat service injection.
 	 */
-	resolveService(name: string, requestDeps?: Record<string, any>): any {
+	resolveService(
+		name: string,
+		requestDeps?: Record<string, any>,
+		scope?: import("#questpie/server/config/request-scope.js").RequestScope,
+	): any {
 		const def = this._serviceDefs[name];
 		if (!def) return undefined;
 
 		if (def.lifecycle === "singleton") {
 			if (this._singletonServices[name] === undefined) {
 				throw new Error(
-					`[QuestPie] Singleton service "${name}" is not initialized. Await createApp() before accessing services.`,
+					`[QUESTPIE] Singleton service "${name}" is not initialized. Await createApp() before accessing services.`,
 				);
 			}
 			return this._singletonServices[name];
+		}
+
+		// Scope-aware: memoize request-scoped services within the scope
+		if (scope) {
+			return scope.getOrCreate(name, () =>
+				this._createServiceInstance(name, def, {
+					requestDeps,
+					stack: [],
+					cacheSingleton: false,
+					lazyTriggered: false,
+					allowAsync: false,
+				}),
+			);
 		}
 
 		return this._createServiceInstance(name, def, {
@@ -777,168 +773,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 * - Deduplicates entries that appear multiple times due to `.use()` composition.
 	 */
 	private injectGlobalHooks(): void {
-		const {
-			collections: rawCollectionEntries = [],
-			globals: rawGlobalEntries = [],
-		} = this.globalHooks;
-
-		// Deduplicate entries (same object ref can appear multiple times via .use() merges)
-		const collectionEntries = [...new Set(rawCollectionEntries)];
-		const globalEntries = [...new Set(rawGlobalEntries)];
-
-		// Helper: check if a hook entry matches a given entity name
-		const matchesFilter = (
-			entry: { include?: string[]; exclude?: string[] },
-			name: string,
-		): boolean => {
-			if (entry.include && !entry.include.includes(name)) return false;
-			if (entry.exclude && entry.exclude.includes(name)) return false;
-			return true;
-		};
-
-		// Helper: append a hook fn to an entity's hooks (supports array or single)
-		const appendHook = (
-			hooks: Record<string, any>,
-			hookName: string,
-			fn: (...args: any[]) => any,
-		) => {
-			const existing = hooks[hookName];
-			if (existing) {
-				const arr = Array.isArray(existing) ? existing : [existing];
-				hooks[hookName] = [...arr, fn];
-			} else {
-				hooks[hookName] = [fn];
-			}
-		};
-
-		// Inject global collection hooks
-		for (const [name, collection] of Object.entries(this._collections)) {
-			const state = collection.state as any;
-
-			for (const entry of collectionEntries) {
-				if (!matchesFilter(entry, name)) continue;
-
-				if (!state.hooks) state.hooks = {};
-
-				// Standard hooks: beforeChange, afterChange, beforeDelete, afterDelete
-				for (const hookName of [
-					"beforeChange",
-					"afterChange",
-					"beforeDelete",
-					"afterDelete",
-				] as const) {
-					const globalFn = entry[hookName];
-					if (!globalFn) continue;
-
-					const isAfter = hookName.startsWith("after");
-					const wrapped = isAfter
-						? async (ctx: any) => {
-								try {
-									await globalFn({ ...ctx, collection: name });
-								} catch (err) {
-									this.logger.error(
-										`[QuestPie] Global collection hook "${hookName}" error for "${name}":`,
-										err,
-									);
-								}
-							}
-						: async (ctx: any) => {
-								await globalFn({ ...ctx, collection: name });
-							};
-
-					appendHook(state.hooks, hookName, wrapped);
-				}
-
-				// Transition hooks: beforeTransition, afterTransition
-				for (const hookName of [
-					"beforeTransition",
-					"afterTransition",
-				] as const) {
-					const globalFn = entry[hookName];
-					if (!globalFn) continue;
-
-					const isAfter = hookName === "afterTransition";
-					const wrapped = isAfter
-						? async (ctx: any) => {
-								try {
-									await globalFn({ ...ctx, collection: name });
-								} catch (err) {
-									this.logger.error(
-										`[QuestPie] Global collection hook "${hookName}" error for "${name}":`,
-										err,
-									);
-								}
-							}
-						: async (ctx: any) => {
-								await globalFn({ ...ctx, collection: name });
-							};
-
-					appendHook(state.hooks, hookName, wrapped);
-				}
-			}
-		}
-
-		// Inject global global hooks
-		for (const [name, global] of Object.entries(this._globals)) {
-			const state = (global as any).state as any;
-
-			for (const entry of globalEntries) {
-				if (!matchesFilter(entry, name)) continue;
-
-				if (!state.hooks) state.hooks = {};
-
-				// Standard hooks: beforeChange, afterChange
-				for (const hookName of ["beforeChange", "afterChange"] as const) {
-					const globalFn = entry[hookName];
-					if (!globalFn) continue;
-
-					const isAfter = hookName === "afterChange";
-					const wrapped = isAfter
-						? async (ctx: any) => {
-								try {
-									await globalFn({ ...ctx, global: name });
-								} catch (err) {
-									this.logger.error(
-										`[QuestPie] Global global hook "${hookName}" error for "${name}":`,
-										err,
-									);
-								}
-							}
-						: async (ctx: any) => {
-								await globalFn({ ...ctx, global: name });
-							};
-
-					appendHook(state.hooks, hookName, wrapped);
-				}
-
-				// Transition hooks: beforeTransition, afterTransition
-				for (const hookName of [
-					"beforeTransition",
-					"afterTransition",
-				] as const) {
-					const globalFn = entry[hookName];
-					if (!globalFn) continue;
-
-					const isAfter = hookName === "afterTransition";
-					const wrapped = isAfter
-						? async (ctx: any) => {
-								try {
-									await globalFn({ ...ctx, global: name });
-								} catch (err) {
-									this.logger.error(
-										`[QuestPie] Global global hook "${hookName}" error for "${name}":`,
-										err,
-									);
-								}
-							}
-						: async (ctx: any) => {
-								await globalFn({ ...ctx, global: name });
-							};
-
-					appendHook(state.hooks, hookName, wrapped);
-				}
-			}
-		}
+		// NOTE: Collection global hooks are handled by executeCollectionHooksWithGlobal
+		// in crud-generator.ts — no injection needed here.
+		// NOTE: Global global hooks are handled by executeHooksWithGlobal and
+		// executeTransitionHooksWithGlobal in global-crud-generator.ts. Injecting
+		// them into entity hooks here would execute module hooks twice.
 	}
 
 	/**
@@ -1076,6 +915,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			locale?: string;
 			accessMode?: AccessMode;
 			db?: any;
+			/** Incoming request (if in HTTP scope) */
+			request?: Request;
 			[key: string]: any;
 		} = {},
 	): Promise<RequestContext> {
@@ -1095,12 +936,19 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			}
 		}
 
+		// accessMode defaults:
+		// - explicit override has highest precedence
+		// - with request → "user" (HTTP scope, access rules apply)
+		// - without request → "system" (job/script scope, bypass access)
+		const accessMode: AccessMode =
+			userCtx.accessMode ?? (userCtx.request ? "user" : "system");
+
 		return {
 			...userCtx,
 			session: userCtx.session,
 			locale,
 			defaultLocale,
-			accessMode: userCtx.accessMode ?? ("system" as AccessMode), // Default to system
+			accessMode,
 			db: userCtx.db ?? this.db,
 		};
 	}
@@ -1219,8 +1067,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	/**
 	 * Resolve collection dependencies from WITH config for realtime subscriptions.
 	 * Returns all collections that should trigger a refresh (main + relations).
+	 * @internal Exposed for service definitions (realtime).
 	 */
-	private resolveCollectionDependencies(
+	_resolveCollectionDependencies(
 		baseCollection: string,
 		withConfig?: Record<string, any>,
 	): Set<string> {
@@ -1248,8 +1097,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 	/**
 	 * Resolve global dependencies from WITH config for realtime subscriptions.
+	 * @internal Exposed for service definitions (realtime).
 	 */
-	private resolveGlobalDependencies(
+	_resolveGlobalDependencies(
 		globalName: string,
 		withConfig?: Record<string, any>,
 	): { collections: Set<string>; globals: Set<string> } {

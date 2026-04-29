@@ -7,24 +7,7 @@
  * - path: "workflows" → matches /admin/workflows and /admin/workflows/:id
  */
 
-import type { PageDefinition } from "@questpie/admin/client";
-
-// Inline page() factory — trivial frozen object, same as admin's page.ts
-function page<TName extends string>(
-	name: TName,
-	config: {
-		component: () => Promise<{ default: React.ComponentType }>;
-		showInNav?: boolean;
-		path?: string;
-	},
-): PageDefinition<TName> {
-	return Object.freeze({
-		name,
-		component: config.component,
-		path: config.path,
-		showInNav: config.showInNav,
-	});
-}
+import { page } from "@questpie/admin/client";
 
 export default page("workflows", {
 	component: async () => ({

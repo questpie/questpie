@@ -5,7 +5,7 @@ import type {
 	QueueListenOptions,
 	QueueRunOnceOptions,
 	QueueRunOnceResult,
-} from "../../../src/server/integrated/queue/adapter.js";
+} from "../../../src/server/modules/core/integrated/queue/adapter.js";
 
 export interface MockJob {
 	id: string;

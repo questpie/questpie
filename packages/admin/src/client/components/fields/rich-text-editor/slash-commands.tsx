@@ -4,6 +4,7 @@
  * Provides the "/" command menu for quick insertion of blocks.
  */
 
+import { Icon } from "@iconify/react";
 import { type Editor, Extension, type Range } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
@@ -25,15 +26,7 @@ const SlashCommandList = React.forwardRef<
 	SlashCommandListProps
 >(function SlashCommandList({ items, command }, ref) {
 	const [selectedIndex, setSelectedIndex] = React.useState(0);
-
-	React.useEffect(() => {
-		if (items.length === 0) {
-			setSelectedIndex(0);
-			return;
-		}
-
-		setSelectedIndex((prev) => Math.min(prev, items.length - 1));
-	}, [items.length]);
+	const safeIndex = Math.min(selectedIndex, Math.max(0, items.length - 1));
 
 	const selectItem = (index: number) => {
 		const item = items[index];
@@ -59,7 +52,13 @@ const SlashCommandList = React.forwardRef<
 
 			if (event.key === "Enter") {
 				event.preventDefault();
-				selectItem(selectedIndex);
+				selectItem(safeIndex);
+				return true;
+			}
+
+			if (event.key === "Tab") {
+				event.preventDefault();
+				selectItem(safeIndex);
 				return true;
 			}
 
@@ -68,7 +67,7 @@ const SlashCommandList = React.forwardRef<
 	}));
 
 	return (
-		<div className="qp-rich-text-editor__slash">
+		<div className="qp-rich-text-editor__slash" role="listbox">
 			{items.length === 0 && (
 				<div className="qp-rich-text-editor__slash-empty">No results</div>
 			)}
@@ -76,22 +75,37 @@ const SlashCommandList = React.forwardRef<
 				<button
 					key={item.title}
 					type="button"
+					aria-selected={index === safeIndex}
+					role="option"
 					tabIndex={-1}
 					className={cn(
 						"qp-rich-text-editor__slash-item",
-						index === selectedIndex
+						index === safeIndex
 							? "qp-rich-text-editor__slash-item--active"
 							: "",
 					)}
+					onMouseEnter={() => setSelectedIndex(index)}
 					onMouseDown={(event) => event.preventDefault()}
 					onClick={() => selectItem(index)}
 				>
-					<span className="qp-rich-text-editor__slash-title">{item.title}</span>
-					{item.description && (
-						<span className="qp-rich-text-editor__slash-description">
-							{item.description}
+					{item.icon && (
+						<span
+							className="qp-rich-text-editor__slash-icon"
+							aria-hidden="true"
+						>
+							<Icon icon={item.icon} width={16} height={16} />
 						</span>
 					)}
+					<span className="qp-rich-text-editor__slash-copy">
+						<span className="qp-rich-text-editor__slash-title">
+							{item.title}
+						</span>
+						{item.description && (
+							<span className="qp-rich-text-editor__slash-description">
+								{item.description}
+							</span>
+						)}
+					</span>
 				</button>
 			))}
 		</div>

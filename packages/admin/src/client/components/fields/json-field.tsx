@@ -11,7 +11,8 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import { Controller, useFormContext } from "react-hook-form";
-import { useResolveText } from "../../i18n/hooks";
+
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import {
@@ -106,6 +107,7 @@ export function JsonField({
 	control: controlProp,
 	className,
 }: JsonFieldProps) {
+	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const resolvedLabel = label ? resolveText(label) : undefined;
 	const resolvedDescription = description
@@ -172,7 +174,7 @@ export function JsonField({
 										size="icon-xs"
 										onClick={() => setMode("code")}
 										disabled={disabled}
-										title="Code editor"
+										title={t("field.codeEditor")}
 									>
 										<Icon icon="ph:code-bold" />
 									</Button>
@@ -182,7 +184,7 @@ export function JsonField({
 										size="icon-xs"
 										onClick={() => setMode("form")}
 										disabled={disabled}
-										title="Form editor"
+										title={t("field.formEditor")}
 									>
 										<Icon icon="ph:list-bullets-bold" />
 									</Button>
@@ -268,9 +270,12 @@ function JsonCodeEditor({
 		}
 	});
 	const [parseError, setParseError] = React.useState<string | null>(null);
+	const isEditingRef = React.useRef(false);
 
-	// Sync local value when external value changes
+	// Sync local value when external value changes (skip if user is actively editing)
 	React.useEffect(() => {
+		if (isEditingRef.current) return;
+
 		if (typeof value === "string") {
 			setLocalValue(value);
 		} else if (value !== null && value !== undefined) {
@@ -285,6 +290,7 @@ function JsonCodeEditor({
 	}, [value]);
 
 	const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+		isEditingRef.current = true;
 		const newValue = e.target.value;
 		setLocalValue(newValue);
 
@@ -324,6 +330,9 @@ function JsonCodeEditor({
 				<Textarea
 					value={localValue}
 					onChange={handleChange}
+					onBlur={() => {
+						isEditingRef.current = false;
+					}}
 					disabled={disabled}
 					readOnly={readOnly}
 					placeholder={placeholder}
@@ -341,7 +350,7 @@ function JsonCodeEditor({
 
 				{/* Parse error indicator */}
 				{parseError && (
-					<div className="text-destructive absolute right-2 top-2 flex items-center gap-1 text-xs">
+					<div className="text-destructive bg-background/80 absolute top-2 right-2 flex items-center gap-1 px-1 text-xs text-pretty backdrop-blur-sm">
 						<Icon icon="ph:warning-circle-fill" className="size-3" />
 						{parseError}
 					</div>
@@ -406,5 +415,5 @@ function JsonFormEditor({
 		readOnly,
 	});
 
-	return <div className="rounded-lg border p-4">{formContent}</div>;
+	return <div className="panel-surface p-4">{formContent}</div>;
 }

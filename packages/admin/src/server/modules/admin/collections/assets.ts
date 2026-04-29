@@ -11,6 +11,7 @@
  */
 
 import { starterModule } from "questpie";
+
 import { collection } from "../factories";
 
 const adminAssetsCollection = collection("assets")
@@ -30,7 +31,6 @@ const adminAssetsCollection = collection("assets")
 			defaultSort: { field: "createdAt", direction: "desc" },
 			actions: {
 				header: { primary: [], secondary: [] },
-				row: [a.delete],
 				bulk: [a.deleteMany],
 			},
 		}),

@@ -8,6 +8,7 @@ import {
 	useEffect,
 	useState,
 } from "react";
+
 import { en, type TranslationKey } from "../../translations/en";
 import { sk } from "../../translations/sk";
 

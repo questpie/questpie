@@ -6,8 +6,9 @@
  */
 
 import type * as React from "react";
+
 import { cn } from "../../lib/utils";
-import { Spinner } from "../ui/spinner";
+import { Skeleton } from "../ui/skeleton";
 
 // ============================================================================
 // Types
@@ -52,13 +53,23 @@ export function AuthLoading({
 	return (
 		<div
 			className={cn(
-				"flex min-h-screen flex-col items-center justify-center gap-4",
+				"flex min-h-screen flex-col items-center justify-center gap-4 px-6",
 				className,
 			)}
+			aria-busy="true"
 		>
-			<Spinner className="size-8 text-primary" />
+			<div className="w-full max-w-sm space-y-4">
+				<Skeleton className="mx-auto size-12" />
+				<div className="space-y-2">
+					<Skeleton variant="text" className="mx-auto h-4 w-40" />
+					<Skeleton variant="text" className="mx-auto h-3 w-56" />
+				</div>
+				<Skeleton className="h-10 w-full" />
+			</div>
 			{showMessage && (
-				<p className="text-sm text-muted-foreground">{message}</p>
+				<p className="text-muted-foreground text-sm" role="status">
+					{message}
+				</p>
 			)}
 		</div>
 	);

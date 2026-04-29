@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+
 import { MigrationRunner } from "../../server/migration/runner.js";
 import type { Migration } from "../../server/migration/types.js";
 import { SeedRunner } from "../../server/seed/runner.js";
 import { loadQuestpieConfig } from "../config.js";
+import { resolveCliPath } from "../utils.js";
 
 export type RunMigrationAction = "up" | "down" | "status" | "reset" | "fresh";
 
@@ -27,10 +28,17 @@ export async function runMigrationCommand(
 	options: RunMigrationOptions,
 ): Promise<void> {
 	// Resolve config path
-	const resolvedConfigPath = join(process.cwd(), options.configPath);
+	const resolvedConfigPath = resolveCliPath(options.configPath);
 
 	if (!existsSync(resolvedConfigPath)) {
 		throw new Error(`Config file not found: ${resolvedConfigPath}`);
+	}
+
+	if (
+		options.batch !== undefined &&
+		(!Number.isSafeInteger(options.batch) || options.batch < 1)
+	) {
+		throw new Error("--batch must be a positive integer");
 	}
 
 	// Load config
@@ -39,11 +47,10 @@ export async function runMigrationCommand(
 
 	// Get migrations from Questpie config
 	// Supports both flat array (new codegen) and legacy nested format { migrations: [...] }
-	const migrations: Migration[] = (
-		Array.isArray(app.config.migrations)
+	const migrations: Migration[] =
+		(Array.isArray(app.config.migrations)
 			? app.config.migrations
-			: app.config.migrations?.migrations
-	) || [];
+			: app.config.migrations?.migrations) || [];
 
 	if (migrations.length === 0) {
 		console.log("ℹ️  No migrations found");

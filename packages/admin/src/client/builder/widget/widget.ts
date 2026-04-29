@@ -29,10 +29,7 @@ export interface WidgetDefinition<TName extends string = string> {
 export function widget<
 	TName extends string,
 	TComponent extends MaybeLazyComponent,
->(
-	name: TName,
-	config: { component: TComponent },
-): WidgetDefinition<TName> {
+>(name: TName, config: { component: TComponent }): WidgetDefinition<TName> {
 	return Object.freeze({
 		name,
 		component: config.component,

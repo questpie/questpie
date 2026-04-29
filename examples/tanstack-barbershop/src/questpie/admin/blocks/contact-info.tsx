@@ -6,6 +6,7 @@
  */
 
 import { Icon } from "@iconify/react";
+
 import { useTranslation } from "../../../lib/providers/locale-provider";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -13,7 +14,7 @@ import type { BlockProps } from "../.generated/client";
 export function ContactInfoRenderer({
 	values,
 	data,
-}: BlockProps<"contactInfo">) {
+}: BlockProps<"contact-info">) {
 	const { t } = useTranslation();
 	const contactPhone = data?.contactPhone as string | undefined;
 	const contactEmail = data?.contactEmail as string | undefined;
@@ -28,10 +29,10 @@ export function ContactInfoRenderer({
 		.join(", ");
 
 	return (
-		<section className="py-20 px-6">
+		<section className="px-6 py-20">
 			<div className="container">
 				{values.title && (
-					<h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-12 text-center">
+					<h2 className="mb-12 text-center text-3xl font-bold tracking-tight sm:text-4xl">
 						{values.title}
 					</h2>
 				)}
@@ -41,18 +42,19 @@ export function ContactInfoRenderer({
 						"grid gap-8",
 						values.showMap && data?.mapEmbedUrl
 							? "grid-cols-1 lg:grid-cols-2"
-							: "max-w-2xl mx-auto",
+							: "mx-auto max-w-2xl",
 					)}
 				>
 					{/* Contact Info Cards */}
 					<div className="space-y-6">
 						{contactPhone && (
-							<div className="flex items-start gap-4 p-6 bg-card border rounded-lg">
-								<Icon icon="ph:phone-bold"
-									className="size-6 text-highlight flex-shrink-0 mt-1"
-								 />
+							<div className="bg-card flex items-start gap-4 rounded-lg border p-6">
+								<Icon
+									icon="ph:phone-bold"
+									className="text-highlight mt-1 size-6 flex-shrink-0"
+								/>
 								<div>
-									<h3 className="font-semibold mb-1">
+									<h3 className="mb-1 font-semibold">
 										{t("blocks.contact.phone")}
 									</h3>
 									<a
@@ -66,12 +68,13 @@ export function ContactInfoRenderer({
 						)}
 
 						{contactEmail && (
-							<div className="flex items-start gap-4 p-6 bg-card border rounded-lg">
-								<Icon icon="ph:envelope-bold"
-									className="size-6 text-highlight flex-shrink-0 mt-1"
-								 />
+							<div className="bg-card flex items-start gap-4 rounded-lg border p-6">
+								<Icon
+									icon="ph:envelope-bold"
+									className="text-highlight mt-1 size-6 flex-shrink-0"
+								/>
 								<div>
-									<h3 className="font-semibold mb-1">
+									<h3 className="mb-1 font-semibold">
 										{t("blocks.contact.email")}
 									</h3>
 									<a
@@ -85,12 +88,13 @@ export function ContactInfoRenderer({
 						)}
 
 						{fullAddress && (
-							<div className="flex items-start gap-4 p-6 bg-card border rounded-lg">
-								<Icon icon="ph:map-pin-bold"
-									className="size-6 text-highlight flex-shrink-0 mt-1"
-								 />
+							<div className="bg-card flex items-start gap-4 rounded-lg border p-6">
+								<Icon
+									icon="ph:map-pin-bold"
+									className="text-highlight mt-1 size-6 flex-shrink-0"
+								/>
 								<div>
-									<h3 className="font-semibold mb-1">
+									<h3 className="mb-1 font-semibold">
 										{t("blocks.contact.address")}
 									</h3>
 									<p className="text-muted-foreground">{fullAddress}</p>
@@ -101,7 +105,7 @@ export function ContactInfoRenderer({
 
 					{/* Map */}
 					{values.showMap && mapEmbedUrl && (
-						<div className="rounded-lg overflow-hidden border bg-muted aspect-square lg:aspect-auto">
+						<div className="bg-muted aspect-square overflow-hidden rounded-lg border lg:aspect-auto">
 							<iframe
 								src={mapEmbedUrl}
 								width="100%"

@@ -12,6 +12,7 @@
  * 8. Routes — flat record with slash-separated keys
  */
 import { describe, expect, it } from "bun:test";
+
 import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
@@ -190,18 +191,69 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("declare global {");
 		expect(code).toContain("namespace Questpie {");
 		expect(code).toContain("interface AppContext");
-		expect(code).toContain("collections: App['api']['collections']");
+		expect(code).toContain("collections: _CollectionsAPI;");
 	});
 
 	it("emits AppConfig type", () => {
 		expect(code).toContain("export type AppConfig = {");
-		expect(code).toContain("collections: AppCollections;");
-		expect(code).toContain("globals: AppGlobals;");
+		expect(code).toContain("collections: AppCollections & Record<string, any>;");
+		expect(code).toContain("globals: AppGlobals & Record<string, any>;");
 	});
 
 	it("emits createApp call with modules", () => {
 		expect(code).toContain("export const app = await createApp(");
-		expect(code).toContain("modules: _modules as any");
+		expect(code).toContain("modules: _modules,");
+		expect(code).not.toContain("ModuleDefinition[]");
+	});
+
+	it("derives session from auth config instead of typeof app", () => {
+		expect(code).toContain("type _AppSession =");
+		expect(code).toContain("InferSessionFromAuthConfig<_AppAuthConfig>");
+		expect(code).toContain("session: _AppSession;");
+		expect(code).not.toContain("(typeof app)['auth']");
+	});
+
+	it("derives AppContext infrastructure and globals outside typeof app", () => {
+		expect(code).toContain(
+			'type _AppAppConfig = _ModuleConfig extends { app: infer TApp } ? TApp : {};',
+		);
+		expect(code).toContain(
+			"type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;",
+		);
+		expect(code).toContain(
+			"type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;",
+		);
+		expect(code).toContain(
+			"type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;",
+		);
+		expect(code).toContain("type _AppQuestpieConfig = Omit<QuestpieConfig");
+		expect(code).toContain("type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;");
+		expect(code).toContain('type _AppGlobalsAPI = _AppQuestpie["globals"];');
+		expect(code).toContain("type _AppTables = TablesFromConfig<_AppQuestpieConfig>;");
+		expect(code).toContain("db: _AppDb;");
+		expect(code).toContain('email: _AppQuestpie["email"];');
+		expect(code).toContain("storage: _AppStorage;");
+		expect(code).toContain('kv: _AppQuestpie["kv"];');
+		expect(code).toContain('logger: _AppQuestpie["logger"];');
+		expect(code).toContain('search: _AppQuestpie["search"];');
+		expect(code).toContain('realtime: _AppQuestpie["realtime"];');
+		expect(code).toContain("globals: _AppGlobalsAPI;");
+		expect(code).toContain("tables: _AppTables;");
+		expect(code).not.toContain("(typeof app)['db']");
+		expect(code).not.toContain("(typeof app)['email']");
+		expect(code).not.toContain("(typeof app)['storage']");
+		expect(code).not.toContain("(typeof app)['kv']");
+		expect(code).not.toContain("(typeof app)['logger']");
+		expect(code).not.toContain("(typeof app)['search']");
+		expect(code).not.toContain("(typeof app)['realtime']");
+		expect(code).not.toContain("(typeof app)['globals']");
+		expect(code).not.toContain("(typeof app)['tables']");
+	});
+
+	it("extends AppContext with inferred app config context extensions", () => {
+		expect(code).toContain(
+			"interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {",
+		);
 	});
 
 	it("emits createContext helper", () => {
@@ -220,6 +272,48 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("does not emit seeds section when no seeds", () => {
 		expect(code).not.toContain("seeds:");
+	});
+});
+
+describe("generateTemplate — registry dedupe", () => {
+	it("emits ~fieldTypes exactly once when category and singleton both contribute", () => {
+		const result = minimalResult();
+		result.categories.set(
+			"fieldTypes",
+			new Map([
+				[
+					"color",
+					makeFile("color", {
+						varName: "_ftype_color",
+						importPath: "../fields/color",
+						exportType: "named",
+						namedExportName: "colorField",
+					}),
+				],
+			]),
+		);
+		result.singles.set(
+			"fields",
+			makeFile("fields", {
+				varName: "_fields",
+				importPath: "../fields",
+			}),
+		);
+
+		const code = generateTemplate({
+			configImportPath: "../questpie.config",
+			discovered: result,
+			categories: coreCategories(),
+			singletonFactories: coreSingletonFactories(),
+			discoverPatterns: serverTarget().discover,
+		});
+
+		const fieldTypeLines = code
+			.split("\n")
+			.filter((line) => line.includes('"~fieldTypes":'));
+		expect(fieldTypeLines).toEqual([
+			'\t\t\t"~fieldTypes": _Registry_FieldTypes & _AllModuleFields;',
+		]);
 	});
 });
 
@@ -541,7 +635,7 @@ describe("generateTemplate — services", () => {
 			"type _AppCustomServiceNamespaces = ServiceCustomNamespaceInstances<_AppServiceDefinitions>;",
 		);
 		expect(code).toContain(
-			"interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces {",
+			"interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {",
 		);
 		expect(code).toContain("services: _AppDefaultServices;");
 		expect(code).toContain(
@@ -555,7 +649,7 @@ describe("generateTemplate — services", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateTemplate — emails", () => {
-	it("emits MailerService import when emails exist", () => {
+	it("emits MailerService type only once when emails exist", () => {
 		const result = minimalResult();
 		cat(result, "emails").set(
 			"welcome",
@@ -569,7 +663,8 @@ describe("generateTemplate — emails", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain('import type { MailerService } from "questpie"');
+		expect(code).toContain("type MailerService");
+		expect(code.match(/MailerService/g)?.length).toBe(2);
 	});
 
 	it("emits email: MailerService<AppEmailTemplates> in AppContext", () => {
@@ -613,6 +708,31 @@ describe("generateTemplate — emails", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateTemplate — routes (flat record)", () => {
+	it("emits AppRoutes entries with params inferred from route keys", () => {
+		const result = minimalResult();
+		cat(result, "routes").set(
+			"apps/[appId]/install",
+			makeFile("apps/[appId]/install", {
+				varName: "_route_apps_appId_install",
+				exportType: "default",
+			}),
+		);
+
+		const code = generateTemplate({
+			configImportPath: "../questpie.config",
+			discovered: result,
+			categories: coreCategories(),
+			singletonFactories: coreSingletonFactories(),
+		});
+
+		expect(code).toContain(
+			'type AppRoutes = _ModuleRoutes & {',
+		);
+		expect(code).toContain(
+			'"apps/[appId]/install": RouteWithParams<typeof _route_apps_appId_install, RouteParamsFromKey<"apps/[appId]/install">>;',
+		);
+	});
+
 	it("emits flat route as direct key", () => {
 		const result = minimalResult();
 		cat(result, "routes").set(
@@ -678,6 +798,34 @@ describe("generateTemplate — routes (flat record)", () => {
 
 		expect(code).toContain('"admin/stats": _route_admin_stats,');
 		expect(code).toContain('"admin/users": _route_admin_users,');
+	});
+});
+
+describe("generateTemplate — app config context", () => {
+	it("derives app context extensions from config/app.ts", () => {
+		const result = minimalResult();
+		result.singles.set(
+			"appConfig",
+			makeFile("appConfig", {
+				varName: "_appConfig",
+				importPath: "../config/app",
+				exportType: "default",
+			}),
+		);
+
+		const code = generateTemplate({
+			configImportPath: "../questpie.config",
+			discovered: result,
+			categories: coreCategories(),
+			singletonFactories: coreSingletonFactories(),
+		});
+
+		expect(code).toContain(
+			'type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;',
+		);
+		expect(code).toContain(
+			"type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;",
+		);
 	});
 });
 
@@ -748,7 +896,7 @@ describe("generateTemplate — plugin singles", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Core singles (locale, hooks, access, contextResolver)
+// Core singles (locale, hooks, access)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateTemplate — core singles", () => {
@@ -771,27 +919,6 @@ describe("generateTemplate — core singles", () => {
 		});
 
 		expect(code).toContain("locale: _locale as any,");
-	});
-
-	it("emits contextResolver single in createApp", () => {
-		const result = minimalResult();
-		result.singles.set(
-			"contextResolver",
-			makeFile("contextResolver", {
-				varName: "_contextResolver",
-				importPath: "../context",
-				exportType: "default",
-			}),
-		);
-
-		const code = generateTemplate({
-			configImportPath: "../questpie.config",
-			discovered: result,
-			categories: coreCategories(),
-			singletonFactories: coreSingletonFactories(),
-		});
-
-		expect(code).toContain("contextResolver: _contextResolver as any,");
 	});
 });
 

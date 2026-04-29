@@ -20,8 +20,8 @@
 		},
 		"questpie:generate": {
 			"dependsOn": ["^questpie:generate"],
-			 "inputs": ["$TURBO_DEFAULT$"],
-			 "outputs": ["**/.generated/**"]
+			"inputs": ["$TURBO_DEFAULT$"],
+			"outputs": ["**/.generated/**"]
 		},
 		"dev": {
 			"cache": false,

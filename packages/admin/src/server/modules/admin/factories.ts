@@ -12,6 +12,7 @@
  */
 
 import { CollectionBuilder, GlobalBuilder } from "questpie";
+
 import type {
 	ActionsConfigContext,
 	AdminCollectionConfig,
@@ -24,6 +25,7 @@ import type {
 	PreviewConfig,
 	ServerActionsConfig,
 } from "../../augmentation.js";
+import { createActionCallbackProxy } from "../../proxy-factories.js";
 
 // ── Type augmentation — gives CollectionBuilder/GlobalBuilder typed extension methods ──
 
@@ -120,6 +122,13 @@ function _chainable(def: Record<string, any>): any {
 		get: (target, prop) => {
 			if (typeof prop !== "string") return Reflect.get(target, prop);
 			if (prop in target) return target[prop];
+			if (prop === "set") {
+				return (key: string, value: unknown) =>
+					_chainable({
+						...target,
+						[key]: value,
+					});
+			}
 			// Chain method: .required() → { ...def, required: true }
 			// Chain method: .label({...}) → { ...def, label: {...} }
 			return (...args: any[]) =>
@@ -131,29 +140,8 @@ function _chainable(def: Record<string, any>): any {
 	});
 }
 
-/**
- * Action proxy for actions context.
- * Supports both `a.save()` (builtin) and `a.headerAction({...})` (custom).
- */
-const _actionBuilderProxy = new Proxy(
-	{},
-	{
-		get: (_, prop) => {
-			if (typeof prop !== "string") return undefined;
-			return (...args: any[]) => {
-				if (args.length === 0) return prop; // a.save() → "save"
-				return { id: prop, ...args[0] }; // a.headerAction({...}) → { id: "headerAction", ... }
-			};
-		},
-	},
-);
-
-const _simpleActionProxy = new Proxy(
-	{ custom: (name: string, config: any) => ({ id: name, ...config }) },
-	{
-		get: (target, prop) => (target as any)[prop] ?? String(prop),
-	},
-);
+const _actionBuilderProxy = createActionCallbackProxy();
+const _simpleActionProxy = createActionCallbackProxy();
 
 // ── Extension registries ────────────────────────────────────────
 

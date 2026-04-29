@@ -4,19 +4,24 @@
  * Covers two bugs fixed:
  * 1. `executeJsonRoute` now wraps handler in `runWithContext` — locale/session
  *    propagate into nested CRUD calls without manual threading.
- * 2. `normalizeContext` now merges `session` from ALS — partial overrides like
+ * 2. Route execution now preserves request `accessMode` in ALS instead of
+ *    silently escalating HTTP handlers to system mode.
+ * 3. `normalizeContext` now merges `session` from ALS — partial overrides like
  *    `{ accessMode: "user" }` inside a handler still carry the request session.
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+
 import { z } from "zod";
+
+import { route } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
+import { resolveContext } from "../../src/server/adapters/utils/context.js";
+import { normalizeContext } from "../../src/server/collection/crud/shared/context.js";
 import {
 	runWithContext,
 	tryGetContext,
 } from "../../src/server/config/context.js";
-import { normalizeContext } from "../../src/server/collection/crud/shared/context.js";
 import { executeJsonRoute } from "../../src/server/routes/execute.js";
-import { route } from "../../src/server/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -63,14 +68,17 @@ describe("normalizeContext — ALS propagation", () => {
 	it("partial override { accessMode: 'user' } still inherits ALS session", async () => {
 		const fakeSession = { user: { id: "u1" }, session: { id: "s1" } } as any;
 
-		await runWithContext({ app: {}, session: fakeSession, locale: "de" }, async () => {
-			// Partial override — only accessMode changes
-			const ctx = normalizeContext({ accessMode: "user" });
-			expect(ctx.accessMode).toBe("user");
-			// session and locale should come from ALS
-			expect(ctx.session).toBe(fakeSession);
-			expect(ctx.locale).toBe("de");
-		});
+		await runWithContext(
+			{ app: {}, session: fakeSession, locale: "de" },
+			async () => {
+				// Partial override — only accessMode changes
+				const ctx = normalizeContext({ accessMode: "user" });
+				expect(ctx.accessMode).toBe("user");
+				// session and locale should come from ALS
+				expect(ctx.session).toBe(fakeSession);
+				expect(ctx.locale).toBe("de");
+			},
+		);
 	});
 
 	it("explicit locale overrides ALS locale", async () => {
@@ -116,10 +124,15 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 				return {};
 			});
 
-		await executeJsonRoute(setup.app, getLocale, {}, {
-			locale: "sk",
-			accessMode: "system",
-		});
+		await executeJsonRoute(
+			setup.app,
+			getLocale,
+			{},
+			{
+				locale: "sk",
+				accessMode: "system",
+			},
+		);
 
 		expect(capturedLocale).toBe("sk");
 	});
@@ -138,15 +151,20 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 				return {};
 			});
 
-		await executeJsonRoute(setup.app, getSession, {}, {
-			session: fakeSession,
-			accessMode: "system",
-		});
+		await executeJsonRoute(
+			setup.app,
+			getSession,
+			{},
+			{
+				session: fakeSession,
+				accessMode: "system",
+			},
+		);
 
 		expect(capturedSession).toBe(fakeSession);
 	});
 
-	it("sets accessMode to 'system' inside handler regardless of request accessMode", async () => {
+	it("propagates accessMode from the execution context into handler ALS", async () => {
 		let capturedAccessMode: string | undefined;
 
 		const checkAccess = route()
@@ -158,12 +176,16 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 				return {};
 			});
 
-		// Even though the request comes in as "user", handler body runs as "system"
-		await executeJsonRoute(setup.app, checkAccess, {}, {
-			accessMode: "user",
-		});
+		await executeJsonRoute(
+			setup.app,
+			checkAccess,
+			{},
+			{
+				accessMode: "user",
+			},
+		);
 
-		expect(capturedAccessMode).toBe("system");
+		expect(capturedAccessMode).toBe("user");
 	});
 
 	it("propagates stage into ALS", async () => {
@@ -178,10 +200,15 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 				return {};
 			});
 
-		await executeJsonRoute(setup.app, checkStage, {}, {
-			stage: "draft",
-			accessMode: "system",
-		});
+		await executeJsonRoute(
+			setup.app,
+			checkStage,
+			{},
+			{
+				stage: "draft",
+				accessMode: "system",
+			},
+		);
 
 		expect(capturedStage).toBe("draft");
 	});
@@ -201,10 +228,15 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 				return {};
 			});
 
-		await executeJsonRoute(setup.app, checkNestedSession, {}, {
-			session: fakeSession,
-			locale: "en",
-		});
+		await executeJsonRoute(
+			setup.app,
+			checkNestedSession,
+			{},
+			{
+				session: fakeSession,
+				locale: "en",
+			},
+		);
 
 		expect(capturedSession).toBe(fakeSession);
 	});
@@ -223,15 +255,60 @@ describe("Route via HTTP — locale propagates from request into handler ALS", (
 			const ctx = tryGetContext();
 			return { locale: ctx?.locale };
 		});
+	const echoAccessMode = route()
+		.post()
+		.schema(z.object({}))
+		.outputSchema(z.object({ accessMode: z.string().optional() }))
+		.handler(async () => {
+			const ctx = tryGetContext();
+			return { accessMode: ctx?.accessMode };
+		});
+	const bridgeAdapterContext = route()
+		.post()
+		.raw()
+		.handler(async ({ app, request }) => {
+			const resolved = await resolveContext(app, request, {});
+			return Response.json({
+				accessMode: resolved.appContext.accessMode,
+				organizationId:
+					(resolved.appContext as { organizationId?: string }).organizationId ??
+					null,
+			});
+		});
+	const inspectPublicSurface = route()
+		.post()
+		.schema(z.object({}))
+		.outputSchema(
+			z.object({
+				hasAdapterContext: z.boolean(),
+				hasRequestContext: z.boolean(),
+				symbolCount: z.number(),
+			}),
+		)
+		.handler(async (ctx) => ({
+			hasAdapterContext: "adapterContext" in ctx,
+			hasRequestContext: "requestContext" in ctx,
+			symbolCount: Object.getOwnPropertySymbols(ctx).length,
+		}));
 
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
 		// Must register supported locales so createContext doesn't reject them
 		setup = await buildMockApp({
-			routes: { echoLocale },
+			routes: {
+				echoLocale,
+				echoAccessMode,
+				bridgeAdapterContext,
+				inspectPublicSurface,
+			},
 			locale: {
-				locales: [{ code: "en" }, { code: "fr" }, { code: "sk" }, { code: "de" }],
+				locales: [
+					{ code: "en" },
+					{ code: "fr" },
+					{ code: "sk" },
+					{ code: "de" },
+				],
 				defaultLocale: "en",
 			},
 		});
@@ -255,6 +332,55 @@ describe("Route via HTTP — locale propagates from request into handler ALS", (
 		expect(response?.status).toBe(200);
 		const body = await response?.json();
 		expect(body.locale).toBe("fr");
+	});
+
+	it("handler reads HTTP adapter accessMode via ALS", async () => {
+		const handler = createFetchHandler(setup.app);
+
+		const response = await handler(
+			new Request("http://localhost/echo-access-mode", {
+				method: "POST",
+				body: JSON.stringify({}),
+			}),
+		);
+
+		expect(response?.status).toBe(200);
+		const body = await response?.json();
+		expect(body.accessMode).toBe("user");
+	});
+
+	it("legacy handlers can reuse adapter context without public handler args", async () => {
+		const handler = createFetchHandler(setup.app, {
+			extendContext: async () => ({ organizationId: "org_123" }),
+		});
+
+		const response = await handler(
+			new Request("http://localhost/bridge-adapter-context", {
+				method: "POST",
+			}),
+		);
+
+		expect(response?.status).toBe(200);
+		const body = await response?.json();
+		expect(body.accessMode).toBe("user");
+		expect(body.organizationId).toBe("org_123");
+	});
+
+	it("does not expose adapter plumbing as route handler args", async () => {
+		const handler = createFetchHandler(setup.app);
+
+		const response = await handler(
+			new Request("http://localhost/inspect-public-surface", {
+				method: "POST",
+				body: JSON.stringify({}),
+			}),
+		);
+
+		expect(response?.status).toBe(200);
+		const body = await response?.json();
+		expect(body.hasAdapterContext).toBe(false);
+		expect(body.hasRequestContext).toBe(false);
+		expect(body.symbolCount).toBe(0);
 	});
 
 	it("different requests get their own locale (no ALS leak)", async () => {
@@ -284,5 +410,67 @@ describe("Route via HTTP — locale propagates from request into handler ALS", (
 		const locales = new Set([b1.locale, b2.locale]);
 		expect(locales.has("sk")).toBe(true);
 		expect(locales.has("de")).toBe(true);
+	});
+});
+
+describe("Route via HTTP — custom app context extensions reach JSON handlers", () => {
+	const installApp = route()
+		.post()
+		.schema(z.object({}))
+		.outputSchema(
+			z.object({
+				appId: z.string(),
+				method: z.string(),
+				organizationId: z.string().nullable(),
+			}),
+		)
+		.handler(async (ctx) => {
+			return {
+				appId: ctx.params.appId,
+				method: ctx.request.method,
+				organizationId:
+					(ctx as { organizationId?: string | null }).organizationId ?? null,
+			};
+		});
+
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+
+	beforeEach(async () => {
+		setup = await buildMockApp({
+			routes: {
+				"apps/[appId]/install": installApp,
+			},
+			config: {
+				app: {
+					context: async ({ request }) => ({
+						organizationId: request.headers.get("x-org"),
+					}),
+				},
+			},
+		});
+	});
+
+	afterEach(async () => {
+		await setup.cleanup();
+	});
+
+	it("passes request, params, and app-level context extensions into JSON handlers", async () => {
+		const handler = createFetchHandler(setup.app);
+
+		const response = await handler(
+			new Request("http://localhost/apps/app_123/install", {
+				method: "POST",
+				headers: { "x-org": "org_456" },
+				body: JSON.stringify({}),
+			}),
+		);
+
+		expect(response?.status).toBe(200);
+		const body = await response?.json();
+		expect(body).toEqual({
+			appId: "app_123",
+			method: "POST",
+			organizationId: "org_456",
+		});
 	});
 });

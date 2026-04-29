@@ -5,12 +5,14 @@
  */
 
 import { describe, expect, it } from "bun:test";
+
 import {
 	type FormViewDefinition,
 	type ListViewDefinition,
 	view,
 	type ViewDefinition,
 } from "#questpie/admin/client/builder/view/view";
+
 import {
 	createFormView,
 	createTableView,

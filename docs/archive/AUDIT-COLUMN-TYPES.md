@@ -39,6 +39,7 @@ We refactored the field type system so that `BuildFieldState.column` carries **r
 We initially added `ApplyColumnConstraints` that used `& { _: { notNull: true } }` to apply notNull/hasDefault to builder types. **This corrupted Drizzle's internal `_` metadata** because builders have `_: { notNull: false, ... }` — the intersection created `notNull: false & true = never`, which made `BuildColumns` produce `data: unknown` for all user fields. We removed it entirely.
 
 The system works because:
+
 - **Select types**: `InferCollectionSelect = InferSelectModel<table> & ExtractOutputTypes<fields>` — intersection narrows Drizzle's nullable inference with field-level output types
 - **Insert types**: `InferCollectionInsert = Omit<InferInsertModel<table>, fieldKeys> & ExtractInputObject<fields>` — completely replaces Drizzle's insert inference for field-builder fields
 - So the column type's `notNull`/`hasDefault` don't matter — `InferOutputType` and `InferInputType` handle those from config
@@ -56,6 +57,7 @@ Run a **comprehensive audit** of this refactoring. You must verify correctness, 
 Spawn these **8 agents in parallel** using the Agent tool. Each agent should do research only (no edits).
 
 ### Agent 1: Type Flow Correctness — Select Path
+
 ```
 Read and trace the FULL type chain from field definition to CollectionSelect/HookContext.data for SELECT operations.
 
@@ -88,6 +90,7 @@ Report any type flow that produces incorrect results.
 ```
 
 ### Agent 2: Type Flow Correctness — Insert/Update Path
+
 ```
 Read and trace the FULL type chain for INSERT and UPDATE operations.
 
@@ -119,6 +122,7 @@ Report any type flow that produces incorrect results.
 ```
 
 ### Agent 3: Builtin Field Return Type Annotations Audit
+
 ```
 Audit ALL 15 builtin field files for correct return type annotations on toColumn.
 
@@ -155,6 +159,7 @@ Report all findings as a table.
 ```
 
 ### Agent 4: Dead Code Detection
+
 ```
 Search the ENTIRE codebase for references to types/functions that were removed or changed in this refactoring.
 
@@ -175,6 +180,7 @@ For each finding, report: file path, line number, the dead reference, and whethe
 ```
 
 ### Agent 5: Constraint/Widening Safety Audit
+
 ```
 Audit the safety of widening FieldDefinitionState.column from "AnyPgColumn | null" to "unknown".
 
@@ -199,6 +205,7 @@ Report any location where the widening to "unknown" could cause a type error or 
 ```
 
 ### Agent 6: Duplication & Consistency Audit
+
 ```
 Check for code/type duplication and naming inconsistencies across the field type system.
 
@@ -233,6 +240,7 @@ Report all duplications and inconsistencies with file paths and line numbers.
 ```
 
 ### Agent 7: Edge Case & Regression Analysis
+
 ```
 Test edge cases that could break the type system. For each, trace the type manually through the chain.
 
@@ -279,6 +287,7 @@ Read the relevant files to verify each edge case. Report which ones are safe and
 ```
 
 ### Agent 8: Test Coverage & Build Verification
+
 ```
 Verify test coverage and build integrity for the field type changes.
 
@@ -320,32 +329,38 @@ After all 8 agents return results, synthesize a final report:
 # Column Types Refactoring — Audit Report
 
 ## 1. Type Flow Correctness
+
 - [ ] Select path: all 8 field configs produce correct types
 - [ ] Insert path: all 8 field configs produce correct types
 - [ ] No type flow produces `unknown` or incorrect nullability
 
 ## 2. Return Type Annotations
+
 - [ ] All 15 builtin fields have correct annotations
 - [ ] Mode variant mismatches documented and acceptable
 - [ ] No missing imports
 
 ## 3. Dead Code
+
 - [ ] No references to removed types (InferFieldColumn, ApplyColumnConstraints)
 - [ ] No stale .d.ts/.js artifacts
 - [ ] No broken imports
 
 ## 4. Widening Safety
+
 - [ ] FieldDefinitionState.column: unknown is safe everywhere
 - [ ] No runtime code assumes AnyPgColumn methods on column
 - [ ] No type narrowing breaks
 
 ## 5. Duplication & Consistency
+
 - [ ] No unnecessary duplication
 - [ ] InferColumnType duplication resolved or documented
 - [ ] Location inference (type vs runtime) is consistent
 - [ ] Naming conventions are consistent
 
 ## 6. Edge Cases
+
 - [ ] Polymorphic relation: safe / issue found
 - [ ] Upload M2M: safe / issue found
 - [ ] Select multiple: safe / issue found
@@ -355,21 +370,25 @@ After all 8 agents return results, synthesize a final report:
 - [ ] Required + nullable: safe / issue found
 
 ## 7. Test Coverage
+
 - [ ] All tests pass
 - [ ] No new type errors
 - [ ] Coverage gaps identified
 
 ## 8. Issues Found
-| # | Severity | File | Description | Suggested Fix |
-|---|----------|------|-------------|---------------|
-| 1 | ... | ... | ... | ... |
+
+| #   | Severity | File | Description | Suggested Fix |
+| --- | -------- | ---- | ----------- | ------------- |
+| 1   | ...      | ...  | ...         | ...           |
 
 ## 9. Dead Code to Remove
+
 | File | Line | Code | Reason |
-|------|------|------|--------|
-| ... | ... | ... | ... |
+| ---- | ---- | ---- | ------ |
+| ...  | ...  | ...  | ...    |
 
 ## 10. Recommendations
+
 - ...
 ```
 

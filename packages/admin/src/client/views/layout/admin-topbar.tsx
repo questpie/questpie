@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
 import { Button } from "../../components/ui/button";
 import {
 	DropdownMenu,
@@ -10,10 +11,8 @@ import {
 import { Kbd } from "../../components/ui/kbd";
 import { SidebarTrigger } from "../../components/ui/sidebar";
 import type { Breadcrumb } from "../../contexts/breadcrumb-context";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
-
-type Theme = "light" | "dark" | "system";
 
 // Module-level constant for empty array to avoid recreating on each render
 const EMPTY_BREADCRUMBS: Breadcrumb[] = [];
@@ -21,28 +20,20 @@ const EMPTY_BREADCRUMBS: Breadcrumb[] = [];
 interface AdminTopbarProps {
 	onSearchOpen: () => void;
 	breadcrumbs?: Breadcrumb[];
-	theme?: Theme;
-	setTheme?: (theme: Theme) => void;
-	showThemeToggle?: boolean;
 }
 
 export const AdminTopbar = React.memo(function AdminTopbar({
 	onSearchOpen,
 	breadcrumbs,
-	theme: _theme = "system",
-	setTheme,
-	showThemeToggle,
 }: AdminTopbarProps) {
 	const resolvedBreadcrumbs = breadcrumbs ?? EMPTY_BREADCRUMBS;
 	const resolveText = useResolveText();
-
-	// Show theme toggle if setTheme is provided and showThemeToggle is not explicitly false
-	const shouldShowThemeToggle = setTheme && showThemeToggle !== false;
+	const { t } = useTranslation();
 
 	return (
 		<header
 			role="banner"
-			className="qa-topbar relative sticky top-0 z-30 flex h-14 w-full items-center justify-between border-b border-border bg-background px-4 md:px-6"
+			className="qa-topbar border-border-subtle bg-background/95 relative sticky top-0 z-50 flex h-12 w-full items-center justify-between border-b px-3 backdrop-blur md:px-4"
 		>
 			<div className="qa-topbar__left flex items-center gap-2">
 				{/* Sidebar toggle - works for both mobile (opens sheet) and desktop (collapses) */}
@@ -50,7 +41,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 
 				{/* Mobile: show current page title */}
 				{resolvedBreadcrumbs.length > 0 && (
-					<span className="qa-topbar__mobile-title md:hidden font-mono text-xs text-foreground font-medium truncate max-w-[140px]">
+					<span className="qa-topbar__mobile-title font-chrome text-foreground max-w-[140px] truncate text-xs font-medium md:hidden">
 						{resolveText(
 							resolvedBreadcrumbs[resolvedBreadcrumbs.length - 1].label,
 						)}
@@ -59,8 +50,8 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 
 				{/* Breadcrumbs */}
 				<nav
-					aria-label="Breadcrumb"
-					className="qa-topbar__breadcrumbs hidden md:flex items-center gap-1.5 font-mono text-xs text-muted-foreground"
+					aria-label={t("nav.breadcrumb")}
+					className="qa-topbar__breadcrumbs font-chrome text-muted-foreground hidden items-center gap-1.5 text-xs md:flex"
 				>
 					{resolvedBreadcrumbs.map((crumb) => {
 						const CrumbIcon = crumb.icon;
@@ -82,7 +73,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 												<button
 													type="button"
 													className={cn(
-														"qa-topbar__breadcrumb-item flex items-center gap-1 hover:text-foreground transition-colors",
+														"qa-topbar__breadcrumb-item hover:text-foreground flex items-center gap-1 transition-colors",
 														resolvedBreadcrumbs[
 															resolvedBreadcrumbs.length - 1
 														] === crumb && "text-foreground font-medium",
@@ -118,7 +109,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 									// Breadcrumb with link
 									<a
 										href={crumb.href}
-										className="qa-topbar__breadcrumb-item flex items-center gap-1.5 hover:text-foreground transition-colors"
+										className="qa-topbar__breadcrumb-item hover:text-foreground flex items-center gap-1.5 transition-colors"
 									>
 										{CrumbIcon && <CrumbIcon className="size-3.5" />}
 										{crumbLabel}
@@ -155,55 +146,19 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 					variant="outline"
 					onClick={onSearchOpen}
 					size="icon-sm"
-					className="qa-topbar__search-btn md:size-auto md:h-9 md:w-64 md:justify-between md:px-3 gap-2 text-muted-foreground"
-					aria-label="Search (⌘K)"
+					className="qa-topbar__search-btn border-border-subtle bg-card text-muted-foreground hover:bg-surface-low hover:text-foreground h-9 gap-2 overflow-hidden rounded-md md:w-64 md:justify-between md:px-3"
+					aria-label={t("ui.searchPlaceholder")}
 				>
-					<span className="flex items-center gap-2">
+					<span className="flex min-w-0 items-center gap-2">
 						<Icon icon="ph:magnifying-glass" />
-						<span className="hidden md:inline">Search...</span>
+						<span className="hidden truncate md:inline">
+							{t("ui.searchPlaceholder")}
+						</span>
 					</span>
 					<Kbd className="hidden md:inline-flex">
 						<span className="text-xs">⌘</span>K
 					</Kbd>
 				</Button>
-
-				{shouldShowThemeToggle && (
-					<DropdownMenu>
-						<DropdownMenuTrigger
-							render={
-								<Button
-									variant="ghost"
-									size="icon"
-									className="qa-topbar__theme-toggle"
-								>
-									<Icon
-										icon="ph:sun"
-										className="size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90"
-									/>
-									<Icon
-										icon="ph:moon"
-										className="absolute size-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0"
-									/>
-									<span className="sr-only">Toggle theme</span>
-								</Button>
-							}
-						/>
-						<DropdownMenuContent align="end">
-							<DropdownMenuItem onClick={() => setTheme("light")}>
-								<Icon icon="ph:sun" className="mr-2 size-4" />
-								Light
-							</DropdownMenuItem>
-							<DropdownMenuItem onClick={() => setTheme("dark")}>
-								<Icon icon="ph:moon" className="mr-2 size-4" />
-								Dark
-							</DropdownMenuItem>
-							<DropdownMenuItem onClick={() => setTheme("system")}>
-								<Icon icon="ph:monitor" className="mr-2 size-4" />
-								System
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
-				)}
 			</div>
 		</header>
 	);

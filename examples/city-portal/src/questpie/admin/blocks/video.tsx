@@ -20,32 +20,32 @@ export function VideoRenderer({ values }: BlockProps<"video">) {
 	const embedUrl = values.url ? getEmbedUrl(values.url) : null;
 
 	return (
-		<section className="py-16 px-6">
+		<section className="px-6 py-16">
 			<div className="container mx-auto max-w-4xl">
 				{values.title && (
-					<h2 className="text-2xl font-bold tracking-tight mb-6">
+					<h2 className="mb-6 text-2xl font-bold tracking-tight">
 						{values.title}
 					</h2>
 				)}
 
 				{embedUrl ? (
-					<div className="aspect-video rounded-lg overflow-hidden bg-muted">
+					<div className="bg-muted aspect-video overflow-hidden rounded-lg">
 						<iframe
 							src={embedUrl}
 							title={values.title || "Video"}
-							className="w-full h-full"
+							className="h-full w-full"
 							allowFullScreen
 							allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
 						/>
 					</div>
 				) : (
-					<div className="aspect-video rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
+					<div className="bg-muted text-muted-foreground flex aspect-video items-center justify-center rounded-lg">
 						{values.url ? "Invalid video URL" : "No video URL provided"}
 					</div>
 				)}
 
 				{values.caption && (
-					<p className="mt-3 text-center text-sm text-muted-foreground">
+					<p className="text-muted-foreground mt-3 text-center text-sm">
 						{values.caption}
 					</p>
 				)}

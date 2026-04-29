@@ -37,11 +37,11 @@ is contributed by plugins and modules.
 
 ## 2. Plugin vs Module vs Config
 
-| Concept | What it is | What it does | Example |
-|---------|-----------|-------------|---------|
-| **Plugin** | Codegen declaration | Tells codegen what to discover, what types to generate | `adminPlugin()`, `corePlugin()` |
-| **Module** | Static entity record | Contributes values (collections, fields, views...) | `starterModule`, `adminModule` |
-| **Config** | Runtime infrastructure | DB, adapters, secret, plugin registrations | `questpie.config.ts` |
+| Concept    | What it is             | What it does                                           | Example                         |
+| ---------- | ---------------------- | ------------------------------------------------------ | ------------------------------- |
+| **Plugin** | Codegen declaration    | Tells codegen what to discover, what types to generate | `adminPlugin()`, `corePlugin()` |
+| **Module** | Static entity record   | Contributes values (collections, fields, views...)     | `starterModule`, `adminModule`  |
+| **Config** | Runtime infrastructure | DB, adapters, secret, plugin registrations             | `questpie.config.ts`            |
 
 **Plugin** = "what CAN exist" (schema).
 **Module** = "what DOES exist" (values).
@@ -53,47 +53,47 @@ is contributed by plugins and modules.
 
 ```ts
 interface CodegenPlugin {
-  name: string;
+	name: string;
 
-  /**
-   * File patterns to discover from the filesystem.
-   * Each key becomes a category (e.g., "collections", "views", "blocks").
-   * Discovered files are imported into generated code and merged with
-   * module contributions.
-   */
-  categories?: Record<string, CategoryDeclaration>;
+	/**
+	 * File patterns to discover from the filesystem.
+	 * Each key becomes a category (e.g., "collections", "views", "blocks").
+	 * Discovered files are imported into generated code and merged with
+	 * module contributions.
+	 */
+	categories?: Record<string, CategoryDeclaration>;
 
-  /**
-   * Methods to add on CollectionBuilder and/or GlobalBuilder.
-   * Each extension generates a `declare module` augmentation and a
-   * Proxy-based runtime wrapper.
-   */
-  extensions?: {
-    collection?: Record<string, ExtensionDeclaration>;
-    global?: Record<string, ExtensionDeclaration>;
-  };
+	/**
+	 * Methods to add on CollectionBuilder and/or GlobalBuilder.
+	 * Each extension generates a `declare module` augmentation and a
+	 * Proxy-based runtime wrapper.
+	 */
+	extensions?: {
+		collection?: Record<string, ExtensionDeclaration>;
+		global?: Record<string, ExtensionDeclaration>;
+	};
 
-  /**
-   * Module-level registries. For each key, codegen extracts that property
-   * from all modules, aggregates the keys into a union type, and augments
-   * the Registry interface. Used for things like view names, component
-   * names, field types — anything where modules contribute to a shared
-   * registry that other code references.
-   */
-  moduleRegistries?: Record<string, ModuleRegistryDeclaration>;
+	/**
+	 * Module-level registries. For each key, codegen extracts that property
+	 * from all modules, aggregates the keys into a union type, and augments
+	 * the Registry interface. Used for things like view names, component
+	 * names, field types — anything where modules contribute to a shared
+	 * registry that other code references.
+	 */
+	moduleRegistries?: Record<string, ModuleRegistryDeclaration>;
 
-  /**
-   * Single-file factory functions exported from .generated/factories.ts.
-   * Each singleton is a function the user calls to define a single value
-   * (e.g., sidebar(), branding(), locale()).
-   */
-  singletons?: Record<string, SingletonDeclaration>;
+	/**
+	 * Single-file factory functions exported from .generated/factories.ts.
+	 * Each singleton is a function the user calls to define a single value
+	 * (e.g., sidebar(), branding(), locale()).
+	 */
+	singletons?: Record<string, SingletonDeclaration>;
 
-  /**
-   * Post-discovery hook. Runs after file discovery, before template
-   * generation. Can inject imports, type declarations, runtime code.
-   */
-  transform?: (ctx: CodegenContext) => void;
+	/**
+	 * Post-discovery hook. Runs after file discovery, before template
+	 * generation. Can inject imports, type declarations, runtime code.
+	 */
+	transform?: (ctx: CodegenContext) => void;
 }
 ```
 
@@ -102,6 +102,7 @@ interface CodegenPlugin {
 ## 4. Categories
 
 A category is a type of entity that can be:
+
 - **Discovered** from the user's filesystem via file convention
 - **Contributed** by modules via a property on the module definition
 - **Merged** together (module + user contributions)
@@ -224,108 +225,120 @@ The core plugin declares fundamental questpie categories:
 
 ```ts
 function corePlugin(): CodegenPlugin {
-  return {
-    name: "questpie-core",
-    categories: {
-      collections: {
-        pattern: "collections/*.ts",
-        featureLayout: true,
-        mergeStrategy: "record",
-        moduleContributionKey: "collections",
-        runtimeKey: "collections",
-        registryKey: "collections",
-        typePrefix: "App",
-      },
-      globals: {
-        pattern: "globals/*.ts",
-        featureLayout: true,
-        mergeStrategy: "record",
-        moduleContributionKey: "globals",
-        runtimeKey: "globals",
-        registryKey: "globals",
-        typePrefix: "App",
-      },
-      jobs: {
-        pattern: "jobs/*.ts",
-        mergeStrategy: "record",
-        moduleContributionKey: "jobs",
-        runtimeKey: "jobs",
-        registryKey: "jobs",
-        typePrefix: "App",
-      },
-      functions: {
-        pattern: "functions/*.ts",
-        recursive: true,
-        featureLayout: true,
-        mergeStrategy: "record",
-        moduleContributionKey: "functions",
-        runtimeKey: "functions",
-        registryKey: "functions",
-        typePrefix: "App",
-      },
-      routes: {
-        pattern: "routes/*.ts",
-        recursive: true,
-        mergeStrategy: "record",
-        moduleContributionKey: "routes",
-        runtimeKey: "routes",
-        registryKey: "routes",
-        typePrefix: "App",
-      },
-      services: {
-        pattern: "services/*.ts",
-        mergeStrategy: "record",
-        moduleContributionKey: "services",
-        runtimeKey: "services",
-        registryKey: "services",
-        typePrefix: "App",
-      },
-      fields: {
-        pattern: "fields/*.ts",
-        featureLayout: true,
-        mergeStrategy: "record",
-        moduleContributionKey: "fields",
-        runtimeKey: "fields",
-        registryKey: "fields",
-        typePrefix: "App",
-      },
-      messages: {
-        pattern: "messages/*.ts",
-        mergeStrategy: "record",
-        moduleContributionKey: "messages",
-        runtimeKey: "messages",
-      },
-      emails: {
-        pattern: "emails/*.ts",
-        mergeStrategy: "record",
-        moduleContributionKey: "emails",
-        runtimeKey: "emails",
-        registryKey: "emails",
-        typePrefix: "App",
-      },
-      migrations: {
-        pattern: "migrations/*.ts",
-        mergeStrategy: "array",
-        moduleContributionKey: "migrations",
-        runtimeKey: "migrations",
-      },
-      seeds: {
-        pattern: "seeds/*.ts",
-        mergeStrategy: "array",
-        moduleContributionKey: "seeds",
-        runtimeKey: "seeds",
-      },
-    },
-    singletons: {
-      locale:  { configType: "LocaleConfig",    imports: [{ from: "questpie", names: ["LocaleConfig"] }] },
-      hooks:   { configType: "GlobalHooks",     imports: [{ from: "questpie", names: ["GlobalHooks"] }] },
-      access:  { configType: "DefaultAccess",   imports: [{ from: "questpie", names: ["DefaultAccess"] }] },
-      context: { configType: "ContextResolver", imports: [{ from: "questpie", names: ["ContextResolver"] }] },
-    },
-    moduleRegistries: {
-      fields: { registryKey: "fields" },
-    },
-  };
+	return {
+		name: "questpie-core",
+		categories: {
+			collections: {
+				pattern: "collections/*.ts",
+				featureLayout: true,
+				mergeStrategy: "record",
+				moduleContributionKey: "collections",
+				runtimeKey: "collections",
+				registryKey: "collections",
+				typePrefix: "App",
+			},
+			globals: {
+				pattern: "globals/*.ts",
+				featureLayout: true,
+				mergeStrategy: "record",
+				moduleContributionKey: "globals",
+				runtimeKey: "globals",
+				registryKey: "globals",
+				typePrefix: "App",
+			},
+			jobs: {
+				pattern: "jobs/*.ts",
+				mergeStrategy: "record",
+				moduleContributionKey: "jobs",
+				runtimeKey: "jobs",
+				registryKey: "jobs",
+				typePrefix: "App",
+			},
+			functions: {
+				pattern: "functions/*.ts",
+				recursive: true,
+				featureLayout: true,
+				mergeStrategy: "record",
+				moduleContributionKey: "functions",
+				runtimeKey: "functions",
+				registryKey: "functions",
+				typePrefix: "App",
+			},
+			routes: {
+				pattern: "routes/*.ts",
+				recursive: true,
+				mergeStrategy: "record",
+				moduleContributionKey: "routes",
+				runtimeKey: "routes",
+				registryKey: "routes",
+				typePrefix: "App",
+			},
+			services: {
+				pattern: "services/*.ts",
+				mergeStrategy: "record",
+				moduleContributionKey: "services",
+				runtimeKey: "services",
+				registryKey: "services",
+				typePrefix: "App",
+			},
+			fields: {
+				pattern: "fields/*.ts",
+				featureLayout: true,
+				mergeStrategy: "record",
+				moduleContributionKey: "fields",
+				runtimeKey: "fields",
+				registryKey: "fields",
+				typePrefix: "App",
+			},
+			messages: {
+				pattern: "messages/*.ts",
+				mergeStrategy: "record",
+				moduleContributionKey: "messages",
+				runtimeKey: "messages",
+			},
+			emails: {
+				pattern: "emails/*.ts",
+				mergeStrategy: "record",
+				moduleContributionKey: "emails",
+				runtimeKey: "emails",
+				registryKey: "emails",
+				typePrefix: "App",
+			},
+			migrations: {
+				pattern: "migrations/*.ts",
+				mergeStrategy: "array",
+				moduleContributionKey: "migrations",
+				runtimeKey: "migrations",
+			},
+			seeds: {
+				pattern: "seeds/*.ts",
+				mergeStrategy: "array",
+				moduleContributionKey: "seeds",
+				runtimeKey: "seeds",
+			},
+		},
+		singletons: {
+			locale: {
+				configType: "LocaleConfig",
+				imports: [{ from: "questpie", names: ["LocaleConfig"] }],
+			},
+			hooks: {
+				configType: "GlobalHooks",
+				imports: [{ from: "questpie", names: ["GlobalHooks"] }],
+			},
+			access: {
+				configType: "DefaultAccess",
+				imports: [{ from: "questpie", names: ["DefaultAccess"] }],
+			},
+			context: {
+				configType: "ContextResolver",
+				imports: [{ from: "questpie", names: ["ContextResolver"] }],
+			},
+		},
+		moduleRegistries: {
+			fields: { registryKey: "fields" },
+		},
+	};
 }
 ```
 
@@ -335,61 +348,89 @@ The admin plugin declares admin-specific categories:
 
 ```ts
 function adminPlugin(): CodegenPlugin {
-  return {
-    name: "questpie-admin",
-    categories: {
-      views: {
-        pattern: "views/*.ts",
-        featureLayout: true,
-        mergeStrategy: "record",
-        moduleContributionKey: "views",
-        runtimeKey: "views",
-        registryKey: "views",
-        typePrefix: "App",
-      },
-      components: {
-        pattern: "components/*.ts",
-        featureLayout: true,
-        mergeStrategy: "record",
-        moduleContributionKey: "components",
-        runtimeKey: "components",
-        registryKey: "components",
-        typePrefix: "App",
-      },
-      blocks: {
-        pattern: "blocks/*.ts",
-        mergeStrategy: "record",
-        moduleContributionKey: "blocks",
-        runtimeKey: "blocks",
-        registryKey: "blocks",
-        typePrefix: "App",
-      },
-    },
-    singletons: {
-      sidebar:     { configType: "SidebarContribution", isCallback: true, mergeStrategy: "spread" },
-      dashboard:   { configType: "DashboardContribution", isCallback: true, mergeStrategy: "spread" },
-      branding:    { configType: "BrandingConfig" },
-      adminLocale: { configType: "AdminLocaleConfig" },
-    },
-    extensions: {
-      collection: {
-        admin:   { stateKey: "admin",     configType: "AdminConfig" },
-        list:    { stateKey: "adminList", configType: "...", isCallback: true, callbackContextParams: ["v", "f"] },
-        form:    { stateKey: "adminForm", configType: "...", isCallback: true, callbackContextParams: ["v", "f"] },
-        preview: { stateKey: "preview",  configType: "PreviewConfig" },
-        actions: { stateKey: "actions",  configType: "...", isCallback: true, callbackContextParams: ["a"] },
-      },
-      global: {
-        admin: { stateKey: "admin", configType: "AdminConfig" },
-        form:  { stateKey: "adminForm", configType: "...", isCallback: true, callbackContextParams: ["v", "f"] },
-      },
-    },
-    moduleRegistries: {
-      listViews:  { registryKey: "listViews" },
-      editViews:  { registryKey: "editViews" },
-      components: { registryKey: "components" },
-    },
-  };
+	return {
+		name: "questpie-admin",
+		categories: {
+			views: {
+				pattern: "views/*.ts",
+				featureLayout: true,
+				mergeStrategy: "record",
+				moduleContributionKey: "views",
+				runtimeKey: "views",
+				registryKey: "views",
+				typePrefix: "App",
+			},
+			components: {
+				pattern: "components/*.ts",
+				featureLayout: true,
+				mergeStrategy: "record",
+				moduleContributionKey: "components",
+				runtimeKey: "components",
+				registryKey: "components",
+				typePrefix: "App",
+			},
+			blocks: {
+				pattern: "blocks/*.ts",
+				mergeStrategy: "record",
+				moduleContributionKey: "blocks",
+				runtimeKey: "blocks",
+				registryKey: "blocks",
+				typePrefix: "App",
+			},
+		},
+		singletons: {
+			sidebar: {
+				configType: "SidebarContribution",
+				isCallback: true,
+				mergeStrategy: "spread",
+			},
+			dashboard: {
+				configType: "DashboardContribution",
+				isCallback: true,
+				mergeStrategy: "spread",
+			},
+			branding: { configType: "BrandingConfig" },
+			adminLocale: { configType: "AdminLocaleConfig" },
+		},
+		extensions: {
+			collection: {
+				admin: { stateKey: "admin", configType: "AdminConfig" },
+				list: {
+					stateKey: "adminList",
+					configType: "...",
+					isCallback: true,
+					callbackContextParams: ["v", "f"],
+				},
+				form: {
+					stateKey: "adminForm",
+					configType: "...",
+					isCallback: true,
+					callbackContextParams: ["v", "f"],
+				},
+				preview: { stateKey: "preview", configType: "PreviewConfig" },
+				actions: {
+					stateKey: "actions",
+					configType: "...",
+					isCallback: true,
+					callbackContextParams: ["a"],
+				},
+			},
+			global: {
+				admin: { stateKey: "admin", configType: "AdminConfig" },
+				form: {
+					stateKey: "adminForm",
+					configType: "...",
+					isCallback: true,
+					callbackContextParams: ["v", "f"],
+				},
+			},
+		},
+		moduleRegistries: {
+			listViews: { registryKey: "listViews" },
+			editViews: { registryKey: "editViews" },
+			components: { registryKey: "components" },
+		},
+	};
 }
 ```
 
@@ -404,39 +445,39 @@ Extensions add methods to `CollectionBuilder` and `GlobalBuilder` via
 
 ```ts
 interface ExtensionDeclaration {
-  /** Key where the config is stored on builder state */
-  stateKey: string;
+	/** Key where the config is stored on builder state */
+	stateKey: string;
 
-  /** TypeScript type for the config parameter. May contain placeholders. */
-  configType: string;
+	/** TypeScript type for the config parameter. May contain placeholders. */
+	configType: string;
 
-  /** Imports needed for the configType */
-  imports?: Array<{ from: string; names: string[] }>;
+	/** Imports needed for the configType */
+	imports?: Array<{ from: string; names: string[] }>;
 
-  /** Whether the config is a callback receiving context */
-  isCallback?: boolean;
+	/** Whether the config is a callback receiving context */
+	isCallback?: boolean;
 
-  /**
-   * Context parameters passed to the callback.
-   * Each param creates a proxy:
-   *   "f" → field reference proxy (returns field name strings)
-   *   "v" → view proxy (returns { view: name, ...config })
-   *   "c" → component proxy (returns { type: name, props })
-   *   "a" → action proxy (returns action references)
-   *
-   * Plugins can define new context params — see §5.3.
-   */
-  callbackContextParams?: string[];
+	/**
+	 * Context parameters passed to the callback.
+	 * Each param creates a proxy:
+	 *   "f" → field reference proxy (returns field name strings)
+	 *   "v" → view proxy (returns { view: name, ...config })
+	 *   "c" → component proxy (returns { type: name, props })
+	 *   "a" → action proxy (returns action references)
+	 *
+	 * Plugins can define new context params — see §5.3.
+	 */
+	callbackContextParams?: string[];
 
-  /**
-   * Placeholders in configType that should be replaced with
-   * generated type aliases from moduleRegistries.
-   *
-   * Example: { "$LIST_VIEW_NAMES": "listViews" }
-   * This replaces $LIST_VIEW_NAMES in the configType string
-   * with the aggregated union of listView names from all modules.
-   */
-  configTypePlaceholders?: Record<string, string>;
+	/**
+	 * Placeholders in configType that should be replaced with
+	 * generated type aliases from moduleRegistries.
+	 *
+	 * Example: { "$LIST_VIEW_NAMES": "listViews" }
+	 * This replaces $LIST_VIEW_NAMES in the configType string
+	 * with the aggregated union of listView names from all modules.
+	 */
+	configTypePlaceholders?: Record<string, string>;
 }
 ```
 
@@ -448,9 +489,13 @@ For extension `list` on collection:
 // .generated/factories.ts
 
 declare module "questpie" {
-  interface CollectionBuilder<TState> {
-    list(config: (ctx: ListViewConfigContext<TState, _ListViewNames>) => ListViewConfig): this;
-  }
+	interface CollectionBuilder<TState> {
+		list(
+			config: (
+				ctx: ListViewConfigContext<TState, _ListViewNames>,
+			) => ListViewConfig,
+		): this;
+	}
 }
 
 // Runtime: Proxy intercepts .list() calls, resolves callback with
@@ -465,11 +510,11 @@ Plugins can contribute new callback context parameter types via the
 ```ts
 // kanban plugin adds a "l" (lanes) context param
 transform: (ctx) => {
-  ctx.registerCallbackParam("l", {
-    proxyFactory: "createLanesProxy",
-    import: { from: "@questpie/kanban/server", name: "createLanesProxy" },
-  });
-}
+	ctx.registerCallbackParam("l", {
+		proxyFactory: "createLanesProxy",
+		import: { from: "@questpie/kanban/server", name: "createLanesProxy" },
+	});
+};
 ```
 
 ---
@@ -487,28 +532,28 @@ declared registry, codegen:
 
 ```ts
 interface ModuleRegistryDeclaration {
-  /**
-   * Key in the Registry interface augmentation.
-   * If set, generates: Registry { [registryKey]: Record<_Names, unknown> }
-   */
-  registryKey?: string;
+	/**
+	 * Key in the Registry interface augmentation.
+	 * If set, generates: Registry { [registryKey]: Record<_Names, unknown> }
+	 */
+	registryKey?: string;
 
-  /**
-   * Placeholder token for use in extension configType strings.
-   * Example: "$LIST_VIEW_NAMES" — replaced with the generated union type.
-   */
-  placeholder?: string;
+	/**
+	 * Placeholder token for use in extension configType strings.
+	 * Example: "$LIST_VIEW_NAMES" — replaced with the generated union type.
+	 */
+	placeholder?: string;
 }
 ```
 
 ### 6.2 How Module Registries Differ from Categories
 
-| Aspect | Category | Module Registry |
-|--------|----------|-----------------|
-| **Source** | Filesystem (discovery) + modules | Modules only |
-| **Purpose** | Discover entities, merge, generate types | Extract type-level names for autocomplete |
-| **Output** | Full aggregated type (AppCollections) | Union type of keys ("table" \| "kanban") |
-| **Use case** | Collections, views, fields, blocks | View names for `v` proxy, field type names |
+| Aspect       | Category                                 | Module Registry                            |
+| ------------ | ---------------------------------------- | ------------------------------------------ |
+| **Source**   | Filesystem (discovery) + modules         | Modules only                               |
+| **Purpose**  | Discover entities, merge, generate types | Extract type-level names for autocomplete  |
+| **Output**   | Full aggregated type (AppCollections)    | Union type of keys ("table" \| "kanban")   |
+| **Use case** | Collections, views, fields, blocks       | View names for `v` proxy, field type names |
 
 Module registries complement categories. A category like `views` handles
 the full discovery + merge + type generation. A module registry like
@@ -538,17 +583,17 @@ values (sidebar, branding, locale).
 
 ```ts
 interface SingletonDeclaration {
-  /** TypeScript type for the config parameter */
-  configType: string;
+	/** TypeScript type for the config parameter */
+	configType: string;
 
-  /** Imports for the configType */
-  imports?: Array<{ from: string; names: string[] }>;
+	/** Imports for the configType */
+	imports?: Array<{ from: string; names: string[] }>;
 
-  /** Whether the factory accepts a callback */
-  isCallback?: boolean;
+	/** Whether the factory accepts a callback */
+	isCallback?: boolean;
 
-  /** Merge strategy for spread singletons (sidebar, dashboard) */
-  mergeStrategy?: "spread";
+	/** Merge strategy for spread singletons (sidebar, dashboard) */
+	mergeStrategy?: "spread";
 }
 ```
 
@@ -702,6 +747,7 @@ components/rating.ts           .generated/index.ts
 ### Step 1: Identify what your plugin adds
 
 Ask yourself:
+
 - Does it introduce a new **entity type**? → Category
 - Does it add **methods** to collection/global builders? → Extension
 - Does it need **type-level name aggregation** from modules? → Module registry
@@ -714,37 +760,37 @@ Ask yourself:
 import type { CodegenPlugin } from "questpie";
 
 export function myPlugin(): CodegenPlugin {
-  return {
-    name: "questpie-my-plugin",
+	return {
+		name: "questpie-my-plugin",
 
-    // New entity types
-    categories: {
-      workflows: {
-        pattern: "workflows/*.ts",
-        mergeStrategy: "record",
-        moduleContributionKey: "workflows",
-        runtimeKey: "workflows",
-        registryKey: "workflows",
-        typePrefix: "App",
-      },
-    },
+		// New entity types
+		categories: {
+			workflows: {
+				pattern: "workflows/*.ts",
+				mergeStrategy: "record",
+				moduleContributionKey: "workflows",
+				runtimeKey: "workflows",
+				registryKey: "workflows",
+				typePrefix: "App",
+			},
+		},
 
-    // New builder methods
-    extensions: {
-      collection: {
-        workflow: {
-          stateKey: "workflowConfig",
-          configType: "WorkflowConfig",
-          imports: [{ from: "@questpie/my-plugin", names: ["WorkflowConfig"] }],
-        },
-      },
-    },
+		// New builder methods
+		extensions: {
+			collection: {
+				workflow: {
+					stateKey: "workflowConfig",
+					configType: "WorkflowConfig",
+					imports: [{ from: "@questpie/my-plugin", names: ["WorkflowConfig"] }],
+				},
+			},
+		},
 
-    // Module-level registries
-    moduleRegistries: {
-      workflows: { registryKey: "workflows" },
-    },
-  };
+		// Module-level registries
+		moduleRegistries: {
+			workflows: { registryKey: "workflows" },
+		},
+	};
 }
 ```
 
@@ -755,20 +801,20 @@ export function myPlugin(): CodegenPlugin {
 import { z } from "zod";
 
 export interface WorkflowDefinition<TName extends string = string> {
-  type: "workflow";
-  name: TName;
-  states: readonly string[];
-  transitions: Record<string, string[]>;
+	type: "workflow";
+	name: TName;
+	states: readonly string[];
+	transitions: Record<string, string[]>;
 }
 
 export function workflow<TName extends string>(
-  name: TName,
-  config: {
-    states: readonly string[];
-    transitions: Record<string, string[]>;
-  },
+	name: TName,
+	config: {
+		states: readonly string[];
+		transitions: Record<string, string[]>;
+	},
 ): WorkflowDefinition<TName> {
-  return { type: "workflow", name, ...config };
+	return { type: "workflow", name, ...config };
 }
 ```
 
@@ -781,13 +827,13 @@ If your plugin provides default values:
 import { workflow } from "../../workflow";
 
 const _module = {
-  name: "questpie-workflow",
-  workflows: {
-    approval: workflow("approval", {
-      states: ["draft", "review", "approved", "rejected"],
-      transitions: { draft: ["review"], review: ["approved", "rejected"] },
-    }),
-  },
+	name: "questpie-workflow",
+	workflows: {
+		approval: workflow("approval", {
+			states: ["draft", "review", "approved", "rejected"],
+			transitions: { draft: ["review"], review: ["approved", "rejected"] },
+		}),
+	},
 };
 
 export type WorkflowModule = typeof _module;
@@ -803,8 +849,8 @@ import { adminPlugin } from "@questpie/admin/plugin";
 import { myPlugin } from "@questpie/my-plugin";
 
 export default runtimeConfig({
-  plugins: [adminPlugin(), myPlugin()],
-  db: { url: process.env.DATABASE_URL! },
+	plugins: [adminPlugin(), myPlugin()],
+	db: { url: process.env.DATABASE_URL! },
 });
 
 // modules.ts
@@ -821,8 +867,8 @@ export default [adminModule, workflowModule] as const;
 import { workflow } from "@questpie/my-plugin";
 
 export default workflow("contentReview", {
-  states: ["draft", "editing", "published"],
-  transitions: { draft: ["editing"], editing: ["published", "draft"] },
+	states: ["draft", "editing", "published"],
+	transitions: { draft: ["editing"], editing: ["published", "draft"] },
 });
 ```
 
@@ -835,13 +881,13 @@ import _wf_contentReview from "../workflows/content-review";
 type _ModuleWorkflows = ExtractFromModuleArray<typeof _modules, "workflows">;
 
 export interface AppWorkflows extends _ModuleWorkflows {
-  contentReview: typeof _wf_contentReview;
+	contentReview: typeof _wf_contentReview;
 }
 
 declare module "questpie" {
-  interface Registry {
-    workflows: AppWorkflows;
-  }
+	interface Registry {
+		workflows: AppWorkflows;
+	}
 }
 ```
 
@@ -850,12 +896,12 @@ declare module "questpie" {
 ```ts
 // packages/my-plugin/src/client/index.ts
 export function workflowClientModule(qa: AdminBuilder) {
-  return qa.views({
-    workflow: listView("workflow", {
-      kind: "list",
-      component: WorkflowBoardView,
-    }),
-  });
+	return qa.views({
+		workflow: listView("workflow", {
+			kind: "list",
+			component: WorkflowBoardView,
+		}),
+	});
 }
 ```
 
@@ -866,7 +912,7 @@ export function workflowClientModule(qa: AdminBuilder) {
 When multiple plugins are registered:
 
 ```ts
-plugins: [adminPlugin(), kanbanPlugin(), analyticsPlugin()]
+plugins: [adminPlugin(), kanbanPlugin(), analyticsPlugin()];
 ```
 
 Resolution:
@@ -889,22 +935,24 @@ import { view } from "@questpie/admin/server";
 
 // List view
 export default view("kanban", {
-  kind: "list",
-  configSchema: z.object({
-    groupBy: z.string(),
-    columnField: z.string().optional(),
-  }),
+	kind: "list",
+	configSchema: z.object({
+		groupBy: z.string(),
+		columnField: z.string().optional(),
+	}),
 });
 
 // Edit view
 export default view("wizard", {
-  kind: "edit",
-  configSchema: z.object({
-    steps: z.array(z.object({
-      title: z.string(),
-      fields: z.array(z.string()),
-    })),
-  }),
+	kind: "edit",
+	configSchema: z.object({
+		steps: z.array(
+			z.object({
+				title: z.string(),
+				fields: z.array(z.string()),
+			}),
+		),
+	}),
 });
 ```
 
@@ -916,17 +964,17 @@ and extended via the standard `declare module` augmentation pattern:
 ```ts
 // The admin plugin declares the base view kinds:
 declare module "questpie" {
-  interface ViewKindRegistry {
-    list: { configContext: ListViewConfigContext };
-    edit: { configContext: FormViewConfigContext };
-  }
+	interface ViewKindRegistry {
+		list: { configContext: ListViewConfigContext };
+		edit: { configContext: FormViewConfigContext };
+	}
 }
 
 // A third-party plugin can extend with new kinds:
 declare module "questpie" {
-  interface ViewKindRegistry {
-    dashboard: { configContext: DashboardViewConfigContext };
-  }
+	interface ViewKindRegistry {
+		dashboard: { configContext: DashboardViewConfigContext };
+	}
 }
 ```
 
@@ -935,6 +983,7 @@ Each key becomes a valid `kind` value. The associated config determines
 what the `v` proxy returns for views of that kind.
 
 The resolved `kind` union is:
+
 ```ts
 type ViewKind = keyof ViewKindRegistry;
 // → "list" | "edit"                       (with admin plugin only)
@@ -942,6 +991,7 @@ type ViewKind = keyof ViewKindRegistry;
 ```
 
 Codegen uses `kind` to:
+
 1. **Route views into the correct registry.** Views with `kind: "list"`
    go into `listViews`, views with `kind: "edit"` go into `editViews`.
    The mapping from kind → registry key is declared by the plugin that
@@ -956,44 +1006,45 @@ A plugin that introduces a new view kind declares:
 ```ts
 // analytics plugin
 export function analyticsPlugin(): CodegenPlugin {
-  return {
-    name: "questpie-analytics",
-    // Register the new kind → which module registry it maps to
-    viewKinds: {
-      dashboard: { registryKey: "dashboardViews" },
-    },
-    // The module registry that collects dashboard view names
-    moduleRegistries: {
-      dashboardViews: { registryKey: "dashboardViews" },
-    },
-    // Builder extension that uses the new kind
-    extensions: {
-      collection: {
-        dashboard: {
-          stateKey: "dashboardConfig",
-          configType: "(ctx: DashboardConfigContext<TState, $DASHBOARD_VIEW_NAMES>) => DashboardConfig",
-          isCallback: true,
-          callbackContextParams: ["v"],
-        },
-      },
-    },
-  };
+	return {
+		name: "questpie-analytics",
+		// Register the new kind → which module registry it maps to
+		viewKinds: {
+			dashboard: { registryKey: "dashboardViews" },
+		},
+		// The module registry that collects dashboard view names
+		moduleRegistries: {
+			dashboardViews: { registryKey: "dashboardViews" },
+		},
+		// Builder extension that uses the new kind
+		extensions: {
+			collection: {
+				dashboard: {
+					stateKey: "dashboardConfig",
+					configType:
+						"(ctx: DashboardConfigContext<TState, $DASHBOARD_VIEW_NAMES>) => DashboardConfig",
+					isCallback: true,
+					callbackContextParams: ["v"],
+				},
+			},
+		},
+	};
 }
 ```
 
 User code then:
+
 ```ts
 // views/revenue-chart.ts
 import { view } from "@questpie/analytics/server";
 
 export default view("revenueChart", {
-  kind: "dashboard",
-  configSchema: z.object({ period: z.enum(["day", "week", "month"]) }),
+	kind: "dashboard",
+	configSchema: z.object({ period: z.enum(["day", "week", "month"]) }),
 });
 
 // collections/orders.ts
-collection("orders")
-  .dashboard(({ v }) => v.revenueChart({ period: "week" }))
+collection("orders").dashboard(({ v }) => v.revenueChart({ period: "week" }));
 ```
 
 ### 11.3 Principle: All Discriminant Types Are Plugin-Extensible
@@ -1026,11 +1077,11 @@ Components define server-side references with typed props:
 import { component } from "@questpie/admin/server";
 
 export default component("rating", {
-  propsSchema: z.object({
-    value: z.number(),
-    max: z.number().default(5),
-    color: z.string().optional(),
-  }),
+	propsSchema: z.object({
+		value: z.number(),
+		max: z.number().default(5),
+		color: z.string().optional(),
+	}),
 });
 ```
 
@@ -1045,21 +1096,22 @@ props typed from the same schema.
 
 After this RFC, the framework core (`packages/questpie`) provides:
 
-| Primitive | Purpose |
-|-----------|---------|
-| `field<TConfig, TValue>()` | Factory for defining custom field types |
-| `collection(name)` | Collection builder |
-| `global(name)` | Global builder |
-| `fn({ handler })` | Function definition |
-| `route({ handler })` | Raw HTTP route definition |
-| `job({ handler })` | Background job definition |
-| `runtimeConfig({})` | Runtime config identity function |
-| `createApp(def, runtime)` | Internal — creates Questpie instance |
-| `CodegenPlugin` | Interface for plugin declarations |
-| `corePlugin()` | Built-in plugin for core categories |
-| Codegen engine | Discovery, template generation, type emission |
+| Primitive                  | Purpose                                       |
+| -------------------------- | --------------------------------------------- |
+| `field<TConfig, TValue>()` | Factory for defining custom field types       |
+| `collection(name)`         | Collection builder                            |
+| `global(name)`             | Global builder                                |
+| `fn({ handler })`          | Function definition                           |
+| `route({ handler })`       | Raw HTTP route definition                     |
+| `job({ handler })`         | Background job definition                     |
+| `runtimeConfig({})`        | Runtime config identity function              |
+| `createApp(def, runtime)`  | Internal — creates Questpie instance          |
+| `CodegenPlugin`            | Interface for plugin declarations             |
+| `corePlugin()`             | Built-in plugin for core categories           |
+| Codegen engine             | Discovery, template generation, type emission |
 
 The framework does **NOT** provide:
+
 - ~~`builtinFields`~~ → moved to starter module
 - ~~`adminCodegenPlugin`~~ → moved to `@questpie/admin`
 - ~~`CORE_CATEGORIES`~~ → replaced by `corePlugin().categories`

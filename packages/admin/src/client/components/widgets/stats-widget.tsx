@@ -7,7 +7,9 @@
 
 import type * as React from "react";
 import { useMemo } from "react";
+
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
 import type {
 	DateFilterConfig,
 	DateFilterPreset,
@@ -25,7 +27,12 @@ import { StatsWidgetSkeleton } from "./widget-skeletons";
 type StatsWidgetConfig = {
 	id: string;
 	collection: string;
+	title?: any;
+	description?: any;
 	label?: string;
+	cardVariant?: "default" | "compact" | "featured";
+	actions?: any[];
+	className?: string;
 	realtime?: boolean;
 	/** Static filter (evaluated at build time) */
 	filter?: Record<string, any>;
@@ -140,19 +147,10 @@ function getDateRange(preset: DateFilterPreset): { gte: Date; lte: Date } {
 	}
 }
 
-// Variant styles for the card border/background
-const variantStyles = {
-	default: "",
-	primary: "border-primary/30 bg-primary/5",
-	success: "border-success/30 bg-success/5",
-	warning: "border-warning/30 bg-warning/5",
-	danger: "border-destructive/30 bg-destructive/5",
-};
-
 // Variant styles for the value text
 const variantValueStyles = {
 	default: "",
-	primary: "text-primary",
+	primary: "text-foreground",
 	success: "text-success",
 	warning: "text-warning",
 	danger: "text-destructive",
@@ -217,7 +215,7 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 	const collectionQuery = useCollectionCount(
 		collection as any,
 		computedFilter ? { where: computedFilter } : undefined,
-		undefined,
+		{ enabled: !hasLoader },
 		{ realtime },
 	);
 
@@ -227,25 +225,36 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 		isLoading,
 		error,
 		refetch,
+		isFetching,
 	} = hasLoader ? serverQuery : collectionQuery;
 
 	const count = hasLoader
 		? ((rawData as { count: number } | undefined)?.count ?? 0)
 		: ((rawData as number | undefined) ?? 0);
 
-	const displayLabel = label ? resolveText(label) : formatLabel(collection);
+	const displayLabel = config.title
+		? resolveText(config.title)
+		: label
+			? resolveText(label)
+			: formatLabel(collection);
 
 	return (
 		<WidgetCard
 			title={displayLabel}
+			description={
+				config.description ? resolveText(config.description) : undefined
+			}
 			icon={Icon}
+			variant={config.cardVariant}
 			isLoading={isLoading}
+			isRefreshing={isFetching && !isLoading}
 			loadingSkeleton={<StatsWidgetSkeleton />}
 			error={
 				error instanceof Error ? error : error ? new Error(String(error)) : null
 			}
 			onRefresh={() => refetch()}
-			className={variantStyles[variant]}
+			actions={config.actions}
+			className={config.className}
 		>
 			<div className={cn("text-2xl font-bold", variantValueStyles[variant])}>
 				{count.toLocaleString()}

@@ -3,8 +3,6 @@ title: Modules
 description: Static modules that contribute entities — collections, jobs, sidebar items, dashboard widgets.
 ---
 
-# Modules
-
 Modules are **static objects** that contribute entities to your app. They're pre-built packages (like admin, audit) or custom bundles you create.
 
 ## Using Modules
@@ -18,6 +16,7 @@ export default [adminModule, auditModule] as const;
 ```
 
 Codegen merges module contributions with your project-level entities. The admin module contributes:
+
 - `user` collection (for authentication)
 - Administration sidebar section
 - Audit log entries (via audit module)
@@ -28,25 +27,54 @@ A module is a plain object of entities:
 
 ```ts
 const myModule = module({
-  name: "my-module",
+	name: "my-module",
 
-  // Entity contributions
-  collections: { /* ... */ },
-  globals: { /* ... */ },
-  jobs: { /* ... */ },
-  routes: { /* ... */ },
-  services: { /* ... */ },
-  fields: { /* ... */ },
+	// Entity contributions
+	collections: {
+		/* ... */
+	},
+	globals: {
+		/* ... */
+	},
+	jobs: {
+		/* ... */
+	},
+	routes: {
+		/* ... */
+	},
+	services: {
+		/* ... */
+	},
+	fields: {
+		/* ... */
+	},
 
-  // Admin contributions (when admin plugin is active)
-  sidebar: { /* ... */ },
-  dashboard: { /* ... */ },
+	// Admin contributions (when admin plugin is active)
+	sidebar: {
+		/* ... */
+	},
+	dashboard: {
+		/* ... */
+	},
 
-  // Infrastructure
-  auth: { /* ... */ },
-  migrations: [ /* ... */ ],
-  seeds: [ /* ... */ ],
-  messages: { en: { /* ... */ }, sk: { /* ... */ } },
+	// Infrastructure
+	auth: {
+		/* ... */
+	},
+	migrations: [
+		/* ... */
+	],
+	seeds: [
+		/* ... */
+	],
+	messages: {
+		en: {
+			/* ... */
+		},
+		sk: {
+			/* ... */
+		},
+	},
 });
 ```
 
@@ -65,25 +93,27 @@ Modules can depend on other modules:
 
 ```ts
 const auditModule = module({
-  name: "audit",
-  modules: [adminModule],  // Depends on admin
-  collections: {
-    auditLog: auditLogCollection,
-  },
-  sidebar: {
-    items: [{
-      sectionId: "administration",
-      type: "collection",
-      collection: "auditLog",
-    }],
-  },
+	name: "audit",
+	modules: [adminModule], // Depends on admin
+	collections: {
+		auditLog: auditLogCollection,
+	},
+	sidebar: {
+		items: [
+			{
+				sectionId: "administration",
+				type: "collection",
+				collection: "auditLog",
+			},
+		],
+	},
 });
 ```
 
 ## Built-in Modules
 
-| Module | Package | Provides |
-|---|---|---|
+| Module        | Package                  | Provides                              |
+| ------------- | ------------------------ | ------------------------------------- |
 | `adminModule` | `@questpie/admin/server` | User collection, admin UI, auth pages |
 | `auditModule` | `@questpie/admin/server` | Audit log collection, timeline widget |
 
@@ -93,20 +123,22 @@ const auditModule = module({
 import { module } from "questpie";
 
 export const notificationsModule = module({
-  name: "notifications",
-  collections: {
-    notifications: notificationsCollection,
-  },
-  jobs: {
-    sendPushNotification: pushJob,
-  },
-  sidebar: {
-    items: [{
-      sectionId: "operations",
-      type: "collection",
-      collection: "notifications",
-    }],
-  },
+	name: "notifications",
+	collections: {
+		notifications: notificationsCollection,
+	},
+	jobs: {
+		sendPushNotification: pushJob,
+	},
+	sidebar: {
+		items: [
+			{
+				sectionId: "operations",
+				type: "collection",
+				collection: "notifications",
+			},
+		],
+	},
 });
 ```
 

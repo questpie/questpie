@@ -6,6 +6,7 @@
 
 import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
 import type { GlobalSchema, Questpie } from "questpie";
+
 import type { RegisteredCMS, RegisteredGlobalNames } from "../builder/registry";
 import { selectClient, useAdminStore } from "../runtime";
 

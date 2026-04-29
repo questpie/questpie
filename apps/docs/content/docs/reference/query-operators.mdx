@@ -3,56 +3,54 @@ title: Query Operators
 description: All query operators per field type.
 ---
 
-# Query Operators
-
 ## Text Fields (`text`, `textarea`, `richText`, `email`, `url`)
 
-| Operator | Example | Description |
-|---|---|---|
-| equality | `{ title: "Hello" }` | Exact match |
-| `contains` | `{ title: { contains: "ell" } }` | Substring match |
-| `startsWith` | `{ title: { startsWith: "He" } }` | Prefix match |
-| `endsWith` | `{ title: { endsWith: "lo" } }` | Suffix match |
-| `in` | `{ title: { in: ["A", "B"] } }` | One of values |
+| Operator     | Example                           | Description     |
+| ------------ | --------------------------------- | --------------- |
+| equality     | `{ title: "Hello" }`              | Exact match     |
+| `contains`   | `{ title: { contains: "ell" } }`  | Substring match |
+| `startsWith` | `{ title: { startsWith: "He" } }` | Prefix match    |
+| `endsWith`   | `{ title: { endsWith: "lo" } }`   | Suffix match    |
+| `in`         | `{ title: { in: ["A", "B"] } }`   | One of values   |
 
 ## Number Fields
 
-| Operator | Example | Description |
-|---|---|---|
-| equality | `{ price: 1000 }` | Exact match |
-| `gt` | `{ price: { gt: 1000 } }` | Greater than |
-| `gte` | `{ price: { gte: 1000 } }` | Greater than or equal |
-| `lt` | `{ price: { lt: 5000 } }` | Less than |
-| `lte` | `{ price: { lte: 5000 } }` | Less than or equal |
-| `in` | `{ price: { in: [1000, 2000] } }` | One of values |
+| Operator | Example                           | Description           |
+| -------- | --------------------------------- | --------------------- |
+| equality | `{ price: 1000 }`                 | Exact match           |
+| `gt`     | `{ price: { gt: 1000 } }`         | Greater than          |
+| `gte`    | `{ price: { gte: 1000 } }`        | Greater than or equal |
+| `lt`     | `{ price: { lt: 5000 } }`         | Less than             |
+| `lte`    | `{ price: { lte: 5000 } }`        | Less than or equal    |
+| `in`     | `{ price: { in: [1000, 2000] } }` | One of values         |
 
 ## Boolean Fields
 
-| Operator | Example | Description |
-|---|---|---|
+| Operator | Example              | Description |
+| -------- | -------------------- | ----------- |
 | equality | `{ isActive: true }` | Exact match |
 
 ## Date / DateTime Fields
 
-| Operator | Example | Description |
-|---|---|---|
-| equality | `{ date: "2025-03-01" }` | Exact match |
-| `gt` | `{ date: { gt: "2025-01-01" } }` | After |
-| `gte` | `{ date: { gte: "2025-01-01" } }` | On or after |
-| `lt` | `{ date: { lt: "2025-12-31" } }` | Before |
-| `lte` | `{ date: { lte: "2025-12-31" } }` | On or before |
+| Operator | Example                           | Description  |
+| -------- | --------------------------------- | ------------ |
+| equality | `{ date: "2025-03-01" }`          | Exact match  |
+| `gt`     | `{ date: { gt: "2025-01-01" } }`  | After        |
+| `gte`    | `{ date: { gte: "2025-01-01" } }` | On or after  |
+| `lt`     | `{ date: { lt: "2025-12-31" } }`  | Before       |
+| `lte`    | `{ date: { lte: "2025-12-31" } }` | On or before |
 
 ## Select Fields
 
-| Operator | Example | Description |
-|---|---|---|
-| equality | `{ status: "published" }` | Exact match |
-| `in` | `{ status: { in: ["draft", "published"] } }` | One of values |
+| Operator | Example                                      | Description   |
+| -------- | -------------------------------------------- | ------------- |
+| equality | `{ status: "published" }`                    | Exact match   |
+| `in`     | `{ status: { in: ["draft", "published"] } }` | One of values |
 
 ## Relation Fields
 
-| Operator | Example | Description |
-|---|---|---|
+| Operator | Example                 | Description |
+| -------- | ----------------------- | ----------- |
 | equality | `{ author: "user-id" }` | Match by ID |
 
 ## Combining Operators

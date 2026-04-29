@@ -1,15 +1,20 @@
 import { Icon } from "@iconify/react";
+
 import { cn } from "../../lib/utils";
 
 function Spinner({ className, ...props }: { className?: string }) {
 	return (
-		<Icon
-			icon="ph:spinner"
-			role="status"
-			aria-label="Loading"
-			className={cn("qa-spinner size-4 animate-spin", className)}
-			{...props}
-		/>
+		<span
+			className={cn("qa-spinner inline-flex size-4 animate-spin", className)}
+		>
+			<Icon
+				icon="ph:spinner"
+				role="status"
+				aria-label="Loading"
+				className="size-full"
+				{...props}
+			/>
+		</span>
 	);
 }
 

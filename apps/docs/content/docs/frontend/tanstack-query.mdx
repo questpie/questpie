@@ -1,11 +1,9 @@
 ---
 title: TanStack Query
-description: React hooks for data fetching with TanStack Query integration.
+description: Query options for React data fetching with TanStack Query integration.
 ---
 
-# TanStack Query
-
-QuestPie integrates with TanStack Query for React-based data fetching with caching, refetching, and optimistic updates.
+QUESTPIE integrates with TanStack Query through typed query and mutation options that you pass to `useQuery()` and `useMutation()`.
 
 ## Setup
 
@@ -13,81 +11,91 @@ QuestPie integrates with TanStack Query for React-based data fetching with cachi
 bun add @questpie/tanstack-query @tanstack/react-query
 ```
 
-## Collection Hooks
+## Collection Queries
 
 ```tsx
-import { useCollectionList, useCollectionItem } from "@questpie/tanstack-query";
+import { useQuery } from "@tanstack/react-query";
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
+import { client } from "@/lib/client";
 import type { AppConfig } from "#questpie";
+
+const q = createQuestpieQueryOptions<AppConfig>(client);
 
 // List with filters
 function ServiceList() {
-  const { data, isLoading } = useCollectionList<AppConfig>("services", {
-    where: { isActive: true },
-    orderBy: { name: "asc" },
-    limit: 20,
-  });
+	const { data, isLoading } = useQuery(
+		q.collections.services.find({
+			where: { isActive: true },
+			orderBy: { name: "asc" },
+			limit: 20,
+		}),
+	);
 
-  if (isLoading) return <div>Loading...</div>;
+	if (isLoading) return <div>Loading...</div>;
 
-  return (
-    <ul>
-      {data?.docs.map((service) => (
-        <li key={service.id}>{service.name} — {service.price}¢</li>
-      ))}
-    </ul>
-  );
+	return (
+		<ul>
+			{data?.docs.map((service) => (
+				<li key={service.id}>
+					{service.name} — {service.price}¢
+				</li>
+			))}
+		</ul>
+	);
 }
 
 // Single item
 function ServiceDetail({ id }: { id: string }) {
-  const { data: service } = useCollectionItem<AppConfig>("services", {
-    where: { id },
-    with: { barbers: true },
-  });
+	const { data: service } = useQuery(
+		q.collections.services.findOne({
+			where: { id },
+			with: { barbers: true },
+		}),
+	);
 
-  if (!service) return null;
-  return <div>{service.name}</div>;
+	if (!service) return null;
+	return <div>{service.name}</div>;
 }
 ```
 
-## Mutation Hooks
+## Mutations
 
 ```tsx
-import { useCollectionCreate, useCollectionUpdate } from "@questpie/tanstack-query";
+import { useMutation } from "@tanstack/react-query";
 
 function CreateServiceForm() {
-  const create = useCollectionCreate<AppConfig>("services");
+	const create = useMutation(q.collections.services.create());
 
-  const handleSubmit = (data) => {
-    create.mutate({
-      name: data.name,
-      duration: data.duration,
-      price: data.price,
-      isActive: true,
-    });
-  };
+	const handleSubmit = (data) => {
+		create.mutate({
+			name: data.name,
+			duration: data.duration,
+			price: data.price,
+			isActive: true,
+		});
+	};
 
-  return <form onSubmit={handleSubmit}>...</form>;
+	return <form onSubmit={handleSubmit}>...</form>;
 }
 ```
 
-## Global Hooks
+## Globals
 
 ```tsx
-import { useGlobal, useGlobalUpdate } from "@questpie/tanstack-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 function SiteSettings() {
-  const { data: settings } = useGlobal<AppConfig>("siteSettings");
-  const update = useGlobalUpdate<AppConfig>("siteSettings");
+	const { data: settings } = useQuery(q.globals.siteSettings.get());
+	const update = useMutation(q.globals.siteSettings.update());
 
-  return (
-    <div>
-      <h1>{settings?.shopName}</h1>
-      <button onClick={() => update.mutate({ shopName: "New Name" })}>
-        Update
-      </button>
-    </div>
-  );
+	return (
+		<div>
+			<h1>{settings?.shopName}</h1>
+			<button onClick={() => update.mutate({ data: { shopName: "New Name" } })}>
+				Update
+			</button>
+		</div>
+	);
 }
 ```
 
@@ -123,5 +131,5 @@ function BookingForm() {
 ## Related Pages
 
 - [Querying](/docs/frontend/querying) — Query operators and pagination
-- [Realtime](/docs/frontend/realtime) — Live subscriptions
+- [Realtime Client](/docs/frontend/realtime) — Live subscriptions
 - [Type Inference](/docs/frontend/type-inference) — End-to-end types

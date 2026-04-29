@@ -1,31 +1,9 @@
-/**
- * useUpload Hook
- *
- * Handles file uploads to the app with progress tracking.
- * Uses the QuestpieClient's upload method which uses XMLHttpRequest for progress.
- *
- * @example
- * ```tsx
- * const { upload, uploadMany, isUploading, progress } = useUpload();
- *
- * // Single file upload
- * const asset = await upload(file);
- *
- * // Multiple files upload
- * const assets = await uploadMany(files, {
- *   onProgress: (p) => console.log(`${p}%`),
- * });
- * ```
- */
-
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
+
 import { selectClient, useAdminStore } from "../runtime";
 import { useUploadCollection } from "./use-upload-collection";
 
-/**
- * Upload error with additional context
- */
 class UploadError extends Error {
 	constructor(
 		message: string,
@@ -41,9 +19,6 @@ class UploadError extends Error {
 // Types
 // ============================================================================
 
-/**
- * Asset record returned from upload
- */
 export interface Asset {
 	id: string;
 	key: string;
@@ -60,69 +35,22 @@ export interface Asset {
 	updatedAt?: string;
 }
 
-/**
- * Options for upload operations
- */
 interface UploadOptions {
-	/**
-	 * Target collection for upload (must have .upload() enabled)
-	 */
 	to?: string;
-
-	/**
-	 * Progress callback (0-100)
-	 */
 	onProgress?: (progress: number) => void;
-
-	/**
-	 * Abort signal for cancellation
-	 */
 	signal?: AbortSignal;
 }
 
-/**
- * Options for uploadMany operation
- */
 interface UploadManyOptions extends UploadOptions {
-	/**
-	 * Progress callback receives overall progress (0-100)
-	 * and optionally individual file progress
-	 */
 	onProgress?: (progress: number, fileIndex?: number) => void;
 }
 
-/**
- * Return type for useUpload hook
- */
 interface UseUploadReturn {
-	/**
-	 * Upload a single file
-	 */
 	upload: (file: File, options?: UploadOptions) => Promise<Asset>;
-
-	/**
-	 * Upload multiple files sequentially
-	 */
 	uploadMany: (files: File[], options?: UploadManyOptions) => Promise<Asset[]>;
-
-	/**
-	 * Whether an upload is currently in progress
-	 */
 	isUploading: boolean;
-
-	/**
-	 * Current upload progress (0-100)
-	 */
 	progress: number;
-
-	/**
-	 * Current error, if any
-	 */
 	error: Error | null;
-
-	/**
-	 * Reset state (clear error, progress)
-	 */
 	reset: () => void;
 }
 
@@ -130,12 +58,6 @@ interface UseUploadReturn {
 // Hook Implementation
 // ============================================================================
 
-/**
- * Hook for uploading files to the app
- *
- * Uses the QuestpieClient's built-in upload method which provides
- * progress tracking via XMLHttpRequest.
- */
 export function useUpload(): UseUploadReturn {
 	const client = useAdminStore(selectClient);
 	const queryClient = useQueryClient();
@@ -144,9 +66,7 @@ export function useUpload(): UseUploadReturn {
 		collections: uploadCollections,
 	} = useUploadCollection();
 
-	const [isUploading, setIsUploading] = useState(false);
 	const [progress, setProgress] = useState(0);
-	const [error, setError] = useState<Error | null>(null);
 
 	const resolveTargetCollection = useCallback(
 		(to?: string): string | undefined => {
@@ -172,149 +92,107 @@ export function useUpload(): UseUploadReturn {
 		return "Upload collection is not configured.";
 	}, [uploadCollections]);
 
-	/**
-	 * Upload a single file
-	 */
-	const upload = useCallback(
-		async (file: File, options: UploadOptions = {}): Promise<Asset> => {
-			const { to, onProgress, signal } = options;
+	const uploadMutation = useMutation({
+		mutationFn: async ({
+			file,
+			options,
+		}: {
+			file: File;
+			options?: UploadOptions;
+		}) => {
+			const { to, onProgress, signal } = options ?? {};
 			const targetCollection = resolveTargetCollection(to);
 
 			if (!targetCollection) {
-				const missingCollectionError = new Error(getMissingCollectionMessage());
-				setError(missingCollectionError);
-				throw missingCollectionError;
+				throw new Error(getMissingCollectionMessage());
 			}
 
-			setIsUploading(true);
+			const collectionApi = (client.collections as any)[targetCollection];
+
+			if (!collectionApi?.upload) {
+				throw new UploadError(
+					`Collection "${targetCollection}" does not support uploads. Make sure .upload() is enabled on the collection.`,
+				);
+			}
+
 			setProgress(0);
-			setError(null);
 
-			try {
-				// Get the collection API from client
-				const collectionApi = (client.collections as any)[targetCollection];
+			const result = await collectionApi.upload(file, {
+				signal,
+				onProgress: (p: number) => {
+					setProgress(p);
+					onProgress?.(p);
+				},
+			});
 
-				if (!collectionApi?.upload) {
-					throw new Error(
-						`Collection "${targetCollection}" does not support uploads. Make sure .upload() is enabled on the collection.`,
-					);
-				}
-
-				const result = await collectionApi.upload(file, {
-					signal,
-					onProgress: (p: number) => {
-						setProgress(p);
-						onProgress?.(p);
-					},
-				});
-
-				// Invalidate collection queries to refresh lists
-				queryClient.invalidateQueries({
-					queryKey: ["questpie", "collections", targetCollection],
-				});
-
-				return result as Asset;
-			} catch (err) {
-				const uploadError =
-					err instanceof UploadError
-						? err
-						: new UploadError(
-								err instanceof Error ? err.message : "Upload failed",
-								undefined,
-								err,
-							);
-				setError(uploadError);
-				throw uploadError;
-			} finally {
-				setIsUploading(false);
-			}
+			return { asset: result as Asset, targetCollection };
 		},
-		[client, queryClient, resolveTargetCollection, getMissingCollectionMessage],
-	);
+		onSuccess: ({ targetCollection }) => {
+			queryClient.invalidateQueries({
+				queryKey: ["questpie", "collections", targetCollection],
+			});
+		},
+	});
 
-	/**
-	 * Upload multiple files sequentially
-	 */
-	const uploadMany = useCallback(
-		async (
-			files: File[],
-			options: UploadManyOptions = {},
-		): Promise<Asset[]> => {
-			const { to, onProgress, signal } = options;
+	const uploadManyMutation = useMutation({
+		mutationFn: async ({
+			files,
+			options,
+		}: {
+			files: File[];
+			options?: UploadManyOptions;
+		}) => {
+			const { to, onProgress, signal } = options ?? {};
 			const targetCollection = resolveTargetCollection(to);
 
 			if (!targetCollection) {
-				const missingCollectionError = new Error(getMissingCollectionMessage());
-				setError(missingCollectionError);
-				throw missingCollectionError;
+				throw new Error(getMissingCollectionMessage());
 			}
 
 			if (files.length === 0) {
-				return [];
+				return { assets: [] as Asset[], targetCollection };
 			}
 
-			setIsUploading(true);
+			const collectionApi = (client.collections as any)[targetCollection];
+
+			if (!collectionApi?.uploadMany) {
+				throw new UploadError(
+					`Collection "${targetCollection}" does not support uploads. Make sure .upload() is enabled on the collection.`,
+				);
+			}
+
 			setProgress(0);
-			setError(null);
 
-			try {
-				// Get the collection API from client
-				const collectionApi = (client.collections as any)[targetCollection];
+			const results = await collectionApi.uploadMany(files, {
+				signal,
+				onProgress: (p: number, fileIndex?: number) => {
+					setProgress(p);
+					onProgress?.(p, fileIndex);
+				},
+			});
 
-				if (!collectionApi?.uploadMany) {
-					throw new Error(
-						`Collection "${targetCollection}" does not support uploads. Make sure .upload() is enabled on the collection.`,
-					);
-				}
-
-				const results = await collectionApi.uploadMany(files, {
-					signal,
-					onProgress: (p: number, fileIndex?: number) => {
-						setProgress(p);
-						onProgress?.(p, fileIndex);
-					},
-				});
-
-				// Invalidate collection queries
-				queryClient.invalidateQueries({
-					queryKey: ["questpie", "collections", targetCollection],
-				});
-
-				setProgress(100);
-				return results as Asset[];
-			} catch (err) {
-				const uploadError =
-					err instanceof UploadError
-						? err
-						: new UploadError(
-								err instanceof Error ? err.message : "Upload failed",
-								undefined,
-								err,
-							);
-				setError(uploadError);
-				throw uploadError;
-			} finally {
-				setIsUploading(false);
-			}
+			setProgress(100);
+			return { assets: results as Asset[], targetCollection };
 		},
-		[client, queryClient, resolveTargetCollection, getMissingCollectionMessage],
-	);
-
-	/**
-	 * Reset hook state
-	 */
-	const reset = useCallback(() => {
-		setIsUploading(false);
-		setProgress(0);
-		setError(null);
-	}, []);
+		onSuccess: ({ targetCollection }) => {
+			queryClient.invalidateQueries({
+				queryKey: ["questpie", "collections", targetCollection],
+			});
+		},
+	});
 
 	return {
-		upload,
-		uploadMany,
-		isUploading,
+		upload: (file, options) =>
+			uploadMutation.mutateAsync({ file, options }).then((r) => r.asset),
+		uploadMany: (files, options) =>
+			uploadManyMutation.mutateAsync({ files, options }).then((r) => r.assets),
+		isUploading: uploadMutation.isPending || uploadManyMutation.isPending,
 		progress,
-		error,
-		reset,
+		error: uploadMutation.error || uploadManyMutation.error || null,
+		reset: () => {
+			uploadMutation.reset();
+			uploadManyMutation.reset();
+			setProgress(0);
+		},
 	};
 }

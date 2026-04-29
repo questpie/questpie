@@ -6,7 +6,9 @@
  */
 
 import { Icon } from "@iconify/react";
+
 import { RichTextRenderer, type TipTapDoc } from "@questpie/admin/client";
+
 import { useTranslation } from "../../../lib/providers/locale-provider";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -32,18 +34,18 @@ export function TeamRenderer({ values, data }: BlockProps<"team">) {
 	}[values.columns || "3"];
 
 	return (
-		<section className="py-20 px-6 bg-muted/30">
+		<section className="bg-muted/30 px-6 py-20">
 			<div className="container">
 				{/* Header */}
 				{(values.title || values.subtitle) && (
-					<div className="text-center mb-16 max-w-2xl mx-auto">
+					<div className="mx-auto mb-16 max-w-2xl text-center">
 						{values.title && (
-							<h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">
+							<h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
 								{values.title}
 							</h2>
 						)}
 						{values.subtitle && (
-							<p className="text-lg text-muted-foreground">{values.subtitle}</p>
+							<p className="text-muted-foreground text-lg">{values.subtitle}</p>
 						)}
 					</div>
 				)}
@@ -54,13 +56,13 @@ export function TeamRenderer({ values, data }: BlockProps<"team">) {
 						<a
 							key={barber.id}
 							href={`/barbers/${barber.slug}`}
-							className="group block animate-fade-in-up"
+							className="group animate-fade-in-up block"
 							style={{ animationDelay: `${i * 100}ms` }}
 						>
 							{/* Photo */}
 							<div
 								className={cn(
-									"bg-muted mb-4 overflow-hidden relative",
+									"bg-muted relative mb-4 overflow-hidden",
 									showBio ? "aspect-square rounded-lg" : "aspect-[3/4]",
 								)}
 							>
@@ -68,21 +70,24 @@ export function TeamRenderer({ values, data }: BlockProps<"team">) {
 									<img
 										src={barber.avatar.url}
 										alt={barber.name}
-										className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+										className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
 									/>
 								) : (
-									<div className="w-full h-full flex items-center justify-center bg-muted">
-										<Icon icon="ph:user" className="size-24 text-muted-foreground/30" />
+									<div className="bg-muted flex h-full w-full items-center justify-center">
+										<Icon
+											icon="ph:user"
+											className="text-muted-foreground/30 size-24"
+										/>
 									</div>
 								)}
 
 								{/* Overlay on hover */}
-								<div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+								<div className="absolute inset-0 bg-black/0 transition-colors duration-300 group-hover:bg-black/20" />
 							</div>
 
 							{/* Info */}
 							<div className="space-y-2">
-								<h3 className="text-xl font-semibold group-hover:text-highlight transition-colors">
+								<h3 className="group-hover:text-highlight text-xl font-semibold transition-colors">
 									{barber.name}
 								</h3>
 
@@ -108,7 +113,7 @@ export function TeamRenderer({ values, data }: BlockProps<"team">) {
 												className={cn(
 													"text-sm",
 													showBio
-														? "px-3 py-1 bg-muted rounded-full"
+														? "bg-muted rounded-full px-3 py-1"
 														: "text-muted-foreground",
 												)}
 											>
@@ -125,20 +130,23 @@ export function TeamRenderer({ values, data }: BlockProps<"team">) {
 				</div>
 
 				{barbers.length === 0 && (
-					<p className="text-center text-muted-foreground py-12">
+					<p className="text-muted-foreground py-12 text-center">
 						{t("blocks.team.empty")}
 					</p>
 				)}
 
 				{/* View All Link */}
 				{barbers.length > 0 && (
-					<div className="text-center mt-12">
+					<div className="mt-12 text-center">
 						<a
 							href="/barbers"
-							className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-highlight transition-colors group"
+							className="text-foreground hover:text-highlight group inline-flex items-center gap-2 text-sm font-medium transition-colors"
 						>
 							{t("blocks.team.viewAll")}
-							<Icon icon="ph:arrow-right" className="size-4 transition-transform group-hover:translate-x-1" />
+							<Icon
+								icon="ph:arrow-right"
+								className="size-4 transition-transform group-hover:translate-x-1"
+							/>
 						</a>
 					</div>
 				)}

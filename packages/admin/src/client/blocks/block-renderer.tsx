@@ -7,7 +7,7 @@
  * @example
  * ```tsx
  * import { BlockRenderer } from "@questpie/admin/client";
- * import { blocks } from "~/admin/blocks";
+ * import { blocks } from "@/admin/blocks";
  *
  * function PageContent({ page }) {
  *   return (
@@ -21,6 +21,7 @@
  */
 
 import type * as React from "react";
+
 import { BlockScopeProvider } from "../preview/block-scope-context.js";
 import type { BlockContent, BlockNode } from "./types";
 
@@ -31,7 +32,6 @@ const EMPTY_DATA: Record<string, unknown> = {};
  * Block renderer function type.
  * Consumers provide their own renderers mapped by block type.
  */
-// biome-ignore lint/suspicious/noExplicitAny: Renderers are a dispatch table — contravariance on typed block props would reject all concrete renderers
 type BlockRendererFn = (props: any) => React.ReactNode;
 
 /**
@@ -72,7 +72,8 @@ export function BlockRenderer({
 	 * Recursively render a block node.
 	 */
 	function renderBlock(node: BlockNode): React.ReactNode {
-		const renderFn = renderers[node.type];
+		const renderFn =
+			renderers[node.type] ?? renderers[kebabToCamelCase(node.type)];
 
 		if (!renderFn) {
 			if (process.env.NODE_ENV !== "production") {
@@ -149,4 +150,8 @@ export function BlockRenderer({
 	}
 
 	return <div className={className}>{content._tree.map(renderBlock)}</div>;
+}
+
+function kebabToCamelCase(value: string): string {
+	return value.replace(/-([a-z])/g, (_, char: string) => char.toUpperCase());
 }

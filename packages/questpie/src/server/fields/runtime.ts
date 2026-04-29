@@ -1,6 +1,6 @@
 import type { RequestContext } from "#questpie/server/config/context.js";
-import type { Field } from "#questpie/server/fields/field-class.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
 import type {
 	FieldHookContext,
 	FieldHooks,

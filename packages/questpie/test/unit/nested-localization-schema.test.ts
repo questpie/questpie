@@ -1,10 +1,11 @@
 import { describe, expect, it } from "bun:test";
+
 import {
 	extractNestedLocalizationSchema,
 	extractNestedLocalizationSchemas,
 } from "../../src/server/collection/crud/shared/field-extraction.js";
 import { splitByNestedSchema } from "../../src/server/collection/crud/shared/nested-i18n-split.js";
-import { collection } from "../../src/server/index.js";
+import { collection } from "../../src/exports/index.js";
 
 /**
  * Unit tests for nested localization schema extraction and splitting.
@@ -61,10 +62,12 @@ describe("extractNestedLocalizationSchema", () => {
 
 	it("extracts schema for array with localized item fields", () => {
 		const col = collection("test").fields(({ f }) => ({
-			links: f.object({
-				platform: f.text().required(),
-				description: f.text().localized(),
-			}).array(),
+			links: f
+				.object({
+					platform: f.text().required(),
+					description: f.text().localized(),
+				})
+				.array(),
 		}));
 
 		const fieldDef = col.state.fieldDefinitions!.links;
@@ -76,10 +79,12 @@ describe("extractNestedLocalizationSchema", () => {
 
 	it("returns null for array without localized fields", () => {
 		const col = collection("test").fields(({ f }) => ({
-			links: f.object({
-				platform: f.text().required(),
-				url: f.text(),
-			}).array(),
+			links: f
+				.object({
+					platform: f.text().required(),
+					url: f.text(),
+				})
+				.array(),
 		}));
 
 		const fieldDef = col.state.fieldDefinitions!.links;
@@ -95,10 +100,12 @@ describe("extractNestedLocalizationSchema", () => {
 					theme: f.text(),
 					greeting: f.text().localized(),
 				}),
-				items: f.object({
-					name: f.text(),
-					label: f.text().localized(),
-				}).array(),
+				items: f
+					.object({
+						name: f.text(),
+						label: f.text().localized(),
+					})
+					.array(),
 			}),
 		}));
 
@@ -121,10 +128,12 @@ describe("extractNestedLocalizationSchemas", () => {
 				views: f.number(),
 				lastNote: f.text().localized(),
 			}),
-			tags: f.object({
-				name: f.text(),
-				description: f.text().localized(),
-			}).array(),
+			tags: f
+				.object({
+					name: f.text(),
+					description: f.text().localized(),
+				})
+				.array(),
 		}));
 
 		const schemas = extractNestedLocalizationSchemas(

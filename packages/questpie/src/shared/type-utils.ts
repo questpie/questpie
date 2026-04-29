@@ -37,10 +37,10 @@ export type DateInput = (Date | string) & {
 	readonly [__dateInputBrand]?: never;
 };
 
-import type { Collection } from "#questpie/server/collection/builder/collection.js";
 import type { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
-import type { Global } from "#questpie/server/global/builder/global.js";
+import type { Collection } from "#questpie/server/collection/builder/collection.js";
 import type { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
+import type { Global } from "#questpie/server/global/builder/global.js";
 
 // ============================================================================
 // Performance Type Utilities
@@ -230,17 +230,17 @@ export type CollectionRelations<T> =
 				? Relations
 				: CollectionState<T> extends {
 							fieldDefinitions: infer TFieldDefs;
-						}
+					  }
 					? InferRelationsFromFieldDefs<TFieldDefs>
 					: Record<string, RelationConfig>
 			: CollectionState<T> extends {
 						fieldDefinitions: infer TFieldDefs;
-					}
+				  }
 				? InferRelationsFromFieldDefs<TFieldDefs>
 				: Record<string, RelationConfig>
 		: CollectionState<T> extends {
 					fieldDefinitions: infer TFieldDefs;
-				}
+			  }
 			? InferRelationsFromFieldDefs<TFieldDefs>
 			: Record<string, RelationConfig>;
 
@@ -317,17 +317,17 @@ export type GlobalRelations<T> =
 				? Relations
 				: GlobalState<T> extends {
 							fieldDefinitions: infer TFieldDefs;
-						}
+					  }
 					? InferRelationsFromFieldDefs<TFieldDefs>
 					: Record<string, RelationConfig>
 			: GlobalState<T> extends {
 						fieldDefinitions: infer TFieldDefs;
-					}
+				  }
 				? InferRelationsFromFieldDefs<TFieldDefs>
 				: Record<string, RelationConfig>
 		: GlobalState<T> extends {
 					fieldDefinitions: infer TFieldDefs;
-				}
+			  }
 			? InferRelationsFromFieldDefs<TFieldDefs>
 			: Record<string, RelationConfig>;
 
@@ -342,11 +342,12 @@ export type GlobalRelations<T> =
 export type GetCollection<
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
 	Name extends keyof TCollections,
-> = TCollections[Name] extends Collection<infer TState>
-	? Collection<TState>
-	: TCollections[Name] extends CollectionBuilder<infer TState>
+> =
+	TCollections[Name] extends Collection<infer TState>
 		? Collection<TState>
-		: never;
+		: TCollections[Name] extends CollectionBuilder<infer TState>
+			? Collection<TState>
+			: never;
 
 // ============================================================================
 // Global Name Extraction & Lookup
@@ -359,11 +360,12 @@ export type GetCollection<
 export type GetGlobal<
 	TGlobals extends Record<string, AnyGlobalOrBuilder>,
 	Name extends keyof TGlobals,
-> = TGlobals[Name] extends Global<infer TState>
-	? Global<TState>
-	: TGlobals[Name] extends GlobalBuilder<infer TState>
+> =
+	TGlobals[Name] extends Global<infer TState>
 		? Global<TState>
-		: never;
+		: TGlobals[Name] extends GlobalBuilder<infer TState>
+			? Global<TState>
+			: never;
 
 // ============================================================================
 // Relation Resolution
@@ -462,7 +464,7 @@ export type ResolveRelations<
 		: TRelations[K] extends {
 					type: "one";
 					collection: infer C;
-				}
+			  }
 			? ResolveCollectionSelect<TCollections, C>
 			: never;
 };
@@ -480,7 +482,7 @@ export type ResolveRelationsDeep<
 		: TRelations[K] extends {
 					type: "one";
 					collection: infer C;
-				}
+			  }
 			? ResolveCollectionRelation<TCollections, C, Depth>
 			: never;
 };

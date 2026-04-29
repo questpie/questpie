@@ -1,9 +1,7 @@
 ---
 title: Building a Plugin
-description: Create a QuestPie codegen plugin — categories, extensions, module registries.
+description: Create a QUESTPIE codegen plugin — categories, extensions, module registries.
 ---
-
-# Building a Plugin
 
 A plugin tells codegen what to discover and what types to generate. It's the highest level of extension.
 
@@ -13,39 +11,45 @@ A plugin tells codegen what to discover and what types to generate. It's the hig
 import type { CodegenPlugin } from "questpie";
 
 export function myPlugin(): CodegenPlugin {
-  return {
-    name: "my-plugin",
+	return {
+		name: "my-plugin",
+		targets: {
+			server: {
+				root: ".",
+				outputFile: "index.ts",
 
-    // File categories to discover
-    categories: {
-      widgets: {
-        pattern: "widgets/**/*.ts",
-        cardinality: "map",
-        recursive: true,
-        featureLayout: true,
-        mergeStrategy: "record",
-        moduleContributionKey: "widgets",
-        registryKey: "widgets",
-      },
-    },
+				// File categories to discover
+				categories: {
+					widgets: {
+						dirs: ["widgets"],
+						prefix: "widg",
+						recursive: true,
+						emit: "record",
+						registryKey: "widgets",
+						moduleContributionKey: "widgets",
+					},
+				},
 
-    // Builder extensions
-    extensions: {
-      collection: {
-        methods: {
-          widget: { type: "WidgetConfig" },
-        },
-      },
-    },
+				// Single-file or directory patterns
+				discover: {
+					widgetConfig: {
+						pattern: "config/widgets.ts",
+						configKey: "widgets",
+					},
+				},
 
-    // Single-file factories
-    singletons: {
-      widgetConfig: {
-        pattern: "widget-config.ts",
-        factory: "widgetConfig",
-      },
-    },
-  };
+				// Builder and singleton factories
+				registries: {
+					collectionExtensions: {
+						widget: { stateKey: "widget" },
+					},
+					singletonFactories: {
+						widgetConfig: { configType: "WidgetConfig" },
+					},
+				},
+			},
+		},
+	};
 }
 ```
 
@@ -57,8 +61,8 @@ Register in runtime config:
 import { myPlugin } from "my-plugin-package";
 
 export default runtimeConfig({
-  plugins: [myPlugin()],
-  // ...
+	plugins: [myPlugin()],
+	// ...
 });
 ```
 
@@ -71,18 +75,18 @@ export default runtimeConfig({
 
 ## Real-World Example: Admin Plugin
 
-The `adminPlugin()` from `@questpie/admin/plugin` is a production example:
+The admin module contributes an admin codegen plugin automatically:
 
 ```ts
-// What adminPlugin() declares:
+// A simplified view of what the admin plugin declares:
 categories: {
-  blocks: { pattern: "blocks/**/*.ts", cardinality: "map" },
+  blocks: { dirs: ["blocks"], prefix: "bloc", registryKey: "blocks" },
 }
-singletons: {
-  sidebar: { pattern: "sidebar.ts", factory: "sidebar" },
-  dashboard: { pattern: "dashboard.ts", factory: "dashboard" },
-  branding: { pattern: "branding.ts", factory: "branding" },
-  adminLocale: { pattern: "admin-locale.ts", factory: "adminLocale" },
+discover: {
+  adminConfig: {
+    pattern: "config/admin.ts",
+    configKey: "admin",
+  },
 }
 ```
 

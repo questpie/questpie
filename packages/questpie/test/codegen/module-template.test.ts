@@ -17,6 +17,7 @@
  * 13. keyFromProperty categories skip named type interfaces
  */
 import { describe, expect, it } from "bun:test";
+
 import { generateModuleTemplate } from "../../src/cli/codegen/module-template.js";
 import type {
 	CategoryDeclaration,
@@ -294,11 +295,15 @@ describe("generateModuleTemplate — routes with slash-separated keys", () => {
 
 	it("emits flat type interface with camelCase slash keys", () => {
 		expect(output).toContain("export interface TestRoutes {");
-		expect(output).toContain('"admin/stats": typeof _route_admin_stats;');
 		expect(output).toContain(
-			'"admin/users/export": typeof _route_admin_users_export;',
+			'"admin/stats": RouteWithParams<typeof _route_admin_stats, RouteParamsFromKey<"admin/stats">>;',
 		);
-		expect(output).toContain("getConfig: typeof _route_getConfig;");
+		expect(output).toContain(
+			'"admin/users/export": RouteWithParams<typeof _route_admin_users_export, RouteParamsFromKey<"admin/users/export">>;',
+		);
+		expect(output).toContain(
+			'getConfig: RouteWithParams<typeof _route_getConfig, RouteParamsFromKey<"getConfig">>;',
+		);
 	});
 });
 
@@ -331,7 +336,9 @@ describe("generateModuleTemplate — bundle routes", () => {
 	it("includes all entries in type (intersection for bundles)", () => {
 		// When bundles are present, type is emitted as intersection, not interface
 		expect(output).toContain("export type TestRoutes =");
-		expect(output).toContain("getConfig: typeof _route_getConfig");
+		expect(output).toContain(
+			'getConfig: RouteWithParams<typeof _route_getConfig, RouteParamsFromKey<"getConfig">>',
+		);
 		expect(output).toContain("typeof _route_setup");
 	});
 });
@@ -453,11 +460,11 @@ describe("generateModuleTemplate — singles", () => {
 	});
 });
 
-describe("generateModuleTemplate — singles with moduleEmit: array", () => {
+describe("generateModuleTemplate — plugin single", () => {
 	const result = emptyResult();
 	result.singles.set(
-		"sidebar",
-		makeFile("sidebar", { varName: "_sidebar", importPath: "../sidebar" }),
+		"plugin",
+		makeFile("plugin", { varName: "_plugin", importPath: "../plugin" }),
 	);
 
 	const { code: output } = generateModuleTemplate({
@@ -466,8 +473,36 @@ describe("generateModuleTemplate — singles with moduleEmit: array", () => {
 		categoryMeta: new Map(),
 	});
 
-	it("wraps moduleEmit: array singles in array", () => {
-		expect(output).toContain("sidebar: [_sidebar],");
+	it("emits plugin import", () => {
+		expect(output).toContain('import _plugin from "../plugin";');
+	});
+
+	it("emits plugin as direct property in module object", () => {
+		expect(output).toContain("plugin: _plugin,");
+	});
+});
+
+describe("generateModuleTemplate — config bucket singles", () => {
+	const result = emptyResult();
+	result.singles.set(
+		"adminConfig",
+		makeFile("adminConfig", {
+			varName: "_adminConfig",
+			importPath: "../config/admin",
+		}),
+	);
+	// Add configKey to the discovered file
+	(result.singles.get("adminConfig") as any).configKey = "admin";
+
+	const { code: output } = generateModuleTemplate({
+		moduleName: "questpie-test",
+		discovered: result,
+		categoryMeta: new Map(),
+	});
+
+	it("emits config bucket with configKey singles", () => {
+		expect(output).toContain("config: {");
+		expect(output).toContain("admin: _adminConfig,");
 	});
 });
 
@@ -596,7 +631,7 @@ describe("generateModuleTemplate — extra module properties", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// keyFromProperty — skips named type interface
+// keyFromProperty — runtime-keyed type alias
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateModuleTemplate — keyFromProperty", () => {
@@ -627,8 +662,11 @@ describe("generateModuleTemplate — keyFromProperty", () => {
 		expect(output).toContain("[_view_table.name]: _view_table,");
 	});
 
-	it("does not emit named type interface for keyFromProperty categories", () => {
-		expect(output).not.toContain("export interface AdminViews");
+	it("emits a runtime-keyed type alias for keyFromProperty categories", () => {
+		expect(output).toContain("export type AdminViews =");
+		expect(output).toContain(
+			"{ [K in typeof _view_table.name]: typeof _view_table };",
+		);
 	});
 
 	it("does NOT emit Registry augmentation (handled by root template)", () => {

@@ -1,6 +1,8 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+
 import { createFileRoute } from "@tanstack/react-router";
+
 import { siteConfig } from "@/lib/seo";
 
 const execAsync = promisify(exec);

@@ -1,0 +1,28 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__order",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "order",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-04-24T22:13:28.820Z",
+      "migrationId": "boldYellowPhoenix20260424T221327"
+    }
+  ],
+  "metadata": {
+    "migrationId": "boldYellowPhoenix20260424T221327",
+    "timestamp": "2026-04-24T22:13:28.963Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

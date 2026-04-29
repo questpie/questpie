@@ -6,34 +6,124 @@
  */
 
 import { Skeleton } from "../../components/ui/skeleton";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "../../components/ui/table";
+import { AdminViewHeader, AdminViewLayout } from "../layout/admin-view-layout";
 
-function TableSkeletonRow({ isLast = false }: { isLast?: boolean }) {
+const TABLE_SKELETON_COLUMNS = [
+	{ width: 40, header: "mx-auto h-4 w-4", cells: ["mx-auto h-4 w-4"] },
+	{
+		width: 360,
+		header: "h-4 w-28",
+		cells: ["h-4 w-52", "h-4 w-44", "h-4 w-56", "h-4 w-40"],
+	},
+	{
+		width: 160,
+		header: "h-4 w-20",
+		cells: ["h-4 w-24", "h-4 w-20", "h-4 w-28", "h-4 w-16"],
+	},
+	{
+		width: 140,
+		header: "h-4 w-24",
+		cells: ["h-4 w-20", "h-4 w-24", "h-4 w-16", "h-4 w-28"],
+	},
+	{
+		width: 96,
+		header: "ml-auto h-4 w-16",
+		cells: ["ml-auto h-4 w-14", "ml-auto h-4 w-16", "ml-auto h-4 w-12"],
+	},
+] as const;
+
+function getColumnSizeStyle(width: number) {
+	return { width, minWidth: width, maxWidth: width };
+}
+
+function getSkeletonWidth(widths: readonly string[], rowIndex: number): string {
+	return widths[rowIndex % widths.length] ?? widths[0] ?? "h-4 w-20";
+}
+
+function TableSkeletonRows({ rows = 8 }: { rows?: number }) {
 	return (
-		<div className={`flex items-center gap-4 p-4 ${isLast ? "" : "border-b"}`}>
-			<Skeleton className="h-4 w-4" />
-			<Skeleton className="h-4 w-48" />
-			<Skeleton className="h-4 w-20" />
-			<Skeleton className="h-4 w-24" />
-			<Skeleton className="h-4 w-16 ml-auto" />
-		</div>
+		<>
+			{Array.from({ length: rows }, (_, rowIndex) => (
+				<TableRow key={rowIndex} className="hover:bg-transparent">
+					{TABLE_SKELETON_COLUMNS.map((column, columnIndex) => {
+						const stickyLeft =
+							columnIndex === 0 ? 0 : columnIndex === 1 ? 40 : undefined;
+
+						return (
+							<TableCell
+								key={columnIndex}
+								stickyLeft={stickyLeft}
+								showStickyBorder={columnIndex === 1}
+								className={columnIndex === 0 ? "w-9 min-w-9 px-1.5" : ""}
+								style={getColumnSizeStyle(column.width)}
+							>
+								<Skeleton
+									variant="text"
+									className={getSkeletonWidth(column.cells, rowIndex)}
+								/>
+							</TableCell>
+						);
+					})}
+				</TableRow>
+			))}
+		</>
+	);
+}
+
+function TableSkeletonShell() {
+	const width = TABLE_SKELETON_COLUMNS.reduce(
+		(total, column) => total + column.width,
+		0,
+	);
+
+	return (
+		<Table className="table-fixed" style={{ width }}>
+			<colgroup>
+				{TABLE_SKELETON_COLUMNS.map((column, index) => (
+					<col key={index} style={{ width: column.width }} />
+				))}
+			</colgroup>
+			<TableHeader>
+				<TableRow className="hover:bg-transparent">
+					{TABLE_SKELETON_COLUMNS.map((column, index) => {
+						const stickyLeft = index === 0 ? 0 : index === 1 ? 40 : undefined;
+
+						return (
+							<TableHead
+								key={index}
+								stickyLeft={stickyLeft}
+								showStickyBorder={index === 1}
+								className={index === 0 ? "w-9 min-w-9 px-1.5" : ""}
+								style={getColumnSizeStyle(column.width)}
+							>
+								<Skeleton variant="text" className={column.header} />
+							</TableHead>
+						);
+					})}
+				</TableRow>
+			</TableHeader>
+			<TableBody>
+				<TableSkeletonRows />
+			</TableBody>
+		</Table>
 	);
 }
 
 function FormFieldSkeleton() {
 	return (
 		<div className="space-y-2">
-			<Skeleton className="h-4 w-24" />
+			<Skeleton variant="text" className="h-4 w-24" />
 			<Skeleton className="h-10 w-full" />
 		</div>
 	);
-}
-
-function ToolbarIconSkeleton() {
-	return <Skeleton className="h-8 w-8" />;
-}
-
-function ContentLineSkeleton({ width }: { width: string }) {
-	return <Skeleton className={`h-4 ${width}`} />;
 }
 
 /**
@@ -43,43 +133,49 @@ function ContentLineSkeleton({ width }: { width: string }) {
  */
 export function TableViewSkeleton() {
 	return (
-		<div className="qa-table-view-skeleton container">
-			<div className="space-y-4">
-				{/* Header */}
-				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-					<div className="space-y-1">
-						<Skeleton className="h-8 w-48" />
-						<Skeleton className="h-4 w-64" />
-					</div>
-					<Skeleton className="h-9 w-32" />
+		<AdminViewLayout
+			header={
+				<AdminViewHeader
+					title={<Skeleton variant="text" className="h-7 w-44" />}
+					description={
+						<Skeleton variant="text" className="h-4 w-64 max-w-full" />
+					}
+					actions={
+						<>
+							<Skeleton className="size-8" />
+							<Skeleton className="size-8" />
+							<Skeleton className="h-8 w-24" />
+						</>
+					}
+				/>
+			}
+			contentClassName="overflow-y-auto pb-3"
+		>
+			<div
+				className="qa-table-view qa-table-view-skeleton min-w-0 space-y-4"
+				aria-busy="true"
+			>
+				<span className="sr-only">Loading table view</span>
+				<div className="qa-table-view__table-wrapper min-w-0">
+					<TableSkeletonShell />
 				</div>
-
-				{/* Toolbar */}
-				<div className="flex items-center gap-2">
-					<Skeleton className="h-9 w-64" />
-					<Skeleton className="h-9 w-24" />
-					<Skeleton className="h-9 w-24" />
-				</div>
-
-				{/* Table */}
-				<div className="rounded-md border">
-					{/* Header row */}
-					<div className="flex items-center gap-4 p-4 border-b bg-muted">
-						<Skeleton className="h-4 w-4" />
-						<Skeleton className="h-4 w-32" />
-						<Skeleton className="h-4 w-24" />
-						<Skeleton className="h-4 w-24" />
-						<Skeleton className="h-4 w-20 ml-auto" />
+				<div className="qa-table-view__pagination flex items-center justify-between gap-4 py-2">
+					<div className="flex items-center gap-4">
+						<Skeleton variant="text" className="h-4 w-20" />
+						<div className="flex items-center gap-2">
+							<Skeleton variant="text" className="h-4 w-10" />
+							<Skeleton className="h-8 w-[70px]" />
+						</div>
 					</div>
-					{/* Data rows */}
-					<TableSkeletonRow />
-					<TableSkeletonRow />
-					<TableSkeletonRow />
-					<TableSkeletonRow />
-					<TableSkeletonRow isLast />
+					<div className="flex items-center gap-1">
+						<Skeleton className="size-8" />
+						<Skeleton className="size-8" />
+						<Skeleton className="size-8" />
+						<Skeleton className="size-8" />
+					</div>
 				</div>
 			</div>
-		</div>
+		</AdminViewLayout>
 	);
 }
 
@@ -95,8 +191,8 @@ export function FormViewSkeleton() {
 				{/* Header */}
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-3">
-						<Skeleton className="h-8 w-8 rounded-md" /> {/* Back button */}
-						<Skeleton className="h-8 w-48" />
+						<Skeleton variant="text" className="h-8 w-8" /> {/* Back button */}
+						<Skeleton variant="text" className="h-8 w-48" />
 					</div>
 					<div className="flex items-center gap-2">
 						<Skeleton className="h-9 w-20" />
@@ -113,41 +209,9 @@ export function FormViewSkeleton() {
 
 					{/* Textarea field */}
 					<div className="space-y-2">
-						<Skeleton className="h-4 w-32" />
+						<Skeleton variant="text" className="h-4 w-32" />
 						<Skeleton className="h-32 w-full" />
 					</div>
-				</div>
-			</div>
-		</div>
-	);
-}
-
-/**
- * Skeleton for RichTextEditor
- *
- * Shows a loading state that mimics the rich text editor.
- */
-function RichTextEditorSkeleton() {
-	return (
-		<div className="space-y-2">
-			{/* Toolbar */}
-			<div className="flex items-center gap-1 p-2 border rounded-t-md bg-muted">
-				<ToolbarIconSkeleton />
-				<ToolbarIconSkeleton />
-				<ToolbarIconSkeleton />
-				<ToolbarIconSkeleton />
-				<ToolbarIconSkeleton />
-				<ToolbarIconSkeleton />
-				<ToolbarIconSkeleton />
-				<ToolbarIconSkeleton />
-			</div>
-			{/* Content area */}
-			<div className="border border-t-0 rounded-b-md p-4 min-h-[200px]">
-				<div className="space-y-2">
-					<ContentLineSkeleton width="w-full" />
-					<ContentLineSkeleton width="w-3/4" />
-					<ContentLineSkeleton width="w-5/6" />
-					<ContentLineSkeleton width="w-2/3" />
 				</div>
 			</div>
 		</div>

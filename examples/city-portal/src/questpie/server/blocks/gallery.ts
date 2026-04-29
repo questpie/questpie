@@ -1,4 +1,5 @@
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
+
 import { content } from "./_categories";
 
 export const galleryBlock = block("gallery")

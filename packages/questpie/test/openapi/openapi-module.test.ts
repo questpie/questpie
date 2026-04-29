@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { generateOpenApiSpec as generateInternal } from "../../../openapi/src/generator/index.js";
 import { openApiPlugin } from "../../../openapi/src/plugin.js";
 import {
@@ -7,7 +8,7 @@ import {
 	openApiModule,
 	openApiRoute,
 } from "../../../openapi/src/server.js";
-import { collection, global } from "../../src/server/index.js";
+import { collection, global } from "../../src/exports/index.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -116,47 +117,33 @@ describe("generateOpenApiSpec (public API)", () => {
 // ---------------------------------------------------------------------------
 
 describe("openApiModule", () => {
-	it("returns a valid module definition", () => {
-		const mod = openApiModule({
-			info: { title: "Test API", version: "1.0.0" },
-		});
-
-		expect(mod.name).toBe("questpie-openapi");
-		expect(mod.routes).toBeDefined();
+	it("is a valid static module definition", () => {
+		expect(openApiModule.name).toBe("questpie-openapi");
+		expect(openApiModule.routes).toBeDefined();
 	});
 
-	it("creates routes with default paths", () => {
-		const mod = openApiModule();
-
-		expect(mod.routes).toBeDefined();
-		expect(mod.routes!["openapi.json"]).toBeDefined();
-		expect(mod.routes!["docs"]).toBeDefined();
+	it("has routes with default paths", () => {
+		expect(openApiModule.routes).toBeDefined();
+		expect(openApiModule.routes!["openapi.json"]).toBeDefined();
+		expect(openApiModule.routes!["docs"]).toBeDefined();
 	});
 
-	it("supports custom specPath and docsPath", () => {
-		const mod = openApiModule({
-			specPath: "spec.json",
-			docsPath: "api-docs",
-		});
-
-		expect(mod.routes!["spec.json"]).toBeDefined();
-		expect(mod.routes!["api-docs"]).toBeDefined();
-		expect(mod.routes!["openapi.json"]).toBeUndefined();
-		expect(mod.routes!["docs"]).toBeUndefined();
+	it("includes the openapi plugin", () => {
+		expect(openApiModule.plugin).toBeDefined();
+		expect((openApiModule.plugin as any).name).toBe("questpie-openapi");
 	});
 
 	it("routes have the correct __brand and mode", () => {
-		const mod = openApiModule();
-		const specRoute = mod.routes!["openapi.json"] as any;
-		const docsRoute = mod.routes!["docs"] as any;
+		const specRoute = openApiModule.routes!["openapi.json"] as any;
+		const docsRouteVal = openApiModule.routes!["docs"] as any;
 
 		expect(specRoute.__brand).toBe("route");
 		expect(specRoute.mode).toBe("raw");
 		expect(specRoute.method).toBe("GET");
 
-		expect(docsRoute.__brand).toBe("route");
-		expect(docsRoute.mode).toBe("raw");
-		expect(docsRoute.method).toBe("GET");
+		expect(docsRouteVal.__brand).toBe("route");
+		expect(docsRouteVal.mode).toBe("raw");
+		expect(docsRouteVal.method).toBe("GET");
 	});
 });
 

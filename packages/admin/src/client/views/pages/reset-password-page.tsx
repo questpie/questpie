@@ -6,11 +6,12 @@
  */
 
 import * as React from "react";
+
 import { Button } from "../../components/ui/button";
 import { useAuthClient } from "../../hooks/use-auth";
+import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
-	selectBrandName,
 	selectNavigate,
 	useAdminStore,
 } from "../../runtime/provider";
@@ -75,17 +76,17 @@ export interface ResetPasswordPageProps {
  * ```
  */
 export function ResetPasswordPage({
-	title = "Reset password",
-	description = "Enter your new password",
+	title,
+	description,
 	logo,
 	loginPath,
 	minPasswordLength = 8,
 	getToken,
 }: ResetPasswordPageProps) {
+	const { t } = useTranslation();
 	const authClient = useAuthClient();
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
-	const brandName = useAdminStore(selectBrandName);
 
 	const [error, setError] = React.useState<string | null>(null);
 
@@ -116,7 +117,7 @@ export function ResetPasswordPage({
 				if (result.error.message) {
 					setError(result.error.message);
 				} else {
-					setError("Failed to reset password");
+					setError(t("error.failedToResetPassword"));
 				}
 				return;
 			}
@@ -126,7 +127,7 @@ export function ResetPasswordPage({
 			if (err instanceof Error) {
 				setError(err.message);
 			} else {
-				setError("An error occurred");
+				setError(t("error.anErrorOccurred"));
 			}
 		}
 	};
@@ -139,16 +140,16 @@ export function ResetPasswordPage({
 	if (!token) {
 		return (
 			<AuthLayout
-				title="Invalid Link"
-				description="The password reset link is invalid or has expired."
-				logo={logo ?? <DefaultLogo brandName={brandName} />}
+				title={t("auth.invalidLink")}
+				description={t("auth.invalidLinkDescription")}
+				logo={logo}
 			>
 				<div className="space-y-4 text-center">
 					<p className="text-muted-foreground text-sm">
-						Please request a new password reset link.
+						{t("auth.requestNewResetLink")}
 					</p>
 					<Button type="button" variant="link" onClick={handleBackToLoginClick}>
-						Back to login
+						{t("auth.backToLogin")}
 					</Button>
 				</div>
 			</AuthLayout>
@@ -157,9 +158,9 @@ export function ResetPasswordPage({
 
 	return (
 		<AuthLayout
-			title={title}
-			description={description}
-			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			title={title ?? t("auth.resetPassword")}
+			description={description ?? t("auth.enterNewPassword")}
+			logo={logo}
 			className="qa-reset-password-page"
 		>
 			<ResetPasswordForm
@@ -170,13 +171,5 @@ export function ResetPasswordPage({
 				error={error}
 			/>
 		</AuthLayout>
-	);
-}
-
-function DefaultLogo({ brandName }: { brandName: string }) {
-	return (
-		<div className="text-center">
-			<h1 className="text-xl font-bold">{brandName}</h1>
-		</div>
 	);
 }

@@ -6,6 +6,7 @@
  */
 
 import { Icon } from "@iconify/react";
+
 import { useTranslation } from "../../../lib/providers/locale-provider";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -37,18 +38,18 @@ export function ServicesRenderer({ values, data }: BlockProps<"services">) {
 	};
 
 	return (
-		<section className="py-20 px-6">
+		<section className="px-6 py-20">
 			<div className="container">
 				{/* Header */}
 				{(values.title || values.subtitle) && (
-					<div className="text-center mb-16 max-w-2xl mx-auto">
+					<div className="mx-auto mb-16 max-w-2xl text-center">
 						{values.title && (
-							<h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">
+							<h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
 								{values.title}
 							</h2>
 						)}
 						{values.subtitle && (
-							<p className="text-lg text-muted-foreground">{values.subtitle}</p>
+							<p className="text-muted-foreground text-lg">{values.subtitle}</p>
 						)}
 					</div>
 				)}
@@ -63,11 +64,11 @@ export function ServicesRenderer({ values, data }: BlockProps<"services">) {
 						return (
 							<article
 								key={service.id}
-								className="group p-6 border border-border bg-card rounded-lg hover:border-foreground/20 hover:shadow-lg transition-all duration-300 animate-fade-in-up"
+								className="group border-border bg-card hover:border-foreground/20 animate-fade-in-up rounded-lg border p-6 transition-all duration-300 hover:shadow-lg"
 								style={{ animationDelay: `${i * 50}ms` }}
 							>
 								{imageUrl && (
-									<div className="mb-4 aspect-[4/3] overflow-hidden border border-border bg-muted rounded-md">
+									<div className="border-border bg-muted mb-4 aspect-[4/3] overflow-hidden rounded-md border">
 										<img
 											src={imageUrl}
 											alt={service.name}
@@ -75,18 +76,18 @@ export function ServicesRenderer({ values, data }: BlockProps<"services">) {
 										/>
 									</div>
 								)}
-								<h3 className="text-xl font-semibold mb-2 group-hover:text-highlight transition-colors">
+								<h3 className="group-hover:text-highlight mb-2 text-xl font-semibold transition-colors">
 									{service.name}
 								</h3>
 
 								{service.description && (
-									<p className="text-muted-foreground text-sm mb-6 line-clamp-2">
+									<p className="text-muted-foreground mb-6 line-clamp-2 text-sm">
 										{service.description}
 									</p>
 								)}
 
-								<div className="flex items-center justify-between pt-4 border-t border-border">
-									<div className="flex items-center gap-4 text-sm text-muted-foreground">
+								<div className="border-border flex items-center justify-between border-t pt-4">
+									<div className="text-muted-foreground flex items-center gap-4 text-sm">
 										{values.showDuration && (
 											<span className="flex items-center gap-1.5">
 												<Icon icon="ph:clock-bold" className="size-4" />
@@ -96,7 +97,7 @@ export function ServicesRenderer({ values, data }: BlockProps<"services">) {
 									</div>
 
 									{values.showPrices && (
-										<span className="font-semibold text-highlight">
+										<span className="text-highlight font-semibold">
 											{formatPrice(service.price)}
 										</span>
 									)}
@@ -107,20 +108,23 @@ export function ServicesRenderer({ values, data }: BlockProps<"services">) {
 				</div>
 
 				{services.length === 0 && (
-					<p className="text-center text-muted-foreground py-12">
+					<p className="text-muted-foreground py-12 text-center">
 						{t("blocks.services.empty")}
 					</p>
 				)}
 
 				{/* View All Link */}
 				{services.length > 0 && (
-					<div className="text-center mt-12">
+					<div className="mt-12 text-center">
 						<a
 							href="/services"
-							className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-highlight transition-colors group"
+							className="text-foreground hover:text-highlight group inline-flex items-center gap-2 text-sm font-medium transition-colors"
 						>
 							{t("blocks.services.viewAll")}
-							<Icon icon="ph:arrow-right" className="size-4 transition-transform group-hover:translate-x-1" />
+							<Icon
+								icon="ph:arrow-right"
+								className="size-4 transition-transform group-hover:translate-x-1"
+							/>
 						</a>
 					</div>
 				)}

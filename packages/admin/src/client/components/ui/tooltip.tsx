@@ -1,6 +1,7 @@
 "use client";
 
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+
 import { cn } from "#questpie/admin/client/lib/utils.js";
 
 function TooltipProvider({
@@ -53,8 +54,7 @@ function TooltipContent({
 				<TooltipPrimitive.Popup
 					data-slot="tooltip-content"
 					className={cn(
-						"qa-tooltip__content data-open:animate-in data-open:fade-in-0 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 rounded-md px-3 py-1.5 text-xs bg-foreground text-background z-50 w-fit max-w-xs origin-(--transform-origin)",
-						"bg-card border text-foreground border-border",
+						"qa-tooltip__content floating-surface motion-floating-fast font-chrome text-popover-foreground z-50 w-fit max-w-xs origin-(--transform-origin) px-2.5 py-1.5 text-xs data-ending-style:scale-[var(--motion-scale-enter)] data-ending-style:opacity-0 data-starting-style:scale-[var(--motion-scale-enter)] data-starting-style:opacity-0",
 						className,
 					)}
 					{...props}

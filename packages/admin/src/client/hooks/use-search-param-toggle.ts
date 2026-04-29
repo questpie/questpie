@@ -1,6 +1,6 @@
 import * as React from "react";
 
-const SEARCH_PARAMS_EVENT = "questpie:searchparamschange";
+import { SEARCH_PARAMS_EVENT } from "../lib/events.js";
 
 interface UseSearchParamToggleOptions {
 	defaultValue?: boolean;

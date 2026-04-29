@@ -9,6 +9,8 @@ export type {
 	HttpMethod,
 	InferRouteInput,
 	InferRouteOutput,
+	InferRouteParams,
+	JsonRouteParams,
 	JsonRouteDefinition,
 	JsonRouteHandlerArgs,
 	RawRouteDefinition,
@@ -17,6 +19,8 @@ export type {
 	RouteAccessContext,
 	RouteAccessRule,
 	RouteDefinition,
+	RouteParamsFromKey,
+	RouteWithParams,
 	RoutesTree,
 } from "./types.js";
 export { isJsonRoute, isRawRoute } from "./types.js";

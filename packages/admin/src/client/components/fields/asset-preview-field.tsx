@@ -15,6 +15,7 @@
 
 import * as React from "react";
 import { useFormContext, useWatch } from "react-hook-form";
+
 import type { I18nText } from "../../i18n/types";
 import { cn } from "../../lib/utils";
 import { AssetThumbnail } from "../../views/collection/cells";
@@ -112,8 +113,8 @@ export function AssetPreviewField({
 			<FieldWrapper name={name} label={label} description={description}>
 				<div
 					className={cn(
-						"qa-asset-preview-field flex items-center justify-center rounded-lg border border-dashed p-8",
-						"bg-muted text-muted-foreground",
+						"qa-asset-preview-field flex items-center justify-center py-4",
+						"text-muted-foreground",
 						className,
 					)}
 				>

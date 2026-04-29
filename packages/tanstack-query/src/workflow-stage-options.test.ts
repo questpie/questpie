@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { createQuestpieQueryOptions } from "./index.js";
 
 describe("tanstack query workflow stage config", () => {

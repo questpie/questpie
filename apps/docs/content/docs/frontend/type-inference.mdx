@@ -3,9 +3,7 @@ title: Type Inference
 description: End-to-end type safety — from schema definition to client SDK.
 ---
 
-# Type Inference
-
-QuestPie provides end-to-end TypeScript type safety. Types flow from your field definitions through codegen to the client SDK. No manual type definitions needed.
+QUESTPIE provides end-to-end TypeScript type safety. Types flow from your field definitions through codegen to the client SDK. No manual type definitions needed.
 
 ## The Type Flow
 
@@ -23,15 +21,27 @@ Codegen produces:
 ```ts
 // From .generated/
 export type AppConfig = {
-  collections: {
-    posts: {
-      select: { id: string; title: string; body: string | null; status: "draft" | "published" };
-      insert: { title: string; body?: string | null; status?: "draft" | "published" };
-      where: { title?: string | { contains?: string }; status?: "draft" | "published" | { in?: string[] } };
-      orderBy: { title?: "asc" | "desc"; createdAt?: "asc" | "desc" };
-    };
-    // ...
-  };
+	collections: {
+		posts: {
+			select: {
+				id: string;
+				title: string;
+				body: string | null;
+				status: "draft" | "published";
+			};
+			insert: {
+				title: string;
+				body?: string | null;
+				status?: "draft" | "published";
+			};
+			where: {
+				title?: string | { contains?: string };
+				status?: "draft" | "published" | { in?: string[] };
+			};
+			orderBy: { title?: "asc" | "desc"; createdAt?: "asc" | "desc" };
+		};
+		// ...
+	};
 };
 ```
 
@@ -41,8 +51,8 @@ The client uses `AppConfig` which includes collections, globals, and routes:
 
 ```ts
 const client = createClient<AppConfig>({
-  baseURL: "http://localhost:3000",
-  basePath: "/api",
+	baseURL: "http://localhost:3000",
+	basePath: "/api",
 });
 
 // Autocomplete: collections.posts, collections.barbers, ...
@@ -58,17 +68,17 @@ Codegen augments `AppContext` so handlers get typed DI:
 ```ts
 // In any handler — everything is typed
 handler: async ({ input, collections, queue, email, blog }) => {
-  const post = await collections.posts.findOne({
-    where: { id: input.postId },  // typed
-  });
-  // post.title — string
-  // post.status — "draft" | "published"
+	const post = await collections.posts.findOne({
+		where: { id: input.postId }, // typed
+	});
+	// post.title — string
+	// post.status — "draft" | "published"
 
-  await queue.notifyBlogSubscribers.publish({
-    postId: post.id,    // typed payload
-    title: post.title,
-  });
-}
+	await queue.notifyBlogSubscribers.publish({
+		postId: post.id, // typed payload
+		title: post.title,
+	});
+};
 ```
 
 ## Route Return Types
@@ -78,13 +88,13 @@ Route return types are inferred from the handler:
 ```ts
 // Server
 export default route()
-  .post()
-  .schema(z.object({ barberId: z.string() }))
-  .handler(async ({ input, collections }) => {
-    return await collections.barbers.findOne({
-      where: { id: input.barberId },
-    });
-  });
+	.post()
+	.schema(z.object({ barberId: z.string() }))
+	.handler(async ({ input, collections }) => {
+		return await collections.barbers.findOne({
+			where: { id: input.barberId },
+		});
+	});
 
 // Client — return type is inferred
 const barber = await client.routes.getBarber({ barberId: "abc" });
@@ -95,4 +105,4 @@ const barber = await client.routes.getBarber({ barberId: "abc" });
 
 - [Codegen](/docs/backend/architecture/codegen) — What gets generated
 - [Querying](/docs/frontend/querying) — Query operators
-- [Routes](/docs/backend/business-logic/routes) — Server routes
+- [Typed Routes](/docs/backend/business-logic/routes) — Server routes

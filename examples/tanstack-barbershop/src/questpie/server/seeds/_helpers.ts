@@ -6,7 +6,7 @@
 // Image URLs
 // ============================================================================
 
-export const IMAGES = {
+const IMAGES = {
 	// Heroes
 	heroHome:
 		"https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=1920&h=1080&fit=crop",
@@ -113,7 +113,7 @@ export function richTextFormatted(
 // Upload Helper
 // ============================================================================
 
-export async function uploadImage(
+async function uploadImage(
 	collections: any,
 	url: string,
 	name: string,

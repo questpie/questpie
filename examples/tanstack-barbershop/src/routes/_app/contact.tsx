@@ -6,6 +6,7 @@
 
 import { Icon } from "@iconify/react";
 import { createFileRoute } from "@tanstack/react-router";
+
 import {
 	getSiteSettings,
 	type SiteSettingsData,
@@ -47,29 +48,32 @@ function ContactPage() {
 	] as const;
 
 	return (
-		<div className="py-20 px-6">
-			<div className="container max-w-5xl mx-auto">
-				<header className="mb-16 text-center max-w-2xl mx-auto">
-					<h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+		<div className="px-6 py-20">
+			<div className="container mx-auto max-w-5xl">
+				<header className="mx-auto mb-16 max-w-2xl text-center">
+					<h1 className="mb-4 text-4xl font-bold tracking-tight md:text-5xl">
 						{t("contact.title")}
 					</h1>
-					<p className="text-xl text-muted-foreground">
+					<p className="text-muted-foreground text-xl">
 						{t("contact.subtitle")}
 					</p>
 				</header>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-16">
+				<div className="grid grid-cols-1 gap-16 md:grid-cols-2">
 					{/* Contact Info */}
 					<div className="space-y-12">
 						<div className="space-y-8">
 							<h2 className="text-2xl font-bold">{t("contact.details")}</h2>
 
-							<div className="flex gap-6 items-start">
-								<div className="size-12 bg-muted flex items-center justify-center border border-border shrink-0">
-									<Icon icon="ph:map-pin-fill" className="size-6 text-highlight" />
+							<div className="flex items-start gap-6">
+								<div className="bg-muted border-border flex size-12 shrink-0 items-center justify-center border">
+									<Icon
+										icon="ph:map-pin-fill"
+										className="text-highlight size-6"
+									/>
 								</div>
 								<div>
-									<h3 className="font-bold text-lg mb-1">
+									<h3 className="mb-1 text-lg font-bold">
 										{t("contact.address")}
 									</h3>
 									<p className="text-muted-foreground text-lg">
@@ -82,15 +86,18 @@ function ContactPage() {
 								</div>
 							</div>
 
-							<div className="flex gap-6 items-start">
-								<div className="size-12 bg-muted flex items-center justify-center border border-border shrink-0">
-									<Icon icon="ph:phone-fill" className="size-6 text-highlight" />
+							<div className="flex items-start gap-6">
+								<div className="bg-muted border-border flex size-12 shrink-0 items-center justify-center border">
+									<Icon
+										icon="ph:phone-fill"
+										className="text-highlight size-6"
+									/>
 								</div>
 								<div>
-									<h3 className="font-bold text-lg mb-1">
+									<h3 className="mb-1 text-lg font-bold">
 										{t("contact.phone")}
 									</h3>
-									<p className="text-muted-foreground text-lg hover:text-highlight transition-colors">
+									<p className="text-muted-foreground hover:text-highlight text-lg transition-colors">
 										<a href={`tel:${settings.contactPhone}`}>
 											{settings.contactPhone || "+421 900 000 000"}
 										</a>
@@ -98,15 +105,18 @@ function ContactPage() {
 								</div>
 							</div>
 
-							<div className="flex gap-6 items-start">
-								<div className="size-12 bg-muted flex items-center justify-center border border-border shrink-0">
-									<Icon icon="ph:envelope-fill" className="size-6 text-highlight" />
+							<div className="flex items-start gap-6">
+								<div className="bg-muted border-border flex size-12 shrink-0 items-center justify-center border">
+									<Icon
+										icon="ph:envelope-fill"
+										className="text-highlight size-6"
+									/>
 								</div>
 								<div>
-									<h3 className="font-bold text-lg mb-1">
+									<h3 className="mb-1 text-lg font-bold">
 										{t("contact.email")}
 									</h3>
-									<p className="text-muted-foreground text-lg hover:text-highlight transition-colors">
+									<p className="text-muted-foreground hover:text-highlight text-lg transition-colors">
 										<a href={`mailto:${settings.contactEmail}`}>
 											{settings.contactEmail}
 										</a>
@@ -117,7 +127,7 @@ function ContactPage() {
 
 						{/* Map */}
 						{settings.mapEmbedUrl ? (
-							<div className="aspect-video bg-muted border border-border relative overflow-hidden">
+							<div className="bg-muted border-border relative aspect-video overflow-hidden border">
 								<iframe
 									src={settings.mapEmbedUrl}
 									width="100%"
@@ -130,20 +140,20 @@ function ContactPage() {
 								/>
 							</div>
 						) : (
-							<div className="aspect-video bg-muted border border-border relative overflow-hidden group">
+							<div className="bg-muted border-border group relative aspect-video overflow-hidden border">
 								<div className="absolute inset-0 flex items-center justify-center">
 									<p className="text-muted-foreground font-medium">
 										{t("contact.mapPlaceholder")}
 									</p>
 								</div>
-								<div className="absolute inset-0 bg-highlight/5 group-hover:bg-transparent transition-colors duration-500" />
+								<div className="bg-highlight/5 absolute inset-0 transition-colors duration-500 group-hover:bg-transparent" />
 							</div>
 						)}
 					</div>
 
 					{/* Business Hours */}
-					<div className="bg-muted/30 border border-border p-10">
-						<h2 className="text-2xl font-bold mb-8 text-center md:text-left">
+					<div className="bg-muted/30 border-border border p-10">
+						<h2 className="mb-8 text-center text-2xl font-bold md:text-left">
 							{t("contact.hours")}
 						</h2>
 						<div className="space-y-6">
@@ -153,9 +163,9 @@ function ContactPage() {
 								return (
 									<div
 										key={day.id}
-										className="flex justify-between items-center border-b border-border/50 pb-4"
+										className="border-border/50 flex items-center justify-between border-b pb-4"
 									>
-										<span className="font-medium text-lg">
+										<span className="text-lg font-medium">
 											{t(day.labelKey)}
 										</span>
 										{hours.isOpen ? (
@@ -163,7 +173,7 @@ function ContactPage() {
 												{hours.start} — {hours.end}
 											</span>
 										) : (
-											<span className="text-highlight font-bold uppercase text-sm tracking-wider">
+											<span className="text-highlight text-sm font-bold tracking-wider uppercase">
 												{t("contact.closed")}
 											</span>
 										)}
@@ -173,12 +183,12 @@ function ContactPage() {
 						</div>
 
 						<div className="mt-12 text-center">
-							<p className="text-sm text-muted-foreground mb-6 italic">
+							<p className="text-muted-foreground mb-6 text-sm italic">
 								{t("contact.holidayNote")}
 							</p>
 							<a
 								href="/booking"
-								className="inline-block w-full py-4 bg-foreground text-background font-bold text-lg hover:bg-highlight hover:text-highlight-foreground transition-all duration-300"
+								className="bg-foreground text-background hover:bg-highlight hover:text-highlight-foreground inline-block w-full py-4 text-lg font-bold transition-all duration-300"
 							>
 								{t("cta.bookNow")}
 							</a>

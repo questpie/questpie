@@ -287,6 +287,42 @@ export interface RelationFieldAdminMeta extends BaseAdminMeta {
 	preload?: boolean;
 	maxItems?: number;
 	/**
+	 * Restrict which related records can be picked. Static `Record` is used
+	 * as-is; a function or `{ handler, deps?, debounce? }` config stays on
+	 * the server (introspection emits a `ReactivePropPlaceholder`) and is
+	 * resolved on demand via `/admin/reactive` against current form data.
+	 *
+	 * @example Static
+	 * ```ts
+	 * f.relation("users").admin({ filter: { role: "admin" } })
+	 * ```
+	 *
+	 * @example Reactive — depends on form state
+	 * ```ts
+	 * f.relation("users").admin({
+	 *   filter: ({ data }) => ({ role: "admin", team: data.team }),
+	 * })
+	 * ```
+	 */
+	filter?:
+		| Record<string, unknown>
+		| ((ctx: {
+				data: Record<string, unknown>;
+				sibling: Record<string, unknown>;
+				prev: { data: Record<string, unknown>; sibling: Record<string, unknown> };
+				ctx: unknown;
+			}) => Record<string, unknown> | Promise<Record<string, unknown>>)
+		| {
+				handler: (ctx: {
+					data: Record<string, unknown>;
+					sibling: Record<string, unknown>;
+					prev: { data: Record<string, unknown>; sibling: Record<string, unknown> };
+					ctx: unknown;
+				}) => Record<string, unknown> | Promise<Record<string, unknown>>;
+				deps?: string[];
+				debounce?: number;
+			};
+	/**
 	 * List table cell rendering for relation values.
 	 * - "chip": default text chip
 	 * - "avatarChip": chip with avatar image + label

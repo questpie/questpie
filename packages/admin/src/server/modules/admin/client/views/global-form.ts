@@ -7,4 +7,3 @@ export default view("global-form", {
 			default: React.ComponentType<any>;
 		}>,
 });
-

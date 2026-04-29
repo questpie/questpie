@@ -1,5 +1,5 @@
-import browserCollections from "fumadocs-mdx:collections/browser";
 import { useFumadocsLoader } from "fumadocs-core/source/client";
+import browserCollections from "fumadocs-mdx:collections/browser";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import {
 	DocsBody,
@@ -8,6 +8,7 @@ import {
 	DocsTitle,
 } from "fumadocs-ui/layouts/docs/page";
 import { createContext, useContext } from "react";
+
 import { LLMCopyButton } from "@/components/llm-actions";
 import { components } from "@/components/mdx";
 import { baseOptions } from "@/lib/layout.shared";
@@ -23,7 +24,7 @@ const PageUrlContext = createContext<string>("");
 function LLMActions() {
 	const url = useContext(PageUrlContext);
 	return (
-		<div className="mb-6 flex items-center gap-2 border-b border-fd-border pb-4">
+		<div className="border-fd-border mb-6 flex items-center gap-2 border-b pb-4">
 			<LLMCopyButton markdownUrl={`${url}.mdx`} />
 		</div>
 	);

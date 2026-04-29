@@ -5,6 +5,7 @@
  */
 
 import { uniqueIndex } from "drizzle-orm/pg-core";
+
 import { collection } from "#questpie/factories";
 
 export default collection("cities")

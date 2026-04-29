@@ -3,46 +3,44 @@ title: Collections
 description: Collections are database-backed data models with CRUD operations, hooks, access control, and admin UI.
 ---
 
-# Collections
-
 A collection is a data model backed by a database table. Each collection file defines fields, indexes, hooks, access rules, and admin UI in one place.
 
 ## Defining a Collection
 
 ```ts title="collections/services.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export const services = collection("services")
-  .fields(({ f }) => ({
-    name: f.text(255).required().localized(),
-    description: f.textarea().localized(),
-    duration: f.number().required(),
-    price: f.number().required(),
-    isActive: f.boolean().default(true).required(),
-  }))
-  .title(({ f }) => f.name)
-  .admin(({ c }) => ({
-    label: { en: "Services", sk: "Služby" },
-    icon: c.icon("ph:scissors"),
-  }));
+	.fields(({ f }) => ({
+		name: f.text(255).required().localized(),
+		description: f.textarea().localized(),
+		duration: f.number().required(),
+		price: f.number().required(),
+		isActive: f.boolean().default(true).required(),
+	}))
+	.title(({ f }) => f.name)
+	.admin(({ c }) => ({
+		label: { en: "Services", sk: "Služby" },
+		icon: c.icon("ph:scissors"),
+	}));
 ```
 
 ## Builder Chain
 
 Collections use a chainable builder API. Each method adds a layer:
 
-| Method | Purpose |
-|---|---|
-| `.fields(({ f }) => {...})` | Define data fields |
-| `.title(({ f }) => f.name)` | Record display title |
-| `.admin(({ c }) => {...})` | Admin UI metadata (label, icon) |
-| `.indexes(({ table }) => [...])` | Database indexes |
-| `.list(({ v, f }) => v.collectionTable({...}))` | List view config |
-| `.form(({ v, f }) => v.collectionForm({...}))` | Form view config |
-| `.hooks({...})` | Lifecycle hooks |
-| `.access({...})` | Access control rules |
-| `.preview({...})` | Live preview config |
-| `.options({...})` | Timestamps, versioning, soft delete |
+| Method                                          | Purpose                                               |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| `.fields(({ f }) => {...})`                     | Define data fields                                    |
+| `.title(({ f }) => f.name)`                     | Record display title                                  |
+| `.admin(({ c }) => {...})`                      | Admin UI metadata (label, icon)                       |
+| `.indexes(({ table }) => [...])`                | Database indexes                                      |
+| `.list(({ v, f }) => v.collectionTable({...}))` | List view config                                      |
+| `.form(({ v, f }) => v.collectionForm({...}))`  | Form view config                                      |
+| `.hooks({...})`                                 | Lifecycle hooks                                       |
+| `.access({...})`                                | Access control rules                                  |
+| `.preview({...})`                               | Live preview config                                   |
+| `.options({...})`                               | Schema, timestamps, versioning, workflow, soft delete |
 
 ### `.title()`
 
@@ -96,11 +94,38 @@ Configure collection-level behavior:
 
 ```ts
 .options({
-  timestamps: true,   // adds createdAt, updatedAt
+  schema: "auth",      // optional Postgres schema (default: public)
+  timestamps: true,    // adds createdAt, updatedAt
   versioning: true,    // track content versions
   softDelete: true,    // mark as deleted instead of removing
 })
 ```
+
+For publishing stages such as draft, review, and published, see [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow).
+
+#### `schema`
+
+Places the collection's tables under a named Postgres schema instead of `public`.
+Applies to all four tables: main, i18n, versions, and i18n_versions.
+
+```ts
+collection("user")
+	.fields(({ f }) => ({ email: f.text(255).required() }))
+	.options({ schema: "auth" });
+```
+
+Generated DDL:
+
+```sql
+CREATE SCHEMA IF NOT EXISTS "auth";
+CREATE TABLE "auth"."user" (...);
+```
+
+Cross-schema relations render as `REFERENCES "other_schema"."table"("id")` —
+useful when multiple QUESTPIE apps share one Postgres instance and partition
+tables by schema (`auth.*`, `web.*`, `brain.*`).
+
+When unset, tables live in `public` — fully backward-compatible.
 
 ## CRUD Operations
 
@@ -112,41 +137,41 @@ const { collections } = context;
 
 // Find many
 const results = await collections.services.find({
-  where: { isActive: true },
-  orderBy: { name: "asc" },
-  limit: 10,
-  offset: 0,
+	where: { isActive: true },
+	orderBy: { name: "asc" },
+	limit: 10,
+	offset: 0,
 });
 // results.docs: Service[]
 // results.totalDocs: number
 
 // Find one
 const service = await collections.services.findOne({
-  where: { id: "abc123" },
+	where: { id: "abc123" },
 });
 
 // Create
 const newService = await collections.services.create({
-  name: "Haircut",
-  duration: 30,
-  price: 2500,
-  isActive: true,
+	name: "Haircut",
+	duration: 30,
+	price: 2500,
+	isActive: true,
 });
 
 // Update
 const updated = await collections.services.update({
-  where: { id: "abc123" },
-  data: { price: 3000 },
+	where: { id: "abc123" },
+	data: { price: 3000 },
 });
 
 // Delete
 await collections.services.delete({
-  where: { id: "abc123" },
+	where: { id: "abc123" },
 });
 
 // Count
 const count = await collections.services.count({
-  where: { isActive: true },
+	where: { isActive: true },
 });
 ```
 
@@ -156,96 +181,108 @@ From the barbershop example — a complete collection with all builder methods:
 
 ```ts title="collections/barbers.ts"
 import { uniqueIndex } from "drizzle-orm/pg-core";
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 import { slugify } from "@/questpie/server/utils";
 
 export const barbers = collection("barbers")
-  .fields(({ f }) => {
-    const daySchedule = {
-      isOpen: f.boolean().default(true),
-      start: f.time(),
-      end: f.time(),
-    };
+	.fields(({ f }) => {
+		const daySchedule = {
+			isOpen: f.boolean().default(true),
+			start: f.time(),
+			end: f.time(),
+		};
 
-    return {
-      name: f.text(255).required(),
-      slug: f.text(255).required().inputOptional(),
-      email: f.email().required(),
-      phone: f.text(50),
-      bio: f.textarea().localized(),
-      avatar: f.upload({ to: "assets", mimeTypes: ["image/*"], maxSize: 5_000_000 }),
-      isActive: f.boolean().default(true).required(),
-      workingHours: f.object({
-        monday: f.object(daySchedule),
-        tuesday: f.object(daySchedule),
-        // ... other days
-      }),
-      socialLinks: f.object({
-        platform: f.select(["instagram", "facebook", "twitter"]),
-        url: f.url(),
-      }).array().maxItems(5),
-      services: f.relation("services").manyToMany({
-        through: "barberServices",
-        sourceField: "barber",
-        targetField: "service",
-      }),
-    };
-  })
-  .indexes(({ table }) => [
-    uniqueIndex("barbers_slug_unique").on(table.slug),
-    uniqueIndex("barbers_email_unique").on(table.email),
-  ])
-  .title(({ f }) => f.name)
-  .admin(({ c }) => ({
-    label: { en: "Barbers", sk: "Holiči" },
-    icon: c.icon("ph:users"),
-  }))
-  .preview({
-    enabled: true,
-    position: "right",
-    defaultWidth: 50,
-    url: ({ record }) => `/barbers/${record.slug}?preview=true`,
-  })
-  .list(({ v }) => v.collectionTable({}))
-  .form(({ v, f }) =>
-    v.collectionForm({
-      sidebar: {
-        position: "right",
-        fields: [f.isActive, f.avatar],
-      },
-      fields: [
-        {
-          type: "section",
-          label: { en: "Contact Information" },
-          layout: "grid",
-          columns: 2,
-          fields: [f.name, f.slug, f.email, f.phone],
-        },
-        {
-          type: "section",
-          label: { en: "Profile" },
-          fields: [f.bio],
-        },
-        {
-          type: "section",
-          label: { en: "Services" },
-          fields: [f.services],
-        },
-      ],
-    }),
-  )
-  .hooks({
-    beforeValidate: async (ctx) => {
-      if (ctx.data.name && !ctx.data.slug) {
-        ctx.data.slug = slugify(ctx.data.name);
-      }
-    },
-  });
+		return {
+			name: f.text(255).required(),
+			slug: f.text(255).required().inputOptional(),
+			email: f.email().required(),
+			phone: f.text(50),
+			bio: f.textarea().localized(),
+			avatar: f.upload({
+				to: "assets",
+				mimeTypes: ["image/*"],
+				maxSize: 5_000_000,
+			}),
+			isActive: f.boolean().default(true).required(),
+			workingHours: f.object({
+				monday: f.object(daySchedule),
+				tuesday: f.object(daySchedule),
+				// ... other days
+			}),
+			socialLinks: f
+				.object({
+					platform: f.select([
+						{ value: "instagram", label: "Instagram" },
+						{ value: "facebook", label: "Facebook" },
+						{ value: "twitter", label: "Twitter" },
+					]),
+					url: f.url(),
+				})
+				.array()
+				.maxItems(5),
+			services: f.relation("services").manyToMany({
+				through: "barberServices",
+				sourceField: "barber",
+				targetField: "service",
+			}),
+		};
+	})
+	.indexes(({ table }) => [
+		uniqueIndex("barbers_slug_unique").on(table.slug),
+		uniqueIndex("barbers_email_unique").on(table.email),
+	])
+	.title(({ f }) => f.name)
+	.admin(({ c }) => ({
+		label: { en: "Barbers", sk: "Holiči" },
+		icon: c.icon("ph:users"),
+	}))
+	.preview({
+		enabled: true,
+		position: "right",
+		defaultWidth: 50,
+		url: ({ record }) => `/barbers/${record.slug}?preview=true`,
+	})
+	.list(({ v }) => v.collectionTable({}))
+	.form(({ v, f }) =>
+		v.collectionForm({
+			sidebar: {
+				position: "right",
+				fields: [f.isActive, f.avatar],
+			},
+			fields: [
+				{
+					type: "section",
+					label: { en: "Contact Information" },
+					layout: "grid",
+					columns: 2,
+					fields: [f.name, f.slug, f.email, f.phone],
+				},
+				{
+					type: "section",
+					label: { en: "Profile" },
+					fields: [f.bio],
+				},
+				{
+					type: "section",
+					label: { en: "Services" },
+					fields: [f.services],
+				},
+			],
+		}),
+	)
+	.hooks({
+		beforeValidate: async (ctx) => {
+			if (ctx.data.name && !ctx.data.slug) {
+				ctx.data.slug = slugify(ctx.data.name);
+			}
+		},
+	});
 ```
 
 ## Related Pages
 
 - [Fields](/docs/backend/data-modeling/fields) — All field types and options
+- [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow) — Version history and publishing stages
 - [Relations](/docs/backend/data-modeling/relations) — Relation field deep dive
 - [Hooks](/docs/backend/rules/hooks) — Lifecycle hooks
 - [Access Control](/docs/backend/rules/access-control) — Who can do what

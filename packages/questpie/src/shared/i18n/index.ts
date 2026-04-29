@@ -19,7 +19,13 @@ export {
 	type ValidationMessageKey,
 	type ValidationMessagesMap,
 	type ValidationTranslateFn,
+	validationMessagesCS,
+	validationMessagesDE,
 	validationMessagesEN,
+	validationMessagesES,
+	validationMessagesFR,
+	validationMessagesPL,
+	validationMessagesPT,
 	validationMessagesSK,
 } from "./validation-messages.js";
 export {

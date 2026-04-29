@@ -12,6 +12,7 @@
 import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { ZodType } from "zod";
+
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 // ============================================================================
@@ -20,7 +21,6 @@ import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 declare global {
 	namespace Questpie {
-		// biome-ignore lint/complexity/noBannedTypes: Empty interface for declaration merging augmentation
 		interface FieldTypeRegistry {}
 	}
 }
@@ -29,7 +29,6 @@ declare global {
  * Open augmentation point for field type names.
  * Augment via `declare global { namespace Questpie { interface FieldTypeRegistry { ... } } }`
  */
-// biome-ignore lint/complexity/noBannedTypes: Extends global augmentable interface
 export interface FieldTypeRegistry extends Questpie.FieldTypeRegistry {}
 
 /**
@@ -301,23 +300,6 @@ export type OperatorsToWhereInput<TOps extends OperatorMap> = {
 // ============================================================================
 
 /**
- * Base metadata interface - shared across all field types.
- *
- * NOTE: This is NOT used directly! Each field type defines its own meta interface
- * that can be augmented by external packages.
- *
- * Pattern:
- * 1. Field defines: `interface TextFieldMeta {}`
- * 2. Admin augments: `interface TextFieldMeta { admin?: { placeholder?: string } }`
- * 3. Field config uses: `meta?: TextFieldMeta`
- *
- * This allows type-safe, field-specific admin configuration.
- *
- * @deprecated Use field-specific meta interfaces (TextFieldMeta, BooleanFieldMeta, etc.)
- */
-export type FieldMetadataMeta = {};
-
-/**
  * Base metadata exposed for introspection.
  * Contains only data-relevant information - NO UI/admin config.
  * Admin package uses this to auto-generate UI, then applies its own overrides.
@@ -364,7 +346,7 @@ export interface FieldMetadataBase {
 	 * Extensible metadata for external packages.
 	 * Augmented by packages like @questpie/admin to add UI configuration.
 	 */
-	meta?: FieldMetadataMeta;
+	meta?: Record<string, unknown>;
 }
 
 /**
@@ -440,6 +422,8 @@ export interface RelationFieldMetadata extends FieldMetadataBase {
 export interface NestedFieldMetadata extends FieldMetadataBase {
 	type: "object" | "array" | "blocks";
 	nestedFields?: Record<string, FieldMetadata>;
+	/** Form layout for object fields (sections, tabs, grid). Added by admin plugin. */
+	form?: { fields: unknown[] };
 }
 
 /**
@@ -539,7 +523,7 @@ export type ExtractFieldsByLocation<
 			: TFields[K] extends {
 						readonly _: infer TState extends
 							import("./field-class-types.js").FieldState;
-					}
+				  }
 				? InferLocationFromFieldState<TState> extends TLocation
 					? K
 					: never

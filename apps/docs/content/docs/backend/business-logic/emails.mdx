@@ -3,8 +3,6 @@ title: Emails
 description: Define email templates with Zod-validated input and send them from any handler.
 ---
 
-# Emails
-
 Email templates are defined in `emails/` and discovered by codegen. Each template has a Zod input schema and a handler that returns `{ subject, html }`.
 
 ## Defining an Email Template
@@ -14,17 +12,17 @@ import { email } from "questpie";
 import { z } from "zod";
 
 export default email({
-  name: "appointment-confirmation",
-  schema: z.object({
-    customerName: z.string(),
-    appointmentId: z.string(),
-    barberName: z.string(),
-    serviceName: z.string(),
-    scheduledAt: z.string(),
-  }),
-  handler: ({ input }) => ({
-    subject: "Appointment Confirmed",
-    html: `
+	name: "appointment-confirmation",
+	schema: z.object({
+		customerName: z.string(),
+		appointmentId: z.string(),
+		barberName: z.string(),
+		serviceName: z.string(),
+		scheduledAt: z.string(),
+	}),
+	handler: ({ input }) => ({
+		subject: "Appointment Confirmed",
+		html: `
       <h1>Appointment Confirmed</h1>
       <p>Hi ${input.customerName}, your appointment is confirmed!</p>
       <p><strong>Service:</strong> ${input.serviceName}</p>
@@ -32,7 +30,7 @@ export default email({
       <p><strong>Date:</strong> ${input.scheduledAt}</p>
       <p>Booking ID: #${input.appointmentId.slice(0, 8).toUpperCase()}</p>
     `,
-  }),
+	}),
 });
 ```
 
@@ -47,28 +45,28 @@ import { route } from "questpie";
 import { z } from "zod";
 
 export default route()
-  .post()
-  .schema(z.object({ appointmentId: z.string() }))
-  .handler(async ({ input, collections, email }) => {
-    const appointment = await collections.appointments.findOne({
-      where: { id: input.appointmentId },
-      with: { barber: true, service: true },
-    });
+	.post()
+	.schema(z.object({ appointmentId: z.string() }))
+	.handler(async ({ input, collections, email }) => {
+		const appointment = await collections.appointments.findOne({
+			where: { id: input.appointmentId },
+			with: { barber: true, service: true },
+		});
 
-    await email.sendTemplate({
-      template: "appointmentConfirmation",
-      to: appointment.customerEmail,
-      input: {
-        customerName: appointment.customerName,
-        appointmentId: appointment.id,
-        barberName: appointment.barber.name,
-        serviceName: appointment.service.name,
-        scheduledAt: appointment.scheduledAt.toISOString(),
-      },
-    });
+		await email.sendTemplate({
+			template: "appointmentConfirmation",
+			to: appointment.customerEmail,
+			input: {
+				customerName: appointment.customerName,
+				appointmentId: appointment.id,
+				barberName: appointment.barber.name,
+				serviceName: appointment.service.name,
+				scheduledAt: appointment.scheduledAt.toISOString(),
+			},
+		});
 
-    return { success: true };
-  });
+		return { success: true };
+	});
 ```
 
 ## Handler Context
@@ -77,22 +75,24 @@ Email handlers receive the full `AppContext` plus validated `input`:
 
 ```ts
 export default email({
-  name: "weekly-digest",
-  schema: z.object({ userId: z.string() }),
-  handler: async ({ input, collections, db }) => {
-    // Full AppContext available — fetch data, call services
-    const user = await collections.users.findOne({ where: { id: input.userId } });
-    const recentPosts = await collections.posts.find({
-      where: { createdAt: { gte: oneWeekAgo() } },
-      limit: 5,
-    });
+	name: "weekly-digest",
+	schema: z.object({ userId: z.string() }),
+	handler: async ({ input, collections, db }) => {
+		// Full AppContext available — fetch data, call services
+		const user = await collections.users.findOne({
+			where: { id: input.userId },
+		});
+		const recentPosts = await collections.posts.find({
+			where: { createdAt: { gte: oneWeekAgo() } },
+			limit: 5,
+		});
 
-    return {
-      subject: `Weekly digest for ${user.name}`,
-      html: renderDigestHtml(user, recentPosts.docs),
-      text: renderDigestText(user, recentPosts.docs), // optional plain text
-    };
-  },
+		return {
+			subject: `Weekly digest for ${user.name}`,
+			html: renderDigestHtml(user, recentPosts.docs),
+			text: renderDigestText(user, recentPosts.docs), // optional plain text
+		};
+	},
 });
 ```
 
@@ -100,11 +100,11 @@ export default email({
 
 The handler must return:
 
-| Property | Type | Required | Description |
-|---|---|---|---|
-| `subject` | `string` | Yes | Email subject line |
-| `html` | `string` | Yes | HTML body |
-| `text` | `string` | No | Plain text fallback |
+| Property  | Type     | Required | Description         |
+| --------- | -------- | -------- | ------------------- |
+| `subject` | `string` | Yes      | Email subject line  |
+| `html`    | `string` | Yes      | HTML body           |
+| `text`    | `string` | No       | Plain text fallback |
 
 ## Sending from Hooks and Jobs
 
@@ -124,13 +124,13 @@ The handler must return:
 
 ```ts title="In a background job"
 export default job({
-  handler: async ({ input, email }) => {
-    await email.sendTemplate({
-      template: "weeklyDigest",
-      to: input.email,
-      input: { userId: input.userId },
-    });
-  },
+	handler: async ({ input, email }) => {
+		await email.sendTemplate({
+			template: "weeklyDigest",
+			to: input.email,
+			input: { userId: input.userId },
+		});
+	},
 });
 ```
 

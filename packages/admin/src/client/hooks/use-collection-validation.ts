@@ -9,6 +9,7 @@ import type { ZodErrorMapFn } from "questpie/shared";
 import { useCallback, useMemo } from "react";
 import type { FieldErrors, FieldValues, Resolver } from "react-hook-form";
 import type { z } from "zod";
+
 import { createFormSchema } from "../builder/validation";
 import { useCollectionFields } from "./use-collection-fields";
 import { useValidationErrorMap } from "./use-validation-error-map";
@@ -21,6 +22,10 @@ interface CollectionValidationResult {
 	schema: z.ZodTypeAny | undefined;
 	/** Error map for i18n support */
 	errorMap: ZodErrorMapFn;
+}
+
+interface UseCollectionValidationOptions {
+	enabled?: boolean;
 }
 
 /**
@@ -47,12 +52,19 @@ interface CollectionValidationResult {
  */
 export function useCollectionValidation<
 	TFieldValues extends FieldValues = FieldValues,
->(collection: string): Resolver<TFieldValues> | undefined {
-	const { fields } = useCollectionFields(collection);
+>(
+	collection: string,
+	options: UseCollectionValidationOptions = {},
+): Resolver<TFieldValues> | undefined {
+	const enabled = options.enabled ?? true;
+	const { fields } = useCollectionFields(collection, {
+		schemaQueryOptions: { enabled },
+	});
 	const schema = useMemo(() => {
-		if (!fields || Object.keys(fields).length === 0) return undefined;
+		if (!enabled || !fields || Object.keys(fields).length === 0)
+			return undefined;
 		return createFormSchema(fields);
-	}, [fields]);
+	}, [enabled, fields]);
 	const errorMap = useValidationErrorMap();
 
 	const resolver: Resolver<TFieldValues> = useCallback(
@@ -84,7 +96,7 @@ export function useCollectionValidation<
 		[schema, errorMap],
 	);
 
-	return schema ? resolver : undefined;
+	return enabled && schema ? resolver : undefined;
 }
 
 /**

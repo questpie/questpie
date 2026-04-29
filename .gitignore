@@ -48,3 +48,6 @@ yarn-error.log*
 
 .opencode
 .claude
+
+**/*.tsbuildinfo
+tmp/

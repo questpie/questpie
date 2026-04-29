@@ -1,7 +1,6 @@
 {
 	"name": "@questpie/openapi",
-	"version": "2.0.0",
-	"type": "module",
+	"version": "3.0.10",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -10,21 +9,10 @@
 	"files": [
 		"dist"
 	],
-	"scripts": {
-		"build": "tsdown",
-		"check-types": "tsc --noEmit"
-	},
-	"dependencies": {
-		"questpie": "workspace:*",
-		"zod": "^4.2.1"
-	},
-	"devDependencies": {
-		"bun-types": "latest",
-		"tsdown": "^0.18.3"
-	},
-	"peerDependencies": {
-		"questpie": "^2.0.0"
-	},
+	"type": "module",
+	"main": "./dist/server.mjs",
+	"module": "./dist/server.mjs",
+	"types": "./dist/server.d.mts",
 	"exports": {
 		".": {
 			"types": "./dist/server.d.mts",
@@ -50,7 +38,19 @@
 			"./package.json": "./package.json"
 		}
 	},
-	"main": "./dist/server.mjs",
-	"module": "./dist/server.mjs",
-	"types": "./dist/server.d.mts"
+	"scripts": {
+		"build": "tsdown",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"questpie": "workspace:*",
+		"zod": "^4.2.1"
+	},
+	"devDependencies": {
+		"bun-types": "latest",
+		"tsdown": "^0.18.3"
+	},
+	"peerDependencies": {
+		"questpie": "^3.0.0"
+	}
 }

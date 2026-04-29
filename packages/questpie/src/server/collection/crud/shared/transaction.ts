@@ -67,14 +67,14 @@
  *
  *     return withTransaction(db, async (tx) => {
  *       // Create order
- *       const order = await app.api.collections.orders.create(
+ *       const order = await app.collections.orders.create(
  *         { cartId: input.cartId, status: "pending" },
  *         { db: tx }
  *       );
  *
  *       // Deduct inventory (nested CRUD - reuses same transaction)
  *       for (const item of order.items) {
- *         await app.api.collections.products.updateById(
+ *         await app.collections.products.updateById(
  *           { id: item.productId, data: { stock: sql`stock - ${item.qty}` } },
  *           { db: tx }
  *         );
@@ -304,12 +304,13 @@ export async function withTransaction<T>(
 	};
 
 	// Execute transaction within the AsyncLocalStorage context
-	const result = await transactionStorage.run(ctx, async () => {
+	// Cast needed because some @types/node versions type run() as returning void
+	const result = (await transactionStorage.run(ctx, async () => {
 		return db.transaction(async (tx: any) => {
 			ctx.tx = tx;
 			return fn(tx);
 		});
-	});
+	})) as T;
 
 	// Transaction committed successfully - run afterCommit callbacks
 	// These run sequentially to maintain predictable ordering

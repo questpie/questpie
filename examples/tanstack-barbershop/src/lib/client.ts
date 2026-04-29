@@ -5,6 +5,7 @@
  */
 
 import { createClient } from "questpie/client";
+
 import type { AppConfig } from "#questpie";
 
 export const client = createClient<AppConfig>({
@@ -14,5 +15,3 @@ export const client = createClient<AppConfig>({
 			: process.env.APP_URL || "http://localhost:3000",
 	basePath: "/api",
 });
-
-export type AppClient = typeof client;

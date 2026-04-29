@@ -1,12 +1,12 @@
-import type { Collection } from "#questpie/server/collection/builder/collection.js";
 import type { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
+import type { Collection } from "#questpie/server/collection/builder/collection.js";
 import type {
 	CollectionAccess,
 	ExtractFieldsByLocation,
 	InferTableWithColumns,
 } from "#questpie/server/collection/builder/types.js";
-import type { Global } from "#questpie/server/global/builder/global.js";
 import type { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
+import type { Global } from "#questpie/server/global/builder/global.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
 import type {
 	AnyCollectionOrBuilder,
@@ -21,16 +21,18 @@ import type {
 type NonLocalizedFields<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
-> = TFields extends Record<string, { $types: any; toColumn: any }>
-	? ExtractFieldsByLocation<TFields, "main">
-	: Omit<TFields, TLocalized[number]>;
+> =
+	TFields extends Record<string, { $types: any; toColumn: any }>
+		? ExtractFieldsByLocation<TFields, "main">
+		: Omit<TFields, TLocalized[number]>;
 
 type LocalizedFields<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
-> = TFields extends Record<string, { $types: any; toColumn: any }>
-	? ExtractFieldsByLocation<TFields, "i18n">
-	: Pick<TFields, TLocalized[number]>;
+> =
+	TFields extends Record<string, { $types: any; toColumn: any }>
+		? ExtractFieldsByLocation<TFields, "i18n">
+		: Pick<TFields, TLocalized[number]>;
 
 /**
  * Resolve which fields property to use for schema inference.
@@ -63,7 +65,7 @@ type HasI18nFields<
 		: false
 	: [
 				keyof ExtractFieldsByLocation<TState["fieldDefinitions"], "i18n">,
-			] extends [never]
+		  ] extends [never]
 		? false
 		: true;
 
@@ -82,15 +84,16 @@ import type { BetterAuthOptions } from "better-auth";
 import type { drizzle as drizzleBun } from "drizzle-orm/bun-sql";
 import type { drizzle as drizzlePgLite } from "drizzle-orm/pglite";
 import type { DriverContract } from "flydrive/types";
-import type { MailerConfig } from "../integrated/mailer/index.js";
-import type { QueueConfig as BaseQueueConfig } from "../integrated/queue/types.js";
-import type { RealtimeConfig } from "../integrated/realtime/index.js";
+
+import type { MailerConfig } from "../modules/core/integrated/mailer/types.js";
+import type { QueueConfig as BaseQueueConfig } from "../modules/core/integrated/queue/types.js";
+import type { RealtimeConfig } from "../modules/core/integrated/realtime/types.js";
 import type {
 	SearchAdapter,
 	SearchConfig,
-} from "../integrated/search/index.js";
+} from "../modules/core/integrated/search/types.js";
 import type { Migration } from "../migration/types.js";
-import type { Seed, SeedCategory, SeedsConfig } from "../seed/types.js";
+import type { SeedCategory, SeedsConfig } from "../seed/types.js";
 
 export type DrizzleSchemaFromCollections<
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
@@ -291,7 +294,7 @@ export interface StorageBaseConfig {
 
 /**
  * Local filesystem storage configuration.
- * QuestPie creates FSDriver and serves files at `/storage/files/:key`.
+ * QUESTPIE creates FSDriver and serves files at `/storage/files/:key`.
  */
 export interface StorageLocalConfig extends StorageBaseConfig {
 	/**
@@ -440,12 +443,12 @@ export interface QuestpieConfig {
 	/**
 	 * Logger configuration
 	 */
-	logger?: import("../integrated/logger").LoggerConfig;
+	logger?: import("../modules/core/integrated/logger/types.js").LoggerConfig;
 
 	/**
 	 * KV store configuration
 	 */
-	kv?: import("../integrated/kv").KVConfig;
+	kv?: import("../modules/core/integrated/kv/types.js").KVConfig;
 
 	/**
 	 * Migration configuration
@@ -519,13 +522,6 @@ export interface QuestpieConfig {
 	translations?: TranslationsConfig;
 
 	/**
-	 * Context resolver for extending request context.
-	 * Called on each request to add custom properties (e.g., tenantId, propertyId).
-	 * Defined via `.context()` on the builder.
-	 */
-	contextResolver?: ContextResolver;
-
-	/**
 	 * Global lifecycle hooks that fire for ALL collections/globals.
 	 * Registered via `.hooks()` on the builder.
 	 */
@@ -576,25 +572,6 @@ export interface ContextExtensions {
 // Context Extension System
 // ============================================================================
 
-/**
- * Interface for extending request context via module augmentation.
- * Add custom properties that will be available in all access functions, hooks, etc.
- *
- * @example
- * ```ts
- * declare global {
- *   namespace Questpie {
- *     interface QuestpieContextExtension {
- *       tenantId: string | null
- *       propertyId: string | null
- *     }
- *   }
- * }
- * ```
- */
-// biome-ignore lint/suspicious/noEmptyInterface: Designed to be augmented
-export interface QuestpieContextExtension
-	extends Questpie.QuestpieContextExtension {}
 
 /**
  * Parameters passed to the context resolver function.

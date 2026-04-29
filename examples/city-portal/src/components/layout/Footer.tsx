@@ -5,6 +5,7 @@
  */
 
 import { Link } from "@tanstack/react-router";
+
 import type { FooterLink, SocialLink } from "@/questpie/server/globals";
 
 interface FooterProps {
@@ -44,14 +45,14 @@ export function Footer({
 	const currentYear = new Date().getFullYear();
 
 	return (
-		<footer className="border-t bg-muted/30">
+		<footer className="bg-muted/30 border-t">
 			<div className="container mx-auto px-4 py-12">
-				<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+				<div className="grid grid-cols-1 gap-8 md:grid-cols-3">
 					{/* About */}
 					<div>
-						<h3 className="font-semibold mb-4">{cityName} Council</h3>
+						<h3 className="mb-4 font-semibold">{cityName} Council</h3>
 						{footerText && (
-							<p className="text-sm text-muted-foreground mb-4">{footerText}</p>
+							<p className="text-muted-foreground mb-4 text-sm">{footerText}</p>
 						)}
 						{/* Social Links */}
 						{socialLinks.length > 0 && (
@@ -66,7 +67,7 @@ export function Footer({
 										aria-label={link.platform}
 									>
 										<svg
-											className="w-5 h-5"
+											className="h-5 w-5"
 											viewBox="0 0 24 24"
 											fill="currentColor"
 											aria-hidden="true"
@@ -82,13 +83,13 @@ export function Footer({
 
 					{/* Quick Links */}
 					<div>
-						<h3 className="font-semibold mb-4">Quick Links</h3>
+						<h3 className="mb-4 font-semibold">Quick Links</h3>
 						<ul className="space-y-2">
 							{footerLinks.map((link) => (
 								<li key={link.href}>
 									<Link
 										to={link.href}
-										className="text-sm text-muted-foreground hover:text-primary transition-colors"
+										className="text-muted-foreground hover:text-primary text-sm transition-colors"
 									>
 										{link.label}
 									</Link>
@@ -99,8 +100,8 @@ export function Footer({
 
 					{/* Contact */}
 					<div>
-						<h3 className="font-semibold mb-4">Contact Us</h3>
-						<div className="space-y-2 text-sm text-muted-foreground">
+						<h3 className="mb-4 font-semibold">Contact Us</h3>
+						<div className="text-muted-foreground space-y-2 text-sm">
 							{address && <p className="whitespace-pre-line">{address}</p>}
 							{contactEmail && (
 								<p>
@@ -129,7 +130,7 @@ export function Footer({
 				</div>
 
 				{/* Copyright */}
-				<div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
+				<div className="text-muted-foreground mt-8 border-t pt-8 text-center text-sm">
 					<p>
 						© {currentYear}{" "}
 						{copyrightText || `${cityName} Council. All rights reserved.`}

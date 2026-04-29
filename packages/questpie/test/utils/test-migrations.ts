@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+
 import type { Collection } from "../../src/server/collection/builder/collection.js";
 import type { AnyCollectionState } from "../../src/server/collection/builder/types.js";
 import type { Migration } from "../../src/server/migration/types.js";

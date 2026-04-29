@@ -6,9 +6,10 @@
  */
 
 import * as React from "react";
+
+import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
-	selectBrandName,
 	selectClient,
 	selectNavigate,
 	useAdminStore,
@@ -69,17 +70,17 @@ export interface SetupPageProps {
  * ```
  */
 export function SetupPage({
-	title = "Welcome",
-	description = "Create your admin account to get started",
+	title,
+	description,
 	logo,
 	redirectTo,
 	loginPath,
 	showLoginLink = true,
 }: SetupPageProps) {
+	const { t } = useTranslation();
 	const client = useAdminStore(selectClient);
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
-	const brandName = useAdminStore(selectBrandName);
 
 	const [error, setError] = React.useState<string | null>(null);
 
@@ -100,7 +101,7 @@ export function SetupPage({
 				if (result.error) {
 					setError(result.error);
 				} else {
-					setError("Failed to create admin account");
+					setError(t("error.failedToCreateAdminAccount"));
 				}
 				return;
 			}
@@ -111,7 +112,7 @@ export function SetupPage({
 			if (err instanceof Error) {
 				setError(err.message);
 			} else {
-				setError("An error occurred");
+				setError(t("error.anErrorOccurred"));
 			}
 		}
 	};
@@ -122,20 +123,20 @@ export function SetupPage({
 
 	return (
 		<AuthLayout
-			title={title}
-			description={description}
-			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			title={title ?? t("auth.createFirstAdmin")}
+			description={description ?? t("auth.createAccountDescription")}
+			logo={logo}
 			className="qa-setup-page"
 			footer={
 				showLoginLink && (
 					<p className="text-muted-foreground text-center text-xs">
-						Already have an account?{" "}
+						{t("auth.alreadyHaveAccount")}{" "}
 						<button
 							type="button"
 							onClick={handleLoginClick}
-							className="text-primary hover:underline"
+							className="text-foreground underline-offset-4 hover:underline"
 						>
-							Sign in
+							{t("auth.signIn")}
 						</button>
 					</p>
 				)
@@ -143,13 +144,5 @@ export function SetupPage({
 		>
 			<SetupForm onSubmit={handleSubmit} error={error} />
 		</AuthLayout>
-	);
-}
-
-function DefaultLogo({ brandName }: { brandName: string }) {
-	return (
-		<div className="text-center">
-			<h1 className="text-xl font-bold">{brandName}</h1>
-		</div>
 	);
 }

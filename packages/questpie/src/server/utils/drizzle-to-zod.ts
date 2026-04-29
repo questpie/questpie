@@ -102,14 +102,12 @@ type HasDefault<T extends PgColumn> = T["_"]["hasDefault"] extends true
 	: false;
 
 // Apply nullability and optionality to base type
-type ApplyModifiers<
-	TBase extends z.ZodTypeAny,
-	TColumn extends PgColumn,
-> = IsNullable<TColumn> extends true
-	? HasDefault<TColumn> extends true
-		? z.ZodOptional<z.ZodNullable<TBase>>
-		: z.ZodNullable<TBase>
-	: TBase;
+type ApplyModifiers<TBase extends z.ZodTypeAny, TColumn extends PgColumn> =
+	IsNullable<TColumn> extends true
+		? HasDefault<TColumn> extends true
+			? z.ZodOptional<z.ZodNullable<TBase>>
+			: z.ZodNullable<TBase>
+		: TBase;
 
 // Final Zod type for a column
 type ColumnToZodType<T extends PgColumn> = ApplyModifiers<

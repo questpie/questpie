@@ -3,46 +3,50 @@ title: Relations
 description: Define relationships between collections — belongsTo, hasMany, and many-to-many through junction tables.
 ---
 
-# Relations
-
-Relations link collections together. QuestPie supports belongs-to, has-many, and many-to-many relationships.
+Relations link collections together. QUESTPIE supports belongs-to, has-many, and many-to-many relationships.
 
 ## Belongs-To (Single Relation)
 
 A field that references one record from another collection:
 
 ```ts title="collections/appointments.ts"
-export const appointments = collection("appointments")
-  .fields(({ f }) => ({
-    customer: f.relation("user").required(),
-    barber: f.relation("barbers").required(),
-    service: f.relation("services").required(),
-    // ...
-  }));
+import { collection } from "#questpie/factories";
+
+export const appointments = collection("appointments").fields(({ f }) => ({
+	customer: f.relation("user").required(),
+	barber: f.relation("barbers").required(),
+	service: f.relation("services").required(),
+	// ...
+}));
 ```
 
 This creates a foreign key column `customer` → `user.id`, `barber` → `barbers.id`, etc.
 
 ### Options
 
-| Option | Type | Description |
-|---|---|---|
-| `to` | `string` | Target collection name |
-| `required` | `boolean` | Whether the relation is required |
-| `label` | `string \| i18n` | Display label |
-| `onDelete` | `"cascade" \| "set null" \| "restrict"` | Foreign key behavior |
+| Option     | Type                                    | Description                      |
+| ---------- | --------------------------------------- | -------------------------------- |
+| `to`       | `string`                                | Target collection name           |
+| `required` | `boolean`                               | Whether the relation is required |
+| `label`    | `string \| i18n`                        | Display label                    |
+| `onDelete` | `"cascade" \| "set null" \| "restrict"` | Foreign key behavior             |
 
 ## Has-Many (Reverse Relation)
 
 Define the reverse side of a belongs-to — one record has many related records:
 
 ```ts title="collections/services.ts"
-export const services = collection("services")
-  .fields(({ f }) => ({
-    name: f.text().required(),
-    // Reverse: this service has many barbers (via barberServices junction)
-    barbers: f.relation("barbers").manyToMany({ through: "barberServices", sourceField: "service", targetField: "barber" }),
-  }));
+import { collection } from "#questpie/factories";
+
+export const services = collection("services").fields(({ f }) => ({
+	name: f.text().required(),
+	// Reverse: this service has many barbers (via barberServices junction)
+	barbers: f.relation("barbers").manyToMany({
+		through: "barberServices",
+		sourceField: "service",
+		targetField: "barber",
+	}),
+}));
 ```
 
 ## Many-to-Many (Through Junction)
@@ -50,14 +54,14 @@ export const services = collection("services")
 Many-to-many requires a junction collection:
 
 ```ts title="collections/barber-services.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export const barberServices = collection("barberServices")
-  .fields(({ f }) => ({
-    barber: f.relation("barbers").required().onDelete("cascade"),
-    service: f.relation("services").required().onDelete("cascade"),
-  }))
-  .admin(({ c }) => ({ hidden: true })); // Hide from admin sidebar
+	.fields(({ f }) => ({
+		barber: f.relation("barbers").required().onDelete("cascade"),
+		service: f.relation("services").required().onDelete("cascade"),
+	}))
+	.admin(({ c }) => ({ hidden: true })); // Hide from admin sidebar
 ```
 
 Then reference it from both sides:
@@ -72,10 +76,10 @@ barbers: f.relation("barbers").manyToMany({ through: "barberServices", sourceFie
 
 ### Through Options
 
-| Option | Type | Description |
-|---|---|---|
-| `through` | `string` | Junction collection name |
-| `sourceField` | `string` | FK in junction → this collection |
+| Option        | Type     | Description                        |
+| ------------- | -------- | ---------------------------------- |
+| `through`     | `string` | Junction collection name           |
+| `sourceField` | `string` | FK in junction → this collection   |
 | `targetField` | `string` | FK in junction → target collection |
 
 ## Querying Relations
@@ -84,10 +88,10 @@ barbers: f.relation("barbers").manyToMany({ through: "barberServices", sourceFie
 
 ```ts
 const barber = await collections.barbers.findOne({
-  where: { id: "abc" },
-  with: {
-    services: true,  // Include related services
-  },
+	where: { id: "abc" },
+	with: {
+		services: true, // Include related services
+	},
 });
 // barber.services: Service[]
 ```
@@ -96,10 +100,10 @@ const barber = await collections.barbers.findOne({
 
 ```ts
 const appointments = await collections.appointments.find({
-  where: {
-    barber: barberId,    // Filter by relation ID
-    status: "pending",
-  },
+	where: {
+		barber: barberId, // Filter by relation ID
+		status: "pending",
+	},
 });
 ```
 
@@ -107,8 +111,8 @@ const appointments = await collections.appointments.find({
 
 ```ts
 const barbers = await client.collections.barbers.find({
-  with: { services: true },
-  where: { isActive: true },
+	with: { services: true },
+	where: { isActive: true },
 });
 ```
 

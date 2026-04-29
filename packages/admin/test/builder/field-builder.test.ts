@@ -5,12 +5,14 @@
  */
 
 import { describe, expect, it } from "bun:test";
+
 import {
 	configureField,
 	type FieldDefinition,
 	type FieldInstance,
 	field,
 } from "#questpie/admin/client/builder/field/field";
+
 import {
 	createTextField,
 	MockTextareaField,

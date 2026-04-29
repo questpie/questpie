@@ -11,6 +11,7 @@ import {
 	char,
 	index,
 	integer,
+	pgSchema,
 	pgTable,
 	smallint,
 	text,
@@ -19,6 +20,7 @@ import {
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
+
 import { Collection } from "#questpie/server/collection/builder/collection.js";
 import type {
 	ExtractFieldsByLocation,
@@ -33,9 +35,10 @@ import { createGlobalValidationSchema } from "#questpie/server/global/builder/va
 import {
 	extractWorkflowFromVersioning,
 	resolveWorkflowConfig,
-} from "#questpie/server/workflow/config.js";
+} from "#questpie/server/modules/core/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type { GlobalMeta } from "#questpie/shared/global-meta.js";
+
 import { GlobalCRUDGenerator } from "../crud/global-crud-generator.js";
 import type { GlobalCRUD } from "../crud/types.js";
 
@@ -43,7 +46,9 @@ import type { GlobalCRUD } from "../crud/types.js";
  * Default ID column factory for globals
  */
 const defaultIdColumn = () =>
-	text("id").primaryKey().default(sql`gen_random_uuid()`);
+	text("id")
+		.primaryKey()
+		.default(sql`gen_random_uuid()`);
 
 /**
  * Helper to get column config from a Drizzle column
@@ -275,6 +280,16 @@ export class Global<TState extends GlobalBuilderState> {
 		return crud.generate() as any;
 	}
 
+	/**
+	 * Resolve the table builder for this global.
+	 * When `options.schema` is set, returns `pgSchema(name).table`; otherwise `pgTable`.
+	 */
+	private getTableBuilder(): typeof pgTable {
+		const schemaName = this.state.options?.schema;
+		if (!schemaName) return pgTable;
+		return pgSchema(schemaName).table as unknown as typeof pgTable;
+	}
+
 	private generateMainTable(): PgTable {
 		const tableName = this.state.name;
 		const columns: Record<string, any> = {};
@@ -302,14 +317,16 @@ export class Global<TState extends GlobalBuilderState> {
 			Object.assign(columns, Collection.timestampsCols());
 		}
 
+		const tableBuilder = this.getTableBuilder();
+
 		// Add unique index on scope_id for scoped globals
 		if (isScoped) {
-			return pgTable(tableName, columns as any, (t) => ({
+			return tableBuilder(tableName, columns as any, (t) => ({
 				scopeIdx: uniqueIndex(`${tableName}_scope_idx`).on(t.scopeId),
 			}));
 		}
 
-		return pgTable(tableName, columns as any);
+		return tableBuilder(tableName, columns as any);
 	}
 
 	private generateI18nTable(): PgTable | null {
@@ -321,7 +338,9 @@ export class Global<TState extends GlobalBuilderState> {
 		const parentIdColumn = (this.table as any).id as PgColumn;
 
 		const columns: Record<string, any> = {
-			id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+			id: text("id")
+				.primaryKey()
+				.default(sql`gen_random_uuid()`),
 			parentId: cloneColumnType(parentIdColumn, "parent_id")
 				.notNull()
 				.references(() => (this.table as any).id, { onDelete: "cascade" }),
@@ -335,7 +354,8 @@ export class Global<TState extends GlobalBuilderState> {
 			}
 		}
 
-		return pgTable(tableName, columns as any, (t) => ({
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => ({
 			parentLocaleIdx: uniqueIndex().on(t.parentId, t.locale),
 		}));
 	}
@@ -383,7 +403,8 @@ export class Global<TState extends GlobalBuilderState> {
 			Object.assign(columns, Collection.timestampsCols());
 		}
 
-		return pgTable(tableName, columns as any, (t) => ({
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => ({
 			recordVersionIdx: index().on(t.id, t.versionNumber),
 			recordStageVersionIdx: index().on(t.id, t.versionStage, t.versionNumber),
 			versionCreatedAtIdx: index().on(t.versionCreatedAt),
@@ -403,7 +424,9 @@ export class Global<TState extends GlobalBuilderState> {
 		const parentIdColumn = (this.table as any).id as PgColumn;
 
 		const columns: Record<string, any> = {
-			id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+			id: text("id")
+				.primaryKey()
+				.default(sql`gen_random_uuid()`),
 			parentId: cloneColumnType(parentIdColumn, "parent_id").notNull(),
 			versionNumber: integer("version_number").notNull(),
 			locale: text("locale").notNull(),
@@ -416,7 +439,8 @@ export class Global<TState extends GlobalBuilderState> {
 			}
 		}
 
-		return pgTable(tableName, columns as any, (t) => ({
+		const tableBuilder = this.getTableBuilder();
+		return tableBuilder(tableName, columns as any, (t) => ({
 			parentVersionLocaleIdx: uniqueIndex().on(
 				t.parentId,
 				t.versionNumber,

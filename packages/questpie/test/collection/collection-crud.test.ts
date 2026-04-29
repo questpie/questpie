@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { collection } from "../../src/server/index.js";
+
+import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -95,7 +96,7 @@ describe("collection CRUD", () => {
 	it("creates, updates localized fields, and falls back to default locale", async () => {
 		const ctx = createTestContext();
 
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				id: crypto.randomUUID(),
 				sku: "sku-1",
@@ -105,7 +106,7 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		await setup.app.api.collections.products.updateById(
+		await setup.app.collections.products.updateById(
 			{
 				id: created.id,
 				data: { name: "Nazov SK" },
@@ -113,13 +114,13 @@ describe("collection CRUD", () => {
 			createTestContext({ locale: "sk" }),
 		);
 
-		const skRow = await setup.app.api.collections.products.findOne(
+		const skRow = await setup.app.collections.products.findOne(
 			{ where: { id: created.id } },
 			createTestContext({ locale: "sk" }),
 		);
 		expect(skRow?.name).toBe("Nazov SK");
 
-		const deRow = await setup.app.api.collections.products.findOne(
+		const deRow = await setup.app.collections.products.findOne(
 			{ where: { id: created.id } },
 			createTestContext({ locale: "de" }),
 		);
@@ -129,7 +130,7 @@ describe("collection CRUD", () => {
 	it("soft delete hides rows from find", async () => {
 		const ctx = createTestContext();
 
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				id: crypto.randomUUID(),
 				sku: "sku-2",
@@ -138,12 +139,12 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		await setup.app.api.collections.products.deleteById(
+		await setup.app.collections.products.deleteById(
 			{ id: created.id },
 			ctx,
 		);
 
-		const rows = await setup.app.api.collections.products.find({}, ctx);
+		const rows = await setup.app.collections.products.find({}, ctx);
 		expect(rows.docs.length).toBe(0);
 		expect(rows.totalDocs).toBe(0);
 	});
@@ -152,7 +153,7 @@ describe("collection CRUD", () => {
 		const _ctx = createTestContext();
 
 		await expect(
-			setup.app.api.collections.locked_products.create(
+			setup.app.collections.locked_products.create(
 				{
 					id: crypto.randomUUID(),
 					sku: "sku-3",
@@ -162,7 +163,7 @@ describe("collection CRUD", () => {
 			),
 		).rejects.toThrow("User does not have permission to create records");
 
-		const created = await setup.app.api.collections.locked_products.create(
+		const created = await setup.app.collections.locked_products.create(
 			{
 				id: crypto.randomUUID(),
 				sku: "sku-4",
@@ -176,7 +177,7 @@ describe("collection CRUD", () => {
 	it("records versions on create, update, and delete", async () => {
 		const ctx = createTestContext();
 
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				id: crypto.randomUUID(),
 				sku: "sku-5",
@@ -185,7 +186,7 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		await setup.app.api.collections.products.updateById(
+		await setup.app.collections.products.updateById(
 			{
 				id: created.id,
 				data: { sku: "sku-5b" },
@@ -193,12 +194,12 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		await setup.app.api.collections.products.deleteById(
+		await setup.app.collections.products.deleteById(
 			{ id: created.id },
 			ctx,
 		);
 
-		const versions = await setup.app.api.collections.products.findVersions(
+		const versions = await setup.app.collections.products.findVersions(
 			{ id: created.id },
 			ctx,
 		);
@@ -209,7 +210,7 @@ describe("collection CRUD", () => {
 		const ctx = createTestContext();
 
 		// Create a product
-		const created = await setup.app.api.collections.products.create(
+		const created = await setup.app.collections.products.create(
 			{
 				id: crypto.randomUUID(),
 				sku: "TITLE-TEST",
@@ -223,21 +224,21 @@ describe("collection CRUD", () => {
 		expect(created._title).toBe("Test Product");
 
 		// _title should be returned on findOne
-		const found = await setup.app.api.collections.products.findOne(
+		const found = await setup.app.collections.products.findOne(
 			{ where: { id: created.id } },
 			ctx,
 		);
 		expect(found?._title).toBe("Test Product");
 
 		// _title should be returned on find (list)
-		const list = await setup.app.api.collections.products.find(
+		const list = await setup.app.collections.products.find(
 			{ where: { id: created.id } },
 			ctx,
 		);
 		expect(list.docs[0]._title).toBe("Test Product");
 
 		// _title should be returned on updateById
-		const updated = await setup.app.api.collections.products.updateById(
+		const updated = await setup.app.collections.products.updateById(
 			{
 				id: created.id,
 				data: { name: "Updated Product" },
@@ -252,7 +253,7 @@ describe("collection CRUD", () => {
 		const id = crypto.randomUUID();
 
 		// Create a simple item (collection without .title())
-		const created = await setup.app.api.collections.simple_items.create(
+		const created = await setup.app.collections.simple_items.create(
 			{
 				id,
 				name: "Simple Item",
@@ -266,21 +267,21 @@ describe("collection CRUD", () => {
 		expect(created._title).toBe(id);
 
 		// _title should be returned on findOne
-		const found = await setup.app.api.collections.simple_items.findOne(
+		const found = await setup.app.collections.simple_items.findOne(
 			{ where: { id: created.id } },
 			ctx,
 		);
 		expect(found?._title).toBe(id);
 
 		// _title should be returned on find (list)
-		const list = await setup.app.api.collections.simple_items.find(
+		const list = await setup.app.collections.simple_items.find(
 			{ where: { id: created.id } },
 			ctx,
 		);
 		expect(list.docs[0]._title).toBe(id);
 
 		// _title should be returned on updateById
-		const updated = await setup.app.api.collections.simple_items.updateById(
+		const updated = await setup.app.collections.simple_items.updateById(
 			{
 				id: created.id,
 				data: { name: "Updated Simple Item" },
@@ -294,7 +295,7 @@ describe("collection CRUD", () => {
 		const ctx = createTestContext();
 
 		// Create multiple products with different titles
-		await setup.app.api.collections.products.create(
+		await setup.app.collections.products.create(
 			{
 				id: crypto.randomUUID(),
 				sku: "ALPHA-001",
@@ -303,7 +304,7 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		await setup.app.api.collections.products.create(
+		await setup.app.collections.products.create(
 			{
 				id: crypto.randomUUID(),
 				sku: "BETA-002",
@@ -312,7 +313,7 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		await setup.app.api.collections.products.create(
+		await setup.app.collections.products.create(
 			{
 				id: crypto.randomUUID(),
 				sku: "GAMMA-003",
@@ -322,7 +323,7 @@ describe("collection CRUD", () => {
 		);
 
 		// Search for "Alpha" - should match title "Alpha Product"
-		const alphaResults = await setup.app.api.collections.products.find(
+		const alphaResults = await setup.app.collections.products.find(
 			{ search: "Alpha" },
 			ctx,
 		);
@@ -330,7 +331,7 @@ describe("collection CRUD", () => {
 		expect(alphaResults.docs[0]._title).toContain("Alpha");
 
 		// Search for "Beta" - should match title "Beta Product"
-		const betaResults = await setup.app.api.collections.products.find(
+		const betaResults = await setup.app.collections.products.find(
 			{ search: "Beta" },
 			ctx,
 		);
@@ -338,14 +339,14 @@ describe("collection CRUD", () => {
 		expect(betaResults.docs[0]._title).toContain("Beta");
 
 		// Search for "Product" - should match all 3 products
-		const allResults = await setup.app.api.collections.products.find(
+		const allResults = await setup.app.collections.products.find(
 			{ search: "Product" },
 			ctx,
 		);
 		expect(allResults.docs.length).toBe(3);
 
 		// Search for "XYZ" - should return no results
-		const noResults = await setup.app.api.collections.products.find(
+		const noResults = await setup.app.collections.products.find(
 			{ search: "XYZ" },
 			ctx,
 		);
@@ -356,7 +357,7 @@ describe("collection CRUD", () => {
 		const ctx = createTestContext();
 
 		// Create two products
-		const p1 = await setup.app.api.collections.products.create(
+		const p1 = await setup.app.collections.products.create(
 			{
 				sku: "BATCH-1",
 				name: "Original 1",
@@ -364,7 +365,7 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		const p2 = await setup.app.api.collections.products.create(
+		const p2 = await setup.app.collections.products.create(
 			{
 				sku: "BATCH-2",
 				name: "Original 2",
@@ -373,7 +374,7 @@ describe("collection CRUD", () => {
 		);
 
 		// Update both
-		const updated = await setup.app.api.collections.products.update(
+		const updated = await setup.app.collections.products.update(
 			{
 				where: { id: { in: [p1.id, p2.id] } },
 				data: { name: "Updated Batch" },
@@ -393,7 +394,7 @@ describe("collection CRUD", () => {
 	it("reads latest snapshot from non-initial workflow stage", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created = await setup.app.api.collections.workflow_posts.create(
+		const created = await setup.app.collections.workflow_posts.create(
 			{
 				id: crypto.randomUUID(),
 				title: "Draft v1",
@@ -401,7 +402,7 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		await setup.app.api.collections.workflow_posts.updateById(
+		await setup.app.collections.workflow_posts.updateById(
 			{
 				id: created.id,
 				data: { title: "Published v1" },
@@ -409,7 +410,7 @@ describe("collection CRUD", () => {
 			createTestContext({ accessMode: "system", stage: "published" }),
 		);
 
-		await setup.app.api.collections.workflow_posts.updateById(
+		await setup.app.collections.workflow_posts.updateById(
 			{
 				id: created.id,
 				data: { title: "Draft v2" },
@@ -417,13 +418,13 @@ describe("collection CRUD", () => {
 			createTestContext({ accessMode: "system" }),
 		);
 
-		const draftRow = await setup.app.api.collections.workflow_posts.findOne(
+		const draftRow = await setup.app.collections.workflow_posts.findOne(
 			{ where: { id: created.id } },
 			createTestContext({ accessMode: "system" }),
 		);
 		expect(draftRow?.title).toBe("Draft v2");
 
-		const publishedRow = await setup.app.api.collections.workflow_posts.findOne(
+		const publishedRow = await setup.app.collections.workflow_posts.findOne(
 			{ where: { id: created.id }, stage: "published" },
 			createTestContext({ accessMode: "system" }),
 		);
@@ -434,7 +435,7 @@ describe("collection CRUD", () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
 		const created =
-			await setup.app.api.collections.guarded_workflow_posts.create(
+			await setup.app.collections.guarded_workflow_posts.create(
 				{
 					id: crypto.randomUUID(),
 					title: "Draft",
@@ -443,7 +444,7 @@ describe("collection CRUD", () => {
 			);
 
 		await expect(
-			setup.app.api.collections.guarded_workflow_posts.updateById(
+			setup.app.collections.guarded_workflow_posts.updateById(
 				{
 					id: created.id,
 					data: { title: "Invalid publish" },
@@ -452,7 +453,7 @@ describe("collection CRUD", () => {
 			),
 		).rejects.toThrow('Transition from "draft" to "published" is not allowed');
 
-		await setup.app.api.collections.guarded_workflow_posts.updateById(
+		await setup.app.collections.guarded_workflow_posts.updateById(
 			{
 				id: created.id,
 				data: { title: "Review" },
@@ -460,7 +461,7 @@ describe("collection CRUD", () => {
 			createTestContext({ accessMode: "system", stage: "review" }),
 		);
 
-		await setup.app.api.collections.guarded_workflow_posts.updateById(
+		await setup.app.collections.guarded_workflow_posts.updateById(
 			{
 				id: created.id,
 				data: { title: "Published" },
@@ -469,7 +470,7 @@ describe("collection CRUD", () => {
 		);
 
 		await expect(
-			setup.app.api.collections.guarded_workflow_posts.updateById(
+			setup.app.collections.guarded_workflow_posts.updateById(
 				{
 					id: created.id,
 					data: { title: "Back to draft" },

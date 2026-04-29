@@ -1,6 +1,7 @@
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultComponents from "fumadocs-ui/mdx";
 import type { ComponentProps } from "react";
+
 import { cn } from "@/lib/utils";
 
 export function CustomPre({
@@ -9,10 +10,10 @@ export function CustomPre({
 	...props
 }: ComponentProps<"pre"> & { title?: string }) {
 	return (
-		<div className="group relative my-6 overflow-hidden border border-border bg-card">
+		<div className="group border-border-subtle bg-card relative my-6 overflow-hidden rounded-[var(--surface-radius)] border shadow-[var(--surface-shadow)]">
 			{title && (
-				<div className="border-b border-border bg-card px-4 py-1.5">
-					<span className="font-mono text-[9px] text-muted-foreground tracking-[2px] uppercase">
+				<div className="border-border-subtle bg-surface-low border-b px-4 py-2">
+					<span className="text-muted-foreground font-chrome text-xs font-medium">
 						{title}
 					</span>
 				</div>

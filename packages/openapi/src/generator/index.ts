@@ -3,6 +3,7 @@
  */
 
 import type { Questpie, RoutesTree } from "questpie";
+
 import type { OpenApiConfig, OpenApiSpec } from "../types.js";
 import { generateAuthPaths } from "./auth.js";
 import { generateCollectionPaths } from "./collections.js";

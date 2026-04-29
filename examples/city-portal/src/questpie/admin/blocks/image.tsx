@@ -33,13 +33,13 @@ export function ImageRenderer({ values, data }: BlockProps<"image">) {
 				/>
 			) : (
 				<div
-					className={`w-full bg-muted rounded-lg flex items-center justify-center text-muted-foreground ${aspectClass || "aspect-video"}`}
+					className={`bg-muted text-muted-foreground flex w-full items-center justify-center rounded-lg ${aspectClass || "aspect-video"}`}
 				>
 					No image
 				</div>
 			)}
 			{values.caption && (
-				<figcaption className="mt-3 text-center text-sm text-muted-foreground">
+				<figcaption className="text-muted-foreground mt-3 text-center text-sm">
 					{values.caption}
 				</figcaption>
 			)}

@@ -1,10 +1,12 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+import { useQuery } from "@tanstack/react-query";
 import type * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useId, useMemo, useState } from "react";
+
 import { useIsMobile } from "../../hooks/use-media-query";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 import {
@@ -30,8 +32,9 @@ import { flattenOptions } from "./types";
 const EMPTY_VALUE: string[] = [];
 const EMPTY_OPTIONS: SelectOptions<string> = [];
 
-interface SelectMultiProps<TValue extends string = string>
-	extends BasePrimitiveProps {
+interface SelectMultiProps<
+	TValue extends string = string,
+> extends BasePrimitiveProps {
 	/** Selected values */
 	value: TValue[];
 	/** Change handler */
@@ -40,10 +43,12 @@ interface SelectMultiProps<TValue extends string = string>
 	options?: SelectOptions<TValue>;
 	/** Dynamic options loader */
 	loadOptions?: (search: string) => Promise<SelectOption<TValue>[]>;
+	/** Query key builder for loadOptions */
+	queryKey?: (search: string) => readonly unknown[];
+	/** Prefetch options on mount */
+	prefetchOnMount?: boolean;
 	/** Max selections */
 	maxSelections?: number;
-	/** Debounce delay for loadOptions (ms) */
-	debounceMs?: number;
 	/** External loading state */
 	loading?: boolean;
 	/** Empty state message */
@@ -82,8 +87,9 @@ export function SelectMulti<TValue extends string = string>({
 	onChange,
 	options: staticOptions,
 	loadOptions,
+	queryKey,
+	prefetchOnMount = false,
 	maxSelections,
-	debounceMs = 300,
 	loading: externalLoading = false,
 	emptyMessage = "No options found",
 	placeholder = "Select...",
@@ -97,16 +103,18 @@ export function SelectMulti<TValue extends string = string>({
 	const resolvedValue = value ?? (EMPTY_VALUE as TValue[]);
 	const resolvedStaticOptions = staticOptions ?? EMPTY_OPTIONS;
 	const resolveText = useResolveText();
+	const i18n = useSafeI18n();
+	const t = (key: string, fallback: string) => {
+		const message = i18n?.t(key);
+		return message && message !== key ? message : fallback;
+	};
 	const resolvedPlaceholder = resolveText(placeholder);
 	const resolvedEmptyMessage = resolveText(emptyMessage);
 	const resolvedDrawerTitle = resolveText(drawerTitle);
 	const [open, setOpen] = useState(false);
 	const [search, setSearch] = useState("");
-	const [dynamicOptions, setDynamicOptions] = useState<SelectOption<TValue>[]>(
-		[],
-	);
-	const [isLoading, setIsLoading] = useState(false);
-	const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+	const instanceId = useId();
+	const deferredSearch = useDeferredValue(search);
 	const isMobile = useIsMobile();
 
 	// Flatten static options
@@ -115,15 +123,37 @@ export function SelectMulti<TValue extends string = string>({
 		[resolvedStaticOptions],
 	);
 
-	// Merge static and dynamic options
-	const allOptions = useMemo(() => {
-		if (loadOptions) {
-			return dynamicOptions;
+	const loadOptionsKey = useMemo(
+		() =>
+			queryKey
+				? queryKey(deferredSearch)
+				: ["select-multi", instanceId, deferredSearch],
+		[queryKey, deferredSearch, instanceId],
+	);
+
+	const { data: dynamicOptions = [], isFetching } = useQuery({
+		queryKey: loadOptionsKey,
+		queryFn: () => loadOptions?.(deferredSearch) ?? Promise.resolve([]),
+		enabled: !!loadOptions && (open || prefetchOnMount),
+		staleTime: 30_000,
+		gcTime: 5 * 60_000,
+	});
+
+	const allOptions = useMemo<SelectOption<TValue>[]>(() => {
+		if (!loadOptions) {
+			return flatStaticOptions as SelectOption<TValue>[];
 		}
-		return flatStaticOptions;
+		if (flatStaticOptions.length === 0) {
+			return dynamicOptions as SelectOption<TValue>[];
+		}
+		const mergedMap = [...flatStaticOptions, ...dynamicOptions].reduce(
+			(map, opt) =>
+				new Map(map).set(opt.value as TValue, opt as SelectOption<TValue>),
+			new Map<TValue, SelectOption<TValue>>(),
+		);
+		return Array.from(mergedMap.values());
 	}, [loadOptions, dynamicOptions, flatStaticOptions]);
 
-	// Filter options by search (for static options)
 	const filteredOptions = useMemo(() => {
 		if (loadOptions) {
 			return allOptions;
@@ -135,34 +165,6 @@ export function SelectMulti<TValue extends string = string>({
 			resolveText(opt.label).toLowerCase().includes(search.toLowerCase()),
 		);
 	}, [allOptions, search, loadOptions, resolveText]);
-
-	// Load dynamic options
-	useEffect(() => {
-		if (!loadOptions) return;
-
-		if (debounceRef.current) {
-			clearTimeout(debounceRef.current);
-		}
-
-		debounceRef.current = setTimeout(async () => {
-			setIsLoading(true);
-			try {
-				const results = await loadOptions(search);
-				setDynamicOptions(results);
-				setIsLoading(false);
-			} catch (error) {
-				console.error("Failed to load options:", error);
-				setDynamicOptions([]);
-				setIsLoading(false);
-			}
-		}, debounceMs);
-
-		return () => {
-			if (debounceRef.current) {
-				clearTimeout(debounceRef.current);
-			}
-		};
-	}, [search, loadOptions, debounceMs]);
 
 	// Get label for a value
 	const getLabel = useCallback(
@@ -189,7 +191,11 @@ export function SelectMulti<TValue extends string = string>({
 	);
 
 	const handleRemove = useCallback(
-		(removedValue: TValue, e?: React.MouseEvent) => {
+		(
+			removedValue: TValue,
+			e?: React.MouseEvent | React.PointerEvent | React.KeyboardEvent,
+		) => {
+			e?.preventDefault();
 			e?.stopPropagation();
 			onChange(resolvedValue.filter((v) => v !== removedValue));
 		},
@@ -197,14 +203,28 @@ export function SelectMulti<TValue extends string = string>({
 	);
 
 	const handleClearAll = useCallback(
-		(e: React.MouseEvent) => {
+		(e: React.MouseEvent | React.PointerEvent | React.KeyboardEvent) => {
+			e.preventDefault();
 			e.stopPropagation();
 			onChange([]);
 		},
 		[onChange],
 	);
 
-	const showLoading = isLoading || externalLoading;
+	const handleTriggerKeyDown = useCallback(
+		(event: React.KeyboardEvent) => {
+			if (
+				resolvedValue.length > 0 &&
+				!disabled &&
+				(event.key === "Backspace" || event.key === "Delete")
+			) {
+				handleClearAll(event);
+			}
+		},
+		[disabled, handleClearAll, resolvedValue.length],
+	);
+
+	const showLoading = isFetching || externalLoading;
 	const canAddMore = !maxSelections || resolvedValue.length < maxSelections;
 
 	// Visible and hidden chips
@@ -221,8 +241,8 @@ export function SelectMulti<TValue extends string = string>({
 			aria-invalid={ariaInvalid}
 			tabIndex={0}
 			className={cn(
-				"qa-select-multi flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-border bg-input px-3 py-1.5 text-sm transition-colors",
-				"focus-within:ring-2 focus-within:ring-ring focus-within:border-ring",
+				"qa-select-multi control-surface font-chrome flex h-auto min-h-[var(--control-height)] w-full flex-wrap items-center gap-1 px-3 py-1.5 text-sm",
+				"hover:bg-surface-low focus-within:border-border-strong focus-within:ring-ring/20 aria-expanded:border-border-strong aria-expanded:ring-ring/20 focus-within:ring-3 aria-expanded:ring-3",
 				disabled && "cursor-not-allowed opacity-50",
 				ariaInvalid && "border-destructive ring-destructive/20",
 				className,
@@ -235,16 +255,22 @@ export function SelectMulti<TValue extends string = string>({
 			) : (
 				<>
 					{visibleChips.map((val) => (
-						<Badge key={String(val)} variant="secondary" className="gap-1 pr-1">
-							<span className="truncate max-w-24">{getLabel(val)}</span>
+						<Badge
+							key={String(val)}
+							variant="secondary"
+							className="min-h-7 gap-1 pr-1"
+						>
+							<span className="max-w-24 truncate">{getLabel(val)}</span>
 							{!disabled && (
-								<button
-									type="button"
+								<span
+									aria-hidden="true"
+									title={t("field.removeItem", "Remove option")}
+									onPointerDown={(e) => handleRemove(val, e)}
 									onClick={(e) => handleRemove(val, e)}
-									className="rounded-full hover:bg-muted-foreground/20 p-0.5"
+									className="hover:bg-muted-foreground/20 inline-flex size-5 items-center justify-center rounded-full transition-colors"
 								>
 									<Icon icon="ph:x" className="size-2.5" />
-								</button>
+								</span>
 							)}
 						</Badge>
 					))}
@@ -255,15 +281,17 @@ export function SelectMulti<TValue extends string = string>({
 					)}
 				</>
 			)}
-			<div className="ml-auto flex items-center gap-1 shrink-0">
+			<div className="ml-auto flex shrink-0 items-center gap-1">
 				{resolvedValue.length > 0 && !disabled && (
-					<button
-						type="button"
+					<span
+						aria-hidden="true"
+						title={t("common.clear", "Clear all")}
+						onPointerDown={handleClearAll}
 						onClick={handleClearAll}
-						className="rounded-sm opacity-50 hover:opacity-100 hover:bg-muted p-0.5"
+						className="hover:bg-muted inline-flex size-6 items-center justify-center rounded-md opacity-60 transition-[background-color,opacity] hover:opacity-100"
 					>
 						<Icon icon="ph:x" className="size-3" />
-					</button>
+					</span>
 				)}
 				<Icon icon="ph:plus" className="size-3.5 opacity-50" />
 			</div>
@@ -273,7 +301,7 @@ export function SelectMulti<TValue extends string = string>({
 	const CommandContent = (
 		<Command shouldFilter={!loadOptions}>
 			<CommandInput
-				placeholder="Search..."
+				placeholder={t("ui.searchPlaceholder", "Search...")}
 				value={search}
 				onValueChange={setSearch}
 			/>
@@ -282,7 +310,7 @@ export function SelectMulti<TValue extends string = string>({
 					<div className="flex items-center justify-center py-6">
 						<Icon
 							icon="ph:circle-notch"
-							className="size-4 animate-spin text-muted-foreground"
+							className="text-muted-foreground size-4 animate-spin"
 						/>
 					</div>
 				)}
@@ -303,9 +331,9 @@ export function SelectMulti<TValue extends string = string>({
 							>
 								<div
 									className={cn(
-										"flex size-4 items-center justify-center rounded-sm border",
+										"flex size-4 items-center justify-center border",
 										isSelected
-											? "bg-primary border-primary text-primary-foreground"
+											? "border-foreground bg-foreground text-background"
 											: "border-muted-foreground/30",
 									)}
 								>
@@ -319,7 +347,7 @@ export function SelectMulti<TValue extends string = string>({
 				</CommandGroup>
 			</CommandList>
 			{maxSelections && (
-				<div className="border-t p-2 text-center text-xs text-muted-foreground">
+				<div className="text-muted-foreground border-t p-2 text-center text-xs tabular-nums">
 					{resolvedValue.length} / {maxSelections} selected
 				</div>
 			)}
@@ -334,6 +362,7 @@ export function SelectMulti<TValue extends string = string>({
 					<button
 						type="button"
 						disabled={disabled}
+						onKeyDown={handleTriggerKeyDown}
 						className="w-full text-left"
 					>
 						{TriggerContent}
@@ -357,6 +386,7 @@ export function SelectMulti<TValue extends string = string>({
 					<button
 						type="button"
 						disabled={disabled}
+						onKeyDown={handleTriggerKeyDown}
 						className="w-full text-left"
 					>
 						{TriggerContent}

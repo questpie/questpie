@@ -5,6 +5,9 @@
  */
 
 import { Icon } from "@iconify/react";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+
+import { getBlogPost } from "@/lib/getBlogPosts.function";
 import {
 	PreviewField,
 	PreviewProvider,
@@ -12,8 +15,6 @@ import {
 	type TipTapDoc,
 	useCollectionPreview,
 } from "@questpie/admin/client";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { getBlogPost } from "@/lib/getBlogPosts.function";
 
 export const Route = createFileRoute("/_app/blog/$slug")({
 	loader: async (ctx) => {
@@ -52,12 +53,12 @@ function BlogPostPage() {
 			focusedField={focusedField}
 			onFieldClick={handleFieldClick}
 		>
-			<div className={isPreviewMode ? "preview-mode py-20 px-6" : "py-20 px-6"}>
-				<div className="container max-w-3xl mx-auto">
+			<div className={isPreviewMode ? "preview-mode px-6 py-20" : "px-6 py-20"}>
+				<div className="container mx-auto max-w-3xl">
 					{/* Back Link */}
 					<Link
 						to="/blog"
-						className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-12 transition-colors group"
+						className="text-muted-foreground hover:text-foreground group mb-12 inline-flex items-center gap-2 transition-colors"
 					>
 						<Icon
 							icon="ph:arrow-left"
@@ -70,18 +71,18 @@ function BlogPostPage() {
 					{previewPost.coverImage && (
 						<PreviewField
 							field="coverImage"
-							className="aspect-[16/9] bg-muted mb-10 overflow-hidden border border-border"
+							className="bg-muted border-border mb-10 aspect-[16/9] overflow-hidden border"
 						>
 							<img
 								src={previewPost.coverImage as string}
 								alt={previewPost.title as string}
-								className="w-full h-full object-cover"
+								className="h-full w-full object-cover"
 							/>
 						</PreviewField>
 					)}
 
 					{/* Meta */}
-					<div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
+					<div className="text-muted-foreground mb-6 flex items-center gap-4 text-sm">
 						{previewPost.publishedAt && (
 							<time>{formatDate(previewPost.publishedAt)}</time>
 						)}
@@ -97,14 +98,14 @@ function BlogPostPage() {
 					<PreviewField
 						field="title"
 						as="h1"
-						className="text-4xl md:text-5xl font-bold tracking-tight mb-6"
+						className="mb-6 text-4xl font-bold tracking-tight md:text-5xl"
 					>
 						{previewPost.title}
 					</PreviewField>
 
 					{/* Tags */}
 					{previewPost.tags && (
-						<PreviewField field="tags" className="flex flex-wrap gap-2 mb-8">
+						<PreviewField field="tags" className="mb-8 flex flex-wrap gap-2">
 							{String(previewPost.tags)
 								.split(",")
 								.map((tag: string) => tag.trim())
@@ -112,7 +113,7 @@ function BlogPostPage() {
 								.map((tag: string) => (
 									<span
 										key={tag}
-										className="px-3 py-1 bg-highlight/10 text-highlight text-sm font-bold uppercase tracking-wider"
+										className="bg-highlight/10 text-highlight px-3 py-1 text-sm font-bold tracking-wider uppercase"
 									>
 										{tag}
 									</span>
@@ -125,19 +126,19 @@ function BlogPostPage() {
 						<PreviewField
 							field="author"
 							fieldType="relation"
-							className="flex items-center gap-4 p-6 bg-muted/30 border border-border mb-12"
+							className="bg-muted/30 border-border mb-12 flex items-center gap-4 border p-6"
 						>
-							<div className="size-12 bg-muted border border-border flex items-center justify-center shrink-0">
+							<div className="bg-muted border-border flex size-12 shrink-0 items-center justify-center border">
 								<Icon
 									icon="ph:user"
-									className="size-6 text-muted-foreground/40"
+									className="text-muted-foreground/40 size-6"
 								/>
 							</div>
 							<div>
 								<p className="font-bold">
 									{previewPost.author?.name || previewPost.author?.email}
 								</p>
-								<p className="text-sm text-muted-foreground">Author</p>
+								<p className="text-muted-foreground text-sm">Author</p>
 							</div>
 						</PreviewField>
 					)}
@@ -165,7 +166,7 @@ function BlogPostPage() {
 					</PreviewField>
 
 					{isPreviewMode && (
-						<div className="fixed bottom-4 right-4 bg-highlight text-highlight-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium z-50">
+						<div className="bg-highlight text-highlight-foreground fixed right-4 bottom-4 z-50 rounded-full px-4 py-2 text-sm font-medium shadow-lg">
 							Preview Mode - Click fields to edit
 						</div>
 					)}

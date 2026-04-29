@@ -1,4 +1,5 @@
-import { block } from "@questpie/admin/server";
+import { block } from "#questpie/factories";
+
 import { dynamic } from "./_categories";
 
 export const documentsListBlock = block("documents-list")

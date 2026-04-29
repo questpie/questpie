@@ -1,21 +1,25 @@
 {
 	"name": "@questpie/admin",
-	"version": "2.0.0",
-	"type": "module",
+	"version": "3.1.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
 		"directory": "packages/admin"
 	},
-	"imports": {
-		"#questpie/admin/*": "./src/*"
-	},
 	"files": [
-		"dist"
+		"dist",
+		"skills"
 	],
+	"type": "module",
 	"sideEffects": [
 		"**/*.css"
 	],
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"imports": {
+		"#questpie/admin/*": "./src/*"
+	},
 	"exports": {
 		".": "./src/exports/index.ts",
 		"./client": "./src/exports/client.ts",
@@ -24,7 +28,22 @@
 		"./server": "./src/exports/server.ts",
 		"./shared": "./src/exports/shared.ts",
 		"./*": "./*",
+		"./client/styles/base.css": "./src/client/styles/base.css",
 		"./client/styles/index.css": "./src/client/styles/index.css"
+	},
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			".": "./dist/index.mjs",
+			"./client": "./dist/client.mjs",
+			"./client-module": "./dist/client-module.mjs",
+			"./plugin": "./dist/plugin.mjs",
+			"./server": "./dist/server.mjs",
+			"./shared": "./dist/shared.mjs",
+			"./*": "./*",
+			"./client/styles/base.css": "./dist/client/styles/base.css",
+			"./client/styles/index.css": "./dist/client/styles/index.css"
+		}
 	},
 	"scripts": {
 		"dev": "tsdown --watch",
@@ -32,7 +51,7 @@
 		"check-types": "tsc --noEmit",
 		"test": "bun test test/",
 		"test:watch": "bun test --watch test/",
-		"questpie:generate": "bun questpie generate --verbose"
+		"questpie:generate": "bun x questpie generate --verbose"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",
@@ -82,14 +101,26 @@
 		"vaul": "^1.1.2",
 		"zustand": "^5.0.10"
 	},
+	"devDependencies": {
+		"@rollup/plugin-babel": "^6.1.0",
+		"@tanstack/db": "^0.1.1",
+		"@types/react": "^19.2.0",
+		"@types/react-dom": "^19.2.0",
+		"babel-plugin-react-compiler": "^1.0.0",
+		"bun-types": "latest",
+		"shadcn": "^3.6.1",
+		"tinyglobby": "^0.2.15",
+		"tsdown": "^0.18.3",
+		"typescript": "^5.9.2"
+	},
 	"peerDependencies": {
-		"react": "^19.2.0",
-		"react-dom": "^19.2.0",
+		"@tanstack/db": "^0.x",
 		"@tanstack/react-query": "^5.x",
 		"@tanstack/react-table": "^8.x",
-		"@tanstack/db": "^0.x",
 		"better-auth": "^1.4.9",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
 		"zod": "^4.2.1"
 	},
 	"peerDependenciesMeta": {
@@ -99,32 +130,5 @@
 		"@tanstack/db": {
 			"optional": true
 		}
-	},
-	"devDependencies": {
-		"@rollup/plugin-babel": "^6.1.0",
-		"@tanstack/db": "^0.1.1",
-		"shadcn": "^3.6.1",
-		"@types/react": "^19.2.0",
-		"@types/react-dom": "^19.2.0",
-		"babel-plugin-react-compiler": "^1.0.0",
-		"tinyglobby": "^0.2.15",
-		"tsdown": "^0.18.3",
-		"typescript": "^5.9.2"
-	},
-	"publishConfig": {
-		"access": "public",
-		"exports": {
-			".": "./dist/index.mjs",
-			"./client": "./dist/client.mjs",
-			"./client-module": "./dist/client-module.mjs",
-			"./plugin": "./dist/plugin.mjs",
-			"./server": "./dist/server.mjs",
-			"./shared": "./dist/shared.mjs",
-			"./*": "./*",
-			"./client/styles/index.css": "./dist/client/styles/index.css"
-		}
-	},
-	"main": "./dist/index.mjs",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.mts"
+	}
 }

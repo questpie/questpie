@@ -16,7 +16,10 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
+import { useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
+import { Button } from "../ui/button";
 
 // ============================================================================
 // Types
@@ -61,6 +64,12 @@ interface DropzoneProps {
 	progress?: number;
 
 	/**
+	 * Visual density of the dropzone.
+	 * @default "panel"
+	 */
+	variant?: "panel" | "compact";
+
+	/**
 	 * Custom label text
 	 * @default "Drop files here or click to browse"
 	 */
@@ -85,6 +94,16 @@ interface DropzoneProps {
 	 * Children to render inside the dropzone (custom content)
 	 */
 	children?: React.ReactNode;
+
+	/**
+	 * Secondary action rendered inside the dropzone.
+	 */
+	action?: {
+		label: string;
+		icon?: string;
+		onClick: () => void;
+		disabled?: boolean;
+	};
 
 	/**
 	 * Callback when validation fails
@@ -151,13 +170,16 @@ export function Dropzone({
 	disabled = false,
 	loading = false,
 	progress,
-	label = "Drop files here or click to browse",
+	variant = "panel",
+	label,
 	hint,
 	error,
 	className,
 	children,
+	action,
 	onValidationError,
 }: DropzoneProps) {
+	const { t } = useTranslation();
 	const [isDragging, setIsDragging] = React.useState(false);
 	const inputRef = React.useRef<HTMLInputElement>(null);
 	const dragCounterRef = React.useRef(0);
@@ -176,7 +198,7 @@ export function Dropzone({
 					errors.push({
 						file,
 						type: "type",
-						message: `"${file.name}" is not an accepted file type`,
+						message: t("dropzone.invalidType", { name: file.name }),
 					});
 					continue;
 				}
@@ -186,7 +208,10 @@ export function Dropzone({
 					errors.push({
 						file,
 						type: "size",
-						message: `"${file.name}" exceeds maximum size of ${formatFileSize(maxSize)}`,
+						message: t("dropzone.tooLarge", {
+							name: file.name,
+							maxSize: formatFileSize(maxSize),
+						}),
 					});
 					continue;
 				}
@@ -196,7 +221,7 @@ export function Dropzone({
 
 			return { valid, errors };
 		},
-		[accept, maxSize],
+		[accept, maxSize, t],
 	);
 
 	/**
@@ -291,6 +316,7 @@ export function Dropzone({
 	 * Build accept string for input
 	 */
 	const acceptString = accept?.join(",") || undefined;
+	const isCompact = variant === "compact";
 
 	/**
 	 * Build hint text
@@ -303,13 +329,13 @@ export function Dropzone({
 		if (accept && accept.length > 0) {
 			// Simplify accept types for display
 			const types = accept
-				.map((t) => {
-					if (t.startsWith("image/")) return "Images";
-					if (t.startsWith("video/")) return "Videos";
-					if (t.startsWith("audio/")) return "Audio";
-					if (t === "application/pdf") return "PDF";
-					if (t.startsWith(".")) return t.toUpperCase();
-					return t;
+				.map((mimeType) => {
+					if (mimeType.startsWith("image/")) return t("dropzone.typeImages");
+					if (mimeType.startsWith("video/")) return t("dropzone.typeVideos");
+					if (mimeType.startsWith("audio/")) return t("dropzone.typeAudio");
+					if (mimeType === "application/pdf") return t("dropzone.typePDF");
+					if (mimeType.startsWith(".")) return mimeType.toUpperCase();
+					return mimeType;
 				})
 				.filter((v, i, a) => a.indexOf(v) === i); // unique
 			parts.push(types.join(", "));
@@ -320,7 +346,7 @@ export function Dropzone({
 		}
 
 		return parts.length > 0 ? parts.join(" • ") : undefined;
-	}, [hint, accept, maxSize]);
+	}, [hint, accept, maxSize, t]);
 
 	return (
 		<div
@@ -338,9 +364,11 @@ export function Dropzone({
 			onDragOver={handleDragOver}
 			onDrop={handleDrop}
 			className={cn(
-				"qa-dropzone relative flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors",
-				"border-border bg-muted hover:border-border hover:bg-muted",
-				isDragging && "border-primary bg-primary/5",
+				"qa-dropzone control-surface relative flex cursor-pointer hover:bg-muted/40 rounded-lg border transition-colors",
+				isCompact
+					? "min-h-16 flex-row items-center justify-start gap-3 border border-dashed p-3 text-left"
+					: "min-h-[120px] flex-col items-center justify-center gap-2 border-2 p-6 text-center",
+				isDragging && "border-border-strong bg-surface-high",
 				error && "border-destructive/50 bg-destructive/5",
 				(disabled || loading) && "pointer-events-none opacity-60",
 				className,
@@ -364,15 +392,29 @@ export function Dropzone({
 			{children || (
 				<>
 					{/* Icon / Loading */}
-					<div className="flex items-center justify-center">
+					<div
+						className={cn(
+							"flex shrink-0 items-center justify-center",
+							isCompact &&
+								"bg-background/70 border-border-subtle size-9 rounded border",
+						)}
+					>
 						{loading ? (
 							<div className="relative">
 								<Icon
 									icon="ph:spinner-gap"
-									className="text-muted-foreground size-10 animate-spin"
+									className={cn(
+										"text-muted-foreground animate-spin",
+										isCompact ? "size-5" : "size-10",
+									)}
 								/>
 								{typeof progress === "number" && (
-									<span className="text-muted-foreground absolute inset-0 flex items-center justify-center text-xs font-medium">
+									<span
+										className={cn(
+											"text-muted-foreground absolute inset-0 flex items-center justify-center font-medium tabular-nums",
+											isCompact ? "text-[9px]" : "text-xs",
+										)}
+									>
 										{progress}%
 									</span>
 								)}
@@ -381,45 +423,80 @@ export function Dropzone({
 							<Icon
 								icon="ph:cloud-arrow-up"
 								className={cn(
-									"size-10 transition-colors",
-									isDragging ? "text-primary" : "text-muted-foreground",
+									"transition-colors",
+									isCompact ? "size-5" : "size-10",
+									isDragging ? "text-foreground" : "text-muted-foreground",
 								)}
 							/>
 						)}
 					</div>
 
 					{/* Label */}
-					<div className="space-y-1">
+					<div className={cn("min-w-0 space-y-1", isCompact && "flex-1")}>
 						<p
 							className={cn(
-								"text-sm font-medium",
-								isDragging ? "text-primary" : "text-foreground",
+								"text-foreground text-sm font-medium",
+								isCompact && "truncate",
 							)}
 						>
-							{loading ? "Uploading..." : label}
+							{loading ? t("dropzone.uploading") : label || t("dropzone.label")}
 						</p>
 
 						{/* Hint */}
 						{hintText && !loading && (
-							<p className="text-muted-foreground text-xs">{hintText}</p>
+							<p
+								className={cn(
+									"text-muted-foreground text-xs",
+									isCompact && "truncate",
+								)}
+							>
+								{hintText}
+							</p>
 						)}
 
 						{/* Progress bar */}
 						{loading && typeof progress === "number" && (
-							<div className="bg-muted mx-auto mt-2 h-1.5 w-32 overflow-hidden rounded-full">
+							<div
+								className={cn(
+									"bg-muted mt-2 h-1.5 overflow-hidden rounded-full",
+									isCompact ? "w-full" : "mx-auto w-32",
+								)}
+							>
 								<div
-									className="bg-primary h-full rounded-full transition-all duration-300"
+									className="bg-primary h-full rounded-full transition-[width] duration-300"
 									style={{ width: `${progress}%` }}
 								/>
 							</div>
 						)}
 					</div>
+
+					{action && !loading && !disabled && (
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							disabled={action.disabled}
+							onClick={(e) => {
+								e.stopPropagation();
+								action.onClick();
+							}}
+							onKeyDown={(e) => {
+								e.stopPropagation();
+							}}
+							className={cn("shrink-0", isCompact && "max-w-[45%] px-2.5")}
+						>
+							{action.icon && (
+								<Icon icon={action.icon} className="size-4 shrink-0" />
+							)}
+							<span className="truncate">{action.label}</span>
+						</Button>
+					)}
 				</>
 			)}
 
 			{/* Error message */}
 			{error && (
-				<p className="text-destructive absolute bottom-2 left-0 right-0 text-center text-xs">
+				<p className="text-destructive absolute right-0 bottom-2 left-0 text-center text-xs">
 					{error}
 				</p>
 			)}

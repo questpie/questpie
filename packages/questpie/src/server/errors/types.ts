@@ -8,6 +8,12 @@ export type FieldError = {
 	path: string;
 	/** Error message */
 	message: string;
+	/** Translation key for i18n-aware field errors */
+	messageKey?: string;
+	/** Parameters for translation interpolation */
+	messageParams?: Record<string, unknown>;
+	/** Original validation issue, kept server-side for localized serialization */
+	validationIssue?: unknown;
 	/** The invalid value (optional) */
 	value?: unknown;
 };

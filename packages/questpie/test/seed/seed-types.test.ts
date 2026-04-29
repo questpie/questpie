@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { resolveAutoSeedCategories } from "../../src/server/seed/types.js";
 
 describe("resolveAutoSeedCategories", () => {

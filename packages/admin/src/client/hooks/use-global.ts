@@ -1,4 +1,3 @@
-import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import {
 	type UseMutationOptions,
 	type UseQueryOptions,
@@ -8,6 +7,9 @@ import {
 } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
 import * as React from "react";
+
+import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
+
 import type { RegisteredCMS, RegisteredGlobalNames } from "../builder/registry";
 import { selectClient, selectContentLocale, useAdminStore } from "../runtime";
 

@@ -17,11 +17,11 @@ import type {
 	CollectionOptions,
 	UploadOptions,
 } from "#questpie/server/collection/builder/types.js";
-import { datetime } from "#questpie/server/fields/builtin-factories/datetime.js";
-import { number } from "#questpie/server/fields/builtin-factories/number.js";
-import { text } from "#questpie/server/fields/builtin-factories/text.js";
-import type { Field } from "#questpie/server/fields/field-class.js";
+import { datetime } from "#questpie/server/modules/core/fields/datetime.js";
+import { number } from "#questpie/server/modules/core/fields/number.js";
+import { text } from "#questpie/server/modules/core/fields/text.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
 import type {
 	ExtractOperatorParamType,
 	OperatorMap,
@@ -145,58 +145,58 @@ type UploadVisibilityField = typeof _systemUploadVisibilityField;
  * System fields auto-inserted into fieldDefinitions by the collection builder.
  * Only inserts fields not already defined by the user.
  */
+type BaseSystemFields = {
+	readonly id: IdField;
+	readonly _title: TitleField;
+};
+
+type TimestampSystemFields<TOptions extends CollectionOptions> =
+	TOptions extends { timestamps: false }
+		? {}
+		: {
+				readonly createdAt: TimestampField;
+				readonly updatedAt: TimestampField;
+			};
+
+type SoftDeleteSystemFields<TOptions extends CollectionOptions> =
+	TOptions extends { softDelete: true }
+		? {
+				readonly deletedAt: NullableTimestampField;
+			}
+		: {};
+
+type UploadSystemFields<TUpload extends UploadOptions | undefined> =
+	TUpload extends UploadOptions
+		? {
+				readonly key: UploadTextField;
+				readonly filename: UploadTextField;
+				readonly mimeType: UploadTextField;
+				readonly size: UploadNumberField;
+				readonly visibility: UploadVisibilityField;
+			}
+		: {};
+
+type AllSystemFields<
+	TOptions extends CollectionOptions,
+	TUpload extends UploadOptions | undefined,
+> = BaseSystemFields &
+	TimestampSystemFields<TOptions> &
+	SoftDeleteSystemFields<TOptions> &
+	UploadSystemFields<TUpload>;
+
 export type AutoInsertedFields<
 	TUserFields extends Record<string, any>,
 	TOptions extends CollectionOptions,
 	TUpload extends UploadOptions | undefined,
-> = ("id" extends keyof TUserFields ? {} : { readonly id: IdField }) &
-	("_title" extends keyof TUserFields ? {} : { readonly _title: TitleField }) &
-	(TOptions extends { timestamps: false }
-		? {}
-		: ("createdAt" extends keyof TUserFields
-				? {}
-				: {
-						readonly createdAt: TimestampField;
-					}) &
-				("updatedAt" extends keyof TUserFields
-					? {}
-					: {
-							readonly updatedAt: TimestampField;
-						})) &
-	(TOptions extends { softDelete: true }
-		? "deletedAt" extends keyof TUserFields
-			? {}
-			: {
-					readonly deletedAt: NullableTimestampField;
-				}
-		: {}) &
-	(TUpload extends UploadOptions
-		? ("key" extends keyof TUserFields
-				? {}
-				: {
-						readonly key: UploadTextField;
-					}) &
-				("filename" extends keyof TUserFields
-					? {}
-					: {
-							readonly filename: UploadTextField;
-						}) &
-				("mimeType" extends keyof TUserFields
-					? {}
-					: {
-							readonly mimeType: UploadTextField;
-						}) &
-				("size" extends keyof TUserFields
-					? {}
-					: {
-							readonly size: UploadNumberField;
-						}) &
-				("visibility" extends keyof TUserFields
-					? {}
-					: {
-							readonly visibility: UploadVisibilityField;
-						})
-		: {});
+> = {
+	readonly [K in keyof AllSystemFields<
+		TOptions,
+		TUpload
+	> as K extends keyof TUserFields ? never : K]: AllSystemFields<
+		TOptions,
+		TUpload
+	>[K];
+};
 
 /**
  * Merges user-defined field definitions with auto-inserted system fields.

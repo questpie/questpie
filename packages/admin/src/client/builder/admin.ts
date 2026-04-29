@@ -6,6 +6,7 @@
  */
 
 import { DEFAULT_LOCALE, DEFAULT_LOCALE_CONFIG } from "questpie/shared";
+
 import type { AdminState } from "./admin-types";
 import type { RegisteredAdmin } from "./registry";
 import type { ViewKind } from "./view/view";
@@ -70,9 +71,7 @@ export class Admin<TState extends AdminState = AdminState> {
 	/**
 	 * Get configuration for a specific page.
 	 */
-	getPageConfig(
-		name: string,
-	): TState["pages"][string] | undefined {
+	getPageConfig(name: string): TState["pages"][string] | undefined {
 		return (this.state.pages as Record<string, any>)?.[name];
 	}
 
@@ -90,9 +89,7 @@ export class Admin<TState extends AdminState = AdminState> {
 	/**
 	 * Get a specific component implementation by name.
 	 */
-	getComponent(
-		name: string,
-	): TState["components"][string] | undefined {
+	getComponent(name: string): TState["components"][string] | undefined {
 		return (this.state.components as Record<string, any>)?.[name];
 	}
 

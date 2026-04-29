@@ -80,14 +80,16 @@ type MutationBuilder<TVariables, TData> = () => UseMutationOptions<
 >;
 
 /** Extract collection keys from QuestpieClient */
-type CollectionKeys<
-	TApp extends QuestpieApp,
-> = Extract<keyof QuestpieClient<TApp>["collections"], string>;
+type CollectionKeys<TApp extends QuestpieApp> = Extract<
+	keyof QuestpieClient<TApp>["collections"],
+	string
+>;
 
 /** Extract global keys from QuestpieClient */
-type GlobalKeys<
-	TApp extends QuestpieApp,
-> = Extract<keyof QuestpieClient<TApp>["globals"], string>;
+type GlobalKeys<TApp extends QuestpieApp> = Extract<
+	keyof QuestpieClient<TApp>["globals"],
+	string
+>;
 
 // Collection method type extractors
 type CollectionFind<
@@ -268,28 +270,27 @@ type GlobalQueryOptionsAPI<
 	>;
 };
 
-export type QuestpieQueryOptionsProxy<
-	TApp extends QuestpieApp = QuestpieApp,
-> = {
-	collections: {
-		[K in CollectionKeys<TApp>]: CollectionQueryOptionsAPI<TApp, K>;
+export type QuestpieQueryOptionsProxy<TApp extends QuestpieApp = QuestpieApp> =
+	{
+		collections: {
+			[K in CollectionKeys<TApp>]: CollectionQueryOptionsAPI<TApp, K>;
+		};
+		globals: {
+			[K in GlobalKeys<TApp>]: GlobalQueryOptionsAPI<TApp, K>;
+		};
+		routes: RoutesQueryOptionsAPI<QuestpieClient<TApp>["routes"]>;
+		custom: {
+			query: <TData>(config: {
+				key: QueryKey;
+				queryFn: () => Promise<TData>;
+			}) => UseQueryOptions<TData>;
+			mutation: <TVariables, TData>(config: {
+				key: QueryKey;
+				mutationFn: (variables: TVariables) => Promise<TData>;
+			}) => UseMutationOptions<TData, DefaultError, TVariables>;
+		};
+		key: (parts: QueryKey) => QueryKey;
 	};
-	globals: {
-		[K in GlobalKeys<TApp>]: GlobalQueryOptionsAPI<TApp, K>;
-	};
-	routes: RoutesQueryOptionsAPI<QuestpieClient<TApp>["routes"]>;
-	custom: {
-		query: <TData>(config: {
-			key: QueryKey;
-			queryFn: () => Promise<TData>;
-		}) => UseQueryOptions<TData>;
-		mutation: <TVariables, TData>(config: {
-			key: QueryKey;
-			mutationFn: (variables: TVariables) => Promise<TData>;
-		}) => UseMutationOptions<TData, DefaultError, TVariables>;
-	};
-	key: (parts: QueryKey) => QueryKey;
-};
 
 // ============================================================================
 // Internal Helpers
@@ -683,127 +684,121 @@ export function createQuestpieQueryOptions<
 		},
 	);
 
-	const globals = new Proxy(
-		{} as QuestpieQueryOptionsProxy<TApp>["globals"],
-		{
-			get: (_target, globalName) => {
-				if (typeof globalName !== "string") return undefined;
-				const global = client.globals[
-					globalName as GlobalKeys<TApp>
-				] as any;
-				const baseKey: QueryKey = ["globals", globalName];
+	const globals = new Proxy({} as QuestpieQueryOptionsProxy<TApp>["globals"], {
+		get: (_target, globalName) => {
+			if (typeof globalName !== "string") return undefined;
+			const global = client.globals[globalName as GlobalKeys<TApp>] as any;
+			const baseKey: QueryKey = ["globals", globalName];
 
-				return {
-					get: (options?: any, queryConfig?: { realtime?: boolean }) => {
-						const qKey = buildKey(keyPrefix, [
+			return {
+				get: (options?: any, queryConfig?: { realtime?: boolean }) => {
+					const qKey = buildKey(keyPrefix, [
+						...baseKey,
+						"get",
+						locale,
+						stage,
+						normalizeQueryKeyOptions(options),
+					]);
+
+					if (queryConfig?.realtime && client.realtime) {
+						const topic = buildGlobalTopic(globalName as string, options);
+						return queryOptions({
+							queryKey: qKey,
+							queryFn: streamedQuery({
+								streamFn: ({ signal }) => client.realtime.stream(topic, signal),
+								reducer: (_: any, chunk: any) => chunk,
+								initialValue: undefined,
+								refetchMode: "append",
+							}),
+						});
+					}
+
+					return queryOptions({
+						queryKey: qKey,
+						queryFn: wrapQueryFn(() => global.get(options), errorMap),
+					});
+				},
+				update: () =>
+					mutationOptions({
+						mutationKey: buildKey(keyPrefix, [
 							...baseKey,
-							"get",
+							"update",
+							locale,
+							stage,
+						]),
+						mutationFn: wrapMutationFn(
+							(variables: { data: any; options?: any }) =>
+								global.update(variables.data, {
+									...variables.options,
+									...(locale ? { locale } : undefined),
+									...(stage ? { stage } : undefined),
+								}),
+							errorMap,
+						),
+					}),
+				findVersions: (options?: {
+					id?: string;
+					limit?: number;
+					offset?: number;
+					locale?: string;
+					localeFallback?: boolean;
+				}) =>
+					queryOptions({
+						queryKey: buildKey(keyPrefix, [
+							...baseKey,
+							"findVersions",
 							locale,
 							stage,
 							normalizeQueryKeyOptions(options),
-						]);
-
-						if (queryConfig?.realtime && client.realtime) {
-							const topic = buildGlobalTopic(globalName as string, options);
-							return queryOptions({
-								queryKey: qKey,
-								queryFn: streamedQuery({
-									streamFn: ({ signal }) =>
-										client.realtime.stream(topic, signal),
-									reducer: (_: any, chunk: any) => chunk,
-									initialValue: undefined,
-									refetchMode: "append",
+						]),
+						queryFn: wrapQueryFn(
+							() =>
+								global.findVersions({
+									...options,
+									...(locale ? { locale } : undefined),
+									...(stage ? { stage } : undefined),
 								}),
-							});
-						}
-
-						return queryOptions({
-							queryKey: qKey,
-							queryFn: wrapQueryFn(() => global.get(options), errorMap),
-						});
-					},
-					update: () =>
-						mutationOptions({
-							mutationKey: buildKey(keyPrefix, [
-								...baseKey,
-								"update",
-								locale,
-								stage,
-							]),
-							mutationFn: wrapMutationFn(
-								(variables: { data: any; options?: any }) =>
-									global.update(variables.data, {
-										...variables.options,
-										...(locale ? { locale } : undefined),
-										...(stage ? { stage } : undefined),
-									}),
-								errorMap,
-							),
-						}),
-					findVersions: (options?: {
-						id?: string;
-						limit?: number;
-						offset?: number;
-						locale?: string;
-						localeFallback?: boolean;
-					}) =>
-						queryOptions({
-							queryKey: buildKey(keyPrefix, [
-								...baseKey,
-								"findVersions",
-								locale,
-								stage,
-								normalizeQueryKeyOptions(options),
-							]),
-							queryFn: wrapQueryFn(
-								() =>
-									global.findVersions({
-										...options,
-										...(locale ? { locale } : undefined),
-										...(stage ? { stage } : undefined),
-									}),
-								errorMap,
-							),
-						}),
-					revertToVersion: () =>
-						mutationOptions({
-							mutationKey: buildKey(keyPrefix, [
-								...baseKey,
-								"revertToVersion",
-								locale,
-								stage,
-							]),
-							mutationFn: wrapMutationFn(
-								(variables: { params: any; options?: any }) =>
-									global.revertToVersion(variables.params, {
-										...variables.options,
-										...(locale ? { locale } : undefined),
-										...(stage ? { stage } : undefined),
-									}),
-								errorMap,
-							),
-						}),
-					transitionStage: () =>
-						mutationOptions({
-							mutationKey: buildKey(keyPrefix, [
-								...baseKey,
-								"transitionStage",
-								locale,
-								stage,
-							]),
-							mutationFn: wrapMutationFn(
-								(variables: { params: any; options?: any }) =>
-									global.transitionStage(variables.params, {
-										...variables.options,
-										...(locale ? { locale } : undefined),
-									}),
-								errorMap,
-							),
-						}),
-				};
-			},
+							errorMap,
+						),
+					}),
+				revertToVersion: () =>
+					mutationOptions({
+						mutationKey: buildKey(keyPrefix, [
+							...baseKey,
+							"revertToVersion",
+							locale,
+							stage,
+						]),
+						mutationFn: wrapMutationFn(
+							(variables: { params: any; options?: any }) =>
+								global.revertToVersion(variables.params, {
+									...variables.options,
+									...(locale ? { locale } : undefined),
+									...(stage ? { stage } : undefined),
+								}),
+							errorMap,
+						),
+					}),
+				transitionStage: () =>
+					mutationOptions({
+						mutationKey: buildKey(keyPrefix, [
+							...baseKey,
+							"transitionStage",
+							locale,
+							stage,
+						]),
+						mutationFn: wrapMutationFn(
+							(variables: { params: any; options?: any }) =>
+								global.transitionStage(variables.params, {
+									...variables.options,
+									...(locale ? { locale } : undefined),
+								}),
+							errorMap,
+						),
+					}),
+			};
 		},
-	);
+	});
 
 	/**
 	 * Resolve a nested route caller from the client by traversing dot segments.

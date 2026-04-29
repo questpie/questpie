@@ -2,6 +2,7 @@
 
 import type { BuildColumn, SQL } from "drizzle-orm";
 import type { PgTableWithColumns } from "drizzle-orm/pg-core";
+
 import type { Collection } from "#questpie/server/collection/builder/collection.js";
 import type {
 	CollectionVersioningOptions,
@@ -13,10 +14,7 @@ import type {
 } from "#questpie/server/collection/builder/types.js";
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { BaseRequestContext } from "#questpie/server/config/context.js";
-import type {
-	AccessMode,
-	QuestpieContextExtension,
-} from "#questpie/server/config/types.js";
+import type { AccessMode } from "#questpie/server/config/types.js";
 import type { FieldAccess } from "#questpie/server/fields/types.js";
 
 /**
@@ -24,13 +22,27 @@ import type { FieldAccess } from "#questpie/server/fields/types.js";
  * Returns a scope ID based on the request context.
  */
 export type GlobalScopeResolver = (
-	ctx: BaseRequestContext & QuestpieContextExtension,
+	ctx: BaseRequestContext,
 ) => string | null | undefined;
 
 /**
  * Options for global configuration
  */
 export interface GlobalOptions {
+	/**
+	 * Postgres schema name to place this global's tables in.
+	 *
+	 * When unset (default), tables live in the `public` schema. When set,
+	 * main/i18n/versions/i18n_versions tables are created via
+	 * `pgSchema(name).table(...)`, and migrations emit
+	 * `CREATE SCHEMA IF NOT EXISTS "name"` before the first table lands there.
+	 *
+	 * @example
+	 * ```ts
+	 * global("site-settings").options({ schema: "web" })
+	 * ```
+	 */
+	schema?: string;
 	/**
 	 * Whether to automatically add `createdAt` and `updatedAt` timestamp fields.
 	 * @default true
@@ -168,6 +180,8 @@ export type GlobalTransitionHookContext<TData = any> = AppContext & {
 	toStage: string;
 	/** Current locale */
 	locale?: string;
+	/** Current access mode */
+	accessMode?: AccessMode;
 };
 
 /**

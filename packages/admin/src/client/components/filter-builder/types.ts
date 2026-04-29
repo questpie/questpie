@@ -6,6 +6,7 @@
  */
 
 import type { ViewConfiguration } from "../../../shared/types/saved-views.types.js";
+import type { I18nText } from "../../i18n/types.js";
 
 // Re-export shared types for client usage
 export type {
@@ -34,7 +35,7 @@ export interface SavedView {
  */
 export interface AvailableField {
 	name: string;
-	label: string;
+	label: I18nText;
 	type: string;
 	isSystem?: boolean;
 	options?: Record<string, any>;

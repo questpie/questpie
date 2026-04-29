@@ -8,11 +8,12 @@
  */
 
 import { RichTextRenderer, type TipTapDoc } from "@questpie/admin/client";
+
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
 
-export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
+export function ImageTextRenderer({ values, data }: BlockProps<"image-text">) {
 	const imageUrl = (data?.image?.url as string | undefined) || values.image;
 
 	const aspectClass = {
@@ -31,11 +32,11 @@ export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
 	};
 
 	return (
-		<section className="py-20 px-6">
+		<section className="px-6 py-20">
 			<div className="container">
 				<div
 					className={cn(
-						"grid grid-cols-1 lg:grid-cols-2 gap-12 items-center",
+						"grid grid-cols-1 items-center gap-12 lg:grid-cols-2",
 						isImageRight && "lg:grid-flow-dense",
 					)}
 				>
@@ -51,10 +52,10 @@ export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
 								<img
 									src={imageUrl}
 									alt={values.title || ""}
-									className="w-full h-full object-cover"
+									className="h-full w-full object-cover"
 								/>
 							) : (
-								<div className="w-full h-full flex items-center justify-center text-muted-foreground">
+								<div className="text-muted-foreground flex h-full w-full items-center justify-center">
 									No image
 								</div>
 							)}
@@ -63,10 +64,10 @@ export function ImageTextRenderer({ values, data }: BlockProps<"imageText">) {
 
 					{/* Content */}
 					<div className={cn(isImageRight && "lg:col-start-1 lg:row-start-1")}>
-						<h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-6">
+						<h2 className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl">
 							{values.title || "Title"}
 						</h2>
-						<div className="prose prose-neutral dark:prose-invert max-w-none mb-6">
+						<div className="prose prose-neutral dark:prose-invert mb-6 max-w-none">
 							<RichTextRenderer
 								content={values.content}
 								styles={richTextStyles}

@@ -7,6 +7,7 @@ import type {
 	SQL,
 } from "drizzle-orm";
 import type { PgColumn, PgTableWithColumns } from "drizzle-orm/pg-core";
+
 import type { Collection } from "#questpie/server/collection/builder/collection.js";
 import type { ValidationSchemas } from "#questpie/server/collection/builder/validation-helpers.js";
 import type { AppContext } from "#questpie/server/config/app-context.js";
@@ -15,7 +16,7 @@ import type {
 	FieldAccess as FieldDefinitionAccess,
 	FieldLocation,
 } from "#questpie/server/fields/types.js";
-import type { SearchableConfig } from "#questpie/server/integrated/search/index.js";
+import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 
 /**
  * Title expression type - field name (key from fields or virtuals)
@@ -104,6 +105,24 @@ export interface UploadOptions {
  */
 export interface CollectionOptions {
 	/**
+	 * Postgres schema name to place this collection's tables in.
+	 *
+	 * When unset (default), tables live in the `public` schema — current behavior.
+	 * When set (e.g. `"auth"`), all four tables for this collection
+	 * (main, i18n, versions, i18n_versions) are created via
+	 * `pgSchema(name).table(...)`, and migrations emit
+	 * `CREATE SCHEMA IF NOT EXISTS "name"` before the first table lands there.
+	 *
+	 * Cross-schema relations are supported — FK constraints render as
+	 * `REFERENCES "other_schema"."table"("id")`.
+	 *
+	 * @example
+	 * ```ts
+	 * collection("user").options({ schema: "auth" })
+	 * ```
+	 */
+	schema?: string;
+	/**
 	 * Whether to automatically add `createdAt` and `updatedAt` timestamp fields
 	 * @default true
 	 */
@@ -168,36 +187,6 @@ export interface RelationConfig {
 	targetKey?: string; // Primary key on target table (default: "id")
 	targetField?: string; // Foreign key column in junction table pointing to target
 }
-
-type InferRelationTargetName<TTarget> = TTarget extends string
-	? TTarget
-	: TTarget extends () => { name: infer TName extends string }
-		? TName
-		: TTarget extends Record<string, any>
-			? Extract<keyof TTarget, string>
-			: string;
-
-type InferRelationTypeFromConfig<TConfig> = TConfig extends {
-	morphName: string;
-}
-	? "many"
-	: TConfig extends { hasMany: true }
-		? TConfig extends { through: any }
-			? "manyToMany"
-			: "many"
-		: "one";
-
-/** Infer upload relation type: through → manyToMany, else one */
-type InferUploadRelationType<TConfig> = TConfig extends { through: string }
-	? "manyToMany"
-	: "one";
-
-/** Infer upload target collection: config.to or default "assets" */
-type InferUploadTargetCollection<TConfig> = TConfig extends {
-	to: infer TTo extends string;
-}
-	? TTo
-	: "assets";
 
 export type InferRelationConfigsFromFields<
 	TFields extends Record<string, any>,
@@ -396,6 +385,29 @@ export type HookContext<
 	 * Operation type (specific to hook)
 	 */
 	operation: TOperation;
+
+	// ---- Bulk metadata (present when operation is part of a batch) ----
+
+	/** True when this hook is invoked as part of a bulk operation (updateMany/deleteMany) */
+	isBatch?: boolean;
+	/** IDs of all affected records in the batch */
+	recordIds?: (string | number)[];
+	/**
+	 * All affected records in the batch.
+	 * Semantics: post-image on update, pre-image on delete.
+	 */
+	records?: TData[];
+	/** Total number of affected records in the batch */
+	count?: number;
+
+	/**
+	 * Queue a callback to run after the current transaction commits.
+	 * If called outside a transaction, the callback runs immediately (fire-and-forget).
+	 *
+	 * Use this for side effects that should only happen when data is durable:
+	 * dispatching jobs, sending emails, search indexing, webhook calls.
+	 */
+	onAfterCommit: (callback: () => Promise<void>) => void;
 };
 
 /**
@@ -420,6 +432,20 @@ export type AccessContext<TData = any> = AppContext & {
 	input?: unknown;
 	/** Current locale */
 	locale?: string;
+	/**
+	 * Incoming HTTP request (when access is invoked via an HTTP adapter).
+	 * Use to differentiate admin vs frontend calls by URL, header, etc.
+	 *
+	 * @example
+	 * ```ts
+	 * read: ({ session, request }) => {
+	 *   const isAdmin = request?.url.includes("/admin/api/");
+	 *   if (isAdmin && isMasterCounselor(session?.user)) return true;
+	 *   return { createdById: session?.user?.id };
+	 * }
+	 * ```
+	 */
+	request?: Request;
 };
 
 /**
@@ -554,12 +580,18 @@ export type AfterDeleteHook<TSelect = any> = HookFunction<
 export type TransitionHookContext<TData = any> = AppContext & {
 	/** Record being transitioned */
 	data: TData;
+	/** Record ID (string or number) */
+	recordId: string | number;
 	/** Stage the record is transitioning from */
 	fromStage: string;
 	/** Stage the record is transitioning to */
 	toStage: string;
+	/** When set, the transition should be scheduled for this future date instead of executing immediately */
+	scheduledAt?: Date;
 	/** Current locale */
 	locale?: string;
+	/** Current access mode */
+	accessMode?: AccessMode;
 };
 
 /**

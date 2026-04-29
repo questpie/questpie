@@ -6,12 +6,9 @@
  */
 
 import * as React from "react";
+
 import { useAuthClient } from "../../hooks/use-auth";
-import {
-	selectBasePath,
-	selectBrandName,
-	useAdminStore,
-} from "../../runtime/provider";
+import { useTranslation } from "../../i18n/hooks";
 import { AuthLayout } from "../auth/auth-layout";
 import { InviteForm, type InviteFormValues } from "../auth/invite-form";
 
@@ -74,19 +71,21 @@ interface InvitePageProps {
  * ```
  */
 export function InvitePage({
-	title = "Invite User",
-	description = "Send an invitation to add a new user",
+	title,
+	description,
 	logo,
-	roles = [
-		{ value: "admin", label: "Admin" },
-		{ value: "user", label: "User" },
-	],
+	roles,
 	defaultRole = "user",
 	showMessage = true,
 	onSuccess,
 }: InvitePageProps) {
+	const { t } = useTranslation();
 	const authClient = useAuthClient();
-	const brandName = useAdminStore(selectBrandName);
+
+	const resolvedRoles = roles ?? [
+		{ value: "admin", label: t("defaults.users.fields.role.options.admin") },
+		{ value: "user", label: t("defaults.users.fields.role.options.user") },
+	];
 
 	const [error, setError] = React.useState<string | null>(null);
 	const [success, setSuccess] = React.useState<string | null>(null);
@@ -106,12 +105,12 @@ export function InvitePage({
 				if (result.error.message) {
 					setError(result.error.message);
 				} else {
-					setError("Failed to send invitation");
+					setError(t("error.failedToSendInvitation"));
 				}
 				return;
 			}
 
-			setSuccess(`Invitation sent to ${values.email}`);
+			setSuccess(t("auth.inviteSentTo", { email: values.email }));
 			if (onSuccess) {
 				onSuccess(values.email);
 			}
@@ -119,34 +118,26 @@ export function InvitePage({
 			if (err instanceof Error) {
 				setError(err.message);
 			} else {
-				setError("An error occurred");
+				setError(t("error.anErrorOccurred"));
 			}
 		}
 	};
 
 	return (
 		<AuthLayout
-			title={title}
-			description={description}
-			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			title={title ?? t("auth.inviteUser")}
+			description={description ?? t("auth.inviteUserDescription")}
+			logo={logo}
 			className="qa-invite-page"
 		>
 			<InviteForm
 				onSubmit={handleSubmit}
-				roles={roles}
+				roles={resolvedRoles}
 				defaultRole={defaultRole}
 				showMessage={showMessage}
 				error={error}
 				success={success}
 			/>
 		</AuthLayout>
-	);
-}
-
-function DefaultLogo({ brandName }: { brandName: string }) {
-	return (
-		<div className="text-center">
-			<h1 className="text-xl font-bold">{brandName}</h1>
-		</div>
 	);
 }

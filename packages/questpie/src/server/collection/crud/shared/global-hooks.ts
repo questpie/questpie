@@ -18,7 +18,7 @@ function matchesFilter(
 	if (entry.include && !entry.include.includes(name)) {
 		return false;
 	}
-	if (entry.exclude && entry.exclude.includes(name)) {
+	if (entry.exclude?.includes(name)) {
 		return false;
 	}
 	return true;
@@ -44,18 +44,21 @@ export async function executeGlobalCollectionHooks(
 
 	const isBefore = hookName.startsWith("before");
 
+	// Enrich context with collection name for global hooks
+	const enrichedCtx = { ...ctx, collection: collectionName };
+
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, collectionName)) continue;
 
 		if (isBefore) {
-			await hookFn(ctx);
+			await hookFn(enrichedCtx);
 		} else {
 			try {
-				await hookFn(ctx);
+				await hookFn(enrichedCtx);
 			} catch (err) {
-				ctx.logger.error(
-					`[QuestPie] Global collection hook "${hookName}" error for "${collectionName}":`,
+				enrichedCtx.logger.error(
+					`[QUESTPIE] Global collection hook "${hookName}" error for "${collectionName}":`,
 					err,
 				);
 			}
@@ -79,18 +82,21 @@ export async function executeGlobalCollectionTransitionHooks(
 
 	const isBefore = hookName === "beforeTransition";
 
+	// Enrich context with collection name for global hooks
+	const enrichedCtx = { ...ctx, collection: collectionName };
+
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, collectionName)) continue;
 
 		if (isBefore) {
-			await hookFn(ctx);
+			await hookFn(enrichedCtx);
 		} else {
 			try {
-				await hookFn(ctx);
+				await hookFn(enrichedCtx);
 			} catch (err) {
-				ctx.logger.error(
-					`[QuestPie] Global collection hook "${hookName}" error for "${collectionName}":`,
+				enrichedCtx.logger.error(
+					`[QUESTPIE] Global collection hook "${hookName}" error for "${collectionName}":`,
 					err,
 				);
 			}
@@ -118,18 +124,21 @@ export async function executeGlobalGlobalHooks(
 
 	const isBefore = hookName === "beforeChange";
 
+	// Enrich context with global name for global hooks
+	const enrichedCtx = { ...ctx, global: globalName };
+
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, globalName)) continue;
 
 		if (isBefore) {
-			await hookFn(ctx);
+			await hookFn(enrichedCtx);
 		} else {
 			try {
-				await hookFn(ctx);
+				await hookFn(enrichedCtx);
 			} catch (err) {
-				ctx.logger.error(
-					`[QuestPie] Global global hook "${hookName}" error for "${globalName}":`,
+				enrichedCtx.logger.error(
+					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,
 				);
 			}
@@ -153,18 +162,21 @@ export async function executeGlobalGlobalTransitionHooks(
 
 	const isBefore = hookName === "beforeTransition";
 
+	// Enrich context with global name for global hooks
+	const enrichedCtx = { ...ctx, global: globalName };
+
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
 		if (!hookFn || !matchesFilter(entry, globalName)) continue;
 
 		if (isBefore) {
-			await hookFn(ctx);
+			await hookFn(enrichedCtx);
 		} else {
 			try {
-				await hookFn(ctx);
+				await hookFn(enrichedCtx);
 			} catch (err) {
-				ctx.logger.error(
-					`[QuestPie] Global global hook "${hookName}" error for "${globalName}":`,
+				enrichedCtx.logger.error(
+					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,
 				);
 			}

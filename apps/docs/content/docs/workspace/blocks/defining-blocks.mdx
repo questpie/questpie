@@ -3,31 +3,35 @@ title: Defining Blocks
 description: Server-side block definitions — fields, admin metadata, and categories.
 ---
 
-# Defining Blocks
-
 Blocks are defined in `blocks/` using the `block()` factory. Each block has fields, admin metadata, and optional prefetch config.
 
 ## Basic Block
 
 ```ts title="blocks/hero.ts"
-import { block } from "#questpie";
+import { block } from "#questpie/factories";
 
 export const heroBlock = block("hero")
-  .admin(({ c }) => ({
-    label: { en: "Hero Section", sk: "Hero sekcia" },
-    icon: c.icon("ph:image"),
-    category: "sections",
-  }))
-  .fields(({ f }) => ({
-    title: f.text().required().localized(),
-    subtitle: f.textarea().localized(),
-    backgroundImage: f.upload({ to: "assets" }),
-    overlayOpacity: f.number().default(60),
-    alignment: f.select(["left", "center", "right"]).default("center"),
-    ctaText: f.text().localized(),
-    ctaLink: f.text(),
-  }))
-  .prefetch({ with: { backgroundImage: true } });
+	.admin(({ c }) => ({
+		label: { en: "Hero Section", sk: "Hero sekcia" },
+		icon: c.icon("ph:image"),
+		category: "sections",
+	}))
+	.fields(({ f }) => ({
+		title: f.text().required().localized(),
+		subtitle: f.textarea().localized(),
+		backgroundImage: f.upload({ to: "assets" }),
+		overlayOpacity: f.number().default(60),
+		alignment: f
+			.select([
+				{ value: "left", label: "Left" },
+				{ value: "center", label: "Center" },
+				{ value: "right", label: "Right" },
+			])
+			.default("center"),
+		ctaText: f.text().localized(),
+		ctaLink: f.text(),
+	}))
+	.prefetch({ with: { backgroundImage: true } });
 ```
 
 ## Admin Metadata
@@ -45,14 +49,13 @@ export const heroBlock = block("hero")
 Add a `blocks` field to any collection:
 
 ```ts title="collections/pages.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
-export const pages = collection("pages")
-  .fields(({ f }) => ({
-    title: f.text().required().localized(),
-    slug: f.text().required(),
-    content: f.blocks().localized(),  // Block content field
-  }));
+export const pages = collection("pages").fields(({ f }) => ({
+	title: f.text().required().localized(),
+	slug: f.text().required(),
+	content: f.blocks().localized(), // Block content field
+}));
 ```
 
 The admin renders a visual block editor for this field.
@@ -62,28 +65,35 @@ The admin renders a visual block editor for this field.
 Export multiple named blocks from one file:
 
 ```ts title="blocks/layout.ts"
-import { block } from "#questpie";
+import { block } from "#questpie/factories";
 
 export const twoColumnBlock = block("twoColumn")
-  .admin(({ c }) => ({
-    label: { en: "Two Columns" },
-    icon: c.icon("ph:columns"),
-    category: "layout",
-  }))
-  .fields(({ f }) => ({
-    left: f.blocks(),
-    right: f.blocks(),
-  }));
+	.admin(({ c }) => ({
+		label: { en: "Two Columns" },
+		icon: c.icon("ph:columns"),
+		category: "layout",
+	}))
+	.fields(({ f }) => ({
+		left: f.blocks(),
+		right: f.blocks(),
+	}));
 
 export const spacerBlock = block("spacer")
-  .admin(({ c }) => ({
-    label: { en: "Spacer" },
-    icon: c.icon("ph:arrows-out-line-vertical"),
-    category: "layout",
-  }))
-  .fields(({ f }) => ({
-    height: f.select(["sm", "md", "lg", "xl"]).default("md"),
-  }));
+	.admin(({ c }) => ({
+		label: { en: "Spacer" },
+		icon: c.icon("ph:arrows-out-line-vertical"),
+		category: "layout",
+	}))
+	.fields(({ f }) => ({
+		height: f
+			.select([
+				{ value: "sm", label: "Small" },
+				{ value: "md", label: "Medium" },
+				{ value: "lg", label: "Large" },
+				{ value: "xl", label: "Extra large" },
+			])
+			.default("md"),
+	}));
 ```
 
 ## Related Pages

@@ -4,6 +4,9 @@
 
 import { Icon } from "@iconify/react";
 import * as React from "react";
+
+import { useTranslation } from "../../../../i18n/hooks";
+import { cn } from "../../../../lib/utils";
 import { CollectionEditLink } from "../../../admin-link";
 import { resolveIconElement } from "../../../component-renderer";
 import { Button } from "../../../ui/button";
@@ -24,14 +27,14 @@ function ListSkeleton({
 
 	if (editable) {
 		return (
-			<div className="space-y-2 rounded-lg border border-border bg-card p-3">
+			<div className="panel-surface space-y-2 p-3">
 				{skeletonKeys.map((key) => (
 					<div
 						key={key}
-						className="flex items-center gap-2 rounded-md border border-border bg-card p-2"
+						className="item-surface border-border bg-card flex items-center gap-2 px-3 py-2.5"
 					>
-						<Skeleton className="size-3.5 rounded" />
-						<Skeleton className="h-4 flex-1 max-w-[200px] rounded" />
+						<Skeleton variant="text" className="size-3.5" />
+						<Skeleton variant="text" className="h-4 max-w-[200px] flex-1" />
 					</div>
 				))}
 			</div>
@@ -39,11 +42,14 @@ function ListSkeleton({
 	}
 
 	return (
-		<ul className="space-y-1">
+		<ul className="space-y-2">
 			{skeletonKeys.map((key) => (
-				<li key={key} className="flex items-center gap-1">
-					<Skeleton className="size-3 rounded" />
-					<Skeleton className="h-4 w-32 rounded" />
+				<li
+					key={key}
+					className="item-surface border-border bg-card flex items-center gap-2 px-3 py-2"
+				>
+					<Skeleton variant="text" className="size-3.5" />
+					<Skeleton variant="text" className="h-4 w-32" />
 				</li>
 			))}
 		</ul>
@@ -62,11 +68,12 @@ export function ListDisplay({
 	isLoading = false,
 	loadingCount = 3,
 }: RelationDisplayProps) {
+	const { t } = useTranslation();
 	const iconElement = resolveIconElement(collectionIcon, {
 		className: "size-3.5 text-muted-foreground shrink-0",
 	});
 	const smallIconElement = resolveIconElement(collectionIcon, {
-		className: "size-3 text-muted-foreground",
+		className: "size-3.5 text-muted-foreground shrink-0",
 	});
 
 	// Show skeleton when loading and no items
@@ -77,30 +84,30 @@ export function ListDisplay({
 	// Editable list with cards
 	if (editable) {
 		return (
-			<div className="space-y-2 rounded-lg border border-border bg-card p-3">
+			<div className="panel-surface space-y-2 p-3">
 				{items.map((item, index) => (
 					<div
 						key={item.id}
-						className="flex items-center gap-2 rounded-md border border-border bg-card p-2"
+						className="item-surface border-border bg-card flex items-center gap-2 px-3 py-2.5"
 					>
 						{/* Drag Handle */}
 						{orderable && (
 							<button
 								type="button"
-								className="cursor-grab text-muted-foreground hover:text-foreground"
-								aria-label="Drag to reorder"
+								className="text-muted-foreground hover:text-foreground flex shrink-0 cursor-grab items-center"
+								aria-label={t("field.dragToReorder")}
 							>
 								<Icon icon="ph:dots-six-vertical" className="h-4 w-4" />
 							</button>
 						)}
 
 						{/* Item Display */}
-						<div className="flex-1 flex items-center gap-2 min-w-0">
+						<div className="flex min-w-0 flex-1 items-center gap-2">
 							{iconElement}
 							{renderItem ? (
 								renderItem(item, index)
 							) : (
-								<span className="text-sm truncate">
+								<span className="truncate text-sm">
 									{getItemDisplayValue(item)}
 								</span>
 							)}
@@ -111,11 +118,11 @@ export function ListDisplay({
 							<Button
 								type="button"
 								variant="ghost"
-								size="icon"
-								className="h-7 w-7 shrink-0"
+								size="icon-xs"
+								className="shrink-0"
 								onClick={() => actions.onEdit?.(item)}
-								title="Edit"
-								aria-label="Edit item"
+								title={t("common.edit")}
+								aria-label={t("field.editItem")}
 							>
 								<Icon icon="ph:pencil" className="h-3 w-3" />
 							</Button>
@@ -126,11 +133,11 @@ export function ListDisplay({
 							<Button
 								type="button"
 								variant="ghost"
-								size="icon"
-								className="h-7 w-7 shrink-0"
+								size="icon-xs"
+								className="shrink-0"
 								onClick={() => actions.onRemove?.(item)}
-								title="Remove"
-								aria-label="Remove item"
+								title={t("common.remove")}
+								aria-label={t("field.removeItem")}
 							>
 								<Icon icon="ph:x" className="h-3 w-3" />
 							</Button>
@@ -142,8 +149,11 @@ export function ListDisplay({
 	}
 
 	// Read-only list
+	const itemSurfaceClass =
+		"item-surface border-border bg-card flex w-full items-center gap-2 px-3 py-2 text-sm";
+
 	return (
-		<ul className="space-y-1">
+		<ul className="space-y-2">
 			{items.map((item, index) => {
 				const displayText = renderItem
 					? renderItem(item, index)
@@ -156,11 +166,14 @@ export function ListDisplay({
 							<button
 								type="button"
 								onClick={() => actions.onEdit?.(item)}
-								className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+								className={cn(
+									itemSurfaceClass,
+									"hover:border-border hover:bg-accent hover:text-accent-foreground",
+								)}
 							>
 								{smallIconElement}
 								{displayText}
-								<Icon icon="ph:pencil" className="size-3" />
+								<Icon icon="ph:pencil" className="ml-auto size-3.5 shrink-0" />
 							</button>
 						</li>
 					);
@@ -173,11 +186,17 @@ export function ListDisplay({
 							<CollectionEditLink
 								collection={collection as any}
 								id={item.id}
-								className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+								className={cn(
+									itemSurfaceClass,
+									"hover:border-border hover:bg-accent hover:text-accent-foreground",
+								)}
 							>
 								{smallIconElement}
 								{displayText}
-								<Icon icon="ph:arrow-right" className="size-3" />
+								<Icon
+									icon="ph:arrow-right"
+									className="ml-auto size-3.5 shrink-0"
+								/>
 							</CollectionEditLink>
 						</li>
 					);
@@ -185,7 +204,7 @@ export function ListDisplay({
 
 				// Read-only
 				return (
-					<li key={item.id} className="text-sm flex items-center gap-1">
+					<li key={item.id} className={itemSurfaceClass}>
 						{smallIconElement}
 						{displayText}
 					</li>

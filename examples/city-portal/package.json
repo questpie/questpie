@@ -4,7 +4,8 @@
 	"private": true,
 	"type": "module",
 	"imports": {
-		"#questpie": "./src/questpie/server/.generated/factories.ts"
+		"#questpie": "./src/questpie/server/.generated/index.ts",
+		"#questpie/*": "./src/questpie/server/.generated/*"
 	},
 	"scripts": {
 		"dev": "bun --bun vite dev --port 3001",
@@ -41,8 +42,11 @@
 		"zod": "^4.2.1"
 	},
 	"devDependencies": {
-		"@types/node": "^22.10.2",
+		"bun-types": "latest",
+		"@iconify/json": ">=2",
+		"@questpie/vite-plugin-iconify": "workspace:*",
 		"@tanstack/devtools-vite": "^0.3.11",
+		"@types/node": "^22.10.2",
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
 		"@vitejs/plugin-react": "^5.0.4",

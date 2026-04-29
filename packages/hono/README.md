@@ -1,6 +1,6 @@
 # @questpie/hono
 
-Hono adapter for QUESTPIE. Mounts CRUD, auth, storage, custom app routes, and realtime routes on a Hono instance with a unified client combining QuestPie operations and Hono RPC.
+Hono adapter for QUESTPIE. Mounts CRUD, auth, storage, custom app routes, and realtime routes on a Hono instance with a unified client combining QUESTPIE operations and Hono RPC.
 
 ## Installation
 
@@ -12,11 +12,10 @@ bun add @questpie/hono questpie hono
 
 ```ts
 import { Hono } from "hono";
-import { questpieHono } from "@questpie/hono";
+import { questpieHono } from "@questpie/hono/server";
 import { app } from "./questpie";
 
-const app = new Hono()
-  .route("/", questpieHono(app, { basePath: "/api" }));
+const app = new Hono().route("/", questpieHono(app, { basePath: "/api" }));
 
 export default { port: 3000, fetch: app.fetch };
 export type AppType = typeof app;
@@ -32,7 +31,7 @@ import type { AppType } from "./server";
 import type { App } from "./questpie";
 
 const client = createClientFromHono<AppType, App>({
-  baseURL: "http://localhost:3000",
+	baseURL: "http://localhost:3000",
 });
 
 // CRUD — fully typed
@@ -52,8 +51,8 @@ import { createClient } from "questpie/client";
 import type { App } from "./questpie";
 
 const client = createClient<App>({
-  baseURL: "http://localhost:3000",
-  basePath: "/api",
+	baseURL: "http://localhost:3000",
+	basePath: "/api",
 });
 ```
 
@@ -61,24 +60,24 @@ const client = createClient<App>({
 
 The adapter automatically creates:
 
-| Method | Route                                    | Description          |
-| ------ | ---------------------------------------- | -------------------- |
-| GET    | `/api/collections/:name`             | List items           |
-| POST   | `/api/collections/:name`             | Create item          |
-| GET    | `/api/collections/:name/:id`         | Get item             |
-| PATCH  | `/api/collections/:name/:id`         | Update item          |
-| DELETE | `/api/collections/:name/:id`         | Delete item          |
-| POST   | `/api/collections/:name/:id/restore` | Restore soft-deleted |
-| GET    | `/api/collections/:name/:id/versions` | List item versions   |
-| POST   | `/api/collections/:name/:id/revert`   | Revert item version  |
-| GET    | `/api/globals/:name`                 | Get global           |
-| PATCH  | `/api/globals/:name`                 | Update global        |
-| GET    | `/api/globals/:name/versions`         | List global versions |
+| Method | Route                                 | Description           |
+| ------ | ------------------------------------- | --------------------- |
+| GET    | `/api/collections/:name`              | List items            |
+| POST   | `/api/collections/:name`              | Create item           |
+| GET    | `/api/collections/:name/:id`          | Get item              |
+| PATCH  | `/api/collections/:name/:id`          | Update item           |
+| DELETE | `/api/collections/:name/:id`          | Delete item           |
+| POST   | `/api/collections/:name/:id/restore`  | Restore soft-deleted  |
+| GET    | `/api/collections/:name/:id/versions` | List item versions    |
+| POST   | `/api/collections/:name/:id/revert`   | Revert item version   |
+| GET    | `/api/globals/:name`                  | Get global            |
+| PATCH  | `/api/globals/:name`                  | Update global         |
+| GET    | `/api/globals/:name/versions`         | List global versions  |
 | POST   | `/api/globals/:name/revert`           | Revert global version |
-| POST   | `/api/collections/:name/upload`      | Upload file          |
-| ALL    | `/api/auth/*`                        | Better Auth routes   |
-| ANY    | `/api/:route*`                       | Custom app routes    |
-| GET    | `/api/collections/:name/subscribe`   | SSE realtime         |
+| POST   | `/api/collections/:name/upload`       | Upload file           |
+| ALL    | `/api/auth/*`                         | Better Auth routes    |
+| ANY    | `/api/:route*`                        | Custom app routes     |
+| GET    | `/api/collections/:name/subscribe`    | SSE realtime          |
 
 ## Documentation
 

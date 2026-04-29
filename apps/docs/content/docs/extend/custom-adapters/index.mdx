@@ -1,0 +1,41 @@
+---
+title: Custom Adapters
+description: Build your own KV, queue, search, realtime, storage, and email adapters for QUESTPIE.
+---
+
+Almost every infrastructure layer in QUESTPIE is swappable. Each subsystem defines a contract (interface or base class) that you implement, then register in your `questpie.config.ts`. QUESTPIE calls your adapter through that contract -- it never cares which provider sits behind it.
+
+## Adapter types
+
+| Type | Contract | Config key | Default |
+|---|---|---|---|
+| [KV / Cache](./kv) | `KVAdapter` interface | `kv.adapter` | `MemoryKVAdapter` |
+| [Queue](./queue) | `QueueAdapter` interface | `queue.adapter` | `PgBossAdapter` |
+| [Search](./search) | `SearchAdapter` interface | `search` | `PostgresSearchAdapter` |
+| [Realtime](./realtime) | `RealtimeAdapter` interface | `realtime.adapter` | polling (no adapter) |
+| [Storage](./storage) | FlyDrive `DriverContract` | `storage.driver` | `FSDriver` (local disk) |
+| [Email](./email) | `MailAdapter` abstract class | `email.adapter` | `ConsoleAdapter` |
+
+## Before you start
+
+A good custom adapter should follow three rules:
+
+1. **Keep the adapter thin.** Translate QUESTPIE calls to your provider SDK, but do not move business logic into the adapter.
+2. **Match the contract exactly.** If a method returns `Promise<void>` or `Promise<string | null>`, keep it that way.
+3. **Start with an in-memory fake.** It is the fastest way to test behavior before wiring up a real provider.
+
+## Recommended workflow
+
+1. Implement the contract against an in-memory fake.
+2. Write adapter-only tests for success, errors, and cleanup.
+3. Wrap the real provider SDK.
+4. Register it in `questpie.config.ts`.
+5. Add one integration test that exercises the real QUESTPIE runtime path.
+
+## Related pages
+
+- [Production adapters overview](/docs/production)
+- [Queue](/docs/production/queue)
+- [Realtime infrastructure](/docs/production/realtime)
+- [Storage](/docs/production/storage)
+- [Email](/docs/production/email)

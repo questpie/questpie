@@ -3,9 +3,7 @@ title: Build Your Backend
 description: Define your data schema, rules, and business logic — codegen generates the typed runtime.
 ---
 
-# Build Your Backend
-
-QuestPie backends follow a simple flow: **define schema → run codegen → get typed runtime**.
+QUESTPIE backends follow a simple flow: **define schema → run codegen → get typed runtime**.
 
 ```text
 Schema Files                    Codegen Output
@@ -20,13 +18,17 @@ Schema Files                    Codegen Output
 ## Sections
 
 ### [Data Modeling](/docs/backend/data-modeling)
+
 Define your collections, globals, fields, and relations. Fields are the single source of truth — they drive database schema, API validation, query operators, and UI rendering.
 
 ### [Rules](/docs/backend/rules)
+
 Add validation, access control, and lifecycle hooks to your collections. Control who can do what, when, and how.
 
 ### [Business Logic](/docs/backend/business-logic)
+
 Write server routes (JSON or raw HTTP), background jobs, and shared services. All handlers receive typed context with DI.
 
 ### [Architecture](/docs/backend/architecture)
+
 Understand file conventions, the plugin system, modules, codegen, and the CLI.

@@ -1,11 +1,9 @@
 ---
-title: CLI
-description: QuestPie CLI commands — generate, dev, migrate, seed, push, add.
+title: CLI Workflow
+description: QUESTPIE CLI commands — generate, dev, migrate, seed, push, add.
 ---
 
-# CLI
-
-The QuestPie CLI manages codegen, database operations, and development tooling.
+The QUESTPIE CLI manages codegen, database operations, and development tooling.
 
 ## Setup
 
@@ -79,9 +77,7 @@ Drop all tables and re-run all migrations:
 bunx questpie migrate:fresh
 ```
 
-<Callout type="warn">
-This destroys all data. Use only in development.
-</Callout>
+<Callout type="warn">This destroys all data. Use only in development.</Callout>
 
 ### `migrate:reset`
 
@@ -91,19 +87,19 @@ Reset migration state without dropping tables:
 bunx questpie migrate:reset
 ```
 
-### `seed:run`
+### `seed`
 
 Run seed files:
 
 ```bash
-bunx questpie seed:run
+bunx questpie seed
 ```
 
 Seed files are in the configured directory (default: `./src/seeds`).
 
 ### `add`
 
-Add a QuestPie module or starter:
+Add a QUESTPIE module or starter:
 
 ```bash
 bunx questpie add <module>
@@ -115,15 +111,15 @@ bunx questpie add <module>
 import { runtimeConfig } from "questpie";
 
 export default runtimeConfig({
-  // ...
-  cli: {
-    migrations: {
-      directory: "./src/migrations",
-    },
-    seeds: {
-      directory: "./src/seeds",
-    },
-  },
+	// ...
+	cli: {
+		migrations: {
+			directory: "./src/migrations",
+		},
+		seeds: {
+			directory: "./src/seeds",
+		},
+	},
 });
 ```
 

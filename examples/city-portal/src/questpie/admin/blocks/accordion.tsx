@@ -3,6 +3,7 @@
  */
 
 import { useState } from "react";
+
 import type { BlockProps } from "../.generated/client";
 
 type AccordionItem = {
@@ -27,28 +28,28 @@ export function AccordionRenderer({ values }: BlockProps<"accordion">) {
 	};
 
 	return (
-		<section className="py-16 px-6">
+		<section className="px-6 py-16">
 			<div className="container mx-auto max-w-3xl">
 				{values.title && (
-					<h2 className="text-3xl font-bold tracking-tight mb-8 text-center">
+					<h2 className="mb-8 text-center text-3xl font-bold tracking-tight">
 						{values.title}
 					</h2>
 				)}
 
-				<div className="divide-y border rounded-lg">
+				<div className="divide-y rounded-lg border">
 					{items.map((item, index) => {
 						const isOpen = openItems.has(index);
 						return (
 							<div key={`${item.title}-${index}`}>
 								<button
 									type="button"
-									className="w-full flex items-center justify-between px-6 py-4 text-left font-medium hover:bg-muted/50 transition-colors"
+									className="hover:bg-muted/50 flex w-full items-center justify-between px-6 py-4 text-left font-medium transition-colors"
 									onClick={() => toggleItem(index)}
 									aria-expanded={isOpen}
 								>
 									<span>{item.title}</span>
 									<svg
-										className={`w-5 h-5 transition-transform ${isOpen ? "rotate-180" : ""}`}
+										className={`h-5 w-5 transition-transform ${isOpen ? "rotate-180" : ""}`}
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
@@ -63,7 +64,7 @@ export function AccordionRenderer({ values }: BlockProps<"accordion">) {
 									</svg>
 								</button>
 								{isOpen && (
-									<div className="px-6 pb-4 text-muted-foreground">
+									<div className="text-muted-foreground px-6 pb-4">
 										{item.content}
 									</div>
 								)}
@@ -73,7 +74,7 @@ export function AccordionRenderer({ values }: BlockProps<"accordion">) {
 				</div>
 
 				{items.length === 0 && (
-					<p className="text-center text-muted-foreground">
+					<p className="text-muted-foreground text-center">
 						No items added yet.
 					</p>
 				)}

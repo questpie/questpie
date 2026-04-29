@@ -1,9 +1,7 @@
 ---
-title: Build Your Workspace
+title: Admin Workspace
 description: The admin panel is a projection of your schema — not the framework itself.
 ---
-
-# Build Your Workspace
 
 The admin panel is **a projection**, not the framework. It reads your server schema via introspection and generates an interface. Your backend works without it. Add it when you need an internal tool.
 
@@ -14,9 +12,9 @@ Server Schema                        Admin Panel
 │   ├── .form()               →    │   ├── Sort/filter from field types
 │   └── .admin()              →    │   └── Label, icon
 ├── globals/settings.ts       →    ├── Form view (singleton)
-├── sidebar.ts                →    ├── Navigation sidebar
-├── dashboard.ts              →    ├── Dashboard widgets
-└── branding.ts               →    └── App name, logo
+└── config/admin.ts           →    ├── Navigation sidebar
+                              →    ├── Dashboard widgets
+                              →    └── App name
 ```
 
 ## Sections
@@ -25,7 +23,7 @@ Server Schema                        Admin Panel
 - **[Views](/docs/workspace/views)** — List views, form views, dashboard, sidebar
 - **[Blocks](/docs/workspace/blocks)** — Content blocks for page builders
 - **[Actions](/docs/workspace/actions)** — CRUD actions and custom actions
-- **[Branding](/docs/workspace/branding)** — Name, logo, theme
+- **[Branding](/docs/workspace/branding)** — Name, chrome, theme
 - **[Filters](/docs/workspace/filters)** — Filters and saved views
 - **[Media](/docs/workspace/media)** — File uploads and asset management
 - **[Visibility](/docs/workspace/visibility)** — Reactive field visibility rules

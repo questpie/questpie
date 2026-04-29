@@ -8,6 +8,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
+
 import type { FieldComponentProps } from "../../builder";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { Button } from "../ui/button";
@@ -21,7 +22,8 @@ import { ObjectArrayField } from "./object-array-field";
 type ArrayFieldItemType = "text" | "number" | "email" | "textarea" | "select";
 
 interface ArrayFieldProps
-	extends FieldComponentProps<any[]>,
+	extends
+		FieldComponentProps<any[]>,
 		Pick<
 			ArrayFieldConfig,
 			"item" | "mode" | "layout" | "columns" | "itemLabel"
@@ -225,7 +227,7 @@ export function ArrayField({
 						{resolvedLabel}
 						{required && <span className="text-destructive">*</span>}
 						{maxItems && (
-							<span className="ml-2 text-xs text-muted-foreground">
+							<span className="text-muted-foreground ml-2 text-xs tabular-nums">
 								({fields.length}/{maxItems})
 							</span>
 						)}
@@ -234,13 +236,15 @@ export function ArrayField({
 				</div>
 			)}
 			{resolvedDescription && (
-				<p className="text-sm text-muted-foreground">{resolvedDescription}</p>
+				<p className="text-muted-foreground text-sm text-pretty">
+					{resolvedDescription}
+				</p>
 			)}
 
 			<div className="space-y-2">
 				{fields.length === 0 ? (
-					<div className="rounded-lg border border-dashed p-4 text-center">
-						<p className="text-sm text-muted-foreground">
+					<div className="py-2">
+						<p className="text-muted-foreground text-sm text-pretty">
 							{resolvedPlaceholder || emptyLabel}
 						</p>
 					</div>
@@ -268,26 +272,26 @@ export function ArrayField({
 										<Button
 											type="button"
 											variant="ghost"
-											size="icon"
-											className="h-6 w-6"
+											size="icon-sm"
+											className="relative after:absolute after:-inset-1"
 											onClick={() => handleMove(index, index - 1)}
 											disabled={!canMoveUp || disabled}
-											title="Move up"
-											aria-label="Move item up"
+											title={t("field.moveUp")}
+											aria-label={t("field.moveUp")}
 										>
-											<Icon icon="ph:caret-up" className="h-3 w-3" />
+											<Icon icon="ph:caret-up" className="size-3.5" />
 										</Button>
 										<Button
 											type="button"
 											variant="ghost"
-											size="icon"
-											className="h-6 w-6"
+											size="icon-sm"
+											className="relative after:absolute after:-inset-1"
 											onClick={() => handleMove(index, index + 1)}
 											disabled={!canMoveDown || disabled}
-											title="Move down"
-											aria-label="Move item down"
+											title={t("field.moveDown")}
+											aria-label={t("field.moveDown")}
 										>
-											<Icon icon="ph:caret-down" className="h-3 w-3" />
+											<Icon icon="ph:caret-down" className="size-3.5" />
 										</Button>
 									</div>
 								)}
@@ -295,14 +299,14 @@ export function ArrayField({
 									<Button
 										type="button"
 										variant="ghost"
-										size="icon"
-										className="h-6 w-6"
+										size="icon-sm"
+										className="relative after:absolute after:-inset-1"
 										onClick={() => handleRemove(index)}
 										disabled={disabled}
-										title="Remove"
-										aria-label="Remove item"
+										title={t("common.remove")}
+										aria-label={t("field.removeItem")}
 									>
-										<Icon icon="ph:trash" className="h-3 w-3" />
+										<Icon icon="ph:trash" className="size-3.5" />
 									</Button>
 								)}
 							</div>
@@ -323,7 +327,7 @@ export function ArrayField({
 				</Button>
 			)}
 
-			{error && <p className="text-sm text-destructive">{error}</p>}
+			{error && <p className="text-destructive text-sm text-pretty">{error}</p>}
 		</div>
 	);
 }

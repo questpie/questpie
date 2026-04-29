@@ -27,7 +27,6 @@ import type * as React from "react";
  * }
  * ```
  */
-// biome-ignore lint/suspicious/noEmptyInterface: Augmentation target for user's message types
 interface MessageRegistry {
 	// Augment this interface to provide type-safe message keys:
 	// declare module "@questpie/admin" {

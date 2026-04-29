@@ -3,9 +3,7 @@ title: Fields
 description: Fields are the single source of truth — they define database columns, API validation, query operators, and UI rendering.
 ---
 
-# Fields
-
-Fields are the foundation of QuestPie. Each field definition drives:
+Fields are the foundation of QUESTPIE. Each field definition drives:
 
 - **Database column** — Drizzle column type, nullable, default
 - **API validation** — Zod schema for create/update
@@ -18,14 +16,17 @@ Fields are the foundation of QuestPie. Each field definition drives:
 Fields are defined inside `.fields()` using the `f` field builder:
 
 ```ts title="collections/posts.ts"
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 
 export default collection("posts").fields(({ f }) => ({
-  title: f.text(255).required(),
-  body: f.textarea().localized(),
-  cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
-  status: f.select(["draft", "published"]),
-  publishedAt: f.date(),
+	title: f.text(255).required(),
+	body: f.textarea().localized(),
+	cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
+	status: f.select([
+		{ value: "draft", label: "Draft" },
+		{ value: "published", label: "Published" },
+	]),
+	publishedAt: f.date(),
 }));
 ```
 
@@ -33,12 +34,12 @@ export default collection("posts").fields(({ f }) => ({
 
 ### Text Fields
 
-| Field | DB Type | Use case |
-|---|---|---|
-| `f.text()` | `varchar` / `text` | Short strings, titles, slugs |
-| `f.textarea()` | `text` | Long text, descriptions, rich content |
-| `f.email()` | `varchar` | Email addresses (validated) |
-| `f.url()` | `varchar` | URLs (validated) |
+| Field          | DB Type            | Use case                              |
+| -------------- | ------------------ | ------------------------------------- |
+| `f.text()`     | `varchar` / `text` | Short strings, titles, slugs          |
+| `f.textarea()` | `text`             | Long text, descriptions, rich content |
+| `f.email()`    | `varchar`          | Email addresses (validated)           |
+| `f.url()`      | `varchar`          | URLs (validated)                      |
 
 ```ts
 name: f.text(255).required(),
@@ -50,8 +51,8 @@ website: f.url(),
 
 ### Numeric Fields
 
-| Field | DB Type | Use case |
-|---|---|---|
+| Field        | DB Type               | Use case                   |
+| ------------ | --------------------- | -------------------------- |
 | `f.number()` | `integer` / `numeric` | Counts, prices, quantities |
 
 ```ts
@@ -67,11 +68,11 @@ isActive: f.boolean().default(true).required(),
 
 ### Date/Time Fields
 
-| Field | DB Type | Use case |
-|---|---|---|
-| `f.date()` | `date` | Calendar dates |
-| `f.time()` | `time` | Time of day |
-| `f.datetime()` | `timestamp` | Date + time |
+| Field          | DB Type     | Use case       |
+| -------------- | ----------- | -------------- |
+| `f.date()`     | `date`      | Calendar dates |
+| `f.time()`     | `time`      | Time of day    |
+| `f.datetime()` | `timestamp` | Date + time    |
 
 ```ts
 publishedAt: f.date(),
@@ -84,8 +85,12 @@ scheduledAt: f.datetime().required(),
 Single value from a predefined list:
 
 ```ts
-// Simple options
-status: f.select(["draft", "published", "archived"]).required().default("draft"),
+// Basic options
+status: f.select([
+    { value: "draft", label: "Draft" },
+    { value: "published", label: "Published" },
+    { value: "archived", label: "Archived" },
+]).required().default("draft"),
 
 // Options with labels
 status: f.select([
@@ -168,7 +173,12 @@ tags: f.text().array(),
 
 // Array of objects
 socialLinks: f.object({
-  platform: f.select(["instagram", "facebook", "twitter", "linkedin"]),
+  platform: f.select([
+    { value: "instagram", label: "Instagram" },
+    { value: "facebook", label: "Facebook" },
+    { value: "twitter", label: "Twitter" },
+    { value: "linkedin", label: "LinkedIn" },
+  ]),
   url: f.url(),
 }).array().maxItems(5),
 ```
@@ -211,16 +221,16 @@ Virtual fields appear in queries but cannot be written to.
 
 Every field supports these chain methods:
 
-| Method | Description |
-|---|---|
-| `.required()` | Mark as NOT NULL |
-| `.default(value)` | Set default value (makes input optional) |
-| `.label(text)` | Display label (string or i18n object) |
-| `.description(text)` | Help text (string or i18n object) |
-| `.localized()` | Store per-locale values in i18n table |
-| `.inputOptional()` | Always optional in input, even if NOT NULL (e.g., auto-generated slugs) |
-| `.virtual(expr?)` | No DB column; optional SQL expression for computed fields |
-| `.array()` | Wrap as JSONB array |
+| Method               | Description                                                             |
+| -------------------- | ----------------------------------------------------------------------- |
+| `.required()`        | Mark as NOT NULL                                                        |
+| `.default(value)`    | Set default value (makes input optional)                                |
+| `.label(text)`       | Display label (string or i18n object)                                   |
+| `.description(text)` | Help text (string or i18n object)                                       |
+| `.localized()`       | Store per-locale values in i18n table                                   |
+| `.inputOptional()`   | Always optional in input, even if NOT NULL (e.g., auto-generated slugs) |
+| `.virtual(expr?)`    | No DB column; optional SQL expression for computed fields               |
+| `.array()`           | Wrap as JSONB array                                                     |
 
 See [Field API Reference](/docs/reference/field-api) for the full list.
 
@@ -248,5 +258,5 @@ isActive: f.boolean().default(true),
 
 - [Collections](/docs/backend/data-modeling/collections) — Builder chain and CRUD methods
 - [Relations](/docs/backend/data-modeling/relations) — Relation field deep dive
-- [Localization](/docs/backend/data-modeling/localization) — Multi-language support
+- [Localized Fields](/docs/backend/data-modeling/localization) — Multi-language support
 - [Validation](/docs/backend/rules/validation) — Field-level validation

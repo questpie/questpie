@@ -18,6 +18,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+
 import {
 	type BusinessHours,
 	Footer,
@@ -31,6 +32,7 @@ import {
 import { LocaleProvider } from "../lib/providers/locale-provider";
 import { ThemeProvider } from "../lib/providers/theme-provider";
 import { queryClient } from "../lib/query-client";
+
 import stylesCss from "../styles.css?url";
 
 export const Route = createFileRoute("/_app")({
@@ -58,6 +60,9 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
 	const { siteSettings } = Route.useLoaderData();
+	const showDevtools =
+		process.env.NODE_ENV === "development" &&
+		process.env.VITE_TANSTACK_DEVTOOLS === "true";
 
 	return (
 		<html lang="en" suppressHydrationWarning>
@@ -65,7 +70,6 @@ function AppLayout() {
 				<HeadContent />
 				{/* Inline script to prevent FOUC for theme */}
 				<script
-					// biome-ignore lint: theme pre-hydration
 					dangerouslySetInnerHTML={{
 						__html: `
 							(function() {
@@ -80,7 +84,7 @@ function AppLayout() {
 					}}
 				/>
 			</head>
-			<body className="min-h-screen bg-background text-foreground antialiased">
+			<body className="bg-background text-foreground min-h-screen antialiased">
 				<QueryClientProvider client={queryClient}>
 					<ThemeProvider>
 						<LocaleProvider>
@@ -117,7 +121,7 @@ function AppLayout() {
 						</LocaleProvider>
 					</ThemeProvider>
 
-					{process.env.NODE_ENV === "development" && (
+					{showDevtools && (
 						<TanStackDevtools
 							config={{
 								position: "bottom-right",

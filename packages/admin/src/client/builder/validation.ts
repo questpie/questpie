@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+
 import type { FieldInstance } from "./field/field";
 import type { FieldValidationConfig } from "./types/field-types";
 
@@ -65,10 +66,10 @@ const FIELD_VALIDATORS: Record<
 
 	select: (opts) => {
 		if (opts.options && opts.options.length > 0) {
-			const values = opts.options.map((o: any) => o.value);
+			const validValues = new Set(opts.options.map((o: any) => o.value));
 			const schema = z
 				.union([z.string(), z.number()])
-				.refine((val) => values.includes(val), {
+				.refine((val) => validValues.has(val), {
 					message: "Invalid selection",
 				});
 			return wrapOptional(schema, opts.required);
@@ -77,17 +78,17 @@ const FIELD_VALIDATORS: Record<
 	},
 
 	multiSelect: (opts) => {
-		const itemSchema =
+		const validValues =
 			opts.options?.length > 0
-				? z
-						.union([z.string(), z.number()])
-						.refine(
-							(val) => opts.options.map((o: any) => o.value).includes(val),
-							{
-								message: "Invalid selection",
-							},
-						)
-				: z.union([z.string(), z.number()]);
+				? new Set(opts.options.map((o: any) => o.value))
+				: null;
+		const itemSchema = validValues
+			? z
+					.union([z.string(), z.number()])
+					.refine((val) => validValues.has(val), {
+						message: "Invalid selection",
+					})
+			: z.union([z.string(), z.number()]);
 
 		let schema = z.array(itemSchema);
 		if (opts.minItems !== undefined) {
@@ -199,10 +200,10 @@ const FIELD_VALIDATORS: Record<
 					break;
 				case "select":
 					if (opts.options?.length > 0) {
-						const values = opts.options.map((o: any) => o.value);
+						const validVals = new Set(opts.options.map((o: any) => o.value));
 						itemSchema = z
 							.union([z.string(), z.number()])
-							.refine((val) => values.includes(val), {
+							.refine((val) => validVals.has(val), {
 								message: "Invalid selection",
 							});
 					} else {

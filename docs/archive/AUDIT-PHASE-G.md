@@ -31,8 +31,8 @@ The extension is `.form()`, the schema key is `admin.form`, the view names end w
 
 ```typescript
 interface ViewKindRegistry {
-  list: {};
-  form: {};   // was "edit" — now matches .form() extension and view naming
+	list: {};
+	form: {}; // was "edit" — now matches .form() extension and view naming
 }
 ```
 
@@ -40,11 +40,11 @@ interface ViewKindRegistry {
 
 If `global-form` has an entity prefix, then collection views must too. No implicit defaults.
 
-| View name | Kind | Component | Entity scope |
-|-----------|------|-----------|-------------|
-| `collection-table` | `"list"` | `TableView` | collection |
-| `collection-form` | `"form"` | `FormView` | collection |
-| `global-form` | `"form"` | `GlobalFormView` | global |
+| View name          | Kind     | Component        | Entity scope |
+| ------------------ | -------- | ---------------- | ------------ |
+| `collection-table` | `"list"` | `TableView`      | collection   |
+| `collection-form`  | `"form"` | `FormView`       | collection   |
+| `global-form`      | `"form"` | `GlobalFormView` | global       |
 
 User custom views follow the same pattern:
 
@@ -56,13 +56,13 @@ global-wizard        → kind: "form"   (custom global form)
 
 ### Full consistency table
 
-| Layer | Collection list | Collection form | Global form |
-|-------|----------------|-----------------|-------------|
-| Server extension | `.list()` | `.form()` | `.form()` |
-| Kind | `"list"` | `"form"` | `"form"` |
-| Schema key | `admin.list` | `admin.form` | `admin.form` |
-| View name | `"collection-table"` | `"collection-form"` | `"global-form"` |
-| Component | `TableView` | `FormView` | `GlobalFormView` |
+| Layer            | Collection list      | Collection form     | Global form      |
+| ---------------- | -------------------- | ------------------- | ---------------- |
+| Server extension | `.list()`            | `.form()`           | `.form()`        |
+| Kind             | `"list"`             | `"form"`            | `"form"`         |
+| Schema key       | `admin.list`         | `admin.form`        | `admin.form`     |
+| View name        | `"collection-table"` | `"collection-form"` | `"global-form"`  |
+| Component        | `TableView`          | `FormView`          | `GlobalFormView` |
 
 Zero synonyms. Zero translations between layers.
 
@@ -114,6 +114,7 @@ const listConfig = { ...extensionDefaults.list, ...state.adminList };
 ```
 
 Effects:
+
 - Client schema **always** has `admin.list.view` and `admin.form.view` populated.
 - Router reads `schema.admin.list.view` / `schema.admin.form.view` directly.
 - **No fallback logic in router.** No `VIEW_DEFAULTS` map. No `resolveDefaultViewName`.
@@ -152,23 +153,23 @@ View definition carries its own config. Same factory, same pattern as user code:
 ```typescript
 // modules/admin/client/views/collection-table.ts
 export default view("collection-table", {
-  kind: "list",
-  component: () => import("./table-view"),
-  config: {
-    showSearch: true,
-    showFilters: true,
-    showToolbar: true,
-    realtime: false,
-  } satisfies ListViewConfig,
+	kind: "list",
+	component: () => import("./table-view"),
+	config: {
+		showSearch: true,
+		showFilters: true,
+		showToolbar: true,
+		realtime: false,
+	} satisfies ListViewConfig,
 });
 
 // modules/admin/client/views/collection-form.ts
 export default view("collection-form", {
-  kind: "form",
-  component: () => import("./form-view"),
-  config: {
-    showMeta: true,
-  } satisfies FormViewConfig,
+	kind: "form",
+	component: () => import("./form-view"),
+	config: {
+		showMeta: true,
+	} satisfies FormViewConfig,
 });
 ```
 
@@ -176,8 +177,8 @@ Router merges view config with schema override:
 
 ```typescript
 const viewConfig = mergeViewConfig(
-  viewDef?.config,                    // view-level defaults (from view definition)
-  schema.admin[operation]?.["~config"],  // schema-level override (per collection/global)
+	viewDef?.config, // view-level defaults (from view definition)
+	schema.admin[operation]?.["~config"], // schema-level override (per collection/global)
 );
 ```
 
@@ -193,10 +194,10 @@ Dashboard becomes a regular page in `pages` registry:
 ```typescript
 // modules/admin/client/pages/dashboard.ts
 export default page("dashboard", {
-  component: () => import("./dashboard-page"),
-  label: "Dashboard",
-  icon: "ph:house",
-  path: "/",
+	component: () => import("./dashboard-page"),
+	label: "Dashboard",
+	icon: "ph:house",
+	path: "/",
 });
 ```
 
@@ -206,13 +207,13 @@ export default page("dashboard", {
 
 ### Audit result
 
-| Category | Count | Fields | Introspection-only? |
-|----------|-------|--------|-------------------|
-| Purely metadata-driven | 9 | text, textarea, number, boolean, json, richText, relation, upload, assetPreview | YES |
-| Metadata + minor custom | 5 | email, url, date, datetime, select | YES with type-aware logic |
-| Context-dependent | 2 | object, array | NO — needs `ctx.buildSchema` for recursion |
-| Custom recursive | 1 | blocks | NO — lazy schema + custom refine |
-| Hardcoded format | 1 | time | NO — regex not in metadata |
+| Category                | Count | Fields                                                                          | Introspection-only?                        |
+| ----------------------- | ----- | ------------------------------------------------------------------------------- | ------------------------------------------ |
+| Purely metadata-driven  | 9     | text, textarea, number, boolean, json, richText, relation, upload, assetPreview | YES                                        |
+| Metadata + minor custom | 5     | email, url, date, datetime, select                                              | YES with type-aware logic                  |
+| Context-dependent       | 2     | object, array                                                                   | NO — needs `ctx.buildSchema` for recursion |
+| Custom recursive        | 1     | blocks                                                                          | NO — lazy schema + custom refine           |
+| Hardcoded format        | 1     | time                                                                            | NO — regex not in metadata                 |
 
 ### Solution
 
@@ -221,27 +222,27 @@ Same extensibility mechanism for user custom fields.
 
 ```typescript
 function buildZodFromIntrospection(
-  fieldSchema: FieldIntrospection,
-  ctx?: { buildSchema: (field: FieldIntrospection) => z.ZodType },
+	fieldSchema: FieldIntrospection,
+	ctx?: { buildSchema: (field: FieldIntrospection) => z.ZodType },
 ): z.ZodType {
-  const validator = FIELD_VALIDATORS[fieldSchema.type];
-  if (validator) return validator(fieldSchema, ctx);
+	const validator = FIELD_VALIDATORS[fieldSchema.type];
+	if (validator) return validator(fieldSchema, ctx);
 
-  // Generic path: 14 fields, zero per-field code
-  let schema = resolveBaseType(fieldSchema.type);
-  // apply minLength, maxLength, min, max, pattern from metadata
-  return wrapOptional(schema, fieldSchema.required);
+	// Generic path: 14 fields, zero per-field code
+	let schema = resolveBaseType(fieldSchema.type);
+	// apply minLength, maxLength, min, max, pattern from metadata
+	return wrapOptional(schema, fieldSchema.required);
 }
 
 const FIELD_VALIDATORS: Record<string, FieldValidator> = {
-  object: buildObjectZod,
-  array: buildArrayZod,
-  blocks: buildBlocksZod,
-  time: buildTimeZod,
-  select: buildSelectZod,
-  date: buildDateZod,
-  datetime: buildDateTimeZod,
-  email: buildEmailZod,
+	object: buildObjectZod,
+	array: buildArrayZod,
+	blocks: buildBlocksZod,
+	time: buildTimeZod,
+	select: buildSelectZod,
+	date: buildDateZod,
+	datetime: buildDateTimeZod,
+	email: buildEmailZod,
 };
 ```
 
@@ -249,10 +250,10 @@ const FIELD_VALIDATORS: Record<string, FieldValidator> = {
 
 ```typescript
 interface FieldRegistryEntry<TName extends string = string> {
-  readonly name: TName;
-  readonly component: React.ComponentType<BaseFieldProps>;
-  readonly cell?: React.ComponentType<BaseCellProps>;
-  readonly validator?: FieldValidator;   // optional — for custom fields
+	readonly name: TName;
+	readonly component: React.ComponentType<BaseFieldProps>;
+	readonly cell?: React.ComponentType<BaseCellProps>;
+	readonly validator?: FieldValidator; // optional — for custom fields
 }
 ```
 
@@ -299,11 +300,13 @@ for (const moduleDir of moduleDirs) {
 Detection: `isModuleMode = !!ctx.module`.
 
 **Module mode** (admin package internal):
+
 - No `_defaults` import — this IS the defaults.
 - Exports flat `AdminState` object.
 - Published as `@questpie/admin/client/defaults`.
 
 **Project mode** (user projects):
+
 - Imports `_defaults` from `@questpie/admin/client/defaults`.
 - Merges user files on top.
 - No `filterViews()` — flat views in both modes.
@@ -335,14 +338,14 @@ Same factories used by admin module files and user files. No difference.
 
 ```typescript
 interface ViewDefinition<
-  TName extends string = string,
-  TKind extends ViewKind = ViewKind,
-  TConfig = unknown,
+	TName extends string = string,
+	TKind extends ViewKind = ViewKind,
+	TConfig = unknown,
 > {
-  readonly name: TName;
-  readonly kind: TKind;                        // "list" | "form"
-  readonly component: MaybeLazyComponent;      // client-only
-  readonly config?: TConfig;                   // view-level defaults (showSearch, showMeta, etc.)
+	readonly name: TName;
+	readonly kind: TKind; // "list" | "form"
+	readonly component: MaybeLazyComponent; // client-only
+	readonly config?: TConfig; // view-level defaults (showSearch, showMeta, etc.)
 }
 ```
 
@@ -354,14 +357,14 @@ No `defaultFor`. No `"~config"` phantom (use `config` directly). No `.state` nes
 
 ```typescript
 interface AdminState {
-  views: Record<string, ViewDefinition>;       // flat, no listViews/editViews split
-  fields: Record<string, FieldRegistryEntry>;
-  components: Record<string, ComponentDefinition>;
-  pages: Record<string, PageDefinition>;
-  widgets: Record<string, WidgetDefinition>;
-  blocks: Record<string, BlockDefinition>;
-  translations: TranslationsMap;
-  locale: LocaleConfig;                        // includes labels: { en: "English", ... }
+	views: Record<string, ViewDefinition>; // flat, no listViews/editViews split
+	fields: Record<string, FieldRegistryEntry>;
+	components: Record<string, ComponentDefinition>;
+	pages: Record<string, PageDefinition>;
+	widgets: Record<string, WidgetDefinition>;
+	blocks: Record<string, BlockDefinition>;
+	translations: TranslationsMap;
+	locale: LocaleConfig; // includes labels: { en: "English", ... }
 }
 ```
 
@@ -416,6 +419,7 @@ G.8  Tests after each step
 ## Files Summary
 
 ### New (~35)
+
 - `modules/admin/client/views/{collection-table,collection-form,global-form}.ts` (3)
 - `modules/admin/client/fields/{text,textarea,...,blocks,assetPreview}.ts` (18)
 - `modules/admin/client/components/icon.ts` (1)
@@ -423,6 +427,7 @@ G.8  Tests after each step
 - `modules/admin/client/widgets/{stats,...,progress}.ts` (8)
 
 ### Modified (~22)
+
 - `packages/questpie/src/cli/codegen/types.ts` — moduleRoot, RegistryExtension.defaults
 - `packages/questpie/src/cli/codegen/index.ts` — merge moduleRoot
 - `packages/questpie/src/cli/commands/codegen.ts` — multi-target generatePackageModules
@@ -440,6 +445,7 @@ G.8  Tests after each step
 - Tests (8+ files)
 
 ### Deleted (~10)
+
 - `client/builder/admin-builder.ts`
 - `client/builder/qa.ts`
 - `client/builder/defaults/{core,starter,fields,views,pages,widgets,components}.ts`

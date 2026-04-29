@@ -3,9 +3,7 @@ title: Project Structure
 description: File convention layout, discovery rules, and generated output.
 ---
 
-# Project Structure
-
-QuestPie uses a **file convention** — your project structure determines what gets discovered and wired into the runtime. No manual registration required.
+QUESTPIE uses a **file convention** — your project structure determines what gets discovered and wired into the runtime. No manual registration required.
 
 ## Standard Layout
 
@@ -15,10 +13,9 @@ my-app/
 ├── src/
 │   ├── questpie/
 │   │   ├── server/
-│   │   │   ├── questpie.config.ts        # Runtime config (DB, plugins, adapters)
+│   │   │   ├── questpie.config.ts        # Runtime config (DB, adapters, secrets)
+│   │   │   ├── app.ts                    # Re-export generated app
 │   │   │   ├── modules.ts                # Module dependencies
-│   │   │   ├── auth.ts                   # Authentication config
-│   │   │   ├── locale.ts                 # Content locale config
 │   │   │   │
 │   │   │   ├── collections/              # One file per collection
 │   │   │   │   ├── posts.ts
@@ -45,10 +42,11 @@ my-app/
 │   │   │   ├── emails/                   # Email templates
 │   │   │   │   └── appointment-confirmation.ts
 │   │   │   │
-│   │   │   ├── sidebar.ts                # Admin sidebar config
-│   │   │   ├── dashboard.ts              # Admin dashboard config
-│   │   │   ├── branding.ts               # Admin branding
-│   │   │   ├── admin-locale.ts           # Admin UI locale
+│   │   │   ├── config/                   # Typed configuration files
+│   │   │   │   ├── auth.ts              # Auth config (Better Auth)
+│   │   │   │   ├── app.ts              # Optional app config (locale, access, hooks)
+│   │   │   │   ├── admin.ts            # Admin config (sidebar, dashboard, branding)
+│   │   │   │   └── openapi.ts          # OpenAPI config
 │   │   │   │
 │   │   │   └── .generated/               # Codegen output (never edit)
 │   │   │       ├── index.ts              # App instance + types
@@ -75,31 +73,31 @@ my-app/
 
 Codegen discovers files based on **directory name** and **export pattern**:
 
-| Directory | Export | Key derivation | Example |
-|---|---|---|---|
-| `collections/` | Default or named | Filename → camelCase | `blog-posts.ts` → `blogPosts` |
-| `globals/` | Default or named | Filename → camelCase | `site-settings.ts` → `siteSettings` |
-| `routes/` | Default | Filename → camelCase/slash path | `create-booking.ts` → `createBooking` |
-| `jobs/` | Default | Filename → camelCase | `send-email.ts` → `sendEmail` |
-| `routes/` (raw) | Default | Filename → slash path | `webhook.ts` → `webhook` |
-| `services/` | Default | Filename → camelCase | `blog.ts` → `blog` |
-| `blocks/` | Named exports | Export name | `export const hero` → `hero` |
-| `emails/` | Default | Filename → camelCase | `appointment-confirmation.ts` → `appointmentConfirmation` |
+| Directory       | Export           | Key derivation                   | Example                                                   |
+| --------------- | ---------------- | -------------------------------- | --------------------------------------------------------- |
+| `collections/`  | Default or named | Factory string arg               | `collection("blog-posts")` → `blogPosts`                  |
+| `globals/`      | Default or named | Factory string arg               | `global("siteSettings")` → `siteSettings`                 |
+| `routes/`       | Default          | Filename → camelCase/slash path  | `create-booking.ts` → `createBooking`                     |
+| `jobs/`         | Default          | Filename → camelCase             | `send-email.ts` → `sendEmail`                             |
+| `routes/` (raw) | Default          | Filename → slash path            | `webhook.ts` → `webhook`                                  |
+| `services/`     | Default          | Filename → camelCase             | `blog.ts` → `blog`                                        |
+| `blocks/`       | Named exports    | Factory string arg → export name | `block("hero")` → `hero`                                  |
+| `emails/`       | Default          | Filename → camelCase             | `appointment-confirmation.ts` → `appointmentConfirmation` |
+
+Factory string args are the runtime identity. Hyphens are camelized (`"blog-posts"` → `blogPosts`), while underscores are preserved (`"site_settings"` → `site_settings`).
 
 ### Single-file conventions
 
 Some configs are single files instead of directories:
 
-| File | Purpose |
-|---|---|
-| `questpie.config.ts` | Runtime config (DB, plugins, adapters) |
-| `modules.ts` | Module dependencies array |
-| `auth.ts` | Authentication config |
-| `locale.ts` | Content locale config |
-| `sidebar.ts` | Admin sidebar sections |
-| `dashboard.ts` | Admin dashboard widgets |
-| `branding.ts` | Admin branding (name, logo) |
-| `admin-locale.ts` | Admin UI locale |
+| File                 | Purpose                                                                    |
+| -------------------- | -------------------------------------------------------------------------- |
+| `questpie.config.ts` | Runtime config (DB, adapters, secrets)                                     |
+| `modules.ts`         | Module dependencies array                                                  |
+| `config/auth.ts`     | Auth config via `authConfig()` (Better Auth options)                       |
+| `config/app.ts`      | App config via `appConfig()` (locale, access, hooks)                       |
+| `config/admin.ts`    | Admin config via `adminConfig()` (sidebar, dashboard, branding, UI locale) |
+| `config/openapi.ts`  | OpenAPI config via `openApiConfig()` (spec info, Scalar)                   |
 
 ### Nested routes
 
@@ -124,10 +122,10 @@ Running `bunx questpie generate` creates `.generated/` with:
 import type { AppCollections, AppGlobals, AppRoutes, AppJobs } from "./module";
 
 export type AppConfig = {
-  collections: AppCollections;
-  globals: AppGlobals;
-  routes: AppRoutes;
-  // ... auth, locales
+	collections: AppCollections;
+	globals: AppGlobals;
+	routes: AppRoutes;
+	// ... auth, locales
 };
 
 export { app, createContext } from "./app";
@@ -139,30 +137,47 @@ export type { AppConfig, AppCollections, AppGlobals, AppRoutes, AppJobs };
 The generated code augments `AppContext` so every handler gets typed DI:
 
 ```ts
-declare global { namespace Questpie {
-  interface AppContext {
-    db: Database;
-    email: MailerService<AppEmailTemplates>;
-    queue: QueueClient<AppJobs>;
-    collections: AppCollections;
-    globals: AppGlobals;
-    session: Session | null;
-    // ... custom services
-  }
-}}
+declare global {
+	namespace Questpie {
+		interface AppContext {
+			db: Database;
+			email: MailerService<AppEmailTemplates>;
+			queue: QueueClient<AppJobs>;
+			collections: AppCollections;
+			globals: AppGlobals;
+			session: Session | null;
+			// ... custom services
+		}
+	}
+}
 ```
 
 This is why `collections`, `queue`, `email` are available and typed in every handler — codegen generates the augmentation from your file structure.
 
-## The `#questpie` Import
+## The `#questpie` Imports
 
-Collection and global files use `#questpie` as the import specifier:
+QUESTPIE uses Node.js [subpath imports](https://nodejs.org/api/packages.html#subpath-imports) (the `"imports"` field in `package.json`) to wire your code to the generated output:
+
+| Import                | Resolves to               | Use for                                       |
+| --------------------- | ------------------------- | --------------------------------------------- |
+| `#questpie`           | `.generated/index.ts`     | `app` instance, `AppConfig` type              |
+| `#questpie/factories` | `.generated/factories.ts` | `collection()`, `global()`, `sidebar()`, etc. |
+
+Collection, global, and admin singleton files import from `#questpie/factories`:
 
 ```ts
-import { collection } from "#questpie";
+import { collection } from "#questpie/factories";
 ```
 
-This is a TypeScript path alias that resolves to the generated app instance. It ensures your builders have access to the correct types for field autocompletion and relation targets.
+The generated factories file provides typed builders with all plugin extensions (e.g. `.admin()`, `.form()`, `.list()`) and the merged field set (builtins + module-contributed fields like `richText`, `blocks`).
+
+Routes, jobs, and seeds import from the bare `questpie` package:
+
+```ts
+import { route } from "questpie";
+import { job } from "questpie";
+import { seed } from "questpie";
+```
 
 ## By-Feature Layout
 

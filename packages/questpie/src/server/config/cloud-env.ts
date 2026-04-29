@@ -44,8 +44,8 @@ const DEFAULT_APP_URL = "http://localhost:3000";
 export function isQuestpieCloud(): boolean {
 	return Boolean(
 		process.env[CLOUD_ENV.DB] ||
-			process.env[CLOUD_ENV.APP_URL] ||
-			process.env[CLOUD_ENV.STORAGE_ENDPOINT],
+		process.env[CLOUD_ENV.APP_URL] ||
+		process.env[CLOUD_ENV.STORAGE_ENDPOINT],
 	);
 }
 

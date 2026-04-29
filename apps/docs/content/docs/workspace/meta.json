@@ -1,14 +1,18 @@
 {
-	"title": "Build Your Workspace",
+	"title": "Admin Workspace",
 	"pages": [
-		"index",
 		"setup",
 		"views",
 		"blocks",
 		"actions",
 		"branding",
+		"bulk-actions",
 		"filters",
+		"history",
+		"localization",
+		"ui-language-and-messages",
 		"media",
-		"visibility"
+		"visibility",
+		"live-preview"
 	]
 }

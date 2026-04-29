@@ -1,0 +1,146 @@
+---
+title: Realtime Adapter
+description: Implement a custom realtime transport adapter for QUESTPIE.
+---
+
+Realtime adapters transport change notifications from the server to connected clients. Without an adapter, QUESTPIE falls back to polling the outbox table. With an adapter, notifications are delivered instantly via PostgreSQL LISTEN/NOTIFY, Redis Streams, or any pub/sub system you wire up.
+
+## Interface
+
+```ts
+export interface RealtimeAdapter {
+	start(): Promise<void>;
+	stop(): Promise<void>;
+	notify(event: RealtimeChangeEvent): Promise<void>;
+	subscribe(handler: (notice: RealtimeNotice) => void): () => void;
+}
+```
+
+The contract is intentionally small -- four methods, no configuration objects, no channel management API.
+
+## Required methods
+
+| Method               | Description                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| `start()`            | Initialize connections, listeners, or subscriptions. Called once at app startup.          |
+| `stop()`             | Close connections cleanly. Called during graceful shutdown.                               |
+| `notify(event)`      | Publish a change event to the transport. QUESTPIE calls this after every write operation. |
+| `subscribe(handler)` | Register a handler for inbound notices. Returns an **unsubscribe function**.              |
+
+## Event types
+
+### `RealtimeChangeEvent` (published by QUESTPIE)
+
+```ts
+export type RealtimeChangeEvent = {
+	seq: number;
+	resourceType: "collection" | "global";
+	resource: string;
+	operation: "create" | "update" | "delete" | "bulk_update" | "bulk_delete";
+	recordId?: string | null;
+	locale?: string | null;
+	payload?: Record<string, unknown>;
+	createdAt: Date;
+};
+```
+
+### `RealtimeNotice` (received by subscribers)
+
+```ts
+export type RealtimeNotice = Pick<
+	RealtimeChangeEvent,
+	"seq" | "resourceType" | "resource" | "operation"
+>;
+```
+
+Notices are a lightweight projection of the full event -- just enough for the client to decide whether to refetch.
+
+## Channel lifecycle
+
+QUESTPIE's contract does not expose channel or topic management. If your provider needs explicit channel/topic setup:
+
+- Create channels inside `start()`, clean them up in `stop()`.
+- If your provider supports per-topic subscriptions internally, multiplex them behind the single `subscribe()` callback.
+- The `resource` field on events (e.g. `"posts"`, `"siteSettings"`) is the natural topic key.
+
+## Minimal example
+
+```ts title="my-realtime-adapter.ts"
+import type {
+	RealtimeAdapter,
+	RealtimeChangeEvent,
+	RealtimeNotice,
+} from "questpie";
+
+export class InMemoryRealtimeAdapter implements RealtimeAdapter {
+	private listeners = new Set<(notice: RealtimeNotice) => void>();
+
+	async start(): Promise<void> {
+		// Connect to your pub/sub provider here.
+	}
+
+	async stop(): Promise<void> {
+		this.listeners.clear();
+		// Disconnect from your provider here.
+	}
+
+	async notify(event: RealtimeChangeEvent): Promise<void> {
+		const notice: RealtimeNotice = {
+			seq: event.seq,
+			resourceType: event.resourceType,
+			resource: event.resource,
+			operation: event.operation,
+		};
+
+		for (const listener of this.listeners) {
+			listener(notice);
+		}
+	}
+
+	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
+		this.listeners.add(handler);
+		return () => {
+			this.listeners.delete(handler);
+		};
+	}
+}
+```
+
+## Registration
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { InMemoryRealtimeAdapter } from "./my-realtime-adapter";
+
+export default runtimeConfig({
+	// ...
+	realtime: {
+		adapter: new InMemoryRealtimeAdapter(),
+		pollIntervalMs: 2000, // fallback poll interval (default: 2000)
+		batchSize: 500, // max events per drain (default: 500)
+	},
+});
+```
+
+### Config options
+
+| Option           | Default     | Description                                                                |
+| ---------------- | ----------- | -------------------------------------------------------------------------- |
+| `adapter`        | `undefined` | Your adapter instance. If omitted, QUESTPIE polls the outbox.              |
+| `pollIntervalMs` | `2000`      | Poll interval in ms when no adapter is configured.                         |
+| `batchSize`      | `500`       | Max events to read per drain cycle.                                        |
+| `retentionDays`  | --          | Time-based outbox cleanup window (in addition to watermark-based cleanup). |
+
+## Testing tips
+
+- Assert that `subscribe()` returns a working unsubscribe function -- call it and verify the handler stops receiving events.
+- Test multiple listeners receiving the same `notify()` event.
+- Verify `stop()` does not leak listeners, connections, or timers.
+- Test the full round-trip: `notify()` an event, assert the `subscribe()` handler receives the corresponding notice.
+- For network-based adapters (Redis, NATS), test reconnection behavior.
+
+## Reference implementations
+
+- [PgNotifyAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/realtime/adapters/pg-notify.ts) -- PostgreSQL LISTEN/NOTIFY, JSON over a single channel
+- [RedisStreamsAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/realtime/adapters/redis-streams.ts) -- Redis Streams with consumer groups, batched reads
+- [RealtimeAdapter interface source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/realtime/adapter.ts)

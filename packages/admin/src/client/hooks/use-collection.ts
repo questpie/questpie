@@ -5,7 +5,8 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
-import type { QuestpieClient } from "questpie/client";
+
+import type { AnyQuestpieClient } from "../builder";
 import type {
 	RegisteredCMS,
 	RegisteredCollectionNames,
@@ -23,8 +24,7 @@ type CollectionRealtimeOptions = {
 /**
  * Resolved app type (Questpie<any> if not registered)
  */
-type ResolvedCMS =
-	RegisteredCMS extends Questpie<any> ? RegisteredCMS : any;
+type ResolvedCMS = RegisteredCMS extends Questpie<any> ? RegisteredCMS : any;
 
 /**
  * Resolved collection names (string if not registered)
@@ -130,9 +130,7 @@ export function useCollectionItem<K extends ResolvedCollectionNames>(
 	collection: K,
 	id: string,
 	options?: Omit<
-		Parameters<
-			QuestpieClient<any>["collections"][K & string]["findOne"]
-		>[0],
+		Parameters<AnyQuestpieClient["collections"][K & string]["findOne"]>[0],
 		"where"
 	> & {
 		localeFallback?: boolean;
@@ -170,7 +168,9 @@ export function useCollectionCreate<K extends ResolvedCollectionNames>(
 ): any {
 	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
-	const baseOptions = (queryOpts.collections as any)[collection as string].create();
+	const baseOptions = (queryOpts.collections as any)[
+		collection as string
+	].create();
 	const listQueryKey = queryOpts.key([
 		"collections",
 		collection as string,
@@ -220,7 +220,9 @@ export function useCollectionUpdate<K extends ResolvedCollectionNames>(
 ): any {
 	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
-	const baseOptions = (queryOpts.collections as any)[collection as string].update();
+	const baseOptions = (queryOpts.collections as any)[
+		collection as string
+	].update();
 	const listQueryKey = queryOpts.key([
 		"collections",
 		collection as string,
@@ -255,6 +257,52 @@ export function useCollectionUpdate<K extends ResolvedCollectionNames>(
 			queryClient.invalidateQueries({
 				queryKey: itemQueryKey,
 			});
+			(mutationOptions?.onSettled as any)?.(data, error, variables, context);
+		},
+		...mutationOptions,
+	} as any);
+}
+
+/**
+ * Hook to update multiple collection items with distinct data per record.
+ */
+export function useCollectionUpdateBatch<K extends ResolvedCollectionNames>(
+	collection: K,
+	mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
+): any {
+	const { client, queryOpts, queryClient, locale } = useQuestpieQueryOptions();
+
+	const listQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"find",
+		locale,
+	]);
+	const countQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"count",
+		locale,
+	]);
+	const itemQueryKey = queryOpts.key([
+		"collections",
+		collection as string,
+		"findOne",
+		locale,
+	]);
+
+	return useMutation({
+		mutationFn: (params: any) =>
+			(client.collections as any)[collection as string].updateBatch(params, {
+				locale,
+			}),
+		onSuccess: (data: any, variables: any, context: any) => {
+			(mutationOptions?.onSuccess as any)?.(data, variables, context);
+		},
+		onSettled: (data: any, error: any, variables: any, context: any) => {
+			queryClient.invalidateQueries({ queryKey: listQueryKey });
+			queryClient.invalidateQueries({ queryKey: countQueryKey });
+			queryClient.invalidateQueries({ queryKey: itemQueryKey });
 			(mutationOptions?.onSettled as any)?.(data, error, variables, context);
 		},
 		...mutationOptions,
@@ -279,7 +327,9 @@ export function useCollectionDelete<K extends ResolvedCollectionNames>(
 ): any {
 	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
-	const baseOptions = (queryOpts.collections as any)[collection as string].delete();
+	const baseOptions = (queryOpts.collections as any)[
+		collection as string
+	].delete();
 	const listQueryKey = queryOpts.key([
 		"collections",
 		collection as string,
@@ -311,7 +361,7 @@ export function useCollectionDelete<K extends ResolvedCollectionNames>(
 			queryClient.invalidateQueries({
 				queryKey: countQueryKey,
 			});
-			queryClient.invalidateQueries({
+			queryClient.removeQueries({
 				queryKey: itemQueryKey,
 			});
 			(mutationOptions?.onSettled as any)?.(data, error, variables, context);
@@ -329,7 +379,9 @@ export function useCollectionRestore<K extends ResolvedCollectionNames>(
 ): any {
 	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
-	const baseOptions = (queryOpts.collections as any)[collection as string].restore();
+	const baseOptions = (queryOpts.collections as any)[
+		collection as string
+	].restore();
 	const listQueryKey = queryOpts.key([
 		"collections",
 		collection as string,
@@ -399,8 +451,9 @@ export function useCollectionRevertVersion<K extends ResolvedCollectionNames>(
 ): any {
 	const { queryOpts, queryClient, locale } = useQuestpieQueryOptions();
 
-	const baseOptions =
-		(queryOpts.collections as any)[collection as string].revertToVersion();
+	const baseOptions = (queryOpts.collections as any)[
+		collection as string
+	].revertToVersion();
 	const listQueryKey = queryOpts.key([
 		"collections",
 		collection as string,

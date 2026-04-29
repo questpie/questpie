@@ -10,6 +10,13 @@ export default {
 	"error.validation": "Validação falhou",
 	"error.internal": "Erro interno do servidor",
 	"error.badRequest": "Requisição inválida",
+	"error.invalidJsonBody": "Corpo JSON inválido",
+	"error.methodNotAllowed": "Método não permitido",
+	"error.methodNotAllowed.useMethod": "Método não permitido. Use {{method}}.",
+	"error.missingRequiredField": "Campo obrigatório ausente: {{field}}",
+	"error.invalidDateField": "Data inválida em {{field}}",
+	"error.updatesMustBeArray": "updates deve ser um array",
+	"error.versionRequired": "Version ou versionId é obrigatório",
 	"error.conflict": "Conflito de recursos",
 	"error.notImplemented": "{{feature}} não está implementado",
 	"error.timeout": "Tempo de solicitação esgotado",
@@ -35,6 +42,33 @@ export default {
 	"upload.tooLarge": "O arquivo excede o tamanho máximo de {{maxSize}}",
 	"upload.invalidType": "O tipo de arquivo {{type}} não é permitido",
 	"upload.failed": "Falha no envio do arquivo",
+	"upload.noFileUploaded": "Nenhum arquivo enviado. Envie 'file' em form-data.",
+	"upload.collectionNotSupported":
+		'A coleção "{{collection}}" não oferece suporte a uploads de arquivos. Use .upload() para habilitar.',
+	"upload.collectionServeNotSupported":
+		'A coleção "{{collection}}" não oferece suporte a servir arquivos. Use .upload() para habilitar.',
+	"upload.methodNotAvailable":
+		'Método de upload indisponível para a coleção "{{collection}}"',
+	"upload.tokenRequired": "Token obrigatório para arquivos privados",
+	"upload.tokenInvalid": "Token inválido ou expirado",
+	"upload.tokenMismatch": "O token não corresponde ao arquivo solicitado",
+	"upload.fileKeyNotSpecified": "Chave do arquivo não especificada",
+	"upload.extensionNotAllowed":
+		'A extensão de arquivo "{{extension}}" não é permitida',
+
+	// Search errors
+	"search.serviceNotConfigured": "O serviço de busca não está configurado",
+	"search.reindexAccessDenied": "Acesso de reindexação negado pela política",
+
+	// Realtime errors
+	"realtime.topicsRequired":
+		"O array topics é obrigatório e não pode estar vazio",
+	"realtime.topicIdRequired": "O ID do tópico é obrigatório",
+	"realtime.resourceRequired": "resourceType e resource são obrigatórios",
+	"realtime.collectionNotFound": 'Coleção "{{collection}}" não encontrada',
+	"realtime.globalNotFound": 'Global "{{global}}" não encontrado',
+	"realtime.invalidResourceType": 'resourceType "{{resourceType}}" inválido',
+	"realtime.noValidTopics": "Nenhum tópico válido fornecido. Erros: {{errors}}",
 
 	// Hook errors
 	"hook.beforeCreate.failed": "Validação pré-criação falhou",
@@ -52,8 +86,14 @@ export default {
 
 	// Database errors
 	"error.database.uniqueViolation": "Duplicado {{field}}: {{value}}",
+	"error.database.uniqueViolation.field":
+		"Já existe um registro com este {{field}}",
 	"error.database.foreignKeyViolation":
 		"{{field}} inválido: o registro referenciado não existe",
+	"error.database.foreignKeyViolation.field":
+		"O registro referenciado não existe",
 	"error.database.notNullViolation": "{{field}} é obrigatório",
+	"error.database.notNullViolation.field": "{{field}} é obrigatório",
 	"error.database.checkViolation": "Valor inválido para {{field}}",
+	"error.database.checkViolation.field": "Valor inválido para {{field}}",
 } as const;

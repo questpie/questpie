@@ -9,21 +9,20 @@
 
 import * as React from "react";
 import { useFormContext, useWatch } from "react-hook-form";
+
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
+
 import type { BlockContent } from "../../../blocks/types.js";
 import { EMPTY_BLOCK_CONTENT, isBlockContent } from "../../../blocks/types.js";
 import type { BaseFieldProps } from "../../../builder/types/common.js";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "../../../components/ui/card.js";
 import { useAdminConfig } from "../../../hooks/use-admin-config.js";
+import { useTranslation } from "../../../i18n/hooks.js";
 import { BlockEditorLayout } from "../../blocks/block-editor-layout.js";
 import { BlockEditorProvider } from "../../blocks/block-editor-provider.js";
 import { countBlocks } from "../../blocks/utils/tree-utils.js";
 import { FieldWrapper } from "../field-wrapper.js";
+
+const EMPTY_BLOCKS: Record<string, BlockSchema> = {};
 
 /**
  * Blocks field configuration.
@@ -55,11 +54,11 @@ export function BlocksField({
 	error,
 	required,
 	disabled,
-	readOnly,
 	allowedBlocks,
 	minBlocks,
 	maxBlocks,
 }: BlocksFieldProps) {
+	const { t } = useTranslation();
 	const form = useFormContext();
 	const watchedContent = useWatch({ control: form.control, name });
 	const { data: adminConfig } = useAdminConfig();
@@ -72,15 +71,16 @@ export function BlocksField({
 			: EMPTY_BLOCK_CONTENT;
 
 	// Get blocks from server introspection
-	const blocks = adminConfig?.blocks ?? {};
+	const blocks = adminConfig?.blocks ?? EMPTY_BLOCKS;
 
 	// Filter blocks by allowed list
 	const filteredBlocks = React.useMemo<Record<string, BlockSchema>>(() => {
 		if (!allowedBlocks || allowedBlocks.length === 0) {
 			return blocks;
 		}
+		const allowed = new Set(allowedBlocks);
 		return Object.fromEntries(
-			Object.entries(blocks).filter(([name]) => allowedBlocks.includes(name)),
+			Object.entries(blocks).filter(([name]) => allowed.has(name)),
 		);
 	}, [blocks, allowedBlocks]);
 
@@ -115,26 +115,15 @@ export function BlocksField({
 						<BlockEditorLayout />
 					</BlockEditorProvider>
 				) : (
-					<Card className="border-dashed">
-						<CardHeader className="pb-2">
-							<CardTitle className="flex items-center justify-between text-sm font-medium">
-								<span>Blocks ({blockCount})</span>
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="py-8 text-center text-muted-foreground">
-								<p className="text-sm">No block definitions registered</p>
-								<p className="mt-1 text-xs">
-									Register blocks with .blocks() in your admin configuration
-								</p>
-							</div>
-						</CardContent>
-					</Card>
+					<div className="text-muted-foreground py-4">
+						<p className="text-sm">{t("blocks.noDefinitions")}</p>
+						<p className="mt-1 text-xs">{t("blocks.noDefinitionsHint")}</p>
+					</div>
 				)}
 
 				{/* Constraints info */}
 				{(minBlocks || maxBlocks) && (
-					<div className="mt-2 text-xs text-muted-foreground">
+					<div className="text-muted-foreground mt-2 text-xs">
 						{minBlocks && <span>Min: {minBlocks} blocks </span>}
 						{maxBlocks && <span>Max: {maxBlocks} blocks</span>}
 						<span className="ml-2">Current: {blockCount}</span>

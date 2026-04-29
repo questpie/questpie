@@ -3,7 +3,9 @@
  */
 
 import type * as React from "react";
+
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
 import type { FieldInstance } from "../../../../builder/field/field";
 import { formatLabel } from "../../../../lib/utils";
 import { DefaultCell } from "../../../../views/collection/cells";

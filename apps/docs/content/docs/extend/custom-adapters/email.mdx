@@ -1,0 +1,173 @@
+---
+title: Email Adapter
+description: Implement a custom email sending adapter for QUESTPIE.
+---
+
+Email adapters are the thinnest adapter type in QUESTPIE. They receive already-rendered email content (HTML + text) and only need to deliver it. Template rendering, `from` address resolution, and queuing all happen before the adapter is called.
+
+## Base class
+
+```ts
+export abstract class MailAdapter {
+	abstract send(options: SerializableMailOptions): Promise<void>;
+}
+```
+
+### `SerializableMailOptions`
+
+```ts
+export type SerializableMailOptions = {
+	from: string; // already resolved, never undefined
+	to: string | string[];
+	cc?: string | string[];
+	bcc?: string | string[];
+	subject: string;
+	text: string; // already rendered
+	html: string; // already rendered
+	attachments?: Array<{
+		filename: string;
+		content: Buffer | string;
+		contentType?: string;
+	}>;
+	headers?: Record<string, string>;
+	replyTo?: string;
+};
+```
+
+By the time your adapter receives `SerializableMailOptions`, both `text` and `html` are guaranteed to be present, and `from` is always a resolved string. Your adapter does not need to handle template rendering or default address logic.
+
+## Required method
+
+| Method          | Description                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| `send(options)` | Deliver the email through your provider. Throw on failure so the caller (usually a queued job) can retry. |
+
+## Minimal example: HTTP API provider
+
+```ts title="resend-adapter.ts"
+import { MailAdapter, type SerializableMailOptions } from "questpie";
+
+export class ResendAdapter extends MailAdapter {
+	constructor(private apiKey: string) {
+		super();
+	}
+
+	async send(options: SerializableMailOptions): Promise<void> {
+		const res = await fetch("https://api.resend.com/emails", {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${this.apiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				from: options.from,
+				to: Array.isArray(options.to) ? options.to : [options.to],
+				cc: options.cc,
+				bcc: options.bcc,
+				reply_to: options.replyTo,
+				subject: options.subject,
+				text: options.text,
+				html: options.html,
+				attachments: options.attachments?.map((a) => ({
+					filename: a.filename,
+					content:
+						typeof a.content === "string"
+							? a.content
+							: Buffer.from(a.content).toString("base64"),
+				})),
+				headers: options.headers,
+			}),
+		});
+
+		if (!res.ok) {
+			const body = await res.text();
+			throw new Error(`Resend API error (${res.status}): ${body}`);
+		}
+	}
+}
+```
+
+## Minimal example: SDK-based provider
+
+```ts title="sendgrid-adapter.ts"
+import { MailAdapter, type SerializableMailOptions } from "questpie";
+import sgMail from "@sendgrid/mail";
+
+export class SendGridAdapter extends MailAdapter {
+	constructor(apiKey: string) {
+		super();
+		sgMail.setApiKey(apiKey);
+	}
+
+	async send(options: SerializableMailOptions): Promise<void> {
+		await sgMail.send({
+			from: options.from,
+			to: options.to,
+			cc: options.cc ?? undefined,
+			bcc: options.bcc ?? undefined,
+			replyTo: options.replyTo,
+			subject: options.subject,
+			text: options.text,
+			html: options.html,
+			attachments: options.attachments?.map((a) => ({
+				filename: a.filename,
+				content:
+					typeof a.content === "string"
+						? a.content
+						: Buffer.from(a.content).toString("base64"),
+				type: a.contentType,
+			})),
+			headers: options.headers,
+		});
+	}
+}
+```
+
+## Registration
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { ResendAdapter } from "./resend-adapter";
+
+export default runtimeConfig({
+	// ...
+	email: {
+		adapter: new ResendAdapter(process.env.RESEND_API_KEY!),
+		defaults: {
+			from: "noreply@yourapp.com",
+		},
+	},
+});
+```
+
+### Config options
+
+| Option          | Default          | Description                                                                          |
+| --------------- | ---------------- | ------------------------------------------------------------------------------------ |
+| `adapter`       | `ConsoleAdapter` | Your adapter instance. Can also be a `Promise<MailAdapter>` for lazy initialization. |
+| `defaults.from` | --               | Default sender address used when a template does not specify one.                    |
+| `templates`     | --               | Email template registry (defined via the `email()` helper).                          |
+
+### Async adapter initialization
+
+The `adapter` field accepts a `Promise<MailAdapter>`, which is useful when your adapter needs async setup (e.g. fetching credentials from a secrets manager):
+
+```ts
+email: {
+	adapter: initializeResendAdapter(), // returns Promise<ResendAdapter>
+},
+```
+
+## Testing tips
+
+- Mock the provider HTTP call and assert the final payload shape matches what your provider expects.
+- Verify both `text` and `html` are forwarded -- some providers reject emails missing either field.
+- Test multi-recipient values for `to`, `cc`, and `bcc` (both string and array forms).
+- Verify adapter failures throw so queued jobs can retry or surface errors.
+- Test with attachments -- especially binary content (Buffer) vs string content.
+
+## Reference implementations
+
+- [ConsoleAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/mailer/adapters/console.adapter.ts) -- logs emails to console, useful for development
+- [SmtpAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/mailer/adapters/smtp.adapter.ts) -- production SMTP via nodemailer, includes `createEtherealSmtpAdapter()` helper for test accounts
+- [MailAdapter base class source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/mailer/adapter.ts)

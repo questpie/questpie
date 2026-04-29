@@ -7,6 +7,7 @@
 
 import { Icon } from "@iconify/react";
 import type * as React from "react";
+
 import type { WidgetAction, WidgetCardVariant } from "../../builder";
 import { resolveIconElement } from "../../components/component-renderer";
 import { Button } from "../../components/ui/button";
@@ -25,6 +26,7 @@ import {
 	DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
 import { Skeleton } from "../../components/ui/skeleton";
+import { useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 
 // ============================================================================
@@ -67,8 +69,7 @@ interface WidgetCardProps {
 const variantStyles: Record<WidgetCardVariant, string> = {
 	default: "",
 	compact: "py-3 gap-3",
-	featured:
-		"border-primary/30 bg-gradient-to-br from-primary/5 to-transparent shadow-sm",
+	featured: "border-border-strong bg-surface-low",
 };
 
 const variantContentStyles: Record<WidgetCardVariant, string> = {
@@ -87,11 +88,18 @@ function WidgetCardLoading({
 	variant?: WidgetCardVariant;
 }) {
 	return (
-		<Card className={cn("h-full flex flex-col", variantStyles[variant])}>
-			<CardHeader>
+		<Card
+			className={cn("flex h-full min-h-0 flex-col", variantStyles[variant])}
+		>
+			<CardHeader className="shrink-0">
 				<Skeleton className="h-4 w-24" />
 			</CardHeader>
-			<CardContent className={cn("flex-1", variantContentStyles[variant])}>
+			<CardContent
+				className={cn(
+					"min-h-0 flex-1 overflow-hidden",
+					variantContentStyles[variant],
+				)}
+			>
 				<Skeleton className="h-20 w-full" />
 			</CardContent>
 		</Card>
@@ -107,16 +115,17 @@ function WidgetCardError({
 	variant?: WidgetCardVariant;
 	onRetry?: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<Card
 			className={cn(
-				"h-full flex flex-col border-destructive/20 bg-destructive/5",
+				"border-destructive/20 bg-destructive/5 flex h-full min-h-0 flex-col",
 				variantStyles[variant],
 			)}
 		>
-			<CardHeader>
-				<CardTitle className="text-sm font-medium text-destructive">
-					Error
+			<CardHeader className="shrink-0">
+				<CardTitle className="text-destructive text-sm font-medium">
+					{t("toast.error")}
 				</CardTitle>
 				{onRetry && (
 					<CardAction>
@@ -126,8 +135,13 @@ function WidgetCardError({
 					</CardAction>
 				)}
 			</CardHeader>
-			<CardContent className={cn("flex-1", variantContentStyles[variant])}>
-				<p className="text-xs text-muted-foreground">{error.message}</p>
+			<CardContent
+				className={cn(
+					"min-h-0 flex-1 overflow-auto",
+					variantContentStyles[variant],
+				)}
+			>
+				<p className="text-muted-foreground text-xs">{error.message}</p>
 			</CardContent>
 		</Card>
 	);
@@ -167,21 +181,27 @@ export function WidgetCard({
 	loadingSkeleton,
 	children,
 }: WidgetCardProps): React.ReactElement {
+	const { t } = useTranslation();
 	// Loading state
 	if (isLoading) {
 		if (loadingSkeleton) {
 			return (
 				<Card
 					className={cn(
-						"h-full flex flex-col",
+						"flex h-full min-h-0 flex-col",
 						variantStyles[variant],
 						className,
 					)}
 				>
-					<CardHeader>
+					<CardHeader className="shrink-0">
 						<Skeleton className="h-4 w-24" />
 					</CardHeader>
-					<CardContent className={cn("flex-1", variantContentStyles[variant])}>
+					<CardContent
+						className={cn(
+							"min-h-0 flex-1 overflow-hidden",
+							variantContentStyles[variant],
+						)}
+					>
 						{loadingSkeleton}
 					</CardContent>
 				</Card>
@@ -203,20 +223,20 @@ export function WidgetCard({
 	return (
 		<Card
 			className={cn(
-				"qa-widget-card h-full flex flex-col",
+				"qa-widget-card flex h-full min-h-0 flex-col",
 				variantStyles[variant],
 				className,
 			)}
 		>
 			{hasHeader && (
-				<CardHeader className="qa-widget-card__header">
-					<div className="flex items-center gap-2">
+				<CardHeader className="qa-widget-card__header shrink-0">
+					<div className="flex min-w-0 items-center gap-2">
 						{resolveIconElement(icon, {
 							className: "h-4 w-4 text-muted-foreground",
 						})}
-						<div className="flex-1 min-w-0">
+						<div className="min-w-0 flex-1">
 							{title && (
-								<CardTitle className="text-sm font-medium truncate">
+								<CardTitle className="truncate text-sm font-medium">
 									{title}
 								</CardTitle>
 							)}
@@ -280,7 +300,7 @@ export function WidgetCard({
 										variant="ghost"
 										size="icon-xs"
 										onClick={onRefresh}
-										title="Refresh"
+										title={t("common.refresh")}
 										disabled={isRefreshing}
 									>
 										<Icon
@@ -297,7 +317,7 @@ export function WidgetCard({
 										variant="ghost"
 										size="icon-xs"
 										onClick={onExpand}
-										title="Expand"
+										title={t("ui.expand")}
 									>
 										<Icon icon="ph:arrows-out-simple" className="h-3.5 w-3.5" />
 									</Button>
@@ -310,6 +330,7 @@ export function WidgetCard({
 			<CardContent
 				className={cn(
 					"qa-widget-card__content flex-1",
+					"min-h-0 overflow-auto overscroll-contain",
 					variantContentStyles[variant],
 					!hasHeader && "pt-0",
 				)}

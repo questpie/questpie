@@ -15,16 +15,16 @@ The rewrite adopts a Drizzle/Zod-like immutable builder where each method return
 
 ## Phases
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | Operator System Refactor (non-breaking) | Pending |
-| 2 | Core Field Builder Class | Pending |
-| 3 | Builtin Field Factories | Pending |
-| 4 | Relation + Upload Fields | Pending |
-| 5 | Collection Builder Integration | Pending |
-| 6 | Admin Integration via Codegen Plugin | Pending |
-| 7 | Example + Consumer Migration | Pending |
-| 8 | Codegen Updates | Pending |
-| 9 | Cleanup + Test Migration | Pending |
+| Phase | Description                             | Status  |
+| ----- | --------------------------------------- | ------- |
+| 1     | Operator System Refactor (non-breaking) | Pending |
+| 2     | Core Field Builder Class                | Pending |
+| 3     | Builtin Field Factories                 | Pending |
+| 4     | Relation + Upload Fields                | Pending |
+| 5     | Collection Builder Integration          | Pending |
+| 6     | Admin Integration via Codegen Plugin    | Pending |
+| 7     | Example + Consumer Migration            | Pending |
+| 8     | Codegen Updates                         | Pending |
+| 9     | Cleanup + Test Migration                | Pending |
 
 See the full detailed plan in the conversation transcript.
