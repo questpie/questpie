@@ -1,7 +1,6 @@
 "use client";
 
 import { CodeBlock, Pre } from "fumadocs-ui/components/codeblock";
-import { useTheme } from "next-themes";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -15,11 +14,20 @@ type MermaidRenderState =
 	  }
 	| { status: "error"; message: string };
 
+type MermaidTheme = "dark" | "default";
+
 function normalizeChart(chart: string): string {
 	return chart.replaceAll("\\n", "\n").trim();
 }
 
-function getThemeVariables(theme: "dark" | "default") {
+function resolveMermaidTheme(): MermaidTheme {
+	if (typeof document === "undefined") return "dark";
+	return document.documentElement.classList.contains("light")
+		? "default"
+		: "dark";
+}
+
+function getThemeVariables(theme: MermaidTheme) {
 	if (theme === "dark") {
 		return {
 			background: "#1b1b1b",
@@ -63,21 +71,32 @@ export function Mermaid({
 		() => `mermaid-${id.replace(/[^a-zA-Z0-9_-]/g, "")}`,
 		[id],
 	);
-	const { resolvedTheme } = useTheme();
 	const [mounted, setMounted] = useState(false);
+	const [theme, setTheme] = useState<MermaidTheme>("dark");
 	const [renderState, setRenderState] = useState<MermaidRenderState>({
 		status: "idle",
 	});
 
 	useEffect(() => {
 		setMounted(true);
+		setTheme(resolveMermaidTheme());
+
+		const observer = new MutationObserver(() => {
+			setTheme(resolveMermaidTheme());
+		});
+
+		observer.observe(document.documentElement, {
+			attributeFilter: ["class"],
+			attributes: true,
+		});
+
+		return () => observer.disconnect();
 	}, []);
 
 	useEffect(() => {
 		if (!mounted) return;
 
 		let cancelled = false;
-		const theme = resolvedTheme === "dark" ? "dark" : "default";
 
 		async function renderDiagram() {
 			setRenderState({ status: "loading" });
@@ -118,7 +137,7 @@ export function Mermaid({
 		return () => {
 			cancelled = true;
 		};
-	}, [diagramId, mounted, normalizedChart, resolvedTheme]);
+	}, [diagramId, mounted, normalizedChart, theme]);
 
 	useEffect(() => {
 		if (renderState.status !== "ready" || !containerRef.current) return;
