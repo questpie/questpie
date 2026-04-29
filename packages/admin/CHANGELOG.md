@@ -39,6 +39,10 @@
   - `trigger()`, `cancel()`, `getInstance()`, `getHistory()`, `sendEvent()`
   - `cancelAll()`, `retryAll()` batch operations
   - Idempotency key support, delayed start, parent-child relationships
+<<<<<<< HEAD
+=======
+  - Typed collection/global `transitionStage()` client calls now accept `scheduledAt`
+>>>>>>> origin/changeset-release/main
 
   **Admin UI**
 
@@ -47,6 +51,17 @@
   - Dashboard stats widget showing active/completed/failed counts
   - Sidebar contribution for navigation
 
+<<<<<<< HEAD
+=======
+  **Docs & Type Safety**
+
+  - Full durable workflow documentation with typed route, event, cron, admin, and client examples
+  - Documented durable workflow instance and step lifecycle transitions with Mermaid diagrams
+  - Expanded versioning workflow transition references across CRUD, global, hooks, and HTTP route docs
+  - Mermaid architecture diagrams for workflow and docs architecture pages
+  - Runtime workflow helpers and admin client routes are strongly typed without unsafe casts
+
+>>>>>>> origin/changeset-release/main
   **Integration**
 
   - `workflowsPlugin()` codegen plugin for file-convention discovery
@@ -55,7 +70,11 @@
   - Service at `ctx.workflows` via `namespace(null)`
   - `@questpie/admin/client` now exports `page()` and `PageDefinition` for module-provided admin pages
 
+<<<<<<< HEAD
 - Updated dependencies []:
+=======
+- Updated dependencies [[`652f6b7`](https://github.com/questpie/questpie/commit/652f6b79e9a70004bc7318464e4ca1d7a4a5bead)]:
+>>>>>>> origin/changeset-release/main
   - questpie@3.2.0
   - @questpie/tanstack-query@3.2.0
 

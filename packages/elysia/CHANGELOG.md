@@ -4,7 +4,11 @@
 
 ### Patch Changes
 
+<<<<<<< HEAD
 - Updated dependencies []:
+=======
+- Updated dependencies [[`652f6b7`](https://github.com/questpie/questpie/commit/652f6b79e9a70004bc7318464e4ca1d7a4a5bead)]:
+>>>>>>> origin/changeset-release/main
   - questpie@3.2.0
 
 ## 3.1.0
