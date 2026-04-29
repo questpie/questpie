@@ -43,7 +43,7 @@
 	},
 	"scripts": {
 		"build": "tsdown",
-		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test",
+		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test --max-concurrency=1",
 		"test:watch": "bun test --watch",
 		"check-types": "tsc --noEmit",
 		"questpie:generate": "bun run ./src/exports/cli.ts generate --verbose",

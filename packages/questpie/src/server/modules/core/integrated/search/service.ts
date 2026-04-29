@@ -179,6 +179,19 @@ export class SearchServiceWrapper implements SearchService {
 		await this._flushPending();
 	}
 
+	/**
+	 * Stop pending debounce work without dispatching new jobs.
+	 * Used during app teardown after callers had a chance to flush explicitly.
+	 */
+	destroy(): void {
+		if (this._flushTimeout) {
+			clearTimeout(this._flushTimeout);
+			this._flushTimeout = null;
+		}
+		this._pendingIndexItems.clear();
+		this._queuePublish = null;
+	}
+
 	private async _flushPending(): Promise<void> {
 		if (this._pendingIndexItems.size === 0) return;
 

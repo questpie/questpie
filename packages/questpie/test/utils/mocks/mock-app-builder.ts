@@ -67,7 +67,14 @@ export async function buildMockApp(
 	const dbConfig = runtimeOverrides.db ?? { pglite: testDb };
 
 	// Normalize module definition — move flat config keys into config bucket
-	const { locale, hooks, defaultAccess, auth, config: existingConfig, ...moduleDef } = definition as any;
+	const {
+		locale,
+		hooks,
+		defaultAccess,
+		auth,
+		config: existingConfig,
+		...moduleDef
+	} = definition as any;
 
 	// Build config bucket from flat keys + any existing config
 	const appConfigPart: Record<string, unknown> = {};
@@ -77,7 +84,10 @@ export async function buildMockApp(
 
 	const moduleConfig: Record<string, unknown> = { ...(existingConfig ?? {}) };
 	if (Object.keys(appConfigPart).length > 0) {
-		moduleConfig.app = { ...(moduleConfig.app as any ?? {}), ...appConfigPart };
+		moduleConfig.app = {
+			...((moduleConfig.app as any) ?? {}),
+			...appConfigPart,
+		};
 	}
 	if (auth) {
 		moduleConfig.auth = auth;
@@ -89,33 +99,30 @@ export async function buildMockApp(
 		...(Object.keys(moduleConfig).length > 0 ? { config: moduleConfig } : {}),
 	});
 
-	const app = await createApp(
-		{ modules: [normalizedDef] },
-		{
-			app: runtimeOverrides.app ?? { url: "http://localhost:3000" },
-			db: dbConfig,
-			storage: runtimeOverrides.storage,
-			email: {
-				...(runtimeOverrides.email ?? {}),
-				adapter: mailerAdapter,
-			},
-			kv: {
-				...(runtimeOverrides.kv ?? {}),
-				adapter: kvAdapter,
-			},
-			queue: {
-				...(runtimeOverrides.queue ?? {}),
-				adapter: queueAdapter,
-			},
-			logger: {
-				...(runtimeOverrides.logger ?? {}),
-				adapter: logger,
-			},
-			search: runtimeOverrides.search,
-			realtime: runtimeOverrides.realtime,
-			secret: runtimeOverrides.secret,
-		} as RuntimeConfig,
-	);
+	const app = await createApp({ modules: [normalizedDef] }, {
+		app: runtimeOverrides.app ?? { url: "http://localhost:3000" },
+		db: dbConfig,
+		storage: runtimeOverrides.storage,
+		email: {
+			...(runtimeOverrides.email ?? {}),
+			adapter: mailerAdapter,
+		},
+		kv: {
+			...(runtimeOverrides.kv ?? {}),
+			adapter: kvAdapter,
+		},
+		queue: {
+			...(runtimeOverrides.queue ?? {}),
+			adapter: queueAdapter,
+		},
+		logger: {
+			...(runtimeOverrides.logger ?? {}),
+			adapter: logger,
+		},
+		search: runtimeOverrides.search,
+		realtime: runtimeOverrides.realtime,
+		secret: runtimeOverrides.secret,
+	} as RuntimeConfig);
 
 	// Attach mock adapters for easy access in tests
 	const mockApp = app as MockApp<any>;
@@ -127,11 +134,20 @@ export async function buildMockApp(
 		fakes: app.storage.fake(Questpie.__internal.storageDriverServiceName),
 	};
 
+	let cleanedUp = false;
 	const cleanup = async () => {
-		if (testDb) {
-			await testDb.close();
+		if (cleanedUp) return;
+		cleanedUp = true;
+
+		try {
+			await mockApp.search?.flushPending?.();
+			await mockApp.destroy();
+		} finally {
+			mockApp.storage.restore(Questpie.__internal.storageDriverServiceName);
+			if (testDb) {
+				await testDb.close();
+			}
 		}
-		mockApp.storage.restore(Questpie.__internal.storageDriverServiceName);
 	};
 
 	return { cleanup, app: mockApp };
