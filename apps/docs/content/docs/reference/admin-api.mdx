@@ -328,3 +328,41 @@ Override field behavior per-form:
   },
 }
 ```
+
+### Visual Edit Workspace
+
+Two form views ship out of the box — pick one in `.form()`:
+
+```ts
+// Default split-screen, refresh on save
+.form(({ v }) => v.collectionForm({ sidebar, fields }))
+
+// Opt-in canvas + inspector workspace, field-level patches
+.form(({ v }) => v.visualEditForm({ sidebar, fields }))
+```
+
+`v.visualEditForm` accepts the same `sidebar` / `fields` config — the workspace falls through to that layout when the document inspector body has no `visualEdit.group` to switch on.
+
+Per-field tuning lives on the field's `admin` metadata under a `visualEdit` block:
+
+```ts
+title: f.text(255).set("admin", {
+  visualEdit: {
+    group: "content",       // pin to a group in the document inspector
+    order: 1,               // sort within the group
+    hidden: false,          // hide from the document body
+    inspector: ref,         // override the inspector component
+    patchStrategy: "patch", // "patch" | "refresh" | "deferred"
+  },
+}),
+```
+
+| Key             | Default                                           | Effect                                                                                                                  |
+| --------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `group`         | `BaseAdminMeta.group`                             | Pin to a group in the Document inspector. Any field with `group` flips the body to the grouped layout.                  |
+| `order`         | declaration order                                 | Sort within the resolved group (lower first).                                                                           |
+| `hidden`        | `false`                                           | Drop from the Document inspector. Canvas click targets still work.                                                      |
+| `inspector`     | `undefined`                                       | Component reference rendered in place of the default field component.                                                   |
+| `patchStrategy` | `"patch"` for scalars, `"refresh"` for relations / uploads / blocks / fields with a server `compute` handler | How changes propagate to the iframe. `"deferred"` skips live updates entirely. |
+
+See the [Visual Edit Workspace guide](/docs/workspace/live-preview/visual-edit) for the full reference and the [Protocol page](/docs/workspace/live-preview/protocol) for the wire format.
